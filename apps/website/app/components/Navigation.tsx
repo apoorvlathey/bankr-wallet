@@ -45,7 +45,7 @@ const navLinks = [
   { label: "Stake", href: "/stake" },
   // { label: "Apps", href: "/apps" },
   { label: "Install", href: "#install" },
-  { label: "Tweets", href: "#tweets" },
+  { label: "Roadmap", href: "/roadmap" },
 ];
 
 function TelegramIcon({ size = 20 }: { size?: number }) {
