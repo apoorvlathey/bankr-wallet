@@ -27,15 +27,32 @@ export const erc20Abi = [
     stateMutability: "nonpayable",
     type: "function",
   },
+  {
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+    ],
+    name: "transfer",
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
 ] as const;
 
-// WETH9 deposit (wrap ETH -> WETH)
+// WETH9 deposit/withdraw (wrap/unwrap ETH <-> WETH)
 export const weth9Abi = [
   {
     inputs: [],
     name: "deposit",
     outputs: [],
     stateMutability: "payable",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "wad", type: "uint256" }],
+    name: "withdraw",
+    outputs: [],
+    stateMutability: "nonpayable",
     type: "function",
   },
 ] as const;

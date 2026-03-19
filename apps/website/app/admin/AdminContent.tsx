@@ -13,9 +13,10 @@ import {
   Button,
   Image,
   Link,
+  Tooltip,
   useToast,
 } from "@chakra-ui/react";
-import { RefreshCw, AlertTriangle, ExternalLink as ExternalLinkIcon } from "lucide-react";
+import { RefreshCw, AlertTriangle, ExternalLink as ExternalLinkIcon, Info } from "lucide-react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import {
   useAccount,
@@ -25,8 +26,10 @@ import {
   useWriteContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
-import { formatUnits } from "viem";
+import { formatUnits, encodeFunctionData, encodeAbiParameters } from "viem";
 import { Navigation } from "../components/Navigation";
+import { WCHAN_TOKEN_ADDRESS } from "@walletchan/shared/contracts";
+import { erc20Abi, weth9Abi } from "./drip/abi";
 import { ADDRESSES } from "@/lib/wchan-swap/addresses";
 import { useTokenData } from "../contexts/TokenDataContext";
 import {
@@ -93,6 +96,38 @@ const CLANKER_FEE_ABI = [
 const ETH_PRICE_POLL_MS = 30_000; // 30s
 const FEES_POLL_MS = 5_000; // 5s
 
+const WCHAN_ADDR = WCHAN_TOKEN_ADDRESS as `0x${string}`;
+const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD" as `0x${string}`;
+const WCHAN_TOTAL_SUPPLY = 100_000_000_000; // 100B
+const DESTINATION_ADDRESS = "0xab7def16d63c49422bd8692e118ab780eb5410e6" as `0x${string}`; // walletchan.eth
+const MAX_UINT256 = 2n ** 256n - 1n;
+
+const ERC7821Abi = [
+  {
+    inputs: [
+      { name: "mode", type: "bytes32" },
+      { name: "executionData", type: "bytes" },
+    ],
+    name: "execute",
+    outputs: [],
+    stateMutability: "payable",
+    type: "function",
+  },
+] as const;
+
+const ERC7821_BATCH_MODE =
+  "0x0100000000007821000100000000000000000000000000000000000000000000" as `0x${string}`;
+
+const wchanWrapAbi = [
+  {
+    inputs: [{ name: "amount_", type: "uint256" }],
+    name: "wrap",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
 
 function formatEth(wei: bigint | undefined): string {
   if (!wei) return "0";
@@ -124,7 +159,7 @@ export default function AdminContent() {
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   // Chain detection
-  const { isConnected: isWalletConnected } = useAccount();
+  const { address, isConnected: isWalletConnected } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
   const isWrongChain = isWalletConnected && chainId !== BASE_CHAIN_ID;
@@ -230,6 +265,26 @@ export default function AdminContent() {
     query: { refetchInterval: FEES_POLL_MS },
   });
 
+  // Burned WCHAN balance
+  const { data: burnedWchanRaw, isLoading: burnedWchanLoading } = useReadContract({
+    address: WCHAN_ADDR,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: [BURN_ADDRESS],
+    chainId: BASE_CHAIN_ID,
+    query: { refetchInterval: FEES_POLL_MS },
+  });
+
+  // BNKRW allowance for WCHAN (needed for batch claim)
+  const { data: bnkrwAllowanceForWchan } = useReadContract({
+    address: BNKRW_ADDRESS,
+    abi: erc20Abi,
+    functionName: "allowance",
+    args: address ? [address, WCHAN_ADDR] : undefined,
+    chainId: BASE_CHAIN_ID,
+    query: { enabled: !!address, refetchInterval: FEES_POLL_MS },
+  });
+
   // Clanker claim WETH
   const {
     writeContract: claimClankerWeth,
@@ -247,6 +302,15 @@ export default function AdminContent() {
   } = useWriteContract();
   const { isLoading: isClankerBnkrwConfirming, isSuccess: isClankerBnkrwConfirmed } =
     useWaitForTransactionReceipt({ hash: clankerBnkrwTxHash });
+
+  // Batch claim
+  const {
+    writeContract: writeBatchClaim,
+    data: batchClaimTxHash,
+    isPending: isBatchClaiming,
+  } = useWriteContract();
+  const { isLoading: isBatchConfirming, isSuccess: isBatchConfirmed } =
+    useWaitForTransactionReceipt({ hash: batchClaimTxHash });
 
   // Refetch after Clanker claims confirm
   useEffect(() => {
@@ -378,6 +442,150 @@ export default function AdminContent() {
       chainId: V4_CHAIN_ID,
     });
   };
+
+  // Batch claim: only enabled for the fee owner address
+  const isOwner = address?.toLowerCase() === CLANKER_FEE_OWNER.toLowerCase();
+
+  // Batch claim handler — builds a single ERC-7821 batched tx that:
+  //   1. Claims WETH fees from Clanker fee locker
+  //   2. Claims BNKRW fees from Clanker fee locker
+  //   3. Approves BNKRW spend on WCHAN contract (if allowance insufficient)
+  //   4. Wraps claimed BNKRW → WCHAN (1:1)
+  //   5. Unwraps claimed WETH → ETH
+  //   6. Transfers WCHAN to walletchan.eth (DESTINATION_ADDRESS)
+  //   7. Sends ETH to walletchan.eth (DESTINATION_ADDRESS)
+  // Steps are conditionally included based on whether each token amount > 0.
+  const handleBatchClaim = () => {
+    if (!address) return;
+
+    const wethAmount = clankerWethFees ?? 0n;
+    const bnkrwAmount = clankerBnkrwFees ?? 0n;
+    const hasWeth = wethAmount > 0n;
+    const hasBnkrw = bnkrwAmount > 0n;
+
+    const calls: { to: `0x${string}`; value: bigint; data: `0x${string}` }[] = [];
+
+    // 1. Claim WETH from Clanker fee locker
+    if (hasWeth) {
+      calls.push({
+        to: CLANKER_FEE_LOCKER,
+        value: 0n,
+        data: encodeFunctionData({ abi: CLANKER_FEE_ABI, functionName: "claim", args: [CLANKER_FEE_OWNER, WETH_ADDRESS] }),
+      });
+    }
+
+    // 2. Claim BNKRW from Clanker fee locker
+    if (hasBnkrw) {
+      calls.push({
+        to: CLANKER_FEE_LOCKER,
+        value: 0n,
+        data: encodeFunctionData({ abi: CLANKER_FEE_ABI, functionName: "claim", args: [CLANKER_FEE_OWNER, BNKRW_ADDRESS] }),
+      });
+    }
+
+    // 3. Approve BNKRW → WCHAN contract (infinite allowance, only if current allowance < claimed amount)
+    if (hasBnkrw) {
+      const currentAllowance = (bnkrwAllowanceForWchan as bigint) ?? 0n;
+      if (currentAllowance < bnkrwAmount) {
+        calls.push({
+          to: BNKRW_ADDRESS,
+          value: 0n,
+          data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [WCHAN_ADDR, MAX_UINT256] }),
+        });
+      }
+    }
+
+    // 4. Wrap BNKRW → WCHAN (1:1 ratio)
+    if (hasBnkrw) {
+      calls.push({
+        to: WCHAN_ADDR,
+        value: 0n,
+        data: encodeFunctionData({ abi: wchanWrapAbi, functionName: "wrap", args: [bnkrwAmount] }),
+      });
+    }
+
+    // 5. Unwrap WETH → ETH
+    if (hasWeth) {
+      calls.push({
+        to: WETH_ADDRESS,
+        value: 0n,
+        data: encodeFunctionData({ abi: weth9Abi, functionName: "withdraw", args: [wethAmount] }),
+      });
+    }
+
+    // 6. Transfer WCHAN to walletchan.eth
+    if (hasBnkrw) {
+      calls.push({
+        to: WCHAN_ADDR,
+        value: 0n,
+        data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [DESTINATION_ADDRESS, bnkrwAmount] }),
+      });
+    }
+
+    // 7. Send ETH (native) to walletchan.eth
+    if (hasWeth) {
+      calls.push({
+        to: DESTINATION_ADDRESS,
+        value: wethAmount,
+        data: "0x" as `0x${string}`,
+      });
+    }
+
+    // Encode all calls as a single ERC-7821 batched execution on the connected wallet
+    writeBatchClaim({
+      address: address,
+      abi: ERC7821Abi,
+      functionName: "execute",
+      args: [
+        ERC7821_BATCH_MODE,
+        encodeAbiParameters(
+          [
+            {
+              type: "tuple[]",
+              components: [
+                { type: "address", name: "to" },
+                { type: "uint256", name: "value" },
+                { type: "bytes", name: "data" },
+              ],
+            },
+          ],
+          [calls],
+        ),
+      ],
+      chainId: BASE_CHAIN_ID,
+    });
+  };
+
+  // Refetch after batch claim confirms
+  const batchToastedTxRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (isBatchConfirmed && batchClaimTxHash && batchToastedTxRef.current !== batchClaimTxHash) {
+      batchToastedTxRef.current = batchClaimTxHash;
+      const txUrl = `https://basescan.org/tx/${batchClaimTxHash}`;
+      toast({
+        title: "Batch claim & send complete",
+        description: (
+          <>
+            Fees claimed, wrapped, and sent to walletchan.eth.{" "}
+            <a href={txUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "underline" }}>
+              View on BaseScan
+            </a>
+          </>
+        ),
+        status: "success",
+        duration: 10000,
+        isClosable: true,
+        position: "bottom-right",
+      });
+      const timeout = setTimeout(() => {
+        refetchClankerWeth();
+        refetchClankerBnkrw();
+        fetchEthPrice();
+        setHistoryRefreshKey((k) => k + 1);
+      }, 2000);
+      return () => clearTimeout(timeout);
+    }
+  }, [isBatchConfirmed, batchClaimTxHash, refetchClankerWeth, refetchClankerBnkrw, fetchEthPrice, toast]);
 
   // Clanker derived values
   const clankerWethFloat = clankerWethFees
@@ -835,6 +1043,38 @@ export default function AdminContent() {
                           Claim
                         </Button>
                       </Flex>
+
+                      <Box h="2px" bg="bauhaus.border" opacity={0.1} />
+
+                      {/* Batch Claim & Send */}
+                      <Flex justify="center" align="center" gap={2}>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={handleBatchClaim}
+                          isLoading={isBatchClaiming || isBatchConfirming}
+                          loadingText={isBatchConfirming ? "Confirming..." : "Claiming..."}
+                          isDisabled={
+                            !isWalletConnected ||
+                            isWrongChain ||
+                            !isOwner ||
+                            (!hasClankerWeth && !hasClankerBnkrw)
+                          }
+                        >
+                          Batch Claim & Send
+                        </Button>
+                        {isWalletConnected && !isOwner && (
+                          <Tooltip
+                            label={`Only the fee owner (${CLANKER_FEE_OWNER.slice(0, 6)}...${CLANKER_FEE_OWNER.slice(-4)}) can batch claim`}
+                            fontSize="xs"
+                            hasArrow
+                          >
+                            <Box as="span" cursor="help" color="gray.400">
+                              <Info size={14} />
+                            </Box>
+                          </Tooltip>
+                        )}
+                      </Flex>
                     </VStack>
                   </Box>
                 </Box>
@@ -952,6 +1192,44 @@ export default function AdminContent() {
             wchanPrice={bnkrwPrice}
             refreshKey={historyRefreshKey}
           />
+          {/* Burned WCHAN */}
+          <Box w="100%" mt={4}>
+            <HStack justify="center" spacing={3} opacity={0.7}>
+              <Text fontSize="sm" fontWeight="700" color="gray.500">
+                🔥 Burned WCHAN:
+              </Text>
+              {burnedWchanLoading ? (
+                <Skeleton h="16px" w="200px" />
+              ) : burnedWchanRaw != null ? (
+                <Text fontSize="sm" fontWeight="700" color="gray.500">
+                  {parseFloat(formatUnits(burnedWchanRaw as bigint, 18)).toLocaleString(undefined, {
+                    maximumFractionDigits: 0,
+                  })}
+                  {" "}
+                  ({(() => {
+                    const pct = (parseFloat(formatUnits(burnedWchanRaw as bigint, 18)) / WCHAN_TOTAL_SUPPLY) * 100;
+                    if (pct >= 0.01) return pct.toFixed(2);
+                    if (pct === 0) return "0";
+                    // Show enough decimals to get first non-zero digit + 1
+                    const digits = Math.max(2, -Math.floor(Math.log10(pct)) + 1);
+                    return pct.toFixed(digits);
+                  })()}%)
+                  {bnkrwPrice != null && (
+                    <>
+                      {" · "}
+                      {formatUsd(parseFloat(formatUnits(burnedWchanRaw as bigint, 18)) * bnkrwPrice)}
+                    </>
+                  )}
+                </Text>
+              ) : null}
+              <Link
+                href={`https://basescan.org/token/${WCHAN_TOKEN_ADDRESS}?a=${BURN_ADDRESS}`}
+                isExternal
+              >
+                <ExternalLinkIcon size={14} color="gray" />
+              </Link>
+            </HStack>
+          </Box>
           {/* Internal Pages */}
           <HStack justify="center" pt={4} spacing={4} flexWrap="wrap" opacity={0.6}>
             {[
