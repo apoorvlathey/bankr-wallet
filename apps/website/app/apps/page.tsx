@@ -108,7 +108,7 @@ export default function AppsPage() {
                   textTransform="uppercase"
                   letterSpacing="wider"
                 >
-                  Explore dApps
+                  App Store
                 </Text>
                 <Box
                   w="14px"
@@ -120,7 +120,7 @@ export default function AppsPage() {
                 />
               </HStack>
               <Text fontSize="sm" color="gray.500" fontWeight="500">
-                Browse and interact with dApps directly through WalletChan
+                Connect wallet once and interact with multiple Web3 dapps easily
               </Text>
             </VStack>
             <Box
