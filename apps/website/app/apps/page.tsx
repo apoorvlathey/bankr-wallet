@@ -12,14 +12,21 @@ import {
   InputLeftElement,
   SimpleGrid,
   Button,
+  Flex,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverBody,
 } from "@chakra-ui/react";
-import { Search } from "lucide-react";
+import { Search, ChevronDown } from "lucide-react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Navigation } from "../components/Navigation";
+import { TokenBanner } from "../components/TokenBanner";
 import { AppCard } from "./components/AppCard";
 import { IframeApp } from "./components/IframeApp";
-import { DAPPS, CHAIN_NAMES } from "./data/dapps";
+import { DAPPS, CHAIN_NAMES, getChainColor, getChainTextColor } from "./data/dapps";
 import type { DappEntry } from "./data/dapps";
+import { ChainIcon } from "./components/ChainIcon";
 
 export default function AppsPage() {
   const [search, setSearch] = useState("");
@@ -30,16 +37,25 @@ export default function AppsPage() {
   const availableChains = useMemo(() => {
     const chainSet = new Set<number>();
     DAPPS.forEach((dapp) => dapp.chains.forEach((c) => chainSet.add(c)));
-    // Sort by CHAIN_NAMES order (known chains first), then by ID
-    const knownOrder = Object.keys(CHAIN_NAMES).map(Number);
+    // Ethereum first, then alphabetical by name
     return Array.from(chainSet).sort((a, b) => {
-      const aIdx = knownOrder.indexOf(a);
-      const bIdx = knownOrder.indexOf(b);
-      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-      if (aIdx !== -1) return -1;
-      if (bIdx !== -1) return 1;
-      return a - b;
+      if (a === 1) return -1;
+      if (b === 1) return 1;
+      const nameA = (CHAIN_NAMES[a] || `Chain ${a}`).toLowerCase();
+      const nameB = (CHAIN_NAMES[b] || `Chain ${b}`).toLowerCase();
+      return nameA.localeCompare(nameB);
     });
+  }, []);
+
+  // Count dapps per chain for the filter
+  const chainCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    DAPPS.forEach((dapp) =>
+      dapp.chains.forEach((c) => {
+        counts[c] = (counts[c] || 0) + 1;
+      })
+    );
+    return counts;
   }, []);
 
   const filteredDapps = useMemo(() => {
@@ -71,45 +87,64 @@ export default function AppsPage() {
   return (
     <Box minH="100vh" bg="bauhaus.background">
       <Navigation />
+      <TokenBanner />
 
-      <Container maxW="7xl" py={8}>
+      <Container maxW="7xl" py={10}>
         <VStack spacing={8} align="stretch">
-          {/* Header */}
-          <VStack spacing={3} textAlign="center">
-            <HStack spacing={3} justify="center">
-              <Box w="16px" h="16px" bg="bauhaus.red" border="3px solid" borderColor="bauhaus.black" />
-              <Text
-                fontSize={{ base: "2xl", md: "3xl" }}
-                fontWeight="900"
-                textTransform="uppercase"
-                letterSpacing="wider"
-              >
-                Explore dApps
+          {/* Header with centered title and connect wallet top-right */}
+          <Box position="relative">
+            <VStack spacing={2} textAlign="center">
+              <HStack spacing={3} justify="center">
+                <Box
+                  w="14px"
+                  h="14px"
+                  bg="bauhaus.red"
+                  border="3px solid"
+                  borderColor="bauhaus.black"
+                />
+                <Text
+                  fontSize={{ base: "2xl", md: "3xl" }}
+                  fontWeight="900"
+                  textTransform="uppercase"
+                  letterSpacing="wider"
+                >
+                  Explore dApps
+                </Text>
+                <Box
+                  w="14px"
+                  h="14px"
+                  bg="bauhaus.blue"
+                  border="3px solid"
+                  borderColor="bauhaus.black"
+                  borderRadius="full"
+                />
+              </HStack>
+              <Text fontSize="sm" color="gray.500" fontWeight="500">
+                Browse and interact with dApps directly through WalletChan
               </Text>
-              <Box
-                w="16px"
-                h="16px"
-                bg="bauhaus.blue"
-                border="3px solid"
-                borderColor="bauhaus.black"
-                borderRadius="full"
-              />
-            </HStack>
-            <Text
-              fontSize="md"
-              color="gray.600"
-              maxW="500px"
-              fontWeight="500"
+            </VStack>
+            <Box
+              position={{ base: "relative", md: "absolute" }}
+              right={{ md: 0 }}
+              top={{ md: "50%" }}
+              transform={{ md: "translateY(-50%)" }}
+              mt={{ base: 3, md: 0 }}
+              display="flex"
+              justifyContent="center"
             >
-              Browse and interact with dApps directly through WalletChan.
-              Connect your wallet to get started.
-            </Text>
-            <ConnectButton />
-          </VStack>
+              <ConnectButton />
+            </Box>
+          </Box>
 
-          {/* Search */}
-          <Box maxW="500px" mx="auto" w="full">
-            <InputGroup>
+          {/* Search + Chain Filter on same line */}
+          <Flex
+            maxW="600px"
+            mx="auto"
+            w="full"
+            gap={3}
+            direction={{ base: "column", sm: "row" }}
+          >
+            <InputGroup flex={1}>
               <InputLeftElement pointerEvents="none">
                 <Search size={16} color="gray" />
               </InputLeftElement>
@@ -128,48 +163,14 @@ export default function AppsPage() {
                 }}
               />
             </InputGroup>
-          </Box>
 
-          {/* Chain filter chips */}
-          <HStack spacing={2} flexWrap="wrap" justify="center">
-            <Button
-              size="xs"
-              bg={selectedChain === null ? "bauhaus.blue" : "white"}
-              color={selectedChain === null ? "white" : "bauhaus.black"}
-              border="2px solid"
-              borderColor="bauhaus.black"
-              borderRadius="0"
-              fontWeight="800"
-              textTransform="uppercase"
-              fontSize="10px"
-              letterSpacing="wide"
-              onClick={() => setSelectedChain(null)}
-              _hover={{ opacity: 0.8 }}
-            >
-              All Chains
-            </Button>
-            {availableChains.map((chainId) => (
-              <Button
-                key={chainId}
-                size="xs"
-                bg={selectedChain === chainId ? "bauhaus.blue" : "white"}
-                color={selectedChain === chainId ? "white" : "bauhaus.black"}
-                border="2px solid"
-                borderColor="bauhaus.black"
-                borderRadius="0"
-                fontWeight="800"
-                textTransform="uppercase"
-                fontSize="10px"
-                letterSpacing="wide"
-                onClick={() =>
-                  setSelectedChain(selectedChain === chainId ? null : chainId)
-                }
-                _hover={{ opacity: 0.8 }}
-              >
-                {CHAIN_NAMES[chainId] || `Chain ${chainId}`}
-              </Button>
-            ))}
-          </HStack>
+            <ChainFilterDropdown
+              availableChains={availableChains}
+              chainCounts={chainCounts}
+              selectedChain={selectedChain}
+              onSelect={setSelectedChain}
+            />
+          </Flex>
 
           {/* Dapp Grid */}
           {filteredDapps.length > 0 ? (
@@ -181,6 +182,7 @@ export default function AppsPage() {
                 <AppCard
                   key={dapp.id}
                   dapp={dapp}
+                  selectedChain={selectedChain}
                   onClick={() => setActiveDapp(dapp)}
                 />
               ))}
@@ -204,3 +206,137 @@ export default function AppsPage() {
     </Box>
   );
 }
+
+/** Chain filter dropdown button + popover */
+function ChainFilterDropdown({
+  availableChains,
+  chainCounts,
+  selectedChain,
+  onSelect,
+}: {
+  availableChains: number[];
+  chainCounts: Record<number, number>;
+  selectedChain: number | null;
+  onSelect: (chain: number | null) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <Popover
+      isOpen={isOpen}
+      onClose={() => setIsOpen(false)}
+      placement="bottom-end"
+      isLazy
+    >
+      <PopoverTrigger>
+        <Button
+          bg={selectedChain ? getChainColor(selectedChain) : "white"}
+          color={selectedChain ? getChainTextColor(selectedChain) : "bauhaus.black"}
+          border="3px solid"
+          borderColor="bauhaus.black"
+          borderRadius="0"
+          fontWeight="800"
+          textTransform="uppercase"
+          fontSize="xs"
+          letterSpacing="wide"
+          px={4}
+          h="40px"
+          minW={{ base: "full", sm: "160px" }}
+          onClick={() => setIsOpen(!isOpen)}
+          _hover={{ opacity: 0.85 }}
+          _active={{
+            transform: "translate(2px, 2px)",
+            boxShadow: "none",
+          }}
+          boxShadow="3px 3px 0px 0px var(--chakra-colors-bauhaus-black)"
+          rightIcon={<ChevronDown size={14} />}
+          leftIcon={selectedChain ? <ChainIcon chainId={selectedChain} size="14px" /> : undefined}
+        >
+          {selectedChain
+            ? CHAIN_NAMES[selectedChain] || `Chain ${selectedChain}`
+            : "All Chains"}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        bg="white"
+        border="3px solid"
+        borderColor="bauhaus.black"
+        borderRadius="0"
+        boxShadow="6px 6px 0px 0px var(--chakra-colors-bauhaus-black)"
+        w="240px"
+        _focus={{ outline: "none" }}
+      >
+        <PopoverBody p={0} maxH="320px" overflowY="auto">
+          {/* All Chains option */}
+          <Box
+            as="button"
+            w="full"
+            textAlign="left"
+            px={4}
+            py={2.5}
+            bg={selectedChain === null ? "bauhaus.blue" : "white"}
+            color={selectedChain === null ? "white" : "bauhaus.black"}
+            fontWeight="800"
+            fontSize="xs"
+            textTransform="uppercase"
+            letterSpacing="wide"
+            borderBottom="2px solid"
+            borderColor="gray.200"
+            _hover={{ bg: selectedChain === null ? "bauhaus.blue" : "gray.50" }}
+            onClick={() => {
+              onSelect(null);
+              setIsOpen(false);
+            }}
+          >
+            <HStack justify="space-between">
+              <Text>All Chains</Text>
+              <Text fontWeight="600" opacity={0.6}>
+                {DAPPS.length}
+              </Text>
+            </HStack>
+          </Box>
+
+          {availableChains.map((chainId) => (
+            <Box
+              key={chainId}
+              as="button"
+              w="full"
+              textAlign="left"
+              px={4}
+              py={2.5}
+              bg={selectedChain === chainId ? "bauhaus.blue" : "white"}
+              color={selectedChain === chainId ? "white" : "bauhaus.black"}
+              fontWeight="700"
+              fontSize="xs"
+              textTransform="uppercase"
+              letterSpacing="wide"
+              borderBottom="1px solid"
+              borderColor="gray.100"
+              _hover={{
+                bg:
+                  selectedChain === chainId ? "bauhaus.blue" : "gray.50",
+              }}
+              onClick={() => {
+                onSelect(selectedChain === chainId ? null : chainId);
+                setIsOpen(false);
+              }}
+            >
+              <HStack justify="space-between">
+                <HStack spacing={2}>
+                  <ChainIcon chainId={chainId} size="12px" />
+                  <Text>
+                    {CHAIN_NAMES[chainId] || `Chain ${chainId}`}
+                  </Text>
+                </HStack>
+                <Text fontWeight="600" opacity={0.5} fontSize="10px">
+                  {chainCounts[chainId] || 0}
+                </Text>
+              </HStack>
+            </Box>
+          ))}
+        </PopoverBody>
+      </PopoverContent>
+    </Popover>
+  );
+}
+

@@ -6,17 +6,24 @@ import {
   VStack,
   Text,
   Image,
-  Badge,
+  Tooltip,
 } from "@chakra-ui/react";
 import type { DappEntry } from "../data/dapps";
 import { CHAIN_NAMES } from "../data/dapps";
+import { ChainIcon } from "./ChainIcon";
+
+const MAX_VISIBLE_CHAINS = 4;
 
 interface AppCardProps {
   dapp: DappEntry;
+  selectedChain?: number | null;
   onClick: () => void;
 }
 
 export function AppCard({ dapp, onClick }: AppCardProps) {
+  const visibleChains = dapp.chains.slice(0, MAX_VISIBLE_CHAINS);
+  const overflowCount = dapp.chains.length - MAX_VISIBLE_CHAINS;
+
   return (
     <Box
       as="button"
@@ -68,21 +75,52 @@ export function AppCard({ dapp, onClick }: AppCardProps) {
           >
             {dapp.description}
           </Text>
-          <HStack spacing={1} flexWrap="wrap" mt={1}>
-            {dapp.chains.map((chainId) => (
-              <Badge
+          {/* Compact chain indicators */}
+          <HStack spacing={1.5} mt={1}>
+            {visibleChains.map((chainId) => (
+              <Tooltip
                 key={chainId}
+                label={CHAIN_NAMES[chainId] || `Chain ${chainId}`}
+                fontSize="xs"
                 bg="bauhaus.black"
                 color="white"
-                fontSize="9px"
-                fontWeight="800"
-                textTransform="uppercase"
                 borderRadius="0"
-                px={1.5}
+                fontWeight="700"
+                textTransform="uppercase"
+                px={2}
+                py={1}
               >
-                {CHAIN_NAMES[chainId] || chainId}
-              </Badge>
+                <Box>
+                  <ChainIcon chainId={chainId} />
+                </Box>
+              </Tooltip>
             ))}
+            {overflowCount > 0 && (
+              <Tooltip
+                label={dapp.chains
+                  .slice(MAX_VISIBLE_CHAINS)
+                  .map((id) => CHAIN_NAMES[id] || id)
+                  .join(", ")}
+                fontSize="xs"
+                bg="bauhaus.black"
+                color="white"
+                borderRadius="0"
+                fontWeight="700"
+                textTransform="uppercase"
+                px={2}
+                py={1}
+              >
+                <Text
+                  fontSize="9px"
+                  fontWeight="800"
+                  color="gray.500"
+                  lineHeight="10px"
+                  flexShrink={0}
+                >
+                  +{overflowCount}
+                </Text>
+              </Tooltip>
+            )}
           </HStack>
         </VStack>
       </HStack>
