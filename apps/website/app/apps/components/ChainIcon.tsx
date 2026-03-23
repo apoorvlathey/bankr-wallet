@@ -31,8 +31,8 @@ export function ChainIcon({ chainId, size = "10px" }: ChainIconProps) {
       h={size}
       bg={getChainColor(chainId)}
       borderRadius={chainId % 2 === 0 ? "full" : "0"}
-      border="1.5px solid"
-      borderColor="bauhaus.black"
+      border="1px solid"
+      borderColor="gray.400"
       flexShrink={0}
     />
   );

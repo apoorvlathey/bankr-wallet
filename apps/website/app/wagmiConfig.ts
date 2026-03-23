@@ -1,4 +1,4 @@
-import { http, createConfig } from "wagmi";
+import { http, createConfig, fallback } from "wagmi";
 import {
   mainnet,
   base,
@@ -40,7 +40,7 @@ const connectors = connectorsForWallets(
       ],
     },
   ],
-  { appName: "WalletChan", projectId }
+  { appName: "WalletChan", projectId },
 );
 
 export const walletChains = [
@@ -67,7 +67,7 @@ export const walletChains = [
 export const CHAIN_RPC_URLS: Record<number, string> = {
   1: process.env.NEXT_PUBLIC_ETH_RPC_URL || "https://eth.llamarpc.com",
   8453: process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://base.llamarpc.com",
-  137: "https://polygon.llamarpc.com",
+  137: process.env.NEXT_PUBLIC_POLYGON_RPC_URL || "https://1rpc.io/matic",
   130: "https://mainnet.unichain.org",
   42161: "https://arb1.arbitrum.io/rpc",
   10: "https://mainnet.optimism.io",
@@ -84,14 +84,29 @@ export const CHAIN_RPC_URLS: Record<number, string> = {
   11155111: "https://ethereum-sepolia-rpc.publicnode.com",
 };
 
+/** Additional fallback RPC URLs per chain */
+const CHAIN_FALLBACK_RPCS: Record<number, string[]> = {
+  8453: ["https://mainnet.base.org"],
+};
+
 export const config = createConfig({
   connectors,
   chains: walletChains,
-  transports: walletChains.reduce<Record<number, ReturnType<typeof http>>>(
+  transports: walletChains.reduce<
+    Record<number, ReturnType<typeof http> | ReturnType<typeof fallback>>
+  >(
     (acc, chain) => {
-      acc[chain.id] = http(CHAIN_RPC_URLS[chain.id]);
+      const fallbacks = CHAIN_FALLBACK_RPCS[chain.id];
+      if (fallbacks?.length) {
+        acc[chain.id] = fallback([
+          http(CHAIN_RPC_URLS[chain.id]),
+          ...fallbacks.map((url) => http(url)),
+        ]);
+      } else {
+        acc[chain.id] = http(CHAIN_RPC_URLS[chain.id]);
+      }
       return acc;
     },
-    {}
+    {},
   ),
 });

@@ -7,7 +7,48 @@ export interface DappEntry {
   url: string;
   iconUrl: string;
   chains: number[];
+  categories?: string[];
+  /** true = tested & auto-connects, false = tested & does NOT, undefined = untested */
+  autoConnect?: boolean;
 }
+
+/** Ordered list of categories for the filter bar */
+export const CATEGORIES = [
+  "swap",
+  "yield",
+  "staking",
+  "bridge",
+  "leverage",
+  "tools",
+  "insurance",
+  "social",
+] as const;
+
+export type Category = (typeof CATEGORIES)[number];
+
+/** Display names for categories */
+export const CATEGORY_LABELS: Record<string, string> = {
+  swap: "Swap",
+  yield: "Yield",
+  staking: "Staking",
+  bridge: "Bridge",
+  leverage: "Leverage",
+  tools: "Tools",
+  insurance: "Insurance",
+  social: "Social",
+};
+
+/** Category colors: [bg, text] */
+export const CATEGORY_COLORS: Record<string, [string, string]> = {
+  swap: ["#1040C0", "#FFFFFF"],       // Bauhaus blue
+  yield: ["#0B8A3E", "#FFFFFF"],      // Green
+  staking: ["#7C3AED", "#FFFFFF"],    // Purple
+  bridge: ["#F0C020", "#121212"],     // Bauhaus yellow
+  leverage: ["#D02020", "#FFFFFF"],    // Bauhaus red
+  tools: ["#64748B", "#FFFFFF"],      // Slate
+  insurance: ["#DB2777", "#FFFFFF"],  // Pink
+  social: ["#6366F1", "#FFFFFF"],     // Indigo
+};
 
 /** Chains hidden from the UI (stripped from dapp entries and filters) */
 const HIDDEN_CHAINS = new Set([

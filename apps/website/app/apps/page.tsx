@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Box,
   Container,
@@ -13,25 +14,70 @@ import {
   SimpleGrid,
   Button,
   Flex,
+  Image,
+  Skeleton,
+  SkeletonCircle,
   Popover,
   PopoverTrigger,
   PopoverContent,
   PopoverBody,
 } from "@chakra-ui/react";
-import { Search, ChevronDown } from "lucide-react";
+import { Search, ChevronDown, Globe } from "lucide-react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Navigation } from "../components/Navigation";
 import { TokenBanner } from "../components/TokenBanner";
 import { AppCard } from "./components/AppCard";
 import { IframeApp } from "./components/IframeApp";
-import { DAPPS, CHAIN_NAMES, getChainColor, getChainTextColor } from "./data/dapps";
+import { DAPPS, CHAIN_NAMES, CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS, getChainColor, getChainTextColor } from "./data/dapps";
 import type { DappEntry } from "./data/dapps";
 import { ChainIcon } from "./components/ChainIcon";
 
 export default function AppsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [selectedChain, setSelectedChain] = useState<number | null>(null);
-  const [activeDapp, setActiveDapp] = useState<DappEntry | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  // Restore dapp from ?url= param synchronously to avoid grid flash
+  const [activeDapp, setActiveDapp] = useState<DappEntry | null>(() => {
+    const urlParam = searchParams.get("url");
+    if (!urlParam) return null;
+    return (
+      DAPPS.find((d) => d.url === urlParam) ||
+      DAPPS.filter((d) => urlParam.startsWith(d.url))
+        .sort((a, b) => b.url.length - a.url.length)[0] ||
+      null
+    );
+  });
+  const [customUrl, setCustomUrl] = useState<string | null>(() => {
+    const urlParam = searchParams.get("url");
+    if (!urlParam) return null;
+    // Only set customUrl if no known dapp matched
+    const matched = DAPPS.some(
+      (d) => d.url === urlParam || urlParam.startsWith(d.url)
+    );
+    return matched ? null : urlParam;
+  });
+  const [customUrlName, setCustomUrlName] = useState<string | null>(null);
+  const [initialChainId] = useState<number | undefined>(() => {
+    const chainParam = searchParams.get("chainId");
+    return chainParam ? Number(chainParam) : undefined;
+  });
+
+  /** Check if search input looks like a URL */
+  const isUrl = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+    // Match URLs with protocol or common domain patterns
+    return /^https?:\/\//i.test(trimmed) || /^[\w-]+(\.[\w-]+)+/.test(trimmed);
+  }, []);
+
+  /** Normalize a URL string — prepend https:// if missing */
+  const normalizeUrl = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `https://${trimmed}`;
+  }, []);
 
   // Derive unique chain IDs from the dapps data
   const availableChains = useMemo(() => {
@@ -68,9 +114,47 @@ export default function AppsPage() {
         dapp.url.toLowerCase().includes(q);
       const matchesChain =
         !selectedChain || dapp.chains.includes(selectedChain);
-      return matchesSearch && matchesChain;
+      const matchesCategory =
+        !selectedCategory || (dapp.categories?.includes(selectedCategory) ?? false);
+      return matchesSearch && matchesChain && matchesCategory;
     });
-  }, [search, selectedChain]);
+  }, [search, selectedChain, selectedCategory]);
+
+  /** Update the chainId in the URL without navigation */
+  const updateChainInUrl = useCallback((appUrl: string, chainId: number) => {
+    const params = new URLSearchParams();
+    params.set("url", appUrl);
+    params.set("chainId", String(chainId));
+    router.replace(`/apps?${params.toString()}`, { scroll: false });
+  }, [router]);
+
+  const savedScrollY = useRef(0);
+
+  /** Navigate back to the grid, clearing the URL param */
+  const handleBack = useCallback(() => {
+    document.title = "WalletChan - The Wallet for AI Era";
+    router.replace("/apps", { scroll: false });
+    setActiveDapp(null);
+    setCustomUrl(null);
+    setCustomUrlName(null);
+    // Restore scroll after React re-renders the grid
+    requestAnimationFrame(() => window.scrollTo(0, savedScrollY.current));
+  }, [router]);
+
+  /** Open a known dapp */
+  const openDapp = useCallback((dapp: DappEntry) => {
+    savedScrollY.current = window.scrollY;
+    router.push(`/apps?url=${encodeURIComponent(dapp.url)}`);
+    setActiveDapp(dapp);
+  }, [router]);
+
+  /** Open a custom URL */
+  const openCustomUrl = useCallback((url: string, name?: string | null) => {
+    savedScrollY.current = window.scrollY;
+    router.push(`/apps?url=${encodeURIComponent(url)}`);
+    setCustomUrl(url);
+    if (name) setCustomUrlName(name);
+  }, [router]);
 
   // If a dapp is selected, show the iframe view
   if (activeDapp) {
@@ -78,14 +162,38 @@ export default function AppsPage() {
       <IframeApp
         appUrl={activeDapp.url}
         appName={activeDapp.name}
+        appIconUrl={activeDapp.iconUrl}
         supportedChains={activeDapp.chains}
-        onBack={() => setActiveDapp(null)}
+        autoConnect={activeDapp.autoConnect}
+        initialChainId={initialChainId}
+        onChainChange={(chainId) => updateChainInUrl(activeDapp.url, chainId)}
+        onBack={handleBack}
+      />
+    );
+  }
+
+  // If a custom URL is entered, show the iframe view with all chains
+  if (customUrl) {
+    const hostname = (() => {
+      try { return new URL(customUrl).hostname; } catch { return customUrl; }
+    })();
+    return (
+      <IframeApp
+        appUrl={customUrl}
+        appName={customUrlName || hostname}
+        supportedChains={availableChains}
+        initialChainId={initialChainId}
+        onChainChange={(chainId) => updateChainInUrl(customUrl, chainId)}
+        onBack={handleBack}
       />
     );
   }
 
   return (
     <Box minH="100vh" bg="bauhaus.background">
+      {/* Preload character image so it's instant when opening a dapp */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/images/walletchan-icon-nobg.png" alt="" style={{ display: "none" }} />
       <Navigation />
       <TokenBanner />
 
@@ -149,14 +257,20 @@ export default function AppsPage() {
                 <Search size={16} color="gray" />
               </InputLeftElement>
               <Input
-                placeholder="Search dApps..."
+                placeholder="Search dApps or enter URL..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && isUrl(search)) {
+                    openCustomUrl(normalizeUrl(search));
+                  }
+                }}
                 bg="white"
                 border="3px solid"
                 borderColor="bauhaus.black"
                 borderRadius="0"
                 fontWeight="600"
+                _placeholder={{ color: "gray.400" }}
                 _focus={{
                   borderColor: "bauhaus.blue",
                   boxShadow: "none",
@@ -172,6 +286,93 @@ export default function AppsPage() {
             />
           </Flex>
 
+          {/* Category Filter Bar */}
+          <Flex
+            gap={2}
+            overflowX="auto"
+            pb={2}
+            justify="center"
+            flexWrap="wrap"
+            css={{
+              "&::-webkit-scrollbar": { display: "none" },
+              scrollbarWidth: "none",
+            }}
+          >
+            <Button
+              size="sm"
+              bg={selectedCategory === null ? "bauhaus.black" : "transparent"}
+              color={selectedCategory === null ? "white" : "gray.500"}
+              border="2px solid"
+              borderColor={selectedCategory === null ? "bauhaus.black" : "gray.200"}
+              borderRadius="full"
+              fontWeight="800"
+              textTransform="uppercase"
+              fontSize="xs"
+              letterSpacing="wide"
+              px={4}
+              flexShrink={0}
+              onClick={() => setSelectedCategory(null)}
+              boxShadow={
+                selectedCategory === null
+                  ? "3px 3px 0px 0px var(--chakra-colors-bauhaus-black)"
+                  : "none"
+              }
+              _hover={{ bg: selectedCategory === null ? "bauhaus.black" : "gray.50" }}
+              _active={{
+                transform: "translate(2px, 2px)",
+                boxShadow: "none",
+              }}
+            >
+              All
+            </Button>
+            {CATEGORIES.map((cat) => {
+              const [catBg] = CATEGORY_COLORS[cat] || ["#1040C0"];
+              const isSelected = selectedCategory === cat;
+              return (
+              <Button
+                key={cat}
+                size="sm"
+                bg={isSelected ? catBg : `${catBg}10`}
+                color={isSelected ? "white" : catBg}
+                border="2px solid"
+                borderColor={isSelected ? catBg : `${catBg}30`}
+                borderRadius="full"
+                fontWeight="800"
+                textTransform="uppercase"
+                fontSize="xs"
+                letterSpacing="wide"
+                px={4}
+                flexShrink={0}
+                onClick={() =>
+                  setSelectedCategory(isSelected ? null : cat)
+                }
+                boxShadow={
+                  isSelected
+                    ? "3px 3px 0px 0px var(--chakra-colors-bauhaus-black)"
+                    : "none"
+                }
+                _hover={{ bg: isSelected ? catBg : `${catBg}20` }}
+                _active={{
+                  transform: "translate(2px, 2px)",
+                  boxShadow: "none",
+                }}
+              >
+                {CATEGORY_LABELS[cat] || cat}
+              </Button>
+              );
+            })}
+          </Flex>
+
+          {/* Custom URL card when search looks like a URL */}
+          {isUrl(search) && (
+            <CustomUrlCard
+              url={normalizeUrl(search)}
+              onOpen={(name) => {
+                openCustomUrl(normalizeUrl(search), name);
+              }}
+            />
+          )}
+
           {/* Dapp Grid */}
           {filteredDapps.length > 0 ? (
             <SimpleGrid
@@ -183,11 +384,11 @@ export default function AppsPage() {
                   key={dapp.id}
                   dapp={dapp}
                   selectedChain={selectedChain}
-                  onClick={() => setActiveDapp(dapp)}
+                  onClick={() => openDapp(dapp)}
                 />
               ))}
             </SimpleGrid>
-          ) : (
+          ) : !isUrl(search) ? (
             <Box textAlign="center" py={12}>
               <Text
                 fontWeight="700"
@@ -200,9 +401,123 @@ export default function AppsPage() {
                 Try adjusting your search or filters
               </Text>
             </Box>
-          )}
+          ) : null}
         </VStack>
       </Container>
+    </Box>
+  );
+}
+
+/** Custom URL card — fetches favicon + meta description */
+function CustomUrlCard({ url, onOpen }: { url: string; onOpen: (name: string | null) => void }) {
+  const [meta, setMeta] = useState<{ title: string | null; description: string | null } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const prevUrlRef = useRef(url);
+
+  // Extract domain for favicon
+  let domain = url;
+  try { domain = new URL(url).hostname; } catch {}
+  const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+
+  useEffect(() => {
+    // Reset when URL changes
+    if (prevUrlRef.current !== url) {
+      setMeta(null);
+      setLoading(true);
+      prevUrlRef.current = url;
+    }
+
+    const controller = new AbortController();
+    fetch(`/api/meta?url=${encodeURIComponent(url)}`, { signal: controller.signal })
+      .then((r) => r.json())
+      .then((data) => {
+        setMeta(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        setMeta(null);
+        setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [url]);
+
+  return (
+    <Box
+      as="button"
+      maxW="400px"
+      mx="auto"
+      w="full"
+      bg="white"
+      border="2px solid"
+      borderColor="bauhaus.blue"
+      borderRadius="16px"
+      boxShadow="3px 3px 0px 0px var(--chakra-colors-bauhaus-blue)"
+      p={5}
+      textAlign="left"
+      cursor="pointer"
+      transition="all 0.15s ease-out"
+      _hover={{
+        transform: "translate(-2px, -2px)",
+        boxShadow: "5px 5px 0px 0px var(--chakra-colors-bauhaus-blue)",
+      }}
+      _active={{
+        transform: "translate(3px, 3px)",
+        boxShadow: "none",
+      }}
+      onClick={() => onOpen(meta?.title || null)}
+    >
+      <HStack spacing={3} align="start">
+        {loading ? (
+          <SkeletonCircle size="48px" flexShrink={0} />
+        ) : (
+          <Image
+            src={faviconUrl}
+            alt={domain}
+            w="48px"
+            h="48px"
+            borderRadius="full"
+            flexShrink={0}
+            fallback={
+              <Box
+                w="48px"
+                h="48px"
+                bg="bauhaus.blue"
+                borderRadius="full"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                flexShrink={0}
+              >
+                <Globe size={24} color="white" />
+              </Box>
+            }
+          />
+        )}
+        <VStack align="start" spacing={0.5} flex={1} minW={0}>
+          {loading ? (
+            <>
+              <Skeleton h="16px" w="60%" />
+              <Skeleton h="12px" w="90%" />
+            </>
+          ) : (
+            <>
+              <Text
+                fontWeight="900"
+                fontSize="sm"
+                textTransform="uppercase"
+                letterSpacing="wide"
+                noOfLines={1}
+              >
+                {meta?.title || domain}
+              </Text>
+              <Text fontSize="xs" color="gray.600" noOfLines={2} lineHeight="short">
+                {meta?.description || url}
+              </Text>
+            </>
+          )}
+        </VStack>
+      </HStack>
     </Box>
   );
 }

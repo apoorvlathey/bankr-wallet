@@ -5,11 +5,10 @@ import {
   HStack,
   VStack,
   Text,
-  Image,
   Tooltip,
 } from "@chakra-ui/react";
 import type { DappEntry } from "../data/dapps";
-import { CHAIN_NAMES } from "../data/dapps";
+import { CHAIN_NAMES, CATEGORY_LABELS, CATEGORY_COLORS } from "../data/dapps";
 import { ChainIcon } from "./ChainIcon";
 
 const MAX_VISIBLE_CHAINS = 4;
@@ -20,42 +19,90 @@ interface AppCardProps {
   onClick: () => void;
 }
 
+function getDappDomain(url: string): string {
+  try {
+    const { hostname } = new URL(url);
+    return hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 export function AppCard({ dapp, onClick }: AppCardProps) {
   const visibleChains = dapp.chains.slice(0, MAX_VISIBLE_CHAINS);
   const overflowCount = dapp.chains.length - MAX_VISIBLE_CHAINS;
+  const domain = getDappDomain(dapp.url);
 
   return (
     <Box
       as="button"
       w="full"
       bg="white"
-      border="4px solid"
+      border="2px solid"
       borderColor="bauhaus.black"
-      boxShadow="6px 6px 0px 0px var(--chakra-colors-bauhaus-black)"
-      p={4}
+      borderRadius="16px"
+      boxShadow="3px 3px 0px 0px var(--chakra-colors-bauhaus-black)"
+      p={5}
       textAlign="left"
       cursor="pointer"
       transition="all 0.15s ease-out"
       _hover={{
         transform: "translate(-2px, -2px)",
-        boxShadow: "8px 8px 0px 0px var(--chakra-colors-bauhaus-black)",
+        boxShadow: "5px 5px 0px 0px var(--chakra-colors-bauhaus-black)",
       }}
       _active={{
         transform: "translate(3px, 3px)",
         boxShadow: "none",
       }}
       onClick={onClick}
+      position="relative"
     >
-      <HStack spacing={3} align="start">
-        <Image
+      {/* Category badges + auto-connect zap — top right */}
+      {(dapp.categories?.length || dapp.autoConnect === true) && (
+        <HStack position="absolute" top={2} right={2} spacing={1}>
+          {dapp.categories?.map((cat) => (
+            <Text
+              key={cat}
+              fontSize="8px"
+              fontWeight="800"
+              textTransform="uppercase"
+              letterSpacing="wide"
+              color={CATEGORY_COLORS[cat]?.[0] || "bauhaus.blue"}
+              bg={`${CATEGORY_COLORS[cat]?.[0] || "#1040C0"}15`}
+              px={1.5}
+              py={0.5}
+              border="1px solid"
+              borderColor={`${CATEGORY_COLORS[cat]?.[0] || "#1040C0"}35`}
+              borderRadius="full"
+              lineHeight="1"
+            >
+              {CATEGORY_LABELS[cat] || cat}
+            </Text>
+          ))}
+          {dapp.autoConnect === true && (
+            <Tooltip
+              label="Auto-connects wallet"
+              fontSize="xs"
+              bg="bauhaus.black"
+              color="white"
+              borderRadius="0"
+              fontWeight="700"
+              px={2}
+              py={1}
+            >
+              <Text fontSize="sm" lineHeight="1">⚡</Text>
+            </Tooltip>
+          )}
+        </HStack>
+      )}
+      <HStack spacing={3} align="start" mt={dapp.categories?.length || dapp.autoConnect === true ? 1 : 0}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={dapp.iconUrl}
           alt={dapp.name}
-          w="40px"
-          h="40px"
-          borderRadius="sm"
-          border="2px solid"
-          borderColor="bauhaus.black"
-          fallbackSrc="https://www.google.com/s2/favicons?domain=example.com&sz=64"
+          width={48}
+          height={48}
+          style={{ borderRadius: "50%", flexShrink: 0, width: 48, height: 48 }}
         />
         <VStack align="start" spacing={1} flex={1} minW={0}>
           <Text
@@ -64,18 +111,29 @@ export function AppCard({ dapp, onClick }: AppCardProps) {
             textTransform="uppercase"
             letterSpacing="wide"
             noOfLines={1}
+            pr={dapp.categories?.length || dapp.autoConnect === true ? 10 : 0}
           >
             {dapp.name}
+          </Text>
+          <Text
+            fontSize="11px"
+            color="gray.500"
+            noOfLines={1}
+            lineHeight="1"
+            mt={-0.5}
+          >
+            {domain}
           </Text>
           <Text
             fontSize="xs"
             color="gray.600"
             noOfLines={2}
+            mt={0.5}
             lineHeight="short"
           >
             {dapp.description}
           </Text>
-          {/* Compact chain indicators */}
+          {/* Chain indicators */}
           <HStack spacing={1.5} mt={1}>
             {visibleChains.map((chainId) => (
               <Tooltip
