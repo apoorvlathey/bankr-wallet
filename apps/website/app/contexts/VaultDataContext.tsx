@@ -74,7 +74,7 @@ export function VaultDataProvider({ children }: { children: ReactNode }) {
   }, [fetchVaultData]);
 
   return (
-    // @ts-expect-error React 19 types conflict with monorepo React 18 types
+    // @ts-ignore React 19 types conflict with monorepo React 18 types on Vercel
     <VaultDataContext.Provider
       value={{ vaultData, isLoading, refetchVaultData: fetchVaultData }}
     >

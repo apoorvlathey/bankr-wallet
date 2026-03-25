@@ -102,7 +102,7 @@ export function TokenDataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    // @ts-expect-error React 19 types conflict with monorepo React 18 types
+    // @ts-ignore React 19 types conflict with monorepo React 18 types on Vercel
     <TokenDataContext.Provider value={{ tokenData, isLoading }}>
       {children}
     </TokenDataContext.Provider>
