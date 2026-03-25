@@ -17,6 +17,10 @@ interface AppCardProps {
   dapp: DappEntry;
   selectedChain?: number | null;
   onClick: () => void;
+  /** App Store mode: show install/uninstall button */
+  isInstalled?: boolean;
+  onInstall?: () => void;
+  onUninstall?: () => void;
 }
 
 function getDappDomain(url: string): string {
@@ -28,7 +32,7 @@ function getDappDomain(url: string): string {
   }
 }
 
-export function AppCard({ dapp, onClick }: AppCardProps) {
+export function AppCard({ dapp, onClick, isInstalled, onInstall, onUninstall }: AppCardProps) {
   const visibleChains = dapp.chains.slice(0, MAX_VISIBLE_CHAINS);
   const overflowCount = dapp.chains.length - MAX_VISIBLE_CHAINS;
   const domain = getDappDomain(dapp.url);
@@ -133,51 +137,74 @@ export function AppCard({ dapp, onClick }: AppCardProps) {
           >
             {dapp.description}
           </Text>
-          {/* Chain indicators */}
-          <HStack spacing={1.5} mt={1}>
-            {visibleChains.map((chainId) => (
-              <Tooltip
-                key={chainId}
-                label={CHAIN_NAMES[chainId] || `Chain ${chainId}`}
-                fontSize="xs"
-                bg="bauhaus.black"
-                color="white"
-                borderRadius="0"
-                fontWeight="700"
-                textTransform="uppercase"
-                px={2}
-                py={1}
-              >
-                <Box>
-                  <ChainIcon chainId={chainId} />
-                </Box>
-              </Tooltip>
-            ))}
-            {overflowCount > 0 && (
-              <Tooltip
-                label={dapp.chains
-                  .slice(MAX_VISIBLE_CHAINS)
-                  .map((id) => CHAIN_NAMES[id] || id)
-                  .join(", ")}
-                fontSize="xs"
-                bg="bauhaus.black"
-                color="white"
-                borderRadius="0"
-                fontWeight="700"
-                textTransform="uppercase"
-                px={2}
-                py={1}
-              >
-                <Text
-                  fontSize="9px"
-                  fontWeight="800"
-                  color="gray.500"
-                  lineHeight="10px"
-                  flexShrink={0}
+          {/* Chain indicators + Install button */}
+          <HStack spacing={1.5} mt={1} justify="space-between" w="full">
+            <HStack spacing={1.5}>
+              {visibleChains.map((chainId) => (
+                <Tooltip
+                  key={chainId}
+                  label={CHAIN_NAMES[chainId] || `Chain ${chainId}`}
+                  fontSize="xs"
+                  bg="bauhaus.black"
+                  color="white"
+                  borderRadius="0"
+                  fontWeight="700"
+                  textTransform="uppercase"
+                  px={2}
+                  py={1}
                 >
-                  +{overflowCount}
-                </Text>
-              </Tooltip>
+                  <Box>
+                    <ChainIcon chainId={chainId} />
+                  </Box>
+                </Tooltip>
+              ))}
+              {overflowCount > 0 && (
+                <Tooltip
+                  label={dapp.chains
+                    .slice(MAX_VISIBLE_CHAINS)
+                    .map((id) => CHAIN_NAMES[id] || id)
+                    .join(", ")}
+                  fontSize="xs"
+                  bg="bauhaus.black"
+                  color="white"
+                  borderRadius="0"
+                  fontWeight="700"
+                  textTransform="uppercase"
+                  px={2}
+                  py={1}
+                >
+                  <Text
+                    fontSize="9px"
+                    fontWeight="800"
+                    color="gray.500"
+                    lineHeight="10px"
+                    flexShrink={0}
+                  >
+                    +{overflowCount}
+                  </Text>
+                </Tooltip>
+              )}
+            </HStack>
+            {isInstalled !== undefined && (
+              <Text
+                as="span"
+                fontSize="9px"
+                fontWeight="800"
+                color={isInstalled ? "green.500" : "bauhaus.blue"}
+                textTransform="uppercase"
+                cursor="pointer"
+                _hover={{ textDecoration: "underline" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isInstalled) {
+                    onUninstall?.();
+                  } else {
+                    onInstall?.();
+                  }
+                }}
+              >
+                {isInstalled ? "✓ Installed" : "+ Install"}
+              </Text>
             )}
           </HStack>
         </VStack>
