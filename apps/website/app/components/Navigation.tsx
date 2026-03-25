@@ -26,12 +26,12 @@ import { LogoShapes } from "./ui/GeometricShape";
 import { CHROME_STORE_URL, TELEGRAM_URL } from "../constants";
 import { useVaultData } from "../contexts/VaultDataContext";
 
-const COINS_SUBDOMAIN = "coins.walletchan.com";
-const COINS_SUBDOMAIN_URL = "https://coins.walletchan.com";
 const STAKE_SUBDOMAIN = "stake.walletchan.com";
 const STAKE_SUBDOMAIN_URL = "https://stake.walletchan.com";
 const MIGRATE_SUBDOMAIN = "migrate.walletchan.com";
 const MIGRATE_SUBDOMAIN_URL = "https://migrate.walletchan.com";
+const OS_SUBDOMAIN = "os.walletchan.com";
+const OS_SUBDOMAIN_URL = "https://os.walletchan.com";
 const MAIN_SITE = "https://walletchan.com";
 
 const revolveBorder = keyframes`
@@ -41,9 +41,8 @@ const revolveBorder = keyframes`
 
 const navLinks = [
   { label: "Token", href: "#token" },
-  // { label: "Coins", href: "/coins" },
+  { label: "OS", href: "/os" },
   { label: "Stake", href: "/stake" },
-  // { label: "OS", href: "/os" },
   { label: "Install", href: "#install" },
   { label: "Roadmap", href: "/roadmap" },
 ];
@@ -60,28 +59,28 @@ export function Navigation() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const pathname = usePathname();
   const { vaultData } = useVaultData();
-  const [isCoinsSubdomain, setIsCoinsSubdomain] = useState(false);
   const [isStakeSubdomain, setIsStakeSubdomain] = useState(false);
   const [isMigrateSubdomain, setIsMigrateSubdomain] = useState(false);
+  const [isOsSubdomain, setIsOsSubdomain] = useState(false);
   const [isLocalhost, setIsLocalhost] = useState(false);
 
   useEffect(() => {
     const hostname = window.location.hostname;
-    setIsCoinsSubdomain(hostname === COINS_SUBDOMAIN);
     setIsStakeSubdomain(hostname === STAKE_SUBDOMAIN);
     setIsMigrateSubdomain(hostname === MIGRATE_SUBDOMAIN);
+    setIsOsSubdomain(hostname === OS_SUBDOMAIN);
     setIsLocalhost(hostname === "localhost" || hostname === "127.0.0.1");
   }, []);
 
-  const isOnSubdomain = isCoinsSubdomain || isStakeSubdomain || isMigrateSubdomain;
-  const isOnCoins = pathname === "/coins" || isCoinsSubdomain;
+  const isOnSubdomain = isStakeSubdomain || isMigrateSubdomain || isOsSubdomain;
+  const isOnOs = pathname === "/os" || isOsSubdomain;
   const isOnStake = pathname === "/stake" || isStakeSubdomain;
   const isOnMigrate = pathname === "/migrate" || isMigrateSubdomain;
 
   const getNavHref = (href: string) => {
-    // On coins subdomain
-    if (isCoinsSubdomain) {
-      if (href === "/coins") return "/";
+    // On OS subdomain
+    if (isOsSubdomain) {
+      if (href === "/os") return "/";
       if (href === "/stake") return STAKE_SUBDOMAIN_URL;
       if (href === "/migrate") return MIGRATE_SUBDOMAIN_URL;
       if (href.startsWith("#")) return `${MAIN_SITE}/${href}`;
@@ -89,20 +88,20 @@ export function Navigation() {
     // On stake subdomain
     if (isStakeSubdomain) {
       if (href === "/stake") return "/";
-      if (href === "/coins") return COINS_SUBDOMAIN_URL;
+      if (href === "/os") return OS_SUBDOMAIN_URL;
       if (href === "/migrate") return MIGRATE_SUBDOMAIN_URL;
       if (href.startsWith("#")) return `${MAIN_SITE}/${href}`;
     }
     // On migrate subdomain
     if (isMigrateSubdomain) {
       if (href === "/migrate") return "/";
-      if (href === "/coins") return COINS_SUBDOMAIN_URL;
+      if (href === "/os") return OS_SUBDOMAIN_URL;
       if (href === "/stake") return STAKE_SUBDOMAIN_URL;
       if (href.startsWith("#")) return `${MAIN_SITE}/${href}`;
     }
     // On production main site, route to subdomains
     if (!isLocalhost && !isOnSubdomain) {
-      if (href === "/coins") return COINS_SUBDOMAIN_URL;
+      if (href === "/os") return OS_SUBDOMAIN_URL;
       if (href === "/stake") return STAKE_SUBDOMAIN_URL;
       if (href === "/migrate") return MIGRATE_SUBDOMAIN_URL;
       // On sub-pages, anchor links need to go to homepage
@@ -149,7 +148,7 @@ export function Navigation() {
           {/* Desktop Navigation */}
           <HStack spacing={8} display={{ base: "none", md: "flex" }}>
             {navLinks.map((link) =>
-              link.label === "Coins" ? (
+              link.label === "OS" ? (
                 <Box
                   key={link.label}
                   position="relative"
@@ -157,17 +156,17 @@ export function Navigation() {
                   overflow="hidden"
                   borderRadius="4px"
                 >
-                  {/* Revolving conic gradient border (static on /coins) */}
+                  {/* Revolving conic gradient border (static on /os) */}
                   <Box
                     position="absolute"
-                    inset={isOnCoins ? "0" : "-50%"}
+                    inset={isOnOs ? "0" : "-50%"}
                     bg={
-                      isOnCoins
+                      isOnOs
                         ? "bauhaus.yellow"
                         : "conic-gradient(from 0deg, #F0C020, #FFE066, #F5A800, #F0C020)"
                     }
                     animation={
-                      isOnCoins
+                      isOnOs
                         ? undefined
                         : `${revolveBorder} 2s linear infinite`
                     }
@@ -300,7 +299,7 @@ export function Navigation() {
           <DrawerBody>
             <VStack spacing={8} align="flex-start" mt={8}>
               {navLinks.map((link) =>
-                link.label === "Coins" ? (
+                link.label === "OS" ? (
                   <Box
                     key={link.label}
                     position="relative"
@@ -310,14 +309,14 @@ export function Navigation() {
                   >
                     <Box
                       position="absolute"
-                      inset={isOnCoins ? "0" : "-50%"}
+                      inset={isOnOs ? "0" : "-50%"}
                       bg={
-                        isOnCoins
+                        isOnOs
                           ? "bauhaus.yellow"
                           : "conic-gradient(from 0deg, #F0C020, #FFE066, #F5A800, #F0C020)"
                       }
                       animation={
-                        isOnCoins
+                        isOnOs
                           ? undefined
                           : `${revolveBorder} 2s linear infinite`
                       }

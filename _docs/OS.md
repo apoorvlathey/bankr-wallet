@@ -27,6 +27,10 @@ The `/os` page (subdomain: `os.walletchan.com`) presents a Windows 95-style desk
 - Hydration-safe initialization (defaults on server, localStorage in useEffect)
 - CSS breakpoint switching (no useBreakpointValue) to avoid white flash
 - Cascade offset for new windows (40px diagonal, cycling every 8)
+- Start menu closes on click outside
+- OG image: dynamic endpoint at `/api/og/os` (dark gradient, WalletChan mascot, Outfit font)
+- Meta tags in `app/os/layout.tsx` (title, description, OpenGraph, Twitter card)
+- Navigation bar links to OS with revolving conic gradient border (same style as former Coins link)
 
 ### Key Files
 | File | Purpose |
@@ -48,9 +52,11 @@ The `/os` page (subdomain: `os.walletchan.com`) presents a Windows 95-style desk
 | `app/os/os/WalletChanMascot.tsx` | Animated mascot with tips speech bubble |
 | `app/os/components/IframeContent.tsx` | Extracted iframe rendering (used by both windows and mobile) |
 | `app/os/components/IframeApp.tsx` | Fullscreen iframe wrapper (mobile fallback) |
+| `app/os/layout.tsx` | Metadata (title, OG, Twitter card) |
+| `app/api/og/os/route.tsx` | Dynamic OG image generator (edge runtime, 1200x630) |
 
 ### URL Parameters
 `?url=<dapp-url>&chainId=<number>` — auto-opens the dapp in a window on page load.
 
 ### Mobile
-Below `md` breakpoint: simple icon grid + fullscreen IframeApp. No windowing.
+Below `md` breakpoint: dark OS-themed icon grid with MenuBar at top + fullscreen IframeApp on dapp open. No windowing. Uses same `DESKTOP_BG` gradient and `WIN95_FONT` as desktop.

@@ -70,6 +70,19 @@ function MobileAppsView() {
     <Box minH="100vh" bg={DESKTOP_BG} display="flex" flexDirection="column">
       <MenuBar />
       <Box
+        bg="#F0C020"
+        px={3}
+        py={1.5}
+        textAlign="center"
+        fontFamily={WIN95_FONT}
+        fontSize="10px"
+        fontWeight="700"
+        color="#000"
+        letterSpacing="0.02em"
+      >
+        For the full OS experience, visit on a desktop
+      </Box>
+      <Box
         flex={1}
         overflowY="auto"
         px={4}
@@ -81,7 +94,7 @@ function MobileAppsView() {
           gap={4}
           justifyItems="center"
         >
-          {DAPPS.slice(0, 24).map((dapp) => (
+          {DAPPS.map((dapp) => (
             <Box
               key={dapp.id}
               as="button"

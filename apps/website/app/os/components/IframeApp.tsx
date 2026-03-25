@@ -134,12 +134,12 @@ export function IframeApp({
         bg="bauhaus.black"
         borderBottom="4px solid"
         borderColor="bauhaus.black"
-        px={4}
-        py={2.5}
+        px={3}
+        py={2}
       >
-        <HStack justify="space-between" align="center">
-          {/* Left: Back + App info */}
-          <HStack spacing={3} flex={1} minW={0}>
+        {/* Row 1: Back + App name + Connect */}
+        <HStack justify="space-between" align="center" mb={1.5}>
+          <HStack spacing={2} flex={1} minW={0}>
             <IconButton
               aria-label="Back to apps"
               icon={<ArrowLeft size={16} />}
@@ -150,120 +150,118 @@ export function IframeApp({
               onClick={onBack}
               flexShrink={0}
             />
-            <VStack align="start" spacing={0} minW={0}>
-              <HStack spacing={2}>
-                {faviconUrl && (
-                  <Image
-                    src={faviconUrl}
-                    alt=""
-                    w="16px"
-                    h="16px"
-                    borderRadius="3px"
-                    flexShrink={0}
-                  />
-                )}
-                <Text
+            {faviconUrl && (
+              <Image
+                src={faviconUrl}
+                alt=""
+                w="16px"
+                h="16px"
+                borderRadius="3px"
+                flexShrink={0}
+              />
+            )}
+            <Text
+              color="white"
+              fontWeight="900"
+              fontSize="sm"
+              textTransform="uppercase"
+              letterSpacing="wide"
+              noOfLines={1}
+            >
+              {appName}
+            </Text>
+          </HStack>
+
+          <ConnectButton.Custom>
+            {({ account, openAccountModal, openConnectModal, mounted }) => {
+              const connected = mounted && account;
+              return (
+                <Button
+                  size="sm"
+                  bg="whiteAlpha.200"
                   color="white"
-                  fontWeight="900"
-                  fontSize="sm"
-                  textTransform="uppercase"
-                  letterSpacing="wide"
-                  noOfLines={1}
-                >
-                  {appName}
-                </Text>
-              </HStack>
-              <HStack spacing={1}>
-                <Text
-                  color="whiteAlpha.500"
+                  border="2px solid"
+                  borderColor="whiteAlpha.300"
+                  borderRadius="0"
+                  fontWeight="700"
                   fontSize="xs"
-                  fontFamily="mono"
-                  noOfLines={1}
+                  letterSpacing="wide"
+                  h="28px"
+                  px={2.5}
+                  flexShrink={0}
+                  onClick={connected ? openAccountModal : openConnectModal}
+                  _hover={{ bg: "whiteAlpha.300" }}
+                  _active={{ transform: "translate(1px, 1px)" }}
                 >
-                  {displayUrl}
-                </Text>
-                <IconButton
-                  aria-label="Open in new tab"
-                  icon={<ExternalLink size={12} />}
-                  size="xs"
-                  variant="ghost"
-                  color="whiteAlpha.500"
-                  minW="auto"
-                  h="auto"
-                  p={0.5}
-                  _hover={{ color: "white" }}
-                  as="a"
-                  href={appUrl}
-                  target="_blank"
-                />
-              </HStack>
-            </VStack>
-          </HStack>
+                  {connected ? (
+                    <HStack spacing={1.5}>
+                      {account.ensAvatar ? (
+                        <Image
+                          src={account.ensAvatar}
+                          alt=""
+                          w="16px"
+                          h="16px"
+                          borderRadius="full"
+                          flexShrink={0}
+                        />
+                      ) : (
+                        <Box
+                          w="6px"
+                          h="6px"
+                          bg="green.400"
+                          borderRadius="full"
+                          flexShrink={0}
+                        />
+                      )}
+                      <Text fontSize="xs">{account.displayName}</Text>
+                    </HStack>
+                  ) : (
+                    "CONNECT"
+                  )}
+                </Button>
+              );
+            }}
+          </ConnectButton.Custom>
+        </HStack>
 
-          {/* Right: Chain selector + ConnectButton */}
-          <HStack spacing={3} flexShrink={0}>
-            <ChainSelectorDropdown
-              availableChains={availableChains}
-              selectedChain={activeChainId}
-              isOpen={chainDropdownOpen}
-              onToggle={() => setChainDropdownOpen(!chainDropdownOpen)}
-              onClose={() => setChainDropdownOpen(false)}
-              onSelect={(id) => {
-                handleChainChange(id);
-                setChainDropdownOpen(false);
-              }}
+        {/* Row 2: URL (left) + Chain selector (right) */}
+        <HStack spacing={2} align="center" justify="space-between">
+          <HStack spacing={1} flex={1} minW={0}>
+            <Text
+              color="whiteAlpha.500"
+              fontSize="xs"
+              fontFamily="mono"
+              noOfLines={1}
+            >
+              {displayUrl}
+            </Text>
+            <IconButton
+              aria-label="Open in new tab"
+              icon={<ExternalLink size={12} />}
+              size="xs"
+              variant="ghost"
+              color="whiteAlpha.500"
+              minW="auto"
+              h="auto"
+              p={0.5}
+              _hover={{ color: "white" }}
+              as="a"
+              href={appUrl}
+              target="_blank"
+              flexShrink={0}
             />
-
-            <ConnectButton.Custom>
-              {({ account, openAccountModal, openConnectModal, mounted }) => {
-                const connected = mounted && account;
-                return (
-                  <Button
-                    size="sm"
-                    bg="whiteAlpha.200"
-                    color="white"
-                    border="2px solid"
-                    borderColor="whiteAlpha.300"
-                    borderRadius="0"
-                    fontWeight="700"
-                    fontSize="xs"
-                    letterSpacing="wide"
-                    h="32px"
-                    px={3}
-                    onClick={connected ? openAccountModal : openConnectModal}
-                    _hover={{ bg: "whiteAlpha.300" }}
-                    _active={{ transform: "translate(1px, 1px)" }}
-                  >
-                    {connected ? (
-                      <HStack spacing={2}>
-                        {account.ensAvatar ? (
-                          <Image
-                            src={account.ensAvatar}
-                            alt=""
-                            w="18px"
-                            h="18px"
-                            borderRadius="full"
-                            flexShrink={0}
-                          />
-                        ) : (
-                          <Box
-                            w="6px"
-                            h="6px"
-                            bg="green.400"
-                            borderRadius="full"
-                            flexShrink={0}
-                          />
-                        )}
-                        <Text>{account.displayName}</Text>
-                      </HStack>
-                    ) : (
-                      "CONNECT"
-                    )}
-                  </Button>
-                );
-              }}
-            </ConnectButton.Custom>
           </HStack>
+          <ChainSelectorDropdown
+            availableChains={availableChains}
+            selectedChain={activeChainId}
+            isOpen={chainDropdownOpen}
+            onToggle={() => setChainDropdownOpen(!chainDropdownOpen)}
+            onClose={() => setChainDropdownOpen(false)}
+            onSelect={(id) => {
+              handleChainChange(id);
+              setChainDropdownOpen(false);
+            }}
+          />
         </HStack>
       </Box>
 

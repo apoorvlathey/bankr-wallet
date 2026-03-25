@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Box, HStack, Text, Image } from "@chakra-ui/react";
 import {
   TASKBAR_BG,
@@ -67,6 +67,19 @@ export function Taskbar({
   installedApps,
 }: TaskbarProps) {
   const [startMenuOpen, setStartMenuOpen] = useState(false);
+  const startMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close start menu on click outside
+  useEffect(() => {
+    if (!startMenuOpen) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (startMenuRef.current && !startMenuRef.current.contains(e.target as Node)) {
+        setStartMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, [startMenuOpen]);
 
   const handleStartClick = useCallback(() => {
     setStartMenuOpen((prev) => !prev);
@@ -86,7 +99,7 @@ export function Taskbar({
       zIndex={10000}
     >
       {/* Start Button + Menu */}
-      <Box position="relative" flexShrink={0}>
+      <Box ref={startMenuRef} position="relative" flexShrink={0}>
         <Box
           as="button"
           display="flex"
