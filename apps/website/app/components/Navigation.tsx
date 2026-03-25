@@ -43,7 +43,7 @@ const navLinks = [
   { label: "Token", href: "#token" },
   // { label: "Coins", href: "/coins" },
   { label: "Stake", href: "/stake" },
-  // { label: "Apps", href: "/apps" },
+  // { label: "OS", href: "/os" },
   { label: "Install", href: "#install" },
   { label: "Roadmap", href: "/roadmap" },
 ];

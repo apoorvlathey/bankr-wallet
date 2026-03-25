@@ -1236,7 +1236,7 @@ export default function AdminContent() {
               { href: "/swap", label: "Swap" },
               { href: "/swap-wchan", label: "Swap WCHAN" },
               { href: "/verify", label: "Verify" },
-              { href: "/apps", label: "Apps" },
+              { href: "/os", label: "OS" },
               { href: "/migrate", label: "Migrate" },
               { href: "/mainnet", label: "Bridge to Mainnet" },
               { href: "/l1-base-deploy", label: "L1 Base Token Deploy" },

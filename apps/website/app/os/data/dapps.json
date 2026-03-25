@@ -1,0 +1,825 @@
+[
+  {
+    "id": 38,
+    "name": "Uniswap",
+    "description": "Swap or provide liquidity on the Uniswap Protocol",
+    "url": "https://app.uniswap.org",
+    "iconUrl": "/images/dapp-icons/38.png",
+    "chains": [
+      1,
+      130,
+      8453,
+      42161,
+      137,
+      10,
+      56,
+      43114,
+      7777777,
+      42220
+    ],
+    "categories": [
+      "swap",
+      "bridge"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 1753279954,
+    "name": "DefiLlama Swap",
+    "description": "LlamaSwap looks for the best route for your trade among a variety of Dex Aggregators, guaranteeing you the best execution prices in DeFi.",
+    "url": "https://swap.defillama.com/",
+    "iconUrl": "/images/dapp-icons/1753279954.png",
+    "chains": [
+      1,
+      8453,
+      42161,
+      43114,
+      56,
+      42220,
+      100,
+      10,
+      137,
+      146,
+      130
+    ],
+    "categories": [
+      "swap"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 44,
+    "name": "Yearn",
+    "description": "The yield protocol for digital assets",
+    "url": "https://yearn.fi",
+    "iconUrl": "/images/dapp-icons/44.png",
+    "chains": [
+      1,
+      42161,
+      8453,
+      137,
+      146
+    ],
+    "categories": [
+      "yield"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 151,
+    "name": "Aerodrome Finance",
+    "description": "Aerodrome Finance is a next-generation AMM that combines the best of Curve, Convex and Uniswap, designed to serve as the central liquidity hub on Base network. Aerodrome NFTs vote on token emissions a",
+    "url": "https://aerodrome.finance",
+    "iconUrl": "/images/dapp-icons/151.png",
+    "chains": [
+      8453
+    ],
+    "categories": [
+      "swap"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 74,
+    "name": "CoW Swap",
+    "description": "CoW Swap finds the lowest prices from all decentralized exchanges and DEX aggregators & saves you more with p2p trading and protection from MEV",
+    "url": "https://swap.cow.fi",
+    "iconUrl": "/images/dapp-icons/74.png",
+    "chains": [
+      1,
+      8453,
+      137,
+      42161,
+      56,
+      43114,
+      100
+    ],
+    "categories": [
+      "swap",
+      "bridge"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 88,
+    "name": "Revoke.cash",
+    "description": "Manage and revoke your token allowances with Revoke.cash",
+    "url": "https://revoke.cash/",
+    "iconUrl": "/images/dapp-icons/88.png",
+    "chains": [
+      1,
+      8453,
+      42161,
+      43114,
+      56,
+      100,
+      57073,
+      10,
+      137,
+      130,
+      7777777,
+      369,
+      1868,
+      146
+    ],
+    "categories": [
+      "tools"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 21,
+    "name": "DeFi Saver",
+    "description": "The next generation DeFi management dashboard",
+    "url": "https://app.defisaver.com",
+    "iconUrl": "/images/dapp-icons/21.png",
+    "chains": [
+      1,
+      8453,
+      42161,
+      10
+    ],
+    "categories": [
+      "tools"
+    ],
+    "autoConnect": false
+  },
+  {
+    "id": 20,
+    "name": "Curve Finance",
+    "description": "Decentralized exchange liquidity pool designed for extremely efficient stablecoin trading and low-risk income for liquidity providers",
+    "url": "https://www.curve.finance/",
+    "iconUrl": "/images/dapp-icons/20.png",
+    "chains": [
+      1,
+      8453,
+      42161,
+      43114,
+      56,
+      100,
+      57073,
+      10,
+      137,
+      146
+    ],
+    "categories": [
+      "swap"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 196,
+    "name": "sky.money",
+    "description": "Rewards, savings, upgrade, and trade",
+    "url": "https://app.sky.money/",
+    "iconUrl": "/images/dapp-icons/196.png",
+    "chains": [
+      1,
+      42161,
+      8453,
+      10,
+      130
+    ],
+    "categories": [
+      "yield"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 93,
+    "name": "Balancer",
+    "description": "Balancer is a battle-tested toolkit for true AMM experimentation and innovation.",
+    "url": "https://balancer.fi/pools",
+    "iconUrl": "/images/dapp-icons/93.png",
+    "chains": [
+      1,
+      8453,
+      137,
+      42161,
+      10,
+      43114,
+      100
+    ],
+    "categories": [
+      "swap"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 35,
+    "name": "Sushi",
+    "description": "Be a DeFi Chef with Sushi. Swap, earn, stack yields, lend, borrow, leverage all on one decentralized, community driven platform.",
+    "url": "https://www.sushi.com/",
+    "iconUrl": "/images/dapp-icons/35.png",
+    "chains": [
+      1,
+      8453,
+      42161,
+      137,
+      10,
+      56,
+      43114,
+      42220,
+      100,
+      146
+    ],
+    "categories": [
+      "swap",
+      "bridge"
+    ],
+    "autoConnect": false
+  },
+  {
+    "id": 91,
+    "name": "PancakeSwap",
+    "description": "Farm CAKE with Pancake LP Tokens",
+    "url": "https://pancakeswap.finance",
+    "iconUrl": "/images/dapp-icons/91.png",
+    "chains": [
+      1,
+      56
+    ],
+    "categories": [
+      "swap"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 1767000293,
+    "name": "Ethereum Follow Protocol",
+    "description": "The onchain social graph protocol for Ethereum accounts",
+    "url": "https://efp.app",
+    "iconUrl": "/images/dapp-icons/1767000293.png",
+    "chains": [
+      1,
+      10,
+      8453
+    ],
+    "categories": [
+      "social"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 34,
+    "name": "Summer.fi",
+    "description": "Automated Exposure to DeFi’s. Highest Quality Yield",
+    "url": "https://summer.fi",
+    "iconUrl": "/images/dapp-icons/34.png",
+    "chains": [
+      1,
+      10
+    ],
+    "categories": [
+      "yield"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 25,
+    "name": "Velora (formerly ParaSwap)",
+    "description": "Velora is the most advanced intent-based trading protocol in DeFi. Unlock powerful features like crosschain swaps, limit orders, Super Hooks, and real-time execution.",
+    "url": "https://embedded.velora.xyz/?referrer=safe_app",
+    "iconUrl": "/images/dapp-icons/25.png",
+    "chains": [
+      1,
+      8453,
+      137,
+      42161,
+      10,
+      56,
+      43114,
+      100
+    ],
+    "categories": [
+      "swap",
+      "bridge"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 87,
+    "name": "Aura Finance",
+    "description": "Boosting DeFi yield potential and governance power",
+    "url": "https://app.aura.finance/",
+    "iconUrl": "/images/dapp-icons/87.png",
+    "chains": [
+      1,
+      42161,
+      43114,
+      8453,
+      100,
+      10,
+      137
+    ],
+    "categories": [
+      "yield"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 138,
+    "name": "Spark",
+    "description": "Spark is an at-scale stablecoin allocation engine capturing yield across DeFi, RWAs and exchanges. This yield is provided cross-chain to Savings USDS holders.",
+    "url": "https://app.spark.fi/",
+    "iconUrl": "/images/dapp-icons/138.png",
+    "chains": [
+      1,
+      8453,
+      100
+    ],
+    "categories": [
+      "yield"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 173,
+    "name": "Arcadia Finance",
+    "description": "The smartest way to earn on Base",
+    "url": "https://arcadia.finance",
+    "iconUrl": "/images/dapp-icons/173.png",
+    "chains": [
+      8453
+    ],
+    "categories": [
+      "yield"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 54,
+    "name": "Bancor Network",
+    "description": "Bancor Safe Staking",
+    "url": "https://app.bancor.network/",
+    "iconUrl": "/images/dapp-icons/54.png",
+    "chains": [
+      1
+    ],
+    "categories": [
+      "swap"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 152,
+    "name": "Velodrome Finance",
+    "description": "Velodrome Finance is a next-generation AMM that combines the best of Curve, Convex and Uniswap, designed to serve as the central liquidity hub on Optimism network. Velodrome NFTs vote on token emissio",
+    "url": "https://velodrome.finance",
+    "iconUrl": "/images/dapp-icons/152.png",
+    "chains": [
+      10
+    ],
+    "categories": [
+      "swap",
+      "bridge"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 160,
+    "name": "Everstake",
+    "description": "Stake your Ethereum with as little as 0.1 ETH.",
+    "url": "https://safe-eth.everstake.one/",
+    "iconUrl": "/images/dapp-icons/160.png",
+    "chains": [
+      1
+    ],
+    "categories": [
+      "staking"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 84,
+    "name": "Tenderize",
+    "description": "Liquid staking for web3 assets. Make staking tender again 🥩 🔨",
+    "url": "https://app.tenderize.me/",
+    "iconUrl": "/images/dapp-icons/84.png",
+    "chains": [
+      1,
+      42161
+    ],
+    "categories": [
+      "staking"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 51,
+    "name": "Enzyme (ETH)",
+    "description": "Onchain Asset Management",
+    "url": "https://app.enzyme.finance",
+    "iconUrl": "/images/dapp-icons/51.png",
+    "chains": [
+      1
+    ],
+    "categories": [
+      "yield"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 90,
+    "name": "Enzyme (Polygon)",
+    "description": "Onchain Asset Management",
+    "url": "https://app.enzyme.finance/?network=polygon",
+    "iconUrl": "/images/dapp-icons/90.png",
+    "chains": [
+      137
+    ],
+    "categories": [
+      "yield"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 36,
+    "name": "DODO",
+    "description": "DODO - Your on-chain liquidity provider.",
+    "url": "https://app.dodoex.io",
+    "iconUrl": "/images/dapp-icons/36.png",
+    "chains": [
+      1,
+      137,
+      56
+    ],
+    "categories": [
+      "swap",
+      "bridge"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 185,
+    "name": "CoW Stop Loss App",
+    "description": "UI for creating and managing stop loss orders on CoW Protocol",
+    "url": "https://www.stoploss.bleu.builders",
+    "iconUrl": "/images/dapp-icons/185.png",
+    "chains": [
+      1,
+      42161,
+      100
+    ],
+    "categories": [
+      "swap"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 96,
+    "name": "Nexus Mutual",
+    "description": "The insurance alternative for crypto and more.",
+    "url": "https://app.nexusmutual.io",
+    "iconUrl": "/images/dapp-icons/96.png",
+    "chains": [
+      1
+    ],
+    "categories": [
+      "insurance"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 53,
+    "name": "0xPlasma Finance",
+    "description": "Cross-chain DeFi & DEX aggregator, farming, asset management, fiat on-ramp",
+    "url": "https://apy.plasma.finance",
+    "iconUrl": "/images/dapp-icons/53.png",
+    "chains": [
+      1,
+      137,
+      42161,
+      10,
+      56,
+      43114
+    ],
+    "categories": [
+      "swap",
+      "bridge"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 137,
+    "name": "Envelop",
+    "description": "Cross-chain multi-tool protocol providing true value to your NFT",
+    "url": "https://app.envelop.is/",
+    "iconUrl": "/images/dapp-icons/137.png",
+    "chains": [
+      1,
+      137,
+      42161,
+      56
+    ],
+    "categories": [
+      "tools"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 191,
+    "name": "UNCX Liquidity Lockers",
+    "description": "Lock Uniswap liquidity and vest ERC20 tokens with customizable schedules and hooks. Enjoy enhanced security and visibility on popular charting platforms.",
+    "url": "https://safe-lockers.uncx.network",
+    "iconUrl": "/images/dapp-icons/191.png",
+    "chains": [
+      1,
+      8453,
+      137,
+      42161,
+      56,
+      43114
+    ],
+    "categories": [
+      "tools"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 145,
+    "name": "Multisight",
+    "description": "An analytics tool for evaluating the response activity of multisignature wallets",
+    "url": "https://multisight.app",
+    "iconUrl": "/images/dapp-icons/145.png",
+    "chains": [
+      1,
+      8453,
+      137,
+      42161,
+      10,
+      56,
+      43114,
+      42220,
+      100
+    ],
+    "categories": [
+      "tools"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 211,
+    "name": "Teller",
+    "description": "Borrow with long-tail tokens in your treasury. Loans are time-based. No margin call liquidations, simply repay on time.",
+    "url": "https://app.teller.org",
+    "iconUrl": "/images/dapp-icons/211.png",
+    "chains": [
+      1,
+      8453,
+      42161
+    ],
+    "categories": [
+      "yield"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 56,
+    "name": "InsurAce",
+    "description": "Entry to the products and services InsurAce provides to secure your DeFi journey.",
+    "url": "https://app.insurace.io",
+    "iconUrl": "/images/dapp-icons/56.png",
+    "chains": [
+      1,
+      137,
+      56,
+      43114
+    ],
+    "categories": [
+      "insurance"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 181,
+    "name": "Tezoro",
+    "description": "Create a Digital Will - a smart contract that can transfer your assets to beneficiaries if something goes wrong.",
+    "url": "https://www.tezoro.io/",
+    "iconUrl": "/images/dapp-icons/181.png",
+    "chains": [
+      1
+    ],
+    "categories": [
+      "tools"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 107,
+    "name": "Toros",
+    "description": "Leverage with protections",
+    "url": "https://toros.finance",
+    "iconUrl": "/images/dapp-icons/107.png",
+    "chains": [
+      1,
+      137,
+      42161,
+      10
+    ],
+    "categories": [
+      "leverage"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 170,
+    "name": "Rango Exchange",
+    "description": "Cross-Chain Dex & Bridge Aggregator",
+    "url": "https://app.rango.exchange/",
+    "iconUrl": "/images/dapp-icons/170.png",
+    "chains": [
+      1,
+      137,
+      42161,
+      10,
+      56,
+      43114
+    ],
+    "categories": [
+      "swap",
+      "bridge"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 202,
+    "name": "StakeKit",
+    "description": "StakeKit is the world's most powerful yield platform. Covering more than 400+ yield opportunities, StakeKit aggregates all yields across all chains and across all major DeFi providers in one place.",
+    "url": "https://safe.stakek.it/",
+    "iconUrl": "/images/dapp-icons/202.png",
+    "chains": [
+      1,
+      8453,
+      137,
+      42161,
+      10,
+      56,
+      43114,
+      42220,
+      146
+    ],
+    "categories": [
+      "staking"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 204,
+    "name": "Multisender.app",
+    "description": "Multisender facilitates airdrops and other mass transactions on a multitude of networks, including, among others, Ethereum, BSC and Base.",
+    "url": "https://classic.multisender.app/",
+    "iconUrl": "/images/dapp-icons/204.png",
+    "chains": [
+      1,
+      8453,
+      137,
+      42161,
+      10,
+      56,
+      43114,
+      42220,
+      100,
+      146
+    ],
+    "categories": [
+      "tools"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 203,
+    "name": "Lagoon Finance",
+    "description": "Lagoon Finance brings DeFi to your fingertips with secure and risk-optimized yield from vaults managed by professional curators.",
+    "url": "https://app.lagoon.finance/",
+    "iconUrl": "/images/dapp-icons/203.png",
+    "chains": [
+      1,
+      8453,
+      137,
+      130,
+      42161,
+      10,
+      56,
+      43114,
+      146
+    ],
+    "categories": [
+      "yield"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 206,
+    "name": "butterswap",
+    "description": "1st ZK light-client cross-chain aggregator swap. Minimized ZK verification time & optimized gas fees. One-click exchanges btw popular chains & BTC ecosystem.",
+    "url": "https://www.butterswap.io/?utm_source=SafeWallet&referrer=safe",
+    "iconUrl": "/images/dapp-icons/206.png",
+    "chains": [
+      1,
+      8453,
+      137,
+      42161,
+      10,
+      56
+    ],
+    "categories": [
+      "swap",
+      "bridge"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 166,
+    "name": "Unistake Pro",
+    "description": "Unistake Pro is a staking app built on Stakewise's v3 Staking Vault architecture. The UI offers a simple interface to allow users to stake ETH with Blockscape's Stakewise vault.",
+    "url": "https://unistake.blockscape.network",
+    "iconUrl": "/images/dapp-icons/166.png",
+    "chains": [
+      1
+    ],
+    "categories": [
+      "staking"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 208,
+    "name": "Nuon Finance",
+    "description": "Nuon is a non-custodial, yield-bearing stablecoin backed by yield-generating assets and tokenized RWAs, powered by decentralized asset management.",
+    "url": "https://nuon.fi/?utm_source=SafeWallet",
+    "iconUrl": "/images/dapp-icons/208.png",
+    "chains": [
+      8453
+    ],
+    "categories": [
+      "yield"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 188,
+    "name": "Gimme",
+    "description": "A very simple and UX focused way to deposit tokens to earn Yield on them. Built on Yearn's vault",
+    "url": "https://gimme.mom",
+    "iconUrl": "/images/dapp-icons/188.png",
+    "chains": [
+      137
+    ],
+    "categories": [
+      "yield"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 122,
+    "name": "dump.services",
+    "description": "Dump your tokens like a pro",
+    "url": "https://dump.services/",
+    "iconUrl": "/images/dapp-icons/122.png",
+    "chains": [
+      1,
+      137
+    ],
+    "categories": [
+      "swap"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 142,
+    "name": "Pods Yield",
+    "description": "Earn more yield for your DAO treasury without risking the principal",
+    "url": "https://app.pods.finance",
+    "iconUrl": "/images/dapp-icons/142.png",
+    "chains": [
+      1,
+      8453
+    ],
+    "categories": [
+      "yield"
+    ],
+    "autoConnect": true
+  },
+  {
+    "id": 175,
+    "name": "TokenOps",
+    "description": "Create, track, and automate token vesting schedules.",
+    "url": "https://claim.tokenops.xyz/",
+    "iconUrl": "/images/dapp-icons/175.png",
+    "chains": [
+      1,
+      8453,
+      137,
+      42161,
+      10,
+      56,
+      43114,
+      100
+    ],
+    "categories": [
+      "tools"
+    ],
+    "autoConnect": true
+  }
+]
