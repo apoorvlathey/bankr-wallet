@@ -244,9 +244,9 @@ export function IframeContent({
         </VStack>
       )}
 
-      {/* key={activeChainId} forces full remount on chain switch */}
+      {/* key includes address + chainId to force full remount on wallet connect or chain switch */}
       <ImpersonatorIframeProvider
-        key={activeChainId}
+        key={`${address}-${activeChainId}`}
         address={address}
         rpcUrl={rpcUrl}
         sendTransaction={handleTransaction}
