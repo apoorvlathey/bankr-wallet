@@ -189,7 +189,7 @@ const CUSTOM_DAPPS: DappInfo[] = [
     description: "Manage and revoke your token allowances with Revoke.cash",
     url: "https://revoke.cash/",
     iconUrl:
-      "https://safe-transaction-assets.safe.global/safe_apps/88/icon.png",
+      "https://www.google.com/s2/favicons?domain=revoke.cash&sz=128",
     chains: [
       1, 8453, 42161, 43114, 56, 100, 57073, 10, 137, 130, 7777777, 369, 1868,
       146,
@@ -409,7 +409,7 @@ async function main() {
     scriptDir,
     "..",
     "app",
-    "apps",
+    "os",
     "data",
     "dapps.json",
   );
