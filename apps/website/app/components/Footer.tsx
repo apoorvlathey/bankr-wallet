@@ -13,8 +13,6 @@ import {
   Image,
 } from "@chakra-ui/react";
 import { Copy, Check } from "lucide-react";
-import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
 import { LogoShapes } from "./ui/GeometricShape";
 import {
   TOKEN_ADDRESS,
@@ -22,8 +20,7 @@ import {
   TWITTER_URL,
   TELEGRAM_URL,
 } from "../constants";
-
-const MAIN_SITE = "https://walletchan.com";
+import { useSiteNav } from "../lib/useSiteNav";
 
 // Custom X (Twitter) icon
 function XIcon({ size = 20 }: { size?: number }) {
@@ -45,28 +42,9 @@ function TelegramIcon({ size = 20 }: { size?: number }) {
 export function Footer() {
   const { hasCopied, onCopy } = useClipboard(TOKEN_ADDRESS);
   const truncatedAddress = `${TOKEN_ADDRESS.slice(0, 6)}...${TOKEN_ADDRESS.slice(-4)}`;
-  const pathname = usePathname();
-  const [isSubdomain, setIsSubdomain] = useState(false);
-  const [isLocalhost, setIsLocalhost] = useState(false);
+  const { href } = useSiteNav();
 
-  useEffect(() => {
-    const hostname = window.location.hostname;
-    setIsSubdomain(
-      hostname !== "walletchan.com" &&
-        hostname !== "localhost" &&
-        hostname !== "127.0.0.1",
-    );
-    setIsLocalhost(hostname === "localhost" || hostname === "127.0.0.1");
-  }, []);
-
-  const getInstallHref = () => {
-    if (isSubdomain) return `${MAIN_SITE}/#install`;
-    if (isLocalhost && pathname !== "/") return `/#install`;
-    if (pathname !== "/") return `${MAIN_SITE}/#install`;
-    return "#install";
-  };
-
-  const installHref = getInstallHref();
+  const installHref = href("#install");
 
   return (
     <Box bg="bauhaus.black" py={{ base: 8, md: 16 }}>

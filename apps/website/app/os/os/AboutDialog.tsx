@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { Box, VStack, HStack, Text, Image, Link } from "@chakra-ui/react";
+import { useSiteNav } from "../../lib/useSiteNav";
 import {
   BUTTON_FACE,
   BUTTON_HIGHLIGHT,
@@ -31,6 +32,8 @@ export function AboutDialog({ isOpen, onClose }: AboutDialogProps) {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [isOpen, onClose]);
+
+  const { homeHref } = useSiteNav();
 
   if (!isOpen) return null;
 
@@ -148,7 +151,7 @@ export function AboutDialog({ isOpen, onClose }: AboutDialogProps) {
               Your dapps, one place.
             </Text>
             <Link
-              href="/"
+              href={homeHref}
               fontFamily={WIN95_FONT}
               fontSize={WIN95_FONT_SIZE}
               color="#000080"

@@ -3,6 +3,7 @@
 import { useState, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Box, Text } from "@chakra-ui/react";
+import { useSiteNav } from "../lib/useSiteNav";
 import { Desktop } from "./os/Desktop";
 import { IframeApp } from "./components/IframeApp";
 import { MenuBar } from "./os/MenuBar";
@@ -18,6 +19,8 @@ import {
 function MobileAppsView() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { getRouteBasePath } = useSiteNav();
+  const osBasePath = getRouteBasePath("/os");
 
   const [activeDapp, setActiveDapp] = useState<DappEntry | null>(() => {
     const urlParam = searchParams.get("url");
@@ -41,8 +44,7 @@ function MobileAppsView() {
       const params = new URLSearchParams();
       params.set("url", appUrl);
       params.set("chainId", String(chainId));
-      const basePath = typeof window !== "undefined" && window.location.hostname.startsWith("os.") ? "" : "/os";
-      router.replace(`${basePath}?${params.toString()}`, { scroll: false });
+      router.replace(`${osBasePath}?${params.toString()}`, { scroll: false });
     },
     [router]
   );
@@ -90,12 +92,10 @@ function MobileAppsView() {
             // Find matching dapp or open as custom URL
             const match = DAPPS.find((d) => url.startsWith(d.url));
             if (match) {
-              const basePath = window.location.hostname.startsWith("os.") ? "" : "/os";
-              router.push(`${basePath}?url=${encodeURIComponent(match.url)}`);
+              router.push(`${osBasePath}?url=${encodeURIComponent(match.url)}`);
               setActiveDapp(match);
             } else {
-              const basePath = window.location.hostname.startsWith("os.") ? "" : "/os";
-              router.push(`${basePath}?url=${encodeURIComponent(url)}`);
+              router.push(`${osBasePath}?url=${encodeURIComponent(url)}`);
               setActiveDapp({
                 id: -1,
                 name: name || url,
@@ -129,8 +129,7 @@ function MobileAppsView() {
               alignItems="center"
               gap={1}
               onClick={() => {
-                const basePath = window.location.hostname.startsWith("os.") ? "" : "/os";
-                router.push(`${basePath}?url=${encodeURIComponent(dapp.url)}`);
+                router.push(`${osBasePath}?url=${encodeURIComponent(dapp.url)}`);
                 setActiveDapp(dapp);
               }}
             >

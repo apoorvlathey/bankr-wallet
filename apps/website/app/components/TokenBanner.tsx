@@ -4,8 +4,9 @@ import { Box, HStack, Text, Link, useDisclosure } from "@chakra-ui/react";
 import { useTokenData } from "../contexts/TokenDataContext";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { DEXSCREENER_URL, TOKEN_ADDRESS } from "../constants";
+import { useSiteNav } from "../lib/useSiteNav";
 import { BuyModal, type BuyToken } from "../coins/components/BuyModal";
 import { LoadingShapes } from "./ui/LoadingShapes";
 
@@ -53,12 +54,9 @@ export function TokenBanner() {
     window.history.replaceState({}, "", url.toString());
   }, [onClose]);
 
-  const pathname = usePathname();
+  const { isOnPage } = useSiteNav();
 
-  const isMigratePage =
-    pathname === "/migrate" ||
-    (typeof window !== "undefined" &&
-      window.location.hostname === "migrate.walletchan.com");
+  const isMigratePage = isOnPage("/migrate");
   const [displayValue, setDisplayValue] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [direction, setDirection] = useState<"up" | "down">("up");

@@ -176,9 +176,11 @@ apps/website/
 ├── app/
 │   ├── layout.tsx
 │   ├── page.tsx
-│   └── components/        # Hero, Features, TokenSection, etc.
-└── lib/
-    └── theme.ts           # Chakra UI Bauhaus theme
+│   ├── components/        # Hero, Features, TokenSection, etc.
+│   └── lib/
+│       ├── siteRouting.ts # Subdomain registry + pure URL resolution functions
+│       ├── useSiteNav.ts  # React hook wrapping siteRouting for client components
+│       └── theme.ts       # Chakra UI Bauhaus theme
 ```
 
 ## Documentation References
@@ -342,19 +344,46 @@ export default function MyPage() {
 
 ### Adding New Website Subdomains
 
-When adding a new page that should be accessible via a subdomain (e.g., `foo.walletchan.com`), you must update **three things** in `apps/website/next.config.js`:
+When adding a new page that should be accessible via a subdomain (e.g., `foo.walletchan.com`), you must update **four things**:
 
-1. **Add a `beforeFiles` rewrite** to map the subdomain to the route:
+1. **Add a `beforeFiles` rewrite** in `apps/website/next.config.js` to map the subdomain to the route:
    ```js
    { source: "/:path((?!_next|api|images|og|screenshots).*)", has: [{ type: "host", value: "foo.walletchan.com" }], destination: "/foo/:path*" }
    ```
-2. **Add a redirect** from the old `bankrwallet.app` subdomain:
+2. **Add a redirect** in `apps/website/next.config.js` from the old `bankrwallet.app` subdomain:
    ```js
    { source: "/:path*", has: [{ type: "host", value: "foo.bankrwallet.app" }], destination: "https://foo.walletchan.com/:path*", permanent: true }
    ```
-3. **Add the subdomain in Vercel** project domain settings.
+3. **Add the route to the subdomain registry** in `apps/website/app/lib/siteRouting.ts`:
+   ```ts
+   { path: "/foo", subdomain: "foo.walletchan.com" }
+   ```
+   This is the single source of truth for client-side subdomain routing. All navigation helpers (`resolveHref`, `useSiteNav` hook, `getBasePath`) derive from this array.
+4. **Add the subdomain in Vercel** project domain settings.
 
-**Existing subdomains**: `coins`, `stake`, `migrate`
+**Existing subdomains**: `os`, `stake`, `migrate`, `compare`, `mainnet`, `admin`
+
+### Cross-Subdomain URL Routing
+
+**CRITICAL**: Never construct subdomain URLs manually or use raw `window.location.hostname` checks for routing. Always use the centralized routing helpers:
+
+- **`useSiteNav()` hook** (`apps/website/app/lib/useSiteNav.ts`) — for React components. Provides:
+  - `href(path)` — resolves any internal path to the correct URL (handles localhost vs subdomain vs main site)
+  - `homeHref` — logo/home link (`"/"` on localhost, `"https://walletchan.com"` on subdomains)
+  - `isOnPage(route)` — checks if on a specific page (works with both pathname and subdomain)
+  - `getRouteBasePath(route)` — returns `""` on own subdomain, `"/os"` etc. elsewhere
+  - `isLocalhost`, `isOnSubdomain`, `currentRoute`
+- **`siteRouting.ts`** (`apps/website/app/lib/siteRouting.ts`) — pure functions for non-React code. Same logic, takes `hostname` as parameter.
+
+**Examples:**
+```tsx
+// In a component on any page/subdomain:
+const { href, homeHref, isOnPage } = useSiteNav();
+<Link href={href("/stake")}>Stake</Link>        // → "/stake" on localhost, "https://stake.walletchan.com" on prod
+<Link href={href("#install")}>Install</Link>     // → "#install" on homepage, "https://walletchan.com/#install" on subdomains
+<Link href={homeHref}>Home</Link>                // → "/" on localhost, "https://walletchan.com" on subdomains
+const isOnStake = isOnPage("/stake");            // → true on /stake path OR stake.walletchan.com
+```
 
 ## Ponder Indexer Performance
 

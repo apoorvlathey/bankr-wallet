@@ -4,6 +4,7 @@ import { useCallback, useRef, useState, useEffect } from "react";
 import { Box, HStack, Text, Image, Tooltip, Link } from "@chakra-ui/react";
 import { ExternalLink, RotateCw } from "lucide-react";
 import { Rnd } from "react-rnd";
+import { useSiteNav } from "../../lib/useSiteNav";
 import type { WindowState } from "./types";
 import { APP_STORE_WINDOW_ID, SWAP_WINDOW_ID, STAKE_WINDOW_ID, WIDGET_STORE_WINDOW_ID } from "./types";
 import {
@@ -112,6 +113,7 @@ export function Win95Window({
   const { id, position, size, chainId, isMinimized, isMaximized, zIndex } =
     windowState;
 
+  const { getRouteBasePath } = useSiteNav();
   const [chainDropdownOpen, setChainDropdownOpen] = useState(false);
   const [shareTooltip, setShareTooltip] = useState(false);
   const [isFlashing, setIsFlashing] = useState(false);
@@ -344,8 +346,7 @@ export function Win95Window({
                   const params = new URLSearchParams();
                   params.set("url", appUrl);
                   params.set("chainId", String(chainId));
-                  const isSubdomain = window.location.hostname.startsWith("os.");
-                  const shareUrl = `${window.location.origin}${isSubdomain ? "" : "/os"}?${params.toString()}`;
+                  const shareUrl = `${window.location.origin}${getRouteBasePath("/os")}?${params.toString()}`;
                   navigator.clipboard.writeText(shareUrl).then(() => {
                     setShareTooltip(true);
                     setTimeout(() => setShareTooltip(false), 1500);

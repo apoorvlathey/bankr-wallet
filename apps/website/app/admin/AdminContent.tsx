@@ -41,6 +41,7 @@ import {
 } from "./useV4PositionFees";
 import ClaimHistory from "./ClaimHistory";
 import DripSection from "./drip/DripSection";
+import { useSiteNav } from "../lib/useSiteNav";
 
 const BASE_CHAIN_ID = 8453;
 const HOOK_ADDRESS = ADDRESSES[BASE_CHAIN_ID].hook as `0x${string}`;
@@ -150,6 +151,7 @@ function formatUsd(value: number): string {
 
 export default function AdminContent() {
   const toast = useToast();
+  const { href: resolveHref } = useSiteNav();
   const [ethPrice, setEthPrice] = useState<number | null>(null);
   const [ethPriceLoading, setEthPriceLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1241,11 +1243,7 @@ export default function AdminContent() {
               { href: "/mainnet", label: "Bridge to Mainnet" },
               { href: "/l1-base-deploy", label: "L1 Base Token Deploy" },
               {
-                href:
-                  typeof window !== "undefined" &&
-                  window.location.hostname === "localhost"
-                    ? "/compare"
-                    : "https://compare.walletchan.com",
+                href: resolveHref("/compare"),
                 label: "Compare",
               },
             ].map(({ href, label }) => (

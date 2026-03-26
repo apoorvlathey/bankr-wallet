@@ -19,20 +19,11 @@ import {
   Image,
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
-import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
 import { Menu } from "lucide-react";
 import { LogoShapes } from "./ui/GeometricShape";
 import { CHROME_STORE_URL, TELEGRAM_URL } from "../constants";
 import { useVaultData } from "../contexts/VaultDataContext";
-
-const STAKE_SUBDOMAIN = "stake.walletchan.com";
-const STAKE_SUBDOMAIN_URL = "https://stake.walletchan.com";
-const MIGRATE_SUBDOMAIN = "migrate.walletchan.com";
-const MIGRATE_SUBDOMAIN_URL = "https://migrate.walletchan.com";
-const OS_SUBDOMAIN = "os.walletchan.com";
-const OS_SUBDOMAIN_URL = "https://os.walletchan.com";
-const MAIN_SITE = "https://walletchan.com";
+import { useSiteNav } from "../lib/useSiteNav";
 
 const revolveBorder = keyframes`
   0% { transform: rotate(0deg); }
@@ -57,64 +48,10 @@ function TelegramIcon({ size = 20 }: { size?: number }) {
 
 export function Navigation() {
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const pathname = usePathname();
   const { vaultData } = useVaultData();
-  const [isStakeSubdomain, setIsStakeSubdomain] = useState(false);
-  const [isMigrateSubdomain, setIsMigrateSubdomain] = useState(false);
-  const [isOsSubdomain, setIsOsSubdomain] = useState(false);
-  const [isLocalhost, setIsLocalhost] = useState(false);
+  const { href: resolveHref, homeHref, isOnPage } = useSiteNav();
 
-  useEffect(() => {
-    const hostname = window.location.hostname;
-    setIsStakeSubdomain(hostname === STAKE_SUBDOMAIN);
-    setIsMigrateSubdomain(hostname === MIGRATE_SUBDOMAIN);
-    setIsOsSubdomain(hostname === OS_SUBDOMAIN);
-    setIsLocalhost(hostname === "localhost" || hostname === "127.0.0.1");
-  }, []);
-
-  const isOnSubdomain = isStakeSubdomain || isMigrateSubdomain || isOsSubdomain;
-  const isOnOs = pathname === "/os" || isOsSubdomain;
-  const isOnStake = pathname === "/stake" || isStakeSubdomain;
-  const isOnMigrate = pathname === "/migrate" || isMigrateSubdomain;
-
-  const getNavHref = (href: string) => {
-    // On OS subdomain
-    if (isOsSubdomain) {
-      if (href === "/os") return "/";
-      if (href === "/stake") return STAKE_SUBDOMAIN_URL;
-      if (href === "/migrate") return MIGRATE_SUBDOMAIN_URL;
-      if (href.startsWith("#")) return `${MAIN_SITE}/${href}`;
-    }
-    // On stake subdomain
-    if (isStakeSubdomain) {
-      if (href === "/stake") return "/";
-      if (href === "/os") return OS_SUBDOMAIN_URL;
-      if (href === "/migrate") return MIGRATE_SUBDOMAIN_URL;
-      if (href.startsWith("#")) return `${MAIN_SITE}/${href}`;
-    }
-    // On migrate subdomain
-    if (isMigrateSubdomain) {
-      if (href === "/migrate") return "/";
-      if (href === "/os") return OS_SUBDOMAIN_URL;
-      if (href === "/stake") return STAKE_SUBDOMAIN_URL;
-      if (href.startsWith("#")) return `${MAIN_SITE}/${href}`;
-    }
-    // On production main site, route to subdomains
-    if (!isLocalhost && !isOnSubdomain) {
-      if (href === "/os") return OS_SUBDOMAIN_URL;
-      if (href === "/stake") return STAKE_SUBDOMAIN_URL;
-      if (href === "/migrate") return MIGRATE_SUBDOMAIN_URL;
-      // On sub-pages, anchor links need to go to homepage
-      if (pathname !== "/" && href.startsWith("#")) return `${MAIN_SITE}/${href}`;
-    }
-    // On localhost sub-pages, anchor links need absolute path to go to homepage
-    if (isLocalhost && pathname !== "/" && href.startsWith("#")) {
-      return `/${href}`;
-    }
-    return href;
-  };
-
-  const logoHref = isOnSubdomain ? MAIN_SITE : "/";
+  const isOnOs = isOnPage("/os");
 
   return (
     <Box
@@ -126,7 +63,7 @@ export function Navigation() {
       <Container maxW="7xl" py={4}>
         <Flex justify="space-between" align="center">
           {/* Logo */}
-          <Link href={logoHref} _hover={{ textDecoration: "none" }}>
+          <Link href={homeHref} _hover={{ textDecoration: "none" }}>
             <HStack spacing={3}>
               <Image
                 src="/images/walletchan-icon-nobg.png"
@@ -172,7 +109,7 @@ export function Navigation() {
                     }
                   />
                   <Link
-                    href={getNavHref(link.href)}
+                    href={resolveHref(link.href)}
                     fontWeight="bold"
                     textTransform="uppercase"
                     letterSpacing="wider"
@@ -215,7 +152,7 @@ export function Navigation() {
                     </Box>
                   )}
                   <Link
-                    href={getNavHref(link.href)}
+                    href={resolveHref(link.href)}
                     fontWeight="bold"
                     textTransform="uppercase"
                     letterSpacing="wider"
@@ -228,7 +165,7 @@ export function Navigation() {
               ) : (
                 <Link
                   key={link.label}
-                  href={getNavHref(link.href)}
+                  href={resolveHref(link.href)}
                   fontWeight="bold"
                   textTransform="uppercase"
                   letterSpacing="wider"
@@ -322,7 +259,7 @@ export function Navigation() {
                       }
                     />
                     <Link
-                      href={getNavHref(link.href)}
+                      href={resolveHref(link.href)}
                       color="white"
                       fontWeight="bold"
                       fontSize="2xl"
@@ -366,7 +303,7 @@ export function Navigation() {
                       </Box>
                     )}
                     <Link
-                      href={getNavHref(link.href)}
+                      href={resolveHref(link.href)}
                       color="white"
                       fontWeight="bold"
                       fontSize="2xl"
@@ -381,7 +318,7 @@ export function Navigation() {
                 ) : (
                   <Link
                     key={link.label}
-                    href={getNavHref(link.href)}
+                    href={resolveHref(link.href)}
                     color="white"
                     fontWeight="bold"
                     fontSize="2xl"
