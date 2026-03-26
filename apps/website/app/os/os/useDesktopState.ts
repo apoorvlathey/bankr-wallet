@@ -313,11 +313,26 @@ export function useDesktopState() {
   /** Open a custom URL in a new window */
   const openCustomUrl = useCallback(
     (url: string, name?: string, chainId?: number) => {
+      // If already open, just focus it
+      const expectedId = stableWindowId(null, url);
+      const existing = windows.find((w) => w.id === expectedId);
+      if (existing) {
+        focusWindow(existing.id);
+        if (existing.isMinimized) {
+          setWindows((prev) =>
+            prev.map((w) =>
+              w.id === existing.id ? { ...w, isMinimized: false } : w
+            )
+          );
+        }
+        return;
+      }
+
       const win = createWindowState(null, url, name, chainId);
       setWindows((prev) => [...prev, win]);
       setFocusedWindowId(win.id);
     },
-    [createWindowState]
+    [windows, createWindowState] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   /** Toggle the App Store window — open if closed, close if open */

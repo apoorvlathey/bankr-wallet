@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import { Box, HStack, Text, Image, Tooltip, Link } from "@chakra-ui/react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, RotateCw } from "lucide-react";
 import { Rnd } from "react-rnd";
 import type { WindowState } from "./types";
 import { APP_STORE_WINDOW_ID, SWAP_WINDOW_ID, STAKE_WINDOW_ID, WIDGET_STORE_WINDOW_ID } from "./types";
@@ -114,7 +114,20 @@ export function Win95Window({
 
   const [chainDropdownOpen, setChainDropdownOpen] = useState(false);
   const [shareTooltip, setShareTooltip] = useState(false);
+  const [isFlashing, setIsFlashing] = useState(false);
   const rndRef = useRef<Rnd>(null);
+  const prevZIndexRef = useRef(zIndex);
+
+  // Flash when zIndex bumps while already focused & visible (re-open attempt)
+  useEffect(() => {
+    if (zIndex > prevZIndexRef.current && isFocused && !isMinimized) {
+      setIsFlashing(true);
+      const timer = setTimeout(() => setIsFlashing(false), 600);
+      prevZIndexRef.current = zIndex;
+      return () => clearTimeout(timer);
+    }
+    prevZIndexRef.current = zIndex;
+  }, [zIndex, isFocused, isMinimized]);
 
   const isAppStore = id === APP_STORE_WINDOW_ID;
   const isSystemWindow = isAppStore || id === SWAP_WINDOW_ID || id === STAKE_WINDOW_ID || id === WIDGET_STORE_WINDOW_ID;
@@ -207,6 +220,12 @@ export function Win95Window({
         {...windowFrame}
         overflow="hidden"
         data-window-id={id}
+        boxShadow={
+          isFlashing
+            ? `${windowFrame.boxShadow}, 0 0 16px 4px rgba(240, 192, 32, 0.7)`
+            : windowFrame.boxShadow
+        }
+        transition="box-shadow 0.3s ease-out"
       >
         {/* Title Bar */}
         <HStack
@@ -344,6 +363,33 @@ export function Win95Window({
                 <Text>Share</Text>
               </Box>
             </Tooltip>
+
+            {/* Refresh button */}
+            <Box
+              as="button"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              w="20px"
+              h="18px"
+              flexShrink={0}
+              bg="transparent"
+              _hover={{ bg: BUTTON_FACE }}
+              {...raisedBorder}
+              _active={sunkenBorder}
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                // Find the iframe inside this window and reload it
+                const windowEl = (e.target as HTMLElement).closest("[data-window-id]");
+                const iframe = windowEl?.querySelector("iframe") as HTMLIFrameElement | null;
+                if (iframe) {
+                  // eslint-disable-next-line no-self-assign
+                  iframe.src = iframe.src;
+                }
+              }}
+            >
+              <RotateCw size={10} color="#000" />
+            </Box>
 
             {/* URL bar */}
             {(dapp?.url || windowState.customUrl) && (
