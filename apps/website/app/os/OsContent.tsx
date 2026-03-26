@@ -40,7 +40,8 @@ function MobileAppsView() {
       const params = new URLSearchParams();
       params.set("url", appUrl);
       params.set("chainId", String(chainId));
-      router.replace(`/os?${params.toString()}`, { scroll: false });
+      const basePath = typeof window !== "undefined" && window.location.hostname.startsWith("os.") ? "" : "/os";
+      router.replace(`${basePath}?${params.toString()}`, { scroll: false });
     },
     [router]
   );
@@ -103,7 +104,8 @@ function MobileAppsView() {
               alignItems="center"
               gap={1}
               onClick={() => {
-                router.push(`/os?url=${encodeURIComponent(dapp.url)}`);
+                const basePath = window.location.hostname.startsWith("os.") ? "" : "/os";
+                router.push(`${basePath}?url=${encodeURIComponent(dapp.url)}`);
                 setActiveDapp(dapp);
               }}
             >

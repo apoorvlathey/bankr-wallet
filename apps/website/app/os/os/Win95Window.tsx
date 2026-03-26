@@ -332,7 +332,8 @@ export function Win95Window({
                   const params = new URLSearchParams();
                   params.set("url", appUrl);
                   params.set("chainId", String(chainId));
-                  const shareUrl = `${window.location.origin}/os?${params.toString()}`;
+                  const isSubdomain = window.location.hostname.startsWith("os.");
+                  const shareUrl = `${window.location.origin}${isSubdomain ? "" : "/os"}?${params.toString()}`;
                   navigator.clipboard.writeText(shareUrl).then(() => {
                     setShareTooltip(true);
                     setTimeout(() => setShareTooltip(false), 1500);

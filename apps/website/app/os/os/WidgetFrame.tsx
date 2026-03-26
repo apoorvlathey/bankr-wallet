@@ -180,6 +180,7 @@ export function WidgetFrame({
           borderRadius="8px"
           bg={showConfig ? "rgba(10, 16, 30, 0.92)" : "transparent"}
         >
+          {/* @ts-ignore — React 18/19 types conflict */}
           <Component
             config={showConfig ? null : widget.config}
             onSaveConfig={handleSaveConfig}
