@@ -8,6 +8,7 @@ import { Win95Window } from "./Win95Window";
 import { MenuBar } from "./MenuBar";
 import { Taskbar } from "./Taskbar";
 import { AppStoreContent } from "./AppStoreContent";
+import { SearchBar } from "./SearchBar";
 import { SwapWchanPanel } from "./SwapWchanPanel";
 import { StakingPanel } from "./StakingPanel";
 import { IframeContent } from "../components/IframeContent";
@@ -401,6 +402,21 @@ export function Desktop() {
           />
         </Box>
       </HStack>
+
+      {/* Top-centered search bar */}
+      <Box
+        position="absolute"
+        top="20px"
+        left="50%"
+        transform="translateX(-50%)"
+        zIndex={2}
+        w="100%"
+        maxW="520px"
+        px={4}
+        data-desktop-bg="true"
+      >
+        <SearchBar onOpenUrl={openCustomUrl} />
+      </Box>
 
       {/* Windows layer */}
       <Box

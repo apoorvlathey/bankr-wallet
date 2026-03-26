@@ -79,6 +79,8 @@ export function useDesktopState() {
 
   // Z-index counter for window stacking
   const nextZIndexRef = useRef(100);
+  // Separate counter for cascade positioning (only incremented on new window creation)
+  const windowCreationCount = useRef(0);
 
   // Installed apps (persisted) — start with defaults, hydrate from localStorage
   const [installedAppIds, setInstalledAppIds] = useState<number[]>(DEFAULT_INSTALLED_IDS);
@@ -205,7 +207,7 @@ export function useDesktopState() {
       maximized = false
     ): WindowState => {
       const z = nextZIndexRef.current++;
-      const cascadeIndex = (z - 100) % 8; // cycle every 8 windows to avoid going off-screen
+      const cascadeIndex = windowCreationCount.current++ % 8;
       const cascade = cascadeIndex * DEFAULT_WINDOW_OFFSET;
       const dapp = dappId ? findDapp(dappId) : undefined;
       const defaultChain = dapp?.chains[0] ?? 1;
@@ -216,8 +218,8 @@ export function useDesktopState() {
       const desktopH = screenH - MENUBAR_HEIGHT - TASKBAR_HEIGHT;
       const centerX = Math.round((screenW - DEFAULT_WINDOW_SIZE.w) / 2);
       const centerY = Math.round((desktopH - DEFAULT_WINDOW_SIZE.h) / 2);
-      const x = Math.max(0, centerX + cascade);
-      const y = Math.max(0, centerY + cascade);
+      const x = Math.max(0, Math.min(centerX + cascade, screenW - DEFAULT_WINDOW_SIZE.w));
+      const y = Math.max(0, Math.min(centerY + cascade, desktopH - DEFAULT_WINDOW_SIZE.h));
 
       return {
         id: stableWindowId(dappId, customUrl),

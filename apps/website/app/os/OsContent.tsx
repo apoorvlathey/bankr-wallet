@@ -8,6 +8,7 @@ import { IframeApp } from "./components/IframeApp";
 import { MenuBar } from "./os/MenuBar";
 import { DAPPS } from "./data/dapps";
 import type { DappEntry } from "./data/dapps";
+import { SearchBar } from "./os/SearchBar";
 import {
   DESKTOP_BG,
   WIN95_FONT,
@@ -82,6 +83,30 @@ function MobileAppsView() {
         letterSpacing="0.02em"
       >
         For the full OS experience, visit on a desktop
+      </Box>
+      <Box px={4} pt={4}>
+        <SearchBar
+          onOpenUrl={(url, name) => {
+            // Find matching dapp or open as custom URL
+            const match = DAPPS.find((d) => url.startsWith(d.url));
+            if (match) {
+              const basePath = window.location.hostname.startsWith("os.") ? "" : "/os";
+              router.push(`${basePath}?url=${encodeURIComponent(match.url)}`);
+              setActiveDapp(match);
+            } else {
+              const basePath = window.location.hostname.startsWith("os.") ? "" : "/os";
+              router.push(`${basePath}?url=${encodeURIComponent(url)}`);
+              setActiveDapp({
+                id: -1,
+                name: name || url,
+                description: "",
+                url,
+                iconUrl: `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`,
+                chains: [1, 8453, 137, 42161],
+              });
+            }
+          }}
+        />
       </Box>
       <Box
         flex={1}
