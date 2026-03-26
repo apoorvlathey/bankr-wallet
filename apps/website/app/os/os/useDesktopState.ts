@@ -6,13 +6,16 @@ import { DAPPS } from "../data/dapps";
 import type { DappEntry } from "../data/dapps";
 import {
   WindowState,
+  WidgetState,
   DesktopPersistedState,
   DEFAULT_INSTALLED_IDS,
   APP_STORE_WINDOW_ID,
   SWAP_WINDOW_ID,
   STAKE_WINDOW_ID,
+  WIDGET_STORE_WINDOW_ID,
   type CustomApp,
 } from "./types";
+import { getWidgetType } from "./widgetRegistry";
 import { MENUBAR_HEIGHT, TASKBAR_HEIGHT } from "./win95styles";
 
 const STORAGE_KEY = "@wchan/os-state";
@@ -20,11 +23,12 @@ const DEFAULT_WINDOW_SIZE = { w: 900, h: 600 };
 const DEFAULT_WINDOW_OFFSET = 40; // cascade offset for new windows
 
 /** System window IDs that should not be persisted to localStorage */
-const SYSTEM_WINDOW_IDS = new Set([APP_STORE_WINDOW_ID, SWAP_WINDOW_ID, STAKE_WINDOW_ID]);
+const SYSTEM_WINDOW_IDS = new Set([APP_STORE_WINDOW_ID, SWAP_WINDOW_ID, STAKE_WINDOW_ID, WIDGET_STORE_WINDOW_ID]);
 
 const SYSTEM_WINDOW_NAMES: Record<string, string> = {
   [SWAP_WINDOW_ID]: "Swap WCHAN",
   [STAKE_WINDOW_ID]: "Stake WCHAN",
+  [WIDGET_STORE_WINDOW_ID]: "Widget Store",
 };
 
 function loadPersistedState(): DesktopPersistedState {
@@ -85,6 +89,9 @@ export function useDesktopState() {
   // Open windows
   const [windows, setWindows] = useState<WindowState[]>([]);
 
+  // Desktop widgets
+  const [widgets, setWidgets] = useState<WidgetState[]>([]);
+
   // Focused window ID
   const [focusedWindowId, setFocusedWindowId] = useState<string | null>(null);
 
@@ -115,14 +122,22 @@ export function useDesktopState() {
     if (persisted.focusedWindowId) {
       setFocusedWindowId(persisted.focusedWindowId);
     }
+
+    // Restore widgets (filter out any with unknown types)
+    if (persisted.widgets?.length) {
+      const restoredWidgets = persisted.widgets.filter((w) => !!getWidgetType(w.type));
+      setWidgets(restoredWidgets);
+      const maxWidgetZ = Math.max(...restoredWidgets.map((w) => w.zIndex), nextZIndexRef.current - 1);
+      nextZIndexRef.current = Math.max(nextZIndexRef.current, maxWidgetZ + 1);
+    }
   }, []);
 
   // Persist full state on change (skip the initial default render, exclude system windows)
   useEffect(() => {
     if (!hydratedRef.current) return;
     const persistableWindows = windows.filter((w) => !SYSTEM_WINDOW_IDS.has(w.id));
-    savePersistedState({ installedAppIds, customApps, windows: persistableWindows, focusedWindowId });
-  }, [installedAppIds, customApps, windows, focusedWindowId]);
+    savePersistedState({ installedAppIds, customApps, windows: persistableWindows, focusedWindowId, widgets });
+  }, [installedAppIds, customApps, windows, focusedWindowId, widgets]);
 
   // On mount: if URL params present, they override persisted windows
   const initializedRef = useRef(false);
@@ -475,6 +490,118 @@ export function useDesktopState() {
     [customApps]
   );
 
+  // ── Widget actions ──────────────────────────────────────
+
+  /** Add a widget to the desktop */
+  const addWidget = useCallback(
+    (type: string) => {
+      const def = getWidgetType(type);
+      if (!def) return;
+
+      const z = nextZIndexRef.current++;
+      const screenW = typeof window !== "undefined" ? window.innerWidth : 1200;
+      const desktopH =
+        (typeof window !== "undefined" ? window.innerHeight : 800) -
+        MENUBAR_HEIGHT -
+        TASKBAR_HEIGHT;
+      const existingCount = widgets.length;
+      const cascade = (existingCount % 5) * 40;
+      const x = Math.max(0, screenW - def.defaultSize.w - 20 - cascade);
+      const y = Math.min(20 + cascade, desktopH - def.defaultSize.h);
+
+      const widget: WidgetState = {
+        id: `widget-${type}-${Date.now()}`,
+        type,
+        position: { x, y: Math.max(0, y) },
+        size: def.defaultSize,
+        zIndex: z,
+        config: null,
+      };
+      setWidgets((prev) => [...prev, widget]);
+    },
+    [widgets.length]
+  );
+
+  /** Remove a widget */
+  const removeWidget = useCallback((id: string) => {
+    setWidgets((prev) => prev.filter((w) => w.id !== id));
+  }, []);
+
+  /** Update widget position (after drag) */
+  const updateWidgetPosition = useCallback(
+    (id: string, position: { x: number; y: number }) => {
+      setWidgets((prev) =>
+        prev.map((w) => (w.id === id ? { ...w, position } : w))
+      );
+    },
+    []
+  );
+
+  /** Update widget size (after resize) */
+  const updateWidgetSize = useCallback(
+    (id: string, size: { w: number; h: number }, position?: { x: number; y: number }) => {
+      setWidgets((prev) =>
+        prev.map((w) => {
+          if (w.id !== id) return w;
+          const updates: Partial<WidgetState> = { size };
+          if (position) updates.position = position;
+          return { ...w, ...updates };
+        })
+      );
+    },
+    []
+  );
+
+  /** Update widget config */
+  const updateWidgetConfig = useCallback(
+    (id: string, config: Record<string, unknown>) => {
+      setWidgets((prev) =>
+        prev.map((w) => (w.id === id ? { ...w, config } : w))
+      );
+    },
+    []
+  );
+
+  /** Focus a widget (bring to front) */
+  const focusWidget = useCallback((id: string) => {
+    const z = nextZIndexRef.current++;
+    setWidgets((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, zIndex: z } : w))
+    );
+  }, []);
+
+  /** Toggle the Widget Store window */
+  const openWidgetStore = useCallback(() => {
+    const existing = windows.find((w) => w.id === WIDGET_STORE_WINDOW_ID);
+    if (existing) {
+      closeWindow(WIDGET_STORE_WINDOW_ID);
+      return;
+    }
+
+    const z = nextZIndexRef.current++;
+    const storeW = 560;
+    const storeH = 480;
+    const screenW = typeof window !== "undefined" ? window.innerWidth : 1200;
+    const screenH = typeof window !== "undefined" ? window.innerHeight : 800;
+    const desktopH = screenH - MENUBAR_HEIGHT - TASKBAR_HEIGHT;
+    const win: WindowState = {
+      id: WIDGET_STORE_WINDOW_ID,
+      dappId: null,
+      customName: "Widget Store",
+      position: {
+        x: Math.max(0, Math.round((screenW - storeW) / 2)),
+        y: Math.max(0, Math.round((desktopH - storeH) / 2)),
+      },
+      size: { w: storeW, h: storeH },
+      chainId: 1,
+      isMinimized: false,
+      isMaximized: false,
+      zIndex: z,
+    };
+    setWindows((prev) => [...prev, win]);
+    setFocusedWindowId(WIDGET_STORE_WINDOW_ID);
+  }, [windows]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /** Get installed dapps as DappEntry[] */
   const installedDapps = installedAppIds
     .map(findDapp)
@@ -509,5 +636,15 @@ export function useDesktopState() {
     installCustomApp,
     uninstallCustomApp,
     isCustomAppInstalled,
+
+    // Widget actions
+    widgets,
+    addWidget,
+    removeWidget,
+    updateWidgetPosition,
+    updateWidgetSize,
+    updateWidgetConfig,
+    focusWidget,
+    openWidgetStore,
   };
 }

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Box, HStack, Text, Image, Link } from "@chakra-ui/react";
+import { Box, HStack, Text, Image, Link, Popover, PopoverTrigger, PopoverContent, PopoverBody } from "@chakra-ui/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useAccount } from "wagmi";
 import { useTokenData } from "../../contexts/TokenDataContext";
 import { DEXSCREENER_URL } from "../../constants";
 import { LoadingShapes } from "../../components/ui/LoadingShapes";
@@ -21,9 +22,13 @@ const MotionText = motion(Text);
 
 interface MenuBarProps {
   onOpenSwap?: () => void;
+  isPremium?: boolean;
+  isLoadingPremium?: boolean;
+  onOpenStake?: () => void;
 }
 
-export function MenuBar({ onOpenSwap }: MenuBarProps) {
+export function MenuBar({ onOpenSwap, isPremium, isLoadingPremium, onOpenStake }: MenuBarProps) {
+  const { isConnected } = useAccount();
   const { tokenData, isLoading } = useTokenData();
 
   // Animated market cap display (same pattern as TokenBanner)
@@ -159,6 +164,104 @@ export function MenuBar({ onOpenSwap }: MenuBarProps) {
     </HStack>
   );
 
+  const premiumBadge = isConnected ? (
+    <Popover placement="bottom-end" trigger="click">
+      <PopoverTrigger>
+        <Box
+          as="button"
+          display="flex"
+          alignItems="center"
+          gap="4px"
+          h="22px"
+          px="8px"
+          bg={isPremium ? "rgba(240,192,32,0.15)" : "rgba(255,255,255,0.06)"}
+          border="1px solid"
+          borderColor={isPremium ? "rgba(240,192,32,0.3)" : "rgba(255,255,255,0.1)"}
+          borderRadius="6px"
+          flexShrink={0}
+          cursor="pointer"
+          transition="all 0.15s"
+          _hover={{
+            bg: isPremium ? "rgba(240,192,32,0.25)" : "rgba(255,255,255,0.12)",
+          }}
+        >
+          <Text
+            fontSize="12px"
+            lineHeight="1"
+            filter={isPremium ? "none" : "grayscale(1)"}
+            opacity={isPremium ? 1 : 0.5}
+          >
+            {"\uD83D\uDC51"}
+          </Text>
+          {isPremium && (
+            <Text
+              fontFamily={WIN95_FONT}
+              fontSize="9px"
+              fontWeight="900"
+              color="#F0C020"
+              letterSpacing="0.3px"
+            >
+              PRO
+            </Text>
+          )}
+        </Box>
+      </PopoverTrigger>
+      <PopoverContent
+        bg="rgba(10,16,30,0.95)"
+        backdropFilter="blur(12px)"
+        border="1px solid rgba(255,255,255,0.15)"
+        borderRadius="8px"
+        w="240px"
+        _focus={{ boxShadow: "none" }}
+      >
+        <PopoverBody p={3}>
+          {isPremium ? (
+            <Box>
+              <HStack spacing="6px" mb={2}>
+                <Text fontSize="16px">{"\uD83D\uDC51"}</Text>
+                <Text fontFamily={WIN95_FONT} fontSize="11px" fontWeight="900" color="#F0C020">
+                  Premium Staker
+                </Text>
+              </HStack>
+              <Text fontFamily={WIN95_FONT} fontSize="10px" color="rgba(255,255,255,0.7)" lineHeight="1.5">
+                You have 20M+ sWCHAN staked. Desktop widgets are unlocked!
+              </Text>
+            </Box>
+          ) : (
+            <Box>
+              <HStack spacing="6px" mb={2}>
+                <Text fontSize="14px">{"\uD83D\uDD12"}</Text>
+                <Text fontFamily={WIN95_FONT} fontSize="11px" fontWeight="900" color="white">
+                  Premium Required
+                </Text>
+              </HStack>
+              <Text fontFamily={WIN95_FONT} fontSize="10px" color="rgba(255,255,255,0.6)" lineHeight="1.5" mb={2}>
+                Stake 20M+ sWCHAN to unlock desktop widgets and premium features.
+              </Text>
+              <Box
+                as="button"
+                w="100%"
+                py="6px"
+                fontFamily={WIN95_FONT}
+                fontSize="10px"
+                fontWeight="bold"
+                bg={ACCENT_BLUE}
+                color="white"
+                borderRadius="4px"
+                border="none"
+                _hover={{ bg: "#1350d8" }}
+                _active={{ bg: "#0e3aa0" }}
+                onClick={onOpenStake}
+              >
+                Stake WCHAN
+              </Box>
+            </Box>
+          )}
+        </PopoverBody>
+      </PopoverContent>
+    </Popover>
+  ) : null;
+
   const connectButton = (
     <ConnectButton.Custom>
       {({ account, openAccountModal, openConnectModal, mounted }) => {
@@ -247,7 +350,10 @@ export function MenuBar({ onOpenSwap }: MenuBarProps) {
           </Text>
         </HStack>
         {mcapPill}
-        {connectButton}
+        <HStack spacing="6px" flexShrink={0}>
+          {premiumBadge}
+          {connectButton}
+        </HStack>
       </HStack>
 
       {/* Mobile: two rows */}
@@ -277,7 +383,10 @@ export function MenuBar({ onOpenSwap }: MenuBarProps) {
               WalletChan OS
             </Text>
           </HStack>
-          {connectButton}
+          <HStack spacing="6px" flexShrink={0}>
+            {premiumBadge}
+            {connectButton}
+          </HStack>
         </HStack>
         {/* Row 2: mcap pill centered */}
         <HStack

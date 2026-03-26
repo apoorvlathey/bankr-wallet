@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { Plus } from "lucide-react";
 import { Box, HStack, Text, Image } from "@chakra-ui/react";
 import {
   TASKBAR_BG,
@@ -28,6 +29,7 @@ interface TaskbarProps {
   onOpenAbout: () => void;
   onOpenApp: (dappId: number) => void;
   installedApps: { id: number; name: string; iconUrl: string }[];
+  onOpenWidgetStore: () => void;
 }
 
 function Clock() {
@@ -65,6 +67,7 @@ export function Taskbar({
   onOpenAbout,
   onOpenApp,
   installedApps,
+  onOpenWidgetStore,
 }: TaskbarProps) {
   const [startMenuOpen, setStartMenuOpen] = useState(false);
   const startMenuRef = useRef<HTMLDivElement>(null);
@@ -213,7 +216,35 @@ export function Taskbar({
         flexShrink={0}
       />
 
-      {/* System tray */}
+      {/* Add Widgets button */}
+      <Box
+        as="button"
+        display="flex"
+        alignItems="center"
+        gap="4px"
+        h="26px"
+        px="10px"
+        borderRadius="4px"
+        bg="rgba(16, 64, 192, 0.35)"
+        border="1px solid rgba(16, 64, 192, 0.6)"
+        flexShrink={0}
+        _hover={{ bg: "rgba(16, 64, 192, 0.5)", borderColor: "rgba(16, 64, 192, 0.8)" }}
+        _active={{ bg: "rgba(16, 64, 192, 0.6)" }}
+        onClick={onOpenWidgetStore}
+      >
+        <Plus size={12} color="rgba(255,255,255,0.9)" />
+        <Text
+          fontFamily={WIN95_FONT}
+          fontSize="10px"
+          fontWeight="bold"
+          color="rgba(255,255,255,0.9)"
+          whiteSpace="nowrap"
+        >
+          Widgets
+        </Text>
+      </Box>
+
+      {/* Clock */}
       <HStack
         h="26px"
         px="8px"

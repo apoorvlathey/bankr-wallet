@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState, useEffect } from "react";
-import { Box, VStack, Text } from "@chakra-ui/react";
+import { Box, HStack, VStack, Text } from "@chakra-ui/react";
 import { useDesktopState } from "./useDesktopState";
 import { DesktopIcon } from "./DesktopIcon";
 import { Win95Window } from "./Win95Window";
@@ -14,10 +14,14 @@ import { IframeContent } from "../components/IframeContent";
 import { AboutDialog } from "./AboutDialog";
 import { ContextMenu, type ContextMenuAction } from "./ContextMenu";
 import { WalletChanMascot } from "./WalletChanMascot";
-import { APP_STORE_WINDOW_ID, SWAP_WINDOW_ID, STAKE_WINDOW_ID } from "./types";
+import { APP_STORE_WINDOW_ID, SWAP_WINDOW_ID, STAKE_WINDOW_ID, WIDGET_STORE_WINDOW_ID } from "./types";
+import { WidgetFrame } from "./WidgetFrame";
+import { WidgetStoreContent } from "./WidgetStoreContent";
+import { getWidgetType } from "./widgetRegistry";
 import { DAPPS, CHAIN_NAMES } from "../data/dapps";
 import { DESKTOP_BG, TASKBAR_HEIGHT, MENUBAR_HEIGHT } from "./win95styles";
 import { useVaultData } from "../../contexts/VaultDataContext";
+import { usePremiumStatus } from "./usePremiumStatus";
 
 export function Desktop() {
   const {
@@ -43,9 +47,22 @@ export function Desktop() {
     installCustomApp,
     uninstallCustomApp,
     isCustomAppInstalled,
+    widgets,
+    addWidget,
+    removeWidget,
+    updateWidgetPosition,
+    updateWidgetSize,
+    updateWidgetConfig,
+    focusWidget,
+    openWidgetStore,
   } = useDesktopState();
 
   const { vaultData } = useVaultData();
+  const { isPremium, isLoading: isLoadingPremium } = usePremiumStatus();
+
+  const handleOpenStake = useCallback(() => {
+    openSystemWindow(STAKE_WINDOW_ID);
+  }, [openSystemWindow]);
 
   const [selectedIconId, setSelectedIconId] = useState<number | string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -84,20 +101,22 @@ export function Desktop() {
       setTimeout(() => {
         const activeEl = document.activeElement;
         if (activeEl?.tagName === "IFRAME") {
-          // Walk up to find the Rnd wrapper with a data-window-id
+          // Walk up to find the Rnd wrapper with a data-window-id or data-widget-id
           let el: HTMLElement | null = activeEl as HTMLElement;
-          while (el && !el.dataset?.windowId) {
+          while (el && !el.dataset?.windowId && !el.dataset?.widgetId) {
             el = el.parentElement;
           }
           if (el?.dataset?.windowId) {
             focusWindow(el.dataset.windowId);
+          } else if (el?.dataset?.widgetId) {
+            focusWidget(el.dataset.widgetId);
           }
         }
       }, 0);
     };
     window.addEventListener("blur", handleBlur);
     return () => window.removeEventListener("blur", handleBlur);
-  }, [focusWindow]);
+  }, [focusWindow, focusWidget]);
 
   // Deselect icon when clicking on desktop background
   const handleDesktopClick = useCallback(
@@ -192,7 +211,12 @@ export function Desktop() {
       onContextMenu={handleDesktopContextMenu}
     >
       {/* macOS-style menu bar */}
-      <MenuBar onOpenSwap={() => openSystemWindow(SWAP_WINDOW_ID)} />
+      <MenuBar
+        onOpenSwap={() => openSystemWindow(SWAP_WINDOW_ID)}
+        isPremium={isPremium}
+        isLoadingPremium={isLoadingPremium}
+        onOpenStake={handleOpenStake}
+      />
 
       {/* Desktop area below menu bar */}
       <Box
@@ -323,12 +347,12 @@ export function Desktop() {
       </Box>
 
       {/* Right-side system icons */}
-      <VStack
+      <HStack
         position="absolute"
         right={3}
         top={3}
-        spacing={1}
-        align="center"
+        spacing={3}
+        align="start"
         zIndex={1}
       >
         <DesktopIcon
@@ -376,7 +400,7 @@ export function Desktop() {
             onOpen={() => openSystemWindow(STAKE_WINDOW_ID)}
           />
         </Box>
-      </VStack>
+      </HStack>
 
       {/* Windows layer */}
       <Box
@@ -388,6 +412,26 @@ export function Desktop() {
         pointerEvents="none"
       >
         <Box position="relative" w="100%" h="100%" sx={{ "& > *": { pointerEvents: "auto" } }}>
+          {/* Widgets — only rendered for premium stakers */}
+          {isPremium && widgets.map((widget) => {
+            const widgetDef = getWidgetType(widget.type);
+            if (!widgetDef) return null;
+            return (
+              <WidgetFrame
+                key={widget.id}
+                widget={widget}
+                widgetDef={widgetDef}
+                isFocused={false}
+                onFocus={() => focusWidget(widget.id)}
+                onClose={() => removeWidget(widget.id)}
+                onDragStop={(pos) => updateWidgetPosition(widget.id, pos)}
+                onResizeStop={(size, pos) => updateWidgetSize(widget.id, size, pos)}
+                onSaveConfig={(config) => updateWidgetConfig(widget.id, config)}
+              />
+            );
+          })}
+
+          {/* Windows */}
           {windows.map((win) => {
             const dapp = win.dappId
               ? DAPPS.find((d) => d.id === win.dappId) ?? null
@@ -438,6 +482,8 @@ export function Desktop() {
                     onInstallCustomApp={installCustomApp}
                     onUninstallCustomApp={uninstallCustomApp}
                   />
+                ) : win.id === WIDGET_STORE_WINDOW_ID ? (
+                  <WidgetStoreContent onAddWidget={addWidget} isPremium={isPremium} onOpenStake={handleOpenStake} />
                 ) : win.id === SWAP_WINDOW_ID ? (
                   <SwapWchanPanel />
                 ) : win.id === STAKE_WINDOW_ID ? (
@@ -474,6 +520,7 @@ export function Desktop() {
         onOpenAbout={() => setAboutOpen(true)}
         onOpenApp={openWindow}
         installedApps={installedDapps.map((d) => ({ id: d.id, name: d.name, iconUrl: d.iconUrl }))}
+        onOpenWidgetStore={openWidgetStore}
       />
       </Box>
 

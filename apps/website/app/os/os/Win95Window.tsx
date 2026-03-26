@@ -5,7 +5,7 @@ import { Box, HStack, Text, Image, Tooltip, Link } from "@chakra-ui/react";
 import { ExternalLink } from "lucide-react";
 import { Rnd } from "react-rnd";
 import type { WindowState } from "./types";
-import { APP_STORE_WINDOW_ID, SWAP_WINDOW_ID, STAKE_WINDOW_ID } from "./types";
+import { APP_STORE_WINDOW_ID, SWAP_WINDOW_ID, STAKE_WINDOW_ID, WIDGET_STORE_WINDOW_ID } from "./types";
 import {
   WINDOW_BG,
   BUTTON_FACE,
@@ -117,7 +117,7 @@ export function Win95Window({
   const rndRef = useRef<Rnd>(null);
 
   const isAppStore = id === APP_STORE_WINDOW_ID;
-  const isSystemWindow = isAppStore || id === SWAP_WINDOW_ID || id === STAKE_WINDOW_ID;
+  const isSystemWindow = isAppStore || id === SWAP_WINDOW_ID || id === STAKE_WINDOW_ID || id === WIDGET_STORE_WINDOW_ID;
   const windowTitle = isAppStore
     ? "App Store"
     : dapp?.name ?? windowState.customName ?? "Browser";
