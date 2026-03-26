@@ -32,6 +32,36 @@ interface TaskbarProps {
   onOpenWidgetStore: () => void;
 }
 
+function EthPrice() {
+  const [price, setPrice] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchPrice = async () => {
+      try {
+        const res = await fetch("/api/eth-price");
+        const data = await res.json();
+        if (data?.ethereum?.usd) setPrice(data.ethereum.usd);
+      } catch {}
+    };
+    fetchPrice();
+    const interval = setInterval(fetchPrice, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (price === null) return null;
+
+  return (
+    <Text
+      fontFamily={WIN95_FONT}
+      fontSize={WIN95_FONT_SIZE}
+      color="rgba(255,255,255,0.7)"
+      whiteSpace="nowrap"
+    >
+      Ξ ${price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+    </Text>
+  );
+}
+
 function Clock() {
   const [time, setTime] = useState("");
 
@@ -244,7 +274,7 @@ export function Taskbar({
         </Text>
       </Box>
 
-      {/* Clock */}
+      {/* ETH Price + Clock */}
       <HStack
         h="26px"
         px="8px"
@@ -253,7 +283,10 @@ export function Taskbar({
         border="1px solid rgba(255,255,255,0.1)"
         borderRadius="4px"
         flexShrink={0}
+        minW="fit-content"
       >
+        <EthPrice />
+        <Box w="1px" h="14px" bg="rgba(255,255,255,0.2)" flexShrink={0} />
         <Clock />
       </HStack>
     </Box>

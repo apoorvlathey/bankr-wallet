@@ -5,6 +5,8 @@ import { Box, VStack, HStack, Text, Spinner } from "@chakra-ui/react";
 import type { WidgetComponentProps } from "../widgetRegistry";
 import { ACCENT_BLUE } from "../win95styles";
 
+const STANDARD_GAS = 21_000; // simple ETH transfer
+
 const ETH_RPC = "https://ethereum-rpc.publicnode.com";
 
 interface GasPrices {
@@ -65,17 +67,26 @@ async function fetchGasPrices(): Promise<GasPrices> {
 
 const REFRESH_INTERVAL = 12_000; // ~1 block
 
+/** Format USD cost — 3 decimal places like Etherscan */
+function formatUsd(usd: number): string {
+  return `$${usd.toFixed(3)}`;
+}
+
 function GasTier({
   label,
   gwei,
   color,
   emoji,
+  ethPrice,
 }: {
   label: string;
   gwei: number;
   color: string;
   emoji: string;
+  ethPrice: number | null;
 }) {
+  const usdCost = ethPrice ? (gwei * STANDARD_GAS * ethPrice) / 1e9 : null;
+
   return (
     <VStack
       spacing="2px"
@@ -93,6 +104,11 @@ function GasTier({
       <Text fontSize="9px" color="rgba(255,255,255,0.4)" textTransform="uppercase" letterSpacing="0.5px">
         Gwei
       </Text>
+      {usdCost !== null && (
+        <Text fontSize="9px" color="rgba(255,255,255,0.35)">
+          {formatUsd(usdCost)}
+        </Text>
+      )}
       <Text fontSize="10px" fontWeight="600" color="rgba(255,255,255,0.6)" mt="2px">
         {label}
       </Text>
@@ -102,6 +118,7 @@ function GasTier({
 
 export function GasTrackerWidget({ config, onSaveConfig }: WidgetComponentProps) {
   const [prices, setPrices] = useState<GasPrices | null>(null);
+  const [ethPrice, setEthPrice] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -115,8 +132,12 @@ export function GasTrackerWidget({ config, onSaveConfig }: WidgetComponentProps)
 
   const refresh = useCallback(async () => {
     try {
-      const data = await fetchGasPrices();
+      const [data, priceRes] = await Promise.all([
+        fetchGasPrices(),
+        fetch("/api/eth-price").then((r) => r.json()).catch(() => null),
+      ]);
       setPrices(data);
+      if (priceRes?.ethereum?.usd) setEthPrice(priceRes.ethereum.usd);
       setError("");
     } catch {
       setError("Failed to fetch gas prices");
@@ -166,7 +187,7 @@ export function GasTrackerWidget({ config, onSaveConfig }: WidgetComponentProps)
       <HStack w="100%" justify="space-between" align="center">
         <HStack spacing="6px">
           <Text fontSize="13px" fontWeight="bold" color="white">
-            ETH Gas Tracker
+            ⛽ ETH Gas Tracker
           </Text>
         </HStack>
         <HStack spacing="4px">
@@ -179,9 +200,9 @@ export function GasTrackerWidget({ config, onSaveConfig }: WidgetComponentProps)
 
       {/* Gas tiers */}
       <HStack spacing="8px" w="100%">
-        <GasTier label="Low" gwei={prices.low} color="#27C93F" emoji="🐢" />
-        <GasTier label="Standard" gwei={prices.standard} color={ACCENT_BLUE} emoji="🚗" />
-        <GasTier label="Fast" gwei={prices.fast} color="#FFBD2E" emoji="🚀" />
+        <GasTier label="Low" gwei={prices.low} color="#27C93F" emoji="🐢" ethPrice={ethPrice} />
+        <GasTier label="Standard" gwei={prices.standard} color={ACCENT_BLUE} emoji="🚗" ethPrice={ethPrice} />
+        <GasTier label="Fast" gwei={prices.fast} color="#FFBD2E" emoji="🚀" ethPrice={ethPrice} />
       </HStack>
 
       {/* Base fee footer */}
