@@ -73,6 +73,7 @@ export function WidgetFrame({
       style={{
         zIndex: widget.zIndex,
         display: "flex",
+        overflow: "hidden",
       }}
       dragHandleClassName="widget-title-bar"
       onMouseDown={onFocus}
@@ -95,10 +96,11 @@ export function WidgetFrame({
         border="1px solid transparent"
         data-widget-id={widget.id}
         role="group"
-        transition="border-color 0.15s"
+        transition="border-color 0.15s, box-shadow 0.15s"
         _hover={{
           borderColor: "rgba(255,255,255,0.25)",
         }}
+        sx={{ isolation: "isolate" }}
       >
         {/* Floating toolbar — visible on hover only */}
         <HStack

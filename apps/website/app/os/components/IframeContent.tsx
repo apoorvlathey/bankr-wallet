@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Box, HStack, VStack, Text, Image } from "@chakra-ui/react";
+import { ExternalLink } from "lucide-react";
 import { keyframes } from "@emotion/react";
 import {
   ImpersonatorIframeProvider,
@@ -67,6 +68,7 @@ export function IframeContent({
   const [overlayMounted, setOverlayMounted] = useState(true);
   const [isSwitchingChain, setIsSwitchingChain] = useState(false);
   const [safeConnected, setSafeConnected] = useState(false);
+  const [iframeBlocked, setIframeBlocked] = useState(false);
 
   const availableChains = supportedChains.filter(
     (id) => CHAIN_RPC_URLS[id] !== undefined
@@ -114,6 +116,17 @@ export function IframeContent({
       if (fallbackTimer) clearTimeout(fallbackTimer);
     };
   }, [iframeLoaded, safeConnected, onSafeConnected]);
+
+  // Check if the site blocks iframe embedding via response headers
+  useEffect(() => {
+    setIframeBlocked(false);
+    fetch(`/api/frame-check?url=${encodeURIComponent(appUrl)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.blocked) setIframeBlocked(true);
+      })
+      .catch(() => {});
+  }, [appUrl]);
 
   // After first paint, start exit animation
   useEffect(() => {
@@ -241,6 +254,52 @@ export function IframeContent({
           >
             {isSwitchingChain ? "Switching chain..." : `Loading ${appName}...`}
           </Text>
+        </VStack>
+      )}
+
+      {/* Blocked iframe overlay */}
+      {iframeBlocked && !overlayMounted && (
+        <VStack
+          position="absolute"
+          inset={0}
+          justify="center"
+          spacing={4}
+          bg="blackAlpha.800"
+          backdropFilter="blur(12px)"
+          zIndex={2}
+          p={8}
+        >
+          <Text
+            fontWeight="900"
+            fontSize="lg"
+            letterSpacing="wide"
+            color="white"
+          >
+            😔 App doesn&apos;t support iframe
+          </Text>
+          <Box
+            as="a"
+            href={appUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            display="inline-flex"
+            alignItems="center"
+            gap={2}
+            px={6}
+            py={3}
+            bg="bauhaus.red"
+            color="white"
+            fontWeight="800"
+            fontSize="md"
+            border="3px solid"
+            borderColor="bauhaus.black"
+            textTransform="uppercase"
+            letterSpacing="wide"
+            _hover={{ opacity: 0.9 }}
+          >
+            Open in New Tab
+            <ExternalLink size={16} />
+          </Box>
         </VStack>
       )}
 
