@@ -48,7 +48,7 @@ function loadPersistedState(): DesktopPersistedState {
 /** Stable window IDs for persisted windows (no Date.now()) */
 function stableWindowId(dappId: number | null, customUrl?: string): string {
   if (dappId !== null) return `dapp-${dappId}`;
-  if (customUrl) return `custom-${btoa(customUrl).slice(0, 16)}`;
+  if (customUrl) return `custom-${btoa(customUrl)}`;
   return `win-${Date.now()}`;
 }
 
