@@ -60,7 +60,13 @@ interface TransactionConfirmationProps {
 type ConfirmationState = "ready" | "submitting" | "sent" | "error";
 
 // Copy button component
-function CopyButton({ value }: { value: string }) {
+function CopyButton({
+  value,
+  light,
+}: {
+  value: string;
+  light?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   const toast = useBauhausToast();
 
@@ -91,9 +97,18 @@ function CopyButton({ value }: { value: string }) {
       icon={copied ? <CheckIcon /> : <CopyIcon />}
       size="xs"
       variant="ghost"
-      color={copied ? "bauhaus.yellow" : "text.secondary"}
+      color={
+        copied
+          ? "bauhaus.yellow"
+          : light
+            ? "whiteAlpha.800"
+            : "text.secondary"
+      }
       onClick={handleCopy}
-      _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+      _hover={{
+        color: light ? "white" : "bauhaus.blue",
+        bg: light ? "whiteAlpha.200" : "bg.muted",
+      }}
     />
   );
 }
@@ -433,6 +448,24 @@ function TransactionConfirmation({
           </Text>
         </Box>
 
+        {/* Copy tx JSON */}
+        <Flex justify="flex-end" mb={-2}>
+          <CopyButton
+            value={JSON.stringify(
+              {
+                to: tx.to || null,
+                value:
+                  tx.value && tx.value !== "0" && tx.value !== "0x0"
+                    ? BigInt(tx.value).toString()
+                    : "0",
+                data: tx.data || "0x",
+              },
+              null,
+              2,
+            )}
+          />
+        </Flex>
+
         {/* Transaction Info Card */}
         <Box
           bg="bauhaus.white"
@@ -441,19 +474,6 @@ function TransactionConfirmation({
           boxShadow="3px 3px 0px 0px #121212"
           position="relative"
         >
-          {/* Corner decoration */}
-          <Box
-            position="absolute"
-            top="-2px"
-            right="-2px"
-            w="8px"
-            h="8px"
-            bg="bauhaus.red"
-            border="1.5px solid"
-            borderColor="bauhaus.black"
-            borderRadius="full"
-          />
-
           <VStack spacing={0} divider={<Box h="1px" bg="gray.300" w="full" />}>
             {/* Origin */}
             <HStack w="full" py={2} px={3} justify="space-between">
@@ -719,17 +739,8 @@ function TransactionConfirmation({
         )}
 
         {/* Simulate on Tenderly */}
-        <Button
-          size="sm"
-          variant="ghost"
-          w="full"
-          border="2px solid"
-          borderColor="bauhaus.black"
-          fontWeight="700"
-          fontSize="xs"
-          textTransform="uppercase"
-          letterSpacing="wide"
-          onClick={() => {
+        {(() => {
+          const tenderlyUrl = (() => {
             const params = new URLSearchParams({
               from: tx.from,
               value: tx.value || "0",
@@ -737,21 +748,38 @@ function TransactionConfirmation({
               network: String(tx.chainId),
               ...(tx.to ? { contractAddress: tx.to } : {}),
             });
-            chrome.tabs.create({
-              url: `https://dashboard.tenderly.co/simulator/new?${params}`,
-            });
-          }}
-          leftIcon={
-            <Image
-              src="https://www.google.com/s2/favicons?sz=32&domain=tenderly.co"
-              boxSize="14px"
-            />
-          }
-          rightIcon={<ExternalLinkIcon boxSize={3} />}
-          _hover={{ bg: "bg.muted", transform: "translateY(-1px)" }}
-        >
-          Simulate on Tenderly
-        </Button>
+            return `https://dashboard.tenderly.co/simulator/new?${params}`;
+          })();
+          return (
+            <HStack spacing={1} w="full">
+              <CopyButton value={tenderlyUrl} />
+              <Button
+                size="sm"
+                variant="ghost"
+                flex="1"
+                border="2px solid"
+                borderColor="bauhaus.black"
+                fontWeight="700"
+                fontSize="xs"
+                textTransform="uppercase"
+                letterSpacing="wide"
+                onClick={() => {
+                  chrome.tabs.create({ url: tenderlyUrl });
+                }}
+                leftIcon={
+                  <Image
+                    src="https://www.google.com/s2/favicons?sz=32&domain=tenderly.co"
+                    boxSize="14px"
+                  />
+                }
+                rightIcon={<ExternalLinkIcon boxSize={3} />}
+                _hover={{ bg: "bg.muted", transform: "translateY(-1px)" }}
+              >
+                Simulate on Tenderly
+              </Button>
+            </HStack>
+          );
+        })()}
 
         {/* Error Display */}
         {error && state === "error" && (
