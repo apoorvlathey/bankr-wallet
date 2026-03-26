@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState, useEffect } from "react";
-import { Box, HStack, VStack, Text } from "@chakra-ui/react";
+import { Box, HStack, VStack, Text, Input } from "@chakra-ui/react";
 import { useDesktopState } from "./useDesktopState";
 import { DesktopIcon } from "./DesktopIcon";
 import { Win95Window } from "./Win95Window";
@@ -20,7 +20,7 @@ import { WidgetFrame } from "./WidgetFrame";
 import { WidgetStoreContent } from "./WidgetStoreContent";
 import { getWidgetType } from "./widgetRegistry";
 import { DAPPS, CHAIN_NAMES } from "../data/dapps";
-import { DESKTOP_BG, TASKBAR_HEIGHT, MENUBAR_HEIGHT } from "./win95styles";
+import { DESKTOP_BG, TASKBAR_HEIGHT, MENUBAR_HEIGHT, WIN95_FONT, windowFrame, sunkenBorder, win95Button, ACTIVE_TITLE_BG, TITLE_TEXT_COLOR } from "./win95styles";
 import { useVaultData } from "../../contexts/VaultDataContext";
 import { usePremiumStatus } from "./usePremiumStatus";
 
@@ -46,6 +46,7 @@ export function Desktop() {
     reorderApps,
     customApps,
     installCustomApp,
+    editCustomApp,
     uninstallCustomApp,
     isCustomAppInstalled,
     widgets,
@@ -71,6 +72,7 @@ export function Desktop() {
   const desktopRef = useRef<HTMLDivElement>(null);
   const [desktopSize, setDesktopSize] = useState({ width: 0, height: 0 });
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [editingApp, setEditingApp] = useState<{ url: string; name: string } | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -325,6 +327,10 @@ export function Desktop() {
                   {
                     label: "Open",
                     onClick: () => openCustomUrl(app.url, app.name),
+                  },
+                  {
+                    label: "Edit",
+                    onClick: () => setEditingApp({ url: app.url, name: app.name }),
                     dividerAfter: true,
                   },
                   {
@@ -543,6 +549,19 @@ export function Desktop() {
       {/* About Dialog */}
       <AboutDialog isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
 
+      {/* Edit Custom App Dialog */}
+      {editingApp && (
+        <EditCustomAppDialog
+          initialUrl={editingApp.url}
+          initialName={editingApp.name}
+          onSave={(newUrl, newName) => {
+            editCustomApp(editingApp.url, newUrl, newName);
+            setEditingApp(null);
+          }}
+          onClose={() => setEditingApp(null)}
+        />
+      )}
+
       {/* Context Menu */}
       {contextMenu && (
         <ContextMenu
@@ -552,6 +571,126 @@ export function Desktop() {
           onClose={() => setContextMenu(null)}
         />
       )}
+    </Box>
+  );
+}
+
+/** Win95-style dialog for editing a custom app's URL and name */
+function EditCustomAppDialog({
+  initialUrl,
+  initialName,
+  onSave,
+  onClose,
+}: {
+  initialUrl: string;
+  initialName: string;
+  onSave: (url: string, name: string) => void;
+  onClose: () => void;
+}) {
+  const [url, setUrl] = useState(initialUrl);
+  const [name, setName] = useState(initialName);
+
+  return (
+    <Box
+      position="fixed"
+      inset={0}
+      zIndex={99999}
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      bg="rgba(0,0,0,0.4)"
+      onClick={onClose}
+    >
+      <Box
+        {...windowFrame}
+        w="380px"
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+      >
+        {/* Title bar */}
+        <HStack
+          h="22px"
+          px={2}
+          bg={ACTIVE_TITLE_BG}
+          justify="space-between"
+          align="center"
+        >
+          <Text
+            fontFamily={WIN95_FONT}
+            fontSize="11px"
+            fontWeight="bold"
+            color={TITLE_TEXT_COLOR}
+          >
+            Edit App
+          </Text>
+          <Box
+            as="button"
+            {...win95Button}
+            w="16px"
+            h="14px"
+            fontSize="10px"
+            lineHeight="14px"
+            textAlign="center"
+            fontFamily={WIN95_FONT}
+            fontWeight="bold"
+            px={0}
+            py={0}
+            onClick={onClose}
+          >
+            X
+          </Box>
+        </HStack>
+
+        {/* Form */}
+        <VStack spacing={3} p={4} align="stretch">
+          <Box>
+            <Text fontFamily={WIN95_FONT} fontSize="11px" fontWeight="bold" mb={1}>
+              Name
+            </Text>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              fontFamily={WIN95_FONT}
+              fontSize="11px"
+              borderRadius="0"
+              h="24px"
+              bg="white"
+              {...sunkenBorder}
+              _focus={{ borderColor: "#000080", boxShadow: "none" }}
+            />
+          </Box>
+          <Box>
+            <Text fontFamily={WIN95_FONT} fontSize="11px" fontWeight="bold" mb={1}>
+              URL
+            </Text>
+            <Input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              fontFamily={WIN95_FONT}
+              fontSize="11px"
+              borderRadius="0"
+              h="24px"
+              bg="white"
+              {...sunkenBorder}
+              _focus={{ borderColor: "#000080", boxShadow: "none" }}
+            />
+          </Box>
+          <HStack justify="flex-end" spacing={2} pt={1}>
+            <Box as="button" {...win95Button} px={4} onClick={onClose}>
+              Cancel
+            </Box>
+            <Box
+              as="button"
+              {...win95Button}
+              px={4}
+              onClick={() => {
+                if (url.trim()) onSave(url.trim(), name.trim());
+              }}
+            >
+              Save
+            </Box>
+          </HStack>
+        </VStack>
+      </Box>
     </Box>
   );
 }

@@ -515,6 +515,84 @@ export function useDesktopState() {
     img.src = googleFavicon;
   }, []);
 
+  /** Edit a custom URL dapp's name and/or URL */
+  const editCustomApp = useCallback((oldUrl: string, newUrl: string, newName: string) => {
+    let domain = newUrl;
+    try { domain = new URL(newUrl).hostname; } catch {}
+
+    setCustomApps((prev) =>
+      prev.map((a) => {
+        if (a.url !== oldUrl) return a;
+        const urlChanged = oldUrl !== newUrl;
+        return {
+          ...a,
+          url: newUrl,
+          name: newName || domain,
+          // Re-fetch icon if URL changed
+          iconUrl: urlChanged
+            ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64`
+            : a.iconUrl,
+        };
+      })
+    );
+
+    // Update any open window for this custom URL
+    if (oldUrl !== newUrl) {
+      const oldWinId = stableWindowId(null, oldUrl);
+      const newWinId = stableWindowId(null, newUrl);
+      setWindows((prev) =>
+        prev.map((w) =>
+          w.id === oldWinId
+            ? { ...w, id: newWinId, customUrl: newUrl, customName: newName || domain }
+            : w
+        )
+      );
+
+      // Re-fetch icon for new URL
+      const googleFavicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+      const img = new window.Image();
+      img.onload = () => {
+        if (img.naturalWidth <= 16) {
+          fetch(`/api/meta?url=${encodeURIComponent(newUrl)}`)
+            .then((r) => r.json())
+            .then((data) => {
+              if (data?.favicon) {
+                setCustomApps((prev) =>
+                  prev.map((a) =>
+                    a.url === newUrl ? { ...a, iconUrl: data.favicon } : a
+                  )
+                );
+              }
+            })
+            .catch(() => {});
+        }
+      };
+      img.onerror = () => {
+        fetch(`/api/meta?url=${encodeURIComponent(newUrl)}`)
+          .then((r) => r.json())
+          .then((data) => {
+            if (data?.favicon) {
+              setCustomApps((prev) =>
+                prev.map((a) =>
+                  a.url === newUrl ? { ...a, iconUrl: data.favicon } : a
+                )
+              );
+            }
+          })
+          .catch(() => {});
+      };
+      img.src = googleFavicon;
+    } else {
+      // URL didn't change, just update name in windows
+      const winId = stableWindowId(null, oldUrl);
+      setWindows((prev) =>
+        prev.map((w) =>
+          w.id === winId ? { ...w, customName: newName || domain } : w
+        )
+      );
+    }
+  }, []);
+
   /** Uninstall a custom URL dapp */
   const uninstallCustomApp = useCallback((url: string) => {
     setCustomApps((prev) => prev.filter((a) => a.url !== url));
@@ -673,6 +751,7 @@ export function useDesktopState() {
     isInstalled,
     reorderApps,
     installCustomApp,
+    editCustomApp,
     uninstallCustomApp,
     isCustomAppInstalled,
 
