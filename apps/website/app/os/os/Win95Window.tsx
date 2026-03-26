@@ -136,7 +136,7 @@ export function Win95Window({
   // Available chains for this dapp — Ethereum first, then alphabetical
   const availableChains = (dapp
     ? dapp.chains.filter((c) => CHAIN_RPC_URLS[c] !== undefined)
-    : Object.keys(CHAIN_RPC_URLS).map(Number)
+    : Object.keys(CHAIN_NAMES).map(Number).filter((c) => CHAIN_RPC_URLS[c] !== undefined)
   ).sort((a, b) => {
     if (a === 1) return -1;
     if (b === 1) return 1;
