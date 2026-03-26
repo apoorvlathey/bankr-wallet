@@ -30,6 +30,8 @@ export interface WidgetState {
   zIndex: number;
   /** Type-specific config. null = unconfigured (show config prompt) */
   config: Record<string, unknown> | null;
+  /** Distance from the right edge of the screen — used to maintain relative position on resize */
+  rightOffset?: number;
 }
 
 export interface DesktopPersistedState {

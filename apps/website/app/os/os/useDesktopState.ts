@@ -141,6 +141,53 @@ export function useDesktopState() {
     savePersistedState({ installedAppIds, customApps, windows: persistableWindows, focusedWindowId, widgets });
   }, [installedAppIds, customApps, windows, focusedWindowId, widgets]);
 
+  // Reposition widgets and windows when viewport resizes
+  useEffect(() => {
+    const handleResize = () => {
+      const screenW = window.innerWidth;
+      const desktopH = window.innerHeight - MENUBAR_HEIGHT - TASKBAR_HEIGHT;
+
+      // Widgets: recompute x from rightOffset so they track the right edge
+      setWidgets((prev) => {
+        let changed = false;
+        const next = prev.map((w) => {
+          const offset = w.rightOffset ?? (screenW - w.position.x);
+          let newX = screenW - offset;
+          // Clamp to visible bounds
+          newX = Math.max(0, Math.min(newX, screenW - w.size.w));
+          const newY = Math.max(0, Math.min(w.position.y, desktopH - w.size.h));
+          if (newX !== w.position.x || newY !== w.position.y) {
+            changed = true;
+            return { ...w, position: { x: newX, y: newY }, rightOffset: offset };
+          }
+          return w;
+        });
+        return changed ? next : prev;
+      });
+
+      // Windows: just clamp to stay visible
+      setWindows((prev) => {
+        let changed = false;
+        const next = prev.map((w) => {
+          if (w.isMaximized) return w;
+          const maxX = Math.max(0, screenW - Math.min(w.size.w, screenW));
+          const maxY = Math.max(0, desktopH - Math.min(w.size.h, desktopH));
+          const clampedX = Math.min(w.position.x, maxX);
+          const clampedY = Math.min(w.position.y, maxY);
+          if (clampedX !== w.position.x || clampedY !== w.position.y) {
+            changed = true;
+            return { ...w, position: { x: clampedX, y: clampedY } };
+          }
+          return w;
+        });
+        return changed ? next : prev;
+      });
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   // On mount: if URL params present, they override persisted windows
   const initializedRef = useRef(false);
   useEffect(() => {
@@ -633,6 +680,7 @@ export function useDesktopState() {
         size: def.defaultSize,
         zIndex: z,
         config: null,
+        rightOffset: screenW - x,
       };
       setWidgets((prev) => [...prev, widget]);
     },
@@ -647,8 +695,9 @@ export function useDesktopState() {
   /** Update widget position (after drag) */
   const updateWidgetPosition = useCallback(
     (id: string, position: { x: number; y: number }) => {
+      const screenW = window.innerWidth;
       setWidgets((prev) =>
-        prev.map((w) => (w.id === id ? { ...w, position } : w))
+        prev.map((w) => (w.id === id ? { ...w, position, rightOffset: screenW - position.x } : w))
       );
     },
     []
@@ -657,11 +706,15 @@ export function useDesktopState() {
   /** Update widget size (after resize) */
   const updateWidgetSize = useCallback(
     (id: string, size: { w: number; h: number }, position?: { x: number; y: number }) => {
+      const screenW = window.innerWidth;
       setWidgets((prev) =>
         prev.map((w) => {
           if (w.id !== id) return w;
           const updates: Partial<WidgetState> = { size };
-          if (position) updates.position = position;
+          if (position) {
+            updates.position = position;
+            updates.rightOffset = screenW - position.x;
+          }
           return { ...w, ...updates };
         })
       );
