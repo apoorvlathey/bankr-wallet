@@ -36,8 +36,33 @@ export async function GET(req: NextRequest) {
         /<meta[^>]+content="([^"]*)"[^>]+name="description"/);
     const description = descMatch?.[1]?.trim() || null;
 
+    // Extract favicon
+    const origin = new URL(url).origin;
+    // Try: og:image, apple-touch-icon, shortcut icon, icon link, then /favicon.ico
+    const ogImageMatch =
+      html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]*)"/) ??
+      html.match(/<meta[^>]+content="([^"]*)"[^>]+property="og:image"/);
+    const appleTouchMatch = html.match(
+      /<link[^>]+rel="apple-touch-icon"[^>]+href="([^"]*)"/
+    ) ?? html.match(
+      /<link[^>]+href="([^"]*)"[^>]+rel="apple-touch-icon"/
+    );
+    const iconLinkMatch =
+      html.match(/<link[^>]+rel="(?:shortcut )?icon"[^>]+href="([^"]*)"/) ??
+      html.match(/<link[^>]+href="([^"]*)"[^>]+rel="(?:shortcut )?icon"/);
+
+    let favicon: string | null = null;
+    const rawFavicon = appleTouchMatch?.[1] ?? iconLinkMatch?.[1] ?? ogImageMatch?.[1] ?? null;
+    if (rawFavicon) {
+      try {
+        favicon = new URL(rawFavicon, origin).href;
+      } catch {
+        favicon = rawFavicon;
+      }
+    }
+
     return NextResponse.json(
-      { title, description },
+      { title, description, favicon },
       {
         headers: {
           "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800",
@@ -45,6 +70,6 @@ export async function GET(req: NextRequest) {
       }
     );
   } catch {
-    return NextResponse.json({ title: null, description: null });
+    return NextResponse.json({ title: null, description: null, favicon: null });
   }
 }

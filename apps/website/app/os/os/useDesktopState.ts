@@ -466,16 +466,53 @@ export function useDesktopState() {
 
   /** Install a custom URL dapp to the desktop */
   const installCustomApp = useCallback((url: string, name?: string) => {
+    let domain = url;
+    try { domain = new URL(url).hostname; } catch {}
+    const googleFavicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+
     setCustomApps((prev) => {
       if (prev.some((a) => a.url === url)) return prev;
-      let domain = url;
-      try { domain = new URL(url).hostname; } catch {}
       return [...prev, {
         url,
         name: name || domain,
-        iconUrl: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
+        iconUrl: googleFavicon,
       }];
     });
+
+    // Check if Google favicon is a real icon; if not, fall back to meta API
+    const img = new window.Image();
+    img.onload = () => {
+      // Google returns a tiny 16x16 default globe for unknown domains
+      if (img.naturalWidth <= 16) {
+        fetch(`/api/meta?url=${encodeURIComponent(url)}`)
+          .then((r) => r.json())
+          .then((data) => {
+            if (data?.favicon) {
+              setCustomApps((prev) =>
+                prev.map((a) =>
+                  a.url === url ? { ...a, iconUrl: data.favicon } : a
+                )
+              );
+            }
+          })
+          .catch(() => {});
+      }
+    };
+    img.onerror = () => {
+      fetch(`/api/meta?url=${encodeURIComponent(url)}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.favicon) {
+            setCustomApps((prev) =>
+              prev.map((a) =>
+                a.url === url ? { ...a, iconUrl: data.favicon } : a
+              )
+            );
+          }
+        })
+        .catch(() => {});
+    };
+    img.src = googleFavicon;
   }, []);
 
   /** Uninstall a custom URL dapp */

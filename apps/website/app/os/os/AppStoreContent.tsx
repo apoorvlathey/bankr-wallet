@@ -278,6 +278,7 @@ function CustomUrlCard({
   const [meta, setMeta] = useState<{
     title: string | null;
     description: string | null;
+    favicon: string | null;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const prevUrlRef = useRef(url);
@@ -330,7 +331,7 @@ function CustomUrlCard({
             <SkeletonCircle size="32px" />
           ) : (
             <Image
-              src={faviconUrl}
+              src={meta?.favicon || faviconUrl}
               alt={domain}
               w="32px"
               h="32px"
