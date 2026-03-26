@@ -167,7 +167,7 @@ export function Taskbar({
           const isSystemWindow = isAppStore || win.id === SWAP_WINDOW_ID || win.id === STAKE_WINDOW_ID;
           const icon = isSystemWindow
             ? "/images/walletchan-icon-nobg.png"
-            : dapp?.iconUrl;
+            : dapp?.iconUrl ?? win.customIconUrl;
 
           return (
             <Box

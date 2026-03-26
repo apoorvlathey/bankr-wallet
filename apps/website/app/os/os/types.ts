@@ -4,6 +4,7 @@ export interface WindowState {
   dappId: number | null;
   customUrl?: string;
   customName?: string;
+  customIconUrl?: string;
   position: { x: number; y: number };
   size: { w: number; h: number };
   chainId: number;

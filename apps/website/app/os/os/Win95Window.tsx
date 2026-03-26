@@ -137,14 +137,7 @@ export function Win95Window({
 
   const faviconUrl = isAppStore
     ? "/images/walletchan-icon-nobg.png"
-    : dapp?.iconUrl ??
-      (() => {
-        try {
-          return `https://www.google.com/s2/favicons?domain=${new URL(windowState.customUrl || "").hostname}&sz=32`;
-        } catch {
-          return undefined;
-        }
-      })();
+    : dapp?.iconUrl ?? windowState.customIconUrl;
 
   // Available chains for this dapp — Ethereum first, then alphabetical
   const availableChains = (dapp

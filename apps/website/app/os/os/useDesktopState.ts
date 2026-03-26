@@ -329,10 +329,36 @@ export function useDesktopState() {
       }
 
       const win = createWindowState(null, url, name, chainId);
+
+      // Resolve icon: use installed custom app icon if available, else Google favicon
+      const installedApp = customApps.find((a) => a.url === url);
+      if (installedApp) {
+        win.customIconUrl = installedApp.iconUrl;
+      } else {
+        let domain = url;
+        try { domain = new URL(url).hostname; } catch {}
+        const googleFavicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+        win.customIconUrl = googleFavicon;
+
+        // Try meta API fallback for better icon
+        fetch(`/api/meta?url=${encodeURIComponent(url)}`)
+          .then((r) => r.json())
+          .then((data) => {
+            if (data?.favicon) {
+              setWindows((prev) =>
+                prev.map((w) =>
+                  w.id === win.id ? { ...w, customIconUrl: data.favicon } : w
+                )
+              );
+            }
+          })
+          .catch(() => {});
+      }
+
       setWindows((prev) => [...prev, win]);
       setFocusedWindowId(win.id);
     },
-    [windows, createWindowState] // eslint-disable-line react-hooks/exhaustive-deps
+    [windows, customApps, createWindowState] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   /** Toggle the App Store window — open if closed, close if open */
