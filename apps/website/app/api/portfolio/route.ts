@@ -3,12 +3,57 @@ import { NextRequest, NextResponse } from "next/server";
 const OCTAV_API_URL =
   process.env.OCTAV_API_URL || "https://api.octav.fi";
 const OCTAV_API_KEY = process.env.OCTAV_API_KEY;
+const BASE_RPC_URL =
+  process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://mainnet.base.org";
+
+// WCHAN token on Base
+const WCHAN_ADDRESS = "0xBa5ED0000e1CA9136a695f0a848012A16008B032";
+const WCHAN_CHAIN_ID = 8453;
+const WCHAN_DECIMALS = 18;
 
 // Custom logo overrides keyed by `${chainId}:${lowercaseAddress}`
 const LOGO_OVERRIDES: Record<string, string> = {
   "8453:0xba5ed0000e1ca9136a695f0a848012a16008b032":
     "https://walletchan.com/images/walletchan-icon.png",
 };
+
+// ERC20 balanceOf selector: 0x70a08231
+const BALANCE_OF_SELECTOR = "0x70a08231";
+
+/** Fetch WCHAN balance from Base RPC via eth_call */
+async function fetchWchanBalance(address: string): Promise<{
+  balance: number;
+  balanceRaw: string;
+} | null> {
+  try {
+    const paddedAddr = address.toLowerCase().replace("0x", "").padStart(64, "0");
+    const calldata = `${BALANCE_OF_SELECTOR}${paddedAddr}`;
+
+    const res = await fetch(BASE_RPC_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "eth_call",
+        params: [{ to: WCHAN_ADDRESS, data: calldata }, "latest"],
+        id: 1,
+      }),
+    });
+
+    const json = await res.json();
+    if (!json.result || json.result === "0x") return null;
+
+    const rawBigInt = BigInt(json.result);
+    if (rawBigInt === 0n) return null;
+
+    const balance =
+      Number(rawBigInt / 10n ** 12n) / 10 ** (WCHAN_DECIMALS - 12);
+    return { balance, balanceRaw: json.result };
+  } catch (err) {
+    console.warn("[portfolio] WCHAN RPC fetch failed:", err);
+    return null;
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,16 +76,17 @@ export async function GET(request: NextRequest) {
 
     const params = new URLSearchParams({ addresses: address, includeImages: "true" });
 
-    const response = await fetch(
-      `${OCTAV_API_URL}/v1/portfolio?${params.toString()}`,
-      {
+    // Fetch Octav portfolio and WCHAN balance in parallel
+    const [response, wchanResult] = await Promise.all([
+      fetch(`${OCTAV_API_URL}/v1/portfolio?${params.toString()}`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${OCTAV_API_KEY}`,
         },
         next: { revalidate: 60 },
-      }
-    );
+      }),
+      fetchWchanBalance(address),
+    ]);
 
     if (!response.ok) {
       if (response.status === 401) {
@@ -62,12 +108,14 @@ export async function GET(request: NextRequest) {
     // Transform Octav response to provider-agnostic format
     // Octav structure: assetByProtocols -> protocol -> chains -> chain -> protocolPositions -> type -> assets[]
     const tokenMap = new Map<string, PortfolioToken>();
-    const totalValueUsd = parseFloat(portfolio?.networth || "0");
+    const defiPositions: DefiPosition[] = [];
+    let totalValueUsd = parseFloat(portfolio?.networth || "0");
 
     if (portfolio?.assetByProtocols) {
-      for (const [, protocol] of Object.entries(portfolio.assetByProtocols)) {
+      for (const [protoKey, protocol] of Object.entries(portfolio.assetByProtocols)) {
         const proto = protocol as OctavProtocol;
         if (!proto.chains) continue;
+        const isWallet = protoKey.toLowerCase() === "wallet";
 
         for (const [chainKey, chainData] of Object.entries(proto.chains)) {
           const chainId = getChainIdFromOctav(chainKey);
@@ -76,18 +124,55 @@ export async function GET(request: NextRequest) {
           const chain = chainData as OctavChain;
           if (!chain.protocolPositions) continue;
 
-          for (const [, positionType] of Object.entries(chain.protocolPositions)) {
+          for (const [posKey, positionType] of Object.entries(chain.protocolPositions)) {
             const pos = positionType as OctavPositionType;
-            // Collect assets from all position sub-types
-            collectAssets(pos.assets, chainId, tokenMap);
 
-            // Nested protocol positions (e.g. lending, LP)
-            if (pos.protocolPositions) {
-              for (const subPos of pos.protocolPositions) {
-                collectAssets(subPos.assets, chainId, tokenMap);
-                collectAssets(subPos.supplyAssets, chainId, tokenMap);
-                collectAssets(subPos.rewardAssets, chainId, tokenMap);
-                // borrowAssets are liabilities - skip them from holdings
+            if (isWallet) {
+              // Wallet protocol: collect into flat token list
+              collectAssets(pos.assets, chainId, tokenMap);
+            } else {
+              // DeFi protocol: top-level assets as a position
+              if (pos.assets?.length) {
+                const topAssets = toDefiAssets(pos.assets, chainId);
+                if (topAssets.length > 0) {
+                  defiPositions.push({
+                    protocol: proto.name || protoKey,
+                    protocolLogo: proto.imgSmall || proto.imgLarge || undefined,
+                    chainId,
+                    type: posKey,
+                    name: pos.name || posKey,
+                    valueUsd: topAssets.reduce((s, a) => s + a.valueUsd, 0),
+                    assets: topAssets,
+                    rewardAssets: [],
+                  });
+                }
+              }
+
+              // Nested sub-positions (LP, staking, lending)
+              if (pos.protocolPositions) {
+                for (const subPos of pos.protocolPositions as OctavSubPosition[]) {
+                  const assets = toDefiAssets([
+                    ...(subPos.assets || []),
+                    ...(subPos.supplyAssets || []),
+                  ], chainId);
+                  const rewardAssets = toDefiAssets(subPos.rewardAssets, chainId);
+                  const posValueUsd =
+                    assets.reduce((s, a) => s + a.valueUsd, 0) +
+                    rewardAssets.reduce((s, a) => s + a.valueUsd, 0);
+                  if (assets.length === 0 && rewardAssets.length === 0) continue;
+
+                  defiPositions.push({
+                    protocol: proto.name || protoKey,
+                    protocolLogo: proto.imgSmall || proto.imgLarge || undefined,
+                    chainId,
+                    type: posKey,
+                    name: subPos.name || pos.name || posKey,
+                    valueUsd: posValueUsd,
+                    siteUrl: subPos.siteUrl || undefined,
+                    assets,
+                    rewardAssets,
+                  });
+                }
               }
             }
           }
@@ -96,6 +181,47 @@ export async function GET(request: NextRequest) {
     }
 
     const tokens = Array.from(tokenMap.values());
+
+    // Inject WCHAN wallet balance from RPC if not already present from Octav
+    if (wchanResult && wchanResult.balance > 0) {
+      const wchanKey = `wchan-${WCHAN_CHAIN_ID}`;
+      if (!tokenMap.has(wchanKey)) {
+        // Find WCHAN price from DeFi positions (it appears in LP assets)
+        let wchanPrice = 0;
+        for (const pos of defiPositions) {
+          for (const asset of pos.assets) {
+            if (
+              asset.symbol.toLowerCase() === "wchan" &&
+              asset.chainId === WCHAN_CHAIN_ID
+            ) {
+              const assetBal = parseFloat(asset.balance);
+              if (assetBal > 0) {
+                wchanPrice = asset.valueUsd / assetBal;
+                break;
+              }
+            }
+          }
+          if (wchanPrice > 0) break;
+        }
+
+        const valueUsd = wchanResult.balance * wchanPrice;
+        const wchanToken: PortfolioToken = {
+          symbol: "wchan",
+          name: "walletchan",
+          contractAddress: WCHAN_ADDRESS.toLowerCase(),
+          chainId: WCHAN_CHAIN_ID,
+          decimals: WCHAN_DECIMALS,
+          balance: wchanResult.balance.toString(),
+          balanceFormatted: formatBalance(wchanResult.balance),
+          priceUsd: wchanPrice,
+          valueUsd,
+          logoUrl: LOGO_OVERRIDES[`${WCHAN_CHAIN_ID}:${WCHAN_ADDRESS.toLowerCase()}`],
+        };
+        tokens.push(wchanToken);
+        totalValueUsd += valueUsd;
+      }
+    }
+
     // Apply custom logo overrides
     for (const token of tokens) {
       const key = `${token.chainId}:${token.contractAddress.toLowerCase()}`;
@@ -104,8 +230,10 @@ export async function GET(request: NextRequest) {
     }
     // Sort by USD value descending
     tokens.sort((a, b) => b.valueUsd - a.valueUsd);
+    // Sort DeFi positions by value descending
+    defiPositions.sort((a, b) => b.valueUsd - a.valueUsd);
 
-    const result: PortfolioResponse = { tokens, totalValueUsd };
+    const result: PortfolioResponse = { tokens, defiPositions, totalValueUsd };
 
     return NextResponse.json(result, {
       headers: { "Cache-Control": "public, max-age=60" },
@@ -133,8 +261,32 @@ interface PortfolioToken {
   logoUrl?: string;
 }
 
+interface DefiAsset {
+  symbol: string;
+  name: string;
+  contractAddress: string;
+  chainId: number;
+  balance: string;
+  balanceFormatted: string;
+  valueUsd: number;
+  logoUrl?: string;
+}
+
+interface DefiPosition {
+  protocol: string;
+  protocolLogo?: string;
+  chainId: number;
+  type: string;
+  name: string;
+  valueUsd: number;
+  siteUrl?: string;
+  assets: DefiAsset[];
+  rewardAssets: DefiAsset[];
+}
+
 interface PortfolioResponse {
   tokens: PortfolioToken[];
+  defiPositions: DefiPosition[];
   totalValueUsd: number;
 }
 
@@ -154,6 +306,7 @@ interface OctavAsset {
 interface OctavSubPosition {
   name: string;
   value: string;
+  siteUrl?: string;
   assets?: OctavAsset[];
   supplyAssets?: OctavAsset[];
   borrowAssets?: OctavAsset[];
@@ -181,7 +334,7 @@ interface OctavProtocol {
   chains?: Record<string, OctavChain>;
 }
 
-// Collect assets into a deduped token map (key: symbol+chainId)
+// Collect wallet assets into a deduped token map (key: symbol+chainId)
 function collectAssets(
   assets: OctavAsset[] | undefined,
   chainId: number,
@@ -221,6 +374,38 @@ function collectAssets(
       });
     }
   }
+}
+
+// Convert Octav assets to DefiAsset[]
+function toDefiAssets(assets: OctavAsset[] | undefined, chainId: number): DefiAsset[] {
+  if (!assets) return [];
+  const result: DefiAsset[] = [];
+  for (const asset of assets) {
+    const balance = parseFloat(asset.balance || "0");
+    const valueUsd = parseFloat(asset.value || "0");
+    if (balance === 0 && valueUsd === 0) continue;
+    const contractAddress =
+      !asset.contract || asset.contract === "0x0000000000000000000000000000000000000000"
+        ? "native"
+        : asset.contract;
+    let logoUrl = asset.imgSmall || asset.imgLarge || undefined;
+    // Filter out Octav placeholder images
+    if (logoUrl?.includes("NoImageAvailable")) logoUrl = undefined;
+    // Apply logo overrides
+    const overrideKey = `${chainId}:${contractAddress.toLowerCase()}`;
+    if (LOGO_OVERRIDES[overrideKey]) logoUrl = LOGO_OVERRIDES[overrideKey];
+    result.push({
+      symbol: asset.symbol || "???",
+      name: asset.name || asset.symbol || "Unknown",
+      contractAddress,
+      chainId,
+      balance: asset.balance || "0",
+      balanceFormatted: formatBalance(balance),
+      valueUsd,
+      logoUrl,
+    });
+  }
+  return result;
 }
 
 // Map Octav chain names to chain IDs

@@ -140,10 +140,15 @@ export async function fetchOnchainBalances(
 
   await Promise.all(chainPromises);
 
-  // Recompute totalValueUsd
-  const totalValueUsd = updated.reduce((sum, t) => sum + t.valueUsd, 0);
+  // Filter out tokens with zero on-chain balance and sort by USD value descending
+  const filtered = updated.filter(
+    (t) => parseFloat(t.balance) > 0
+  );
+  filtered.sort((a, b) => b.valueUsd - a.valueUsd);
 
-  return { tokens: updated, totalValueUsd };
+  const totalValueUsd = filtered.reduce((sum, t) => sum + t.valueUsd, 0);
+
+  return { tokens: filtered, totalValueUsd };
 }
 
 /** Apply a raw bigint balance to a token entry, recomputing derived fields */
