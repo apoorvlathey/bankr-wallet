@@ -33,7 +33,19 @@ export const NetworksProvider: React.FunctionComponent<{
         };
 
       if (storedNetworksInfo) {
-        setNetworksInfo(storedNetworksInfo);
+        // Merge in any new chains from DEFAULT_NETWORKS that aren't stored yet,
+        // then reorder to match DEFAULT_NETWORKS key order (Ethereum first, rest alphabetical).
+        // User-added custom chains appear at the end.
+        const merged = { ...DEFAULT_NETWORKS, ...storedNetworksInfo };
+        const defaultOrder = Object.keys(DEFAULT_NETWORKS);
+        const ordered: NetworksInfo = {};
+        for (const name of defaultOrder) {
+          if (merged[name]) ordered[name] = merged[name];
+        }
+        for (const name of Object.keys(merged)) {
+          if (!ordered[name]) ordered[name] = merged[name];
+        }
+        setNetworksInfo(ordered);
       } else {
         // Initialize with default networks if nothing stored
         setNetworksInfo(DEFAULT_NETWORKS);
