@@ -13,6 +13,7 @@ import {
   Spacer,
   Image,
   Icon,
+  Tooltip,
 } from "@chakra-ui/react";
 import { useBauhausToast } from "@/hooks/useBauhausToast";
 import { keyframes } from "@emotion/react";
@@ -63,9 +64,11 @@ type ConfirmationState = "ready" | "submitting" | "sent" | "error";
 function CopyButton({
   value,
   light,
+  label,
 }: {
   value: string;
   light?: boolean;
+  label?: string;
 }) {
   const [copied, setCopied] = useState(false);
   const toast = useBauhausToast();
@@ -91,9 +94,9 @@ function CopyButton({
     }
   };
 
-  return (
+  const button = (
     <IconButton
-      aria-label="Copy"
+      aria-label={label || "Copy"}
       icon={copied ? <CheckIcon /> : <CopyIcon />}
       size="xs"
       variant="ghost"
@@ -110,6 +113,14 @@ function CopyButton({
         bg: light ? "whiteAlpha.200" : "bg.muted",
       }}
     />
+  );
+
+  if (!label) return button;
+
+  return (
+    <Tooltip label={label} fontSize="xs" hasArrow>
+      {button}
+    </Tooltip>
   );
 }
 
@@ -399,21 +410,38 @@ function TransactionConfirmation({
             </HStack>
           )}
 
-          {/* Right - Reject All */}
+          {/* Right - Copy tx JSON + Reject All */}
           <Spacer />
-          {totalCount > 1 && (
-            <Button
-              size="xs"
-              variant="ghost"
-              color="bauhaus.red"
-              fontWeight="700"
-              _hover={{ bg: "bauhaus.red", color: "white" }}
-              onClick={onRejectAll}
-              px={2}
-            >
-              Reject All
-            </Button>
-          )}
+          <HStack spacing={1}>
+            <CopyButton
+              label="Copy tx JSON"
+              value={JSON.stringify(
+                {
+                  to: tx.to || null,
+                  value:
+                    tx.value && tx.value !== "0" && tx.value !== "0x0"
+                      ? BigInt(tx.value).toString()
+                      : "0",
+                  data: tx.data || "0x",
+                },
+                null,
+                2,
+              )}
+            />
+            {totalCount > 1 && (
+              <Button
+                size="xs"
+                variant="ghost"
+                color="bauhaus.red"
+                fontWeight="700"
+                _hover={{ bg: "bauhaus.red", color: "white" }}
+                onClick={onRejectAll}
+                px={2}
+              >
+                Reject All
+              </Button>
+            )}
+          </HStack>
         </Flex>
 
         {/* Title row with blue background */}
@@ -447,24 +475,6 @@ function TransactionConfirmation({
             Transaction Request
           </Text>
         </Box>
-
-        {/* Copy tx JSON */}
-        <Flex justify="flex-end" mb={-2}>
-          <CopyButton
-            value={JSON.stringify(
-              {
-                to: tx.to || null,
-                value:
-                  tx.value && tx.value !== "0" && tx.value !== "0x0"
-                    ? BigInt(tx.value).toString()
-                    : "0",
-                data: tx.data || "0x",
-              },
-              null,
-              2,
-            )}
-          />
-        </Flex>
 
         {/* Transaction Info Card */}
         <Box
@@ -751,32 +761,40 @@ function TransactionConfirmation({
             return `https://dashboard.tenderly.co/simulator/new?${params}`;
           })();
           return (
-            <HStack spacing={1} w="full">
-              <CopyButton value={tenderlyUrl} />
-              <Button
-                size="sm"
-                variant="ghost"
-                flex="1"
-                border="2px solid"
-                borderColor="bauhaus.black"
-                fontWeight="700"
-                fontSize="xs"
-                textTransform="uppercase"
-                letterSpacing="wide"
+            <HStack
+              spacing={2}
+              w="full"
+              border="2px solid"
+              borderColor="bauhaus.black"
+              px={3}
+              py={1.5}
+              mt={-1}
+              justify="center"
+              _hover={{ bg: "bg.muted" }}
+              transition="background 0.15s"
+            >
+              <CopyButton value={tenderlyUrl} label="Copy Tenderly URL" />
+              <HStack
+                spacing={2}
+                cursor="pointer"
                 onClick={() => {
                   chrome.tabs.create({ url: tenderlyUrl });
                 }}
-                leftIcon={
-                  <Image
-                    src="https://www.google.com/s2/favicons?sz=32&domain=tenderly.co"
-                    boxSize="14px"
-                  />
-                }
-                rightIcon={<ExternalLinkIcon boxSize={3} />}
-                _hover={{ bg: "bg.muted", transform: "translateY(-1px)" }}
               >
-                Simulate on Tenderly
-              </Button>
+                <Image
+                  src="https://www.google.com/s2/favicons?sz=32&domain=tenderly.co"
+                  boxSize="14px"
+                />
+                <Text
+                  fontWeight="700"
+                  fontSize="xs"
+                  textTransform="uppercase"
+                  letterSpacing="wide"
+                >
+                  Simulate on Tenderly
+                </Text>
+                <ExternalLinkIcon boxSize={3} />
+              </HStack>
             </HStack>
           );
         })()}
