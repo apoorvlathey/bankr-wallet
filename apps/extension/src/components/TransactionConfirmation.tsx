@@ -351,8 +351,12 @@ function TransactionConfirmation({
   }
 
   return (
-    <Box p={4} minH="100%" bg="bg.base">
-      <VStack spacing={3} align="stretch">
+    <Box p={3} h="100%" overflowY="auto" bg="bg.base" css={{
+      "&::-webkit-scrollbar": { width: "4px" },
+      "&::-webkit-scrollbar-track": { background: "transparent" },
+      "&::-webkit-scrollbar-thumb": { background: "#ccc", borderRadius: "2px" },
+    }}>
+      <VStack spacing={2} align="stretch">
         {/* Top row - Back button, navigation, Reject All */}
         <Flex align="center" position="relative" minH="32px">
           {/* Left - Back button */}
@@ -449,24 +453,24 @@ function TransactionConfirmation({
           bg="bauhaus.blue"
           border="3px solid"
           borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
-          py={3}
-          px={4}
+          boxShadow="3px 3px 0px 0px #121212"
+          py={1.5}
+          px={3}
           position="relative"
         >
           <Box
             position="absolute"
             top="-3px"
             right="-3px"
-            w="10px"
-            h="10px"
+            w="8px"
+            h="8px"
             bg="bauhaus.yellow"
             border="2px solid"
             borderColor="bauhaus.black"
           />
           <Text
             fontWeight="900"
-            fontSize="lg"
+            fontSize="sm"
             color="white"
             textAlign="center"
             textTransform="uppercase"
@@ -481,12 +485,12 @@ function TransactionConfirmation({
           bg="bauhaus.white"
           border="2px solid"
           borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
+          boxShadow="2px 2px 0px 0px #121212"
           position="relative"
         >
           <VStack spacing={0} divider={<Box h="1px" bg="gray.300" w="full" />}>
             {/* Origin */}
-            <HStack w="full" py={2} px={3} justify="space-between">
+            <HStack w="full" py={1.5} px={3} justify="space-between">
               <Text
                 fontSize="xs"
                 color="text.secondary"
@@ -535,7 +539,7 @@ function TransactionConfirmation({
             </HStack>
 
             {/* From */}
-            <HStack w="full" py={2} px={3} justify="space-between">
+            <HStack w="full" py={1.5} px={3} justify="space-between">
               <Text
                 fontSize="xs"
                 color="text.secondary"
@@ -548,7 +552,7 @@ function TransactionConfirmation({
             </HStack>
 
             {/* Network */}
-            <HStack w="full" py={2} px={3} justify="space-between">
+            <HStack w="full" py={1.5} px={3} justify="space-between">
               <Text
                 fontSize="xs"
                 color="text.secondary"
@@ -583,7 +587,7 @@ function TransactionConfirmation({
             </HStack>
 
             {/* To Address / Contract Deployment */}
-            <Box w="full" py={2} px={3}>
+            <Box w="full" py={1.5} px={3}>
               <HStack
                 justify="space-between"
                 mb={toLabels.length > 0 || resolvedToName ? 1 : 0}
@@ -669,7 +673,7 @@ function TransactionConfirmation({
             </Box>
 
             {/* Value */}
-            <HStack w="full" py={2} px={3} justify="space-between">
+            <HStack w="full" py={1.5} px={3} justify="space-between">
               <Text
                 fontSize="xs"
                 color="text.secondary"
@@ -748,6 +752,18 @@ function TransactionConfirmation({
           </Box>
         )}
 
+        {/* Pinned bottom section — sticky so buttons are always reachable */}
+        <Box
+          position="sticky"
+          bottom={-3}
+          bg="bg.base"
+          pt={1}
+          pb={1}
+          mx={-3}
+          px={3}
+          zIndex={1}
+        >
+        <VStack spacing={2} align="stretch">
         {/* Simulate on Tenderly */}
         {(() => {
           const tenderlyUrl = (() => {
@@ -768,7 +784,6 @@ function TransactionConfirmation({
               borderColor="bauhaus.black"
               px={3}
               py={1.5}
-              mt={-1}
               justify="center"
               _hover={{ bg: "bg.muted" }}
               transition="background 0.15s"
@@ -852,7 +867,7 @@ function TransactionConfirmation({
 
         {/* Action Buttons */}
         {state !== "submitting" && (
-          <HStack pt={2} spacing={3}>
+          <HStack spacing={3} pb={1}>
             <Button variant="secondary" flex={1} onClick={handleReject}>
               Reject
             </Button>
@@ -868,6 +883,8 @@ function TransactionConfirmation({
             )}
           </HStack>
         )}
+        </VStack>
+        </Box>
       </VStack>
     </Box>
   );
