@@ -15,7 +15,7 @@ import {
   Icon,
   Tooltip,
 } from "@chakra-ui/react";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+
 import { keyframes } from "@emotion/react";
 import {
   ArrowBackIcon,
@@ -71,27 +71,13 @@ function CopyButton({
   label?: string;
 }) {
   const [copied, setCopied] = useState(false);
-  const toast = useBauhausToast();
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
-      toast({
-        title: "Copied!",
-        status: "success",
-        duration: 1500,
-        isClosable: true,
-      });
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      toast({
-        title: "Failed to copy",
-        status: "error",
-        duration: 2000,
-        isClosable: true,
-      });
-    }
+    } catch {}
   };
 
   const button = (
@@ -635,6 +621,27 @@ function TransactionConfirmation({
                         {tx.to.slice(0, 6)}...{tx.to.slice(-4)}
                       </Text>
                       <CopyButton value={tx.to} />
+                      {(() => {
+                        const cfg = getChainConfig(tx.chainId);
+                        return cfg.explorer ? (
+                          <IconButton
+                            aria-label="View on explorer"
+                            icon={<ExternalLinkIcon boxSize="10px" />}
+                            size="xs"
+                            variant="ghost"
+                            minW="18px"
+                            h="18px"
+                            color="text.tertiary"
+                            onClick={() =>
+                              window.open(
+                                `${cfg.explorer}/address/${tx.to}`,
+                                "_blank"
+                              )
+                            }
+                            _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                          />
+                        ) : null;
+                      })()}
                     </HStack>
                   </VStack>
                 ) : (

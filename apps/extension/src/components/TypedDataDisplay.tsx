@@ -10,7 +10,7 @@ import {
   Collapse,
 } from "@chakra-ui/react";
 import { CopyIcon, CheckIcon, ExternalLinkIcon, ChevronDownIcon } from "@chakra-ui/icons";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+
 import { getChainConfig } from "@/constants/chainConfig";
 
 interface TypedDataDisplayProps {
@@ -20,7 +20,6 @@ interface TypedDataDisplayProps {
 
 function CopyBtn({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
-  const toast = useBauhausToast();
 
   return (
     <IconButton
@@ -32,7 +31,6 @@ function CopyBtn({ value }: { value: string }) {
       onClick={async () => {
         await navigator.clipboard.writeText(value);
         setCopied(true);
-        toast({ title: "Copied!", status: "success", duration: 1500 });
         setTimeout(() => setCopied(false), 2000);
       }}
       _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
@@ -48,7 +46,6 @@ function truncateAddr(addr: string): string {
 function AddressValue({ address, chainId }: { address: string; chainId?: number }) {
   const [label, setLabel] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const toast = useBauhausToast();
 
   const explorerUrl = (() => {
     const config = getChainConfig(chainId || 1);
@@ -82,7 +79,6 @@ function AddressValue({ address, chainId }: { address: string; chainId?: number 
         onClick={async () => {
           await navigator.clipboard.writeText(address);
           setCopied(true);
-          toast({ title: "Copied!", status: "success", duration: 1500 });
           setTimeout(() => setCopied(false), 2000);
         }}
         _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
