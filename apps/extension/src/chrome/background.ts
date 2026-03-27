@@ -1314,7 +1314,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "rpcRequest": {
-      const rpcResultKey = `rpcResult:${message.id}`;
+      const rpcResultKey = `rpcResult:${message.rpcId}`;
       handleRpcRequest(message.rpcUrl, message.method, message.params)
         .then((result) => writeResultToStorage(rpcResultKey, { result }))
         .catch((error) => writeResultToStorage(rpcResultKey, { error: error.message }));

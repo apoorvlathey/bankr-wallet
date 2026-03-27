@@ -394,11 +394,11 @@ window.addEventListener("message", async (e) => {
         params: any[];
       };
 
-      // Generate a unique key and watch storage — same pattern as tx/sig
-      const rpcKey = `rpcResult:${id}`;
+      // Generate a content-script UUID for the storage key (don't use dapp-supplied id)
+      const rpcId = crypto.randomUUID();
 
       waitForStorageResult<{ result?: any; error?: string }>(
-        rpcKey, 30 * 1000 // 30s timeout for RPC calls
+        `rpcResult:${rpcId}`, 30 * 1000 // 30s timeout for RPC calls
       ).then((response) => {
         window.postMessage(
           { type: "rpcResponse", msg: { id, result: response.result, error: response.error } },
@@ -414,7 +414,7 @@ window.addEventListener("message", async (e) => {
       // Fire-and-forget message to background
       chrome.runtime.sendMessage({
         type: "rpcRequest",
-        id,
+        rpcId,
         rpcUrl,
         method,
         params,
