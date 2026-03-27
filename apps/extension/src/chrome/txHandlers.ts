@@ -539,7 +539,8 @@ async function lookupFunctionName(calldata: string): Promise<string | null> {
     const res = await fetch(url);
     const data = await res.json();
     if (data?.ok && data.result?.function?.[selector]?.[0]?.name) {
-      return data.result.function[selector][0].name;
+      const sig = data.result.function[selector][0].name;
+      return sig.split("(")[0];
     }
   } catch {
     /* ignore */
