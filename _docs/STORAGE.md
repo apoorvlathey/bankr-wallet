@@ -45,9 +45,12 @@ Persists across extension restarts. Cleared only on manual reset or uninstall.
 
 ### Transient (dynamic keys)
 
-| Key Pattern         | Shape                                       | Description                                                                      |
-| ------------------- | ------------------------------------------- | -------------------------------------------------------------------------------- |
-| `notification-{id}` | `string` (explorer URL) or `{ type, txId }` | Notification click metadata. Created on tx completion, removed on click/dismiss. |
+| Key Pattern         | Shape                                                   | Description                                                                                                            |
+| ------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `notification-{id}` | `string` (explorer URL) or `{ type, txId }`             | Notification click metadata. Created on tx completion, removed on click/dismiss.                                       |
+| `txResult:{txId}`   | `{ result: { success, txHash?, error? }, timestamp }`   | Transaction result. Written by background on confirm/reject, read+deleted by content script. Stale keys cleaned >30m.  |
+| `sigResult:{sigId}` | `{ result: { success, signature?, error? }, timestamp }` | Signature result. Written by background on confirm/reject, read+deleted by content script. Stale keys cleaned >30m.    |
+| `rpcResult:{id}`    | `{ result: { result?, error? }, timestamp }`             | RPC proxy result. Written by background after RPC call, read+deleted by content script. 30s timeout, stale keys cleaned >30m. |
 
 ---
 

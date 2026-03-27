@@ -77,22 +77,10 @@ import {
   isSidePanelSupported,
 } from "./sidepanelManager";
 
-// In-memory map for resolving transaction promises back to content script
-export interface PendingResolver {
-  resolve: (result: TransactionResult) => void;
-}
-
 export interface TransactionResult {
   success: boolean;
   txHash?: string;
   error?: string;
-}
-
-export const pendingResolvers = new Map<string, PendingResolver>();
-
-// In-memory map for resolving signature requests back to content script
-export interface PendingSignatureResolver {
-  resolve: (result: SignatureResult) => void;
 }
 
 export interface SignatureResult {
@@ -101,10 +89,17 @@ export interface SignatureResult {
   error?: string;
 }
 
-export const pendingSignatureResolvers = new Map<
-  string,
-  PendingSignatureResolver
->();
+/**
+ * Write a result to chrome.storage.local for the content script to pick up.
+ * Used instead of in-memory resolver Maps to survive service worker restarts
+ * and avoid Chrome MV3 message channel lifetime issues.
+ */
+export async function writeResultToStorage(
+  key: string,
+  result: TransactionResult | SignatureResult,
+): Promise<void> {
+  await chrome.storage.local.set({ [key]: { result, timestamp: Date.now() } });
+}
 
 // Active transaction AbortControllers for cancellation
 export const activeAbortControllers = new Map<string, AbortController>();
@@ -128,121 +123,83 @@ export const failedTxResults = new Map<string, FailedTxResult>();
 /**
  * Handles incoming transaction requests from content script
  */
-export async function handleTransactionRequest(
+export function handleTransactionRequest(
   message: {
     type: string;
     tx: TransactionParams;
     origin: string;
     favicon?: string | null;
   },
-  sendResponse: (response: TransactionResult) => void,
+  txId: string,
   senderWindowId?: number,
-): Promise<void> {
+): void {
   const { tx, origin, favicon } = message;
 
-  // Validate chain ID
-  if (!ALLOWED_CHAIN_IDS.has(tx.chainId)) {
-    sendResponse({
-      success: false,
-      error: `Chain ${tx.chainId} not supported. Supported chains: ${Array.from(
-        ALLOWED_CHAIN_IDS,
-      )
-        .map((id) => CHAIN_NAMES[id] || id)
-        .join(", ")}`,
-    });
-    return;
-  }
+  // Do async storage + popup work in a fire-and-forget block
+  (async () => {
+    const chainName = CHAIN_NAMES[tx.chainId] || `Chain ${tx.chainId}`;
 
-  // Check if API key is configured
-  const hasKey = await hasEncryptedApiKey();
-  if (!hasKey) {
-    sendResponse({
-      success: false,
-      error:
-        "API key not configured. Please configure your Bankr API key in the extension settings.",
-    });
-    return;
-  }
+    const pendingRequest: PendingTxRequest = {
+      id: txId,
+      tx,
+      origin,
+      favicon: favicon || null,
+      chainName,
+      timestamp: Date.now(),
+    };
 
-  // Create pending transaction request
-  const txId = crypto.randomUUID();
-  const chainName = CHAIN_NAMES[tx.chainId] || `Chain ${tx.chainId}`;
+    await savePendingTxRequest(pendingRequest);
 
-  const pendingRequest: PendingTxRequest = {
-    id: txId,
-    tx,
-    origin,
-    favicon: favicon || null,
-    chainName,
-    timestamp: Date.now(),
-  };
+    chrome.runtime
+      .sendMessage({ type: "newPendingTxRequest", txRequest: pendingRequest })
+      .catch(() => {});
 
-  // Store the pending request persistently
-  await savePendingTxRequest(pendingRequest);
-
-  // Store the resolver to respond when user confirms/rejects
-  pendingResolvers.set(txId, { resolve: sendResponse });
-
-  // Notify any open extension views (sidepanel/popup) about the new tx request
-  chrome.runtime
-    .sendMessage({ type: "newPendingTxRequest", txRequest: pendingRequest })
-    .catch(() => {
-      // Ignore errors if no listeners (popup/sidepanel not open)
-    });
-
-  // Open the extension popup/sidepanel for user to confirm
-  openExtensionPopup(senderWindowId);
+    openExtensionPopup(senderWindowId);
+  })();
 }
 
 /**
  * Handles incoming signature requests from content script
  */
-export async function handleSignatureRequest(
+export function handleSignatureRequest(
   message: {
     type: string;
     signature: SignatureParams;
     origin: string;
     favicon?: string | null;
   },
-  sendResponse: (response: SignatureResult) => void,
+  sigId: string,
   senderWindowId?: number,
-): Promise<void> {
+): void {
   const { signature, origin, favicon } = message;
 
   // Note: EIP-712 validation now happens in background.ts before this function is called
 
-  // Create pending signature request
-  const sigId = crypto.randomUUID();
-  const chainName =
-    CHAIN_NAMES[signature.chainId] || `Chain ${signature.chainId}`;
+  // Do async storage + popup work in a fire-and-forget block
+  (async () => {
+    const chainName =
+      CHAIN_NAMES[signature.chainId] || `Chain ${signature.chainId}`;
 
-  const pendingRequest: PendingSignatureRequest = {
-    id: sigId,
-    signature,
-    origin,
-    favicon: favicon || null,
-    chainName,
-    timestamp: Date.now(),
-  };
+    const pendingRequest: PendingSignatureRequest = {
+      id: sigId,
+      signature,
+      origin,
+      favicon: favicon || null,
+      chainName,
+      timestamp: Date.now(),
+    };
 
-  // Store the pending request persistently
-  await savePendingSignatureRequest(pendingRequest);
+    await savePendingSignatureRequest(pendingRequest);
 
-  // Store the resolver to respond when user cancels
-  pendingSignatureResolvers.set(sigId, { resolve: sendResponse });
+    chrome.runtime
+      .sendMessage({
+        type: "newPendingSignatureRequest",
+        sigRequest: pendingRequest,
+      })
+      .catch(() => {});
 
-  // Notify any open extension views (sidepanel/popup) about the new signature request
-  chrome.runtime
-    .sendMessage({
-      type: "newPendingSignatureRequest",
-      sigRequest: pendingRequest,
-    })
-    .catch(() => {
-      // Ignore errors if no listeners (popup/sidepanel not open)
-    });
-
-  // Open the extension popup/sidepanel for user to view
-  openExtensionPopup(senderWindowId);
+    openExtensionPopup(senderWindowId);
+  })();
 }
 
 /**
@@ -785,7 +742,6 @@ async function processTransactionInBackground(
       pending.tx,
       abortController.signal,
     );
-    const resolver = pendingResolvers.get(txId);
     const txHash = result.transactionHash;
 
     if (result.status === "reverted") {
@@ -793,7 +749,6 @@ async function processTransactionInBackground(
         txId,
         pending,
         "Transaction reverted",
-        resolver,
       );
     } else {
       // success or pending — both mean tx was submitted
@@ -826,12 +781,9 @@ async function processTransactionInBackground(
         `Transaction on ${pending.chainName} was successful. Click to view.`,
       );
 
-      if (resolver) {
-        resolver.resolve({ success: true, txHash });
-      }
+      await writeResultToStorage(`txResult:${txId}`, { success: true, txHash });
     }
   } catch (error) {
-    const resolver = pendingResolvers.get(txId);
     let errorMessage = "Unknown error";
 
     if (error instanceof Error) {
@@ -842,10 +794,9 @@ async function processTransactionInBackground(
       }
     }
 
-    await handleTransactionFailure(txId, pending, errorMessage, resolver);
+    await handleTransactionFailure(txId, pending, errorMessage);
   } finally {
     activeAbortControllers.delete(txId);
-    pendingResolvers.delete(txId);
     processingTxIds.delete(txId);
   }
 }
@@ -857,7 +808,6 @@ async function handleTransactionFailure(
   txId: string,
   pending: PendingTxRequest,
   error: string,
-  resolver?: PendingResolver,
 ): Promise<void> {
   const notificationId = `tx-failed-${txId}`;
 
@@ -888,9 +838,7 @@ async function handleTransactionFailure(
     error.length > 100 ? error.substring(0, 100) + "..." : error,
   );
 
-  if (resolver) {
-    resolver.resolve({ success: false, error });
-  }
+  await writeResultToStorage(`txResult:${txId}`, { success: false, error });
 }
 
 /** Gas overrides from user-edited gas params */
@@ -969,9 +917,6 @@ async function processLocalTransactionInBackground(
     );
     const txHash = result.txHash;
 
-    // Send result back to content script
-    const resolver = pendingResolvers.get(txId);
-
     // Update history to "success"
     await updateTxInHistory(txId, {
       status: "success",
@@ -1003,18 +948,14 @@ async function processLocalTransactionInBackground(
       `Transaction on ${pending.chainName} was successful. Click to view.`,
     );
 
-    if (resolver) {
-      resolver.resolve({ success: true, txHash });
-    }
+    await writeResultToStorage(`txResult:${txId}`, { success: true, txHash });
   } catch (error) {
-    const resolver = pendingResolvers.get(txId);
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
 
-    await handleTransactionFailure(txId, pending, errorMessage, resolver);
+    await handleTransactionFailure(txId, pending, errorMessage);
   } finally {
     activeAbortControllers.delete(txId);
-    pendingResolvers.delete(txId);
     processingTxIds.delete(txId);
   }
 }
@@ -1400,7 +1341,7 @@ export async function handleRemoveAccount(
  * Performs a full security reset - clears ALL sensitive data from memory
  * This should be called when resetting the extension
  */
-export function performSecurityReset(): void {
+export async function performSecurityReset(): Promise<void> {
   // Abort all active transactions
   for (const [, abortController] of activeAbortControllers.entries()) {
     try {
@@ -1411,25 +1352,14 @@ export function performSecurityReset(): void {
   }
   activeAbortControllers.clear();
 
-  // Reject all pending resolvers with reset error
-  for (const [, resolver] of pendingResolvers.entries()) {
-    try {
-      resolver.resolve({ success: false, error: "Extension was reset" });
-    } catch {
-      // Ignore errors
-    }
+  // Write reset errors to storage for any pending requests
+  const allKeys = await chrome.storage.local.get(null);
+  const pendingResultKeys = Object.keys(allKeys).filter(
+    (k) => k.startsWith("txResult:") || k.startsWith("sigResult:"),
+  );
+  if (pendingResultKeys.length > 0) {
+    await chrome.storage.local.remove(pendingResultKeys);
   }
-  pendingResolvers.clear();
-
-  // Reject all pending signature resolvers with reset error
-  for (const [, resolver] of pendingSignatureResolvers.entries()) {
-    try {
-      resolver.resolve({ success: false, error: "Extension was reset" });
-    } catch {
-      // Ignore errors
-    }
-  }
-  pendingSignatureResolvers.clear();
 
   // Clear failed transaction results
   failedTxResults.clear();
