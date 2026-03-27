@@ -97,6 +97,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
     isResolving: impersonatorIsResolving,
     isLoadingExtras: impersonatorIsLoadingExtras,
     isValid: impersonatorIsValid,
+    error: impersonatorResolverError,
   } = useAddressResolver(impersonatorAddress);
 
   // Check existing accounts and seed groups on mount
@@ -208,7 +209,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
         }
 
         if (!impersonatorIsValid || !impersonatorResolvedAddress) {
-          setErrors({ impersonatorAddress: "Invalid address or name" });
+          setErrors({ impersonatorAddress: impersonatorResolverError || "Invalid address or name" });
           setIsSubmitting(false);
           return;
         }
@@ -860,7 +861,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                     fontWeight="700"
                     mt={1}
                   >
-                    Invalid address or name
+                    {impersonatorResolverError || "Invalid address or name"}
                   </Text>
                 )}
               <FormErrorMessage color="bauhaus.red" fontWeight="700">

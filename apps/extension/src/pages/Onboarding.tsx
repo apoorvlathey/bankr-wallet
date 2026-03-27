@@ -185,7 +185,15 @@ function Onboarding({ onComplete }: OnboardingProps) {
       return input;
     }
     if (isResolvableName(input)) {
-      return await resolveNameToAddress(input);
+      try {
+        return await resolveNameToAddress(input);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/429|too many/i.test(msg)) {
+          throw new Error("RPC rate limited (429). Try switching your RPC URL in Settings.");
+        }
+        throw new Error("Failed to resolve name. Check your RPC URL in Settings.");
+      }
     }
     return null;
   };
@@ -236,11 +244,15 @@ function Onboarding({ onComplete }: OnboardingProps) {
       newErrors.walletAddress = "Wallet address is required";
     } else {
       setIsResolvingAddress(true);
-      const resolved = await resolveAddress(walletAddress.trim());
-      setIsResolvingAddress(false);
-
-      if (!resolved) {
-        newErrors.walletAddress = "Invalid address or name";
+      try {
+        const resolved = await resolveAddress(walletAddress.trim());
+        if (!resolved) {
+          newErrors.walletAddress = "Invalid address or name";
+        }
+      } catch (err) {
+        newErrors.walletAddress = err instanceof Error ? err.message : "Failed to resolve name";
+      } finally {
+        setIsResolvingAddress(false);
       }
     }
 
@@ -407,7 +419,14 @@ function Onboarding({ onComplete }: OnboardingProps) {
       // Handle Bankr account setup
       if (accountTypeChoice === "bankr") {
         // Resolve address (in case it's ENS/Basename/WNS)
-        const resolvedAddress = await resolveAddress(walletAddress.trim());
+        let resolvedAddress: string | null;
+        try {
+          resolvedAddress = await resolveAddress(walletAddress.trim());
+        } catch (err) {
+          setErrors({ walletAddress: err instanceof Error ? err.message : "Failed to resolve name" });
+          setIsSubmitting(false);
+          return;
+        }
         if (!resolvedAddress) {
           setErrors({ walletAddress: "Invalid address or name" });
           setIsSubmitting(false);

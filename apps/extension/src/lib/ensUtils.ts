@@ -182,28 +182,29 @@ const getMegaName = async (
 export const resolveNameToAddress = async (
   name: string
 ): Promise<Address | null> => {
+  // Handle .wei names via WNS — let RPC errors propagate
+  if (wei.isWei(name)) {
+    const address = await wei.resolve(name);
+    return address as Address | null;
+  }
+
+  // Handle .mega names via MegaNames (handles its own errors, returns null for not-found)
+  if (isMega(name)) {
+    return await resolveMegaName(name);
+  }
+
+  // ENS handles .eth, .base.eth, and other names
+  // normalize() throws for invalid name format — return null for that (not an RPC issue)
+  let normalizedName: string;
   try {
-    // Handle .wei names via WNS
-    if (wei.isWei(name)) {
-      const address = await wei.resolve(name);
-      return address as Address | null;
-    }
-
-    // Handle .mega names via MegaNames
-    if (isMega(name)) {
-      return await resolveMegaName(name);
-    }
-
-    // ENS handles .eth, .base.eth, and other names
-    const client = await getMainnetClient();
-    const address = await client.getEnsAddress({
-      name: normalize(name),
-    });
-    return address;
-  } catch (error) {
-    console.error("Error resolving name to address:", error);
+    normalizedName = normalize(name);
+  } catch {
     return null;
   }
+
+  // Let RPC errors (429, timeouts, etc.) propagate so callers can show actionable feedback
+  const client = await getMainnetClient();
+  return await client.getEnsAddress({ name: normalizedName });
 };
 
 // ============================================================================
