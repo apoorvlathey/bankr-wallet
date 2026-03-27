@@ -15,6 +15,8 @@ interface AddressResolverResult {
   /** True while secondary lookups (reverse name, avatar) are in progress */
   isLoadingExtras: boolean;
   isValid: boolean;
+  /** Non-null when resolution failed due to an RPC / network error */
+  error: string | null;
 }
 
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
@@ -28,6 +30,7 @@ export function useAddressResolver(
   const [avatar, setAvatar] = useState<string | null>(null);
   const [isResolving, setIsResolving] = useState(false);
   const [isLoadingExtras, setIsLoadingExtras] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const latestInput = useRef(input);
 
   useEffect(() => {
@@ -40,6 +43,7 @@ export function useAddressResolver(
       setAvatar(null);
       setIsResolving(false);
       setIsLoadingExtras(false);
+      setError(null);
       return;
     }
 
@@ -53,6 +57,7 @@ export function useAddressResolver(
       setAvatar(null);
       setIsResolving(false);
       setIsLoadingExtras(false);
+      setError(null);
 
       const timer = setTimeout(async () => {
         if (latestInput.current !== input) return;
@@ -87,6 +92,7 @@ export function useAddressResolver(
       setAvatar(null);
       setIsResolving(false);
       setIsLoadingExtras(false);
+      setError(null);
 
       const timer = setTimeout(async () => {
         if (latestInput.current !== input) return;
@@ -98,6 +104,7 @@ export function useAddressResolver(
 
           setResolvedAddress(address);
           setIsResolving(false);
+          setError(null);
 
           if (address) {
             setIsLoadingExtras(true);
@@ -105,10 +112,16 @@ export function useAddressResolver(
             if (latestInput.current !== input) return;
             setAvatar(av);
           }
-        } catch {
+        } catch (err) {
           if (latestInput.current === input) {
             setResolvedAddress(null);
             setIsResolving(false);
+            const msg = err instanceof Error ? err.message : String(err);
+            if (/429|too many/i.test(msg)) {
+              setError("RPC rate limited (429). Try switching your RPC URL in Settings.");
+            } else {
+              setError("Failed to resolve name. Check your RPC URL in Settings.");
+            }
           }
         } finally {
           if (latestInput.current === input) {
@@ -126,9 +139,10 @@ export function useAddressResolver(
     setAvatar(null);
     setIsResolving(false);
     setIsLoadingExtras(false);
+    setError(null);
   }, [input, debounceMs]);
 
   const isValid = resolvedAddress !== null && ADDRESS_REGEX.test(resolvedAddress);
 
-  return { resolvedAddress, resolvedName, avatar, isResolving, isLoadingExtras, isValid };
+  return { resolvedAddress, resolvedName, avatar, isResolving, isLoadingExtras, isValid, error };
 }

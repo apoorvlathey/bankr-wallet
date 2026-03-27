@@ -60,7 +60,7 @@ function TokenTransfer({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const { resolvedAddress, resolvedName, avatar, isResolving, isLoadingExtras, isValid: isRecipientValid } =
+  const { resolvedAddress, resolvedName, avatar, isResolving, isLoadingExtras, isValid: isRecipientValid, error: resolverError } =
     useAddressResolver(recipient);
 
   const chainConfig = getChainConfig(token.chainId);
@@ -396,7 +396,7 @@ function TokenTransfer({
           />
           {recipient && !isResolving && !isRecipientValid && (
             <Text fontSize="xs" color="bauhaus.red" fontWeight="700" mt={1}>
-              Invalid address or name
+              {resolverError || "Invalid address or name"}
             </Text>
           )}
         </Box>
