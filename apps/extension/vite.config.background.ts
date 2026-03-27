@@ -4,7 +4,7 @@ import { sharedConfig, sharedBuildConfig } from "./vite.config";
 
 export default defineConfig({
   ...sharedConfig,
-  plugins: [], // Background worker doesn't need React or other plugins
+  plugins: [],
   build: {
     ...sharedBuildConfig,
     outDir: "build/static/js",
@@ -17,6 +17,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         entryFileNames: "background.js",
+        // Service workers disallow dynamic import() — inline everything
+        // into a single chunk so no code-splitting occurs.
+        inlineDynamicImports: true,
       },
     },
   },

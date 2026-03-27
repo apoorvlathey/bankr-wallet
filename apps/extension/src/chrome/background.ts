@@ -53,6 +53,7 @@ import {
   getTxHistory,
   getProcessingTxs,
   clearTxHistory,
+  cleanupStaleProcessingTxs,
 } from "./txHistoryStorage";
 import {
   getConversations,
@@ -330,8 +331,12 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 // Initialize sidepanel behavior on startup
 initSidePanel();
 
+// Clean up txs stuck in "processing" (e.g. from a service worker restart mid-tx)
+cleanupStaleProcessingTxs();
+
 // Resume receipt polling for any txs stuck in "pending" status
 import { resumePendingPollers, checkPendingTxReceipt as checkPendingTxReceiptFn } from "./txReceiptPoller";
+import { clearAllNonces } from "./nonceManager";
 resumePendingPollers();
 
 // Handle extension icon click when popup is cleared (sidepanel mode)
@@ -1457,6 +1462,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true });
       });
       return true;
+    }
+
+    case "clearNonceCache": {
+      clearAllNonces();
+      sendResponse({ success: true });
+      return false;
     }
 
     case "checkPendingTxReceipt": {

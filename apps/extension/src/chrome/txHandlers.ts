@@ -76,6 +76,13 @@ import {
   setSidePanelMode,
   isSidePanelSupported,
 } from "./sidepanelManager";
+import { startReceiptPolling } from "./txReceiptPoller";
+import {
+  getNextNonce,
+  resetNonce,
+  clearNoncesForAddress,
+  clearAllNonces,
+} from "./nonceManager";
 
 export interface TransactionResult {
   success: boolean;
@@ -790,7 +797,6 @@ async function processTransactionInBackground(
 
       // Start polling for on-chain confirmation
       if (txHash) {
-        const { startReceiptPolling } = await import("./txReceiptPoller");
         startReceiptPolling(txId, txHash, pending.tx.chainId);
       }
 
@@ -910,17 +916,21 @@ async function processLocalTransactionInBackground(
       }
     }
 
+    // Get managed nonce to prevent conflicts with rapid txs
+    const nonce = await getNextNonce(pending.tx.from, pending.tx.chainId);
+
     // Merge gas overrides if provided
     // When overrides are set, remove legacy gasPrice to avoid conflict with EIP-1559 params
     const txForSigning = gasOverrides
       ? {
           ...pending.tx,
+          nonce,
           gas: gasOverrides.gasLimit,
           maxFeePerGas: gasOverrides.maxFeePerGas,
           maxPriorityFeePerGas: gasOverrides.maxPriorityFeePerGas,
           gasPrice: undefined,
         }
-      : pending.tx;
+      : { ...pending.tx, nonce };
 
     // Sign and broadcast the transaction
     const result = await signAndBroadcastTransaction(
@@ -938,7 +948,6 @@ async function processLocalTransactionInBackground(
 
     // Start polling for on-chain confirmation
     if (txHash) {
-      const { startReceiptPolling } = await import("./txReceiptPoller");
       startReceiptPolling(txId, txHash, pending.tx.chainId);
     }
 
@@ -946,6 +955,9 @@ async function processLocalTransactionInBackground(
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
+
+    // Reset nonce cache on failure so next tx re-fetches from RPC
+    resetNonce(pending.tx.from, pending.tx.chainId);
 
     await handleTransactionFailure(txId, pending, errorMessage);
   } finally {
@@ -1284,8 +1296,9 @@ export async function handleRemoveAccount(
       return { success: false, error: "Cannot remove the last account" };
     }
 
-    // If it's a PK or seed phrase account, remove from vault
+    // If it's a PK or seed phrase account, remove from vault and clear nonces
     if (account.type === "privateKey" || account.type === "seedPhrase") {
+      clearNoncesForAddress(account.address);
       await removeKeyFromVault(accountId);
 
       // Update the cached vault if it exists
@@ -1360,6 +1373,9 @@ export async function performSecurityReset(): Promise<void> {
 
   // Clear processing locks
   processingTxIds.clear();
+
+  // Clear nonce cache
+  clearAllNonces();
 }
 
 /**

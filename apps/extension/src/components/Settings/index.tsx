@@ -27,6 +27,7 @@ import {
   DeleteIcon,
   TimeIcon,
   ChatIcon,
+  RepeatIcon,
 } from "@chakra-ui/icons";
 
 // Sidepanel icon
@@ -82,6 +83,17 @@ function Settings({ close, showBackButton = true, onSessionExpired }: SettingsPr
         isClosable: true,
       });
       onDeleteModalClose();
+    });
+  };
+
+  const handleResetNonce = () => {
+    chrome.runtime.sendMessage({ type: "clearNonceCache" }, () => {
+      toast({
+        title: "Nonce cache reset",
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
     });
   };
 
@@ -535,6 +547,53 @@ function Settings({ close, showBackButton = true, onSessionExpired }: SettingsPr
               </Text>
               <Text fontSize="xs" color="text.secondary" fontWeight="500">
                 Remove all transaction records
+              </Text>
+            </Box>
+          </HStack>
+        </HStack>
+      </Box>
+
+      {/* Reset Nonce Cache Section */}
+      <Box
+        bg="bauhaus.white"
+        border="3px solid"
+        borderColor="bauhaus.black"
+        boxShadow="4px 4px 0px 0px #121212"
+        p={4}
+        cursor="pointer"
+        onClick={handleResetNonce}
+        _hover={{
+          transform: "translateY(-2px)",
+          boxShadow: "6px 6px 0px 0px #121212",
+        }}
+        _active={{
+          transform: "translate(2px, 2px)",
+          boxShadow: "none",
+        }}
+        transition="all 0.2s ease-out"
+        position="relative"
+      >
+        <Box
+          position="absolute"
+          top="-3px"
+          right="-3px"
+          w="8px"
+          h="8px"
+          bg="bauhaus.blue"
+          border="2px solid"
+          borderColor="bauhaus.black"
+        />
+        <HStack justify="space-between">
+          <HStack spacing={3}>
+            <Box p={2} bg="bauhaus.blue">
+              <RepeatIcon boxSize={4} color="white" />
+            </Box>
+            <Box>
+              <Text fontWeight="700" color="text.primary">
+                Reset Nonce Cache
+              </Text>
+              <Text fontSize="xs" color="text.secondary" fontWeight="500">
+                Fix stuck transactions from nonce conflicts
               </Text>
             </Box>
           </HStack>

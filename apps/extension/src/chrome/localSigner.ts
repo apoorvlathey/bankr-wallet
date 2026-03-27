@@ -51,7 +51,7 @@ function createClient(
   const client = createWalletClient({
     account,
     chain,
-    transport: http(rpcUrl || RPC_URLS[chainId]),
+    transport: http(rpcUrl || RPC_URLS[chainId], { timeout: 30_000 }),
   });
 
   return { client, account };
