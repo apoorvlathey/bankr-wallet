@@ -16,6 +16,24 @@ import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import { getCombinedRequests, CombinedRequest } from "@/App";
 
+function getOriginHostname(origin: string): string | null {
+  try {
+    return new URL(origin).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function getOriginDisplay(origin: string): string {
+  return getOriginHostname(origin) || origin;
+}
+
+function getFaviconUrl(origin: string, favicon: string | null): string | undefined {
+  if (favicon) return favicon;
+  const hostname = getOriginHostname(origin);
+  return hostname ? `https://www.google.com/s2/favicons?domain=${hostname}&sz=32` : undefined;
+}
+
 interface PendingTxListProps {
   txRequests: PendingTxRequest[];
   signatureRequests: PendingSignatureRequest[];
@@ -150,14 +168,14 @@ function PendingTxList({ txRequests, signatureRequests, onBack, onSelectTx, onSe
                       >
                         <Image
                           src={
-                            request.favicon ||
-                            `https://www.google.com/s2/favicons?domain=${new URL(request.origin).hostname}&sz=32`
+                            getFaviconUrl(request.origin, request.favicon)
                           }
                           alt="favicon"
                           boxSize="24px"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
-                            target.src = `https://www.google.com/s2/favicons?domain=${new URL(request.origin).hostname}&sz=32`;
+                            const fallback = getFaviconUrl(request.origin, null);
+                            if (fallback) target.src = fallback;
                           }}
                         />
                       </Box>
@@ -169,7 +187,7 @@ function PendingTxList({ txRequests, signatureRequests, onBack, onSelectTx, onSe
                             color="text.primary"
                             noOfLines={1}
                           >
-                            {new URL(request.origin).hostname}
+                            {getOriginDisplay(request.origin)}
                           </Text>
                           <Text fontSize="xs" color="text.tertiary" fontWeight="500">
                             {formatTimestamp(request.timestamp)}
@@ -271,14 +289,14 @@ function PendingTxList({ txRequests, signatureRequests, onBack, onSelectTx, onSe
                       >
                         <Image
                           src={
-                            request.favicon ||
-                            `https://www.google.com/s2/favicons?domain=${new URL(request.origin).hostname}&sz=32`
+                            getFaviconUrl(request.origin, request.favicon)
                           }
                           alt="favicon"
                           boxSize="24px"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
-                            target.src = `https://www.google.com/s2/favicons?domain=${new URL(request.origin).hostname}&sz=32`;
+                            const fallback = getFaviconUrl(request.origin, null);
+                            if (fallback) target.src = fallback;
                           }}
                         />
                       </Box>
@@ -290,7 +308,7 @@ function PendingTxList({ txRequests, signatureRequests, onBack, onSelectTx, onSe
                             color="text.primary"
                             noOfLines={1}
                           >
-                            {new URL(request.origin).hostname}
+                            {getOriginDisplay(request.origin)}
                           </Text>
                           <Text fontSize="xs" color="text.tertiary" fontWeight="500">
                             {formatTimestamp(request.timestamp)}

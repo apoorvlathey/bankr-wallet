@@ -190,6 +190,8 @@ function TokenTransfer({
                 chainId: token.chainId,
               },
               chainName: chainConfig.name,
+              tokenName: token.symbol.toUpperCase(),
+              tokenLogo: token.logoUrl || null,
             },
             resolve
           );
