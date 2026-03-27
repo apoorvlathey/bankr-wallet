@@ -9,8 +9,8 @@ import {
   IconButton,
   Tooltip,
 } from "@chakra-ui/react";
-import { RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
-import { fetchPortfolio, PortfolioToken } from "@/chrome/portfolioApi";
+import { ExternalLinkIcon, RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { fetchPortfolio, PortfolioToken, DefiPosition } from "@/chrome/portfolioApi";
 import { fetchOnchainBalances } from "@/chrome/onchainBalances";
 import { recordSnapshot } from "@/chrome/portfolioSnapshotStorage";
 import { getChainConfig } from "@/constants/chainConfig";
@@ -31,6 +31,7 @@ interface TokenHoldingsProps {
 
 function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateChange }: TokenHoldingsProps) {
   const [tokens, setTokens] = useState<PortfolioToken[]>([]);
+  const [defiPositions, setDefiPositions] = useState<DefiPosition[]>([]);
   const [totalValueUsd, setTotalValueUsd] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +69,7 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
 
         // Show API data immediately so user isn't stuck on skeleton loader
         setTokens(data.tokens);
+        setDefiPositions(data.defiPositions || []);
         setTotalValueUsd(data.totalValueUsd);
         setLoading(false);
         setLastFetched(Date.now());
@@ -77,9 +79,12 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
         try {
           const onchain = await fetchOnchainBalances(address, data.tokens);
           setTokens(onchain.tokens);
-          setTotalValueUsd(onchain.totalValueUsd);
+          // Total = on-chain corrected wallet tokens + DeFi positions
+          const defiTotal = (data.defiPositions || []).reduce((s: number, p: DefiPosition) => s + p.valueUsd, 0);
+          const total = onchain.totalValueUsd + defiTotal;
+          setTotalValueUsd(total);
           // Record snapshot with on-chain enhanced value
-          recordSnapshot(address, onchain.totalValueUsd).catch(() => {});
+          recordSnapshot(address, total).catch(() => {});
         } catch (err) {
           console.warn("[onchain] balance fetch failed, using API values:", err);
           // Record snapshot with API-only value
@@ -97,6 +102,7 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
   useEffect(() => {
     setLastFetched(0);
     setTokens([]);
+    setDefiPositions([]);
     setTotalValueUsd(0);
     loadPortfolio(true);
   }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -152,9 +158,7 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
   }
 
   const tokenList = (
-    <VStack
-      spacing={0}
-    >
+    <VStack spacing={0}>
       {loading && tokens.length === 0 ? (
         // Loading skeletons
         Array.from({ length: 3 }).map((_, i) => (
@@ -170,100 +174,288 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
             </VStack>
           </HStack>
         ))
-      ) : tokens.length === 0 ? (
+      ) : tokens.length === 0 && defiPositions.length === 0 ? (
         <Box p={3}>
           <Text fontSize="sm" color="text.tertiary" textAlign="center">
             No tokens found
           </Text>
         </Box>
       ) : (
-        tokens.map((token, i) => (
-          <HStack
-            key={`${token.chainId}-${token.contractAddress}-${i}`}
-            w="full"
-            p={2.5}
-            px={3}
-            borderBottom={i < tokens.length - 1 ? "1px solid" : "none"}
-            borderColor="gray.200"
-            cursor={onTokenClick ? "pointer" : "default"}
-            _hover={onTokenClick ? { bg: "bg.muted" } : {}}
-            onClick={() => onTokenClick?.(token)}
-            transition="background 0.15s"
-          >
-            {/* Token icon */}
-            <Box position="relative">
-              <Box
-                bg="bg.muted"
-                border="2px solid"
-                borderColor="bauhaus.black"
-                borderRadius="full"
-                w="24px"
-                h="24px"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                overflow="hidden"
-              >
-                {token.logoUrl ? (
-                  <Image
-                    src={token.logoUrl}
-                    alt={token.symbol}
-                    boxSize="20px"
-                    fallback={
-                      <Text fontSize="9px" fontWeight="800" color="text.secondary">
-                        {token.symbol.slice(0, 3)}
-                      </Text>
-                    }
-                  />
-                ) : (
-                  <Text fontSize="9px" fontWeight="800" color="text.secondary">
-                    {token.symbol.slice(0, 3)}
+        <>
+          {tokens.map((token, i) => (
+            <HStack
+              key={`${token.chainId}-${token.contractAddress}-${i}`}
+              w="full"
+              p={2.5}
+              px={3}
+              borderBottom={i < tokens.length - 1 || defiPositions.length > 0 ? "1px solid" : "none"}
+              borderColor="gray.200"
+              cursor={onTokenClick ? "pointer" : "default"}
+              _hover={onTokenClick ? { bg: "bg.muted" } : {}}
+              onClick={() => onTokenClick?.(token)}
+              transition="background 0.15s"
+            >
+              {/* Token icon */}
+              <Box position="relative">
+                <Box
+                  bg="bg.muted"
+                  border="2px solid"
+                  borderColor="bauhaus.black"
+                  borderRadius="full"
+                  w="24px"
+                  h="24px"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  overflow="hidden"
+                >
+                  {token.logoUrl ? (
+                    <Image
+                      src={token.logoUrl}
+                      alt={token.symbol}
+                      boxSize="20px"
+                      fallback={
+                        <Text fontSize="9px" fontWeight="800" color="text.secondary">
+                          {token.symbol.slice(0, 3)}
+                        </Text>
+                      }
+                    />
+                  ) : (
+                    <Text fontSize="9px" fontWeight="800" color="text.secondary">
+                      {token.symbol.slice(0, 3)}
+                    </Text>
+                  )}
+                </Box>
+                {/* Chain badge */}
+                {(() => {
+                  const config = getChainConfig(token.chainId);
+                  return config.icon ? (
+                    <Image
+                      src={config.icon}
+                      alt=""
+                      boxSize="12px"
+                      position="absolute"
+                      bottom="-2px"
+                      right="-4px"
+                      border="1px solid"
+                      borderColor="bauhaus.black"
+                      borderRadius="full"
+                      bg="white"
+                    />
+                  ) : null;
+                })()}
+              </Box>
+
+              {/* Token info */}
+              <VStack align="start" spacing={0} flex={1} minW={0}>
+                <Text fontSize="xs" fontWeight="700" color="text.primary" noOfLines={1} textTransform="uppercase">
+                  {token.symbol}
+                </Text>
+                <Text fontSize="10px" color="text.tertiary" fontWeight="500" noOfLines={1}>
+                  {token.balanceFormatted}
+                </Text>
+              </VStack>
+
+              {/* Value */}
+              <VStack align="end" spacing={0} minW="50px">
+                <Text fontSize="xs" fontWeight="700" color="text.primary">
+                  {formatUsd(token.valueUsd)}
+                </Text>
+                {!hideValue && token.priceUsd > 0 && (
+                  <Text fontSize="10px" color="text.tertiary" fontWeight="500">
+                    ${token.priceUsd < 0.01 ? "<0.01" : token.priceUsd.toLocaleString("en-US", { maximumFractionDigits: 2 })}
                   </Text>
                 )}
-              </Box>
-              {/* Chain badge */}
-              {(() => {
-                const config = getChainConfig(token.chainId);
-                return config.icon ? (
-                  <Image
-                    src={config.icon}
-                    alt=""
-                    boxSize="12px"
-                    position="absolute"
-                    bottom="-2px"
-                    right="-4px"
-                    border="1px solid"
-                    borderColor="bauhaus.black"
-                    borderRadius="full"
-                    bg="white"
-                  />
-                ) : null;
-              })()}
-            </Box>
+              </VStack>
+            </HStack>
+          ))}
 
-            {/* Token info */}
-            <VStack align="start" spacing={0} flex={1} minW={0}>
-              <Text fontSize="xs" fontWeight="700" color="text.primary" noOfLines={1} textTransform="uppercase">
-                {token.symbol}
-              </Text>
-              <Text fontSize="10px" color="text.tertiary" fontWeight="500" noOfLines={1}>
-                {token.balanceFormatted}
-              </Text>
-            </VStack>
-
-            {/* Value */}
-            <VStack align="end" spacing={0} minW="50px">
-              <Text fontSize="xs" fontWeight="700" color="text.primary">
-                {formatUsd(token.valueUsd)}
-              </Text>
-              {!hideValue && token.priceUsd > 0 && (
-                <Text fontSize="10px" color="text.tertiary" fontWeight="500">
-                  ${token.priceUsd < 0.01 ? "<0.01" : token.priceUsd.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+          {/* DeFi Positions */}
+          {defiPositions.length > 0 && (
+            <>
+              <HStack
+                w="full"
+                px={3}
+                py={2}
+                bg="bg.muted"
+                borderBottom="1px solid"
+                borderColor="gray.200"
+              >
+                <Text fontSize="10px" fontWeight="800" color="text.secondary" textTransform="uppercase" letterSpacing="wider">
+                  DeFi Positions
                 </Text>
-              )}
-            </VStack>
-          </HStack>
-        ))
+              </HStack>
+              {defiPositions.map((pos, i) => {
+                const chainConfig = getChainConfig(pos.chainId);
+                return (
+                  <Box
+                    key={`defi-${pos.protocol}-${pos.name}-${i}`}
+                    w="full"
+                    borderBottom={i < defiPositions.length - 1 ? "1px solid" : "none"}
+                    borderColor="gray.200"
+                  >
+                    {/* Position header */}
+                    <HStack w="full" p={2.5} px={3} spacing={2}>
+                      <Box position="relative">
+                        <Box
+                          bg="bg.muted"
+                          border="2px solid"
+                          borderColor="bauhaus.black"
+                          borderRadius="4px"
+                          w="24px"
+                          h="24px"
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                          overflow="hidden"
+                        >
+                          {pos.protocolLogo ? (
+                            <Image
+                              src={pos.protocolLogo}
+                              alt={pos.protocol}
+                              boxSize="20px"
+                              fallback={
+                                <Text fontSize="8px" fontWeight="800" color="text.secondary">
+                                  {pos.protocol.slice(0, 3).toUpperCase()}
+                                </Text>
+                              }
+                            />
+                          ) : (
+                            <Text fontSize="8px" fontWeight="800" color="text.secondary">
+                              {pos.protocol.slice(0, 3).toUpperCase()}
+                            </Text>
+                          )}
+                        </Box>
+                        {chainConfig.icon && (
+                          <Image
+                            src={chainConfig.icon}
+                            alt=""
+                            boxSize="12px"
+                            position="absolute"
+                            bottom="-2px"
+                            right="-4px"
+                            border="1px solid"
+                            borderColor="bauhaus.black"
+                            borderRadius="full"
+                            bg="white"
+                          />
+                        )}
+                      </Box>
+                      <VStack align="start" spacing={0} flex={1} minW={0}>
+                        <HStack spacing={1}>
+                          <Text fontSize="xs" fontWeight="700" color="text.primary" noOfLines={1} textTransform="uppercase">
+                            {pos.protocol}
+                          </Text>
+                          {pos.siteUrl && (
+                            <IconButton
+                              aria-label="Open in app"
+                              icon={<ExternalLinkIcon />}
+                              size="xs"
+                              variant="ghost"
+                              color="text.tertiary"
+                              minW="auto"
+                              h="auto"
+                              p={0}
+                              fontSize="10px"
+                              _hover={{ color: "bauhaus.blue" }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(pos.siteUrl, "_blank");
+                              }}
+                            />
+                          )}
+                        </HStack>
+                        <Text fontSize="10px" color="text.tertiary" fontWeight="500" noOfLines={1}>
+                          {pos.type === pos.name ? pos.type : `${pos.type} · ${pos.name}`}
+                        </Text>
+                      </VStack>
+                      <Text fontSize="xs" fontWeight="700" color="text.primary">
+                        {formatUsd(pos.valueUsd)}
+                      </Text>
+                    </HStack>
+
+                    {/* Position assets */}
+                    <VStack spacing={0} pl={9} pr={3} pb={1.5}>
+                      {pos.assets.map((asset, j) => (
+                        <HStack key={`asset-${j}`} w="full" py={0.5} justify="space-between">
+                          <HStack spacing={1.5}>
+                            <Box
+                              bg="bg.muted"
+                              border="1.5px solid"
+                              borderColor="gray.300"
+                              borderRadius="full"
+                              w="16px"
+                              h="16px"
+                              display="flex"
+                              alignItems="center"
+                              justifyContent="center"
+                              overflow="hidden"
+                              flexShrink={0}
+                            >
+                              {asset.logoUrl ? (
+                                <Image src={asset.logoUrl} alt={asset.symbol} boxSize="13px" fallback={
+                                  <Text fontSize="7px" fontWeight="800" color="text.tertiary">{asset.symbol.slice(0, 2).toUpperCase()}</Text>
+                                } />
+                              ) : (
+                                <Text fontSize="7px" fontWeight="800" color="text.tertiary">{asset.symbol.slice(0, 2).toUpperCase()}</Text>
+                              )}
+                            </Box>
+                            <Text fontSize="10px" color="text.tertiary" fontWeight="600" textTransform="uppercase">
+                              {asset.balanceFormatted} {asset.symbol}
+                            </Text>
+                          </HStack>
+                          <Text fontSize="10px" color="text.tertiary" fontWeight="500">
+                            {formatUsd(asset.valueUsd)}
+                          </Text>
+                        </HStack>
+                      ))}
+                      {pos.rewardAssets.length > 0 && (
+                        <>
+                          <Text fontSize="9px" color="text.tertiary" fontWeight="700" textTransform="uppercase" alignSelf="start" mt={0.5} opacity={0.6}>
+                            Rewards
+                          </Text>
+                          {pos.rewardAssets.map((asset, j) => (
+                            <HStack key={`reward-${j}`} w="full" py={0.5} justify="space-between">
+                              <HStack spacing={1.5}>
+                                <Box
+                                  bg="bg.muted"
+                                  border="1.5px solid"
+                                  borderColor="gray.300"
+                                  borderRadius="full"
+                                  w="16px"
+                                  h="16px"
+                                  display="flex"
+                                  alignItems="center"
+                                  justifyContent="center"
+                                  overflow="hidden"
+                                  flexShrink={0}
+                                >
+                                  {asset.logoUrl ? (
+                                    <Image src={asset.logoUrl} alt={asset.symbol} boxSize="13px" fallback={
+                                      <Text fontSize="7px" fontWeight="800" color="text.tertiary">{asset.symbol.slice(0, 2).toUpperCase()}</Text>
+                                    } />
+                                  ) : (
+                                    <Text fontSize="7px" fontWeight="800" color="text.tertiary">{asset.symbol.slice(0, 2).toUpperCase()}</Text>
+                                  )}
+                                </Box>
+                                <Text fontSize="10px" color="text.tertiary" fontWeight="600" textTransform="uppercase">
+                                  {asset.balanceFormatted} {asset.symbol}
+                                </Text>
+                              </HStack>
+                              <Text fontSize="10px" color="text.tertiary" fontWeight="500">
+                                {formatUsd(asset.valueUsd)}
+                              </Text>
+                            </HStack>
+                          ))}
+                        </>
+                      )}
+                    </VStack>
+                  </Box>
+                );
+              })}
+            </>
+          )}
+        </>
       )}
     </VStack>
   );

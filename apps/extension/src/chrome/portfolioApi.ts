@@ -13,8 +13,32 @@ export interface PortfolioToken {
   logoUrl?: string;
 }
 
+export interface DefiAsset {
+  symbol: string;
+  name: string;
+  contractAddress: string;
+  chainId: number;
+  balance: string;
+  balanceFormatted: string;
+  valueUsd: number;
+  logoUrl?: string;
+}
+
+export interface DefiPosition {
+  protocol: string;
+  protocolLogo?: string;
+  chainId: number;
+  type: string;
+  name: string;
+  valueUsd: number;
+  siteUrl?: string;
+  assets: DefiAsset[];
+  rewardAssets: DefiAsset[];
+}
+
 export interface PortfolioResponse {
   tokens: PortfolioToken[];
+  defiPositions: DefiPosition[];
   totalValueUsd: number;
 }
 
