@@ -6,7 +6,7 @@
  */
 
 import { type Chain } from "viem";
-import { mainnet, polygon, base } from "viem/chains";
+import { arbitrum, mainnet, polygon, base, bsc } from "viem/chains";
 import { type NetworksInfo } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -52,6 +52,37 @@ export interface ChainConfig {
 const ETH_CURRENCY = { name: "Ether", symbol: "ETH", decimals: 18 };
 
 export const CHAIN_REGISTRY: readonly ChainEntry[] = [
+  // Ethereum first, then alphabetical
+  {
+    chainId: 1,
+    name: "Ethereum",
+    rpcUrl: "https://eth.llamarpc.com",
+    explorer: "https://etherscan.io",
+    icon: "/chainIcons/ethereum.svg",
+    bg: "rgba(98, 126, 234, 0.15)",
+    border: "rgba(98, 126, 234, 0.4)",
+    text: "#627EEA",
+    nativeCurrency: ETH_CURRENCY,
+    isOpStack: false,
+    isBankrSupported: true,
+    coingeckoTokenId: "ethereum",
+    viemChain: mainnet,
+  },
+  {
+    chainId: 42161,
+    name: "Arbitrum",
+    rpcUrl: "https://arb1.arbitrum.io/rpc",
+    explorer: "https://arbiscan.io",
+    icon: "/chainIcons/arbitrum.svg",
+    bg: "rgba(40, 160, 240, 0.15)",
+    border: "rgba(40, 160, 240, 0.4)",
+    text: "#28A0F0",
+    nativeCurrency: ETH_CURRENCY,
+    isOpStack: false,
+    isBankrSupported: true,
+    coingeckoTokenId: "ethereum",
+    viemChain: arbitrum,
+  },
   {
     chainId: 8453,
     name: "Base",
@@ -68,19 +99,19 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     viemChain: base,
   },
   {
-    chainId: 1,
-    name: "Ethereum",
-    rpcUrl: "https://eth.llamarpc.com",
-    explorer: "https://etherscan.io",
-    icon: "/chainIcons/ethereum.svg",
-    bg: "rgba(98, 126, 234, 0.15)",
-    border: "rgba(98, 126, 234, 0.4)",
-    text: "#627EEA",
-    nativeCurrency: ETH_CURRENCY,
+    chainId: 56,
+    name: "BNB Chain",
+    rpcUrl: "https://bsc-dataseed.binance.org",
+    explorer: "https://bscscan.com",
+    icon: "/chainIcons/bnb.svg",
+    bg: "rgba(243, 186, 47, 0.15)",
+    border: "rgba(243, 186, 47, 0.4)",
+    text: "#F3BA2F",
+    nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
     isOpStack: false,
     isBankrSupported: true,
-    coingeckoTokenId: "ethereum",
-    viemChain: mainnet,
+    coingeckoTokenId: "binancecoin",
+    viemChain: bsc,
   },
   {
     chainId: 4326,
