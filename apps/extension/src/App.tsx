@@ -172,6 +172,7 @@ function App() {
   const [sidePanelMode, setSidePanelMode] = useState(false);
   const [isInSidePanel, setIsInSidePanel] = useState(false);
   const [isFullscreenTab, setIsFullscreenTab] = useState(false);
+  const [isPopupWindow, setIsPopupWindow] = useState(false);
   const [failedTxError, setFailedTxError] = useState<{
     error: string;
     origin: string;
@@ -210,6 +211,7 @@ function App() {
   );
   const keepAlivePortRef = useRef<chrome.runtime.Port | null>(null);
   const reconnectingRef = useRef(false);
+  const isPopupWindowRef = useRef(false);
 
   const currentTab = async () => {
     const [tab] = await chrome.tabs.query({
@@ -517,17 +519,38 @@ function App() {
         }
       }
 
+      // Check if we're in a popup-type window (created by chrome.windows.create)
+      // This is authoritative and doesn't depend on dimensions — important because
+      // macOS fullscreen can resize popup windows, causing dimension-based detection to fail
+      let inPopupWindow = false;
+      try {
+        const currentWindow = await chrome.windows.getCurrent();
+        inPopupWindow = currentWindow.type === "popup";
+      } catch {
+        // Fallback: not in a popup window
+      }
+      setIsPopupWindow(inPopupWindow);
+      isPopupWindowRef.current = inPopupWindow;
+
       // Detect if currently in fullscreen tab first (takes priority)
-      const inFullscreen = detectFullscreenContext();
+      // But never if we're in a popup window (macOS fullscreen can resize popups)
+      const inFullscreen = !inPopupWindow && detectFullscreenContext();
       setIsFullscreenTab(inFullscreen);
 
-      // Detect if currently in sidepanel (only if not fullscreen)
-      const inSidePanel = !inFullscreen && detectSidePanelContext();
+      // Detect if currently in sidepanel (only if not fullscreen and not popup window)
+      const inSidePanel =
+        !inPopupWindow && !inFullscreen && detectSidePanelContext();
       setIsInSidePanel(inSidePanel);
 
       // Add/remove body class for CSS
-      document.body.classList.remove("sidepanel-mode", "fullscreen-mode");
-      if (inFullscreen) {
+      document.body.classList.remove(
+        "sidepanel-mode",
+        "fullscreen-mode",
+        "popup-window-mode",
+      );
+      if (inPopupWindow) {
+        document.body.classList.add("popup-window-mode");
+      } else if (inFullscreen) {
         document.body.classList.add("fullscreen-mode");
       } else if (inSidePanel) {
         document.body.classList.add("sidepanel-mode");
@@ -538,6 +561,9 @@ function App() {
 
     // Listen for window resize to update sidepanel/fullscreen detection
     const handleResize = () => {
+      // Never reclassify a popup window — macOS fullscreen can resize it
+      if (isPopupWindowRef.current) return;
+
       const isWide = window.innerWidth > 500;
       const isTall = window.innerHeight > 700;
       const isTopLevel = window.top === window.self;
@@ -766,7 +792,7 @@ function App() {
   // Also respond to ping messages so background knows a view is open
   // Also listen for onboarding completion
   useEffect(() => {
-    const handleMessage = async (
+    const handleMessage = (
       message: {
         type: string;
         txRequest?: PendingTxRequest;
@@ -774,50 +800,60 @@ function App() {
       },
       _sender: chrome.runtime.MessageSender,
       sendResponse: (response?: any) => void,
-    ) => {
+    ): boolean | undefined => {
       if (message.type === "ping") {
         // Respond to ping so background knows we're open
         sendResponse("pong");
-        return true;
+        return;
       }
       if (message.type === "newPendingTxRequest" && message.txRequest) {
-        // Update pending requests list
-        setPendingRequests((prev) => [...prev, message.txRequest!]);
-        // Check if wallet is locked before showing the request
-        const isUnlocked = await checkLockState();
-        setIsWalletUnlocked(isUnlocked);
-        if (isUnlocked) {
-          // Show the new tx request
-          setSelectedTxRequest(message.txRequest);
-          setView("txConfirm");
-        } else {
-          // Wallet is locked - show unlock screen (requests will be shown after unlock)
-          setView("unlock");
-        }
+        const txRequest = message.txRequest;
+        // Don't append to pendingRequests here — the storage change listener
+        // will sync the full list from chrome.storage.local, avoiding duplicates.
+        // Just handle view switching.
+        (async () => {
+          const isUnlocked = await checkLockState();
+          setIsWalletUnlocked(isUnlocked);
+          if (isUnlocked) {
+            setSelectedTxRequest(txRequest);
+            setView("txConfirm");
+          } else {
+            setView("unlock");
+          }
+        })();
+        return;
       }
       if (message.type === "newPendingSignatureRequest" && message.sigRequest) {
-        // Update pending signature requests list
-        setPendingSignatureRequests((prev) => [...prev, message.sigRequest!]);
-        // Check if wallet is locked before showing the request
-        const isUnlocked = await checkLockState();
-        setIsWalletUnlocked(isUnlocked);
-        if (isUnlocked) {
-          // Show the new signature request
-          setSelectedSignatureRequest(message.sigRequest);
-          setView("signatureConfirm");
-        } else {
-          // Wallet is locked - show unlock screen (requests will be shown after unlock)
-          setView("unlock");
-        }
+        const sigRequest = message.sigRequest;
+        // Don't append to pendingSignatureRequests here — the storage change listener
+        // will sync the full list from chrome.storage.local, avoiding duplicates.
+        // Just handle view switching.
+        (async () => {
+          const isUnlocked = await checkLockState();
+          setIsWalletUnlocked(isUnlocked);
+          if (isUnlocked) {
+            setSelectedSignatureRequest(sigRequest);
+            setView("signatureConfirm");
+          } else {
+            setView("unlock");
+          }
+        })();
+        return;
       }
       if (message.type === "onboardingComplete") {
         // Onboarding finished - reload to show unlock screen
         window.location.reload();
+        return;
       }
       if (message.type === "accountsUpdated") {
         // Reload accounts and sync address when they change
         loadAccounts(true);
+        return;
       }
+      // Return undefined for unrecognized messages — critical so this listener
+      // doesn't intercept messages meant for the background service worker
+      // (an async handler always returns a Promise/truthy, which Chrome treats
+      // as "I'll respond", stealing the response from the background)
     };
 
     chrome.runtime.onMessage.addListener(handleMessage);
@@ -850,11 +886,53 @@ function App() {
           }
         }
       }
+      // Sync pending requests when storage changes (e.g., confirmed/rejected from another context)
+      if (areaName === "local") {
+        if (changes.pendingTxRequests) {
+          const updated: PendingTxRequest[] =
+            changes.pendingTxRequests.newValue || [];
+          setPendingRequests(updated);
+          // If the currently selected tx was removed, clear it
+          if (
+            selectedTxRequest &&
+            !updated.find((r) => r.id === selectedTxRequest.id)
+          ) {
+            if (updated.length > 0) {
+              setSelectedTxRequest(updated[0]);
+            } else {
+              setSelectedTxRequest(null);
+              if (view === "txConfirm" || view === "pendingTxList") {
+                setActivityTabTrigger((k) => k + 1);
+                setView("main");
+              }
+            }
+          }
+        }
+        if (changes.pendingSignatureRequests) {
+          const updated: PendingSignatureRequest[] =
+            changes.pendingSignatureRequests.newValue || [];
+          setPendingSignatureRequests(updated);
+          // If the currently selected sig was removed, clear it
+          if (
+            selectedSignatureRequest &&
+            !updated.find((r) => r.id === selectedSignatureRequest.id)
+          ) {
+            if (updated.length > 0) {
+              setSelectedSignatureRequest(updated[0]);
+            } else {
+              setSelectedSignatureRequest(null);
+              if (view === "signatureConfirm") {
+                setView("main");
+              }
+            }
+          }
+        }
+      }
     };
 
     chrome.storage.onChanged.addListener(handleStorageChange);
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
-  }, [chainName, address, displayAddress]);
+  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, view]);
 
   // Listen for tab activation changes to update chain for current tab
   useEffect(() => {
@@ -975,7 +1053,7 @@ function App() {
     if (remaining.length > 0) {
       setSelectedTxRequest(remaining[0]);
     } else {
-      // Only close popup when no more pending requests (not sidepanel or fullscreen)
+      // Only close popup when no more pending requests (not sidepanel or fullscreen tab)
       if (isInSidePanel || isFullscreenTab) {
         setSelectedTxRequest(null);
         setView("main");
@@ -1004,7 +1082,7 @@ function App() {
         );
       });
     }
-    // Only close popup after rejecting all (not sidepanel or fullscreen)
+    // Only close popup after rejecting all (not sidepanel or fullscreen tab)
     if (isInSidePanel || isFullscreenTab) {
       setPendingRequests([]);
       setPendingSignatureRequests([]);

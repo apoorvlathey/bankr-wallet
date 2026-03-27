@@ -42,6 +42,27 @@ html:has(body.fullscreen-mode) {
   height: 100vh;
 }
 
+/* Popup window mode - when macOS fullscreen resizes the popup beyond its natural size */
+html:has(body.popup-window-mode) {
+  width: 100%;
+  height: 100vh;
+  background: #F0F0F0;
+}
+
+body.popup-window-mode {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  justify-content: center;
+  background: #F0F0F0;
+}
+
+body.popup-window-mode #root {
+  width: 480px;
+  max-width: 480px;
+  height: 100%;
+}
+
 code,
 pre,
 .mono {
