@@ -750,8 +750,8 @@ async function processTransactionInBackground(
         pending,
         "Transaction reverted",
       );
-    } else {
-      // success or pending — both mean tx was submitted
+    } else if (result.status === "success" && txHash) {
+      // API confirmed on-chain (waitForConfirmation: true) — mark success
       await updateTxInHistory(txId, {
         status: "success",
         txHash,
@@ -759,9 +759,7 @@ async function processTransactionInBackground(
       });
 
       // Fire-and-forget gas fee fetch
-      if (txHash) {
-        fetchAndStoreGasData(txId, txHash, pending.tx.chainId);
-      }
+      fetchAndStoreGasData(txId, txHash, pending.tx.chainId);
 
       const notificationId = `tx-success-${txId}`;
       const chainConfig = CHAIN_CONFIG[pending.tx.chainId];
@@ -780,6 +778,20 @@ async function processTransactionInBackground(
         "Transaction Confirmed",
         `Transaction on ${pending.chainName} was successful. Click to view.`,
       );
+
+      await writeResultToStorage(`txResult:${txId}`, { success: true, txHash });
+    } else {
+      // API returned "pending" — tx submitted but not yet confirmed
+      await updateTxInHistory(txId, {
+        status: "pending",
+        txHash,
+      });
+
+      // Start polling for on-chain confirmation
+      if (txHash) {
+        const { startReceiptPolling } = await import("./txReceiptPoller");
+        startReceiptPolling(txId, txHash, pending.tx.chainId);
+      }
 
       await writeResultToStorage(`txResult:${txId}`, { success: true, txHash });
     }
@@ -917,36 +929,17 @@ async function processLocalTransactionInBackground(
     );
     const txHash = result.txHash;
 
-    // Update history to "success"
+    // Tx is broadcast but not yet confirmed — mark as pending
     await updateTxInHistory(txId, {
-      status: "success",
+      status: "pending",
       txHash,
-      completedAt: Date.now(),
     });
 
-    // Fire-and-forget gas fee fetch
+    // Start polling for on-chain confirmation
     if (txHash) {
-      fetchAndStoreGasData(txId, txHash, pending.tx.chainId);
+      const { startReceiptPolling } = await import("./txReceiptPoller");
+      startReceiptPolling(txId, txHash, pending.tx.chainId);
     }
-
-    // Show notification
-    const notificationId = `tx-success-${txId}`;
-    const chainConfig = CHAIN_CONFIG[pending.tx.chainId];
-    const explorerUrl = chainConfig?.explorer
-      ? `${chainConfig.explorer}/tx/${txHash}`
-      : null;
-
-    if (explorerUrl) {
-      chrome.storage.local.set({
-        [`notification-${notificationId}`]: explorerUrl,
-      });
-    }
-
-    await showNotification(
-      notificationId,
-      "Transaction Confirmed",
-      `Transaction on ${pending.chainName} was successful. Click to view.`,
-    );
 
     await writeResultToStorage(`txResult:${txId}`, { success: true, txHash });
   } catch (error) {

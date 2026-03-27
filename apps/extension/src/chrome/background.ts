@@ -330,6 +330,10 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 // Initialize sidepanel behavior on startup
 initSidePanel();
 
+// Resume receipt polling for any txs stuck in "pending" status
+import { resumePendingPollers, checkPendingTxReceipt as checkPendingTxReceiptFn } from "./txReceiptPoller";
+resumePendingPollers();
+
 // Handle extension icon click when popup is cleared (sidepanel mode)
 // When sidepanel mode is active, setPopup('') causes onClicked to fire instead of opening a popup.
 // We try sidePanel.open() and verify it actually opened. Some browsers (Arc) resolve the promise
@@ -1451,6 +1455,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "clearTxHistory": {
       clearTxHistory().then(() => {
         sendResponse({ success: true });
+      });
+      return true;
+    }
+
+    case "checkPendingTxReceipt": {
+      checkPendingTxReceiptFn(
+        message.txId,
+        message.txHash,
+        message.chainId,
+      ).then((result) => {
+        sendResponse({ status: result });
       });
       return true;
     }
