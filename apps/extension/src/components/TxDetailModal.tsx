@@ -209,6 +209,25 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 )}
                 {tx.chainName}
               </Badge>
+              {tx.status === "pending" && (
+                <Badge
+                  bg="bauhaus.blue"
+                  color="white"
+                  border="2px solid"
+                  borderColor="bauhaus.black"
+                  px={2}
+                  py={0.5}
+                  fontSize="xs"
+                  display="flex"
+                  alignItems="center"
+                  gap={1}
+                >
+                  <Text fontSize="xs" lineHeight="1">
+                    ⌛
+                  </Text>
+                  Pending...
+                </Badge>
+              )}
               {tx.status === "success" && (
                 <Badge
                   bg="bauhaus.yellow"
@@ -243,7 +262,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   Failed
                 </Badge>
               )}
-              {tx.status === "success" && tx.txHash && config.explorer && (
+              {(tx.status === "success" || tx.status === "pending") && tx.txHash && config.explorer && (
                 <Button
                   size="xs"
                   variant="ghost"

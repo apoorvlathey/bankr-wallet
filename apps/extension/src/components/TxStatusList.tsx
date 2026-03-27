@@ -1,33 +1,59 @@
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import {
   Box,
   VStack,
   HStack,
   Text,
-  Badge,
   Spinner,
   Image,
   IconButton,
-  Button,
 } from "@chakra-ui/react";
 import {
-  CheckCircleIcon,
   WarningIcon,
   ExternalLinkIcon,
   ChevronDownIcon,
   ChevronUpIcon,
-  CloseIcon,
 } from "@chakra-ui/icons";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
 import { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import TxDetailModal from "@/components/TxDetailModal";
 
 interface TxStatusListProps {
   maxItems?: number;
-  address?: string; // Filter transactions by this address
+  address?: string;
   hideHeader?: boolean;
   hideCard?: boolean;
+}
+
+/** Group transactions by date label */
+function groupByDate(
+  txs: CompletedTransaction[],
+): { label: string; txs: CompletedTransaction[] }[] {
+  const groups: Map<string, CompletedTransaction[]> = new Map();
+
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  const toDateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+
+  const todayKey = toDateKey(today);
+  const yesterdayKey = toDateKey(yesterday);
+
+  for (const tx of txs) {
+    const d = new Date(tx.createdAt);
+    const key = toDateKey(d);
+    let label: string;
+    if (key === todayKey) label = "Today";
+    else if (key === yesterdayKey) label = "Yesterday";
+    else label = fmt(d);
+
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label)!.push(tx);
+  }
+
+  return Array.from(groups.entries()).map(([label, txs]) => ({ label, txs }));
 }
 
 function TxStatusList({
@@ -44,12 +70,10 @@ function TxStatusList({
 
   // Load and listen for updates
   useEffect(() => {
-    // Initial load
     chrome.runtime.sendMessage({ type: "getTxHistory" }, (result) => {
       setAllHistory(result || []);
     });
 
-    // Listen for updates
     const handleMessage = (message: { type: string }) => {
       if (message.type === "txHistoryUpdated") {
         chrome.runtime.sendMessage({ type: "getTxHistory" }, (result) => {
@@ -62,7 +86,33 @@ function TxStatusList({
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
   }, []);
 
-  // Filter history by address (case-insensitive comparison)
+  // Poll for pending tx receipts while UI is open
+  const allHistoryRef = useRef(allHistory);
+  allHistoryRef.current = allHistory;
+  const hasPending = allHistory.some((tx) => tx.status === "pending");
+
+  useEffect(() => {
+    if (!hasPending) return;
+
+    const checkPendingReceipts = () => {
+      const pendingTxs = allHistoryRef.current.filter(
+        (tx) => tx.status === "pending" && tx.txHash,
+      );
+      for (const tx of pendingTxs) {
+        chrome.runtime.sendMessage({
+          type: "checkPendingTxReceipt",
+          txId: tx.id,
+          txHash: tx.txHash,
+          chainId: tx.chainId,
+        });
+      }
+    };
+
+    checkPendingReceipts();
+    const interval = setInterval(checkPendingReceipts, 5_000);
+    return () => clearInterval(interval);
+  }, [hasPending]);
+
   const history = address
     ? allHistory.filter(
         (tx) => tx.tx.from.toLowerCase() === address.toLowerCase(),
@@ -71,21 +121,7 @@ function TxStatusList({
 
   const displayItems = isExpanded ? history : history.slice(0, maxItems);
   const hasMore = history.length > maxItems;
-
-  const txContent =
-    history.length === 0 ? (
-      <Box p={4} textAlign="center">
-        <Text fontSize="sm" color="text.tertiary" fontWeight="500">
-          No recent transactions
-        </Text>
-      </Box>
-    ) : (
-      <VStack spacing={hideCard ? 3 : 3} align="stretch" p={hideCard ? 0 : 0}>
-        {displayItems.map((tx) => (
-          <TxStatusItem key={tx.id} tx={tx} onClick={() => setSelectedTx(tx)} />
-        ))}
-      </VStack>
-    );
+  const dateGroups = groupByDate(displayItems);
 
   const modal = selectedTx && (
     <TxDetailModal
@@ -95,41 +131,33 @@ function TxStatusList({
     />
   );
 
-  if (hideCard) {
+  const expandButton = hasMore && (
+    <IconButton
+      aria-label={isExpanded ? "Show less" : "Show more"}
+      icon={isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
+      size="xs"
+      variant="ghost"
+      onClick={() => setIsExpanded(!isExpanded)}
+    />
+  );
+
+  if (history.length === 0) {
     return (
-      <Box>
-        {!hideHeader && (
-          <HStack justify="space-between" mb={3}>
-            <Text
-              fontSize="sm"
-              fontWeight="900"
-              color="text.primary"
-              textTransform="uppercase"
-              letterSpacing="wider"
-            >
-              Recent Transactions
-            </Text>
-            {hasMore && (
-              <IconButton
-                aria-label={isExpanded ? "Show less" : "Show more"}
-                icon={isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
-                size="xs"
-                variant="ghost"
-                onClick={() => setIsExpanded(!isExpanded)}
-              />
-            )}
-          </HStack>
-        )}
-        {txContent}
+      <Box pt={hideCard ? 0 : 4}>
+        <Box p={4} textAlign="center">
+          <Text fontSize="sm" color="text.tertiary" fontWeight="500">
+            No recent transactions
+          </Text>
+        </Box>
         {modal}
       </Box>
     );
   }
 
   return (
-    <Box pt={4}>
-      {!hideHeader ? (
-        <HStack justify="space-between" mb={3}>
+    <Box pt={hideCard ? 0 : 4}>
+      {!hideHeader && (
+        <HStack justify="space-between" mb={2}>
           <Text
             fontSize="sm"
             fontWeight="900"
@@ -137,44 +165,38 @@ function TxStatusList({
             textTransform="uppercase"
             letterSpacing="wider"
           >
-            Recent Transactions
+            Activity
           </Text>
-          {hasMore && (
-            <IconButton
-              aria-label={isExpanded ? "Show less" : "Show more"}
-              icon={isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
-              size="xs"
-              variant="ghost"
-              onClick={() => setIsExpanded(!isExpanded)}
-            />
-          )}
+          {expandButton}
         </HStack>
-      ) : null}
-
-      {history.length === 0 ? (
-        <Box
-          bg="bauhaus.white"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
-          p={4}
-          textAlign="center"
-        >
-          <Text fontSize="sm" color="text.tertiary" fontWeight="500">
-            No recent transactions
-          </Text>
-        </Box>
-      ) : (
-        <VStack spacing={3} align="stretch">
-          {displayItems.map((tx) => (
-            <TxStatusItem
-              key={tx.id}
-              tx={tx}
-              onClick={() => setSelectedTx(tx)}
-            />
-          ))}
-        </VStack>
       )}
+
+      <VStack spacing={0} align="stretch">
+        {dateGroups.map((group) => (
+          <Box key={group.label}>
+            <Text
+              fontSize="2xs"
+              fontWeight="700"
+              color="text.tertiary"
+              textTransform="uppercase"
+              letterSpacing="wider"
+              px={1}
+              pt={2}
+              pb={1}
+            >
+              {group.label}
+            </Text>
+            {group.txs.map((tx) => (
+              <TxStatusItem
+                key={tx.id}
+                tx={tx}
+                onClick={() => setSelectedTx(tx)}
+              />
+            ))}
+          </Box>
+        ))}
+      </VStack>
+
       {modal}
     </Box>
   );
@@ -188,6 +210,16 @@ function getOriginHostname(origin: string): string | null {
   }
 }
 
+function formatTimeAgo(timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 function TxStatusItem({
   tx,
   onClick,
@@ -196,113 +228,11 @@ function TxStatusItem({
   onClick: () => void;
 }) {
   const config = getChainConfig(tx.chainId);
-  const toast = useBauhausToast();
-  const [cancelling, setCancelling] = useState(false);
   const originHostname = getOriginHostname(tx.origin);
 
-  const handleCancel = async () => {
-    setCancelling(true);
-    try {
-      const result = await new Promise<{ success: boolean; error?: string }>(
-        (resolve) => {
-          chrome.runtime.sendMessage(
-            { type: "cancelProcessingTx", txId: tx.id },
-            resolve,
-          );
-        },
-      );
-      if (result.success) {
-        toast({
-          title: "Transaction cancelled",
-          status: "info",
-          duration: 2000,
-        });
-      } else {
-        toast({
-          title: result.error || "Cancel failed",
-          status: "error",
-          duration: 2000,
-        });
-      }
-    } catch {
-      toast({ title: "Cancel failed", status: "error", duration: 2000 });
-    } finally {
-      setCancelling(false);
-    }
-  };
-
-  const formatTimeAgo = (timestamp: number): string => {
-    const diff = Date.now() - timestamp;
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return "Just now";
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
-  };
-
-  const getStatusBadge = () => {
-    switch (tx.status) {
-      case "processing":
-        return (
-          <Badge
-            bg="bauhaus.blue"
-            color="white"
-            border="2px solid"
-            borderColor="bauhaus.black"
-            px={2}
-            py={0.5}
-            fontSize="xs"
-            display="flex"
-            alignItems="center"
-            gap={1}
-          >
-            <Spinner size="xs" color="white" />
-            Processing
-          </Badge>
-        );
-      case "success":
-        return (
-          <Badge
-            bg="bauhaus.yellow"
-            color="bauhaus.black"
-            border="2px solid"
-            borderColor="bauhaus.black"
-            px={2}
-            py={0.5}
-            fontSize="xs"
-            display="flex"
-            alignItems="center"
-            gap={1}
-          >
-            <CheckCircleIcon boxSize={3} />
-            Confirmed
-          </Badge>
-        );
-      case "failed":
-        return (
-          <Badge
-            bg="bauhaus.red"
-            color="white"
-            border="2px solid"
-            borderColor="bauhaus.black"
-            px={2}
-            py={0.5}
-            fontSize="xs"
-            display="flex"
-            alignItems="center"
-            gap={1}
-          >
-            <WarningIcon boxSize={3} />
-            Failed
-          </Badge>
-        );
-    }
-  };
-
-  const handleViewTx = () => {
-    if (tx.status === "success" && tx.txHash && config.explorer) {
-      // Extract hash if txHash contains full URL or just hash
+  const handleViewTx = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (tx.txHash && config.explorer) {
       const hash = tx.txHash.match(/0x[a-fA-F0-9]{64}/)?.[0];
       if (hash) {
         chrome.tabs.create({ url: `${config.explorer}/tx/${hash}` });
@@ -310,57 +240,70 @@ function TxStatusItem({
     }
   };
 
+  const statusElement = (() => {
+    switch (tx.status) {
+      case "processing":
+        return (
+          <HStack spacing={1}>
+            <Spinner size="xs" color="bauhaus.blue" />
+            <Text fontSize="xs" color="bauhaus.blue" fontWeight="600">
+              Processing
+            </Text>
+          </HStack>
+        );
+      case "pending":
+        return (
+          <HStack spacing={1}>
+            <Spinner size="xs" color="bauhaus.blue" />
+            <Text fontSize="xs" color="bauhaus.blue" fontWeight="600">
+              Pending...
+            </Text>
+          </HStack>
+        );
+      case "success":
+        return (
+          <Text fontSize="2xs" color="green.500" fontWeight="600">
+            Confirmed
+          </Text>
+        );
+      case "failed":
+        return (
+          <HStack spacing={1}>
+            <WarningIcon boxSize={2.5} color="bauhaus.red" />
+            <Text fontSize="xs" color="bauhaus.red" fontWeight="600">
+              Failed
+            </Text>
+          </HStack>
+        );
+    }
+  })();
+
   return (
     <Box
-      bg="bauhaus.white"
-      border="3px solid"
-      borderColor="bauhaus.black"
-      boxShadow="4px 4px 0px 0px #121212"
-      p={3}
+      py={2.5}
+      px={1}
       cursor="pointer"
       onClick={onClick}
-      _hover={{
-        transform: "translateY(-1px)",
-        boxShadow: "5px 5px 0px 0px #121212",
-      }}
-      transition="all 0.2s ease-out"
-      position="relative"
+      _hover={{ bg: "blackAlpha.50" }}
+      borderBottom="1px solid"
+      borderColor="gray.100"
+      transition="background 0.15s"
     >
-      {/* Corner decoration based on status */}
-      <Box
-        position="absolute"
-        top="-3px"
-        right="-3px"
-        w="8px"
-        h="8px"
-        bg={
-          tx.status === "success"
-            ? "bauhaus.yellow"
-            : tx.status === "failed"
-              ? "bauhaus.red"
-              : "bauhaus.blue"
-        }
-        border="2px solid"
-        borderColor="bauhaus.black"
-        borderRadius={tx.status === "success" ? "full" : "0"}
-      />
-
-      <HStack justify="space-between">
-        <HStack spacing={3} flex={1}>
+      <HStack spacing={3} align="center">
+        {/* Favicon with chain icon overlay */}
+        <Box position="relative" flexShrink={0} w="36px" h="36px">
           <Box
-            bg={tx.origin === "WalletChan" ? "transparent" : "bauhaus.white"}
-            border="2px solid"
-            borderColor={
-              tx.origin === "WalletChan" ? "transparent" : "bauhaus.black"
-            }
-            p={tx.origin === "WalletChan" ? 0 : 1}
+            bg="gray.100"
+            borderRadius="full"
+            w="36px"
+            h="36px"
             display="flex"
             alignItems="center"
             justifyContent="center"
+            overflow="hidden"
           >
             <Image
               src={
-                // keeping BankrWallet for backwards compatibility so the activity isn't messed up
                 tx.origin === "WalletChan" || tx.origin === "BankrWallet"
                   ? "/walletchan-icon.png"
                   : tx.favicon ||
@@ -369,7 +312,7 @@ function TxStatusItem({
                       : undefined)
               }
               alt="favicon"
-              boxSize={tx.origin === "WalletChan" ? "24px" : "18px"}
+              boxSize="22px"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 if (originHostname) {
@@ -378,115 +321,92 @@ function TxStatusItem({
               }}
             />
           </Box>
-          <Box flex={1}>
-            <HStack justify="space-between">
-              <HStack spacing={1.5} flex={1} minW={0}>
-                <Text
-                  fontSize="sm"
-                  fontWeight="700"
-                  color="text.primary"
-                  noOfLines={1}
-                >
-                  {originHostname || tx.origin}
-                </Text>
-                {tx.functionName && (
-                  <Badge
-                    fontSize="2xs"
-                    bg="bg.muted"
-                    color="text.secondary"
-                    border="2px solid"
-                    borderColor="gray.300"
-                    fontFamily="mono"
-                    textTransform="none"
-                    px={1.5}
-                    py={0}
-                    flexShrink={0}
-                  >
-                    {tx.functionName}
-                  </Badge>
-                )}
-              </HStack>
+          {/* Chain icon overlay */}
+          {config.icon && (
+            <Box
+              position="absolute"
+              bottom="-2px"
+              right="-2px"
+              w="16px"
+              h="16px"
+              borderRadius="full"
+              bg="white"
+              border="1.5px solid"
+              borderColor="gray.200"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+            >
+              <Image src={config.icon} alt={tx.chainName} boxSize="11px" />
+            </Box>
+          )}
+        </Box>
+
+        {/* Content */}
+        <Box flex={1} minW={0}>
+          {/* Row 1: hostname + time */}
+          <HStack justify="space-between" spacing={2}>
+            <Text
+              fontSize="sm"
+              fontWeight="600"
+              color="text.primary"
+              noOfLines={1}
+            >
+              {originHostname || tx.origin}
+            </Text>
+            <Text
+              fontSize="2xs"
+              color="text.tertiary"
+              fontWeight="500"
+              flexShrink={0}
+            >
+              {formatTimeAgo(tx.createdAt)}
+            </Text>
+          </HStack>
+
+          {/* Row 2: function + status + explorer */}
+          <HStack justify="space-between" spacing={2} mt={0.5}>
+            {tx.functionName ? (
               <Text
                 fontSize="xs"
                 color="text.tertiary"
-                fontWeight="500"
-                flexShrink={0}
+                fontFamily="mono"
+                noOfLines={1}
               >
-                {formatTimeAgo(tx.createdAt)}
+                {tx.functionName}
               </Text>
-            </HStack>
-            <HStack spacing={2} mt={1}>
-              <Badge
-                fontSize="xs"
-                bg={config.bg}
-                color={config.text}
-                border="2px solid"
-                borderColor="bauhaus.black"
-                px={2}
-                py={0.5}
-                display="flex"
-                alignItems="center"
-                gap={1}
-              >
-                {config.icon && (
-                  <Image src={config.icon} alt={tx.chainName} boxSize="10px" />
+            ) : (
+              <Box />
+            )}
+            <HStack spacing={1} flexShrink={0}>
+              {statusElement}
+              {(tx.status === "success" || tx.status === "pending") &&
+                tx.txHash &&
+                config.explorer && (
+                  <ExternalLinkIcon
+                    boxSize={2.5}
+                    color="text.tertiary"
+                    cursor="pointer"
+                    onClick={handleViewTx}
+                    _hover={{ color: "bauhaus.blue" }}
+                  />
                 )}
-                {tx.chainName}
-              </Badge>
-              {getStatusBadge()}
             </HStack>
-          </Box>
-        </HStack>
-
-        {tx.status === "success" && tx.txHash && config.explorer && (
-          <IconButton
-            aria-label="View on explorer"
-            icon={<ExternalLinkIcon />}
-            size="sm"
-            variant="ghost"
-            color="text.secondary"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleViewTx();
-            }}
-            _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
-          />
-        )}
+          </HStack>
+        </Box>
       </HStack>
 
-      {/* Cancel button temporarily disabled
-      {tx.status === "processing" && tx.accountType !== "bankr" && (
-        <HStack justify="flex-end" mt={1}>
-          <Button
-            size="xs"
-            color="bauhaus.red"
-            variant="ghost"
-            fontWeight="700"
-            onClick={(e) => { e.stopPropagation(); handleCancel(); }}
-            isLoading={cancelling}
-            loadingText=""
-            leftIcon={<CloseIcon boxSize="8px" />}
-            _hover={{ bg: "bauhaus.red", color: "white" }}
-          >
-            Cancel
-          </Button>
-        </HStack>
-      )}
-      */}
-
-      {/* Show error message for failed transactions */}
+      {/* Error message for failed txs */}
       {tx.status === "failed" && tx.error && (
-        <Box
-          mt={2}
-          p={2}
-          bg="bauhaus.red"
-          border="2px solid"
-          borderColor="bauhaus.black"
+        <Text
+          fontSize="2xs"
+          color="text.tertiary"
+          noOfLines={1}
+          mt={1}
+          ml="48px"
         >
-          <Text fontSize="xs" color="white" noOfLines={2} fontWeight="500">
-            {tx.error}
-          </Text>
-        </Box>
+          {tx.error}
+        </Text>
       )}
     </Box>
   );

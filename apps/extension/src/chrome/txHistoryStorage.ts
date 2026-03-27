@@ -5,7 +5,7 @@
 
 import { TransactionParams } from "./bankrApi";
 
-export type TxStatus = "processing" | "success" | "failed";
+export type TxStatus = "processing" | "pending" | "success" | "failed";
 
 export interface CompletedTransaction {
   id: string;
@@ -107,6 +107,16 @@ export async function getTxById(
 export async function getProcessingTxs(): Promise<CompletedTransaction[]> {
   const history = await getTxHistory();
   return history.filter((tx) => tx.status === "processing");
+}
+
+/**
+ * Get transactions awaiting on-chain confirmation (have txHash but not yet confirmed)
+ */
+export async function getPendingConfirmationTxs(): Promise<
+  CompletedTransaction[]
+> {
+  const history = await getTxHistory();
+  return history.filter((tx) => tx.status === "pending" && tx.txHash);
 }
 
 /**
