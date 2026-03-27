@@ -1385,8 +1385,10 @@ export async function performSecurityReset(): Promise<void> {
 export async function handleInitiateTransfer(message: {
   tx: TransactionParams;
   chainName: string;
+  tokenName?: string;
+  tokenLogo?: string | null;
 }): Promise<{ success: boolean; txId?: string; error?: string }> {
-  const { tx, chainName } = message;
+  const { tx, chainName, tokenName, tokenLogo } = message;
 
   // Validate chain ID
   if (!ALLOWED_CHAIN_IDS.has(tx.chainId)) {
@@ -1401,8 +1403,8 @@ export async function handleInitiateTransfer(message: {
   const pendingRequest: PendingTxRequest = {
     id: txId,
     tx,
-    origin: "WalletChan",
-    favicon: null,
+    origin: tokenName ? `Send ${tokenName}` : "WalletChan",
+    favicon: tokenLogo ?? null,
     chainName,
     timestamp: Date.now(),
   };
