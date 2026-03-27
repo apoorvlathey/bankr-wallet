@@ -24,6 +24,43 @@ function getFaviconUrl(): string | null {
   return new URL("/favicon.ico", window.location.origin).href;
 }
 
+/**
+ * Wait for a result to appear in chrome.storage.local under the given key.
+ * Used to receive transaction/signature results from the background script
+ * without keeping a long-lived message channel open (which is fragile in MV3).
+ */
+function waitForStorageResult<T>(key: string, timeoutMs = 5 * 60 * 1000): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      chrome.storage.onChanged.removeListener(listener);
+      reject(new Error("Request timed out"));
+    }, timeoutMs);
+
+    // Check if result already exists (race: result written before listener attached)
+    chrome.storage.local.get(key).then((items) => {
+      if (items[key]?.result) {
+        clearTimeout(timeout);
+        chrome.storage.onChanged.removeListener(listener);
+        chrome.storage.local.remove(key);
+        resolve(items[key].result as T);
+      }
+    });
+
+    function listener(
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string,
+    ) {
+      if (areaName !== "local" || !changes[key]?.newValue?.result) return;
+      clearTimeout(timeout);
+      chrome.storage.onChanged.removeListener(listener);
+      chrome.storage.local.remove(key);
+      resolve(changes[key].newValue.result as T);
+    }
+
+    chrome.storage.onChanged.addListener(listener);
+  });
+}
+
 let store = {
   address: "",
   displayAddress: "",
@@ -277,36 +314,38 @@ window.addEventListener("message", async (e) => {
         maxPriorityFeePerGas?: string;
       };
 
-      // Forward to background worker
-      chrome.runtime.sendMessage(
-        {
-          type: "sendTransaction",
-          tx: {
-            from, to, data, value, chainId,
-            ...(gas ? { gas } : {}),
-            ...(gasPrice ? { gasPrice } : {}),
-            ...(maxFeePerGas ? { maxFeePerGas } : {}),
-            ...(maxPriorityFeePerGas ? { maxPriorityFeePerGas } : {}),
-          },
-          origin: window.location.origin,
-          favicon: getFaviconUrl(),
+      // Generate txId here and watch storage — no sendMessage callback needed
+      const txId = crypto.randomUUID();
+
+      // Start watching for result BEFORE sending message (avoids race condition)
+      waitForStorageResult<{ success: boolean; txHash?: string; error?: string }>(
+        `txResult:${txId}`
+      ).then((result) => {
+        window.postMessage(
+          { type: "sendTransactionResult", msg: { id, success: result.success, txHash: result.txHash, error: result.error } },
+          "*"
+        );
+      }).catch((err) => {
+        window.postMessage(
+          { type: "sendTransactionResult", msg: { id, success: false, error: err.message } },
+          "*"
+        );
+      });
+
+      // Fire-and-forget message to background (no callback)
+      chrome.runtime.sendMessage({
+        type: "sendTransaction",
+        txId,
+        tx: {
+          from, to, data, value, chainId,
+          ...(gas ? { gas } : {}),
+          ...(gasPrice ? { gasPrice } : {}),
+          ...(maxFeePerGas ? { maxFeePerGas } : {}),
+          ...(maxPriorityFeePerGas ? { maxPriorityFeePerGas } : {}),
         },
-        (result: { success: boolean; txHash?: string; error?: string }) => {
-          // Send result back to impersonator.ts
-          window.postMessage(
-            {
-              type: "sendTransactionResult",
-              msg: {
-                id,
-                success: result.success,
-                txHash: result.txHash,
-                error: result.error,
-              },
-            },
-            "*"
-          );
-        }
-      );
+        origin: window.location.origin,
+        favicon: getFaviconUrl(),
+      });
       break;
     }
 
@@ -318,62 +357,32 @@ window.addEventListener("message", async (e) => {
         chainId: number;
       };
 
-      // Forward to background worker
-      chrome.runtime.sendMessage(
-        {
-          type: "signatureRequest",
-          signature: { method, params, chainId },
-          origin: window.location.origin,
-          favicon: getFaviconUrl(),
-        },
-        (result: { success: boolean; signature?: string; error?: string }) => {
-          // Check for Chrome runtime errors
-          if (chrome.runtime.lastError) {
-            window.postMessage(
-              {
-                type: "signatureRequestResult",
-                msg: {
-                  id,
-                  success: false,
-                  error: chrome.runtime.lastError.message || "Extension error",
-                },
-              },
-              "*"
-            );
-            return;
-          }
+      // Generate sigId here and watch storage — no sendMessage callback needed
+      const sigId = crypto.randomUUID();
 
-          // Check if result is undefined
-          if (!result) {
-            window.postMessage(
-              {
-                type: "signatureRequestResult",
-                msg: {
-                  id,
-                  success: false,
-                  error: "No response from background script",
-                },
-              },
-              "*"
-            );
-            return;
-          }
+      // Start watching for result BEFORE sending message (avoids race condition)
+      waitForStorageResult<{ success: boolean; signature?: string; error?: string }>(
+        `sigResult:${sigId}`
+      ).then((result) => {
+        window.postMessage(
+          { type: "signatureRequestResult", msg: { id, success: result.success, signature: result.signature, error: result.error } },
+          "*"
+        );
+      }).catch((err) => {
+        window.postMessage(
+          { type: "signatureRequestResult", msg: { id, success: false, error: err.message } },
+          "*"
+        );
+      });
 
-          // Send result back to impersonator.ts
-          window.postMessage(
-            {
-              type: "signatureRequestResult",
-              msg: {
-                id,
-                success: result.success,
-                signature: result.signature,
-                error: result.error,
-              },
-            },
-            "*"
-          );
-        }
-      );
+      // Fire-and-forget message to background (no callback)
+      chrome.runtime.sendMessage({
+        type: "signatureRequest",
+        sigId,
+        signature: { method, params, chainId },
+        origin: window.location.origin,
+        favicon: getFaviconUrl(),
+      });
       break;
     }
 

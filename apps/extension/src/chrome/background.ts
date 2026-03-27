@@ -98,8 +98,6 @@ import {
 
 // Transaction handlers
 import {
-  pendingResolvers,
-  pendingSignatureResolvers,
   failedTxResults,
   handleTransactionRequest,
   handleSignatureRequest,
@@ -116,6 +114,7 @@ import {
   performSecurityReset,
   handleInitiateTransfer,
   handleCancelProcessingTx,
+  writeResultToStorage,
   SignatureResult,
 } from "./txHandlers";
 
@@ -239,6 +238,16 @@ setInterval(() => {
   clearExpiredTxRequests();
   clearExpiredSignatureRequests();
 }, 60000); // Every minute
+
+// Clean up stale result keys from storage (from previous service worker sessions)
+chrome.storage.local.get(null).then((items) => {
+  const staleKeys = Object.keys(items).filter((k) => {
+    if (!k.startsWith("txResult:") && !k.startsWith("sigResult:")) return false;
+    const entry = items[k];
+    return entry?.timestamp && Date.now() - entry.timestamp > 30 * 60 * 1000;
+  });
+  if (staleKeys.length > 0) chrome.storage.local.remove(staleKeys);
+});
 
 // Initialize badge on startup
 updateBadge();
@@ -380,12 +389,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
     case "sendTransaction": {
       const senderWindowId = sender.tab?.windowId;
-      handleTransactionRequest(message, sendResponse, senderWindowId);
-      return true;
+      handleTransactionRequest(message, message.txId, senderWindowId);
+      return false;
     }
 
     case "signatureRequest": {
-      // Validate EIP-712 schema BEFORE async handler (synchronous sendResponse)
+      // Validate EIP-712 schema — write error to storage so content script picks it up
       const { signature } = message;
       if (
         signature.method === "eth_signTypedData_v3" ||
@@ -401,18 +410,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             `[WalletChan] EIP-712 validation failed for ${message.origin}:`,
             validationResult.error,
           );
-          sendResponse({
+          writeResultToStorage(`sigResult:${message.sigId}`, {
             success: false,
             error: "Data must conform to EIP-712 schema",
           });
-          return false; // Synchronous response, don't keep channel open
+          return false;
         }
       }
 
-      // Validation passed, proceed with async handler
       const senderWindowId = sender.tab?.windowId;
-      handleSignatureRequest(message, sendResponse, senderWindowId);
-      return true;
+      handleSignatureRequest(message, message.sigId, senderWindowId);
+      return false;
     }
 
     case "getPendingSignatureRequests": {
@@ -427,12 +435,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         success: false,
         error: "Signature request cancelled by user",
       };
-      removePendingSignatureRequest(message.sigId).then(() => {
-        const resolver = pendingSignatureResolvers.get(message.sigId);
-        if (resolver) {
-          resolver.resolve(result);
-          pendingSignatureResolvers.delete(message.sigId);
-        }
+      removePendingSignatureRequest(message.sigId).then(async () => {
+        await writeResultToStorage(`sigResult:${message.sigId}`, result);
         sendResponse(result);
       });
       return true;
@@ -472,11 +476,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleConfirmTransaction(message.txId, message.password).then(
         async (result) => {
           await removePendingTxRequest(message.txId);
-          const resolver = pendingResolvers.get(message.txId);
-          if (resolver) {
-            resolver.resolve(result);
-            pendingResolvers.delete(message.txId);
-          }
+          await writeResultToStorage(`txResult:${message.txId}`, result);
           sendResponse(result);
         },
       );
@@ -485,12 +485,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "rejectTransaction": {
       const result = handleRejectTransaction(message.txId);
-      removePendingTxRequest(message.txId).then(() => {
-        const resolver = pendingResolvers.get(message.txId);
-        if (resolver) {
-          resolver.resolve(result);
-          pendingResolvers.delete(message.txId);
-        }
+      removePendingTxRequest(message.txId).then(async () => {
+        await writeResultToStorage(`txResult:${message.txId}`, result);
         sendResponse(result);
       });
       return true;
@@ -1173,11 +1169,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             tabId,
           );
         }
-        const resolver = pendingSignatureResolvers.get(message.sigId);
-        if (resolver) {
-          resolver.resolve(result);
-          pendingSignatureResolvers.delete(message.sigId);
-        }
+        await writeResultToStorage(`sigResult:${message.sigId}`, result);
         sendResponse(result);
       })();
       return true;
@@ -1473,11 +1465,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       // SECURITY: Perform full memory cleanup first (before async operations)
-      performSecurityReset();
       clearCachedApiKey();
       clearCachedVault();
 
       (async () => {
+        await performSecurityReset();
         try {
           const allLocalStorage = await chrome.storage.local.get(null);
           const notificationKeys = Object.keys(allLocalStorage).filter((key) =>

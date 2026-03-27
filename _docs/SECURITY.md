@@ -308,6 +308,8 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 | `accounts`                 | No               | Account metadata (addresses, names, types)              |
 | `pendingTxRequests`        | No               | Pending transaction queue                               |
 | `pendingSignatureRequests` | No               | Pending signature queue                                 |
+| `txResult:{txId}`          | No               | Transient tx result (written on confirm/reject, read+deleted by content script) |
+| `sigResult:{sigId}`        | No               | Transient sig result (written on confirm/reject, read+deleted by content script) |
 | `txHistory`                | No               | Completed transaction log                               |
 | `chatHistory`              | No               | Chat conversation history                               |
 
