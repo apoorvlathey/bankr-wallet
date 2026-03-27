@@ -7,8 +7,10 @@ import {
   Spinner,
   Collapse,
   Input,
+  IconButton,
+  Tooltip,
 } from "@chakra-ui/react";
-import { ChevronDownIcon, ChevronUpIcon, WarningIcon } from "@chakra-ui/icons";
+import { ChevronDownIcon, ChevronUpIcon, WarningIcon, CopyIcon, CheckIcon } from "@chakra-ui/icons";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { GasEstimate } from "@/chrome/gasEstimation";
 import { GasOverrides } from "@/chrome/txHandlers";
@@ -107,6 +109,47 @@ function gweiStrToWei(gweiStr: string): string | null {
   } catch {
     return null;
   }
+}
+
+function RevertWarning({ shortError, fullError }: { shortError: string; fullError: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(fullError);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
+
+  return (
+    <HStack
+      bg="bauhaus.red"
+      border="3px solid"
+      borderColor="bauhaus.black"
+      boxShadow="3px 3px 0px 0px #121212"
+      px={3}
+      py={2}
+      spacing={2}
+    >
+      <WarningIcon color="white" boxSize={3.5} flexShrink={0} />
+      <Text fontSize="xs" color="white" fontWeight="700" textTransform="uppercase" flex="1" noOfLines={2}>
+        TX may revert: {shortError}
+      </Text>
+      <Tooltip label="Copy full error" fontSize="xs" hasArrow>
+        <IconButton
+          aria-label="Copy full error"
+          icon={copied ? <CheckIcon /> : <CopyIcon />}
+          size="xs"
+          variant="ghost"
+          color={copied ? "bauhaus.yellow" : "whiteAlpha.800"}
+          onClick={handleCopy}
+          _hover={{ color: "white", bg: "whiteAlpha.200" }}
+          flexShrink={0}
+        />
+      </Tooltip>
+    </HStack>
+  );
 }
 
 function GasEstimateDisplay({ txRequest, accountType, onGasOverrides }: GasEstimateDisplayProps) {
@@ -262,20 +305,10 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides }: GasEstim
     <VStack spacing={2} align="stretch">
       {/* Revert warning */}
       {estimate.estimationFailed && (
-        <HStack
-          bg="bauhaus.red"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
-          px={3}
-          py={2}
-          spacing={2}
-        >
-          <WarningIcon color="white" boxSize={3.5} />
-          <Text fontSize="xs" color="white" fontWeight="700" textTransform="uppercase">
-            TX may revert: {estimate.estimationError || "estimation failed"}
-          </Text>
-        </HStack>
+        <RevertWarning
+          shortError={estimate.estimationError || "estimation failed"}
+          fullError={estimate.estimationErrorFull || estimate.estimationError || "estimation failed"}
+        />
       )}
 
       {/* Insufficient balance warning */}

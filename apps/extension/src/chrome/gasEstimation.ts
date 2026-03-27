@@ -24,6 +24,7 @@ export interface GasEstimate {
   insufficientBalance: boolean;
   estimationFailed: boolean;
   estimationError?: string;
+  estimationErrorFull?: string;
   /** Whether the dapp provided gas params (shown as "Dapp suggested" in UI) */
   dappProvidedGas: boolean;
 }
@@ -136,6 +137,7 @@ export async function estimateGas(
   let gasLimit = 0n;
   let estimationFailed = false;
   let estimationError: string | undefined;
+  let estimationErrorFull: string | undefined;
 
   const [gasResult, feesResult, balance, nativePriceUsd] = await Promise.all([
     // 1. Estimate gas limit (skip if dapp provided it)
@@ -148,9 +150,11 @@ export async function estimateGas(
             gasLimit = (gas * 120n) / 100n;
             return gasLimit;
           })
-          .catch((err: Error) => {
+          .catch((err: any) => {
             estimationFailed = true;
-            estimationError = err.message || "Gas estimation failed";
+            const fullMsg = err.message || "Gas estimation failed";
+            estimationError = err.shortMessage || fullMsg;
+            estimationErrorFull = fullMsg;
             gasLimit = 200_000n;
             return gasLimit;
           }),
@@ -207,6 +211,7 @@ export async function estimateGas(
     insufficientBalance,
     estimationFailed,
     estimationError,
+    estimationErrorFull,
     dappProvidedGas,
   };
 }
