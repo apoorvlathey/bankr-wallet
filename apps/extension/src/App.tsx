@@ -29,7 +29,7 @@ import {
   Spinner,
   useDisclosure,
 } from "@chakra-ui/react";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+
 import {
   SettingsIcon,
   ChevronDownIcon,
@@ -149,8 +149,6 @@ type AppView =
 
 function App() {
   const { networksInfo, reloadRequired, setReloadRequired } = useNetworks();
-  const toast = useBauhausToast();
-
   const [view, setView] = useState<AppView>("main");
   const [isLoading, setIsLoading] = useState(true);
   const [address, setAddress] = useState<string>("");
@@ -949,21 +947,8 @@ function App() {
     try {
       await navigator.clipboard.writeText(address);
       setCopied(true);
-      toast({
-        title: "Address copied!",
-        status: "success",
-        duration: 1500,
-        isClosable: true,
-      });
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      toast({
-        title: "Failed to copy",
-        status: "error",
-        duration: 2000,
-        isClosable: true,
-      });
-    }
+    } catch {}
   };
 
   const handleTxConfirmed = useCallback(async () => {

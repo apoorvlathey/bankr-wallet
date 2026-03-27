@@ -340,7 +340,6 @@ function TokenTransfer({
                   onClick={async () => {
                     await navigator.clipboard.writeText(resolvedAddress);
                     setCopied(true);
-                    toast({ title: "Copied!", status: "success", duration: 1500 });
                     setTimeout(() => setCopied(false), 2000);
                   }}
                   _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}

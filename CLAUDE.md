@@ -218,6 +218,7 @@ When working on features, refer to these docs:
 - **EIP-6963**: Modern wallet discovery alongside legacy window.ethereum
 - **Shared contract constants**: `packages/shared/src/contracts.ts` is the single source of truth for `BASE_CHAIN_ID`, `BNKRW_TOKEN_ADDRESS`, `SBNKRW_VAULT_ADDRESS`, `BNKRW_POOL_ADDRESS`. Import via `@walletchan/shared/contracts`.
 - **Address display standard**: Whenever a `0x` address is shown in the UI, always include a **copy button** (CopyIcon/CheckIcon toggle) and a **view on explorer** link (ExternalLinkIcon, opens `${chainConfig.explorer}/address/${addr}`). See `TypedDataDisplay.tsx` `AddressValue` component for the reference pattern.
+- **Copy button feedback**: NEVER use toast notifications for copy actions — toasts block nearby buttons (e.g., Reject/Confirm on tx confirmation, Chat button on homepage). Instead, toggle the icon from `CopyIcon` → `CheckIcon` (with `bauhaus.yellow` color) for 2 seconds. Use the shared `CopyButton` component from `components/CopyButton.tsx` when possible. For inline copy buttons, follow the same pattern: `setCopied(true)` + `setTimeout(() => setCopied(false), 2000)`.
 
 ## Code Quality Guidelines
 

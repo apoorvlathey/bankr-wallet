@@ -781,11 +781,6 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                             impersonatorResolvedAddress,
                           );
                           setImpersonatorCopied(true);
-                          toast({
-                            title: "Copied!",
-                            status: "success",
-                            duration: 1500,
-                          });
                           setTimeout(() => setImpersonatorCopied(false), 2000);
                         }}
                         _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}

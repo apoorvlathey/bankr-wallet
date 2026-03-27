@@ -1,7 +1,7 @@
+import { useState } from "react";
 import { Box, Text, Link, Button, HStack, IconButton } from "@chakra-ui/react";
-import { LockIcon, RepeatIcon, CopyIcon } from "@chakra-ui/icons";
+import { LockIcon, RepeatIcon, CopyIcon, CheckIcon } from "@chakra-ui/icons";
 import { Message } from "@/chrome/chatStorage";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
 import ShapesLoader from "./ShapesLoader";
 
 
@@ -53,7 +53,7 @@ interface MessageBubbleProps {
 }
 
 export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock, onRetry, onResend }: MessageBubbleProps) {
-  const toast = useBauhausToast();
+  const [copied, setCopied] = useState(false);
   const isUser = message.role === "user";
   const isPending = message.status === "pending";
   const isError = message.status === "error";
@@ -236,11 +236,11 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
             {message.content && (
               <IconButton
                 aria-label="Copy message"
-                icon={<CopyIcon />}
+                icon={copied ? <CheckIcon /> : <CopyIcon />}
                 size="xs"
                 variant="ghost"
-                color={styles.color}
-                opacity={0}
+                color={copied ? "bauhaus.yellow" : styles.color}
+                opacity={copied ? 0.7 : 0}
                 _groupHover={{ opacity: 0.7 }}
                 _hover={{ opacity: "1 !important" }}
                 minW="auto"
@@ -248,11 +248,8 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
                 p={0.5}
                 onClick={async () => {
                   await navigator.clipboard.writeText(message.content);
-                  toast({
-                    title: "Copied!",
-                    status: "success",
-                    duration: 1500,
-                  });
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
                 }}
               />
             )}

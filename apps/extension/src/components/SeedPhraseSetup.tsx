@@ -14,7 +14,7 @@ import {
   Textarea,
 } from "@chakra-ui/react";
 import { useBauhausToast } from "@/hooks/useBauhausToast";
-import { ArrowBackIcon, CopyIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon, CopyIcon, CheckIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 
 type Mode = "choose" | "generate" | "import";
 
@@ -37,6 +37,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [mnemonicCopied, setMnemonicCopied] = useState(false);
 
   // When switching to generate mode, request a new mnemonic from background
   useEffect(() => {
@@ -221,12 +222,14 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               />
               <IconButton
                 aria-label="Copy"
-                icon={<CopyIcon />}
+                icon={mnemonicCopied ? <CheckIcon /> : <CopyIcon />}
                 size="xs"
                 variant="ghost"
+                color={mnemonicCopied ? "bauhaus.yellow" : undefined}
                 onClick={async () => {
                   await navigator.clipboard.writeText(generatedMnemonic);
-                  toast({ title: "Copied to clipboard", status: "success", duration: 1500 });
+                  setMnemonicCopied(true);
+                  setTimeout(() => setMnemonicCopied(false), 2000);
                 }}
               />
             </HStack>
