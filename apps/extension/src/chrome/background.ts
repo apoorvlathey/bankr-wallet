@@ -242,7 +242,7 @@ setInterval(() => {
 // Clean up stale result keys from storage (from previous service worker sessions)
 chrome.storage.local.get(null).then((items) => {
   const staleKeys = Object.keys(items).filter((k) => {
-    if (!k.startsWith("txResult:") && !k.startsWith("sigResult:")) return false;
+    if (!k.startsWith("txResult:") && !k.startsWith("sigResult:") && !k.startsWith("rpcResult:")) return false;
     const entry = items[k];
     return entry?.timestamp && Date.now() - entry.timestamp > 30 * 60 * 1000;
   });
@@ -1314,10 +1314,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "rpcRequest": {
+      const rpcResultKey = `rpcResult:${message.id}`;
       handleRpcRequest(message.rpcUrl, message.method, message.params)
-        .then((result) => sendResponse({ result }))
-        .catch((error) => sendResponse({ error: error.message }));
-      return true;
+        .then((result) => writeResultToStorage(rpcResultKey, { result }))
+        .catch((error) => writeResultToStorage(rpcResultKey, { error: error.message }));
+      return false;
     }
 
     case "setArcBrowser": {

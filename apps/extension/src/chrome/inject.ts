@@ -394,30 +394,31 @@ window.addEventListener("message", async (e) => {
         params: any[];
       };
 
-      // Forward RPC request to background worker
-      chrome.runtime.sendMessage(
-        {
-          type: "rpcRequest",
-          id,
-          rpcUrl,
-          method,
-          params,
-        },
-        (response: { result?: any; error?: string }) => {
-          // Send result back to impersonator.ts
-          window.postMessage(
-            {
-              type: "rpcResponse",
-              msg: {
-                id,
-                result: response?.result,
-                error: response?.error,
-              },
-            },
-            "*"
-          );
-        }
-      );
+      // Generate a unique key and watch storage — same pattern as tx/sig
+      const rpcKey = `rpcResult:${id}`;
+
+      waitForStorageResult<{ result?: any; error?: string }>(
+        rpcKey, 30 * 1000 // 30s timeout for RPC calls
+      ).then((response) => {
+        window.postMessage(
+          { type: "rpcResponse", msg: { id, result: response.result, error: response.error } },
+          "*"
+        );
+      }).catch((err) => {
+        window.postMessage(
+          { type: "rpcResponse", msg: { id, result: undefined, error: err.message } },
+          "*"
+        );
+      });
+
+      // Fire-and-forget message to background
+      chrome.runtime.sendMessage({
+        type: "rpcRequest",
+        id,
+        rpcUrl,
+        method,
+        params,
+      });
       break;
     }
   }
