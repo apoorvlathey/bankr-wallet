@@ -1,4 +1,4 @@
-import { useState, memo } from "react";
+import { useState, useMemo, memo } from "react";
 import {
   Box,
   VStack,
@@ -9,7 +9,13 @@ import {
   Image,
   IconButton,
   InputGroup,
+  InputLeftElement,
   InputRightElement,
+  Slider,
+  SliderTrack,
+  SliderFilledTrack,
+  SliderThumb,
+  SliderMark,
   Spinner,
 } from "@chakra-ui/react";
 import { ArrowBackIcon, CopyIcon, CheckIcon, ExternalLinkIcon } from "@chakra-ui/icons";
@@ -19,6 +25,17 @@ import { isResolvableName } from "@/lib/ensUtils";
 import { PortfolioToken } from "@/chrome/portfolioApi";
 import { buildTransferTx } from "@/chrome/transferUtils";
 import { getChainConfig } from "@/constants/chainConfig";
+
+function formatUsd(value: number): string {
+  if (value < 0.01 && value > 0) return "<$0.01";
+  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatTokenAmount(value: number): string {
+  if (value === 0) return "0";
+  if (value < 0.000001) return "<0.000001";
+  return parseFloat(value.toPrecision(6)).toString();
+}
 
 interface TokenTransferProps {
   token: PortfolioToken;
@@ -38,6 +55,8 @@ function TokenTransfer({
   const toast = useBauhausToast();
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
+  const [isUsdMode, setIsUsdMode] = useState(false);
+  const [sliderValue, setSliderValue] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -45,16 +64,91 @@ function TokenTransfer({
     useAddressResolver(recipient);
 
   const chainConfig = getChainConfig(token.chainId);
+  const hasPrice = token.priceUsd > 0;
+
+  // Compute the token amount that will actually be sent
+  const tokenAmount = useMemo(() => {
+    if (!amount) return "";
+    const num = parseFloat(amount);
+    if (isNaN(num) || num <= 0) return "";
+    if (isUsdMode && hasPrice) {
+      const converted = num / token.priceUsd;
+      const balance = parseFloat(token.balance);
+      // Cap at actual balance to avoid rounding past it
+      if (converted >= balance) return token.balance;
+      return converted.toFixed(token.decimals);
+    }
+    return amount;
+  }, [amount, isUsdMode, hasPrice, token.priceUsd, token.decimals, token.balance]);
+
+  const balanceNum = parseFloat(token.balance);
+
+  const setAmountFromSlider = (pct: number) => {
+    if (pct === 0) {
+      setAmount("");
+    } else if (pct === 100) {
+      if (isUsdMode && hasPrice) {
+        setAmount((balanceNum * token.priceUsd).toFixed(2));
+      } else {
+        setAmount(token.balance);
+      }
+    } else {
+      const tokenAmt = (balanceNum * pct) / 100;
+      if (isUsdMode && hasPrice) {
+        setAmount((tokenAmt * token.priceUsd).toFixed(2));
+      } else {
+        // Use toPrecision directly, avoiding "<0.000001" display string
+        const formatted = tokenAmt === 0 ? "0" : parseFloat(tokenAmt.toPrecision(6)).toString();
+        setAmount(formatted);
+      }
+    }
+  };
+
+  const syncSliderFromAmount = (val: string) => {
+    const num = parseFloat(val);
+    if (!val || isNaN(num) || num <= 0 || balanceNum <= 0) {
+      setSliderValue(0);
+      return;
+    }
+    let tokenVal = num;
+    if (isUsdMode && hasPrice) {
+      tokenVal = num / token.priceUsd;
+    }
+    const pct = Math.min(100, Math.round((tokenVal / balanceNum) * 100));
+    setSliderValue(pct);
+  };
 
   const handleMaxAmount = () => {
-    setAmount(token.balanceFormatted.replace(/,/g, ""));
+    setSliderValue(100);
+    if (isUsdMode && hasPrice) {
+      const usdValue = balanceNum * token.priceUsd;
+      setAmount(usdValue.toFixed(2));
+    } else {
+      setAmount(token.balance);
+    }
+  };
+
+  const handleToggleMode = () => {
+    if (!hasPrice) return;
+    const num = parseFloat(amount);
+    if (amount && !isNaN(num) && num > 0) {
+      if (isUsdMode) {
+        // USD -> Token: convert, cap at balance to avoid rounding past it
+        const converted = num / token.priceUsd;
+        setAmount(converted >= balanceNum ? token.balance : formatTokenAmount(converted));
+      } else {
+        // Token -> USD: convert current token to USD
+        setAmount((num * token.priceUsd).toFixed(2));
+      }
+    }
+    setIsUsdMode(!isUsdMode);
   };
 
   const isAmountValid = (): boolean => {
-    if (!amount) return false;
-    const num = parseFloat(amount);
+    if (!tokenAmount) return false;
+    const num = parseFloat(tokenAmount);
     if (isNaN(num) || num <= 0) return false;
-    const balance = parseFloat(token.balanceFormatted.replace(/,/g, ""));
+    const balance = parseFloat(token.balance);
     return num <= balance;
   };
 
@@ -77,7 +171,7 @@ function TokenTransfer({
     try {
       const txParts = buildTransferTx({
         to: resolvedAddress!,
-        amount,
+        amount: tokenAmount,
         contractAddress: token.contractAddress,
         decimals: token.decimals,
         chainId: token.chainId,
@@ -183,9 +277,14 @@ function TokenTransfer({
               <Text fontSize="sm" fontWeight="700" color="text.primary">
                 {token.symbol.toUpperCase()}
               </Text>
-              <Text fontSize="xs" color="text.tertiary">
-                Balance: {token.balanceFormatted}
+              <Text fontSize="sm" fontWeight="800" color="text.primary">
+                {token.balanceFormatted} {token.symbol.toUpperCase()}
               </Text>
+              {hasPrice && (
+                <Text fontSize="xs" fontWeight="700" color="text.tertiary">
+                  {formatUsd(parseFloat(token.balance) * token.priceUsd)}
+                </Text>
+              )}
             </VStack>
             {chainConfig.icon && (
               <HStack spacing={1}>
@@ -303,16 +402,41 @@ function TokenTransfer({
 
         {/* Amount input */}
         <Box>
-          <Text fontSize="sm" fontWeight="700" color="text.secondary" textTransform="uppercase" mb={1}>
-            Amount
-          </Text>
+          <HStack justify="space-between" align="center" mb={1}>
+            <Text fontSize="sm" fontWeight="700" color="text.secondary" textTransform="uppercase">
+              Amount
+            </Text>
+            {hasPrice && (
+              <Button
+                size="xs"
+                variant="ghost"
+                color="bauhaus.blue"
+                fontWeight="800"
+                fontSize="xs"
+                h="20px"
+                px={1}
+                onClick={handleToggleMode}
+                _hover={{ bg: "bg.muted" }}
+              >
+                {isUsdMode ? token.symbol.toUpperCase() : "USD"}
+              </Button>
+            )}
+          </HStack>
           <InputGroup>
+            {isUsdMode && (
+              <InputLeftElement pointerEvents="none" h="full" w="28px" pl={2}>
+                <Text fontFamily="mono" fontSize="sm" color="text.tertiary" fontWeight="700">$</Text>
+              </InputLeftElement>
+            )}
             <Input
               placeholder="0.0"
               value={amount}
               onChange={(e) => {
                 const val = e.target.value;
-                if (/^\d*\.?\d*$/.test(val)) setAmount(val);
+                if (/^\d*\.?\d*$/.test(val)) {
+                  setAmount(val);
+                  syncSliderFromAmount(val);
+                }
               }}
               fontFamily="mono"
               fontSize="sm"
@@ -322,6 +446,7 @@ function TokenTransfer({
               bg="bauhaus.white"
               _hover={{ borderColor: "bauhaus.blue" }}
               _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+              pl={isUsdMode ? "28px" : undefined}
               pr="60px"
             />
             <InputRightElement w="55px" h="full">
@@ -337,6 +462,60 @@ function TokenTransfer({
               </Button>
             </InputRightElement>
           </InputGroup>
+          {/* Conversion display */}
+          {amount && parseFloat(amount) > 0 && hasPrice && (
+            <Text fontSize="xs" color="text.tertiary" fontWeight="700" mt={1}>
+              {isUsdMode
+                ? `${formatTokenAmount(parseFloat(amount) / token.priceUsd)} ${token.symbol.toUpperCase()}`
+                : formatUsd(parseFloat(amount) * token.priceUsd)
+              }
+            </Text>
+          )}
+          {/* Percentage slider */}
+          {balanceNum > 0 && (
+            <Box px={2} pt={2} pb={6}>
+              <Slider
+                min={0}
+                max={100}
+                step={1}
+                value={sliderValue}
+                onChange={(val) => {
+                  const SNAP_THRESHOLD = 3;
+                  const snaps = [0, 25, 50, 75, 100];
+                  const nearest = snaps.find((s) => Math.abs(val - s) <= SNAP_THRESHOLD);
+                  const snapped = nearest !== undefined ? nearest : val;
+                  setSliderValue(snapped);
+                  setAmountFromSlider(snapped);
+                }}
+              >
+                {[0, 25, 50, 75, 100].map((pct) => (
+                  <SliderMark
+                    key={pct}
+                    value={pct}
+                    mt={3}
+                    fontSize="xs"
+                    fontWeight="800"
+                    color={sliderValue >= pct ? "bauhaus.blue" : "gray.400"}
+                    whiteSpace="nowrap"
+                    transform="translateX(-50%)"
+                  >
+                    {pct}%
+                  </SliderMark>
+                ))}
+                <SliderTrack bg="gray.200" h="6px" borderRadius={0}>
+                  <SliderFilledTrack bg="bauhaus.blue" />
+                </SliderTrack>
+                <SliderThumb
+                  boxSize={5}
+                  bg="bauhaus.blue"
+                  border="3px solid"
+                  borderColor="bauhaus.black"
+                  borderRadius={0}
+                  _focus={{ boxShadow: "none" }}
+                />
+              </Slider>
+            </Box>
+          )}
           {amount && !isAmountValid() && parseFloat(amount) > 0 && (
             <Text fontSize="xs" color="bauhaus.red" fontWeight="700" mt={1}>
               Insufficient balance
