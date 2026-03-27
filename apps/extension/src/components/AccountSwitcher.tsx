@@ -14,7 +14,7 @@ import {
   IconButton,
   Tooltip,
 } from "@chakra-ui/react";
-import { ChevronDownIcon, AddIcon, SettingsIcon } from "@chakra-ui/icons";
+import { ChevronDownIcon, AddIcon, SettingsIcon, CopyIcon, CheckIcon } from "@chakra-ui/icons";
 import { blo } from "blo";
 import type { Account, SeedGroup } from "@/chrome/types";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
@@ -121,6 +121,7 @@ function AccountSwitcher({
   const [seedGroupMap, setSeedGroupMap] = useState<Map<string, string>>(
     new Map(),
   );
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const accountAddresses = useMemo(
     () => accounts.map((a) => a.address),
@@ -186,7 +187,7 @@ function AccountSwitcher({
         fontWeight="700"
         h="full"
         py={3}
-        pr={5}
+        px={3}
         borderRadius="0"
         transition="all 0.2s ease-out"
         overflow="hidden"
@@ -194,8 +195,8 @@ function AccountSwitcher({
       >
         <ChevronDownIcon
           position="absolute"
-          top="6px"
-          right="6px"
+          bottom="8px"
+          right="4px"
           boxSize="14px"
           color="text.secondary"
         />
@@ -365,18 +366,64 @@ function AccountSwitcher({
                 size={24}
               />
               <VStack align="start" spacing={0} flex={1} minW={0}>
-                <Text
-                  fontSize="sm"
-                  color="text.primary"
-                  fontWeight="700"
-                  noOfLines={1}
-                >
-                  {getAccountDisplayName(account)}
-                </Text>
-                {hasResolvedName(account) && (
-                  <Text fontSize="xs" color="text.tertiary" fontFamily="mono">
-                    {truncateAddress(account.address)}
+                <HStack spacing={0.5} align="center">
+                  <Text
+                    fontSize="sm"
+                    color="text.primary"
+                    fontWeight="700"
+                    noOfLines={1}
+                  >
+                    {getAccountDisplayName(account)}
                   </Text>
+                  {!hasResolvedName(account) && (
+                    <>
+                      <IconButton
+                        aria-label="Copy address"
+                        icon={copiedId === account.id ? <CheckIcon boxSize="10px" /> : <CopyIcon boxSize="10px" />}
+                        size="xs"
+                        variant="ghost"
+                        minW="16px"
+                        h="16px"
+                        color={copiedId === account.id ? "bauhaus.green" : "text.tertiary"}
+                        _hover={{ color: "bauhaus.blue", bg: "transparent" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(account.address);
+                          setCopiedId(account.id);
+                          setTimeout(() => setCopiedId(null), 2000);
+                        }}
+                      />
+                      {account.id === activeAccount?.id && (
+                        <Box w="8px" h="8px" flexShrink={0} bg="bauhaus.green" borderRadius="full" border="2px solid" borderColor="bauhaus.black" />
+                      )}
+                    </>
+                  )}
+                </HStack>
+                {hasResolvedName(account) && (
+                  <HStack spacing={0.5} align="center">
+                    <Text fontSize="xs" color="text.tertiary" fontFamily="mono">
+                      {truncateAddress(account.address)}
+                    </Text>
+                    <IconButton
+                      aria-label="Copy address"
+                      icon={copiedId === account.id ? <CheckIcon boxSize="10px" /> : <CopyIcon boxSize="10px" />}
+                      size="xs"
+                      variant="ghost"
+                      minW="16px"
+                      h="16px"
+                      color={copiedId === account.id ? "bauhaus.green" : "text.tertiary"}
+                      _hover={{ color: "bauhaus.blue", bg: "transparent" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(account.address);
+                        setCopiedId(account.id);
+                        setTimeout(() => setCopiedId(null), 2000);
+                      }}
+                    />
+                    {account.id === activeAccount?.id && (
+                      <Box w="8px" h="8px" flexShrink={0} bg="bauhaus.green" borderRadius="full" border="2px solid" borderColor="bauhaus.black" />
+                    )}
+                  </HStack>
                 )}
                 <HStack spacing={1} flexWrap="wrap">
                   {account.displayName && getEnsName(account) && (
@@ -486,18 +533,6 @@ function AccountSwitcher({
                   )}
                 </HStack>
               </VStack>
-              <Box
-                w="8px"
-                h="8px"
-                bg={
-                  account.id === activeAccount?.id
-                    ? "bauhaus.green"
-                    : "transparent"
-                }
-                borderRadius="full"
-                border={account.id === activeAccount?.id ? "2px solid" : "none"}
-                borderColor="bauhaus.black"
-              />
               <Tooltip label="Account Settings" hasArrow placement="top">
                 <IconButton
                   aria-label="Account Settings"
