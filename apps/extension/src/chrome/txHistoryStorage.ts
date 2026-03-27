@@ -120,6 +120,34 @@ export async function getPendingConfirmationTxs(): Promise<
 }
 
 /**
+ * Mark any txs stuck in "processing" for longer than the threshold as failed.
+ * This handles edge cases like service worker restart mid-processing.
+ */
+export async function cleanupStaleProcessingTxs(
+  maxAgeMs: number = 5 * 60 * 1000,
+): Promise<void> {
+  const history = await getTxHistory();
+  const now = Date.now();
+  let changed = false;
+
+  for (const tx of history) {
+    if (tx.status === "processing" && now - tx.createdAt > maxAgeMs) {
+      tx.status = "failed";
+      tx.error = "Transaction timed out";
+      tx.completedAt = now;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    await chrome.storage.local.set({ [TX_HISTORY_KEY]: history });
+    chrome.runtime
+      .sendMessage({ type: "txHistoryUpdated" })
+      .catch(() => {});
+  }
+}
+
+/**
  * Clear all transaction history
  */
 export async function clearTxHistory(): Promise<void> {

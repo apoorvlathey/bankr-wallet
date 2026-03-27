@@ -9,8 +9,9 @@ import {
   getPendingConfirmationTxs,
   type GasData,
 } from "./txHistoryStorage";
-import { getRpcUrl } from "./txHandlers";
+import { getRpcUrl, showNotification } from "./txHandlers";
 import { OP_STACK_CHAIN_IDS } from "../constants/networks";
+import { CHAIN_CONFIG } from "../constants/chainConfig";
 
 /** Polling config */
 const INITIAL_INTERVAL_MS = 2_000;
@@ -181,9 +182,6 @@ async function showConfirmationNotification(
   chainId: number,
   succeeded: boolean,
 ): Promise<void> {
-  // Dynamically import to avoid circular deps
-  const { CHAIN_CONFIG } = await import("../constants/chainConfig");
-  const { showNotification } = await import("./txHandlers");
   const chainConfig = CHAIN_CONFIG[chainId];
   const chainName = chainConfig?.name || "Unknown chain";
 
