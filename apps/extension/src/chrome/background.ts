@@ -114,6 +114,7 @@ import {
   openPopupWindow,
   performSecurityReset,
   handleInitiateTransfer,
+  handleExecuteSwapDirect,
   handleCancelProcessingTx,
   writeResultToStorage,
   SignatureResult,
@@ -124,6 +125,16 @@ import { estimateGas } from "./gasEstimation";
 
 // Chat handlers
 import { handleSubmitChatPrompt } from "./chatHandlers";
+
+// Swap API
+import {
+  fetchSwapPrice,
+  fetchSwapQuote,
+  fetchTokenInfo,
+  fetchTokenPrice,
+  getCachedTokenList,
+  checkTokenAllowance,
+} from "./swapApi";
 
 // Sidepanel management
 import {
@@ -1399,6 +1410,93 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "initiateTransfer": {
       handleInitiateTransfer(message).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "fetchSwapPrice": {
+      fetchSwapPrice({
+        chainId: message.chainId,
+        sellToken: message.sellToken,
+        buyToken: message.buyToken,
+        sellAmount: message.sellAmount,
+        taker: message.taker,
+        slippageBps: message.slippageBps,
+      })
+        .then((data) => sendResponse({ success: true, data }))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "fetchSwapQuote": {
+      fetchSwapQuote({
+        chainId: message.chainId,
+        sellToken: message.sellToken,
+        buyToken: message.buyToken,
+        sellAmount: message.sellAmount,
+        taker: message.taker,
+        slippageBps: message.slippageBps,
+      })
+        .then((data) => sendResponse({ success: true, data }))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "fetchTokenInfo": {
+      fetchTokenInfo(message.tokenAddress, message.chainId)
+        .then((data) => sendResponse({ success: true, data }))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "fetchTokenPrice": {
+      fetchTokenPrice(message.chainId, message.address)
+        .then((priceUsd) =>
+          sendResponse({ success: true, priceUsd }),
+        )
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "fetchSwapTokenList": {
+      getCachedTokenList(message.chainId)
+        .then((data) => sendResponse({ success: true, data }))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "checkTokenAllowance": {
+      checkTokenAllowance(
+        message.tokenAddress,
+        message.owner,
+        message.spender,
+        message.chainId,
+      )
+        .then((allowance) =>
+          sendResponse({ success: true, allowance: allowance.toString() }),
+        )
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "executeSwapDirect": {
+      handleExecuteSwapDirect(
+        message.transactions,
+        message.chainName,
+      ).then((result) => {
         sendResponse(result);
       });
       return true;

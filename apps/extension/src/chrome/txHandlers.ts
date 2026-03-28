@@ -58,6 +58,7 @@ import {
   addTxToHistory,
   updateTxInHistory,
   getTxById,
+  type SwapMeta,
 } from "./txHistoryStorage";
 import {
   getCachedApiKey,
@@ -1417,6 +1418,285 @@ export async function handleInitiateTransfer(message: {
     .catch(() => {});
 
   return { success: true, txId };
+}
+
+// ---------------------------------------------------------------------------
+// Direct Swap Execution (bypasses confirmation screen)
+// ---------------------------------------------------------------------------
+
+export interface SwapTxEntry {
+  tx: TransactionParams;
+  origin: string;
+  favicon: string | null;
+  functionName?: string;
+  swapMeta?: SwapMeta;
+}
+
+/**
+ * Directly signs and broadcasts swap transactions (approval + swap) without
+ * going through the TransactionConfirmation screen. Handles all wallet types.
+ * Uses the nonce manager so approval + swap get sequential nonces.
+ */
+export async function handleExecuteSwapDirect(
+  transactions: SwapTxEntry[],
+  chainName: string,
+): Promise<{ success: boolean; txIds?: string[]; error?: string }> {
+  if (transactions.length === 0) {
+    return { success: false, error: "No transactions provided" };
+  }
+
+  const chainId = transactions[0].tx.chainId;
+
+  // Validate chain
+  if (!ALLOWED_CHAIN_IDS.has(chainId)) {
+    return { success: false, error: `Chain ${chainId} not supported` };
+  }
+
+  // Resolve account
+  const account = await getActiveAccount();
+  if (!account) {
+    return { success: false, error: "No account found" };
+  }
+
+  // --- Bankr API accounts ---
+  if (account.type === "impersonator") {
+    if (!BANKR_SUPPORTED_CHAIN_IDS.has(chainId)) {
+      return { success: false, error: `Chain not supported for Bankr API accounts` };
+    }
+
+    let apiKey = getCachedApiKey();
+    if (!apiKey) {
+      if (!getCachedPassword()) {
+        const autoLockTimeout = await getAutoLockTimeout();
+        if (autoLockTimeout === 0) {
+          await tryRestoreSession(handleUnlockWallet);
+          apiKey = getCachedApiKey();
+        }
+      }
+      if (!apiKey) {
+        return { success: false, error: "Wallet must be unlocked" };
+      }
+    }
+
+    const txIds: string[] = [];
+    for (const entry of transactions) {
+      const txId = crypto.randomUUID();
+      txIds.push(txId);
+      const pending: PendingTxRequest = {
+        id: txId,
+        tx: entry.tx,
+        origin: entry.origin,
+        favicon: entry.favicon,
+        chainName,
+        timestamp: Date.now(),
+      };
+      // Await each TX so approval is broadcast before swap starts
+      await processSwapTxBankr(txId, pending, apiKey, entry.functionName, entry.swapMeta);
+    }
+    return { success: true, txIds };
+  }
+
+  // --- PK / Seed Phrase accounts ---
+  if (account.type !== "privateKey" && account.type !== "seedPhrase") {
+    return { success: false, error: "Unsupported account type" };
+  }
+
+  let privateKey = getPrivateKeyFromCache(account.id);
+
+  if (!privateKey) {
+    const vaultKey = getCachedVaultKey();
+    if (!vaultKey) {
+      const autoLockTimeout = await getAutoLockTimeout();
+      if (autoLockTimeout === 0) {
+        const restored = await tryRestoreSession(handleUnlockWallet);
+        if (restored) privateKey = getPrivateKeyFromCache(account.id);
+      }
+    }
+    if (!privateKey) {
+      const cachedVaultKey = getCachedVaultKey();
+      if (cachedVaultKey) {
+        const { decryptAllKeysWithVaultKey } = await import("./authHandlers");
+        const vault = await decryptAllKeysWithVaultKey(cachedVaultKey);
+        if (vault) setCachedVault(vault);
+      }
+      privateKey = getPrivateKeyFromCache(account.id);
+    }
+    if (!privateKey) {
+      return { success: false, error: "Wallet must be unlocked" };
+    }
+  }
+
+  // Resolve RPC URL once
+  const { networksInfo } = await chrome.storage.sync.get("networksInfo");
+  let rpcUrl: string | undefined;
+  if (networksInfo) {
+    for (const name of Object.keys(networksInfo)) {
+      if (networksInfo[name].chainId === chainId) {
+        rpcUrl = networksInfo[name].rpcUrl;
+        break;
+      }
+    }
+  }
+
+  // Phase 1 (sequential): assign nonces + write history entries
+  // This avoids the addTxToHistory race condition and ensures correct nonces.
+  const prepared: Array<{
+    txId: string;
+    pending: PendingTxRequest;
+    nonce: number;
+    functionName?: string;
+    swapMeta?: SwapMeta;
+  }> = [];
+
+  const txIds: string[] = [];
+  const fromAddr = transactions[0].tx.from;
+
+  for (const entry of transactions) {
+    const txId = crypto.randomUUID();
+    txIds.push(txId);
+
+    const nonce = await getNextNonce(fromAddr, chainId);
+
+    const pending: PendingTxRequest = {
+      id: txId,
+      tx: entry.tx,
+      origin: entry.origin,
+      favicon: entry.favicon,
+      chainName,
+      timestamp: Date.now(),
+    };
+
+    await addTxToHistory({
+      id: txId,
+      status: "processing",
+      tx: entry.tx,
+      origin: entry.origin,
+      favicon: entry.favicon,
+      chainName,
+      chainId,
+      createdAt: pending.timestamp,
+      accountType: account.type as "privateKey" | "seedPhrase",
+      functionName: entry.functionName,
+      swapMeta: entry.swapMeta,
+    });
+
+    prepared.push({ txId, pending, nonce, functionName: entry.functionName, swapMeta: entry.swapMeta });
+  }
+
+  // Phase 2 (concurrent): broadcast all TXs with pre-assigned nonces
+  for (const item of prepared) {
+    broadcastSwapTxLocal(
+      item.txId, item.pending, account, privateKey, item.nonce, rpcUrl,
+    );
+  }
+
+  return { success: true, txIds };
+}
+
+/** Fire-and-forget: sign+broadcast a single swap tx via Bankr API */
+async function processSwapTxBankr(
+  txId: string,
+  pending: PendingTxRequest,
+  apiKey: string,
+  functionName?: string,
+  swapMeta?: SwapMeta,
+): Promise<void> {
+  const abortController = new AbortController();
+  activeAbortControllers.set(txId, abortController);
+
+  await addTxToHistory({
+    id: txId,
+    status: "processing",
+    tx: pending.tx,
+    origin: pending.origin,
+    favicon: pending.favicon,
+    chainName: pending.chainName,
+    chainId: pending.tx.chainId,
+    createdAt: pending.timestamp,
+    accountType: "bankr",
+    functionName,
+    swapMeta,
+  });
+
+  try {
+    const result = await submitTransactionDirect(
+      apiKey,
+      pending.tx,
+      abortController.signal,
+    );
+    const txHash = result.transactionHash;
+
+    if (result.status === "reverted") {
+      // Save txHash before marking as failed so explorer link works
+      if (txHash) await updateTxInHistory(txId, { txHash });
+      await handleTransactionFailure(txId, pending, "Transaction reverted on-chain");
+    } else if (result.status === "success" && txHash) {
+      await updateTxInHistory(txId, {
+        status: "success",
+        txHash,
+        completedAt: Date.now(),
+      });
+      fetchAndStoreGasData(txId, txHash, pending.tx.chainId);
+
+      const notificationId = `tx-success-${txId}`;
+      const chainConfig = CHAIN_CONFIG[pending.tx.chainId];
+      const explorerUrl = chainConfig?.explorer
+        ? `${chainConfig.explorer}/tx/${txHash}`
+        : null;
+      if (explorerUrl) {
+        chrome.storage.local.set({
+          [`notification-${notificationId}`]: explorerUrl,
+        });
+      }
+    } else {
+      await updateTxInHistory(txId, { status: "pending", txHash });
+      if (txHash) startReceiptPolling(txId, txHash, pending.tx.chainId);
+    }
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    resetNonce(pending.tx.from, pending.tx.chainId);
+    await handleTransactionFailure(txId, pending, errorMessage);
+  } finally {
+    activeAbortControllers.delete(txId);
+  }
+}
+
+/**
+ * Fire-and-forget: sign+broadcast a swap tx with a pre-assigned nonce.
+ * History entry must already exist (created in the preparation phase).
+ */
+async function broadcastSwapTxLocal(
+  txId: string,
+  pending: PendingTxRequest,
+  account: Account,
+  privateKey: `0x${string}`,
+  nonce: number,
+  rpcUrl?: string,
+): Promise<void> {
+  const abortController = new AbortController();
+  activeAbortControllers.set(txId, abortController);
+
+  try {
+    const txForSigning = { ...pending.tx, nonce };
+
+    const result = await signAndBroadcastTransaction(
+      privateKey,
+      txForSigning,
+      rpcUrl,
+    );
+    const txHash = result.txHash;
+
+    await updateTxInHistory(txId, { status: "pending", txHash });
+    if (txHash) startReceiptPolling(txId, txHash, pending.tx.chainId);
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    resetNonce(pending.tx.from, pending.tx.chainId);
+    await handleTransactionFailure(txId, pending, errorMessage);
+  } finally {
+    activeAbortControllers.delete(txId);
+  }
 }
 
 /**

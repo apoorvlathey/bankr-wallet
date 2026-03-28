@@ -290,57 +290,128 @@ function TxStatusItem({
       transition="background 0.15s"
     >
       <HStack spacing={3} align="center">
-        {/* Favicon with chain icon overlay */}
-        <Box position="relative" flexShrink={0} w="36px" h="36px">
-          <Box
-            bg="gray.100"
-            borderRadius="full"
-            w="36px"
-            h="36px"
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            overflow="hidden"
-          >
-            <Image
-              src={
-                tx.origin === "WalletChan" || tx.origin === "BankrWallet"
-                  ? "/walletchan-icon.png"
-                  : tx.favicon ||
-                    (originHostname
-                      ? `https://www.google.com/s2/favicons?domain=${originHostname}&sz=32`
-                      : undefined)
-              }
-              alt="favicon"
-              boxSize="22px"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                if (originHostname) {
-                  target.src = `https://www.google.com/s2/favicons?domain=${originHostname}&sz=32`;
-                }
-              }}
-            />
-          </Box>
-          {/* Chain icon overlay */}
-          {config.icon && (
+        {/* Icon area */}
+        {tx.swapMeta ? (
+          /* Swap: overlapping sell→buy token icons with chain badge */
+          <Box position="relative" flexShrink={0} w="42px" h="36px">
+            {/* Sell token (back) */}
             <Box
               position="absolute"
-              bottom="-2px"
-              right="-2px"
-              w="16px"
-              h="16px"
+              left={0}
+              top={0}
+              bg="gray.100"
               borderRadius="full"
-              bg="white"
-              border="1.5px solid"
-              borderColor="gray.200"
+              w="28px"
+              h="28px"
               display="flex"
               alignItems="center"
               justifyContent="center"
+              overflow="hidden"
+              border="2px solid white"
+              zIndex={1}
             >
-              <Image src={config.icon} alt={tx.chainName} boxSize="11px" />
+              {tx.swapMeta.sellTokenLogo ? (
+                <Image src={tx.swapMeta.sellTokenLogo} alt={tx.swapMeta.sellTokenSymbol} boxSize="20px" />
+              ) : (
+                <Text fontSize="2xs" fontWeight="700">{tx.swapMeta.sellTokenSymbol.slice(0, 2)}</Text>
+              )}
             </Box>
-          )}
-        </Box>
+            {/* Buy token (front, overlapping) */}
+            <Box
+              position="absolute"
+              left="14px"
+              top={0}
+              bg="gray.100"
+              borderRadius="full"
+              w="28px"
+              h="28px"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              overflow="hidden"
+              border="2px solid white"
+              zIndex={2}
+            >
+              {tx.swapMeta.buyTokenLogo ? (
+                <Image src={tx.swapMeta.buyTokenLogo} alt={tx.swapMeta.buyTokenSymbol} boxSize="20px" />
+              ) : (
+                <Text fontSize="2xs" fontWeight="700">{tx.swapMeta.buyTokenSymbol.slice(0, 2)}</Text>
+              )}
+            </Box>
+            {/* Chain icon */}
+            {config.icon && (
+              <Box
+                position="absolute"
+                bottom="-2px"
+                right="-2px"
+                w="16px"
+                h="16px"
+                borderRadius="full"
+                bg="white"
+                border="1.5px solid"
+                borderColor="gray.200"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                zIndex={3}
+              >
+                <Image src={config.icon} alt={tx.chainName} boxSize="11px" />
+              </Box>
+            )}
+          </Box>
+        ) : (
+          /* Standard: single favicon with chain icon overlay */
+          <Box position="relative" flexShrink={0} w="36px" h="36px">
+            <Box
+              bg="gray.100"
+              borderRadius="full"
+              w="36px"
+              h="36px"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              overflow="hidden"
+            >
+              <Image
+                src={
+                  tx.origin === "WalletChan" || tx.origin === "BankrWallet"
+                    ? "/walletchan-icon.png"
+                    : tx.favicon ||
+                      (originHostname
+                        ? `https://www.google.com/s2/favicons?domain=${originHostname}&sz=32`
+                        : undefined)
+                }
+                alt="favicon"
+                boxSize="22px"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  if (originHostname) {
+                    target.src = `https://www.google.com/s2/favicons?domain=${originHostname}&sz=32`;
+                  }
+                }}
+              />
+            </Box>
+            {/* Chain icon overlay */}
+            {config.icon && (
+              <Box
+                position="absolute"
+                bottom="-2px"
+                right="-2px"
+                w="16px"
+                h="16px"
+                borderRadius="full"
+                bg="white"
+                border="1.5px solid"
+                borderColor="gray.200"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <Image src={config.icon} alt={tx.chainName} boxSize="11px" />
+              </Box>
+            )}
+          </Box>
+        )}
 
         {/* Content */}
         <Box flex={1} minW={0}>
@@ -380,8 +451,7 @@ function TxStatusItem({
             )}
             <HStack spacing={1} flexShrink={0}>
               {statusElement}
-              {(tx.status === "success" || tx.status === "pending") &&
-                tx.txHash &&
+              {tx.txHash &&
                 config.explorer && (
                   <ExternalLinkIcon
                     boxSize={2.5}
