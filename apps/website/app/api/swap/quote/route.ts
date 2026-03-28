@@ -3,11 +3,15 @@ import { isAddress } from "viem";
 
 const ZEROX_API_KEY = process.env.ZEROX_API_KEY ?? "";
 const ZEROX_BASE_URL = "https://api.0x.org";
-const CHAIN_ID = "8453"; // Base
+const DEFAULT_CHAIN_ID = "8453"; // Base
 
 const FEE_RECIPIENT = process.env.SWAP_FEE_RECIPIENT ?? "";
 const FEE_BPS = "90"; // 0.9%
 const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+
+const SUPPORTED_CHAIN_IDS = new Set([
+  "1", "42161", "8453", "56", "137", "130",
+]);
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -69,8 +73,17 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // Chain ID (optional, defaults to Base for backwards compatibility)
+  const chainIdParam = searchParams.get("chainId") ?? DEFAULT_CHAIN_ID;
+  if (!SUPPORTED_CHAIN_IDS.has(chainIdParam)) {
+    return NextResponse.json(
+      { error: `Unsupported chainId: ${chainIdParam}` },
+      { status: 400 },
+    );
+  }
+
   const params = new URLSearchParams({
-    chainId: CHAIN_ID,
+    chainId: chainIdParam,
     sellToken,
     buyToken,
     sellAmount,
