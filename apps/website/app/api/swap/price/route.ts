@@ -82,11 +82,11 @@ export async function GET(request: NextRequest) {
     sellAmount,
   });
 
-  // Fee always collected in ETH (sellToken) — hardcoded server-side
+  // Fee collected in sellToken — must be either sellToken or buyToken per 0x API
   if (FEE_RECIPIENT) {
     params.set("swapFeeRecipient", FEE_RECIPIENT);
     params.set("swapFeeBps", FEE_BPS);
-    params.set("swapFeeToken", NATIVE_TOKEN);
+    params.set("swapFeeToken", sellToken);
   }
 
   if (taker) {
