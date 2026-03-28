@@ -128,6 +128,7 @@ import { handleSubmitChatPrompt } from "./chatHandlers";
 // Sidepanel management
 import {
   isSidePanelSupported,
+  isSidePanelSupportedAsync,
   getSidePanelMode,
   setSidePanelMode,
   initSidePanel,
@@ -1333,7 +1334,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "setArcBrowser": {
       if (message.isArc) {
         chrome.storage.sync.set({
-          sidePanelVerified: false,
           sidePanelMode: false,
           isArcBrowser: true,
         });
@@ -1345,16 +1345,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "isSidePanelSupported": {
-      (async () => {
-        if (!isSidePanelSupported()) {
-          sendResponse({ supported: false });
-          return;
-        }
-        const { sidePanelVerified } = await chrome.storage.sync.get([
-          "sidePanelVerified",
-        ]);
-        sendResponse({ supported: sidePanelVerified !== false });
-      })();
+      isSidePanelSupportedAsync().then((supported) => {
+        sendResponse({ supported });
+      });
       return true;
     }
 

@@ -130,31 +130,23 @@ function UnlockScreen({
   }, []);
 
   const toggleSidePanelMode = async () => {
-    const newMode = !sidePanelMode;
+    if (sidePanelMode) {
+      // DISABLING: persist and close immediately
+      chrome.runtime.sendMessage({ type: "setSidePanelMode", enabled: false });
+      window.close();
+    } else {
+      // ENABLING: open sidepanel, persist, close popup — all fire-and-forget
+      try {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        const windowId = tabs[0]?.windowId;
+        if (!windowId) return;
 
-    await new Promise<void>((resolve) => {
-      chrome.runtime.sendMessage(
-        { type: "setSidePanelMode", enabled: newMode },
-        () => {
-          resolve();
-        },
-      );
-    });
-    setSidePanelMode(newMode);
-
-    if (!newMode && isInSidePanel) {
-      chrome.runtime.sendMessage({ type: "openPopupWindow" }, () => {
+        chrome.sidePanel.open({ windowId });
+        chrome.runtime.sendMessage({ type: "setSidePanelMode", enabled: true });
         window.close();
-      });
-    } else if (newMode && !isInSidePanel) {
-      toast({
-        title: "Sidepanel mode enabled",
-        description:
-          "Close popup and click the extension icon to open in sidepanel",
-        status: "info",
-        duration: null,
-        isClosable: true,
-      });
+      } catch (error) {
+        console.warn("Failed to open sidepanel:", error);
+      }
     }
   };
 
