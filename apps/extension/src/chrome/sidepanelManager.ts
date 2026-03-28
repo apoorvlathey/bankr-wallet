@@ -9,11 +9,36 @@
  */
 
 /**
- * Checks if the browser exposes the sidePanel API (synchronous, for service worker context).
- * Arc detection is handled separately via the isArcBrowser storage flag set by UI context.
+ * Checks if this is a non-Chrome Chromium browser (Arc, Brave, Opera, etc.)
+ * Arc's sidePanel API is a "perfect phantom" — sidePanel.open() resolves,
+ * getContexts reports a SIDE_PANEL context, but nothing is rendered.
+ * Genuine Chrome always includes "Google Chrome" in userAgentData.brands.
+ */
+function isNonChromeBrowser(): boolean {
+  try {
+    const uaData = (navigator as any).userAgentData;
+    if (!uaData?.brands) return false;
+    const hasGoogleChrome = uaData.brands.some(
+      (b: { brand: string }) => b.brand === "Google Chrome"
+    );
+    return !hasGoogleChrome;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Checks if the browser supports the sidePanel API (synchronous, for service worker context).
+ * Blocks non-Chrome Chromium browsers where sidePanel silently fails (e.g. Arc).
+ * Unlike the old code, this does NOT persist a lockout flag — the check is re-evaluated
+ * on each service worker start, so a browser update that adds "Google Chrome" to brands
+ * would immediately unblock.
  */
 export function isSidePanelSupported(): boolean {
   try {
+    if (isNonChromeBrowser()) {
+      return false;
+    }
     return (
       typeof chrome !== "undefined" &&
       typeof chrome.sidePanel !== "undefined" &&
