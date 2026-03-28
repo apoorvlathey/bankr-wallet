@@ -31,6 +31,7 @@ import {
   NATIVE_TOKEN_ADDRESS,
   DEFAULT_SLIPPAGE_BPS,
   buildApprovalTx,
+  buildPermit2ApproveTx,
   type SwapQuoteResponse,
   type TokenInfo,
   type TokenListEntry,
@@ -86,6 +87,7 @@ interface SwapViewProps {
   onBack: () => void;
   onSwapInitiated: () => void;
   onChainChange: (chainName: string) => void;
+  initialBuyToken?: { address: string; name: string; symbol: string; decimals: number; logoURI?: string };
 }
 
 function SwapView({
@@ -96,6 +98,7 @@ function SwapView({
   onBack,
   onSwapInitiated,
   onChainChange,
+  initialBuyToken,
 }: SwapViewProps) {
   const toast = useBauhausToast();
   const chainConfig = getChainConfig(chainId);
@@ -114,9 +117,11 @@ function SwapView({
   const [sliderValue, setSliderValue] = useState(0);
 
   // Buy side
-  const [buyTokenAddress, setBuyTokenAddress] = useState("");
-  const [buyTokenInfo, setBuyTokenInfo] = useState<TokenInfo | null>(null);
-  const [buyTokenLogoURI, setBuyTokenLogoURI] = useState<string | undefined>();
+  const [buyTokenAddress, setBuyTokenAddress] = useState(initialBuyToken?.address ?? "");
+  const [buyTokenInfo, setBuyTokenInfo] = useState<TokenInfo | null>(
+    initialBuyToken ? { name: initialBuyToken.name, symbol: initialBuyToken.symbol, decimals: initialBuyToken.decimals } : null,
+  );
+  const [buyTokenLogoURI, setBuyTokenLogoURI] = useState<string | undefined>(initialBuyToken?.logoURI);
   const [buyTokenLoading, setBuyTokenLoading] = useState(false);
   const [buyTokenPriceUsd, setBuyTokenPriceUsd] = useState<number>(0);
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
@@ -548,6 +553,55 @@ function SwapView({
               chainId,
             },
             origin: `Approve ${sellToken.symbol.toUpperCase()} for swap`,
+            favicon: sellToken.logoUrl || null,
+            functionName: "approve",
+          });
+        }
+      }
+
+      // Check Permit2 allowance to UniversalRouter (for custom WCHAN sell routes)
+      const permit2Approval = quote.issues?.permit2Approval;
+      if (permit2Approval) {
+        const permit2Res = await new Promise<{
+          success: boolean;
+          amount?: string;
+          expiration?: number;
+        }>((resolve) => {
+          chrome.runtime.sendMessage(
+            {
+              type: "checkPermit2Allowance",
+              token: permit2Approval.token,
+              owner: fromAddress,
+              spender: permit2Approval.spender,
+              chainId,
+            },
+            resolve,
+          );
+        });
+
+        const permit2Amount = BigInt(permit2Res.amount || "0");
+        const permit2Expiration = permit2Res.expiration || 0;
+        const now = Math.floor(Date.now() / 1000);
+
+        if (
+          permit2Amount < BigInt(sellAmountWei) ||
+          permit2Expiration < now
+        ) {
+          const { data: permit2Data } = buildPermit2ApproveTx(
+            allowanceSpender!, // Permit2 contract address
+            permit2Approval.token,
+            permit2Approval.spender,
+            BigInt(sellAmountWei),
+          );
+          transactions.push({
+            tx: {
+              from: fromAddress,
+              to: allowanceSpender!,
+              data: permit2Data,
+              value: "0x0",
+              chainId,
+            },
+            origin: `Approve ${sellToken.symbol.toUpperCase()} on Permit2`,
             favicon: sellToken.logoUrl || null,
             functionName: "approve",
           });

@@ -134,6 +134,7 @@ import {
   fetchTokenPrice,
   getCachedTokenList,
   checkTokenAllowance,
+  checkPermit2Allowance,
 } from "./swapApi";
 
 // Sidepanel management
@@ -1485,6 +1486,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       )
         .then((allowance) =>
           sendResponse({ success: true, allowance: allowance.toString() }),
+        )
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "checkPermit2Allowance": {
+      checkPermit2Allowance(
+        message.token,
+        message.owner,
+        message.spender,
+        message.chainId,
+      )
+        .then(({ amount, expiration }) =>
+          sendResponse({
+            success: true,
+            amount: amount.toString(),
+            expiration,
+          }),
         )
         .catch((err) =>
           sendResponse({ success: false, error: err.message }),

@@ -231,6 +231,9 @@ function App() {
   const [transferToken, setTransferToken] = useState<PortfolioToken | null>(
     null,
   );
+  const [swapInitialBuyToken, setSwapInitialBuyToken] = useState<
+    { address: string; name: string; symbol: string; decimals: number; logoURI?: string } | undefined
+  >();
   const keepAlivePortRef = useRef<chrome.runtime.Port | null>(null);
   const reconnectingRef = useRef(false);
   const isPopupWindowRef = useRef(false);
@@ -1557,8 +1560,12 @@ function App() {
               accountType={activeAccount?.type || "bankr"}
               chainId={networksInfo?.[chainName!]?.chainId || 8453}
               chainName={chainName || "Base"}
-              onBack={() => setView("main")}
+              onBack={() => {
+                setSwapInitialBuyToken(undefined);
+                setView("main");
+              }}
               onSwapInitiated={() => {
+                setSwapInitialBuyToken(undefined);
                 setView("main");
                 setActivityTabTrigger((t) => t + 1);
               }}
@@ -1566,6 +1573,7 @@ function App() {
                 setChainName(name);
                 chrome.storage.sync.set({ chainName: name });
               }}
+              initialBuyToken={swapInitialBuyToken}
             />
           </Suspense>
         </Box>
@@ -1888,10 +1896,26 @@ function App() {
               color: "bauhaus.white",
             }}
             transition="all 0.2s ease-out"
+            cursor="pointer"
             onClick={() => {
-              chrome.tabs.create({
-                url: "http://walletchan.com/?buyWCHAN=true",
+              // Switch to Base and open swap with WCHAN as buy token
+              const baseName = networksInfo
+                ? Object.keys(networksInfo).find(
+                    (n) => networksInfo[n].chainId === 8453,
+                  )
+                : "Base";
+              if (baseName) {
+                setChainName(baseName);
+                chrome.storage.sync.set({ chainName: baseName });
+              }
+              setSwapInitialBuyToken({
+                address: "0xBa5ED0000e1CA9136a695f0a848012A16008B032",
+                name: "WalletChan",
+                symbol: "WCHAN",
+                decimals: 18,
+                logoURI: "https://walletchan.com/images/walletchan-icon.png",
               });
+              setView("swap");
             }}
           >
             $WCHAN
@@ -2230,7 +2254,10 @@ function App() {
                 letterSpacing="wider"
                 borderRadius={0}
                 leftIcon={<SwapIcon boxSize={5} />}
-                onClick={() => setView("swap")}
+                onClick={() => {
+                  setSwapInitialBuyToken(undefined);
+                  setView("swap");
+                }}
                 _hover={{
                   bg: "bauhaus.blue",
                   transform: "translateY(-2px)",
