@@ -1536,6 +1536,7 @@ function App() {
               fromAddress={address}
               chainId={networksInfo?.[chainName!]?.chainId || 8453}
               accountType={activeAccount?.type || "bankr"}
+              accounts={accounts}
               onBack={() => {
                 setTransferToken(null);
                 setView("main");
