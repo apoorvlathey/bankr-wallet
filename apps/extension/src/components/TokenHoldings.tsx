@@ -219,11 +219,9 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
               <Box position="relative">
                 <Box
                   bg="bg.muted"
-                  border="2px solid"
-                  borderColor="bauhaus.black"
                   borderRadius="full"
-                  w="24px"
-                  h="24px"
+                  w="28px"
+                  h="28px"
                   display="flex"
                   alignItems="center"
                   justifyContent="center"
@@ -233,7 +231,8 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
                     <Image
                       src={token.logoUrl}
                       alt={token.symbol}
-                      boxSize="20px"
+                      boxSize="28px"
+                      borderRadius="full"
                       fallback={
                         <Text fontSize="9px" fontWeight="800" color="text.secondary">
                           {token.symbol.slice(0, 3)}
@@ -253,12 +252,12 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
                     <Image
                       src={config.icon}
                       alt=""
-                      boxSize="12px"
+                      boxSize="14px"
                       position="absolute"
                       bottom="-2px"
                       right="-4px"
-                      border="1px solid"
-                      borderColor="bauhaus.black"
+                      border="1.5px solid"
+                      borderColor="white"
                       borderRadius="full"
                       bg="white"
                     />
@@ -325,11 +324,9 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
                       <Box position="relative">
                         <Box
                           bg="bg.muted"
-                          border="2px solid"
-                          borderColor="bauhaus.black"
-                          borderRadius="4px"
-                          w="24px"
-                          h="24px"
+                          borderRadius="6px"
+                          w="28px"
+                          h="28px"
                           display="flex"
                           alignItems="center"
                           justifyContent="center"
@@ -339,7 +336,8 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
                             <Image
                               src={pos.protocolLogo}
                               alt={pos.protocol}
-                              boxSize="20px"
+                              boxSize="28px"
+                              borderRadius="6px"
                               fallback={
                                 <Text fontSize="8px" fontWeight="800" color="text.secondary">
                                   {pos.protocol.slice(0, 3).toUpperCase()}
@@ -356,12 +354,12 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
                           <Image
                             src={chainConfig.icon}
                             alt=""
-                            boxSize="12px"
+                            boxSize="14px"
                             position="absolute"
                             bottom="-2px"
                             right="-4px"
-                            border="1px solid"
-                            borderColor="bauhaus.black"
+                            border="1.5px solid"
+                            borderColor="white"
                             borderRadius="full"
                             bg="white"
                           />
@@ -407,8 +405,6 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
                           <HStack spacing={1.5}>
                             <Box
                               bg="bg.muted"
-                              border="1.5px solid"
-                              borderColor="gray.300"
                               borderRadius="full"
                               w="16px"
                               h="16px"
