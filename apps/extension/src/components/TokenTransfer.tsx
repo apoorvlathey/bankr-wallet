@@ -24,6 +24,7 @@ import {
   MenuItem,
 } from "@chakra-ui/react";
 import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon } from "@chakra-ui/icons";
+import { blo } from "blo";
 import { useBauhausToast } from "@/hooks/useBauhausToast";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
 import { isResolvableName } from "@/lib/ensUtils";
@@ -31,6 +32,7 @@ import { fetchPortfolio, PortfolioToken } from "@/chrome/portfolioApi";
 import { buildTransferTx } from "@/chrome/transferUtils";
 import { getChainConfig } from "@/constants/chainConfig";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import type { Account } from "@/chrome/types";
 import TokenSelector from "@/components/Swap/TokenSelector";
 
 function formatUsd(value: number): string {
@@ -49,6 +51,7 @@ interface TokenTransferProps {
   fromAddress: string;
   chainId: number;
   accountType: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  accounts?: Account[];
   onBack: () => void;
   onTransferInitiated: () => void;
 }
@@ -58,6 +61,7 @@ function TokenTransfer({
   fromAddress,
   chainId,
   accountType,
+  accounts,
   onBack,
   onTransferInitiated,
 }: TokenTransferProps) {
@@ -191,6 +195,12 @@ function TokenTransfer({
 
   const chainConfig = getChainConfig(selectedChainId);
   const hasPrice = token ? token.priceUsd > 0 : false;
+
+  // Other wallet accounts (excluding current sender) for recipient picker
+  const otherAccounts = useMemo(
+    () => (accounts || []).filter(a => a.address.toLowerCase() !== fromAddress.toLowerCase()),
+    [accounts, fromAddress],
+  );
 
   // Compute the token amount that will actually be sent
   const tokenAmount = useMemo(() => {
@@ -500,9 +510,76 @@ function TokenTransfer({
         {/* Recipient input */}
         <Box>
           <HStack justify="space-between" align="center" mb={1}>
-            <Text fontSize="sm" fontWeight="700" color="text.secondary" textTransform="uppercase">
-              Recipient
-            </Text>
+            <HStack spacing={1}>
+              <Text fontSize="sm" fontWeight="700" color="text.secondary" textTransform="uppercase">
+                Recipient
+              </Text>
+              {otherAccounts.length > 0 && (
+                <Menu placement="bottom-start">
+                  <MenuButton
+                    as={Button}
+                    size="xs"
+                    variant="ghost"
+                    rightIcon={<ChevronDownIcon boxSize="14px" />}
+                    fontWeight="800"
+                    fontSize="10px"
+                    color="bauhaus.blue"
+                    textTransform="uppercase"
+                    letterSpacing="wide"
+                    px={1}
+                    h="20px"
+                    iconSpacing={0.5}
+                    _hover={{ bg: "bg.muted" }}
+                  >
+                    My Wallets
+                  </MenuButton>
+                  <MenuList
+                    bg="bauhaus.white"
+                    border="3px solid"
+                    borderColor="bauhaus.black"
+                    borderRadius="0"
+                    py={1}
+                    maxH="200px"
+                    overflowY="auto"
+                    zIndex={10}
+                    minW="220px"
+                  >
+                    {otherAccounts.map((account) => (
+                      <MenuItem
+                        key={account.id}
+                        onClick={() => setRecipient(account.address)}
+                        bg="transparent"
+                        _hover={{ bg: "bg.muted" }}
+                        py={1.5}
+                        px={3}
+                      >
+                        <HStack spacing={2}>
+                          <Image
+                            src={account.type === "bankr" ? "/bankr-icon.png" : blo(account.address as `0x${string}`)}
+                            alt="avatar"
+                            boxSize="20px"
+                            minW="20px"
+                            borderRadius="sm"
+                            border="2px solid"
+                            borderColor="bauhaus.black"
+                          />
+                          <VStack align="start" spacing={0}>
+                            <Text fontSize="xs" fontWeight="700" color="text.primary" noOfLines={1}>
+                              {account.displayName || `${account.address.slice(0, 6)}...${account.address.slice(-4)}`}
+                            </Text>
+                            {account.displayName && (
+                              <Text fontSize="2xs" fontFamily="mono" color="text.tertiary">
+                                {account.address.slice(0, 6)}...{account.address.slice(-4)}
+                              </Text>
+                            )}
+                          </VStack>
+                        </HStack>
+                      </MenuItem>
+                    ))}
+                  </MenuList>
+                </Menu>
+              )}
+            </HStack>
             {/* Resolution status - top right */}
             {recipient && (isResolving || isLoadingExtras) && (
               <HStack spacing={1}>
