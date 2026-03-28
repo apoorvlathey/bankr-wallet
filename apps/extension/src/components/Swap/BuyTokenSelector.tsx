@@ -8,6 +8,7 @@ import {
   Image,
   Wrap,
   WrapItem,
+  Spinner,
 } from "@chakra-ui/react";
 import { ChevronDownIcon } from "@chakra-ui/icons";
 import type { TokenListEntry } from "@/chrome/swapApi";
@@ -63,6 +64,12 @@ interface BuyTokenSelectorProps {
   onAddressSubmit: (address: string) => void;
   excludeAddress?: string;
   chainId: number;
+  /** Whether the parent is currently resolving a custom token address */
+  buyTokenLoading?: boolean;
+  /** Resolved token pending user confirmation */
+  pendingToken?: TokenListEntry | null;
+  /** Called when user clicks "Choose" on the pending token */
+  onConfirmPending?: (token: TokenListEntry) => void;
 }
 
 export default function BuyTokenSelector({
@@ -73,6 +80,9 @@ export default function BuyTokenSelector({
   onAddressSubmit,
   excludeAddress,
   chainId,
+  buyTokenLoading,
+  pendingToken,
+  onConfirmPending,
 }: BuyTokenSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -80,6 +90,7 @@ export default function BuyTokenSelector({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastSubmittedRef = useRef("");
 
   const searchTerm = search.trim().toLowerCase();
 
@@ -100,6 +111,7 @@ export default function BuyTokenSelector({
   useEffect(() => {
     if (isOpen) {
       setVisibleCount(60);
+      lastSubmittedRef.current = "";
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
@@ -210,23 +222,14 @@ export default function BuyTokenSelector({
     handleSelect(holdingToEntry(h));
   };
 
-  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      const val = search.trim();
-      if (/^0x[a-fA-F0-9]{40}$/.test(val)) {
-        const found = tokenList.find(
-          (t) => t.address.toLowerCase() === val.toLowerCase(),
-        );
-        if (found) {
-          handleSelect(found);
-        } else {
-          onAddressSubmit(val);
-          setIsOpen(false);
-          setSearch("");
-        }
-      }
+  // Auto-resolve when a valid address is typed/pasted
+  useEffect(() => {
+    const val = search.trim();
+    if (/^0x[a-fA-F0-9]{40}$/.test(val) && val !== lastSubmittedRef.current) {
+      lastSubmittedRef.current = val;
+      onAddressSubmit(val);
     }
-  };
+  }, [search]);
 
   const fallbackIcon =
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect fill='%23ccc' width='20' height='20'/%3E%3C/svg%3E";
@@ -286,7 +289,7 @@ export default function BuyTokenSelector({
               placeholder="Search or paste address"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
+              onKeyDown={(e) => e.stopPropagation()}
               fontSize="sm"
               border="2px solid"
               borderColor="bauhaus.black"
@@ -499,16 +502,59 @@ export default function BuyTokenSelector({
                 </HStack>
               ))}
 
-              {!hasResults && searchTerm && (
+              {/* Loading state for custom address resolution */}
+              {buyTokenLoading && /^0x[a-fA-F0-9]{40}$/.test(search.trim()) && (
+                <HStack px={3} py={3} spacing={2} justify="center">
+                  <Spinner size="xs" color="bauhaus.blue" />
+                  <Text fontSize="xs" fontWeight="700" color="text.tertiary">
+                    Loading token...
+                  </Text>
+                </HStack>
+              )}
+
+              {/* Resolved token from pasted address — user must click to select */}
+              {pendingToken && !buyTokenLoading && /^0x[a-fA-F0-9]{40}$/.test(search.trim()) && (
+                <HStack
+                  px={3}
+                  py={2}
+                  cursor="pointer"
+                  bg="bauhaus.yellow"
+                  _hover={{ bg: "#e6b31c" }}
+                  onClick={() => {
+                    if (onConfirmPending) onConfirmPending(pendingToken);
+                    setIsOpen(false);
+                    setSearch("");
+                  }}
+                  spacing={2}
+                >
+                  <Image
+                    src={pendingToken.logoURI}
+                    boxSize="20px"
+                    borderRadius="full"
+                    fallbackSrc={fallbackIcon}
+                  />
+                  <Box flex={1} minW={0}>
+                    <Text fontWeight="700" fontSize="sm" textTransform="uppercase" isTruncated lineHeight="short">
+                      {pendingToken.symbol}
+                    </Text>
+                    <Text fontSize="2xs" color="text.tertiary" fontFamily="mono" isTruncated lineHeight="short">
+                      {truncateAddress(pendingToken.address)}
+                    </Text>
+                  </Box>
+                  <Text fontSize="xs" color="text.secondary" fontWeight="700">
+                    Choose
+                  </Text>
+                </HStack>
+              )}
+
+              {!hasResults && searchTerm && !buyTokenLoading && !pendingToken && (
                 <Box px={3} py={3}>
                   <Text
                     fontSize="xs"
                     color="text.tertiary"
                     textAlign="center"
                   >
-                    {/^0x[a-fA-F0-9]{40}$/.test(search.trim())
-                      ? "Press Enter to use this address"
-                      : "No tokens found"}
+                    No tokens found
                   </Text>
                 </Box>
               )}
