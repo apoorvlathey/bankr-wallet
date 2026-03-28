@@ -124,6 +124,13 @@ function SwapView({
   const [buyTokenLogoURI, setBuyTokenLogoURI] = useState<string | undefined>(initialBuyToken?.logoURI);
   const [buyTokenLoading, setBuyTokenLoading] = useState(false);
   const [buyTokenPriceUsd, setBuyTokenPriceUsd] = useState<number>(0);
+  // Pending custom token (resolved but not yet selected by user)
+  const [pendingBuyToken, setPendingBuyToken] = useState<TokenListEntry | null>(null);
+  const [pendingBuyLoading, setPendingBuyLoading] = useState(false);
+  // Pending custom sell token (resolved but not yet selected by user)
+  const [resolvedSellToken, setResolvedSellToken] = useState<PortfolioToken | null>(null);
+  const [sellCustomLoading, setSellCustomLoading] = useState(false);
+  const [sellCustomError, setSellCustomError] = useState<string | null>(null);
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
 
   // Quote
@@ -139,6 +146,8 @@ function SwapView({
 
   const quoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenInfoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Set true when handleBuyTokenSelect already provides token info — skips useEffect re-fetch */
+  const buyInfoSetBySelectRef = useRef(false);
 
   const isSwapSupported = SWAP_SUPPORTED_CHAIN_IDS.has(chainId);
   const hasPrice = sellToken ? sellToken.priceUsd > 0 : false;
@@ -263,6 +272,13 @@ function SwapView({
   // -----------------------------------------------------------------------
   useEffect(() => {
     if (tokenInfoTimerRef.current) clearTimeout(tokenInfoTimerRef.current);
+
+    // Skip re-fetch if handleBuyTokenSelect already provided the info
+    if (buyInfoSetBySelectRef.current) {
+      buyInfoSetBySelectRef.current = false;
+      return;
+    }
+
     setBuyTokenInfo(null);
 
     const addr = buyTokenAddress.trim();
@@ -416,9 +432,73 @@ function SwapView({
   };
 
   // -----------------------------------------------------------------------
+  // -----------------------------------------------------------------------
+  // Custom sell token resolution (paste address in sell dropdown)
+  // -----------------------------------------------------------------------
+  const resolveSellCustomAddress = async (tokenAddress: string) => {
+    setSellCustomLoading(true);
+    setResolvedSellToken(null);
+    setSellCustomError(null);
+    try {
+      const infoResult = await new Promise<{ success: boolean; data?: { name: string; symbol: string; decimals: number } }>((resolve) => {
+        chrome.runtime.sendMessage({ type: "fetchTokenInfo", tokenAddress, chainId }, resolve);
+      });
+      if (!infoResult.success || !infoResult.data) {
+        setSellCustomError("Not a valid ERC20 contract");
+        return;
+      }
+      const { name, symbol, decimals } = infoResult.data;
+
+      const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
+      const { RPC_URLS } = await import("@/constants/chainRegistry");
+      const rpcUrl = RPC_URLS[chainId];
+      if (!rpcUrl) {
+        setSellCustomError("No RPC for this chain");
+        return;
+      }
+      const client = createPublicClient({ transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }) });
+      const rawBalance = await client.readContract({
+        address: tokenAddress as `0x${string}`,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [fromAddress as `0x${string}`],
+      });
+      const balance = formatUnits(rawBalance, decimals);
+      const balanceNum = parseFloat(balance);
+
+      setResolvedSellToken({
+        contractAddress: tokenAddress,
+        name,
+        symbol,
+        decimals,
+        balance,
+        balanceFormatted: balanceNum < 0.0001 && balanceNum > 0 ? "<0.0001" : parseFloat(balanceNum.toPrecision(6)).toString(),
+        logoUrl: "",
+        valueUsd: 0,
+        priceUsd: 0,
+        chainId,
+      });
+    } catch {
+      setSellCustomError("Failed to fetch token info");
+    } finally {
+      setSellCustomLoading(false);
+    }
+  };
+
+  const handleSelectCustomSellToken = (customToken: PortfolioToken) => {
+    setSellToken(customToken);
+    setResolvedSellToken(null);
+    setSellCustomError(null);
+    setSellAmount("");
+    setIsUsdMode(false);
+    setSliderValue(0);
+    setQuote(null);
+  };
+
   // Handle token list selection
   // -----------------------------------------------------------------------
   const handleBuyTokenSelect = (token: TokenListEntry) => {
+    buyInfoSetBySelectRef.current = true;
     setBuyTokenAddress(token.address);
     setBuyTokenInfo({
       name: token.name,
@@ -430,12 +510,41 @@ function SwapView({
     setQuote(null);
   };
 
-  /** Handle raw address entered in the buy dropdown */
+  /** Handle raw address entered in the buy dropdown — resolve without selecting */
   const handleBuyAddressSubmit = (address: string) => {
-    setBuyTokenAddress(address);
-    setBuyTokenInfo(null);
-    setBuyTokenLogoURI(undefined);
-    // Token info will be resolved by the useEffect
+    // Check if it's already in the token list
+    const found = tokenList.find(
+      (t) => t.address.toLowerCase() === address.toLowerCase(),
+    );
+    if (found) {
+      setPendingBuyToken(found);
+      setPendingBuyLoading(false);
+      return;
+    }
+    // Resolve on-chain
+    setPendingBuyToken(null);
+    setPendingBuyLoading(true);
+    chrome.runtime.sendMessage(
+      { type: "fetchTokenInfo", tokenAddress: address, chainId },
+      (res) => {
+        setPendingBuyLoading(false);
+        if (res?.success && res.data) {
+          setPendingBuyToken({
+            address,
+            name: res.data.name,
+            symbol: res.data.symbol,
+            decimals: res.data.decimals,
+            logoURI: "",
+          });
+        }
+      },
+    );
+  };
+
+  /** User clicked "Choose" on the pending token */
+  const handleConfirmPendingBuy = (token: TokenListEntry) => {
+    handleBuyTokenSelect(token);
+    setPendingBuyToken(null);
   };
 
   // -----------------------------------------------------------------------
@@ -1004,6 +1113,12 @@ function SwapView({
                 setSliderValue(0);
                 setQuote(null);
               }}
+              onCustomAddress={resolveSellCustomAddress}
+              onSelectCustomToken={handleSelectCustomSellToken}
+              resolvedCustomToken={resolvedSellToken}
+              customTokenLoading={sellCustomLoading}
+              customTokenError={sellCustomError}
+              chainName={chainName}
             />
             <InputGroup flex={1}>
               {isUsdMode && (
@@ -1185,6 +1300,9 @@ function SwapView({
               chainId={chainId}
               onTokenSelect={handleBuyTokenSelect}
               onAddressSubmit={handleBuyAddressSubmit}
+              buyTokenLoading={pendingBuyLoading}
+              pendingToken={pendingBuyToken}
+              onConfirmPending={handleConfirmPendingBuy}
             />
             {/* Output amount — read-only, mirrors the sell amount input */}
             <InputGroup flex={1}>

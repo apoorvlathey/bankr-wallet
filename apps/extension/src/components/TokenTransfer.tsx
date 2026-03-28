@@ -1,4 +1,4 @@
-import { useState, useMemo, memo } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import {
   Box,
   VStack,
@@ -17,14 +17,21 @@ import {
   SliderThumb,
   SliderMark,
   Spinner,
+  Skeleton,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, CopyIcon, CheckIcon, ExternalLinkIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon } from "@chakra-ui/icons";
 import { useBauhausToast } from "@/hooks/useBauhausToast";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
 import { isResolvableName } from "@/lib/ensUtils";
-import { PortfolioToken } from "@/chrome/portfolioApi";
+import { fetchPortfolio, PortfolioToken } from "@/chrome/portfolioApi";
 import { buildTransferTx } from "@/chrome/transferUtils";
 import { getChainConfig } from "@/constants/chainConfig";
+import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import TokenSelector from "@/components/Swap/TokenSelector";
 
 function formatUsd(value: number): string {
   if (value < 0.01 && value > 0) return "<$0.01";
@@ -38,52 +45,178 @@ function formatTokenAmount(value: number): string {
 }
 
 interface TokenTransferProps {
-  token: PortfolioToken;
+  token?: PortfolioToken | null;
   fromAddress: string;
+  chainId: number;
   accountType: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
   onBack: () => void;
   onTransferInitiated: () => void;
 }
 
 function TokenTransfer({
-  token,
+  token: initialToken,
   fromAddress,
+  chainId,
   accountType,
   onBack,
   onTransferInitiated,
 }: TokenTransferProps) {
   const toast = useBauhausToast();
+  const [selectedChainId, setSelectedChainId] = useState(initialToken?.chainId || chainId);
+  const [selectedToken, setSelectedToken] = useState<PortfolioToken | null>(initialToken || null);
+  const [allTokens, setAllTokens] = useState<PortfolioToken[]>([]);
+  const [holdingsLoading, setHoldingsLoading] = useState(false);
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
   const [isUsdMode, setIsUsdMode] = useState(false);
   const [sliderValue, setSliderValue] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [customTokenLoading, setCustomTokenLoading] = useState(false);
+
+  // Fetch all holdings once
+  useEffect(() => {
+    let cancelled = false;
+    setHoldingsLoading(true);
+    fetchPortfolio(fromAddress).then((data) => {
+      if (cancelled) return;
+      setAllTokens(data.tokens);
+      // If no token pre-selected, auto-select the first on current chain
+      if (!selectedToken) {
+        const onChain = data.tokens.filter((t) => t.chainId === selectedChainId);
+        if (onChain.length > 0) setSelectedToken(onChain[0]);
+      }
+      setHoldingsLoading(false);
+    }).catch(() => {
+      if (!cancelled) setHoldingsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [fromAddress]);
+
+  // Holdings filtered by selected chain
+  const holdings = useMemo(
+    () => allTokens.filter((t) => t.chainId === selectedChainId),
+    [allTokens, selectedChainId],
+  );
+
+  // All chains from registry (sorted: selected first, then registry order)
+  const allChains = useMemo(() => {
+    const ids = CHAIN_REGISTRY.map((c) => c.chainId);
+    // Move selected chain to front
+    const sorted = [selectedChainId, ...ids.filter((id) => id !== selectedChainId)];
+    return sorted;
+  }, [selectedChainId]);
+
+  const handleChainChange = (newChainId: number) => {
+    setSelectedChainId(newChainId);
+    // Auto-select first token on that chain
+    const onChain = allTokens.filter((t) => t.chainId === newChainId);
+    setSelectedToken(onChain.length > 0 ? onChain[0] : null);
+    setAmount("");
+    setIsUsdMode(false);
+    setSliderValue(0);
+  };
+
+  // Resolved custom token shown in dropdown for user to click
+  const [resolvedCustomToken, setResolvedCustomToken] = useState<PortfolioToken | null>(null);
+  const [customTokenError, setCustomTokenError] = useState<string | null>(null);
+
+  // Resolve a custom ERC20 address: fetch on-chain info + balance
+  const resolveCustomAddress = async (tokenAddress: string) => {
+    setCustomTokenLoading(true);
+    setResolvedCustomToken(null);
+    setCustomTokenError(null);
+    try {
+      // Fetch token info via background
+      const infoResult = await new Promise<{ success: boolean; data?: { name: string; symbol: string; decimals: number } }>((resolve) => {
+        chrome.runtime.sendMessage({ type: "fetchTokenInfo", tokenAddress, chainId: selectedChainId }, resolve);
+      });
+      if (!infoResult.success || !infoResult.data) {
+        setCustomTokenError("Not a valid ERC20 contract");
+        return;
+      }
+      const { name, symbol, decimals } = infoResult.data;
+
+      // Fetch balance via balanceOf
+      const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
+      const { RPC_URLS } = await import("@/constants/chainRegistry");
+      const rpcUrl = RPC_URLS[selectedChainId];
+      if (!rpcUrl) {
+        setCustomTokenError("No RPC for this chain");
+        return;
+      }
+      const client = createPublicClient({ transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }) });
+      const rawBalance = await client.readContract({
+        address: tokenAddress as `0x${string}`,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [fromAddress as `0x${string}`],
+      });
+      const balance = formatUnits(rawBalance, decimals);
+      const balanceNum = parseFloat(balance);
+
+      setResolvedCustomToken({
+        contractAddress: tokenAddress,
+        name,
+        symbol,
+        decimals,
+        balance,
+        balanceFormatted: balanceNum < 0.0001 && balanceNum > 0 ? "<0.0001" : parseFloat(balanceNum.toPrecision(6)).toString(),
+        logoUrl: "",
+        valueUsd: 0,
+        priceUsd: 0,
+        chainId: selectedChainId,
+      });
+    } catch {
+      setCustomTokenError("Failed to fetch token info");
+    } finally {
+      setCustomTokenLoading(false);
+    }
+  };
+
+  // When user selects the resolved custom token from the dropdown
+  const handleSelectCustomToken = (customToken: PortfolioToken) => {
+    setSelectedToken(customToken);
+    setResolvedCustomToken(null);
+    setCustomTokenError(null);
+    setAmount("");
+    setIsUsdMode(false);
+    setSliderValue(0);
+  };
+
+  const token = selectedToken;
 
   const { resolvedAddress, resolvedName, avatar, isResolving, isLoadingExtras, isValid: isRecipientValid, error: resolverError } =
     useAddressResolver(recipient);
 
-  const chainConfig = getChainConfig(token.chainId);
-  const hasPrice = token.priceUsd > 0;
+  const chainConfig = getChainConfig(selectedChainId);
+  const hasPrice = token ? token.priceUsd > 0 : false;
 
   // Compute the token amount that will actually be sent
   const tokenAmount = useMemo(() => {
-    if (!amount) return "";
+    if (!token || !amount) return "";
     const num = parseFloat(amount);
     if (isNaN(num) || num <= 0) return "";
     if (isUsdMode && hasPrice) {
       const converted = num / token.priceUsd;
       const balance = parseFloat(token.balance);
-      // Cap at actual balance to avoid rounding past it
       if (converted >= balance) return token.balance;
       return converted.toFixed(token.decimals);
     }
     return amount;
-  }, [amount, isUsdMode, hasPrice, token.priceUsd, token.decimals, token.balance]);
+  }, [amount, isUsdMode, hasPrice, token]);
 
-  const balanceNum = parseFloat(token.balance);
+  const balanceNum = token ? parseFloat(token.balance) : 0;
+
+  const handleTokenSelect = (t: PortfolioToken) => {
+    setSelectedToken(t);
+    setAmount("");
+    setIsUsdMode(false);
+    setSliderValue(0);
+  };
 
   const setAmountFromSlider = (pct: number) => {
+    if (!token) return;
     if (pct === 0) {
       setAmount("");
     } else if (pct === 100) {
@@ -97,7 +230,6 @@ function TokenTransfer({
       if (isUsdMode && hasPrice) {
         setAmount((tokenAmt * token.priceUsd).toFixed(2));
       } else {
-        // Use toPrecision directly, avoiding "<0.000001" display string
         const formatted = tokenAmt === 0 ? "0" : parseFloat(tokenAmt.toPrecision(6)).toString();
         setAmount(formatted);
       }
@@ -105,6 +237,7 @@ function TokenTransfer({
   };
 
   const syncSliderFromAmount = (val: string) => {
+    if (!token) return;
     const num = parseFloat(val);
     if (!val || isNaN(num) || num <= 0 || balanceNum <= 0) {
       setSliderValue(0);
@@ -119,6 +252,7 @@ function TokenTransfer({
   };
 
   const handleMaxAmount = () => {
+    if (!token) return;
     setSliderValue(100);
     if (isUsdMode && hasPrice) {
       const usdValue = balanceNum * token.priceUsd;
@@ -129,15 +263,13 @@ function TokenTransfer({
   };
 
   const handleToggleMode = () => {
-    if (!hasPrice) return;
+    if (!token || !hasPrice) return;
     const num = parseFloat(amount);
     if (amount && !isNaN(num) && num > 0) {
       if (isUsdMode) {
-        // USD -> Token: convert, cap at balance to avoid rounding past it
         const converted = num / token.priceUsd;
         setAmount(converted >= balanceNum ? token.balance : formatTokenAmount(converted));
       } else {
-        // Token -> USD: convert current token to USD
         setAmount((num * token.priceUsd).toFixed(2));
       }
     }
@@ -145,17 +277,17 @@ function TokenTransfer({
   };
 
   const isAmountValid = (): boolean => {
-    if (!tokenAmount) return false;
+    if (!token || !tokenAmount) return false;
     const num = parseFloat(tokenAmount);
     if (isNaN(num) || num <= 0) return false;
     const balance = parseFloat(token.balance);
     return num <= balance;
   };
 
-  const canSubmit = isRecipientValid && !isResolving && isAmountValid() && !isSubmitting;
+  const canSubmit = !!token && isRecipientValid && !isResolving && isAmountValid() && !isSubmitting;
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || !token) return;
     if (accountType === "impersonator") {
       toast({
         title: "View-only account",
@@ -233,71 +365,137 @@ function TokenTransfer({
             onClick={onBack}
           />
           <Text fontWeight="900" fontSize="lg" color="text.primary" textTransform="uppercase" letterSpacing="wider">
-            Send {token.symbol}
+            Send
           </Text>
         </HStack>
 
-        {/* Token info card */}
-        <Box
-          bg="bauhaus.white"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
-          p={3}
-        >
-          <HStack spacing={3}>
-            <Box
-              bg="bg.muted"
-              border="2px solid"
-              borderColor="bauhaus.black"
-              borderRadius="sm"
-              w="32px"
-              h="32px"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              overflow="hidden"
-            >
-              {token.logoUrl ? (
-                <Image
-                  src={token.logoUrl}
-                  alt={token.symbol}
-                  boxSize="28px"
-                  fallback={
-                    <Text fontSize="xs" fontWeight="800" color="text.secondary">
-                      {token.symbol.slice(0, 3)}
-                    </Text>
-                  }
+        {/* Token selector card */}
+        {holdingsLoading && !token ? (
+          <Skeleton h="64px" />
+        ) : (
+          <Box
+            bg="bauhaus.white"
+            border="3px solid"
+            borderColor="bauhaus.black"
+            boxShadow="4px 4px 0px 0px #121212"
+            p={3}
+          >
+            <HStack spacing={3}>
+              {/* Chain selector */}
+              <Menu>
+                <MenuButton
+                  as={Box}
+                  cursor="pointer"
+                  flexShrink={0}
+                  _hover={{ opacity: 0.7 }}
+                  transition="opacity 0.15s"
+                >
+                  <Box position="relative">
+                    {chainConfig.icon ? (
+                      <Image
+                        src={chainConfig.icon}
+                        alt={chainConfig.name}
+                        boxSize="36px"
+                        border="2px solid"
+                        borderColor="bauhaus.black"
+                        borderRadius="full"
+                        bg="white"
+                      />
+                    ) : (
+                      <Box
+                        boxSize="36px"
+                        border="2px solid"
+                        borderColor="bauhaus.black"
+                        borderRadius="full"
+                        bg="bg.muted"
+                      />
+                    )}
+                    <Box
+                      position="absolute"
+                      bottom="-2px"
+                      right="-2px"
+                      bg="bauhaus.white"
+                      border="1.5px solid"
+                      borderColor="bauhaus.black"
+                      borderRadius="full"
+                      boxSize="16px"
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                    >
+                      <ChevronDownIcon boxSize="12px" />
+                    </Box>
+                  </Box>
+                </MenuButton>
+                <MenuList
+                  bg="bauhaus.white"
+                  border="3px solid"
+                  borderColor="bauhaus.black"
+                  borderRadius={0}
+                  boxShadow="4px 4px 0px 0px #121212"
+                  maxH="200px"
+                  overflowY="auto"
+                  p={0}
+                  zIndex={10}
+                >
+                  {allChains.map((cId) => {
+                    const cc = getChainConfig(cId);
+                    return (
+                      <MenuItem
+                        key={cId}
+                        onClick={() => handleChainChange(cId)}
+                        bg={cId === selectedChainId ? "bg.muted" : "transparent"}
+                        _hover={{ bg: "bg.hover" }}
+                        px={3}
+                        py={2}
+                      >
+                        <HStack spacing={2}>
+                          {cc.icon && <Image src={cc.icon} boxSize="18px" borderRadius="full" />}
+                          <Text fontWeight="700" fontSize="sm">{cc.name}</Text>
+                        </HStack>
+                      </MenuItem>
+                    );
+                  })}
+                </MenuList>
+              </Menu>
+
+              {/* Token selector + balance */}
+              <VStack align="start" spacing={0} flex={1} minW={0}>
+                <TokenSelector
+                  holdings={holdings}
+                  selectedToken={token}
+                  onSelect={handleTokenSelect}
+                  borderless
+                  onCustomAddress={resolveCustomAddress}
+                  onSelectCustomToken={handleSelectCustomToken}
+                  resolvedCustomToken={resolvedCustomToken}
+                  customTokenLoading={customTokenLoading}
+                  customTokenError={customTokenError}
+                  chainName={chainConfig.name}
                 />
-              ) : (
-                <Text fontSize="xs" fontWeight="800" color="text.secondary">
-                  {token.symbol.slice(0, 3)}
-                </Text>
+                {token && (
+                  <Text fontSize="xs" fontWeight="700" color="text.tertiary" mt={0.5} noOfLines={1}>
+                    on {chainConfig.name}
+                  </Text>
+                )}
+              </VStack>
+
+              {/* Balance */}
+              {token && (
+                <VStack align="end" spacing={0} flexShrink={0}>
+                  <Text fontSize="sm" fontWeight="800" color="text.primary" noOfLines={1}>
+                    {token.balanceFormatted}
+                  </Text>
+                  {hasPrice && (
+                    <Text fontSize="xs" fontWeight="700" color="text.tertiary">
+                      {formatUsd(parseFloat(token.balance) * token.priceUsd)}
+                    </Text>
+                  )}
+                </VStack>
               )}
-            </Box>
-            <VStack align="start" spacing={0} flex={1}>
-              <Text fontSize="sm" fontWeight="700" color="text.primary">
-                {token.symbol.toUpperCase()}
-              </Text>
-              <Text fontSize="sm" fontWeight="800" color="text.primary">
-                {token.balanceFormatted} {token.symbol.toUpperCase()}
-              </Text>
-              {hasPrice && (
-                <Text fontSize="xs" fontWeight="700" color="text.tertiary">
-                  {formatUsd(parseFloat(token.balance) * token.priceUsd)}
-                </Text>
-              )}
-            </VStack>
-            {chainConfig.icon && (
-              <HStack spacing={1}>
-                <Image src={chainConfig.icon} alt={chainConfig.name} boxSize="20px" />
-                <Text fontSize="xs" fontWeight="700" color="text.secondary">
-                  {chainConfig.name}
-                </Text>
-              </HStack>
-            )}
-          </HStack>
-        </Box>
+            </HStack>
+          </Box>
+        )}
 
         {/* Recipient input */}
         <Box>

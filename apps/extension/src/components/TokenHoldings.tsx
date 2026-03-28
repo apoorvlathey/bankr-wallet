@@ -191,10 +191,30 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
               borderBottom={i < tokens.length - 1 || defiPositions.length > 0 ? "1px solid" : "none"}
               borderColor="gray.200"
               cursor={onTokenClick ? "pointer" : "default"}
-              _hover={onTokenClick ? { bg: "bg.muted" } : {}}
+              _hover={onTokenClick ? { bg: "bg.muted", "& > .send-label": { opacity: 1 }, "& > .value-col": { opacity: 0 } } : {}}
               onClick={() => onTokenClick?.(token)}
               transition="background 0.15s"
+              position="relative"
             >
+              {onTokenClick && (
+                <Text
+                  className="send-label"
+                  position="absolute"
+                  right={3}
+                  fontSize="10px"
+                  fontWeight="800"
+                  color="bauhaus.blue"
+                  textTransform="uppercase"
+                  letterSpacing="wider"
+                  opacity={0}
+                  transition="opacity 0.15s"
+                  pointerEvents="none"
+                  top="50%"
+                  transform="translateY(-50%)"
+                >
+                  Send Tokens
+                </Text>
+              )}
               {/* Token icon */}
               <Box position="relative">
                 <Box
@@ -256,8 +276,14 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
                 </Text>
               </VStack>
 
-              {/* Value */}
-              <VStack align="end" spacing={0} minW="50px">
+              {/* Value — fades on hover when clickable */}
+              <VStack
+                align="end"
+                spacing={0}
+                minW="50px"
+                className={onTokenClick ? "value-col" : undefined}
+                transition="opacity 0.15s"
+              >
                 <Text fontSize="xs" fontWeight="700" color="text.primary">
                   {formatUsd(token.valueUsd)}
                 </Text>

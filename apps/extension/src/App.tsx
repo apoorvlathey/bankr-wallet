@@ -109,6 +109,9 @@ const RevealSeedPhraseModal = lazy(
 const AccountSettingsModal = lazy(
   () => import("@/components/AccountSettingsModal"),
 );
+const QRCodeModal = lazy(() =>
+  import("@/components/QRCodeModal").then((m) => ({ default: m.QRCodeModal })),
+);
 const TokenTransfer = lazy(() => import("@/components/TokenTransfer"));
 const SwapView = lazy(() => import("@/components/Swap/SwapView"));
 
@@ -227,6 +230,11 @@ function App() {
     isOpen: isAccountSettingsOpen,
     onOpen: onAccountSettingsOpen,
     onClose: onAccountSettingsClose,
+  } = useDisclosure();
+  const {
+    isOpen: isQROpen,
+    onOpen: onQROpen,
+    onClose: onQRClose,
   } = useDisclosure();
   const [transferToken, setTransferToken] = useState<PortfolioToken | null>(
     null,
@@ -1511,7 +1519,7 @@ function App() {
   }
 
   // Transfer view
-  if (view === "transfer" && transferToken) {
+  if (view === "transfer") {
     return (
       <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
         <Box
@@ -1526,6 +1534,7 @@ function App() {
             <TokenTransfer
               token={transferToken}
               fromAddress={address}
+              chainId={networksInfo?.[chainName!]?.chainId || 8453}
               accountType={activeAccount?.type || "bankr"}
               onBack={() => {
                 setTransferToken(null);
@@ -2150,6 +2159,27 @@ function App() {
                     {truncateAddress(address)}
                   </Code>
                   <IconButton
+                    aria-label="Show QR code"
+                    icon={
+                      <Icon viewBox="0 0 24 24" boxSize="14px">
+                        <path
+                          fill="currentColor"
+                          fillRule="evenodd"
+                          clipRule="evenodd"
+                          d="M3 4.875C3 3.83947 3.83947 3 4.875 3H9.375C10.4105 3 11.25 3.83947 11.25 4.875V9.375C11.25 10.4105 10.4105 11.25 9.375 11.25H4.875C3.83947 11.25 3 10.4105 3 9.375V4.875ZM4.875 4.5C4.66789 4.5 4.5 4.66789 4.5 4.875V9.375C4.5 9.58211 4.66789 9.75 4.875 9.75H9.375C9.58211 9.75 9.75 9.58211 9.75 9.375V4.875C9.75 4.66789 9.58211 4.5 9.375 4.5H4.875ZM12.75 4.875C12.75 3.83947 13.5895 3 14.625 3H19.125C20.1605 3 21 3.83947 21 4.875V9.375C21 10.4105 20.1605 11.25 19.125 11.25H14.625C13.5895 11.25 12.75 10.4105 12.75 9.375V4.875ZM14.625 4.5C14.4179 4.5 14.25 4.66789 14.25 4.875V9.375C14.25 9.58211 14.4179 9.75 14.625 9.75H19.125C19.3321 9.75 19.5 9.58211 19.5 9.375V4.875C19.5 4.66789 19.3321 4.5 19.125 4.5H14.625ZM6 6.75C6 6.33579 6.33579 6 6.75 6H7.5C7.91421 6 8.25 6.33579 8.25 6.75V7.5C8.25 7.91421 7.91421 8.25 7.5 8.25H6.75C6.33579 8.25 6 7.91421 6 7.5V6.75ZM15.75 6.75C15.75 6.33579 16.0858 6 16.5 6H17.25C17.6642 6 18 6.33579 18 6.75V7.5C18 7.91421 17.6642 8.25 17.25 8.25H16.5C16.0858 8.25 15.75 7.91421 15.75 7.5V6.75ZM3 14.625C3 13.5895 3.83947 12.75 4.875 12.75H9.375C10.4105 12.75 11.25 13.5895 11.25 14.625V19.125C11.25 20.1605 10.4105 21 9.375 21H4.875C3.83947 21 3 20.1605 3 19.125V14.625ZM4.875 14.25C4.66789 14.25 4.5 14.4179 4.5 14.625V19.125C4.5 19.3321 4.66789 19.5 4.875 19.5H9.375C9.58211 19.5 9.75 19.3321 9.75 19.125V14.625C9.75 14.4179 9.58211 14.25 9.375 14.25H4.875ZM12.75 13.5C12.75 13.0858 13.0858 12.75 13.5 12.75H14.25C14.6642 12.75 15 13.0858 15 13.5V14.25C15 14.6642 14.6642 15 14.25 15H13.5C13.0858 15 12.75 14.6642 12.75 14.25V13.5ZM18.75 13.5C18.75 13.0858 19.0858 12.75 19.5 12.75H20.25C20.6642 12.75 21 13.0858 21 13.5V14.25C21 14.6642 20.6642 15 20.25 15H19.5C19.0858 15 18.75 14.6642 18.75 14.25V13.5ZM6 16.5C6 16.0858 6.33579 15.75 6.75 15.75H7.5C7.91421 15.75 8.25 16.0858 8.25 16.5V17.25C8.25 17.6642 7.91421 18 7.5 18H6.75C6.33579 18 6 17.6642 6 17.25V16.5ZM15.75 16.5C15.75 16.0858 16.0858 15.75 16.5 15.75H17.25C17.6642 15.75 18 16.0858 18 16.5V17.25C18 17.6642 17.6642 18 17.25 18H16.5C16.0858 18 15.75 17.6642 15.75 17.25V16.5ZM12.75 19.5C12.75 19.0858 13.0858 18.75 13.5 18.75H14.25C14.6642 18.75 15 19.0858 15 19.5V20.25C15 20.6642 14.6642 21 14.25 21H13.5C13.0858 21 12.75 20.6642 12.75 20.25V19.5ZM18.75 19.5C18.75 19.0858 19.0858 18.75 19.5 18.75H20.25C20.6642 18.75 21 19.0858 21 19.5V20.25C21 20.6642 20.6642 21 20.25 21H19.5C19.0858 21 18.75 20.6642 18.75 20.25V19.5Z"
+                        />
+                      </Icon>
+                    }
+                    size="xs"
+                    variant="ghost"
+                    color="bauhaus.white"
+                    onClick={onQROpen}
+                    _hover={{ color: "bauhaus.yellow" }}
+                    minW="auto"
+                    h="auto"
+                    p={0}
+                  />
+                  <IconButton
                     aria-label="Copy address"
                     icon={copied ? <CheckIcon /> : <CopyIcon />}
                     size="xs"
@@ -2239,37 +2269,75 @@ function App() {
               </HStack>
             )}
 
-            {/* Swap Button */}
+            {/* Swap + Send Buttons */}
             {address && activeAccount?.type !== "impersonator" && (
-              <Button
-                w="100%"
-                bg="bauhaus.blue"
-                color="bauhaus.white"
-                border="3px solid"
-                borderColor="bauhaus.black"
-                boxShadow="4px 4px 0px 0px #121212"
-                fontWeight="800"
-                fontSize="sm"
-                textTransform="uppercase"
-                letterSpacing="wider"
-                borderRadius={0}
-                leftIcon={<SwapIcon boxSize={5} />}
-                onClick={() => {
-                  setSwapInitialBuyToken(undefined);
-                  setView("swap");
-                }}
-                _hover={{
-                  bg: "bauhaus.blue",
-                  transform: "translateY(-2px)",
-                  boxShadow: "6px 6px 0px 0px #121212",
-                }}
-                _active={{
-                  transform: "translate(2px, 2px)",
-                  boxShadow: "none",
-                }}
-              >
-                Swap
-              </Button>
+              <HStack spacing={2}>
+                <Button
+                  flex={1}
+                  bg="bauhaus.blue"
+                  color="bauhaus.white"
+                  border="3px solid"
+                  borderColor="bauhaus.black"
+                  boxShadow="4px 4px 0px 0px #121212"
+                  fontWeight="800"
+                  fontSize="sm"
+                  textTransform="uppercase"
+                  letterSpacing="wider"
+                  borderRadius={0}
+                  leftIcon={<SwapIcon boxSize={5} />}
+                  onClick={() => {
+                    setSwapInitialBuyToken(undefined);
+                    setView("swap");
+                  }}
+                  _hover={{
+                    bg: "bauhaus.blue",
+                    transform: "translateY(-2px)",
+                    boxShadow: "6px 6px 0px 0px #121212",
+                  }}
+                  _active={{
+                    transform: "translate(2px, 2px)",
+                    boxShadow: "none",
+                  }}
+                >
+                  Swap
+                </Button>
+                <Button
+                  flex={1}
+                  bg="bauhaus.yellow"
+                  color="bauhaus.black"
+                  border="3px solid"
+                  borderColor="bauhaus.black"
+                  boxShadow="4px 4px 0px 0px #121212"
+                  fontWeight="800"
+                  fontSize="sm"
+                  textTransform="uppercase"
+                  letterSpacing="wider"
+                  borderRadius={0}
+                  leftIcon={
+                    <Icon viewBox="0 0 24 24" boxSize={5}>
+                      <path
+                        fill="currentColor"
+                        d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"
+                      />
+                    </Icon>
+                  }
+                  onClick={() => {
+                    setTransferToken(null);
+                    setView("transfer");
+                  }}
+                  _hover={{
+                    bg: "#e6b31c",
+                    transform: "translateY(-2px)",
+                    boxShadow: "6px 6px 0px 0px #121212",
+                  }}
+                  _active={{
+                    transform: "translate(2px, 2px)",
+                    boxShadow: "none",
+                  }}
+                >
+                  Send
+                </Button>
+              </HStack>
             )}
 
             {/* Portfolio Tabs (Holdings + Activity) */}
@@ -2444,6 +2512,17 @@ function App() {
           account={revealSeedAccount}
         />
       </Suspense>
+
+      {/* QR Code Modal */}
+      {address && (
+        <Suspense fallback={null}>
+          <QRCodeModal
+            isOpen={isQROpen}
+            onClose={onQRClose}
+            address={address}
+          />
+        </Suspense>
+      )}
 
       {/* Account Settings Modal */}
       <Suspense fallback={null}>
