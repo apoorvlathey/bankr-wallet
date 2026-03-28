@@ -242,6 +242,7 @@ function App() {
   const [swapInitialBuyToken, setSwapInitialBuyToken] = useState<
     { address: string; name: string; symbol: string; decimals: number; logoURI?: string } | undefined
   >();
+  const [stakeApy, setStakeApy] = useState<number | null>(null);
   const keepAlivePortRef = useRef<chrome.runtime.Port | null>(null);
   const reconnectingRef = useRef(false);
   const isPopupWindowRef = useRef(false);
@@ -839,6 +840,21 @@ function App() {
     };
 
     init();
+  }, []);
+
+  // Fetch staking APY from website API
+  useEffect(() => {
+    const fetchApy = () => {
+      fetch("https://walletchan.com/api/vault-data")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.totalApy != null) setStakeApy(data.totalApy);
+        })
+        .catch(() => {});
+    };
+    fetchApy();
+    const interval = setInterval(fetchApy, 60_000);
+    return () => clearInterval(interval);
   }, []);
 
   // Listen for new pending tx/signature requests (when sidepanel/popup is already open)
@@ -1878,7 +1894,6 @@ function App() {
           spacing={2}
           borderBottom="3px solid"
           borderColor="bauhaus.black"
-          mb={4}
         >
           <Box w="6px" h="6px" bg="bauhaus.black" />
           <Text
@@ -1933,8 +1948,40 @@ function App() {
           <Box w="6px" h="6px" bg="bauhaus.black" />
         </HStack>
 
+        {/* WalletChan OS Banner */}
+        <HStack
+          bg="linear-gradient(90deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%)"
+          py={1.5}
+          px={4}
+          justify="center"
+          spacing={3}
+          borderBottom="2px solid"
+          borderColor="bauhaus.black"
+          cursor="pointer"
+          transition="all 0.15s ease-out"
+          _hover={{ opacity: 0.85 }}
+          onClick={() => {
+            chrome.tabs.create({ url: "https://os.walletchan.com" });
+          }}
+        >
+          <Text fontSize="sm" fontWeight="900" color="bauhaus.yellow" textTransform="uppercase" letterSpacing="wider" whiteSpace="nowrap">
+            WalletChan OS
+          </Text>
+          <Flex direction="column" align="flex-start">
+            <HStack spacing={1}>
+              <Text fontSize="9px" fontWeight="600" color="gray.400">
+                Your Web3 Operating System
+              </Text>
+              <ExternalLinkIcon boxSize={2} color="gray.500" />
+            </HStack>
+            <Text fontSize="8px" fontWeight="500" color="gray.500">
+              All dapps in one place
+            </Text>
+          </Flex>
+        </HStack>
+
         <Container
-          pt={6}
+          pt={3}
           pb={4}
           flex="1"
           display="flex"
@@ -2270,7 +2317,7 @@ function App() {
               </HStack>
             )}
 
-            {/* Swap + Send Buttons */}
+            {/* Swap + Send + Stake Buttons */}
             {address && activeAccount?.type !== "impersonator" && (
               <HStack spacing={2}>
                 <Button
@@ -2338,6 +2385,60 @@ function App() {
                 >
                   Send
                 </Button>
+                <Box flex={1} position="relative">
+                  {stakeApy !== null && (
+                    <Box
+                      position="absolute"
+                      top="-8px"
+                      right="-4px"
+                      bg="bauhaus.red"
+                      color="bauhaus.white"
+                      fontSize="8px"
+                      fontWeight="900"
+                      px={1.5}
+                      py="1px"
+                      border="2px solid"
+                      borderColor="bauhaus.black"
+                      zIndex={1}
+                      lineHeight="1.2"
+                    >
+                      {stakeApy.toFixed(1)}% APY
+                    </Box>
+                  )}
+                  <Button
+                    w="100%"
+                    bg="bauhaus.white"
+                    color="bauhaus.black"
+                    border="3px solid"
+                    borderColor="bauhaus.black"
+                    boxShadow="4px 4px 0px 0px #121212"
+                    fontWeight="800"
+                    fontSize="sm"
+                    textTransform="uppercase"
+                    letterSpacing="wider"
+                    borderRadius={0}
+                    leftIcon={
+                      <Icon viewBox="0 0 24 24" boxSize={5} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 3v12m0 0l-4-4m4 4l4-4" />
+                        <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+                      </Icon>
+                    }
+                    onClick={() => {
+                      chrome.tabs.create({ url: "https://stake.walletchan.com" });
+                    }}
+                    _hover={{
+                      bg: "gray.100",
+                      transform: "translateY(-2px)",
+                      boxShadow: "6px 6px 0px 0px #121212",
+                    }}
+                    _active={{
+                      transform: "translate(2px, 2px)",
+                      boxShadow: "none",
+                    }}
+                  >
+                    Stake
+                  </Button>
+                </Box>
               </HStack>
             )}
 
