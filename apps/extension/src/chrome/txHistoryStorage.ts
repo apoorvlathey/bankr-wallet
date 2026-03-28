@@ -7,6 +7,13 @@ import { TransactionParams } from "./bankrApi";
 
 export type TxStatus = "processing" | "pending" | "success" | "failed";
 
+export interface SwapMeta {
+  sellTokenSymbol: string;
+  sellTokenLogo: string | null;
+  buyTokenSymbol: string;
+  buyTokenLogo: string | null;
+}
+
 export interface CompletedTransaction {
   id: string;
   status: TxStatus;
@@ -23,6 +30,7 @@ export interface CompletedTransaction {
   accountType?: "bankr" | "privateKey" | "seedPhrase";
   functionName?: string;
   gasData?: GasData;
+  swapMeta?: SwapMeta;
 }
 
 export interface GasData {

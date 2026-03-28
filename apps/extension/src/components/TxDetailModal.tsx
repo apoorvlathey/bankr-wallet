@@ -262,7 +262,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   Failed
                 </Badge>
               )}
-              {(tx.status === "success" || tx.status === "pending") && tx.txHash && config.explorer && (
+              {tx.txHash && config.explorer && (
                 <Button
                   size="xs"
                   variant="ghost"

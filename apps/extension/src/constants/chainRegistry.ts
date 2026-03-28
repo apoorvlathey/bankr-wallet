@@ -29,8 +29,12 @@ export interface ChainEntry {
   isOpStack: boolean;
   /** Whether the Bankr API supports this chain */
   isBankrSupported: boolean;
+  /** Whether 0x Swap API supports this chain */
+  isSwapSupported: boolean;
   /** CoinGecko token ID for native token price lookups (undefined = no price) */
   coingeckoTokenId?: string;
+  /** CoinGecko platform ID for token list lookups (e.g. "base", "ethereum") */
+  coingeckoPlatformId?: string;
   /** Pre-built viem Chain object (for chains in viem/chains). Omit for custom chains. */
   viemChain?: Chain;
 }
@@ -65,7 +69,9 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     nativeCurrency: ETH_CURRENCY,
     isOpStack: false,
     isBankrSupported: true,
+    isSwapSupported: true,
     coingeckoTokenId: "ethereum",
+    coingeckoPlatformId: "ethereum",
     viemChain: mainnet,
   },
   {
@@ -80,7 +86,9 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     nativeCurrency: ETH_CURRENCY,
     isOpStack: false,
     isBankrSupported: true,
+    isSwapSupported: true,
     coingeckoTokenId: "ethereum",
+    coingeckoPlatformId: "arbitrum-one",
     viemChain: arbitrum,
   },
   {
@@ -95,7 +103,9 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     nativeCurrency: ETH_CURRENCY,
     isOpStack: true,
     isBankrSupported: true,
+    isSwapSupported: true,
     coingeckoTokenId: "ethereum",
+    coingeckoPlatformId: "base",
     viemChain: base,
   },
   {
@@ -110,7 +120,9 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
     isOpStack: false,
     isBankrSupported: true,
+    isSwapSupported: true,
     coingeckoTokenId: "binancecoin",
+    coingeckoPlatformId: "binance-smart-chain",
     viemChain: bsc,
   },
   {
@@ -125,6 +137,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     nativeCurrency: ETH_CURRENCY,
     isOpStack: true,
     isBankrSupported: false,
+    isSwapSupported: false,
     coingeckoTokenId: undefined,
   },
   {
@@ -139,7 +152,9 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
     isOpStack: false,
     isBankrSupported: true,
+    isSwapSupported: true,
     coingeckoTokenId: "matic-network",
+    coingeckoPlatformId: "polygon-pos",
     viemChain: polygon,
   },
   {
@@ -154,7 +169,9 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     nativeCurrency: ETH_CURRENCY,
     isOpStack: true,
     isBankrSupported: true,
+    isSwapSupported: true,
     coingeckoTokenId: "ethereum",
+    coingeckoPlatformId: "unichain",
   },
 ] as const;
 
@@ -201,6 +218,17 @@ export const ALLOWED_CHAIN_IDS = new Set(CHAIN_REGISTRY.map((c) => c.chainId));
 export const BANKR_SUPPORTED_CHAIN_IDS = new Set(
   CHAIN_REGISTRY.filter((c) => c.isBankrSupported).map((c) => c.chainId)
 );
+
+export const SWAP_SUPPORTED_CHAIN_IDS = new Set(
+  CHAIN_REGISTRY.filter((c) => c.isSwapSupported).map((c) => c.chainId)
+);
+
+export const COINGECKO_PLATFORM_IDS: Record<number, string> = {};
+for (const c of CHAIN_REGISTRY) {
+  if (c.coingeckoPlatformId) {
+    COINGECKO_PLATFORM_IDS[c.chainId] = c.coingeckoPlatformId;
+  }
+}
 
 export const OP_STACK_CHAIN_IDS = new Set(
   CHAIN_REGISTRY.filter((c) => c.isOpStack).map((c) => c.chainId)

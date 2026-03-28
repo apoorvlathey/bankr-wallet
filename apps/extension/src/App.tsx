@@ -62,6 +62,16 @@ const FullscreenIcon = (props: any) => (
   </Icon>
 );
 
+// Swap icon (two vertical arrows)
+const SwapIcon = (props: any) => (
+  <Icon viewBox="0 0 24 24" {...props}>
+    <path
+      fill="currentColor"
+      d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"
+    />
+  </Icon>
+);
+
 /**
  * Detects if we're running in Arc browser using CSS variable
  * Arc browser injects --arc-palette-title CSS variable
@@ -100,6 +110,7 @@ const AccountSettingsModal = lazy(
   () => import("@/components/AccountSettingsModal"),
 );
 const TokenTransfer = lazy(() => import("@/components/TokenTransfer"));
+const SwapView = lazy(() => import("@/components/Swap/SwapView"));
 
 // Eager load components needed immediately
 import UnlockScreen from "@/components/UnlockScreen";
@@ -155,7 +166,8 @@ type AppView =
   | "waitingForOnboarding"
   | "chat"
   | "addAccount"
-  | "transfer";
+  | "transfer"
+  | "swap";
 
 function App() {
   const { networksInfo, reloadRequired, setReloadRequired } = useNetworks();
@@ -1527,6 +1539,40 @@ function App() {
     );
   }
 
+  // Swap view
+  if (view === "swap") {
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <SwapView
+              fromAddress={address}
+              accountType={activeAccount?.type || "bankr"}
+              chainId={networksInfo?.[chainName!]?.chainId || 8453}
+              chainName={chainName || "Base"}
+              onBack={() => setView("main")}
+              onSwapInitiated={() => {
+                setView("main");
+                setActivityTabTrigger((t) => t + 1);
+              }}
+              onChainChange={(name) => {
+                setChainName(name);
+                chrome.storage.sync.set({ chainName: name });
+              }}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
   // Pending tx list view
   if (view === "pendingTxList") {
     return (
@@ -2057,177 +2103,147 @@ function App() {
               </Menu>
             </HStack>
 
-            {/* Address Display */}
-            <Box
-              bg="bauhaus.white"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="4px 4px 0px 0px #121212"
-              px={4}
-              py={3}
-              position="relative"
-            >
-              {/* Corner decoration */}
-              <Box
-                position="absolute"
-                top="-3px"
-                right="-3px"
-                w="10px"
-                h="10px"
-                bg="bauhaus.blue"
-                border="2px solid"
-                borderColor="bauhaus.black"
-              />
-
-              {address ? (
-                <VStack align="stretch" spacing={2}>
-                  <Text
-                    fontSize="xs"
-                    color="text.secondary"
-                    fontWeight="700"
-                    textTransform="uppercase"
-                  >
-                    {activeAccount?.type === "impersonator"
-                      ? "Impersonated Address"
-                      : "Wallet Address"}
-                  </Text>
-                  {/* Two columns: address pill | explorer icons (2x2 when narrow, 1x4 when wide) */}
-                  <HStack spacing={2} align="center">
-                    {/* Column 1: Address pill */}
-                    <HStack
-                      bg="bauhaus.black"
-                      px={2}
-                      py={1}
-                      spacing={2}
-                      flexShrink={0}
-                    >
-                      <Code
-                        fontSize="md"
-                        fontFamily="mono"
-                        bg="transparent"
-                        color="bauhaus.white"
-                        p={0}
-                        fontWeight="700"
-                        whiteSpace="nowrap"
-                      >
-                        {truncateAddress(address)}
-                      </Code>
-                      <IconButton
-                        aria-label="Copy address"
-                        icon={copied ? <CheckIcon /> : <CopyIcon />}
-                        size="xs"
-                        variant="ghost"
-                        color={copied ? "bauhaus.yellow" : "bauhaus.white"}
-                        onClick={handleCopyAddress}
-                        _hover={{ color: "bauhaus.yellow" }}
-                        minW="auto"
-                        h="auto"
-                        p={0}
-                      />
-                      {chainName && networksInfo && (
-                        <IconButton
-                          aria-label="View on explorer"
-                          icon={<ExternalLinkIcon />}
-                          size="xs"
-                          variant="ghost"
-                          color="bauhaus.white"
-                          onClick={() => {
-                            const config = getChainConfig(
-                              networksInfo[chainName].chainId,
-                            );
-                            if (config.explorer) {
-                              chrome.tabs.create({
-                                url: `${config.explorer}/address/${address}`,
-                              });
-                            }
-                          }}
-                          _hover={{ color: "bauhaus.yellow" }}
-                          minW="auto"
-                          h="auto"
-                          p={0}
-                        />
-                      )}
-                    </HStack>
-                    {/* Column 2: Explorer icons - 2x2 grid (<390px, centered) or 1x4 row (>=390px, right-aligned) */}
-                    <Box
-                      display="grid"
-                      gridTemplateColumns="repeat(2, 32px)"
-                      justifyContent="center"
-                      gap={1}
-                      flex={1}
-                      sx={{
-                        "@media (min-width: 390px)": {
-                          gridTemplateColumns: "repeat(4, 32px)",
-                          justifyContent: "flex-end",
-                        },
-                      }}
-                    >
-                      {[
-                        {
-                          name: "Octav",
-                          icon: "octav-icon.png",
-                          url: `https://pro.octav.fi/?addresses=${address}`,
-                          bg: "#FFFFFF",
-                        },
-                        {
-                          name: "DeBank",
-                          icon: "debank-icon.ico",
-                          url: `https://debank.com/profile/${address}`,
-                          bg: "#FFFFFF",
-                        },
-                        {
-                          name: "Zapper",
-                          icon: "zapper-icon.png",
-                          url: `https://zapper.xyz/account/${address}`,
-                          bg: "#FFFFFF",
-                        },
-                        {
-                          name: "Nansen",
-                          icon: "nansen-icon.png",
-                          url: `https://app.nansen.ai/address/${address}`,
-                          bg: "#FFFFFF",
-                        },
-                      ].map((site) => (
-                        <Box
-                          key={site.name}
-                          as="button"
-                          bg={site.bg}
-                          border="2px solid"
-                          borderColor="bauhaus.black"
-                          boxShadow="2px 2px 0px 0px #121212"
-                          p={1}
-                          cursor="pointer"
-                          transition="all 0.2s ease-out"
-                          _hover={{
-                            transform: "translateY(-1px)",
-                            boxShadow: "3px 3px 0px 0px #121212",
-                          }}
-                          _active={{
-                            transform: "translate(2px, 2px)",
-                            boxShadow: "none",
-                          }}
-                          onClick={() => {
-                            chrome.tabs.create({ url: site.url });
-                          }}
-                          title={`View on ${site.name}`}
-                        >
-                          <Image src={site.icon} boxSize="20px" />
-                        </Box>
-                      ))}
-                    </Box>
-                  </HStack>
-                </VStack>
-              ) : (
-                <Text
-                  color="text.tertiary"
-                  fontSize="sm"
-                  textAlign="center"
-                  fontWeight="500"
+            {/* Address Bar — compact utility row */}
+            {address && (
+              <HStack spacing={2} align="center">
+                {/* Address pill */}
+                <HStack
+                  bg="bauhaus.black"
+                  px={2}
+                  py={1}
+                  spacing={2}
+                  flexShrink={0}
                 >
-                  No address configured
-                </Text>
-              )}
-            </Box>
+                  <Code
+                    fontSize="sm"
+                    fontFamily="mono"
+                    bg="transparent"
+                    color="bauhaus.white"
+                    p={0}
+                    fontWeight="700"
+                    whiteSpace="nowrap"
+                  >
+                    {truncateAddress(address)}
+                  </Code>
+                  <IconButton
+                    aria-label="Copy address"
+                    icon={copied ? <CheckIcon /> : <CopyIcon />}
+                    size="xs"
+                    variant="ghost"
+                    color={copied ? "bauhaus.yellow" : "bauhaus.white"}
+                    onClick={handleCopyAddress}
+                    _hover={{ color: "bauhaus.yellow" }}
+                    minW="auto"
+                    h="auto"
+                    p={0}
+                  />
+                  {chainName && networksInfo && (
+                    <IconButton
+                      aria-label="View on explorer"
+                      icon={<ExternalLinkIcon />}
+                      size="xs"
+                      variant="ghost"
+                      color="bauhaus.white"
+                      onClick={() => {
+                        const config = getChainConfig(
+                          networksInfo[chainName].chainId,
+                        );
+                        if (config.explorer) {
+                          chrome.tabs.create({
+                            url: `${config.explorer}/address/${address}`,
+                          });
+                        }
+                      }}
+                      _hover={{ color: "bauhaus.yellow" }}
+                      minW="auto"
+                      h="auto"
+                      p={0}
+                    />
+                  )}
+                </HStack>
+                {/* Explorer shortcuts */}
+                <HStack spacing={1} flex={1} justify="flex-end">
+                  {[
+                    {
+                      name: "Octav",
+                      icon: "octav-icon.png",
+                      url: `https://pro.octav.fi/?addresses=${address}`,
+                    },
+                    {
+                      name: "DeBank",
+                      icon: "debank-icon.ico",
+                      url: `https://debank.com/profile/${address}`,
+                    },
+                    {
+                      name: "Zapper",
+                      icon: "zapper-icon.png",
+                      url: `https://zapper.xyz/account/${address}`,
+                    },
+                    {
+                      name: "Nansen",
+                      icon: "nansen-icon.png",
+                      url: `https://app.nansen.ai/address/${address}`,
+                    },
+                  ].map((site) => (
+                    <Box
+                      key={site.name}
+                      as="button"
+                      bg="bauhaus.white"
+                      border="2px solid"
+                      borderColor="bauhaus.black"
+                      boxShadow="2px 2px 0px 0px #121212"
+                      p={0.5}
+                      cursor="pointer"
+                      transition="all 0.15s ease-out"
+                      _hover={{
+                        transform: "translateY(-1px)",
+                        boxShadow: "3px 3px 0px 0px #121212",
+                      }}
+                      _active={{
+                        transform: "translate(2px, 2px)",
+                        boxShadow: "none",
+                      }}
+                      onClick={() => {
+                        chrome.tabs.create({ url: site.url });
+                      }}
+                      title={`View on ${site.name}`}
+                    >
+                      <Image src={site.icon} boxSize="18px" />
+                    </Box>
+                  ))}
+                </HStack>
+              </HStack>
+            )}
+
+            {/* Swap Button */}
+            {address && activeAccount?.type !== "impersonator" && (
+              <Button
+                w="100%"
+                bg="bauhaus.blue"
+                color="bauhaus.white"
+                border="3px solid"
+                borderColor="bauhaus.black"
+                boxShadow="4px 4px 0px 0px #121212"
+                fontWeight="800"
+                fontSize="sm"
+                textTransform="uppercase"
+                letterSpacing="wider"
+                borderRadius={0}
+                leftIcon={<SwapIcon boxSize={5} />}
+                onClick={() => setView("swap")}
+                _hover={{
+                  bg: "bauhaus.blue",
+                  transform: "translateY(-2px)",
+                  boxShadow: "6px 6px 0px 0px #121212",
+                }}
+                _active={{
+                  transform: "translate(2px, 2px)",
+                  boxShadow: "none",
+                }}
+              >
+                Swap
+              </Button>
+            )}
 
             {/* Portfolio Tabs (Holdings + Activity) */}
             {address && (
