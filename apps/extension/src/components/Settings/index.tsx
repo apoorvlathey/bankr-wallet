@@ -17,7 +17,6 @@ import {
   ModalFooter,
   useDisclosure,
   Icon,
-  Switch,
 } from "@chakra-ui/react";
 import { useBauhausToast } from "@/hooks/useBauhausToast";
 import {
@@ -30,15 +29,6 @@ import {
   RepeatIcon,
 } from "@chakra-ui/icons";
 
-// Sidepanel icon
-const SidePanelIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" {...props}>
-    <path
-      fill="currentColor"
-      d="M3 3h18a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm12 2v14h5V5h-5zM4 5v14h10V5H4z"
-    />
-  </Icon>
-);
 import { clearChatHistory } from "@/chrome/chatStorage";
 import Chains from "./Chains";
 import ChangePassword from "./ChangePassword";
@@ -67,9 +57,6 @@ function Settings({ close, showBackButton = true, onSessionExpired }: SettingsPr
   const [tab, setTab] = useState<SettingsTab>("main");
   const [isAgentPasswordEnabled, setIsAgentPasswordEnabled] = useState(false);
   const [passwordType, setPasswordType] = useState<"master" | "agent" | null>(null);
-  const [sidePanelSupported, setSidePanelSupported] = useState(false);
-  const [sidePanelMode, setSidePanelMode] = useState(false);
-  const [isTogglingMode, setIsTogglingMode] = useState(false);
   const toast = useBauhausToast();
   const { isOpen: isDeleteModalOpen, onOpen: onDeleteModalOpen, onClose: onDeleteModalClose } = useDisclosure();
   const { isOpen: isChatDeleteModalOpen, onOpen: onChatDeleteModalOpen, onClose: onChatDeleteModalClose } = useDisclosure();
@@ -111,59 +98,7 @@ function Settings({ close, showBackButton = true, onSessionExpired }: SettingsPr
   useEffect(() => {
     checkAgentPassword();
     checkPasswordType();
-    checkSidePanelSupport();
   }, []);
-
-  const checkSidePanelSupport = async () => {
-    const supportResponse = await new Promise<{ supported: boolean }>((resolve) => {
-      chrome.runtime.sendMessage({ type: "isSidePanelSupported" }, resolve);
-    });
-    setSidePanelSupported(supportResponse?.supported || false);
-
-    if (supportResponse?.supported) {
-      const modeResponse = await new Promise<{ enabled: boolean }>((resolve) => {
-        chrome.runtime.sendMessage({ type: "getSidePanelMode" }, resolve);
-      });
-      setSidePanelMode(modeResponse?.enabled || false);
-    }
-  };
-
-  const toggleSidePanelMode = async () => {
-    if (isTogglingMode) return;
-    setIsTogglingMode(true);
-
-    const newMode = !sidePanelMode;
-    const response = await new Promise<{ success: boolean; sidePanelWorks: boolean }>((resolve) => {
-      chrome.runtime.sendMessage({ type: "setSidePanelMode", enabled: newMode }, (res) => {
-        resolve(res || { success: false, sidePanelWorks: false });
-      });
-    });
-
-    if (newMode && !response.success) {
-      toast({
-        title: "Sidepanel not supported",
-        description: "This browser doesn't support sidepanel. Using popup mode.",
-        status: "warning",
-        duration: 4000,
-        isClosable: true,
-      });
-      setSidePanelSupported(false);
-      setSidePanelMode(false);
-    } else {
-      setSidePanelMode(newMode);
-      toast({
-        title: newMode ? "Sidepanel mode enabled" : "Popup mode enabled",
-        description: newMode
-          ? "Close and click the extension icon to open in sidepanel"
-          : "Extension will now open as a popup",
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-      });
-    }
-
-    setIsTogglingMode(false);
-  };
 
   const checkAgentPassword = async () => {
     const response = await new Promise<{ enabled: boolean }>((resolve) => {
@@ -405,52 +340,6 @@ function Settings({ close, showBackButton = true, onSessionExpired }: SettingsPr
           </Box>
         </HStack>
       </Box>
-
-      {/* Sidepanel Mode Toggle - only show if supported */}
-      {sidePanelSupported && (
-        <Box
-          bg="bauhaus.white"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
-          p={4}
-          position="relative"
-        >
-          {/* Corner decoration */}
-          <Box
-            position="absolute"
-            top="-3px"
-            right="-3px"
-            w="8px"
-            h="8px"
-            bg={sidePanelMode ? "bauhaus.blue" : "gray.300"}
-            border="2px solid"
-            borderColor="bauhaus.black"
-          />
-
-          <HStack justify="space-between">
-            <HStack spacing={3}>
-              <Box p={2} bg={sidePanelMode ? "bauhaus.blue" : "gray.200"}>
-                <SidePanelIcon boxSize={4} color={sidePanelMode ? "white" : "gray.600"} />
-              </Box>
-              <Box>
-                <Text fontWeight="700" color="text.primary">
-                  Sidepanel Mode
-                </Text>
-                <Text fontSize="xs" color="text.secondary" fontWeight="500">
-                  {sidePanelMode ? "Opens in browser sidepanel" : "Opens as popup window"}
-                </Text>
-              </Box>
-            </HStack>
-            <Switch
-              isChecked={sidePanelMode}
-              onChange={toggleSidePanelMode}
-              isDisabled={isTogglingMode}
-              size="lg"
-            />
-          </HStack>
-        </Box>
-      )}
 
       {/* Chain RPCs Section */}
       <Box

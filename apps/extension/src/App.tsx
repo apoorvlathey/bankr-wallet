@@ -42,6 +42,16 @@ import {
   ChatIcon,
 } from "@chakra-ui/icons";
 
+// Sidepanel icon
+const SidePanelIcon = (props: any) => (
+  <Icon viewBox="0 0 24 24" {...props}>
+    <path
+      fill="currentColor"
+      d="M3 3h18a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm12 2v14h5V5h-5zM4 5v14h10V5H4z"
+    />
+  </Icon>
+);
+
 // Fullscreen icon (two diagonal arrows pointing outward)
 const FullscreenIcon = (props: any) => (
   <Icon viewBox="0 0 24 24" {...props}>
@@ -444,7 +454,6 @@ function App() {
         // Use direct chrome.storage.sync.set for immediate effect (no message needed)
         await chrome.storage.sync.set({
           isArcBrowser: true,
-          sidePanelVerified: false,
           sidePanelMode: false,
         });
         // Also notify background via message (for any runtime state it needs to update)
@@ -613,6 +622,27 @@ function App() {
     // Close popup if we're in popup mode
     if (!isInSidePanel && !isFullscreenTab) {
       window.close();
+    }
+  };
+
+  const toggleSidePanelMode = async () => {
+    if (sidePanelMode) {
+      // DISABLING: persist and close immediately
+      chrome.runtime.sendMessage({ type: "setSidePanelMode", enabled: false });
+      window.close();
+    } else {
+      // ENABLING: open sidepanel, persist, close popup — all fire-and-forget
+      try {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        const windowId = tabs[0]?.windowId;
+        if (!windowId) return;
+
+        chrome.sidePanel.open({ windowId });
+        chrome.runtime.sendMessage({ type: "setSidePanelMode", enabled: true });
+        window.close();
+      } catch (error) {
+        console.warn("Failed to open sidepanel:", error);
+      }
     }
   };
 
@@ -1734,6 +1764,22 @@ function App() {
                 }}
               />
             </Tooltip>
+            {sidePanelSupported && !isFullscreenTab && (
+              <Tooltip
+                label={sidePanelMode ? "Switch to popup" : "Switch to sidepanel"}
+                placement="bottom"
+              >
+                <IconButton
+                  aria-label={sidePanelMode ? "Switch to popup" : "Switch to sidepanel"}
+                  icon={<SidePanelIcon />}
+                  variant="ghost"
+                  size="sm"
+                  color="bauhaus.white"
+                  _hover={{ bg: "whiteAlpha.200" }}
+                  onClick={toggleSidePanelMode}
+                />
+              </Tooltip>
+            )}
             {!isFullscreenTab && (
               <Tooltip label="Open in new tab" placement="bottom">
                 <IconButton

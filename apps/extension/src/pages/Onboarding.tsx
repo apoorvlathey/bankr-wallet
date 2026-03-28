@@ -154,7 +154,6 @@ function Onboarding({ onComplete }: OnboardingProps) {
         );
         await chrome.storage.sync.set({
           isArcBrowser: true,
-          sidePanelVerified: false,
           sidePanelMode: false,
         });
       }
