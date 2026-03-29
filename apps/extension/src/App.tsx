@@ -114,6 +114,7 @@ const QRCodeModal = lazy(() =>
 );
 const TokenTransfer = lazy(() => import("@/components/TokenTransfer"));
 const SwapView = lazy(() => import("@/components/Swap/SwapView"));
+const WatchAssetConfirmation = lazy(() => import("@/components/WatchAssetConfirmation"));
 
 // Eager load components needed immediately
 import UnlockScreen from "@/components/UnlockScreen";
@@ -125,6 +126,7 @@ import { BANKR_SUPPORTED_CHAIN_IDS } from "@/constants/networks";
 import { hasEncryptedApiKey } from "@/chrome/crypto";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
+import { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
 import type { Account } from "@/chrome/types";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 
@@ -166,6 +168,7 @@ type AppView =
   | "pendingTxList"
   | "txConfirm"
   | "signatureConfirm"
+  | "watchAssetConfirm"
   | "waitingForOnboarding"
   | "chat"
   | "addAccount"
@@ -190,6 +193,8 @@ function App() {
   >([]);
   const [selectedSignatureRequest, setSelectedSignatureRequest] =
     useState<PendingSignatureRequest | null>(null);
+  const [pendingWatchAssetRequest, setPendingWatchAssetRequest] =
+    useState<PendingWatchAssetRequest | null>(null);
   const [activityTabTrigger, setActivityTabTrigger] = useState(0);
 
   const [copied, setCopied] = useState(false);
@@ -367,6 +372,13 @@ function App() {
       type: "getPendingSignatureRequests",
     });
     setPendingSignatureRequests(requests || []);
+    return requests || [];
+  };
+
+  const loadPendingWatchAssetRequests = async () => {
+    const requests = await sendMessageWithRetry<PendingWatchAssetRequest[]>({
+      type: "getPendingWatchAssetRequests",
+    });
     return requests || [];
   };
 
@@ -727,6 +739,7 @@ function App() {
       // Load pending requests
       const requests = await loadPendingRequests();
       const sigRequests = await loadPendingSignatureRequests();
+      const watchAssetRequests = await loadPendingWatchAssetRequests();
 
       // Load accounts
       let { accounts: loadedAccounts, activeAccount: loadedActive } =
@@ -832,6 +845,9 @@ function App() {
         // Auto-open newest (last) pending signature request
         setSelectedSignatureRequest(sigRequests[sigRequests.length - 1]);
         setView("signatureConfirm");
+      } else if (watchAssetRequests.length > 0) {
+        setPendingWatchAssetRequest(watchAssetRequests[watchAssetRequests.length - 1]);
+        setView("watchAssetConfirm");
       } else {
         setView("main");
       }
@@ -903,6 +919,20 @@ function App() {
           if (isUnlocked) {
             setSelectedSignatureRequest(sigRequest);
             setView("signatureConfirm");
+          } else {
+            setView("unlock");
+          }
+        })();
+        return;
+      }
+      if (message.type === "newPendingWatchAssetRequest" && message.request) {
+        const watchRequest = message.request as PendingWatchAssetRequest;
+        (async () => {
+          const isUnlocked = await checkLockState();
+          setIsWalletUnlocked(isUnlocked);
+          if (isUnlocked) {
+            setPendingWatchAssetRequest(watchRequest);
+            setView("watchAssetConfirm");
           } else {
             setView("unlock");
           }
@@ -996,12 +1026,25 @@ function App() {
             }
           }
         }
+        if (changes.pendingWatchAssetRequests) {
+          const updated: PendingWatchAssetRequest[] =
+            changes.pendingWatchAssetRequests.newValue || [];
+          if (
+            pendingWatchAssetRequest &&
+            !updated.find((r) => r.id === pendingWatchAssetRequest.id)
+          ) {
+            setPendingWatchAssetRequest(null);
+            if (view === "watchAssetConfirm") {
+              setView("main");
+            }
+          }
+        }
       }
     };
 
     chrome.storage.onChanged.addListener(handleStorageChange);
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
-  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, view]);
+  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, pendingWatchAssetRequest, view]);
 
   // Listen for tab activation changes to update chain for current tab
   useEffect(() => {
@@ -1076,6 +1119,7 @@ function App() {
     // Refresh pending requests after unlock
     const requests = await loadPendingRequests();
     const sigRequests = await loadPendingSignatureRequests();
+    const watchAssetRequests = await loadPendingWatchAssetRequests();
 
     if (requests.length > 0) {
       // Show newest (last) pending transaction request
@@ -1085,6 +1129,9 @@ function App() {
       // Show newest (last) pending signature request
       setSelectedSignatureRequest(sigRequests[sigRequests.length - 1]);
       setView("signatureConfirm");
+    } else if (watchAssetRequests.length > 0) {
+      setPendingWatchAssetRequest(watchAssetRequests[watchAssetRequests.length - 1]);
+      setView("watchAssetConfirm");
     } else {
       setView("main");
     }
@@ -1764,6 +1811,35 @@ function App() {
                     setView("txConfirm");
                   }
                 }
+              }}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
+  if (view === "watchAssetConfirm" && pendingWatchAssetRequest) {
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <WatchAssetConfirmation
+              request={pendingWatchAssetRequest}
+              onConfirmed={() => {
+                setPendingWatchAssetRequest(null);
+                setView("main");
+              }}
+              onRejected={() => {
+                setPendingWatchAssetRequest(null);
+                setView("main");
               }}
             />
           </Suspense>

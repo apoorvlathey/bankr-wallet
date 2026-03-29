@@ -386,6 +386,41 @@ window.addEventListener("message", async (e) => {
       break;
     }
 
+    case "i_watchAsset": {
+      const { id, asset, chainId } = e.data.msg as {
+        id: string;
+        asset: { address: string; symbol: string; decimals: number; image?: string };
+        chainId: number;
+      };
+
+      const watchAssetId = crypto.randomUUID();
+
+      waitForStorageResult<{ success: boolean; error?: string }>(
+        `watchAssetResult:${watchAssetId}`,
+        5 * 60 * 1000 // 5 minute timeout
+      ).then((result) => {
+        window.postMessage(
+          { type: "watchAssetResult", msg: { id, success: result.success, error: result.error } },
+          "*"
+        );
+      }).catch((err) => {
+        window.postMessage(
+          { type: "watchAssetResult", msg: { id, success: false, error: err.message } },
+          "*"
+        );
+      });
+
+      chrome.runtime.sendMessage({
+        type: "watchAsset",
+        watchAssetId,
+        asset,
+        chainId,
+        origin: window.location.origin,
+        favicon: getFaviconUrl(),
+      });
+      break;
+    }
+
     case "i_rpcRequest": {
       const { id, rpcUrl, method, params } = e.data.msg as {
         id: string;

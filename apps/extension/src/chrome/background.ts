@@ -112,6 +112,7 @@ import {
   handleAddPrivateKeyAccount,
   handleRemoveAccount,
   openPopupWindow,
+  openExtensionPopup,
   performSecurityReset,
   handleInitiateTransfer,
   handleExecuteSwapDirect,
@@ -141,6 +142,15 @@ import {
 } from "./swapApi";
 
 // Sidepanel management
+// Watch asset (wallet_watchAsset / EIP-747)
+import {
+  savePendingWatchAssetRequest,
+  removePendingWatchAssetRequest,
+  getPendingWatchAssetRequests,
+  PendingWatchAssetRequest,
+} from "./pendingWatchAssetStorage";
+import { addCustomToken } from "./customTokenStorage";
+
 import {
   isSidePanelSupported,
   isSidePanelSupportedAsync,
@@ -464,6 +474,75 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await writeResultToStorage(`sigResult:${message.sigId}`, result);
         sendResponse(result);
       });
+      return true;
+    }
+
+    // ── wallet_watchAsset (EIP-747) ──────────────────────────────────────────
+    case "watchAsset": {
+      const senderWindowId = sender.tab?.windowId;
+      (async () => {
+        const request: PendingWatchAssetRequest = {
+          id: message.watchAssetId,
+          asset: message.asset,
+          chainId: message.chainId,
+          origin: message.origin,
+          favicon: message.favicon || null,
+          timestamp: Date.now(),
+        };
+        await savePendingWatchAssetRequest(request);
+        chrome.runtime
+          .sendMessage({ type: "newPendingWatchAssetRequest", request })
+          .catch(() => {});
+        openExtensionPopup(senderWindowId);
+      })();
+      return false;
+    }
+
+    case "getPendingWatchAssetRequests": {
+      getPendingWatchAssetRequests().then((requests) => {
+        sendResponse(requests);
+      });
+      return true;
+    }
+
+    case "confirmWatchAsset": {
+      (async () => {
+        const requests = await getPendingWatchAssetRequests();
+        const pending = requests.find((r) => r.id === message.watchAssetId);
+        if (pending) {
+          // Try to fetch the real token name from on-chain
+          let tokenName = pending.asset.symbol;
+          try {
+            const info = await fetchTokenInfo(pending.asset.address, pending.chainId);
+            if (info?.name) tokenName = info.name;
+          } catch { /* use symbol as fallback */ }
+
+          await addCustomToken({
+            chainId: pending.chainId,
+            contractAddress: pending.asset.address,
+            symbol: pending.asset.symbol,
+            name: tokenName,
+            decimals: pending.asset.decimals,
+          });
+          await removePendingWatchAssetRequest(message.watchAssetId);
+          await writeResultToStorage(`watchAssetResult:${message.watchAssetId}`, {
+            success: true,
+          });
+        }
+        sendResponse({ success: true });
+      })();
+      return true;
+    }
+
+    case "rejectWatchAsset": {
+      (async () => {
+        await removePendingWatchAssetRequest(message.watchAssetId);
+        await writeResultToStorage(`watchAssetResult:${message.watchAssetId}`, {
+          success: false,
+          error: "User rejected token addition",
+        });
+        sendResponse({ success: true });
+      })();
       return true;
     }
 
