@@ -31,6 +31,7 @@ import { getChainConfig } from "@/constants/chainConfig";
 import { resolveAddressToName } from "@/lib/ensUtils";
 import CalldataDecoder from "@/components/CalldataDecoder";
 import GasEstimateDisplay from "@/components/GasEstimateDisplay";
+import AssetChangesDisplay from "@/components/AssetChangesDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 
 // Success animation keyframes
@@ -695,6 +696,9 @@ function TransactionConfirmation({
             </HStack>
           </VStack>
         </Box>
+
+        {/* Asset Changes (simulation) */}
+        {tx.to && <AssetChangesDisplay txRequest={txRequest} />}
 
         {/* Gas Estimate */}
         <GasEstimateDisplay

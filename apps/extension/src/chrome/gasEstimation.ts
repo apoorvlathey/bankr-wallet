@@ -53,7 +53,7 @@ async function getClient(chainId: number): Promise<PublicClient | null> {
 let priceCache: { prices: Record<string, number>; timestamp: number } | null = null;
 const PRICE_CACHE_TTL = 60_000; // 60 seconds
 
-async function fetchNativePrice(chainId: number): Promise<number | null> {
+export async function fetchNativePrice(chainId: number): Promise<number | null> {
   const tokenId = CHAIN_TOKEN_IDS[chainId];
   if (!tokenId) return null;
 
