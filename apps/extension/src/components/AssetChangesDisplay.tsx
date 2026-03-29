@@ -15,6 +15,7 @@ import {
   CopyIcon,
   CheckIcon,
   ExternalLinkIcon,
+  InfoOutlineIcon,
 } from "@chakra-ui/icons";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import type { SimulationResult, AssetChange, TokenMetadataResult } from "@/chrome/txSimulation";
@@ -322,15 +323,24 @@ function AssetChangesDisplay({ txRequest }: AssetChangesDisplayProps) {
         _hover={{ bg: "bg.muted" }}
         justify="space-between"
       >
-        <Text
-          fontSize="xs"
-          color="text.secondary"
-          fontWeight="700"
-          textTransform="uppercase"
-          flexShrink={0}
-        >
-          Asset Changes
-        </Text>
+        <HStack spacing={1} flexShrink={0}>
+          <Text
+            fontSize="xs"
+            color="text.secondary"
+            fontWeight="700"
+            textTransform="uppercase"
+          >
+            Asset Changes
+          </Text>
+          <Tooltip
+            label="This is an estimation. Actual onchain transfers may differ based on updated contract state."
+            fontSize="xs"
+            hasArrow
+            placement="top"
+          >
+            <InfoOutlineIcon boxSize="11px" color="text.tertiary" />
+          </Tooltip>
+        </HStack>
         <HStack spacing={1} minW={0}>
           {!expanded && (
             <Text
