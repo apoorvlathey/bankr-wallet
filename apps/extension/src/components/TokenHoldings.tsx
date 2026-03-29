@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
 import {
   Box,
   VStack,
@@ -10,10 +10,13 @@ import {
   Tooltip,
 } from "@chakra-ui/react";
 import { ExternalLinkIcon, RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { useDisclosure } from "@chakra-ui/react";
 import { fetchPortfolio, PortfolioToken, DefiPosition } from "@/chrome/portfolioApi";
 import { fetchOnchainBalances } from "@/chrome/onchainBalances";
 import { recordSnapshot } from "@/chrome/portfolioSnapshotStorage";
 import { getChainConfig } from "@/constants/chainConfig";
+import { getCustomTokens } from "@/chrome/customTokenStorage";
+import EditCustomTokenModal from "@/components/EditCustomTokenModal";
 
 interface TokenHoldingsProps {
   address: string;
@@ -26,6 +29,7 @@ interface TokenHoldingsProps {
     hideValue: boolean;
     toggleHideValue: () => void;
     refresh: () => void;
+    tokenKeys: Set<string>;
   }) => void;
 }
 
@@ -37,6 +41,9 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
   const [error, setError] = useState<string | null>(null);
   const [hideValue, setHideValue] = useState(false);
   const [lastFetched, setLastFetched] = useState(0);
+  const [customTokenKeys, setCustomTokenKeys] = useState<Set<string>>(new Set());
+  const [editingToken, setEditingToken] = useState<PortfolioToken | null>(null);
+  const editModal = useDisclosure();
 
   // Load hide preference
   useEffect(() => {
@@ -65,10 +72,38 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
       setError(null);
 
       try {
-        const data = await fetchPortfolio(address);
+        const [data, customTokens] = await Promise.all([
+          fetchPortfolio(address),
+          getCustomTokens(),
+        ]);
 
-        // Show API data immediately so user isn't stuck on skeleton loader
-        setTokens(data.tokens);
+        // Merge custom tokens that aren't already in the API response
+        const apiTokenKeys = new Set(
+          data.tokens.map((t) => `${t.chainId}-${t.contractAddress.toLowerCase()}`)
+        );
+        const customAsPortfolio: PortfolioToken[] = customTokens
+          .filter((ct) => !apiTokenKeys.has(`${ct.chainId}-${ct.contractAddress}`))
+          .map((ct) => ({
+            symbol: ct.symbol,
+            name: ct.name,
+            contractAddress: ct.contractAddress,
+            chainId: ct.chainId,
+            decimals: ct.decimals,
+            balance: "0",
+            balanceFormatted: "0",
+            priceUsd: 0,
+            valueUsd: 0,
+            logoUrl: undefined,
+          }));
+        const mergedTokens = [...data.tokens, ...customAsPortfolio];
+
+        // Track which tokens are user-added custom tokens (for edit-on-hover)
+        setCustomTokenKeys(
+          new Set(customTokens.map((ct) => `${ct.chainId}-${ct.contractAddress}`))
+        );
+
+        // Show merged data immediately so user isn't stuck on skeleton loader
+        setTokens(mergedTokens);
         setDefiPositions(data.defiPositions || []);
         setTotalValueUsd(data.totalValueUsd);
         setLoading(false);
@@ -77,7 +112,7 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
         // Enhance with on-chain balances in the background.
         // If RPCs are rate-limited or slow, user already sees API values.
         try {
-          const onchain = await fetchOnchainBalances(address, data.tokens);
+          const onchain = await fetchOnchainBalances(address, mergedTokens);
           setTokens(onchain.tokens);
           // Total = on-chain corrected wallet tokens + DeFi positions
           const defiTotal = (data.defiPositions || []).reduce((s: number, p: DefiPosition) => s + p.valueUsd, 0);
@@ -107,6 +142,12 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
     loadPortfolio(true);
   }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Set of "chainId-address" keys for dedup in AddTokenModal
+  const tokenKeys = useMemo(
+    () => new Set(tokens.map((t) => `${t.chainId}-${t.contractAddress.toLowerCase()}`)),
+    [tokens]
+  );
+
   // Notify parent of state changes for tab header display
   const loadPortfolioRef = useRef(loadPortfolio);
   loadPortfolioRef.current = loadPortfolio;
@@ -118,8 +159,9 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
       hideValue,
       toggleHideValue: () => toggleHideValueRef.current(),
       refresh: () => loadPortfolioRef.current(true),
+      tokenKeys,
     });
-  }, [totalValueUsd, loading, hideValue, onStateChange]);
+  }, [totalValueUsd, loading, hideValue, onStateChange, tokenKeys]);
 
   const formatUsd = (value: number): string => {
     if (hideValue) return "****";
@@ -182,7 +224,12 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
         </Box>
       ) : (
         <>
-          {tokens.map((token, i) => (
+          {tokens.map((token, i) => {
+            const isCustom = customTokenKeys.has(
+              `${token.chainId}-${token.contractAddress.toLowerCase()}`
+            );
+            const hasHover = !!(onTokenClick || isCustom);
+            return (
             <HStack
               key={`${token.chainId}-${token.contractAddress}-${i}`}
               w="full"
@@ -190,8 +237,8 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
               px={3}
               borderBottom={i < tokens.length - 1 || defiPositions.length > 0 ? "1px solid" : "none"}
               borderColor="gray.200"
-              cursor={onTokenClick ? "pointer" : "default"}
-              _hover={onTokenClick ? { bg: "bg.muted", "& > .send-label": { opacity: 1 }, "& > .value-col": { opacity: 0 } } : {}}
+              cursor={hasHover ? "pointer" : "default"}
+              _hover={hasHover ? { bg: "bg.muted", "& > .send-label": { opacity: 1 }, "& > .edit-label": { opacity: 1, pointerEvents: "auto" }, "& > .value-col": { opacity: 0 } } : {}}
               onClick={() => onTokenClick?.(token)}
               transition="background 0.15s"
               position="relative"
@@ -200,7 +247,7 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
                 <Text
                   className="send-label"
                   position="absolute"
-                  right={3}
+                  right={isCustom ? "52px" : 3}
                   fontSize="10px"
                   fontWeight="800"
                   color="bauhaus.blue"
@@ -213,6 +260,33 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
                   transform="translateY(-50%)"
                 >
                   Send Tokens
+                </Text>
+              )}
+              {isCustom && (
+                <Text
+                  className="edit-label"
+                  position="absolute"
+                  right={3}
+                  fontSize="10px"
+                  fontWeight="800"
+                  color="bauhaus.red"
+                  textTransform="uppercase"
+                  letterSpacing="wider"
+                  opacity={0}
+                  pointerEvents="none"
+                  transition="opacity 0.15s"
+                  cursor="pointer"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  zIndex={1}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingToken(token);
+                    editModal.onOpen();
+                  }}
+                  _hover={{ textDecoration: "underline" }}
+                >
+                  Edit
                 </Text>
               )}
               {/* Token icon */}
@@ -280,7 +354,7 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
                 align="end"
                 spacing={0}
                 minW="50px"
-                className={onTokenClick ? "value-col" : undefined}
+                className={hasHover ? "value-col" : undefined}
                 transition="opacity 0.15s"
               >
                 <Text fontSize="xs" fontWeight="700" color="text.primary">
@@ -293,7 +367,8 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
                 )}
               </VStack>
             </HStack>
-          ))}
+            );
+          })}
 
           {/* DeFi Positions */}
           {defiPositions.length > 0 && (
@@ -482,7 +557,16 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
     </VStack>
   );
 
-  if (hideCard) return tokenList;
+  const editModalEl = (
+    <EditCustomTokenModal
+      isOpen={editModal.isOpen}
+      onClose={editModal.onClose}
+      onUpdated={() => loadPortfolio(true)}
+      token={editingToken}
+    />
+  );
+
+  if (hideCard) return <>{tokenList}{editModalEl}</>;
 
   return (
     <Box
@@ -549,6 +633,7 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
       )}
 
       {tokenList}
+      {editModalEl}
     </Box>
   );
 }

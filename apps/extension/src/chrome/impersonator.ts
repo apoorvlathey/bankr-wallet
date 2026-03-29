@@ -48,6 +48,12 @@ const pendingRpcCallbacks = new Map<
   { resolve: (result: any) => void; reject: (error: Error) => void }
 >();
 
+// Pending wallet_watchAsset callbacks
+const pendingWatchAssetCallbacks = new Map<
+  string,
+  { resolve: (result: boolean) => void; reject: (error: Error) => void }
+>();
+
 // Helper to make RPC calls through content script (to bypass page CSP)
 function rpcCall(rpcUrl: string, method: string, params: any[]): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -231,6 +237,40 @@ class ImpersonatorProvider extends EventEmitter {
                 id: sigId,
                 method: method,
                 params: params || [],
+                chainId: this.chainId,
+              },
+            },
+            "*",
+          );
+        });
+      }
+      case "wallet_watchAsset": {
+        // EIP-747: params can be { type, options } or [type, options]
+        let assetType: string;
+        let assetOptions: { address: string; symbol: string; decimals: number; image?: string };
+        if (Array.isArray(params) && typeof params[0] === "string") {
+          assetType = params[0];
+          assetOptions = params[1];
+        } else {
+          // @ts-ignore
+          const p = params as { type: string; options: any };
+          assetType = p.type;
+          assetOptions = p.options;
+        }
+
+        if (assetType !== "ERC20") {
+          throw new Error("Only ERC20 tokens are supported");
+        }
+
+        const watchId = crypto.randomUUID();
+        return new Promise<boolean>((resolve, reject) => {
+          pendingWatchAssetCallbacks.set(watchId, { resolve, reject });
+          window.postMessage(
+            {
+              type: "i_watchAsset",
+              msg: {
+                id: watchId,
+                asset: assetOptions,
                 chainId: this.chainId,
               },
             },
@@ -515,6 +555,21 @@ window.addEventListener("message", (e: any) => {
             error.code = -32603; // JSON-RPC Internal Error
           }
 
+          callbacks.reject(error);
+        }
+      }
+      break;
+    }
+    case "watchAssetResult": {
+      const watchId = e.data.msg.id as string;
+      const callbacks = pendingWatchAssetCallbacks.get(watchId);
+      if (callbacks) {
+        pendingWatchAssetCallbacks.delete(watchId);
+        if (e.data.msg.success) {
+          callbacks.resolve(true);
+        } else {
+          const error = new Error(e.data.msg.error || "User rejected token addition") as Error & { code: number };
+          error.code = 4001;
           callbacks.reject(error);
         }
       }

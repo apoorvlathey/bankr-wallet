@@ -11,10 +11,12 @@ import {
   IconButton,
   Tooltip,
   Skeleton,
+  useDisclosure,
 } from "@chakra-ui/react";
-import { RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { AddIcon, RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 import TxStatusList from "@/components/TxStatusList";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
+import AddTokenModal from "@/components/AddTokenModal";
 
 const TokenHoldings = lazy(() => import("@/components/TokenHoldings"));
 
@@ -24,6 +26,7 @@ interface HoldingsState {
   hideValue: boolean;
   toggleHideValue: () => void;
   refresh: () => void;
+  tokenKeys: Set<string>;
 }
 
 interface PortfolioTabsProps {
@@ -40,6 +43,7 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, onToken
   const [holdingsState, setHoldingsState] = useState<HoldingsState | null>(null);
   const holdingsStateRef = useRef<HoldingsState | null>(null);
   holdingsStateRef.current = holdingsState;
+  const addTokenModal = useDisclosure();
 
   // Switch to Activity tab when activityTabTrigger increments (after tx submission)
   useEffect(() => {
@@ -132,6 +136,22 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, onToken
                         {formatUsd(holdingsState.totalValueUsd)}
                       </Text>
                     )}
+                    <IconButton
+                      aria-label={holdingsState.hideValue ? "Show values" : "Hide values"}
+                      icon={holdingsState.hideValue ? <ViewOffIcon /> : <ViewIcon />}
+                      size="xs"
+                      variant="ghost"
+                      color="whiteAlpha.600"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        holdingsState.toggleHideValue();
+                      }}
+                      _hover={{ color: "bauhaus.yellow" }}
+                      minW="auto"
+                      h="auto"
+                      p={0}
+                      fontSize="12px"
+                    />
                   </>
                 )}
               </HStack>
@@ -159,14 +179,14 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, onToken
           {/* Action buttons - only visible on Holdings tab */}
           {tabIndex === 0 && holdingsState && (
             <HStack spacing={1} pr={2}>
-              <Tooltip label={holdingsState.hideValue ? "Show values" : "Hide values"} hasArrow>
+              <Tooltip label="Add token" hasArrow>
                 <IconButton
-                  aria-label={holdingsState.hideValue ? "Show values" : "Hide values"}
-                  icon={holdingsState.hideValue ? <ViewOffIcon /> : <ViewIcon />}
+                  aria-label="Add token"
+                  icon={<AddIcon boxSize="10px" />}
                   size="xs"
                   variant="ghost"
                   color="text.secondary"
-                  onClick={holdingsState.toggleHideValue}
+                  onClick={addTokenModal.onOpen}
                   _hover={{ color: "bauhaus.blue" }}
                   minW="auto"
                 />
@@ -207,6 +227,13 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, onToken
           </TabPanel>
         </TabPanels>
       </Tabs>
+
+      <AddTokenModal
+        isOpen={addTokenModal.isOpen}
+        onClose={addTokenModal.onClose}
+        onTokenAdded={() => holdingsState?.refresh()}
+        existingTokenKeys={holdingsState?.tokenKeys ?? new Set()}
+      />
     </Box>
   );
 }

@@ -42,6 +42,7 @@ Persists across extension restarts. Cleared only on manual reset or uninstall.
 | `chatHistory`        | `Conversation[]` — `{ id, title, messages, createdAt, updatedAt }` | Chat conversations with Bankr AI. Max 50 conversations, 100 messages each.   | v0.2.0     |
 | `portfolioSnapshots` | `Record<address, HoldingsSnapshot[]>`                              | Portfolio value snapshots per address. 1-hour min interval, 8-day retention. | v1.0.0     |
 | `ensIdentityCache`   | `Record<address, { name, avatar, resolvedAt }>`                    | Resolved ENS/Basename/WNS/Mega names and avatars. 6-hour cache.              | v1.0.0     |
+| `customTokens`       | `CustomToken[]` — `{ contractAddress, chainId, symbol, name, decimals, addedAt }` | User-added custom ERC-20 tokens for portfolio tracking. Merged into holdings on each load; skipped if API already returns the token. | v2.2.0 |
 
 ### Transient (dynamic keys)
 

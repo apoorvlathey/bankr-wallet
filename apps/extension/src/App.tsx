@@ -114,6 +114,7 @@ const QRCodeModal = lazy(() =>
 );
 const TokenTransfer = lazy(() => import("@/components/TokenTransfer"));
 const SwapView = lazy(() => import("@/components/Swap/SwapView"));
+const WatchAssetConfirmation = lazy(() => import("@/components/WatchAssetConfirmation"));
 
 // Eager load components needed immediately
 import UnlockScreen from "@/components/UnlockScreen";
@@ -125,6 +126,7 @@ import { BANKR_SUPPORTED_CHAIN_IDS } from "@/constants/networks";
 import { hasEncryptedApiKey } from "@/chrome/crypto";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
+import { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
 import type { Account } from "@/chrome/types";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 
@@ -166,6 +168,7 @@ type AppView =
   | "pendingTxList"
   | "txConfirm"
   | "signatureConfirm"
+  | "watchAssetConfirm"
   | "waitingForOnboarding"
   | "chat"
   | "addAccount"
@@ -190,6 +193,8 @@ function App() {
   >([]);
   const [selectedSignatureRequest, setSelectedSignatureRequest] =
     useState<PendingSignatureRequest | null>(null);
+  const [pendingWatchAssetRequest, setPendingWatchAssetRequest] =
+    useState<PendingWatchAssetRequest | null>(null);
   const [activityTabTrigger, setActivityTabTrigger] = useState(0);
 
   const [copied, setCopied] = useState(false);
@@ -367,6 +372,13 @@ function App() {
       type: "getPendingSignatureRequests",
     });
     setPendingSignatureRequests(requests || []);
+    return requests || [];
+  };
+
+  const loadPendingWatchAssetRequests = async () => {
+    const requests = await sendMessageWithRetry<PendingWatchAssetRequest[]>({
+      type: "getPendingWatchAssetRequests",
+    });
     return requests || [];
   };
 
@@ -727,6 +739,7 @@ function App() {
       // Load pending requests
       const requests = await loadPendingRequests();
       const sigRequests = await loadPendingSignatureRequests();
+      const watchAssetRequests = await loadPendingWatchAssetRequests();
 
       // Load accounts
       let { accounts: loadedAccounts, activeAccount: loadedActive } =
@@ -832,6 +845,9 @@ function App() {
         // Auto-open newest (last) pending signature request
         setSelectedSignatureRequest(sigRequests[sigRequests.length - 1]);
         setView("signatureConfirm");
+      } else if (watchAssetRequests.length > 0) {
+        setPendingWatchAssetRequest(watchAssetRequests[watchAssetRequests.length - 1]);
+        setView("watchAssetConfirm");
       } else {
         setView("main");
       }
@@ -903,6 +919,20 @@ function App() {
           if (isUnlocked) {
             setSelectedSignatureRequest(sigRequest);
             setView("signatureConfirm");
+          } else {
+            setView("unlock");
+          }
+        })();
+        return;
+      }
+      if (message.type === "newPendingWatchAssetRequest" && message.request) {
+        const watchRequest = message.request as PendingWatchAssetRequest;
+        (async () => {
+          const isUnlocked = await checkLockState();
+          setIsWalletUnlocked(isUnlocked);
+          if (isUnlocked) {
+            setPendingWatchAssetRequest(watchRequest);
+            setView("watchAssetConfirm");
           } else {
             setView("unlock");
           }
@@ -996,12 +1026,25 @@ function App() {
             }
           }
         }
+        if (changes.pendingWatchAssetRequests) {
+          const updated: PendingWatchAssetRequest[] =
+            changes.pendingWatchAssetRequests.newValue || [];
+          if (
+            pendingWatchAssetRequest &&
+            !updated.find((r) => r.id === pendingWatchAssetRequest.id)
+          ) {
+            setPendingWatchAssetRequest(null);
+            if (view === "watchAssetConfirm") {
+              setView("main");
+            }
+          }
+        }
       }
     };
 
     chrome.storage.onChanged.addListener(handleStorageChange);
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
-  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, view]);
+  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, pendingWatchAssetRequest, view]);
 
   // Listen for tab activation changes to update chain for current tab
   useEffect(() => {
@@ -1076,6 +1119,7 @@ function App() {
     // Refresh pending requests after unlock
     const requests = await loadPendingRequests();
     const sigRequests = await loadPendingSignatureRequests();
+    const watchAssetRequests = await loadPendingWatchAssetRequests();
 
     if (requests.length > 0) {
       // Show newest (last) pending transaction request
@@ -1085,6 +1129,9 @@ function App() {
       // Show newest (last) pending signature request
       setSelectedSignatureRequest(sigRequests[sigRequests.length - 1]);
       setView("signatureConfirm");
+    } else if (watchAssetRequests.length > 0) {
+      setPendingWatchAssetRequest(watchAssetRequests[watchAssetRequests.length - 1]);
+      setView("watchAssetConfirm");
     } else {
       setView("main");
     }
@@ -1218,10 +1265,14 @@ function App() {
     }
   }, [pendingSignatureRequests, isInSidePanel, isFullscreenTab]);
 
-  const truncateAddress = (addr: string): string => {
-    if (!addr) return "";
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-  };
+  // Split address for CSS middle-truncation with bold first/last 4 hex chars
+  // Split hex chars (after "0x") in half, then prepend "0x" to the start
+  const hexLen = address ? address.length - 2 : 0;
+  const addrHalf = address ? 2 + Math.ceil(hexLen / 2) : 0;
+  const addrBoldStart = address ? address.slice(0, 6) : "";
+  const addrMidStart = address ? address.slice(6, addrHalf) : "";
+  const addrMidEnd = address ? address.slice(addrHalf, -4) : "";
+  const addrBoldEnd = address ? address.slice(-4) : "";
 
   if (isLoading) {
     return (
@@ -1768,6 +1819,35 @@ function App() {
     );
   }
 
+  if (view === "watchAssetConfirm" && pendingWatchAssetRequest) {
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <WatchAssetConfirmation
+              request={pendingWatchAssetRequest}
+              onConfirmed={() => {
+                setPendingWatchAssetRequest(null);
+                setView("main");
+              }}
+              onRejected={() => {
+                setPendingWatchAssetRequest(null);
+                setView("main");
+              }}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
   // Main view
   return (
     <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
@@ -2193,19 +2273,61 @@ function App() {
                   px={2}
                   py={1}
                   spacing={2}
-                  flexShrink={0}
+                  flex={1}
+                  minW={0}
                 >
-                  <Code
+                  <Flex
+                    flex={1}
+                    minW={0}
                     fontSize="sm"
                     fontFamily="mono"
-                    bg="transparent"
                     color="bauhaus.white"
-                    p={0}
-                    fontWeight="700"
-                    whiteSpace="nowrap"
                   >
-                    {truncateAddress(address)}
-                  </Code>
+                    <Box
+                      as="span"
+                      overflow="hidden"
+                      whiteSpace="nowrap"
+                      flex="1 1 50%"
+                      minW="6ch"
+                      sx={{
+                        maskImage:
+                          "linear-gradient(to right, black calc(100% - 2ch), transparent 100%)",
+                        WebkitMaskImage:
+                          "linear-gradient(to right, black calc(100% - 2ch), transparent 100%)",
+                      }}
+                    >
+                      <Box as="span" fontWeight="700">{addrBoldStart}</Box>
+                      <Box as="span" fontWeight="400" opacity={0.5}>{addrMidStart}</Box>
+                    </Box>
+                    <Box
+                      as="span"
+                      flexShrink={0}
+                      fontWeight="700"
+                      opacity={0.5}
+                    >
+                      ...
+                    </Box>
+                    <Box
+                      as="span"
+                      overflow="hidden"
+                      whiteSpace="nowrap"
+                      flex="1 1 50%"
+                      minW="4ch"
+                      dir="rtl"
+                      textAlign="left"
+                      sx={{
+                        maskImage:
+                          "linear-gradient(to left, black calc(100% - 2ch), transparent 100%)",
+                        WebkitMaskImage:
+                          "linear-gradient(to left, black calc(100% - 2ch), transparent 100%)",
+                      }}
+                    >
+                      <Box as="span" dir="ltr" display="inline-block">
+                        <Box as="span" fontWeight="400" opacity={0.5}>{addrMidEnd}</Box>
+                        <Box as="span" fontWeight="700">{addrBoldEnd}</Box>
+                      </Box>
+                    </Box>
+                  </Flex>
                   <IconButton
                     aria-label="Show QR code"
                     icon={
@@ -2264,7 +2386,7 @@ function App() {
                   )}
                 </HStack>
                 {/* Explorer shortcuts */}
-                <HStack spacing={1} flex={1} justify="flex-end">
+                <HStack spacing={1} flexShrink={0} justify="flex-end">
                   {[
                     {
                       name: "Octav",
