@@ -157,10 +157,13 @@ apps/extension/src/
 │   ├── cryptoUtils.ts       # Shared crypto utilities (PBKDF2, base64)
 │   ├── vaultCrypto.ts       # Vault encryption for private keys
 │   ├── bankrApi.ts          # Bankr API client
+│   ├── txSimulation.ts      # Asset change simulation (state override injection)
+│   ├── gasEstimation.ts     # Gas estimation + native token price
 │   ├── impersonator.ts      # Inpage provider (EIP-6963)
 │   └── inject.ts            # Content script bridge
 ├── components/
 │   ├── TransactionConfirmation.tsx
+│   ├── AssetChangesDisplay.tsx    # Simulated token flow display
 │   ├── SignatureRequestConfirmation.tsx
 │   ├── UnlockScreen.tsx
 │   └── Settings/
@@ -198,6 +201,7 @@ When working on features, refer to these docs:
 | `_docs/SWAP.md`                                          | Swap page: 0x API integration, fees, slippage, UI         |
 | `_docs/COINS.md`                                         | Coins page: SSE streaming, indexer API, pagination        |
 | `_docs/CALLDATA.md`                                      | Calldata decoder UI, param components, type routing       |
+| `_docs/ASSET_CHANGES_SIMULATION.md`                      | Tx simulation: state override injection, metadata retry   |
 | `apps/staking-indexer/STAKING_INDEXER_IMPLEMENTATION.md` | Staking indexer: sBNKRW vault events, balance tracking (legacy) |
 | `apps/wchan-vault-indexer/IMPLEMENTATION.md`             | WCHAN vault indexer: sWCHAN balance tracking, APY, snapshots    |
 | `_docs/DEVELOPMENT.md`                                   | Build process, dev environment setup                      |

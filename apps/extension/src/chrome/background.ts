@@ -123,6 +123,9 @@ import {
 // Gas estimation
 import { estimateGas } from "./gasEstimation";
 
+// Transaction simulation (asset change detection)
+import { simulateAssetChanges, retryTokenMetadata } from "./txSimulation";
+
 // Chat handlers
 import { handleSubmitChatPrompt } from "./chatHandlers";
 
@@ -1199,6 +1202,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "estimateGas": {
       estimateGas(message.tx, message.accountAddress).then(sendResponse);
+      return true;
+    }
+
+    case "simulateAssetChanges": {
+      simulateAssetChanges(message.tx, message.accountAddress).then(sendResponse);
+      return true;
+    }
+
+    case "retryTokenMetadata": {
+      retryTokenMetadata(message.chainId, message.tokenChanges, message.accountAddress).then(sendResponse);
       return true;
     }
 
