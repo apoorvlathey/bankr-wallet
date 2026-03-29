@@ -8,6 +8,7 @@ import {
 } from "viem";
 import { RPC_URLS } from "@/constants/chainRegistry";
 import { PortfolioToken } from "@/chrome/portfolioApi";
+import type { NetworksInfo } from "@/types";
 
 /** Multicall3 is deployed at the same address on all supported chains */
 const MULTICALL3_ADDRESS: Address =
@@ -33,17 +34,32 @@ const RPC_TIMEOUT = 8_000;
 /** Cached viem clients keyed by chainId to reuse connections */
 const clientCache = new Map<number, PublicClient>();
 
-function getClient(chainId: number): PublicClient | null {
-  const rpcUrl = RPC_URLS[chainId];
+async function getClient(chainId: number): Promise<PublicClient | null> {
+  let client = clientCache.get(chainId);
+  if (client) return client;
+
+  // Check user-configured RPCs first, fall back to defaults
+  let rpcUrl: string | undefined;
+  try {
+    const { networksInfo } = (await chrome.storage.sync.get("networksInfo")) as {
+      networksInfo: NetworksInfo | undefined;
+    };
+    if (networksInfo) {
+      for (const name of Object.keys(networksInfo)) {
+        if (networksInfo[name].chainId === chainId) {
+          rpcUrl = networksInfo[name].rpcUrl;
+          break;
+        }
+      }
+    }
+  } catch {}
+  if (!rpcUrl) rpcUrl = RPC_URLS[chainId];
   if (!rpcUrl) return null;
 
-  let client = clientCache.get(chainId);
-  if (!client) {
-    client = createPublicClient({
-      transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 0 }),
-    });
-    clientCache.set(chainId, client);
-  }
+  client = createPublicClient({
+    transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 0 }),
+  });
+  clientCache.set(chainId, client);
   return client;
 }
 
@@ -72,7 +88,7 @@ export async function fetchOnchainBalances(
   // Fetch balances per chain in parallel
   const chainPromises = Array.from(byChain.entries()).map(
     async ([chainId, entries]) => {
-      const client = getClient(chainId);
+      const client = await getClient(chainId);
       if (!client) return; // unknown chain, keep API values
 
       const addr = address as Address;

@@ -184,6 +184,8 @@ export const resolveNameToAddress = async (
 ): Promise<Address | null> => {
   // Handle .wei names via WNS — let RPC errors propagate
   if (wei.isWei(name)) {
+    const rpcUrl = await getUserRpcUrl(mainnet.id);
+    wei.config({ rpc: rpcUrl });
     const address = await wei.resolve(name);
     return address as Address | null;
   }
@@ -245,6 +247,9 @@ const getEnsName = async (address: string): Promise<string | null> => {
 
 const getWeiName = async (address: string): Promise<string | null> => {
   try {
+    // Configure Wei SDK to use user's Ethereum RPC instead of hardcoded defaults
+    const rpcUrl = await getUserRpcUrl(mainnet.id);
+    wei.config({ rpc: rpcUrl });
     return await wei.reverseResolve(address);
   } catch {
     return null;

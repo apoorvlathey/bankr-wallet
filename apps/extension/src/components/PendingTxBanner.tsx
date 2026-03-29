@@ -5,29 +5,33 @@ import { BellIcon, ChevronRightIcon } from "@chakra-ui/icons";
 interface PendingTxBannerProps {
   txCount: number;
   signatureCount: number;
+  batchCount?: number;
   onClickTx: () => void;
   onClickSignature: () => void;
+  onClickBatch?: () => void;
 }
 
-function PendingTxBanner({ txCount, signatureCount, onClickTx, onClickSignature }: PendingTxBannerProps) {
-  const totalCount = txCount + signatureCount;
+function PendingTxBanner({ txCount, signatureCount, batchCount = 0, onClickTx, onClickSignature, onClickBatch }: PendingTxBannerProps) {
+  const totalCount = txCount + signatureCount + batchCount;
   if (totalCount === 0) return null;
 
   // Determine the label and action based on what's pending
   const getLabel = () => {
-    if (txCount > 0 && signatureCount > 0) {
-      return `${txCount} Transaction${txCount > 1 ? "s" : ""}, ${signatureCount} Signature${signatureCount > 1 ? "s" : ""}`;
-    } else if (txCount > 0) {
-      return `${txCount} Pending Request${txCount > 1 ? "s" : ""}`;
-    } else {
-      return `${signatureCount} Signature Request${signatureCount > 1 ? "s" : ""}`;
-    }
+    const parts: string[] = [];
+    if (txCount > 0) parts.push(`${txCount} TX`);
+    if (batchCount > 0) parts.push(`${batchCount} Batch`);
+    if (signatureCount > 0) parts.push(`${signatureCount} Sig`);
+    if (parts.length > 1) return parts.join(", ");
+    if (txCount > 0) return `${txCount} Pending Request${txCount > 1 ? "s" : ""}`;
+    if (batchCount > 0) return `${batchCount} Batch Request${batchCount > 1 ? "s" : ""}`;
+    return `${signatureCount} Signature Request${signatureCount > 1 ? "s" : ""}`;
   };
 
   const handleClick = () => {
-    // Prioritize transaction requests over signature requests
     if (txCount > 0) {
       onClickTx();
+    } else if (batchCount > 0) {
+      onClickBatch?.();
     } else {
       onClickSignature();
     }

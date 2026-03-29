@@ -97,6 +97,9 @@ const SignatureRequestConfirmation = lazy(
   () => import("@/components/SignatureRequestConfirmation"),
 );
 const PendingTxList = lazy(() => import("@/components/PendingTxList"));
+const BatchTransactionConfirmation = lazy(
+  () => import("@/components/BatchTransactionConfirmation"),
+);
 const ChatView = lazy(() => import("@/components/Chat/ChatView"));
 const AccountSwitcher = lazy(() => import("@/components/AccountSwitcher"));
 const AddAccount = lazy(() => import("@/components/AddAccount"));
@@ -126,6 +129,7 @@ import { BANKR_SUPPORTED_CHAIN_IDS } from "@/constants/networks";
 import { hasEncryptedApiKey } from "@/chrome/crypto";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
+import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
 import type { Account } from "@/chrome/types";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
@@ -133,16 +137,19 @@ import type { PortfolioToken } from "@/chrome/portfolioApi";
 // Combined request type for unified ordering
 export type CombinedRequest =
   | { type: "tx"; request: PendingTxRequest }
-  | { type: "sig"; request: PendingSignatureRequest };
+  | { type: "sig"; request: PendingSignatureRequest }
+  | { type: "batch"; request: PendingBatchTxRequest };
 
 // Helper to combine and sort requests by timestamp
 export function getCombinedRequests(
   txRequests: PendingTxRequest[],
   sigRequests: PendingSignatureRequest[],
+  batchRequests: PendingBatchTxRequest[] = [],
 ): CombinedRequest[] {
   const combined: CombinedRequest[] = [
     ...txRequests.map((r) => ({ type: "tx" as const, request: r })),
     ...sigRequests.map((r) => ({ type: "sig" as const, request: r })),
+    ...batchRequests.map((r) => ({ type: "batch" as const, request: r })),
   ];
   // Sort by timestamp ascending (oldest first)
   return combined.sort((a, b) => a.request.timestamp - b.request.timestamp);
@@ -173,7 +180,8 @@ type AppView =
   | "chat"
   | "addAccount"
   | "transfer"
-  | "swap";
+  | "swap"
+  | "batchTxConfirm";
 
 function App() {
   const { networksInfo, reloadRequired, setReloadRequired } = useNetworks();
@@ -195,6 +203,11 @@ function App() {
     useState<PendingSignatureRequest | null>(null);
   const [pendingWatchAssetRequest, setPendingWatchAssetRequest] =
     useState<PendingWatchAssetRequest | null>(null);
+  const [pendingBatchRequests, setPendingBatchRequests] = useState<
+    PendingBatchTxRequest[]
+  >([]);
+  const [selectedBatchRequest, setSelectedBatchRequest] =
+    useState<PendingBatchTxRequest | null>(null);
   const [activityTabTrigger, setActivityTabTrigger] = useState(0);
 
   const [copied, setCopied] = useState(false);
@@ -372,6 +385,14 @@ function App() {
       type: "getPendingSignatureRequests",
     });
     setPendingSignatureRequests(requests || []);
+    return requests || [];
+  };
+
+  const loadPendingBatchRequests = async () => {
+    const requests = await sendMessageWithRetry<PendingBatchTxRequest[]>({
+      type: "getPendingBatchTxRequests",
+    });
+    setPendingBatchRequests(requests || []);
     return requests || [];
   };
 
@@ -739,6 +760,7 @@ function App() {
       // Load pending requests
       const requests = await loadPendingRequests();
       const sigRequests = await loadPendingSignatureRequests();
+      const batchRequests = await loadPendingBatchRequests();
       const watchAssetRequests = await loadPendingWatchAssetRequests();
 
       // Load accounts
@@ -841,6 +863,9 @@ function App() {
         // Auto-open newest (last) pending transaction request
         setSelectedTxRequest(requests[requests.length - 1]);
         setView("txConfirm");
+      } else if (batchRequests.length > 0) {
+        setSelectedBatchRequest(batchRequests[batchRequests.length - 1]);
+        setView("batchTxConfirm");
       } else if (sigRequests.length > 0) {
         // Auto-open newest (last) pending signature request
         setSelectedSignatureRequest(sigRequests[sigRequests.length - 1]);
@@ -882,6 +907,7 @@ function App() {
         type: string;
         txRequest?: PendingTxRequest;
         sigRequest?: PendingSignatureRequest;
+        batchRequest?: PendingBatchTxRequest;
       },
       _sender: chrome.runtime.MessageSender,
       sendResponse: (response?: any) => void,
@@ -919,6 +945,20 @@ function App() {
           if (isUnlocked) {
             setSelectedSignatureRequest(sigRequest);
             setView("signatureConfirm");
+          } else {
+            setView("unlock");
+          }
+        })();
+        return;
+      }
+      if (message.type === "newPendingBatchTxRequest" && message.batchRequest) {
+        const batchReq = message.batchRequest;
+        (async () => {
+          const isUnlocked = await checkLockState();
+          setIsWalletUnlocked(isUnlocked);
+          if (isUnlocked) {
+            setSelectedBatchRequest(batchReq);
+            setView("batchTxConfirm");
           } else {
             setView("unlock");
           }
@@ -1026,6 +1066,25 @@ function App() {
             }
           }
         }
+        if (changes.pendingBatchTxRequests) {
+          const updated: PendingBatchTxRequest[] =
+            changes.pendingBatchTxRequests.newValue || [];
+          setPendingBatchRequests(updated);
+          if (
+            selectedBatchRequest &&
+            !updated.find((r) => r.id === selectedBatchRequest.id)
+          ) {
+            if (updated.length > 0) {
+              setSelectedBatchRequest(updated[0]);
+            } else {
+              setSelectedBatchRequest(null);
+              if (view === "batchTxConfirm") {
+                setActivityTabTrigger((k) => k + 1);
+                setView("main");
+              }
+            }
+          }
+        }
         if (changes.pendingWatchAssetRequests) {
           const updated: PendingWatchAssetRequest[] =
             changes.pendingWatchAssetRequests.newValue || [];
@@ -1119,14 +1178,16 @@ function App() {
     // Refresh pending requests after unlock
     const requests = await loadPendingRequests();
     const sigRequests = await loadPendingSignatureRequests();
+    const batchReqs = await loadPendingBatchRequests();
     const watchAssetRequests = await loadPendingWatchAssetRequests();
 
     if (requests.length > 0) {
-      // Show newest (last) pending transaction request
       setSelectedTxRequest(requests[requests.length - 1]);
       setView("txConfirm");
+    } else if (batchReqs.length > 0) {
+      setSelectedBatchRequest(batchReqs[batchReqs.length - 1]);
+      setView("batchTxConfirm");
     } else if (sigRequests.length > 0) {
-      // Show newest (last) pending signature request
       setSelectedSignatureRequest(sigRequests[sigRequests.length - 1]);
       setView("signatureConfirm");
     } else if (watchAssetRequests.length > 0) {
@@ -1169,8 +1230,13 @@ function App() {
     if (remaining.length > 0) {
       setSelectedTxRequest(remaining[0]);
     } else {
-      // Only close popup when no more pending requests (not sidepanel or fullscreen tab)
-      if (isInSidePanel || isFullscreenTab) {
+      // Check for other pending request types before closing
+      const batchReqs = await loadPendingBatchRequests();
+      if (batchReqs.length > 0) {
+        setSelectedTxRequest(null);
+        setSelectedBatchRequest(batchReqs[0]);
+        setView("batchTxConfirm");
+      } else if (isInSidePanel || isFullscreenTab) {
         setSelectedTxRequest(null);
         setView("main");
       } else {
@@ -1189,6 +1255,15 @@ function App() {
         );
       });
     }
+    // Reject all pending batch transactions
+    for (const request of pendingBatchRequests) {
+      await new Promise<void>((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: "rejectBatchTransaction", bundleId: request.id },
+          () => resolve(),
+        );
+      });
+    }
     // Reject all pending signature requests
     for (const request of pendingSignatureRequests) {
       await new Promise<void>((resolve) => {
@@ -1201,8 +1276,10 @@ function App() {
     // Only close popup after rejecting all (not sidepanel or fullscreen tab)
     if (isInSidePanel || isFullscreenTab) {
       setPendingRequests([]);
+      setPendingBatchRequests([]);
       setPendingSignatureRequests([]);
       setSelectedTxRequest(null);
+      setSelectedBatchRequest(null);
       setSelectedSignatureRequest(null);
       setView("main");
     } else {
@@ -1210,6 +1287,7 @@ function App() {
     }
   }, [
     pendingRequests,
+    pendingBatchRequests,
     pendingSignatureRequests,
     isInSidePanel,
     isFullscreenTab,
@@ -1224,12 +1302,19 @@ function App() {
     if (remaining.length > 0) {
       setSelectedSignatureRequest(remaining[0]);
     } else {
-      // Check if there are pending transaction requests
+      // Check if there are other pending requests
       const txRequests = await loadPendingRequests();
       if (txRequests.length > 0) {
         setSelectedSignatureRequest(null);
         setSelectedTxRequest(txRequests[0]);
         setView("txConfirm");
+        return;
+      }
+      const batchReqs = await loadPendingBatchRequests();
+      if (batchReqs.length > 0) {
+        setSelectedSignatureRequest(null);
+        setSelectedBatchRequest(batchReqs[0]);
+        setView("batchTxConfirm");
       } else if (isInSidePanel || isFullscreenTab) {
         setSelectedSignatureRequest(null);
         setView("main");
@@ -1249,19 +1334,27 @@ function App() {
         );
       });
     }
-    // Check if there are pending transaction requests
+    // Check if there are other pending requests
     const txRequests = await loadPendingRequests();
     if (txRequests.length > 0) {
       setPendingSignatureRequests([]);
       setSelectedSignatureRequest(null);
       setSelectedTxRequest(txRequests[0]);
       setView("txConfirm");
-    } else if (isInSidePanel || isFullscreenTab) {
-      setPendingSignatureRequests([]);
-      setSelectedSignatureRequest(null);
-      setView("main");
     } else {
-      window.close();
+      const batchReqs = await loadPendingBatchRequests();
+      if (batchReqs.length > 0) {
+        setPendingSignatureRequests([]);
+        setSelectedSignatureRequest(null);
+        setSelectedBatchRequest(batchReqs[0]);
+        setView("batchTxConfirm");
+      } else if (isInSidePanel || isFullscreenTab) {
+        setPendingSignatureRequests([]);
+        setSelectedSignatureRequest(null);
+        setView("main");
+      } else {
+        window.close();
+      }
     }
   }, [pendingSignatureRequests, isInSidePanel, isFullscreenTab]);
 
@@ -1311,6 +1404,7 @@ function App() {
             onUnlock={handleUnlock}
             pendingTxCount={pendingRequests.length}
             pendingSignatureCount={pendingSignatureRequests.length}
+            pendingBatchCount={pendingBatchRequests.length}
           />
         </Box>
       </Box>
@@ -1674,6 +1768,7 @@ function App() {
             <PendingTxList
               txRequests={pendingRequests}
               signatureRequests={pendingSignatureRequests}
+              batchRequests={pendingBatchRequests}
               onBack={() => setView("main")}
               onSelectTx={(tx) => {
                 setSelectedTxRequest(tx);
@@ -1682,6 +1777,10 @@ function App() {
               onSelectSignature={(sig) => {
                 setSelectedSignatureRequest(sig);
                 setView("signatureConfirm");
+              }}
+              onSelectBatch={(batch) => {
+                setSelectedBatchRequest(batch);
+                setView("batchTxConfirm");
               }}
               onRejectAll={handleRejectAll}
             />
@@ -1696,6 +1795,7 @@ function App() {
     const combinedRequests = getCombinedRequests(
       pendingRequests,
       pendingSignatureRequests,
+      pendingBatchRequests,
     );
     const currentIndex = combinedRequests.findIndex(
       (r) => r.type === "tx" && r.request.id === selectedTxRequest.id,
@@ -1740,8 +1840,116 @@ function App() {
                   const nextRequest = combinedRequests[newIdx];
                   if (nextRequest.type === "tx") {
                     setSelectedTxRequest(nextRequest.request);
+                  } else if (nextRequest.type === "batch") {
+                    setSelectedTxRequest(null);
+                    setSelectedBatchRequest(nextRequest.request);
+                    setView("batchTxConfirm");
                   } else {
                     setSelectedTxRequest(null);
+                    setSelectedSignatureRequest(nextRequest.request);
+                    setView("signatureConfirm");
+                  }
+                }
+              }}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
+  // Batch transaction confirmation view (ERC-5792)
+  if (view === "batchTxConfirm" && selectedBatchRequest) {
+    const combinedRequests = getCombinedRequests(
+      pendingRequests,
+      pendingSignatureRequests,
+      pendingBatchRequests,
+    );
+    const currentIndex = combinedRequests.findIndex(
+      (r) => r.type === "batch" && r.request.id === selectedBatchRequest.id,
+    );
+    const totalCount = combinedRequests.length;
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <BatchTransactionConfirmation
+              key={selectedBatchRequest.id}
+              batchRequest={selectedBatchRequest}
+              currentIndex={currentIndex >= 0 ? currentIndex : 0}
+              totalCount={totalCount}
+              isInSidePanel={isInSidePanel || isFullscreenTab}
+              accountType={activeAccount?.type}
+              accountAddress={address}
+              onBack={() => {
+                if (totalCount > 1) {
+                  setView("pendingTxList");
+                } else {
+                  setView("main");
+                }
+              }}
+              onConfirmed={() => {
+                setSelectedBatchRequest(null);
+                setActivityTabTrigger((k) => k + 1);
+                if (pendingBatchRequests.length > 1) {
+                  const remaining = pendingBatchRequests.filter(
+                    (r) => r.id !== selectedBatchRequest.id,
+                  );
+                  if (remaining.length > 0) {
+                    setSelectedBatchRequest(remaining[0]);
+                  } else {
+                    setView("main");
+                  }
+                } else {
+                  setView("main");
+                }
+              }}
+              onRejected={() => {
+                setSelectedBatchRequest(null);
+                setActivityTabTrigger((k) => k + 1);
+                if (pendingBatchRequests.length > 1) {
+                  const remaining = pendingBatchRequests.filter(
+                    (r) => r.id !== selectedBatchRequest.id,
+                  );
+                  if (remaining.length > 0) {
+                    setSelectedBatchRequest(remaining[0]);
+                  } else if (isInSidePanel || isFullscreenTab) {
+                    setView("main");
+                  } else {
+                    window.close();
+                  }
+                } else if (isInSidePanel || isFullscreenTab) {
+                  setView("main");
+                } else {
+                  window.close();
+                }
+              }}
+              onRejectAll={handleRejectAll}
+              onNavigate={(direction) => {
+                const currentIdx = combinedRequests.findIndex(
+                  (r) =>
+                    r.type === "batch" &&
+                    r.request.id === selectedBatchRequest.id,
+                );
+                const newIdx =
+                  direction === "prev" ? currentIdx - 1 : currentIdx + 1;
+                if (newIdx >= 0 && newIdx < combinedRequests.length) {
+                  const nextRequest = combinedRequests[newIdx];
+                  if (nextRequest.type === "batch") {
+                    setSelectedBatchRequest(nextRequest.request);
+                  } else if (nextRequest.type === "tx") {
+                    setSelectedBatchRequest(null);
+                    setSelectedTxRequest(nextRequest.request);
+                    setView("txConfirm");
+                  } else {
+                    setSelectedBatchRequest(null);
                     setSelectedSignatureRequest(nextRequest.request);
                     setView("signatureConfirm");
                   }
@@ -1759,6 +1967,7 @@ function App() {
     const combinedRequests = getCombinedRequests(
       pendingRequests,
       pendingSignatureRequests,
+      pendingBatchRequests,
     );
     const currentIndex = combinedRequests.findIndex(
       (r) => r.type === "sig" && r.request.id === selectedSignatureRequest.id,
@@ -2116,8 +2325,9 @@ function App() {
             <PendingTxBanner
               txCount={pendingRequests.length}
               signatureCount={pendingSignatureRequests.length}
+              batchCount={pendingBatchRequests.length}
               onClickTx={() => {
-                if (pendingRequests.length === 1) {
+                if (pendingRequests.length === 1 && pendingSignatureRequests.length === 0 && pendingBatchRequests.length === 0) {
                   setSelectedTxRequest(pendingRequests[0]);
                   setView("txConfirm");
                 } else {
@@ -2128,6 +2338,14 @@ function App() {
                 if (pendingSignatureRequests.length > 0) {
                   setSelectedSignatureRequest(pendingSignatureRequests[0]);
                   setView("signatureConfirm");
+                }
+              }}
+              onClickBatch={() => {
+                if (pendingBatchRequests.length === 1 && pendingRequests.length === 0 && pendingSignatureRequests.length === 0) {
+                  setSelectedBatchRequest(pendingBatchRequests[0]);
+                  setView("batchTxConfirm");
+                } else {
+                  setView("pendingTxList");
                 }
               }}
             />

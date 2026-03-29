@@ -50,6 +50,19 @@ import {
   clearExpiredSignatureRequests,
 } from "./pendingSignatureStorage";
 import {
+  getPendingBatchTxRequests,
+  clearExpiredBatchTxRequests,
+} from "./pendingBatchTxStorage";
+import { cleanupOldBundleStatuses } from "./bundleStatusStorage";
+import {
+  handleWalletGetCapabilities,
+  handleWalletSendCalls,
+  handleConfirmBatchTransaction,
+  handleRejectBatchTransaction,
+  handleWalletGetCallsStatus,
+  handleWalletShowCallsStatus,
+} from "./batchTxHandlers";
+import {
   getTxHistory,
   getProcessingTxs,
   clearTxHistory,
@@ -125,7 +138,7 @@ import {
 import { estimateGas } from "./gasEstimation";
 
 // Transaction simulation (asset change detection)
-import { simulateAssetChanges, retryTokenMetadata } from "./txSimulation";
+import { simulateAssetChanges, simulateBatchAssetChanges, retryTokenMetadata } from "./txSimulation";
 
 // Chat handlers
 import { handleSubmitChatPrompt } from "./chatHandlers";
@@ -260,21 +273,29 @@ self.addEventListener("suspend", () => {
   clearCachedVault();
 });
 
-// Clean up expired transactions and signature requests periodically
+// Clean up expired transactions, signature requests, and batch requests periodically
 setInterval(() => {
   clearExpiredTxRequests();
   clearExpiredSignatureRequests();
+  clearExpiredBatchTxRequests();
 }, 60000); // Every minute
 
 // Clean up stale result keys from storage (from previous service worker sessions)
 chrome.storage.local.get(null).then((items) => {
+  const STALE_PREFIXES = [
+    "txResult:", "sigResult:", "rpcResult:",
+    "batchTxResult:", "batchTxAck:", "capabilitiesResult:", "callsStatusResult:",
+  ];
   const staleKeys = Object.keys(items).filter((k) => {
-    if (!k.startsWith("txResult:") && !k.startsWith("sigResult:") && !k.startsWith("rpcResult:")) return false;
+    if (!STALE_PREFIXES.some((p) => k.startsWith(p))) return false;
     const entry = items[k];
     return entry?.timestamp && Date.now() - entry.timestamp > 30 * 60 * 1000;
   });
   if (staleKeys.length > 0) chrome.storage.local.remove(staleKeys);
 });
+
+// Clean up old bundle statuses on startup
+cleanupOldBundleStatuses();
 
 // Initialize badge on startup
 updateBadge();
@@ -543,6 +564,71 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         sendResponse({ success: true });
       })();
+      return true;
+    }
+
+    // ── ERC-5792 Batch Transactions ──────────────────────────────────────────
+    case "walletGetCapabilities": {
+      handleWalletGetCapabilities(message.address, message.chainIds).then(
+        async (result) => {
+          await writeResultToStorage(
+            `capabilitiesResult:${message.requestId}`,
+            result,
+          );
+        },
+      );
+      return false;
+    }
+
+    case "walletSendCalls": {
+      const senderWindowId = sender.tab?.windowId;
+      handleWalletSendCalls(
+        message.params,
+        message.bundleId,
+        message.origin,
+        message.favicon,
+        senderWindowId,
+      );
+      return false;
+    }
+
+    case "walletGetCallsStatus": {
+      handleWalletGetCallsStatus(message.bundleId).then(async (result) => {
+        await writeResultToStorage(
+          `callsStatusResult:${message.requestId}`,
+          result,
+        );
+      });
+      return false;
+    }
+
+    case "walletShowCallsStatus": {
+      handleWalletShowCallsStatus(message.bundleId);
+      return false;
+    }
+
+    case "getPendingBatchTxRequests": {
+      getPendingBatchTxRequests().then((requests) => {
+        sendResponse(requests);
+      });
+      return true;
+    }
+
+    case "confirmBatchTransactionAsync": {
+      handleConfirmBatchTransaction(
+        message.bundleId,
+        message.password,
+        message.functionNames,
+      ).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "rejectBatchTransaction": {
+      handleRejectBatchTransaction(message.bundleId).then((result) => {
+        sendResponse(result);
+      });
       return true;
     }
 
@@ -1286,6 +1372,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "simulateAssetChanges": {
       simulateAssetChanges(message.tx, message.accountAddress).then(sendResponse);
+      return true;
+    }
+
+    case "simulateBatchAssetChanges": {
+      simulateBatchAssetChanges(message.calls, message.fromAddress, message.chainId).then(sendResponse);
       return true;
     }
 

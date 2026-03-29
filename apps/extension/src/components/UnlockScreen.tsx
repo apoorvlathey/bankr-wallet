@@ -54,12 +54,14 @@ interface UnlockScreenProps {
   onUnlock: () => void;
   pendingTxCount: number;
   pendingSignatureCount: number;
+  pendingBatchCount?: number;
 }
 
 function UnlockScreen({
   onUnlock,
   pendingTxCount,
   pendingSignatureCount,
+  pendingBatchCount = 0,
 }: UnlockScreenProps) {
   const toast = useBauhausToast();
   const [password, setPassword] = useState("");
@@ -280,7 +282,7 @@ function UnlockScreen({
       </HStack>
 
       {/* Pending requests banner */}
-      {(pendingTxCount > 0 || pendingSignatureCount > 0) && (
+      {(pendingTxCount > 0 || pendingSignatureCount > 0 || pendingBatchCount > 0) && (
         <Box
           position="absolute"
           top={3}
@@ -312,11 +314,16 @@ function UnlockScreen({
               color="bauhaus.black"
               textTransform="uppercase"
             >
-              {pendingTxCount > 0 && pendingSignatureCount > 0
-                ? `${pendingTxCount} tx, ${pendingSignatureCount} sig pending`
-                : pendingTxCount > 0
-                  ? `${pendingTxCount} pending request${pendingTxCount > 1 ? "s" : ""}`
-                  : `${pendingSignatureCount} signature${pendingSignatureCount > 1 ? "s" : ""}`}
+              {(() => {
+                const parts: string[] = [];
+                if (pendingTxCount > 0) parts.push(`${pendingTxCount} tx`);
+                if (pendingBatchCount > 0) parts.push(`${pendingBatchCount} batch`);
+                if (pendingSignatureCount > 0) parts.push(`${pendingSignatureCount} sig`);
+                if (parts.length > 1) return `${parts.join(", ")} pending`;
+                if (pendingTxCount > 0) return `${pendingTxCount} pending request${pendingTxCount > 1 ? "s" : ""}`;
+                if (pendingBatchCount > 0) return `${pendingBatchCount} batch request${pendingBatchCount > 1 ? "s" : ""}`;
+                return `${pendingSignatureCount} signature${pendingSignatureCount > 1 ? "s" : ""}`;
+              })()}
             </Text>
           </HStack>
         </Box>
