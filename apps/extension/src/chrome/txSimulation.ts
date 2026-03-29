@@ -154,7 +154,7 @@ function getNativeCurrency(chainId: number) {
 }
 
 /** Hardcoded logos for tokens not in the swap token list */
-const KNOWN_TOKEN_LOGOS: Record<string, string> = {
+export const KNOWN_TOKEN_LOGOS: Record<string, string> = {
   // WCHAN on Base
   "0xba5ed0000e1ca9136a695f0a848012a16008b032":
     "https://walletchan.com/images/walletchan-icon.png",

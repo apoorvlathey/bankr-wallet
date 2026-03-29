@@ -92,6 +92,20 @@ export async function updateBadge(): Promise<void> {
 }
 
 /**
+ * Update the calldata of a pending transaction request (e.g. modified approval amount)
+ */
+export async function updatePendingTxRequestData(
+  txId: string,
+  newData: string,
+): Promise<void> {
+  const requests = await getPendingTxRequests();
+  const idx = requests.findIndex((r) => r.id === txId);
+  if (idx === -1) return;
+  requests[idx].tx.data = newData;
+  await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+}
+
+/**
  * Clear all pending transaction requests
  */
 export async function clearAllPendingTxRequests(): Promise<void> {

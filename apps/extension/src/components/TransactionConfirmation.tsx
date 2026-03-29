@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import {
   Box,
   VStack,
@@ -32,7 +32,9 @@ import { resolveAddressToName } from "@/lib/ensUtils";
 import CalldataDecoder from "@/components/CalldataDecoder";
 import GasEstimateDisplay from "@/components/GasEstimateDisplay";
 import AssetChangesDisplay from "@/components/AssetChangesDisplay";
+import ERC20ApproveDisplay from "@/components/ERC20ApproveDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
+import { isErc20Approve, parseApproveCalldata } from "@/lib/erc20Approve";
 
 // Success animation keyframes
 const scaleIn = keyframes`
@@ -228,6 +230,12 @@ function TransactionConfirmation({
       },
     );
   };
+
+  // Detect ERC20 approve calls
+  const parsedApproval = useMemo(
+    () => (tx.to && tx.data ? parseApproveCalldata(tx.data) : null),
+    [tx.to, tx.data],
+  );
 
   const formatValue = (value: string | undefined): string => {
     if (!value || value === "0" || value === "0x0") {
@@ -435,9 +443,9 @@ function TransactionConfirmation({
           </HStack>
         </Flex>
 
-        {/* Title row with blue background */}
+        {/* Title row */}
         <Box
-          bg="bauhaus.blue"
+          bg={parsedApproval ? "bauhaus.yellow" : "bauhaus.blue"}
           border="3px solid"
           borderColor="bauhaus.black"
           boxShadow="3px 3px 0px 0px #121212"
@@ -451,21 +459,31 @@ function TransactionConfirmation({
             right="-3px"
             w="8px"
             h="8px"
-            bg="bauhaus.yellow"
+            bg={parsedApproval ? "bauhaus.blue" : "bauhaus.yellow"}
             border="2px solid"
             borderColor="bauhaus.black"
           />
           <Text
             fontWeight="900"
             fontSize="sm"
-            color="white"
+            color={parsedApproval ? "bauhaus.black" : "white"}
             textAlign="center"
             textTransform="uppercase"
             letterSpacing="wider"
           >
-            Transaction Request
+            {parsedApproval ? "Token Approval Request" : "Transaction Request"}
           </Text>
         </Box>
+
+        {/* ERC20 Approve detection — shown above tx info when present */}
+        {tx.to && parsedApproval && (
+          <ERC20ApproveDisplay
+            tokenAddress={tx.to}
+            approval={parsedApproval}
+            chainId={tx.chainId}
+            txId={txRequest.id}
+          />
+        )}
 
         {/* Transaction Info Card */}
         <Box
