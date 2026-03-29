@@ -74,14 +74,15 @@ export async function clearExpiredTxRequests(): Promise<void> {
 }
 
 /**
- * Update the extension badge with pending counts (combines tx and signature requests)
+ * Update the extension badge with pending counts (combines tx, signature, and batch requests)
  */
 export async function updateBadge(): Promise<void> {
   const txRequests = await getPendingTxRequests();
-  // Import getPendingSignatureRequests to combine counts
   const { getPendingSignatureRequests } = await import("./pendingSignatureStorage");
+  const { getPendingBatchTxRequests } = await import("./pendingBatchTxStorage");
   const sigRequests = await getPendingSignatureRequests();
-  const count = txRequests.length + sigRequests.length;
+  const batchRequests = await getPendingBatchTxRequests();
+  const count = txRequests.length + sigRequests.length + batchRequests.length;
 
   if (count > 0) {
     await chrome.action.setBadgeText({ text: count.toString() });

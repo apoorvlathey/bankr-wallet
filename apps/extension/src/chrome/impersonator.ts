@@ -54,6 +54,24 @@ const pendingWatchAssetCallbacks = new Map<
   { resolve: (result: boolean) => void; reject: (error: Error) => void }
 >();
 
+// Pending ERC-5792 batch call callbacks
+const pendingBatchCallbacks = new Map<
+  string,
+  { resolve: (result: any) => void; reject: (error: Error) => void }
+>();
+
+// Pending ERC-5792 capabilities callbacks
+const pendingCapabilitiesCallbacks = new Map<
+  string,
+  { resolve: (result: any) => void; reject: (error: Error) => void }
+>();
+
+// Pending ERC-5792 getCallsStatus callbacks
+const pendingCallsStatusCallbacks = new Map<
+  string,
+  { resolve: (result: any) => void; reject: (error: Error) => void }
+>();
+
 // Helper to make RPC calls through content script (to bypass page CSP)
 function rpcCall(rpcUrl: string, method: string, params: any[]): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -278,6 +296,102 @@ class ImpersonatorProvider extends EventEmitter {
           );
         });
       }
+      // ── ERC-5792 Batch Transaction Methods ──────────────────────────────
+      case "wallet_getCapabilities": {
+        const capId = crypto.randomUUID();
+        const address = params?.[0] || this.address;
+        const chainIds = params?.[1]; // optional chain ID filter
+
+        return new Promise<any>((resolve, reject) => {
+          pendingCapabilitiesCallbacks.set(capId, { resolve, reject });
+
+          window.postMessage(
+            {
+              type: "i_walletGetCapabilities",
+              msg: { id: capId, address, chainIds },
+            },
+            "*",
+          );
+
+          setTimeout(() => {
+            if (pendingCapabilitiesCallbacks.has(capId)) {
+              pendingCapabilitiesCallbacks.delete(capId);
+              reject(new Error("wallet_getCapabilities timeout"));
+            }
+          }, 15000);
+        });
+      }
+
+      case "wallet_sendCalls": {
+        const sendCallsId = crypto.randomUUID();
+        // @ts-ignore
+        const sendCallsParams = params?.[0] || params;
+
+        return new Promise<any>((resolve, reject) => {
+          pendingBatchCallbacks.set(sendCallsId, { resolve, reject });
+
+          window.postMessage(
+            {
+              type: "i_walletSendCalls",
+              msg: { id: sendCallsId, params: sendCallsParams },
+            },
+            "*",
+          );
+
+          // 5-minute timeout (user needs time to review batch)
+          setTimeout(() => {
+            if (pendingBatchCallbacks.has(sendCallsId)) {
+              pendingBatchCallbacks.delete(sendCallsId);
+              reject(new Error("wallet_sendCalls timeout"));
+            }
+          }, 5 * 60 * 1000);
+        });
+      }
+
+      case "wallet_getCallsStatus": {
+        const statusId = crypto.randomUUID();
+        // @ts-ignore
+        const bundleId = params?.[0];
+
+        if (!bundleId) {
+          return Promise.reject(new Error("Missing bundle ID"));
+        }
+
+        return new Promise<any>((resolve, reject) => {
+          pendingCallsStatusCallbacks.set(statusId, { resolve, reject });
+
+          window.postMessage(
+            {
+              type: "i_walletGetCallsStatus",
+              msg: { id: statusId, bundleId },
+            },
+            "*",
+          );
+
+          setTimeout(() => {
+            if (pendingCallsStatusCallbacks.has(statusId)) {
+              pendingCallsStatusCallbacks.delete(statusId);
+              reject(new Error("wallet_getCallsStatus timeout"));
+            }
+          }, 15000);
+        });
+      }
+
+      case "wallet_showCallsStatus": {
+        // @ts-ignore
+        const showBundleId = params?.[0];
+        if (showBundleId) {
+          window.postMessage(
+            {
+              type: "i_walletShowCallsStatus",
+              msg: { bundleId: showBundleId },
+            },
+            "*",
+          );
+        }
+        return Promise.resolve();
+      }
+
       case "eth_sendTransaction": {
         // Validate chain ID
         if (!ALLOWED_CHAIN_IDS.has(this.chainId)) {
@@ -584,6 +698,50 @@ window.addEventListener("message", (e: any) => {
           callbacks.reject(new Error(e.data.msg.error));
         } else {
           callbacks.resolve(e.data.msg.result);
+        }
+      }
+      break;
+    }
+    // ── ERC-5792 results ──────────────────────────────────────────────────
+    case "walletGetCapabilitiesResult": {
+      const capId = e.data.msg.id as string;
+      const callbacks = pendingCapabilitiesCallbacks.get(capId);
+      if (callbacks) {
+        pendingCapabilitiesCallbacks.delete(capId);
+        if (e.data.msg.success) {
+          callbacks.resolve(e.data.msg.result);
+        } else {
+          callbacks.reject(new Error(e.data.msg.error || "Failed to get capabilities"));
+        }
+      }
+      break;
+    }
+    case "walletSendCallsResult": {
+      const batchId = e.data.msg.id as string;
+      const callbacks = pendingBatchCallbacks.get(batchId);
+      if (callbacks) {
+        pendingBatchCallbacks.delete(batchId);
+        if (e.data.msg.success) {
+          callbacks.resolve(e.data.msg.result);
+        } else {
+          const error = new Error(e.data.msg.error || "wallet_sendCalls failed") as Error & { code: number };
+          if (e.data.msg.code) error.code = e.data.msg.code;
+          callbacks.reject(error);
+        }
+      }
+      break;
+    }
+    case "walletGetCallsStatusResult": {
+      const statusId = e.data.msg.id as string;
+      const callbacks = pendingCallsStatusCallbacks.get(statusId);
+      if (callbacks) {
+        pendingCallsStatusCallbacks.delete(statusId);
+        if (e.data.msg.success) {
+          callbacks.resolve(e.data.msg.result);
+        } else {
+          const error = new Error(e.data.msg.error || "Failed to get calls status") as Error & { code: number };
+          if (e.data.msg.code) error.code = e.data.msg.code;
+          callbacks.reject(error);
         }
       }
       break;

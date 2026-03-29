@@ -456,6 +456,120 @@ window.addEventListener("message", async (e) => {
       });
       break;
     }
+
+    // ── ERC-5792 Batch Transaction Methods ──────────────────────────────────
+
+    case "i_walletGetCapabilities": {
+      const { id, address, chainIds } = e.data.msg as {
+        id: string;
+        address: string;
+        chainIds?: string[];
+      };
+
+      const requestId = crypto.randomUUID();
+
+      waitForStorageResult<any>(
+        `capabilitiesResult:${requestId}`, 15 * 1000
+      ).then((result) => {
+        window.postMessage(
+          { type: "walletGetCapabilitiesResult", msg: { id, success: true, result } },
+          "*"
+        );
+      }).catch((err) => {
+        window.postMessage(
+          { type: "walletGetCapabilitiesResult", msg: { id, success: false, error: err.message } },
+          "*"
+        );
+      });
+
+      chrome.runtime.sendMessage({
+        type: "walletGetCapabilities",
+        requestId,
+        address,
+        chainIds,
+      });
+      break;
+    }
+
+    case "i_walletSendCalls": {
+      const { id, params } = e.data.msg as {
+        id: string;
+        params: any;
+      };
+
+      // Generate bundle ID in content script (not dapp-controlled)
+      const bundleId = crypto.randomUUID();
+
+      // Wait for acknowledgment (immediate — background writes this after saving pending request)
+      waitForStorageResult<{ success: boolean; id?: string; error?: string; code?: number }>(
+        `batchTxAck:${bundleId}`, 15 * 1000
+      ).then((result) => {
+        if (result.success) {
+          window.postMessage(
+            { type: "walletSendCallsResult", msg: { id, success: true, result: { id: result.id } } },
+            "*"
+          );
+        } else {
+          window.postMessage(
+            { type: "walletSendCallsResult", msg: { id, success: false, error: result.error, code: result.code } },
+            "*"
+          );
+        }
+      }).catch((err) => {
+        window.postMessage(
+          { type: "walletSendCallsResult", msg: { id, success: false, error: err.message } },
+          "*"
+        );
+      });
+
+      chrome.runtime.sendMessage({
+        type: "walletSendCalls",
+        bundleId,
+        params,
+        origin: window.location.origin,
+        favicon: getFaviconUrl(),
+      });
+      break;
+    }
+
+    case "i_walletGetCallsStatus": {
+      const { id, bundleId } = e.data.msg as {
+        id: string;
+        bundleId: string;
+      };
+
+      const requestId = crypto.randomUUID();
+
+      waitForStorageResult<any>(
+        `callsStatusResult:${requestId}`, 15 * 1000
+      ).then((result) => {
+        window.postMessage(
+          { type: "walletGetCallsStatusResult", msg: { id, success: true, result } },
+          "*"
+        );
+      }).catch((err) => {
+        window.postMessage(
+          { type: "walletGetCallsStatusResult", msg: { id, success: false, error: err.message } },
+          "*"
+        );
+      });
+
+      chrome.runtime.sendMessage({
+        type: "walletGetCallsStatus",
+        requestId,
+        bundleId,
+      });
+      break;
+    }
+
+    case "i_walletShowCallsStatus": {
+      const { bundleId } = e.data.msg as { bundleId: string };
+      chrome.runtime.sendMessage({
+        type: "walletShowCallsStatus",
+        bundleId,
+      });
+      break;
+    }
   }
 });
 

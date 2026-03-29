@@ -153,14 +153,26 @@ Inside `TransactionConfirmation.tsx`, the asset changes card sits between the tr
 - Skipped for contract deployments (no `to` address)
 - Hidden entirely if simulation fails (best-effort, non-blocking)
 
+## Batch Transaction Simulation
+
+ERC-5792 batch transactions are self-calls (`from === to = wallet address`), which breaks the normal `simulate()` path — the state override replaces the wallet's code with the simulator, so the self-call hits the simulator instead of the smart account.
+
+`TxSimulator.sol` has a `simulateBatch(BatchCall[] calls, address[] candidates)` function that executes all calls **sequentially in a single `eth_call`**. This preserves state between calls (e.g., approve → swap).
+
+**Flow**: `AssetChangesDisplay` passes `batchCalls` prop → sends `simulateBatchAssetChanges` message → background merges access lists from all calls → encodes `simulateBatch` → single `eth_call` with state override → returns cumulative deltas.
+
+See `_docs/ERC5792.md` → "Simulation & Tenderly" for the full flow.
+
 ## Updating the Simulator Contract
 
 If you modify `TxSimulator.sol`:
 
 1. `cd apps/contracts && forge build`
-2. Extract `deployedBytecode.object` from `out/TxSimulator.sol/TxSimulator.json`
+2. Extract **exact** `deployedBytecode.object` from `out/TxSimulator.sol/TxSimulator.json`
 3. Update `SIMULATOR_BYTECODE` in `txSimulation.ts`
-4. Update `SIMULATOR_ABI` if the function signature changed
+4. Update `SIMULATOR_ABI` / `BATCH_SIMULATOR_ABI` if the function signature changed
+
+**Critical**: The bytecode must be from the **same compilation run**. Even recompiling the identical source can produce different bytecodes (metadata hash changes), causing `InvalidJump` EVM errors because internal jump offsets differ. Always extract and paste in one step.
 
 ## Limitations
 

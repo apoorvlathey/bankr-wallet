@@ -159,10 +159,15 @@ apps/extension/src/
 │   ├── bankrApi.ts          # Bankr API client
 │   ├── txSimulation.ts      # Asset change simulation (state override injection)
 │   ├── gasEstimation.ts     # Gas estimation + native token price
-│   ├── impersonator.ts      # Inpage provider (EIP-6963)
+│   ├── batchTxHandlers.ts   # ERC-5792 batch tx handlers + ERC-7821 encoding
+│   ├── erc5792Types.ts      # ERC-5792 type definitions
+│   ├── pendingBatchTxStorage.ts  # Pending batch request persistence
+│   ├── bundleStatusStorage.ts    # Bundle status for getCallsStatus
+│   ├── impersonator.ts      # Inpage provider (EIP-6963 + ERC-5792)
 │   └── inject.ts            # Content script bridge
 ├── components/
 │   ├── TransactionConfirmation.tsx
+│   ├── BatchTransactionConfirmation.tsx  # Batch tx confirmation UI (ERC-5792)
 │   ├── AssetChangesDisplay.tsx    # Simulated token flow display
 │   ├── SignatureRequestConfirmation.tsx
 │   ├── UnlockScreen.tsx
@@ -202,6 +207,7 @@ When working on features, refer to these docs:
 | `_docs/COINS.md`                                         | Coins page: SSE streaming, indexer API, pagination        |
 | `_docs/CALLDATA.md`                                      | Calldata decoder UI, param components, type routing       |
 | `_docs/ASSET_CHANGES_SIMULATION.md`                      | Tx simulation: state override injection, metadata retry   |
+| `_docs/ERC5792.md`                                       | ERC-5792 batch txs: message flow, ERC-7821 encoding, 7702 plan |
 | `apps/staking-indexer/STAKING_INDEXER_IMPLEMENTATION.md` | Staking indexer: sBNKRW vault events, balance tracking (legacy) |
 | `apps/wchan-vault-indexer/IMPLEMENTATION.md`             | WCHAN vault indexer: sWCHAN balance tracking, APY, snapshots    |
 | `_docs/DEVELOPMENT.md`                                   | Build process, dev environment setup                      |

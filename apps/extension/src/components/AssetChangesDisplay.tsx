@@ -24,6 +24,8 @@ import { ShapesLoader } from "@/components/Chat/ShapesLoader";
 
 interface AssetChangesDisplayProps {
   txRequest: PendingTxRequest;
+  /** For batch transactions: simulate each call individually instead of the encoded batch */
+  batchCalls?: { to?: string; data?: string; value?: string }[];
 }
 
 /** Format USD value for display */
@@ -174,7 +176,7 @@ const MAX_RETRIES = 3;
 /** Delay before each retry (ms) */
 const RETRY_DELAY = 2_500;
 
-function AssetChangesDisplay({ txRequest }: AssetChangesDisplayProps) {
+function AssetChangesDisplay({ txRequest, batchCalls }: AssetChangesDisplayProps) {
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
@@ -183,22 +185,29 @@ function AssetChangesDisplay({ txRequest }: AssetChangesDisplayProps) {
   useEffect(() => {
     let cancelled = false;
 
-    chrome.runtime.sendMessage(
-      {
-        type: "simulateAssetChanges",
-        tx: txRequest.tx,
-        accountAddress: txRequest.tx.from,
-      },
-      (response: SimulationResult) => {
-        if (cancelled) return;
-        if (chrome.runtime.lastError) {
-          setLoading(false);
-          return;
+    // Batch transactions: simulate each call individually to avoid self-call issue
+    const message = batchCalls
+      ? {
+          type: "simulateBatchAssetChanges",
+          calls: batchCalls,
+          fromAddress: txRequest.tx.from,
+          chainId: txRequest.tx.chainId,
         }
-        setResult(response);
+      : {
+          type: "simulateAssetChanges",
+          tx: txRequest.tx,
+          accountAddress: txRequest.tx.from,
+        };
+
+    chrome.runtime.sendMessage(message, (response: SimulationResult) => {
+      if (cancelled) return;
+      if (chrome.runtime.lastError) {
         setLoading(false);
-      },
-    );
+        return;
+      }
+      setResult(response);
+      setLoading(false);
+    });
 
     return () => {
       cancelled = true;

@@ -13,6 +13,7 @@ import {
 import { ArrowBackIcon, ChevronRightIcon } from "@chakra-ui/icons";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
+import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import { getChainConfig } from "@/constants/chainConfig";
 import { getCombinedRequests, CombinedRequest } from "@/App";
 
@@ -37,14 +38,16 @@ function getFaviconUrl(origin: string, favicon: string | null): string | undefin
 interface PendingTxListProps {
   txRequests: PendingTxRequest[];
   signatureRequests: PendingSignatureRequest[];
+  batchRequests?: PendingBatchTxRequest[];
   onBack: () => void;
   onSelectTx: (txRequest: PendingTxRequest) => void;
   onSelectSignature: (sigRequest: PendingSignatureRequest) => void;
+  onSelectBatch?: (batchRequest: PendingBatchTxRequest) => void;
   onRejectAll: () => void;
 }
 
-function PendingTxList({ txRequests, signatureRequests, onBack, onSelectTx, onSelectSignature, onRejectAll }: PendingTxListProps) {
-  const combinedRequests = getCombinedRequests(txRequests, signatureRequests);
+function PendingTxList({ txRequests, signatureRequests, batchRequests = [], onBack, onSelectTx, onSelectSignature, onSelectBatch, onRejectAll }: PendingTxListProps) {
+  const combinedRequests = getCombinedRequests(txRequests, signatureRequests, batchRequests);
   const totalCount = combinedRequests.length;
 
   const formatTimestamp = (timestamp: number): string => {
@@ -229,8 +232,114 @@ function PendingTxList({ txRequests, signatureRequests, onBack, onSelectTx, onSe
                   </HStack>
                 </Box>
               );
-            } else {
+            } else if (item.type === "batch") {
               const request = item.request;
+              const config = getChainConfig(request.chainId);
+              return (
+                <Box
+                  key={request.id}
+                  bg="bauhaus.white"
+                  border="3px solid"
+                  borderColor="bauhaus.black"
+                  boxShadow="4px 4px 0px 0px #121212"
+                  p={3}
+                  cursor="pointer"
+                  onClick={() => onSelectBatch?.(request)}
+                  _hover={{
+                    transform: "translateY(-2px)",
+                    boxShadow: "6px 6px 0px 0px #121212",
+                  }}
+                  _active={{
+                    transform: "translate(2px, 2px)",
+                    boxShadow: "none",
+                  }}
+                  transition="all 0.2s ease-out"
+                  position="relative"
+                >
+                  <Badge
+                    position="absolute"
+                    top="-10px"
+                    left="-3px"
+                    fontSize="xs"
+                    bg="bauhaus.yellow"
+                    color="bauhaus.black"
+                    border="2px solid"
+                    borderColor="bauhaus.black"
+                    px={1.5}
+                    zIndex={1}
+                  >
+                    BATCH
+                  </Badge>
+                  <HStack justify="space-between">
+                    <HStack spacing={3} flex={1}>
+                      <Badge
+                        bg="bauhaus.black"
+                        color="bauhaus.white"
+                        fontSize="xs"
+                        minW="28px"
+                        textAlign="center"
+                        fontWeight="700"
+                      >
+                        #{index + 1}
+                      </Badge>
+                      <Box
+                        bg="bauhaus.white"
+                        border="2px solid"
+                        borderColor="bauhaus.black"
+                        p={1}
+                      >
+                        <Image
+                          src={getFaviconUrl(request.origin, request.favicon)}
+                          alt="favicon"
+                          boxSize="24px"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            const fallback = getFaviconUrl(request.origin, null);
+                            if (fallback) target.src = fallback;
+                          }}
+                        />
+                      </Box>
+                      <Box flex={1}>
+                        <HStack justify="space-between">
+                          <Text fontSize="sm" fontWeight="700" color="text.primary" noOfLines={1}>
+                            {getOriginDisplay(request.origin)}
+                          </Text>
+                          <Text fontSize="xs" color="text.tertiary" fontWeight="500">
+                            {formatTimestamp(request.timestamp)}
+                          </Text>
+                        </HStack>
+                        <HStack spacing={2} mt={1}>
+                          <Badge
+                            fontSize="xs"
+                            bg={config.bg}
+                            color={config.text}
+                            border="2px solid"
+                            borderColor="bauhaus.black"
+                            px={2}
+                            py={0.5}
+                            display="flex"
+                            alignItems="center"
+                            gap={1}
+                          >
+                            {config.icon && (
+                              <Image src={config.icon} alt={request.chainName} boxSize="10px" />
+                            )}
+                            {request.chainName}
+                          </Badge>
+                          <Text fontSize="xs" color="text.tertiary" fontWeight="500">
+                            {request.params.calls.length} calls
+                          </Text>
+                        </HStack>
+                      </Box>
+                    </HStack>
+                    <Box bg="bauhaus.black" p={1}>
+                      <ChevronRightIcon color="bauhaus.white" />
+                    </Box>
+                  </HStack>
+                </Box>
+              );
+            } else {
+              const request = item.request as PendingSignatureRequest;
               const config = getChainConfig(request.signature.chainId);
               return (
                 <Box
