@@ -305,54 +305,97 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
               </Box>
             )}
 
-            {/* From → To row */}
-            <HStack spacing={2} align="start">
-              {/* From (our wallet) */}
-              <VStack align="start" spacing={0} flex={1} minW={0}>
-                <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
-                  From
-                </Text>
-                <FromAccountDisplay address={tx.tx.from} />
-              </VStack>
+            {/* Transfer meta (sponsored transfers) */}
+            {tx.transferMeta ? (
+              <>
+                {/* Amount + Token */}
+                <Box>
+                  <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
+                    Amount
+                  </Text>
+                  <HStack spacing={2}>
+                    {tx.transferMeta.tokenLogo && (
+                      <Image
+                        src={tx.transferMeta.tokenLogo}
+                        alt={tx.transferMeta.symbol}
+                        boxSize="20px"
+                        borderRadius="full"
+                      />
+                    )}
+                    <Text fontSize="sm" fontWeight="800" color="text.primary">
+                      {tx.transferMeta.amount} {tx.transferMeta.symbol}
+                    </Text>
+                  </HStack>
+                </Box>
 
-              {/* Arrow */}
-              <Text fontSize="md" fontWeight="800" color="text.tertiary" pt={5}>
-                →
-              </Text>
+                {/* From */}
+                <Box>
+                  <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
+                    From
+                  </Text>
+                  <FromAccountDisplay address={tx.tx.from} />
+                </Box>
 
-              {/* To */}
-              <VStack align="start" spacing={0} flex={1} minW={0}>
-                <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
-                  {isContractDeploy ? "Type" : "To"}
-                </Text>
-                {isContractDeploy ? (
-                  <Badge
-                    fontSize="2xs"
-                    bg="bauhaus.yellow"
-                    color="bauhaus.black"
-                    border="2px solid"
-                    borderColor="bauhaus.black"
-                    fontWeight="700"
-                    px={1.5}
-                    py={0.5}
-                  >
-                    Contract Deploy
-                  </Badge>
-                ) : (
-                  <AddressParam value={tx.tx.to!} chainId={tx.chainId} />
-                )}
-              </VStack>
-            </HStack>
+                {/* To (actual recipient) */}
+                <Box>
+                  <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
+                    To
+                  </Text>
+                  <AddressParam value={tx.transferMeta.recipient} chainId={tx.chainId} />
+                </Box>
+              </>
+            ) : (
+              <>
+                {/* From → To row */}
+                <HStack spacing={2} align="start">
+                  {/* From (our wallet) */}
+                  <VStack align="start" spacing={0} flex={1} minW={0}>
+                    <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
+                      From
+                    </Text>
+                    <FromAccountDisplay address={tx.tx.from} />
+                  </VStack>
 
-            {/* Value */}
-            <Box>
-              <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
-                Value
-              </Text>
-              <Text fontSize="sm" fontWeight="700" color="text.primary">
-                {formatValue(tx.tx.value)}
-              </Text>
-            </Box>
+                  {/* Arrow */}
+                  <Text fontSize="md" fontWeight="800" color="text.tertiary" pt={5}>
+                    →
+                  </Text>
+
+                  {/* To */}
+                  <VStack align="start" spacing={0} flex={1} minW={0}>
+                    <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
+                      {isContractDeploy ? "Type" : "To"}
+                    </Text>
+                    {isContractDeploy ? (
+                      <Badge
+                        fontSize="2xs"
+                        bg="bauhaus.yellow"
+                        color="bauhaus.black"
+                        border="2px solid"
+                        borderColor="bauhaus.black"
+                        fontWeight="700"
+                        px={1.5}
+                        py={0.5}
+                      >
+                        Contract Deploy
+                      </Badge>
+                    ) : (
+                      <AddressParam value={tx.tx.to!} chainId={tx.chainId} />
+                    )}
+                  </VStack>
+                </HStack>
+
+                {/* Value */}
+                <Box>
+                  <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
+                    Value
+                  </Text>
+                  <Text fontSize="sm" fontWeight="700" color="text.primary">
+                    {formatValue(tx.tx.value)}
+                  </Text>
+                </Box>
+              </>
+            )}
 
             {/* Gas — collapsible */}
             {gasData && txFee && (

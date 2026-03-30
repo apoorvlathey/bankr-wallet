@@ -143,6 +143,12 @@ import { simulateAssetChanges, simulateBatchAssetChanges, retryTokenMetadata } f
 // Chat handlers
 import { handleSubmitChatPrompt } from "./chatHandlers";
 
+// Sponsored transfer handlers
+import {
+  handleSponsoredTransfer,
+  handleCheckPremiumStatus,
+} from "./sponsoredTransferHandlers";
+
 // Swap API
 import {
   fetchSwapPrice,
@@ -1701,6 +1707,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message.transactions,
         message.chainName,
       ).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "sponsoredTransfer": {
+      handleSponsoredTransfer(message).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "checkPremiumStatus": {
+      handleCheckPremiumStatus(message.address).then((result) => {
         sendResponse(result);
       });
       return true;

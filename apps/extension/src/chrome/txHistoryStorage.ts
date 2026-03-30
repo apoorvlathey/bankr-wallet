@@ -14,6 +14,13 @@ export interface SwapMeta {
   buyTokenLogo: string | null;
 }
 
+export interface TransferMeta {
+  recipient: string;
+  amount: string;
+  symbol: string;
+  tokenLogo: string | null;
+}
+
 export interface CompletedTransaction {
   id: string;
   status: TxStatus;
@@ -31,6 +38,7 @@ export interface CompletedTransaction {
   functionName?: string;
   gasData?: GasData;
   swapMeta?: SwapMeta;
+  transferMeta?: TransferMeta;
 }
 
 export interface GasData {

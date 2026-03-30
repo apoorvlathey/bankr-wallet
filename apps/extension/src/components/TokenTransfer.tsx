@@ -35,6 +35,9 @@ import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import type { Account } from "@/chrome/types";
 import TokenSelector from "@/components/Swap/TokenSelector";
 
+/** USDC on Base (ERC-3009 transferWithAuthorization) */
+const BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+
 function formatUsd(value: number): string {
   if (value < 0.01 && value > 0) return "<$0.01";
   return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -53,7 +56,7 @@ interface TokenTransferProps {
   accountType: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
   accounts?: Account[];
   onBack: () => void;
-  onTransferInitiated: () => void;
+  onTransferInitiated: (sponsored?: boolean) => void;
 }
 
 function TokenTransfer({
@@ -190,6 +193,35 @@ function TokenTransfer({
 
   const token = selectedToken;
 
+  // Sponsored USDC transfer detection
+  const isUsdcOnBase = !!(
+    token &&
+    token.chainId === 8453 &&
+    token.contractAddress?.toLowerCase() === BASE_USDC_ADDRESS.toLowerCase()
+  );
+  const [premiumStatus, setPremiumStatus] = useState<{
+    isPremium: boolean;
+    balance: string;
+  } | null>(null);
+  const [premiumLoading, setPremiumLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isUsdcOnBase) {
+      setPremiumStatus(null);
+      return;
+    }
+    setPremiumLoading(true);
+    chrome.runtime.sendMessage(
+      { type: "checkPremiumStatus", address: fromAddress },
+      (result: { isPremium: boolean; balance: string } | undefined) => {
+        if (result) setPremiumStatus(result);
+        setPremiumLoading(false);
+      }
+    );
+  }, [isUsdcOnBase, fromAddress]);
+
+  const isSponsoredFlow = isUsdcOnBase && premiumStatus?.isPremium && accountType !== "impersonator";
+
   const { resolvedAddress, resolvedName, avatar, isResolving, isLoadingExtras, isValid: isRecipientValid, error: resolverError } =
     useAddressResolver(recipient);
 
@@ -311,6 +343,37 @@ function TokenTransfer({
     setIsSubmitting(true);
 
     try {
+      // Sponsored ERC-3009 flow for USDC on Base
+      if (isSponsoredFlow) {
+        const result = await new Promise<{ success: boolean; txId?: string; error?: string }>(
+          (resolve) => {
+            chrome.runtime.sendMessage(
+              {
+                type: "sponsoredTransfer",
+                to: resolvedAddress!,
+                amount: tokenAmount,
+                decimals: token.decimals,
+                fromAddress,
+              },
+              resolve
+            );
+          }
+        );
+
+        if (result.success) {
+          onTransferInitiated(true);
+        } else {
+          toast({
+            title: "Sponsored transfer failed",
+            description: result.error || "Could not complete sponsored transfer",
+            status: "error",
+            duration: 3000,
+          });
+        }
+        return;
+      }
+
+      // Normal transfer flow
       const txParts = buildTransferTx({
         to: resolvedAddress!,
         amount: tokenAmount,
@@ -378,6 +441,45 @@ function TokenTransfer({
             Send
           </Text>
         </HStack>
+
+        {/* Non-premium upsell (compact, top of page) */}
+        {isUsdcOnBase && !premiumLoading && premiumStatus && !premiumStatus.isPremium && accountType !== "impersonator" && (
+          <HStack
+            spacing={2}
+            px={2.5}
+            py={1.5}
+            bg="bauhaus.yellow"
+            border="2px solid"
+            borderColor="bauhaus.black"
+            justify="space-between"
+          >
+            <Box>
+              <Text fontSize="2xs" color="bauhaus.black" fontWeight="700">
+                ✨ Stake 20M+ sWCHAN for gas-free USDC sends
+              </Text>
+              <Text fontSize="2xs" color="blackAlpha.700" fontWeight="600">
+                and other pro features!
+              </Text>
+            </Box>
+            <Button
+              size="xs"
+              h="22px"
+              px={2}
+              bg="bauhaus.yellow"
+              color="bauhaus.black"
+              fontWeight="800"
+              fontSize="2xs"
+              borderRadius={0}
+              border="2px solid"
+              borderColor="bauhaus.black"
+              _hover={{ bg: "#e0b01c" }}
+              onClick={() => window.open("https://stake.walletchan.com", "_blank")}
+              flexShrink={0}
+            >
+              STAKE
+            </Button>
+          </HStack>
+        )}
 
         {/* Token selector card */}
         {holdingsLoading && !token ? (
@@ -799,6 +901,27 @@ function TokenTransfer({
           )}
         </Box>
 
+        {/* Sponsored USDC banner */}
+        {isUsdcOnBase && !premiumLoading && premiumStatus?.isPremium && accountType !== "impersonator" && (
+          <Box
+            bg="bauhaus.blue"
+            border="3px solid"
+            borderColor="bauhaus.black"
+            boxShadow="3px 3px 0px 0px #121212"
+            p={3}
+          >
+            <Text fontSize="md" color="bauhaus.white" fontWeight="900" textTransform="uppercase" textAlign="center">
+              Gas Sponsored by us!
+            </Text>
+            <Text fontSize="xs" color="whiteAlpha.800" fontWeight="700" textAlign="center" mt={0.5}>
+              Free USDC transfer for sWCHAN stakers
+            </Text>
+          </Box>
+        )}
+        {isUsdcOnBase && premiumLoading && (
+          <Skeleton h="60px" />
+        )}
+
         {/* Impersonator warning */}
         {accountType === "impersonator" && (
           <Box
@@ -835,6 +958,7 @@ function TokenTransfer({
             borderColor="bauhaus.black"
             boxShadow="4px 4px 0px 0px #121212"
             fontWeight="700"
+            fontSize={isSponsoredFlow ? "xs" : undefined}
             _hover={{
               bg: "bauhaus.blue",
               transform: "translateY(-2px)",
@@ -845,7 +969,7 @@ function TokenTransfer({
               boxShadow: "none",
             }}
           >
-            Send
+            {isSponsoredFlow ? "Sign (Gas-Free)" : "Send"}
           </Button>
         </HStack>
       </VStack>
