@@ -1,10 +1,32 @@
-import { createPublicClient, http } from "viem";
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+} from "viem";
 import { base } from "viem/chains";
+import { privateKeyToAccount } from "viem/accounts";
 
 const publicClient = createPublicClient({
   chain: base,
-  transport: http(),
+  transport: http(process.env.NEXT_PUBLIC_BASE_RPC_URL || undefined),
 });
+
+/**
+ * Creates a wallet client for the sponsor relayer.
+ * Uses SPONSOR_RELAYER_PRIVATE_KEY env var to sign and broadcast txs on Base.
+ */
+export function createRelayerWalletClient() {
+  const pk = process.env.SPONSOR_RELAYER_PRIVATE_KEY;
+  if (!pk) {
+    throw new Error("SPONSOR_RELAYER_PRIVATE_KEY not configured");
+  }
+  const account = privateKeyToAccount(pk as `0x${string}`);
+  return createWalletClient({
+    account,
+    chain: base,
+    transport: http(process.env.NEXT_PUBLIC_BASE_RPC_URL || undefined),
+  });
+}
 
 /**
  * Verify a plain message signature.

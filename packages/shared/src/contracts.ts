@@ -19,6 +19,10 @@ export const BNKRW_POOL_ADDRESS =
 export const WCHAN_TOKEN_ADDRESS =
   "0xBa5ED0000e1CA9136a695f0a848012A16008B032";
 
+// USDC on Base (supports ERC-3009 transferWithAuthorization)
+export const BASE_USDC_ADDRESS =
+  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+
 // Uniswap V4 pool ID for WCHAN
 export const WCHAN_POOL_ID =
   "0x5a7b2f855c58a230afd95981147bd4c15f074ad22e18318140bbe2bfbb79f062";
