@@ -1702,9 +1702,14 @@ function App() {
                 setTransferToken(null);
                 setView("main");
               }}
-              onTransferInitiated={() => {
+              onTransferInitiated={(sponsored?: boolean) => {
                 setTransferToken(null);
-                // The newPendingTxRequest listener will auto-switch to txConfirm
+                if (sponsored) {
+                  // Sponsored flow: no tx confirmation screen, go straight to activity
+                  setView("main");
+                  setActivityTabTrigger((n) => n + 1);
+                }
+                // Normal flow: the newPendingTxRequest listener will auto-switch to txConfirm
               }}
             />
           </Suspense>
