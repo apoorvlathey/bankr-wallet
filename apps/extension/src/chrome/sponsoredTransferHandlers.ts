@@ -10,10 +10,7 @@ import { parseUnits } from "viem";
 import { signTypedData } from "./localSigner";
 import { signMessageViaApi } from "./bankrApi";
 import { getActiveAccount } from "./accountStorage";
-import {
-  addTxToHistory,
-  updateTxInHistory,
-} from "./txHistoryStorage";
+import { addTxToHistory } from "./txHistoryStorage";
 import { startReceiptPolling } from "./txReceiptPoller";
 import {
   getCachedApiKey,
@@ -176,35 +173,8 @@ export async function handleSponsoredTransfer(message: {
     signature = result.signature;
   }
 
-  // 4. Create tx history entry
-  const txId = crypto.randomUUID();
-  await addTxToHistory({
-    id: txId,
-    status: "processing",
-    tx: {
-      from: fromAddress,
-      to: BASE_USDC_ADDRESS,
-      data: "0x",
-      value: "0x0",
-      chainId: 8453,
-    },
-    origin: "Send USDC (Sponsored)",
-    favicon: USDC_LOGO_URL,
-    chainName: "Base",
-    chainId: 8453,
-    createdAt: Date.now(),
-    accountType:
-      account.type === "impersonator" ? "bankr" : account.type,
-    functionName: "transferWithAuthorization",
-    transferMeta: {
-      recipient: to,
-      amount,
-      symbol: "USDC",
-      tokenLogo: USDC_LOGO_URL,
-    },
-  });
-
-  // 5. Call API
+  // 4. Call API (only record to history if we get a txHash back)
+  let data: any;
   try {
     const res = await fetch(SPONSORED_TRANSFER_API, {
       method: "POST",
@@ -220,33 +190,49 @@ export async function handleSponsoredTransfer(message: {
       }),
     });
 
-    const data = await res.json();
+    data = await res.json();
 
     if (!res.ok) {
-      await updateTxInHistory(txId, {
-        status: "failed",
-        error: data.error || "Sponsored transfer failed",
-        completedAt: Date.now(),
-      });
       return { success: false, error: data.error || "Sponsored transfer failed" };
     }
-
-    // 6. Update to pending and start polling
-    const txHash = data.txHash;
-    await updateTxInHistory(txId, {
-      status: "pending",
-      txHash,
-    });
-    startReceiptPolling(txId, txHash, 8453);
-
-    return { success: true, txId };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Network error";
-    await updateTxInHistory(txId, {
-      status: "failed",
-      error: errorMsg,
-      completedAt: Date.now(),
-    });
     return { success: false, error: errorMsg };
   }
+
+  // 5. API succeeded — verify we got a txHash before recording
+  const txHash = data.txHash;
+  if (!txHash) {
+    return { success: false, error: data.error || "No transaction hash returned" };
+  }
+  const txId = crypto.randomUUID();
+  await addTxToHistory({
+    id: txId,
+    status: "pending",
+    tx: {
+      from: fromAddress,
+      to: BASE_USDC_ADDRESS,
+      data: "0x",
+      value: "0x0",
+      chainId: 8453,
+    },
+    origin: "Send USDC (Sponsored)",
+    favicon: USDC_LOGO_URL,
+    chainName: "Base",
+    chainId: 8453,
+    createdAt: Date.now(),
+    accountType:
+      account.type === "impersonator" ? "bankr" : account.type,
+    functionName: "transferWithAuthorization",
+    txHash,
+    transferMeta: {
+      recipient: to,
+      amount,
+      symbol: "USDC",
+      tokenLogo: USDC_LOGO_URL,
+    },
+  });
+  startReceiptPolling(txId, txHash, 8453);
+
+  return { success: true, txId };
 }
