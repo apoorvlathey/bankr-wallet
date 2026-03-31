@@ -425,9 +425,10 @@ function SignatureRequestConfirmation({
               </Text>
               <HStack spacing={1.5}>
                 <Box
-                  bg="bauhaus.black"
+                  bg="gray.100"
                   border="1.5px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="gray.300"
+                  borderRadius="md"
                   p={0.5}
                   display="flex"
                   alignItems="center"
@@ -440,6 +441,7 @@ function SignatureRequestConfirmation({
                     }
                     alt="favicon"
                     boxSize="14px"
+                    sx={{ filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.4)) drop-shadow(0 0 0.5px rgba(255,255,255,0.4))" }}
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
                       const googleFallback = googleFaviconUrl(new URL(origin).hostname);
@@ -447,7 +449,7 @@ function SignatureRequestConfirmation({
                         target.src = googleFallback;
                       }
                     }}
-                    fallback={<Box boxSize="14px" bg="bauhaus.black" />}
+                    fallback={<Box boxSize="14px" bg="gray.300" borderRadius="sm" />}
                   />
                 </Box>
                 <Text fontSize="xs" fontWeight="700" color="text.primary">

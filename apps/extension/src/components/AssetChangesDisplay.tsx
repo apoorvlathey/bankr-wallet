@@ -116,9 +116,9 @@ function AssetRow({ change, chainId }: { change: AssetChange; chainId: number })
           {/* Line 2: Name + copy/explorer ... USD */}
           <HStack w="full" justify="space-between" spacing={2}>
             <HStack spacing={0.5} minW={0}>
-              {showName && (
+              {!isNative && (
                 <Text fontSize="2xs" color="text.tertiary" noOfLines={1}>
-                  {change.name}
+                  {showName ? change.name : `${change.address.slice(0, 6)}...${change.address.slice(-4)}`}
                 </Text>
               )}
               {!isNative && (

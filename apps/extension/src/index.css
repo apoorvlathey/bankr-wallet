@@ -1,6 +1,17 @@
 /* Bauhaus Design System - Outfit geometric sans-serif font */
 @import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap");
 
+/* Bell ringing animation for pending request banners */
+@keyframes bell-ring {
+  0%, 100% { transform: rotate(0deg); }
+  10% { transform: rotate(14deg); }
+  20% { transform: rotate(-12deg); }
+  30% { transform: rotate(10deg); }
+  40% { transform: rotate(-8deg); }
+  50% { transform: rotate(4deg); }
+  60% { transform: rotate(0deg); }
+}
+
 html {
   width: 360px;
   height: 600px;

@@ -507,9 +507,10 @@ function TransactionConfirmation({
               </Text>
               <HStack spacing={1.5}>
                 <Box
-                  bg={origin === "WalletChan" ? "transparent" : "bauhaus.black"}
+                  bg={origin === "WalletChan" ? "transparent" : "gray.100"}
                   border={origin === "WalletChan" ? "none" : "1.5px solid"}
-                  borderColor="bauhaus.black"
+                  borderColor="gray.300"
+                  borderRadius="md"
                   p={origin === "WalletChan" ? 0 : 0.5}
                   display="flex"
                   alignItems="center"
@@ -526,6 +527,7 @@ function TransactionConfirmation({
                     }
                     alt="favicon"
                     boxSize={origin === "WalletChan" ? "20px" : "14px"}
+                    sx={{ filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.4)) drop-shadow(0 0 0.5px rgba(255,255,255,0.4))" }}
                     onError={(e) => {
                       if (originHostname) {
                         const target = e.target as HTMLImageElement;
@@ -535,7 +537,7 @@ function TransactionConfirmation({
                         }
                       }
                     }}
-                    fallback={<Box boxSize="14px" bg="bauhaus.black" />}
+                    fallback={<Box boxSize="14px" bg="gray.300" borderRadius="sm" />}
                   />
                 </Box>
                 <Text fontSize="xs" fontWeight="700" color="text.primary">

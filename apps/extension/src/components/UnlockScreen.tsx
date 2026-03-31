@@ -41,12 +41,12 @@ const SidePanelIcon = (props: any) => (
   </Icon>
 );
 
-// Fullscreen icon
+// Fullscreen icon (two diagonal arrows pointing outward - matches App.tsx)
 const FullScreenIcon = (props: any) => (
   <Icon viewBox="0 0 24 24" {...props}>
     <path
       fill="currentColor"
-      d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"
+      d="M14 3v2h3.59l-4.3 4.29 1.42 1.42L19 6.41V10h2V3h-7zM5 17.59V14H3v7h7v-2H6.41l4.3-4.29-1.42-1.42L5 17.59z"
     />
   </Icon>
 );
@@ -222,31 +222,6 @@ function UnlockScreen({
       px={6}
       position="relative"
     >
-      {/* Geometric decoration - top left */}
-      <Box
-        position="absolute"
-        top={4}
-        left={4}
-        w="12px"
-        h="12px"
-        bg="bauhaus.red"
-        border="2px solid"
-        borderColor="bauhaus.black"
-      />
-
-      {/* Geometric decoration - top right triangle */}
-      <Box
-        position="absolute"
-        top={4}
-        right={sidePanelSupported ? 20 : 12}
-        w="0"
-        h="0"
-        borderLeft="6px solid transparent"
-        borderRight="6px solid transparent"
-        borderBottom="12px solid"
-        borderBottomColor="bauhaus.blue"
-      />
-
       {/* Top right controls - fullscreen and sidepanel toggle */}
       <HStack position="absolute" top={3} right={3} spacing={1}>
         <Tooltip label="Open in fullscreen" placement="bottom">
@@ -282,34 +257,32 @@ function UnlockScreen({
         )}
       </HStack>
 
-      {/* Pending requests banner */}
+      {/* Pending requests banner - below the top controls */}
       {(pendingTxCount > 0 || pendingSignatureCount > 0 || pendingBatchCount > 0) && (
         <Box
           position="absolute"
-          top={3}
+          top={12}
           left={3}
-          right={sidePanelSupported ? 20 : 12}
+          right={3}
           bg="bauhaus.yellow"
           border="2px solid"
           borderColor="bauhaus.black"
           boxShadow="3px 3px 0px 0px #121212"
           px={3}
-          py={2}
+          py={1.5}
         >
-          <HStack spacing={2}>
+          <HStack spacing={2} justifyContent="center">
             <Box
-              p={1.5}
+              p={1}
               bg="bauhaus.black"
               display="flex"
               alignItems="center"
               justifyContent="center"
               flexShrink={0}
             >
-              <BellIcon boxSize={3.5} color="bauhaus.yellow" />
+              <BellIcon boxSize={3} color="bauhaus.yellow" sx={{ animation: "bell-ring 1.5s ease-in-out infinite", transformOrigin: "top center" }} />
             </Box>
             <Text
-              flex="1"
-              textAlign="center"
               fontSize="xs"
               fontWeight="700"
               color="bauhaus.black"

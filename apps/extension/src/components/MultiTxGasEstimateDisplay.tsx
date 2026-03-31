@@ -201,11 +201,11 @@ function MultiTxGasEstimateDisplay({
           _hover={{ bg: "bg.muted" }}
           justify="space-between"
         >
-          <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-            Estimated Gas Fee
+          <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" flexShrink={0}>
+            Gas Fee
           </Text>
-          <HStack spacing={1}>
-            <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono">
+          <HStack spacing={1} minW={0}>
+            <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono" noOfLines={1}>
               {formatEth(totalCostWei)}
             </Text>
             {usdDisplay && (

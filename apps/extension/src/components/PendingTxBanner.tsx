@@ -40,54 +40,46 @@ function PendingTxBanner({ txCount, signatureCount, batchCount = 0, onClickTx, o
   return (
     <Box
       bg="bauhaus.yellow"
-      border="3px solid"
+      border="2px solid"
       borderColor="bauhaus.black"
-      boxShadow="4px 4px 0px 0px #121212"
-      p={3}
+      boxShadow="3px 3px 0px 0px #121212"
+      px={3}
+      py={1.5}
       cursor="pointer"
       onClick={handleClick}
       _hover={{
         transform: "translateY(-2px)",
-        boxShadow: "6px 6px 0px 0px #121212",
+        boxShadow: "5px 5px 0px 0px #121212",
       }}
       _active={{
         transform: "translate(2px, 2px)",
         boxShadow: "none",
       }}
       transition="all 0.2s ease-out"
-      position="relative"
     >
-      {/* Corner decoration */}
-      <Box
-        position="absolute"
-        top="-3px"
-        right="-3px"
-        w="10px"
-        h="10px"
-        bg="bauhaus.red"
-        border="2px solid"
-        borderColor="bauhaus.black"
-      />
-
-      <HStack spacing={0}>
-        <Box w="40px" flexShrink={0}>
-          <Box
-            p={1.5}
-            bg="bauhaus.black"
-            w="fit-content"
-          >
-            <BellIcon boxSize={4} color="bauhaus.yellow" />
-          </Box>
+      <HStack spacing={2}>
+        <Box
+          p={1}
+          bg="bauhaus.black"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          flexShrink={0}
+        >
+          <BellIcon boxSize={3} color="bauhaus.yellow" sx={{ animation: "bell-ring 1.5s ease-in-out infinite", transformOrigin: "top center" }} />
         </Box>
-        <Box flex="1" textAlign="center">
-          <Text fontSize="sm" fontWeight="700" color="bauhaus.black" textTransform="uppercase" letterSpacing="wider">
-            {getLabel()}
-          </Text>
-        </Box>
-        <Box w="40px" flexShrink={0} display="flex" justifyContent="flex-end">
-          <Box bg="bauhaus.black" p={1}>
-            <ChevronRightIcon color="bauhaus.yellow" />
-          </Box>
+        <Text flex="1" textAlign="center" fontSize="xs" fontWeight="700" color="bauhaus.black" textTransform="uppercase" letterSpacing="wider">
+          {getLabel()}
+        </Text>
+        <Box
+          bg="bauhaus.black"
+          p={0.5}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          flexShrink={0}
+        >
+          <ChevronRightIcon boxSize={3.5} color="bauhaus.yellow" />
         </Box>
       </HStack>
     </Box>
