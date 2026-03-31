@@ -34,6 +34,7 @@ import { getChainConfig } from "@/constants/chainConfig";
 import { CHAIN_REGISTRY, SWAP_SUPPORTED_CHAIN_IDS } from "@/constants/chainRegistry";
 import type { Account } from "@/chrome/types";
 import TokenSelector from "@/components/Swap/TokenSelector";
+import { WALLETCHAN_STAKE_URL } from "@/constants/externalUrls";
 
 /** USDC on Base (ERC-3009 transferWithAuthorization) */
 const BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
@@ -80,6 +81,7 @@ function TokenTransfer({
   const [isUsdMode, setIsUsdMode] = useState(false);
   const [sliderValue, setSliderValue] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sponsoredFailed, setSponsoredFailed] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [customTokenLoading, setCustomTokenLoading] = useState(false);
 
@@ -365,12 +367,7 @@ function TokenTransfer({
         if (result.success) {
           onTransferInitiated(true);
         } else {
-          toast({
-            title: "Sponsored transfer failed",
-            description: result.error || "Could not complete sponsored transfer",
-            status: "error",
-            duration: 3000,
-          });
+          setSponsoredFailed(result.error || "Could not complete sponsored transfer");
         }
         return;
       }
@@ -378,6 +375,64 @@ function TokenTransfer({
       // Normal transfer flow
       const txParts = buildTransferTx({
         to: resolvedAddress!,
+        amount: tokenAmount,
+        contractAddress: token.contractAddress,
+        decimals: token.decimals,
+        chainId: token.chainId,
+      });
+
+      const result = await new Promise<{ success: boolean; txId?: string; error?: string }>(
+        (resolve) => {
+          chrome.runtime.sendMessage(
+            {
+              type: "initiateTransfer",
+              tx: {
+                from: fromAddress,
+                to: txParts.to,
+                data: txParts.data,
+                value: txParts.value,
+                chainId: token.chainId,
+              },
+              chainName: chainConfig.name,
+              tokenName: token.symbol.toUpperCase(),
+              tokenLogo: token.logoUrl || null,
+            },
+            resolve
+          );
+        }
+      );
+
+      if (result.success) {
+        onTransferInitiated();
+      } else {
+        toast({
+          title: "Transfer failed",
+          description: result.error || "Could not initiate transfer",
+          status: "error",
+          duration: 3000,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to initiate transfer",
+        status: "error",
+        duration: 3000,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  /** Fallback: send as a normal transfer (user pays gas) when sponsored route fails */
+  const handleFallbackSend = async () => {
+    if (!token || !resolvedAddress || !tokenAmount) return;
+    setIsSubmitting(true);
+    setSponsoredFailed(null);
+
+    try {
+      const txParts = buildTransferTx({
+        to: resolvedAddress,
         amount: tokenAmount,
         contractAddress: token.contractAddress,
         decimals: token.decimals,
@@ -489,7 +544,7 @@ function TokenTransfer({
               border="2px solid"
               borderColor="bauhaus.black"
               _hover={{ bg: "#e0b01c" }}
-              onClick={() => window.open("https://stake.walletchan.com", "_blank")}
+              onClick={() => window.open(WALLETCHAN_STAKE_URL, "_blank")}
               flexShrink={0}
             >
               STAKE
@@ -937,6 +992,51 @@ function TokenTransfer({
         )}
         {isUsdcOnBase && premiumLoading && (
           <Skeleton h="60px" />
+        )}
+
+        {/* Sponsored transfer failed — fallback to normal send */}
+        {sponsoredFailed && (
+          <Box
+            bg="bauhaus.red"
+            border="3px solid"
+            borderColor="bauhaus.black"
+            boxShadow="3px 3px 0px 0px #121212"
+            p={3}
+          >
+            <Text fontSize="xs" color="bauhaus.white" fontWeight="800">
+              ⚠️ Gas-free transfer is temporarily unavailable.
+            </Text>
+            <Text fontSize="xs" color="whiteAlpha.800" fontWeight="700" mt={1}>
+              You can still send by paying gas yourself.
+            </Text>
+            <Button
+              mt={2}
+              w="full"
+              size="sm"
+              bg="bauhaus.yellow"
+              color="bauhaus.black"
+              border="2px solid"
+              borderColor="bauhaus.black"
+              borderRadius={0}
+              boxShadow="2px 2px 0px 0px #121212"
+              fontWeight="800"
+              fontSize="xs"
+              textTransform="uppercase"
+              isLoading={isSubmitting}
+              onClick={handleFallbackSend}
+              animation="fallbackBounce 1.5s ease-in-out infinite"
+              sx={{
+                "@keyframes fallbackBounce": {
+                  "0%, 100%": { transform: "translateY(0)" },
+                  "50%": { transform: "translateY(-3px)" },
+                },
+              }}
+              _hover={{ bg: "#e0b01c", animation: "none", transform: "translateY(-1px)", boxShadow: "3px 3px 0px 0px #121212" }}
+              _active={{ animation: "none", transform: "translate(1px, 1px)", boxShadow: "none" }}
+            >
+              ⛽ Send (Pay Gas)
+            </Button>
+          </Box>
         )}
 
         {/* Impersonator warning */}
