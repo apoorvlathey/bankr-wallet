@@ -9,7 +9,7 @@ import {
   IconButton,
   Tooltip,
 } from "@chakra-ui/react";
-import { ExternalLinkIcon, RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { CheckIcon, CopyIcon, ExternalLinkIcon, RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 import { useDisclosure } from "@chakra-ui/react";
 import { fetchPortfolio, PortfolioToken, DefiPosition } from "@/chrome/portfolioApi";
 import { fetchOnchainBalances } from "@/chrome/onchainBalances";
@@ -43,6 +43,7 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
   const [lastFetched, setLastFetched] = useState(0);
   const [customTokenKeys, setCustomTokenKeys] = useState<Set<string>>(new Set());
   const [editingToken, setEditingToken] = useState<PortfolioToken | null>(null);
+  const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
   const editModal = useDisclosure();
 
   // Load hide preference
@@ -238,7 +239,7 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
               borderBottom={i < tokens.length - 1 || defiPositions.length > 0 ? "1px solid" : "none"}
               borderColor="gray.200"
               cursor={hasHover ? "pointer" : "default"}
-              _hover={hasHover ? { bg: "bg.muted", "& > .send-label": { opacity: 1 }, "& > .edit-label": { opacity: 1, pointerEvents: "auto" }, "& > .value-col": { opacity: 0 } } : {}}
+              _hover={{ bg: "bg.muted", "& > .send-label": { opacity: 1 }, "& > .edit-label": { opacity: 1, pointerEvents: "auto" }, "& > .value-col": { opacity: 0 }, "& .copy-addr-btn": { opacity: 1 } }}
               onClick={() => onTokenClick?.(token)}
               transition="background 0.15s"
               position="relative"
@@ -341,9 +342,35 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
 
               {/* Token info */}
               <VStack align="start" spacing={0} flex={1} minW={0}>
-                <Text fontSize="xs" fontWeight="700" color="text.primary" noOfLines={1} textTransform="uppercase">
-                  {token.symbol}
-                </Text>
+                <HStack spacing={0.5}>
+                  <Text fontSize="xs" fontWeight="700" color="text.primary" noOfLines={1} textTransform="uppercase">
+                    {token.symbol}
+                  </Text>
+                  {token.contractAddress && token.contractAddress !== "0x0000000000000000000000000000000000000000" && token.contractAddress !== "native" && (
+                    <IconButton
+                      className="copy-addr-btn"
+                      aria-label="Copy token address"
+                      icon={copiedAddr === `${token.chainId}-${token.contractAddress}` ? <CheckIcon /> : <CopyIcon />}
+                      size="xs"
+                      variant="ghost"
+                      color={copiedAddr === `${token.chainId}-${token.contractAddress}` ? "bauhaus.yellow" : "text.tertiary"}
+                      opacity={copiedAddr === `${token.chainId}-${token.contractAddress}` ? 1 : 0}
+                      transition="opacity 0.15s"
+                      minW="auto"
+                      h="auto"
+                      p={0}
+                      fontSize="10px"
+                      _hover={{ color: "bauhaus.blue" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(token.contractAddress);
+                        const key = `${token.chainId}-${token.contractAddress}`;
+                        setCopiedAddr(key);
+                        setTimeout(() => setCopiedAddr((prev) => prev === key ? null : prev), 2000);
+                      }}
+                    />
+                  )}
+                </HStack>
                 <Text fontSize="10px" color="text.tertiary" fontWeight="500" noOfLines={1}>
                   {token.balanceFormatted}
                 </Text>
