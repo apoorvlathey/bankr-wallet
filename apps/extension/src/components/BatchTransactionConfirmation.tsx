@@ -27,6 +27,7 @@ import type { PendingBatchTxRequest, ERC5792Call } from "@/chrome/erc5792Types";
 import type { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import CalldataDecoder from "@/components/CalldataDecoder";
+import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import AssetChangesDisplay from "@/components/AssetChangesDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { CopyButton } from "@/components/CopyButton";
@@ -820,6 +821,12 @@ function CallCard({
                 chainId={chainId}
                 onFunctionName={onFunctionName}
               />
+            </Box>
+          )}
+          {/* ERC-8213: Calldata Digest */}
+          {hasCalldata && (
+            <Box w="full" px={2} pb={1.5}>
+              <CalldataDigestDisplay calldata={call.data!} />
             </Box>
           )}
         </VStack>

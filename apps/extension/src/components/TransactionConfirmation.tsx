@@ -26,6 +26,7 @@ import {
   ExternalLinkIcon,
 } from "@chakra-ui/icons";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
+import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import { GasOverrides } from "@/chrome/txHandlers";
 import { getChainConfig } from "@/constants/chainConfig";
 import { resolveAddressToName } from "@/lib/ensUtils";
@@ -783,7 +784,6 @@ function TransactionConfirmation({
             </Box>
           </Box>
         )}
-
         {/* Pinned bottom section — sticky so buttons are always reachable */}
         <Box
           position="sticky"
@@ -796,6 +796,10 @@ function TransactionConfirmation({
           zIndex={1}
         >
         <VStack spacing={2} align="stretch">
+        {/* ERC-8213: Calldata Digest */}
+        {tx.data && tx.data !== "0x" && (
+          <CalldataDigestDisplay calldata={tx.data} />
+        )}
         {/* Simulate on Tenderly */}
         {(() => {
           const tenderlyUrl = (() => {

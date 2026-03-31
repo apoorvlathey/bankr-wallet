@@ -17,6 +17,7 @@ import { ArrowBackIcon, ChevronLeftIcon, ChevronRightIcon } from "@chakra-ui/ico
 import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import TypedDataDisplay from "@/components/TypedDataDisplay";
+import { Eip712DigestDisplay } from "@/components/DigestDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { CopyButton } from "@/components/CopyButton";
 import { googleFaviconUrl } from "@/constants/externalUrls";
@@ -527,6 +528,23 @@ function SignatureRequestConfirmation({
           <MessageDataDisplay message={message} rawData={rawData} />
         )}
 
+        {/* Pinned bottom section — sticky so buttons are always reachable */}
+        <Box
+          position="sticky"
+          bottom={-4}
+          bg="bg.base"
+          pt={1}
+          pb={1}
+          mx={-4}
+          px={4}
+          zIndex={1}
+        >
+        <VStack spacing={2} align="stretch">
+        {/* ERC-8213: EIP-712 Digest */}
+        {typedData && (
+          <Eip712DigestDisplay typedData={typedData} />
+        )}
+
         {/* Impersonator Info Box */}
         {accountType === "impersonator" && (
           <Box
@@ -544,7 +562,7 @@ function SignatureRequestConfirmation({
 
         {/* Action Buttons */}
         {(accountType === "privateKey" || accountType === "seedPhrase" || accountType === "bankr") ? (
-          <HStack spacing={3} mt={2}>
+          <HStack spacing={3}>
             <Button
               variant="secondary"
               flex={1}
@@ -582,11 +600,12 @@ function SignatureRequestConfirmation({
             variant="danger"
             w="full"
             onClick={handleCancel}
-            mt={2}
           >
             Reject
           </Button>
         )}
+        </VStack>
+        </Box>
       </VStack>
     </Box>
   );
