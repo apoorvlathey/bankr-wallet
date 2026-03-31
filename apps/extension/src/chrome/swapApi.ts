@@ -224,6 +224,30 @@ export async function fetchTokenInfo(
 // Token Allowance Check (on-chain)
 // ---------------------------------------------------------------------------
 
+export async function getTokenBalanceWei(
+  tokenAddress: string,
+  owner: string,
+  chainId: number,
+): Promise<bigint> {
+  const rpcUrl = RPC_URLS[chainId];
+  if (!rpcUrl) return 0n;
+
+  const client = createPublicClient({
+    transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 0 }),
+  });
+
+  try {
+    return await client.readContract({
+      address: tokenAddress as Address,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [owner as Address],
+    });
+  } catch {
+    return 0n;
+  }
+}
+
 export async function checkTokenAllowance(
   tokenAddress: string,
   owner: string,

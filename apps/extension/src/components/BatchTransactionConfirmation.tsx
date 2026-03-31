@@ -30,6 +30,7 @@ import CalldataDecoder from "@/components/CalldataDecoder";
 import AssetChangesDisplay from "@/components/AssetChangesDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { CopyButton } from "@/components/CopyButton";
+import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
 
 const scaleIn = keyframes`
@@ -496,6 +497,31 @@ function BatchTransactionConfirmation({
         <AssetChangesDisplay
           txRequest={syntheticTxRequest}
           batchCalls={calls.map((c) => ({ to: c.to, data: c.data, value: c.value }))}
+        />
+
+        {/* Gas Estimate */}
+        <MultiTxGasEstimateDisplay
+          transactions={calls.map((c, i) => ({
+            tx: {
+              from: fromAddress,
+              to: c.to || "0x0000000000000000000000000000000000000000",
+              data: c.data || "0x",
+              value: c.value || "0x0",
+              chainId,
+            },
+            label: decodedFunctionNames[i] || `Call ${i + 1}`,
+          }))}
+          accountType={accountType || "bankr"}
+          batchedTx={{
+            tx: {
+              from: fromAddress,
+              to: encodedBatch.to,
+              data: encodedBatch.data,
+              value: encodedBatch.value,
+              chainId,
+            },
+            label: `Batch Transaction (${calls.length} calls)`,
+          }}
         />
 
         {/* Tenderly link */}

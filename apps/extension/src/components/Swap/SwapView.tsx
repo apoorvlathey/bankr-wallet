@@ -27,6 +27,7 @@ import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon }
 import { parseEther, parseUnits, formatUnits } from "viem";
 import { useBauhausToast } from "@/hooks/useBauhausToast";
 import { fetchPortfolio, type PortfolioToken } from "@/chrome/portfolioApi";
+import { getCustomTokens } from "@/chrome/customTokenStorage";
 import {
   NATIVE_TOKEN_ADDRESS,
   DEFAULT_SLIPPAGE_BPS,
@@ -38,13 +39,18 @@ import {
 } from "@/chrome/swapApi";
 import {
   SWAP_SUPPORTED_CHAIN_IDS,
+  BANKR_SUPPORTED_CHAIN_IDS,
   CHAIN_REGISTRY,
 } from "@/constants/chainRegistry";
 import { getChainConfig } from "@/constants/chainConfig";
+import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
+import type { ERC5792Call } from "@/chrome/erc5792Types";
+import type { SwapTxEntry } from "@/chrome/txHandlers";
 import TokenSelector from "./TokenSelector";
 import BuyTokenSelector from "./BuyTokenSelector";
 import SwapQuoteDisplay from "./SwapQuoteDisplay";
 import SlippageSettings from "./SlippageSettings";
+import SwapConfirmation from "./SwapConfirmation";
 
 // Swap direction arrow icon
 const SwapArrowIcon = (props: React.ComponentProps<typeof Icon>) => (
@@ -88,6 +94,7 @@ interface SwapViewProps {
   onSwapInitiated: () => void;
   onChainChange: (chainName: string) => void;
   initialBuyToken?: { address: string; name: string; symbol: string; decimals: number; logoURI?: string };
+  initialSellToken?: PortfolioToken;
 }
 
 function SwapView({
@@ -99,6 +106,7 @@ function SwapView({
   onSwapInitiated,
   onChainChange,
   initialBuyToken,
+  initialSellToken,
 }: SwapViewProps) {
   const toast = useBauhausToast();
   const chainConfig = getChainConfig(chainId);
@@ -132,6 +140,7 @@ function SwapView({
   const [sellCustomLoading, setSellCustomLoading] = useState(false);
   const [sellCustomError, setSellCustomError] = useState<string | null>(null);
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
+  const [isMaxMode, setIsMaxMode] = useState(false);
 
   // Quote
   const [quote, setQuote] = useState<SwapQuoteResponse | null>(null);
@@ -143,6 +152,12 @@ function SwapView({
 
   // Submit
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Confirmation step
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [preparedTransactions, setPreparedTransactions] = useState<SwapTxEntry[] | null>(null);
+  const [preparedBatchTx, setPreparedBatchTx] = useState<{ to: string; data: string; value: string } | null>(null);
+  const [preparedQuote, setPreparedQuote] = useState<SwapQuoteResponse | null>(null);
 
   const quoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenInfoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -160,14 +175,16 @@ function SwapView({
     if (isNaN(num) || num <= 0) return "";
     if (isUsdMode && hasPrice && sellToken) {
       const converted = num / sellToken.priceUsd;
-      if (converted >= sellBalance) return sellToken.balance;
-      return converted.toFixed(sellToken.decimals);
+      // Cap at balance only for MAX/slider to avoid rounding overshoot
+      const final = isMaxMode ? Math.min(converted, sellBalance) : converted;
+      return final.toFixed(sellToken.decimals);
     }
     return sellAmount;
-  }, [sellAmount, isUsdMode, hasPrice, sellToken, sellBalance]);
+  }, [sellAmount, isUsdMode, hasPrice, sellToken, sellBalance, isMaxMode]);
 
   const setAmountFromSlider = (pct: number) => {
     if (!sellToken) return;
+    setIsMaxMode(pct === 100);
     if (pct === 0) {
       setSellAmount("");
     } else if (pct === 100) {
@@ -207,11 +224,7 @@ function SwapView({
     if (sellAmount && !isNaN(num) && num > 0) {
       if (isUsdMode) {
         const converted = num / sellToken.priceUsd;
-        setSellAmount(
-          converted >= sellBalance
-            ? sellToken.balance
-            : parseFloat(converted.toPrecision(6)).toString(),
-        );
+        setSellAmount(parseFloat(converted.toPrecision(6)).toString());
       } else {
         setSellAmount((num * sellToken.priceUsd).toFixed(2));
       }
@@ -230,17 +243,69 @@ function SwapView({
     let cancelled = false;
     (async () => {
       try {
-        const data = await fetchPortfolio(fromAddress);
+        const [data, customTokens] = await Promise.all([
+          fetchPortfolio(fromAddress),
+          getCustomTokens(),
+        ]);
         if (cancelled) return;
-        const chainTokens = data.tokens.filter(
-          (t) => t.chainId === chainId,
+
+        // Merge custom tokens not already in API response
+        const apiTokenKeys = new Set(
+          data.tokens.map((t) => `${t.chainId}-${t.contractAddress.toLowerCase()}`)
         );
+        const customOnlyTokens = customTokens
+          .filter((ct) => !apiTokenKeys.has(`${ct.chainId}-${ct.contractAddress}`))
+          .filter((ct) => ct.chainId === chainId);
+
+        // Fetch on-chain balances for custom tokens
+        const customBalances = await Promise.all(
+          customOnlyTokens.map((ct) =>
+            new Promise<bigint>((resolve) => {
+              chrome.runtime.sendMessage(
+                { type: "getTokenBalanceWei", tokenAddress: ct.contractAddress, owner: fromAddress, chainId },
+                (res) => resolve(res?.balance ? BigInt(res.balance) : 0n),
+              );
+            }),
+          ),
+        );
+        if (cancelled) return;
+
+        const customAsPortfolio: PortfolioToken[] = customOnlyTokens.map((ct, i) => {
+          const balWei = customBalances[i];
+          const formatted = formatUnits(balWei, ct.decimals);
+          return {
+            symbol: ct.symbol,
+            name: ct.name,
+            contractAddress: ct.contractAddress,
+            chainId: ct.chainId,
+            decimals: ct.decimals,
+            balance: formatted,
+            balanceFormatted: formatted,
+            priceUsd: 0,
+            valueUsd: 0,
+            logoUrl: undefined,
+          };
+        });
+
+        const chainTokens = [...data.tokens.filter((t) => t.chainId === chainId), ...customAsPortfolio];
         setHoldings(chainTokens);
-        const native = chainTokens.find(
-          (t) => t.contractAddress === "native",
-        );
-        if (native) setSellToken(native);
-        else if (chainTokens.length > 0) setSellToken(chainTokens[0]);
+        // If initialSellToken provided, find the matching token from portfolio
+        if (initialSellToken) {
+          const match = chainTokens.find(
+            (t) => t.contractAddress.toLowerCase() === initialSellToken.contractAddress.toLowerCase(),
+          );
+          if (match) {
+            setSellToken(match);
+          } else {
+            setSellToken(initialSellToken);
+          }
+        } else {
+          const native = chainTokens.find(
+            (t) => t.contractAddress === "native",
+          );
+          if (native) setSellToken(native);
+          else if (chainTokens.length > 0) setSellToken(chainTokens[0]);
+        }
       } catch {
         // silently fail
       } finally {
@@ -386,7 +451,7 @@ function SwapView({
               setQuoteError(null);
             }
           } else {
-            setQuoteError(res?.error || "Failed to fetch quote");
+            setQuoteError("Unable to find swap quote");
             setQuote(null);
           }
         },
@@ -548,9 +613,9 @@ function SwapView({
   };
 
   // -----------------------------------------------------------------------
-  // Submit: Direct broadcast (approval + swap in one shot)
+  // Submit: Prepare transactions, then show confirmation screen
   // -----------------------------------------------------------------------
-  const handleSwap = async () => {
+  const handlePrepareSwap = async () => {
     if (!sellToken || !quote || !buyTokenInfo) return;
     if (accountType === "impersonator") {
       toast({
@@ -575,6 +640,29 @@ function SwapView({
       } catch {
         toast({ title: "Invalid amount", status: "error", duration: 3000 });
         return;
+      }
+
+      // 1b. For non-native tokens, cap at on-chain balance to avoid rounding
+      // issues where parseUnits(formattedBalance) > actual wei balance
+      if (sellToken.contractAddress !== "native") {
+        const balRes = await new Promise<{ success: boolean; balance?: string }>((resolve) => {
+          chrome.runtime.sendMessage(
+            {
+              type: "getTokenBalanceWei",
+              tokenAddress: sellToken.contractAddress,
+              owner: fromAddress,
+              chainId,
+            },
+            resolve,
+          );
+        });
+        if (balRes.success && balRes.balance) {
+          const onChainBalance = BigInt(balRes.balance);
+          const parsed = BigInt(sellAmountWei);
+          if (parsed > onChainBalance) {
+            sellAmountWei = onChainBalance.toString();
+          }
+        }
       }
 
       // 2. Get firm quote (with transaction object)
@@ -608,13 +696,7 @@ function SwapView({
       }
 
       // 3. Build transaction list (approval + swap)
-      const transactions: Array<{
-        tx: { from: string; to: string; data: string; value: string; chainId: number; gas?: string; gasPrice?: string };
-        origin: string;
-        favicon: string | null;
-        functionName?: string;
-        swapMeta?: { sellTokenSymbol: string; sellTokenLogo: string | null; buyTokenSymbol: string; buyTokenLogo: string | null };
-      }> = [];
+      const transactions: SwapTxEntry[] = [];
 
       const swapMeta = {
         sellTokenSymbol: sellToken.symbol,
@@ -734,31 +816,104 @@ function SwapView({
         swapMeta,
       });
 
-      // 4. Send all TXs for direct broadcast
-      const result = await new Promise<{
-        success: boolean;
-        txIds?: string[];
-        error?: string;
-      }>((resolve) => {
-        chrome.runtime.sendMessage(
-          {
-            type: "executeSwapDirect",
-            transactions,
-            chainName,
-          },
-          resolve,
-        );
-      });
+      // 4. Prepare batch encoding for Bankr accounts with multiple txs
+      const isBatchSupported =
+        (accountType === "bankr" || accountType === "impersonator") &&
+        BANKR_SUPPORTED_CHAIN_IDS.has(chainId);
 
-      if (result.success) {
-        onSwapInitiated();
-      } else {
-        toast({
-          title: "Swap failed",
-          description: result.error || "Could not execute swap",
-          status: "error",
-          duration: 3000,
+      let batchTx: { to: string; data: string; value: string } | null = null;
+      if (isBatchSupported && transactions.length > 1) {
+        const calls: ERC5792Call[] = transactions.map((t) => ({
+          to: t.tx.to as `0x${string}`,
+          data: (t.tx.data || "0x") as `0x${string}`,
+          value: (t.tx.value || "0x0") as `0x${string}`,
+        }));
+        batchTx = encodeBatchCalls(calls, fromAddress);
+      }
+
+      // 5. Store prepared data and show confirmation
+      setPreparedTransactions(transactions);
+      setPreparedBatchTx(batchTx);
+      setPreparedQuote(firmQuote.data);
+      setShowConfirmation(true);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error ? error.message : "Swap failed",
+        status: "error",
+        duration: 3000,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // -----------------------------------------------------------------------
+  // Confirm: broadcast prepared transactions
+  // -----------------------------------------------------------------------
+  const handleConfirmSwap = async () => {
+    if (!preparedTransactions || preparedTransactions.length === 0) return;
+
+    setIsSubmitting(true);
+
+    try {
+      if (preparedBatchTx) {
+        // Batch path: single atomic tx via Bankr API
+        const result = await new Promise<{
+          success: boolean;
+          txIds?: string[];
+          error?: string;
+        }>((resolve) => {
+          chrome.runtime.sendMessage(
+            {
+              type: "executeSwapBatch",
+              batchTx: preparedBatchTx,
+              originalTransactions: preparedTransactions,
+              chainId,
+              chainName,
+            },
+            resolve,
+          );
         });
+
+        if (result.success) {
+          onSwapInitiated();
+        } else {
+          toast({
+            title: "Swap failed",
+            description: result.error || "Could not execute swap",
+            status: "error",
+            duration: 3000,
+          });
+        }
+      } else {
+        // Sequential path: individual txs
+        const result = await new Promise<{
+          success: boolean;
+          txIds?: string[];
+          error?: string;
+        }>((resolve) => {
+          chrome.runtime.sendMessage(
+            {
+              type: "executeSwapDirect",
+              transactions: preparedTransactions,
+              chainName,
+            },
+            resolve,
+          );
+        });
+
+        if (result.success) {
+          onSwapInitiated();
+        } else {
+          toast({
+            title: "Swap failed",
+            description: result.error || "Could not execute swap",
+            status: "error",
+            duration: 3000,
+          });
+        }
       }
     } catch (error) {
       toast({
@@ -771,6 +926,13 @@ function SwapView({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleCancelConfirmation = () => {
+    setShowConfirmation(false);
+    setPreparedTransactions(null);
+    setPreparedBatchTx(null);
+    setPreparedQuote(null);
   };
 
   // -----------------------------------------------------------------------
@@ -931,6 +1093,34 @@ function SwapView({
           </Box>
         </VStack>
       </Box>
+    );
+  }
+
+  // -----------------------------------------------------------------------
+  // Confirmation screen
+  // -----------------------------------------------------------------------
+  if (showConfirmation && preparedTransactions && sellToken && buyTokenInfo && preparedQuote) {
+    return (
+      <SwapConfirmation
+        transactions={preparedTransactions}
+        sellToken={sellToken}
+        sellAmount={sellTokenAmount}
+        sellUsd={inputUsd}
+        buyTokenInfo={buyTokenInfo}
+        buyAmount={preparedQuote.buyAmount}
+        buyTokenDecimals={buyTokenInfo.decimals}
+        buyTokenLogoURI={buyTokenLogoURI}
+        buyUsd={outputUsd}
+        chainId={chainId}
+        chainName={chainName}
+        fromAddress={fromAddress}
+        accountType={accountType}
+        isBatched={!!preparedBatchTx}
+        batchedTx={preparedBatchTx ?? undefined}
+        onConfirm={handleConfirmSwap}
+        onCancel={handleCancelConfirmation}
+        isSubmitting={isSubmitting}
+      />
     );
   }
 
@@ -1120,7 +1310,7 @@ function SwapView({
               customTokenError={sellCustomError}
               chainName={chainName}
             />
-            <InputGroup flex={1}>
+            <InputGroup flex={1} isolation="isolate">
               {isUsdMode && (
                 <InputLeftElement pointerEvents="none" h="full" w="28px" pl={2}>
                   <Text fontFamily="mono" fontSize="sm" color="text.tertiary" fontWeight="700">$</Text>
@@ -1131,6 +1321,7 @@ function SwapView({
                 value={sellAmount}
                 onChange={(e) => {
                   if (/^\d*\.?\d*$/.test(e.target.value)) {
+                    setIsMaxMode(false);
                     setSellAmount(e.target.value);
                     syncSliderFromAmount(e.target.value);
                   }
@@ -1146,15 +1337,18 @@ function SwapView({
                 pl={isUsdMode ? "28px" : undefined}
                 pr="50px"
               />
-              <InputRightElement w="45px" h="full">
+              <InputRightElement w="45px" h="calc(100% - 6px)" top="3px" right="3px">
                 <Button
                   size="xs"
                   variant="ghost"
                   color="bauhaus.blue"
                   fontWeight="800"
+                  borderRadius="0"
+                  h="full"
                   onClick={() => {
                     if (sellToken) {
                       setSliderValue(100);
+                      setIsMaxMode(true);
                       if (isUsdMode && hasPrice) {
                         setSellAmount(
                           (sellBalance * sellToken.priceUsd).toFixed(2),
@@ -1200,6 +1394,7 @@ function SwapView({
                 max={100}
                 step={1}
                 value={sliderValue}
+                focusThumbOnChange={false}
                 onChange={(val) => {
                   const SNAP_THRESHOLD = 3;
                   const snaps = [0, 25, 50, 75, 100];
@@ -1398,6 +1593,7 @@ function SwapView({
                 ? 18
                 : sellToken.decimals
             }
+            buyTokenPriceUsd={buyTokenPriceUsd}
           />
         )}
 
@@ -1441,9 +1637,9 @@ function SwapView({
         <Box mt={2}>
           <Button
             w="100%"
-            onClick={handleSwap}
+            onClick={handlePrepareSwap}
             isLoading={isSubmitting}
-            loadingText="Swapping..."
+            loadingText="Preparing..."
             isDisabled={!canSwap}
             bg="bauhaus.red"
             color="bauhaus.white"

@@ -260,6 +260,7 @@ function App() {
   const [swapInitialBuyToken, setSwapInitialBuyToken] = useState<
     { address: string; name: string; symbol: string; decimals: number; logoURI?: string } | undefined
   >();
+  const [swapInitialSellToken, setSwapInitialSellToken] = useState<PortfolioToken | undefined>();
   const [stakeApy, setStakeApy] = useState<number | null>(null);
   const keepAlivePortRef = useRef<chrome.runtime.Port | null>(null);
   const reconnectingRef = useRef(false);
@@ -1711,6 +1712,11 @@ function App() {
                 }
                 // Normal flow: the newPendingTxRequest listener will auto-switch to txConfirm
               }}
+              onSwapInstead={(token) => {
+                setTransferToken(null);
+                setSwapInitialSellToken(token);
+                setView("swap");
+              }}
             />
           </Suspense>
         </Box>
@@ -1738,10 +1744,12 @@ function App() {
               chainName={chainName || "Base"}
               onBack={() => {
                 setSwapInitialBuyToken(undefined);
+                setSwapInitialSellToken(undefined);
                 setView("main");
               }}
               onSwapInitiated={() => {
                 setSwapInitialBuyToken(undefined);
+                setSwapInitialSellToken(undefined);
                 setView("main");
                 setActivityTabTrigger((t) => t + 1);
               }}
@@ -1750,6 +1758,7 @@ function App() {
                 chrome.storage.sync.set({ chainName: name });
               }}
               initialBuyToken={swapInitialBuyToken}
+              initialSellToken={swapInitialSellToken}
             />
           </Suspense>
         </Box>
