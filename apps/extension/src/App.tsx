@@ -2806,6 +2806,10 @@ function App() {
                   setTransferToken(token);
                   setView("transfer");
                 }}
+                onSwapClick={(token) => {
+                  setSwapInitialSellToken(token);
+                  setView("swap");
+                }}
               />
             )}
 

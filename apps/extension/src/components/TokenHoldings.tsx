@@ -21,6 +21,7 @@ import EditCustomTokenModal from "@/components/EditCustomTokenModal";
 interface TokenHoldingsProps {
   address: string;
   onTokenClick?: (token: PortfolioToken) => void;
+  onSwapClick?: (token: PortfolioToken) => void;
   hideHeader?: boolean;
   hideCard?: boolean;
   onStateChange?: (state: {
@@ -33,7 +34,7 @@ interface TokenHoldingsProps {
   }) => void;
 }
 
-function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateChange }: TokenHoldingsProps) {
+function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCard, onStateChange }: TokenHoldingsProps) {
   const [tokens, setTokens] = useState<PortfolioToken[]>([]);
   const [defiPositions, setDefiPositions] = useState<DefiPosition[]>([]);
   const [totalValueUsd, setTotalValueUsd] = useState(0);
@@ -229,7 +230,7 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
             const isCustom = customTokenKeys.has(
               `${token.chainId}-${token.contractAddress.toLowerCase()}`
             );
-            const hasHover = !!(onTokenClick || isCustom);
+            const hasHover = !!(onTokenClick || onSwapClick || isCustom);
             return (
             <HStack
               key={`${token.chainId}-${token.contractAddress}-${i}`}
@@ -239,29 +240,54 @@ function TokenHoldings({ address, onTokenClick, hideHeader, hideCard, onStateCha
               borderBottom={i < tokens.length - 1 || defiPositions.length > 0 ? "1px solid" : "none"}
               borderColor="gray.200"
               cursor={hasHover ? "pointer" : "default"}
-              _hover={{ bg: "bg.muted", "& > .send-label": { opacity: 1 }, "& > .edit-label": { opacity: 1, pointerEvents: "auto" }, "& > .value-col": { opacity: 0 }, "& .copy-addr-btn": { opacity: 1 } }}
+              _hover={{ bg: "bg.muted", "& > .hover-actions": { opacity: 1 }, "& > .edit-label": { opacity: 1, pointerEvents: "auto" }, "& > .value-col": { opacity: 0 }, "& .copy-addr-btn": { opacity: 1 } }}
               onClick={() => onTokenClick?.(token)}
               transition="background 0.15s"
               position="relative"
             >
-              {onTokenClick && (
-                <Text
-                  className="send-label"
+              {(onTokenClick || onSwapClick) && (
+                <HStack
+                  className="hover-actions"
                   position="absolute"
                   right={isCustom ? "52px" : 3}
-                  fontSize="10px"
-                  fontWeight="800"
-                  color="bauhaus.blue"
-                  textTransform="uppercase"
-                  letterSpacing="wider"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  spacing={3}
                   opacity={0}
                   transition="opacity 0.15s"
                   pointerEvents="none"
-                  top="50%"
-                  transform="translateY(-50%)"
+                  sx={{ "& > *": { pointerEvents: "auto" } }}
                 >
-                  Send Tokens
-                </Text>
+                  {onSwapClick && (
+                    <Text
+                      fontSize="10px"
+                      fontWeight="800"
+                      color="bauhaus.red"
+                      textTransform="uppercase"
+                      letterSpacing="wider"
+                      cursor="pointer"
+                      _hover={{ textDecoration: "underline" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSwapClick(token);
+                      }}
+                    >
+                      Swap
+                    </Text>
+                  )}
+                  {onTokenClick && (
+                    <Text
+                      fontSize="10px"
+                      fontWeight="800"
+                      color="bauhaus.blue"
+                      textTransform="uppercase"
+                      letterSpacing="wider"
+                      pointerEvents="none"
+                    >
+                      Send
+                    </Text>
+                  )}
+                </HStack>
               )}
               {isCustom && (
                 <Text
