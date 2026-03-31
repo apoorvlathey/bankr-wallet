@@ -129,6 +129,7 @@ import {
   performSecurityReset,
   handleInitiateTransfer,
   handleExecuteSwapDirect,
+  handleExecuteSwapBatch,
   handleCancelProcessingTx,
   writeResultToStorage,
   SignatureResult,
@@ -158,6 +159,7 @@ import {
   getCachedTokenList,
   checkTokenAllowance,
   checkPermit2Allowance,
+  getTokenBalanceWei,
 } from "./swapApi";
 
 // Sidepanel management
@@ -1682,6 +1684,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "getTokenBalanceWei": {
+      getTokenBalanceWei(
+        message.tokenAddress,
+        message.owner,
+        message.chainId,
+      )
+        .then((balance) =>
+          sendResponse({ success: true, balance: balance.toString() }),
+        )
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
     case "checkPermit2Allowance": {
       checkPermit2Allowance(
         message.token,
@@ -1709,6 +1726,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       ).then((result) => {
         sendResponse(result);
       });
+      return true;
+    }
+
+    case "executeSwapBatch": {
+      handleExecuteSwapBatch(
+        message.batchTx,
+        message.originalTransactions,
+        message.chainId,
+        message.chainName,
+      ).then(sendResponse);
       return true;
     }
 

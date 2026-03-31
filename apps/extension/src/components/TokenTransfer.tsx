@@ -31,7 +31,7 @@ import { isResolvableName } from "@/lib/ensUtils";
 import { fetchPortfolio, PortfolioToken } from "@/chrome/portfolioApi";
 import { buildTransferTx } from "@/chrome/transferUtils";
 import { getChainConfig } from "@/constants/chainConfig";
-import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import { CHAIN_REGISTRY, SWAP_SUPPORTED_CHAIN_IDS } from "@/constants/chainRegistry";
 import type { Account } from "@/chrome/types";
 import TokenSelector from "@/components/Swap/TokenSelector";
 
@@ -57,6 +57,7 @@ interface TokenTransferProps {
   accounts?: Account[];
   onBack: () => void;
   onTransferInitiated: (sponsored?: boolean) => void;
+  onSwapInstead?: (token: PortfolioToken) => void;
 }
 
 function TokenTransfer({
@@ -67,6 +68,7 @@ function TokenTransfer({
   accounts,
   onBack,
   onTransferInitiated,
+  onSwapInstead,
 }: TokenTransferProps) {
   const toast = useBauhausToast();
   const [selectedChainId, setSelectedChainId] = useState(initialToken?.chainId || chainId);
@@ -429,17 +431,31 @@ function TokenTransfer({
     <Box p={4} minH="100%" bg="bg.base">
       <VStack spacing={3} align="stretch">
         {/* Header */}
-        <HStack spacing={2}>
-          <IconButton
-            aria-label="Back"
-            icon={<ArrowBackIcon />}
-            variant="ghost"
-            size="sm"
-            onClick={onBack}
-          />
-          <Text fontWeight="900" fontSize="lg" color="text.primary" textTransform="uppercase" letterSpacing="wider">
-            Send
-          </Text>
+        <HStack spacing={2} justify="space-between">
+          <HStack spacing={2}>
+            <IconButton
+              aria-label="Back"
+              icon={<ArrowBackIcon />}
+              variant="ghost"
+              size="sm"
+              onClick={onBack}
+            />
+            <Text fontWeight="900" fontSize="lg" color="text.primary" textTransform="uppercase" letterSpacing="wider">
+              Send
+            </Text>
+          </HStack>
+          {onSwapInstead && selectedToken && SWAP_SUPPORTED_CHAIN_IDS.has(selectedChainId) && (
+            <Text
+              fontSize="xs"
+              fontWeight="700"
+              color="bauhaus.blue"
+              cursor="pointer"
+              onClick={() => onSwapInstead(selectedToken)}
+              _hover={{ textDecoration: "underline" }}
+            >
+              Swap instead?
+            </Text>
+          )}
         </HStack>
 
         {/* Non-premium upsell (compact, top of page) */}
@@ -857,6 +873,7 @@ function TokenTransfer({
                 max={100}
                 step={1}
                 value={sliderValue}
+                focusThumbOnChange={false}
                 onChange={(val) => {
                   const SNAP_THRESHOLD = 3;
                   const snaps = [0, 25, 50, 75, 100];

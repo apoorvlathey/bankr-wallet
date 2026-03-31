@@ -1459,7 +1459,7 @@ export async function handleExecuteSwapDirect(
   }
 
   // --- Bankr API accounts ---
-  if (account.type === "impersonator") {
+  if (account.type === "impersonator" || account.type === "bankr") {
     if (!BANKR_SUPPORTED_CHAIN_IDS.has(chainId)) {
       return { success: false, error: `Chain not supported for Bankr API accounts` };
     }
@@ -1697,6 +1697,77 @@ async function broadcastSwapTxLocal(
   } finally {
     activeAbortControllers.delete(txId);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Batched Swap Execution (Bankr accounts: approve+swap as single ERC-7821 tx)
+// ---------------------------------------------------------------------------
+
+/**
+ * Submits a batched swap transaction (approval + swap encoded as single ERC-7821
+ * batch) via the Bankr API. Only for Bankr/impersonator accounts.
+ */
+export async function handleExecuteSwapBatch(
+  batchTx: { to: string; data: string; value: string },
+  originalTransactions: SwapTxEntry[],
+  chainId: number,
+  chainName: string,
+): Promise<{ success: boolean; txIds?: string[]; error?: string }> {
+  // Validate chain
+  if (!BANKR_SUPPORTED_CHAIN_IDS.has(chainId)) {
+    return { success: false, error: `Chain not supported for Bankr API accounts` };
+  }
+
+  // Resolve account
+  const account = await getActiveAccount();
+  if (!account || (account.type !== "impersonator" && account.type !== "bankr")) {
+    return { success: false, error: "Batch swap requires a Bankr account" };
+  }
+
+  let apiKey = getCachedApiKey();
+  if (!apiKey) {
+    if (!getCachedPassword()) {
+      const autoLockTimeout = await getAutoLockTimeout();
+      if (autoLockTimeout === 0) {
+        await tryRestoreSession(handleUnlockWallet);
+        apiKey = getCachedApiKey();
+      }
+    }
+    if (!apiKey) {
+      return { success: false, error: "Wallet must be unlocked" };
+    }
+  }
+
+  const txId = crypto.randomUUID();
+  const fromAddress = account.address;
+
+  // Build combined function name and extract swapMeta from original txs
+  const functionNames = originalTransactions
+    .map((t) => t.functionName || t.origin)
+    .join(", ");
+  const swapMeta = originalTransactions.find((t) => t.swapMeta)?.swapMeta;
+
+  const batchTxParams: TransactionParams = {
+    from: fromAddress,
+    to: batchTx.to,
+    data: batchTx.data,
+    value: batchTx.value,
+    chainId,
+  };
+
+  const pending: PendingTxRequest = {
+    id: txId,
+    tx: batchTxParams,
+    origin: `Batch: ${functionNames}`,
+    favicon: originalTransactions[0]?.favicon ?? null,
+    chainName,
+    timestamp: Date.now(),
+  };
+
+  // Fire-and-forget: process in background
+  processSwapTxBankr(txId, pending, apiKey, `Batch: ${functionNames}`, swapMeta);
+
+  return { success: true, txIds: [txId] };
 }
 
 /**

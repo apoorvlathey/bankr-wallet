@@ -36,6 +36,7 @@ interface SwapQuoteDisplayProps {
   buyTokenDecimals: number;
   sellTokenSymbol: string;
   sellTokenDecimals: number;
+  buyTokenPriceUsd?: number;
 }
 
 export default function SwapQuoteDisplay({
@@ -44,10 +45,18 @@ export default function SwapQuoteDisplay({
   buyTokenDecimals,
   sellTokenSymbol,
   sellTokenDecimals,
+  buyTokenPriceUsd,
 }: SwapQuoteDisplayProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const minBuyAmount = formatAmount(quote.minBuyAmount, buyTokenDecimals);
+  const minBuyUsd = (() => {
+    if (!buyTokenPriceUsd || buyTokenPriceUsd <= 0) return null;
+    const num = parseFloat(formatUnits(BigInt(quote.minBuyAmount), buyTokenDecimals));
+    const usd = num * buyTokenPriceUsd;
+    if (usd < 0.01 && usd > 0) return "<$0.01";
+    return `~$${usd.toFixed(2)}`;
+  })();
   const integratorFee = quote.fees?.integratorFee;
   const zeroExFee = quote.fees?.zeroExFee;
   const sources = quote.route?.fills?.map((f) => f.source) ?? [];
@@ -76,10 +85,17 @@ export default function SwapQuoteDisplay({
         >
           Min. Received
         </Text>
-        <HStack spacing={1}>
-          <Text fontSize="sm" fontWeight="700">
-            {minBuyAmount} {buyTokenSymbol}
-          </Text>
+        <HStack spacing={1} align="center">
+          <VStack spacing={0} align="flex-end">
+            <Text fontSize="sm" fontWeight="700" noOfLines={1}>
+              {minBuyAmount} {buyTokenSymbol}
+            </Text>
+            {minBuyUsd && (
+              <Text fontSize="xs" color="text.tertiary" fontWeight="600">
+                {minBuyUsd}
+              </Text>
+            )}
+          </VStack>
           <ChevronIcon isOpen={isOpen} boxSize={4} color="text.tertiary" />
         </HStack>
       </HStack>
