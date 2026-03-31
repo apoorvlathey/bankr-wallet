@@ -12,6 +12,7 @@ import {
 import { CopyIcon, CheckIcon, ExternalLinkIcon, ChevronDownIcon } from "@chakra-ui/icons";
 
 import { getChainConfig } from "@/constants/chainConfig";
+import { ethShLabelsUrl } from "@/constants/externalUrls";
 
 interface TypedDataDisplayProps {
   typedData: any;
@@ -55,7 +56,7 @@ function AddressValue({ address, chainId }: { address: string; chainId?: number 
   useEffect(() => {
     if (!address || !address.startsWith("0x")) return;
     const cid = chainId || 1;
-    fetch(`https://eth.sh/api/labels/${address}?chainId=${cid}`)
+    fetch(ethShLabelsUrl(address, cid))
       .then((r) => (r.ok ? r.json() : []))
       .then((l) => {
         if (Array.isArray(l) && l.length > 0) setLabel(l[0]);

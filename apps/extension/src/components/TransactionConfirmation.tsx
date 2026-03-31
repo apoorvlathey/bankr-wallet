@@ -35,6 +35,7 @@ import AssetChangesDisplay from "@/components/AssetChangesDisplay";
 import ERC20ApproveDisplay from "@/components/ERC20ApproveDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { isErc20Approve, parseApproveCalldata } from "@/lib/erc20Approve";
+import { ethShLabelsUrl, googleFaviconUrl } from "@/constants/externalUrls";
 
 // Success animation keyframes
 const scaleIn = keyframes`
@@ -152,7 +153,7 @@ function TransactionConfirmation({
     const fetchLabels = async () => {
       try {
         const response = await fetch(
-          `https://eth.sh/api/labels/${tx.to}?chainId=${tx.chainId}`,
+          ethShLabelsUrl(tx.to, tx.chainId),
         );
         if (response.ok) {
           const labels = await response.json();
@@ -520,7 +521,7 @@ function TransactionConfirmation({
                         ? "/walletchan-icon.png"
                         : favicon ||
                           (originHostname
-                            ? `https://www.google.com/s2/favicons?domain=${originHostname}&sz=32`
+                            ? googleFaviconUrl(originHostname)
                             : undefined)
                     }
                     alt="favicon"
@@ -528,7 +529,7 @@ function TransactionConfirmation({
                     onError={(e) => {
                       if (originHostname) {
                         const target = e.target as HTMLImageElement;
-                        const googleFallback = `https://www.google.com/s2/favicons?domain=${originHostname}&sz=32`;
+                        const googleFallback = googleFaviconUrl(originHostname);
                         if (target.src !== googleFallback) {
                           target.src = googleFallback;
                         }
@@ -826,7 +827,7 @@ function TransactionConfirmation({
                 }}
               >
                 <Image
-                  src="https://www.google.com/s2/favicons?sz=32&domain=tenderly.co"
+                  src={googleFaviconUrl("tenderly.co")}
                   boxSize="14px"
                 />
                 <Text

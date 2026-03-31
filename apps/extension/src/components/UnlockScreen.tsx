@@ -29,6 +29,7 @@ import {
   WarningTwoIcon,
   BellIcon,
 } from "@chakra-ui/icons";
+import { TWITTER_URL } from "@/constants/externalUrls";
 
 // Sidepanel icon
 const SidePanelIcon = (props: any) => (
@@ -598,7 +599,7 @@ function UnlockScreen({
           fontWeight="700"
           _hover={{ color: "bauhaus.red" }}
           onClick={() => {
-            chrome.tabs.create({ url: "https://x.com/apoorveth" });
+            chrome.tabs.create({ url: TWITTER_URL });
           }}
         >
           <Box

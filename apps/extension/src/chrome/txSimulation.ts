@@ -22,6 +22,7 @@ import {
 } from "viem";
 import { getRpcUrl } from "./txHandlers";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import { WALLETCHAN_ICON_URL } from "@/constants/externalUrls";
 import { getCachedTokenList, fetchTokenPrice } from "./swapApi";
 import { fetchPortfolio, type PortfolioToken } from "./portfolioApi";
 
@@ -186,7 +187,7 @@ function getNativeCurrency(chainId: number) {
 export const KNOWN_TOKEN_LOGOS: Record<string, string> = {
   // WCHAN on Base
   "0xba5ed0000e1ca9136a695f0a848012a16008b032":
-    "https://walletchan.com/images/walletchan-icon.png",
+    WALLETCHAN_ICON_URL,
 };
 
 // ---------------------------------------------------------------------------

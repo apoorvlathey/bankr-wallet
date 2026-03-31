@@ -30,6 +30,7 @@ import {
 } from "@chakra-ui/icons";
 
 import { clearChatHistory } from "@/chrome/chatStorage";
+import { TWITTER_URL } from "@/constants/externalUrls";
 import Chains from "./Chains";
 import ChangePassword from "./ChangePassword";
 import AutoLockSettings from "./AutoLockSettings";
@@ -638,7 +639,7 @@ function Settings({ close, showBackButton = true, onSessionExpired }: SettingsPr
           fontWeight="700"
           _hover={{ color: "bauhaus.red" }}
           onClick={() => {
-            chrome.tabs.create({ url: "https://x.com/apoorveth" });
+            chrome.tabs.create({ url: TWITTER_URL });
           }}
         >
           <Box

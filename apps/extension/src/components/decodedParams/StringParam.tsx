@@ -4,6 +4,7 @@ import { CopyButton } from "@/components/CopyButton";
 import { isValidJSON, decodeBase64 } from "@/lib/convertUtils";
 import { isAddress } from "viem";
 import { AddressParam } from "./AddressParam";
+import { IPFS_GATEWAY } from "@/constants/externalUrls";
 
 interface StringParamProps {
   value: string;
@@ -29,7 +30,7 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
   useEffect(() => {
     if (!isURL || disableRich) return;
     const url = str.startsWith("ipfs://")
-      ? str.replace("ipfs://", "https://ipfs.io/ipfs/")
+      ? str.replace("ipfs://", IPFS_GATEWAY)
       : str;
 
     fetch(url, { signal: AbortSignal.timeout(5000) })

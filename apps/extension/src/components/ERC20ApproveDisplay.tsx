@@ -27,6 +27,7 @@ import {
   INFINITE_THRESHOLD,
 } from "@/lib/erc20Approve";
 import { updatePendingTxRequestData } from "@/chrome/pendingTxStorage";
+import { ethShLabelsUrl } from "@/constants/externalUrls";
 import { getChainConfig } from "@/constants/chainConfig";
 import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 
@@ -131,7 +132,7 @@ export default function ERC20ApproveDisplay({
   // Fetch spender labels
   useEffect(() => {
     fetch(
-      `https://eth.sh/api/labels/${approval.spender}?chainId=${chainId}`,
+      ethShLabelsUrl(approval.spender, chainId),
     )
       .then((res) => (res.ok ? res.json() : []))
       .then((labels) => {

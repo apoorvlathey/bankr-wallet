@@ -17,6 +17,7 @@ import {
 import { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import TxDetailModal from "@/components/TxDetailModal";
+import { googleFaviconUrl } from "@/constants/externalUrls";
 
 interface TxStatusListProps {
   maxItems?: number;
@@ -378,7 +379,7 @@ function TxStatusItem({
                     ? "/walletchan-icon.png"
                     : tx.favicon ||
                       (originHostname
-                        ? `https://www.google.com/s2/favicons?domain=${originHostname}&sz=32`
+                        ? googleFaviconUrl(originHostname)
                         : undefined)
                 }
                 alt="favicon"
@@ -386,7 +387,7 @@ function TxStatusItem({
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
                   if (originHostname) {
-                    target.src = `https://www.google.com/s2/favicons?domain=${originHostname}&sz=32`;
+                    target.src = googleFaviconUrl(originHostname);
                   }
                 }}
               />

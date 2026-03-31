@@ -133,6 +133,7 @@ import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
 import type { Account } from "@/chrome/types";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
+import { TWITTER_URL, WALLETCHAN_ICON_URL, WALLETCHAN_OS_URL, WALLETCHAN_STAKE_URL, WALLETCHAN_VAULT_DATA_API } from "@/constants/externalUrls";
 
 // Combined request type for unified ordering
 export type CombinedRequest =
@@ -887,7 +888,7 @@ function App() {
   // Fetch staking APY from website API
   useEffect(() => {
     const fetchApy = () => {
-      fetch("https://walletchan.com/api/vault-data")
+      fetch(WALLETCHAN_VAULT_DATA_API)
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (data?.totalApy != null) setStakeApy(data.totalApy);
@@ -1517,7 +1518,7 @@ function App() {
                   fontWeight="700"
                   _hover={{ color: "bauhaus.red" }}
                   onClick={() => {
-                    chrome.tabs.create({ url: "https://x.com/apoorveth" });
+                    chrome.tabs.create({ url: TWITTER_URL });
                   }}
                 >
                   <Box
@@ -2241,7 +2242,7 @@ function App() {
                 name: "WalletChan",
                 symbol: "WCHAN",
                 decimals: 18,
-                logoURI: "https://walletchan.com/images/walletchan-icon.png",
+                logoURI: WALLETCHAN_ICON_URL,
               });
               setView("swap");
             }}
@@ -2264,7 +2265,7 @@ function App() {
           transition="all 0.15s ease-out"
           _hover={{ opacity: 0.85 }}
           onClick={() => {
-            chrome.tabs.create({ url: "https://os.walletchan.com" });
+            chrome.tabs.create({ url: WALLETCHAN_OS_URL });
           }}
         >
           <Text fontSize="sm" fontWeight="900" color="bauhaus.yellow" textTransform="uppercase" letterSpacing="wider" whiteSpace="nowrap">
@@ -2778,7 +2779,7 @@ function App() {
                       </Icon>
                     }
                     onClick={() => {
-                      chrome.tabs.create({ url: "https://stake.walletchan.com" });
+                      chrome.tabs.create({ url: WALLETCHAN_STAKE_URL });
                     }}
                     _hover={{
                       bg: "gray.100",

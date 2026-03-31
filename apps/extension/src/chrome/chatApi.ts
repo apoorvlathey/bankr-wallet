@@ -3,8 +3,9 @@
  */
 
 import { BankrApiError, getJobStatus, pollJobUntilComplete, JobStatus } from "./bankrApi";
+import { BANKR_API_BASE } from "@/constants/externalUrls";
 
-const API_BASE_URL = "https://api.bankr.bot";
+const API_BASE_URL = BANKR_API_BASE;
 
 // Max prompt length for Bankr API
 const MAX_PROMPT_LENGTH = 10000;

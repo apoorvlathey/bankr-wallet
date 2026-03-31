@@ -25,13 +25,17 @@ import {
   tryRestoreSession,
 } from "./sessionCache";
 import { handleUnlockWallet } from "./authHandlers";
+import {
+  WALLETCHAN_SPONSORED_TRANSFER_API,
+  WALLETCHAN_PREMIUM_STATUS_API,
+  USDC_LOGO_URL,
+} from "@/constants/externalUrls";
 
 /** USDC on Base (ERC-3009 transferWithAuthorization) */
 const BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
-const SPONSORED_TRANSFER_API = "https://walletchan.com/api/sponsored-transfer";
-const PREMIUM_STATUS_API = "https://walletchan.com/api/premium-status";
-const USDC_LOGO_URL = "https://coin-images.coingecko.com/coins/images/6319/small/usdc.png";
+const SPONSORED_TRANSFER_API = WALLETCHAN_SPONSORED_TRANSFER_API;
+const PREMIUM_STATUS_API = WALLETCHAN_PREMIUM_STATUS_API;
 
 /** EIP-712 domain for USDC on Base */
 const USDC_DOMAIN = {

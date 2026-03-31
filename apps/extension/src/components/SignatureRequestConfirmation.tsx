@@ -19,6 +19,7 @@ import { getChainConfig } from "@/constants/chainConfig";
 import TypedDataDisplay from "@/components/TypedDataDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { CopyButton } from "@/components/CopyButton";
+import { googleFaviconUrl } from "@/constants/externalUrls";
 
 interface SignatureRequestConfirmationProps {
   sigRequest: PendingSignatureRequest;
@@ -435,13 +436,13 @@ function SignatureRequestConfirmation({
                   <Image
                     src={
                       favicon ||
-                      `https://www.google.com/s2/favicons?domain=${new URL(origin).hostname}&sz=32`
+                      googleFaviconUrl(new URL(origin).hostname)
                     }
                     alt="favicon"
                     boxSize="14px"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
-                      const googleFallback = `https://www.google.com/s2/favicons?domain=${new URL(origin).hostname}&sz=32`;
+                      const googleFallback = googleFaviconUrl(new URL(origin).hostname);
                       if (target.src !== googleFallback) {
                         target.src = googleFallback;
                       }

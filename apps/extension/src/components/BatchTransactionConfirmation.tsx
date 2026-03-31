@@ -32,6 +32,7 @@ import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { CopyButton } from "@/components/CopyButton";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
+import { googleFaviconUrl } from "@/constants/externalUrls";
 
 const scaleIn = keyframes`
   0% { transform: scale(0) rotate(-10deg); opacity: 0; }
@@ -404,7 +405,7 @@ function BatchTransactionConfirmation({
                     src={
                       favicon ||
                       (originHostname
-                        ? `https://www.google.com/s2/favicons?domain=${originHostname}&sz=32`
+                        ? googleFaviconUrl(originHostname)
                         : undefined)
                     }
                     alt="favicon"
@@ -566,7 +567,7 @@ function BatchTransactionConfirmation({
                     onClick={() => chrome.tabs.create({ url: tenderlyUrl })}
                   >
                     <Image
-                      src="https://www.google.com/s2/favicons?sz=32&domain=tenderly.co"
+                      src={googleFaviconUrl("tenderly.co")}
                       boxSize="14px"
                     />
                     <Text

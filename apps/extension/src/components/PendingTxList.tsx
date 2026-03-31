@@ -15,6 +15,7 @@ import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import { getChainConfig } from "@/constants/chainConfig";
+import { googleFaviconUrl } from "@/constants/externalUrls";
 import { getCombinedRequests, CombinedRequest } from "@/App";
 
 function getOriginHostname(origin: string): string | null {
@@ -32,7 +33,7 @@ function getOriginDisplay(origin: string): string {
 function getFaviconUrl(origin: string, favicon: string | null): string | undefined {
   if (favicon) return favicon;
   const hostname = getOriginHostname(origin);
-  return hostname ? `https://www.google.com/s2/favicons?domain=${hostname}&sz=32` : undefined;
+  return hostname ? googleFaviconUrl(hostname) : undefined;
 }
 
 interface PendingTxListProps {

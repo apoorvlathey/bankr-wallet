@@ -84,6 +84,7 @@ import {
   clearNoncesForAddress,
   clearAllNonces,
 } from "./nonceManager";
+import { FOURBYTE_SOURCIFY_LOOKUP_URL, FOURBYTE_DIRECTORY_API_URL } from "@/constants/externalUrls";
 
 export interface TransactionResult {
   success: boolean;
@@ -540,9 +541,7 @@ async function lookupFunctionName(calldata: string): Promise<string | null> {
 
   // Try Sourcify first
   try {
-    const url = new URL(
-      "https://api.4byte.sourcify.dev/signature-database/v1/lookup",
-    );
+    const url = new URL(FOURBYTE_SOURCIFY_LOOKUP_URL);
     url.searchParams.append("function", selector);
     const res = await fetch(url);
     const data = await res.json();
@@ -556,7 +555,7 @@ async function lookupFunctionName(calldata: string): Promise<string | null> {
 
   // Fallback to 4byte.directory
   try {
-    const url = new URL("https://www.4byte.directory/api/v1/signatures/");
+    const url = new URL(FOURBYTE_DIRECTORY_API_URL);
     url.searchParams.append("hex_signature", selector);
     const res = await fetch(url);
     const data = await res.json();

@@ -10,6 +10,7 @@ import {
   type Address,
 } from "viem";
 import { RPC_URLS, CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import { WALLETCHAN_SWAP_API_BASE } from "@/constants/externalUrls";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -20,7 +21,7 @@ export const NATIVE_TOKEN_ADDRESS =
 export const DEFAULT_SLIPPAGE_BPS = 500; // 5%
 export const SLIPPAGE_PRESETS = [100, 300, 500]; // 1%, 3%, 5%
 
-const SWAP_API_BASE = "https://walletchan.com/api/swap";
+const SWAP_API_BASE = WALLETCHAN_SWAP_API_BASE;
 const RPC_TIMEOUT = 8_000;
 const TOKEN_LIST_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 

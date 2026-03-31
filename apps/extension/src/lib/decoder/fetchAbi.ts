@@ -1,6 +1,5 @@
 import { InterfaceAbi } from "ethers";
-
-const SOURCIFY_BASE = "https://sourcify.dev/server/v2/contract";
+import { SOURCIFY_BASE } from "@/constants/externalUrls";
 
 interface SourcifyResponse {
   abi?: any[];

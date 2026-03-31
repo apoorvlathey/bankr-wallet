@@ -12,6 +12,7 @@ import {
 } from "viem";
 import { getRpcUrl } from "./txHandlers";
 import { CHAIN_TOKEN_IDS } from "@/constants/chainRegistry";
+import { COINGECKO_PRICE_API } from "@/constants/externalUrls";
 
 export interface GasEstimate {
   gasLimit: string;
@@ -65,7 +66,7 @@ export async function fetchNativePrice(chainId: number): Promise<number | null> 
   try {
     const ids = [...new Set(Object.values(CHAIN_TOKEN_IDS))].join(",");
     const res = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`,
+      `${COINGECKO_PRICE_API}?ids=${ids}&vs_currencies=usd`,
       { signal: AbortSignal.timeout(5000) }
     );
     if (!res.ok) return null;

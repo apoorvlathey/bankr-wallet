@@ -32,6 +32,7 @@ import {
   hexToString,
   parseAbi,
 } from "viem";
+import { FOURBYTE_SOURCIFY_LOOKUP_URL, FOURBYTE_DIRECTORY_API_URL } from "@/constants/externalUrls";
 
 // Inline helper replacing swiss-knife's startHexWith0x
 function startHexWith0x(hexValue?: string): Hex {
@@ -513,7 +514,7 @@ export async function fetchFunctionInterface({
 async function fetchFunctionFromSourcify({ selector }: { selector: string }) {
   try {
     const requestUrl = new URL(
-      "https://api.4byte.sourcify.dev/signature-database/v1/lookup"
+      FOURBYTE_SOURCIFY_LOOKUP_URL
     );
     requestUrl.searchParams.append("function", selector);
     const response = await fetch(requestUrl);
@@ -536,7 +537,7 @@ async function fetchFunctionFromSourcify({ selector }: { selector: string }) {
 async function fetchFunctionFrom4Bytes({ selector }: { selector: string }) {
   try {
     const requestUrl = new URL(
-      "https://www.4byte.directory/api/v1/signatures/"
+      FOURBYTE_DIRECTORY_API_URL
     );
     requestUrl.searchParams.append("hex_signature", selector);
     const response = await fetch(requestUrl);

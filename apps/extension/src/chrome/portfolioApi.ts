@@ -1,4 +1,6 @@
-const PORTFOLIO_API_URL = "https://walletchan.com/api/portfolio";
+import { WALLETCHAN_PORTFOLIO_API } from "@/constants/externalUrls";
+
+const PORTFOLIO_API_URL = WALLETCHAN_PORTFOLIO_API;
 
 export interface PortfolioToken {
   symbol: string;

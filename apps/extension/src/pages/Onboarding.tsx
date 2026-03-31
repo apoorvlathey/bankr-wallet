@@ -33,6 +33,7 @@ import {
 } from "@/components/shared/AccountTypeIcons";
 import PrivateKeyInput from "@/components/shared/PrivateKeyInput";
 import SeedPhraseSetup from "@/components/SeedPhraseSetup";
+import { TWITTER_URL, BANKR_BOT_API_PAGE, BANKR_BOT_TERMINAL_PAGE } from "@/constants/externalUrls";
 
 type OnboardingStep =
   | "welcome"
@@ -662,7 +663,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
             color="bauhaus.blue"
             fontWeight="700"
             _hover={{ color: "bauhaus.red" }}
-            href="https://x.com/apoorveth"
+            href={TWITTER_URL}
             isExternal
           >
             <Box
@@ -832,7 +833,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
             color="bauhaus.blue"
             fontWeight="700"
             _hover={{ color: "bauhaus.red" }}
-            href="https://x.com/apoorveth"
+            href={TWITTER_URL}
             isExternal
           >
             <Box
@@ -1305,7 +1306,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                 fontSize="sm"
                 color="bauhaus.blue"
                 fontWeight="700"
-                href="https://bankr.bot/api"
+                href={BANKR_BOT_API_PAGE}
                 isExternal
                 _hover={{ color: "bauhaus.red", textDecoration: "underline" }}
               >
@@ -1315,7 +1316,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                 fontSize="sm"
                 color="bauhaus.blue"
                 fontWeight="700"
-                href="https://bankr.bot/terminal"
+                href={BANKR_BOT_TERMINAL_PAGE}
                 isExternal
                 _hover={{ color: "bauhaus.red", textDecoration: "underline" }}
               >
@@ -1591,7 +1592,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
           color="bauhaus.blue"
           fontWeight="700"
           _hover={{ color: "bauhaus.red" }}
-          href="https://x.com/apoorveth"
+          href={TWITTER_URL}
           isExternal
         >
           <Box

@@ -2,7 +2,9 @@
  * Bankr API client for transaction submission, message signing, and job polling
  */
 
-const API_BASE_URL = "https://api.bankr.bot";
+import { BANKR_API_BASE } from "@/constants/externalUrls";
+
+const API_BASE_URL = BANKR_API_BASE;
 
 export interface TransactionParams {
   from: string;

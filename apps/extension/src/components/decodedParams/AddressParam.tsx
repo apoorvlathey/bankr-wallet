@@ -4,6 +4,7 @@ import { ExternalLinkIcon } from "@chakra-ui/icons";
 import { CopyButton } from "@/components/CopyButton";
 import { resolveAddressToName, getNameAvatar } from "@/lib/ensUtils";
 import { getChainConfig } from "@/constants/chainConfig";
+import { ethShLabelsUrl } from "@/constants/externalUrls";
 
 interface AddressParamProps {
   value: string;
@@ -33,7 +34,7 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
     });
 
     // eth.sh labels
-    fetch(`https://eth.sh/api/labels/${address}?chainId=${chainId}`)
+    fetch(ethShLabelsUrl(address, chainId))
       .then((r) => (r.ok ? r.json() : []))
       .then((l) => {
         if (Array.isArray(l) && l.length > 0) setLabels(l);
