@@ -155,6 +155,33 @@ contract TxSimulator {
         return 0;
     }
 
+    // -----------------------------------------------------------------------
+    // ERC-1271 support — makes Permit2 use ECDSA verification for our address
+    // -----------------------------------------------------------------------
+
+    /// @dev ERC-1271: Permit2 calls this when address(this) has code.
+    ///      We perform the same ecrecover that Permit2 would do for an EOA,
+    ///      so signatures created by the real EOA owner still verify correctly.
+    function isValidSignature(
+        bytes32 hash,
+        bytes calldata signature
+    ) external pure returns (bytes4) {
+        if (signature.length == 65) {
+            bytes32 r;
+            bytes32 s;
+            uint8 v;
+            assembly {
+                r := calldataload(signature.offset)
+                s := calldataload(add(signature.offset, 0x20))
+                v := byte(0, calldataload(add(signature.offset, 0x40)))
+            }
+            if (ecrecover(hash, v, r, s) != address(0)) {
+                return 0x1626ba7e; // ERC-1271 magic value
+            }
+        }
+        return 0xffffffff;
+    }
+
     /// @dev Accept ETH (e.g. from swaps returning native currency).
     receive() external payable {}
 }

@@ -101,70 +101,72 @@ function AssetRow({ change, chainId }: { change: AssetChange; chainId: number })
             <Text fontSize="sm" fontWeight="700" color="text.primary" noOfLines={1}>
               {change.symbol}
             </Text>
-            <Text
-              fontSize="sm"
-              fontWeight="700"
-              fontFamily="mono"
-              color={dirColor}
-              flexShrink={0}
-            >
-              {change.direction === "out" ? "\u2212" : "+"}
-              {change.formattedAmount}
-            </Text>
+            <VStack spacing={0} align="flex-end" flexShrink={0}>
+              <Text
+                fontSize="sm"
+                fontWeight="700"
+                fontFamily="mono"
+                color={dirColor}
+              >
+                {change.direction === "out" ? "\u2212" : "+"}
+                {change.formattedAmount}
+              </Text>
+              {isNative && change.valueUsd !== null && (
+                <Text fontSize="2xs" fontWeight="600" color="text.secondary">
+                  {formatUsd(change.valueUsd)}
+                </Text>
+              )}
+            </VStack>
           </HStack>
 
-          {/* Line 2: Name + copy/explorer ... USD */}
-          <HStack w="full" justify="space-between" spacing={2}>
-            <HStack spacing={0.5} minW={0}>
-              {!isNative && (
+          {/* Line 2: Name + copy/explorer ... USD (tokens only, not native) */}
+          {!isNative && (
+            <HStack w="full" justify="space-between" spacing={2}>
+              <HStack spacing={0.5} minW={0}>
                 <Text fontSize="2xs" color="text.tertiary" noOfLines={1}>
                   {showName ? change.name : `${change.address.slice(0, 6)}...${change.address.slice(-4)}`}
                 </Text>
-              )}
-              {!isNative && (
-                <>
-                  <Tooltip label="Copy address" fontSize="xs" hasArrow>
-                    <IconButton
-                      aria-label="Copy"
-                      icon={copied ? <CheckIcon /> : <CopyIcon />}
-                      size="xs"
-                      variant="ghost"
-                      minW="16px"
-                      h="16px"
-                      color={copied ? "bauhaus.yellow" : "text.tertiary"}
-                      onClick={handleCopy}
-                      _hover={{ color: "bauhaus.blue", bg: "transparent" }}
-                    />
-                  </Tooltip>
-                  {(() => {
-                    const cfg = getChainConfig(chainId);
-                    return cfg.explorer ? (
-                      <Tooltip label="View on explorer" fontSize="xs" hasArrow>
-                        <IconButton
-                          aria-label="View on explorer"
-                          icon={<ExternalLinkIcon boxSize="9px" />}
-                          size="xs"
-                          variant="ghost"
-                          minW="16px"
-                          h="16px"
-                          color="text.tertiary"
-                          onClick={() =>
-                            window.open(`${cfg.explorer}/address/${change.address}`, "_blank")
-                          }
-                          _hover={{ color: "bauhaus.blue", bg: "transparent" }}
-                        />
-                      </Tooltip>
-                    ) : null;
-                  })()}
-                </>
+                <Tooltip label="Copy address" fontSize="xs" hasArrow>
+                  <IconButton
+                    aria-label="Copy"
+                    icon={copied ? <CheckIcon /> : <CopyIcon />}
+                    size="xs"
+                    variant="ghost"
+                    minW="16px"
+                    h="16px"
+                    color={copied ? "bauhaus.yellow" : "text.tertiary"}
+                    onClick={handleCopy}
+                    _hover={{ color: "bauhaus.blue", bg: "transparent" }}
+                  />
+                </Tooltip>
+                {(() => {
+                  const cfg = getChainConfig(chainId);
+                  return cfg.explorer ? (
+                    <Tooltip label="View on explorer" fontSize="xs" hasArrow>
+                      <IconButton
+                        aria-label="View on explorer"
+                        icon={<ExternalLinkIcon boxSize="9px" />}
+                        size="xs"
+                        variant="ghost"
+                        minW="16px"
+                        h="16px"
+                        color="text.tertiary"
+                        onClick={() =>
+                          window.open(`${cfg.explorer}/address/${change.address}`, "_blank")
+                        }
+                        _hover={{ color: "bauhaus.blue", bg: "transparent" }}
+                      />
+                    </Tooltip>
+                  ) : null;
+                })()}
+              </HStack>
+              {change.valueUsd !== null && (
+                <Text fontSize="2xs" fontWeight="600" color="text.secondary" flexShrink={0}>
+                  {formatUsd(change.valueUsd)}
+                </Text>
               )}
             </HStack>
-            {change.valueUsd !== null && (
-              <Text fontSize="2xs" fontWeight="600" color="text.secondary" flexShrink={0}>
-                {formatUsd(change.valueUsd)}
-              </Text>
-            )}
-          </HStack>
+          )}
         </VStack>
       </HStack>
     </Box>
@@ -199,12 +201,15 @@ function AssetChangesDisplay({ txRequest, batchCalls }: AssetChangesDisplayProps
           accountAddress: txRequest.tx.from,
         };
 
+    console.log("[AssetChangesUI] Sending simulation message:", message.type, message);
     chrome.runtime.sendMessage(message, (response: SimulationResult) => {
       if (cancelled) return;
       if (chrome.runtime.lastError) {
+        console.error("[AssetChangesUI] chrome.runtime.lastError:", chrome.runtime.lastError);
         setLoading(false);
         return;
       }
+      console.log("[AssetChangesUI] Simulation response:", response);
       setResult(response);
       setLoading(false);
     });
@@ -293,13 +298,20 @@ function AssetChangesDisplay({ txRequest, batchCalls }: AssetChangesDisplayProps
   }
 
   // Hide entirely if simulation failed or no changes
-  if (!result || result.simulationFailed) return null;
+  if (!result || result.simulationFailed) {
+    console.log("[AssetChangesUI] Hidden — simulationFailed:", result?.simulationFailed, "error:", result?.simulationError, "result:", result);
+    return null;
+  }
 
   const allChanges: AssetChange[] = [];
   if (result.nativeChange) allChanges.push(result.nativeChange);
   allChanges.push(...result.tokenChanges);
 
-  if (allChanges.length === 0) return null;
+  if (allChanges.length === 0) {
+    console.log("[AssetChangesUI] Hidden — no asset changes detected (nativeChange:", result.nativeChange, "tokenChanges:", result.tokenChanges, ")");
+    return null;
+  }
+  console.log("[AssetChangesUI] Rendering", allChanges.length, "asset changes");
 
   const outChanges = allChanges.filter((c) => c.direction === "out");
   const inChanges = allChanges.filter((c) => c.direction === "in");
