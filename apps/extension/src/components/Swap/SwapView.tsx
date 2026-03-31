@@ -374,8 +374,11 @@ function SwapView({
     if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) return;
 
     // Check if user holds this token — use portfolio price
+    const isNative = addr.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
     const held = holdings.find(
-      (h) => h.contractAddress.toLowerCase() === addr.toLowerCase(),
+      (h) =>
+        h.contractAddress.toLowerCase() === addr.toLowerCase() ||
+        (isNative && h.contractAddress === "native"),
     );
     if (held && held.priceUsd > 0) {
       setBuyTokenPriceUsd(held.priceUsd);
@@ -1524,8 +1527,11 @@ function SwapView({
               />
             </InputGroup>
           </HStack>
-          {/* Token address */}
-          {buyTokenAddress && buyTokenInfo && (
+          {/* Token address (hide for native token) */}
+          {buyTokenAddress &&
+            buyTokenInfo &&
+            buyTokenAddress.toLowerCase() !==
+              NATIVE_TOKEN_ADDRESS.toLowerCase() && (
             <TokenAddressRow
               address={buyTokenAddress}
               explorer={chainConfig.explorer}
@@ -1633,8 +1639,17 @@ function SwapView({
           </Box>
         )}
 
-        {/* Action button */}
-        <Box mt={2}>
+        {/* Action button — sticky when content overflows */}
+        <Box
+          position="sticky"
+          bottom={-4}
+          bg="bg.base"
+          pt={2}
+          pb={8}
+          mx={-4}
+          px={4}
+          zIndex={1}
+        >
           <Button
             w="100%"
             onClick={handlePrepareSwap}

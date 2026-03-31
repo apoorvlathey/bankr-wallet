@@ -22,6 +22,10 @@ function ChevronIcon({
   );
 }
 
+function humanizeSource(source: string): string {
+  return source.replace(/_/g, " ");
+}
+
 function formatAmount(amount: string, decimals: number): string {
   const formatted = formatUnits(BigInt(amount), decimals);
   const num = parseFloat(formatted);
@@ -59,6 +63,12 @@ export default function SwapQuoteDisplay({
   })();
   const integratorFee = quote.fees?.integratorFee;
   const zeroExFee = quote.fees?.zeroExFee;
+  const walletFeePercent = integratorFee
+    ? (
+        (parseFloat(integratorFee.amount) / parseFloat(quote.sellAmount)) *
+        100
+      ).toFixed(1)
+    : "0";
   const sources = quote.route?.fills?.map((f) => f.source) ?? [];
   const uniqueSources = [...new Set(sources)];
 
@@ -109,7 +119,8 @@ export default function SwapQuoteDisplay({
           borderTop="1px solid"
           borderColor="border.secondary"
         >
-          {integratorFee && (
+          {/* Wallet Fee — always show */}
+          <VStack spacing={1} align="stretch">
             <HStack justify="space-between">
               <Text
                 fontSize="xs"
@@ -117,45 +128,101 @@ export default function SwapQuoteDisplay({
                 textTransform="uppercase"
                 color="text.secondary"
               >
-                Fee (0.9%)
+                Wallet Fee
               </Text>
               <Text fontSize="sm" fontWeight="500">
-                {formatAmount(integratorFee.amount, sellTokenDecimals)}{" "}
-                {sellTokenSymbol}
+                {walletFeePercent}%
               </Text>
             </HStack>
-          )}
+            {(integratorFee || zeroExFee) && (
+              <VStack spacing={0} align="stretch" pl={2}>
+                {[
+                  integratorFee && { label: "WalletChan", fee: integratorFee },
+                  zeroExFee && { label: "0x Protocol", fee: zeroExFee },
+                ]
+                  .filter(Boolean)
+                  .map((item, i, arr) => (
+                    <HStack
+                      key={item!.label}
+                      justify="space-between"
+                      position="relative"
+                      pl={4}
+                      py={0.5}
+                    >
+                      {/* Vertical line */}
+                      <Box
+                        position="absolute"
+                        left="0"
+                        top="0"
+                        bottom={i === arr.length - 1 ? "50%" : "0"}
+                        w="0"
+                        borderLeft="2px solid"
+                        borderColor="text.tertiary"
+                      />
+                      {/* Horizontal branch */}
+                      <Box
+                        position="absolute"
+                        left="0"
+                        top="50%"
+                        w="10px"
+                        h="0"
+                        borderTop="2px solid"
+                        borderColor="text.tertiary"
+                      />
+                      <Text fontSize="xs" color="text.tertiary" fontWeight="500">
+                        {item!.label}
+                      </Text>
+                      <Text fontSize="xs" fontWeight="500" color="text.tertiary">
+                        {formatAmount(item!.fee.amount, sellTokenDecimals)}{" "}
+                        {sellTokenSymbol}
+                      </Text>
+                    </HStack>
+                  ))}
+              </VStack>
+            )}
+          </VStack>
 
-          {zeroExFee && (
-            <HStack justify="space-between">
-              <Text
-                fontSize="xs"
-                fontWeight="bold"
-                textTransform="uppercase"
-                color="text.secondary"
-              >
-                0x Fee
-              </Text>
-              <Text fontSize="sm" fontWeight="500">
-                {formatAmount(zeroExFee.amount, sellTokenDecimals)}{" "}
-                {sellTokenSymbol}
-              </Text>
-            </HStack>
-          )}
-
+          {/* Route */}
           {uniqueSources.length > 0 && (
-            <HStack justify="space-between">
+            <HStack justify="space-between" align="flex-start" spacing={2}>
               <Text
                 fontSize="xs"
                 fontWeight="bold"
                 textTransform="uppercase"
                 color="text.secondary"
+                flexShrink={0}
+                pt="2px"
               >
                 Route
               </Text>
-              <Text fontSize="sm" fontWeight="500">
-                {uniqueSources.join(" + ")}
-              </Text>
+              <VStack spacing={0} align="flex-end">
+                {uniqueSources.map((source, i) => (
+                  <Box key={i}>
+                    {i > 0 && (
+                      <Text
+                        fontSize="xs"
+                        color="text.tertiary"
+                        fontWeight="bold"
+                        textAlign="center"
+                        lineHeight="1.4"
+                      >
+                        ↓
+                      </Text>
+                    )}
+                    <Box
+                      px={1.5}
+                      py={0.5}
+                      border="2px solid"
+                      borderColor="bauhaus.black"
+                      fontSize="xs"
+                      fontWeight="700"
+                      whiteSpace="nowrap"
+                    >
+                      {humanizeSource(source)}
+                    </Box>
+                  </Box>
+                ))}
+              </VStack>
             </HStack>
           )}
         </VStack>
