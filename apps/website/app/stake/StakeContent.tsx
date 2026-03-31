@@ -1309,6 +1309,7 @@ export default function StakeContent() {
                           max={100}
                           step={1}
                           value={sliderValue}
+                          focusThumbOnChange={false}
                           onChange={(val) => {
                             const SNAP_THRESHOLD = 3;
                             const snaps = [0, 25, 50, 75, 100];

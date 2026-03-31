@@ -602,6 +602,7 @@ function StreamInput({
             max={100}
             step={1}
             size="sm"
+            focusThumbOnChange={false}
           >
             <SliderTrack bg="gray.200" h="4px" borderRadius={0}>
               <SliderFilledTrack bg={accentColor} />

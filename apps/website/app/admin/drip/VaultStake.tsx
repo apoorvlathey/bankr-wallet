@@ -441,6 +441,7 @@ export default function VaultStake({
             />
             <Slider
               value={sliderPct}
+              focusThumbOnChange={false}
               onChange={(val) => {
                 setSliderPct(val);
                 if (!currentBalance || currentBalance === 0n) return;

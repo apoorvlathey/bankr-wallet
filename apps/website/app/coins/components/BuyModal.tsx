@@ -535,6 +535,7 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                       max={100}
                       step={1}
                       value={sliderValue}
+                      focusThumbOnChange={false}
                       onChange={(val) => {
                         // Snap to nearest 25% increment when within threshold
                         const SNAP_THRESHOLD = 3;
