@@ -260,15 +260,16 @@ export async function openExtensionPopup(
         }
 
         if (opened) return;
-        // Sidepanel didn't actually open — fall through to popup
-        await setSidePanelMode(false);
+        // Sidepanel didn't actually open — fall through to popup window
+        // Don't disable sidepanel mode: this is a transient failure, not a
+        // permanent browser incompatibility. The user's preference should persist.
       }
     } catch (error) {
       console.warn(
         "Sidepanel failed to open for tx confirmation, falling back to popup:",
         error,
       );
-      await setSidePanelMode(false);
+      // Don't disable sidepanel mode — fall through to popup for this request only
     }
   }
 

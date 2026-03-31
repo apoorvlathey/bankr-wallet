@@ -128,7 +128,7 @@ function MessageField({ name, value, depth = 0, chainId }: { name: string; value
         <Text fontSize="xs" color="text.secondary" fontWeight="700" minW="fit-content">
           {name}:
         </Text>
-        <Text fontSize="xs" fontFamily="mono" color="#B8860B" fontWeight="600">
+        <Text fontSize="xs" fontFamily="mono" color="#B8860B" fontWeight="600" wordBreak="break-all">
           {String(value)}
         </Text>
       </HStack>
@@ -264,7 +264,7 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
       </HStack>
 
       {/* Content */}
-      <Box p={3} maxH="250px" overflowY="auto" css={scrollStyles}>
+      <Box p={3} maxH="250px" overflowY="auto" overflowX="hidden" css={scrollStyles}>
         {tab === "structured" ? (
           <VStack align="start" spacing={3}>
             {/* Domain section */}

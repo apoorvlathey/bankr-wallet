@@ -422,13 +422,14 @@ chrome.action.onClicked.addListener(async (tab) => {
     }
 
     if (!sidePanelActuallyOpen) {
-      // Self-heal: disable sidepanel mode and fall back to popup window
-      await setSidePanelMode(false);
+      // Sidepanel didn't render — fall back to popup window for this click.
+      // Don't permanently disable sidepanel mode; transient failures (timing,
+      // service worker restart) shouldn't override the user's preference.
+      // Arc browser is handled separately via isArcBrowser detection.
       await openPopupWindow();
     }
   } catch {
-    // sidePanel.open() threw — disable sidepanel and fall back to popup
-    await setSidePanelMode(false);
+    // sidePanel.open() threw — fall back to popup for this click only
     await openPopupWindow();
   }
 });
