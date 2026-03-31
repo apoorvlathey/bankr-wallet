@@ -296,10 +296,14 @@ function SignatureRequestConfirmation({
   };
 
   return (
-    <Box p={4} minH="100%" bg="bg.base">
-      <VStack spacing={3} align="stretch">
+    <Box pt={1} px={3} pb={3} h="100%" overflowY="auto" overflowX="hidden" bg="bg.base" css={{
+      "&::-webkit-scrollbar": { width: "4px" },
+      "&::-webkit-scrollbar-track": { background: "transparent" },
+      "&::-webkit-scrollbar-thumb": { background: "#ccc", borderRadius: "2px" },
+    }}>
+      <VStack spacing={2} align="stretch">
         {/* Top row - Back button, navigation, Reject All */}
-        <Flex align="center" position="relative" minH="32px">
+        <Flex align="center" position="relative">
           {/* Left - Back button */}
           <IconButton
             aria-label="Back"
@@ -531,79 +535,80 @@ function SignatureRequestConfirmation({
         {/* Pinned bottom section — sticky so buttons are always reachable */}
         <Box
           position="sticky"
-          bottom={-4}
+          bottom={-3}
           bg="bg.base"
           pt={1}
-          pb={1}
-          mx={-4}
-          px={4}
+          pb={3}
+          mx={-3}
+          px={3}
           zIndex={1}
         >
         <VStack spacing={2} align="stretch">
-        {/* ERC-8213: EIP-712 Digest */}
-        {typedData && (
-          <Eip712DigestDisplay typedData={typedData} />
-        )}
+          {/* ERC-8213: EIP-712 Digest */}
+          {typedData && (
+            <Eip712DigestDisplay typedData={typedData} />
+          )}
 
-        {/* Impersonator Info Box */}
-        {accountType === "impersonator" && (
-          <Box
-            bg="bauhaus.yellow"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="3px 3px 0px 0px #121212"
-            p={3}
-          >
-            <Text fontSize="sm" color="bauhaus.black" fontWeight="700">
-              Connected via Impersonated account — signing is disabled.
-            </Text>
-          </Box>
-        )}
+          {/* Impersonator Info Box */}
+          {accountType === "impersonator" && (
+            <Box
+              bg="bauhaus.yellow"
+              border="3px solid"
+              borderColor="bauhaus.black"
+              boxShadow="3px 3px 0px 0px #121212"
+              p={3}
+              mb={2}
+            >
+              <Text fontSize="sm" color="bauhaus.black" fontWeight="700">
+                Connected via Impersonated account — signing is disabled.
+              </Text>
+            </Box>
+          )}
 
-        {/* Action Buttons */}
-        {(accountType === "privateKey" || accountType === "seedPhrase" || accountType === "bankr") ? (
-          <HStack spacing={3}>
+          {/* Action Buttons */}
+          {(accountType === "privateKey" || accountType === "seedPhrase" || accountType === "bankr") ? (
+            <HStack spacing={3}>
+              <Button
+                variant="secondary"
+                flex={1}
+                onClick={handleCancel}
+                isDisabled={isSubmitting}
+              >
+                Reject
+              </Button>
+              <Button
+                flex={1}
+                onClick={handleConfirm}
+                isLoading={isSubmitting}
+                loadingText="Signing..."
+                bg="bauhaus.yellow"
+                color="bauhaus.black"
+                border="3px solid"
+                borderColor="bauhaus.black"
+                boxShadow="4px 4px 0px 0px #121212"
+                fontWeight="700"
+                _hover={{
+                  bg: "bauhaus.yellow",
+                  transform: "translateY(-2px)",
+                  boxShadow: "6px 6px 0px 0px #121212",
+                }}
+                _active={{
+                  transform: "translate(2px, 2px)",
+                  boxShadow: "none",
+                }}
+              >
+                Sign
+              </Button>
+            </HStack>
+          ) : (
             <Button
-              variant="secondary"
-              flex={1}
+              variant="danger"
+              w="full"
               onClick={handleCancel}
-              isDisabled={isSubmitting}
             >
               Reject
             </Button>
-            <Button
-              flex={1}
-              onClick={handleConfirm}
-              isLoading={isSubmitting}
-              loadingText="Signing..."
-              bg="bauhaus.yellow"
-              color="bauhaus.black"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="4px 4px 0px 0px #121212"
-              fontWeight="700"
-              _hover={{
-                bg: "bauhaus.yellow",
-                transform: "translateY(-2px)",
-                boxShadow: "6px 6px 0px 0px #121212",
-              }}
-              _active={{
-                transform: "translate(2px, 2px)",
-                boxShadow: "none",
-              }}
-            >
-              Sign
-            </Button>
-          </HStack>
-        ) : (
-          <Button
-            variant="danger"
-            w="full"
-            onClick={handleCancel}
-          >
-            Reject
-          </Button>
-        )}
+          )}
         </VStack>
         </Box>
       </VStack>

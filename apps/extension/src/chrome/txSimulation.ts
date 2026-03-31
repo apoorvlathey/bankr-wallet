@@ -17,6 +17,9 @@ import {
   decodeFunctionResult,
   formatUnits,
   parseEther,
+  keccak256,
+  encodeAbiParameters,
+  toHex,
   type PublicClient,
   type Address,
 } from "viem";
@@ -29,6 +32,10 @@ import { fetchPortfolio, type PortfolioToken } from "./portfolioApi";
 /** Multicall3 is deployed at the same address on all supported chains */
 const MULTICALL3_ADDRESS: Address =
   "0xcA11bde05977b3631167028862bE2a173976CA11";
+
+/** Permit2 is deployed at the same address on all supported chains */
+const PERMIT2_ADDRESS: Address =
+  "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,9 +87,11 @@ export interface TokenMetadataResult {
 // Simulator bytecode & ABI
 // ---------------------------------------------------------------------------
 
-/** Runtime bytecode of TxSimulator.sol (not creation code). */
+/** Runtime bytecode of TxSimulator.sol (not creation code).
+ *  Includes ERC-1271 isValidSignature so Permit2 signature verification
+ *  still works when the user's address has contract code (the simulator). */
 const SIMULATOR_BYTECODE: `0x${string}` =
-  "0x60806040526004361061002c575f3560e01c8063410bc60a14610037578063887628c81461007657610033565b3661003357005b5f80fd5b348015610042575f80fd5b5061005d60048036038101906100589190610ae8565b6100b5565b60405161006d9493929190610d36565b60405180910390f35b348015610081575f80fd5b5061009c60048036038101906100979190610e39565b61054b565b6040516100ac9493929190610d36565b60405180910390f35b5f806060805f4790505f8787905090505f8167ffffffffffffffff8111156100e0576100df610edc565b5b60405190808252806020026020018201604052801561010e5781602001602082028036833780820191505090505b5090505f5b828110156101755761014b8a8a8381811061013157610130610f09565b5b90506020020160208101906101469190610f36565b61092e565b82828151811061015e5761015d610f09565b5b602002602001018181525050806001019050610113565b50600196505f5b8b8b9050811015610297575f8c8c8381811061019b5761019a610f09565b5b90506020028101906101ad9190610f6d565b5f0160208101906101be9190610f36565b73ffffffffffffffffffffffffffffffffffffffff168d8d848181106101e7576101e6610f09565b5b90506020028101906101f99190610f6d565b602001358e8e858181106102105761020f610f09565b5b90506020028101906102229190610f6d565b80604001906102319190610f94565b60405161023f929190611032565b5f6040518083038185875af1925050503d805f8114610279576040519150601f19603f3d011682016040523d82523d5f602084013e61027e565b606091505b505090508061028b575f98505b5080600101905061017c565b5082476102a49190611077565b95505f808367ffffffffffffffff8111156102c2576102c1610edc565b5b6040519080825280602002602001820160405280156102f05781602001602082028036833780820191505090505b5090505f5b848110156103af575f61032e8d8d8481811061031457610313610f09565b5b90506020020160208101906103299190610f36565b61092e565b905084828151811061034357610342610f09565b5b6020026020010151816103569190611077565b83838151811061036957610368610f09565b5b6020026020010181815250505f83838151811061038957610388610f09565b5b6020026020010151146103a357836103a0906110b7565b93505b508060010190506102f5565b508167ffffffffffffffff8111156103ca576103c9610edc565b5b6040519080825280602002602001820160405280156103f85781602001602082028036833780820191505090505b5096508167ffffffffffffffff81111561041557610414610edc565b5b6040519080825280602002602001820160405280156104435781602001602082028036833780820191505090505b5095505f805b85811015610539575f83828151811061046557610464610f09565b5b60200260200101511461052e578c8c8281811061048557610484610f09565b5b905060200201602081019061049a9190610f36565b8983815181106104ad576104ac610f09565b5b602002602001019073ffffffffffffffffffffffffffffffffffffffff16908173ffffffffffffffffffffffffffffffffffffffff16815250508281815181106104fa576104f9610f09565b5b602002602001015188838151811061051557610514610f09565b5b6020026020010181815250508161052b906110b7565b91505b806001019050610449565b50505050505050945094509450949050565b5f806060805f4790505f8787905090505f8167ffffffffffffffff81111561057657610575610edc565b5b6040519080825280602002602001820160405280156105a45781602001602082028036833780820191505090505b5090505f5b8281101561060b576105e18a8a838181106105c7576105c6610f09565b5b90506020020160208101906105dc9190610f36565b61092e565b8282815181106105f4576105f3610f09565b5b6020026020010181815250508060010190506105a9565b508c73ffffffffffffffffffffffffffffffffffffffff168c8c8c604051610634929190611032565b5f6040518083038185875af1925050503d805f811461066e576040519150601f19603f3d011682016040523d82523d5f602084013e610673565b606091505b50508097505082476106859190611077565b95505f808367ffffffffffffffff8111156106a3576106a2610edc565b5b6040519080825280602002602001820160405280156106d15781602001602082028036833780820191505090505b5090505f5b84811015610790575f61070f8d8d848181106106f5576106f4610f09565b5b905060200201602081019061070a9190610f36565b61092e565b905084828151811061072457610723610f09565b5b6020026020010151816107379190611077565b83838151811061074a57610749610f09565b5b6020026020010181815250505f83838151811061076a57610769610f09565b5b6020026020010151146107845783610781906110b7565b93505b508060010190506106d6565b508167ffffffffffffffff8111156107ab576107aa610edc565b5b6040519080825280602002602001820160405280156107d95781602001602082028036833780820191505090505b5096508167ffffffffffffffff8111156107f6576107f5610edc565b5b6040519080825280602002602001820160405280156108245781602001602082028036833780820191505090505b5095505f805b8581101561091a575f83828151811061084657610845610f09565b5b60200260200101511461090f578c8c8281811061086657610865610f09565b5b905060200201602081019061087b9190610f36565b89838151811061088e5761088d610f09565b5b602002602001019073ffffffffffffffffffffffffffffffffffffffff16908173ffffffffffffffffffffffffffffffffffffffff16815250508281815181106108db576108da610f09565b5b60200260200101518883815181106108f6576108f5610f09565b5b6020026020010181815250508161090c906110b7565b91505b80600101905061082a565b505050505050509650965096509692505050565b5f805f8373ffffffffffffffffffffffffffffffffffffffff166370a082313060405160240161095e919061110d565b6040516020818303038152906040529060e01b6020820180517bffffffffffffffffffffffffffffffffffffffffffffffffffffffff83818316178352505050506040516109ac919061116e565b5f60405180830381855afa9150503d805f81146109e4576040519150601f19603f3d011682016040523d82523d5f602084013e6109e9565b606091505b50915091508180156109fd57506020815110155b15610a1f5780806020019051810190610a169190611198565b92505050610a25565b5f925050505b919050565b5f80fd5b5f80fd5b5f80fd5b5f80fd5b5f80fd5b5f8083601f840112610a5357610a52610a32565b5b8235905067ffffffffffffffff811115610a7057610a6f610a36565b5b602083019150836020820283011115610a8c57610a8b610a3a565b5b9250929050565b5f8083601f840112610aa857610aa7610a32565b5b8235905067ffffffffffffffff811115610ac557610ac4610a36565b5b602083019150836020820283011115610ae157610ae0610a3a565b5b9250929050565b5f805f8060408587031215610b0057610aff610a2a565b5b5f85013567ffffffffffffffff811115610b1d57610b1c610a2e565b5b610b2987828801610a3e565b9450945050602085013567ffffffffffffffff811115610b4c57610b4b610a2e565b5b610b5887828801610a93565b925092505092959194509250565b5f8115159050919050565b610b7a81610b66565b82525050565b5f819050919050565b610b9281610b80565b82525050565b5f81519050919050565b5f82825260208201905092915050565b5f819050602082019050919050565b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f610bea82610bc1565b9050919050565b610bfa81610be0565b82525050565b5f610c0b8383610bf1565b60208301905092915050565b5f602082019050919050565b5f610c2d82610b98565b610c378185610ba2565b9350610c4283610bb2565b805f5b83811015610c72578151610c598882610c00565b9750610c6483610c17565b925050600181019050610c45565b5085935050505092915050565b5f81519050919050565b5f82825260208201905092915050565b5f819050602082019050919050565b610cb181610b80565b82525050565b5f610cc28383610ca8565b60208301905092915050565b5f602082019050919050565b5f610ce482610c7f565b610cee8185610c89565b9350610cf983610c99565b805f5b83811015610d29578151610d108882610cb7565b9750610d1b83610cce565b925050600181019050610cfc565b5085935050505092915050565b5f608082019050610d495f830187610b71565b610d566020830186610b89565b8181036040830152610d688185610c23565b90508181036060830152610d7c8184610cda565b905095945050505050565b610d9081610be0565b8114610d9a575f80fd5b50565b5f81359050610dab81610d87565b92915050565b5f819050919050565b610dc381610db1565b8114610dcd575f80fd5b50565b5f81359050610dde81610dba565b92915050565b5f8083601f840112610df957610df8610a32565b5b8235905067ffffffffffffffff811115610e1657610e15610a36565b5b602083019150836001820283011115610e3257610e31610a3a565b5b9250929050565b5f805f805f8060808789031215610e5357610e52610a2a565b5b5f610e6089828a01610d9d565b9650506020610e7189828a01610dd0565b955050604087013567ffffffffffffffff811115610e9257610e91610a2e565b5b610e9e89828a01610de4565b9450945050606087013567ffffffffffffffff811115610ec157610ec0610a2e565b5b610ecd89828a01610a93565b92509250509295509295509295565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52604160045260245ffd5b7f4e487b71000000000000000000000000000000000000000000000000000000005f52603260045260245ffd5b5f60208284031215610f4b57610f4a610a2a565b5b5f610f5884828501610d9d565b91505092915050565b5f80fd5b5f80fd5b5f80fd5b5f82356001606003833603038112610f8857610f87610f61565b5b80830191505092915050565b5f8083356001602003843603038112610fb057610faf610f61565b5b80840192508235915067ffffffffffffffff821115610fd257610fd1610f65565b5b602083019250600182023603831315610fee57610fed610f69565b5b509250929050565b5f81905092915050565b828183375f83830152505050565b5f6110198385610ff6565b9350611026838584611000565b82840190509392505050565b5f61103e82848661100e565b91508190509392505050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b5f61108182610b80565b915061108c83610b80565b925082820390508181125f8412168282135f8512151617156110b1576110b061104a565b5b92915050565b5f6110c182610db1565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff82036110f3576110f261104a565b5b600182019050919050565b61110781610be0565b82525050565b5f6020820190506111205f8301846110fe565b92915050565b5f81519050919050565b8281835e5f83830152505050565b5f61114882611126565b6111528185610ff6565b9350611162818560208601611130565b80840191505092915050565b5f611179828461113e565b915081905092915050565b5f8151905061119281610dba565b92915050565b5f602082840312156111ad576111ac610a2a565b5b5f6111ba84828501611184565b9150509291505056fea2646970667358221220c63a1945e851cf1f7fb417be21820b41a0c567d025d82fda2c4ef2fafae3da9a64736f6c634300081a0033";
+  "0x608060405260043610610037575f3560e01c80631626ba7e14610042578063410bc60a1461007e578063887628c8146100bd5761003e565b3661003e57005b5f80fd5b34801561004d575f80fd5b5061006860048036038101906100639190610bd6565b6100fc565b6040516100759190610c6d565b60405180910390f35b348015610089575f80fd5b506100a4600480360381019061009f9190610d30565b6101c5565b6040516100b49493929190610f7e565b60405180910390f35b3480156100c8575f80fd5b506100e360048036038101906100de919061102c565b61065b565b6040516100f39493929190610f7e565b60405180910390f35b5f604183839050036101b3575f805f853592506020860135915060408601355f1a90505f73ffffffffffffffffffffffffffffffffffffffff166001888386866040515f815260200160405260405161015894939291906110f9565b6020604051602081039080840390855afa158015610178573d5f803e3d5ffd5b5050506020604051035173ffffffffffffffffffffffffffffffffffffffff16146101af57631626ba7e60e01b93505050506101be565b5050505b63ffffffff60e01b90505b9392505050565b5f806060805f4790505f8787905090505f8167ffffffffffffffff8111156101f0576101ef61113c565b5b60405190808252806020026020018201604052801561021e5781602001602082028036833780820191505090505b5090505f5b828110156102855761025b8a8a8381811061024157610240611169565b5b90506020020160208101906102569190611196565b610a3e565b82828151811061026e5761026d611169565b5b602002602001018181525050806001019050610223565b50600196505f5b8b8b90508110156103a7575f8c8c838181106102ab576102aa611169565b5b90506020028101906102bd91906111cd565b5f0160208101906102ce9190611196565b73ffffffffffffffffffffffffffffffffffffffff168d8d848181106102f7576102f6611169565b5b905060200281019061030991906111cd565b602001358e8e858181106103205761031f611169565b5b905060200281019061033291906111cd565b806040019061034191906111f4565b60405161034f929190611292565b5f6040518083038185875af1925050503d805f8114610389576040519150601f19603f3d011682016040523d82523d5f602084013e61038e565b606091505b505090508061039b575f98505b5080600101905061028c565b5082476103b491906112d7565b95505f808367ffffffffffffffff8111156103d2576103d161113c565b5b6040519080825280602002602001820160405280156104005781602001602082028036833780820191505090505b5090505f5b848110156104bf575f61043e8d8d8481811061042457610423611169565b5b90506020020160208101906104399190611196565b610a3e565b905084828151811061045357610452611169565b5b60200260200101518161046691906112d7565b83838151811061047957610478611169565b5b6020026020010181815250505f83838151811061049957610498611169565b5b6020026020010151146104b357836104b090611317565b93505b50806001019050610405565b508167ffffffffffffffff8111156104da576104d961113c565b5b6040519080825280602002602001820160405280156105085781602001602082028036833780820191505090505b5096508167ffffffffffffffff8111156105255761052461113c565b5b6040519080825280602002602001820160405280156105535781602001602082028036833780820191505090505b5095505f805b85811015610649575f83828151811061057557610574611169565b5b60200260200101511461063e578c8c8281811061059557610594611169565b5b90506020020160208101906105aa9190611196565b8983815181106105bd576105bc611169565b5b602002602001019073ffffffffffffffffffffffffffffffffffffffff16908173ffffffffffffffffffffffffffffffffffffffff168152505082818151811061060a57610609611169565b5b602002602001015188838151811061062557610624611169565b5b6020026020010181815250508161063b90611317565b91505b806001019050610559565b50505050505050945094509450949050565b5f806060805f4790505f8787905090505f8167ffffffffffffffff8111156106865761068561113c565b5b6040519080825280602002602001820160405280156106b45781602001602082028036833780820191505090505b5090505f5b8281101561071b576106f18a8a838181106106d7576106d6611169565b5b90506020020160208101906106ec9190611196565b610a3e565b82828151811061070457610703611169565b5b6020026020010181815250508060010190506106b9565b508c73ffffffffffffffffffffffffffffffffffffffff168c8c8c604051610744929190611292565b5f6040518083038185875af1925050503d805f811461077e576040519150601f19603f3d011682016040523d82523d5f602084013e610783565b606091505b505080975050824761079591906112d7565b95505f808367ffffffffffffffff8111156107b3576107b261113c565b5b6040519080825280602002602001820160405280156107e15781602001602082028036833780820191505090505b5090505f5b848110156108a0575f61081f8d8d8481811061080557610804611169565b5b905060200201602081019061081a9190611196565b610a3e565b905084828151811061083457610833611169565b5b60200260200101518161084791906112d7565b83838151811061085a57610859611169565b5b6020026020010181815250505f83838151811061087a57610879611169565b5b602002602001015114610894578361089190611317565b93505b508060010190506107e6565b508167ffffffffffffffff8111156108bb576108ba61113c565b5b6040519080825280602002602001820160405280156108e95781602001602082028036833780820191505090505b5096508167ffffffffffffffff8111156109065761090561113c565b5b6040519080825280602002602001820160405280156109345781602001602082028036833780820191505090505b5095505f805b85811015610a2a575f83828151811061095657610955611169565b5b602002602001015114610a1f578c8c8281811061097657610975611169565b5b905060200201602081019061098b9190611196565b89838151811061099e5761099d611169565b5b602002602001019073ffffffffffffffffffffffffffffffffffffffff16908173ffffffffffffffffffffffffffffffffffffffff16815250508281815181106109eb576109ea611169565b5b6020026020010151888381518110610a0657610a05611169565b5b60200260200101818152505081610a1c90611317565b91505b80600101905061093a565b505050505050509650965096509692505050565b5f805f8373ffffffffffffffffffffffffffffffffffffffff166370a0823130604051602401610a6e919061136d565b6040516020818303038152906040529060e01b6020820180517bffffffffffffffffffffffffffffffffffffffffffffffffffffffff8381831617835250505050604051610abc91906113ce565b5f60405180830381855afa9150503d805f8114610af4576040519150601f19603f3d011682016040523d82523d5f602084013e610af9565b606091505b5091509150818015610b0d57506020815110155b15610b2f5780806020019051810190610b2691906113f8565b92505050610b35565b5f925050505b919050565b5f80fd5b5f80fd5b5f819050919050565b610b5481610b42565b8114610b5e575f80fd5b50565b5f81359050610b6f81610b4b565b92915050565b5f80fd5b5f80fd5b5f80fd5b5f8083601f840112610b9657610b95610b75565b5b8235905067ffffffffffffffff811115610bb357610bb2610b79565b5b602083019150836001820283011115610bcf57610bce610b7d565b5b9250929050565b5f805f60408486031215610bed57610bec610b3a565b5b5f610bfa86828701610b61565b935050602084013567ffffffffffffffff811115610c1b57610c1a610b3e565b5b610c2786828701610b81565b92509250509250925092565b5f7fffffffff0000000000000000000000000000000000000000000000000000000082169050919050565b610c6781610c33565b82525050565b5f602082019050610c805f830184610c5e565b92915050565b5f8083601f840112610c9b57610c9a610b75565b5b8235905067ffffffffffffffff811115610cb857610cb7610b79565b5b602083019150836020820283011115610cd457610cd3610b7d565b5b9250929050565b5f8083601f840112610cf057610cef610b75565b5b8235905067ffffffffffffffff811115610d0d57610d0c610b79565b5b602083019150836020820283011115610d2957610d28610b7d565b5b9250929050565b5f805f8060408587031215610d4857610d47610b3a565b5b5f85013567ffffffffffffffff811115610d6557610d64610b3e565b5b610d7187828801610c86565b9450945050602085013567ffffffffffffffff811115610d9457610d93610b3e565b5b610da087828801610cdb565b925092505092959194509250565b5f8115159050919050565b610dc281610dae565b82525050565b5f819050919050565b610dda81610dc8565b82525050565b5f81519050919050565b5f82825260208201905092915050565b5f819050602082019050919050565b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f610e3282610e09565b9050919050565b610e4281610e28565b82525050565b5f610e538383610e39565b60208301905092915050565b5f602082019050919050565b5f610e7582610de0565b610e7f8185610dea565b9350610e8a83610dfa565b805f5b83811015610eba578151610ea18882610e48565b9750610eac83610e5f565b925050600181019050610e8d565b5085935050505092915050565b5f81519050919050565b5f82825260208201905092915050565b5f819050602082019050919050565b610ef981610dc8565b82525050565b5f610f0a8383610ef0565b60208301905092915050565b5f602082019050919050565b5f610f2c82610ec7565b610f368185610ed1565b9350610f4183610ee1565b805f5b83811015610f71578151610f588882610eff565b9750610f6383610f16565b925050600181019050610f44565b5085935050505092915050565b5f608082019050610f915f830187610db9565b610f9e6020830186610dd1565b8181036040830152610fb08185610e6b565b90508181036060830152610fc48184610f22565b905095945050505050565b610fd881610e28565b8114610fe2575f80fd5b50565b5f81359050610ff381610fcf565b92915050565b5f819050919050565b61100b81610ff9565b8114611015575f80fd5b50565b5f8135905061102681611002565b92915050565b5f805f805f806080878903121561104657611045610b3a565b5b5f61105389828a01610fe5565b965050602061106489828a01611018565b955050604087013567ffffffffffffffff81111561108557611084610b3e565b5b61109189828a01610b81565b9450945050606087013567ffffffffffffffff8111156110b4576110b3610b3e565b5b6110c089828a01610cdb565b92509250509295509295509295565b6110d881610b42565b82525050565b5f60ff82169050919050565b6110f3816110de565b82525050565b5f60808201905061110c5f8301876110cf565b61111960208301866110ea565b61112660408301856110cf565b61113360608301846110cf565b95945050505050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52604160045260245ffd5b7f4e487b71000000000000000000000000000000000000000000000000000000005f52603260045260245ffd5b5f602082840312156111ab576111aa610b3a565b5b5f6111b884828501610fe5565b91505092915050565b5f80fd5b5f80fd5b5f80fd5b5f823560016060038336030381126111e8576111e76111c1565b5b80830191505092915050565b5f80833560016020038436030381126112105761120f6111c1565b5b80840192508235915067ffffffffffffffff821115611232576112316111c5565b5b60208301925060018202360383131561124e5761124d6111c9565b5b509250929050565b5f81905092915050565b828183375f83830152505050565b5f6112798385611256565b9350611286838584611260565b82840190509392505050565b5f61129e82848661126e565b91508190509392505050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b5f6112e182610dc8565b91506112ec83610dc8565b925082820390508181125f8412168282135f851215161715611311576113106112aa565b5b92915050565b5f61132182610ff9565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8203611353576113526112aa565b5b600182019050919050565b61136781610e28565b82525050565b5f6020820190506113805f83018461135e565b92915050565b5f81519050919050565b8281835e5f83830152505050565b5f6113a882611386565b6113b28185611256565b93506113c2818560208601611390565b80840191505092915050565b5f6113d9828461139e565b915081905092915050565b5f815190506113f281611002565b92915050565b5f6020828403121561140d5761140c610b3a565b5b5f61141a848285016113e4565b9150509291505056fea26469706673582212200a09646e7fd2c81195a90436e6cbc8d6d7e8b47303cd8d04dc60ec8ec876a73964736f6c634300081a0033";
 
 /** ABI for the simulate() function only. */
 const SIMULATOR_ABI = [
@@ -241,6 +250,193 @@ async function getPortfolioPriceMap(
 }
 
 // ---------------------------------------------------------------------------
+// State overrides — grant balances + ERC-20 approvals + Permit2 allowances
+// ---------------------------------------------------------------------------
+
+type StateDiffEntry = { slot: `0x${string}`; value: `0x${string}` };
+type StateOverride = { address: Address; stateDiff: StateDiffEntry[] };
+
+/** Known EIP-1967 proxy slots to ignore when probing balance storage */
+const PROXY_SLOTS = new Set([
+  "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc", // implementation
+  "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103", // admin
+  "0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50", // beacon
+]);
+
+/**
+ * Use eth_createAccessList on balanceOf(user) to discover the exact storage
+ * slot where `token` stores the balance of `user`.
+ */
+async function findBalanceSlot(
+  client: PublicClient,
+  token: Address,
+  user: Address,
+): Promise<`0x${string}` | null> {
+  try {
+    const { accessList } = await client.createAccessList({
+      to: token,
+      data: encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [user],
+      }),
+    });
+
+    const tokenEntry = accessList.find(
+      (e) => e.address.toLowerCase() === token.toLowerCase(),
+    );
+    if (!tokenEntry || tokenEntry.storageKeys.length === 0) return null;
+
+    // Filter out known proxy slots — the remaining key(s) are the balance mapping
+    const balanceSlots = tokenEntry.storageKeys.filter(
+      (k: string) => !PROXY_SLOTS.has(k.toLowerCase()),
+    );
+    return (balanceSlots[0] as `0x${string}`) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Similarly, find the exact storage slot for `allowance[owner][spender]` in
+ * an ERC-20 token by tracing an `allowance()` call.
+ */
+async function findAllowanceSlot(
+  client: PublicClient,
+  token: Address,
+  owner: Address,
+  spender: Address,
+): Promise<`0x${string}` | null> {
+  try {
+    const { accessList } = await client.createAccessList({
+      to: token,
+      data: encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "allowance",
+        args: [owner, spender],
+      }),
+    });
+
+    const tokenEntry = accessList.find(
+      (e) => e.address.toLowerCase() === token.toLowerCase(),
+    );
+    if (!tokenEntry || tokenEntry.storageKeys.length === 0) return null;
+
+    const slots = tokenEntry.storageKeys.filter(
+      (k: string) => !PROXY_SLOTS.has(k.toLowerCase()),
+    );
+    return (slots[0] as `0x${string}`) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Build complete state overrides for retry simulation:
+ * 1. Token balance overrides (large balance for all candidates)
+ * 2. ERC-20 approval overrides (approve Permit2 on all candidates)
+ * 3. Permit2 allowance overrides (grant router access)
+ *
+ * Uses eth_createAccessList to discover exact storage slots — works for
+ * any ERC-20 implementation (OZ, USDC proxy, custom, etc.).
+ */
+async function buildRetryOverrides(
+  client: PublicClient,
+  owner: Address,
+  spender: Address,
+  candidates: Address[],
+): Promise<StateOverride[]> {
+  const MAX_UINT256 = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" as `0x${string}`;
+  // Large but not max balance (avoids overflow issues in some token logic)
+  const LARGE_BALANCE = toHex(10n ** 30n, { size: 32 });
+
+  // Run all slot probes in parallel (balance + approval for each candidate)
+  const [balanceSlots, allowanceSlots] = await Promise.all([
+    Promise.all(candidates.map((token) => findBalanceSlot(client, token, owner))),
+    Promise.all(candidates.map((token) => findAllowanceSlot(client, token, owner, PERMIT2_ADDRESS))),
+  ]);
+
+  console.log("[TxSim] Balance slots found:", balanceSlots.map((s, i) => `${candidates[i].slice(0, 8)}=${s ? "yes" : "no"}`).join(", "));
+  console.log("[TxSim] Allowance slots found:", allowanceSlots.map((s, i) => `${candidates[i].slice(0, 8)}=${s ? "yes" : "no"}`).join(", "));
+
+  // Merge all diffs per address
+  const diffMap = new Map<string, StateDiffEntry[]>();
+  const addressMap = new Map<string, Address>(); // lowercase → original
+
+  function addDiff(address: Address, diff: StateDiffEntry) {
+    const key = address.toLowerCase();
+    addressMap.set(key, address);
+    const arr = diffMap.get(key) ?? [];
+    arr.push(diff);
+    diffMap.set(key, arr);
+  }
+
+  // 1. Token balance overrides
+  for (let i = 0; i < candidates.length; i++) {
+    if (balanceSlots[i]) {
+      addDiff(candidates[i], { slot: balanceSlots[i]!, value: LARGE_BALANCE });
+    }
+  }
+
+  // 2. ERC-20 approval overrides (owner → Permit2)
+  for (let i = 0; i < candidates.length; i++) {
+    if (allowanceSlots[i]) {
+      addDiff(candidates[i], { slot: allowanceSlots[i]!, value: MAX_UINT256 });
+    }
+  }
+
+  // 3. Permit2 allowance overrides: allowance[owner][token][spender]
+  // Permit2's allowance is a triple-nested mapping at slot 0.
+  // CRITICAL: preserve the current nonce when overriding — Permit2's permit()
+  // verifies the signed nonce matches storage, so changing it breaks signature checks.
+  // Packed layout (256 bits): [nonce:48][expiration:48][amount:160]
+  const permit2Slots: `0x${string}`[] = [];
+  for (const token of candidates) {
+    const ownerSlot = keccak256(
+      encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [owner, 0n]),
+    );
+    const tokenSlot = keccak256(
+      encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [token, ownerSlot]),
+    );
+    const finalSlot = keccak256(
+      encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [spender, tokenSlot]),
+    );
+    permit2Slots.push(finalSlot);
+  }
+
+  // Read current Permit2 slots in parallel to extract nonces
+  const currentPermit2Values = await Promise.all(
+    permit2Slots.map((slot) =>
+      client.getStorageAt({ address: PERMIT2_ADDRESS, slot }).catch(() => "0x0" as `0x${string}`),
+    ),
+  );
+
+  for (let i = 0; i < candidates.length; i++) {
+    const currentValue = BigInt(currentPermit2Values[i] || "0x0");
+    // Extract current nonce from top 48 bits
+    const currentNonce = (currentValue >> 208n) & BigInt("0xffffffffffff");
+    // Pack: [currentNonce:48][maxExpiration:48][maxAmount:160]
+    const overrideValue = toHex(
+      (currentNonce << 208n) |
+      (BigInt("0xffffffffffff") << 160n) |
+      BigInt("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"),
+      { size: 32 },
+    );
+    addDiff(PERMIT2_ADDRESS, { slot: permit2Slots[i], value: overrideValue });
+  }
+
+  // Build final override array
+  const overrides: StateOverride[] = [];
+  for (const [key, diffs] of diffMap) {
+    if (diffs.length > 0) {
+      overrides.push({ address: addressMap.get(key)!, stateDiff: diffs });
+    }
+  }
+
+  return overrides;
+}
+
+// ---------------------------------------------------------------------------
 // Main simulation
 // ---------------------------------------------------------------------------
 
@@ -254,6 +450,15 @@ export async function simulateAssetChanges(
   },
   accountAddress: string,
 ): Promise<SimulationResult> {
+  console.log("[TxSim] simulateAssetChanges called", {
+    from: tx.from,
+    to: tx.to,
+    data: tx.data?.slice(0, 10),
+    value: tx.value,
+    chainId: tx.chainId,
+    accountAddress,
+  });
+
   const EMPTY: SimulationResult = {
     txSuccess: true,
     nativeChange: null,
@@ -263,10 +468,14 @@ export async function simulateAssetChanges(
   };
 
   // Skip contract deployments (no `to` address)
-  if (!tx.to) return EMPTY;
+  if (!tx.to) {
+    console.log("[TxSim] Skipping: no 'to' address (contract deployment)");
+    return EMPTY;
+  }
 
   const client = await getClient(tx.chainId);
   if (!client) {
+    console.log("[TxSim] Failed: no RPC URL for chainId", tx.chainId);
     return { ...EMPTY, simulationFailed: true, simulationError: "No RPC URL" };
   }
 
@@ -277,12 +486,14 @@ export async function simulateAssetChanges(
 
   try {
     // Step 1: Get access list to discover touched contracts
+    console.log("[TxSim] Step 1: Creating access list...");
     const { accessList } = await client.createAccessList({
       account: from,
       to,
       value,
       data,
     });
+    console.log("[TxSim] Access list entries:", accessList.length, accessList.map(e => e.address));
 
     // Collect unique candidate addresses (include `to` — it could be a token)
     const seen = new Set<string>();
@@ -299,82 +510,29 @@ export async function simulateAssetChanges(
     if (!seen.has(to.toLowerCase())) {
       candidates.push(to);
     }
+    console.log("[TxSim] Candidate tokens:", candidates.length, candidates);
 
     // Step 2: Simulate via eth_call with state override
-    const callData = encodeFunctionData({
-      abi: SIMULATOR_ABI,
-      functionName: "simulate",
-      args: [to, value, data, candidates],
-    });
+    const simResult = await runSimulation(client, from, to, value, data, candidates, []);
 
-    const result = await client.call({
-      to: from, // call the user's address (overridden with simulator code)
-      data: callData,
-      stateOverride: [
-        {
-          address: from,
-          code: SIMULATOR_BYTECODE,
-          balance: parseEther("100000"), // ensure enough ETH for the call
-        },
-      ],
-    });
-
-    if (!result.data) {
-      return { ...EMPTY, simulationFailed: true, simulationError: "Empty response" };
-    }
-
-    // Decode return: (bool success, int256 ethDelta, address[] tokens, int256[] deltas)
-    const [txSuccess, ethDelta, tokens, deltas] = decodeFunctionResult({
-      abi: SIMULATOR_ABI,
-      functionName: "simulate",
-      data: result.data,
-    });
-
-    // Step 3: Fetch token metadata + prices for non-zero changes
-    const { changes: tokenChanges, metadataComplete } = await enrichTokenChanges(
-      client,
-      tx.chainId,
-      tokens as Address[],
-      deltas as bigint[],
-      accountAddress,
-    );
-
-    // Build native change (with USD price from CoinGecko via gasEstimation cache)
-    const native = getNativeCurrency(tx.chainId);
-    let nativeChange: AssetChange | null = null;
-    if (ethDelta !== 0n) {
-      const abs = ethDelta < 0n ? -ethDelta : ethDelta;
-      const amount = parseFloat(formatUnits(abs, native.decimals));
-
-      // Fetch native price (reuses gasEstimation's CoinGecko cache via import)
-      let nativePriceUsd: number | null = null;
-      try {
-        const { fetchNativePrice } = await import("./gasEstimation");
-        nativePriceUsd = await fetchNativePrice(tx.chainId);
-      } catch {}
-
-      // Fallback to portfolio holdings price for native currency
-      if (nativePriceUsd === null) {
-        const portfolioPrices = await getPortfolioPriceMap(accountAddress);
-        const key = `${tx.chainId}:native`;
-        nativePriceUsd = portfolioPrices.get(key) ?? null;
+    // Step 2b: If inner tx reverted, retry with balance + approval + Permit2 overrides.
+    // Common reasons: user lacks on-chain token balance (impersonator account),
+    // missing ERC-20 approval to Permit2, or missing Permit2 allowance to router.
+    if (!simResult.txSuccess && simResult.tokens.length === 0) {
+      console.log("[TxSim] Inner tx reverted with no changes — retrying with balance + approval overrides...");
+      const retryOverrides = await buildRetryOverrides(client, from, to, candidates);
+      console.log("[TxSim] Built retry overrides:", retryOverrides.length, "addresses");
+      const retryResult = await runSimulation(client, from, to, value, data, candidates, retryOverrides);
+      if (retryResult.tokens.length > 0 || retryResult.ethDelta !== 0n) {
+        console.log("[TxSim] Retry succeeded! tokens:", retryResult.tokens.length, "ethDelta:", retryResult.ethDelta.toString());
+        return await buildSimulationResult(client, tx.chainId, accountAddress, retryResult, EMPTY);
       }
-
-      nativeChange = {
-        address: "native",
-        symbol: native.symbol,
-        name: native.name,
-        decimals: native.decimals,
-        logoUrl: native.icon,
-        rawDelta: ethDelta.toString(),
-        formattedAmount: formatAmount(amount),
-        valueUsd: nativePriceUsd !== null ? amount * nativePriceUsd : null,
-        direction: ethDelta > 0n ? "in" : "out",
-      };
+      console.log("[TxSim] Retry also produced no changes");
     }
 
-    return { txSuccess, nativeChange, tokenChanges, simulationFailed: false, metadataComplete };
+    return await buildSimulationResult(client, tx.chainId, accountAddress, simResult, EMPTY);
   } catch (err: any) {
+    console.error("[TxSim] Simulation error:", err.shortMessage || err.message || err);
     return {
       ...EMPTY,
       metadataComplete: true,
@@ -382,6 +540,137 @@ export async function simulateAssetChanges(
       simulationError: err.shortMessage || err.message || "Simulation failed",
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Simulation core — runs the eth_call with state overrides and decodes result
+// ---------------------------------------------------------------------------
+
+interface RawSimResult {
+  txSuccess: boolean;
+  ethDelta: bigint;
+  tokens: Address[];
+  deltas: bigint[];
+}
+
+async function runSimulation(
+  client: PublicClient,
+  from: Address,
+  to: Address,
+  value: bigint,
+  data: `0x${string}`,
+  candidates: Address[],
+  extraOverrides: { address: Address; stateDiff: { slot: `0x${string}`; value: `0x${string}` }[] }[],
+): Promise<RawSimResult> {
+  const callData = encodeFunctionData({
+    abi: SIMULATOR_ABI,
+    functionName: "simulate",
+    args: [to, value, data, candidates],
+  });
+
+  const label = extraOverrides.length > 0 ? "[TxSim retry]" : "[TxSim]";
+  console.log(`${label} Running eth_call simulation (extraOverrides: ${extraOverrides.length})...`);
+
+  const result = await client.call({
+    account: from,
+    to: from,
+    data: callData,
+    stateOverride: [
+      {
+        address: from,
+        code: SIMULATOR_BYTECODE,
+        balance: parseEther("100000"),
+      },
+      ...extraOverrides,
+    ],
+  });
+
+  if (!result.data) {
+    console.log(`${label} Empty response from eth_call`);
+    return { txSuccess: false, ethDelta: 0n, tokens: [], deltas: [] };
+  }
+  console.log(`${label} eth_call response length:`, result.data.length);
+
+  const [txSuccess, ethDelta, tokens, deltas] = decodeFunctionResult({
+    abi: SIMULATOR_ABI,
+    functionName: "simulate",
+    data: result.data,
+  });
+  console.log(`${label} Decoded:`, {
+    txSuccess,
+    ethDelta: ethDelta.toString(),
+    tokensCount: (tokens as Address[]).length,
+    tokens,
+    deltas: (deltas as bigint[]).map(d => d.toString()),
+  });
+
+  return {
+    txSuccess: txSuccess as boolean,
+    ethDelta: ethDelta as bigint,
+    tokens: tokens as Address[],
+    deltas: deltas as bigint[],
+  };
+}
+
+async function buildSimulationResult(
+  client: PublicClient,
+  chainId: number,
+  accountAddress: string,
+  raw: RawSimResult,
+  empty: SimulationResult,
+): Promise<SimulationResult> {
+  const { changes: tokenChanges, metadataComplete } = await enrichTokenChanges(
+    client,
+    chainId,
+    raw.tokens,
+    raw.deltas,
+    accountAddress,
+  );
+  console.log("[TxSim] Token changes:", tokenChanges.length, tokenChanges.map(c => ({ symbol: c.symbol, amount: c.formattedAmount, direction: c.direction })));
+
+  const native = getNativeCurrency(chainId);
+  let nativeChange: AssetChange | null = null;
+  if (raw.ethDelta !== 0n) {
+    const abs = raw.ethDelta < 0n ? -raw.ethDelta : raw.ethDelta;
+    const amount = parseFloat(formatUnits(abs, native.decimals));
+
+    let nativePriceUsd: number | null = null;
+    try {
+      const { fetchNativePrice } = await import("./gasEstimation");
+      nativePriceUsd = await fetchNativePrice(chainId);
+    } catch {}
+    if (nativePriceUsd === null) {
+      const portfolioPrices = await getPortfolioPriceMap(accountAddress);
+      nativePriceUsd = portfolioPrices.get(`${chainId}:native`) ?? null;
+    }
+
+    nativeChange = {
+      address: "native",
+      symbol: native.symbol,
+      name: native.name,
+      decimals: native.decimals,
+      logoUrl: native.icon,
+      rawDelta: raw.ethDelta.toString(),
+      formattedAmount: formatAmount(amount),
+      valueUsd: nativePriceUsd !== null ? amount * nativePriceUsd : null,
+      direction: raw.ethDelta > 0n ? "in" : "out",
+    };
+  }
+
+  const finalResult: SimulationResult = {
+    txSuccess: raw.txSuccess,
+    nativeChange,
+    tokenChanges,
+    simulationFailed: false,
+    metadataComplete,
+  };
+  console.log("[TxSim] Final result:", {
+    txSuccess: raw.txSuccess,
+    nativeChange: nativeChange ? { symbol: nativeChange.symbol, amount: nativeChange.formattedAmount, direction: nativeChange.direction } : null,
+    tokenChangesCount: tokenChanges.length,
+    metadataComplete,
+  });
+  return finalResult;
 }
 
 // ---------------------------------------------------------------------------
@@ -766,6 +1055,7 @@ export async function simulateBatchAssetChanges(
     console.log(`[batchSim] Encoded calldata length: ${callData.length} chars`);
 
     const result = await client.call({
+      account: from, // sets tx.origin = from (critical for Permit2 / protocol checks)
       to: from,
       data: callData,
       stateOverride: [

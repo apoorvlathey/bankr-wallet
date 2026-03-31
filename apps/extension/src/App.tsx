@@ -1041,10 +1041,17 @@ function App() {
             if (updated.length > 0) {
               setSelectedTxRequest(updated[0]);
             } else {
-              setSelectedTxRequest(null);
-              if (view === "txConfirm" || view === "pendingTxList") {
-                setActivityTabTrigger((k) => k + 1);
-                setView("main");
+              // In popup mode during tx confirm, don't clear state —
+              // TransactionConfirmation shows the success animation then
+              // closes the popup itself via window.close()
+              if (view === "txConfirm" && !isInSidePanel && !isFullscreenTab) {
+                // Let the animation play; popup will close itself
+              } else {
+                setSelectedTxRequest(null);
+                if (view === "txConfirm" || view === "pendingTxList") {
+                  setActivityTabTrigger((k) => k + 1);
+                  setView("main");
+                }
               }
             }
           }
@@ -1061,9 +1068,15 @@ function App() {
             if (updated.length > 0) {
               setSelectedSignatureRequest(updated[0]);
             } else {
-              setSelectedSignatureRequest(null);
-              if (view === "signatureConfirm") {
-                setView("main");
+              // In popup mode, don't switch view — the handler will
+              // close the popup via window.close()
+              if (view === "signatureConfirm" && !isInSidePanel && !isFullscreenTab) {
+                // Let the popup close itself
+              } else {
+                setSelectedSignatureRequest(null);
+                if (view === "signatureConfirm") {
+                  setView("main");
+                }
               }
             }
           }
@@ -1105,7 +1118,7 @@ function App() {
 
     chrome.storage.onChanged.addListener(handleStorageChange);
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
-  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, pendingWatchAssetRequest, view]);
+  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, pendingWatchAssetRequest, view, isInSidePanel, isFullscreenTab]);
 
   // Listen for tab activation changes to update chain for current tab
   useEffect(() => {
@@ -2805,6 +2818,10 @@ function App() {
                 onTokenClick={(token) => {
                   setTransferToken(token);
                   setView("transfer");
+                }}
+                onSwapClick={(token) => {
+                  setSwapInitialSellToken(token);
+                  setView("swap");
                 }}
               />
             )}
