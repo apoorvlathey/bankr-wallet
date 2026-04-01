@@ -14,7 +14,7 @@ import {
   AlertIcon,
   Spinner,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, WarningTwoIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon, ExternalLinkIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
 import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 
@@ -256,6 +256,21 @@ function AddChain({
         <Text fontSize="lg" fontWeight="900" color="text.primary" textTransform="uppercase" letterSpacing="tight">
           {mode === "dapp" ? "Add Network" : "Add Chain"}
         </Text>
+        <Button
+          size="xs"
+          variant="ghost"
+          rightIcon={<ExternalLinkIcon boxSize={3} />}
+          color="bauhaus.blue"
+          fontWeight="800"
+          textTransform="uppercase"
+          letterSpacing="wide"
+          onClick={() => chrome.tabs.create({ url: "https://chainlist.org" })}
+          _hover={{ bg: "transparent", color: "bauhaus.red" }}
+          _active={{ bg: "transparent" }}
+          px={1}
+        >
+          Chainlist
+        </Button>
         <Spacer />
       </HStack>
 
