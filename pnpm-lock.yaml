@@ -60,6 +60,9 @@ importers:
       '@chakra-ui/theme-tools':
         specifier: ^2.2
         version: 2.2.6(@chakra-ui/styled-system@2.12.4(react@18.3.1))(react@18.3.1)
+      '@chenglou/pretext':
+        specifier: 0.0.3
+        version: 0.0.3
       '@emotion/react':
         specifier: ^11.13
         version: 11.14.0(@types/react@18.3.27)(react@18.3.1)
@@ -544,6 +547,9 @@ packages:
     resolution: {integrity: sha512-KTBCK+M5KtXH6p54XS39ImQUMVtAx65BoZDoEms3LuObyTo1+civ1sMm4h3nRT320U6H5H7D35WnABVQjqU/4g==}
     peerDependencies:
       react: '>=16.8.0'
+
+  '@chenglou/pretext@0.0.3':
+    resolution: {integrity: sha512-RQmqMqUAPRCyv4R3LlRi/ao6KbNWYclqLA+V1HS7sWgyUUbjn3JmmlfXZSY/BjM4rbmIaMSyIVisYocYGYftiQ==}
 
   '@coinbase/cdp-sdk@1.44.0':
     resolution: {integrity: sha512-0I5O1DzbchR91GAYQAU8lxx6q9DBvN0no9IBwrTKLHW8t5bABMg8dzQ/jrGRd6lr/QFJJW4L0ZSLGae5jsxGWw==}
@@ -6928,6 +6934,8 @@ snapshots:
       '@types/lodash.mergewith': 4.6.9
       lodash.mergewith: 4.6.2
       react: 19.2.4
+
+  '@chenglou/pretext@0.0.3': {}
 
   '@coinbase/cdp-sdk@1.44.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)':
     dependencies:

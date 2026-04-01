@@ -129,6 +129,7 @@ const AddChain = lazy(() => import("@/components/Settings/AddChain"));
 import UnlockScreen from "@/components/UnlockScreen";
 import PendingTxBanner from "@/components/PendingTxBanner";
 import PortfolioTabs from "@/components/PortfolioTabs";
+import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
 import { useNetworks } from "@/contexts/NetworksContext";
 import ChainIcon from "@/components/ChainIcon";
 import { hasEncryptedApiKey } from "@/chrome/crypto";
@@ -1462,15 +1463,6 @@ function App() {
       }
     }
   }, [pendingSignatureRequests, isInSidePanel, isFullscreenTab]);
-
-  // Split address for CSS middle-truncation with bold first/last 4 hex chars
-  // Split hex chars (after "0x") in half, then prepend "0x" to the start
-  const hexLen = address ? address.length - 2 : 0;
-  const addrHalf = address ? 2 + Math.ceil(hexLen / 2) : 0;
-  const addrBoldStart = address ? address.slice(0, 6) : "";
-  const addrMidStart = address ? address.slice(6, addrHalf) : "";
-  const addrMidEnd = address ? address.slice(addrHalf, -4) : "";
-  const addrBoldEnd = address ? address.slice(-4) : "";
 
   const handleRpcIssuesChange = useCallback((chainIds: number[]) => {
     setRpcIssueChainIds(chainIds);
@@ -2893,58 +2885,7 @@ function App() {
                   flex={1}
                   minW={0}
                 >
-                  <Flex
-                    flex={1}
-                    minW={0}
-                    fontSize="sm"
-                    fontFamily="mono"
-                    color="bauhaus.white"
-                  >
-                    <Box
-                      as="span"
-                      overflow="hidden"
-                      whiteSpace="nowrap"
-                      flex="1 1 50%"
-                      minW="6ch"
-                      sx={{
-                        maskImage:
-                          "linear-gradient(to right, black calc(100% - 2ch), transparent 100%)",
-                        WebkitMaskImage:
-                          "linear-gradient(to right, black calc(100% - 2ch), transparent 100%)",
-                      }}
-                    >
-                      <Box as="span" fontWeight="700">{addrBoldStart}</Box>
-                      <Box as="span" fontWeight="400" opacity={0.5}>{addrMidStart}</Box>
-                    </Box>
-                    <Box
-                      as="span"
-                      flexShrink={0}
-                      fontWeight="700"
-                      opacity={0.5}
-                    >
-                      ...
-                    </Box>
-                    <Box
-                      as="span"
-                      overflow="hidden"
-                      whiteSpace="nowrap"
-                      flex="1 1 50%"
-                      minW="4ch"
-                      dir="rtl"
-                      textAlign="left"
-                      sx={{
-                        maskImage:
-                          "linear-gradient(to left, black calc(100% - 2ch), transparent 100%)",
-                        WebkitMaskImage:
-                          "linear-gradient(to left, black calc(100% - 2ch), transparent 100%)",
-                      }}
-                    >
-                      <Box as="span" dir="ltr" display="inline-block">
-                        <Box as="span" fontWeight="400" opacity={0.5}>{addrMidEnd}</Box>
-                        <Box as="span" fontWeight="700">{addrBoldEnd}</Box>
-                      </Box>
-                    </Box>
-                  </Flex>
+                  <MiddleTruncatedAddress address={address} />
                   <IconButton
                     aria-label="Show QR code"
                     icon={
