@@ -249,3 +249,22 @@ export function resolveChainIconMeta(
     text: fallback.text,
   };
 }
+
+export function getChainEnvironmentLabel(
+  chainId: number,
+  chainName?: string,
+): "TESTNET" | undefined {
+  const alias = findAlias(chainId, chainName);
+  const normalizedName = normalizeChainName(chainName);
+
+  if (
+    alias?.overlayLabel ||
+    normalizedName.includes("testnet") ||
+    normalizedName.includes("sepolia") ||
+    normalizedName.includes("fuji")
+  ) {
+    return "TESTNET";
+  }
+
+  return undefined;
+}

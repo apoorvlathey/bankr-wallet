@@ -39,6 +39,7 @@ import TokenSelector from "@/components/Swap/TokenSelector";
 import { WALLETCHAN_STAKE_URL } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import ChainIcon from "@/components/ChainIcon";
+import { getChainEnvironmentLabel } from "@/lib/chainIcons";
 import {
   getResolvedChainById,
   getStoredRpcUrl,
@@ -278,6 +279,7 @@ function TokenTransfer({
     useAddressResolver(recipient);
 
   const chainName = getChainName(selectedChainId);
+  const chainEnvironmentLabel = getChainEnvironmentLabel(selectedChainId, chainName);
   const explorerUrl = getResolvedChainById(selectedChainId, networksInfo)?.explorer ?? "";
   const [chainSearch, setChainSearch] = useState("");
   const chainSearchInputRef = useRef<HTMLInputElement>(null);
@@ -685,24 +687,23 @@ function TokenTransfer({
                   _hover={{ opacity: 0.7 }}
                   transition="opacity 0.15s"
                 >
-                  <Box position="relative">
+                  <HStack spacing={1.5}>
                     <ChainIcon chainId={selectedChainId} chainName={chainName} size="36px" />
                     <Box
-                      position="absolute"
-                      bottom="-2px"
-                      right="-2px"
                       bg="bauhaus.white"
                       border="1.5px solid"
                       borderColor="bauhaus.black"
-                      borderRadius="full"
-                      boxSize="16px"
+                      borderRadius="none"
+                      minW="18px"
+                      h="18px"
                       display="flex"
                       alignItems="center"
                       justifyContent="center"
+                      boxShadow="2px 2px 0px 0px #121212"
                     >
                       <ChevronDownIcon boxSize="12px" />
                     </Box>
-                  </Box>
+                  </HStack>
                 </MenuButton>
                 <MenuList
                   bg="bauhaus.white"
@@ -786,7 +787,26 @@ function TokenTransfer({
                       >
                         <HStack spacing={2}>
                           <ChainIcon chainId={cId} chainName={getChainName(cId)} size="18px" />
-                          <Text fontWeight="700" fontSize="sm">{getChainName(cId)}</Text>
+                          <HStack spacing={1.5}>
+                            <Text fontWeight="700" fontSize="sm">{getChainName(cId)}</Text>
+                            {getChainEnvironmentLabel(cId, getChainName(cId)) && (
+                              <Text
+                                fontSize="8px"
+                                fontWeight="900"
+                                letterSpacing="0.08em"
+                                textTransform="uppercase"
+                                px={1.5}
+                                py={0.5}
+                                bg="bauhaus.yellow"
+                                color="bauhaus.black"
+                                border="1px solid"
+                                borderColor="bauhaus.black"
+                                lineHeight="1"
+                              >
+                                Testnet
+                              </Text>
+                            )}
+                          </HStack>
                         </HStack>
                       </MenuItem>
                     ))}
@@ -816,9 +836,29 @@ function TokenTransfer({
                   chainName={chainName}
                 />
                 {token && (
-                  <Text fontSize="xs" fontWeight="700" color="text.tertiary" mt={0.5} noOfLines={1}>
-                    on {chainName}
-                  </Text>
+                  <HStack spacing={1.5} mt={0.5} minW={0} flexWrap="wrap">
+                    <Text fontSize="xs" fontWeight="700" color="text.tertiary" noOfLines={1}>
+                      on {chainName.replace(/\s+testnet$/i, "")}
+                    </Text>
+                    {chainEnvironmentLabel && (
+                      <Text
+                        fontSize="8px"
+                        fontWeight="900"
+                        letterSpacing="0.08em"
+                        textTransform="uppercase"
+                        px={1.5}
+                        py={0.5}
+                        bg="bauhaus.yellow"
+                        color="bauhaus.black"
+                        border="1px solid"
+                        borderColor="bauhaus.black"
+                        lineHeight="1"
+                        flexShrink={0}
+                      >
+                        {chainEnvironmentLabel}
+                      </Text>
+                    )}
+                  </HStack>
                 )}
               </VStack>
 
