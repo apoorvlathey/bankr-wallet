@@ -32,6 +32,7 @@ import { resolveAddressToName } from "@/lib/ensUtils";
 import CalldataDecoder from "@/components/CalldataDecoder";
 import GasEstimateDisplay from "@/components/GasEstimateDisplay";
 import AssetChangesDisplay from "@/components/AssetChangesDisplay";
+import GasFeeWaiverBanner from "@/components/GasFeeWaiverBanner";
 import ERC20ApproveDisplay from "@/components/ERC20ApproveDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import ChainIcon from "@/components/ChainIcon";
@@ -799,6 +800,8 @@ function TransactionConfirmation({
           accountType={accountType}
           onGasOverrides={setGasOverrides}
         />
+
+        <GasFeeWaiverBanner />
 
         {/* Calldata (Decoded + Raw) */}
         {tx.data && tx.data !== "0x" && tx.to && (
