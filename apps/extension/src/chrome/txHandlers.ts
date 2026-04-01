@@ -11,13 +11,12 @@ import {
   BankrApiError,
 } from "./bankrApi";
 import {
-  ALLOWED_CHAIN_IDS,
   BANKR_SUPPORTED_CHAIN_IDS,
   CHAIN_NAMES,
-  DEFAULT_NETWORKS,
   OP_STACK_CHAIN_IDS,
 } from "../constants/networks";
 import { CHAIN_CONFIG } from "../constants/chainConfig";
+import { getStoredResolvedChainById, getStoredRpcUrl } from "@/lib/chains";
 import type { Account } from "./types";
 import {
   getActiveAccount,
@@ -74,7 +73,6 @@ import {
 import { handleUnlockWallet } from "./authHandlers";
 import {
   getSidePanelMode,
-  setSidePanelMode,
   isSidePanelSupported,
 } from "./sidepanelManager";
 import { startReceiptPolling } from "./txReceiptPoller";
@@ -105,7 +103,7 @@ export interface SignatureResult {
  */
 export async function writeResultToStorage(
   key: string,
-  result: TransactionResult | SignatureResult,
+  result: TransactionResult | SignatureResult | Record<string, unknown>,
 ): Promise<void> {
   await chrome.storage.local.set({ [key]: { result, timestamp: Date.now() } });
 }
@@ -574,22 +572,12 @@ async function lookupFunctionName(calldata: string): Promise<string | null> {
 
 /**
  * Resolve RPC URL for a chain ID.
- * Checks user-configured networks first, falls back to defaults.
+ * Centralized wrapper around the shared chain resolver. Keeping this export
+ * avoids touching every existing caller while still making runtime chain
+ * lookups come from one place.
  */
 export async function getRpcUrl(chainId: number): Promise<string | undefined> {
-  const { networksInfo } = await chrome.storage.sync.get("networksInfo");
-  if (networksInfo) {
-    for (const name of Object.keys(networksInfo)) {
-      if (networksInfo[name].chainId === chainId) {
-        return networksInfo[name].rpcUrl;
-      }
-    }
-  }
-  // Fallback to defaults
-  for (const net of Object.values(DEFAULT_NETWORKS)) {
-    if (net.chainId === chainId) return net.rpcUrl;
-  }
-  return undefined;
+  return getStoredRpcUrl(chainId);
 }
 
 /**
@@ -905,17 +893,15 @@ async function processLocalTransactionInBackground(
   }
 
   try {
-    // Get RPC URL for the chain
-    const { networksInfo } = await chrome.storage.sync.get("networksInfo");
-    let rpcUrl: string | undefined;
-    if (networksInfo) {
-      for (const chainName of Object.keys(networksInfo)) {
-        if (networksInfo[chainName].chainId === pending.tx.chainId) {
-          rpcUrl = networksInfo[chainName].rpcUrl;
-          break;
+    const resolvedChain = await getStoredResolvedChainById(pending.tx.chainId);
+    const rpcUrl = resolvedChain?.rpcUrl;
+    const customChainMeta = resolvedChain?.isCustom
+      ? {
+          name: resolvedChain.name,
+          nativeCurrency: resolvedChain.nativeCurrency,
+          explorer: resolvedChain.explorer || undefined,
         }
-      }
-    }
+      : undefined;
 
     // Get managed nonce to prevent conflicts with rapid txs
     const nonce = await getNextNonce(pending.tx.from, pending.tx.chainId);
@@ -938,6 +924,7 @@ async function processLocalTransactionInBackground(
       privateKey,
       txForSigning,
       rpcUrl,
+      customChainMeta,
     );
     const txHash = result.txHash;
 
@@ -1391,11 +1378,12 @@ export async function handleInitiateTransfer(message: {
 }): Promise<{ success: boolean; txId?: string; error?: string }> {
   const { tx, chainName, tokenName, tokenLogo } = message;
 
-  // Validate chain ID
-  if (!ALLOWED_CHAIN_IDS.has(tx.chainId)) {
+  // Validate chain is configured (hardcoded or custom)
+  const configuredRpc = await getRpcUrl(tx.chainId);
+  if (!configuredRpc) {
     return {
       success: false,
-      error: `Chain ${tx.chainId} not supported`,
+      error: `Chain ${tx.chainId} not configured. Add it in Settings → Chains.`,
     };
   }
 
@@ -1447,9 +1435,10 @@ export async function handleExecuteSwapDirect(
 
   const chainId = transactions[0].tx.chainId;
 
-  // Validate chain
-  if (!ALLOWED_CHAIN_IDS.has(chainId)) {
-    return { success: false, error: `Chain ${chainId} not supported` };
+  // Validate chain is configured
+  const swapRpc = await getRpcUrl(chainId);
+  if (!swapRpc) {
+    return { success: false, error: `Chain ${chainId} not configured` };
   }
 
   // Resolve account
@@ -1526,17 +1515,15 @@ export async function handleExecuteSwapDirect(
     }
   }
 
-  // Resolve RPC URL once
-  const { networksInfo } = await chrome.storage.sync.get("networksInfo");
-  let rpcUrl: string | undefined;
-  if (networksInfo) {
-    for (const name of Object.keys(networksInfo)) {
-      if (networksInfo[name].chainId === chainId) {
-        rpcUrl = networksInfo[name].rpcUrl;
-        break;
+  const resolvedChain = await getStoredResolvedChainById(chainId);
+  const rpcUrl = resolvedChain?.rpcUrl;
+  const customChainMeta = resolvedChain?.isCustom
+    ? {
+        name: resolvedChain.name,
+        nativeCurrency: resolvedChain.nativeCurrency,
+        explorer: resolvedChain.explorer || undefined,
       }
-    }
-  }
+    : undefined;
 
   // Phase 1 (sequential): assign nonces + write history entries
   // This avoids the addTxToHistory race condition and ensures correct nonces.
@@ -1586,7 +1573,7 @@ export async function handleExecuteSwapDirect(
   // Phase 2 (concurrent): broadcast all TXs with pre-assigned nonces
   for (const item of prepared) {
     broadcastSwapTxLocal(
-      item.txId, item.pending, account, privateKey, item.nonce, rpcUrl,
+      item.txId, item.pending, account, privateKey, item.nonce, rpcUrl, customChainMeta,
     );
   }
 
@@ -1673,6 +1660,7 @@ async function broadcastSwapTxLocal(
   privateKey: `0x${string}`,
   nonce: number,
   rpcUrl?: string,
+  customChainMeta?: { name: string; nativeCurrency?: { name: string; symbol: string; decimals: number }; explorer?: string },
 ): Promise<void> {
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
@@ -1684,6 +1672,7 @@ async function broadcastSwapTxLocal(
       privateKey,
       txForSigning,
       rpcUrl,
+      customChainMeta,
     );
     const txHash = result.txHash;
 

@@ -12,6 +12,7 @@ import {
 import { getRpcUrl, showNotification } from "./txHandlers";
 import { OP_STACK_CHAIN_IDS } from "../constants/networks";
 import { CHAIN_CONFIG } from "../constants/chainConfig";
+import { getStoredChainName, getStoredExplorerUrl } from "@/lib/chains";
 
 /** Polling config */
 const INITIAL_INTERVAL_MS = 2_000;
@@ -44,24 +45,13 @@ async function pollReceipt(
   txHash: string,
   chainId: number,
 ): Promise<void> {
-  const rpcUrl = await getRpcUrl(chainId);
-  if (!rpcUrl) {
-    // Can't poll without RPC — leave as pending, frontend will retry when UI opens
-    return;
-  }
-
   const startTime = Date.now();
   let interval = INITIAL_INTERVAL_MS;
 
   while (Date.now() - startTime < MAX_POLL_DURATION_MS) {
     await sleep(interval);
 
-    const confirmed = await checkAndFinalizeReceipt(
-      txId,
-      txHash,
-      chainId,
-      rpcUrl,
-    );
+    const confirmed = await checkAndFinalizeReceipt(txId, txHash, chainId);
     if (confirmed !== null) return; // Resolved (success or failed)
 
     // Exponential backoff
@@ -70,7 +60,7 @@ async function pollReceipt(
 
   // Timed out — do one final check, then stop silently if still pending.
   // The frontend will resume polling when the user opens the activity tab.
-  await checkAndFinalizeReceipt(txId, txHash, chainId, rpcUrl);
+  await checkAndFinalizeReceipt(txId, txHash, chainId);
 }
 
 /**
@@ -81,8 +71,13 @@ async function checkAndFinalizeReceipt(
   txId: string,
   txHash: string,
   chainId: number,
-  rpcUrl: string,
 ): Promise<boolean | null> {
+  const rpcUrl = await getRpcUrl(chainId);
+  if (!rpcUrl) {
+    // Can't poll without RPC — leave as pending, frontend will retry when UI opens
+    return null;
+  }
+
   try {
     const receipt = await fetchReceipt(rpcUrl, txHash);
 
@@ -183,16 +178,15 @@ async function showConfirmationNotification(
   succeeded: boolean,
 ): Promise<void> {
   const chainConfig = CHAIN_CONFIG[chainId];
-  const chainName = chainConfig?.name || "Unknown chain";
+  const chainName = chainConfig?.name || (await getStoredChainName(chainId));
 
   const notificationId = succeeded
     ? `tx-success-${txId}`
     : `tx-failed-${txId}`;
 
   if (succeeded) {
-    const explorerUrl = chainConfig?.explorer
-      ? `${chainConfig.explorer}/tx/${txHash}`
-      : null;
+    const explorer = chainConfig?.explorer || (await getStoredExplorerUrl(chainId));
+    const explorerUrl = explorer ? `${explorer}/tx/${txHash}` : null;
 
     if (explorerUrl) {
       await chrome.storage.local.set({
@@ -219,10 +213,7 @@ export async function checkPendingTxReceipt(
   txHash: string,
   chainId: number,
 ): Promise<"success" | "failed" | null> {
-  const rpcUrl = await getRpcUrl(chainId);
-  if (!rpcUrl) return null;
-
-  const result = await checkAndFinalizeReceipt(txId, txHash, chainId, rpcUrl);
+  const result = await checkAndFinalizeReceipt(txId, txHash, chainId);
   if (result === true) return "success";
   if (result === false) return "failed";
   return null;

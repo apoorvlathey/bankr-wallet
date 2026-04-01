@@ -58,6 +58,10 @@ export const SOURCIFY_BASE = "https://sourcify.dev/server/v2/contract";
 // ---------------------------------------------------------------------------
 export const COINGECKO_PRICE_API =
   "https://api.coingecko.com/api/v3/simple/price";
+export const COINGECKO_MARKETS_API =
+  "https://api.coingecko.com/api/v3/coins/markets";
+export const COINGECKO_SEARCH_API =
+  "https://api.coingecko.com/api/v3/search";
 
 // ---------------------------------------------------------------------------
 // External APIs — Google Favicons

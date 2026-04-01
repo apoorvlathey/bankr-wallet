@@ -28,12 +28,19 @@ import {
 } from "@chakra-ui/icons";
 import { CompletedTransaction, GasData } from "@/chrome/txHistoryStorage";
 import { getChainConfig } from "@/constants/chainConfig";
-import { DEFAULT_NETWORKS, OP_STACK_CHAIN_IDS } from "@/constants/networks";
+import { OP_STACK_CHAIN_IDS } from "@/constants/networks";
+import { useNetworks } from "@/contexts/NetworksContext";
 import { AddressParam } from "@/components/decodedParams/AddressParam";
 import { CopyButton } from "@/components/CopyButton";
 import CalldataDecoder from "@/components/CalldataDecoder";
 import { formatEth, formatGwei, formatNumber } from "@/lib/gasFormatUtils";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
+import ChainIcon from "@/components/ChainIcon";
+import {
+  getResolvedChainById,
+  getStoredNativeCurrencySymbol,
+  getStoredRpcUrl,
+} from "@/lib/chains";
 
 interface TxDetailModalProps {
   isOpen: boolean;
@@ -41,13 +48,24 @@ interface TxDetailModalProps {
   tx: CompletedTransaction;
 }
 
-function formatValue(value: string | undefined): string {
+function formatValue(value: string | undefined, symbol = "ETH"): string {
   if (!value || value === "0" || value === "0x0") {
-    return "0 ETH";
+    return `0 ${symbol}`;
   }
   const wei = BigInt(value);
   const eth = Number(wei) / 1e18;
-  return `${eth.toFixed(6)} ETH`;
+  return `${eth.toFixed(6)} ${symbol}`;
+}
+
+function formatLocalTimestamp(timestamp: number): string {
+  return new Date(timestamp).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 function GasRow({ label, value }: { label: string; value: string }) {
@@ -64,11 +82,25 @@ function GasRow({ label, value }: { label: string; value: string }) {
 }
 
 function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
+  const { networksInfo } = useNetworks();
+  const resolvedChain = getResolvedChainById(tx.chainId, networksInfo);
   const config = getChainConfig(tx.chainId);
   const hasCalldata = tx.tx.data && tx.tx.data !== "0x";
   const isContractDeploy = !tx.tx.to;
   const isL2 = OP_STACK_CHAIN_IDS.has(tx.chainId);
   const [gasExpanded, setGasExpanded] = useState(false);
+
+  // Native currency symbol — fast for hardcoded chains, async for custom
+  const [nativeSym, setNativeSym] = useState(
+    resolvedChain?.nativeCurrency.symbol ?? "ETH",
+  );
+  useEffect(() => {
+    if (resolvedChain?.nativeCurrency.symbol) {
+      setNativeSym(resolvedChain.nativeCurrency.symbol);
+      return;
+    }
+    getStoredNativeCurrencySymbol(tx.chainId).then(setNativeSym).catch(() => {});
+  }, [resolvedChain, tx.chainId]);
 
   // On-demand gas data fetching for txs that don't have it yet
   const [gasData, setGasData] = useState<GasData | undefined>(tx.gasData);
@@ -82,24 +114,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
     let cancelled = false;
 
     (async () => {
-      // Resolve RPC URL
-      let rpcUrl: string | undefined;
-      try {
-        const { networksInfo } = await chrome.storage.sync.get("networksInfo");
-        if (networksInfo) {
-          for (const name of Object.keys(networksInfo)) {
-            if (networksInfo[name].chainId === tx.chainId) {
-              rpcUrl = networksInfo[name].rpcUrl;
-              break;
-            }
-          }
-        }
-      } catch { /* ignore */ }
-      if (!rpcUrl) {
-        for (const net of Object.values(DEFAULT_NETWORKS)) {
-          if (net.chainId === tx.chainId) { rpcUrl = net.rpcUrl; break; }
-        }
-      }
+      const rpcUrl = await getStoredRpcUrl(tx.chainId);
       if (!rpcUrl || cancelled) return;
 
       try {
@@ -135,11 +150,14 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
     return () => { cancelled = true; };
   }, [tx.id, tx.gasData, tx.txHash, tx.status, tx.chainId, isOpen]);
 
+  // Resolve explorer: hardcoded chain config first, then custom chain in networksInfo
+  const explorerBase = resolvedChain?.explorer || config.explorer || "";
+
   const handleViewOnExplorer = () => {
-    if (tx.txHash && config.explorer) {
+    if (tx.txHash && explorerBase) {
       const hash = tx.txHash.match(/0x[a-fA-F0-9]{64}/)?.[0];
       if (hash) {
-        chrome.tabs.create({ url: `${config.explorer}/tx/${hash}` });
+        chrome.tabs.create({ url: `${explorerBase}/tx/${hash}` });
       }
     }
   };
@@ -151,6 +169,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
   const gasUsagePercent = gasData
     ? ((Number(gasData.gasUsed) / Number(gasData.gasLimit)) * 100).toFixed(2)
     : undefined;
+  const displayTimestamp = tx.completedAt ?? tx.createdAt;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} scrollBehavior="inside" isCentered>
@@ -190,12 +209,21 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
 
         <ModalBody px={4} py={3}>
           <VStack spacing={3} align="stretch">
-            {/* Status + Chain + Explorer row */}
+            {/* Status + Chain row */}
             <HStack spacing={2} flexWrap="wrap">
+              {(() => {
+                const badgeChain = resolvedChain ?? {
+                  name: tx.chainName,
+                  bg: config.bg,
+                  text: config.text,
+                  icon: config.icon,
+                  isCustom: false,
+                };
+                return (
               <Badge
                 fontSize="xs"
-                bg={config.bg}
-                color={config.text}
+                bg={badgeChain.isCustom ? "bauhaus.white" : badgeChain.bg}
+                color={badgeChain.isCustom ? "bauhaus.black" : badgeChain.text}
                 border="2px solid"
                 borderColor="bauhaus.black"
                 px={2}
@@ -204,11 +232,11 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 alignItems="center"
                 gap={1}
               >
-                {config.icon && (
-                  <Image src={config.icon} alt={tx.chainName} boxSize="10px" />
-                )}
-                {tx.chainName}
+                <ChainIcon chainId={tx.chainId} chainName={badgeChain.name} size="10px" />
+                {badgeChain.name}
               </Badge>
+                );
+              })()}
               {tx.status === "pending" && (
                 <Badge
                   bg="bauhaus.blue"
@@ -262,7 +290,10 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   Failed
                 </Badge>
               )}
-              {tx.txHash && config.explorer && (
+            </HStack>
+
+            <HStack justify="space-between" align="center" spacing={3}>
+              {tx.txHash && explorerBase ? (
                 <Button
                   size="xs"
                   variant="ghost"
@@ -280,7 +311,12 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 >
                   View on Explorer
                 </Button>
+              ) : (
+                <Box />
               )}
+              <Text fontSize="2xs" fontWeight="600" color="text.tertiary" textAlign="right">
+                {formatLocalTimestamp(displayTimestamp)}
+              </Text>
             </HStack>
 
             {/* Function name */}
@@ -391,7 +427,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                     Value
                   </Text>
                   <Text fontSize="sm" fontWeight="700" color="text.primary">
-                    {formatValue(tx.tx.value)}
+                    {formatValue(tx.tx.value, nativeSym)}
                   </Text>
                 </Box>
               </>
@@ -418,7 +454,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   </HStack>
                   <HStack spacing={1}>
                     <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono">
-                      {formatEth(txFee)}
+                      {formatEth(txFee, nativeSym)}
                     </Text>
                     {gasExpanded
                       ? <ChevronUpIcon boxSize={4} color="text.tertiary" />
@@ -446,10 +482,10 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                         <Box h="1px" bg="gray.200" mt={0.5} mb={0.5} />
                         <GasRow
                           label="L2 Fees Paid"
-                          value={formatEth((BigInt(gasData.gasUsed) * BigInt(gasData.effectiveGasPrice)).toString())}
+                          value={formatEth((BigInt(gasData.gasUsed) * BigInt(gasData.effectiveGasPrice)).toString(), nativeSym)}
                         />
                         {gasData.l1Fee && (
-                          <GasRow label="L1 Fees Paid" value={formatEth(gasData.l1Fee)} />
+                          <GasRow label="L1 Fees Paid" value={formatEth(gasData.l1Fee, nativeSym)} />
                         )}
                         {gasData.l1GasPrice && (
                           <GasRow label="L1 Gas Price" value={formatGwei(gasData.l1GasPrice)} />

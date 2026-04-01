@@ -43,6 +43,9 @@ Persists across extension restarts. Cleared only on manual reset or uninstall.
 | `portfolioSnapshots` | `Record<address, HoldingsSnapshot[]>`                              | Portfolio value snapshots per address. 1-hour min interval, 8-day retention. | v1.0.0     |
 | `ensIdentityCache`   | `Record<address, { name, avatar, resolvedAt }>`                    | Resolved ENS/Basename/WNS/Mega names and avatars. 6-hour cache.              | v1.0.0     |
 | `customTokens`       | `CustomToken[]` — `{ contractAddress, chainId, symbol, name, decimals, addedAt }` | User-added custom ERC-20 tokens for portfolio tracking. Merged into holdings on each load; skipped if API already returns the token. | v2.2.0 |
+| `coingeckoMarketCache` | `Record<coinId, { priceUsd, logoUrl?, fetchedAt }>`             | Shared CoinGecko market cache for native asset price + image lookups. Used by gas estimation and custom-chain native token resolution. | v2.3.0 |
+| `coingeckoSearchCache` | `Record<query, { coins, fetchedAt }>`                            | Cached CoinGecko search responses for resolving unknown custom native assets to a coin ID. | v2.3.0 |
+| `coingeckoNativeResolutionCache` | `Record<lookupKey, { coinId, fetchedAt }>`             | Maps custom native asset descriptors (`chainName/native name/symbol`) to a resolved CoinGecko coin ID to avoid repeated searches. | v2.3.0 |
 
 ### Transient (dynamic keys)
 

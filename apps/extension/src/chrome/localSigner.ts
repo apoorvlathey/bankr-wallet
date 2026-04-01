@@ -15,7 +15,13 @@ import {
   type LocalAccount,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { VIEM_CHAINS, RPC_URLS } from "@/constants/chainRegistry";
+import { VIEM_CHAINS, RPC_URLS, buildCustomViemChain } from "@/constants/chainRegistry";
+
+export interface CustomChainMeta {
+  name: string;
+  nativeCurrency?: { name: string; symbol: string; decimals: number };
+  explorer?: string;
+}
 
 export interface TransactionRequest {
   from: string;
@@ -35,16 +41,28 @@ export interface SignedTransaction {
 }
 
 /**
- * Creates a wallet client for a given chain and private key
+ * Creates a wallet client for a given chain and private key.
+ * For custom chains not in CHAIN_REGISTRY, builds a viem Chain dynamically.
  */
 function createClient(
   chainId: number,
   privateKey: `0x${string}`,
-  rpcUrl?: string
-): { client: WalletClient<Transport, Chain, LocalAccount>; account: LocalAccount } {
-  const chain = VIEM_CHAINS[chainId];
+  rpcUrl?: string,
+  customChainMeta?: CustomChainMeta,
+): { client: WalletClient<Transport, Chain, LocalAccount>; account: LocalAccount; chain: Chain } {
+  let chain = VIEM_CHAINS[chainId];
   if (!chain) {
-    throw new Error(`Unsupported chain: ${chainId}`);
+    const resolvedRpc = rpcUrl || RPC_URLS[chainId];
+    if (!resolvedRpc) {
+      throw new Error(`Unsupported chain: ${chainId}. No RPC URL available.`);
+    }
+    chain = buildCustomViemChain(
+      chainId,
+      customChainMeta?.name ?? `Chain ${chainId}`,
+      resolvedRpc,
+      customChainMeta?.nativeCurrency,
+      customChainMeta?.explorer,
+    );
   }
 
   const account = privateKeyToAccount(privateKey);
@@ -54,7 +72,7 @@ function createClient(
     transport: http(rpcUrl || RPC_URLS[chainId], { timeout: 30_000 }),
   });
 
-  return { client, account };
+  return { client, account, chain };
 }
 
 /**
@@ -64,9 +82,10 @@ function createClient(
 export async function signAndBroadcastTransaction(
   privateKey: `0x${string}`,
   tx: TransactionRequest,
-  rpcUrl?: string
+  rpcUrl?: string,
+  customChainMeta?: CustomChainMeta,
 ): Promise<SignedTransaction> {
-  const { client, account } = createClient(tx.chainId, privateKey, rpcUrl);
+  const { client, account, chain } = createClient(tx.chainId, privateKey, rpcUrl, customChainMeta);
 
   // Parse value from hex or decimal string
   let valueInWei: bigint;
@@ -82,7 +101,7 @@ export async function signAndBroadcastTransaction(
     to: tx.to ? (tx.to as `0x${string}`) : undefined,
     data: tx.data as `0x${string}`,
     value: valueInWei,
-    chain: VIEM_CHAINS[tx.chainId],
+    chain,
   };
 
   // Add gas parameters if provided

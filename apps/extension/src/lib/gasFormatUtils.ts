@@ -3,11 +3,11 @@
  * Used by both TxDetailModal (post-tx) and GasEstimateDisplay (pre-tx)
  */
 
-export function formatEth(wei: string): string {
+export function formatEth(wei: string, symbol = "ETH"): string {
   const eth = Number(BigInt(wei)) / 1e18;
-  if (eth === 0) return "0 ETH";
+  if (eth === 0) return `0 ${symbol}`;
   const formatted = eth.toFixed(18).replace(/0+$/, "").replace(/\.$/, "");
-  return `${formatted} ETH`;
+  return `${formatted} ${symbol}`;
 }
 
 export function formatGwei(wei: string): string {

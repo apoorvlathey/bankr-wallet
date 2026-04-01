@@ -52,10 +52,22 @@ interface SettingsProps {
   close: () => void;
   showBackButton?: boolean;
   onSessionExpired?: () => void;
+  initialTab?: SettingsTab;
+  initialChainsTab?: "list" | "add";
+  initialEditChainName?: string;
+  onChainSaved?: (chain: { chainName: string; chainId: number }) => void;
 }
 
-function Settings({ close, showBackButton = true, onSessionExpired }: SettingsProps) {
-  const [tab, setTab] = useState<SettingsTab>("main");
+function Settings({
+  close,
+  showBackButton = true,
+  onSessionExpired,
+  initialTab = "main",
+  initialChainsTab = "list",
+  initialEditChainName,
+  onChainSaved,
+}: SettingsProps) {
+  const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [isAgentPasswordEnabled, setIsAgentPasswordEnabled] = useState(false);
   const [passwordType, setPasswordType] = useState<"master" | "agent" | null>(null);
   const toast = useBauhausToast();
@@ -116,7 +128,14 @@ function Settings({ close, showBackButton = true, onSessionExpired }: SettingsPr
   };
 
   if (tab === "chains") {
-    return <Chains close={() => setTab("main")} />;
+    return (
+      <Chains
+        close={() => setTab("main")}
+        initialTab={initialChainsTab}
+        initialEditChainName={initialEditChainName}
+        onChainSaved={onChainSaved}
+      />
+    );
   }
 
   if (tab === "changePassword") {

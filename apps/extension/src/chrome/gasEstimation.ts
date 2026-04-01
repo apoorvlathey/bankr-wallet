@@ -11,8 +11,8 @@ import {
   type Address,
 } from "viem";
 import { getRpcUrl } from "./txHandlers";
-import { CHAIN_TOKEN_IDS } from "@/constants/chainRegistry";
-import { COINGECKO_PRICE_API } from "@/constants/externalUrls";
+import { getNativeCurrencySymbol } from "@/constants/chainRegistry";
+import { fetchNativeCoinGeckoPrice } from "./coingeckoService";
 
 export interface GasEstimate {
   gasLimit: string;
@@ -21,6 +21,8 @@ export interface GasEstimate {
   baseFee: string;
   estimatedCostWei: string;
   nativePriceUsd: number | null;
+  /** Native currency symbol for display (e.g. "ETH", "AVAX", "BNB") */
+  nativeCurrencySymbol: string;
   accountBalance: string;
   insufficientBalance: boolean;
   estimationFailed: boolean;
@@ -33,57 +35,27 @@ export interface GasEstimate {
 /** RPC timeout for gas estimation */
 const RPC_TIMEOUT = 10_000;
 
-/** Cached viem clients keyed by chainId */
-const clientCache = new Map<number, PublicClient>();
+/** Cached viem clients keyed by chainId and invalidated when RPC URL changes */
+const clientCache = new Map<number, { rpcUrl: string; client: PublicClient }>();
 
 async function getClient(chainId: number): Promise<PublicClient | null> {
-  let client = clientCache.get(chainId);
-  if (client) return client;
-
   const rpcUrl = await getRpcUrl(chainId);
   if (!rpcUrl) return null;
 
-  client = createPublicClient({
+  const cached = clientCache.get(chainId);
+  if (cached && cached.rpcUrl === rpcUrl) {
+    return cached.client;
+  }
+
+  const client = createPublicClient({
     transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
   });
-  clientCache.set(chainId, client);
+  clientCache.set(chainId, { rpcUrl, client });
   return client;
 }
 
-/** In-memory price cache */
-let priceCache: { prices: Record<string, number>; timestamp: number } | null = null;
-const PRICE_CACHE_TTL = 60_000; // 60 seconds
-
 export async function fetchNativePrice(chainId: number): Promise<number | null> {
-  const tokenId = CHAIN_TOKEN_IDS[chainId];
-  if (!tokenId) return null;
-
-  // Return cached price if fresh
-  if (priceCache && Date.now() - priceCache.timestamp < PRICE_CACHE_TTL) {
-    return priceCache.prices[tokenId] ?? null;
-  }
-
-  try {
-    const ids = [...new Set(Object.values(CHAIN_TOKEN_IDS))].join(",");
-    const res = await fetch(
-      `${COINGECKO_PRICE_API}?ids=${ids}&vs_currencies=usd`,
-      { signal: AbortSignal.timeout(5000) }
-    );
-    if (!res.ok) return null;
-
-    const data = await res.json();
-    const prices: Record<string, number> = {};
-    for (const [id, val] of Object.entries(data)) {
-      if (val && typeof val === "object" && "usd" in val) {
-        prices[id] = (val as { usd: number }).usd;
-      }
-    }
-
-    priceCache = { prices, timestamp: Date.now() };
-    return prices[tokenId] ?? null;
-  } catch {
-    return null;
-  }
+  return fetchNativeCoinGeckoPrice(chainId);
 }
 
 /**
@@ -105,7 +77,12 @@ export async function estimateGas(
   },
   accountAddress: string
 ): Promise<GasEstimate> {
-  const client = await getClient(tx.chainId);
+  // Resolve native currency symbol (parallel with client creation)
+  const [client, nativeCurrencySymbol] = await Promise.all([
+    getClient(tx.chainId),
+    getNativeCurrencySymbol(tx.chainId),
+  ]);
+
   if (!client) {
     return {
       gasLimit: "0",
@@ -114,6 +91,7 @@ export async function estimateGas(
       baseFee: "0",
       estimatedCostWei: "0",
       nativePriceUsd: null,
+      nativeCurrencySymbol,
       accountBalance: "0",
       insufficientBalance: false,
       estimationFailed: true,
@@ -208,6 +186,7 @@ export async function estimateGas(
     baseFee: baseFee.toString(),
     estimatedCostWei: estimatedCostWei.toString(),
     nativePriceUsd,
+    nativeCurrencySymbol,
     accountBalance: balance.toString(),
     insufficientBalance,
     estimationFailed,

@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, useContext } from "react";
 import { useUpdateEffect } from "@chakra-ui/react";
 import { NetworksInfo } from "@/types";
 import { DEFAULT_NETWORKS } from "@/constants/networks";
+import { normalizeNetworksInfo } from "@/lib/chains";
 
 type NetworkContextType = {
   networksInfo: NetworksInfo | undefined;
@@ -33,22 +34,10 @@ export const NetworksProvider: React.FunctionComponent<{
         };
 
       if (storedNetworksInfo) {
-        // Merge in any new chains from DEFAULT_NETWORKS that aren't stored yet,
-        // then reorder to match DEFAULT_NETWORKS key order (Ethereum first, rest alphabetical).
-        // User-added custom chains appear at the end.
-        const merged = { ...DEFAULT_NETWORKS, ...storedNetworksInfo };
-        const defaultOrder = Object.keys(DEFAULT_NETWORKS);
-        const ordered: NetworksInfo = {};
-        for (const name of defaultOrder) {
-          if (merged[name]) ordered[name] = merged[name];
-        }
-        for (const name of Object.keys(merged)) {
-          if (!ordered[name]) ordered[name] = merged[name];
-        }
-        setNetworksInfo(ordered);
+        setNetworksInfo(normalizeNetworksInfo(storedNetworksInfo));
       } else {
         // Initialize with default networks if nothing stored
-        setNetworksInfo(DEFAULT_NETWORKS);
+        setNetworksInfo(normalizeNetworksInfo(DEFAULT_NETWORKS));
       }
     };
 
@@ -57,9 +46,15 @@ export const NetworksProvider: React.FunctionComponent<{
 
   useUpdateEffect(() => {
     const saveToBrowser = async () => {
-      await chrome.storage.sync.set({
-        networksInfo,
-      });
+      if (!networksInfo) return;
+
+      const normalized = normalizeNetworksInfo(networksInfo);
+      if (JSON.stringify(networksInfo) !== JSON.stringify(normalized)) {
+        setNetworksInfo(normalized);
+        return;
+      }
+
+      await chrome.storage.sync.set({ networksInfo: normalized });
     };
 
     saveToBrowser();

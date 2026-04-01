@@ -30,9 +30,12 @@ import CalldataDecoder from "@/components/CalldataDecoder";
 import AssetChangesDisplay from "@/components/AssetChangesDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { CopyButton } from "@/components/CopyButton";
+import ChainIcon from "@/components/ChainIcon";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
 import { googleFaviconUrl } from "@/constants/externalUrls";
+import { useNetworks } from "@/contexts/NetworksContext";
+import { getResolvedChainById } from "@/lib/chains";
 
 const scaleIn = keyframes`
   0% { transform: scale(0) rotate(-10deg); opacity: 0; }
@@ -77,6 +80,8 @@ function BatchTransactionConfirmation({
   onRejectAll,
   onNavigate,
 }: BatchTransactionConfirmationProps) {
+  const { networksInfo } = useNetworks();
+  const resolvedChain = getResolvedChainById(batchRequest.chainId, networksInfo);
   const [state, setState] = useState<ConfirmationState>("ready");
   const [error, setError] = useState<string>("");
   const [expandedCalls, setExpandedCalls] = useState<Set<number>>(new Set());
@@ -446,11 +451,17 @@ function BatchTransactionConfirmation({
               </Text>
               {(() => {
                 const config = getChainConfig(chainId);
+                const badgeChain = resolvedChain ?? {
+                  name: chainName,
+                  icon: config.icon,
+                  bg: config.bg,
+                  text: config.text,
+                };
                 return (
                   <Badge
                     fontSize="xs"
-                    bg={config.bg}
-                    color={config.text}
+                    bg={badgeChain.bg}
+                    color={badgeChain.text}
                     border="1.5px solid"
                     borderColor="bauhaus.black"
                     fontWeight="700"
@@ -460,10 +471,8 @@ function BatchTransactionConfirmation({
                     alignItems="center"
                     gap={1}
                   >
-                    {config.icon && (
-                      <Image src={config.icon} alt={chainName} boxSize="12px" />
-                    )}
-                    {chainName}
+                    <ChainIcon chainId={chainId} chainName={badgeChain.name} size="12px" />
+                    {badgeChain.name}
                   </Badge>
                 );
               })()}
@@ -668,16 +677,19 @@ function CallCard({
   onFunctionName: (name: string) => void;
   decodedName?: string;
 }) {
+  const { networksInfo } = useNetworks();
   const accent = CALL_ACCENTS[index % CALL_ACCENTS.length];
   const config = getChainConfig(chainId);
+  const resolvedChain = getResolvedChainById(chainId, networksInfo);
   const hasCalldata = call.data && call.data !== "0x";
   const hasValue =
     call.value && call.value !== "0x0" && call.value !== "0x";
 
+  const sym = resolvedChain?.nativeCurrency.symbol || "ETH";
   const formatValue = (value: string): string => {
     const wei = BigInt(value);
     const eth = Number(wei) / 1e18;
-    return `${eth.toFixed(6)} ETH`;
+    return `${eth.toFixed(6)} ${sym}`;
   };
 
   // Display name: decoded function name, or "Native Transfer" for value-only, or "Call"

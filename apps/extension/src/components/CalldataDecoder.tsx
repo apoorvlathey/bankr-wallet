@@ -217,10 +217,13 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
 
   return (
     <Box
+      w="full"
+      maxW="100%"
       bg="bauhaus.white"
       border="3px solid"
       borderColor="bauhaus.black"
       boxShadow="4px 4px 0px 0px #121212"
+      overflow="hidden"
     >
       {/* Tab header */}
       <HStack p={0} borderBottom="2px solid" borderColor="bauhaus.black" spacing={0}>
@@ -272,7 +275,7 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
       </HStack>
 
       {/* Content — both tabs always rendered, inactive hidden to preserve state */}
-      <Box p={3} display={tab === "decoded" ? "block" : "none"}>
+      <Box p={3} display={tab === "decoded" ? "block" : "none"} maxW="100%" overflow="hidden">
         {loading ? (
           <VStack spacing={2} align="start">
             <Skeleton h="16px" w="120px" />
@@ -280,7 +283,7 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
             <Skeleton h="14px" w="180px" />
           </VStack>
         ) : result ? (
-          <VStack align="start" spacing={2}>
+          <VStack align="start" spacing={2} maxW="100%">
             {/* Function name */}
             <Code
               px={2}
@@ -297,8 +300,16 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
             </Code>
 
             {/* Parameters */}
-            <Box w="full">
-              <VStack align="start" spacing={1.5} w="full">
+            <Box
+              w="full"
+              maxW="100%"
+              maxH="220px"
+              overflowX="auto"
+              overflowY="auto"
+              pr={1}
+              css={scrollStyles}
+            >
+              <VStack align="start" spacing={1.5} w="full" minW={0}>
                 {result.args.map((arg, i) => renderParams(i, arg, chainId))}
               </VStack>
             </Box>
@@ -315,7 +326,9 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
           bg="bg.muted"
           border="2px solid"
           borderColor="bauhaus.black"
+          maxW="100%"
           maxH="100px"
+          overflowX="auto"
           overflowY="auto"
           css={scrollStyles}
         >

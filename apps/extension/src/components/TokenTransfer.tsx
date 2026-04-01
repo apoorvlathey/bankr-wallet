@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo } from "react";
+import { useState, useEffect, useMemo, memo, useCallback, useRef } from "react";
 import {
   Box,
   VStack,
@@ -23,18 +23,27 @@ import {
   MenuList,
   MenuItem,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon } from "@chakra-ui/icons";
 import { blo } from "blo";
 import { useBauhausToast } from "@/hooks/useBauhausToast";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
+import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { isResolvableName } from "@/lib/ensUtils";
-import { fetchPortfolio, PortfolioToken } from "@/chrome/portfolioApi";
+import { PortfolioToken } from "@/chrome/portfolioApi";
+import { fetchOnchainBalances } from "@/chrome/onchainBalances";
+import { loadPortfolioTokenCatalog } from "@/chrome/portfolioTokens";
 import { buildTransferTx } from "@/chrome/transferUtils";
-import { getChainConfig } from "@/constants/chainConfig";
-import { CHAIN_REGISTRY, SWAP_SUPPORTED_CHAIN_IDS } from "@/constants/chainRegistry";
+import { SWAP_SUPPORTED_CHAIN_IDS } from "@/constants/chainRegistry";
 import type { Account } from "@/chrome/types";
 import TokenSelector from "@/components/Swap/TokenSelector";
 import { WALLETCHAN_STAKE_URL } from "@/constants/externalUrls";
+import { useNetworks } from "@/contexts/NetworksContext";
+import ChainIcon from "@/components/ChainIcon";
+import {
+  getResolvedChainById,
+  getStoredRpcUrl,
+  getVisibleChains,
+} from "@/lib/chains";
 
 /** USDC on Base (ERC-3009 transferWithAuthorization) */
 const BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
@@ -48,6 +57,24 @@ function formatTokenAmount(value: number): string {
   if (value === 0) return "0";
   if (value < 0.000001) return "<0.000001";
   return parseFloat(value.toPrecision(6)).toString();
+}
+
+function truncateAddress(address: string): string {
+  if (!address) return "";
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function getAccountTypePillStyles(account: Account) {
+  if (account.type === "bankr") {
+    return { label: "Bankr", bg: "bauhaus.blue", color: "white" };
+  }
+  if (account.type === "privateKey") {
+    return { label: "Private Key", bg: "bauhaus.yellow", color: "bauhaus.black" };
+  }
+  if (account.type === "seedPhrase") {
+    return { label: "Seed Phrase", bg: "bauhaus.red", color: "white" };
+  }
+  return { label: "View Only", bg: "bauhaus.green", color: "white" };
 }
 
 interface TokenTransferProps {
@@ -72,6 +99,7 @@ function TokenTransfer({
   onSwapInstead,
 }: TokenTransferProps) {
   const toast = useBauhausToast();
+  const { networksInfo } = useNetworks();
   const [selectedChainId, setSelectedChainId] = useState(initialToken?.chainId || chainId);
   const [selectedToken, setSelectedToken] = useState<PortfolioToken | null>(initialToken || null);
   const [allTokens, setAllTokens] = useState<PortfolioToken[]>([]);
@@ -89,18 +117,34 @@ function TokenTransfer({
   useEffect(() => {
     let cancelled = false;
     setHoldingsLoading(true);
-    fetchPortfolio(fromAddress).then((data) => {
-      if (cancelled) return;
-      setAllTokens(data.tokens);
-      // If no token pre-selected, auto-select the first on current chain
-      if (!selectedToken) {
-        const onChain = data.tokens.filter((t) => t.chainId === selectedChainId);
-        if (onChain.length > 0) setSelectedToken(onChain[0]);
+    (async () => {
+      try {
+        const catalog = await loadPortfolioTokenCatalog(fromAddress);
+        if (cancelled) return;
+
+        let tokens = catalog.tokens;
+        try {
+          const onchain = await fetchOnchainBalances(fromAddress, catalog.tokens, {
+            preserveZeroBalanceTokens: true,
+          });
+          if (!cancelled) {
+            tokens = onchain.tokens;
+          }
+        } catch {
+          // Fall back to API/catalog tokens.
+        }
+
+        if (cancelled) return;
+        setAllTokens(tokens);
+
+        if (!selectedToken) {
+          const onChain = tokens.filter((t) => t.chainId === selectedChainId);
+          if (onChain.length > 0) setSelectedToken(onChain[0]);
+        }
+      } finally {
+        if (!cancelled) setHoldingsLoading(false);
       }
-      setHoldingsLoading(false);
-    }).catch(() => {
-      if (!cancelled) setHoldingsLoading(false);
-    });
+    })();
     return () => { cancelled = true; };
   }, [fromAddress]);
 
@@ -110,13 +154,18 @@ function TokenTransfer({
     [allTokens, selectedChainId],
   );
 
-  // All chains from registry (sorted: selected first, then registry order)
+  // Centralized chain list: built-ins + custom overrides/custom additions.
   const allChains = useMemo(() => {
-    const ids = CHAIN_REGISTRY.map((c) => c.chainId);
+    const ids = getVisibleChains(networksInfo).map((chain) => chain.chainId);
     // Move selected chain to front
-    const sorted = [selectedChainId, ...ids.filter((id) => id !== selectedChainId)];
-    return sorted;
-  }, [selectedChainId]);
+    return [selectedChainId, ...ids.filter((id) => id !== selectedChainId)];
+  }, [selectedChainId, networksInfo]);
+
+  // All UI labels resolve through the shared chain helper so custom chains do
+  // not need per-screen fallback code.
+  const getChainName = useCallback((cId: number): string => {
+    return getResolvedChainById(cId, networksInfo)?.name ?? `Chain ${cId}`;
+  }, [networksInfo]);
 
   const handleChainChange = (newChainId: number) => {
     setSelectedChainId(newChainId);
@@ -150,8 +199,7 @@ function TokenTransfer({
 
       // Fetch balance via balanceOf
       const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
-      const { RPC_URLS } = await import("@/constants/chainRegistry");
-      const rpcUrl = RPC_URLS[selectedChainId];
+      const rpcUrl = await getStoredRpcUrl(selectedChainId);
       if (!rpcUrl) {
         setCustomTokenError("No RPC for this chain");
         return;
@@ -229,14 +277,66 @@ function TokenTransfer({
   const { resolvedAddress, resolvedName, avatar, isResolving, isLoadingExtras, isValid: isRecipientValid, error: resolverError } =
     useAddressResolver(recipient);
 
-  const chainConfig = getChainConfig(selectedChainId);
+  const chainName = getChainName(selectedChainId);
+  const explorerUrl = getResolvedChainById(selectedChainId, networksInfo)?.explorer ?? "";
+  const [chainSearch, setChainSearch] = useState("");
+  const chainSearchInputRef = useRef<HTMLInputElement>(null);
+  const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
+  const [highlightedChainIndex, setHighlightedChainIndex] = useState(0);
+  const normalizedChainSearch = chainSearch.trim().toLowerCase();
+  const filteredChains = normalizedChainSearch
+    ? allChains.filter((cId) => {
+        const name = getChainName(cId);
+        return (
+          name.toLowerCase().includes(normalizedChainSearch) ||
+          String(cId).includes(normalizedChainSearch)
+        );
+      })
+    : allChains;
   const hasPrice = token ? token.priceUsd > 0 : false;
+
+  useEffect(() => {
+    if (!isChainMenuOpen) return;
+    const timeoutId = window.setTimeout(() => {
+      chainSearchInputRef.current?.focus();
+      chainSearchInputRef.current?.select();
+    }, 30);
+    return () => window.clearTimeout(timeoutId);
+  }, [isChainMenuOpen]);
+  useEffect(() => {
+    setHighlightedChainIndex(0);
+  }, [chainSearch, isChainMenuOpen]);
 
   // Other wallet accounts (excluding current sender) for recipient picker
   const otherAccounts = useMemo(
     () => (accounts || []).filter(a => a.address.toLowerCase() !== fromAddress.toLowerCase()),
     [accounts, fromAddress],
   );
+  const otherAccountAddresses = useMemo(
+    () => otherAccounts.map((account) => account.address),
+    [otherAccounts],
+  );
+  const { identities: otherAccountIdentities } = useEnsIdentities(otherAccountAddresses);
+
+  const getAccountDisplayName = useCallback((account: Account): string => {
+    if (account.displayName) return account.displayName;
+    const ens = otherAccountIdentities.get(account.address.toLowerCase());
+    if (ens?.name) return ens.name;
+    return truncateAddress(account.address);
+  }, [otherAccountIdentities]);
+
+  const hasSecondaryAddressLine = useCallback((account: Account): boolean => {
+    if (account.displayName) return true;
+    const ens = otherAccountIdentities.get(account.address.toLowerCase());
+    return !!ens?.name;
+  }, [otherAccountIdentities]);
+
+  const getAccountAvatar = useCallback((account: Account): string => {
+    const ensAvatar = otherAccountIdentities.get(account.address.toLowerCase())?.avatar;
+    if (ensAvatar) return ensAvatar;
+    if (account.type === "bankr") return "/bankr-icon.png";
+    return blo(account.address as `0x${string}`);
+  }, [otherAccountIdentities]);
 
   // Compute the token amount that will actually be sent
   const tokenAmount = useMemo(() => {
@@ -393,7 +493,7 @@ function TokenTransfer({
                 value: txParts.value,
                 chainId: token.chainId,
               },
-              chainName: chainConfig.name,
+              chainName: chainName,
               tokenName: token.symbol.toUpperCase(),
               tokenLogo: token.logoUrl || null,
             },
@@ -451,7 +551,7 @@ function TokenTransfer({
                 value: txParts.value,
                 chainId: token.chainId,
               },
-              chainName: chainConfig.name,
+              chainName: chainName,
               tokenName: token.symbol.toUpperCase(),
               tokenLogo: token.logoUrl || null,
             },
@@ -565,7 +665,19 @@ function TokenTransfer({
           >
             <HStack spacing={3}>
               {/* Chain selector */}
-              <Menu>
+              <Menu
+                isOpen={isChainMenuOpen}
+                initialFocusRef={chainSearchInputRef}
+                onOpen={() => {
+                  setIsChainMenuOpen(true);
+                  setHighlightedChainIndex(0);
+                }}
+                onClose={() => {
+                  setIsChainMenuOpen(false);
+                  setChainSearch("");
+                  setHighlightedChainIndex(0);
+                }}
+              >
                 <MenuButton
                   as={Box}
                   cursor="pointer"
@@ -574,25 +686,7 @@ function TokenTransfer({
                   transition="opacity 0.15s"
                 >
                   <Box position="relative">
-                    {chainConfig.icon ? (
-                      <Image
-                        src={chainConfig.icon}
-                        alt={chainConfig.name}
-                        boxSize="36px"
-                        border="2px solid"
-                        borderColor="bauhaus.black"
-                        borderRadius="full"
-                        bg="white"
-                      />
-                    ) : (
-                      <Box
-                        boxSize="36px"
-                        border="2px solid"
-                        borderColor="bauhaus.black"
-                        borderRadius="full"
-                        bg="bg.muted"
-                      />
-                    )}
+                    <ChainIcon chainId={selectedChainId} chainName={chainName} size="36px" />
                     <Box
                       position="absolute"
                       bottom="-2px"
@@ -616,29 +710,94 @@ function TokenTransfer({
                   borderColor="bauhaus.black"
                   borderRadius={0}
                   boxShadow="4px 4px 0px 0px #121212"
-                  maxH="200px"
-                  overflowY="auto"
                   p={0}
                   zIndex={10}
                 >
-                  {allChains.map((cId) => {
-                    const cc = getChainConfig(cId);
-                    return (
+                  <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+                    <InputGroup size="sm">
+                      <InputLeftElement pointerEvents="none">
+                        <Search2Icon color="text.tertiary" boxSize={3} />
+                      </InputLeftElement>
+                      <Input
+                        ref={chainSearchInputRef}
+                        value={chainSearch}
+                        onChange={(e) => setChainSearch(e.target.value)}
+                        placeholder="Search chains"
+                        border="2px solid"
+                        borderColor="bauhaus.black"
+                        borderRadius="0"
+                        fontWeight="600"
+                        pl={9}
+                        _hover={{ borderColor: "bauhaus.black" }}
+                        _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+                        onKeyDown={(e) => {
+                          if (e.key === "ArrowDown") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (filteredChains.length > 0) {
+                              setHighlightedChainIndex((prev) =>
+                                Math.min(prev + 1, filteredChains.length - 1),
+                              );
+                            }
+                            return;
+                          }
+                          if (e.key === "ArrowUp") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (filteredChains.length > 0) {
+                              setHighlightedChainIndex((prev) => Math.max(prev - 1, 0));
+                            }
+                            return;
+                          }
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const highlighted = filteredChains[highlightedChainIndex];
+                            if (highlighted !== undefined) {
+                              handleChainChange(highlighted);
+                              setIsChainMenuOpen(false);
+                              setChainSearch("");
+                            }
+                            return;
+                          }
+                          e.stopPropagation();
+                        }}
+                      />
+                    </InputGroup>
+                  </Box>
+                  <Box maxH="200px" overflowY="auto">
+                    {filteredChains.map((cId, index) => (
                       <MenuItem
                         key={cId}
-                        onClick={() => handleChainChange(cId)}
-                        bg={cId === selectedChainId ? "bg.muted" : "transparent"}
+                        onClick={() => {
+                          handleChainChange(cId);
+                          setIsChainMenuOpen(false);
+                          setChainSearch("");
+                        }}
+                        onMouseEnter={() => setHighlightedChainIndex(index)}
+                        bg={
+                          index === highlightedChainIndex || cId === selectedChainId
+                            ? "bg.muted"
+                            : "transparent"
+                        }
                         _hover={{ bg: "bg.hover" }}
                         px={3}
                         py={2}
                       >
                         <HStack spacing={2}>
-                          {cc.icon && <Image src={cc.icon} boxSize="18px" borderRadius="full" />}
-                          <Text fontWeight="700" fontSize="sm">{cc.name}</Text>
+                          <ChainIcon chainId={cId} chainName={getChainName(cId)} size="18px" />
+                          <Text fontWeight="700" fontSize="sm">{getChainName(cId)}</Text>
                         </HStack>
                       </MenuItem>
-                    );
-                  })}
+                    ))}
+                    {filteredChains.length === 0 && (
+                      <Box px={3} py={3}>
+                        <Text fontSize="sm" fontWeight="700" color="text.secondary">
+                          No chains match "{chainSearch.trim()}".
+                        </Text>
+                      </Box>
+                    )}
+                  </Box>
                 </MenuList>
               </Menu>
 
@@ -654,11 +813,11 @@ function TokenTransfer({
                   resolvedCustomToken={resolvedCustomToken}
                   customTokenLoading={customTokenLoading}
                   customTokenError={customTokenError}
-                  chainName={chainConfig.name}
+                  chainName={chainName}
                 />
                 {token && (
                   <Text fontSize="xs" fontWeight="700" color="text.tertiary" mt={0.5} noOfLines={1}>
-                    on {chainConfig.name}
+                    on {chainName}
                   </Text>
                 )}
               </VStack>
@@ -726,25 +885,43 @@ function TokenTransfer({
                         py={1.5}
                         px={3}
                       >
-                        <HStack spacing={2}>
+                        <HStack spacing={2} align="start">
                           <Image
-                            src={account.type === "bankr" ? "/bankr-icon.png" : blo(account.address as `0x${string}`)}
+                            src={getAccountAvatar(account)}
                             alt="avatar"
                             boxSize="20px"
                             minW="20px"
-                            borderRadius="sm"
+                            borderRadius={getAccountAvatar(account) === "/bankr-icon.png" ? "sm" : "full"}
                             border="2px solid"
                             borderColor="bauhaus.black"
                           />
-                          <VStack align="start" spacing={0}>
+                          <VStack align="start" spacing={0.5}>
                             <Text fontSize="xs" fontWeight="700" color="text.primary" noOfLines={1}>
-                              {account.displayName || `${account.address.slice(0, 6)}...${account.address.slice(-4)}`}
+                              {getAccountDisplayName(account)}
                             </Text>
-                            {account.displayName && (
+                            {hasSecondaryAddressLine(account) && (
                               <Text fontSize="2xs" fontFamily="mono" color="text.tertiary">
-                                {account.address.slice(0, 6)}...{account.address.slice(-4)}
+                                {truncateAddress(account.address)}
                               </Text>
                             )}
+                            <Box
+                              bg={getAccountTypePillStyles(account).bg}
+                              px={1.5}
+                              py={0}
+                              borderRadius="sm"
+                              border="1px solid"
+                              borderColor="bauhaus.black"
+                            >
+                              <Text
+                                fontSize="8px"
+                                color={getAccountTypePillStyles(account).color}
+                                fontWeight="800"
+                                textTransform="uppercase"
+                                letterSpacing="wide"
+                              >
+                                {getAccountTypePillStyles(account).label}
+                              </Text>
+                            </Box>
                           </VStack>
                         </HStack>
                       </MenuItem>
@@ -792,7 +969,7 @@ function TokenTransfer({
                   }}
                   _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
                 />
-                {chainConfig.explorer && (
+                {explorerUrl && (
                   <IconButton
                     aria-label="View on explorer"
                     icon={<ExternalLinkIcon boxSize="10px" />}
@@ -801,7 +978,7 @@ function TokenTransfer({
                     minW="18px"
                     h="18px"
                     color="text.tertiary"
-                    onClick={() => window.open(`${chainConfig.explorer}/address/${resolvedAddress}`, "_blank")}
+                    onClick={() => window.open(`${explorerUrl}/address/${resolvedAddress}`, "_blank")}
                     _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
                   />
                 )}

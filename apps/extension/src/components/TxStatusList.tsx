@@ -16,8 +16,11 @@ import {
 } from "@chakra-ui/icons";
 import { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import { getChainConfig } from "@/constants/chainConfig";
+import { useNetworks } from "@/contexts/NetworksContext";
+import { getResolvedChainById } from "@/lib/chains";
 import TxDetailModal from "@/components/TxDetailModal";
 import { googleFaviconUrl } from "@/constants/externalUrls";
+import ChainIcon from "@/components/ChainIcon";
 
 interface TxStatusListProps {
   maxItems?: number;
@@ -221,6 +224,59 @@ function formatTimeAgo(timestamp: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function getInternalSendSymbol(tx: CompletedTransaction): string | null {
+  if (tx.transferMeta?.symbol) return tx.transferMeta.symbol;
+  if (!tx.origin.startsWith("Send ")) return null;
+  const symbol = tx.origin.slice(5).trim();
+  return symbol || null;
+}
+
+function ActivityIcon({
+  tx,
+  originHostname,
+}: {
+  tx: CompletedTransaction;
+  originHostname: string | null;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const internalSendSymbol = getInternalSendSymbol(tx);
+  const fallbackLabel = (internalSendSymbol || tx.origin || "?").slice(0, 3).toUpperCase();
+  const imageSrc =
+    tx.origin === "WalletChan" || tx.origin === "BankrWallet"
+      ? "/walletchan-icon.png"
+      : tx.favicon || (originHostname ? googleFaviconUrl(originHostname) : undefined);
+
+  if (!imageSrc || imageFailed) {
+    return (
+      <Text fontSize="2xs" fontWeight="800" color="text.secondary">
+        {fallbackLabel}
+      </Text>
+    );
+  }
+
+  return (
+    <Image
+      src={imageSrc}
+      alt={internalSendSymbol || "favicon"}
+      boxSize="22px"
+      onError={(e) => {
+        if (!originHostname || tx.origin.startsWith("Send ")) {
+          setImageFailed(true);
+          return;
+        }
+
+        const target = e.target as HTMLImageElement;
+        const googleFallback = googleFaviconUrl(originHostname);
+        if (target.src === googleFallback) {
+          setImageFailed(true);
+          return;
+        }
+        target.src = googleFallback;
+      }}
+    />
+  );
+}
+
 function TxStatusItem({
   tx,
   onClick,
@@ -228,15 +284,21 @@ function TxStatusItem({
   tx: CompletedTransaction;
   onClick: () => void;
 }) {
+  const { networksInfo } = useNetworks();
   const config = getChainConfig(tx.chainId);
+  const explorerBase =
+    getResolvedChainById(tx.chainId, networksInfo)?.explorer ||
+    config.explorer ||
+    "";
   const originHostname = getOriginHostname(tx.origin);
+  const hasSecondaryLabel = !!tx.functionName;
 
   const handleViewTx = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (tx.txHash && config.explorer) {
+    if (tx.txHash && explorerBase) {
       const hash = tx.txHash.match(/0x[a-fA-F0-9]{64}/)?.[0];
       if (hash) {
-        chrome.tabs.create({ url: `${config.explorer}/tx/${hash}` });
+        chrome.tabs.create({ url: `${explorerBase}/tx/${hash}` });
       }
     }
   };
@@ -339,26 +401,23 @@ function TxStatusItem({
                 <Text fontSize="2xs" fontWeight="700">{tx.swapMeta.buyTokenSymbol.slice(0, 2)}</Text>
               )}
             </Box>
-            {/* Chain icon */}
-            {config.icon && (
-              <Box
-                position="absolute"
-                bottom="-2px"
-                right="-2px"
-                w="16px"
-                h="16px"
-                borderRadius="full"
-                bg="white"
-                border="1.5px solid"
-                borderColor="gray.200"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                zIndex={3}
-              >
-                <Image src={config.icon} alt={tx.chainName} boxSize="11px" />
-              </Box>
-            )}
+            <Box
+              position="absolute"
+              bottom="-2px"
+              right="-2px"
+              w="16px"
+              h="16px"
+              borderRadius="full"
+              bg="white"
+              border="1.5px solid"
+              borderColor="gray.200"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              zIndex={3}
+            >
+              <ChainIcon chainId={tx.chainId} chainName={tx.chainName} size="11px" />
+            </Box>
           </Box>
         ) : (
           /* Standard: single favicon with chain icon overlay */
@@ -373,51 +432,31 @@ function TxStatusItem({
               justifyContent="center"
               overflow="hidden"
             >
-              <Image
-                src={
-                  tx.origin === "WalletChan" || tx.origin === "BankrWallet"
-                    ? "/walletchan-icon.png"
-                    : tx.favicon ||
-                      (originHostname
-                        ? googleFaviconUrl(originHostname)
-                        : undefined)
-                }
-                alt="favicon"
-                boxSize="22px"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  if (originHostname) {
-                    target.src = googleFaviconUrl(originHostname);
-                  }
-                }}
-              />
+              <ActivityIcon tx={tx} originHostname={originHostname} />
             </Box>
-            {/* Chain icon overlay */}
-            {config.icon && (
-              <Box
-                position="absolute"
-                bottom="-2px"
-                right="-2px"
-                w="16px"
-                h="16px"
-                borderRadius="full"
-                bg="white"
-                border="1.5px solid"
-                borderColor="gray.200"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Image src={config.icon} alt={tx.chainName} boxSize="11px" />
-              </Box>
-            )}
+            <Box
+              position="absolute"
+              bottom="-2px"
+              right="-2px"
+              w="16px"
+              h="16px"
+              borderRadius="full"
+              bg="white"
+              border="1.5px solid"
+              borderColor="gray.200"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+            >
+              <ChainIcon chainId={tx.chainId} chainName={tx.chainName} size="11px" />
+            </Box>
           </Box>
         )}
 
         {/* Content */}
         <Box flex={1} minW={0}>
           {/* Row 1: hostname + time */}
-          <HStack justify="space-between" spacing={2}>
+          <HStack justify="space-between" spacing={2} minH={hasSecondaryLabel ? undefined : "36px"} align="center">
             <Text
               fontSize="sm"
               fontWeight="600"
@@ -437,7 +476,7 @@ function TxStatusItem({
           </HStack>
 
           {/* Row 2: function + status + explorer */}
-          <HStack justify="space-between" spacing={2} mt={0.5}>
+          <HStack justify="space-between" spacing={2} mt={0.5} display={hasSecondaryLabel ? "flex" : "none"}>
             {tx.functionName ? (
               <Text
                 fontSize="xs"
@@ -453,7 +492,7 @@ function TxStatusItem({
             <HStack spacing={1} flexShrink={0}>
               {statusElement}
               {tx.txHash &&
-                config.explorer && (
+                explorerBase && (
                   <ExternalLinkIcon
                     boxSize={2.5}
                     color="text.tertiary"

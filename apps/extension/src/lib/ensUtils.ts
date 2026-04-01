@@ -10,8 +10,6 @@ import {
 import { mainnet, base } from "viem/chains";
 import { normalize } from "viem/ens";
 import { L2ResolverAbi } from "./L2ResolverAbi";
-import { DEFAULT_NETWORKS } from "@/constants/networks";
-import type { NetworksInfo } from "@/types";
 import wei from "@/utils/wei";
 import {
   isMega,
@@ -19,6 +17,7 @@ import {
   MEGA_NAMES_CONTRACT,
   MEGAETH_CHAIN_ID,
 } from "@/utils/mega";
+import { getStoredRpcUrl } from "@/lib/chains";
 
 // ============================================================================
 // Constants
@@ -32,26 +31,8 @@ const BASENAME_L2_RESOLVER_ADDRESS =
 // ============================================================================
 
 async function getUserRpcUrl(chainId: number): Promise<string> {
-  try {
-    const { networksInfo } = (await chrome.storage.sync.get("networksInfo")) as {
-      networksInfo: NetworksInfo | undefined;
-    };
-    if (networksInfo) {
-      for (const name of Object.keys(networksInfo)) {
-        if (networksInfo[name].chainId === chainId) {
-          return networksInfo[name].rpcUrl;
-        }
-      }
-    }
-  } catch {
-    // Fall through to defaults (e.g. if chrome.storage is unavailable)
-  }
-  // Fallback to defaults
-  for (const name of Object.keys(DEFAULT_NETWORKS)) {
-    if (DEFAULT_NETWORKS[name].chainId === chainId) {
-      return DEFAULT_NETWORKS[name].rpcUrl;
-    }
-  }
+  const rpcUrl = await getStoredRpcUrl(chainId).catch(() => undefined);
+  if (rpcUrl) return rpcUrl;
   // Hardcoded last resort
   return chainId === base.id
     ? "https://mainnet.base.org"

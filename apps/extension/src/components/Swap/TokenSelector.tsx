@@ -21,6 +21,46 @@ function formatBalance(balance: string): string {
   return parseFloat(num.toPrecision(6)).toString();
 }
 
+function TokenIcon({
+  symbol,
+  logoUrl,
+  size = "20px",
+}: {
+  symbol: string;
+  logoUrl?: string;
+  size?: string;
+}) {
+  return (
+    <Box
+      boxSize={size}
+      borderRadius="full"
+      bg="bg.muted"
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      overflow="hidden"
+      flexShrink={0}
+    >
+      {logoUrl ? (
+        <Image
+          src={logoUrl}
+          boxSize={size}
+          borderRadius="full"
+          fallback={
+            <Text fontSize="7px" fontWeight="800" color="text.secondary">
+              {symbol.slice(0, 3)}
+            </Text>
+          }
+        />
+      ) : (
+        <Text fontSize="7px" fontWeight="800" color="text.secondary">
+          {symbol.slice(0, 3)}
+        </Text>
+      )}
+    </Box>
+  );
+}
+
 interface TokenSelectorProps {
   holdings: PortfolioToken[];
   selectedToken: PortfolioToken | null;
@@ -95,13 +135,8 @@ export default function TokenSelector({
         alignItems="center"
       >
         <HStack spacing={2}>
-          {selectedToken?.logoUrl && (
-            <Image
-              src={selectedToken.logoUrl}
-              boxSize="20px"
-              borderRadius="full"
-              fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect fill='%23ccc' width='20' height='20'/%3E%3C/svg%3E"
-            />
+          {selectedToken && (
+            <TokenIcon symbol={selectedToken.symbol} logoUrl={selectedToken.logoUrl} />
           )}
           <Text fontWeight="700" fontSize="sm" textTransform="uppercase">
             {selectedToken?.symbol || "Select"}
@@ -176,20 +211,7 @@ export default function TokenSelector({
             borderColor="gray.200"
           >
             <HStack spacing={2} w="full">
-              <Box
-                boxSize="20px"
-                borderRadius="full"
-                bg="bg.muted"
-                border="1px solid"
-                borderColor="bauhaus.black"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Text fontSize="7px" fontWeight="800">
-                  {resolvedCustomToken.symbol.slice(0, 2)}
-                </Text>
-              </Box>
+              <TokenIcon symbol={resolvedCustomToken.symbol} logoUrl={resolvedCustomToken.logoUrl} />
               <Box flex={1}>
                 <Text fontWeight="700" fontSize="sm" textTransform="uppercase">
                   {resolvedCustomToken.symbol}
@@ -220,12 +242,7 @@ export default function TokenSelector({
             py={2}
           >
             <HStack spacing={2} w="full">
-              <Image
-                src={token.logoUrl}
-                boxSize="20px"
-                borderRadius="full"
-                fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect fill='%23ccc' width='20' height='20'/%3E%3C/svg%3E"
-              />
+              <TokenIcon symbol={token.symbol} logoUrl={token.logoUrl} />
               <Box flex={1}>
                 <Text fontWeight="700" fontSize="sm" textTransform="uppercase">
                   {token.symbol}

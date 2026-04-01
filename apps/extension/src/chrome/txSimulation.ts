@@ -28,6 +28,7 @@ import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import { WALLETCHAN_ICON_URL } from "@/constants/externalUrls";
 import { getCachedTokenList, fetchTokenPrice } from "./swapApi";
 import { fetchPortfolio, type PortfolioToken } from "./portfolioApi";
+import { getStoredResolvedChainById } from "@/lib/chains";
 
 /** Multicall3 is deployed at the same address on all supported chains */
 const MULTICALL3_ADDRESS: Address =
@@ -146,19 +147,21 @@ const BATCH_SIMULATOR_ABI = [
 // ---------------------------------------------------------------------------
 
 const RPC_TIMEOUT = 10_000;
-const clientCache = new Map<number, PublicClient>();
+const clientCache = new Map<number, { rpcUrl: string; client: PublicClient }>();
 
 async function getClient(chainId: number): Promise<PublicClient | null> {
-  let client = clientCache.get(chainId);
-  if (client) return client;
-
   const rpcUrl = await getRpcUrl(chainId);
   if (!rpcUrl) return null;
 
-  client = createPublicClient({
+  const cached = clientCache.get(chainId);
+  if (cached && cached.rpcUrl === rpcUrl) {
+    return cached.client;
+  }
+
+  const client = createPublicClient({
     transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
   });
-  clientCache.set(chainId, client);
+  clientCache.set(chainId, { rpcUrl, client });
   return client;
 }
 
@@ -190,6 +193,30 @@ function getNativeCurrency(chainId: number) {
       icon: "/chainIcons/ethereum.svg",
     }
   );
+}
+
+async function resolveNativeCurrency(
+  chainId: number,
+): Promise<{ symbol: string; name: string; decimals: number; icon: string }> {
+  const builtIn = NATIVE_CURRENCY[chainId];
+  if (builtIn) return builtIn;
+
+  const resolvedChain = await getStoredResolvedChainById(chainId).catch(
+    () => undefined,
+  );
+  if (resolvedChain) {
+    return {
+      symbol: resolvedChain.nativeCurrency.symbol,
+      name: resolvedChain.nativeCurrency.name,
+      decimals: resolvedChain.nativeCurrency.decimals,
+      icon:
+        resolvedChain.nativeCurrency.symbol === "ETH"
+          ? "/chainIcons/ethereum.svg"
+          : resolvedChain.icon || "",
+    };
+  }
+
+  return getNativeCurrency(chainId);
 }
 
 /** Hardcoded logos for tokens not in the swap token list */
@@ -628,7 +655,7 @@ async function buildSimulationResult(
   );
   console.log("[TxSim] Token changes:", tokenChanges.length, tokenChanges.map(c => ({ symbol: c.symbol, amount: c.formattedAmount, direction: c.direction })));
 
-  const native = getNativeCurrency(chainId);
+  const native = await resolveNativeCurrency(chainId);
   let nativeChange: AssetChange | null = null;
   if (raw.ethDelta !== 0n) {
     const abs = raw.ethDelta < 0n ? -raw.ethDelta : raw.ethDelta;

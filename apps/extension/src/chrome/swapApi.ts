@@ -9,8 +9,10 @@ import {
   erc20Abi,
   type Address,
 } from "viem";
-import { RPC_URLS, CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import { WALLETCHAN_SWAP_API_BASE } from "@/constants/externalUrls";
+import { getRpcUrl } from "./txHandlers";
+import { getStoredResolvedChainById } from "@/lib/chains";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -187,10 +189,13 @@ export async function fetchTokenInfo(
     tokenAddress.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase() ||
     tokenAddress === "0x0000000000000000000000000000000000000000"
   ) {
-    return NATIVE_CURRENCY_INFO[chainId] ?? { name: "Ether", symbol: "ETH", decimals: 18 };
+    if (NATIVE_CURRENCY_INFO[chainId]) return NATIVE_CURRENCY_INFO[chainId];
+    const customChain = await getStoredResolvedChainById(chainId);
+    if (customChain?.nativeCurrency) return customChain.nativeCurrency;
+    return { name: "Ether", symbol: "ETH", decimals: 18 };
   }
 
-  const rpcUrl = RPC_URLS[chainId];
+  const rpcUrl = await getRpcUrl(chainId);
   if (!rpcUrl) return null;
 
   const client = createPublicClient({
@@ -230,7 +235,7 @@ export async function getTokenBalanceWei(
   owner: string,
   chainId: number,
 ): Promise<bigint> {
-  const rpcUrl = RPC_URLS[chainId];
+  const rpcUrl = await getRpcUrl(chainId);
   if (!rpcUrl) return 0n;
 
   const client = createPublicClient({
@@ -255,7 +260,7 @@ export async function checkTokenAllowance(
   spender: string,
   chainId: number,
 ): Promise<bigint> {
-  const rpcUrl = RPC_URLS[chainId];
+  const rpcUrl = await getRpcUrl(chainId);
   if (!rpcUrl) return 0n;
 
   const client = createPublicClient({
@@ -392,7 +397,7 @@ export async function checkPermit2Allowance(
   spender: string,
   chainId: number,
 ): Promise<{ amount: bigint; expiration: number }> {
-  const rpcUrl = RPC_URLS[chainId];
+  const rpcUrl = await getRpcUrl(chainId);
   if (!rpcUrl) return { amount: 0n, expiration: 0 };
 
   const client = createPublicClient({

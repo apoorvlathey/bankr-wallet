@@ -13,10 +13,10 @@ import {
   Button,
   FormControl,
   FormLabel,
-  Image,
 } from "@chakra-ui/react";
 import { getChainConfig } from "@/constants/chainConfig";
 import { updateCustomToken, removeCustomToken } from "@/chrome/customTokenStorage";
+import ChainIcon from "@/components/ChainIcon";
 
 interface EditCustomTokenModalProps {
   isOpen: boolean;
@@ -112,9 +112,7 @@ export default function EditCustomTokenModal({
           <VStack spacing={4} align="stretch">
             {/* Chain + address display */}
             <HStack spacing={2}>
-              {chainConfig.icon && (
-                <Image src={chainConfig.icon} boxSize="18px" borderRadius="full" />
-              )}
+              <ChainIcon chainId={token.chainId} chainName={chainConfig.name} size="18px" />
               <Text fontWeight="700" fontSize="sm">
                 {chainConfig.name}
               </Text>

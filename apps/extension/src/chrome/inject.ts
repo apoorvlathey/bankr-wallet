@@ -1,4 +1,5 @@
 import { NetworksInfo } from "../types";
+import { getResolvedChainById } from "@/lib/chains";
 
 /**
  * Get the favicon URL from the current page
@@ -297,6 +298,123 @@ window.addEventListener("message", async (e) => {
         },
         "*"
       );
+      break;
+    }
+
+    case "i_addEthereumChain": {
+      const { chainId, chainName: reqChainName, nativeCurrency, rpcUrls, blockExplorerUrls } =
+        e.data.msg as {
+          chainId: number;
+          chainName?: string;
+          nativeCurrency?: { name: string; symbol: string; decimals: number };
+          rpcUrls?: string[];
+          blockExplorerUrls?: string[];
+        };
+
+      // Check if chain already exists in networksInfo
+      const { networksInfo: nets } = (await chrome.storage.sync.get("networksInfo")) as {
+        networksInfo: NetworksInfo | undefined;
+      };
+
+      if (nets) {
+        for (const name of Object.keys(nets)) {
+          if (nets[name].chainId === chainId) {
+            const resolvedChain = getResolvedChainById(chainId, nets);
+            const shouldSwitch =
+              store.accountType !== "bankr" ||
+              resolvedChain?.isBankrSupported === true;
+
+            // Chain exists — add succeeds, but only switch if the active
+            // account type supports the chain.
+            if (shouldSwitch) {
+              store.chainName = name;
+              await chrome.storage.sync.set({ chainName: name });
+            }
+            window.postMessage(
+              {
+                type: "addEthereumChainResult",
+                msg: { success: true, chainId, rpcUrl: nets[name].rpcUrl },
+              },
+              "*"
+            );
+            if (shouldSwitch) {
+              // Also emit switchEthereumChain so provider updates chainId
+              window.postMessage(
+                {
+                  type: "switchEthereumChain",
+                  msg: { chainId, rpcUrl: nets[name].rpcUrl },
+                },
+                "*"
+              );
+            }
+            break;
+          }
+        }
+        // If we found it and already broke, don't continue
+        const found = nets && Object.values(nets).some((n) => n.chainId === chainId);
+        if (found) break;
+      }
+
+      // Chain doesn't exist — forward to background for user confirmation
+      const addChainRequestId = crypto.randomUUID();
+
+      waitForStorageResult<{ success: boolean; error?: string; rpcUrl?: string; chainName?: string; shouldSwitch?: boolean }>(
+        `addChainResult:${addChainRequestId}`,
+        5 * 60 * 1000
+      )
+        .then((result) => {
+          if (result.success && result.rpcUrl && result.chainName) {
+            if (result.shouldSwitch !== false) {
+              store.chainName = result.chainName;
+              chrome.storage.sync.set({ chainName: result.chainName }).catch(() => {});
+            }
+            window.postMessage(
+              {
+                type: "addEthereumChainResult",
+                msg: { success: true, chainId, rpcUrl: result.rpcUrl },
+              },
+              "*"
+            );
+            if (result.shouldSwitch !== false) {
+              window.postMessage(
+                {
+                  type: "switchEthereumChain",
+                  msg: { chainId, rpcUrl: result.rpcUrl },
+                },
+                "*"
+              );
+            }
+          } else {
+            window.postMessage(
+              {
+                type: "addEthereumChainResult",
+                msg: { success: false, error: result.error || "User rejected" },
+              },
+              "*"
+            );
+          }
+        })
+        .catch((err) => {
+          window.postMessage(
+            {
+              type: "addEthereumChainResult",
+              msg: { success: false, error: err.message },
+            },
+            "*"
+          );
+        });
+
+      chrome.runtime.sendMessage({
+        type: "addEthereumChain",
+        requestId: addChainRequestId,
+        chainId,
+        chainName: reqChainName,
+        nativeCurrency,
+        rpcUrls,
+        blockExplorerUrls,
+        origin: window.location.origin,
+        favicon: getFaviconUrl(),
+      });
       break;
     }
 
