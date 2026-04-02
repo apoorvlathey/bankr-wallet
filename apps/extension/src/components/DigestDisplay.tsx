@@ -51,6 +51,23 @@ function hexToEmojiArray(hex: string): string[] {
 
 type DigestTab = "hex" | "emoji";
 
+/** Pick 2 random column indices per row for spot-check highlighting */
+function generateHighlightedCells(totalEmojis: number): Set<number> {
+  const cells = new Set<number>();
+  const numRows = Math.ceil(totalEmojis / 8);
+  for (let row = 0; row < numRows; row++) {
+    const cols = Array.from({ length: 8 }, (_, i) => i);
+    // Partial Fisher-Yates: pick 2 random columns
+    for (let i = 0; i < 2; i++) {
+      const j = i + Math.floor(Math.random() * (cols.length - i));
+      [cols[i], cols[j]] = [cols[j], cols[i]];
+    }
+    cells.add(row * 8 + cols[0]);
+    cells.add(row * 8 + cols[1]);
+  }
+  return cells;
+}
+
 function DigestBox({
   label,
   labelBg,
@@ -67,6 +84,8 @@ function DigestBox({
   const [open, setOpen] = useState(defaultOpen);
   const [tab, setTab] = useState<DigestTab>("emoji");
   const emojiArray = useMemo(() => hexToEmojiArray(hash), [hash]);
+  // Random spot-check cells — new selection each time the component mounts
+  const [highlightedCells] = useState(() => generateHighlightedCells(emojiArray.length));
 
   return (
     <Box w="full">
@@ -160,38 +179,53 @@ function DigestBox({
               </Text>
             </Box>
           ) : (
-            <Box border="2px solid" borderColor="bauhaus.black" bg="white">
-              <SimpleGrid columns={8} spacing={0}>
-                {emojiArray.map((emoji, i) => (
-                  <Box
-                    key={i}
-                    position="relative"
-                    borderRight={i % 8 !== 7 ? "1px solid" : undefined}
-                    borderBottom={i < emojiArray.length - 8 ? "1px solid" : undefined}
-                    borderColor="gray.200"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    py={1.5}
-                  >
-                    <Text
-                      position="absolute"
-                      top="1px"
-                      left="2px"
-                      fontSize="7px"
-                      fontFamily="mono"
-                      color="gray.400"
-                      fontWeight="700"
-                      lineHeight="1"
-                    >
-                      {i + 1}
-                    </Text>
-                    <Text fontSize="md" lineHeight="1">
-                      {emoji}
-                    </Text>
-                  </Box>
-                ))}
-              </SimpleGrid>
+            <Box>
+              <Box border="2px solid" borderColor="bauhaus.black" bg="white">
+                <SimpleGrid columns={8} spacing={0}>
+                  {emojiArray.map((emoji, i) => {
+                    const isHighlighted = highlightedCells.has(i);
+                    return (
+                      <Box
+                        key={i}
+                        position="relative"
+                        borderRight={i % 8 !== 7 ? "1px solid" : undefined}
+                        borderBottom={i < emojiArray.length - 8 ? "1px solid" : undefined}
+                        borderColor="gray.200"
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        py={1.5}
+                        bg={isHighlighted ? "rgba(240, 192, 32, 0.25)" : undefined}
+                      >
+                        <Text
+                          position="absolute"
+                          top="1px"
+                          left="2px"
+                          fontSize="7px"
+                          fontFamily="mono"
+                          color={isHighlighted ? "bauhaus.black" : "gray.400"}
+                          fontWeight="700"
+                          lineHeight="1"
+                        >
+                          {i + 1}
+                        </Text>
+                        <Text fontSize="md" lineHeight="1">
+                          {emoji}
+                        </Text>
+                      </Box>
+                    );
+                  })}
+                </SimpleGrid>
+              </Box>
+              <Text
+                mt={1}
+                fontSize="9px"
+                fontWeight="700"
+                color="text.tertiary"
+                textTransform="uppercase"
+              >
+                Verify highlighted emojis match your device
+              </Text>
             </Box>
           )}
         </Box>
