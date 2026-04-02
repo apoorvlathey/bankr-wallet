@@ -11,12 +11,15 @@ import {
 } from "@chakra-ui/react";
 import { CheckIcon, CopyIcon, ExternalLinkIcon, RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 import { useDisclosure } from "@chakra-ui/react";
-import { fetchPortfolio, PortfolioToken, DefiPosition } from "@/chrome/portfolioApi";
+import { PortfolioToken, DefiPosition } from "@/chrome/portfolioApi";
 import { fetchOnchainBalances } from "@/chrome/onchainBalances";
+import { loadPortfolioTokenCatalog } from "@/chrome/portfolioTokens";
 import { recordSnapshot } from "@/chrome/portfolioSnapshotStorage";
 import { getChainConfig } from "@/constants/chainConfig";
-import { getCustomTokens } from "@/chrome/customTokenStorage";
 import EditCustomTokenModal from "@/components/EditCustomTokenModal";
+import ChainIcon from "@/components/ChainIcon";
+import { useNetworks } from "@/contexts/NetworksContext";
+import { getResolvedChainById, getVisibleChains } from "@/lib/chains";
 
 interface TokenHoldingsProps {
   address: string;
@@ -24,6 +27,7 @@ interface TokenHoldingsProps {
   onSwapClick?: (token: PortfolioToken) => void;
   hideHeader?: boolean;
   hideCard?: boolean;
+  onRpcIssuesChange?: (chainIds: number[]) => void;
   onStateChange?: (state: {
     totalValueUsd: number;
     loading: boolean;
@@ -34,7 +38,8 @@ interface TokenHoldingsProps {
   }) => void;
 }
 
-function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCard, onStateChange }: TokenHoldingsProps) {
+function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCard, onRpcIssuesChange, onStateChange }: TokenHoldingsProps) {
+  const { networksInfo } = useNetworks();
   const [tokens, setTokens] = useState<PortfolioToken[]>([]);
   const [defiPositions, setDefiPositions] = useState<DefiPosition[]>([]);
   const [totalValueUsd, setTotalValueUsd] = useState(0);
@@ -46,6 +51,17 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
   const [editingToken, setEditingToken] = useState<PortfolioToken | null>(null);
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
   const editModal = useDisclosure();
+  const chainReloadKey = useMemo(
+    () =>
+      getVisibleChains(networksInfo)
+        .map(
+          (chain) =>
+            `${chain.chainId}:${chain.name}:${chain.rpcUrl}:${chain.nativeCurrency.symbol}:${chain.hidden}`,
+        )
+        .sort()
+        .join("|"),
+    [networksInfo],
+  );
 
   // Load hide preference
   useEffect(() => {
@@ -74,40 +90,15 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       setError(null);
 
       try {
-        const [data, customTokens] = await Promise.all([
-          fetchPortfolio(address),
-          getCustomTokens(),
-        ]);
+        const catalog = await loadPortfolioTokenCatalog(address);
+        const mergedTokens = catalog.tokens;
 
-        // Merge custom tokens that aren't already in the API response
-        const apiTokenKeys = new Set(
-          data.tokens.map((t) => `${t.chainId}-${t.contractAddress.toLowerCase()}`)
-        );
-        const customAsPortfolio: PortfolioToken[] = customTokens
-          .filter((ct) => !apiTokenKeys.has(`${ct.chainId}-${ct.contractAddress}`))
-          .map((ct) => ({
-            symbol: ct.symbol,
-            name: ct.name,
-            contractAddress: ct.contractAddress,
-            chainId: ct.chainId,
-            decimals: ct.decimals,
-            balance: "0",
-            balanceFormatted: "0",
-            priceUsd: 0,
-            valueUsd: 0,
-            logoUrl: undefined,
-          }));
-        const mergedTokens = [...data.tokens, ...customAsPortfolio];
-
-        // Track which tokens are user-added custom tokens (for edit-on-hover)
-        setCustomTokenKeys(
-          new Set(customTokens.map((ct) => `${ct.chainId}-${ct.contractAddress}`))
-        );
+        setCustomTokenKeys(catalog.customTokenKeys);
 
         // Show merged data immediately so user isn't stuck on skeleton loader
         setTokens(mergedTokens);
-        setDefiPositions(data.defiPositions || []);
-        setTotalValueUsd(data.totalValueUsd);
+        setDefiPositions(catalog.defiPositions || []);
+        setTotalValueUsd(catalog.totalValueUsd);
         setLoading(false);
         setLastFetched(Date.now());
 
@@ -115,20 +106,22 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         // If RPCs are rate-limited or slow, user already sees API values.
         try {
           const onchain = await fetchOnchainBalances(address, mergedTokens);
+          onRpcIssuesChange?.(onchain.rpcIssueChainIds);
           setTokens(onchain.tokens);
           // Total = on-chain corrected wallet tokens + DeFi positions
-          const defiTotal = (data.defiPositions || []).reduce((s: number, p: DefiPosition) => s + p.valueUsd, 0);
+          const defiTotal = (catalog.defiPositions || []).reduce((s: number, p: DefiPosition) => s + p.valueUsd, 0);
           const total = onchain.totalValueUsd + defiTotal;
           setTotalValueUsd(total);
           // Record snapshot with on-chain enhanced value
           recordSnapshot(address, total).catch(() => {});
         } catch (err) {
-          console.warn("[onchain] balance fetch failed, using API values:", err);
+          onRpcIssuesChange?.([]);
           // Record snapshot with API-only value
-          recordSnapshot(address, data.totalValueUsd).catch(() => {});
+          recordSnapshot(address, catalog.totalValueUsd).catch(() => {});
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load portfolio");
+        onRpcIssuesChange?.([]);
         setLoading(false);
       }
     },
@@ -142,7 +135,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
     setDefiPositions([]);
     setTotalValueUsd(0);
     loadPortfolio(true);
-  }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [address, chainReloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Set of "chainId-address" keys for dedup in AddTokenModal
   const tokenKeys = useMemo(
@@ -230,7 +223,9 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
             const isCustom = customTokenKeys.has(
               `${token.chainId}-${token.contractAddress.toLowerCase()}`
             );
-            const hasHover = !!(onTokenClick || onSwapClick || isCustom);
+            const resolvedChain = getResolvedChainById(token.chainId, networksInfo);
+            const canSwap = !!onSwapClick && resolvedChain?.isSwapSupported === true;
+            const hasHover = !!(onTokenClick || canSwap || isCustom);
             return (
             <HStack
               key={`${token.chainId}-${token.contractAddress}-${i}`}
@@ -245,7 +240,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
               transition="background 0.15s"
               position="relative"
             >
-              {(onTokenClick || onSwapClick) && (
+              {(onTokenClick || canSwap) && (
                 <HStack
                   className="hover-actions"
                   position="absolute"
@@ -258,7 +253,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                   pointerEvents="none"
                   sx={{ "& > *": { pointerEvents: "auto" } }}
                 >
-                  {onSwapClick && (
+                  {canSwap && (
                     <Text
                       fontSize="10px"
                       fontWeight="800"
@@ -269,7 +264,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                       _hover={{ textDecoration: "underline" }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onSwapClick(token);
+                        onSwapClick?.(token);
                       }}
                     >
                       Swap
@@ -348,12 +343,10 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                 </Box>
                 {/* Chain badge */}
                 {(() => {
-                  const config = getChainConfig(token.chainId);
-                  return config.icon ? (
-                    <Image
-                      src={config.icon}
-                      alt=""
-                      boxSize="14px"
+                  const resolvedChain = getResolvedChainById(token.chainId, networksInfo);
+                  const chainName = resolvedChain?.name ?? getChainConfig(token.chainId).name ?? `Chain ${token.chainId}`;
+                  return (
+                    <Box
                       position="absolute"
                       bottom="-2px"
                       right="-4px"
@@ -361,8 +354,15 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                       borderColor="white"
                       borderRadius="full"
                       bg="white"
-                    />
-                  ) : null;
+                      overflow="hidden"
+                      boxSize="14px"
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                    >
+                      <ChainIcon chainId={token.chainId} chainName={chainName} size="14px" />
+                    </Box>
+                  );
                 })()}
               </Box>
 
@@ -478,20 +478,21 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                             </Text>
                           )}
                         </Box>
-                        {chainConfig.icon && (
-                          <Image
-                            src={chainConfig.icon}
-                            alt=""
-                            boxSize="14px"
-                            position="absolute"
-                            bottom="-2px"
-                            right="-4px"
-                            border="1.5px solid"
-                            borderColor="white"
-                            borderRadius="full"
-                            bg="white"
+                        <Box
+                          position="absolute"
+                          bottom="-2px"
+                          right="-4px"
+                          border="1.5px solid"
+                          borderColor="white"
+                          borderRadius="full"
+                          bg="white"
+                        >
+                          <ChainIcon
+                            chainId={pos.chainId}
+                            chainName={chainConfig.name}
+                            size="14px"
                           />
-                        )}
+                        </Box>
                       </Box>
                       <VStack align="start" spacing={0} flex={1} minW={0}>
                         <HStack spacing={1}>

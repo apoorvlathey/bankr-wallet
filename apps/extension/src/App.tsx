@@ -19,15 +19,18 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
+  MenuDivider,
   Image,
   IconButton,
-  Code,
   VStack,
   Tooltip,
   Icon,
   Link,
   Spinner,
   useDisclosure,
+  Input,
+  InputGroup,
+  InputLeftElement,
 } from "@chakra-ui/react";
 
 import {
@@ -40,6 +43,8 @@ import {
   WarningIcon,
   InfoIcon,
   ChatIcon,
+  AddIcon,
+  Search2Icon,
 } from "@chakra-ui/icons";
 
 // Sidepanel icon
@@ -118,22 +123,30 @@ const QRCodeModal = lazy(() =>
 const TokenTransfer = lazy(() => import("@/components/TokenTransfer"));
 const SwapView = lazy(() => import("@/components/Swap/SwapView"));
 const WatchAssetConfirmation = lazy(() => import("@/components/WatchAssetConfirmation"));
+const AddChain = lazy(() => import("@/components/Settings/AddChain"));
 
 // Eager load components needed immediately
 import UnlockScreen from "@/components/UnlockScreen";
 import PendingTxBanner from "@/components/PendingTxBanner";
 import PortfolioTabs from "@/components/PortfolioTabs";
+import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
 import { useNetworks } from "@/contexts/NetworksContext";
-import { getChainConfig } from "@/constants/chainConfig";
-import { BANKR_SUPPORTED_CHAIN_IDS } from "@/constants/networks";
+import ChainIcon from "@/components/ChainIcon";
 import { hasEncryptedApiKey } from "@/chrome/crypto";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
+import { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import type { Account } from "@/chrome/types";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import { TWITTER_URL, WALLETCHAN_ICON_URL, WALLETCHAN_OS_URL, WALLETCHAN_STAKE_URL, WALLETCHAN_VAULT_DATA_API } from "@/constants/externalUrls";
+import {
+  getDefaultChainName,
+  getResolvedChainById,
+  getResolvedChainByName,
+  getVisibleChains,
+} from "@/lib/chains";
 
 // Combined request type for unified ordering
 export type CombinedRequest =
@@ -173,6 +186,7 @@ type AppView =
   | "main"
   | "unlock"
   | "settings"
+  | "settingsAddChain"
   | "pendingTxList"
   | "txConfirm"
   | "signatureConfirm"
@@ -204,24 +218,31 @@ function App() {
     useState<PendingSignatureRequest | null>(null);
   const [pendingWatchAssetRequest, setPendingWatchAssetRequest] =
     useState<PendingWatchAssetRequest | null>(null);
+  const [pendingAddChainRequest, setPendingAddChainRequest] =
+    useState<PendingAddChainRequest | null>(null);
+  const [rpcIssueChainIds, setRpcIssueChainIds] = useState<number[]>([]);
+  const [dismissedRpcIssueChainIds, setDismissedRpcIssueChainIds] = useState<number[]>([]);
   const [pendingBatchRequests, setPendingBatchRequests] = useState<
     PendingBatchTxRequest[]
   >([]);
   const [selectedBatchRequest, setSelectedBatchRequest] =
     useState<PendingBatchTxRequest | null>(null);
   const [activityTabTrigger, setActivityTabTrigger] = useState(0);
+  const [portfolioRefreshTrigger, setPortfolioRefreshTrigger] = useState(0);
 
   const [copied, setCopied] = useState(false);
   const [sidePanelSupported, setSidePanelSupported] = useState(false);
   const [sidePanelMode, setSidePanelMode] = useState(false);
   const [isInSidePanel, setIsInSidePanel] = useState(false);
   const [isFullscreenTab, setIsFullscreenTab] = useState(false);
-  const [isPopupWindow, setIsPopupWindow] = useState(false);
+  const [, setIsPopupWindow] = useState(false);
   const [failedTxError, setFailedTxError] = useState<{
     error: string;
     origin: string;
   } | null>(null);
-  const [onboardingTabId, setOnboardingTabId] = useState<number | null>(null);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<"main" | "chains">("main");
+  const [settingsInitialEditChainName, setSettingsInitialEditChainName] = useState<string | undefined>(undefined);
+  const [, setOnboardingTabId] = useState<number | null>(null);
   const [startChatWithNew, setStartChatWithNew] = useState(false);
   const [returnToChatAfterUnlock, setReturnToChatAfterUnlock] = useState(false);
   const [returnToConversationId, setReturnToConversationId] = useState<
@@ -235,6 +256,37 @@ function App() {
     null,
   );
   const [settingsAccount, setSettingsAccount] = useState<Account | null>(null);
+  const selectedChain = getResolvedChainByName(chainName, networksInfo);
+  const visibleChains = getVisibleChains(networksInfo, activeAccount?.type);
+  const [chainSearch, setChainSearch] = useState("");
+  const chainSearchInputRef = useRef<HTMLInputElement>(null);
+  const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
+  const [highlightedChainIndex, setHighlightedChainIndex] = useState(0);
+  const normalizedChainSearch = chainSearch.trim().toLowerCase();
+  const filteredVisibleChains = normalizedChainSearch
+    ? visibleChains.filter(
+        (chain) =>
+          chain.name.toLowerCase().includes(normalizedChainSearch) ||
+          String(chain.chainId).includes(normalizedChainSearch),
+      )
+    : visibleChains;
+  useEffect(() => {
+    setHighlightedChainIndex(0);
+  }, [chainSearch, isChainMenuOpen]);
+  const visibleRpcIssueChainIds = rpcIssueChainIds.filter(
+    (chainId) => !dismissedRpcIssueChainIds.includes(chainId),
+  );
+  const visibleRpcIssueChainNames = visibleRpcIssueChainIds
+    .map((chainId) => getResolvedChainById(chainId, networksInfo)?.name)
+    .filter((name): name is string => !!name);
+  const handleHomepageChainSelect = useCallback((nextChainName: string) => {
+    if (!chainName) {
+      setReloadRequired(true);
+    }
+    setChainName(nextChainName);
+    setIsChainMenuOpen(false);
+    setChainSearch("");
+  }, [chainName, setChainName]);
   const {
     isOpen: isRevealKeyOpen,
     onOpen: onRevealKeyOpen,
@@ -405,6 +457,13 @@ function App() {
     return requests || [];
   };
 
+  const loadPendingAddChainRequests = async () => {
+    const requests = await sendMessageWithRetry<PendingAddChainRequest[]>({
+      type: "getPendingAddChainRequests",
+    });
+    return requests || [];
+  };
+
   const checkLockState = async (): Promise<boolean> => {
     const cached = await sendMessageWithRetry<boolean>({
       type: "isWalletUnlocked",
@@ -472,11 +531,9 @@ function App() {
 
     // If switching to a Bankr account, ensure current chain is supported
     if (account.type === "bankr" && chainName && networksInfo) {
-      const currentChainId = networksInfo[chainName]?.chainId;
-      if (currentChainId && !BANKR_SUPPORTED_CHAIN_IDS.has(currentChainId)) {
-        const firstSupported = Object.keys(networksInfo).find((name) =>
-          BANKR_SUPPORTED_CHAIN_IDS.has(networksInfo[name].chainId),
-        );
+      const currentChain = getResolvedChainByName(chainName, networksInfo);
+      if (currentChain && !currentChain.isBankrSupported) {
+        const firstSupported = getDefaultChainName(networksInfo, "bankr");
         if (firstSupported) setChainName(firstSupported);
       }
     }
@@ -529,13 +586,6 @@ function App() {
         type: "isSidePanelSupported",
       });
       return response?.supported || false;
-    };
-
-    const checkSidePanelMode = async () => {
-      const response = await sendMessageWithRetry<{ enabled: boolean }>({
-        type: "getSidePanelMode",
-      });
-      return response?.enabled || false;
     };
 
     const detectSidePanelContext = () => {
@@ -764,6 +814,7 @@ function App() {
       const sigRequests = await loadPendingSignatureRequests();
       const batchRequests = await loadPendingBatchRequests();
       const watchAssetRequests = await loadPendingWatchAssetRequests();
+      const addChainRequests = await loadPendingAddChainRequests();
 
       // Load accounts
       let { accounts: loadedAccounts, activeAccount: loadedActive } =
@@ -875,6 +926,9 @@ function App() {
       } else if (watchAssetRequests.length > 0) {
         setPendingWatchAssetRequest(watchAssetRequests[watchAssetRequests.length - 1]);
         setView("watchAssetConfirm");
+      } else if (addChainRequests.length > 0) {
+        setPendingAddChainRequest(addChainRequests[addChainRequests.length - 1]);
+        setView("addChainConfirm");
       } else {
         setView("main");
       }
@@ -975,6 +1029,20 @@ function App() {
           if (isUnlocked) {
             setPendingWatchAssetRequest(watchRequest);
             setView("watchAssetConfirm");
+          } else {
+            setView("unlock");
+          }
+        })();
+        return;
+      }
+      if (message.type === "newPendingAddChainRequest" && message.request) {
+        const addChainReq = message.request as PendingAddChainRequest;
+        (async () => {
+          const isUnlocked = await checkLockState();
+          setIsWalletUnlocked(isUnlocked);
+          if (isUnlocked) {
+            setPendingAddChainRequest(addChainReq);
+            setView("addChainConfirm");
           } else {
             setView("unlock");
           }
@@ -1151,12 +1219,13 @@ function App() {
     const updateChainId = async () => {
       if (networksInfo && chainName) {
         const tab = await currentTab();
-        const chainId = networksInfo[chainName].chainId;
+        const chain = getResolvedChainByName(chainName, networksInfo);
+        if (!chain) return;
 
         chrome.tabs
           .sendMessage(tab.id!, {
             type: "setChainId",
-            msg: { chainName, chainId, rpcUrl: networksInfo[chainName].rpcUrl },
+            msg: { chainName: chain.name, chainId: chain.chainId, rpcUrl: chain.rpcUrl },
           })
           .catch(() => {
             // Ignore errors if content script not injected (e.g. chrome:// pages)
@@ -1170,10 +1239,26 @@ function App() {
   }, [chainName, networksInfo]);
 
   useUpdateEffect(() => {
-    if (reloadRequired && networksInfo) {
-      setChainName(Object.keys(networksInfo)[0]);
+    if (
+      activeAccount?.type === "bankr" &&
+      networksInfo &&
+      chainName
+    ) {
+      const currentChain = getResolvedChainByName(chainName, networksInfo);
+      if (currentChain && !currentChain.isBankrSupported) {
+        const fallbackChainName = getDefaultChainName(networksInfo, "bankr");
+        if (fallbackChainName && fallbackChainName !== chainName) {
+          setChainName(fallbackChainName);
+        }
+      }
     }
-  }, [reloadRequired, networksInfo]);
+  }, [activeAccount?.type, networksInfo, chainName]);
+
+  useUpdateEffect(() => {
+    if (reloadRequired && networksInfo) {
+      setChainName(getDefaultChainName(networksInfo, activeAccount?.type));
+    }
+  }, [reloadRequired, networksInfo, activeAccount?.type]);
 
   const handleUnlock = useCallback(async () => {
     // Mark wallet as unlocked
@@ -1195,6 +1280,7 @@ function App() {
     const sigRequests = await loadPendingSignatureRequests();
     const batchReqs = await loadPendingBatchRequests();
     const watchAssetRequests = await loadPendingWatchAssetRequests();
+    const addChainReqs = await loadPendingAddChainRequests();
 
     if (requests.length > 0) {
       setSelectedTxRequest(requests[requests.length - 1]);
@@ -1208,6 +1294,9 @@ function App() {
     } else if (watchAssetRequests.length > 0) {
       setPendingWatchAssetRequest(watchAssetRequests[watchAssetRequests.length - 1]);
       setView("watchAssetConfirm");
+    } else if (addChainReqs.length > 0) {
+      setPendingAddChainRequest(addChainReqs[addChainReqs.length - 1]);
+      setView("addChainConfirm");
     } else {
       setView("main");
     }
@@ -1218,7 +1307,9 @@ function App() {
       await navigator.clipboard.writeText(address);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {}
+    } catch {
+      // Ignore clipboard failures in restricted browser contexts.
+    }
   };
 
   const handleTxConfirmed = useCallback(async () => {
@@ -1373,14 +1464,18 @@ function App() {
     }
   }, [pendingSignatureRequests, isInSidePanel, isFullscreenTab]);
 
-  // Split address for CSS middle-truncation with bold first/last 4 hex chars
-  // Split hex chars (after "0x") in half, then prepend "0x" to the start
-  const hexLen = address ? address.length - 2 : 0;
-  const addrHalf = address ? 2 + Math.ceil(hexLen / 2) : 0;
-  const addrBoldStart = address ? address.slice(0, 6) : "";
-  const addrMidStart = address ? address.slice(6, addrHalf) : "";
-  const addrMidEnd = address ? address.slice(addrHalf, -4) : "";
-  const addrBoldEnd = address ? address.slice(-4) : "";
+  const handleRpcIssuesChange = useCallback((chainIds: number[]) => {
+    setRpcIssueChainIds(chainIds);
+    setDismissedRpcIssueChainIds([]);
+  }, []);
+
+  const handleChainSaved = useCallback((chain: { chainName: string; chainId: number }) => {
+    setRpcIssueChainIds((prev) => prev.filter((id) => id !== chain.chainId));
+    setDismissedRpcIssueChainIds((prev) => prev.filter((id) => id !== chain.chainId));
+    setSettingsInitialEditChainName(undefined);
+    setSettingsInitialTab("main");
+    setPortfolioRefreshTrigger((prev) => prev + 1);
+  }, []);
 
   if (isLoading) {
     return (
@@ -1576,7 +1671,12 @@ function App() {
           >
             <Suspense fallback={<LoadingFallback />}>
               <Settings
+                initialTab={settingsInitialTab}
+                initialEditChainName={settingsInitialEditChainName}
+                onChainSaved={handleChainSaved}
                 close={async () => {
+                  setSettingsInitialTab("main");
+                  setSettingsInitialEditChainName(undefined);
                   // After settings, check if now have API key
                   const has = await hasEncryptedApiKey();
                   setHasApiKey(has);
@@ -1619,6 +1719,55 @@ function App() {
                   }
                 }}
                 showBackButton={hasApiKey}
+                onSessionExpired={() => {
+                  setIsWalletUnlocked(false);
+                  setView("unlock");
+                }}
+              />
+            </Suspense>
+          </Container>
+        </Box>
+      </Box>
+    );
+  }
+
+  if (view === "settingsAddChain") {
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Container
+            pt={4}
+            pb={4}
+            flex="1"
+            display="flex"
+            flexDirection="column"
+          >
+            <Suspense fallback={<LoadingFallback />}>
+              <Settings
+                initialTab="chains"
+                initialChainsTab="add"
+                initialEditChainName={undefined}
+                onChainSaved={handleChainSaved}
+                close={async () => {
+                  const has = await hasEncryptedApiKey();
+                  setHasApiKey(has);
+
+                  if (has) {
+                    establishKeepalivePort();
+                    const isUnlocked = await checkLockState();
+                    setIsWalletUnlocked(isUnlocked);
+                    setView(isUnlocked ? "main" : "unlock");
+                  } else {
+                    setView("main");
+                  }
+                }}
                 onSessionExpired={() => {
                   setIsWalletUnlocked(false);
                   setView("unlock");
@@ -1710,7 +1859,7 @@ function App() {
             <TokenTransfer
               token={transferToken}
               fromAddress={address}
-              chainId={networksInfo?.[chainName!]?.chainId || 8453}
+              chainId={selectedChain?.chainId || 8453}
               accountType={activeAccount?.type || "bankr"}
               accounts={accounts}
               onBack={() => {
@@ -1754,7 +1903,7 @@ function App() {
             <SwapView
               fromAddress={address}
               accountType={activeAccount?.type || "bankr"}
-              chainId={networksInfo?.[chainName!]?.chainId || 8453}
+              chainId={selectedChain?.chainId || 8453}
               chainName={chainName || "Base"}
               onBack={() => {
                 setSwapInitialBuyToken(undefined);
@@ -2085,6 +2234,44 @@ function App() {
     );
   }
 
+  if (view === "addChainConfirm" && pendingAddChainRequest) {
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <AddChain
+              initialRequest={pendingAddChainRequest}
+              mode="dapp"
+              back={() => {
+                chrome.runtime.sendMessage({
+                  type: "rejectAddChain",
+                  requestId: pendingAddChainRequest.id,
+                });
+                setPendingAddChainRequest(null);
+                if (isInSidePanel || isFullscreenTab) {
+                  setView("main");
+                } else {
+                  window.close();
+                }
+              }}
+              onAdded={() => {
+                setPendingAddChainRequest(null);
+                setView("main");
+              }}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
   // Main view
   return (
     <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
@@ -2241,11 +2428,7 @@ function App() {
             cursor="pointer"
             onClick={() => {
               // Switch to Base and open swap with WCHAN as buy token
-              const baseName = networksInfo
-                ? Object.keys(networksInfo).find(
-                    (n) => networksInfo[n].chainId === 8453,
-                  )
-                : "Base";
+              const baseName = getResolvedChainById(8453, networksInfo)?.name ?? "Base";
               if (baseName) {
                 setChainName(baseName);
                 chrome.storage.sync.set({ chainName: baseName });
@@ -2378,6 +2561,107 @@ function App() {
               }}
             />
 
+            {visibleRpcIssueChainIds.length > 0 && (
+              <Box
+                bg="#EEF2FF"
+                border="2px solid"
+                borderColor="bauhaus.black"
+                boxShadow="3px 3px 0px 0px #121212"
+                px={3}
+                py={2}
+              >
+                <HStack align="start" spacing={2}>
+                  <Box
+                    p={1}
+                    bg="bauhaus.blue"
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    flexShrink={0}
+                  >
+                    <WarningIcon color="bauhaus.white" boxSize={3} />
+                  </Box>
+                  <Box flex={1} minW={0}>
+                    <Text
+                      fontSize="2xs"
+                      fontWeight="800"
+                      color="text.primary"
+                      textTransform="uppercase"
+                      letterSpacing="wide"
+                      mb={1}
+                    >
+                      RPC Issue Detected
+                    </Text>
+                    {visibleRpcIssueChainNames.length > 0 ? (
+                      <VStack align="start" spacing={1}>
+                        <HStack spacing={2} flexWrap="wrap">
+                          {visibleRpcIssueChainIds.slice(0, 2).map((chainId) => {
+                            const chain = getResolvedChainById(chainId, networksInfo);
+                            if (!chain) return null;
+                            return (
+                              <HStack
+                                key={chainId}
+                                spacing={1.5}
+                                bg="bauhaus.white"
+                                border="1.5px solid"
+                                borderColor="bauhaus.black"
+                                px={1.5}
+                                py={1}
+                                cursor="pointer"
+                                _hover={{ bg: "bg.muted" }}
+                                onClick={() => {
+                                  setSettingsInitialTab("chains");
+                                  setSettingsInitialEditChainName(chain.name);
+                                  setView("settings");
+                                }}
+                              >
+                                <ChainIcon
+                                  chainId={chain.chainId}
+                                  chainName={chain.name}
+                                  size="14px"
+                                />
+                                <Text
+                                  fontSize="xs"
+                                  fontWeight="800"
+                                  color="text.primary"
+                                  textTransform="uppercase"
+                                  letterSpacing="wide"
+                                >
+                                  {chain.name}
+                                </Text>
+                              </HStack>
+                            );
+                          })}
+                          {visibleRpcIssueChainIds.length > 2 && (
+                            <Text fontSize="2xs" fontWeight="700" color="text.tertiary">
+                              +{visibleRpcIssueChainIds.length - 2} more
+                            </Text>
+                          )}
+                        </HStack>
+                        <Text fontSize="xs" color="text.secondary" fontWeight="600">
+                          Balance fetch failed. Edit the chain RPC if this persists.
+                        </Text>
+                      </VStack>
+                    ) : (
+                      <Text fontSize="xs" color="text.secondary" fontWeight="600">
+                        Balance fetch failed for one or more chains. Edit the chain RPC if this persists.
+                      </Text>
+                    )}
+                  </Box>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    color="text.tertiary"
+                    fontWeight="700"
+                    _hover={{ bg: "bg.muted" }}
+                    onClick={() => setDismissedRpcIssueChainIds(rpcIssueChainIds)}
+                  >
+                    Dismiss
+                  </Button>
+                </HStack>
+              </Box>
+            )}
+
             {/* Account Switcher + Chain Selector Row */}
             <HStack spacing={3} align="stretch">
               {accounts.length > 0 && (
@@ -2398,7 +2682,21 @@ function App() {
               )}
 
               {/* Chain Selector */}
-              <Menu isLazy lazyBehavior="unmount">
+              <Menu
+                isLazy
+                isOpen={isChainMenuOpen}
+                lazyBehavior="unmount"
+                initialFocusRef={chainSearchInputRef}
+                onOpen={() => {
+                  setIsChainMenuOpen(true);
+                  setHighlightedChainIndex(0);
+                }}
+                onClose={() => {
+                  setIsChainMenuOpen(false);
+                  setChainSearch("");
+                  setHighlightedChainIndex(0);
+                }}
+              >
                 <MenuButton
                   as={Button}
                   variant="ghost"
@@ -2423,17 +2721,15 @@ function App() {
                   transition="all 0.2s ease-out"
                   flexShrink={0}
                 >
-                  {chainName && networksInfo ? (
+                  {selectedChain ? (
                     <HStack spacing={1.5}>
-                      <Image
-                        src={
-                          getChainConfig(networksInfo[chainName].chainId).icon
-                        }
-                        alt={chainName}
-                        boxSize="18px"
+                      <ChainIcon
+                        chainId={selectedChain.chainId}
+                        chainName={selectedChain.name}
+                        size="18px"
                       />
                       <Text fontSize="xs" fontWeight="700" noOfLines={1}>
-                        {chainName}
+                        {selectedChain.name}
                       </Text>
                     </HStack>
                   ) : (
@@ -2450,62 +2746,129 @@ function App() {
                   borderRadius="0"
                   py={0}
                   minW="160px"
+                  maxH="320px"
+                  overflow="hidden"
                 >
-                  {networksInfo &&
-                    Object.keys(networksInfo)
-                      .filter((_chainName) => {
-                        if (activeAccount?.type === "bankr") {
-                          return BANKR_SUPPORTED_CHAIN_IDS.has(
-                            networksInfo[_chainName].chainId,
-                          );
-                        }
-                        return true;
-                      })
-                      .map((_chainName, i, filteredChains) => {
-                        const config = getChainConfig(
-                          networksInfo[_chainName].chainId,
-                        );
-                        return (
+                  <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+                    <InputGroup size="sm">
+                      <InputLeftElement pointerEvents="none">
+                        <Search2Icon color="text.tertiary" boxSize={3} />
+                      </InputLeftElement>
+                      <Input
+                        ref={chainSearchInputRef}
+                        value={chainSearch}
+                        onChange={(e) => setChainSearch(e.target.value)}
+                        placeholder="Search chains"
+                        border="2px solid"
+                        borderColor="bauhaus.black"
+                        borderRadius="0"
+                        fontWeight="600"
+                        pl={9}
+                        _hover={{ borderColor: "bauhaus.black" }}
+                        _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+                        onKeyDown={(e) => {
+                          if (e.key === "ArrowDown") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (filteredVisibleChains.length > 0) {
+                              setHighlightedChainIndex((prev) =>
+                                Math.min(prev + 1, filteredVisibleChains.length - 1),
+                              );
+                            }
+                            return;
+                          }
+                          if (e.key === "ArrowUp") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (filteredVisibleChains.length > 0) {
+                              setHighlightedChainIndex((prev) => Math.max(prev - 1, 0));
+                            }
+                            return;
+                          }
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const highlighted = filteredVisibleChains[highlightedChainIndex];
+                            if (highlighted) {
+                              handleHomepageChainSelect(highlighted.name);
+                            }
+                            return;
+                          }
+                          e.stopPropagation();
+                        }}
+                      />
+                    </InputGroup>
+                  </Box>
+                  <Box maxH={activeAccount?.type !== "bankr" ? "219px" : "268px"} overflowY="auto">
+                    {filteredVisibleChains.map((_chain, i, currentChains) => (
                           <MenuItem
-                            key={_chainName}
-                            bg="bauhaus.white"
+                            key={_chain.chainId}
+                            bg={i === highlightedChainIndex ? "bg.muted" : "bauhaus.white"}
                             _hover={{ bg: "bg.muted" }}
                             borderBottom={
-                              i < filteredChains.length - 1
+                              i < currentChains.length - 1
                                 ? "2px solid"
                                 : "none"
                             }
                             borderColor="bauhaus.black"
                             py={3}
-                            onClick={() => {
-                              if (!chainName) {
-                                setReloadRequired(true);
-                              }
-                              setChainName(_chainName);
-                            }}
+                            onMouseEnter={() => setHighlightedChainIndex(i)}
+                            onClick={() => handleHomepageChainSelect(_chain.name)}
                           >
                             <HStack spacing={2}>
-                              {config.icon && (
-                                <Box
-                                  bg="bauhaus.white"
-                                  border="2px solid"
-                                  borderColor="bauhaus.black"
-                                  p={0.5}
-                                >
-                                  <Image
-                                    src={config.icon}
-                                    alt={_chainName}
-                                    boxSize="18px"
-                                  />
-                                </Box>
-                              )}
+                              <Box
+                                bg="bauhaus.white"
+                                border="2px solid"
+                                borderColor="bauhaus.black"
+                                p={0.5}
+                              >
+                                <ChainIcon
+                                  chainId={_chain.chainId}
+                                  chainName={_chain.name}
+                                  size="18px"
+                                />
+                              </Box>
                               <Text color="text.primary" fontWeight="700">
-                                {_chainName}
+                                {_chain.name}
                               </Text>
                             </HStack>
                           </MenuItem>
-                        );
-                      })}
+                        ))}
+                    {filteredVisibleChains.length === 0 && (
+                      <Box px={3} py={3}>
+                        <Text fontSize="sm" fontWeight="700" color="text.secondary">
+                          No chains match "{chainSearch.trim()}".
+                        </Text>
+                      </Box>
+                    )}
+                  </Box>
+                  {/* Add Chain button — only for non-bankr accounts */}
+                  {activeAccount?.type !== "bankr" && (
+                    <>
+                      <MenuDivider borderColor="bauhaus.black" m={0} />
+                      <MenuItem
+                        bg="bauhaus.white"
+                        _hover={{ bg: "bg.muted" }}
+                        py={3}
+                        onClick={() => setView("settingsAddChain")}
+                      >
+                        <HStack spacing={2}>
+                          <Box
+                            bg="bauhaus.black"
+                            p={0.5}
+                            display="flex"
+                            alignItems="center"
+                            justifyContent="center"
+                          >
+                            <AddIcon color="bauhaus.white" boxSize="14px" p="2px" />
+                          </Box>
+                          <Text color="text.secondary" fontWeight="700" fontSize="sm">
+                            Add Chain
+                          </Text>
+                        </HStack>
+                      </MenuItem>
+                    </>
+                  )}
                 </MenuList>
               </Menu>
             </HStack>
@@ -2522,58 +2885,7 @@ function App() {
                   flex={1}
                   minW={0}
                 >
-                  <Flex
-                    flex={1}
-                    minW={0}
-                    fontSize="sm"
-                    fontFamily="mono"
-                    color="bauhaus.white"
-                  >
-                    <Box
-                      as="span"
-                      overflow="hidden"
-                      whiteSpace="nowrap"
-                      flex="1 1 50%"
-                      minW="6ch"
-                      sx={{
-                        maskImage:
-                          "linear-gradient(to right, black calc(100% - 2ch), transparent 100%)",
-                        WebkitMaskImage:
-                          "linear-gradient(to right, black calc(100% - 2ch), transparent 100%)",
-                      }}
-                    >
-                      <Box as="span" fontWeight="700">{addrBoldStart}</Box>
-                      <Box as="span" fontWeight="400" opacity={0.5}>{addrMidStart}</Box>
-                    </Box>
-                    <Box
-                      as="span"
-                      flexShrink={0}
-                      fontWeight="700"
-                      opacity={0.5}
-                    >
-                      ...
-                    </Box>
-                    <Box
-                      as="span"
-                      overflow="hidden"
-                      whiteSpace="nowrap"
-                      flex="1 1 50%"
-                      minW="4ch"
-                      dir="rtl"
-                      textAlign="left"
-                      sx={{
-                        maskImage:
-                          "linear-gradient(to left, black calc(100% - 2ch), transparent 100%)",
-                        WebkitMaskImage:
-                          "linear-gradient(to left, black calc(100% - 2ch), transparent 100%)",
-                      }}
-                    >
-                      <Box as="span" dir="ltr" display="inline-block">
-                        <Box as="span" fontWeight="400" opacity={0.5}>{addrMidEnd}</Box>
-                        <Box as="span" fontWeight="700">{addrBoldEnd}</Box>
-                      </Box>
-                    </Box>
-                  </Flex>
+                  <MiddleTruncatedAddress address={address} />
                   <IconButton
                     aria-label="Show QR code"
                     icon={
@@ -2607,29 +2919,27 @@ function App() {
                     h="auto"
                     p={0}
                   />
-                  {chainName && networksInfo && (
-                    <IconButton
-                      aria-label="View on explorer"
-                      icon={<ExternalLinkIcon />}
-                      size="xs"
-                      variant="ghost"
-                      color="bauhaus.white"
-                      onClick={() => {
-                        const config = getChainConfig(
-                          networksInfo[chainName].chainId,
-                        );
-                        if (config.explorer) {
+                  {selectedChain && (() => {
+                    const explorer = selectedChain.explorer;
+                    return explorer ? (
+                      <IconButton
+                        aria-label="View on explorer"
+                        icon={<ExternalLinkIcon />}
+                        size="xs"
+                        variant="ghost"
+                        color="bauhaus.white"
+                        onClick={() => {
                           chrome.tabs.create({
-                            url: `${config.explorer}/address/${address}`,
+                            url: `${explorer}/address/${address}`,
                           });
-                        }
-                      }}
-                      _hover={{ color: "bauhaus.yellow" }}
-                      minW="auto"
-                      h="auto"
-                      p={0}
-                    />
-                  )}
+                        }}
+                        _hover={{ color: "bauhaus.yellow" }}
+                        minW="auto"
+                        h="auto"
+                        p={0}
+                      />
+                    ) : null;
+                  })()}
                 </HStack>
                 {/* Explorer shortcuts */}
                 <HStack spacing={1} flexShrink={0} justify="flex-end">
@@ -2815,6 +3125,8 @@ function App() {
               <PortfolioTabs
                 address={address}
                 activityTabTrigger={activityTabTrigger}
+                refreshTrigger={portfolioRefreshTrigger}
+                onRpcIssuesChange={handleRpcIssuesChange}
                 onTokenClick={(token) => {
                   setTransferToken(token);
                   setView("transfer");

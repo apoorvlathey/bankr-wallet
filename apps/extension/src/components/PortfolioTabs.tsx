@@ -32,14 +32,16 @@ interface HoldingsState {
 interface PortfolioTabsProps {
   address: string;
   activityTabTrigger?: number;
+  refreshTrigger?: number;
   onTokenClick?: (token: PortfolioToken) => void;
   onSwapClick?: (token: PortfolioToken) => void;
+  onRpcIssuesChange?: (chainIds: number[]) => void;
 }
 
 /** Delay before refreshing balances after on-chain tx confirmation (ms) */
 const POST_CONFIRM_REFRESH_DELAY = 3000;
 
-export default function PortfolioTabs({ address, activityTabTrigger = 0, onTokenClick, onSwapClick }: PortfolioTabsProps) {
+export default function PortfolioTabs({ address, activityTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange }: PortfolioTabsProps) {
   const [tabIndex, setTabIndex] = useState(activityTabTrigger > 0 ? 1 : 0);
   const [holdingsState, setHoldingsState] = useState<HoldingsState | null>(null);
   const holdingsStateRef = useRef<HoldingsState | null>(null);
@@ -213,9 +215,11 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, onToken
           <TabPanel p={0}>
             <Suspense fallback={<Skeleton h="100px" />}>
               <TokenHoldings
+                key={`${address}:${refreshTrigger}`}
                 address={address}
                 onTokenClick={onTokenClick}
                 onSwapClick={onSwapClick}
+                onRpcIssuesChange={onRpcIssuesChange}
                 hideHeader
                 hideCard
                 onStateChange={handleStateChange}

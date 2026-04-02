@@ -8,7 +8,6 @@ import {
   Badge,
   Spinner,
   IconButton,
-  Code,
   Flex,
   Spacer,
   Image,
@@ -29,14 +28,20 @@ import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import { GasOverrides } from "@/chrome/txHandlers";
 import { getChainConfig } from "@/constants/chainConfig";
+import { useNetworks } from "@/contexts/NetworksContext";
 import { resolveAddressToName } from "@/lib/ensUtils";
 import CalldataDecoder from "@/components/CalldataDecoder";
 import GasEstimateDisplay from "@/components/GasEstimateDisplay";
 import AssetChangesDisplay from "@/components/AssetChangesDisplay";
 import ERC20ApproveDisplay from "@/components/ERC20ApproveDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
-import { isErc20Approve, parseApproveCalldata } from "@/lib/erc20Approve";
+import ChainIcon from "@/components/ChainIcon";
+import { parseApproveCalldata } from "@/lib/erc20Approve";
 import { ethShLabelsUrl, googleFaviconUrl } from "@/constants/externalUrls";
+import {
+  getResolvedChainById,
+  getStoredNativeCurrencySymbol,
+} from "@/lib/chains";
 
 // Success animation keyframes
 const scaleIn = keyframes`
@@ -82,7 +87,9 @@ function CopyButton({
       await navigator.clipboard.writeText(value);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {}
+    } catch {
+      // Ignore clipboard failures in restricted browser contexts.
+    }
   };
 
   const button = (
@@ -127,6 +134,8 @@ function TransactionConfirmation({
   onRejectAll,
   onNavigate,
 }: TransactionConfirmationProps) {
+  const { networksInfo } = useNetworks();
+  const resolvedChain = getResolvedChainById(txRequest.tx.chainId, networksInfo);
   const [state, setState] = useState<ConfirmationState>("ready");
   const [error, setError] = useState<string>("");
   const [toLabels, setToLabels] = useState<string[]>([]);
@@ -137,6 +146,22 @@ function TransactionConfirmation({
   const [gasOverrides, setGasOverrides] = useState<GasOverrides | null>(null);
 
   const { tx, origin, chainName, favicon } = txRequest;
+  const isInternalWalletChan = origin === "WalletChan";
+  const internalSendTokenLabel = origin.startsWith("Send ")
+    ? origin.slice(5).trim()
+    : null;
+
+  // Native currency symbol for display
+  const [nativeSym, setNativeSym] = useState(
+    resolvedChain?.nativeCurrency.symbol ?? "ETH",
+  );
+  useEffect(() => {
+    if (resolvedChain?.nativeCurrency.symbol) {
+      setNativeSym(resolvedChain.nativeCurrency.symbol);
+      return;
+    }
+    getStoredNativeCurrencySymbol(tx.chainId).then(setNativeSym).catch(() => {});
+  }, [resolvedChain, tx.chainId]);
 
   // Parse origin safely — it may not be a valid URL (e.g. "WalletChan" for internal transfers)
   const originHostname = (() => {
@@ -146,6 +171,44 @@ function TransactionConfirmation({
       return null;
     }
   })();
+
+  const originInitials = (() => {
+    const label = internalSendTokenLabel || originHostname || origin;
+    if (!label) return "WC";
+    const words = label.split(/[\s\-_]+/).filter(Boolean);
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    }
+    return label.slice(0, 3).toUpperCase();
+  })();
+
+  const originInitialsFallback = (
+    <Box
+      boxSize="14px"
+      borderRadius="sm"
+      bg="gray.300"
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+    >
+      <Text fontSize="7px" fontWeight="900" color="text.secondary">
+        {originInitials}
+      </Text>
+    </Box>
+  );
+
+  const handleOriginImageError = (e: any) => {
+    if (originHostname) {
+      const target = e.target as HTMLImageElement;
+      const googleFallback = googleFaviconUrl(originHostname);
+      if (target.src !== googleFallback) {
+        target.src = googleFallback;
+        return;
+      }
+    }
+    const target = e.target as HTMLImageElement;
+    target.style.display = "none";
+  };
 
   // Fetch labels for the "to" address
   useEffect(() => {
@@ -241,12 +304,11 @@ function TransactionConfirmation({
 
   const formatValue = (value: string | undefined): string => {
     if (!value || value === "0" || value === "0x0") {
-      return "0 ETH";
+      return `0 ${nativeSym}`;
     }
-    // Convert hex to decimal and format as ETH
     const wei = BigInt(value);
     const eth = Number(wei) / 1e18;
-    return `${eth.toFixed(6)} ETH`;
+    return `${eth.toFixed(6)} ${nativeSym}`;
   };
 
   // Success animation screen (popup mode only)
@@ -508,38 +570,43 @@ function TransactionConfirmation({
               </Text>
               <HStack spacing={1.5}>
                 <Box
-                  bg={origin === "WalletChan" ? "transparent" : "gray.100"}
-                  border={origin === "WalletChan" ? "none" : "1.5px solid"}
+                  bg={isInternalWalletChan ? "transparent" : "gray.100"}
+                  border={isInternalWalletChan ? "none" : "1.5px solid"}
                   borderColor="gray.300"
                   borderRadius="md"
-                  p={origin === "WalletChan" ? 0 : 0.5}
+                  p={isInternalWalletChan ? 0 : 0.5}
                   display="flex"
                   alignItems="center"
                   justifyContent="center"
                 >
-                  <Image
-                    src={
-                      origin === "WalletChan"
-                        ? "/walletchan-icon.png"
-                        : favicon ||
-                          (originHostname
-                            ? googleFaviconUrl(originHostname)
-                            : undefined)
-                    }
-                    alt="favicon"
-                    boxSize={origin === "WalletChan" ? "20px" : "14px"}
-                    sx={{ filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.4)) drop-shadow(0 0 0.5px rgba(255,255,255,0.4))" }}
-                    onError={(e) => {
-                      if (originHostname) {
-                        const target = e.target as HTMLImageElement;
-                        const googleFallback = googleFaviconUrl(originHostname);
-                        if (target.src !== googleFallback) {
-                          target.src = googleFallback;
-                        }
-                      }
-                    }}
-                    fallback={<Box boxSize="14px" bg="gray.300" borderRadius="sm" />}
-                  />
+                  {isInternalWalletChan ? (
+                    <Image
+                      src="/walletchan-icon.png"
+                      alt="WalletChan"
+                      boxSize="20px"
+                      sx={{ filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.4)) drop-shadow(0 0 0.5px rgba(255,255,255,0.4))" }}
+                    />
+                  ) : favicon ? (
+                    <Image
+                      src={favicon}
+                      alt="favicon"
+                      boxSize="14px"
+                      sx={{ filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.4)) drop-shadow(0 0 0.5px rgba(255,255,255,0.4))" }}
+                      onError={handleOriginImageError}
+                      fallback={originInitialsFallback}
+                    />
+                  ) : originHostname ? (
+                    <Image
+                      src={googleFaviconUrl(originHostname)}
+                      alt="favicon"
+                      boxSize="14px"
+                      sx={{ filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.4)) drop-shadow(0 0 0.5px rgba(255,255,255,0.4))" }}
+                      onError={handleOriginImageError}
+                      fallback={originInitialsFallback}
+                    />
+                  ) : (
+                    originInitialsFallback
+                  )}
                 </Box>
                 <Text fontSize="xs" fontWeight="700" color="text.primary">
                   {originHostname || origin}
@@ -572,11 +639,18 @@ function TransactionConfirmation({
               </Text>
               {(() => {
                 const config = getChainConfig(tx.chainId);
+                const badgeChain = resolvedChain ?? {
+                  name: chainName,
+                  bg: config.bg,
+                  text: config.text,
+                  icon: config.icon,
+                  isCustom: false,
+                };
                 return (
                   <Badge
                     fontSize="xs"
-                    bg={config.bg}
-                    color={config.text}
+                    bg={badgeChain.isCustom ? "bauhaus.white" : badgeChain.bg}
+                    color={badgeChain.isCustom ? "bauhaus.black" : badgeChain.text}
                     border="1.5px solid"
                     borderColor="bauhaus.black"
                     fontWeight="700"
@@ -586,10 +660,8 @@ function TransactionConfirmation({
                     alignItems="center"
                     gap={1}
                   >
-                    {config.icon && (
-                      <Image src={config.icon} alt={chainName} boxSize="12px" />
-                    )}
-                    {chainName}
+                    <ChainIcon chainId={tx.chainId} chainName={badgeChain.name} size="12px" />
+                    {badgeChain.name}
                   </Badge>
                 );
               })()}
@@ -645,8 +717,8 @@ function TransactionConfirmation({
                       </Text>
                       <CopyButton value={tx.to} />
                       {(() => {
-                        const cfg = getChainConfig(tx.chainId);
-                        return cfg.explorer ? (
+                        const explorer = resolvedChain?.explorer || getChainConfig(tx.chainId).explorer;
+                        return explorer ? (
                           <IconButton
                             aria-label="View on explorer"
                             icon={<ExternalLinkIcon boxSize="10px" />}
@@ -657,7 +729,7 @@ function TransactionConfirmation({
                             color="text.tertiary"
                             onClick={() =>
                               window.open(
-                                `${cfg.explorer}/address/${tx.to}`,
+                                `${explorer}/address/${tx.to}`,
                                 "_blank"
                               )
                             }

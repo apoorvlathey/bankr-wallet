@@ -23,11 +23,12 @@ import {
   SliderThumb,
   SliderMark,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon } from "@chakra-ui/icons";
 import { parseEther, parseUnits, formatUnits } from "viem";
 import { useBauhausToast } from "@/hooks/useBauhausToast";
-import { fetchPortfolio, type PortfolioToken } from "@/chrome/portfolioApi";
-import { getCustomTokens } from "@/chrome/customTokenStorage";
+import { type PortfolioToken } from "@/chrome/portfolioApi";
+import { fetchOnchainBalances } from "@/chrome/onchainBalances";
+import { loadPortfolioTokenCatalog } from "@/chrome/portfolioTokens";
 import {
   NATIVE_TOKEN_ADDRESS,
   DEFAULT_SLIPPAGE_BPS,
@@ -43,6 +44,7 @@ import {
   CHAIN_REGISTRY,
 } from "@/constants/chainRegistry";
 import { getChainConfig } from "@/constants/chainConfig";
+import { getStoredRpcUrl } from "@/lib/chains";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
 import type { ERC5792Call } from "@/chrome/erc5792Types";
 import type { SwapTxEntry } from "@/chrome/txHandlers";
@@ -51,6 +53,7 @@ import BuyTokenSelector from "./BuyTokenSelector";
 import SwapQuoteDisplay from "./SwapQuoteDisplay";
 import SlippageSettings from "./SlippageSettings";
 import SwapConfirmation from "./SwapConfirmation";
+import ChainIcon from "@/components/ChainIcon";
 
 // Swap direction arrow icon
 const SwapArrowIcon = (props: React.ComponentProps<typeof Icon>) => (
@@ -109,7 +112,32 @@ function SwapView({
   initialSellToken,
 }: SwapViewProps) {
   const toast = useBauhausToast();
+  const [chainSearch, setChainSearch] = useState("");
+  const chainSearchInputRef = useRef<HTMLInputElement>(null);
+  const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
+  const [highlightedChainIndex, setHighlightedChainIndex] = useState(0);
+  const normalizedChainSearch = chainSearch.trim().toLowerCase();
+  const filteredSwapChains = normalizedChainSearch
+    ? CHAIN_REGISTRY.filter(
+        (c) =>
+          c.isSwapSupported &&
+          (c.name.toLowerCase().includes(normalizedChainSearch) ||
+            String(c.chainId).includes(normalizedChainSearch)),
+      )
+    : CHAIN_REGISTRY.filter((c) => c.isSwapSupported);
   const chainConfig = getChainConfig(chainId);
+
+  useEffect(() => {
+    if (!isChainMenuOpen) return;
+    const timeoutId = window.setTimeout(() => {
+      chainSearchInputRef.current?.focus();
+      chainSearchInputRef.current?.select();
+    }, 30);
+    return () => window.clearTimeout(timeoutId);
+  }, [isChainMenuOpen]);
+  useEffect(() => {
+    setHighlightedChainIndex(0);
+  }, [chainSearch, isChainMenuOpen]);
 
   // Holdings
   const [holdings, setHoldings] = useState<PortfolioToken[]>([]);
@@ -243,51 +271,23 @@ function SwapView({
     let cancelled = false;
     (async () => {
       try {
-        const [data, customTokens] = await Promise.all([
-          fetchPortfolio(fromAddress),
-          getCustomTokens(),
-        ]);
+        const catalog = await loadPortfolioTokenCatalog(fromAddress);
         if (cancelled) return;
 
-        // Merge custom tokens not already in API response
-        const apiTokenKeys = new Set(
-          data.tokens.map((t) => `${t.chainId}-${t.contractAddress.toLowerCase()}`)
-        );
-        const customOnlyTokens = customTokens
-          .filter((ct) => !apiTokenKeys.has(`${ct.chainId}-${ct.contractAddress}`))
-          .filter((ct) => ct.chainId === chainId);
-
-        // Fetch on-chain balances for custom tokens
-        const customBalances = await Promise.all(
-          customOnlyTokens.map((ct) =>
-            new Promise<bigint>((resolve) => {
-              chrome.runtime.sendMessage(
-                { type: "getTokenBalanceWei", tokenAddress: ct.contractAddress, owner: fromAddress, chainId },
-                (res) => resolve(res?.balance ? BigInt(res.balance) : 0n),
-              );
-            }),
-          ),
-        );
+        let tokens = catalog.tokens;
+        try {
+          const onchain = await fetchOnchainBalances(fromAddress, catalog.tokens, {
+            preserveZeroBalanceTokens: true,
+          });
+          if (!cancelled) {
+            tokens = onchain.tokens;
+          }
+        } catch {
+          // Fall back to API/catalog tokens.
+        }
         if (cancelled) return;
 
-        const customAsPortfolio: PortfolioToken[] = customOnlyTokens.map((ct, i) => {
-          const balWei = customBalances[i];
-          const formatted = formatUnits(balWei, ct.decimals);
-          return {
-            symbol: ct.symbol,
-            name: ct.name,
-            contractAddress: ct.contractAddress,
-            chainId: ct.chainId,
-            decimals: ct.decimals,
-            balance: formatted,
-            balanceFormatted: formatted,
-            priceUsd: 0,
-            valueUsd: 0,
-            logoUrl: undefined,
-          };
-        });
-
-        const chainTokens = [...data.tokens.filter((t) => t.chainId === chainId), ...customAsPortfolio];
+        const chainTokens = tokens.filter((t) => t.chainId === chainId);
         setHoldings(chainTokens);
         // If initialSellToken provided, find the matching token from portfolio
         if (initialSellToken) {
@@ -518,8 +518,7 @@ function SwapView({
       const { name, symbol, decimals } = infoResult.data;
 
       const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
-      const { RPC_URLS } = await import("@/constants/chainRegistry");
-      const rpcUrl = RPC_URLS[chainId];
+      const rpcUrl = await getStoredRpcUrl(chainId);
       if (!rpcUrl) {
         setSellCustomError("No RPC for this chain");
         return;
@@ -1003,7 +1002,19 @@ function SwapView({
               </Text>
             </HStack>
             {/* Chain selector */}
-            <Menu>
+            <Menu
+              isOpen={isChainMenuOpen}
+              initialFocusRef={chainSearchInputRef}
+              onOpen={() => {
+                setIsChainMenuOpen(true);
+                setHighlightedChainIndex(0);
+              }}
+              onClose={() => {
+                setIsChainMenuOpen(false);
+                setChainSearch("");
+                setHighlightedChainIndex(0);
+              }}
+            >
               <MenuButton
                 as={Box}
                 cursor="pointer"
@@ -1015,9 +1026,7 @@ function SwapView({
                 _hover={{ opacity: 0.8 }}
               >
                 <HStack spacing={1.5}>
-                  {chainConfig.icon && (
-                    <Image src={chainConfig.icon} boxSize="16px" />
-                  )}
+                  <ChainIcon chainId={chainId} chainName={chainName} size="16px" />
                   <Text
                     fontSize="xs"
                     fontWeight="700"
@@ -1039,25 +1048,80 @@ function SwapView({
                 minW="160px"
                 zIndex={30}
               >
-                {CHAIN_REGISTRY.filter((c) => c.isSwapSupported).map(
+                <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+                  <InputGroup size="sm">
+                    <InputLeftElement pointerEvents="none">
+                      <Search2Icon color="text.tertiary" boxSize={3} />
+                    </InputLeftElement>
+                    <Input
+                      ref={chainSearchInputRef}
+                      value={chainSearch}
+                      onChange={(e) => setChainSearch(e.target.value)}
+                      placeholder="Search chains"
+                      border="2px solid"
+                      borderColor="bauhaus.black"
+                      borderRadius="0"
+                      fontWeight="600"
+                      pl={9}
+                      _hover={{ borderColor: "bauhaus.black" }}
+                      _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+                      onKeyDown={(e) => {
+                        if (e.key === "ArrowDown") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (filteredSwapChains.length > 0) {
+                            setHighlightedChainIndex((prev) =>
+                              Math.min(prev + 1, filteredSwapChains.length - 1),
+                            );
+                          }
+                          return;
+                        }
+                        if (e.key === "ArrowUp") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (filteredSwapChains.length > 0) {
+                            setHighlightedChainIndex((prev) => Math.max(prev - 1, 0));
+                          }
+                          return;
+                        }
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const highlighted = filteredSwapChains[highlightedChainIndex];
+                          if (highlighted) {
+                            onChainChange(highlighted.name);
+                            setIsChainMenuOpen(false);
+                            setChainSearch("");
+                          }
+                          return;
+                        }
+                        e.stopPropagation();
+                      }}
+                    />
+                  </InputGroup>
+                </Box>
+                <Box maxH="220px" overflowY="auto">
+                {filteredSwapChains.map(
                   (c, i, arr) => {
-                    const cfg = getChainConfig(c.chainId);
                     return (
                       <MenuItem
                         key={c.chainId}
-                        bg="bauhaus.white"
+                        bg={i === highlightedChainIndex ? "bg.muted" : "bauhaus.white"}
                         _hover={{ bg: "bg.hover" }}
                         borderBottom={
                           i < arr.length - 1 ? "2px solid" : "none"
                         }
                         borderColor="bauhaus.black"
                         py={2.5}
-                        onClick={() => onChainChange(c.name)}
+                        onMouseEnter={() => setHighlightedChainIndex(i)}
+                        onClick={() => {
+                          onChainChange(c.name);
+                          setIsChainMenuOpen(false);
+                          setChainSearch("");
+                        }}
                       >
                         <HStack spacing={2}>
-                          {cfg.icon && (
-                            <Image src={cfg.icon} boxSize="18px" />
-                          )}
+                          <ChainIcon chainId={c.chainId} chainName={c.name} size="18px" />
                           <Text fontWeight="700" fontSize="sm">
                             {c.name}
                           </Text>
@@ -1066,6 +1130,14 @@ function SwapView({
                     );
                   },
                 )}
+                {filteredSwapChains.length === 0 && (
+                  <Box px={3} py={3}>
+                    <Text fontSize="sm" fontWeight="700" color="text.secondary">
+                      No chains match "{chainSearch.trim()}".
+                    </Text>
+                  </Box>
+                )}
+                </Box>
               </MenuList>
             </Menu>
           </HStack>
@@ -1172,7 +1244,19 @@ function SwapView({
             </Text>
           </HStack>
           {/* Chain selector */}
-          <Menu>
+          <Menu
+            isOpen={isChainMenuOpen}
+            initialFocusRef={chainSearchInputRef}
+            onOpen={() => {
+              setIsChainMenuOpen(true);
+              setHighlightedChainIndex(0);
+            }}
+            onClose={() => {
+              setIsChainMenuOpen(false);
+              setChainSearch("");
+              setHighlightedChainIndex(0);
+            }}
+          >
             <MenuButton
               as={Box}
               cursor="pointer"
@@ -1184,9 +1268,7 @@ function SwapView({
               _hover={{ opacity: 0.8 }}
             >
               <HStack spacing={1.5}>
-                {chainConfig.icon && (
-                  <Image src={chainConfig.icon} boxSize="16px" />
-                )}
+                <ChainIcon chainId={chainId} chainName={chainName} size="16px" />
                 <Text
                   fontSize="xs"
                   fontWeight="700"
@@ -1208,14 +1290,66 @@ function SwapView({
               minW="160px"
               zIndex={30}
             >
-              {CHAIN_REGISTRY.filter((c) => c.isSwapSupported).map(
+              <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+                <InputGroup size="sm">
+                  <InputLeftElement pointerEvents="none">
+                    <Search2Icon color="text.tertiary" boxSize={3} />
+                  </InputLeftElement>
+                  <Input
+                    ref={chainSearchInputRef}
+                    value={chainSearch}
+                    onChange={(e) => setChainSearch(e.target.value)}
+                    placeholder="Search chains"
+                    border="2px solid"
+                    borderColor="bauhaus.black"
+                    borderRadius="0"
+                    fontWeight="600"
+                    pl={9}
+                    _hover={{ borderColor: "bauhaus.black" }}
+                    _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (filteredSwapChains.length > 0) {
+                          setHighlightedChainIndex((prev) =>
+                            Math.min(prev + 1, filteredSwapChains.length - 1),
+                          );
+                        }
+                        return;
+                      }
+                      if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (filteredSwapChains.length > 0) {
+                          setHighlightedChainIndex((prev) => Math.max(prev - 1, 0));
+                        }
+                        return;
+                      }
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const highlighted = filteredSwapChains[highlightedChainIndex];
+                        if (highlighted) {
+                          onChainChange(highlighted.name);
+                          setIsChainMenuOpen(false);
+                          setChainSearch("");
+                        }
+                        return;
+                      }
+                      e.stopPropagation();
+                    }}
+                  />
+                </InputGroup>
+              </Box>
+              <Box maxH="220px" overflowY="auto">
+              {filteredSwapChains.map(
                 (c, i, arr) => {
-                  const cfg = getChainConfig(c.chainId);
                   return (
                     <MenuItem
                       key={c.chainId}
                       bg={
-                        c.chainId === chainId
+                        i === highlightedChainIndex || c.chainId === chainId
                           ? "bg.muted"
                           : "bauhaus.white"
                       }
@@ -1225,15 +1359,15 @@ function SwapView({
                       }
                       borderColor="bauhaus.black"
                       py={2.5}
-                      onClick={() => onChainChange(c.name)}
+                      onMouseEnter={() => setHighlightedChainIndex(i)}
+                      onClick={() => {
+                        onChainChange(c.name);
+                        setIsChainMenuOpen(false);
+                        setChainSearch("");
+                      }}
                     >
                       <HStack spacing={2}>
-                        {cfg.icon && (
-                          <Image
-                            src={cfg.icon}
-                            boxSize="18px"
-                          />
-                        )}
+                        <ChainIcon chainId={c.chainId} chainName={c.name} size="18px" />
                         <Text fontWeight="700" fontSize="sm">
                           {c.name}
                         </Text>
@@ -1242,6 +1376,14 @@ function SwapView({
                   );
                 },
               )}
+              {filteredSwapChains.length === 0 && (
+                <Box px={3} py={3}>
+                  <Text fontSize="sm" fontWeight="700" color="text.secondary">
+                    No chains match "{chainSearch.trim()}".
+                  </Text>
+                </Box>
+              )}
+              </Box>
             </MenuList>
           </Menu>
         </HStack>

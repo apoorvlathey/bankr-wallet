@@ -300,6 +300,7 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides }: GasEstim
   if (!estimate) return null;
 
   const usdDisplay = formatUsd(displayCostWei, estimate.nativePriceUsd);
+  const sym = estimate.nativeCurrencySymbol || "ETH";
 
   return (
     <VStack spacing={2} align="stretch">
@@ -351,7 +352,7 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides }: GasEstim
           </Text>
           <HStack spacing={1} minW={0}>
             <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono" noOfLines={1}>
-              {formatEth(displayCostWei)}
+              {formatEth(displayCostWei, sym)}
             </Text>
             {usdDisplay && (
               <Text fontSize="xs" color="text.tertiary" fontWeight="600">
@@ -407,7 +408,7 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides }: GasEstim
 
             <GasRow
               label="Estimated Cost"
-              value={`${formatEth(displayCostWei)}${usdDisplay ? ` (${usdDisplay})` : ""}`}
+              value={`${formatEth(displayCostWei, sym)}${usdDisplay ? ` (${usdDisplay})` : ""}`}
             />
 
             {estimate.dappProvidedGas && (

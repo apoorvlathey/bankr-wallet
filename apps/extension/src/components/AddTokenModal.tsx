@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   Modal,
   ModalOverlay,
@@ -12,7 +12,6 @@ import {
   Input,
   Button,
   Box,
-  Image,
   Menu,
   MenuButton,
   MenuList,
@@ -22,9 +21,10 @@ import {
   Spinner,
 } from "@chakra-ui/react";
 import { ChevronDownIcon, WarningIcon } from "@chakra-ui/icons";
-import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
-import { getChainConfig } from "@/constants/chainConfig";
 import { addCustomToken } from "@/chrome/customTokenStorage";
+import { useNetworks } from "@/contexts/NetworksContext";
+import ChainIcon from "@/components/ChainIcon";
+import { getVisibleChains } from "@/lib/chains";
 
 interface AddTokenModalProps {
   isOpen: boolean;
@@ -41,7 +41,13 @@ export default function AddTokenModal({
   onTokenAdded,
   existingTokenKeys,
 }: AddTokenModalProps) {
-  const [selectedChainId, setSelectedChainId] = useState(CHAIN_REGISTRY[0].chainId);
+  const { networksInfo } = useNetworks();
+
+  // Always derive the selector from the shared chain resolver so custom-chain
+  // support lands in one place instead of each modal rebuilding its own list.
+  const chainList = useMemo(() => getVisibleChains(networksInfo), [networksInfo]);
+
+  const [selectedChainId, setSelectedChainId] = useState(chainList[0]?.chainId ?? 8453);
   const [tokenAddress, setTokenAddress] = useState("");
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
@@ -67,9 +73,9 @@ export default function AddTokenModal({
       setError(null);
       setFetched(false);
       setSaving(false);
-      setSelectedChainId(CHAIN_REGISTRY[0].chainId);
+      setSelectedChainId(chainList[0]?.chainId ?? 8453);
     }
-  }, [isOpen]);
+  }, [isOpen, chainList]);
 
   const fetchTokenInfo = useCallback(
     async (address: string, chainId: number) => {
@@ -153,7 +159,7 @@ export default function AddTokenModal({
     }
   };
 
-  const chainConfig = getChainConfig(selectedChainId);
+  const selectedChain = chainList.find((c) => c.chainId === selectedChainId);
   const canSave = fetched && !isDuplicate && !loading && !saving && symbol && decimals;
 
   return (
@@ -201,11 +207,13 @@ export default function AddTokenModal({
                 >
                   <HStack spacing={2} justify="space-between">
                     <HStack spacing={2}>
-                      {chainConfig.icon && (
-                        <Image src={chainConfig.icon} boxSize="18px" borderRadius="full" />
-                      )}
+                      <ChainIcon
+                        chainId={selectedChainId}
+                        chainName={selectedChain?.name}
+                        size="18px"
+                      />
                       <Text fontWeight="700" fontSize="sm">
-                        {chainConfig.name}
+                        {selectedChain?.name ?? `Chain ${selectedChainId}`}
                       </Text>
                     </HStack>
                     <ChevronDownIcon />
@@ -222,26 +230,27 @@ export default function AddTokenModal({
                   p={0}
                   zIndex={10}
                 >
-                  {CHAIN_REGISTRY.map((chain) => {
-                    const cc = getChainConfig(chain.chainId);
-                    return (
-                      <MenuItem
-                        key={chain.chainId}
-                        onClick={() => handleChainChange(chain.chainId)}
-                        bg={chain.chainId === selectedChainId ? "bg.muted" : "transparent"}
-                        _hover={{ bg: "bg.hover" }}
-                        px={3}
-                        py={2}
-                      >
-                        <HStack spacing={2}>
-                          {cc.icon && <Image src={cc.icon} boxSize="18px" borderRadius="full" />}
-                          <Text fontWeight="700" fontSize="sm">
-                            {cc.name}
-                          </Text>
-                        </HStack>
-                      </MenuItem>
-                    );
-                  })}
+                  {chainList.map((chain) => (
+                    <MenuItem
+                      key={chain.chainId}
+                      onClick={() => handleChainChange(chain.chainId)}
+                      bg={chain.chainId === selectedChainId ? "bg.muted" : "transparent"}
+                      _hover={{ bg: "bg.hover" }}
+                      px={3}
+                      py={2}
+                    >
+                      <HStack spacing={2}>
+                        <ChainIcon
+                          chainId={chain.chainId}
+                          chainName={chain.name}
+                          size="18px"
+                        />
+                        <Text fontWeight="700" fontSize="sm">
+                          {chain.name}
+                        </Text>
+                      </HStack>
+                    </MenuItem>
+                  ))}
                 </MenuList>
               </Menu>
             </FormControl>

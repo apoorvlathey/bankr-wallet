@@ -6,9 +6,8 @@ import {
   type Address,
   type PublicClient,
 } from "viem";
-import { RPC_URLS } from "@/constants/chainRegistry";
 import { PortfolioToken } from "@/chrome/portfolioApi";
-import type { NetworksInfo } from "@/types";
+import { getStoredRpcUrl } from "@/lib/chains";
 
 /** Multicall3 is deployed at the same address on all supported chains */
 const MULTICALL3_ADDRESS: Address =
@@ -31,35 +30,22 @@ const MULTICALL_BATCH_SIZE = 100;
 /** RPC request timeout in ms – short enough to not block UI on rate limits */
 const RPC_TIMEOUT = 8_000;
 
-/** Cached viem clients keyed by chainId to reuse connections */
-const clientCache = new Map<number, PublicClient>();
+/** Cached viem clients keyed by chainId and invalidated when RPC URL changes */
+const clientCache = new Map<number, { rpcUrl: string; client: PublicClient }>();
 
 async function getClient(chainId: number): Promise<PublicClient | null> {
-  let client = clientCache.get(chainId);
-  if (client) return client;
-
-  // Check user-configured RPCs first, fall back to defaults
-  let rpcUrl: string | undefined;
-  try {
-    const { networksInfo } = (await chrome.storage.sync.get("networksInfo")) as {
-      networksInfo: NetworksInfo | undefined;
-    };
-    if (networksInfo) {
-      for (const name of Object.keys(networksInfo)) {
-        if (networksInfo[name].chainId === chainId) {
-          rpcUrl = networksInfo[name].rpcUrl;
-          break;
-        }
-      }
-    }
-  } catch {}
-  if (!rpcUrl) rpcUrl = RPC_URLS[chainId];
+  const rpcUrl = await getStoredRpcUrl(chainId);
   if (!rpcUrl) return null;
 
-  client = createPublicClient({
+  const cached = clientCache.get(chainId);
+  if (cached && cached.rpcUrl === rpcUrl) {
+    return cached.client;
+  }
+
+  const client = createPublicClient({
     transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 0 }),
   });
-  clientCache.set(chainId, client);
+  clientCache.set(chainId, { rpcUrl, client });
   return client;
 }
 
@@ -72,8 +58,9 @@ async function getClient(chainId: number): Promise<PublicClient | null> {
  */
 export async function fetchOnchainBalances(
   address: string,
-  tokens: PortfolioToken[]
-): Promise<{ tokens: PortfolioToken[]; totalValueUsd: number }> {
+  tokens: PortfolioToken[],
+  options?: { preserveZeroBalanceTokens?: boolean },
+): Promise<{ tokens: PortfolioToken[]; totalValueUsd: number; rpcIssueChainIds: number[] }> {
   // Group tokens by chainId
   const byChain = new Map<number, { index: number; token: PortfolioToken }[]>();
   tokens.forEach((token, index) => {
@@ -84,12 +71,16 @@ export async function fetchOnchainBalances(
 
   // Clone tokens so we can mutate
   const updated = tokens.map((t) => ({ ...t }));
+  const rpcIssueChainIds = new Set<number>();
 
   // Fetch balances per chain in parallel
   const chainPromises = Array.from(byChain.entries()).map(
     async ([chainId, entries]) => {
       const client = await getClient(chainId);
-      if (!client) return; // unknown chain, keep API values
+      if (!client) {
+        rpcIssueChainIds.add(chainId);
+        return;
+      }
 
       const addr = address as Address;
 
@@ -132,7 +123,7 @@ export async function fetchOnchainBalances(
             multicallAddress: MULTICALL3_ADDRESS,
           });
 
-          results.forEach((result: any, j: number) => {
+          await Promise.all(results.map(async (result: any, j: number) => {
             if (result.status === "success") {
               applyBalance(
                 updated,
@@ -140,15 +131,20 @@ export async function fetchOnchainBalances(
                 result.result as bigint,
                 chunk[j].token
               );
+            } else {
+              const succeeded = await fetchSingleBalanceDirectly(
+                client,
+                updated,
+                chunk[j].entryIndex,
+                chunk[j].token,
+                addr,
+              );
+              if (!succeeded) rpcIssueChainIds.add(chainId);
             }
-            // on failure, keep API value for that token
-          });
+          }));
         } catch (err) {
-          console.warn(
-            `[onchain] multicall failed (chain ${chainId}, batch ${Math.floor(i / MULTICALL_BATCH_SIZE)}):`,
-            err
-          );
-          // Keep API values for this entire batch
+          const failed = await fetchChunkBalancesIndividually(client, updated, chunk, addr);
+          if (failed) rpcIssueChainIds.add(chainId);
         }
       }
     }
@@ -157,14 +153,56 @@ export async function fetchOnchainBalances(
   await Promise.all(chainPromises);
 
   // Filter out tokens with zero on-chain balance and sort by USD value descending
-  const filtered = updated.filter(
-    (t) => parseFloat(t.balance) > 0
-  );
+  const filtered = options?.preserveZeroBalanceTokens
+    ? updated
+    : updated.filter((t) => parseFloat(t.balance) > 0);
   filtered.sort((a, b) => b.valueUsd - a.valueUsd);
 
   const totalValueUsd = filtered.reduce((sum, t) => sum + t.valueUsd, 0);
 
-  return { tokens: filtered, totalValueUsd };
+  return { tokens: filtered, totalValueUsd, rpcIssueChainIds: Array.from(rpcIssueChainIds) };
+}
+
+async function fetchChunkBalancesIndividually(
+  client: PublicClient,
+  tokens: PortfolioToken[],
+  chunk: { entryIndex: number; token: PortfolioToken; contract: any }[],
+  address: Address,
+): Promise<boolean> {
+  const results = await Promise.all(
+    chunk.map(({ entryIndex, token }) =>
+      fetchSingleBalanceDirectly(client, tokens, entryIndex, token, address),
+    ),
+  );
+  return results.some((success) => !success);
+}
+
+async function fetchSingleBalanceDirectly(
+  client: PublicClient,
+  tokens: PortfolioToken[],
+  entryIndex: number,
+  token: PortfolioToken,
+  address: Address,
+): Promise<boolean> {
+  try {
+    const isNative =
+      token.contractAddress === "native" ||
+      token.contractAddress === "0x0000000000000000000000000000000000000000";
+
+    const rawBalance = isNative
+      ? await client.getBalance({ address })
+      : await client.readContract({
+          address: token.contractAddress as Address,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [address],
+        });
+
+    applyBalance(tokens, entryIndex, rawBalance as bigint, token);
+    return true;
+  } catch (fallbackErr) {
+    return false;
+  }
 }
 
 /** Apply a raw bigint balance to a token entry, recomputing derived fields */

@@ -3,6 +3,11 @@
  *
  * Adding a new chain? Add ONE entry to CHAIN_REGISTRY below.
  * All derived maps, sets, and config objects auto-populate.
+ *
+ * Runtime note: UI/background code should usually go through `lib/chains.ts`
+ * instead of reading `CHAIN_REGISTRY` and `networksInfo` separately. That
+ * resolver is what keeps built-in chains, user RPC overrides, hidden flags,
+ * and custom chains in sync everywhere.
  */
 
 import { type Chain } from "viem";
@@ -257,6 +262,29 @@ function buildViemChain(entry: ChainEntry): Chain {
   };
 }
 
+const DEFAULT_NATIVE_CURRENCY = { name: "Ether", symbol: "ETH", decimals: 18 };
+
+/** Build a viem Chain object at runtime for custom (user-added) chains. */
+export function buildCustomViemChain(
+  chainId: number,
+  name: string,
+  rpcUrl: string,
+  nativeCurrency?: { name: string; symbol: string; decimals: number },
+  explorer?: string,
+): Chain {
+  return {
+    id: chainId,
+    name,
+    nativeCurrency: nativeCurrency ?? DEFAULT_NATIVE_CURRENCY,
+    rpcUrls: {
+      default: { http: [rpcUrl] },
+    },
+    blockExplorers: explorer
+      ? { default: { name: name + " Explorer", url: explorer } }
+      : undefined,
+  };
+}
+
 export const VIEM_CHAINS: Record<number, Chain> = {};
 for (const c of CHAIN_REGISTRY) {
   VIEM_CHAINS[c.chainId] = c.viemChain ?? buildViemChain(c);
@@ -276,4 +304,82 @@ for (const c of CHAIN_REGISTRY) {
   if (c.coingeckoTokenId) {
     CHAIN_TOKEN_IDS[c.chainId] = c.coingeckoTokenId;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Derived: native currency symbols (for gas display)
+// ---------------------------------------------------------------------------
+
+/** Native currency symbols for hardcoded chains. Custom chains resolved at runtime from networksInfo. */
+export const NATIVE_CURRENCY_SYMBOLS: Record<number, string> = {};
+for (const c of CHAIN_REGISTRY) {
+  NATIVE_CURRENCY_SYMBOLS[c.chainId] = c.nativeCurrency.symbol;
+}
+
+/**
+ * Resolve native currency symbol for any chainId.
+ * Checks CHAIN_REGISTRY first, then falls back to networksInfo in chrome.storage.
+ * Returns "ETH" if chain is unknown (safe default).
+ */
+export async function getNativeCurrencySymbol(chainId: number): Promise<string> {
+  // Fast path: hardcoded chain
+  if (NATIVE_CURRENCY_SYMBOLS[chainId]) return NATIVE_CURRENCY_SYMBOLS[chainId];
+
+  // Slow path: check custom chains in storage
+  try {
+    const { networksInfo } = await chrome.storage.sync.get("networksInfo");
+    if (networksInfo) {
+      for (const name of Object.keys(networksInfo)) {
+        if (networksInfo[name].chainId === chainId) {
+          return networksInfo[name].nativeCurrency?.symbol || "ETH";
+        }
+      }
+    }
+  } catch {
+    // Storage may not be available in all contexts
+  }
+
+  return "ETH";
+}
+
+/**
+ * Resolve explorer URL for any chainId.
+ * Checks CHAIN_CONFIG first, then falls back to networksInfo in chrome.storage.
+ * Returns "" if no explorer configured.
+ */
+export async function getExplorerUrl(chainId: number): Promise<string> {
+  // Fast path: hardcoded chain
+  if (CHAIN_CONFIG[chainId]?.explorer) return CHAIN_CONFIG[chainId].explorer;
+
+  // Slow path: check custom chains in storage
+  try {
+    const { networksInfo } = await chrome.storage.sync.get("networksInfo");
+    if (networksInfo) {
+      for (const name of Object.keys(networksInfo)) {
+        if (networksInfo[name].chainId === chainId) {
+          return networksInfo[name].explorer || "";
+        }
+      }
+    }
+  } catch {
+    // Storage may be unavailable in some execution contexts.
+  }
+
+  return "";
+}
+
+/**
+ * Synchronous explorer URL resolver — checks CHAIN_CONFIG then networksInfo entry.
+ * Use in React components where you already have networksInfo from context.
+ */
+export function getExplorerUrlSync(chainId: number, networksInfo?: Record<string, { chainId: number; explorer?: string }>): string {
+  if (CHAIN_CONFIG[chainId]?.explorer) return CHAIN_CONFIG[chainId].explorer;
+  if (networksInfo) {
+    for (const name of Object.keys(networksInfo)) {
+      if (networksInfo[name].chainId === chainId) {
+        return networksInfo[name].explorer || "";
+      }
+    }
+  }
+  return "";
 }

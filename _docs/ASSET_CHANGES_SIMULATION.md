@@ -83,7 +83,7 @@ For native currency (ETH/BNB/POL), metadata comes from `CHAIN_REGISTRY` and the 
 #### Step 4: Fetch USD Prices
 
 - **ERC-20 tokens**: `fetchTokenPrice(chainId, address)` via `walletchan.com/api/swap/token-price` (CoinGecko proxy)
-- **Native currency**: `fetchNativePrice(chainId)` from `gasEstimation.ts` (direct CoinGecko, 60s cache)
+- **Native currency**: `fetchNativePrice(chainId)` from `gasEstimation.ts`, which now routes through the shared background `coingeckoService.ts` (batched markets fetch + persisted cache)
 
 All price fetches run in parallel with `Promise.all`.
 

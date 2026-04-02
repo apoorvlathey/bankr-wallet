@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Button,
   Box,
   Input,
-  Heading,
   VStack,
   HStack,
   Text,
@@ -11,63 +10,240 @@ import {
   Spacer,
   FormControl,
   FormLabel,
+  Alert,
+  AlertIcon,
+  Spinner,
 } from "@chakra-ui/react";
-import { ArrowBackIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon, ExternalLinkIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
-import { StaticJsonRpcProvider } from "@ethersproject/providers";
+import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 
-function AddChain({ back }: { back: () => void }) {
+interface AddChainProps {
+  back: () => void;
+  initialRequest?: PendingAddChainRequest;
+  mode?: "settings" | "dapp";
+  onAdded?: (chainName: string) => void;
+}
+
+/** Fetch chainId from an RPC endpoint via eth_chainId. */
+async function fetchChainId(rpcUrl: string): Promise<number | null> {
+  try {
+    const res = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }),
+    });
+    const json = await res.json();
+    if (json.result) return Number(json.result);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function AddChain({
+  back,
+  initialRequest,
+  mode = "settings",
+  onAdded,
+}: AddChainProps) {
   const { networksInfo, setNetworksInfo, setReloadRequired } = useNetworks();
 
-  const [chainName, setChainName] = useState<string>("");
-  const [chainId, setChainId] = useState<string>("");
-  const [rpc, setRpc] = useState<string>("");
+  const defaultName = initialRequest?.chainName ?? "";
+  const defaultChainId =
+    initialRequest?.chainId != null ? String(initialRequest.chainId) : "";
+  const defaultRpc = initialRequest?.rpcUrls?.[0] ?? "";
+  const defaultExplorer = initialRequest?.blockExplorerUrls?.[0] ?? "";
+  const defaultCurrencySymbol = initialRequest?.nativeCurrency?.symbol ?? "ETH";
+  const defaultCurrencyDecimals = String(
+    initialRequest?.nativeCurrency?.decimals ?? 18,
+  );
+
+  const [chainName, setChainName] = useState(defaultName);
+  const [chainId, setChainId] = useState(defaultChainId);
+  const [rpc, setRpc] = useState(defaultRpc);
+  const [explorer, setExplorer] = useState(defaultExplorer);
+  const [currencySymbol, setCurrencySymbol] = useState(defaultCurrencySymbol);
+  const [currencyDecimals, setCurrencyDecimals] = useState(defaultCurrencyDecimals);
   const [isBtnLoading, setIsBtnLoading] = useState(false);
-  const [isChainNameNotUnique, setIsChainNameNotUnique] = useState(false);
+  const [isDetecting, setIsDetecting] = useState(false);
 
-  const addChain = () => {
-    setIsBtnLoading(true);
+  // Validation states
+  const [nameError, setNameError] = useState("");
+  const [chainIdConflict, setChainIdConflict] = useState("");
+  const [rpcWarning, setRpcWarning] = useState("");
+  const [rpcError, setRpcError] = useState("");
+  const requestedBy = useMemo(() => {
+    if (!initialRequest?.origin) return "";
+    try {
+      return new URL(initialRequest.origin).hostname;
+    } catch {
+      return initialRequest.origin;
+    }
+  }, [initialRequest?.origin]);
 
-    if (chainName && chainId && rpc) {
-      if (networksInfo && networksInfo[chainName]) {
-        setIsChainNameNotUnique(true);
-      } else {
-        setNetworksInfo((_networksInfo) => {
-          back();
-
-          if (!_networksInfo || Object.keys(_networksInfo).length === 0) {
-            setReloadRequired(true);
-          }
-
-          return {
-            ..._networksInfo,
-            [chainName]: {
-              chainId: parseInt(chainId),
-              rpcUrl: rpc,
-            },
-          };
-        });
+  const checkChainIdConflict = (id: string) => {
+    if (!id || !networksInfo) {
+      setChainIdConflict("");
+      return;
+    }
+    const numId = parseInt(id);
+    for (const name of Object.keys(networksInfo)) {
+      if (networksInfo[name].chainId === numId) {
+        setChainIdConflict(`Chain ID ${numId} already exists as "${name}". You can edit its RPC in the chain list.`);
+        return;
       }
     }
+    setChainIdConflict("");
+  };
 
-    setIsBtnLoading(false);
+  const buildEntry = () => ({
+    chainId: parseInt(chainId, 10),
+    rpcUrl: rpc,
+    isCustom: true,
+    explorer: explorer.replace(/\/+$/, "") || undefined,
+    nativeCurrency: {
+      name: currencySymbol || "ETH",
+      symbol: currencySymbol || "ETH",
+      decimals: parseInt(currencyDecimals, 10) || 18,
+    },
+  });
+
+  const handleRpcChange = async (value: string) => {
+    const trimmed = value.trim();
+    setRpc(trimmed);
+    setRpcWarning("");
+    setRpcError("");
+
+    if (!trimmed || !trimmed.startsWith("http")) return;
+
+    // Auto-detect chainId from RPC
+    setIsDetecting(true);
+    try {
+      const detectedId = await fetchChainId(trimmed);
+      if (detectedId !== null) {
+        setChainId(detectedId.toString());
+        checkChainIdConflict(detectedId.toString());
+        setRpcError("");
+      } else {
+        setRpcError("Could not fetch chain ID from this RPC. It may be down or invalid.");
+      }
+    } catch {
+      setRpcError("Failed to connect to RPC endpoint.");
+    }
+    setIsDetecting(false);
   };
 
   const handleRpcPaste = async (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData("Text").trim();
+    // Prevent double-handling since onChange will also fire
+    e.preventDefault();
+    setRpc(pasted);
+    await handleRpcChange(pasted);
+  };
+
+  const addChain = async () => {
     setIsBtnLoading(true);
-    try {
-      const _rpc = e.clipboardData.getData("Text").trim();
-      const provider = new StaticJsonRpcProvider(_rpc);
-      const _chainId = (await provider.getNetwork()).chainId;
-      setChainId(_chainId.toString());
-    } catch (err) {
-      // Ignore errors - user can manually enter chain ID
+    setNameError("");
+    setRpcWarning("");
+
+    if (!chainName || !chainId || !rpc) {
+      setIsBtnLoading(false);
+      return;
     }
+
+    // Check name uniqueness
+    if (networksInfo && networksInfo[chainName]) {
+      setNameError("Chain name already exists");
+      setIsBtnLoading(false);
+      return;
+    }
+
+    // Validate RPC returns expected chainId
+    const detectedId = await fetchChainId(rpc);
+    if (detectedId === null) {
+      setRpcWarning("Could not verify RPC — endpoint may be down. Chain saved anyway.");
+    } else if (detectedId !== parseInt(chainId)) {
+      setRpcWarning(`RPC returned chain ID ${detectedId}, but you entered ${chainId}. Please verify.`);
+      setIsBtnLoading(false);
+      return;
+    }
+
+    if (mode === "dapp" && initialRequest) {
+      const result = await new Promise<{
+        success: boolean;
+        chainName?: string;
+        error?: string;
+      }>((resolve) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "confirmAddChain",
+            requestId: initialRequest.id,
+            chainName,
+            chainId: parseInt(chainId, 10),
+            rpcUrl: rpc,
+            explorer: explorer.replace(/\/+$/, "") || undefined,
+            nativeCurrency: {
+              name: currencySymbol || "ETH",
+              symbol: currencySymbol || "ETH",
+              decimals: parseInt(currencyDecimals, 10) || 18,
+            },
+          },
+          (response) => resolve(response),
+        );
+      });
+
+      if (!result.success) {
+        setRpcWarning(result.error || "Failed to add network.");
+        setIsBtnLoading(false);
+        return;
+      }
+
+      setNetworksInfo((_networksInfo) => {
+        const existingName = Object.keys(_networksInfo || {}).find(
+          (name) => _networksInfo?.[name].chainId === parseInt(chainId, 10),
+        );
+        if (existingName) {
+          return _networksInfo;
+        }
+
+        return {
+          ..._networksInfo,
+          [result.chainName || chainName]: buildEntry(),
+        };
+      });
+
+      back();
+      onAdded?.(result.chainName || chainName);
+      setIsBtnLoading(false);
+      return;
+    }
+
+    setNetworksInfo((_networksInfo) => {
+      const existingName = Object.keys(_networksInfo || {}).find(
+        (name) => _networksInfo?.[name].chainId === parseInt(chainId, 10),
+      );
+      if (existingName) {
+        return _networksInfo;
+      }
+
+      if (!_networksInfo || Object.keys(_networksInfo).length === 0) {
+        setReloadRequired(true);
+      }
+
+      return {
+        ..._networksInfo,
+        [chainName]: buildEntry(),
+      };
+    });
+
+    back();
+    onAdded?.(chainName);
     setIsBtnLoading(false);
   };
 
   return (
-    <VStack spacing={4} align="stretch">
+    <VStack spacing={4} align="stretch" px={2} pb={20}>
       {/* Header */}
       <HStack>
         <IconButton
@@ -78,50 +254,71 @@ function AddChain({ back }: { back: () => void }) {
           onClick={back}
         />
         <Text fontSize="lg" fontWeight="900" color="text.primary" textTransform="uppercase" letterSpacing="tight">
-          Add Chain
+          {mode === "dapp" ? "Add Network" : "Add Chain"}
         </Text>
+        <Button
+          size="xs"
+          variant="ghost"
+          rightIcon={<ExternalLinkIcon boxSize={3} />}
+          color="bauhaus.blue"
+          fontWeight="800"
+          textTransform="uppercase"
+          letterSpacing="wide"
+          onClick={() => chrome.tabs.create({ url: "https://chainlist.org" })}
+          _hover={{ bg: "transparent", color: "bauhaus.red" }}
+          _active={{ bg: "transparent" }}
+          px={1}
+        >
+          Chainlist
+        </Button>
         <Spacer />
       </HStack>
 
       <Text fontSize="sm" color="text.secondary" fontWeight="500">
-        Add a new network by entering its RPC URL and chain ID.
+        {mode === "dapp"
+          ? "Review and edit the requested network before adding it to your wallet."
+          : "Add a custom EVM network. Only available for Private Key and Seed Phrase accounts."}
       </Text>
 
-      <FormControl>
-        <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-          Name
-        </FormLabel>
-        <Input
-          placeholder="e.g., Arbitrum"
-          value={chainName}
-          onChange={(e) => {
-            setChainName(e.target.value);
-            if (isChainNameNotUnique) {
-              setIsChainNameNotUnique(false);
-            }
-          }}
-          isInvalid={isChainNameNotUnique}
-        />
-        {isChainNameNotUnique && (
-          <Text fontSize="xs" color="bauhaus.red" mt={1} fontWeight="700">
-            Chain name already exists
+      {mode === "dapp" && requestedBy && (
+        <Alert
+          status="info"
+          bg="bauhaus.blue"
+          color="bauhaus.white"
+          borderRadius="0"
+          border="2px solid"
+          borderColor="bauhaus.black"
+          py={2}
+          px={3}
+        >
+          <AlertIcon color="bauhaus.white" />
+          <Text fontSize="xs" fontWeight="700" color="bauhaus.white">
+            Requested by {requestedBy}
           </Text>
-        )}
-      </FormControl>
+        </Alert>
+      )}
 
       <FormControl>
         <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
           RPC URL
         </FormLabel>
-        <Input
-          placeholder="https://..."
-          value={rpc}
-          onChange={(e) => setRpc(e.target.value.trim())}
-          onPaste={handleRpcPaste}
-        />
+        <HStack>
+          <Input
+            placeholder="https://..."
+            value={rpc}
+            onChange={(e) => handleRpcChange(e.target.value)}
+            onPaste={handleRpcPaste}
+          />
+          {isDetecting && <Spinner size="sm" />}
+        </HStack>
         <Text fontSize="xs" color="text.tertiary" mt={1} fontWeight="500">
-          Paste RPC URL to auto-detect chain ID
+          Paste or type an RPC URL — chain ID is auto-detected
         </Text>
+        {rpcError && (
+          <Text fontSize="xs" color="bauhaus.red" mt={1} fontWeight="700">
+            {rpcError}
+          </Text>
+        )}
       </FormControl>
 
       <FormControl>
@@ -129,25 +326,130 @@ function AddChain({ back }: { back: () => void }) {
           Chain ID
         </FormLabel>
         <Input
-          placeholder="e.g., 42161"
+          placeholder="e.g., 43114"
           type="number"
           value={chainId}
-          onChange={(e) => setChainId(e.target.value)}
+          onChange={(e) => {
+            setChainId(e.target.value);
+            checkChainIdConflict(e.target.value);
+          }}
+        />
+        {chainIdConflict && (
+          <Alert status="warning" mt={2} borderRadius="0" border="2px solid" borderColor="bauhaus.black" py={2} px={3}>
+            <AlertIcon />
+            <Text fontSize="xs" fontWeight="600">{chainIdConflict}</Text>
+          </Alert>
+        )}
+      </FormControl>
+
+      <Box
+        bg={mode === "dapp" ? "rgba(16, 64, 192, 0.06)" : "transparent"}
+        border={mode === "dapp" ? "2px solid" : "none"}
+        borderColor={mode === "dapp" ? "bauhaus.blue" : "transparent"}
+        p={mode === "dapp" ? 3 : 0}
+      >
+        <FormControl>
+          <FormLabel
+            color={mode === "dapp" ? "bauhaus.blue" : "text.secondary"}
+            fontWeight="800"
+            textTransform="uppercase"
+            fontSize="xs"
+            mb={mode === "dapp" ? 1.5 : undefined}
+          >
+            Network Name
+          </FormLabel>
+          <Input
+            placeholder="e.g., Avalanche C-Chain"
+            value={chainName}
+            onChange={(e) => {
+              setChainName(e.target.value);
+              if (nameError) setNameError("");
+            }}
+            isInvalid={!!nameError}
+            borderColor={mode === "dapp" ? "bauhaus.blue" : undefined}
+            _focusVisible={
+              mode === "dapp"
+                ? {
+                    borderColor: "bauhaus.blue",
+                    boxShadow: "0 0 0 1px #1040C0",
+                  }
+                : undefined
+            }
+          />
+          {mode === "dapp" && (
+            <Text fontSize="xs" color="text.tertiary" mt={1} fontWeight="600">
+              This is the name you&apos;ll see in the wallet.
+            </Text>
+          )}
+          {nameError && (
+            <Text fontSize="xs" color="bauhaus.red" mt={1} fontWeight="700">
+              {nameError}
+            </Text>
+          )}
+        </FormControl>
+      </Box>
+
+      <FormControl>
+        <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
+          Block Explorer URL (optional)
+        </FormLabel>
+        <Input
+          placeholder="https://explorer.example.com"
+          value={explorer}
+          onChange={(e) => setExplorer(e.target.value.trim())}
         />
       </FormControl>
 
-      <Box display="flex" gap={2} pt={2}>
+      <HStack spacing={3}>
+        <FormControl flex={2}>
+          <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
+            Native Token Symbol
+          </FormLabel>
+          <Input
+            placeholder="ETH"
+            value={currencySymbol}
+            onChange={(e) => setCurrencySymbol(e.target.value.trim())}
+          />
+        </FormControl>
+        <FormControl flex={1}>
+          <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
+            Decimals
+          </FormLabel>
+          <Input
+            type="number"
+            value={currencyDecimals}
+            onChange={(e) => setCurrencyDecimals(e.target.value)}
+          />
+        </FormControl>
+      </HStack>
+
+      {rpcWarning && (
+        <Alert status="warning" borderRadius="0" border="2px solid" borderColor="bauhaus.black" py={2} px={3}>
+          <WarningTwoIcon mr={2} />
+          <Text fontSize="xs" fontWeight="600">{rpcWarning}</Text>
+        </Alert>
+      )}
+
+      <Box
+        display="flex"
+        gap={2}
+        pt={2}
+        position="sticky"
+        bottom={3}
+        bg="bauhaus.background"
+        zIndex={1}
+      >
         <Button variant="secondary" flex={1} onClick={back}>
-          Cancel
+          {mode === "dapp" ? "Reject" : "Cancel"}
         </Button>
         <Button
           variant="primary"
           flex={1}
           onClick={addChain}
           isLoading={isBtnLoading}
-          isDisabled={!chainName || !chainId || !rpc}
+          isDisabled={!chainName || !chainId || !rpc || !!chainIdConflict}
         >
-          Add Chain
+          {mode === "dapp" ? "Add Network" : "Add Chain"}
         </Button>
       </Box>
     </VStack>

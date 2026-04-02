@@ -25,7 +25,6 @@ interface EIP6963AnnounceProviderEvent extends CustomEvent {
 }
 
 import { WALLET_ICON } from "./walletIcon";
-import { ALLOWED_CHAIN_IDS, CHAIN_NAMES } from "@/constants/networks";
 
 // Session UUID for EIP-6963 (generated once per page load)
 const SESSION_UUID = crypto.randomUUID();
@@ -167,7 +166,52 @@ class ImpersonatorProvider extends EventEmitter {
       case "eth_chainId": {
         return hexValue(this.chainId);
       }
-      case "wallet_addEthereumChain":
+      case "wallet_addEthereumChain": {
+        // @ts-ignore
+        const addParams = params[0];
+        const addChainId = Number(addParams.chainId as string);
+        const self_add = this;
+
+        const addChainPromise = new Promise<null>((resolve, reject) => {
+          // Forward full params to content script for add-or-switch logic
+          window.postMessage(
+            {
+              type: "i_addEthereumChain",
+              msg: {
+                chainId: addChainId,
+                chainName: addParams.chainName,
+                nativeCurrency: addParams.nativeCurrency,
+                rpcUrls: addParams.rpcUrls,
+                blockExplorerUrls: addParams.blockExplorerUrls,
+              },
+            },
+            "*",
+          );
+
+          const controller = new AbortController();
+          window.addEventListener(
+            "message",
+            (e: any) => {
+              if (e.source !== window || !e.data.type) return;
+
+              if (e.data.type === "addEthereumChainResult") {
+                const msg = e.data.msg;
+                controller.abort();
+                if (msg.success) {
+                  self_add.setChainId(msg.chainId, msg.rpcUrl);
+                  resolve(null);
+                } else {
+                  reject(new Error(msg.error || `Failed to add chain ${addChainId}`));
+                }
+              }
+            },
+            { signal: controller.signal } as AddEventListenerOptions,
+          );
+        });
+
+        await addChainPromise;
+        return null;
+      }
       case "wallet_switchEthereumChain": {
         // @ts-ignore
         const chainId = Number(params[0].chainId as string);
@@ -393,18 +437,8 @@ class ImpersonatorProvider extends EventEmitter {
       }
 
       case "eth_sendTransaction": {
-        // Validate chain ID
-        if (!ALLOWED_CHAIN_IDS.has(this.chainId)) {
-          return logger.throwError(
-            `Chain ${this.chainId} not supported. Supported chains: ${Array.from(
-              ALLOWED_CHAIN_IDS,
-            )
-              .map((id) => CHAIN_NAMES[id] || id)
-              .join(", ")}`,
-            Logger.errors.UNSUPPORTED_OPERATION,
-            { method, params },
-          );
-        }
+        // Chain validation happens in txHandlers.ts (background script)
+        // which has access to chrome.storage for custom chains
 
         // @ts-ignore
         const txParams = params[0] as {

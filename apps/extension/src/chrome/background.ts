@@ -161,6 +161,7 @@ import {
   checkPermit2Allowance,
   getTokenBalanceWei,
 } from "./swapApi";
+import { resolveCoinGeckoNativeAssetsBatch } from "./coingeckoService";
 
 // Sidepanel management
 // Watch asset (wallet_watchAsset / EIP-747)
@@ -170,7 +171,14 @@ import {
   getPendingWatchAssetRequests,
   PendingWatchAssetRequest,
 } from "./pendingWatchAssetStorage";
+import {
+  savePendingAddChainRequest,
+  removePendingAddChainRequest,
+  getPendingAddChainRequests,
+  PendingAddChainRequest,
+} from "./pendingAddChainStorage";
 import { addCustomToken } from "./customTokenStorage";
+import { getResolvedChainById } from "@/lib/chains";
 
 import {
   isSidePanelSupported,
@@ -570,6 +578,116 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await writeResultToStorage(`watchAssetResult:${message.watchAssetId}`, {
           success: false,
           error: "User rejected token addition",
+        });
+        sendResponse({ success: true });
+      })();
+      return true;
+    }
+
+    // ── wallet_addEthereumChain (EIP-3085) ────────────────────────────────────
+    case "addEthereumChain": {
+      const senderWindowId = sender.tab?.windowId;
+      (async () => {
+        const request: PendingAddChainRequest = {
+          id: message.requestId,
+          chainId: message.chainId,
+          chainName: message.chainName,
+          nativeCurrency: message.nativeCurrency,
+          rpcUrls: message.rpcUrls,
+          blockExplorerUrls: message.blockExplorerUrls,
+          origin: message.origin,
+          favicon: message.favicon || null,
+          timestamp: Date.now(),
+        };
+        await savePendingAddChainRequest(request);
+        chrome.runtime
+          .sendMessage({ type: "newPendingAddChainRequest", request })
+          .catch(() => {});
+        openExtensionPopup(senderWindowId);
+      })();
+      return false;
+    }
+
+    case "getPendingAddChainRequests": {
+      getPendingAddChainRequests().then((requests) => {
+        sendResponse(requests);
+      });
+      return true;
+    }
+
+    case "confirmAddChain": {
+      (async () => {
+        const requests = await getPendingAddChainRequests();
+        const pending = requests.find((r) => r.id === message.requestId);
+        if (pending) {
+          const { networksInfo } = await chrome.storage.sync.get("networksInfo");
+          const nets = networksInfo || {};
+
+          const existingName = Object.keys(nets).find(
+            (name) => nets[name].chainId === pending.chainId,
+          );
+
+          const name = message.chainName || pending.chainName || `Chain ${pending.chainId}`;
+          const rpcUrl = message.rpcUrl || pending.rpcUrls?.[0] || "";
+          const explorer =
+            message.explorer || pending.blockExplorerUrls?.[0] || "";
+          const nativeCurrency =
+            message.nativeCurrency || pending.nativeCurrency;
+
+          if (!existingName) {
+            nets[name] = {
+              chainId: message.chainId || pending.chainId,
+              rpcUrl,
+              isCustom: true,
+              explorer: explorer || undefined,
+              nativeCurrency,
+            };
+          }
+
+          const resolvedName = existingName || name;
+          const resolvedRpcUrl = existingName ? nets[existingName].rpcUrl : rpcUrl;
+          const activeAccount = await getActiveAccount();
+          const resolvedChain = getResolvedChainById(
+            message.chainId || pending.chainId,
+            nets,
+          );
+          const shouldSwitch =
+            activeAccount?.type !== "bankr" ||
+            resolvedChain?.isBankrSupported === true;
+
+          await chrome.storage.sync.set(
+            shouldSwitch
+              ? {
+                  networksInfo: nets,
+                  chainName: resolvedName,
+                }
+              : {
+                  networksInfo: nets,
+                },
+          );
+
+          await removePendingAddChainRequest(pending.id);
+          const result = {
+            success: true,
+            rpcUrl: resolvedRpcUrl,
+            chainName: resolvedName,
+            shouldSwitch,
+          };
+          await writeResultToStorage(`addChainResult:${pending.id}`, result);
+          sendResponse(result);
+          return;
+        }
+        sendResponse({ success: false, error: "Pending add-chain request not found" });
+      })();
+      return true;
+    }
+
+    case "rejectAddChain": {
+      (async () => {
+        await removePendingAddChainRequest(message.requestId);
+        await writeResultToStorage(`addChainResult:${message.requestId}`, {
+          success: false,
+          error: "User rejected chain addition",
         });
         sendResponse({ success: true });
       })();
@@ -1654,6 +1772,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .then((priceUsd) =>
           sendResponse({ success: true, priceUsd }),
         )
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "resolveCoinGeckoNativeAssets": {
+      resolveCoinGeckoNativeAssetsBatch(message.requests)
+        .then((data) => sendResponse({ success: true, data }))
         .catch((err) =>
           sendResponse({ success: false, error: err.message }),
         );

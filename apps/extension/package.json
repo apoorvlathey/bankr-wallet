@@ -30,6 +30,7 @@
     "@chakra-ui/icons": "^2.2",
     "@chakra-ui/react": "^2.9",
     "@chakra-ui/theme-tools": "^2.2",
+    "@chenglou/pretext": "0.0.3",
     "@emotion/react": "^11.13",
     "@emotion/styled": "^11.13",
     "@ethersproject/address": "^5.7.0",

@@ -147,9 +147,38 @@ The following chains are supported for transaction signing (listed in dropdown o
 | Polygon  | 137      | https://polygon-rpc.com         | ✅        | ✅                   |          |
 | Unichain | 130      | https://mainnet.unichain.org    | ✅        | ✅                   | ✅       |
 
-These are configured in `src/constants/chainRegistry.ts` (the single source of truth for all chain data) and pre-populated on first install.
+These are configured in `src/constants/chainRegistry.ts` (the single source of truth for built-in chain data) and pre-populated on first install.
+
+### Runtime Chain Resolution
+
+Built-in chain metadata and user-customized chain state are intentionally split:
+
+- `src/constants/chainRegistry.ts` defines the canonical built-in chains and all derived static maps
+- `chrome.storage.sync.networksInfo` stores runtime overrides only: edited RPC URLs, hidden flags, and user-added custom chains
+- `src/lib/chains.ts` is the required merge layer for runtime code. It normalizes `networksInfo`, keeps built-in chains keyed by their registry name, and exposes helpers like `getVisibleChains`, `getResolvedChainById`, and `getStoredRpcUrl`
+
+**Important:** Do not read `CHAIN_REGISTRY` and `networksInfo` separately in components/handlers to rebuild chain lists or look up RPC/explorer/native currency data. That is what caused custom-chain support to drift across screens. New runtime chain logic should go through `src/lib/chains.ts`.
 
 **Default Network**: Base is set as the default network for new installations.
+
+### Custom Chain UX Rules
+
+- `wallet_addEthereumChain` requests open the same Add Chain form used in Settings, prefilled with the dapp-provided values
+- The user can edit the proposed chain name, RPC, explorer, and native currency fields before saving
+- Chain deduplication is by `chainId`, not by dapp-provided name. If the chain already exists, the add flow resolves to the existing chain instead of creating a duplicate entry
+- Dapp-initiated add-chain confirmation auto-switches the active wallet chain after the save succeeds. Settings-based add-chain does not auto-switch
+- If the active chain is hidden or a custom active chain is deleted, the wallet immediately falls back to the first visible chain allowed for the current account type and shows a toast explaining the switch
+- Do not allow a hide/delete action to leave the current account type with zero visible chains
+
+### CoinGecko Resolution Service
+
+Native asset price/logo resolution is centralized in `src/chrome/coingeckoService.ts`.
+
+- All direct CoinGecko traffic goes through the background service worker
+- `gasEstimation.ts` asks the service for built-in native token USD prices
+- `portfolioTokens.ts` sends a single batched background message for custom-chain native assets instead of hitting CoinGecko from the popup
+- The service batches CoinGecko `coins/markets` requests across a short buffer window, caches market data in memory + `chrome.storage.local`, and caches search/resolution results for unknown custom assets
+- On CoinGecko `429`, the service falls back to cached/stale data and backs off briefly instead of hammering the API
 
 ### Per-Account-Type Chain Restrictions
 
@@ -170,7 +199,9 @@ Not all chains are supported by all account types. The Bankr API only supports t
 3. **Background validation** (`txHandlers.ts`): `handleConfirmTransactionAsync` (Bankr path) rejects chains not in `BANKR_SUPPORTED_CHAIN_IDS`
 4. **Inpage validation** (`impersonator.ts`): Validates against `ALLOWED_CHAIN_IDS` (imports from constants, no longer hardcoded)
 
-**When adding a new chain:** Add a single entry to `CHAIN_REGISTRY` in `src/constants/chainRegistry.ts`. All derived maps, sets, and config objects auto-populate. See [ADD_CHAIN.md](./ADD_CHAIN.md) for the full checklist.
+**When adding a new built-in chain:** Add a single entry to `CHAIN_REGISTRY` in `src/constants/chainRegistry.ts`. All derived maps and runtime resolvers auto-populate. See [ADD_CHAIN.md](./ADD_CHAIN.md) for the full checklist.
+
+**When adding runtime chain behavior:** Extend `src/lib/chains.ts` instead of duplicating another `networksInfo` merge in a component or background handler.
 
 ## Provider Discovery (EIP-6963)
 
@@ -619,6 +650,7 @@ Pre-confirmation gas estimation shown on the transaction confirmation screen. Fe
 - Uses viem `createPublicClient` with cached clients (keyed by chainId), reuses `getRpcUrl()` from `txHandlers.ts`
 - Parallel RPC calls: `estimateGas` (gas limit + 20% buffer), `estimateFeesPerGas` (EIP-1559 fees), `getBalance` (sender balance)
 - CoinGecko price fetch with 60s in-memory cache for USD display
+- Background CoinGecko service with shared storage-backed cache for native asset prices/logos
 - If dapp provided gas params (`gas`, `maxFeePerGas`, `maxPriorityFeePerGas`, `gasPrice`), uses them as defaults instead of RPC estimates
 - Returns `GasEstimate` with `dappProvidedGas` flag
 
@@ -970,6 +1002,36 @@ API portfolio data is shown immediately, while on-chain balances are verified in
 - Parallel execution across all chains with 8s timeout and no retries
 - Cached viem clients per chainId for performance
 - Falls back to API values on any error (per-token or per-batch)
+- `fetchOnchainBalances(..., { preserveZeroBalanceTokens: true })` keeps zero-balance entries when selector UIs need the full token catalog instead of a non-zero-only holdings list
+
+### Shared Portfolio Token Catalog
+
+`portfolioTokens.ts` is the single source of truth for wallet token lists shown across the extension. It builds a shared catalog consumed by `TokenHoldings`, `TokenTransfer`, and `SwapView` by merging:
+
+- Portfolio API tokens
+- User-added custom ERC-20 tokens from `chrome.storage.local.customTokens`
+- Native token placeholders for visible custom chains
+- CoinGecko USD price fallback for custom-chain native tokens when the portfolio API has no price (for example `MON` on Monad)
+- The CoinGecko fallback runs through the background `coingeckoService.ts`, which batches lookups and persists market/search caches in `chrome.storage.local` so reopening the popup doesn't cold-start CoinGecko traffic each time
+
+This prevents the send/swap/holdings views from drifting when custom tokens or custom chains are added.
+
+### Shared Chain Icon Resolution
+
+`lib/chainIcons.ts` is the single source of truth for chain icon rendering across the extension. `ChainIcon.tsx` consumes it everywhere instead of screens reading `config.icon` directly.
+
+Resolution order:
+
+- Built-in registry icon from `CHAIN_REGISTRY`
+- Static alias map for common user-added chains and testnets (for example Base Sepolia reuses the Base icon)
+- Testnet overlay label on top of the base icon (`SEP`, `FUJI`, `T`)
+- Deterministic initials fallback with stable Bauhaus colors for unknown custom chains
+
+Important constraints:
+
+- No chain icons are stored in `chrome.storage`; icon rendering is fully derived from chain ID + chain name
+- Known testnets should reuse the mainnet icon with an overlay instead of adding a separate storage concept
+- Any new UI that needs a chain icon should render `ChainIcon`, not `config.icon` directly
 
 ### TokenHoldings Component
 

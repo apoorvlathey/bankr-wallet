@@ -102,6 +102,7 @@ function MultiTxGasEstimateDisplay({
     0n,
   ).toString();
   const nativePriceUsd = validEstimates[0]?.nativePriceUsd ?? null;
+  const sym = validEstimates[0]?.nativeCurrencySymbol || "ETH";
   const anyFailed = validEstimates.some((e) => e.estimationFailed);
   const anyInsufficient = validEstimates.some((e) => e.insufficientBalance);
 
@@ -206,7 +207,7 @@ function MultiTxGasEstimateDisplay({
           </Text>
           <HStack spacing={1} minW={0}>
             <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono" noOfLines={1}>
-              {formatEth(totalCostWei)}
+              {formatEth(totalCostWei, sym)}
             </Text>
             {usdDisplay && (
               <Text fontSize="xs" color="text.tertiary" fontWeight="600">
@@ -238,7 +239,7 @@ function MultiTxGasEstimateDisplay({
                   </Text>
                   <HStack spacing={1}>
                     <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono" textAlign="right">
-                      {formatEth(est.estimatedCostWei)}
+                      {formatEth(est.estimatedCostWei, sym)}
                     </Text>
                     {costUsd && (
                       <Text fontSize="xs" color="text.tertiary" fontWeight="600">
@@ -260,7 +261,7 @@ function MultiTxGasEstimateDisplay({
                   </Text>
                   <HStack spacing={1}>
                     <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono" textAlign="right">
-                      {formatEth(totalCostWei)}
+                      {formatEth(totalCostWei, sym)}
                     </Text>
                     {usdDisplay && (
                       <Text fontSize="xs" color="text.tertiary" fontWeight="600">

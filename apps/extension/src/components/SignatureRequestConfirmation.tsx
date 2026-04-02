@@ -20,7 +20,10 @@ import TypedDataDisplay from "@/components/TypedDataDisplay";
 import { Eip712DigestDisplay } from "@/components/DigestDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { CopyButton } from "@/components/CopyButton";
+import ChainIcon from "@/components/ChainIcon";
 import { googleFaviconUrl } from "@/constants/externalUrls";
+import { useNetworks } from "@/contexts/NetworksContext";
+import { getResolvedChainById } from "@/lib/chains";
 
 interface SignatureRequestConfirmationProps {
   sigRequest: PendingSignatureRequest;
@@ -228,7 +231,9 @@ function SignatureRequestConfirmation({
   onConfirmed,
 }: SignatureRequestConfirmationProps) {
   const toast = useBauhausToast();
+  const { networksInfo } = useNetworks();
   const { signature, origin, chainName, favicon } = sigRequest;
+  const resolvedChain = getResolvedChainById(signature.chainId, networksInfo);
   const { message, rawData, typedData } = formatSignatureData(signature.method, signature.params);
   const signerAddress = getSignerAddress(signature.method, signature.params);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -480,11 +485,18 @@ function SignatureRequestConfirmation({
               </Text>
               {(() => {
                 const config = getChainConfig(signature.chainId);
+                const badgeChain = resolvedChain ?? {
+                  name: chainName,
+                  bg: config.bg,
+                  text: config.text,
+                  icon: config.icon,
+                  isCustom: false,
+                };
                 return (
                   <Badge
                     fontSize="xs"
-                    bg={config.bg}
-                    color={config.text}
+                    bg={badgeChain.isCustom ? "bauhaus.white" : badgeChain.bg}
+                    color={badgeChain.isCustom ? "bauhaus.black" : badgeChain.text}
                     border="1.5px solid"
                     borderColor="bauhaus.black"
                     fontWeight="700"
@@ -494,10 +506,12 @@ function SignatureRequestConfirmation({
                     alignItems="center"
                     gap={1}
                   >
-                    {config.icon && (
-                      <Image src={config.icon} alt={chainName} boxSize="12px" />
-                    )}
-                    {chainName}
+                    <ChainIcon
+                      chainId={signature.chainId}
+                      chainName={badgeChain.name}
+                      size="12px"
+                    />
+                    {badgeChain.name}
                   </Badge>
                 );
               })()}

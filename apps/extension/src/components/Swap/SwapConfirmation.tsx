@@ -26,6 +26,7 @@ import { getChainConfig } from "@/constants/chainConfig";
 import CalldataDecoder from "@/components/CalldataDecoder";
 import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import { CopyButton } from "@/components/CopyButton";
+import ChainIcon from "@/components/ChainIcon";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
 
 // Bauhaus accent colors for call cards (matches BatchTransactionConfirmation)
@@ -319,9 +320,7 @@ function SwapConfirmation({
               alignItems="center"
               gap={1}
             >
-              {config.icon && (
-                <Image src={config.icon} alt={chainName} boxSize="12px" />
-              )}
+              <ChainIcon chainId={chainId} chainName={chainName} size="12px" />
               {chainName}
             </Badge>
           </HStack>

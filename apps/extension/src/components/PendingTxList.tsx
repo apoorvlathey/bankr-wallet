@@ -17,6 +17,7 @@ import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import { getChainConfig } from "@/constants/chainConfig";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { getCombinedRequests, CombinedRequest } from "@/App";
+import ChainIcon from "@/components/ChainIcon";
 
 function getOriginHostname(origin: string): string | null {
   try {
@@ -210,13 +211,11 @@ function PendingTxList({ txRequests, signatureRequests, batchRequests = [], onBa
                             alignItems="center"
                             gap={1}
                           >
-                            {config.icon && (
-                              <Image
-                                src={config.icon}
-                                alt={request.chainName}
-                                boxSize="10px"
-                              />
-                            )}
+                            <ChainIcon
+                              chainId={request.tx.chainId}
+                              chainName={request.chainName}
+                              size="10px"
+                            />
                             {request.chainName}
                           </Badge>
                           <Text fontSize="xs" color="text.tertiary" fontFamily="mono" fontWeight="500">
@@ -322,9 +321,11 @@ function PendingTxList({ txRequests, signatureRequests, batchRequests = [], onBa
                             alignItems="center"
                             gap={1}
                           >
-                            {config.icon && (
-                              <Image src={config.icon} alt={request.chainName} boxSize="10px" />
-                            )}
+                            <ChainIcon
+                              chainId={request.chainId}
+                              chainName={request.chainName}
+                              size="10px"
+                            />
                             {request.chainName}
                           </Badge>
                           <Text fontSize="xs" color="text.tertiary" fontWeight="500">
@@ -437,13 +438,11 @@ function PendingTxList({ txRequests, signatureRequests, batchRequests = [], onBa
                             alignItems="center"
                             gap={1}
                           >
-                            {config.icon && (
-                              <Image
-                                src={config.icon}
-                                alt={request.chainName}
-                                boxSize="10px"
-                              />
-                            )}
+                            <ChainIcon
+                              chainId={request.signature.chainId}
+                              chainName={request.chainName}
+                              size="10px"
+                            />
                             {request.chainName}
                           </Badge>
                           <Text fontSize="xs" color="text.tertiary" fontFamily="mono" fontWeight="500">

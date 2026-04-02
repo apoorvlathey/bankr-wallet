@@ -10,6 +10,7 @@ import {
 } from "@chakra-ui/react";
 import { getChainConfig } from "@/constants/chainConfig";
 import type { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
+import ChainIcon from "@/components/ChainIcon";
 
 interface WatchAssetConfirmationProps {
   request: PendingWatchAssetRequest;
@@ -138,20 +139,17 @@ export default function WatchAssetConfirmation({
             <VStack spacing={1}>
               <Box position="relative">
                 {tokenIcon}
-                {chainConfig.icon && (
-                  <Image
-                    src={chainConfig.icon}
-                    alt=""
-                    boxSize="20px"
-                    position="absolute"
-                    bottom="-2px"
-                    right="-4px"
-                    border="2px solid"
-                    borderColor="white"
-                    borderRadius="full"
-                    bg="white"
-                  />
-                )}
+                <Box
+                  position="absolute"
+                  bottom="-2px"
+                  right="-4px"
+                  border="2px solid"
+                  borderColor="white"
+                  borderRadius="full"
+                  bg="white"
+                >
+                  <ChainIcon chainId={request.chainId} chainName={chainConfig.name} size="20px" />
+                </Box>
               </Box>
               <Text fontSize="lg" fontWeight="900" mt={1}>
                 {asset.symbol}

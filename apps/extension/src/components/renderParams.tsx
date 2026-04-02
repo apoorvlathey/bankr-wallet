@@ -69,21 +69,28 @@ export function renderParams(index: number, arg: Arg, chainId: number): JSX.Elem
   const arrayLength = isArrayType && Array.isArray(arg.value) ? (arg.value as any[]).length : null;
 
   return (
-    <Box key={index} w="full">
-      <HStack spacing={1} align="center" w="full" flexWrap="wrap">
+    <Box key={index} w="full" minW={0}>
+      <HStack spacing={1} align="center" w="full" minW={0} flexWrap="wrap">
         {/* Param name */}
         <Text
           fontSize="10px"
           color="text.secondary"
           fontFamily="mono"
           fontWeight="700"
-          minW="fit-content"
+          minW={0}
+          wordBreak="break-word"
         >
           {arg.name || `arg${index}`}
         </Text>
 
         {/* Param type */}
-        <Text fontSize="10px" color="text.tertiary" fontFamily="mono" minW="fit-content">
+        <Text
+          fontSize="10px"
+          color="text.tertiary"
+          fontFamily="mono"
+          minW={0}
+          wordBreak="break-word"
+        >
           ({arg.type}
           {arrayLength !== null && ` [${arrayLength}]`})
         </Text>
