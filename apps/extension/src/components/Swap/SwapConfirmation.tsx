@@ -24,6 +24,7 @@ import type { TokenInfo } from "@/chrome/swapApi";
 import type { SwapTxEntry } from "@/chrome/txHandlers";
 import { getChainConfig } from "@/constants/chainConfig";
 import CalldataDecoder from "@/components/CalldataDecoder";
+import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import { CopyButton } from "@/components/CopyButton";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
 
@@ -449,6 +450,13 @@ function SwapConfirmation({
                           chainId={chainId}
                           onFunctionName={(name) => handleFunctionName(i, name)}
                         />
+                      </Box>
+                    )}
+
+                    {/* ERC-8213 Calldata Digest */}
+                    {hasCalldata && (
+                      <Box w="full" px={2} py={1.5}>
+                        <CalldataDigestDisplay calldata={entry.tx.data} />
                       </Box>
                     )}
                   </VStack>
