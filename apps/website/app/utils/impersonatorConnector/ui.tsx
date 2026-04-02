@@ -23,7 +23,6 @@ import {
   InputGroup,
 } from "@chakra-ui/react";
 import { ViewIcon } from "@chakra-ui/icons";
-import { Global } from "@emotion/react";
 import {
   type Address,
   isAddress,
@@ -92,6 +91,17 @@ export const ImpersonatorModal = ({
   const [isValidAddress, setIsValidAddress] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const toast = useToast();
+
+  // Push RainbowKit modal behind when impersonator modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const style = document.createElement("style");
+    style.textContent = `[data-rk] { z-index: 1400 !important; }`;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -209,13 +219,6 @@ export const ImpersonatorModal = ({
 
   return (
     <>
-      <Global
-        styles={{
-          "[data-rk]": {
-            zIndex: isOpen ? "1400 !important" : "auto",
-          },
-        }}
-      />
       <Modal isOpen={isOpen} onClose={onClose} isCentered>
         <ModalOverlay bg="none" backdropFilter="auto" backdropBlur="5px" />
         <ModalContent
