@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAccount } from "wagmi";
 import { formatUnits } from "viem";
 import { WCHAN_VAULT_INDEXER_API_URL } from "../../constants";
+import { impersonatorConnectorId } from "../../utils/impersonatorConnector/connector";
 
 /** 20 million sWCHAN (18 decimals) */
 export const PREMIUM_THRESHOLD = 20_000_000n * 10n ** 18n;
@@ -18,7 +19,7 @@ export function formatSWchanBalance(raw: bigint): string {
 }
 
 export function usePremiumStatus() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, connector } = useAccount();
   const [balance, setBalance] = useState<bigint | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -61,7 +62,9 @@ export function usePremiumStatus() {
     return () => clearInterval(interval);
   }, [isConnected, address, fetchBalance]);
 
-  const isPremium = balance !== null && balance >= PREMIUM_THRESHOLD;
+  const isImpersonator = connector?.id === impersonatorConnectorId;
+  const isPremium =
+    !isImpersonator && balance !== null && balance >= PREMIUM_THRESHOLD;
 
   return { isPremium, balance, isLoading, address };
 }
