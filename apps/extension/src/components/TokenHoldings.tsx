@@ -398,7 +398,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                   )}
                 </HStack>
                 <Text fontSize="10px" color="text.tertiary" fontWeight="500" noOfLines={1}>
-                  {token.balanceFormatted}
+                  {hideValue ? "****" : token.balanceFormatted}
                 </Text>
               </VStack>
 
@@ -552,7 +552,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                               )}
                             </Box>
                             <Text fontSize="10px" color="text.tertiary" fontWeight="600" textTransform="uppercase">
-                              {asset.balanceFormatted} {asset.symbol}
+                              {hideValue ? "****" : asset.balanceFormatted} {asset.symbol}
                             </Text>
                           </HStack>
                           <Text fontSize="10px" color="text.tertiary" fontWeight="500">

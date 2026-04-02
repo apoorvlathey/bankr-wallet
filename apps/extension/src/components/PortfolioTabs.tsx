@@ -17,6 +17,7 @@ import { AddIcon, RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 import TxStatusList from "@/components/TxStatusList";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import AddTokenModal from "@/components/AddTokenModal";
+import PortfolioChart from "@/components/PortfolioChart";
 
 const TokenHoldings = lazy(() => import("@/components/TokenHoldings"));
 
@@ -213,6 +214,11 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
 
         <TabPanels>
           <TabPanel p={0}>
+            <PortfolioChart
+              address={address}
+              hideValue={holdingsState?.hideValue}
+              refreshTrigger={refreshTrigger}
+            />
             <Suspense fallback={<Skeleton h="100px" />}>
               <TokenHoldings
                 key={`${address}:${refreshTrigger}`}
