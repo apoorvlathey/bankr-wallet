@@ -20,6 +20,7 @@ export interface Conversation {
   createdAt: number;
   updatedAt: number;
   favorite?: boolean;
+  address?: string; // wallet address that initiated this conversation
 }
 
 const STORAGE_KEY = "chatHistory";
@@ -34,6 +35,14 @@ export async function getConversations(): Promise<Conversation[]> {
     chatHistory?: Conversation[];
   };
   return chatHistory || [];
+}
+
+/**
+ * Get conversations filtered by address (case-insensitive)
+ */
+export async function getConversationsForAddress(address: string): Promise<Conversation[]> {
+  const all = await getConversations();
+  return all.filter((c) => c.address?.toLowerCase() === address.toLowerCase());
 }
 
 /**
@@ -81,7 +90,8 @@ export async function saveConversation(conversation: Conversation): Promise<void
  * Create a new conversation
  */
 export async function createConversation(
-  title?: string
+  title?: string,
+  address?: string
 ): Promise<Conversation> {
   const now = Date.now();
   const conversation: Conversation = {
@@ -90,6 +100,7 @@ export async function createConversation(
     messages: [],
     createdAt: now,
     updatedAt: now,
+    ...(address ? { address: address.toLowerCase() } : {}),
   };
 
   await saveConversation(conversation);

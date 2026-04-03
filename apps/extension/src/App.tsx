@@ -1810,6 +1810,8 @@ function App() {
               onWalletLocked={() => {
                 setIsWalletUnlocked(false);
               }}
+              address={activeAccount?.address}
+              chainId={selectedChain?.chainId}
             />
           </Suspense>
         </Box>
@@ -2317,7 +2319,7 @@ function App() {
           </HStack>
           <Spacer />
           <HStack spacing={1}>
-            {activeAccount?.type === "bankr" && (
+            {(activeAccount?.type === "bankr" || activeAccount?.type === "privateKey" || activeAccount?.type === "seedPhrase") && (
               <Tooltip label="Chat History" placement="bottom">
                 <IconButton
                   aria-label="Chat History"
@@ -3192,8 +3194,8 @@ function App() {
           </VStack>
         </Container>
 
-        {/* Sticky Footer - only show for Bankr accounts */}
-        {activeAccount?.type === "bankr" && (
+        {/* Sticky Footer - show for Bankr, PK, and SP accounts */}
+        {(activeAccount?.type === "bankr" || activeAccount?.type === "privateKey" || activeAccount?.type === "seedPhrase") && (
           <Box
             position="sticky"
             bottom={0}
@@ -3267,7 +3269,7 @@ function App() {
                 }}
                 leftIcon={<ChatIcon />}
               >
-                Chat with Bankr
+                {activeAccount?.type === "bankr" ? "Chat with Bankr" : "Chat with Nani"}
               </Button>
             </Box>
           </Box>

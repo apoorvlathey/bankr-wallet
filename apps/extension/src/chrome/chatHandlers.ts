@@ -1,6 +1,6 @@
 /**
- * Chat prompt handlers for Bankr AI chat
- * Manages chat submission and background polling
+ * Chat prompt handlers for Bankr AI chat and local Ollama chat
+ * Routes to Bankr API (bankr accounts) or Ollama (PK/SP accounts)
  */
 
 import {
@@ -18,15 +18,54 @@ import {
   tryRestoreSession,
 } from "./sessionCache";
 import { handleUnlockWallet } from "./authHandlers";
+import { getActiveAccount } from "./accountStorage";
+import { handleOllamaChatPrompt } from "./ollamaHandlers";
+import { getOllamaSettings } from "./ollamaApi";
 
 /**
- * Handles chat prompt submission - sends to Bankr API and polls for response
+ * Handles chat prompt submission - routes to Ollama for PK/SP or Bankr API for bankr accounts
  */
 export async function handleSubmitChatPrompt(
   conversationId: string,
   messageId: string,
-  prompt: string
+  prompt: string,
+  chainId?: number
 ): Promise<{ success: boolean; error?: string }> {
+  // Check account type to route chat
+  const activeAccount = await getActiveAccount();
+
+  if (
+    activeAccount &&
+    (activeAccount.type === "privateKey" ||
+      activeAccount.type === "seedPhrase")
+  ) {
+    // Route to Ollama handler for PK/SP accounts
+    const ollamaSettings = await getOllamaSettings();
+    if (!ollamaSettings.enabled) {
+      chrome.runtime
+        .sendMessage({
+          type: "chatJobComplete",
+          conversationId,
+          messageId,
+          error:
+            "Local AI chat is not configured. Enable Ollama in Settings → Local AI Chat.",
+        })
+        .catch(() => {});
+      return {
+        success: false,
+        error: "Local AI chat is not configured",
+      };
+    }
+    return handleOllamaChatPrompt(
+      conversationId,
+      messageId,
+      prompt,
+      activeAccount.address,
+      chainId || 1
+    );
+  }
+
+  // Bankr API flow for bankr/impersonator accounts
   // Get cached API key
   let apiKey = getCachedApiKey();
 

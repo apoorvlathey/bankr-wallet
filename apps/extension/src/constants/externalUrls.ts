@@ -76,6 +76,12 @@ export const USDC_LOGO_URL =
   "https://coin-images.coingecko.com/coins/images/6319/small/usdc.png";
 
 // ---------------------------------------------------------------------------
+// Local AI (Ollama)
+// ---------------------------------------------------------------------------
+export const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
+export const DEFAULT_OLLAMA_MODEL = "nani";
+
+// ---------------------------------------------------------------------------
 // IPFS Gateway
 // ---------------------------------------------------------------------------
 export const IPFS_GATEWAY = "https://ipfs.io/ipfs/";

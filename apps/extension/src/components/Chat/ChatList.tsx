@@ -7,6 +7,7 @@ import {
   IconButton,
   Button,
   Tooltip,
+  Badge,
 } from "@chakra-ui/react";
 import { ArrowBackIcon, AddIcon, ChatIcon, DeleteIcon, StarIcon } from "@chakra-ui/icons";
 import { Conversation } from "@/chrome/chatStorage";
@@ -18,6 +19,13 @@ interface ChatListProps {
   onNewChat: () => void;
   onDeleteConversation: (id: string) => void;
   onToggleFavorite: (id: string) => void;
+  showAllAddresses?: boolean;
+  onToggleShowAll?: () => void;
+}
+
+function truncateAddress(address: string): string {
+  if (address.length <= 10) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 function formatTimestamp(timestamp: number): string {
@@ -50,6 +58,8 @@ export function ChatList({
   onNewChat,
   onDeleteConversation,
   onToggleFavorite,
+  showAllAddresses = false,
+  onToggleShowAll,
 }: ChatListProps) {
   return (
     <Box h="100%" display="flex" flexDirection="column" bg="bg.base">
@@ -111,6 +121,31 @@ export function ChatList({
           onClick={onNewChat}
         />
       </Flex>
+
+      {/* All Wallets Toggle */}
+      {onToggleShowAll && (
+        <HStack px={3} py={2} spacing={2} borderBottom="2px solid" borderColor="gray.200">
+          <Text fontSize="xs" fontWeight="700" color="text.secondary" textTransform="uppercase" letterSpacing="wide" flex="1">
+            All wallets
+          </Text>
+          <Button
+            size="xs"
+            bg={showAllAddresses ? "bauhaus.yellow" : "gray.200"}
+            color="bauhaus.black"
+            border="2px solid"
+            borderColor="bauhaus.black"
+            borderRadius="0"
+            fontWeight="700"
+            fontSize="10px"
+            textTransform="uppercase"
+            h="22px"
+            _hover={{ opacity: 0.8 }}
+            onClick={onToggleShowAll}
+          >
+            {showAllAddresses ? "ON" : "OFF"}
+          </Button>
+        </HStack>
+      )}
 
       {/* Conversation List */}
       <Box flex="1" overflowY="auto" p={3}>
@@ -234,13 +269,31 @@ export function ChatList({
                   >
                     {conv.title}
                   </Text>
-                  <Text
-                    fontSize="xs"
-                    color="text.tertiary"
-                    fontWeight="500"
-                  >
-                    {formatTimestamp(conv.updatedAt)}
-                  </Text>
+                  <HStack spacing={2}>
+                    <Text
+                      fontSize="xs"
+                      color="text.tertiary"
+                      fontWeight="500"
+                    >
+                      {formatTimestamp(conv.updatedAt)}
+                    </Text>
+                    {showAllAddresses && conv.address && (
+                      <Badge
+                        bg="gray.100"
+                        color="text.secondary"
+                        border="1px solid"
+                        borderColor="gray.300"
+                        fontSize="10px"
+                        fontWeight="600"
+                        fontFamily="mono"
+                        px={1}
+                        py={0}
+                        borderRadius="0"
+                      >
+                        {truncateAddress(conv.address)}
+                      </Badge>
+                    )}
+                  </HStack>
                 </Box>
 
                 {/* Delete Button */}

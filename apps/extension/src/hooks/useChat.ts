@@ -3,6 +3,7 @@ import {
   Message,
   Conversation,
   getConversations,
+  getConversationsForAddress,
   getConversation,
   createConversation,
   deleteConversation,
@@ -12,6 +13,11 @@ import {
   deleteMessageFromConversation,
 } from "@/chrome/chatStorage";
 
+interface UseChatOptions {
+  address?: string;
+  chainId?: number;
+}
+
 interface UseChatReturn {
   conversations: Conversation[];
   currentConversation: Conversation | null;
@@ -19,6 +25,9 @@ interface UseChatReturn {
   isLoading: boolean;
   error: string | null;
   statusUpdateText: string | null;
+  streamContent: string | null;
+  showAllAddresses: boolean;
+  setShowAllAddresses: (show: boolean) => void;
   sendMessage: (content: string) => Promise<void>;
   loadConversation: (id: string) => Promise<void>;
   createNewChat: () => Promise<Conversation>;
@@ -26,21 +35,37 @@ interface UseChatReturn {
   toggleFavorite: (id: string) => Promise<void>;
   refreshConversations: () => Promise<void>;
   retryLastMessage: () => Promise<void>;
+  cancelChat: () => void;
 }
 
-export function useChat(): UseChatReturn {
+export function useChat(options?: UseChatOptions): UseChatReturn {
+  const address = options?.address;
+  const chainId = options?.chainId;
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusUpdateText, setStatusUpdateText] = useState<string | null>(null);
+  const [streamContent, setStreamContent] = useState<string | null>(null);
   // Track if current conversation is unsaved (only in memory)
   const [isUnsavedChat, setIsUnsavedChat] = useState(false);
+  // Toggle between showing only current address's chats vs all
+  const [showAllAddresses, setShowAllAddresses] = useState(false);
 
-  // Load conversations on mount
+  const refreshConversations = useCallback(async () => {
+    if (address && !showAllAddresses) {
+      const convs = await getConversationsForAddress(address);
+      setConversations(convs);
+    } else {
+      const convs = await getConversations();
+      setConversations(convs);
+    }
+  }, [address, showAllAddresses]);
+
+  // Load conversations on mount and when filter changes
   useEffect(() => {
     refreshConversations();
-  }, []);
+  }, [refreshConversations]);
 
   // Listen for chat updates from background
   useEffect(() => {
@@ -52,13 +77,15 @@ export function useChat(): UseChatReturn {
         content?: string;
         error?: string;
         statusUpdates?: Array<{ message: string; timestamp: string }>;
+        streamContent?: string;
       },
       _sender: chrome.runtime.MessageSender,
       sendResponse: (response?: any) => void
     ) => {
       if (message.type === "chatJobComplete" && message.conversationId) {
-        // Clear status update text on completion
+        // Clear status/stream text on completion
         setStatusUpdateText(null);
+        setStreamContent(null);
         // Update the message with the response
         if (currentConversation?.id === message.conversationId && message.messageId) {
           updateMessageInConversation(message.conversationId, message.messageId, {
@@ -75,10 +102,16 @@ export function useChat(): UseChatReturn {
       }
 
       if (message.type === "chatJobUpdate" && message.conversationId) {
-        // Extract the latest status update message
+        // Handle streaming content from Ollama
+        if (message.streamContent !== undefined) {
+          setStreamContent(message.streamContent);
+          setStatusUpdateText(null); // Clear status text when streaming
+        }
+        // Extract the latest status update message (Bankr API or tool execution)
         if (message.statusUpdates && message.statusUpdates.length > 0) {
           const latest = message.statusUpdates[message.statusUpdates.length - 1];
           setStatusUpdateText(latest.message);
+          setStreamContent(null); // Clear stream when showing status
         }
         // Refresh conversation to get latest state
         if (currentConversation?.id === message.conversationId) {
@@ -94,11 +127,6 @@ export function useChat(): UseChatReturn {
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
   }, [currentConversation?.id]);
-
-  const refreshConversations = useCallback(async () => {
-    const convs = await getConversations();
-    setConversations(convs);
-  }, []);
 
   const loadConversation = useCallback(async (id: string) => {
     const conv = await getConversation(id);
@@ -150,6 +178,7 @@ export function useChat(): UseChatReturn {
 
       setError(null);
       setStatusUpdateText(null);
+      setStreamContent(null);
       let conv = currentConversation;
 
       // Create new conversation if none exists
@@ -177,9 +206,10 @@ export function useChat(): UseChatReturn {
 
       // If this is an unsaved chat, persist it now with the first message
       if (isUnsavedChat) {
-        // Create the conversation in storage
+        // Create the conversation in storage (with address for filtering)
         const savedConv = await createConversation(
-          content.length > 50 ? content.substring(0, 50) + "..." : content
+          content.length > 50 ? content.substring(0, 50) + "..." : content,
+          address
         );
         // Update the ID to match the saved one
         conv = { ...savedConv, messages: [] };
@@ -220,6 +250,7 @@ export function useChat(): UseChatReturn {
               conversationId: conv!.id,
               messageId: assistantMessage.id,
               prompt: content,
+              chainId,
             },
             (res) => {
               if (chrome.runtime.lastError) {
@@ -237,7 +268,8 @@ export function useChat(): UseChatReturn {
         if (!response.success) {
           // Update message with error
           const errorContent = response.error || "Failed to send message";
-          const isWalletLocked = errorContent.includes("Wallet is locked");
+          const isWalletLocked = errorContent.includes("Wallet is locked") ||
+            errorContent.includes("not configured");
           await updateMessageInConversation(conv!.id, assistantMessage.id, {
             content: errorContent,
             status: "error",
@@ -269,7 +301,7 @@ export function useChat(): UseChatReturn {
 
       await refreshConversations();
     },
-    [currentConversation, isLoading, isUnsavedChat, refreshConversations]
+    [currentConversation, isLoading, isUnsavedChat, refreshConversations, address, chainId]
   );
 
   const retryLastMessage = useCallback(async () => {
@@ -328,6 +360,7 @@ export function useChat(): UseChatReturn {
             conversationId: currentConversation.id,
             messageId: assistantMessage.id,
             prompt: lastUserMessage.content,
+            chainId,
           },
           (res) => {
             if (chrome.runtime.lastError) {
@@ -374,7 +407,15 @@ export function useChat(): UseChatReturn {
     }
 
     await refreshConversations();
-  }, [currentConversation, isLoading, refreshConversations]);
+  }, [currentConversation, isLoading, refreshConversations, chainId]);
+
+  const cancelChat = useCallback(() => {
+    if (!currentConversation || !isLoading) return;
+    chrome.runtime.sendMessage({
+      type: "cancelOllamaChat",
+      conversationId: currentConversation.id,
+    });
+  }, [currentConversation, isLoading]);
 
   return {
     conversations,
@@ -383,6 +424,9 @@ export function useChat(): UseChatReturn {
     isLoading,
     error,
     statusUpdateText,
+    streamContent,
+    showAllAddresses,
+    setShowAllAddresses,
     sendMessage,
     loadConversation,
     createNewChat,
@@ -390,6 +434,7 @@ export function useChat(): UseChatReturn {
     toggleFavorite,
     refreshConversations,
     retryLastMessage,
+    cancelChat,
   };
 }
 
