@@ -46,6 +46,7 @@ interface SafeApiResponse {
 const DISABLED_IDS = [
   // Updated chains/URL in custom
   38,
+  74, // CoW Swap (custom override with referral URL)
   88,
   44,
   20,
@@ -182,6 +183,16 @@ const CUSTOM_DAPPS: DappInfo[] = [
     iconUrl:
       "https://safe-transaction-assets.safe.global/safe_apps/38/icon.png",
     chains: [1, 130, 8453, 42161, 137, 10, 56, 43114, 7777777, 42220],
+  },
+  {
+    id: 74,
+    name: "CoW Swap",
+    description:
+      "CoW Swap finds the lowest prices from all decentralized exchanges and DEX aggregators & saves you more with p2p trading and protection from MEV",
+    url: "https://swap.cow.fi?ref=COW-WALLETCHAN",
+    iconUrl:
+      "https://safe-transaction-assets.safe.global/safe_apps/74/icon.png",
+    chains: [1, 8453, 137, 42161, 56, 43114, 100],
   },
   {
     id: 88,
