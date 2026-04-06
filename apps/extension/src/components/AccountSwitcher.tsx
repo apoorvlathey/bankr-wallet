@@ -1,4 +1,5 @@
-import { memo, useState, useEffect, useMemo } from "react";
+import { memo, useState, useEffect, useMemo, useRef } from "react";
+import { layout, prepare } from "@chenglou/pretext";
 import {
   Menu,
   MenuButton,
@@ -122,12 +123,39 @@ function AccountSwitcher({
     new Map(),
   );
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [nameFont, setNameFont] = useState("");
 
   const accountAddresses = useMemo(
     () => accounts.map((a) => a.address),
     [accounts],
   );
   const { identities } = useEnsIdentities(accountAddresses);
+
+  // Measure container width with ResizeObserver
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    const measure = () => setContainerWidth(node.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  // Capture font from the name text element
+  const nameFontRef = useRef<HTMLParagraphElement | null>(null);
+  useEffect(() => {
+    const node = nameFontRef.current;
+    if (!node) return;
+    const computed = window.getComputedStyle(node);
+    setNameFont(
+      [computed.fontStyle, computed.fontVariant, computed.fontWeight, computed.fontSize, computed.fontFamily]
+        .filter(Boolean)
+        .join(" "),
+    );
+  }, []);
 
   useEffect(() => {
     const hasSeedAccounts = accounts.some((a) => a.type === "seedPhrase");
@@ -165,6 +193,19 @@ function AccountSwitcher({
     return identities.get(account.address.toLowerCase())?.avatar ?? null;
   }
 
+  // Check if the display name would overflow when rendered next to the avatar
+  // Avatar (20px) + gap (6px) + padding-right for chevron (20px) + container padding (12+20=32px)
+  const avatarInlineOverhead = 20 + 6 + 20 + 32;
+  const displayName = activeAccount ? getAccountDisplayName(activeAccount) : "";
+  const nameOverflows = useMemo(() => {
+    if (!activeAccount || !hasResolvedName(activeAccount) || !nameFont || containerWidth <= 0) return false;
+    const availableForName = containerWidth - avatarInlineOverhead;
+    if (availableForName <= 0) return true;
+    const prepared = prepare(displayName, nameFont);
+    return layout(prepared, availableForName, 16).lineCount > 1;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayName, nameFont, containerWidth]);
+
   return (
     <Menu matchWidth isLazy lazyBehavior="unmount">
       <MenuButton
@@ -185,159 +226,167 @@ function AccountSwitcher({
         }}
         textAlign="left"
         fontWeight="700"
-        h="full"
-        py={3}
+        h="auto"
+        minH="full"
+        py={2}
         px={3}
+        pr={5}
         borderRadius="0"
         transition="all 0.2s ease-out"
         overflow="hidden"
         position="relative"
       >
+        {/* Hidden probe to measure name font — rendered once, invisible */}
+        <Text
+          ref={nameFontRef}
+          fontSize="sm"
+          fontWeight="700"
+          position="absolute"
+          visibility="hidden"
+          pointerEvents="none"
+          aria-hidden="true"
+        >
+          X
+        </Text>
+        <Box ref={containerRef} minW={0} flex={1}>
         <ChevronDownIcon
           position="absolute"
-          bottom="8px"
-          right="4px"
+          bottom="6px"
+          right="6px"
           boxSize="14px"
           color="text.secondary"
         />
         {activeAccount ? (
-          <HStack spacing={2} minW={0} flex={1}>
-            <AccountAvatar
-              account={activeAccount}
-              ensAvatar={getEnsAvatar(activeAccount)}
-              size={24}
-            />
-            <VStack align="start" spacing={0} minW={0} flex={1}>
+          nameOverflows ? (
+          /* Long name layout: name full width on top, avatar + address below */
+          <VStack align="start" spacing="3px" minW={0} flex={1}>
+            <Text
+              fontSize="sm"
+              color="text.primary"
+              fontWeight="700"
+              noOfLines={1}
+              maxW="full"
+              lineHeight="1.2"
+            >
+              {getAccountDisplayName(activeAccount)}
+            </Text>
+            <HStack spacing="6px" minW={0} align="center">
+              <Box flexShrink={0}>
+                <AccountAvatar
+                  account={activeAccount}
+                  ensAvatar={getEnsAvatar(activeAccount)}
+                  size={18}
+                />
+              </Box>
               <Text
-                fontSize="sm"
-                color="text.primary"
-                fontWeight="700"
+                fontSize="xs"
+                color="text.tertiary"
+                fontFamily="mono"
                 noOfLines={1}
+                lineHeight="1.2"
               >
-                {getAccountDisplayName(activeAccount)}
+                {truncateAddress(activeAccount.address)}
               </Text>
+            </HStack>
+            <HStack spacing={1} flexWrap="wrap" ml="24px">
+              {activeAccount.displayName && getEnsName(activeAccount) && (
+                <Box bg="gray.600" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
+                  <Text fontSize="8px" color="white" fontWeight="800" letterSpacing="wide" noOfLines={1}>
+                    {getEnsName(activeAccount)}
+                  </Text>
+                </Box>
+              )}
+              {activeAccount.type === "bankr" && (
+                <Box bg="bauhaus.blue" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
+                  <Text fontSize="8px" color="white" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Bankr</Text>
+                </Box>
+              )}
+              {activeAccount.type === "privateKey" && (
+                <Box bg="bauhaus.yellow" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
+                  <Text fontSize="8px" color="bauhaus.black" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Private Key</Text>
+                </Box>
+              )}
+              {activeAccount.type === "seedPhrase" && (
+                <Box bg="bauhaus.red" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
+                  <Text fontSize="8px" color="white" fontWeight="800" textTransform="uppercase" letterSpacing="wide">{getSeedLabel(activeAccount, seedGroupMap) || "Seed"}</Text>
+                </Box>
+              )}
+              {activeAccount.type === "impersonator" && (
+                <Box bg="bauhaus.green" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
+                  <Text fontSize="8px" color="white" fontWeight="800" textTransform="uppercase" letterSpacing="wide">View Only</Text>
+                </Box>
+              )}
+            </HStack>
+          </VStack>
+          ) : (
+          /* Short/no name layout: avatar on left, name + address + badges stacked right */
+          <HStack spacing="6px" minW={0} flex={1} align="start">
+            <Box flexShrink={0} mt={hasResolvedName(activeAccount) ? "2px" : 0}>
+              <AccountAvatar
+                account={activeAccount}
+                ensAvatar={getEnsAvatar(activeAccount)}
+                size={hasResolvedName(activeAccount) ? 20 : 22}
+              />
+            </Box>
+            <VStack align="start" spacing="2px" minW={0} flex={1}>
               {hasResolvedName(activeAccount) && (
                 <Text
-                  fontSize="xs"
-                  color="text.tertiary"
-                  fontFamily="mono"
+                  fontSize="sm"
+                  color="text.primary"
+                  fontWeight="700"
                   noOfLines={1}
+                  maxW="full"
+                  lineHeight="1.2"
                 >
-                  {truncateAddress(activeAccount.address)}
+                  {getAccountDisplayName(activeAccount)}
                 </Text>
               )}
+              <Text
+                fontSize="xs"
+                color={hasResolvedName(activeAccount) ? "text.tertiary" : "text.primary"}
+                fontFamily="mono"
+                fontWeight={hasResolvedName(activeAccount) ? "400" : "700"}
+                noOfLines={1}
+                lineHeight="1.2"
+              >
+                {truncateAddress(activeAccount.address)}
+              </Text>
               <HStack spacing={1} flexWrap="wrap">
-                {activeAccount.displayName && getEnsName(activeAccount) && (
-                  <Box
-                    bg="gray.600"
-                    px={1.5}
-                    py={0}
-                    borderRadius="sm"
-                    border="1px solid"
-                    borderColor="bauhaus.black"
-                    mt={0.5}
-                  >
-                    <Text
-                      fontSize="8px"
-                      color="white"
-                      fontWeight="800"
-                      letterSpacing="wide"
-                      noOfLines={1}
-                    >
-                      {getEnsName(activeAccount)}
-                    </Text>
-                  </Box>
-                )}
-                {activeAccount.type === "bankr" && (
-                  <Box
-                    bg="bauhaus.blue"
-                    px={1.5}
-                    py={0}
-                    borderRadius="sm"
-                    border="1px solid"
-                    borderColor="bauhaus.black"
-                    mt={0.5}
-                  >
-                    <Text
-                      fontSize="8px"
-                      color="white"
-                      fontWeight="800"
-                      textTransform="uppercase"
-                      letterSpacing="wide"
-                    >
-                      Bankr
-                    </Text>
-                  </Box>
-                )}
-                {activeAccount.type === "privateKey" && (
-                  <Box
-                    bg="bauhaus.yellow"
-                    px={1.5}
-                    py={0}
-                    borderRadius="sm"
-                    border="1px solid"
-                    borderColor="bauhaus.black"
-                    mt={0.5}
-                  >
-                    <Text
-                      fontSize="8px"
-                      color="bauhaus.black"
-                      fontWeight="800"
-                      textTransform="uppercase"
-                      letterSpacing="wide"
-                    >
-                      Private Key
-                    </Text>
-                  </Box>
-                )}
-                {activeAccount.type === "seedPhrase" && (
-                  <Box
-                    bg="bauhaus.red"
-                    px={1.5}
-                    py={0}
-                    borderRadius="sm"
-                    border="1px solid"
-                    borderColor="bauhaus.black"
-                    mt={0.5}
-                  >
-                    <Text
-                      fontSize="8px"
-                      color="white"
-                      fontWeight="800"
-                      textTransform="uppercase"
-                      letterSpacing="wide"
-                    >
-                      {getSeedLabel(activeAccount, seedGroupMap) || "Seed"}
-                    </Text>
-                  </Box>
-                )}
-                {activeAccount.type === "impersonator" && (
-                  <Box
-                    bg="bauhaus.green"
-                    px={1.5}
-                    py={0}
-                    borderRadius="sm"
-                    border="1px solid"
-                    borderColor="bauhaus.black"
-                    mt={0.5}
-                  >
-                    <Text
-                      fontSize="8px"
-                      color="white"
-                      fontWeight="800"
-                      textTransform="uppercase"
-                      letterSpacing="wide"
-                    >
-                      View Only
-                    </Text>
-                  </Box>
-                )}
-              </HStack>
+              {activeAccount.displayName && getEnsName(activeAccount) && (
+                <Box bg="gray.600" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
+                  <Text fontSize="8px" color="white" fontWeight="800" letterSpacing="wide" noOfLines={1}>
+                    {getEnsName(activeAccount)}
+                  </Text>
+                </Box>
+              )}
+              {activeAccount.type === "bankr" && (
+                <Box bg="bauhaus.blue" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
+                  <Text fontSize="8px" color="white" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Bankr</Text>
+                </Box>
+              )}
+              {activeAccount.type === "privateKey" && (
+                <Box bg="bauhaus.yellow" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
+                  <Text fontSize="8px" color="bauhaus.black" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Private Key</Text>
+                </Box>
+              )}
+              {activeAccount.type === "seedPhrase" && (
+                <Box bg="bauhaus.red" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
+                  <Text fontSize="8px" color="white" fontWeight="800" textTransform="uppercase" letterSpacing="wide">{getSeedLabel(activeAccount, seedGroupMap) || "Seed"}</Text>
+                </Box>
+              )}
+              {activeAccount.type === "impersonator" && (
+                <Box bg="bauhaus.green" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
+                  <Text fontSize="8px" color="white" fontWeight="800" textTransform="uppercase" letterSpacing="wide">View Only</Text>
+                </Box>
+              )}
+            </HStack>
             </VStack>
           </HStack>
+          )
         ) : (
           <Text color="text.tertiary">Select Account</Text>
         )}
+        </Box>
       </MenuButton>
       <MenuList
         bg="bauhaus.white"

@@ -2712,23 +2712,34 @@ function App() {
                     transform: "translate(2px, 2px)",
                     boxShadow: "none",
                   }}
-                  rightIcon={<ChevronDownIcon />}
                   fontWeight="700"
                   h="full"
                   py={3}
                   px={3}
                   borderRadius="0"
                   transition="all 0.2s ease-out"
-                  flexShrink={0}
+                  flexShrink={1}
+                  minW={0}
+                  maxW="40%"
+                  overflow="hidden"
+                  position="relative"
                 >
+                  <ChevronDownIcon
+                    position="absolute"
+                    bottom="8px"
+                    right="4px"
+                    boxSize="14px"
+                    color="text.secondary"
+                  />
                   {selectedChain ? (
-                    <HStack spacing={1.5}>
+                    <HStack spacing={1.5} minW={0} align="center" pr={3}>
                       <ChainIcon
                         chainId={selectedChain.chainId}
                         chainName={selectedChain.name}
                         size="18px"
+                        flexShrink={0}
                       />
-                      <Text fontSize="xs" fontWeight="700" noOfLines={1}>
+                      <Text fontSize="2xs" fontWeight="700" whiteSpace="normal" lineHeight="1.2" textAlign="left">
                         {selectedChain.name}
                       </Text>
                     </HStack>
