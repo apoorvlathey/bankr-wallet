@@ -58,15 +58,20 @@ const TRANSFER_WITH_AUTHORIZATION_TYPES = {
  */
 export async function handleCheckPremiumStatus(
   address: string
-): Promise<{ isPremium: boolean; balance: string }> {
+): Promise<{ isPremium: boolean; balance: string; sponsoredTransfersEnabled: boolean }> {
   try {
     const res = await fetch(
       `${PREMIUM_STATUS_API}?address=${encodeURIComponent(address)}`
     );
-    if (!res.ok) return { isPremium: false, balance: "0" };
-    return await res.json();
+    if (!res.ok) return { isPremium: false, balance: "0", sponsoredTransfersEnabled: false };
+    const data = await res.json();
+    return {
+      isPremium: data.isPremium,
+      balance: data.balance,
+      sponsoredTransfersEnabled: data.sponsoredTransfersEnabled ?? true,
+    };
   } catch {
-    return { isPremium: false, balance: "0" };
+    return { isPremium: false, balance: "0", sponsoredTransfersEnabled: false };
   }
 }
 

@@ -5,6 +5,10 @@ import { WCHAN_VAULT_INDEXER_API_URL } from "../../constants";
 /** 20 million sWCHAN (18 decimals) */
 const PREMIUM_THRESHOLD = 20_000_000n * 10n ** 18n;
 
+/** Kill switch: set SPONSORED_USDC_TRANSFER_DISABLED=true to disable gasless transfers */
+const isSponsoredDisabled =
+  process.env.SPONSORED_USDC_TRANSFER_DISABLED?.toLowerCase() === "true";
+
 export async function GET(req: NextRequest) {
   const address = req.nextUrl.searchParams.get("address");
 
@@ -37,6 +41,7 @@ export async function GET(req: NextRequest) {
       {
         isPremium: balance >= PREMIUM_THRESHOLD,
         balance: balance.toString(),
+        sponsoredTransfersEnabled: !isSponsoredDisabled,
       },
       {
         headers: { "Cache-Control": "public, max-age=60" },

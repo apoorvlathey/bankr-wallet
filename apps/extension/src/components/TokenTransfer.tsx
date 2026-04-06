@@ -255,6 +255,7 @@ function TokenTransfer({
   const [premiumStatus, setPremiumStatus] = useState<{
     isPremium: boolean;
     balance: string;
+    sponsoredTransfersEnabled: boolean;
   } | null>(null);
   const [premiumLoading, setPremiumLoading] = useState(false);
 
@@ -266,14 +267,14 @@ function TokenTransfer({
     setPremiumLoading(true);
     chrome.runtime.sendMessage(
       { type: "checkPremiumStatus", address: fromAddress },
-      (result: { isPremium: boolean; balance: string } | undefined) => {
+      (result: { isPremium: boolean; balance: string; sponsoredTransfersEnabled: boolean } | undefined) => {
         if (result) setPremiumStatus(result);
         setPremiumLoading(false);
       }
     );
   }, [isUsdcOnBase, fromAddress]);
 
-  const isSponsoredFlow = isUsdcOnBase && premiumStatus?.isPremium && accountType !== "impersonator";
+  const isSponsoredFlow = isUsdcOnBase && premiumStatus?.isPremium && premiumStatus?.sponsoredTransfersEnabled && accountType !== "impersonator";
 
   const { resolvedAddress, resolvedName, avatar, isResolving, isLoadingExtras, isValid: isRecipientValid, error: resolverError } =
     useAddressResolver(recipient);
