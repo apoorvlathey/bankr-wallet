@@ -2,6 +2,7 @@ import type { NetworksInfo, NetworkEntry } from "@/types";
 import {
   CHAIN_REGISTRY,
   DEFAULT_CHAIN_CONFIG,
+  ZEROX_SUPPORTED_CHAIN_IDS,
   type ChainEntry,
 } from "@/constants/chainRegistry";
 import { resolveChainIconMeta } from "@/lib/chainIcons";
@@ -140,7 +141,7 @@ export function getResolvedChains(
         border: config.border,
         text: config.text,
         isBankrSupported: builtIn?.isBankrSupported ?? false,
-        isSwapSupported: builtIn?.isSwapSupported ?? false,
+        isSwapSupported: builtIn?.isSwapSupported ?? ZEROX_SUPPORTED_CHAIN_IDS.has(entry.chainId),
         isOpStack: builtIn?.isOpStack ?? false,
       };
     },

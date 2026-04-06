@@ -1,9 +1,6 @@
 // Base chain ID
 export const SWAP_CHAIN_ID = 8453;
 
-// Fee configuration
-export const FEE_BPS = "90"; // 0.9%
-
 // Native ETH placeholder used by 0x API
 export const NATIVE_TOKEN_ADDRESS =
   "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";

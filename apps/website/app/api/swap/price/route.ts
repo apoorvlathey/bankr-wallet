@@ -5,16 +5,38 @@ import {
   fetchWchanQuote,
   compareBestRoute,
 } from "../wchanRoute";
+import { resolveFeeBps } from "../feeResolver";
 
 const ZEROX_API_KEY = process.env.ZEROX_API_KEY ?? "";
 const ZEROX_BASE_URL = "https://api.0x.org";
 const DEFAULT_CHAIN_ID = "8453"; // Base
 
 const FEE_RECIPIENT = process.env.SWAP_FEE_RECIPIENT ?? "";
-const FEE_BPS = "90"; // 0.9%
 
+// https://docs.0x.org/docs/introduction/supported-chains
 const SUPPORTED_CHAIN_IDS = new Set([
-  "1", "42161", "8453", "56", "137", "130",
+  "1",      // Ethereum
+  "10",     // Optimism
+  "56",     // BSC
+  "130",    // Unichain
+  "137",    // Polygon
+  "143",    // Monad
+  "146",    // Sonic
+  "480",    // World Chain
+  "999",    // HyperEVM
+  "2741",   // Abstract
+  "4217",   // Tempo
+  "5000",   // Mantle
+  "8453",   // Base
+  "9745",   // Plasma
+  "34443",  // Mode
+  "42161",  // Arbitrum
+  "43114",  // Avalanche
+  "57073",  // Ink
+  "59144",  // Linea
+  "80094",  // Berachain
+  "81457",  // Blast
+  "534352", // Scroll
 ]);
 
 const NATIVE_PLACEHOLDER = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
@@ -28,6 +50,7 @@ async function fetch0xPrice(
   sellToken: string,
   buyToken: string,
   sellAmount: string,
+  feeBps: string,
   taker?: string,
   slippageBps?: string,
 ): Promise<{ ok: boolean; data: Record<string, unknown> }> {
@@ -35,7 +58,7 @@ async function fetch0xPrice(
 
   if (FEE_RECIPIENT) {
     params.set("swapFeeRecipient", FEE_RECIPIENT);
-    params.set("swapFeeBps", FEE_BPS);
+    params.set("swapFeeBps", feeBps);
     params.set("swapFeeToken", sellToken);
   }
   if (taker) params.set("taker", taker);
@@ -114,6 +137,9 @@ export async function GET(request: NextRequest) {
   const slippageBps = searchParams.get("slippageBps") ?? undefined;
   const slippageBpsNum = slippageBps && /^\d+$/.test(slippageBps) ? Number(slippageBps) : 100;
 
+  // Resolve fee tier based on taker's sWCHAN staking balance
+  const feeBps = await resolveFeeBps(taker ?? undefined);
+
   // -----------------------------------------------------------------------
   // WCHAN custom routing: compare 0x vs Uniswap V4
   // -----------------------------------------------------------------------
@@ -122,7 +148,7 @@ export async function GET(request: NextRequest) {
   if (wchanCheck.isWchan) {
     try {
       const [zeroXResult, wchanResult] = await Promise.allSettled([
-        fetch0xPrice(chainIdParam, sellToken, buyToken, sellAmount, taker ?? undefined, slippageBps),
+        fetch0xPrice(chainIdParam, sellToken, buyToken, sellAmount, feeBps, taker ?? undefined, slippageBps),
         fetchWchanQuote(wchanCheck.direction, sellAmount),
       ]);
 
@@ -174,6 +200,7 @@ export async function GET(request: NextRequest) {
       sellToken,
       buyToken,
       sellAmount,
+      feeBps,
       taker ?? undefined,
       slippageBps,
     );

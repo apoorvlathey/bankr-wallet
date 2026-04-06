@@ -12,6 +12,11 @@ User → SwapCard (UI) → useSwapQuote hook → /api/swap/price (Next.js route)
 ### Why server-side API routes?
 - **0x API key** (`ZEROX_API_KEY`) stays server-side, never exposed to client
 - **Fee params** (`swapFeeRecipient`, `swapFeeBps`, `swapFeeToken`) injected server-side so clients can't bypass or modify fees
+- **Shared by both website and extension** — the extension's swap UI (`apps/extension/src/chrome/swapApi.ts`) calls the same `/api/swap/*` endpoints
+
+### Multi-chain support
+- The **website** swap page is Base-only (`SWAP_CHAIN_ID = 8453`)
+- The **extension** swap supports all 0x-supported chains (22 chains). The server-side API routes validate against the full `SUPPORTED_CHAIN_IDS` set. The extension's eligible chains are derived from `ZEROX_SUPPORTED_CHAIN_IDS` in `chainRegistry.ts` — custom chains added by users also get swap support if their chain ID is in the 0x set.
 
 ## 0x Integration
 
@@ -28,11 +33,13 @@ Uses **0x Swap API v2** with the **AllowanceHolder** flow (single-signature UX, 
 - `0x-version`: `v2`
 
 ### Fee Collection
-- **Fee**: 0.9% (90 bps) charged in ETH (sellToken)
+- **Default fee**: 0.8% (80 bps) charged on the sell token
+- **Premium fee**: 0.3% (30 bps) for users staking >= 20M sWCHAN
 - **Recipient**: `process.env.SWAP_FEE_RECIPIENT`
-- **Params**: `swapFeeRecipient`, `swapFeeBps=90`, `swapFeeToken` = native ETH address
+- **Params**: `swapFeeRecipient`, `swapFeeBps` (resolved per-request), `swapFeeToken` = sellToken
+- Fee tier resolved server-side in `feeResolver.ts` by checking the taker's sWCHAN balance via the WCHAN vault indexer API. Falls back to default fee on any error.
 - Fee params only added if `SWAP_FEE_RECIPIENT` env var is set
-- `swapFeeToken` is hardcoded to `NATIVE_TOKEN` constant server-side (not from client)
+- `swapFeeToken` is hardcoded to `sellToken` server-side (not from client)
 
 ### Slippage
 - `slippageBps` passed from client → API routes → 0x API
@@ -51,7 +58,7 @@ Uses **0x Swap API v2** with the **AllowanceHolder** flow (single-signature UX, 
 apps/website/app/
 ├── swap/
 │   ├── page.tsx                    # Page layout (Bauhaus blue bg, decorators)
-│   ├── constants.ts                # Chain ID, fee BPS, token addresses, slippage presets
+│   ├── constants.ts                # Chain ID, token addresses, slippage presets
 │   ├── hooks/
 │   │   ├── useTokenInfo.ts         # Fetches ERC20 name/symbol/decimals via multicall
 │   │   └── useSwapQuote.ts         # Price fetching (debounced), firm quote, formatting
@@ -61,6 +68,7 @@ apps/website/app/
 │       ├── QuoteDisplay.tsx        # Collapsible quote breakdown (min received, fees, route)
 │       └── SlippageSettings.tsx    # Popover with preset buttons + custom input
 ├── api/swap/
+│   ├── feeResolver.ts              # Resolves fee BPS per taker (premium vs default)
 │   ├── price/route.ts              # Proxy to 0x /price endpoint (adds fees + slippage)
 │   └── quote/route.ts              # Proxy to 0x /quote endpoint (adds fees + slippage)
 ```
@@ -109,11 +117,12 @@ Both defined in `apps/website/.env.local` (see `.env.local.example`).
 
 ## Constants Reference
 
-| Constant | Value | Purpose |
-|---|---|---|
-| `SWAP_CHAIN_ID` | `8453` | Base chain |
-| `FEE_BPS` | `"90"` | 0.9% fee |
-| `NATIVE_TOKEN_ADDRESS` | `0xEeee...eEEeE` | Native ETH placeholder for 0x |
-| `WETH_ADDRESS` | `0x4200...0006` | WETH on Base |
-| `DEFAULT_SLIPPAGE_BPS` | `500` | 5% default slippage |
-| `SLIPPAGE_PRESETS` | `[100, 300, 500]` | 1%, 3%, 5% |
+| Constant | Value | Location | Purpose |
+|---|---|---|---|
+| `SWAP_CHAIN_ID` | `8453` | `swap/constants.ts` | Base chain |
+| `DEFAULT_FEE_BPS` | `"80"` | `api/swap/feeResolver.ts` | 0.8% default fee |
+| `PREMIUM_FEE_BPS` | `"30"` | `api/swap/feeResolver.ts` | 0.3% premium fee (>= 20M sWCHAN) |
+| `NATIVE_TOKEN_ADDRESS` | `0xEeee...eEEeE` | `swap/constants.ts` | Native ETH placeholder for 0x |
+| `WETH_ADDRESS` | `0x4200...0006` | `swap/constants.ts` | WETH on Base |
+| `DEFAULT_SLIPPAGE_BPS` | `500` | `swap/constants.ts` | 5% default slippage |
+| `SLIPPAGE_PRESETS` | `[100, 300, 500]` | `swap/constants.ts` | 1%, 3%, 5% |

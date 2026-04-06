@@ -44,6 +44,12 @@ export function QuoteDisplay({
 
   const integratorFee = quote.fees?.integratorFee;
   const zeroExFee = quote.fees?.zeroExFee;
+  const feePercent = integratorFee
+    ? (
+        (parseFloat(integratorFee.amount) / parseFloat(quote.sellAmount)) *
+        100
+      ).toFixed(1)
+    : "0";
 
   // Determine route sources
   const sources = quote.route?.fills?.map((f) => f.source) ?? [];
@@ -91,7 +97,7 @@ export function QuoteDisplay({
           {integratorFee && (
             <HStack justify="space-between">
               <Text fontSize="xs" fontWeight="bold" textTransform="uppercase">
-                $WCHAN Fee (0.9%)
+                $WCHAN Fee ({feePercent}%)
               </Text>
               <Text fontSize="sm" fontWeight="medium">
                 {formatTokenAmount(integratorFee.amount, sellTokenDecimals)}{" "}

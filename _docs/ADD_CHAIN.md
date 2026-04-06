@@ -23,6 +23,7 @@ Open `src/constants/chainRegistry.ts` and add a new object to the `CHAIN_REGISTR
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   isOpStack: false,                  // true if OP Stack L2 (enables L1 fee breakdown)
   isBankrSupported: false,           // true only if the Bankr API supports this chain
+  isSwapSupported: true,             // true if 0x Swap API supports this chain (see ZEROX_SUPPORTED_CHAIN_IDS)
   coingeckoTokenId: "ethereum",      // CoinGecko token ID for native gas price, or undefined
   // viemChain: myChain,             // optional: pass a viem/chains built-in if one exists
 },
@@ -41,6 +42,7 @@ Open `src/constants/chainRegistry.ts` and add a new object to the `CHAIN_REGISTR
 | `nativeCurrency` | yes | `{ name, symbol, decimals }` for the native token |
 | `isOpStack` | yes | `true` for OP Stack L2s (shows L1 fee breakdown in gas estimation) |
 | `isBankrSupported` | yes | `true` if the Bankr API can execute transactions on this chain |
+| `isSwapSupported` | yes | `true` if the 0x Swap API supports this chain. Check `ZEROX_SUPPORTED_CHAIN_IDS` in `chainRegistry.ts` for the canonical list ([source](https://docs.0x.org/docs/introduction/supported-chains)). |
 | `coingeckoTokenId` | no | CoinGecko token ID for USD gas estimates. Omit if no price feed needed. |
 | `viemChain` | no | A pre-built `Chain` object from `viem/chains`. If omitted, one is auto-built from `rpcUrl`, `explorer`, and `nativeCurrency`. |
 
@@ -54,6 +56,8 @@ From that single entry, the following are all derived automatically:
 | `DEFAULT_NETWORKS[name]` | Settings, RPC resolution fallback, onchain balances |
 | `ALLOWED_CHAIN_IDS` | Inpage provider validation, chain switch validation |
 | `BANKR_SUPPORTED_CHAIN_IDS` | UI dropdown filtering, tx handler validation |
+| `SWAP_SUPPORTED_CHAIN_IDS` | Swap UI eligibility (alias for `ZEROX_SUPPORTED_CHAIN_IDS`) |
+| `ZEROX_SUPPORTED_CHAIN_IDS` | Canonical set of 0x-supported chain IDs (also used for custom chains) |
 | `OP_STACK_CHAIN_IDS` | Gas estimation L1 fee breakdown |
 | `CHAIN_NAMES[chainId]` | Human-readable name lookups |
 | `VIEM_CHAINS[chainId]` | Local signing (viem wallet client) |
