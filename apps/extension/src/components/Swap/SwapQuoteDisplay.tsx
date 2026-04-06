@@ -139,10 +139,10 @@ export default function SwapQuoteDisplay({
                     fontSize="9px"
                     fontWeight="800"
                     textTransform="uppercase"
-                    color="bauhaus.yellow"
+                    color="#B8860B"
                     letterSpacing="0.5px"
                   >
-                    sWCHAN Staker
+                    ✨ sWCHAN Staker discount
                   </Text>
                 )}
               </VStack>
