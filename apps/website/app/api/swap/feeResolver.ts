@@ -11,14 +11,19 @@ const PREMIUM_FEE_BPS = "30"; // 0.3%
 /** 20 million sWCHAN (18 decimals) */
 const PREMIUM_THRESHOLD = 20_000_000n * 10n ** 18n;
 
+export interface FeeResult {
+  feeBps: string;
+  isPremiumFee: boolean;
+}
+
 /**
- * Returns the fee BPS string for a given taker address.
+ * Returns the fee BPS and premium status for a given taker address.
  * Falls back to the default fee on any error so swaps are never blocked.
  */
 export async function resolveFeeBps(
   taker: string | undefined,
-): Promise<string> {
-  if (!taker) return DEFAULT_FEE_BPS;
+): Promise<FeeResult> {
+  if (!taker) return { feeBps: DEFAULT_FEE_BPS, isPremiumFee: false };
 
   try {
     const res = await fetch(
@@ -26,13 +31,17 @@ export async function resolveFeeBps(
       { next: { revalidate: 60 }, signal: AbortSignal.timeout(5_000) },
     );
 
-    if (!res.ok) return DEFAULT_FEE_BPS;
+    if (!res.ok) return { feeBps: DEFAULT_FEE_BPS, isPremiumFee: false };
 
     const data = await res.json();
     const balance = BigInt(data.shares);
+    const isPremium = balance >= PREMIUM_THRESHOLD;
 
-    return balance >= PREMIUM_THRESHOLD ? PREMIUM_FEE_BPS : DEFAULT_FEE_BPS;
+    return {
+      feeBps: isPremium ? PREMIUM_FEE_BPS : DEFAULT_FEE_BPS,
+      isPremiumFee: isPremium,
+    };
   } catch {
-    return DEFAULT_FEE_BPS;
+    return { feeBps: DEFAULT_FEE_BPS, isPremiumFee: false };
   }
 }

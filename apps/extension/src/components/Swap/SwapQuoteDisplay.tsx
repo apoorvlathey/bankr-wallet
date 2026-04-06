@@ -130,9 +130,22 @@ export default function SwapQuoteDisplay({
               >
                 Wallet Fee
               </Text>
-              <Text fontSize="sm" fontWeight="500">
-                {walletFeePercent}%
-              </Text>
+              <VStack spacing={0} align="flex-end">
+                <Text fontSize="sm" fontWeight="500">
+                  {walletFeePercent}%
+                </Text>
+                {quote.isPremiumFee && (
+                  <Text
+                    fontSize="9px"
+                    fontWeight="800"
+                    textTransform="uppercase"
+                    color="bauhaus.yellow"
+                    letterSpacing="0.5px"
+                  >
+                    sWCHAN Staker
+                  </Text>
+                )}
+              </VStack>
             </HStack>
             {(integratorFee || zeroExFee) && (
               <VStack spacing={0} align="stretch" pl={2}>

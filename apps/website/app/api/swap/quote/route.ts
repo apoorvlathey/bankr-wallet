@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
   const slippageBpsNum = slippageBps && /^\d+$/.test(slippageBps) ? Number(slippageBps) : 100;
 
   // Resolve fee tier based on taker's sWCHAN staking balance
-  const feeBps = await resolveFeeBps(taker);
+  const { feeBps, isPremiumFee } = await resolveFeeBps(taker);
 
   // -----------------------------------------------------------------------
   // WCHAN custom routing: compare 0x vs Uniswap V4
@@ -182,7 +182,7 @@ export async function GET(request: NextRequest) {
       );
 
       if (best) {
-        return NextResponse.json(best.data);
+        return NextResponse.json({ ...best.data, isPremiumFee });
       }
 
       if (zeroXRes) {
@@ -216,7 +216,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(result.data, { status: 502 });
     }
 
-    return NextResponse.json(result.data);
+    return NextResponse.json({ ...result.data, isPremiumFee });
   } catch (error) {
     console.error("0x quote API error:", error);
     return NextResponse.json(

@@ -94,6 +94,8 @@ export interface SwapQuoteResponse {
     gas: string;
     gasPrice: string;
   };
+  /** True when the taker qualifies for reduced premium fees (sWCHAN staker) */
+  isPremiumFee?: boolean;
 }
 
 export interface SwapPriceParams {
