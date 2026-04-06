@@ -6,6 +6,7 @@ import {
   compareBestRoute,
 } from "../wchanRoute";
 import { resolveFeeBps } from "../feeResolver";
+import { resolveSwapFeeToken } from "../preferredFeeTokens";
 
 const ZEROX_API_KEY = process.env.ZEROX_API_KEY ?? "";
 const ZEROX_BASE_URL = "https://api.0x.org";
@@ -52,6 +53,7 @@ async function fetch0xQuote(
   sellAmount: string,
   taker: string,
   feeBps: string,
+  feeToken: string,
   slippageBps?: string,
 ): Promise<{ ok: boolean; data: Record<string, unknown> }> {
   const params = new URLSearchParams({ chainId, sellToken, buyToken, sellAmount, taker });
@@ -59,7 +61,7 @@ async function fetch0xQuote(
   if (FEE_RECIPIENT) {
     params.set("swapFeeRecipient", FEE_RECIPIENT);
     params.set("swapFeeBps", feeBps);
-    params.set("swapFeeToken", sellToken);
+    params.set("swapFeeToken", feeToken);
   }
   if (slippageBps) params.set("slippageBps", slippageBps);
 
@@ -145,8 +147,9 @@ export async function GET(request: NextRequest) {
   const slippageBps = searchParams.get("slippageBps") ?? undefined;
   const slippageBpsNum = slippageBps && /^\d+$/.test(slippageBps) ? Number(slippageBps) : 100;
 
-  // Resolve fee tier based on taker's sWCHAN staking balance
+  // Resolve fee tier and preferred fee token
   const { feeBps, isPremiumFee } = await resolveFeeBps(taker);
+  const feeToken = resolveSwapFeeToken(chainIdParam, sellToken, buyToken);
 
   // -----------------------------------------------------------------------
   // WCHAN custom routing: compare 0x vs Uniswap V4
@@ -156,7 +159,7 @@ export async function GET(request: NextRequest) {
   if (wchanCheck.isWchan) {
     try {
       const [zeroXResult, wchanResult] = await Promise.allSettled([
-        fetch0xQuote(chainIdParam, sellToken, buyToken, sellAmount, taker, feeBps, slippageBps),
+        fetch0xQuote(chainIdParam, sellToken, buyToken, sellAmount, taker, feeBps, feeToken, slippageBps),
         fetchWchanQuote(wchanCheck.direction, sellAmount),
       ]);
 
@@ -209,6 +212,7 @@ export async function GET(request: NextRequest) {
       sellAmount,
       taker,
       feeBps,
+      feeToken,
       slippageBps,
     );
 

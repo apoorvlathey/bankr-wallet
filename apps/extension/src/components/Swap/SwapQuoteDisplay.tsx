@@ -63,9 +63,18 @@ export default function SwapQuoteDisplay({
   })();
   const integratorFee = quote.fees?.integratorFee;
   const zeroExFee = quote.fees?.zeroExFee;
+
+  // Determine if fee is collected in sell or buy token
+  const isFeeInBuyToken = integratorFee
+    ? integratorFee.token.toLowerCase() === quote.buyToken.toLowerCase()
+    : false;
+  const feeTokenDecimals = isFeeInBuyToken ? buyTokenDecimals : sellTokenDecimals;
+  const feeTokenSymbol = isFeeInBuyToken ? buyTokenSymbol : sellTokenSymbol;
+  const feeBaseAmount = isFeeInBuyToken ? quote.buyAmount : quote.sellAmount;
+
   const walletFeePercent = integratorFee
     ? (
-        (parseFloat(integratorFee.amount) / parseFloat(quote.sellAmount)) *
+        (parseFloat(integratorFee.amount) / parseFloat(feeBaseAmount)) *
         100
       ).toFixed(1)
     : "0";
@@ -186,8 +195,8 @@ export default function SwapQuoteDisplay({
                         {item!.label}
                       </Text>
                       <Text fontSize="xs" fontWeight="500" color="text.tertiary">
-                        {formatAmount(item!.fee.amount, sellTokenDecimals)}{" "}
-                        {sellTokenSymbol}
+                        {formatAmount(item!.fee.amount, feeTokenDecimals)}{" "}
+                        {feeTokenSymbol}
                       </Text>
                     </HStack>
                   ))}

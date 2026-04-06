@@ -6,6 +6,7 @@ import {
   compareBestRoute,
 } from "../wchanRoute";
 import { resolveFeeBps } from "../feeResolver";
+import { resolveSwapFeeToken } from "../preferredFeeTokens";
 
 const ZEROX_API_KEY = process.env.ZEROX_API_KEY ?? "";
 const ZEROX_BASE_URL = "https://api.0x.org";
@@ -51,6 +52,7 @@ async function fetch0xPrice(
   buyToken: string,
   sellAmount: string,
   feeBps: string,
+  feeToken: string,
   taker?: string,
   slippageBps?: string,
 ): Promise<{ ok: boolean; data: Record<string, unknown> }> {
@@ -59,7 +61,7 @@ async function fetch0xPrice(
   if (FEE_RECIPIENT) {
     params.set("swapFeeRecipient", FEE_RECIPIENT);
     params.set("swapFeeBps", feeBps);
-    params.set("swapFeeToken", sellToken);
+    params.set("swapFeeToken", feeToken);
   }
   if (taker) params.set("taker", taker);
   if (slippageBps) params.set("slippageBps", slippageBps);
@@ -137,8 +139,9 @@ export async function GET(request: NextRequest) {
   const slippageBps = searchParams.get("slippageBps") ?? undefined;
   const slippageBpsNum = slippageBps && /^\d+$/.test(slippageBps) ? Number(slippageBps) : 100;
 
-  // Resolve fee tier based on taker's sWCHAN staking balance
+  // Resolve fee tier and preferred fee token
   const { feeBps, isPremiumFee } = await resolveFeeBps(taker ?? undefined);
+  const feeToken = resolveSwapFeeToken(chainIdParam, sellToken, buyToken);
 
   // -----------------------------------------------------------------------
   // WCHAN custom routing: compare 0x vs Uniswap V4
@@ -148,7 +151,7 @@ export async function GET(request: NextRequest) {
   if (wchanCheck.isWchan) {
     try {
       const [zeroXResult, wchanResult] = await Promise.allSettled([
-        fetch0xPrice(chainIdParam, sellToken, buyToken, sellAmount, feeBps, taker ?? undefined, slippageBps),
+        fetch0xPrice(chainIdParam, sellToken, buyToken, sellAmount, feeBps, feeToken, taker ?? undefined, slippageBps),
         fetchWchanQuote(wchanCheck.direction, sellAmount),
       ]);
 
@@ -201,6 +204,7 @@ export async function GET(request: NextRequest) {
       buyToken,
       sellAmount,
       feeBps,
+      feeToken,
       taker ?? undefined,
       slippageBps,
     );

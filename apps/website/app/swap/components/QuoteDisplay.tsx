@@ -44,9 +44,18 @@ export function QuoteDisplay({
 
   const integratorFee = quote.fees?.integratorFee;
   const zeroExFee = quote.fees?.zeroExFee;
+
+  // Determine if fee is collected in sell or buy token
+  const isFeeInBuyToken = integratorFee
+    ? integratorFee.token.toLowerCase() === quote.buyToken.toLowerCase()
+    : false;
+  const feeTokenDecimals = isFeeInBuyToken ? buyTokenDecimals : sellTokenDecimals;
+  const feeTokenSymbol = isFeeInBuyToken ? buyTokenSymbol : sellTokenSymbol;
+  const feeBaseAmount = isFeeInBuyToken ? quote.buyAmount : quote.sellAmount;
+
   const feePercent = integratorFee
     ? (
-        (parseFloat(integratorFee.amount) / parseFloat(quote.sellAmount)) *
+        (parseFloat(integratorFee.amount) / parseFloat(feeBaseAmount)) *
         100
       ).toFixed(1)
     : "0";
@@ -100,23 +109,26 @@ export function QuoteDisplay({
                 $WCHAN Fee ({feePercent}%)
               </Text>
               <Text fontSize="sm" fontWeight="medium">
-                {formatTokenAmount(integratorFee.amount, sellTokenDecimals)}{" "}
-                {sellTokenSymbol}
+                {formatTokenAmount(integratorFee.amount, feeTokenDecimals)}{" "}
+                {feeTokenSymbol}
               </Text>
             </HStack>
           )}
 
-          {zeroExFee && (
-            <HStack justify="space-between">
-              <Text fontSize="xs" fontWeight="bold" textTransform="uppercase">
-                0x Fee
-              </Text>
-              <Text fontSize="sm" fontWeight="medium">
-                {formatTokenAmount(zeroExFee.amount, sellTokenDecimals)}{" "}
-                {sellTokenSymbol}
-              </Text>
-            </HStack>
-          )}
+          {zeroExFee && (() => {
+            const isZeroExInBuy = zeroExFee.token.toLowerCase() === quote.buyToken.toLowerCase();
+            return (
+              <HStack justify="space-between">
+                <Text fontSize="xs" fontWeight="bold" textTransform="uppercase">
+                  0x Fee
+                </Text>
+                <Text fontSize="sm" fontWeight="medium">
+                  {formatTokenAmount(zeroExFee.amount, isZeroExInBuy ? buyTokenDecimals : sellTokenDecimals)}{" "}
+                  {isZeroExInBuy ? buyTokenSymbol : sellTokenSymbol}
+                </Text>
+              </HStack>
+            );
+          })()}
 
           {uniqueSources.length > 0 && (
             <HStack justify="space-between">
