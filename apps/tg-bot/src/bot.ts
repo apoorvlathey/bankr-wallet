@@ -56,17 +56,47 @@ export function createBot(): Bot {
       return;
     }
 
-    // copyMessage sends the full message (text + media + formatting) without "Forwarded from"
-    await bot.api.copyMessage(
-      config.GENERAL_CHAT_ID,
-      ctx.message.chat.id,
-      ctx.message.message_id,
-      {
-        ...(config.GENERAL_THREAD_ID
-          ? { message_thread_id: config.GENERAL_THREAD_ID }
-          : {}),
-      },
-    );
+    const threadOpts = config.GENERAL_THREAD_ID
+      ? { message_thread_id: config.GENERAL_THREAD_ID }
+      : {};
+    const caption = ctx.match || undefined;
+
+    // Re-send manually so the "/post" prefix is stripped
+    const photo = ctx.message.photo;
+    const video = ctx.message.video;
+    const document = ctx.message.document;
+    const animation = ctx.message.animation;
+
+    if (photo) {
+      await bot.api.sendPhoto(config.GENERAL_CHAT_ID, photo[photo.length - 1].file_id, {
+        caption,
+        parse_mode: "Markdown",
+        ...threadOpts,
+      });
+    } else if (video) {
+      await bot.api.sendVideo(config.GENERAL_CHAT_ID, video.file_id, {
+        caption,
+        parse_mode: "Markdown",
+        ...threadOpts,
+      });
+    } else if (animation) {
+      await bot.api.sendAnimation(config.GENERAL_CHAT_ID, animation.file_id, {
+        caption,
+        parse_mode: "Markdown",
+        ...threadOpts,
+      });
+    } else if (document) {
+      await bot.api.sendDocument(config.GENERAL_CHAT_ID, document.file_id, {
+        caption,
+        parse_mode: "Markdown",
+        ...threadOpts,
+      });
+    } else {
+      await bot.api.sendMessage(config.GENERAL_CHAT_ID, ctx.match, {
+        parse_mode: "Markdown",
+        ...threadOpts,
+      });
+    }
 
     await ctx.reply("Posted.");
   });
