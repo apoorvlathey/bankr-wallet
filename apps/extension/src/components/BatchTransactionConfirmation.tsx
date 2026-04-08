@@ -330,6 +330,17 @@ function BatchTransactionConfirmation({
           )}
           <Spacer />
           <HStack spacing={1}>
+            <CopyButton
+              value={JSON.stringify(
+                calls.map((c) => ({
+                  to: c.to || null,
+                  value: c.value && c.value !== "0x0" ? c.value : "0",
+                  data: c.data || "0x",
+                })),
+                null,
+                2,
+              )}
+            />
             {totalCount > 1 && (
               <Button
                 size="xs"
