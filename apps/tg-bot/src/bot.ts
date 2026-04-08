@@ -29,6 +29,48 @@ export function createBot(): Bot {
     await ctx.reply(text, { parse_mode: "Markdown" });
   });
 
+  // Admin-only: post a message (with any attachments) to the general channel
+  bot.command("post", async (ctx) => {
+    if (!isAdmin(ctx.from!.id)) return;
+
+    if (!ctx.message) return;
+
+    if (!config.GENERAL_CHAT_ID) {
+      await ctx.reply("GENERAL_CHAT_ID is not configured.");
+      return;
+    }
+
+    // Must have either text (after /post) or an attachment (photo, video, etc.)
+    const hasText = !!ctx.match;
+    const hasAttachment =
+      !!ctx.message.photo ||
+      !!ctx.message.video ||
+      !!ctx.message.document ||
+      !!ctx.message.animation;
+
+    if (!hasText && !hasAttachment) {
+      await ctx.reply(
+        "Usage: `/post <message>` — can include photos, videos, documents, or GIFs",
+        { parse_mode: "Markdown" },
+      );
+      return;
+    }
+
+    // copyMessage sends the full message (text + media + formatting) without "Forwarded from"
+    await bot.api.copyMessage(
+      config.GENERAL_CHAT_ID,
+      ctx.message.chat.id,
+      ctx.message.message_id,
+      {
+        ...(config.GENERAL_THREAD_ID
+          ? { message_thread_id: config.GENERAL_THREAD_ID }
+          : {}),
+      },
+    );
+
+    await ctx.reply("Posted.");
+  });
+
   // Block all other commands in groups
   bot.use(async (ctx, next) => {
     if (ctx.chat && !isDM(ctx.chat.type) && !ctx.chatMember) return;
