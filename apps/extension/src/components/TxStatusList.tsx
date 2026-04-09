@@ -297,7 +297,6 @@ function TxStatusItem({
     config.explorer ||
     "";
   const originHostname = getOriginHostname(tx.origin);
-  const hasSecondaryLabel = !!tx.functionName;
 
   const handleViewTx = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -461,8 +460,8 @@ function TxStatusItem({
 
         {/* Content */}
         <Box flex={1} minW={0}>
-          {/* Row 1: hostname + time */}
-          <HStack justify="space-between" spacing={2} minH={hasSecondaryLabel ? undefined : "36px"} align="center">
+          {/* Row 1: hostname + time (+ status when no functionName) */}
+          <HStack justify="space-between" spacing={2} minH={tx.functionName ? undefined : "36px"} align="center">
             <Text
               fontSize="sm"
               fontWeight="600"
@@ -471,19 +470,36 @@ function TxStatusItem({
             >
               {originHostname || tx.origin}
             </Text>
-            <Text
-              fontSize="2xs"
-              color="text.tertiary"
-              fontWeight="500"
-              flexShrink={0}
-            >
-              {formatTimeAgo(tx.createdAt)}
-            </Text>
+            <HStack spacing={1} flexShrink={0}>
+              <Text
+                fontSize="2xs"
+                color="text.tertiary"
+                fontWeight="500"
+                flexShrink={0}
+              >
+                {formatTimeAgo(tx.createdAt)}
+              </Text>
+              {!tx.functionName && (
+                <>
+                  <Text fontSize="2xs" color="text.tertiary" fontWeight="500">|</Text>
+                  {statusElement}
+                  {tx.txHash && explorerBase && (
+                    <ExternalLinkIcon
+                      boxSize={2.5}
+                      color="text.tertiary"
+                      cursor="pointer"
+                      onClick={handleViewTx}
+                      _hover={{ color: "bauhaus.blue" }}
+                    />
+                  )}
+                </>
+              )}
+            </HStack>
           </HStack>
 
-          {/* Row 2: function + status + explorer */}
-          <HStack justify="space-between" spacing={2} mt={0.5} display={hasSecondaryLabel ? "flex" : "none"}>
-            {tx.functionName ? (
+          {/* Row 2: function + status + explorer (only when functionName exists) */}
+          {tx.functionName && (
+            <HStack justify="space-between" spacing={2} mt={0.5}>
               <Text
                 fontSize="xs"
                 color="text.tertiary"
@@ -492,23 +508,21 @@ function TxStatusItem({
               >
                 {tx.functionName}
               </Text>
-            ) : (
-              <Box />
-            )}
-            <HStack spacing={1} flexShrink={0}>
-              {statusElement}
-              {tx.txHash &&
-                explorerBase && (
-                  <ExternalLinkIcon
-                    boxSize={2.5}
-                    color="text.tertiary"
-                    cursor="pointer"
-                    onClick={handleViewTx}
-                    _hover={{ color: "bauhaus.blue" }}
-                  />
-                )}
+              <HStack spacing={1} flexShrink={0}>
+                {statusElement}
+                {tx.txHash &&
+                  explorerBase && (
+                    <ExternalLinkIcon
+                      boxSize={2.5}
+                      color="text.tertiary"
+                      cursor="pointer"
+                      onClick={handleViewTx}
+                      _hover={{ color: "bauhaus.blue" }}
+                    />
+                  )}
+              </HStack>
             </HStack>
-          </HStack>
+          )}
         </Box>
       </HStack>
 
