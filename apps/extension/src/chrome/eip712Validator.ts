@@ -12,6 +12,8 @@
 export interface EIP712ValidationResult {
   valid: boolean;
   error?: string;
+  /** Sanitized typed data with extra properties stripped from type fields */
+  sanitized?: string;
 }
 
 // Maximum allowed nesting depth for type definitions
@@ -56,13 +58,21 @@ export function validateEIP712TypedData(
     return { valid: false, error: "Missing or invalid 'message' field" };
   }
 
+  // Check max object depth on the entire payload to prevent deeply nested
+  // objects anywhere (types, domain, message, or extra properties) from
+  // crashing the UI during stringify/render.
+  const payloadDepthCheck = validateObjectDepth(data, MAX_NESTING_DEPTH);
+  if (!payloadDepthCheck.valid) {
+    return payloadDepthCheck;
+  }
+
   // Check for circular references
   const circularCheck = detectCircularReferences(data.types);
   if (!circularCheck.valid) {
     return circularCheck;
   }
 
-  // Check nesting depth
+  // Check nesting depth of type references (type A → type B → ...)
   const depthCheck = validateNestingDepth(data.types, MAX_NESTING_DEPTH);
   if (!depthCheck.valid) {
     return depthCheck;
@@ -74,7 +84,35 @@ export function validateEIP712TypedData(
     return typeCheck;
   }
 
-  return { valid: true };
+  // Sanitize: strip extra properties from type field definitions.
+  // EIP-712 fields only have "name" and "type". Extra properties (e.g., deeply
+  // nested objects) can crash the UI during stringify/render.
+  const sanitizedTypes: Record<string, { name: string; type: string }[]> = {};
+  for (const [typeName, fields] of Object.entries(data.types)) {
+    sanitizedTypes[typeName] = (fields as any[]).map((f) => ({
+      name: f.name,
+      type: f.type,
+    }));
+  }
+
+  // Sanitize message and domain: only keep fields defined in the type schema.
+  // Extra fields are NOT part of the EIP-712 hash, so displaying them would
+  // mislead users into thinking they're signing something they're not.
+  const sanitizedMessage = sanitizeValueByType(
+    data.message, data.primaryType, sanitizedTypes
+  );
+  const sanitizedDomain = sanitizeValueByType(
+    data.domain, "EIP712Domain", sanitizedTypes
+  );
+
+  const sanitized = JSON.stringify({
+    types: sanitizedTypes,
+    domain: sanitizedDomain,
+    primaryType: data.primaryType,
+    message: sanitizedMessage,
+  });
+
+  return { valid: true, sanitized };
 }
 
 /**
@@ -301,4 +339,92 @@ function isPrimitiveType(type: string): boolean {
  */
 function isValidTypeName(type: string, types: Record<string, any>): boolean {
   return isPrimitiveType(type) || type in types;
+}
+
+/**
+ * Recursively sanitizes a value according to its EIP-712 type definition.
+ * Only keeps fields defined in the type schema; extra fields are stripped.
+ * For primitive types, the value is returned as-is.
+ * For struct types, only fields listed in the type definition are included.
+ * For array types (e.g., "Foo[]"), each element is sanitized.
+ */
+function sanitizeValueByType(
+  value: any,
+  typeName: string,
+  types: Record<string, { name: string; type: string }[]>,
+): any {
+  if (value === null || value === undefined) return value;
+
+  // Strip array notation to get base type
+  const baseType = typeName.replace(/\[\]$/, "");
+  const isArray = typeName.endsWith("[]");
+
+  // Array type: sanitize each element
+  if (isArray && Array.isArray(value)) {
+    return value.map((item) => sanitizeValueByType(item, baseType, types));
+  }
+
+  // Primitive type: return as-is
+  if (!types[baseType]) return value;
+
+  // Struct type: only include fields defined in the schema
+  if (typeof value !== "object" || Array.isArray(value)) return value;
+
+  const fieldDefs = types[baseType];
+  const sanitized: Record<string, any> = {};
+  for (const field of fieldDefs) {
+    if (field.name in value) {
+      sanitized[field.name] = sanitizeValueByType(
+        value[field.name], field.type, types
+      );
+    }
+  }
+  return sanitized;
+}
+
+/**
+ * Validates that no value in the object exceeds the given nesting depth.
+ * Catches deeply nested objects anywhere in the payload (types, domain, message,
+ * or extra properties on any field) that could crash JSON.stringify or the UI.
+ * Uses an iterative approach to avoid stack overflow from the nesting itself.
+ */
+function validateObjectDepth(
+  obj: unknown,
+  maxDepth: number,
+): EIP712ValidationResult {
+  const stack: { value: unknown; depth: number }[] = [{ value: obj, depth: 0 }];
+  const seen = new WeakSet<object>();
+
+  while (stack.length > 0) {
+    const { value, depth } = stack.pop()!;
+
+    if (depth > maxDepth) {
+      return {
+        valid: false,
+        error: `Payload exceeds maximum object nesting depth of ${maxDepth}`,
+      };
+    }
+
+    if (value === null || typeof value !== "object") {
+      continue;
+    }
+
+    // Skip circular references (already handled by detectCircularReferences for types)
+    if (seen.has(value as object)) {
+      continue;
+    }
+    seen.add(value as object);
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        stack.push({ value: item, depth: depth + 1 });
+      }
+    } else {
+      for (const val of Object.values(value as Record<string, unknown>)) {
+        stack.push({ value: val, depth: depth + 1 });
+      }
+    }
+  }
+
+  return { valid: true };
 }

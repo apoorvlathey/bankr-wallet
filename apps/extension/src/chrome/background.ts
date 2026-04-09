@@ -194,16 +194,15 @@ async function handleRpcRequest(
   method: string,
   params: any[],
 ): Promise<any> {
-  // Validate URL protocol to prevent SSRF
-  try {
-    const url = new URL(rpcUrl);
-    if (url.protocol !== "https:" && url.protocol !== "http:") {
-      throw new Error("Only HTTP(S) RPC URLs allowed");
-    }
-  } catch (e) {
-    if (e instanceof Error && e.message === "Only HTTP(S) RPC URLs allowed")
-      throw e;
-    throw new Error("Invalid RPC URL");
+  // Validate URL is a known RPC endpoint from networksInfo (defense-in-depth)
+  const { networksInfo } = (await chrome.storage.sync.get("networksInfo")) as {
+    networksInfo: Record<string, { rpcUrl: string }> | undefined;
+  };
+  const allowedUrls = networksInfo
+    ? new Set(Object.values(networksInfo).map((n) => n.rpcUrl))
+    : new Set<string>();
+  if (!allowedUrls.has(rpcUrl)) {
+    throw new Error("RPC URL not in allowed list");
   }
 
   const response = await fetch(rpcUrl, {
@@ -458,7 +457,73 @@ chrome.runtime.onConnect.addListener((port) => {
 
 // ─── Message Router ──────────────────────────────────────────────────────────
 
+// Message types that MUST originate from extension pages (popup/sidepanel/onboarding).
+// Content scripts (web pages) are never allowed to send these.
+const EXTENSION_ONLY_MESSAGES = new Set([
+  // Transaction/signature confirmations
+  "confirmTransaction",
+  "confirmTransactionAsync",
+  "confirmTransactionAsyncPK",
+  "confirmBatchTransactionAsync",
+  "confirmSignatureRequest",
+  "confirmAddChain",
+  "confirmWatchAsset",
+  // Rejections (prevent malicious page from rejecting user's pending requests)
+  "rejectTransaction",
+  "rejectBatchTransaction",
+  "rejectSignatureRequest",
+  "rejectAddChain",
+  "rejectWatchAsset",
+  "cancelTransaction",
+  // Account management
+  "addBankrAccount",
+  "addImpersonatorAccount",
+  "addSeedPhraseGroup",
+  "deriveSeedAccount",
+  "addPrivateKeyAccount",
+  "removeAccount",
+  "setActiveAccount",
+  "renameSeedGroup",
+  "updateAccountDisplayName",
+  // Credential / session management
+  "unlockWallet",
+  "lockWallet",
+  "clearApiKeyCache",
+  "saveApiKeyWithCachedPassword",
+  "getCachedPassword",
+  "changePasswordWithCachedPassword",
+  "setAgentPassword",
+  "removeAgentPassword",
+  // Sensitive reads (pending request details)
+  "getPendingTxRequests",
+  "getPendingBatchTxRequests",
+  "getPendingTransaction",
+  "getPendingSignatureRequests",
+  "getPendingWatchAssetRequests",
+  "getPendingAddChainRequests",
+  // Key reveal (already had isExtensionPage but included for completeness)
+  "migrateFromLegacy",
+  "generateMnemonic",
+  "revealSeedPhrase",
+  "revealPrivateKey",
+  // Destructive operations
+  "resetExtension",
+  "onboardingComplete",
+  "clearTxHistory",
+  "clearNonceCache",
+  "clearFailedTxResult",
+  // Settings that affect security
+  "setSidePanelMode",
+  "setAutoLockTimeout",
+]);
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Centralized auth gate: reject extension-only messages from content scripts
+  if (EXTENSION_ONLY_MESSAGES.has(message.type) && !isExtensionPage(sender)) {
+    sendResponse({ success: false, error: "Unauthorized" });
+    return false;
+  }
+
   switch (message.type) {
     case "sendTransaction": {
       const senderWindowId = sender.tab?.windowId;
@@ -488,6 +553,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             error: "Data must conform to EIP-712 schema",
           });
           return false;
+        }
+
+        // Use sanitized typed data (extra properties stripped from type fields)
+        if (validationResult.sanitized) {
+          message.signature.params[1] = validationResult.sanitized;
         }
       }
 
