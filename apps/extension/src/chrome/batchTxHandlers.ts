@@ -75,7 +75,7 @@ export function encodeBatchCalls(
   walletAddress: string,
 ): { to: string; data: string; value: string } {
   const encodedCalls = calls.map((call) => ({
-    to: (call.to || "0x0000000000000000000000000000000000000000") as `0x${string}`,
+    to: call.to as `0x${string}`,
     value: call.value ? BigInt(call.value) : 0n,
     data: (call.data || "0x") as `0x${string}`,
   }));
@@ -190,6 +190,16 @@ export function handleWalletSendCalls(
       await writeResultToStorage(`batchTxAck:${bundleId}`, {
         success: false,
         error: "No calls provided",
+        code: -32602,
+      });
+      return;
+    }
+
+    // Validate every call has a "to" address (contract deployment via batch not supported)
+    if (params.calls.some((call) => !call.to)) {
+      await writeResultToStorage(`batchTxAck:${bundleId}`, {
+        success: false,
+        error: "Each call must have a 'to' address",
         code: -32602,
       });
       return;

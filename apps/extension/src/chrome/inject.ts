@@ -540,12 +540,28 @@ window.addEventListener("message", async (e) => {
     }
 
     case "i_rpcRequest": {
-      const { id, rpcUrl, method, params } = e.data.msg as {
+      const { id, method, params } = e.data.msg as {
         id: string;
-        rpcUrl: string;
+        rpcUrl: string; // ignored — resolved from extension state below
         method: string;
         params: any[];
       };
+
+      // Resolve RPC URL from extension-controlled networksInfo (never trust the page)
+      const { networksInfo: rpcNets } = (await chrome.storage.sync.get(
+        "networksInfo"
+      )) as { networksInfo: NetworksInfo | undefined };
+      const rpcUrl = rpcNets && store.chainName && rpcNets[store.chainName]
+        ? rpcNets[store.chainName].rpcUrl
+        : undefined;
+
+      if (!rpcUrl) {
+        window.postMessage(
+          { type: "rpcResponse", msg: { id, result: undefined, error: "No RPC URL configured for current chain" } },
+          "*"
+        );
+        break;
+      }
 
       // Generate a content-script UUID for the storage key (don't use dapp-supplied id)
       const rpcId = crypto.randomUUID();
@@ -564,7 +580,7 @@ window.addEventListener("message", async (e) => {
         );
       });
 
-      // Fire-and-forget message to background
+      // Fire-and-forget message to background with extension-resolved RPC URL
       chrome.runtime.sendMessage({
         type: "rpcRequest",
         rpcId,

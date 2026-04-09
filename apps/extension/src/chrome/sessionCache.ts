@@ -237,15 +237,17 @@ export function setCurrentSessionId(id: string | null): void {
   currentSessionId = id;
 }
 
+// Storage key in chrome.storage.local for the session encryption key half.
+// Cleaned up on lock / session clear.
+const SESSION_KEY_LOCAL = "sessionEncKey";
+
 /**
- * Stores encrypted session password in chrome.storage.session for session restoration.
- * Only used when auto-lock is "Never" to allow seamless session recovery after
- * service worker restarts.
+ * Stores encrypted session password for session restoration (auto-lock "Never").
  *
- * Security: The password is encrypted with a random key that is also stored in
- * session storage. This provides protection against simple session storage reads
- * while still allowing session restoration. The session storage is cleared when
- * the browser closes or user manually locks.
+ * Security: The password is AES-256-GCM encrypted. The ciphertext + IV are stored
+ * in chrome.storage.session (cleared on browser close), while the AES key is stored
+ * in chrome.storage.local under a dedicated key. Compromising either storage area
+ * alone does not reveal the password.
  */
 export async function storeSessionPassword(password: string): Promise<void> {
   const sessionKey = crypto.getRandomValues(new Uint8Array(32));
@@ -255,31 +257,39 @@ export async function storeSessionPassword(password: string): Promise<void> {
   const encoded = new TextEncoder().encode(password);
   const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
 
+  // Split key material across two storage areas
   await chrome.storage.session.set({
     encryptedSessionPassword: {
       data: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
-      key: btoa(String.fromCharCode(...sessionKey)),
       iv: btoa(String.fromCharCode(...iv)),
     },
+  });
+  await chrome.storage.local.set({
+    [SESSION_KEY_LOCAL]: btoa(String.fromCharCode(...sessionKey)),
   });
 }
 
 /**
- * Retrieves and decrypts the session password from chrome.storage.session.
- * Returns null if no session password is stored or decryption fails.
+ * Retrieves and decrypts the session password.
+ * Reads ciphertext from chrome.storage.session and AES key from chrome.storage.local.
+ * Returns null if either half is missing or decryption fails.
  */
 export async function getSessionPassword(): Promise<string | null> {
-  const session = await chrome.storage.session.get("encryptedSessionPassword");
-  if (!session.encryptedSessionPassword) {
+  const [session, local] = await Promise.all([
+    chrome.storage.session.get("encryptedSessionPassword"),
+    chrome.storage.local.get(SESSION_KEY_LOCAL),
+  ]);
+
+  if (!session.encryptedSessionPassword || !local[SESSION_KEY_LOCAL]) {
     return null;
   }
 
   try {
-    const { data, key: keyB64, iv: ivB64 } = session.encryptedSessionPassword;
+    const { data, iv: ivB64 } = session.encryptedSessionPassword;
 
     // Decode base64
     const encryptedData = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
-    const sessionKey = Uint8Array.from(atob(keyB64), (c) => c.charCodeAt(0));
+    const sessionKey = Uint8Array.from(atob(local[SESSION_KEY_LOCAL]), (c) => c.charCodeAt(0));
     const iv = Uint8Array.from(atob(ivB64), (c) => c.charCodeAt(0));
 
     const key = await crypto.subtle.importKey("raw", sessionKey, "AES-GCM", false, ["decrypt"]);
@@ -309,12 +319,16 @@ export async function storeSessionMetadata(
 }
 
 /**
- * Clears all session data from chrome.storage.session.
+ * Clears all session data from chrome.storage.session and the session
+ * encryption key from chrome.storage.local.
  * Called when user manually locks or session expires.
  */
 export async function clearSessionStorage(): Promise<void> {
   currentSessionId = null;
-  await chrome.storage.session.clear();
+  await Promise.all([
+    chrome.storage.session.clear(),
+    chrome.storage.local.remove(SESSION_KEY_LOCAL),
+  ]);
 }
 
 /**
