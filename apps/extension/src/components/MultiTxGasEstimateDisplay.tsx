@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import {
   Box,
   VStack,
@@ -21,7 +21,11 @@ interface MultiTxGasEstimateDisplayProps {
   accountType: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
   /** If provided, estimate gas for this single batch tx instead of individual txs */
   batchedTx?: TxGasInput;
+  /** Use sequential gas estimation (eth_simulateV1 → Tevm fallback) for non-atomic batches */
+  isNonAtomic?: boolean;
   onInsufficientBalance?: (insufficient: boolean) => void;
+  /** Callback with computed gas estimates (for passing to confirm handler) */
+  onGasEstimates?: (estimates: GasEstimate[]) => void;
 }
 
 /** Format USD from wei + price */
@@ -37,7 +41,9 @@ function MultiTxGasEstimateDisplay({
   transactions,
   accountType,
   batchedTx,
+  isNonAtomic,
   onInsufficientBalance,
+  onGasEstimates,
 }: MultiTxGasEstimateDisplayProps) {
   const [estimates, setEstimates] = useState<(GasEstimate | null)[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,58 +53,99 @@ function MultiTxGasEstimateDisplay({
   // Determine what to estimate
   const toEstimate: TxGasInput[] = batchedTx ? [batchedTx] : transactions;
 
+  // Stable key for dependency — only re-run when actual tx data changes
+  const estimateKey = useMemo(
+    () => toEstimate.map((t) => t.tx.to + t.tx.data).join(",") + (isNonAtomic ? ":na" : ""),
+    [toEstimate.map((t) => t.tx.to + t.tx.data).join(","), isNonAtomic],
+  );
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
     setEstimates([]);
 
-    const promises = toEstimate.map(
-      (item) =>
-        new Promise<GasEstimate | null>((resolve) => {
-          chrome.runtime.sendMessage(
-            {
-              type: "estimateGas",
-              tx: item.tx,
-              accountAddress: item.tx.from,
-            },
-            (result: GasEstimate) => {
-              if (chrome.runtime.lastError) {
-                resolve(null);
-                return;
-              }
-              resolve(result);
-            },
-          );
-        }),
-    );
+    if (isNonAtomic) {
+      // Non-atomic: use sequential estimation (eth_simulateV1 → Tevm fork)
+      // so each call sees state changes from prior calls
+      const calls = transactions.map((t) => ({
+        to: t.tx.to,
+        data: t.tx.data,
+        value: t.tx.value,
+      }));
 
-    Promise.all(promises).then((results) => {
-      if (cancelled) return;
-      setEstimates(results);
-      setLoading(false);
+      chrome.runtime.sendMessage(
+        {
+          type: "estimateBatchGasSequential",
+          calls,
+          fromAddress: transactions[0]?.tx.from,
+          chainId: transactions[0]?.tx.chainId,
+        },
+        (results: GasEstimate[]) => {
+          if (cancelled) return;
+          if (chrome.runtime.lastError || !results) {
+            setError("Gas estimate unavailable");
+            setLoading(false);
+            return;
+          }
+          setEstimates(results);
+          setLoading(false);
 
-      const hasEstimates = results.some((r) => r !== null);
-      if (!hasEstimates) {
-        setError("Gas estimate unavailable");
-      }
+          if (onGasEstimates) onGasEstimates(results);
+          if (onInsufficientBalance) {
+            const anyInsufficient = results.some((r) => r?.insufficientBalance);
+            onInsufficientBalance(!!anyInsufficient);
+          }
+        },
+      );
+    } else {
+      // Atomic or individual: estimate each tx independently
+      const promises = toEstimate.map(
+        (item) =>
+          new Promise<GasEstimate | null>((resolve) => {
+            chrome.runtime.sendMessage(
+              {
+                type: "estimateGas",
+                tx: item.tx,
+                accountAddress: item.tx.from,
+              },
+              (result: GasEstimate) => {
+                if (chrome.runtime.lastError) {
+                  resolve(null);
+                  return;
+                }
+                resolve(result);
+              },
+            );
+          }),
+      );
 
-      // Check insufficient balance from the first valid estimate
-      if (onInsufficientBalance) {
-        const anyInsufficient = results.some((r) => r?.insufficientBalance);
-        onInsufficientBalance(!!anyInsufficient);
-      }
-    });
+      Promise.all(promises).then((results) => {
+        if (cancelled) return;
+        setEstimates(results);
+        setLoading(false);
+
+        const hasEstimates = results.some((r) => r !== null);
+        if (!hasEstimates) {
+          setError("Gas estimate unavailable");
+        }
+
+        if (onInsufficientBalance) {
+          const anyInsufficient = results.some((r) => r?.insufficientBalance);
+          onInsufficientBalance(!!anyInsufficient);
+        }
+      });
+    }
 
     return () => {
       cancelled = true;
     };
-  }, [toEstimate.length, toEstimate.map((t) => t.tx.to + t.tx.data).join(",")]);
+  }, [estimateKey]);
 
   // Compute totals
   const validEstimates = estimates.filter((e): e is GasEstimate => e !== null);
   const totalCostWei = validEstimates.reduce(
-    (sum, e) => sum + BigInt(e.estimatedCostWei),
+    (sum, e) => sum + BigInt(e.estimatedCostWei || "0"),
     0n,
   ).toString();
   const nativePriceUsd = validEstimates[0]?.nativePriceUsd ?? null;

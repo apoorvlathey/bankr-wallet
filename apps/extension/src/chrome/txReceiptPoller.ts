@@ -207,12 +207,16 @@ async function showConfirmationNotification(
 /**
  * Check a single pending tx's receipt on demand (called from frontend polling).
  * Returns the updated status or null if still pending.
+ * Skips the RPC call if a background poller is already tracking this tx.
  */
 export async function checkPendingTxReceipt(
   txId: string,
   txHash: string,
   chainId: number,
 ): Promise<"success" | "failed" | null> {
+  // Skip if background poller is already tracking — avoids duplicate RPC calls
+  if (activePollers.has(txId)) return null;
+
   const result = await checkAndFinalizeReceipt(txId, txHash, chainId);
   if (result === true) return "success";
   if (result === false) return "failed";

@@ -26,6 +26,8 @@ interface AssetChangesDisplayProps {
   txRequest: PendingTxRequest;
   /** For batch transactions: simulate each call individually instead of the encoded batch */
   batchCalls?: { to?: string; data?: string; value?: string }[];
+  /** Use eth_simulateV1-based non-atomic simulation (for PK/SP EOA accounts) */
+  isNonAtomic?: boolean;
 }
 
 /** Format USD value for display */
@@ -178,7 +180,7 @@ const MAX_RETRIES = 3;
 /** Delay before each retry (ms) */
 const RETRY_DELAY = 2_500;
 
-function AssetChangesDisplay({ txRequest, batchCalls }: AssetChangesDisplayProps) {
+function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChangesDisplayProps) {
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
@@ -187,10 +189,14 @@ function AssetChangesDisplay({ txRequest, batchCalls }: AssetChangesDisplayProps
   useEffect(() => {
     let cancelled = false;
 
-    // Batch transactions: simulate each call individually to avoid self-call issue
+    // Batch transactions: simulate each call individually
+    // Non-atomic (PK/SP EOA): use eth_simulateV1 with fallback
+    // Atomic (Bankr): use bytecode-injection batch simulation
     const message = batchCalls
       ? {
-          type: "simulateBatchAssetChanges",
+          type: isNonAtomic
+            ? "simulateBatchAssetChangesNonAtomic"
+            : "simulateBatchAssetChanges",
           calls: batchCalls,
           fromAddress: txRequest.tx.from,
           chainId: txRequest.tx.chainId,
@@ -298,20 +304,13 @@ function AssetChangesDisplay({ txRequest, batchCalls }: AssetChangesDisplayProps
   }
 
   // Hide entirely if simulation failed or no changes
-  if (!result || result.simulationFailed) {
-    console.log("[AssetChangesUI] Hidden — simulationFailed:", result?.simulationFailed, "error:", result?.simulationError, "result:", result);
-    return null;
-  }
+  if (!result || result.simulationFailed) return null;
 
   const allChanges: AssetChange[] = [];
   if (result.nativeChange) allChanges.push(result.nativeChange);
   allChanges.push(...result.tokenChanges);
 
-  if (allChanges.length === 0) {
-    console.log("[AssetChangesUI] Hidden — no asset changes detected (nativeChange:", result.nativeChange, "tokenChanges:", result.tokenChanges, ")");
-    return null;
-  }
-  console.log("[AssetChangesUI] Rendering", allChanges.length, "asset changes");
+  if (allChanges.length === 0) return null;
 
   const outChanges = allChanges.filter((c) => c.direction === "out");
   const inChanges = allChanges.filter((c) => c.direction === "in");

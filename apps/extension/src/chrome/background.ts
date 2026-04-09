@@ -58,6 +58,7 @@ import {
   handleWalletGetCapabilities,
   handleWalletSendCalls,
   handleConfirmBatchTransaction,
+  handleConfirmBatchTransactionPK,
   handleRejectBatchTransaction,
   handleWalletGetCallsStatus,
   handleWalletShowCallsStatus,
@@ -137,9 +138,10 @@ import {
 
 // Gas estimation
 import { estimateGas } from "./gasEstimation";
+import { estimateBatchGasSequential } from "./batchGasEstimation";
 
 // Transaction simulation (asset change detection)
-import { simulateAssetChanges, simulateBatchAssetChanges, retryTokenMetadata } from "./txSimulation";
+import { simulateAssetChanges, simulateBatchAssetChanges, simulateBatchAssetChangesNonAtomic, retryTokenMetadata } from "./txSimulation";
 
 // Chat handlers
 import { handleSubmitChatPrompt } from "./chatHandlers";
@@ -816,6 +818,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message.bundleId,
         message.password,
         message.functionNames,
+      ).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "confirmBatchTransactionAsyncPK": {
+      handleConfirmBatchTransactionPK(
+        message.bundleId,
+        message.password,
+        message.tabId,
+        message.functionNames,
+        message.gasEstimates,
       ).then((result) => {
         sendResponse(result);
       });
@@ -1567,6 +1582,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "estimateBatchGasSequential": {
+      estimateBatchGasSequential(message.calls, message.fromAddress, message.chainId).then(sendResponse);
+      return true;
+    }
+
     case "simulateAssetChanges": {
       simulateAssetChanges(message.tx, message.accountAddress).then(sendResponse);
       return true;
@@ -1574,6 +1594,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "simulateBatchAssetChanges": {
       simulateBatchAssetChanges(message.calls, message.fromAddress, message.chainId).then(sendResponse);
+      return true;
+    }
+
+    case "simulateBatchAssetChangesNonAtomic": {
+      simulateBatchAssetChangesNonAtomic(message.calls, message.fromAddress, message.chainId).then(sendResponse);
       return true;
     }
 
