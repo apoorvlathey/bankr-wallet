@@ -28,6 +28,7 @@ interface TokenHoldingsProps {
   hideHeader?: boolean;
   hideCard?: boolean;
   onRpcIssuesChange?: (chainIds: number[]) => void;
+  filterChainId?: number | null;
   onStateChange?: (state: {
     totalValueUsd: number;
     loading: boolean;
@@ -38,7 +39,7 @@ interface TokenHoldingsProps {
   }) => void;
 }
 
-function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCard, onRpcIssuesChange, onStateChange }: TokenHoldingsProps) {
+function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCard, onRpcIssuesChange, filterChainId, onStateChange }: TokenHoldingsProps) {
   const { networksInfo } = useNetworks();
   const [tokens, setTokens] = useState<PortfolioToken[]>([]);
   const [defiPositions, setDefiPositions] = useState<DefiPosition[]>([]);
@@ -143,6 +144,16 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
     [tokens]
   );
 
+  // Apply network filter
+  const filteredTokens = useMemo(
+    () => filterChainId != null ? tokens.filter((t) => t.chainId === filterChainId) : tokens,
+    [tokens, filterChainId]
+  );
+  const filteredDefiPositions = useMemo(
+    () => filterChainId != null ? defiPositions.filter((p) => p.chainId === filterChainId) : defiPositions,
+    [defiPositions, filterChainId]
+  );
+
   // Notify parent of state changes for tab header display
   const loadPortfolioRef = useRef(loadPortfolio);
   loadPortfolioRef.current = loadPortfolio;
@@ -211,7 +222,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
             </VStack>
           </HStack>
         ))
-      ) : tokens.length === 0 && defiPositions.length === 0 ? (
+      ) : filteredTokens.length === 0 && filteredDefiPositions.length === 0 ? (
         <Box p={3}>
           <Text fontSize="sm" color="text.tertiary" textAlign="center">
             No tokens found
@@ -219,7 +230,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         </Box>
       ) : (
         <>
-          {tokens.map((token, i) => {
+          {filteredTokens.map((token, i) => {
             const isCustom = customTokenKeys.has(
               `${token.chainId}-${token.contractAddress.toLowerCase()}`
             );
@@ -232,7 +243,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
               w="full"
               p={2.5}
               px={3}
-              borderBottom={i < tokens.length - 1 || defiPositions.length > 0 ? "1px solid" : "none"}
+              borderBottom={i < filteredTokens.length - 1 || filteredDefiPositions.length > 0 ? "1px solid" : "none"}
               borderColor="gray.200"
               cursor={hasHover ? "pointer" : "default"}
               _hover={{ bg: "bg.muted", "& > .hover-actions": { opacity: 1 }, "& > .edit-label": { opacity: 1, pointerEvents: "auto" }, "& > .value-col": { opacity: 0 }, "& .copy-addr-btn": { opacity: 1 } }}
@@ -424,7 +435,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
           })}
 
           {/* DeFi Positions */}
-          {defiPositions.length > 0 && (
+          {filteredDefiPositions.length > 0 && (
             <>
               <HStack
                 w="full"
@@ -438,13 +449,13 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                   DeFi Positions
                 </Text>
               </HStack>
-              {defiPositions.map((pos, i) => {
+              {filteredDefiPositions.map((pos, i) => {
                 const chainConfig = getChainConfig(pos.chainId);
                 return (
                   <Box
                     key={`defi-${pos.protocol}-${pos.name}-${i}`}
                     w="full"
-                    borderBottom={i < defiPositions.length - 1 ? "1px solid" : "none"}
+                    borderBottom={i < filteredDefiPositions.length - 1 ? "1px solid" : "none"}
                     borderColor="gray.200"
                   >
                     {/* Position header */}
