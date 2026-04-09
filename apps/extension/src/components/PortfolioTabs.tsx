@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 import {
   Box,
   HStack,
@@ -12,12 +12,22 @@ import {
   Tooltip,
   Skeleton,
   useDisclosure,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  Input,
+  InputGroup,
+  InputLeftElement,
 } from "@chakra-ui/react";
-import { AddIcon, RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { AddIcon, ChevronDownIcon, RepeatIcon, Search2Icon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 import TxStatusList from "@/components/TxStatusList";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import AddTokenModal from "@/components/AddTokenModal";
 import PortfolioChart from "@/components/PortfolioChart";
+import ChainIcon from "@/components/ChainIcon";
+import { useNetworks } from "@/contexts/NetworksContext";
+import { getVisibleChains } from "@/lib/chains";
 
 const TokenHoldings = lazy(() => import("@/components/TokenHoldings"));
 
@@ -48,6 +58,23 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
   const holdingsStateRef = useRef<HoldingsState | null>(null);
   holdingsStateRef.current = holdingsState;
   const addTokenModal = useDisclosure();
+  const { networksInfo } = useNetworks();
+  const visibleChains = getVisibleChains(networksInfo);
+  const [filterChainId, setFilterChainId] = useState<number | null>(null);
+  const selectedChain = filterChainId !== null ? visibleChains.find((c) => c.chainId === filterChainId) : null;
+  const [chainSearch, setChainSearch] = useState("");
+  const chainSearchInputRef = useRef<HTMLInputElement>(null);
+  const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
+  const [highlightedChainIndex, setHighlightedChainIndex] = useState(0);
+
+  // "All Networks" is index 0, chains start at index 1
+  const filteredChains = useMemo(() => {
+    const q = chainSearch.trim().toLowerCase();
+    if (!q) return visibleChains;
+    return visibleChains.filter(
+      (c) => c.name.toLowerCase().includes(q) || String(c.chainId).includes(q),
+    );
+  }, [visibleChains, chainSearch]);
 
   // Switch to Activity tab when activityTabTrigger increments (after tx submission)
   useEffect(() => {
@@ -188,10 +215,177 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
               Activity
             </Tab>
           </TabList>
+        </HStack>
 
-          {/* Action buttons - only visible on Holdings tab */}
+        {/* Filter bar - sits between tab bar and content */}
+        <HStack
+          px={2}
+          py={1}
+          justify="flex-end"
+          align="center"
+        >
+          {/* Network filter dropdown */}
+          <Menu
+            isOpen={isChainMenuOpen}
+            initialFocusRef={chainSearchInputRef}
+            onOpen={() => {
+              setIsChainMenuOpen(true);
+              setHighlightedChainIndex(0);
+            }}
+            onClose={() => {
+              setIsChainMenuOpen(false);
+              setChainSearch("");
+              setHighlightedChainIndex(0);
+            }}
+          >
+            <MenuButton
+              as={Box}
+              cursor="pointer"
+              px={2}
+              h="24px"
+              display="flex"
+              alignItems="center"
+              borderRadius="sm"
+              border="1.5px solid"
+              borderColor="gray.300"
+              bg="bauhaus.white"
+              _hover={{ borderColor: "bauhaus.black" }}
+              transition="border-color 0.15s"
+            >
+              <HStack spacing={1}>
+                {selectedChain ? (
+                  <>
+                    <ChainIcon chainId={selectedChain.chainId} chainName={selectedChain.name} size="12px" />
+                    <Text fontSize="11px" fontWeight="600" color="text.secondary">{selectedChain.name}</Text>
+                  </>
+                ) : (
+                  <Text fontSize="11px" fontWeight="600" color="text.secondary">All Networks</Text>
+                )}
+                <ChevronDownIcon boxSize="12px" color="text.tertiary" />
+              </HStack>
+            </MenuButton>
+            <MenuList
+              bg="bauhaus.white"
+              border="3px solid"
+              borderColor="bauhaus.black"
+              borderRadius={0}
+              boxShadow="4px 4px 0px 0px #121212"
+              p={0}
+              zIndex={10}
+              minW="180px"
+            >
+              <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+                <InputGroup size="sm">
+                  <InputLeftElement pointerEvents="none">
+                    <Search2Icon color="text.tertiary" boxSize={3} />
+                  </InputLeftElement>
+                  <Input
+                    ref={chainSearchInputRef}
+                    value={chainSearch}
+                    onChange={(e) => setChainSearch(e.target.value)}
+                    placeholder="Filter by chain"
+                    border="2px solid"
+                    borderColor="bauhaus.black"
+                    borderRadius="0"
+                    fontWeight="600"
+                    fontSize="xs"
+                    pl={9}
+                    _hover={{ borderColor: "bauhaus.black" }}
+                    _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+                    onKeyDown={(e) => {
+                      // Total items = "All Networks" (when not searching) + filteredChains
+                      const showAll = !chainSearch.trim();
+                      const totalItems = (showAll ? 1 : 0) + filteredChains.length;
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setHighlightedChainIndex((prev) => Math.min(prev + 1, totalItems - 1));
+                        return;
+                      }
+                      if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setHighlightedChainIndex((prev) => Math.max(prev - 1, 0));
+                        return;
+                      }
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (showAll && highlightedChainIndex === 0) {
+                          setFilterChainId(null);
+                        } else {
+                          const chainIdx = showAll ? highlightedChainIndex - 1 : highlightedChainIndex;
+                          const chain = filteredChains[chainIdx];
+                          if (chain) setFilterChainId(chain.chainId);
+                        }
+                        setIsChainMenuOpen(false);
+                        setChainSearch("");
+                        return;
+                      }
+                      e.stopPropagation();
+                    }}
+                  />
+                </InputGroup>
+              </Box>
+              <Box maxH="200px" overflowY="auto">
+                {/* "All Networks" option - only when not searching */}
+                {!chainSearch.trim() && (
+                  <MenuItem
+                    onClick={() => {
+                      setFilterChainId(null);
+                      setIsChainMenuOpen(false);
+                      setChainSearch("");
+                    }}
+                    onMouseEnter={() => setHighlightedChainIndex(0)}
+                    bg={highlightedChainIndex === 0 || filterChainId === null ? "bg.muted" : "transparent"}
+                    _hover={{ bg: "bg.hover" }}
+                    px={3}
+                    py={2}
+                  >
+                    <Text fontWeight="700" fontSize="sm">All Networks</Text>
+                  </MenuItem>
+                )}
+                {filteredChains.map((chain, index) => {
+                  const itemIndex = chainSearch.trim() ? index : index + 1;
+                  return (
+                    <MenuItem
+                      key={chain.chainId}
+                      onClick={() => {
+                        setFilterChainId(chain.chainId);
+                        setIsChainMenuOpen(false);
+                        setChainSearch("");
+                      }}
+                      onMouseEnter={() => setHighlightedChainIndex(itemIndex)}
+                      bg={
+                        itemIndex === highlightedChainIndex || chain.chainId === filterChainId
+                          ? "bg.muted"
+                          : "transparent"
+                      }
+                      _hover={{ bg: "bg.hover" }}
+                      px={3}
+                      py={2}
+                    >
+                      <HStack spacing={2}>
+                        <ChainIcon chainId={chain.chainId} chainName={chain.name} size="18px" />
+                        <Text fontWeight="700" fontSize="sm">{chain.name}</Text>
+                      </HStack>
+                    </MenuItem>
+                  );
+                })}
+                {filteredChains.length === 0 && (
+                  <Box px={3} py={3}>
+                    <Text fontSize="sm" fontWeight="700" color="text.secondary">
+                      No networks match &ldquo;{chainSearch.trim()}&rdquo;
+                    </Text>
+                  </Box>
+                )}
+              </Box>
+            </MenuList>
+          </Menu>
+
+          {/* Action buttons (only on Holdings tab) */}
           {tabIndex === 0 && holdingsState && (
-            <HStack spacing={1} pr={2}>
+            <HStack spacing={1}>
               <Tooltip label="Add token" hasArrow>
                 <IconButton
                   aria-label="Add token"
@@ -238,12 +432,13 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
                 hideHeader
                 hideCard
                 onStateChange={handleStateChange}
+                filterChainId={filterChainId}
               />
             </Suspense>
           </TabPanel>
           <TabPanel p={0}>
-            <Box p={2}>
-              <TxStatusList maxItems={10} address={address} hideHeader hideCard />
+            <Box px={2} pb={2}>
+              <TxStatusList maxItems={10} address={address} hideHeader hideCard filterChainId={filterChainId} />
             </Box>
           </TabPanel>
         </TabPanels>

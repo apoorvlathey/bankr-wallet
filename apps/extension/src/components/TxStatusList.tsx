@@ -27,6 +27,7 @@ interface TxStatusListProps {
   address?: string;
   hideHeader?: boolean;
   hideCard?: boolean;
+  filterChainId?: number | null;
 }
 
 /** Group transactions by date label */
@@ -65,6 +66,7 @@ function TxStatusList({
   address,
   hideHeader,
   hideCard,
+  filterChainId,
 }: TxStatusListProps) {
   const [allHistory, setAllHistory] = useState<CompletedTransaction[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -117,11 +119,15 @@ function TxStatusList({
     return () => clearInterval(interval);
   }, [hasPending]);
 
-  const history = address
+  const addressFiltered = address
     ? allHistory.filter(
         (tx) => tx.tx.from.toLowerCase() === address.toLowerCase(),
       )
     : allHistory;
+
+  const history = filterChainId != null
+    ? addressFiltered.filter((tx) => tx.chainId === filterChainId)
+    : addressFiltered;
 
   const displayItems = isExpanded ? history : history.slice(0, maxItems);
   const hasMore = history.length > maxItems;
