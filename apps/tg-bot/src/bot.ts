@@ -70,30 +70,25 @@ export function createBot(): Bot {
     if (photo) {
       await bot.api.sendPhoto(config.GENERAL_CHAT_ID, photo[photo.length - 1].file_id, {
         caption,
-        parse_mode: "Markdown",
         ...threadOpts,
       });
     } else if (video) {
       await bot.api.sendVideo(config.GENERAL_CHAT_ID, video.file_id, {
         caption,
-        parse_mode: "Markdown",
         ...threadOpts,
       });
     } else if (animation) {
       await bot.api.sendAnimation(config.GENERAL_CHAT_ID, animation.file_id, {
         caption,
-        parse_mode: "Markdown",
         ...threadOpts,
       });
     } else if (document) {
       await bot.api.sendDocument(config.GENERAL_CHAT_ID, document.file_id, {
         caption,
-        parse_mode: "Markdown",
         ...threadOpts,
       });
     } else {
       await bot.api.sendMessage(config.GENERAL_CHAT_ID, ctx.match, {
-        parse_mode: "Markdown",
         ...threadOpts,
       });
     }
