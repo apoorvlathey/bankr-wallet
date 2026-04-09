@@ -143,6 +143,23 @@ const BATCH_SIMULATOR_ABI = [
 ] as const;
 
 // ---------------------------------------------------------------------------
+// eth_simulateV1 support cache — tracks which chains support the method
+// ---------------------------------------------------------------------------
+
+const ethSimulateV1Support = new Map<number, { supported: boolean; checkedAt: number }>();
+const SIMULATE_V1_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+function isEthSimulateV1Supported(chainId: number): boolean | null {
+  const cached = ethSimulateV1Support.get(chainId);
+  if (!cached || Date.now() - cached.checkedAt > SIMULATE_V1_CACHE_TTL) return null;
+  return cached.supported;
+}
+
+function setEthSimulateV1Support(chainId: number, supported: boolean): void {
+  ethSimulateV1Support.set(chainId, { supported, checkedAt: Date.now() });
+}
+
+// ---------------------------------------------------------------------------
 // Client cache (separate from gasEstimation to keep modules independent)
 // ---------------------------------------------------------------------------
 
@@ -1216,4 +1233,263 @@ export async function simulateBatchAssetChanges(
       simulationError: err.shortMessage || err.message || "Batch simulation failed",
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// eth_simulateV1-based batch simulation (non-atomic EOA accounts)
+// ---------------------------------------------------------------------------
+
+/** ERC-20 Transfer event topic */
+const TRANSFER_TOPIC =
+  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+/**
+ * Simulate multiple calls via eth_simulateV1 (sequential, state-persisting).
+ * Returns the same SimulationResult as the bytecode-injection approach.
+ *
+ * Falls back to null if eth_simulateV1 is not supported (caller should
+ * use the existing simulateBatchAssetChanges as fallback).
+ */
+async function simulateViaEthSimulateV1(
+  calls: { to?: string; data?: string; value?: string }[],
+  fromAddress: string,
+  chainId: number,
+): Promise<SimulationResult | null> {
+  // Check cached support status
+  const supported = isEthSimulateV1Supported(chainId);
+  if (supported === false) return null;
+
+  const rpcUrl = await getRpcUrl(chainId);
+  if (!rpcUrl) return null;
+
+  const from = fromAddress.toLowerCase();
+
+  // Build eth_simulateV1 request
+  const simulateCalls = calls.map((call) => ({
+    from: fromAddress,
+    to: call.to || "0x0000000000000000000000000000000000000000",
+    data: call.data || "0x",
+    value: call.value && call.value !== "0x0" ? call.value : "0x0",
+  }));
+
+  const requestBody = {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "eth_simulateV1",
+    params: [
+      {
+        blockStateCalls: [
+          {
+            stateOverrides: {
+              [fromAddress]: {
+                balance: "0x56BC75E2D63100000", // 100 ETH
+              },
+            },
+            calls: simulateCalls,
+          },
+        ],
+        traceTransfers: true,
+        validation: false,
+      },
+      "latest",
+    ],
+  };
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+
+    const response = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    const json = await response.json();
+
+    // Check for RPC error (method not found = unsupported)
+    if (json.error) {
+      const errMsg = (json.error.message || "").toLowerCase();
+      if (
+        errMsg.includes("method not found") ||
+        errMsg.includes("not supported") ||
+        errMsg.includes("does not exist") ||
+        errMsg.includes("unknown method") ||
+        json.error.code === -32601
+      ) {
+        console.log(`[ethSimV1] eth_simulateV1 not supported on chain ${chainId}, caching`);
+        setEthSimulateV1Support(chainId, false);
+        return null;
+      }
+      // Other errors — method exists but call failed
+      console.log(`[ethSimV1] RPC error:`, json.error);
+      setEthSimulateV1Support(chainId, true);
+      return null;
+    }
+
+    // Success — mark as supported
+    setEthSimulateV1Support(chainId, true);
+
+    // Parse the response
+    const blockResults = json.result;
+    if (!blockResults || !Array.isArray(blockResults) || blockResults.length === 0) {
+      console.log("[ethSimV1] Empty response");
+      return null;
+    }
+
+    const blockResult = blockResults[0];
+    const callResults = blockResult.calls || [];
+    console.log(`[ethSimV1] Got ${callResults.length} call results`);
+
+    // Check if all calls succeeded
+    let allSuccess = true;
+    for (const cr of callResults) {
+      if (cr.status !== "0x1") {
+        allSuccess = false;
+      }
+    }
+
+    // Parse Transfer logs to compute net balance changes
+    // tokenAddress → net delta (positive = incoming, negative = outgoing)
+    const tokenDeltas = new Map<string, bigint>();
+    let nativeDelta = 0n;
+
+    for (const cr of callResults) {
+      const logs = cr.logs || [];
+      for (const log of logs) {
+        const topics = log.topics || [];
+        const address = (log.address || "").toLowerCase();
+
+        // Standard ERC-20 Transfer(from, to, amount)
+        if (
+          topics[0] === TRANSFER_TOPIC &&
+          topics.length >= 3
+        ) {
+          const logFrom = "0x" + (topics[1] || "").slice(26).toLowerCase();
+          const logTo = "0x" + (topics[2] || "").slice(26).toLowerCase();
+          const amount = BigInt(log.data || "0x0");
+
+          if (logFrom === from) {
+            // User sending tokens
+            const prev = tokenDeltas.get(address) ?? 0n;
+            tokenDeltas.set(address, prev - amount);
+          }
+          if (logTo === from) {
+            // User receiving tokens
+            const prev = tokenDeltas.get(address) ?? 0n;
+            tokenDeltas.set(address, prev + amount);
+          }
+        }
+
+        // Synthetic native transfer (from traceTransfers: true)
+        // These use a special synthetic address (0xeeee...eeee) or
+        // are transfer events from the zero address
+        if (
+          topics[0] === TRANSFER_TOPIC &&
+          topics.length >= 3 &&
+          address === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        ) {
+          const logFrom = "0x" + (topics[1] || "").slice(26).toLowerCase();
+          const logTo = "0x" + (topics[2] || "").slice(26).toLowerCase();
+          const amount = BigInt(log.data || "0x0");
+
+          if (logFrom === from) nativeDelta -= amount;
+          if (logTo === from) nativeDelta += amount;
+        }
+      }
+    }
+
+    // Remove the synthetic native token address from ERC-20 deltas (if it got included)
+    tokenDeltas.delete("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+
+    // Filter zero-delta tokens
+    const nonZeroTokens: Address[] = [];
+    const nonZeroDeltas: bigint[] = [];
+    for (const [addr, delta] of tokenDeltas) {
+      if (delta !== 0n) {
+        nonZeroTokens.push(addr as Address);
+        nonZeroDeltas.push(delta);
+      }
+    }
+
+    console.log(`[ethSimV1] Parsed: native=${nativeDelta}, ${nonZeroTokens.length} token changes`);
+
+    // Enrich token metadata
+    const client = await getClient(chainId);
+    if (!client) return null;
+
+    const { changes: tokenChanges, metadataComplete } = await enrichTokenChanges(
+      client,
+      chainId,
+      nonZeroTokens,
+      nonZeroDeltas,
+      fromAddress,
+    );
+
+    // Build native change
+    const native = getNativeCurrency(chainId);
+    let nativeChange: AssetChange | null = null;
+    if (nativeDelta !== 0n) {
+      const abs = nativeDelta < 0n ? -nativeDelta : nativeDelta;
+      const amount = parseFloat(formatUnits(abs, native.decimals));
+
+      let nativePriceUsd: number | null = null;
+      try {
+        const { fetchNativePrice } = await import("./gasEstimation");
+        nativePriceUsd = await fetchNativePrice(chainId);
+      } catch {}
+      if (nativePriceUsd === null) {
+        const portfolioPrices = await getPortfolioPriceMap(fromAddress);
+        const key = `${chainId}:native`;
+        nativePriceUsd = portfolioPrices.get(key) ?? null;
+      }
+
+      nativeChange = {
+        address: "native",
+        symbol: native.symbol,
+        name: native.name,
+        decimals: native.decimals,
+        logoUrl: native.icon,
+        rawDelta: nativeDelta.toString(),
+        formattedAmount: formatAmount(amount),
+        valueUsd: nativePriceUsd !== null ? amount * nativePriceUsd : null,
+        direction: nativeDelta > 0n ? "in" : "out",
+      };
+    }
+
+    return {
+      txSuccess: allSuccess,
+      nativeChange,
+      tokenChanges,
+      simulationFailed: false,
+      metadataComplete,
+    };
+  } catch (err: any) {
+    console.log("[ethSimV1] Error:", err.message);
+    // Network errors etc. — don't cache as unsupported, might be transient
+    return null;
+  }
+}
+
+/**
+ * Non-atomic batch simulation: tries eth_simulateV1 first for robust
+ * multi-tx simulation, falls back to the bytecode-injection approach.
+ */
+export async function simulateBatchAssetChangesNonAtomic(
+  calls: { to?: string; data?: string; value?: string }[],
+  fromAddress: string,
+  chainId: number,
+): Promise<SimulationResult> {
+  // Try eth_simulateV1 first (better cross-call state handling for EOAs)
+  const v1Result = await simulateViaEthSimulateV1(calls, fromAddress, chainId);
+  if (v1Result) {
+    console.log("[batchSimNonAtomic] Used eth_simulateV1 successfully");
+    return v1Result;
+  }
+
+  // Fallback: existing bytecode-injection approach (works for EOAs via per-call access list fallback)
+  console.log("[batchSimNonAtomic] Falling back to bytecode-injection simulation");
+  return simulateBatchAssetChanges(calls, fromAddress, chainId);
 }

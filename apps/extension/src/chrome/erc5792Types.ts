@@ -65,6 +65,8 @@ export interface PendingBatchTxRequest {
   chainName: string;
   chainId: number;
   timestamp: number;
+  /** Account type at time of request — determines atomic vs non-atomic path */
+  accountType?: "bankr" | "impersonator" | "privateKey" | "seedPhrase";
 }
 
 /** Status codes per ERC-5792 */
@@ -82,6 +84,8 @@ export interface BundleStatus {
   status: number;
   atomic: boolean;
   txHash?: string;
+  /** Individual tx hashes for non-atomic batches (one per call) */
+  txHashes?: string[];
   receipts?: BundleReceipt[];
   createdAt: number;
   completedAt?: number;

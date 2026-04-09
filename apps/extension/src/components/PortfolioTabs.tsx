@@ -56,20 +56,29 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
     }
   }, [activityTabTrigger]);
 
-  // Listen for tx confirmations from background and auto-refresh balances
+  // Listen for tx confirmations from background and auto-refresh balances.
+  // Debounce so rapid messages (e.g., batch tx with multiple calls) collapse into one refresh.
   useEffect(() => {
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
     const handleMessage = (message: { type: string }) => {
       if (message.type === "txHistoryUpdated") {
-        // Tx status changed (likely confirmed on-chain) — refresh after a delay
-        // so RPC nodes have time to reflect the new state
-        setTimeout(() => {
+        // Clear any pending refresh and schedule a new one.
+        // This ensures only one refresh fires even if multiple txHistoryUpdated
+        // messages arrive in quick succession (e.g., non-atomic batch).
+        if (refreshTimer) clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => {
+          refreshTimer = null;
           holdingsStateRef.current?.refresh();
         }, POST_CONFIRM_REFRESH_DELAY);
       }
     };
 
     chrome.runtime.onMessage.addListener(handleMessage);
-    return () => chrome.runtime.onMessage.removeListener(handleMessage);
+    return () => {
+      chrome.runtime.onMessage.removeListener(handleMessage);
+      if (refreshTimer) clearTimeout(refreshTimer);
+    };
   }, []);
 
   const handleStateChange = useCallback((state: HoldingsState) => {

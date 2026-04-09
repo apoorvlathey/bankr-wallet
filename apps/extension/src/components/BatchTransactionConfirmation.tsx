@@ -88,6 +88,7 @@ function BatchTransactionConfirmation({
   const [decodedFunctionNames, setDecodedFunctionNames] = useState<
     Record<number, string>
   >({});
+  const [cachedGasEstimates, setCachedGasEstimates] = useState<any[] | null>(null);
 
   const { params, origin, chainName, favicon, chainId } = batchRequest;
   const calls = params.calls;
@@ -140,6 +141,9 @@ function BatchTransactionConfirmation({
     setDecodedFunctionNames((prev) => ({ ...prev, [index]: name }));
   };
 
+  const isNonAtomic =
+    accountType === "privateKey" || accountType === "seedPhrase";
+
   const handleConfirm = async () => {
     setState("submitting");
     setError("");
@@ -148,12 +152,19 @@ function BatchTransactionConfirmation({
       (_, i) => decodedFunctionNames[i] || undefined,
     ).filter(Boolean) as string[];
 
+    // Route to the appropriate handler based on account type
+    const messageType = isNonAtomic
+      ? "confirmBatchTransactionAsyncPK"
+      : "confirmBatchTransactionAsync";
+
     chrome.runtime.sendMessage(
       {
-        type: "confirmBatchTransactionAsync",
+        type: messageType,
         bundleId: batchRequest.id,
         password: "",
         functionNames: functionNames.length > 0 ? functionNames : undefined,
+        // Pass pre-computed gas estimates so background doesn't re-estimate (avoids 429)
+        ...(isNonAtomic && cachedGasEstimates ? { gasEstimates: cachedGasEstimates } : {}),
       },
       (result: { success: boolean; error?: string }) => {
         if (result.success) {
@@ -377,16 +388,34 @@ function BatchTransactionConfirmation({
             border="2px solid"
             borderColor="bauhaus.black"
           />
-          <Text
-            fontWeight="900"
-            fontSize="sm"
-            color="white"
-            textAlign="center"
-            textTransform="uppercase"
-            letterSpacing="wider"
-          >
-            Batch Transaction ({calls.length} calls)
-          </Text>
+          <VStack spacing={1}>
+            <Text
+              fontWeight="900"
+              fontSize="sm"
+              color="white"
+              textAlign="center"
+              textTransform="uppercase"
+              letterSpacing="wider"
+            >
+              Batch Transaction ({calls.length} calls)
+            </Text>
+            {isNonAtomic && (
+              <Badge
+                bg="bauhaus.yellow"
+                color="bauhaus.black"
+                fontSize="9px"
+                fontWeight="900"
+                px={1.5}
+                py={0.5}
+                border="1.5px solid"
+                borderColor="bauhaus.black"
+                textTransform="uppercase"
+                letterSpacing="wider"
+              >
+                Auto-Sequential
+              </Badge>
+            )}
+          </VStack>
         </Box>
 
         {/* Info Card */}
@@ -520,6 +549,7 @@ function BatchTransactionConfirmation({
         <AssetChangesDisplay
           txRequest={syntheticTxRequest}
           batchCalls={calls.map((c) => ({ to: c.to, data: c.data, value: c.value }))}
+          isNonAtomic={isNonAtomic}
         />
 
         {/* Gas Estimate */}
@@ -535,7 +565,10 @@ function BatchTransactionConfirmation({
             label: decodedFunctionNames[i] || `Call ${i + 1}`,
           }))}
           accountType={accountType || "bankr"}
-          batchedTx={{
+          isNonAtomic={isNonAtomic}
+          onGasEstimates={isNonAtomic ? setCachedGasEstimates : undefined}
+          // Atomic (Bankr): estimate gas for the single ERC-7821 encoded batch tx
+          batchedTx={isNonAtomic ? undefined : {
             tx: {
               from: fromAddress,
               to: encodedBatch.to,
