@@ -5,17 +5,32 @@
  * (e.g., swap after approve) because each call is simulated independently
  * and doesn't see state changes from prior calls.
  *
- * Solution:
- * 1. Primary: eth_simulateV1 — simulates all calls sequentially, returns gasUsed per call
- * 2. Fallback: estimate call 1 normally via eth_estimateGas, use a generous gas buffer
- *    for dependent calls (on-chain execution is correct due to nonce ordering)
+ * Solution (3 tiers, fall through on failure):
+ * 1. eth_simulateV1 — when supported, simulates all calls sequentially in one
+ *    RPC call and returns gasUsed per call. State persists between calls.
+ * 2. TxSimulator bytecode injection — universal fallback. Injects the
+ *    TxSimulator.sol runtime bytecode at the user's address via eth_call
+ *    state override and runs simulateBatchGas() which executes calls
+ *    sequentially (state persists, msg.sender == user) and measures gas
+ *    via gasleft() per call (intrinsic + calldata cost added in-contract).
+ *    Works on any chain that supports eth_call state overrides (Berlin+).
+ * 3. Individual estimateGas with 500k buffer — last-resort fallback if
+ *    bytecode injection itself fails. Surfaces fallbackUsed=true so the UI
+ *    can warn the user and offer per-row editing.
  */
 
-import { createPublicClient, http, type Address } from "viem";
+import {
+  createPublicClient,
+  http,
+  encodeFunctionData,
+  decodeFunctionResult,
+  type Address,
+} from "viem";
 import { getRpcUrl } from "./txHandlers";
 import { getNativeCurrencySymbol } from "@/constants/chainRegistry";
 import { fetchNativePrice } from "./gasEstimation";
 import type { GasEstimate } from "./gasEstimation";
+import { SIMULATOR_BYTECODE } from "./txSimulation";
 
 const RPC_TIMEOUT = 15_000;
 
@@ -65,6 +80,15 @@ export async function estimateBatchGasSequential(
     return Promise.all(calls.map(() => makeFailedEstimate(chainId, "No RPC URL configured")));
   }
 
+  // Log resolved RPC host (without API key) so we can confirm which provider
+  // is being used when debugging the gas estimation path.
+  try {
+    const host = new URL(rpcUrl).host;
+    console.log(`[batchGas] chainId=${chainId} rpcHost=${host} calls=${calls.length}`);
+  } catch {
+    // ignore URL parse failures
+  }
+
   const client = createPublicClient({
     transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
   });
@@ -83,17 +107,28 @@ export async function estimateBatchGasSequential(
     ? maxFeePerGas - maxPriorityFeePerGas
     : 0n;
 
-  // Try eth_simulateV1 first — accurate sequential gas estimation
+  // Tier 1: eth_simulateV1 — fastest path on supported RPCs (Geth 1.14.9+, Alchemy)
   const simV1Result = await tryEthSimulateV1(calls, fromAddress, chainId, rpcUrl);
   if (simV1Result) {
-    return simV1Result.map((gasUsed) =>
-      buildEstimate(gasUsed, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, false),
+    return simV1Result.map(({ gasLimit, fallbackUsed }) =>
+      buildEstimate(gasLimit, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, fallbackUsed),
     );
   }
 
-  // Fallback: estimate each call independently.
-  // Call 1 (e.g., approve) will estimate correctly.
-  // Dependent calls (e.g., swap) may fail — use a generous gas buffer.
+  // Tier 2: TxSimulator bytecode injection — universal sequential simulation.
+  // Works on any chain that supports eth_call state overrides. Runs all calls
+  // sequentially in one eth_call so dependent calls (swap-after-approve) see
+  // the prior call's state and estimate correctly.
+  const injectionResult = await tryBatchGasInjection(calls, fromAddress, chainId, rpcUrl);
+  if (injectionResult) {
+    return injectionResult.map(({ gasLimit, fallbackUsed }) =>
+      buildEstimate(gasLimit, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, fallbackUsed),
+    );
+  }
+
+  // Tier 3 (last resort): estimate each call independently with hardcoded buffer.
+  // Should be very rare — only hits when both eth_simulateV1 AND bytecode injection
+  // fail (e.g., a chain that supports neither, which is essentially nothing modern).
   console.log("[batchGas] Falling back to individual estimation with generous buffer");
   const gasResults = await estimateIndividualWithFallback(calls, fromAddress, client);
 
@@ -111,7 +146,7 @@ async function tryEthSimulateV1(
   fromAddress: string,
   chainId: number,
   rpcUrl: string,
-): Promise<bigint[] | null> {
+): Promise<Array<{ gasLimit: bigint; fallbackUsed: boolean }> | null> {
   const supported = isSimV1Supported(chainId);
   if (supported === false) return null;
 
@@ -166,8 +201,12 @@ async function tryEthSimulateV1(
         setSimV1Support(chainId, false);
         return null;
       }
+      // RPC supports the method but rejected this specific call. Cache as
+      // supported (so we don't keep retrying on every batch) but fall through
+      // to tier 2. Log the full error payload so we can diagnose what went
+      // wrong (often a quirk in how a specific call decodes inside the sim).
       setSimV1Support(chainId, true);
-      console.log("[batchGas] eth_simulateV1 error:", json.error);
+      console.log("[batchGas] eth_simulateV1 returned error, falling through to tier 2:", JSON.stringify(json.error));
       return null;
     }
 
@@ -180,12 +219,136 @@ async function tryEthSimulateV1(
     console.log(`[batchGas] eth_simulateV1: ${callResults.length} results`);
 
     return callResults.map((cr: any) => {
-      const gasUsed = cr.gasUsed ? BigInt(cr.gasUsed) : 200_000n;
+      // If gasUsed is missing on a call result (shouldn't normally happen),
+      // fall back to 200k and surface the uncertainty via fallbackUsed so the
+      // UI warns the user. This matters most for force inclusion where the
+      // value is baked into the portal _gasLimit and drives L1 burn cost.
+      if (!cr.gasUsed) {
+        console.log("[batchGas] eth_simulateV1 returned no gasUsed, using 200k fallback");
+        return { gasLimit: 200_000n, fallbackUsed: true };
+      }
+      const gasUsed = BigInt(cr.gasUsed);
       // Add 20% buffer
-      return (gasUsed * 120n) / 100n;
+      return { gasLimit: (gasUsed * 120n) / 100n, fallbackUsed: false };
     });
   } catch (err: any) {
     console.log("[batchGas] eth_simulateV1 fetch error:", err.message);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tier 2: TxSimulator bytecode injection
+// ---------------------------------------------------------------------------
+
+/**
+ * ABI for TxSimulator.simulateBatchGas — runs all calls sequentially in one
+ * eth_call (state persists between calls), returns per-call gas including
+ * intrinsic + calldata cost so the value is usable directly as a tx gas limit
+ * after applying a buffer.
+ */
+const SIMULATE_BATCH_GAS_ABI = [
+  {
+    type: "function" as const,
+    name: "simulateBatchGas" as const,
+    inputs: [
+      {
+        name: "calls",
+        type: "tuple[]" as const,
+        components: [
+          { name: "to", type: "address" as const },
+          { name: "value", type: "uint256" as const },
+          { name: "data", type: "bytes" as const },
+        ],
+      },
+    ],
+    outputs: [
+      { name: "allSuccess", type: "bool" as const },
+      { name: "gasUsedPerCall", type: "uint256[]" as const },
+    ],
+    stateMutability: "nonpayable" as const,
+  },
+] as const;
+
+/**
+ * Inject TxSimulator runtime bytecode at the user's address via eth_call state
+ * override and run simulateBatchGas() — gives accurate per-call gas for
+ * dependent batches on any chain that supports eth_call state overrides.
+ */
+async function tryBatchGasInjection(
+  calls: BatchGasCall[],
+  fromAddress: string,
+  chainId: number,
+  rpcUrl: string,
+): Promise<Array<{ gasLimit: bigint; fallbackUsed: boolean }> | null> {
+  try {
+    const client = createPublicClient({
+      transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
+    });
+
+    const encodedCalls = calls.map((c) => ({
+      to: c.to as Address,
+      value: c.value && c.value !== "0x0" ? BigInt(c.value) : 0n,
+      data: ((c.data && c.data !== "0x") ? c.data : "0x") as `0x${string}`,
+    }));
+
+    const calldata = encodeFunctionData({
+      abi: SIMULATE_BATCH_GAS_ABI,
+      functionName: "simulateBatchGas",
+      args: [encodedCalls],
+    });
+
+    const result = await client.call({
+      account: fromAddress as Address,
+      to: fromAddress as Address,
+      data: calldata,
+      stateOverride: [
+        {
+          address: fromAddress as Address,
+          code: SIMULATOR_BYTECODE,
+        },
+      ],
+    });
+
+    if (!result.data) {
+      console.log(`[batchGas] tier-2 injection: empty response on chain ${chainId}`);
+      return null;
+    }
+
+    const decoded = decodeFunctionResult({
+      abi: SIMULATE_BATCH_GAS_ABI,
+      functionName: "simulateBatchGas",
+      data: result.data,
+    });
+
+    // viem returns the outputs as a tuple [allSuccess, gasUsedPerCall]
+    const [allSuccess, gasUsedPerCall] = decoded as unknown as [
+      boolean,
+      readonly bigint[],
+    ];
+
+    if (gasUsedPerCall.length !== calls.length) {
+      console.log(
+        `[batchGas] tier-2 injection: result length mismatch (${gasUsedPerCall.length} vs ${calls.length})`,
+      );
+      return null;
+    }
+
+    console.log(
+      `[batchGas] tier-2 injection ok (allSuccess=${allSuccess}): [${gasUsedPerCall.map(String).join(", ")}]`,
+    );
+
+    // Apply 20% buffer (same as the other paths). gasUsedPerCall already
+    // includes intrinsic (21000) + calldata cost from the contract side.
+    return gasUsedPerCall.map((gas) => ({
+      gasLimit: (gas * 120n) / 100n,
+      fallbackUsed: false,
+    }));
+  } catch (err: any) {
+    // Bytecode injection failures usually mean the chain doesn't support
+    // state overrides on eth_call (extremely rare on modern chains) or the
+    // RPC is rejecting our request shape. Log and let tier 3 take over.
+    console.log(`[batchGas] tier-2 injection failed on chain ${chainId}:`, err?.message || err);
     return null;
   }
 }

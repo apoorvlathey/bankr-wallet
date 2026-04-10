@@ -320,9 +320,17 @@ function MultiTxGasEstimateDisplay({
     return () => {
       cancelled = true;
     };
+    // estimateKey is a memoized digest of all the inputs that should trigger
+    // a re-fetch (tx data, isNonAtomic, forceInclusion). Listing the raw
+    // variables individually would re-fire on every parent render because
+    // arrays/callbacks change identity each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estimateKey]);
 
-  // Propagate (possibly edited) gas estimates to the parent
+  // Propagate (possibly edited) gas estimates to the parent.
+  // onGasEstimates is intentionally NOT in deps — parent passes a useState
+  // setter (stable identity), so re-firing on identity changes would only
+  // create extra renders without changing behavior.
   useEffect(() => {
     if (!onGasEstimates) return;
     if (!passthroughEstimates || passthroughEstimates.length === 0) return;
@@ -335,6 +343,7 @@ function MultiTxGasEstimateDisplay({
       gasLimit: editedGasLimits[i] || est.gasLimit,
     }));
     onGasEstimates(merged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [passthroughEstimates, editedGasLimits]);
 
   const handleEditGasLimit = useCallback((index: number, val: string) => {
@@ -483,7 +492,7 @@ function MultiTxGasEstimateDisplay({
           <Text fontSize="2xs" color="bauhaus.black" fontWeight="700" lineHeight="1.35" pl={5}>
             {forceInclusion
               ? "Edit highlighted row below — too high wastes L1 burn, too low reverts on L2 (burn lost)."
-              : "Edit highlighted row below if your call needs more."}
+              : "Edit highlighted row below if your call needs more. Extra gas gets refunded back."}
           </Text>
         </VStack>
       )}
