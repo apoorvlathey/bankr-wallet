@@ -87,7 +87,7 @@ export async function estimateBatchGasSequential(
   const simV1Result = await tryEthSimulateV1(calls, fromAddress, chainId, rpcUrl);
   if (simV1Result) {
     return simV1Result.map((gasUsed) =>
-      buildEstimate(gasUsed, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol),
+      buildEstimate(gasUsed, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, false),
     );
   }
 
@@ -95,10 +95,10 @@ export async function estimateBatchGasSequential(
   // Call 1 (e.g., approve) will estimate correctly.
   // Dependent calls (e.g., swap) may fail — use a generous gas buffer.
   console.log("[batchGas] Falling back to individual estimation with generous buffer");
-  const gasLimits = await estimateIndividualWithFallback(calls, fromAddress, client);
+  const gasResults = await estimateIndividualWithFallback(calls, fromAddress, client);
 
-  return gasLimits.map((gasLimit) =>
-    buildEstimate(gasLimit, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol),
+  return gasResults.map(({ gasLimit, fallbackUsed }) =>
+    buildEstimate(gasLimit, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, fallbackUsed),
   );
 }
 
@@ -198,7 +198,7 @@ async function estimateIndividualWithFallback(
   calls: BatchGasCall[],
   fromAddress: string,
   client: ReturnType<typeof createPublicClient>,
-): Promise<bigint[]> {
+): Promise<Array<{ gasLimit: bigint; fallbackUsed: boolean }>> {
   const from = fromAddress as Address;
 
   return Promise.all(
@@ -210,12 +210,15 @@ async function estimateIndividualWithFallback(
       try {
         const gas = await client.estimateGas({ account: from, to, value, data });
         // Add 20% buffer
-        return (gas * 120n) / 100n;
+        return { gasLimit: (gas * 120n) / 100n, fallbackUsed: false };
       } catch {
         // Estimation failed (likely a dependent call) — use generous buffer.
         // On-chain gas will be correct because prior calls execute first (nonce ordering).
-        console.log(`[batchGas] Call ${i} estimation failed, using ${DEPENDENT_CALL_GAS_LIMIT} buffer`);
-        return DEPENDENT_CALL_GAS_LIMIT;
+        // We flag this so the UI can surface the uncertainty to the user; this matters
+        // a lot for force inclusion where the value gets baked into the portal _gasLimit
+        // and directly drives L1 burn cost on mainnet.
+        console.log(`[batchGas] Call ${i} estimation failed, using ${DEPENDENT_CALL_GAS_LIMIT} buffer (fallback)`);
+        return { gasLimit: DEPENDENT_CALL_GAS_LIMIT, fallbackUsed: true };
       }
     }),
   );
@@ -233,6 +236,7 @@ function buildEstimate(
   balance: bigint,
   nativePriceUsd: number | null,
   nativeCurrencySymbol: string,
+  fallbackUsed: boolean,
 ): GasEstimate {
   const estimatedCostWei = gasLimit * maxFeePerGas;
 
@@ -248,6 +252,7 @@ function buildEstimate(
     insufficientBalance: balance < estimatedCostWei,
     estimationFailed: false,
     dappProvidedGas: false,
+    fallbackUsed,
   };
 }
 

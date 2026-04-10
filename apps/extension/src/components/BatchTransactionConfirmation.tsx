@@ -13,6 +13,8 @@ import {
   Image,
   Icon,
   Collapse,
+  Switch,
+  Tooltip,
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import {
@@ -22,6 +24,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   ExternalLinkIcon,
+  SettingsIcon,
 } from "@chakra-ui/icons";
 import type { PendingBatchTxRequest, ERC5792Call } from "@/chrome/erc5792Types";
 import type { PendingTxRequest } from "@/chrome/pendingTxStorage";
@@ -32,7 +35,9 @@ import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
+import ForceInclusionProgress from "@/components/ForceInclusionProgress";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
+import { isForceInclusionSupported, FORCE_INCLUSION_CHAINS } from "@/constants/chainRegistry";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
@@ -65,7 +70,7 @@ interface BatchTransactionConfirmationProps {
   onNavigate: (direction: "prev" | "next") => void;
 }
 
-type ConfirmationState = "ready" | "submitting" | "sent" | "error";
+type ConfirmationState = "ready" | "submitting" | "sent" | "error" | "forceInclusion";
 
 function BatchTransactionConfirmation({
   batchRequest,
@@ -89,6 +94,8 @@ function BatchTransactionConfirmation({
     Record<number, string>
   >({});
   const [cachedGasEstimates, setCachedGasEstimates] = useState<any[] | null>(null);
+  const [forceInclusion, setForceInclusion] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const { params, origin, chainName, favicon, chainId } = batchRequest;
   const calls = params.calls;
@@ -138,11 +145,22 @@ function BatchTransactionConfirmation({
   };
 
   const handleFunctionName = (index: number, name: string) => {
-    setDecodedFunctionNames((prev) => ({ ...prev, [index]: name }));
+    setDecodedFunctionNames((prev) => {
+      if (prev[index] === name) return prev; // Same value — skip update to avoid infinite loop
+      return { ...prev, [index]: name };
+    });
   };
 
   const isNonAtomic =
     accountType === "privateKey" || accountType === "seedPhrase";
+
+  // Force inclusion info — non-null when chain supports it and account can submit
+  const forceInclusionInfo = useMemo(() => {
+    if (!isForceInclusionSupported(chainId)) return null;
+    if (accountType === "impersonator") return null;
+    const entry = FORCE_INCLUSION_CHAINS.get(chainId)!;
+    return { l1ChainId: entry.l1ChainId, l1ChainName: entry.l1ChainName };
+  }, [chainId, accountType]);
 
   const handleConfirm = async () => {
     setState("submitting");
@@ -163,12 +181,19 @@ function BatchTransactionConfirmation({
         bundleId: batchRequest.id,
         password: "",
         functionNames: functionNames.length > 0 ? functionNames : undefined,
-        // Pass pre-computed gas estimates so background doesn't re-estimate (avoids 429)
+        // Pass pre-computed gas estimates so background doesn't re-estimate.
+        // For normal non-atomic batches: used directly as gas + fees for signing.
+        // For force inclusion batches: only the `gasLimit` field is used (as the L2
+        //   `_gasLimit` override in the portal call); L1 fees are computed on-chain.
         ...(isNonAtomic && cachedGasEstimates ? { gasEstimates: cachedGasEstimates } : {}),
+        ...(forceInclusion ? { forceInclusion: true } : {}),
       },
       (result: { success: boolean; error?: string }) => {
         if (result.success) {
-          if (isInSidePanel) {
+          // Atomic batch + force inclusion: stay open to show progress
+          if (forceInclusion && !isNonAtomic) {
+            setState("forceInclusion");
+          } else if (isInSidePanel) {
             onConfirmed();
           } else {
             setState("sent");
@@ -192,6 +217,32 @@ function BatchTransactionConfirmation({
       },
     );
   };
+
+  // Force inclusion progress screen (atomic batches only)
+  if (state === "forceInclusion" && forceInclusionInfo) {
+    return (
+      <Box h="100%" overflowY="auto" bg="bg.base">
+        <ForceInclusionProgress
+          txId={batchRequest.id}
+          l1ChainId={forceInclusionInfo.l1ChainId}
+          l2ChainId={chainId}
+          onComplete={() => {
+            if (isInSidePanel) {
+              onConfirmed();
+            } else {
+              setState("sent");
+              setTimeout(() => {
+                window.close();
+              }, 1500);
+            }
+          }}
+          onError={() => {
+            setState("error");
+          }}
+        />
+      </Box>
+    );
+  }
 
   // Success animation
   if (state === "sent") {
@@ -489,34 +540,79 @@ function BatchTransactionConfirmation({
               >
                 Network
               </Text>
-              {(() => {
-                const config = getChainConfig(chainId);
-                const badgeChain = resolvedChain ?? {
-                  name: chainName,
-                  icon: config.icon,
-                  bg: config.bg,
-                  text: config.text,
-                };
-                return (
-                  <Badge
-                    fontSize="xs"
-                    bg={badgeChain.bg}
-                    color={badgeChain.text}
-                    border="1.5px solid"
-                    borderColor="bauhaus.black"
-                    fontWeight="700"
-                    px={2}
-                    py={0.5}
-                    display="flex"
-                    alignItems="center"
-                    gap={1}
-                  >
-                    <ChainIcon chainId={chainId} chainName={badgeChain.name} size="12px" />
-                    {badgeChain.name}
-                  </Badge>
-                );
-              })()}
+              <HStack spacing={1}>
+                {(() => {
+                  const config = getChainConfig(chainId);
+                  const badgeChain = resolvedChain ?? {
+                    name: chainName,
+                    icon: config.icon,
+                    bg: config.bg,
+                    text: config.text,
+                  };
+                  return (
+                    <Badge
+                      fontSize="xs"
+                      bg={badgeChain.bg}
+                      color={badgeChain.text}
+                      border="1.5px solid"
+                      borderColor="bauhaus.black"
+                      fontWeight="700"
+                      px={2}
+                      py={0.5}
+                      display="flex"
+                      alignItems="center"
+                      gap={1}
+                    >
+                      <ChainIcon chainId={chainId} chainName={badgeChain.name} size="12px" />
+                      {badgeChain.name}
+                      {forceInclusion && forceInclusionInfo && (
+                        <Text as="span" fontSize="2xs" opacity={0.7}>
+                          via {forceInclusionInfo.l1ChainName}
+                        </Text>
+                      )}
+                    </Badge>
+                  );
+                })()}
+                {forceInclusionInfo && (
+                  <Tooltip label="Advanced options" fontSize="xs" hasArrow>
+                    <IconButton
+                      aria-label="Advanced options"
+                      icon={<SettingsIcon />}
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setShowAdvanced(!showAdvanced)}
+                      color={showAdvanced ? "bauhaus.blue" : "text.tertiary"}
+                      _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                      minW="auto"
+                      h="auto"
+                      p={0.5}
+                    />
+                  </Tooltip>
+                )}
+              </HStack>
             </HStack>
+
+            {/* Force Inclusion Toggle (advanced options) */}
+            {forceInclusionInfo && (
+              <Collapse in={showAdvanced} animateOpacity>
+                <Box w="full" py={2} px={3} bg="gray.50">
+                  <HStack justify="space-between" mb={1}>
+                    <Text fontSize="xs" fontWeight="700" color="text.primary">
+                      Force Inclusion
+                    </Text>
+                    <Switch
+                      size="sm"
+                      isChecked={forceInclusion}
+                      onChange={(e) => setForceInclusion(e.target.checked)}
+                      colorScheme="blue"
+                    />
+                  </HStack>
+                  <Text fontSize="2xs" color="text.tertiary" fontWeight="500">
+                    Submit via L1 deposit ({forceInclusionInfo.l1ChainName}) to guarantee inclusion. Takes ~1-10 min.
+                  </Text>
+                </Box>
+              </Collapse>
+            )}
           </VStack>
         </Box>
 
@@ -566,8 +662,12 @@ function BatchTransactionConfirmation({
           }))}
           accountType={accountType || "bankr"}
           isNonAtomic={isNonAtomic}
+          // Fire for ANY non-atomic batch (normal or force inclusion) so the user's
+          // edited L2 gas limits get passed through to the background.
           onGasEstimates={isNonAtomic ? setCachedGasEstimates : undefined}
+          forceInclusion={forceInclusion}
           // Atomic (Bankr): estimate gas for the single ERC-7821 encoded batch tx
+          // When force inclusion is on, estimate L1 gas for the encoded batch
           batchedTx={isNonAtomic ? undefined : {
             tx: {
               from: fromAddress,

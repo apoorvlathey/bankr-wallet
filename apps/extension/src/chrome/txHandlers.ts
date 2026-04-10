@@ -639,6 +639,7 @@ export async function handleConfirmTransactionAsync(
   txId: string,
   password: string,
   functionName?: string,
+  forceInclusion?: boolean,
 ): Promise<{ success: boolean; error?: string }> {
   // Prevent double-execution
   if (processingTxIds.has(txId)) {
@@ -651,8 +652,8 @@ export async function handleConfirmTransactionAsync(
     return { success: false, error: "Transaction request expired" };
   }
 
-  // Validate chain is supported for Bankr API accounts
-  if (!BANKR_SUPPORTED_CHAIN_IDS.has(pending.tx.chainId)) {
+  // Validate chain is supported for Bankr API accounts (skip for force inclusion — L1 tx goes to mainnet which IS supported)
+  if (!forceInclusion && !BANKR_SUPPORTED_CHAIN_IDS.has(pending.tx.chainId)) {
     return {
       success: false,
       error: `Chain ${CHAIN_NAMES[pending.tx.chainId] || pending.tx.chainId} is not supported for Bankr API accounts`,
@@ -694,7 +695,12 @@ export async function handleConfirmTransactionAsync(
   await removePendingTxRequest(txId);
 
   // Start background processing (cleanup of processingTxIds happens in finally block)
-  processTransactionInBackground(txId, pending, apiKey, functionName);
+  if (forceInclusion) {
+    const { processForceInclusionBankr } = await import("./forceInclusion");
+    processForceInclusionBankr(txId, pending, apiKey);
+  } else {
+    processTransactionInBackground(txId, pending, apiKey, functionName);
+  }
 
   return { success: true };
 }
@@ -963,6 +969,7 @@ export async function handleConfirmTransactionAsyncPK(
   tabId?: number,
   functionName?: string,
   gasOverrides?: GasOverrides,
+  forceInclusion?: boolean,
 ): Promise<{ success: boolean; error?: string }> {
   // Prevent double-execution
   if (processingTxIds.has(txId)) {
@@ -1049,14 +1056,19 @@ export async function handleConfirmTransactionAsyncPK(
   await removePendingTxRequest(txId);
 
   // Start background processing (cleanup of processingTxIds happens in finally block)
-  processLocalTransactionInBackground(
-    txId,
-    pending,
-    account,
-    privateKey,
-    functionName,
-    gasOverrides,
-  );
+  if (forceInclusion) {
+    const { processForceInclusionLocal } = await import("./forceInclusion");
+    processForceInclusionLocal(txId, pending, account, privateKey);
+  } else {
+    processLocalTransactionInBackground(
+      txId,
+      pending,
+      account,
+      privateKey,
+      functionName,
+      gasOverrides,
+    );
+  }
 
   return { success: true };
 }

@@ -13,6 +13,8 @@ import {
   Image,
   Icon,
   Tooltip,
+  Switch,
+  Collapse,
 } from "@chakra-ui/react";
 
 import { keyframes } from "@emotion/react";
@@ -23,6 +25,7 @@ import {
   CopyIcon,
   CheckIcon,
   ExternalLinkIcon,
+  SettingsIcon,
 } from "@chakra-ui/icons";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { GasOverrides } from "@/chrome/txHandlers";
@@ -41,6 +44,11 @@ import {
   getResolvedChainById,
   getStoredNativeCurrencySymbol,
 } from "@/lib/chains";
+import {
+  isForceInclusionSupported,
+  FORCE_INCLUSION_CHAINS,
+} from "@/constants/chainRegistry";
+import ForceInclusionProgress from "@/components/ForceInclusionProgress";
 
 // Success animation keyframes
 const scaleIn = keyframes`
@@ -67,7 +75,7 @@ interface TransactionConfirmationProps {
   onNavigate: (direction: "prev" | "next") => void;
 }
 
-type ConfirmationState = "ready" | "submitting" | "sent" | "error";
+type ConfirmationState = "ready" | "submitting" | "sent" | "error" | "forceInclusion";
 
 // Copy button component
 function CopyButton({
@@ -143,6 +151,16 @@ function TransactionConfirmation({
     string | undefined
   >();
   const [gasOverrides, setGasOverrides] = useState<GasOverrides | null>(null);
+  const [forceInclusion, setForceInclusion] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Force inclusion info — non-null when the chain supports it and account can submit
+  const forceInclusionInfo = useMemo(() => {
+    if (!isForceInclusionSupported(txRequest.tx.chainId)) return null;
+    if (accountType === "impersonator") return null;
+    const entry = FORCE_INCLUSION_CHAINS.get(txRequest.tx.chainId)!;
+    return { l1ChainId: entry.l1ChainId, l1ChainName: entry.l1ChainName };
+  }, [txRequest.tx.chainId, accountType]);
 
   const { tx, origin, chainName, favicon } = txRequest;
   const isInternalWalletChan = origin === "WalletChan";
@@ -264,11 +282,14 @@ function TransactionConfirmation({
         password: "",
         functionName,
         ...(gasOverrides ? { gasOverrides } : {}),
+        ...(forceInclusion ? { forceInclusion: true } : {}),
       },
       (result: { success: boolean; error?: string }) => {
         if (result.success) {
-          // Transaction submitted
-          if (isInSidePanel) {
+          if (forceInclusion) {
+            // Stay open to show force inclusion progress
+            setState("forceInclusion");
+          } else if (isInSidePanel) {
             // In sidepanel, navigate away immediately
             onConfirmed();
           } else {
@@ -309,6 +330,31 @@ function TransactionConfirmation({
     const eth = Number(wei) / 1e18;
     return `${eth.toFixed(6)} ${nativeSym}`;
   };
+
+  // Force inclusion progress screen
+  if (state === "forceInclusion" && forceInclusionInfo) {
+    return (
+      <Box h="100%" overflowY="auto" bg="bg.base">
+        <ForceInclusionProgress
+          txId={txRequest.id}
+          l1ChainId={forceInclusionInfo.l1ChainId}
+          l2ChainId={tx.chainId}
+          onComplete={() => {
+            if (isInSidePanel) {
+              onConfirmed();
+            } else {
+              setState("sent");
+              setTimeout(() => window.close(), 1500);
+            }
+          }}
+          onError={(err) => {
+            setError(err);
+            setState("error");
+          }}
+        />
+      </Box>
+    );
+  }
 
   // Success animation screen (popup mode only)
   if (state === "sent") {
@@ -636,35 +682,79 @@ function TransactionConfirmation({
               >
                 Network
               </Text>
-              {(() => {
-                const config = getChainConfig(tx.chainId);
-                const badgeChain = resolvedChain ?? {
-                  name: chainName,
-                  bg: config.bg,
-                  text: config.text,
-                  icon: config.icon,
-                  isCustom: false,
-                };
-                return (
-                  <Badge
-                    fontSize="xs"
-                    bg={badgeChain.isCustom ? "bauhaus.white" : badgeChain.bg}
-                    color={badgeChain.isCustom ? "bauhaus.black" : badgeChain.text}
-                    border="1.5px solid"
-                    borderColor="bauhaus.black"
-                    fontWeight="700"
-                    px={2}
-                    py={0.5}
-                    display="flex"
-                    alignItems="center"
-                    gap={1}
-                  >
-                    <ChainIcon chainId={tx.chainId} chainName={badgeChain.name} size="12px" />
-                    {badgeChain.name}
-                  </Badge>
-                );
-              })()}
+              <HStack spacing={1}>
+                {(() => {
+                  const config = getChainConfig(tx.chainId);
+                  const badgeChain = resolvedChain ?? {
+                    name: chainName,
+                    bg: config.bg,
+                    text: config.text,
+                    icon: config.icon,
+                    isCustom: false,
+                  };
+                  return (
+                    <Badge
+                      fontSize="xs"
+                      bg={badgeChain.isCustom ? "bauhaus.white" : badgeChain.bg}
+                      color={badgeChain.isCustom ? "bauhaus.black" : badgeChain.text}
+                      border="1.5px solid"
+                      borderColor="bauhaus.black"
+                      fontWeight="700"
+                      px={2}
+                      py={0.5}
+                      display="flex"
+                      alignItems="center"
+                      gap={1}
+                    >
+                      <ChainIcon chainId={tx.chainId} chainName={badgeChain.name} size="12px" />
+                      {badgeChain.name}
+                      {forceInclusion && forceInclusionInfo && (
+                        <Text as="span" fontSize="2xs" opacity={0.7}>
+                          via {forceInclusionInfo.l1ChainName}
+                        </Text>
+                      )}
+                    </Badge>
+                  );
+                })()}
+                {forceInclusionInfo && (
+                  <Tooltip label="Advanced options" fontSize="xs" hasArrow>
+                    <IconButton
+                      aria-label="Advanced options"
+                      icon={<SettingsIcon boxSize="10px" />}
+                      size="xs"
+                      variant="ghost"
+                      minW="20px"
+                      h="20px"
+                      color={showAdvanced ? "bauhaus.blue" : "text.tertiary"}
+                      onClick={() => setShowAdvanced(!showAdvanced)}
+                      _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                    />
+                  </Tooltip>
+                )}
+              </HStack>
             </HStack>
+
+            {/* Force Inclusion Toggle (advanced options) */}
+            {forceInclusionInfo && (
+              <Collapse in={showAdvanced} animateOpacity>
+                <Box w="full" py={2} px={3} bg="gray.50">
+                  <HStack justify="space-between" mb={1}>
+                    <Text fontSize="xs" fontWeight="700" color="text.primary" textTransform="uppercase">
+                      Force Inclusion
+                    </Text>
+                    <Switch
+                      size="sm"
+                      isChecked={forceInclusion}
+                      onChange={(e) => setForceInclusion(e.target.checked)}
+                      colorScheme="blue"
+                    />
+                  </HStack>
+                  <Text fontSize="2xs" color="text.tertiary" fontWeight="500">
+                    Submit via L1 deposit ({forceInclusionInfo.l1ChainName}) to guarantee inclusion. Takes ~1-10 min.
+                  </Text>
+                </Box>
+              </Collapse>
+            )}
 
             {/* To Address / Contract Deployment */}
             <Box w="full" py={1.5} px={3}>
@@ -798,6 +888,7 @@ function TransactionConfirmation({
           txRequest={txRequest}
           accountType={accountType}
           onGasOverrides={setGasOverrides}
+          forceInclusion={forceInclusion}
         />
 
         {/* Calldata (Decoded + Raw) */}

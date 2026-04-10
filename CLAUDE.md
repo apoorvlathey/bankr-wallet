@@ -163,6 +163,8 @@ apps/extension/src/
 │   ├── erc5792Types.ts      # ERC-5792 type definitions
 │   ├── pendingBatchTxStorage.ts  # Pending batch request persistence
 │   ├── bundleStatusStorage.ts    # Bundle status for getCallsStatus
+│   ├── forceInclusion.ts     # OP Stack L1 deposit for force inclusion
+│   ├── batchForceInclusion.ts # Force inclusion for ERC-5792 batch txs
 │   ├── impersonator.ts      # Inpage provider (EIP-6963 + ERC-5792)
 │   └── inject.ts            # Content script bridge
 ├── components/
@@ -208,6 +210,7 @@ When working on features, refer to these docs:
 | `_docs/CALLDATA.md`                                      | Calldata decoder UI, param components, type routing       |
 | `_docs/ASSET_CHANGES_SIMULATION.md`                      | Tx simulation: state override injection, metadata retry   |
 | `_docs/ERC5792.md`                                       | ERC-5792 batch txs: message flow, ERC-7821 encoding, 7702 plan |
+| `_docs/L2_FORCE_INCLUSION.md`                            | OP Stack force inclusion: L1 deposit flow, portal encoding, 2-step status |
 | `apps/staking-indexer/STAKING_INDEXER_IMPLEMENTATION.md` | Staking indexer: sBNKRW vault events, balance tracking (legacy) |
 | `apps/wchan-vault-indexer/IMPLEMENTATION.md`             | WCHAN vault indexer: sWCHAN balance tracking, APY, snapshots    |
 | `_docs/DEVELOPMENT.md`                                   | Build process, dev environment setup                      |

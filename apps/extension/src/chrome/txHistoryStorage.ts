@@ -21,6 +21,18 @@ export interface TransferMeta {
   tokenLogo: string | null;
 }
 
+/** Metadata for force-inclusion (OP Stack L1 deposit) transactions */
+export interface ForceInclusionMeta {
+  /** L1 transaction hash (the deposit tx on Ethereum/Sepolia) */
+  l1TxHash: string;
+  /** L1 chain ID (1 for mainnet, 11155111 for Sepolia) */
+  l1ChainId: number;
+  /** L2 chain ID (the original target chain, e.g. Base) */
+  l2ChainId: number;
+  /** Whether the L2 tx has been confirmed by the sequencer */
+  l2Confirmed?: boolean;
+}
+
 export interface CompletedTransaction {
   id: string;
   status: TxStatus;
@@ -39,6 +51,7 @@ export interface CompletedTransaction {
   gasData?: GasData;
   swapMeta?: SwapMeta;
   transferMeta?: TransferMeta;
+  forceInclusionMeta?: ForceInclusionMeta;
 }
 
 export interface GasData {
