@@ -2125,6 +2125,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message.conversationId,
         message.messageId,
         message.prompt,
+        message.chainId,
       ).then((result) => {
         sendResponse(result);
       });
@@ -2146,7 +2147,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "createChatConversation": {
-      createConversation(message.title).then((conversation) => {
+      createConversation(message.title, message.address).then((conversation) => {
         sendResponse(conversation);
       });
       return true;
@@ -2175,6 +2176,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message.updates,
       ).then((conversation) => {
         sendResponse(conversation);
+      });
+      return true;
+    }
+
+    // Ollama settings handlers
+    case "getOllamaSettings": {
+      import("./ollamaApi").then(({ getOllamaSettings }) => {
+        getOllamaSettings().then((settings) => sendResponse(settings));
+      });
+      return true;
+    }
+
+    case "saveOllamaSettings": {
+      import("./ollamaApi").then(({ saveOllamaSettings }) => {
+        saveOllamaSettings(message.settings).then(() =>
+          sendResponse({ success: true })
+        );
+      });
+      return true;
+    }
+
+    case "checkOllamaAvailability": {
+      import("./ollamaApi").then(({ checkOllamaAvailability }) => {
+        checkOllamaAvailability(message.baseUrl).then((result) =>
+          sendResponse(result)
+        );
+      });
+      return true;
+    }
+
+    case "cancelOllamaChat": {
+      import("./ollamaHandlers").then(({ cancelOllamaChat }) => {
+        const cancelled = cancelOllamaChat(message.conversationId);
+        sendResponse({ success: cancelled });
       });
       return true;
     }

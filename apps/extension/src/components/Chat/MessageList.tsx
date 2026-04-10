@@ -7,19 +7,20 @@ interface MessageListProps {
   messages: Message[];
   isLoading?: boolean;
   statusUpdateText?: string | null;
+  streamContent?: string | null;
   isWalletUnlocked?: boolean;
   onUnlock?: () => void;
   onRetry?: () => void;
   onResend?: (content: string) => void;
 }
 
-export function MessageList({ messages, isLoading, statusUpdateText, isWalletUnlocked, onUnlock, onRetry, onResend }: MessageListProps) {
+export function MessageList({ messages, isLoading, statusUpdateText, streamContent, isWalletUnlocked, onUnlock, onRetry, onResend }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll to bottom when messages change or content streams in
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+  }, [messages, isLoading, streamContent]);
 
   if (messages.length === 0) {
     return (
@@ -94,6 +95,7 @@ export function MessageList({ messages, isLoading, statusUpdateText, isWalletUnl
             key={message.id}
             message={message}
             statusText={message.status === "pending" ? statusUpdateText : undefined}
+            streamContent={message.status === "pending" ? streamContent : undefined}
             isWalletUnlocked={isWalletUnlocked}
             onUnlock={onUnlock}
             onRetry={onRetry}

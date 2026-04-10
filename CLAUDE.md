@@ -151,7 +151,10 @@ apps/extension/src/
 │   ├── authHandlers.ts      # Unlock, password change, vault key migration
 │   ├── sessionCache.ts      # Credential caching, auto-lock, session restore
 │   ├── txHandlers.ts        # Transaction/signature handling, account mgmt
-│   ├── chatHandlers.ts      # Bankr AI chat prompt handling
+│   ├── chatHandlers.ts      # Chat prompt routing (Bankr API or Ollama)
+│   ├── ollamaApi.ts         # Ollama HTTP client, settings, streaming
+│   ├── ollamaHandlers.ts    # Ollama tool execution loop with streaming
+│   ├── ollamaTools.ts       # Tool definitions, XML parser, executor
 │   ├── sidepanelManager.ts  # Sidepanel/popup mode, Arc browser detection
 │   ├── crypto.ts            # AES-256-GCM encryption for API keys
 │   ├── cryptoUtils.ts       # Shared crypto utilities (PBKDF2, base64)
@@ -205,6 +208,7 @@ When working on features, refer to these docs:
 | `_docs/APPS.md`                                          | Apps page data source, fetch script, adding chains        |
 | `_docs/SWAP.md`                                          | Swap page: 0x API integration, fees, slippage, UI         |
 | `_docs/COINS.md`                                         | Coins page: SSE streaming, indexer API, pagination        |
+| `_docs/OLLAMA.md`                                        | Local AI chat: Ollama setup, model, tools, streaming      |
 | `_docs/CALLDATA.md`                                      | Calldata decoder UI, param components, type routing       |
 | `_docs/ASSET_CHANGES_SIMULATION.md`                      | Tx simulation: state override injection, metadata retry   |
 | `_docs/ERC5792.md`                                       | ERC-5792 batch txs: message flow, ERC-7821 encoding, 7702 plan |

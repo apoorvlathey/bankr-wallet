@@ -35,6 +35,7 @@ import Chains from "./Chains";
 import ChangePassword from "./ChangePassword";
 import AutoLockSettings from "./AutoLockSettings";
 import AgentPasswordSettings from "./AgentPasswordSettings";
+import OllamaSettings from "./OllamaSettings";
 
 // Robot/Agent icon for Agent Password section
 const AgentIcon = (props: any) => (
@@ -46,7 +47,7 @@ const AgentIcon = (props: any) => (
   </Icon>
 );
 
-type SettingsTab = "main" | "chains" | "changePassword" | "autoLock" | "agentPassword";
+type SettingsTab = "main" | "chains" | "changePassword" | "autoLock" | "agentPassword" | "ollama";
 
 interface SettingsProps {
   close: () => void;
@@ -166,6 +167,15 @@ function Settings({
         }}
         onCancel={() => setTab("main")}
         onSessionExpired={onSessionExpired || (() => setTab("main"))}
+      />
+    );
+  }
+
+  if (tab === "ollama") {
+    return (
+      <OllamaSettings
+        onComplete={() => setTab("main")}
+        onCancel={() => setTab("main")}
       />
     );
   }
@@ -352,6 +362,58 @@ function Settings({
               </Text>
               <Text fontSize="xs" color="text.secondary" fontWeight="500">
                 Configure wallet lock timeout
+              </Text>
+            </Box>
+          </HStack>
+          <Box bg="bauhaus.black" p={1}>
+            <ChevronRightIcon color="bauhaus.white" />
+          </Box>
+        </HStack>
+      </Box>
+
+      {/* Local AI Chat (Ollama) Section */}
+      <Box
+        bg="bauhaus.white"
+        border="3px solid"
+        borderColor="bauhaus.black"
+        boxShadow="4px 4px 0px 0px #121212"
+        p={4}
+        cursor="pointer"
+        onClick={() => setTab("ollama")}
+        _hover={{
+          transform: "translateY(-2px)",
+          boxShadow: "6px 6px 0px 0px #121212",
+        }}
+        _active={{
+          transform: "translate(2px, 2px)",
+          boxShadow: "none",
+        }}
+        transition="all 0.2s ease-out"
+        position="relative"
+      >
+        {/* Corner decoration */}
+        <Box
+          position="absolute"
+          top="-3px"
+          right="-3px"
+          w="8px"
+          h="8px"
+          bg="bauhaus.green"
+          border="2px solid"
+          borderColor="bauhaus.black"
+        />
+
+        <HStack justify="space-between">
+          <HStack spacing={3}>
+            <Box p={2} bg="bauhaus.green">
+              <ChatIcon boxSize={4} color="bauhaus.black" />
+            </Box>
+            <Box>
+              <Text fontWeight="700" color="text.primary">
+                Local AI Chat
+              </Text>
+              <Text fontSize="xs" color="text.secondary" fontWeight="500">
+                Configure Ollama for PK/SP accounts
               </Text>
             </Box>
           </HStack>

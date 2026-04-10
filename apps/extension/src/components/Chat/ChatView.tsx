@@ -13,17 +13,23 @@ interface ChatViewProps {
   onUnlock?: (conversationId?: string) => void;
   isWalletUnlocked?: boolean;
   onWalletLocked?: () => void;
+  address?: string;
+  chainId?: number;
 }
 
 type ChatMode = "list" | "chat";
 
-export function ChatView({ onBack, startWithNewChat = false, returnToConversationId, onUnlock, isWalletUnlocked, onWalletLocked }: ChatViewProps) {
+export function ChatView({ onBack, startWithNewChat = false, returnToConversationId, onUnlock, isWalletUnlocked, onWalletLocked, address, chainId }: ChatViewProps) {
   const {
     conversations,
     currentConversation,
     messages,
     isLoading,
     statusUpdateText,
+    streamContent,
+    showAllAddresses,
+    cancelChat,
+    setShowAllAddresses,
     sendMessage,
     loadConversation,
     createNewChat,
@@ -31,7 +37,7 @@ export function ChatView({ onBack, startWithNewChat = false, returnToConversatio
     toggleFavorite,
     refreshConversations,
     retryLastMessage,
-  } = useChat();
+  } = useChat({ address, chainId });
 
   // Determine initial mode based on props
   const getInitialMode = (): ChatMode => {
@@ -171,6 +177,8 @@ export function ChatView({ onBack, startWithNewChat = false, returnToConversatio
         onNewChat={handleNewChat}
         onDeleteConversation={handleDeleteConversation}
         onToggleFavorite={handleToggleFavorite}
+        showAllAddresses={showAllAddresses}
+        onToggleShowAll={() => setShowAllAddresses(!showAllAddresses)}
       />
     );
   }
@@ -191,6 +199,7 @@ export function ChatView({ onBack, startWithNewChat = false, returnToConversatio
           messages={messages}
           isLoading={isLoading}
           statusUpdateText={statusUpdateText}
+          streamContent={streamContent}
           isWalletUnlocked={isWalletUnlocked}
           onUnlock={handleUnlock}
           onRetry={retryLastMessage}
@@ -198,7 +207,7 @@ export function ChatView({ onBack, startWithNewChat = false, returnToConversatio
         />
 
         <Box w="100%" p={2} borderTop="2px solid" borderColor="bauhaus.black">
-          <ChatInput onSend={sendMessage} isLoading={isLoading} />
+          <ChatInput onSend={sendMessage} isLoading={isLoading} onCancel={cancelChat} />
         </Box>
       </VStack>
     </Box>
