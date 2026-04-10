@@ -28,6 +28,7 @@ import {
   createL1PublicClient,
   writeForceInclusionProgress,
   L1_RPC_TIMEOUT,
+  L1_RECEIPT_TIMEOUT,
   type ForceInclusionStage,
   type ForceInclusionProgressData,
 } from "./forceInclusion";
@@ -111,13 +112,6 @@ export async function processForceInclusionBatchBankr(
     await progress("building");
     const l1TxParams = await buildL1DepositTxParams(syntheticL2Tx, info);
 
-    console.log("[ForceInclusion] Batch Bankr L1 tx params: " + JSON.stringify({
-      to: l1TxParams.to,
-      data: l1TxParams.data?.slice(0, 40) + "...",
-      value: l1TxParams.value,
-      chainId: l1TxParams.chainId,
-    }));
-
     // Stage 2: Submit to Bankr API
     await progress("submitting");
     const result = await submitTransactionDirect(apiKey, l1TxParams);
@@ -145,7 +139,7 @@ export async function processForceInclusionBatchBankr(
     const l1Client = createL1PublicClient(l1RpcUrl);
     const receipt = await l1Client.waitForTransactionReceipt({
       hash: l1Hash as Hash,
-      timeout: 120_000,
+      timeout: L1_RECEIPT_TIMEOUT,
     });
 
     // Critical: L1 tx may have reverted on-chain even if it was broadcast successfully
@@ -303,11 +297,27 @@ export async function processForceInclusionBatchLocal(
     return;
   }
 
-  // Get L1 starting nonce and fees (one RPC call each, shared for all deposits)
+  // Get L1 starting nonce and fees (one RPC call each, shared for all deposits).
+  //
+  // Use blockTag: "pending" so we account for any in-flight L1 tx the user
+  // might already have. The default ("latest") returns the last *mined* nonce
+  // and would collide with anything the user broadcast in the last few blocks.
   const [startNonce, l1Fees] = await Promise.all([
-    l1PublicClient.getTransactionCount({ address: viemAccount.address }),
+    l1PublicClient.getTransactionCount({
+      address: viemAccount.address,
+      blockTag: "pending",
+    }),
     l1PublicClient.estimateFeesPerGas().catch(() => null),
   ]);
+
+  try {
+    const host = new URL(l1RpcUrl).host;
+    console.log(
+      `[ForceInclusion] batch start: bundleId=${bundleId} l1Host=${host} l1ChainId=${l1ChainId} calls=${calls.length} startNonce=${startNonce} maxFeePerGas=${l1Fees?.maxFeePerGas?.toString() ?? "auto"} maxPriorityFeePerGas=${l1Fees?.maxPriorityFeePerGas?.toString() ?? "auto"}`,
+    );
+  } catch {
+    // ignore URL parse failure
+  }
 
   // Phase 2: Assign nonces, save sub-txs to history
   const prepared: Array<{
@@ -379,7 +389,26 @@ export async function processForceInclusionBatchLocal(
     }
   }));
 
-  // Phase 3: Broadcast all L1 deposit txs concurrently
+  // Phase 3: Broadcast L1 deposit txs sequentially.
+  //
+  // We MUST broadcast sequentially (not Promise.all) for two reasons:
+  //
+  //   1. Nonce ordering on strict RPCs. Alchemy/Infura/most managed L1 RPCs
+  //      will silently park nonce N+1 in the "queued" pool if it arrives
+  //      before nonce N — and then frequently evict it without ever
+  //      propagating to peers. The node still returns a hash from
+  //      eth_sendRawTransaction (the hash is computed locally from the
+  //      signed bytes, not from network state), so we record the hash and
+  //      show "L1 Pending", but the tx never reaches the actual mempool
+  //      → never appears on Etherscan → user is stuck forever.
+  //
+  //   2. Determinism on partial failure. If broadcast i fails, we want
+  //      broadcasts i+1..N-1 to be skipped (not also fail with their own
+  //      ambiguous errors), so the user gets a single clean failure instead
+  //      of N stuck "pending" rows.
+  //
+  // The sequential await is also fine on cost: the typical batch is 2 calls
+  // (approve + swap), so this adds at most ~1s vs the parallel path.
   const l1WalletClient = createWalletClient({
     account: viemAccount,
     chain: l1Chain,
@@ -394,12 +423,18 @@ export async function processForceInclusionBatchLocal(
   };
   const results: BroadcastResult[] = [];
 
-  const broadcastPromises = prepared.map(async (item, i): Promise<BroadcastResult> => {
-    try {
-      const value = item.l1TxParams.value && item.l1TxParams.value !== "0x0"
+  for (let i = 0; i < prepared.length; i++) {
+    const item = prepared[i];
+    const value =
+      item.l1TxParams.value && item.l1TxParams.value !== "0x0"
         ? BigInt(item.l1TxParams.value)
         : 0n;
 
+    console.log(
+      `[ForceInclusion] broadcasting L1 deposit ${i + 1}/${prepared.length}: txId=${item.txId} nonce=${item.nonce} gas=${l1GasLimits[i].toString()} value=${value.toString()}`,
+    );
+
+    try {
       const l1Hash = await l1WalletClient.sendTransaction({
         to: item.l1TxParams.to as `0x${string}`,
         data: item.l1TxParams.data as `0x${string}`,
@@ -410,7 +445,9 @@ export async function processForceInclusionBatchLocal(
         maxPriorityFeePerGas: l1Fees?.maxPriorityFeePerGas ?? undefined,
       });
 
-      console.log(`[ForceInclusion] Batch local L1 tx ${item.txId} broadcast:`, l1Hash);
+      console.log(
+        `[ForceInclusion] L1 deposit ${i + 1}/${prepared.length} accepted by RPC: hash=${l1Hash}`,
+      );
 
       // Update sub-tx with L1 hash immediately so activity feed can link to it
       await updateTxInHistory(item.txId, {
@@ -422,20 +459,38 @@ export async function processForceInclusionBatchLocal(
         },
       });
 
-      return { txId: item.txId, success: true, l1TxHash: l1Hash };
+      results.push({ txId: item.txId, success: true, l1TxHash: l1Hash });
     } catch (err: any) {
-      const errorMsg = err?.shortMessage || err?.message || "L1 broadcast failed";
+      const errorMsg =
+        err?.shortMessage || err?.message || "L1 broadcast failed";
+      console.warn(
+        `[ForceInclusion] L1 deposit ${i + 1}/${prepared.length} broadcast failed: ${errorMsg}`,
+      );
       await updateTxInHistory(item.txId, {
         status: "failed",
         error: errorMsg,
         completedAt: Date.now(),
       });
-      return { txId: item.txId, success: false, error: errorMsg };
+      results.push({ txId: item.txId, success: false, error: errorMsg });
+      // Skip remaining broadcasts: their nonces depend on this one landing,
+      // and submitting them now would just create more stuck txs. Mark them
+      // as failed so the activity feed reflects reality.
+      for (let j = i + 1; j < prepared.length; j++) {
+        const skipped = prepared[j];
+        await updateTxInHistory(skipped.txId, {
+          status: "failed",
+          error: `Skipped — earlier deposit (${i + 1}/${prepared.length}) failed`,
+          completedAt: Date.now(),
+        });
+        results.push({
+          txId: skipped.txId,
+          success: false,
+          error: `Skipped — earlier deposit failed`,
+        });
+      }
+      break;
     }
-  });
-
-  const broadcastResults = await Promise.all(broadcastPromises);
-  results.push(...broadcastResults);
+  }
 
   const successfulResults = results.filter((r) => r.success && r.l1TxHash);
   const allFailed = successfulResults.length === 0;
@@ -493,7 +548,7 @@ export async function processForceInclusionBatchLocal(
     try {
       const receipt = await l1PublicClient.waitForTransactionReceipt({
         hash: item.l1TxHash! as Hash,
-        timeout: 120_000,
+        timeout: L1_RECEIPT_TIMEOUT,
       });
 
       // Critical: L1 tx may have reverted. Reverted txs emit no logs, so
@@ -511,7 +566,15 @@ export async function processForceInclusionBatchLocal(
             l2Confirmed: false,
           },
         });
-        // Mark this result as failed so the aggregate tracker computes the right status
+        // CONTRACT: this mutation must propagate back into the outer `results`
+        // array. It works because Array.filter (used to derive successfulResults
+        // from results above) shares object identity — `item` here is literally
+        // the same object that lives in `results`. If you ever refactor that
+        // filter to clone (e.g., `.filter(...).map(r => ({...r}))`), you'll
+        // break two invariants:
+        //   1. `lastSuccessful` (computed in trackBatchForceInclusionCompletion)
+        //      will pick a reverted sub-tx as the bundle's primary txHash
+        //   2. The aggregate bundle status will count this sub-tx as confirmed
         item.success = false;
         return;
       }
@@ -540,11 +603,14 @@ export async function processForceInclusionBatchLocal(
         error: "L1 receipt timeout",
         completedAt: Date.now(),
       });
+      // Same shared-reference contract as the revert path above — mark this
+      // sub-tx as failed so lastSuccessful and the aggregate status are correct.
+      item.success = false;
     }
   }));
 
   // Phase 5: Track aggregate bundle completion (poll local storage, zero RPC)
-  trackBatchForceInclusionCompletion(bundleId, pending, results);
+  trackBatchForceInclusionCompletion(bundleId, pending.chainName, results);
 }
 
 // ---------------------------------------------------------------------------
@@ -584,9 +650,15 @@ async function handleBatchForceInclusionFailure(
   });
 }
 
-async function trackBatchForceInclusionCompletion(
+/**
+ * Polls local tx history (zero RPC) until all sub-txs in a force-inclusion
+ * batch resolve, then writes the aggregate bundle status. Exported because
+ * recoverStuckForceInclusionTxs() needs to re-launch this on service worker
+ * restart for bundles whose tracker died mid-loop.
+ */
+export async function trackBatchForceInclusionCompletion(
   bundleId: string,
-  pending: PendingBatchTxRequest,
+  chainName: string,
   results: Array<{ txId: string; success: boolean; l1TxHash?: string; error?: string }>,
 ): Promise<void> {
   const { getTxById } = await import("./txHistoryStorage");
@@ -654,19 +726,19 @@ async function trackBatchForceInclusionCompletion(
     await showNotification(
       `tx-success-${bundleId}`,
       "Batch Force Inclusion Complete",
-      `All ${results.length} calls on ${pending.chainName} confirmed via L1 deposit.`,
+      `All ${results.length} calls on ${chainName} confirmed via L1 deposit.`,
     );
   } else if (aggregateStatus === BUNDLE_STATUS.PARTIAL_REVERT) {
     await showNotification(
       `tx-partial-${bundleId}`,
       "Batch Partially Confirmed",
-      `${successCount}/${results.length} calls confirmed on ${pending.chainName}. ${failCount} failed.`,
+      `${successCount}/${results.length} calls confirmed on ${chainName}. ${failCount} failed.`,
     );
   } else {
     await showNotification(
       `tx-failed-${bundleId}`,
       "Batch Force Inclusion Failed",
-      `All calls on ${pending.chainName} failed.`,
+      `All calls on ${chainName} failed.`,
     );
   }
 }
