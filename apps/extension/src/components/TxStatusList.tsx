@@ -248,7 +248,9 @@ function ActivityIcon({
   const internalSendSymbol = getInternalSendSymbol(tx);
   const fallbackLabel = (internalSendSymbol || tx.origin || "?").slice(0, 3).toUpperCase();
   const imageSrc =
-    tx.origin === "WalletChan" || tx.origin === "BankrWallet"
+    tx.origin === "WalletChan" ||
+    tx.origin === "BankrWallet" ||
+    tx.origin === "Cross-Dapp Batch"
       ? "/walletchan-icon.png"
       : tx.favicon || (originHostname ? googleFaviconUrl(originHostname) : undefined);
 

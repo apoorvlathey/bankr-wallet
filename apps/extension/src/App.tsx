@@ -105,6 +105,9 @@ const PendingTxList = lazy(() => import("@/components/PendingTxList"));
 const BatchTransactionConfirmation = lazy(
   () => import("@/components/BatchTransactionConfirmation"),
 );
+const CrossDappBatchConfirmation = lazy(
+  () => import("@/components/CrossDappBatchConfirmation"),
+);
 const ChatView = lazy(() => import("@/components/Chat/ChatView"));
 const AccountSwitcher = lazy(() => import("@/components/AccountSwitcher"));
 const AddAccount = lazy(() => import("@/components/AddAccount"));
@@ -136,6 +139,10 @@ import { hasEncryptedApiKey } from "@/chrome/crypto";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
+import {
+  getCrossDappBatch,
+  type CrossDappBatch,
+} from "@/chrome/crossDappBatchStorage";
 import { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
 import { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import type { Account } from "@/chrome/types";
@@ -152,21 +159,30 @@ import {
 export type CombinedRequest =
   | { type: "tx"; request: PendingTxRequest }
   | { type: "sig"; request: PendingSignatureRequest }
-  | { type: "batch"; request: PendingBatchTxRequest };
+  | { type: "batch"; request: PendingBatchTxRequest }
+  | { type: "crossDappBatch"; request: CrossDappBatch };
 
-// Helper to combine and sort requests by timestamp
+// Helper to combine and sort requests by timestamp.
+// The cross-dapp batch (when present) is always prepended as the FIRST element
+// so it has a dedicated, prominent slot in the carousel.
 export function getCombinedRequests(
   txRequests: PendingTxRequest[],
   sigRequests: PendingSignatureRequest[],
   batchRequests: PendingBatchTxRequest[] = [],
+  crossDappBatch?: CrossDappBatch | null,
 ): CombinedRequest[] {
-  const combined: CombinedRequest[] = [
+  const rest: CombinedRequest[] = [
     ...txRequests.map((r) => ({ type: "tx" as const, request: r })),
     ...sigRequests.map((r) => ({ type: "sig" as const, request: r })),
     ...batchRequests.map((r) => ({ type: "batch" as const, request: r })),
   ];
-  // Sort by timestamp ascending (oldest first)
-  return combined.sort((a, b) => a.request.timestamp - b.request.timestamp);
+  // Sort the rest by timestamp ascending (oldest first)
+  rest.sort((a, b) => a.request.timestamp - b.request.timestamp);
+
+  if (crossDappBatch && crossDappBatch.entries.length > 0) {
+    return [{ type: "crossDappBatch", request: crossDappBatch }, ...rest];
+  }
+  return rest;
 }
 
 // Loading fallback component
@@ -196,7 +212,8 @@ type AppView =
   | "addAccount"
   | "transfer"
   | "swap"
-  | "batchTxConfirm";
+  | "batchTxConfirm"
+  | "crossDappBatchConfirm";
 
 function App() {
   const { networksInfo, reloadRequired, setReloadRequired } = useNetworks();
@@ -227,6 +244,11 @@ function App() {
   >([]);
   const [selectedBatchRequest, setSelectedBatchRequest] =
     useState<PendingBatchTxRequest | null>(null);
+  // User-assembled cross-dapp batch (Bankr/impersonator accounts only).
+  // Single batch at a time, locked to the from + chainId of whatever was added first.
+  const [crossDappBatch, setCrossDappBatch] = useState<CrossDappBatch | null>(
+    null,
+  );
   const [activityTabTrigger, setActivityTabTrigger] = useState(0);
   const [portfolioRefreshTrigger, setPortfolioRefreshTrigger] = useState(0);
 
@@ -448,6 +470,12 @@ function App() {
     });
     setPendingBatchRequests(requests || []);
     return requests || [];
+  };
+
+  const loadCrossDappBatch = async () => {
+    const batch = await getCrossDappBatch();
+    setCrossDappBatch(batch);
+    return batch;
   };
 
   const loadPendingWatchAssetRequests = async () => {
@@ -815,6 +843,7 @@ function App() {
       const batchRequests = await loadPendingBatchRequests();
       const watchAssetRequests = await loadPendingWatchAssetRequests();
       const addChainRequests = await loadPendingAddChainRequests();
+      await loadCrossDappBatch();
 
       // Load accounts
       let { accounts: loadedAccounts, activeAccount: loadedActive } =
@@ -1168,6 +1197,17 @@ function App() {
             }
           }
         }
+        if (changes.crossDappBatch) {
+          const updated: CrossDappBatch | null =
+            changes.crossDappBatch.newValue ?? null;
+          setCrossDappBatch(updated);
+          // If the cross-dapp batch was just cleared (ship/reject/last-removed)
+          // and we're on its dedicated screen, bounce back home.
+          if (!updated && view === "crossDappBatchConfirm") {
+            setActivityTabTrigger((k) => k + 1);
+            setView("main");
+          }
+        }
         if (changes.pendingWatchAssetRequests) {
           const updated: PendingWatchAssetRequest[] =
             changes.pendingWatchAssetRequests.newValue || [];
@@ -1379,11 +1419,21 @@ function App() {
         );
       });
     }
+    // Reject the cross-dapp batch (if any). The handler fans out a rejection
+    // to every dapp that contributed a tx to the batch.
+    if (crossDappBatch) {
+      await new Promise<void>((resolve) => {
+        chrome.runtime.sendMessage({ type: "rejectCrossDappBatch" }, () =>
+          resolve(),
+        );
+      });
+    }
     // Only close popup after rejecting all (not sidepanel or fullscreen tab)
     if (isInSidePanel || isFullscreenTab) {
       setPendingRequests([]);
       setPendingBatchRequests([]);
       setPendingSignatureRequests([]);
+      setCrossDappBatch(null);
       setSelectedTxRequest(null);
       setSelectedBatchRequest(null);
       setSelectedSignatureRequest(null);
@@ -1395,6 +1445,7 @@ function App() {
     pendingRequests,
     pendingBatchRequests,
     pendingSignatureRequests,
+    crossDappBatch,
     isInSidePanel,
     isFullscreenTab,
   ]);
@@ -1946,6 +1997,7 @@ function App() {
               txRequests={pendingRequests}
               signatureRequests={pendingSignatureRequests}
               batchRequests={pendingBatchRequests}
+              crossDappBatch={crossDappBatch}
               onBack={() => setView("main")}
               onSelectTx={(tx) => {
                 setSelectedTxRequest(tx);
@@ -1959,6 +2011,7 @@ function App() {
                 setSelectedBatchRequest(batch);
                 setView("batchTxConfirm");
               }}
+              onSelectCrossDappBatch={() => setView("crossDappBatchConfirm")}
               onRejectAll={handleRejectAll}
             />
           </Suspense>
@@ -1973,6 +2026,7 @@ function App() {
       pendingRequests,
       pendingSignatureRequests,
       pendingBatchRequests,
+      crossDappBatch,
     );
     const currentIndex = combinedRequests.findIndex(
       (r) => r.type === "tx" && r.request.id === selectedTxRequest.id,
@@ -1996,6 +2050,7 @@ function App() {
               totalCount={totalCount}
               isInSidePanel={isInSidePanel || isFullscreenTab}
               accountType={activeAccount?.type}
+              crossDappBatch={crossDappBatch}
               onBack={() => {
                 if (totalCount > 1) {
                   setView("pendingTxList");
@@ -2006,6 +2061,10 @@ function App() {
               onConfirmed={handleTxConfirmed}
               onRejected={handleTxRejected}
               onRejectAll={handleRejectAll}
+              onAddedToBatch={() => {
+                setSelectedTxRequest(null);
+                setView("crossDappBatchConfirm");
+              }}
               onNavigate={(direction) => {
                 const currentIdx = combinedRequests.findIndex(
                   (r) =>
@@ -2021,6 +2080,9 @@ function App() {
                     setSelectedTxRequest(null);
                     setSelectedBatchRequest(nextRequest.request);
                     setView("batchTxConfirm");
+                  } else if (nextRequest.type === "crossDappBatch") {
+                    setSelectedTxRequest(null);
+                    setView("crossDappBatchConfirm");
                   } else {
                     setSelectedTxRequest(null);
                     setSelectedSignatureRequest(nextRequest.request);
@@ -2041,6 +2103,7 @@ function App() {
       pendingRequests,
       pendingSignatureRequests,
       pendingBatchRequests,
+      crossDappBatch,
     );
     const currentIndex = combinedRequests.findIndex(
       (r) => r.type === "batch" && r.request.id === selectedBatchRequest.id,
@@ -2065,6 +2128,11 @@ function App() {
               isInSidePanel={isInSidePanel || isFullscreenTab}
               accountType={activeAccount?.type}
               accountAddress={address}
+              crossDappBatch={crossDappBatch}
+              onAddedToBatch={() => {
+                setSelectedBatchRequest(null);
+                setView("crossDappBatchConfirm");
+              }}
               onBack={() => {
                 if (totalCount > 1) {
                   setView("pendingTxList");
@@ -2125,8 +2193,93 @@ function App() {
                     setSelectedBatchRequest(null);
                     setSelectedTxRequest(nextRequest.request);
                     setView("txConfirm");
+                  } else if (nextRequest.type === "crossDappBatch") {
+                    setSelectedBatchRequest(null);
+                    setView("crossDappBatchConfirm");
                   } else {
                     setSelectedBatchRequest(null);
+                    setSelectedSignatureRequest(nextRequest.request);
+                    setView("signatureConfirm");
+                  }
+                }
+              }}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
+  // Cross-dapp batch confirmation view (user-assembled)
+  if (view === "crossDappBatchConfirm" && crossDappBatch) {
+    const combinedRequests = getCombinedRequests(
+      pendingRequests,
+      pendingSignatureRequests,
+      pendingBatchRequests,
+      crossDappBatch,
+    );
+    const currentIndex = combinedRequests.findIndex(
+      (r) => r.type === "crossDappBatch",
+    );
+    const totalCount = combinedRequests.length;
+    // Distinctive yellow-tinted background so this screen is instantly
+    // recognizable as the user-assembled cross-dapp batch (vs the standard
+    // bg.base used by every other tx/sig/batch confirmation screen).
+    return (
+      <Box bg="#FFF8DC" h="100%" display="flex" flexDirection="column">
+        {/* Bauhaus accent strip across the top of the page */}
+        <Box
+          h="6px"
+          w="100%"
+          bg="bauhaus.yellow"
+          borderBottom="2px solid"
+          borderColor="bauhaus.black"
+          flexShrink={0}
+        />
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <CrossDappBatchConfirmation
+              batch={crossDappBatch}
+              currentIndex={currentIndex >= 0 ? currentIndex : 0}
+              totalCount={totalCount}
+              isInSidePanel={isInSidePanel || isFullscreenTab}
+              onBack={() => {
+                if (totalCount > 1) {
+                  setView("pendingTxList");
+                } else {
+                  setView("main");
+                }
+              }}
+              onConfirmed={() => {
+                setActivityTabTrigger((k) => k + 1);
+                setView("main");
+              }}
+              onRejected={() => {
+                setActivityTabTrigger((k) => k + 1);
+                setView("main");
+              }}
+              onNavigate={(direction) => {
+                const currentIdx = combinedRequests.findIndex(
+                  (r) => r.type === "crossDappBatch",
+                );
+                const newIdx =
+                  direction === "prev" ? currentIdx - 1 : currentIdx + 1;
+                if (newIdx >= 0 && newIdx < combinedRequests.length) {
+                  const nextRequest = combinedRequests[newIdx];
+                  if (nextRequest.type === "tx") {
+                    setSelectedTxRequest(nextRequest.request);
+                    setView("txConfirm");
+                  } else if (nextRequest.type === "batch") {
+                    setSelectedBatchRequest(nextRequest.request);
+                    setView("batchTxConfirm");
+                  } else if (nextRequest.type === "sig") {
                     setSelectedSignatureRequest(nextRequest.request);
                     setView("signatureConfirm");
                   }
@@ -2145,6 +2298,7 @@ function App() {
       pendingRequests,
       pendingSignatureRequests,
       pendingBatchRequests,
+      crossDappBatch,
     );
     const currentIndex = combinedRequests.findIndex(
       (r) => r.type === "sig" && r.request.id === selectedSignatureRequest.id,
@@ -2191,10 +2345,17 @@ function App() {
                   const nextRequest = combinedRequests[newIdx];
                   if (nextRequest.type === "sig") {
                     setSelectedSignatureRequest(nextRequest.request);
-                  } else {
+                  } else if (nextRequest.type === "tx") {
                     setSelectedSignatureRequest(null);
                     setSelectedTxRequest(nextRequest.request);
                     setView("txConfirm");
+                  } else if (nextRequest.type === "batch") {
+                    setSelectedSignatureRequest(null);
+                    setSelectedBatchRequest(nextRequest.request);
+                    setView("batchTxConfirm");
+                  } else if (nextRequest.type === "crossDappBatch") {
+                    setSelectedSignatureRequest(null);
+                    setView("crossDappBatchConfirm");
                   }
                 }
               }}
@@ -2537,8 +2698,14 @@ function App() {
               txCount={pendingRequests.length}
               signatureCount={pendingSignatureRequests.length}
               batchCount={pendingBatchRequests.length}
+              crossDappBatchCount={crossDappBatch?.entries.length ?? 0}
               onClickTx={() => {
-                if (pendingRequests.length === 1 && pendingSignatureRequests.length === 0 && pendingBatchRequests.length === 0) {
+                const onlyOneTx =
+                  pendingRequests.length === 1 &&
+                  pendingSignatureRequests.length === 0 &&
+                  pendingBatchRequests.length === 0 &&
+                  !crossDappBatch;
+                if (onlyOneTx) {
                   setSelectedTxRequest(pendingRequests[0]);
                   setView("txConfirm");
                 } else {
@@ -2552,11 +2719,22 @@ function App() {
                 }
               }}
               onClickBatch={() => {
-                if (pendingBatchRequests.length === 1 && pendingRequests.length === 0 && pendingSignatureRequests.length === 0) {
+                const onlyOneBatch =
+                  pendingBatchRequests.length === 1 &&
+                  pendingRequests.length === 0 &&
+                  pendingSignatureRequests.length === 0 &&
+                  !crossDappBatch;
+                if (onlyOneBatch) {
                   setSelectedBatchRequest(pendingBatchRequests[0]);
                   setView("batchTxConfirm");
                 } else {
                   setView("pendingTxList");
+                }
+              }}
+              onClickCrossDappBatch={() => {
+                // The cross-dapp batch always has its own dedicated screen.
+                if (crossDappBatch) {
+                  setView("crossDappBatchConfirm");
                 }
               }}
             />
