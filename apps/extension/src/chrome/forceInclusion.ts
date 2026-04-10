@@ -67,6 +67,14 @@ export interface ForceInclusionProgressData {
 // ---------------------------------------------------------------------------
 
 export const L1_RPC_TIMEOUT = 30_000;
+/**
+ * Max time to wait for an L1 deposit receipt. Long enough to absorb L1 mainnet
+ * congestion (slow base fee adjustment can leave a tx pending for many minutes).
+ * If this fires, the catch handler marks the tx as failed — but
+ * recoverStuckForceInclusionTxs() will reconcile on the next service worker
+ * startup if the L1 tx eventually confirms.
+ */
+export const L1_RECEIPT_TIMEOUT = 10 * 60 * 1000; // 10 minutes
 const DEFAULT_L2_GAS = 8_000_000n;
 
 /** Minimal ABI for OptimismPortal.depositTransaction — only the function we call */
@@ -256,14 +264,6 @@ export async function processForceInclusionBankr(
       ...extra,
     });
 
-  console.log("[ForceInclusion] Bankr path - pending.tx: " + JSON.stringify({
-    from: pending.tx.from,
-    to: pending.tx.to,
-    data: pending.tx.data?.slice(0, 40) + "...",
-    value: pending.tx.value,
-    chainId: pending.tx.chainId,
-  }));
-
   // Save to tx history as processing — include forceInclusionMeta from the
   // start so the activity feed can show "L1 Pending" instead of "Processing"
   await addTxToHistory({
@@ -289,12 +289,6 @@ export async function processForceInclusionBankr(
     // Stage 1: Build deposit tx
     await progress("building");
     const l1TxParams = await buildL1DepositTxParams(pending.tx, info);
-    console.log("[ForceInclusion] L1 tx params for Bankr: " + JSON.stringify({
-      to: l1TxParams.to,
-      data: l1TxParams.data?.slice(0, 40) + "...",
-      value: l1TxParams.value,
-      chainId: l1TxParams.chainId,
-    }));
 
     // Stage 2: Submit to Bankr API
     await progress("submitting");
@@ -324,7 +318,7 @@ export async function processForceInclusionBankr(
     const l1Client = createL1PublicClient(l1RpcUrl);
     const receipt = await l1Client.waitForTransactionReceipt({
       hash: l1Hash as Hash,
-      timeout: 120_000,
+      timeout: L1_RECEIPT_TIMEOUT,
     });
 
     // Critical: L1 tx may have reverted on-chain even if Bankr API said "success"
@@ -352,6 +346,20 @@ export async function processForceInclusionLocal(
   pending: PendingTxRequest,
   account: { id: string; address: string; type: string },
   privateKey: `0x${string}`,
+  /**
+   * User-edited L1 gas overrides from the GasEstimateDisplay. The
+   * GasEstimateDisplay fetches its values via estimateForceInclusionGas when
+   * forceInclusion is on, so the strings here are L1-side values:
+   *   - gasLimit         → L1 gas limit for the OptimismPortal.depositTransaction call
+   *   - maxFeePerGas     → L1 max fee per gas
+   *   - maxPriorityFeePerGas → L1 priority fee
+   * They are passed straight through to viem's L1 depositTransaction action.
+   */
+  gasOverrides?: {
+    gasLimit: string;
+    maxFeePerGas: string;
+    maxPriorityFeePerGas: string;
+  },
 ): Promise<void> {
   const info = FORCE_INCLUSION_CHAINS.get(pending.tx.chainId);
   if (!info) {
@@ -434,17 +442,6 @@ export async function processForceInclusionLocal(
       account: from,
     });
 
-    console.log("[ForceInclusion] PK/Seed depositArgs: " + JSON.stringify({
-      l2To,
-      l2Data: l2Data.slice(0, 40) + "...",
-      l2Gas: l2Gas.toString(),
-      value: value.toString(),
-      requestTo: (depositArgs as any).request?.to,
-      requestData: (depositArgs as any).request?.data?.toString().slice(0, 40),
-      requestGas: (depositArgs as any).request?.gas?.toString(),
-      requestIsCreation: (depositArgs as any).request?.isCreation,
-    }));
-
     // Stage 2: Submit to L1
     await progress("submitting");
     const l1RpcUrl = await getL1RpcUrl(info.l1ChainId);
@@ -462,9 +459,18 @@ export async function processForceInclusionLocal(
       account: viemAccount, // Must override — depositArgs.account is an address string, not the local signer
       chain: l1Chain,
       targetChain: info.viemChain,
+      // Apply user-edited L1 gas/fees from GasEstimateDisplay if present.
+      // viem's depositTransaction has a top-level `gas` (L1 gas limit) and
+      // accepts `maxFeePerGas`/`maxPriorityFeePerGas` from the underlying
+      // FormattedTransactionRequest spread.
+      ...(gasOverrides
+        ? {
+            gas: BigInt(gasOverrides.gasLimit),
+            maxFeePerGas: BigInt(gasOverrides.maxFeePerGas),
+            maxPriorityFeePerGas: BigInt(gasOverrides.maxPriorityFeePerGas),
+          }
+        : {}),
     });
-
-    console.log("[ForceInclusion] L1 tx submitted:", l1Hash);
 
     // Update history with L1 hash immediately so the activity feed can link to it
     await updateTxInHistory(txId, {
@@ -481,7 +487,7 @@ export async function processForceInclusionLocal(
     const l1PublicClient = createL1PublicClient(l1RpcUrl);
     const receipt = await l1PublicClient.waitForTransactionReceipt({
       hash: l1Hash,
-      timeout: 120_000,
+      timeout: L1_RECEIPT_TIMEOUT,
     });
 
     // Critical: L1 tx may have reverted on-chain even if it was broadcast successfully
@@ -671,16 +677,6 @@ export async function buildL1DepositTxParams(
     ],
   });
 
-  console.log("[ForceInclusion] buildL1DepositTxParams: " + JSON.stringify({
-    l2To,
-    l2Data: l2Data.slice(0, 40) + "...",
-    l2Gas: l2Gas.toString(),
-    value: value.toString(),
-    isCreation,
-    portalAddress: portalAddress.address,
-    encodedCalldata: portalCalldata.slice(0, 40) + "...",
-  }));
-
   return {
     from: l2Tx.from,
     to: portalAddress.address,
@@ -760,6 +756,100 @@ export async function recoverStuckForceInclusionTxs(): Promise<void> {
       }
     } catch (e) {
       console.warn(`[ForceInclusion Recovery] Failed to check tx ${tx.id}:`, e);
+    }
+  }
+
+  // Phase 2: re-launch trackBatchForceInclusionCompletion for any batch
+  // bundles whose tracker died with the previous service worker. Without
+  // this, the bundle aggregate status would stay PENDING forever even after
+  // all sub-txs eventually resolve.
+  await recoverStuckForceInclusionBundles();
+}
+
+/**
+ * Find batch force-inclusion bundles whose aggregate tracker may have been
+ * killed by a service worker restart, and re-launch the tracker for any that
+ * are still in BUNDLE_STATUS.PENDING.
+ *
+ * Sub-tx ids follow the format `${bundleId}:${index}` (set in
+ * processForceInclusionBatchLocal Phase 2). We group by that prefix.
+ */
+async function recoverStuckForceInclusionBundles(): Promise<void> {
+  const { getTxHistory } = await import("./txHistoryStorage");
+  const { getBundleStatus } = await import("./bundleStatusStorage");
+  const { BUNDLE_STATUS } = await import("./erc5792Types");
+  const { trackBatchForceInclusionCompletion } = await import(
+    "./batchForceInclusion"
+  );
+
+  const history = await getTxHistory();
+
+  // Group sub-txs by bundleId. Only consider entries with forceInclusionMeta
+  // AND a colon in the id (the sub-tx id format).
+  const bundles = new Map<
+    string,
+    Array<(typeof history)[number]>
+  >();
+  for (const tx of history) {
+    if (!tx.forceInclusionMeta) continue;
+    const colon = tx.id.indexOf(":");
+    if (colon < 0) continue; // single-tx force inclusion, not a bundle sub-tx
+    const bundleId = tx.id.slice(0, colon);
+    const arr = bundles.get(bundleId);
+    if (arr) arr.push(tx);
+    else bundles.set(bundleId, [tx]);
+  }
+
+  for (const [bundleId, subTxs] of bundles) {
+    try {
+      const bundleStatus = await getBundleStatus(bundleId);
+      // Only restart tracking for bundles still in PENDING. CONFIRMED/REVERTED/
+      // PARTIAL_REVERT/OFFCHAIN_FAILURE bundles are already finalized.
+      if (!bundleStatus || bundleStatus.status !== BUNDLE_STATUS.PENDING) continue;
+
+      // Sort sub-txs by their index suffix so the reconstructed results array
+      // matches the original broadcast order.
+      const sorted = [...subTxs].sort((a, b) => {
+        const ai = parseInt(a.id.split(":")[1] || "0", 10);
+        const bi = parseInt(b.id.split(":")[1] || "0", 10);
+        return ai - bi;
+      });
+
+      // Reconstruct the `results` array shape that
+      // trackBatchForceInclusionCompletion expects.
+      //
+      // success === true means: the L1 broadcast happened (we have a valid L1
+      // hash) AND the sub-tx isn't in a definitively failed state. This
+      // matches the runtime contract where item.success is mutated to false
+      // on L1-revert / L1 receipt timeout (see Phase 4 of
+      // processForceInclusionBatchLocal). Sub-txs in "pending" or "success"
+      // are kept truthy so the tracker waits / counts them in the aggregate.
+      const results = sorted.map((tx) => {
+        const l1TxHash = tx.forceInclusionMeta?.l1TxHash || undefined;
+        const succeededBroadcast = !!l1TxHash && tx.status !== "failed";
+        return {
+          txId: tx.id,
+          success: succeededBroadcast,
+          l1TxHash,
+          error: tx.error,
+        };
+      });
+
+      // chainName comes from the first sub-tx's history entry — all sub-txs
+      // in a bundle share the same chainName.
+      const chainName = sorted[0]?.chainName || `Chain ${sorted[0]?.chainId}`;
+
+      console.log(
+        `[ForceInclusion Recovery] Restarting bundle tracker for ${bundleId} (${results.length} sub-txs)`,
+      );
+      // Fire-and-forget — the tracker polls local storage and exits when all
+      // sub-txs reach a terminal state.
+      trackBatchForceInclusionCompletion(bundleId, chainName, results);
+    } catch (e) {
+      console.warn(
+        `[ForceInclusion Recovery] Failed to restart bundle tracker for ${bundleId}:`,
+        e,
+      );
     }
   }
 }

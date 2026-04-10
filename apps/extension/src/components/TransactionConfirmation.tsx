@@ -45,7 +45,7 @@ import {
   getStoredNativeCurrencySymbol,
 } from "@/lib/chains";
 import {
-  isForceInclusionSupported,
+  isForceInclusionSupportedForAccount,
   FORCE_INCLUSION_CHAINS,
 } from "@/constants/chainRegistry";
 import ForceInclusionProgress from "@/components/ForceInclusionProgress";
@@ -154,10 +154,11 @@ function TransactionConfirmation({
   const [forceInclusion, setForceInclusion] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Force inclusion info — non-null when the chain supports it and account can submit
+  // Force inclusion info — non-null when the chain supports it and account can submit.
+  // For Bankr accounts this also requires the L1 chain (e.g. Ethereum mainnet) to be
+  // in BANKR_SUPPORTED_CHAIN_IDS, since Bankr API submits the L1 deposit on their end.
   const forceInclusionInfo = useMemo(() => {
-    if (!isForceInclusionSupported(txRequest.tx.chainId)) return null;
-    if (accountType === "impersonator") return null;
+    if (!isForceInclusionSupportedForAccount(txRequest.tx.chainId, accountType)) return null;
     const entry = FORCE_INCLUSION_CHAINS.get(txRequest.tx.chainId)!;
     return { l1ChainId: entry.l1ChainId, l1ChainName: entry.l1ChainName };
   }, [txRequest.tx.chainId, accountType]);

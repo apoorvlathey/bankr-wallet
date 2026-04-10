@@ -470,3 +470,25 @@ for (const chain of OP_STACK_VIEM_CHAINS) {
 export function isForceInclusionSupported(chainId: number): boolean {
   return FORCE_INCLUSION_CHAINS.has(chainId);
 }
+
+/**
+ * Force inclusion is gated per account type because Bankr accounts submit the
+ * L1 deposit through the Bankr API, which only supports chains in
+ * BANKR_SUPPORTED_CHAIN_IDS. Currently that's mainnet (Ethereum, etc.) only —
+ * Sepolia is not supported. PK/Seed accounts broadcast L1 directly and work on
+ * any L1 with an RPC endpoint.
+ */
+export function isForceInclusionSupportedForAccount(
+  l2ChainId: number,
+  accountType: "bankr" | "privateKey" | "seedPhrase" | "impersonator" | undefined,
+): boolean {
+  if (!accountType || accountType === "impersonator") return false;
+  const info = FORCE_INCLUSION_CHAINS.get(l2ChainId);
+  if (!info) return false;
+  // Bankr accounts can only force-include when the L1 chain is supported by Bankr
+  if (accountType === "bankr") {
+    return BANKR_SUPPORTED_CHAIN_IDS.has(info.l1ChainId);
+  }
+  // PK/Seed broadcast L1 directly — no Bankr dependency
+  return true;
+}

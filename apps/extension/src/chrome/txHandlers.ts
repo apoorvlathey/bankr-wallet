@@ -652,8 +652,22 @@ export async function handleConfirmTransactionAsync(
     return { success: false, error: "Transaction request expired" };
   }
 
-  // Validate chain is supported for Bankr API accounts (skip for force inclusion — L1 tx goes to mainnet which IS supported)
-  if (!forceInclusion && !BANKR_SUPPORTED_CHAIN_IDS.has(pending.tx.chainId)) {
+  // Validate chain is supported for Bankr API accounts.
+  // For force inclusion, the actual L1 deposit goes to the L1 chain — verify
+  // THAT chain is in the Bankr-supported set (currently mainnet only).
+  if (forceInclusion) {
+    const { FORCE_INCLUSION_CHAINS } = await import("@/constants/chainRegistry");
+    const info = FORCE_INCLUSION_CHAINS.get(pending.tx.chainId);
+    if (!info) {
+      return { success: false, error: "Chain does not support force inclusion" };
+    }
+    if (!BANKR_SUPPORTED_CHAIN_IDS.has(info.l1ChainId)) {
+      return {
+        success: false,
+        error: `Force inclusion via Bankr requires an L1 chain supported by the Bankr API. Use a Private Key or Seed Phrase account to force-include on testnets.`,
+      };
+    }
+  } else if (!BANKR_SUPPORTED_CHAIN_IDS.has(pending.tx.chainId)) {
     return {
       success: false,
       error: `Chain ${CHAIN_NAMES[pending.tx.chainId] || pending.tx.chainId} is not supported for Bankr API accounts`,
@@ -1058,7 +1072,7 @@ export async function handleConfirmTransactionAsyncPK(
   // Start background processing (cleanup of processingTxIds happens in finally block)
   if (forceInclusion) {
     const { processForceInclusionLocal } = await import("./forceInclusion");
-    processForceInclusionLocal(txId, pending, account, privateKey);
+    processForceInclusionLocal(txId, pending, account, privateKey, gasOverrides);
   } else {
     processLocalTransactionInBackground(
       txId,

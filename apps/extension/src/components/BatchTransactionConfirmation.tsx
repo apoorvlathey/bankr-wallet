@@ -37,7 +37,7 @@ import ChainIcon from "@/components/ChainIcon";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
 import ForceInclusionProgress from "@/components/ForceInclusionProgress";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
-import { isForceInclusionSupported, FORCE_INCLUSION_CHAINS } from "@/constants/chainRegistry";
+import { isForceInclusionSupportedForAccount, FORCE_INCLUSION_CHAINS } from "@/constants/chainRegistry";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
@@ -154,10 +154,11 @@ function BatchTransactionConfirmation({
   const isNonAtomic =
     accountType === "privateKey" || accountType === "seedPhrase";
 
-  // Force inclusion info — non-null when chain supports it and account can submit
+  // Force inclusion info — non-null when chain supports it and account can submit.
+  // For Bankr accounts this also requires the L1 chain (e.g. Ethereum mainnet) to be
+  // in BANKR_SUPPORTED_CHAIN_IDS, since Bankr API submits the L1 deposit on their end.
   const forceInclusionInfo = useMemo(() => {
-    if (!isForceInclusionSupported(chainId)) return null;
-    if (accountType === "impersonator") return null;
+    if (!isForceInclusionSupportedForAccount(chainId, accountType)) return null;
     const entry = FORCE_INCLUSION_CHAINS.get(chainId)!;
     return { l1ChainId: entry.l1ChainId, l1ChainName: entry.l1ChainName };
   }, [chainId, accountType]);
@@ -704,38 +705,50 @@ function BatchTransactionConfirmation({
               zIndex={1}
             >
               <VStack spacing={2} align="stretch">
-                <HStack
-                  spacing={2}
-                  w="full"
-                  border="2px solid"
-                  borderColor="bauhaus.black"
-                  px={3}
-                  py={1.5}
-                  justify="center"
-                  _hover={{ bg: "bg.muted" }}
-                  transition="background 0.15s"
-                >
-                  <CopyButton value={tenderlyUrl} />
+                {/*
+                 * Tenderly's dashboard simulator URL only accepts a single tx
+                 * (from/to/value/rawFunctionInput/network). For atomic Bankr
+                 * batches we encode all calls into one ERC-7821 self-call, which
+                 * Tenderly can simulate faithfully. For non-atomic EOA batches
+                 * (PK/SP) the EOA has no code and doesn't support ERC-7821, so
+                 * the encoded self-call would be misleading. Bundle simulation
+                 * only exists via Tenderly's API/RPC, which isn't shareable as
+                 * a URL — so we hide the button entirely for non-atomic.
+                 */}
+                {!isNonAtomic && (
                   <HStack
                     spacing={2}
-                    cursor="pointer"
-                    onClick={() => chrome.tabs.create({ url: tenderlyUrl })}
+                    w="full"
+                    border="2px solid"
+                    borderColor="bauhaus.black"
+                    px={3}
+                    py={1.5}
+                    justify="center"
+                    _hover={{ bg: "bg.muted" }}
+                    transition="background 0.15s"
                   >
-                    <Image
-                      src={googleFaviconUrl("tenderly.co")}
-                      boxSize="14px"
-                    />
-                    <Text
-                      fontWeight="700"
-                      fontSize="xs"
-                      textTransform="uppercase"
-                      letterSpacing="wide"
+                    <CopyButton value={tenderlyUrl} />
+                    <HStack
+                      spacing={2}
+                      cursor="pointer"
+                      onClick={() => chrome.tabs.create({ url: tenderlyUrl })}
                     >
-                      Simulate on Tenderly
-                    </Text>
-                    <ExternalLinkIcon boxSize={3} />
+                      <Image
+                        src={googleFaviconUrl("tenderly.co")}
+                        boxSize="14px"
+                      />
+                      <Text
+                        fontWeight="700"
+                        fontSize="xs"
+                        textTransform="uppercase"
+                        letterSpacing="wide"
+                      >
+                        Simulate on Tenderly
+                      </Text>
+                      <ExternalLinkIcon boxSize={3} />
+                    </HStack>
                   </HStack>
-                </HStack>
+                )}
 
                 {/* Error Display */}
                 {error && state === "error" && (

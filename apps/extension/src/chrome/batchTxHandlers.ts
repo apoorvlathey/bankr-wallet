@@ -319,8 +319,22 @@ export async function handleConfirmBatchTransaction(
     return { success: false, error: "Batch request expired" };
   }
 
-  // Validate chain support (skip when force inclusion — L1 tx goes to Ethereum which IS supported)
-  if (!forceInclusion && !BANKR_SUPPORTED_CHAIN_IDS.has(pending.chainId)) {
+  // Validate chain support.
+  // For force inclusion, the actual L1 deposit goes to the L1 chain — verify
+  // THAT chain is in the Bankr-supported set (currently mainnet only).
+  if (forceInclusion) {
+    const { FORCE_INCLUSION_CHAINS } = await import("../constants/chainRegistry");
+    const info = FORCE_INCLUSION_CHAINS.get(pending.chainId);
+    if (!info) {
+      return { success: false, error: "Chain does not support force inclusion" };
+    }
+    if (!BANKR_SUPPORTED_CHAIN_IDS.has(info.l1ChainId)) {
+      return {
+        success: false,
+        error: `Force inclusion via Bankr requires an L1 chain supported by the Bankr API. Use a Private Key or Seed Phrase account to force-include on testnets.`,
+      };
+    }
+  } else if (!BANKR_SUPPORTED_CHAIN_IDS.has(pending.chainId)) {
     return {
       success: false,
       error: `Chain ${CHAIN_NAMES[pending.chainId] || pending.chainId} is not supported for Bankr API accounts`,
