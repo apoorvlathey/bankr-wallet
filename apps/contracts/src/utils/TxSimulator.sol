@@ -143,6 +143,46 @@ contract TxSimulator {
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Batch gas measurement — executes calls sequentially (state persists),
+    // measures gas per call via gasleft(), and adds intrinsic + calldata
+    // cost so the returned values can be used directly as tx gas limits
+    // (matching the semantics of eth_estimateGas / eth_simulateV1.gasUsed).
+    //
+    // Used by batchGasEstimation.ts as the universal fallback when a chain
+    // doesn't support eth_simulateV1: dependent calls like swap-after-approve
+    // estimate correctly because the prior call's state changes are visible.
+    // -----------------------------------------------------------------------
+    function simulateBatchGas(BatchCall[] calldata calls)
+        external
+        returns (bool allSuccess, uint256[] memory gasUsedPerCall)
+    {
+        gasUsedPerCall = new uint256[](calls.length);
+        allSuccess = true;
+        for (uint256 i; i < calls.length; ++i) {
+            uint256 gasBefore = gasleft();
+            (bool ok, ) = calls[i].to.call{value: calls[i].value}(calls[i].data);
+            uint256 execGas = gasBefore - gasleft();
+            // 21000 intrinsic + calldata gas (4 per zero byte, 16 per non-zero)
+            // so callers can use the returned value directly as a tx gas limit
+            // after applying their own buffer.
+            gasUsedPerCall[i] = execGas + 21000 + _calldataGas(calls[i].data);
+            if (!ok) allSuccess = false;
+        }
+    }
+
+    /// @dev Counts calldata gas: 4 per zero byte, 16 per non-zero byte (post-Istanbul).
+    function _calldataGas(bytes memory data) internal pure returns (uint256 gas) {
+        uint256 len = data.length;
+        for (uint256 i; i < len; ++i) {
+            if (data[i] == bytes1(0)) {
+                gas += 4;
+            } else {
+                gas += 16;
+            }
+        }
+    }
+
     /// @dev Try balanceOf(address(this)); returns 0 on revert or bad data.
     function _tryBalanceOf(address token) internal view returns (uint256) {
         // selector: balanceOf(address) = 0x70a08231

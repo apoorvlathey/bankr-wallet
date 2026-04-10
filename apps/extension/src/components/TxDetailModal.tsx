@@ -17,6 +17,7 @@ import {
   Image,
   Spacer,
   Collapse,
+  Spinner,
 } from "@chakra-ui/react";
 import {
   CheckCircleIcon,
@@ -26,7 +27,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from "@chakra-ui/icons";
-import { CompletedTransaction, GasData } from "@/chrome/txHistoryStorage";
+import { CompletedTransaction, GasData, type ForceInclusionMeta } from "@/chrome/txHistoryStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import { OP_STACK_CHAIN_IDS } from "@/constants/networks";
 import { useNetworks } from "@/contexts/NetworksContext";
@@ -78,6 +79,130 @@ function GasRow({ label, value }: { label: string; value: string }) {
         {value}
       </Text>
     </HStack>
+  );
+}
+
+/**
+ * Compute the force-inclusion 2-step progress states from a tx record.
+ *
+ * The discriminator is `hasDistinctL2Hash`: when the L2 receipt poller
+ * updates a tx to status="failed" because the L2 tx reverted, it preserves
+ * the L2 hash that was set when L1 was originally confirmed. So:
+ *   - tx.txHash !== meta.l1TxHash → L1 succeeded, L2 hash was extracted
+ *   - tx.txHash === meta.l1TxHash (or absent) → L1 never produced an L2 hash
+ *     (either L1 reverted, or extractL2Hash fell back to the L1 hash)
+ *
+ * This lets us distinguish "L1 failed" from "L2 failed" purely from the
+ * stored state, without parsing error strings.
+ */
+function getForceInclusionState(
+  meta: ForceInclusionMeta,
+  status: string,
+  txHash: string | undefined,
+) {
+  const hasDistinctL2Hash = !!(txHash && txHash !== meta.l1TxHash);
+  const l1Confirmed =
+    status === "pending" ||
+    status === "success" ||
+    (status === "failed" && hasDistinctL2Hash);
+  const l1Reverted = status === "failed" && !hasDistinctL2Hash;
+  const l2Confirmed = meta.l2Confirmed || status === "success";
+  const l2Reverted = status === "failed" && hasDistinctL2Hash;
+  return { hasDistinctL2Hash, l1Confirmed, l1Reverted, l2Confirmed, l2Reverted };
+}
+
+function ForceInclusionSteps({
+  meta,
+  status,
+  txHash,
+}: {
+  meta: ForceInclusionMeta;
+  status: string;
+  txHash: string | undefined;
+}) {
+  const l1Config = getChainConfig(meta.l1ChainId);
+  const l2Config = getChainConfig(meta.l2ChainId);
+  const l1HasHash = !!meta.l1TxHash;
+  const { l1Confirmed, l1Reverted, l2Confirmed, l2Reverted } =
+    getForceInclusionState(meta, status, txHash);
+
+  return (
+    <Box
+      border="2px solid"
+      borderColor="bauhaus.black"
+      bg="gray.50"
+      p={3}
+    >
+      <Text fontSize="2xs" fontWeight="700" textTransform="uppercase" color="text.secondary" mb={2}>
+        Force Inclusion Progress
+      </Text>
+      <VStack spacing={2} align="stretch">
+        {/* Step 1: L1 */}
+        <HStack spacing={2}>
+          <Box
+            w="18px" h="18px" flexShrink={0}
+            border="2px solid" borderColor="bauhaus.black"
+            bg={l1Reverted ? "bauhaus.red" : l1Confirmed ? "green.400" : "bauhaus.blue"}
+            display="flex" alignItems="center" justifyContent="center"
+          >
+            {l1Reverted ? (
+              <WarningIcon boxSize={2.5} color="white" />
+            ) : l1Confirmed ? (
+              <CheckCircleIcon boxSize={2.5} color="white" />
+            ) : (
+              <Spinner size="xs" color="white" boxSize="10px" />
+            )}
+          </Box>
+          <Text fontSize="xs" fontWeight="700" color="text.primary">
+            L1 Deposit ({l1Config.name || "Ethereum"})
+          </Text>
+          {l1Reverted ? (
+            <Text fontSize="2xs" color="bauhaus.red" fontWeight="600">Failed</Text>
+          ) : l1Confirmed ? (
+            <Text fontSize="2xs" color="green.500" fontWeight="600">Confirmed</Text>
+          ) : l1HasHash ? (
+            <Text fontSize="2xs" color="bauhaus.blue" fontWeight="600">Pending...</Text>
+          ) : null}
+        </HStack>
+        {/* Step 2: L2 */}
+        <HStack spacing={2}>
+          <Box
+            w="18px" h="18px" flexShrink={0}
+            border="2px solid" borderColor="bauhaus.black"
+            bg={
+              l2Reverted
+                ? "bauhaus.red"
+                : l2Confirmed
+                  ? "green.400"
+                  : l1Confirmed
+                    ? "bauhaus.blue"
+                    : "gray.200"
+            }
+            display="flex" alignItems="center" justifyContent="center"
+          >
+            {l2Reverted ? (
+              <WarningIcon boxSize={2.5} color="white" />
+            ) : l2Confirmed ? (
+              <CheckCircleIcon boxSize={2.5} color="white" />
+            ) : l1Confirmed ? (
+              <Spinner size="xs" color="white" boxSize="10px" />
+            ) : (
+              <Text fontSize="2xs" fontWeight="800" color="gray.400">2</Text>
+            )}
+          </Box>
+          <Text fontSize="xs" fontWeight="700" color={l1Confirmed ? "text.primary" : "text.tertiary"}>
+            L2 Sequencer ({l2Config.name || "L2"})
+          </Text>
+          {l2Reverted ? (
+            <Text fontSize="2xs" color="bauhaus.red" fontWeight="600">Reverted</Text>
+          ) : l2Confirmed ? (
+            <Text fontSize="2xs" color="green.500" fontWeight="600">Confirmed</Text>
+          ) : l1Confirmed ? (
+            <Text fontSize="2xs" color="bauhaus.blue" fontWeight="600">Awaiting inclusion...</Text>
+          ) : null}
+        </HStack>
+      </VStack>
+    </Box>
   );
 }
 
@@ -237,7 +362,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
               </Badge>
                 );
               })()}
-              {tx.status === "pending" && (
+              {tx.status === "pending" && !tx.forceInclusionMeta && (
                 <Badge
                   bg="bauhaus.blue"
                   color="white"
@@ -270,30 +395,105 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   gap={1}
                 >
                   <CheckCircleIcon boxSize={3} />
-                  Confirmed
+                  {tx.forceInclusionMeta ? "L1 + L2 Confirmed" : "Confirmed"}
                 </Badge>
               )}
-              {tx.status === "failed" && (
-                <Badge
-                  bg="bauhaus.red"
-                  color="white"
-                  border="2px solid"
-                  borderColor="bauhaus.black"
-                  px={2}
-                  py={0.5}
-                  fontSize="xs"
-                  display="flex"
-                  alignItems="center"
-                  gap={1}
-                >
-                  <WarningIcon boxSize={3} />
-                  Failed
-                </Badge>
-              )}
+              {tx.status === "failed" && (() => {
+                // For force inclusion, distinguish L1 vs L2 failure so the user
+                // immediately sees which side broke. The discriminator is
+                // hasDistinctL2Hash — see getForceInclusionState above.
+                let label = "Failed";
+                if (tx.forceInclusionMeta) {
+                  const { l1Reverted, l2Reverted } = getForceInclusionState(
+                    tx.forceInclusionMeta,
+                    tx.status,
+                    tx.txHash,
+                  );
+                  if (l1Reverted) label = "L1 Failed";
+                  else if (l2Reverted) label = "L2 Failed";
+                }
+                return (
+                  <Badge
+                    bg="bauhaus.red"
+                    color="white"
+                    border="2px solid"
+                    borderColor="bauhaus.black"
+                    px={2}
+                    py={0.5}
+                    fontSize="xs"
+                    display="flex"
+                    alignItems="center"
+                    gap={1}
+                  >
+                    <WarningIcon boxSize={3} />
+                    {label}
+                  </Badge>
+                );
+              })()}
             </HStack>
 
+            {/* Force Inclusion 2-step status */}
+            {tx.forceInclusionMeta && (
+              <ForceInclusionSteps
+                meta={tx.forceInclusionMeta}
+                status={tx.status}
+                txHash={tx.txHash}
+              />
+            )}
+
             <HStack justify="space-between" align="center" spacing={3}>
-              {tx.txHash && explorerBase ? (
+              {tx.forceInclusionMeta ? (
+                <HStack spacing={2}>
+                  {/* L1 explorer link */}
+                  {tx.forceInclusionMeta.l1TxHash && (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      fontWeight="700"
+                      fontSize="2xs"
+                      textTransform="uppercase"
+                      letterSpacing="wide"
+                      border="2px solid"
+                      borderColor="bauhaus.black"
+                      px={2}
+                      h="22px"
+                      onClick={() => {
+                        const l1Explorer = getChainConfig(tx.forceInclusionMeta!.l1ChainId).explorer;
+                        if (l1Explorer) chrome.tabs.create({ url: `${l1Explorer}/tx/${tx.forceInclusionMeta!.l1TxHash}` });
+                      }}
+                      rightIcon={<ExternalLinkIcon boxSize={2.5} />}
+                      _hover={{ bg: "bg.muted" }}
+                    >
+                      L1 Tx
+                    </Button>
+                  )}
+                  {/* L2 explorer link — show whenever we have a distinct L2 hash
+                       AND the L2 tx has resolved (success or failed/reverted).
+                       During the L1-Confirmed/L2-Pending window (status === "pending")
+                       the L2 explorer doesn't have the tx yet, so we still hide it.
+                       Also hidden when txHash falls back to the L1 hash
+                       (extractL2Hash failed — no real L2 hash to link). */}
+                  {(tx.status === "success" || tx.status === "failed") && tx.txHash && tx.txHash !== tx.forceInclusionMeta.l1TxHash && explorerBase && (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      fontWeight="700"
+                      fontSize="2xs"
+                      textTransform="uppercase"
+                      letterSpacing="wide"
+                      border="2px solid"
+                      borderColor="bauhaus.black"
+                      px={2}
+                      h="22px"
+                      onClick={handleViewOnExplorer}
+                      rightIcon={<ExternalLinkIcon boxSize={2.5} />}
+                      _hover={{ bg: "bg.muted" }}
+                    >
+                      L2 Tx
+                    </Button>
+                  )}
+                </HStack>
+              ) : tx.txHash && explorerBase ? (
                 <Button
                   size="xs"
                   variant="ghost"

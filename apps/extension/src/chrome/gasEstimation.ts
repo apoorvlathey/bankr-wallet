@@ -30,6 +30,15 @@ export interface GasEstimate {
   estimationErrorFull?: string;
   /** Whether the dapp provided gas params (shown as "Dapp suggested" in UI) */
   dappProvidedGas: boolean;
+  /**
+   * True when this estimate is a hardcoded dependent-call fallback (not a real
+   * eth_estimateGas or eth_simulateV1 result). Set by estimateBatchGasSequential
+   * when a later call in the batch can't be estimated because it depends on state
+   * from a prior call and the RPC doesn't support eth_simulateV1. The UI should
+   * surface this prominently — especially for force inclusion where an
+   * over-estimate directly increases L1 burn cost.
+   */
+  fallbackUsed?: boolean;
 }
 
 /** RPC timeout for gas estimation */

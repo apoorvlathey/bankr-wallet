@@ -20,6 +20,7 @@ interface GasEstimateDisplayProps {
   txRequest: PendingTxRequest;
   accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
   onGasOverrides?: (overrides: GasOverrides | null) => void;
+  forceInclusion?: boolean;
 }
 
 function GasRow({ label, value }: { label: string; value: string }) {
@@ -152,7 +153,7 @@ function RevertWarning({ shortError, fullError }: { shortError: string; fullErro
   );
 }
 
-function GasEstimateDisplay({ txRequest, accountType, onGasOverrides }: GasEstimateDisplayProps) {
+function GasEstimateDisplay({ txRequest, accountType, onGasOverrides, forceInclusion }: GasEstimateDisplayProps) {
   const [estimate, setEstimate] = useState<GasEstimate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -166,13 +167,19 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides }: GasEstim
 
   const isEditable = accountType === "privateKey" || accountType === "seedPhrase";
 
-  // Fetch gas estimate on mount
+  // Fetch gas estimate on mount and when forceInclusion toggles
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setEstimate(null);
+    setError(null);
+    setHasEdited(false);
+
+    const messageType = forceInclusion ? "estimateForceInclusionGas" : "estimateGas";
 
     chrome.runtime.sendMessage(
       {
-        type: "estimateGas",
+        type: messageType,
         tx: txRequest.tx,
         accountAddress: txRequest.tx.from,
       },
@@ -192,7 +199,7 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides }: GasEstim
     );
 
     return () => { cancelled = true; };
-  }, [txRequest.id]);
+  }, [txRequest.id, forceInclusion]);
 
   // Validation
   const isGasLimitValid = (() => {
@@ -328,6 +335,21 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides }: GasEstim
             Insufficient balance for gas
           </Text>
         </HStack>
+      )}
+
+      {/* Force inclusion L1 gas banner */}
+      {forceInclusion && (
+        <Box
+          bg="bauhaus.blue"
+          border="2px solid"
+          borderColor="bauhaus.black"
+          px={3}
+          py={1.5}
+        >
+          <Text fontSize="2xs" color="white" fontWeight="700" textTransform="uppercase">
+            Gas estimated for L1 deposit transaction
+          </Text>
+        </Box>
       )}
 
       {/* Gas estimate box */}

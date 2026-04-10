@@ -298,8 +298,49 @@ function TxStatusItem({
     "";
   const originHostname = getOriginHostname(tx.origin);
 
+  const isForceInclusion = !!tx.forceInclusionMeta;
+  const isForcePendingL2 = tx.status === "pending" && isForceInclusion && !tx.forceInclusionMeta!.l2Confirmed;
+  const isForcePendingL1 = tx.status === "processing" && isForceInclusion;
+
+  // For force inclusion: link to L1 explorer until the L2 sequencer has
+  // actually included the tx. L2 explorers don't index force-inclusion txs
+  // until they appear on-chain — linking to L2 in the "L1 Confirmed / L2
+  // Pending" window leads to a "tx not found" page, which is confusing.
+  const l1ExplorerBase = isForceInclusion
+    ? getChainConfig(tx.forceInclusionMeta!.l1ChainId).explorer || ""
+    : "";
+  const hasViewableTx = isForceInclusion
+    ? !!(tx.forceInclusionMeta!.l1TxHash || tx.txHash)
+    : !!(tx.txHash && explorerBase);
+
   const handleViewTx = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isForceInclusion) {
+      const l1Hash = tx.forceInclusionMeta!.l1TxHash;
+      const txHashIsL2 = tx.txHash && tx.txHash !== l1Hash;
+      // Link to L2 once the L2 tx has actually resolved on-chain. That means
+      // either status === "success" (the L2 receipt poller confirmed) or
+      // status === "failed" with a distinct L2 hash (the L2 tx executed and
+      // reverted — the explorer DOES know about it). The only case where the
+      // L2 explorer wouldn't have the tx is during the L1-Confirmed/L2-Pending
+      // window (status === "pending"), where we still link to L1.
+      // The txHashIsL2 guard also covers the extractL2Hash-failed fallback
+      // where tx.txHash === l1Hash — no real L2 hash to link to.
+      const l2Resolved = tx.status === "success" || tx.status === "failed";
+      if (l2Resolved && txHashIsL2 && explorerBase) {
+        const hash = tx.txHash!.match(/0x[a-fA-F0-9]{64}/)?.[0];
+        if (hash) {
+          chrome.tabs.create({ url: `${explorerBase}/tx/${hash}` });
+          return;
+        }
+      }
+      // Otherwise link to L1 — covers L1 Pending, L1 Confirmed/L2 Pending,
+      // L1 reverted, and the L2-hash-extraction-failed fallback.
+      if (l1Hash && l1ExplorerBase) {
+        chrome.tabs.create({ url: `${l1ExplorerBase}/tx/${l1Hash}` });
+        return;
+      }
+    }
     if (tx.txHash && explorerBase) {
       const hash = tx.txHash.match(/0x[a-fA-F0-9]{64}/)?.[0];
       if (hash) {
@@ -309,6 +350,35 @@ function TxStatusItem({
   };
 
   const statusElement = (() => {
+    // Force inclusion: L1 still processing/pending
+    if (isForcePendingL1) {
+      return (
+        <HStack spacing={1}>
+          <Spinner size="xs" color="bauhaus.blue" boxSize="10px" />
+          <Text fontSize="2xs" color="bauhaus.blue" fontWeight="600">
+            L1 Pending
+          </Text>
+        </HStack>
+      );
+    }
+
+    // Force inclusion: L1 confirmed, awaiting L2 sequencer
+    if (isForcePendingL2) {
+      return (
+        <VStack spacing={0} align="flex-end">
+          <Text fontSize="2xs" color="green.500" fontWeight="600">
+            L1 Confirmed
+          </Text>
+          <HStack spacing={1}>
+            <Spinner size="xs" color="bauhaus.blue" boxSize="10px" />
+            <Text fontSize="2xs" color="bauhaus.blue" fontWeight="600">
+              L2 Pending
+            </Text>
+          </HStack>
+        </VStack>
+      );
+    }
+
     switch (tx.status) {
       case "processing":
         return (
@@ -331,18 +401,29 @@ function TxStatusItem({
       case "success":
         return (
           <Text fontSize="2xs" color="green.500" fontWeight="600">
-            Confirmed
+            {tx.forceInclusionMeta ? "L1 + L2 Confirmed" : "Confirmed"}
           </Text>
         );
-      case "failed":
+      case "failed": {
+        // For force inclusion, distinguish L1 vs L2 failure. The L2 receipt
+        // poller preserves tx.txHash (set when L1 was confirmed) when it marks
+        // the tx as failed, so a distinct L2 hash means L1 succeeded but L2
+        // reverted. Same discriminator the modal uses.
+        let label = "Failed";
+        if (isForceInclusion) {
+          const l1Hash = tx.forceInclusionMeta!.l1TxHash;
+          const hasDistinctL2Hash = !!(tx.txHash && tx.txHash !== l1Hash);
+          label = hasDistinctL2Hash ? "L2 Failed" : "L1 Failed";
+        }
         return (
           <HStack spacing={1}>
             <WarningIcon boxSize={2.5} color="bauhaus.red" />
             <Text fontSize="xs" color="bauhaus.red" fontWeight="600">
-              Failed
+              {label}
             </Text>
           </HStack>
         );
+      }
     }
   })();
 
@@ -483,7 +564,7 @@ function TxStatusItem({
                 <>
                   <Text fontSize="2xs" color="text.tertiary" fontWeight="500">|</Text>
                   {statusElement}
-                  {tx.txHash && explorerBase && (
+                  {hasViewableTx && (
                     <ExternalLinkIcon
                       boxSize={2.5}
                       color="text.tertiary"
@@ -510,8 +591,7 @@ function TxStatusItem({
               </Text>
               <HStack spacing={1} flexShrink={0}>
                 {statusElement}
-                {tx.txHash &&
-                  explorerBase && (
+                {hasViewableTx && (
                     <ExternalLinkIcon
                       boxSize={2.5}
                       color="text.tertiary"

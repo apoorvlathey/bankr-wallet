@@ -307,6 +307,7 @@ export async function handleConfirmBatchTransaction(
   bundleId: string,
   password: string,
   functionNames?: string[],
+  forceInclusion?: boolean,
 ): Promise<{ success: boolean; error?: string }> {
   if (processingBundleIds.has(bundleId)) {
     return { success: false, error: "Bundle already being processed" };
@@ -318,8 +319,22 @@ export async function handleConfirmBatchTransaction(
     return { success: false, error: "Batch request expired" };
   }
 
-  // Validate chain support
-  if (!BANKR_SUPPORTED_CHAIN_IDS.has(pending.chainId)) {
+  // Validate chain support.
+  // For force inclusion, the actual L1 deposit goes to the L1 chain — verify
+  // THAT chain is in the Bankr-supported set (currently mainnet only).
+  if (forceInclusion) {
+    const { FORCE_INCLUSION_CHAINS } = await import("../constants/chainRegistry");
+    const info = FORCE_INCLUSION_CHAINS.get(pending.chainId);
+    if (!info) {
+      return { success: false, error: "Chain does not support force inclusion" };
+    }
+    if (!BANKR_SUPPORTED_CHAIN_IDS.has(info.l1ChainId)) {
+      return {
+        success: false,
+        error: `Force inclusion via Bankr requires an L1 chain supported by the Bankr API. Use a Private Key or Seed Phrase account to force-include on testnets.`,
+      };
+    }
+  } else if (!BANKR_SUPPORTED_CHAIN_IDS.has(pending.chainId)) {
     return {
       success: false,
       error: `Chain ${CHAIN_NAMES[pending.chainId] || pending.chainId} is not supported for Bankr API accounts`,
@@ -352,6 +367,13 @@ export async function handleConfirmBatchTransaction(
 
   // Remove from pending storage
   await removePendingBatchTxRequest(bundleId);
+
+  // Branch to force inclusion if requested
+  if (forceInclusion) {
+    const { processForceInclusionBatchBankr } = await import("./batchForceInclusion");
+    processForceInclusionBatchBankr(bundleId, pending, apiKey, functionNames);
+    return { success: true };
+  }
 
   // Process in background
   processBatchTransactionInBackground(bundleId, pending, apiKey, functionNames);
@@ -526,6 +548,7 @@ export async function handleConfirmBatchTransactionPK(
   tabId?: number,
   functionNames?: string[],
   precomputedGasEstimates?: import("./gasEstimation").GasEstimate[],
+  forceInclusion?: boolean,
 ): Promise<{ success: boolean; error?: string }> {
   if (processingBundleIds.has(bundleId)) {
     return { success: false, error: "Bundle already being processed" };
@@ -602,6 +625,20 @@ export async function handleConfirmBatchTransactionPK(
 
   // Remove from pending storage
   await removePendingBatchTxRequest(bundleId);
+
+  // Branch to force inclusion if requested
+  if (forceInclusion) {
+    const { processForceInclusionBatchLocal } = await import("./batchForceInclusion");
+    processForceInclusionBatchLocal(
+      bundleId,
+      pending,
+      account,
+      privateKey,
+      functionNames,
+      precomputedGasEstimates,
+    );
+    return { success: true };
+  }
 
   // Process in background (non-atomic: sequential nonces, individual broadcasts)
   processBatchTransactionNonAtomicInBackground(

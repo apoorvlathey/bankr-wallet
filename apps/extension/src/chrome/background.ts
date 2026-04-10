@@ -403,6 +403,10 @@ import { resumePendingPollers, checkPendingTxReceipt as checkPendingTxReceiptFn 
 import { clearAllNonces } from "./nonceManager";
 resumePendingPollers();
 
+// Recover stuck force inclusion txs (L1 reverted, or L2 hash extraction failed but L1 succeeded)
+import { recoverStuckForceInclusionTxs } from "./forceInclusion";
+recoverStuckForceInclusionTxs();
+
 // Handle extension icon click when popup is cleared (sidepanel mode)
 // When sidepanel mode is active, setPopup('') causes onClicked to fire instead of opening a popup.
 // We try sidePanel.open() and verify it actually opened. Some browsers (Arc) resolve the promise
@@ -467,6 +471,7 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "confirmTransactionAsync",
   "confirmTransactionAsyncPK",
   "confirmBatchTransactionAsync",
+  "confirmBatchTransactionAsyncPK",
   "confirmSignatureRequest",
   "confirmAddChain",
   "confirmWatchAsset",
@@ -818,6 +823,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message.bundleId,
         message.password,
         message.functionNames,
+        message.forceInclusion,
       ).then((result) => {
         sendResponse(result);
       });
@@ -831,6 +837,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message.tabId,
         message.functionNames,
         message.gasEstimates,
+        message.forceInclusion,
       ).then((result) => {
         sendResponse(result);
       });
@@ -1582,6 +1589,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "estimateForceInclusionGas": {
+      import("./forceInclusion").then(({ estimateForceInclusionGas }) => {
+        estimateForceInclusionGas(message.tx, message.accountAddress).then(sendResponse);
+      });
+      return true;
+    }
+
     case "estimateBatchGasSequential": {
       estimateBatchGasSequential(message.calls, message.fromAddress, message.chainId).then(sendResponse);
       return true;
@@ -1615,6 +1629,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         tabId,
         message.functionName,
         message.gasOverrides,
+        message.forceInclusion,
       ).then((result) => {
         sendResponse(result);
       });
@@ -1808,6 +1823,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message.txId,
         message.password,
         message.functionName,
+        message.forceInclusion,
       ).then((result) => {
         sendResponse(result);
       });

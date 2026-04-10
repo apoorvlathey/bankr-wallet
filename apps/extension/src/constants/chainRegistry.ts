@@ -11,7 +11,24 @@
  */
 
 import { type Chain } from "viem";
-import { arbitrum, mainnet, polygon, base, bsc } from "viem/chains";
+import {
+  arbitrum,
+  mainnet,
+  polygon,
+  base,
+  bsc,
+  // OP Stack chains for force inclusion support
+  baseSepolia,
+  optimism,
+  optimismSepolia,
+  unichain,
+  unichainSepolia,
+  blast,
+  zora,
+  zoraSepolia,
+  worldchain,
+  worldchainSepolia,
+} from "viem/chains";
 import { type NetworksInfo } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -406,4 +423,72 @@ export function getExplorerUrlSync(chainId: number, networksInfo?: Record<string
     }
   }
   return "";
+}
+
+// ---------------------------------------------------------------------------
+// Derived: Force Inclusion (OP Stack L1 deposit) support
+// ---------------------------------------------------------------------------
+
+export interface ForceInclusionChainInfo {
+  viemChain: Chain;
+  l1ChainId: number;
+  l1ChainName: string;
+}
+
+/**
+ * OP Stack chains that support force inclusion via L1 deposit.
+ * Each chain must have a sourceId (L1 chain) and portal contract in its viem
+ * definition. Covers major OP Stack chains + their testnets.
+ * Custom chains added by the user are also supported if their chainId matches.
+ */
+export const FORCE_INCLUSION_CHAINS: Map<number, ForceInclusionChainInfo> = new Map();
+
+const OP_STACK_VIEM_CHAINS = [
+  base, baseSepolia,
+  optimism, optimismSepolia,
+  unichain, unichainSepolia,
+  blast,
+  zora, zoraSepolia,
+  worldchain, worldchainSepolia,
+];
+
+for (const chain of OP_STACK_VIEM_CHAINS) {
+  if (chain.sourceId && (chain.contracts as any)?.portal) {
+    FORCE_INCLUSION_CHAINS.set(chain.id, {
+      viemChain: chain as Chain,
+      l1ChainId: chain.sourceId,
+      l1ChainName:
+        chain.sourceId === 1
+          ? "Ethereum"
+          : chain.sourceId === 11155111
+            ? "Sepolia"
+            : `Chain ${chain.sourceId}`,
+    });
+  }
+}
+
+export function isForceInclusionSupported(chainId: number): boolean {
+  return FORCE_INCLUSION_CHAINS.has(chainId);
+}
+
+/**
+ * Force inclusion is gated per account type because Bankr accounts submit the
+ * L1 deposit through the Bankr API, which only supports chains in
+ * BANKR_SUPPORTED_CHAIN_IDS. Currently that's mainnet (Ethereum, etc.) only —
+ * Sepolia is not supported. PK/Seed accounts broadcast L1 directly and work on
+ * any L1 with an RPC endpoint.
+ */
+export function isForceInclusionSupportedForAccount(
+  l2ChainId: number,
+  accountType: "bankr" | "privateKey" | "seedPhrase" | "impersonator" | undefined,
+): boolean {
+  if (!accountType || accountType === "impersonator") return false;
+  const info = FORCE_INCLUSION_CHAINS.get(l2ChainId);
+  if (!info) return false;
+  // Bankr accounts can only force-include when the L1 chain is supported by Bankr
+  if (accountType === "bankr") {
+    return BANKR_SUPPORTED_CHAIN_IDS.has(info.l1ChainId);
+  }
+  // PK/Seed broadcast L1 directly — no Bankr dependency
+  return true;
 }
