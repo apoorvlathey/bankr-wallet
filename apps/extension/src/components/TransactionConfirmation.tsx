@@ -28,6 +28,7 @@ import {
   SettingsIcon,
 } from "@chakra-ui/icons";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
+import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
 import { GasOverrides } from "@/chrome/txHandlers";
 import { getChainConfig } from "@/constants/chainConfig";
 import { useNetworks } from "@/contexts/NetworksContext";
@@ -73,6 +74,18 @@ interface TransactionConfirmationProps {
   onRejected: () => void;
   onRejectAll: () => void;
   onNavigate: (direction: "prev" | "next") => void;
+  /**
+   * Currently active cross-dapp batch (if any). Used to gate the
+   * "Add to Batch" button (account/chain mismatch → disabled with popover)
+   * and to surface a "Batch: N calls" sub-label.
+   */
+  crossDappBatch?: CrossDappBatch | null;
+  /**
+   * Called after the tx is successfully added to the cross-dapp batch.
+   * Parent should switch the view to the cross-dapp batch confirmation
+   * screen so the user lands directly on the assembled batch.
+   */
+  onAddedToBatch?: () => void;
 }
 
 type ConfirmationState = "ready" | "submitting" | "sent" | "error" | "forceInclusion";
@@ -140,6 +153,8 @@ function TransactionConfirmation({
   onRejected,
   onRejectAll,
   onNavigate,
+  crossDappBatch,
+  onAddedToBatch,
 }: TransactionConfirmationProps) {
   const { networksInfo } = useNetworks();
   const resolvedChain = getResolvedChainById(txRequest.tx.chainId, networksInfo);
@@ -168,6 +183,47 @@ function TransactionConfirmation({
   const internalSendTokenLabel = origin.startsWith("Send ")
     ? origin.slice(5).trim()
     : null;
+
+  // ─── Cross-Dapp Batch Eligibility ──────────────────────────────────────
+  // The "Add to Batch" action is only meaningful for Bankr-API-style accounts
+  // (atomic ship via Bankr API). PK / SP accounts are intentionally excluded:
+  // for them every call still requires its own signature, so combining them
+  // adds friction without benefit. A future 7702 path will lift this.
+  const canBatchAccount =
+    accountType === "bankr" || accountType === "impersonator";
+
+  // Reason the button is disabled, or null if it's enabled. Used for the
+  // tooltip popover. The button is rendered ONLY when canBatchAccount is true.
+  const addToBatchDisabledReason = useMemo<string | null>(() => {
+    if (!crossDappBatch) return null; // first add — no constraints yet
+    if (
+      crossDappBatch.fromAddress.toLowerCase() !== tx.from.toLowerCase()
+    ) {
+      return "Pending batch on another account — clear it first.";
+    }
+    if (crossDappBatch.chainId !== tx.chainId) {
+      return `Pending batch on ${crossDappBatch.chainName} — clear it first.`;
+    }
+    return null;
+  }, [crossDappBatch, tx.from, tx.chainId]);
+
+  const handleAddToBatch = () => {
+    chrome.runtime.sendMessage(
+      { type: "addToCrossDappBatch", txId: txRequest.id },
+      (result: { success: boolean; error?: string } | undefined) => {
+        if (!result?.success) {
+          setError(result?.error || "Failed to add to batch");
+          setState("error");
+          return;
+        }
+        // Success: jump straight to the cross-dapp batch confirmation
+        // screen so the user sees the assembled batch they just added to.
+        onAddedToBatch?.();
+      },
+    );
+  };
+
+  const batchedCount = crossDappBatch?.entries.length ?? 0;
 
   // Native currency symbol for display
   const [nativeSym, setNativeSym] = useState(
@@ -960,7 +1016,7 @@ function TransactionConfirmation({
           zIndex={1}
         >
         <VStack spacing={2} align="stretch">
-        {/* Simulate on Tenderly */}
+        {/* Simulate on Tenderly + (single-pending) Add-to-Batch pill */}
         {(() => {
           const tenderlyUrl = (() => {
             const params = new URLSearchParams({
@@ -972,7 +1028,8 @@ function TransactionConfirmation({
             });
             return `https://dashboard.tenderly.co/simulator/new?${params}`;
           })();
-          return (
+          const showInlineBatch = canBatchAccount;
+          const tenderlyBox = (
             <HStack
               spacing={2}
               w="full"
@@ -1006,6 +1063,44 @@ function TransactionConfirmation({
                 </Text>
                 <ExternalLinkIcon boxSize={3} />
               </HStack>
+            </HStack>
+          );
+          if (!showInlineBatch) return tenderlyBox;
+          return (
+            <HStack spacing={1.5} w="full" align="stretch">
+              <Box flex={1} minW={0}>
+                {tenderlyBox}
+              </Box>
+              <Tooltip
+                label={addToBatchDisabledReason ?? ""}
+                isDisabled={!addToBatchDisabledReason}
+                hasArrow
+                fontSize="xs"
+              >
+                {/*
+                 * Wrapper Flex stretches to the HStack height (cross axis)
+                 * and the inner Button fills it 100%. We avoid Chakra's
+                 * `size="sm"` because its fixed `h={8}` wins over
+                 * `h="auto"`/`alignSelf="stretch"` and prevents the button
+                 * from growing to match a wrapped Tenderly box.
+                 */}
+                <Flex alignSelf="stretch" flexShrink={0}>
+                  <Button
+                    variant="yellow"
+                    onClick={handleAddToBatch}
+                    isDisabled={!!addToBatchDisabledReason}
+                    fontWeight="800"
+                    textTransform="uppercase"
+                    letterSpacing="wide"
+                    fontSize="2xs"
+                    px={2.5}
+                    h="full"
+                    minH={8}
+                  >
+                    {batchedCount > 0 ? `+ Batch (${batchedCount})` : "+ Batch"}
+                  </Button>
+                </Flex>
+              </Tooltip>
             </HStack>
           );
         })()}

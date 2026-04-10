@@ -6,13 +6,25 @@ interface PendingTxBannerProps {
   txCount: number;
   signatureCount: number;
   batchCount?: number;
+  /** Number of entries staged in the user-assembled cross-dapp batch */
+  crossDappBatchCount?: number;
   onClickTx: () => void;
   onClickSignature: () => void;
   onClickBatch?: () => void;
+  onClickCrossDappBatch?: () => void;
 }
 
-function PendingTxBanner({ txCount, signatureCount, batchCount = 0, onClickTx, onClickSignature, onClickBatch }: PendingTxBannerProps) {
-  const totalCount = txCount + signatureCount + batchCount;
+function PendingTxBanner({
+  txCount,
+  signatureCount,
+  batchCount = 0,
+  crossDappBatchCount = 0,
+  onClickTx,
+  onClickSignature,
+  onClickBatch,
+  onClickCrossDappBatch,
+}: PendingTxBannerProps) {
+  const totalCount = txCount + signatureCount + batchCount + crossDappBatchCount;
   if (totalCount === 0) return null;
 
   // Determine the label and action based on what's pending
@@ -21,17 +33,25 @@ function PendingTxBanner({ txCount, signatureCount, batchCount = 0, onClickTx, o
     if (txCount > 0) parts.push(`${txCount} TX`);
     if (batchCount > 0) parts.push(`${batchCount} Batch`);
     if (signatureCount > 0) parts.push(`${signatureCount} Sig`);
+    if (crossDappBatchCount > 0)
+      parts.push(`${crossDappBatchCount} in Batch`);
     if (parts.length > 1) return parts.join(", ");
     if (txCount > 0) return `${txCount} Pending Request${txCount > 1 ? "s" : ""}`;
     if (batchCount > 0) return `${batchCount} Batch Request${batchCount > 1 ? "s" : ""}`;
+    if (crossDappBatchCount > 0)
+      return `Batch (${crossDappBatchCount} call${crossDappBatchCount > 1 ? "s" : ""})`;
     return `${signatureCount} Signature Request${signatureCount > 1 ? "s" : ""}`;
   };
 
   const handleClick = () => {
+    // Priority: pending dapp tx > dapp-initiated batch > cross-dapp batch > sig.
+    // Tx requests need user action first; the cross-dapp batch can keep waiting.
     if (txCount > 0) {
       onClickTx();
     } else if (batchCount > 0) {
       onClickBatch?.();
+    } else if (crossDappBatchCount > 0) {
+      onClickCrossDappBatch?.();
     } else {
       onClickSignature();
     }

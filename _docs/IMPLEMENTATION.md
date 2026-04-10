@@ -1545,6 +1545,7 @@ The following message handlers attempt session restoration when auto-lock is "Ne
 | `revealSeedPhrase`                 | Reveal seed phrase (security-sensitive)  |
 | `setAgentPassword`                 | Set agent password (in authHandlers.ts)  |
 | `cancelTransaction`                | Cancel in-progress transaction           |
+| `confirmCrossDappBatch`            | Ship the user-assembled cross-dapp batch via Bankr API |
 
 **CRITICAL: Adding New Handlers**
 

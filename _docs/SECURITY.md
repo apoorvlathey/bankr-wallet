@@ -121,6 +121,7 @@ The agent password model restricts what operations are available when the wallet
 | Unlock wallet                    | Yes    | Yes         | `authHandlers.ts` - `unlockWithVaultKeySystem()`                               |
 | Sign/send transactions           | Yes    | Yes         | `txHandlers.ts`                                                                |
 | Sign messages                    | Yes    | Yes         | `txHandlers.ts`                                                                |
+| Add/remove/confirm cross-dapp batch | Yes | Yes         | `crossDappBatchHandlers.ts` (no extra gating — same as single tx submission)   |
 | Reveal private key               | Yes    | **BLOCKED** | `background.ts` - `revealPrivateKey` case                                      |
 | Change API key                   | Yes    | **BLOCKED** | `authHandlers.ts` - `handleSaveApiKeyWithCachedPassword()`                     |
 | Change master password           | Yes    | **BLOCKED** | `authHandlers.ts` - `handleChangePasswordWithCachedPassword()`                 |
@@ -194,6 +195,22 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 | `unlockWallet`        | Tries master password first, then agent. Sets `passwordType` accordingly |
 | `setAgentPassword`    | Requires `getPasswordType() === "master"`                                |
 | `removeAgentPassword` | Requires explicit master password verification (not just cached)         |
+
+### Cross-Dapp Batch Handlers (`crossDappBatchHandlers.ts`)
+
+These move pending tx requests in/out of a user-assembled batch and ship the batch via the Bankr API. All five are gated by `EXTENSION_ONLY_MESSAGES` in `background.ts` so a malicious dapp cannot reach into the user's pending tx queue:
+
+| Handler                       | Effect                                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------------------ |
+| `addToCrossDappBatch`         | Removes a `pendingTxRequest` and appends it to `crossDappBatch`. Dapp promise stays open.        |
+| `addCallsToCrossDappBatch`    | Removes a `pendingBatchTxRequest` (dapp `wallet_sendCalls`), appends every call as a sibling entry sharing one `bundleId`. The dapp's `bundleStatuses` entry stays at PENDING. |
+| `removeFromCrossDappBatch`    | For `eth_sendTransaction` entries: writes rejection to `txResult:{txId}`. For `wallet_sendCalls` entries: removes ALL siblings from the same bundle and updates `bundleStatuses` to OFFCHAIN_FAILURE once. Clears the batch if empty. |
+| `rejectCrossDappBatch`        | Writes rejection to every entry — `txResult:{txId}` for plain entries, deduped `bundleStatuses` updates for bundle entries. Clears the batch. |
+| `confirmCrossDappBatch`       | Encodes via ERC-7821, ships via Bankr API, fans the resulting tx hash out — `txResult:{txId}` writes for plain entries, `bundleStatuses` CONFIRMED updates for bundle entries (deduped). |
+
+**Why these MUST stay extension-only**: a content script that could call any of these would be able to (a) silently move a user's pending requests into a batch they cannot easily inspect, (b) reject other dapps' pending requests by spelling out the right `txId`s or `bundleId`s, or (c) flip a victim dapp's bundle status to CONFIRMED without an actual onchain transaction, tricking the dapp into believing a payment landed. The `txId`s and `bundleId`s are not secret, but the right to act on them belongs to the popup only.
+
+`handleConfirmCrossDappBatch` follows the **session restoration pattern** for `getCachedApiKey()` (see "Handlers with Session Restoration" in `_docs/IMPLEMENTATION.md`), so it works under the "Never" auto-lock setting after a service worker restart.
 
 ---
 
@@ -308,6 +325,7 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 | `accounts`                 | No               | Account metadata (addresses, names, types)              |
 | `pendingTxRequests`        | No               | Pending transaction queue                               |
 | `pendingSignatureRequests` | No               | Pending signature queue                                 |
+| `crossDappBatch`           | No               | User-assembled cross-dapp batch (Bankr only). Single batch, locked to first entry's `from` + `chainId`. The original `pendingTxRequests` entries are removed when added; the dapp promises stay open until ship/reject and are resolved via `txResult:{txId}` fan-out. |
 | `txResult:{txId}`          | No               | Transient tx result (written on confirm/reject, read+deleted by content script) |
 | `sigResult:{sigId}`        | No               | Transient sig result (written on confirm/reject, read+deleted by content script) |
 | `rpcResult:{id}`           | No               | Transient RPC result (written after RPC call, read+deleted by content script)    |

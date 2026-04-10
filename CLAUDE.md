@@ -161,15 +161,18 @@ apps/extension/src/
 │   ├── gasEstimation.ts     # Gas estimation + native token price
 │   ├── batchTxHandlers.ts   # ERC-5792 batch tx handlers + ERC-7821 encoding
 │   ├── erc5792Types.ts      # ERC-5792 type definitions
-│   ├── pendingBatchTxStorage.ts  # Pending batch request persistence
+│   ├── pendingBatchTxStorage.ts  # Pending dapp-initiated batch request persistence
+│   ├── crossDappBatchStorage.ts  # User-assembled cross-dapp batch (single batch, Bankr only)
+│   ├── crossDappBatchHandlers.ts # Add/remove/reject/confirm handlers for the cross-dapp batch
 │   ├── bundleStatusStorage.ts    # Bundle status for getCallsStatus
 │   ├── forceInclusion.ts     # OP Stack L1 deposit for force inclusion
 │   ├── batchForceInclusion.ts # Force inclusion for ERC-5792 batch txs
 │   ├── impersonator.ts      # Inpage provider (EIP-6963 + ERC-5792)
 │   └── inject.ts            # Content script bridge
 ├── components/
-│   ├── TransactionConfirmation.tsx
+│   ├── TransactionConfirmation.tsx     # Single tx confirmation (incl. + Add to Batch button)
 │   ├── BatchTransactionConfirmation.tsx  # Batch tx confirmation UI (ERC-5792)
+│   ├── CrossDappBatchConfirmation.tsx  # Thin wrapper around BatchTransactionConfirmation for user-assembled batches
 │   ├── AssetChangesDisplay.tsx    # Simulated token flow display
 │   ├── SignatureRequestConfirmation.tsx
 │   ├── UnlockScreen.tsx

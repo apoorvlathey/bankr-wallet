@@ -64,6 +64,13 @@ import {
   handleWalletShowCallsStatus,
 } from "./batchTxHandlers";
 import {
+  handleAddToCrossDappBatch,
+  handleAddCallsToCrossDappBatch,
+  handleRemoveFromCrossDappBatch,
+  handleRejectCrossDappBatch,
+  handleConfirmCrossDappBatch,
+} from "./crossDappBatchHandlers";
+import {
   getTxHistory,
   getProcessingTxs,
   clearTxHistory,
@@ -482,6 +489,12 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "rejectAddChain",
   "rejectWatchAsset",
   "cancelTransaction",
+  // Cross-dapp batch (popup-only assembly + ship)
+  "addToCrossDappBatch",
+  "addCallsToCrossDappBatch",
+  "removeFromCrossDappBatch",
+  "rejectCrossDappBatch",
+  "confirmCrossDappBatch",
   // Account management
   "addBankrAccount",
   "addImpersonatorAccount",
@@ -846,6 +859,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "rejectBatchTransaction": {
       handleRejectBatchTransaction(message.bundleId).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "addToCrossDappBatch": {
+      handleAddToCrossDappBatch(message.txId).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "addCallsToCrossDappBatch": {
+      handleAddCallsToCrossDappBatch(message.bundleId).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "removeFromCrossDappBatch": {
+      handleRemoveFromCrossDappBatch(message.txId).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "rejectCrossDappBatch": {
+      handleRejectCrossDappBatch().then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "confirmCrossDappBatch": {
+      handleConfirmCrossDappBatch(message.password).then((result) => {
         sendResponse(result);
       });
       return true;
