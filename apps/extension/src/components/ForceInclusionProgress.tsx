@@ -10,7 +10,6 @@ import {
   HStack,
   Text,
   Spinner,
-  Icon,
   IconButton,
 } from "@chakra-ui/react";
 import { ExternalLinkIcon, CheckIcon } from "@chakra-ui/icons";
@@ -102,7 +101,8 @@ function ForceInclusionProgress({
     if (progress.stage === "error" && progress.error) {
       onError(progress.error);
     }
-  }, [progress?.stage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progress?.stage, progress?.error]);
 
   const currentIdx = progress ? stageIndex(progress.stage) : 0;
   const isError = progress?.stage === "error";
