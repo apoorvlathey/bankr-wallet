@@ -32,10 +32,12 @@ Force inclusion is available for OP Stack chains that have a portal contract def
 
 ## Supported Account Types
 
-- **Bankr API** — Deposit tx params are encoded and submitted as an L1 transaction via the Bankr API
+- **Bankr API** — Deposit tx params are encoded and submitted as an L1 transaction via the Bankr API. **Restricted to L1 chains in `BANKR_SUPPORTED_CHAIN_IDS`** (currently Ethereum mainnet only). Force inclusion of testnets requires PK/Seed because Bankr API can't broadcast to Sepolia.
 - **Private Key** — Deposit tx is signed locally and broadcast to L1 RPC
 - **Seed Phrase** — Same as Private Key (derived key)
 - **Impersonator** — Not supported (cannot sign/submit)
+
+The gear icon visibility is gated by `isForceInclusionSupportedForAccount(l2ChainId, accountType)` in `chainRegistry.ts`, which combines the chain check with the per-account L1-reachability check. The backend confirm handlers (`handleConfirmTransactionAsync`, `handleConfirmBatchTransaction`) re-validate this server-side as defense in depth.
 
 ## Architecture
 
@@ -46,7 +48,7 @@ Force inclusion is available for OP Stack chains that have a portal contract def
 | `src/chrome/forceInclusion.ts` | Core logic: gas estimation, deposit tx building, L1 submission (Bankr + local), progress tracking |
 | `src/chrome/batchForceInclusion.ts` | Batch tx force inclusion: atomic (Bankr ERC-7821) + non-atomic (PK/Seed sequential L1 deposits) |
 | `src/components/ForceInclusionProgress.tsx` | Multi-step progress UI shown during confirmation |
-| `src/constants/chainRegistry.ts` | `FORCE_INCLUSION_CHAINS` map, `isForceInclusionSupported()` |
+| `src/constants/chainRegistry.ts` | `FORCE_INCLUSION_CHAINS` map, `isForceInclusionSupported()`, `isForceInclusionSupportedForAccount()` (account-aware gate that hides the gear icon when Bankr can't reach the L1) |
 | `src/components/TransactionConfirmation.tsx` | Advanced options gear icon + toggle in tx confirmation screen |
 | `src/components/BatchTransactionConfirmation.tsx` | Advanced options gear icon + toggle for batch tx confirmation |
 | `src/components/GasEstimateDisplay.tsx` | Re-fetches gas for L1 when force inclusion is toggled |
@@ -153,17 +155,20 @@ interface ForceInclusionMeta {
 | State | Status Display | Explorer Link |
 |-------|---------------|---------------|
 | L1 building/submitting | "L1 Pending" (spinner) | L1 explorer (once hash available) |
-| L1 confirmed, L2 pending | "L1 Confirmed" + "L2 Pending" (spinner) | L2 explorer (or L1 if L2 hash wasn't extractable — see below) |
+| L1 confirmed, L2 pending | "L1 Confirmed" + "L2 Pending" (spinner) | **L1 explorer** (L2 isn't yet indexed by the L2 explorer) |
 | Both confirmed | "L1 + L2 Confirmed" | L2 explorer |
 | Reverted on L1 | "Failed" with error "L1 deposit transaction reverted on-chain" | L1 explorer |
 
-**Explorer link fallback guard** — `handleViewTx` in `TxStatusList.tsx` compares `tx.txHash` against `tx.forceInclusionMeta.l1TxHash`. If they're equal, it means `extractL2Hash` failed and we used the L1 hash as the `txHash` fallback — in that case the link routes to the **L1** explorer, not the L2 explorer, to avoid generating a broken URL like `basescan.org/tx/<L1_hash>`. `TxDetailModal.tsx` has the same guard on the "L2 Tx" button, which is hidden entirely when no real L2 hash is available.
+**Explorer link rules** — `handleViewTx` in `TxStatusList.tsx` only routes to the L2 explorer when `tx.status === "success"` (i.e. the L2 receipt poller has confirmed the tx is actually on-chain). Until then, every state links to the L1 explorer, because L2 explorers don't index force-inclusion txs until the sequencer includes them — linking earlier just leads to a "tx not found" page.
+
+There's also a fallback guard for the case where `extractL2Hash` failed: `tx.txHash` falls back to the L1 hash, so the L2 link is hidden entirely (`TxDetailModal.tsx`'s "L2 Tx" button) or rerouted to the L1 explorer (`TxStatusList.handleViewTx`) to avoid generating a broken URL like `basescan.org/tx/<L1_hash>`.
 
 ### Transaction Detail Modal (TxDetailModal)
 
 - Shows `ForceInclusionSteps` component with 2-step progress tracker
 - Separate **L1 Tx** and **L2 Tx** explorer link buttons
 - L1 Tx button appears as soon as the L1 hash is known (before confirmation)
+- L2 Tx button only appears once `tx.status === "success"` (the L2 sequencer has included the tx and the L2 explorer can resolve it). Hidden during the "L1 Confirmed / L2 Pending" window to avoid sending users to a "tx not found" page.
 
 ## Portal Call Encoding (Bankr API Path)
 
@@ -194,7 +199,7 @@ encodeFunctionData({
 
 **Important**: The args must use the original L2 transaction parameters directly. Do NOT use fields from `buildDepositTransaction`'s return value — those are restructured for viem's internal `depositTransaction` action and will produce incorrect encoding (empty `_to`, empty `_data`).
 
-## PK/Seed Path: Account Override
+## PK/Seed Path: Account Override + L1 Gas Overrides
 
 When using `buildDepositTransaction` + `depositTransaction` for local signing:
 
@@ -209,8 +214,33 @@ await l1WalletClient.depositTransaction({
   account: viemAccount, // privateKeyToAccount(privateKey)
   chain: l1Chain,
   targetChain: info.viemChain,
+  // Apply user-edited L1 gas/fees from GasEstimateDisplay if present.
+  // viem's depositTransaction has a top-level `gas` (L1 gas limit) and
+  // accepts `maxFeePerGas`/`maxPriorityFeePerGas` from the underlying
+  // FormattedTransactionRequest spread.
+  ...(gasOverrides
+    ? {
+        gas: BigInt(gasOverrides.gasLimit),
+        maxFeePerGas: BigInt(gasOverrides.maxFeePerGas),
+        maxPriorityFeePerGas: BigInt(gasOverrides.maxPriorityFeePerGas),
+      }
+    : {}),
 });
 ```
+
+**L1 gas override flow** — when force inclusion is on, `GasEstimateDisplay` fetches L1-side estimates via `estimateForceInclusionGas`. If the user edits any of the gas limit / max fee / priority fee fields in the (PK/Seed-only) editable inputs, the values flow:
+
+```
+GasEstimateDisplay edited fields
+  → onGasOverrides callback
+  → TransactionConfirmation.gasOverrides state
+  → confirm message: { type: "confirmTransactionAsyncPK", forceInclusion: true, gasOverrides }
+  → handleConfirmTransactionAsyncPK
+  → processForceInclusionLocal(txId, pending, account, privateKey, gasOverrides)
+  → spread into l1WalletClient.depositTransaction({ gas, maxFeePerGas, maxPriorityFeePerGas })
+```
+
+If `gasOverrides` is undefined (user didn't edit), the spread is `{}` and viem's auto-estimation runs as before.
 
 ## Gas Estimation
 
@@ -247,7 +277,7 @@ Returns a `GasEstimate`-compatible object with L1 values:
 
 ### UI Integration
 
-The `GasEstimateDisplay` component toggles between `estimateGas` and `estimateForceInclusionGas` messages based on the `forceInclusion` prop, with `forceInclusion` in its useEffect dependency array to re-fetch on toggle.
+The `GasEstimateDisplay` component toggles between `estimateGas` and `estimateForceInclusionGas` messages based on the `forceInclusion` prop, with `forceInclusion` in its useEffect dependency array to re-fetch on toggle. For PK/Seed accounts the gas/fee fields remain editable when force inclusion is on; edited values are sent to the background as `gasOverrides` and applied to viem's `depositTransaction` call (see "PK/Seed Path: Account Override + L1 Gas Overrides" above).
 
 The `MultiTxGasEstimateDisplay` component handles both single-tx batches (Bankr atomic, via `batchedTx` prop) and per-call batches (non-atomic PK/SP). For force inclusion mode on non-atomic batches it fetches **two parallel estimates**:
 
@@ -255,6 +285,8 @@ The `MultiTxGasEstimateDisplay` component handles both single-tx batches (Bankr 
 2. **`estimateBatchGasSequential`** — for the editable L2 `_gasLimit` baked into each portal call
 
 The two are kept in separate state (`estimates` vs `passthroughEstimates`) because they represent fundamentally different gas values: one is the L1 tx cost, the other is what gets argued to `depositTransaction()`.
+
+**`fallbackUsed` flag on `eth_simulateV1`** — `tryEthSimulateV1` in `batchGasEstimation.ts` returns `Array<{ gasLimit, fallbackUsed }>`. If a `cr.gasUsed` field is missing on a call result (rare, but possible), the function falls back to a hardcoded `200_000n` and sets `fallbackUsed: true` so the UI surfaces it via the same yellow warning banner used for the per-call `eth_estimateGas` fallback. Without this flag, an undersized 200k could silently be baked into a force-inclusion portal `_gasLimit` and revert L2 execution.
 
 ### Force Inclusion Batch Path: Background Gas Handling
 
@@ -294,9 +326,13 @@ Each call becomes a separate L1 deposit transaction:
 // Phase 0: L2 gas estimation (or use UI-provided override)
   precomputedL2GasEstimates (from UI) OR
   estimateBatchGasSequential(calls, from, l2ChainId)
-    ├─ Primary: eth_simulateV1 on L2 RPC (dependent calls see prior state)
-    └─ Fallback: per-call eth_estimateGas with 500k for failed dependent calls
-                 (marks each estimate with fallbackUsed: true for UI warning)
+    ├─ Tier 1: eth_simulateV1 on L2 RPC (dependent calls see prior state)
+    ├─ Tier 2: TxSimulator bytecode injection — eth_call + state override
+    │          runs simulateBatchGas() sequentially at the user's address
+    │          (works on any chain with state override support)
+    └─ Tier 3: per-call eth_estimateGas with 500k for failed dependent calls
+               (marks each estimate with fallbackUsed: true for UI warning —
+                near-extinct in practice now that tier 2 catches the gap)
 
 // Phase 1: Build deposits in parallel (with L2 gas baked in)
   For each call:
@@ -304,7 +340,7 @@ Each call becomes a separate L1 deposit transaction:
     → encodes OptimismPortal.depositTransaction(_to, _value, _gasLimit=l2Gas, _isCreation, _data)
 
 // Phase 2: Nonce assignment + history writes (sequential)
-  startNonce = l1PublicClient.getTransactionCount({ address: from })
+  startNonce = l1PublicClient.getTransactionCount({ address: from, blockTag: "pending" })
   l1Fees = l1PublicClient.estimateFeesPerGas()  // once, shared
   For each call:
     nonce = startNonce + i
@@ -317,17 +353,24 @@ Each call becomes a separate L1 deposit transaction:
     → fallback: 1_000_000n
   (Critical — burn cost scales with L2 _gasLimit; a hardcoded 200k reverts inside Burn.gas())
 
-// Phase 3: Broadcast all L1 deposits concurrently
-  l1WalletClient.sendTransaction({
-    to: portal, data, value, nonce, gas: l1GasLimit, maxFeePerGas, maxPriorityFeePerGas,
-  })
-  → update each sub-tx with l1TxHash in forceInclusionMeta
+// Phase 3: Broadcast L1 deposits SEQUENTIALLY (with fail-fast)
+  for i in 0..N:
+    l1WalletClient.sendTransaction({
+      to: portal, data, value, nonce, gas: l1GasLimit, maxFeePerGas, maxPriorityFeePerGas,
+    })
+    → update sub-tx with l1TxHash in forceInclusionMeta
+    if broadcast fails → mark this AND all later sub-txs as "failed" → break
+  (MUST be sequential. See "L1 Broadcast Ordering" below — parallel sends with
+   sequential nonces silently drop on managed RPCs.)
 
 // Phase 4: Wait for L1 receipts concurrently
   For each successful broadcast:
     receipt = waitForTransactionReceipt({ hash: l1TxHash })
     if (receipt.status === "reverted") → mark sub-tx as "failed" (item.success = false)
     else → extractL2Hash → update to "pending" with txHash = l2Hash → startReceiptPolling
+  (Concurrent updates here are safe because txHistoryStorage now serializes
+   writes via withTxHistoryLock — without it, two parallel updateTxInHistory
+   calls would race and one would clobber the other's status update.)
 
 // Phase 5: Aggregate bundle tracking
   trackBatchForceInclusionCompletion — polls local storage every 5s until all sub-txs resolve
@@ -338,7 +381,7 @@ Popup closes after broadcast (consistent with normal non-atomic behavior). Each 
 
 ### User-Editable L2 Gas Limits (Non-Atomic PK/Seed Only)
 
-For dependent batch calls on chains that don't support `eth_simulateV1` (e.g., Base's public RPC), the sequential estimator falls back to a hardcoded 500k per call. Since this value is baked into the portal `_gasLimit` and drives L1 burn cost, letting it go unchallenged on mainnet could easily cost the user an extra $10-30.
+In the rare case where both `eth_simulateV1` AND the TxSimulator bytecode-injection tier fail, the sequential estimator falls back to a hardcoded 500k per call. Since this value is baked into the portal `_gasLimit` and drives L1 burn cost, letting it go unchallenged on mainnet could easily cost the user an extra $10-30. The editable inputs remain available regardless of which tier produced the estimate, so power users can override even a successful simulation result if they want to.
 
 The UI surfaces this via `MultiTxGasEstimateDisplay`:
 
@@ -356,12 +399,24 @@ The L1 cost shown to the user is the initial estimate (computed before editing).
 
 ### Key Design Decisions
 
-1. **L1 nonces managed manually** — `l1PublicClient.getTransactionCount()` fetched once, nonces assigned sequentially (`startNonce + i`). Avoids dependence on `nonceManager.ts` which uses `getRpcUrl()` and doesn't know about L1 chain IDs like Sepolia.
+1. **L1 nonces managed manually** — `l1PublicClient.getTransactionCount({ blockTag: "pending" })` fetched once, nonces assigned sequentially (`startNonce + i`). The `pending` blockTag is critical: `latest` would return the last *mined* nonce and collide with any in-flight L1 tx the user already has. Avoids dependence on `nonceManager.ts` which uses `getRpcUrl()` and doesn't know about L1 chain IDs like Sepolia.
 2. **L1 fees fetched once** — Single `estimateFeesPerGas()` call shared for all deposit txs (they all go to the same portal on the same L1).
 3. **L1 gas estimated per deposit at broadcast time** — Not passed from the UI. Uses `l1PublicClient.estimateGas()` which runs the portal's burn loop during simulation and returns the accurate value. 20% buffer, 1M fallback.
-4. **L2 gas estimated sequentially via `estimateBatchGasSequential`** — Same function the normal non-atomic batch flow uses. Shared logic means dependent-call state propagation is handled the same way (simV1 primary → per-call fallback with `fallbackUsed` flag).
+4. **L2 gas estimated sequentially via `estimateBatchGasSequential`** — Same function the normal non-atomic batch flow uses. Shared logic means dependent-call state propagation is handled the same way (3-tier: eth_simulateV1 → TxSimulator bytecode injection → per-call fallback with `fallbackUsed` flag).
 5. **User overrides flow through end-to-end** — Edited L2 gas limits in the UI bake into the portal `_gasLimit` in the background, and the L1 `estimateGas` is then run against the finalized portal calldata so the L1 burn reflects the user's choice.
 6. **Non-atomic popup closes after broadcast** — Consistent with the normal non-atomic flow. Each sub-tx appears in the activity feed independently with its own force inclusion 2-step status. Atomic (single-L1-deposit) force inclusion keeps the popup open with `ForceInclusionProgress`, same as single tx.
+7. **L1 broadcast is sequential, not parallel** — See "L1 Broadcast Ordering" below. Strict L1 RPCs (Alchemy, Infura, etc.) silently park nonce N+1 in the queued pool if it arrives before nonce N, then evict it without propagating. The node still returns a hash from `eth_sendRawTransaction` (computed locally from the signed bytes) so we'd record it and show "L1 Pending" forever while Etherscan never sees the tx.
+
+### L1 Broadcast Ordering
+
+`processForceInclusionBatchLocal` Phase 3 broadcasts L1 deposits one at a time in a `for` loop with `await`, NOT in `Promise.all`. This is a hard correctness requirement, not a performance choice:
+
+- **Symptom of getting it wrong**: One or more sub-txs are stuck on "L1 Pending" forever. The activity feed shows a hash, but Etherscan reports "Transaction Hash not found on Ethereum" for that hash. Eventually `waitForTransactionReceipt` times out at `L1_RECEIPT_TIMEOUT` (10 min) and the sub-tx flips to "failed: L1 receipt timeout".
+- **Why parallel breaks**: With `Promise.all`, two `eth_sendRawTransaction` calls hit the L1 RPC within milliseconds of each other. There's no guarantee about which lands first. If nonce N+1 arrives before nonce N, strict managed RPCs (Alchemy, Infura, QuickNode) park the higher-nonce tx in the "queued" pool — and most of them then evict it after a short timeout *without ever propagating it to peers*. The JSON-RPC call still returns successfully because the hash is computed deterministically from the signed bytes (it doesn't require network state), so the wallet records the hash and shows the tx as "pending" while it's actually a phantom.
+- **Why L2 non-atomic broadcasts get away with it**: The L2 non-atomic batch path (`processBatchTransactionNonAtomicInBackground` in `batchTxHandlers.ts`) DOES use `Promise.all` for parallel broadcast. This works on L2 because chain-specific RPCs (Base sequencer, Optimism, etc.) have looser mempool semantics and don't aggressively evict queued nonces. Don't generalize from L2 to L1.
+- **Fail-fast**: If broadcast `i` fails, the sequential loop marks `i+1..N-1` as `"failed"` ("Skipped — earlier deposit failed") and breaks. Their nonces depend on tx `i` landing, so submitting them now would just produce more phantom hashes.
+- **Cost**: A typical batch is 2 calls (approve + swap). Sequential broadcast adds ~1s vs the parallel path. Negligible.
+- **Diagnostic logs**: `[ForceInclusion] batch start: ... startNonce=N` on entry, `broadcasting L1 deposit i/N: ... nonce=N+i-1` per send, `L1 deposit i/N accepted by RPC: hash=0x...` on success. Use these to verify ordering when debugging stuck txs.
 
 ## L1 Receipt Status Handling
 
@@ -383,7 +438,10 @@ Even worse: the reverted L1 tx shows up as "L1 Confirmed" in the UI, contradicti
 All four force inclusion paths (`processForceInclusionBankr`, `processForceInclusionLocal`, `processForceInclusionBatchBankr`, `processForceInclusionBatchLocal`) now do this after `waitForTransactionReceipt`:
 
 ```typescript
-const receipt = await l1Client.waitForTransactionReceipt({ hash: l1Hash, timeout: 120_000 });
+const receipt = await l1Client.waitForTransactionReceipt({
+  hash: l1Hash,
+  timeout: L1_RECEIPT_TIMEOUT, // 10 minutes — see "L1 Receipt Timeout" below
+});
 
 if (receipt.status === "reverted") {
   await progress("error", { error: "L1 deposit transaction reverted on-chain" });
@@ -395,7 +453,15 @@ const l2Hash = extractL2Hash(receipt);
 // ... continue with success path
 ```
 
-For non-atomic batches, the reverted sub-tx additionally mutates `item.success = false` so `trackBatchForceInclusionCompletion` computes the correct aggregate bundle status (PARTIAL_REVERT / REVERTED).
+For non-atomic batches, the reverted sub-tx additionally mutates `item.success = false` so `trackBatchForceInclusionCompletion` computes the correct aggregate bundle status (PARTIAL_REVERT / REVERTED). The same mutation happens in the receipt-timeout `catch` block for the same reason — without it, `lastSuccessful` (used to pick the bundle's primary `txHash`) could pick a sub-tx that never confirmed.
+
+**Contract**: this mutation works because `successfulResults = results.filter(...)` shares object identity with `results`. If you ever refactor that filter to clone (e.g., `.filter(...).map(r => ({...r}))`), you'll break the aggregate bundle status computation.
+
+### L1 Receipt Timeout
+
+`L1_RECEIPT_TIMEOUT = 10 * 60 * 1000` (10 minutes), exported from `forceInclusion.ts`. Used by all four `waitForTransactionReceipt` sites. Long enough to absorb L1 mainnet congestion (slow base fee adjustment can leave a tx pending for many minutes). If this fires, the catch handler marks the tx as failed — but `recoverStuckForceInclusionTxs()` reconciles on the next service worker startup if the L1 tx eventually confirms.
+
+`cleanupStaleProcessingTxs` (in `txHistoryStorage.ts`) also has a 5-minute "stuck in processing" cleanup that runs on SW startup. **Force-inclusion txs are explicitly skipped** by that cleanup (`if (tx.forceInclusionMeta) continue;`) — recovery handles them via the L1-receipt re-fetch path instead.
 
 ### Common Revert Cause: Burn Out-Of-Gas
 
@@ -422,3 +488,28 @@ For each tx in history with forceInclusionMeta and status ∈ {processing, pendi
 ```
 
 This means users who had stuck txs from the pre-fix version get them auto-cleaned up the next time the extension's service worker starts.
+
+### Recovery: `recoverStuckForceInclusionBundles()`
+
+The per-tx recovery above only fixes individual sub-tx state. Batch force-inclusion bundles also rely on `trackBatchForceInclusionCompletion` — a 15-minute polling loop that computes the aggregate bundle status (`200 CONFIRMED` / `500 REVERTED` / `600 PARTIAL_REVERT`) once all sub-txs resolve. If the service worker dies mid-loop, that aggregate status would stay `100 PENDING` forever.
+
+`recoverStuckForceInclusionBundles()` runs in Phase 2 of `recoverStuckForceInclusionTxs()`:
+
+```
+1. Group force-inclusion sub-txs in history by bundleId prefix
+   (sub-tx ids follow the format `${bundleId}:${index}`)
+
+2. For each bundle:
+   ├─ Look up bundleStatus via getBundleStatus(bundleId)
+   ├─ Skip unless status === BUNDLE_STATUS.PENDING (already finalized bundles don't need re-tracking)
+   ├─ Sort sub-txs by their `:index` suffix to match original broadcast order
+   ├─ Reconstruct the `results` array shape that the tracker expects:
+   │     success = !!l1TxHash && tx.status !== "failed"
+   │     l1TxHash = forceInclusionMeta.l1TxHash
+   ├─ Pull chainName from the first sub-tx's history entry
+   └─ Re-launch trackBatchForceInclusionCompletion(bundleId, chainName, results) (fire-and-forget)
+```
+
+`trackBatchForceInclusionCompletion` is exported from `batchForceInclusion.ts` so the recovery function can call it. Its signature was changed from `(bundleId, pending: PendingBatchTxRequest, results)` to `(bundleId, chainName: string, results)` because the original `PendingBatchTxRequest` is removed from storage after broadcast — recovery can only reconstruct what's in tx history.
+
+The reconstructed `results` array preserves the runtime contract where `r.success === false` means "this sub-tx is in a definitively failed state" (matching the original Phase 4 mutation semantics — see the L1 Receipt Status Handling section above).
