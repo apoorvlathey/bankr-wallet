@@ -13,7 +13,7 @@ import {
   SimpleGrid,
   Textarea,
 } from "@chakra-ui/react";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
 import { ArrowBackIcon, CopyIcon, CheckIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 
 type Mode = "choose" | "generate" | "import";
@@ -26,7 +26,7 @@ interface SeedPhraseSetupProps {
 }
 
 function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps) {
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
 
   const [mode, setMode] = useState<Mode>("choose");
   const [generatedMnemonic, setGeneratedMnemonic] = useState<string | null>(null);
@@ -170,7 +170,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   if (generatedMnemonic) {
     const words = generatedMnemonic.split(" ");
     return (
-      <Box p={4} minH="100%" bg="bg.base">
+      <Box p={4} minH="100%" bg="surface.base">
         <VStack spacing={4} align="stretch">
           <HStack spacing={3}>
             <IconButton
@@ -193,22 +193,22 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
           </HStack>
 
           <Box
-            bg="bauhaus.red"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="status.error.bg"
+            border="2px solid"
+            borderColor="status.error.border"
+            boxShadow="card"
             p={3}
           >
-            <Text fontSize="xs" color="bauhaus.white" fontWeight="700">
+            <Text fontSize="xs" color="status.error.fg" fontWeight="700">
               Write down these 12 words in order. This is the ONLY way to recover your accounts. Never share your seed phrase!
             </Text>
           </Box>
 
           <Box
-            bg="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="surface.raised"
+            border="2px solid"
+            borderColor="border.default"
+            boxShadow="card"
             p={4}
             position="relative"
           >
@@ -225,7 +225,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
                 icon={mnemonicCopied ? <CheckIcon /> : <CopyIcon />}
                 size="xs"
                 variant="ghost"
-                color={mnemonicCopied ? "bauhaus.yellow" : undefined}
+                color={mnemonicCopied ? "accent.highlight" : undefined}
                 onClick={async () => {
                   await navigator.clipboard.writeText(generatedMnemonic);
                   setMnemonicCopied(true);
@@ -237,9 +237,9 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               {words.map((word, i) => (
                 <HStack
                   key={i}
-                  bg="bg.muted"
+                  bg="surface.sunken"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   px={2}
                   py={1.5}
                   spacing={1}
@@ -288,7 +288,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   // Choose mode: generate or import
   if (mode === "choose") {
     return (
-      <Box p={4} minH="100%" bg="bg.base">
+      <Box p={4} minH="100%" bg="surface.base">
         <VStack spacing={4} align="stretch">
           <HStack spacing={3}>
             <IconButton
@@ -308,13 +308,13 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               as="button"
               w="full"
               p={4}
-              bg="bauhaus.white"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="4px 4px 0px 0px #121212"
+              bg="surface.raised"
+              border="2px solid"
+              borderColor="border.default"
+              boxShadow="card"
               textAlign="left"
               onClick={() => setMode("generate")}
-              _hover={{ bg: "bg.muted" }}
+              _hover={{ bg: "surface.raisedHover" }}
             >
               <VStack align="start" spacing={1}>
                 <Text fontSize="sm" fontWeight="900" color="text.primary" textTransform="uppercase">
@@ -330,13 +330,13 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               as="button"
               w="full"
               p={4}
-              bg="bauhaus.white"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="4px 4px 0px 0px #121212"
+              bg="surface.raised"
+              border="2px solid"
+              borderColor="border.default"
+              boxShadow="card"
               textAlign="left"
               onClick={() => setMode("import")}
-              _hover={{ bg: "bg.muted" }}
+              _hover={{ bg: "surface.raisedHover" }}
             >
               <VStack align="start" spacing={1}>
                 <Text fontSize="sm" fontWeight="900" color="text.primary" textTransform="uppercase">
@@ -356,7 +356,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   // Generate mode form (display name + generate button)
   if (mode === "generate") {
     return (
-      <Box p={4} minH="100%" bg="bg.base">
+      <Box p={4} minH="100%" bg="surface.base">
         <VStack spacing={4} align="stretch">
           <HStack spacing={3}>
             <IconButton
@@ -372,10 +372,10 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
           </HStack>
 
           <Box
-            bg="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="surface.raised"
+            border="2px solid"
+            borderColor="border.default"
+            boxShadow="card"
             p={4}
           >
             <FormControl>
@@ -402,8 +402,8 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
           </Box>
 
           {error && (
-            <Box bg="bauhaus.red" border="2px solid" borderColor="bauhaus.black" p={2}>
-              <Text fontSize="xs" color="bauhaus.white" fontWeight="700">
+            <Box bg="status.error.bg" border="2px solid" borderColor="status.error.border" p={2}>
+              <Text fontSize="xs" color="status.error.fg" fontWeight="700">
                 {error}
               </Text>
             </Box>
@@ -425,7 +425,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
 
   // Import mode form
   return (
-    <Box p={4} minH="100%" bg="bg.base">
+    <Box p={4} minH="100%" bg="surface.base">
       <VStack spacing={4} align="stretch">
         <HStack spacing={3}>
           <IconButton
@@ -441,10 +441,10 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
         </HStack>
 
         <Box
-          bg="bauhaus.white"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
+          bg="surface.raised"
+          border="2px solid"
+          borderColor="border.default"
+          boxShadow="card"
           p={4}
         >
           <VStack spacing={4} align="stretch">
@@ -464,7 +464,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
                 rows={3}
                 resize="none"
               />
-              <FormErrorMessage color="bauhaus.red" fontWeight="700">
+              <FormErrorMessage color="chart.negative" fontWeight="700">
                 {error}
               </FormErrorMessage>
             </FormControl>
@@ -494,13 +494,13 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
         </Box>
 
         <Box
-          bg="bauhaus.yellow"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
+          bg="status.warning.bg"
+          border="2px solid"
+          borderColor="status.warning.border"
+          boxShadow="card"
           p={3}
         >
-          <Text fontSize="sm" color="bauhaus.black" fontWeight="700">
+          <Text fontSize="sm" color="status.warning.fg" fontWeight="700">
             Your seed phrase will be encrypted and stored locally. Never share it with anyone.
           </Text>
         </Box>

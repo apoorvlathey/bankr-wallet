@@ -16,6 +16,7 @@ import { formatEth } from "@/lib/gasFormatUtils";
 import { getChainConfig } from "@/constants/chainConfig";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
+import { useTheme } from "@/theme";
 
 interface TxGasInput {
   tx: { from: string; to: string; data: string; value: string; chainId: number };
@@ -64,12 +65,18 @@ function EditableGasLimitInput({
   /** Row used a hardcoded fallback because estimation failed — highlight for user attention */
   isWarning?: boolean;
 }) {
+  const { tokens } = useTheme();
+  // chart.negative resolves to RED in Bauhaus (matches the historic warning
+  // border) and to a bright red in Midnight — unlike status.error.fg which is
+  // white in Bauhaus and would vanish here.
   const borderColor = isInvalid
-    ? "bauhaus.red"
+    ? "chart.negative"
     : isWarning
-      ? "bauhaus.yellow"
-      : "bauhaus.black";
-  const bg = isWarning && !isInvalid ? "#FFF9E0" : "bauhaus.white";
+      ? "accent.highlight"
+      : "border.default";
+  // Soft warning tint for the fallback row — sourced from status.warning.tint
+  // (Bauhaus = cream wash, Midnight = recessed surface).
+  const bg = isWarning && !isInvalid ? "status.warning.tint" : "surface.raised";
   return (
     <Input
       size="xs"
@@ -80,14 +87,14 @@ function EditableGasLimitInput({
       fontFamily="mono"
       fontWeight="700"
       fontSize="xs"
-      border="2px solid"
+      border={tokens.borders.thin}
       borderColor={borderColor}
-      borderRadius="0"
+      borderRadius={tokens.radii.input}
       bg={bg}
       px={2}
       h="22px"
       _focus={{
-        borderColor: isInvalid ? "bauhaus.red" : "bauhaus.blue",
+        borderColor: isInvalid ? "chart.negative" : "accent.secondary",
         boxShadow: "none",
       }}
     />
@@ -108,6 +115,7 @@ function MultiTxGasEstimateDisplay({
   onGasEstimates,
   forceInclusion,
 }: MultiTxGasEstimateDisplayProps) {
+  const { tokens } = useTheme();
   // Display estimates — what the user sees
   //   Normal batch: from estimateBatchGasSequential (L2 gas + L2 fees)
   //   Force inclusion: from estimateForceInclusionGas per call (L1 gas + L1 fees)
@@ -393,13 +401,14 @@ function MultiTxGasEstimateDisplay({
   if (loading) {
     return (
       <Box
-        border="3px solid"
-        borderColor="bauhaus.black"
-        bg="bauhaus.white"
-        boxShadow="4px 4px 0px 0px #121212"
+        border={tokens.borders.medium}
+        borderColor="border.default"
+        borderRadius="lg"
+        bg="surface.raised"
+        boxShadow="card"
       >
         <HStack px={3} py={3} justify="center">
-          <Spinner size="xs" color="bauhaus.blue" />
+          <Spinner size="xs" color="accent.secondary" />
           <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
             Estimating gas...
           </Text>
@@ -412,10 +421,11 @@ function MultiTxGasEstimateDisplay({
   if (error && validEstimates.length === 0) {
     return (
       <Box
-        border="3px solid"
-        borderColor="bauhaus.black"
-        bg="bauhaus.white"
-        boxShadow="4px 4px 0px 0px #121212"
+        border={tokens.borders.medium}
+        borderColor="border.default"
+        borderRadius="lg"
+        bg="surface.raised"
+        boxShadow="card"
         px={3}
         py={2}
       >
@@ -435,16 +445,17 @@ function MultiTxGasEstimateDisplay({
       {/* Revert warning */}
       {anyFailed && (
         <HStack
-          bg="bauhaus.red"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
+          bg="status.error.bg"
+          border={tokens.borders.medium}
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
           px={3}
           py={2}
           spacing={2}
         >
-          <WarningIcon color="white" boxSize={3.5} flexShrink={0} />
-          <Text fontSize="xs" color="white" fontWeight="700" textTransform="uppercase">
+          <WarningIcon color="status.error.fg" boxSize={3.5} flexShrink={0} />
+          <Text fontSize="xs" color="status.error.fg" fontWeight="700" textTransform="uppercase">
             One or more transactions may revert
           </Text>
         </HStack>
@@ -453,16 +464,17 @@ function MultiTxGasEstimateDisplay({
       {/* Insufficient balance warning */}
       {anyInsufficient && !anyFailed && (
         <HStack
-          bg="bauhaus.yellow"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
+          bg="status.warning.bg"
+          border={tokens.borders.medium}
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
           px={3}
           py={2}
           spacing={2}
         >
-          <WarningIcon color="bauhaus.black" boxSize={3.5} />
-          <Text fontSize="xs" color="bauhaus.black" fontWeight="700" textTransform="uppercase">
+          <WarningIcon color="status.warning.fg" boxSize={3.5} />
+          <Text fontSize="xs" color="status.warning.fg" fontWeight="700" textTransform="uppercase">
             Insufficient balance for gas
           </Text>
         </HStack>
@@ -476,20 +488,21 @@ function MultiTxGasEstimateDisplay({
         <VStack
           align="stretch"
           spacing={0.5}
-          bg="bauhaus.yellow"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
+          bg="status.warning.bg"
+          border={tokens.borders.medium}
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
           px={3}
           py={2}
         >
           <HStack spacing={2}>
-            <WarningIcon color="bauhaus.black" boxSize={3.5} flexShrink={0} />
-            <Text fontSize="xs" color="bauhaus.black" fontWeight="900" textTransform="uppercase">
+            <WarningIcon color="status.warning.fg" boxSize={3.5} flexShrink={0} />
+            <Text fontSize="xs" color="status.warning.fg" fontWeight="900" textTransform="uppercase">
               Couldn&apos;t estimate {fallbackIndices.length} call{fallbackIndices.length > 1 ? "s" : ""} — using 500k default
             </Text>
           </HStack>
-          <Text fontSize="2xs" color="bauhaus.black" fontWeight="700" lineHeight="1.35" pl={5}>
+          <Text fontSize="2xs" color="status.warning.fg" fontWeight="700" lineHeight="1.35" pl={5}>
             {forceInclusion
               ? "Edit highlighted row below — too high wastes L1 burn, too low reverts on L2 (burn lost)."
               : "Edit highlighted row below if your call needs more. Extra gas gets refunded back."}
@@ -500,15 +513,16 @@ function MultiTxGasEstimateDisplay({
       {/* Force inclusion info banner */}
       {forceInclusion && (
         <HStack
-          bg="bauhaus.blue"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
+          bg="status.info.bg"
+          border={tokens.borders.medium}
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
           px={3}
           py={1.5}
           spacing={2}
         >
-          <Text fontSize="xs" color="white" fontWeight="700" textTransform="uppercase">
+          <Text fontSize="xs" color="status.info.fg" fontWeight="700" textTransform="uppercase">
             Gas estimated for L1 deposit
           </Text>
         </HStack>
@@ -516,10 +530,11 @@ function MultiTxGasEstimateDisplay({
 
       {/* Gas estimate box */}
       <Box
-        border="3px solid"
-        borderColor="bauhaus.black"
-        bg="bauhaus.white"
-        boxShadow="4px 4px 0px 0px #121212"
+        border={tokens.borders.medium}
+        borderColor="border.default"
+        borderRadius="lg"
+        bg="surface.raised"
+        boxShadow="card"
         position="relative"
       >
         {/* Collapsed header */}
@@ -552,7 +567,7 @@ function MultiTxGasEstimateDisplay({
         {/* Expanded details */}
         <Collapse in={expanded} animateOpacity>
           <VStack align="stretch" spacing={1.5} px={3} pb={3} pt={1}>
-            <Box h="1px" bg="gray.200" />
+            <Box h="1px" bg="border.subtle" />
 
             {/* Per-transaction cost breakdown */}
             {toEstimate.map((item, i) => {
@@ -583,7 +598,7 @@ function MultiTxGasEstimateDisplay({
             {/* Total row (only when multiple estimates) */}
             {validEstimates.length > 1 && (
               <>
-                <Box h="1px" bg="gray.200" mt={0.5} />
+                <Box h="1px" bg="border.subtle" mt={0.5} />
                 <HStack justify="space-between" w="full">
                   <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
                     Total
@@ -605,7 +620,7 @@ function MultiTxGasEstimateDisplay({
             {/* Editable L2 gas limits (PK/Seed only, non-atomic batches only) */}
             {isEditable && editedGasLimits.length > 0 && (
               <>
-                <Box h="1px" bg="gray.200" mt={0.5} />
+                <Box h="1px" bg="border.subtle" mt={0.5} />
                 <HStack justify="space-between" align="center" mb={0.5}>
                   <Text fontSize="2xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
                     {forceInclusion ? "L2 Gas Limit (per call)" : "Gas Limit (per call)"}
@@ -622,11 +637,11 @@ function MultiTxGasEstimateDisplay({
                     <HStack key={`edit-${i}`} justify="space-between" w="full" spacing={1}>
                       <HStack spacing={1} maxW="55%" flex="1" minW={0}>
                         {isRowFallback && (
-                          <WarningIcon color="bauhaus.yellow" boxSize={2.5} flexShrink={0} />
+                          <WarningIcon color="accent.highlight" boxSize={2.5} flexShrink={0} />
                         )}
                         <Text
                           fontSize="xs"
-                          color={isRowFallback ? "bauhaus.black" : "text.tertiary"}
+                          color={isRowFallback ? "text.primary" : "text.tertiary"}
                           fontWeight={isRowFallback ? "800" : "600"}
                           noOfLines={1}
                         >
@@ -647,7 +662,7 @@ function MultiTxGasEstimateDisplay({
                               minW="16px"
                               h="16px"
                               color="text.tertiary"
-                              _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                              _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                               onClick={() =>
                                 chrome.tabs.create({
                                   url: `${explorerBase}/address/${targetAddr}`,
@@ -667,7 +682,7 @@ function MultiTxGasEstimateDisplay({
                   );
                 })}
                 {anyEditInvalid && (
-                  <Text fontSize="2xs" color="bauhaus.red" fontWeight="700">
+                  <Text fontSize="2xs" color="chart.negative" fontWeight="700">
                     Invalid gas limit — must be a positive integer
                   </Text>
                 )}

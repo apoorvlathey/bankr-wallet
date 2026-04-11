@@ -13,6 +13,7 @@ import { ShapesLoader } from "@/components/Chat/ShapesLoader";
 import { decodeRecursive } from "@/lib/decoder";
 import { renderParams } from "@/components/renderParams";
 import type { DecodeRecursiveResult } from "@/lib/decoder/types";
+import { useTheme } from "@/theme";
 
 interface CalldataDecoderProps {
   calldata: string;
@@ -111,6 +112,13 @@ function isAbiDecodeBetter(
 }
 
 function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDecoderProps) {
+  const { themeId, tokens } = useTheme();
+  const isDarkTheme = themeId === "midnight";
+  // Selected tab strip uses an inverted contrast (Bauhaus paints it black with
+  // white text; Midnight uses a recessed dark surface so we don't compete with
+  // the modal-style luminous shadows). Same pattern as Phase 5 header bar.
+  const tabActiveBg = isDarkTheme ? "surface.sunken" : "fg.primary";
+  const tabActiveFg = isDarkTheme ? "fg.primary" : "fg.inverse";
   const [result, setResult] = useState<DecodeRecursiveResult>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"decoded" | "raw">("raw");
@@ -204,8 +212,8 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
 
   const scrollStyles = {
     "&::-webkit-scrollbar": { width: "6px" },
-    "&::-webkit-scrollbar-track": { background: "#E0E0E0" },
-    "&::-webkit-scrollbar-thumb": { background: "#121212" },
+    "&::-webkit-scrollbar-track": { background: "var(--chakra-colors-bg-muted)" },
+    "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-default)" },
   };
 
   // Copy value: full JSON for decoded tab, raw calldata for raw tab
@@ -219,20 +227,21 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
     <Box
       w="full"
       maxW="100%"
-      bg="bauhaus.white"
-      border="3px solid"
-      borderColor="bauhaus.black"
-      boxShadow="4px 4px 0px 0px #121212"
+      bg="surface.raised"
+      border={tokens.borders.medium}
+      borderColor="border.default"
+      borderRadius="lg"
+      boxShadow="card"
       overflow="hidden"
     >
       {/* Tab header */}
-      <HStack p={0} borderBottom="2px solid" borderColor="bauhaus.black" spacing={0}>
+      <HStack p={0} borderBottom={tokens.borders.thin} borderColor="border.default" spacing={0}>
         <Box
           flex={1}
           py={2}
           px={3}
           cursor="pointer"
-          bg={tab === "decoded" ? "bauhaus.black" : "transparent"}
+          bg={tab === "decoded" ? tabActiveBg : "transparent"}
           onClick={() => setTab("decoded")}
         >
           <HStack spacing={1.5} justify="center">
@@ -241,20 +250,20 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
               fontWeight="800"
               textTransform="uppercase"
               letterSpacing="wide"
-              color={tab === "decoded" ? "bauhaus.white" : "text.secondary"}
+              color={tab === "decoded" ? tabActiveFg : "text.secondary"}
             >
               Decoded
             </Text>
             {showSpinner && <ShapesLoader size="6px" />}
           </HStack>
         </Box>
-        <Box w="2px" bg="bauhaus.black" alignSelf="stretch" />
+        <Box w="2px" bg="border.default" alignSelf="stretch" />
         <Box
           flex={1}
           py={2}
           px={3}
           cursor="pointer"
-          bg={tab === "raw" ? "bauhaus.black" : "transparent"}
+          bg={tab === "raw" ? tabActiveBg : "transparent"}
           onClick={() => setTab("raw")}
         >
           <Text
@@ -263,7 +272,7 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
             textTransform="uppercase"
             letterSpacing="wide"
             textAlign="center"
-            color={tab === "raw" ? "bauhaus.white" : "text.secondary"}
+            color={tab === "raw" ? tabActiveFg : "text.secondary"}
           >
             Raw
           </Text>
@@ -289,11 +298,12 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
               px={2}
               py={1}
               fontSize="xs"
-              bg="bauhaus.blue"
-              color="white"
+              bg="accent.secondary"
+              color="accentFg.secondary"
               fontFamily="mono"
-              border="2px solid"
-              borderColor="bauhaus.black"
+              border={tokens.borders.thin}
+              borderColor="border.default"
+              borderRadius="md"
               fontWeight="700"
             >
               {result.functionName}
@@ -324,8 +334,9 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
         <Box
           p={3}
           bg="bg.muted"
-          border="2px solid"
-          borderColor="bauhaus.black"
+          border={tokens.borders.thin}
+          borderColor="border.default"
+          borderRadius="md"
           maxW="100%"
           maxH="100px"
           overflowX="auto"

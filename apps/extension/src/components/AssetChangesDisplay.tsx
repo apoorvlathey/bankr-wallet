@@ -32,6 +32,7 @@ import type {
 } from "@/chrome/txSimulation";
 import { getChainConfig } from "@/constants/chainConfig";
 import { ShapesLoader } from "@/components/Chat/ShapesLoader";
+import { useTheme } from "@/theme";
 
 interface AssetChangesDisplayProps {
   txRequest: PendingTxRequest;
@@ -89,14 +90,14 @@ function NftStandardTag({ standard }: { standard: NftStandard }) {
       px={1}
       py="1px"
       border="1.5px solid"
-      borderColor="bauhaus.black"
-      bg="bauhaus.yellow"
+      borderColor="border.default"
+      bg="accent.highlight"
       flexShrink={0}
     >
       <Text
         fontSize="8px"
         fontWeight="800"
-        color="bauhaus.black"
+        color="accentFg.highlight"
         letterSpacing="0.02em"
         lineHeight="1.1"
       >
@@ -184,8 +185,10 @@ function NftMediaSandbox({
       width={width}
       height={height}
       border={showBorder ? "2px solid" : "none"}
-      borderColor="bauhaus.black"
-      bg="bauhaus.white"
+      borderColor="border.default"
+      // Sandbox iframe always renders white internally; matching the wrapper
+      // to a literal white avoids a stark dark border in Midnight at the seams.
+      bg="white"
       pointerEvents="none"
     />
   );
@@ -212,21 +215,14 @@ function NftFullscreenModal({
   title: string;
   subtitle?: string;
 }) {
+  const { tokens } = useTheme();
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="md">
-      <ModalOverlay bg="blackAlpha.800" />
-      <ModalContent
-        bg="bauhaus.white"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        borderRadius="0"
-        boxShadow="6px 6px 0 0 var(--chakra-colors-bauhaus-black)"
-        mx={4}
-      >
+      <ModalOverlay bg="surface.overlay" />
+      <ModalContent mx={4}>
         <ModalCloseButton
-          color="bauhaus.black"
-          _hover={{ bg: "bauhaus.yellow" }}
-          borderRadius="0"
+          color="text.primary"
+          _hover={{ bg: "accent.highlight", color: "accentFg.highlight" }}
         />
         <ModalBody p={4}>
           <VStack spacing={3} align="stretch">
@@ -241,9 +237,12 @@ function NftFullscreenModal({
               )}
             </Box>
             <Box
-              border="2px solid"
-              borderColor="bauhaus.black"
-              bg="bauhaus.white"
+              border={tokens.borders.thin}
+              borderColor="border.default"
+              borderRadius="md"
+              // Literal white tile so the NFT image always sits on a neutral
+              // surface — Midnight should not paint dark behind transparent NFTs.
+              bg="white"
               display="flex"
               alignItems="center"
               justifyContent="center"
@@ -268,6 +267,7 @@ function NftFullscreenModal({
 /** Compact NFT preview card shown in the SEND/RECEIVE rows. */
 function NftPreview({ change }: { change: AssetChange }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { tokens } = useTheme();
   if (!change.nft) return null;
   const meta = change.nft.metadata;
   const loading = !!change.nft.metadataLoading;
@@ -285,9 +285,12 @@ function NftPreview({ change }: { change: AssetChange }) {
         w="64px"
         h="64px"
         minW="64px"
-        border="2px solid"
-        borderColor="bauhaus.black"
-        bg="bauhaus.white"
+        border={tokens.borders.thin}
+        borderColor="border.default"
+        borderRadius="md"
+        // Literal white tile (physical sticker) — same rationale as the
+        // NftFullscreenModal preview Box.
+        bg="white"
         display="flex"
         alignItems="center"
         justifyContent="center"
@@ -304,7 +307,7 @@ function NftPreview({ change }: { change: AssetChange }) {
         }
         role={isClickable ? "button" : undefined}
         aria-label={isClickable ? `View ${altText}` : undefined}
-        _hover={isClickable ? { borderColor: "bauhaus.blue" } : undefined}
+        _hover={isClickable ? { borderColor: "accent.secondary" } : undefined}
         transition="border-color 0.1s"
       >
         {showImage ? (
@@ -345,7 +348,12 @@ function AssetRow({ change, chainId }: { change: AssetChange; chainId: number })
     } catch {}
   };
 
-  const dirColor = change.direction === "out" ? "bauhaus.red" : "bauhaus.blue";
+  // Out = negative chart color (red), in = positive chart color (green) so the
+  // semantic mapping reads consistently across themes. Bauhaus historically
+  // used blue for "in" but the PRD calls for chart.positive/negative here so
+  // dark mode gets a clear positive→green visual.
+  const dirColor =
+    change.direction === "out" ? "chart.negative" : "chart.positive";
   const showName = change.name && change.name !== change.symbol;
 
   // For NFTs we display "+1" (ERC-721) or "+N" (ERC-1155). The tokenId moves
@@ -415,9 +423,9 @@ function AssetRow({ change, chainId }: { change: AssetChange; chainId: number })
                     variant="ghost"
                     minW="16px"
                     h="16px"
-                    color={copied ? "bauhaus.yellow" : "text.tertiary"}
+                    color={copied ? "accent.highlight" : "text.tertiary"}
                     onClick={handleCopy}
-                    _hover={{ color: "bauhaus.blue", bg: "transparent" }}
+                    _hover={{ color: "accent.secondary", bg: "transparent" }}
                   />
                 </Tooltip>
                 {(() => {
@@ -435,7 +443,7 @@ function AssetRow({ change, chainId }: { change: AssetChange; chainId: number })
                         onClick={() =>
                           window.open(`${cfg.explorer}/address/${change.address}`, "_blank")
                         }
-                        _hover={{ color: "bauhaus.blue", bg: "transparent" }}
+                        _hover={{ color: "accent.secondary", bg: "transparent" }}
                       />
                     </Tooltip>
                   ) : null;
@@ -474,6 +482,7 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY = 2_500;
 
 function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChangesDisplayProps) {
+  const { tokens } = useTheme();
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
@@ -576,10 +585,11 @@ function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChange
   if (loading) {
     return (
       <Box
-        border="3px solid"
-        borderColor="bauhaus.black"
-        bg="bauhaus.white"
-        boxShadow="4px 4px 0px 0px #121212"
+        border={tokens.borders.medium}
+        borderColor="border.default"
+        borderRadius="lg"
+        bg="surface.raised"
+        boxShadow="card"
       >
         <HStack px={3} py={2.5} justify="center" spacing={3}>
           <ShapesLoader size="6px" />
@@ -621,11 +631,13 @@ function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChange
 
   return (
     <Box
-      border="3px solid"
-      borderColor="bauhaus.black"
-      bg="bauhaus.white"
-      boxShadow="4px 4px 0px 0px #121212"
+      border={tokens.borders.medium}
+      borderColor="border.default"
+      borderRadius="lg"
+      bg="surface.raised"
+      boxShadow="card"
       position="relative"
+      overflow="hidden"
     >
       {/* Header */}
       <HStack
@@ -677,7 +689,7 @@ function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChange
       {/* Expanded details */}
       <Collapse in={expanded} animateOpacity>
         <VStack align="stretch" spacing={0} px={3} pb={3} pt={1}>
-          <Box h="1px" bg="gray.200" />
+          <Box h="1px" bg="border.subtle" />
 
           {/* Outgoing */}
           {outChanges.length > 0 && (
@@ -685,7 +697,7 @@ function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChange
               <Text
                 fontSize="2xs"
                 fontWeight="700"
-                color="bauhaus.red"
+                color="chart.negative"
                 textTransform="uppercase"
                 pt={2}
                 pb={1}
@@ -710,7 +722,7 @@ function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChange
               <Text
                 fontSize="2xs"
                 fontWeight="700"
-                color="bauhaus.blue"
+                color="chart.positive"
                 textTransform="uppercase"
                 pt={outChanges.length > 0 ? 2.5 : 2}
                 pb={1}
@@ -731,8 +743,8 @@ function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChange
 
           {!result.txSuccess && (
             <>
-              <Box h="1px" bg="gray.200" mt={1.5} />
-              <Text fontSize="2xs" color="bauhaus.red" fontWeight="700" pt={1}>
+              <Box h="1px" bg="border.subtle" mt={1.5} />
+              <Text fontSize="2xs" color="chart.negative" fontWeight="700" pt={1}>
                 Note: simulated tx reverted — actual changes may differ
               </Text>
             </>

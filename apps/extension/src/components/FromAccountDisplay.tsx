@@ -48,7 +48,7 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
           minW="22px"
           borderRadius="full"
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           objectFit="cover"
         />
       ) : fromAccount?.type === "bankr" ? (
@@ -60,7 +60,7 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
           minW="20px"
           borderRadius="sm"
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
         />
       ) : (
         <Image
@@ -71,7 +71,7 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
           minW="20px"
           borderRadius="sm"
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
         />
       )}
       <VStack align="start" spacing={0} minW={0}>
@@ -95,7 +95,7 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
             py={0}
             borderRadius="sm"
             border="1px solid"
-            borderColor="bauhaus.black"
+            borderColor="border.default"
             mt={0.5}
           >
             <Text

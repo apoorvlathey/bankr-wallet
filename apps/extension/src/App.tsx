@@ -47,6 +47,8 @@ import {
   Search2Icon,
 } from "@chakra-ui/icons";
 
+import { useTheme, useStripTokens, useIconChipBg } from "@/theme";
+
 // Sidepanel icon
 const SidePanelIcon = (props: any) => (
   <Icon viewBox="0 0 24 24" {...props}>
@@ -194,7 +196,7 @@ const LoadingFallback = () => (
     justifyContent="center"
     bg="bg.base"
   >
-    <Spinner size="lg" color="bauhaus.blue" thickness="3px" />
+    <Spinner size="lg" color="accent.secondary" thickness="3px" />
   </Box>
 );
 
@@ -216,6 +218,11 @@ type AppView =
   | "crossDappBatchConfirm";
 
 function App() {
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
+  const stripTokens = useStripTokens();
+  const addressPillTokens = useStripTokens("elevated");
+  const iconChipBg = useIconChipBg();
   const { networksInfo, reloadRequired, setReloadRequired } = useNetworks();
   const [view, setView] = useState<AppView>("main");
   const [isLoading, setIsLoading] = useState(true);
@@ -1586,7 +1593,7 @@ function App() {
         >
           <Box
             minH="300px"
-            bg="bg.base"
+            bg="surface.base"
             display="flex"
             flexDirection="column"
             alignItems="center"
@@ -1596,35 +1603,39 @@ function App() {
             position="relative"
             flex="1"
           >
-            {/* Geometric decorations */}
-            <Box
-              position="absolute"
-              top={4}
-              left={4}
-              w="12px"
-              h="12px"
-              bg="bauhaus.red"
-              border="2px solid"
-              borderColor="bauhaus.black"
-            />
-            <Box
-              position="absolute"
-              top={4}
-              right={4}
-              w="12px"
-              h="12px"
-              bg="bauhaus.blue"
-              border="2px solid"
-              borderColor="bauhaus.black"
-              borderRadius="full"
-            />
+            {/* Geometric decorations — Bauhaus only */}
+            {!isDarkTheme && (
+              <>
+                <Box
+                  position="absolute"
+                  top={4}
+                  left={4}
+                  w="12px"
+                  h="12px"
+                  bg="accent.primary"
+                  border="2px solid"
+                  borderColor="border.default"
+                />
+                <Box
+                  position="absolute"
+                  top={4}
+                  right={4}
+                  w="12px"
+                  h="12px"
+                  bg="accent.secondary"
+                  border="2px solid"
+                  borderColor="border.default"
+                  borderRadius="full"
+                />
+              </>
+            )}
 
             <VStack spacing={4}>
               <Box
-                bg="bauhaus.yellow"
+                bg="accent.highlight"
                 border="3px solid"
-                borderColor="bauhaus.black"
-                boxShadow="4px 4px 0px 0px #121212"
+                borderColor="border.default"
+                boxShadow="card"
                 p={3}
               >
                 <Image src="walletchan-icon.png" w="3rem" />
@@ -1673,9 +1684,9 @@ function App() {
                   display="flex"
                   alignItems="center"
                   gap={1}
-                  color="bauhaus.blue"
+                  color="accent.secondary"
                   fontWeight="700"
-                  _hover={{ color: "bauhaus.red" }}
+                  _hover={{ color: "accent.primary" }}
                   onClick={() => {
                     chrome.tabs.create({ url: TWITTER_URL });
                   }}
@@ -2222,18 +2233,21 @@ function App() {
       (r) => r.type === "crossDappBatch",
     );
     const totalCount = combinedRequests.length;
-    // Distinctive yellow-tinted background so this screen is instantly
-    // recognizable as the user-assembled cross-dapp batch (vs the standard
-    // bg.base used by every other tx/sig/batch confirmation screen).
+    // Distinctive tinted background so this screen is instantly recognizable
+    // as the user-assembled cross-dapp batch (vs the standard surface.base
+    // used by every other tx/sig/batch confirmation screen). Sourced from
+    // status.warning.tint — Bauhaus = cornsilk wash, Midnight = recessed surface.
+    const crossDappBg = "status.warning.tint";
     return (
-      <Box bg="#FFF8DC" h="100%" display="flex" flexDirection="column">
-        {/* Bauhaus accent strip across the top of the page */}
+      <Box bg={crossDappBg} h="100%" display="flex" flexDirection="column">
+        {/* Theme-accent strip across the top of the page — vivid yellow in
+            Bauhaus, warm amber in Midnight (both via accent.highlight). */}
         <Box
           h="6px"
           w="100%"
-          bg="bauhaus.yellow"
+          bg="accent.highlight"
           borderBottom="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           flexShrink={0}
         />
         <Box
@@ -2434,8 +2448,15 @@ function App() {
   }
 
   // Main view
+  // Header bar — same dark CTA strip pair used by tx/sig confirmation badges,
+  // chat header, etc. (see useStripTokens). The hover overlay is the only
+  // non-shared bit so it stays inline.
+  const headerBg = stripTokens.bg;
+  const headerFg = stripTokens.fg;
+  const headerHoverBg = isDarkTheme ? "whiteAlpha.100" : "whiteAlpha.200";
+
   return (
-    <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+    <Box bg="surface.base" h="100%" display="flex" flexDirection="column">
       {/* Fullscreen centered wrapper */}
       <Box
         maxW={isFullscreenTab ? "480px" : "100%"}
@@ -2449,7 +2470,7 @@ function App() {
         <Flex
           py={3}
           px={4}
-          bg="bauhaus.black"
+          bg={headerBg}
           alignItems="center"
           position="relative"
         >
@@ -2460,16 +2481,16 @@ function App() {
             left="0"
             right="0"
             h="3px"
-            bg="bauhaus.red"
+            bg="accent.primary"
           />
 
           <HStack spacing={2}>
-            <Box bg="bauhaus.white" p={0.5}>
+            <Box bg="surface.raised" p={0.5}>
               <Image src="walletchan-icon-white-bg.png" h="1.75rem" />
             </Box>
             <Text
               fontWeight="900"
-              color="bauhaus.white"
+              color={headerFg}
               textTransform="uppercase"
               letterSpacing="wider"
             >
@@ -2485,8 +2506,8 @@ function App() {
                   icon={<ChatIcon />}
                   variant="ghost"
                   size="sm"
-                  color="bauhaus.white"
-                  _hover={{ bg: "whiteAlpha.200" }}
+                  color={headerFg}
+                  _hover={{ bg: headerHoverBg }}
                   onClick={() => {
                     setStartChatWithNew(false);
                     setView("chat");
@@ -2500,8 +2521,8 @@ function App() {
                 icon={<LockIcon />}
                 variant="ghost"
                 size="sm"
-                color="bauhaus.white"
-                _hover={{ bg: "whiteAlpha.200" }}
+                color={headerFg}
+                _hover={{ bg: headerHoverBg }}
                 onClick={() => {
                   chrome.runtime.sendMessage({ type: "lockWallet" }, () => {
                     setView("unlock");
@@ -2519,8 +2540,8 @@ function App() {
                   icon={<SidePanelIcon />}
                   variant="ghost"
                   size="sm"
-                  color="bauhaus.white"
-                  _hover={{ bg: "whiteAlpha.200" }}
+                  color={headerFg}
+                  _hover={{ bg: headerHoverBg }}
                   onClick={toggleSidePanelMode}
                 />
               </Tooltip>
@@ -2532,8 +2553,8 @@ function App() {
                   icon={<FullscreenIcon />}
                   variant="ghost"
                   size="sm"
-                  color="bauhaus.white"
-                  _hover={{ bg: "whiteAlpha.200" }}
+                  color={headerFg}
+                  _hover={{ bg: headerHoverBg }}
                   onClick={openInFullscreenTab}
                 />
               </Tooltip>
@@ -2543,8 +2564,8 @@ function App() {
               icon={<SettingsIcon />}
               variant="ghost"
               size="sm"
-              color="bauhaus.white"
-              _hover={{ bg: "whiteAlpha.200" }}
+              color={headerFg}
+              _hover={{ bg: headerHoverBg }}
               onClick={() => setView("settings")}
             />
           </HStack>
@@ -2552,27 +2573,27 @@ function App() {
 
         {/* Powered by Banner */}
         <HStack
-          bg="bauhaus.yellow"
+          bg="accent.highlight"
           py={1}
           px={4}
           justify="center"
           spacing={2}
           borderBottom="3px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
         >
-          <Box w="6px" h="6px" bg="bauhaus.black" />
+          <Box w="6px" h="6px" bg="border.default" />
           <Text
             fontSize="xs"
             fontWeight="700"
-            color="bauhaus.black"
+            color="accentFg.highlight"
             textTransform="uppercase"
             letterSpacing="wider"
           >
             Powered by
           </Text>
           <Link
-            bg="bauhaus.blue"
-            color="bauhaus.white"
+            bg="accent.secondary"
+            color="accentFg.secondary"
             px={2}
             py={0.5}
             fontWeight="900"
@@ -2580,10 +2601,10 @@ function App() {
             textTransform="uppercase"
             letterSpacing="wide"
             border="2px solid"
-            borderColor="bauhaus.black"
+            borderColor="border.default"
             _hover={{
-              bg: "#F97316",
-              color: "bauhaus.white",
+              bg: "accent.primary",
+              color: "accentFg.primary",
             }}
             transition="all 0.2s ease-out"
             cursor="pointer"
@@ -2606,7 +2627,7 @@ function App() {
           >
             $WCHAN
           </Link>
-          <Box w="6px" h="6px" bg="bauhaus.black" />
+          <Box w="6px" h="6px" bg="border.default" />
         </HStack>
 
         {/* WalletChan OS Banner */}
@@ -2617,7 +2638,7 @@ function App() {
           justify="center"
           spacing={3}
           borderBottom="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           cursor="pointer"
           transition="all 0.15s ease-out"
           _hover={{ opacity: 0.85 }}
@@ -2625,7 +2646,7 @@ function App() {
             chrome.tabs.create({ url: WALLETCHAN_OS_URL });
           }}
         >
-          <Text fontSize="sm" fontWeight="900" color="bauhaus.yellow" textTransform="uppercase" letterSpacing="wider" whiteSpace="nowrap">
+          <Text fontSize="sm" fontWeight="900" color="accent.highlight" textTransform="uppercase" letterSpacing="wider" whiteSpace="nowrap">
             WalletChan OS
           </Text>
           <Flex direction="column" align="flex-start">
@@ -2653,26 +2674,26 @@ function App() {
             {/* Failed Transaction Error */}
             {failedTxError && (
               <Box
-                bg="bauhaus.red"
+                bg="accent.primary"
                 border="3px solid"
-                borderColor="bauhaus.black"
-                boxShadow="4px 4px 0px 0px #121212"
+                borderColor="border.default"
+                boxShadow="card"
                 p={3}
                 position="relative"
               >
                 <HStack w="full" justify="space-between" mb={2}>
                   <HStack>
-                    <Box p={1} bg="bauhaus.black">
-                      <WarningIcon color="bauhaus.red" boxSize={4} />
+                    <Box p={1} bg="border.default">
+                      <WarningIcon color="accent.primary" boxSize={4} />
                     </Box>
-                    <Text fontSize="sm" color="white" fontWeight="700">
+                    <Text fontSize="sm" color="accentFg.primary" fontWeight="700">
                       Transaction Failed
                     </Text>
                   </HStack>
                   <Button
                     size="xs"
                     variant="ghost"
-                    color="white"
+                    color="accentFg.primary"
                     _hover={{ bg: "whiteAlpha.200" }}
                     onClick={() => setFailedTxError(null)}
                   >
@@ -2687,7 +2708,7 @@ function App() {
                 >
                   {failedTxError.origin}
                 </Text>
-                <Text fontSize="sm" color="white" fontWeight="500">
+                <Text fontSize="sm" color="accentFg.primary" fontWeight="500">
                   {failedTxError.error}
                 </Text>
               </Box>
@@ -2741,23 +2762,23 @@ function App() {
 
             {visibleRpcIssueChainIds.length > 0 && (
               <Box
-                bg="#EEF2FF"
+                bg="status.info.bg"
                 border="2px solid"
-                borderColor="bauhaus.black"
-                boxShadow="3px 3px 0px 0px #121212"
+                borderColor="border.default"
+                boxShadow="card"
                 px={3}
                 py={2}
               >
                 <HStack align="start" spacing={2}>
                   <Box
                     p={1}
-                    bg="bauhaus.blue"
+                    bg="accent.secondary"
                     display="flex"
                     alignItems="center"
                     justifyContent="center"
                     flexShrink={0}
                   >
-                    <WarningIcon color="bauhaus.white" boxSize={3} />
+                    <WarningIcon color="accentFg.secondary" boxSize={3} />
                   </Box>
                   <Box flex={1} minW={0}>
                     <Text
@@ -2780,9 +2801,9 @@ function App() {
                               <HStack
                                 key={chainId}
                                 spacing={1.5}
-                                bg="bauhaus.white"
+                                bg="surface.raised"
                                 border="1.5px solid"
-                                borderColor="bauhaus.black"
+                                borderColor="border.default"
                                 px={1.5}
                                 py={1}
                                 cursor="pointer"
@@ -2878,13 +2899,13 @@ function App() {
                 <MenuButton
                   as={Button}
                   variant="ghost"
-                  bg="bauhaus.white"
+                  bg="surface.raised"
                   border="3px solid"
-                  borderColor="bauhaus.black"
-                  boxShadow="4px 4px 0px 0px #121212"
+                  borderColor="border.default"
+                  boxShadow="card"
                   _hover={{
                     transform: "translateY(-2px)",
-                    boxShadow: "6px 6px 0px 0px #121212",
+                    boxShadow: "cardHover",
                   }}
                   _active={{
                     transform: "translate(2px, 2px)",
@@ -2894,7 +2915,6 @@ function App() {
                   h="full"
                   py={3}
                   px={3}
-                  borderRadius="0"
                   transition="all 0.2s ease-out"
                   flexShrink={1}
                   minW={0}
@@ -2928,17 +2948,16 @@ function App() {
                   )}
                 </MenuButton>
                 <MenuList
-                  bg="bauhaus.white"
+                  bg="surface.raised"
                   border="3px solid"
-                  borderColor="bauhaus.black"
-                  boxShadow="4px 4px 0px 0px #121212"
-                  borderRadius="0"
+                  borderColor="border.default"
+                  boxShadow="card"
                   py={0}
                   minW="160px"
                   maxH="320px"
                   overflow="hidden"
                 >
-                  <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+                  <Box p={2} borderBottom="2px solid" borderColor="border.default">
                     <InputGroup size="sm">
                       <InputLeftElement pointerEvents="none">
                         <Search2Icon color="text.tertiary" boxSize={3} />
@@ -2948,13 +2967,8 @@ function App() {
                         value={chainSearch}
                         onChange={(e) => setChainSearch(e.target.value)}
                         placeholder="Search chains"
-                        border="2px solid"
-                        borderColor="bauhaus.black"
-                        borderRadius="0"
                         fontWeight="600"
                         pl={9}
-                        _hover={{ borderColor: "bauhaus.black" }}
-                        _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
                         onKeyDown={(e) => {
                           if (e.key === "ArrowDown") {
                             e.preventDefault();
@@ -2992,23 +3006,24 @@ function App() {
                     {filteredVisibleChains.map((_chain, i, currentChains) => (
                           <MenuItem
                             key={_chain.chainId}
-                            bg={i === highlightedChainIndex ? "bg.muted" : "bauhaus.white"}
-                            _hover={{ bg: "bg.muted" }}
+                            bg={i === highlightedChainIndex ? "surface.raisedHover" : "surface.raised"}
+                            _hover={{ bg: "surface.raisedHover" }}
                             borderBottom={
                               i < currentChains.length - 1
                                 ? "2px solid"
                                 : "none"
                             }
-                            borderColor="bauhaus.black"
+                            borderColor="border.default"
                             py={3}
                             onMouseEnter={() => setHighlightedChainIndex(i)}
                             onClick={() => handleHomepageChainSelect(_chain.name)}
                           >
                             <HStack spacing={2}>
                               <Box
-                                bg="bauhaus.white"
+                                bg={iconChipBg}
                                 border="2px solid"
-                                borderColor="bauhaus.black"
+                                borderColor="border.default"
+                                borderRadius="md"
                                 p={0.5}
                               >
                                 <ChainIcon
@@ -3034,22 +3049,25 @@ function App() {
                   {/* Add Chain button — only for non-bankr accounts */}
                   {activeAccount?.type !== "bankr" && (
                     <>
-                      <MenuDivider borderColor="bauhaus.black" m={0} />
+                      <MenuDivider borderColor="border.default" m={0} />
                       <MenuItem
-                        bg="bauhaus.white"
-                        _hover={{ bg: "bg.muted" }}
+                        bg="surface.raised"
+                        _hover={{ bg: "surface.raisedHover" }}
                         py={3}
                         onClick={() => setView("settingsAddChain")}
                       >
                         <HStack spacing={2}>
                           <Box
-                            bg="bauhaus.black"
+                            bg="border.default"
                             p={0.5}
                             display="flex"
                             alignItems="center"
                             justifyContent="center"
                           >
-                            <AddIcon color="bauhaus.white" boxSize="14px" p="2px" />
+                            {/* Tiny add icon on a dark square — kept literal
+                                white in both themes; the dark `border.default`
+                                square provides plenty of contrast. */}
+                            <AddIcon color="white" boxSize="14px" p="2px" />
                           </Box>
                           <Text color="text.secondary" fontWeight="700" fontSize="sm">
                             Add Chain
@@ -3062,12 +3080,20 @@ function App() {
               </Menu>
             </HStack>
 
-            {/* Address Bar — compact utility row */}
+            {/* Address Bar — compact utility row.
+                Uses the `elevated` strip variant so Bauhaus keeps its stark
+                black band while Midnight gets a framed raised card (sunken
+                was too close to the page wash and blended in). Both per-theme
+                details live in `useStripTokens`. */}
             {address && (
               <HStack spacing={2} align="center">
                 {/* Address pill */}
                 <HStack
-                  bg="bauhaus.black"
+                  bg={addressPillTokens.bg}
+                  color={addressPillTokens.fg}
+                  border="1px solid"
+                  borderColor={addressPillTokens.border}
+                  borderRadius="md"
                   px={2}
                   py={1}
                   spacing={2}
@@ -3089,9 +3115,9 @@ function App() {
                     }
                     size="xs"
                     variant="ghost"
-                    color="bauhaus.white"
+                    color="inherit"
                     onClick={onQROpen}
-                    _hover={{ color: "bauhaus.yellow" }}
+                    _hover={{ color: "accent.highlight" }}
                     minW="auto"
                     h="auto"
                     p={0}
@@ -3101,9 +3127,9 @@ function App() {
                     icon={copied ? <CheckIcon /> : <CopyIcon />}
                     size="xs"
                     variant="ghost"
-                    color={copied ? "bauhaus.yellow" : "bauhaus.white"}
+                    color={copied ? "accent.highlight" : "inherit"}
                     onClick={handleCopyAddress}
-                    _hover={{ color: "bauhaus.yellow" }}
+                    _hover={{ color: "accent.highlight" }}
                     minW="auto"
                     h="auto"
                     p={0}
@@ -3116,13 +3142,13 @@ function App() {
                         icon={<ExternalLinkIcon />}
                         size="xs"
                         variant="ghost"
-                        color="bauhaus.white"
+                        color="inherit"
                         onClick={() => {
                           chrome.tabs.create({
                             url: `${explorer}/address/${address}`,
                           });
                         }}
-                        _hover={{ color: "bauhaus.yellow" }}
+                        _hover={{ color: "accent.highlight" }}
                         minW="auto"
                         h="auto"
                         p={0}
@@ -3157,16 +3183,16 @@ function App() {
                     <Box
                       key={site.name}
                       as="button"
-                      bg="bauhaus.white"
+                      bg="surface.raised"
                       border="2px solid"
-                      borderColor="bauhaus.black"
-                      boxShadow="2px 2px 0px 0px #121212"
+                      borderColor="border.default"
+                      boxShadow="card"
                       p={0.5}
                       cursor="pointer"
                       transition="all 0.15s ease-out"
                       _hover={{
                         transform: "translateY(-1px)",
-                        boxShadow: "3px 3px 0px 0px #121212",
+                        boxShadow: "cardHover",
                       }}
                       _active={{
                         transform: "translate(2px, 2px)",
@@ -3189,25 +3215,24 @@ function App() {
               <HStack spacing={2}>
                 <Button
                   flex={1}
-                  bg="bauhaus.blue"
-                  color="bauhaus.white"
+                  bg="accent.secondary"
+                  color="accentFg.secondary"
                   border="3px solid"
-                  borderColor="bauhaus.black"
-                  boxShadow="4px 4px 0px 0px #121212"
+                  borderColor="border.default"
+                  boxShadow="card"
                   fontWeight="800"
                   fontSize="sm"
                   textTransform="uppercase"
                   letterSpacing="wider"
-                  borderRadius={0}
                   leftIcon={<SwapIcon boxSize={5} />}
                   onClick={() => {
                     setSwapInitialBuyToken(undefined);
                     setView("swap");
                   }}
                   _hover={{
-                    bg: "bauhaus.blue",
+                    bg: "accent.secondary",
                     transform: "translateY(-2px)",
-                    boxShadow: "6px 6px 0px 0px #121212",
+                    boxShadow: "cardHover",
                   }}
                   _active={{
                     transform: "translate(2px, 2px)",
@@ -3218,16 +3243,15 @@ function App() {
                 </Button>
                 <Button
                   flex={1}
-                  bg="bauhaus.yellow"
-                  color="bauhaus.black"
+                  bg="accent.highlight"
+                  color="accentFg.highlight"
                   border="3px solid"
-                  borderColor="bauhaus.black"
-                  boxShadow="4px 4px 0px 0px #121212"
+                  borderColor="border.default"
+                  boxShadow="card"
                   fontWeight="800"
                   fontSize="sm"
                   textTransform="uppercase"
                   letterSpacing="wider"
-                  borderRadius={0}
                   leftIcon={
                     <Icon viewBox="0 0 24 24" boxSize={5}>
                       <path
@@ -3241,9 +3265,10 @@ function App() {
                     setView("transfer");
                   }}
                   _hover={{
-                    bg: "#e6b31c",
+                    bg: "accent.highlight",
+                    opacity: 0.9,
                     transform: "translateY(-2px)",
-                    boxShadow: "6px 6px 0px 0px #121212",
+                    boxShadow: "cardHover",
                   }}
                   _active={{
                     transform: "translate(2px, 2px)",
@@ -3258,14 +3283,14 @@ function App() {
                       position="absolute"
                       top="-8px"
                       right="-4px"
-                      bg="bauhaus.red"
-                      color="bauhaus.white"
+                      bg="accent.primary"
+                      color="accentFg.primary"
                       fontSize="8px"
                       fontWeight="900"
                       px={1.5}
                       py="1px"
                       border="2px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
                       zIndex={1}
                       lineHeight="1.2"
                     >
@@ -3274,16 +3299,15 @@ function App() {
                   )}
                   <Button
                     w="100%"
-                    bg="bauhaus.white"
-                    color="bauhaus.black"
+                    bg="surface.raised"
+                    color="text.primary"
                     border="3px solid"
-                    borderColor="bauhaus.black"
-                    boxShadow="4px 4px 0px 0px #121212"
+                    borderColor="border.default"
+                    boxShadow="card"
                     fontWeight="800"
                     fontSize="sm"
                     textTransform="uppercase"
                     letterSpacing="wider"
-                    borderRadius={0}
                     leftIcon={
                       <Icon viewBox="0 0 24 24" boxSize={5} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M12 3v12m0 0l-4-4m4 4l4-4" />
@@ -3294,9 +3318,9 @@ function App() {
                       chrome.tabs.create({ url: WALLETCHAN_STAKE_URL });
                     }}
                     _hover={{
-                      bg: "gray.100",
+                      bg: "surface.raisedHover",
                       transform: "translateY(-2px)",
-                      boxShadow: "6px 6px 0px 0px #121212",
+                      boxShadow: "cardHover",
                     }}
                     _active={{
                       transform: "translate(2px, 2px)",
@@ -3330,28 +3354,28 @@ function App() {
             {/* Reload Required Alert */}
             {reloadRequired && (
               <Box
-                bg="bauhaus.yellow"
+                bg="accent.highlight"
                 border="3px solid"
-                borderColor="bauhaus.black"
-                boxShadow="4px 4px 0px 0px #121212"
+                borderColor="border.default"
+                boxShadow="card"
                 p={3}
               >
                 <HStack justify="space-between">
                   <HStack spacing={2}>
-                    <Box p={1} bg="bauhaus.black">
-                      <InfoIcon color="bauhaus.yellow" boxSize={4} />
+                    <Box p={1} bg="border.default">
+                      <InfoIcon color="accent.highlight" boxSize={4} />
                     </Box>
                     <Box>
                       <Text
                         fontSize="sm"
-                        color="bauhaus.black"
+                        color="accentFg.highlight"
                         fontWeight="700"
                       >
                         Reload page required
                       </Text>
                       <Text
                         fontSize="xs"
-                        color="bauhaus.black"
+                        color="accentFg.highlight"
                         opacity={0.8}
                         fontWeight="500"
                       >
@@ -3361,8 +3385,8 @@ function App() {
                   </HStack>
                   <Button
                     size="sm"
-                    bg="bauhaus.black"
-                    color="bauhaus.yellow"
+                    bg="border.default"
+                    color="accent.highlight"
                     _hover={{ opacity: 0.9 }}
                     _active={{ transform: "translate(2px, 2px)" }}
                     onClick={async () => {
@@ -3386,65 +3410,72 @@ function App() {
           <Box
             position="sticky"
             bottom={0}
-            bg="bg.base"
+            bg="surface.base"
             borderTop="3px solid"
-            borderColor="bauhaus.black"
+            borderColor="border.default"
             p={3}
           >
             <Box position="relative">
-              {/* Geometric decorations */}
-              <Box
-                position="absolute"
-                top="-8px"
-                left="10px"
-                w="12px"
-                h="12px"
-                bg="bauhaus.red"
-                borderRadius="full"
-                border="2px solid"
-                borderColor="bauhaus.black"
-                zIndex={1}
-              />
-              <Box
-                position="absolute"
-                top="-6px"
-                right="12px"
-                w="10px"
-                h="10px"
-                bg="bauhaus.blue"
-                transform="rotate(45deg)"
-                border="2px solid"
-                borderColor="bauhaus.black"
-                zIndex={1}
-              />
-              <Box
-                position="absolute"
-                bottom="-8px"
-                right="40px"
-                w={0}
-                h={0}
-                borderLeft="7px solid transparent"
-                borderRight="7px solid transparent"
-                borderBottom="12px solid"
-                borderBottomColor="bauhaus.green"
-                zIndex={1}
-              />
+              {/* Geometric flourishes — circle, diamond, triangle. These are
+                  pure Bauhaus exuberance; Midnight stays restrained, so we hide
+                  the whole group when the corner ornament token is absent. */}
+              {!isDarkTheme && (
+                <>
+                  <Box
+                    position="absolute"
+                    top="-8px"
+                    left="10px"
+                    w="12px"
+                    h="12px"
+                    bg="accent.primary"
+                    borderRadius="full"
+                    border="2px solid"
+                    borderColor="border.default"
+                    zIndex={1}
+                  />
+                  <Box
+                    position="absolute"
+                    top="-6px"
+                    right="12px"
+                    w="10px"
+                    h="10px"
+                    bg="accent.secondary"
+                    transform="rotate(45deg)"
+                    border="2px solid"
+                    borderColor="border.default"
+                    zIndex={1}
+                  />
+                  <Box
+                    position="absolute"
+                    bottom="-8px"
+                    right="40px"
+                    w={0}
+                    h={0}
+                    borderLeft="7px solid transparent"
+                    borderRight="7px solid transparent"
+                    borderBottom="12px solid"
+                    borderBottomColor="status.success.fg"
+                    zIndex={1}
+                  />
+                </>
+              )}
 
               <Button
                 w="full"
-                bg="bauhaus.yellow"
-                color="bauhaus.black"
+                bg="accent.highlight"
+                color="accentFg.highlight"
                 border="3px solid"
-                borderColor="bauhaus.black"
-                boxShadow="4px 4px 0px 0px #121212"
+                borderColor="border.default"
+                boxShadow="card"
                 fontWeight="900"
                 textTransform="uppercase"
                 letterSpacing="wider"
                 py={6}
                 _hover={{
-                  bg: "bauhaus.yellow",
+                  bg: "accent.highlight",
+                  opacity: 0.9,
                   transform: "translateY(-2px)",
-                  boxShadow: "6px 6px 0px 0px #121212",
+                  boxShadow: "cardHover",
                 }}
                 _active={{
                   transform: "translate(2px, 2px)",

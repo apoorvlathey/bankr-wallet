@@ -31,10 +31,11 @@ import {
 import { useNetworks } from "@/contexts/NetworksContext";
 import { NetworksInfo } from "@/types";
 import type { AccountType } from "@/chrome/types";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
 import { getChainConfig } from "@/constants/chainConfig";
 import ChainIcon from "@/components/ChainIcon";
 import { getVisibleChains } from "@/lib/chains";
+import { ThemedCard, Decorator } from "@/theme";
 import EditChain from "./EditChain";
 import AddChain from "./AddChain";
 
@@ -66,26 +67,18 @@ function Chain({
   const rpcDisplay = getRpcDisplay(network.rpcUrl);
 
   return (
-    <Box
-      bg={network.hidden ? "bg.muted" : "bauhaus.white"}
-      border="3px solid"
-      borderColor="bauhaus.black"
-      boxShadow={network.hidden ? "none" : "4px 4px 0px 0px #121212"}
+    <ThemedCard
+      weight="medium"
+      variant={network.hidden ? "sunken" : "default"}
       p={2.5}
       opacity={network.hidden ? 0.72 : 1}
       position="relative"
-      transition="all 0.2s ease-out"
     >
-      {/* Corner decoration */}
-      <Box
-        position="absolute"
-        top="-3px"
-        right="-3px"
-        w="8px"
-        h="8px"
-        bg={network.isCustom ? "bauhaus.yellow" : config.bg || "bauhaus.blue"}
-        border="2px solid"
-        borderColor="bauhaus.black"
+      {/* Corner decoration — accent depends on chain type */}
+      <Decorator
+        corner="top-right"
+        accent={network.isCustom ? "highlight" : "secondary"}
+        {...(!network.isCustom && config.bg ? { bg: config.bg } : {})}
       />
 
       <VStack align="stretch" spacing={2}>
@@ -97,9 +90,9 @@ function Chain({
           _hover={{ opacity: 0.88 }}
         >
           <Box
-            bg="bauhaus.white"
+            bg="surface.raised"
             border="2px solid"
-            borderColor="bauhaus.black"
+            borderColor="border.default"
             p={1.5}
             flexShrink={0}
           >
@@ -112,10 +105,10 @@ function Chain({
               </Text>
               <Badge
                 fontSize="2xs"
-                bg="bauhaus.black"
-                color="bauhaus.white"
+                bg="fg.primary"
+                color="surface.raised"
                 border="1px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
                 fontWeight="700"
                 px={1.5}
               >
@@ -124,10 +117,10 @@ function Chain({
               {isActive && (
                 <Badge
                   fontSize="2xs"
-                  bg="bauhaus.blue"
-                  color="bauhaus.white"
+                  bg="accent.secondary"
+                  color="accentFg.secondary"
                   border="1px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   fontWeight="700"
                   px={1.5}
                 >
@@ -137,10 +130,10 @@ function Chain({
               {network.isCustom && (
                 <Badge
                   fontSize="2xs"
-                  bg="bauhaus.yellow"
-                  color="bauhaus.black"
+                  bg="accent.highlight"
+                  color="accentFg.highlight"
                   border="1px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   fontWeight="700"
                   px={1.5}
                 >
@@ -150,10 +143,10 @@ function Chain({
               {network.hidden && (
                 <Badge
                   fontSize="2xs"
-                  bg="bauhaus.white"
+                  bg="surface.raised"
                   color="text.secondary"
                   border="1px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   fontWeight="700"
                   px={1.5}
                 >
@@ -196,7 +189,7 @@ function Chain({
                 icon={<DeleteIcon />}
                 size="xs"
                 variant="ghost"
-                color="bauhaus.red"
+                color="accent.primary"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete();
@@ -215,7 +208,7 @@ function Chain({
           </HStack>
         </HStack>
       </VStack>
-    </Box>
+    </ThemedCard>
   );
 }
 
@@ -231,7 +224,7 @@ function Chains({
   onChainSaved?: (chain: { chainName: string; chainId: number }) => void;
 }) {
   const { networksInfo, setNetworksInfo } = useNetworks();
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
 
   const [tab, setTab] = useState<React.ReactElement>();
   const [pendingInitialEditChainName, setPendingInitialEditChainName] = useState(initialEditChainName);
@@ -454,13 +447,14 @@ function Chains({
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search chains"
           border="3px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           borderRadius="0"
-          bg="bauhaus.white"
+          bg="surface.raised"
+          color="fg.primary"
           fontWeight="600"
           pl={10}
-          _hover={{ borderColor: "bauhaus.black" }}
-          _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+          _hover={{ borderColor: "border.default" }}
+          _focus={{ borderColor: "border.focus", boxShadow: "none" }}
         />
       </InputGroup>
 
@@ -504,18 +498,11 @@ function Chains({
             />
           ))}
         {filteredChainEntries.length === 0 && (
-          <Box
-            bg="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
-            px={4}
-            py={5}
-          >
+          <ThemedCard weight="medium" px={4} py={5}>
             <Text fontSize="sm" fontWeight="700" color="text.secondary" textAlign="center">
               No chains match "{search.trim()}".
             </Text>
-          </Box>
+          </ThemedCard>
         )}
       </VStack>
 
@@ -527,32 +514,27 @@ function Chains({
       >
         <AlertDialogOverlay>
           <AlertDialogContent
-            bg="bauhaus.white"
+            bg="surface.raised"
             border="3px solid"
-            borderColor="bauhaus.black"
+            borderColor="border.default"
             borderRadius="0"
-            boxShadow="6px 6px 0px 0px #121212"
+            boxShadow="cardHover"
           >
-            <AlertDialogHeader fontWeight="900" textTransform="uppercase">
+            <AlertDialogHeader
+              fontWeight="900"
+              textTransform="uppercase"
+              color="fg.primary"
+            >
               Delete Chain
             </AlertDialogHeader>
-            <AlertDialogBody>
+            <AlertDialogBody color="text.secondary">
               Remove <strong>{chainToDelete}</strong> from your networks? This cannot be undone.
             </AlertDialogBody>
             <AlertDialogFooter gap={2}>
               <Button ref={cancelRef} variant="secondary" onClick={onClose}>
                 Cancel
               </Button>
-              <Button
-                bg="bauhaus.red"
-                color="bauhaus.white"
-                border="2px solid"
-                borderColor="bauhaus.black"
-                borderRadius="0"
-                fontWeight="700"
-                _hover={{ opacity: 0.9 }}
-                onClick={doDelete}
-              >
+              <Button variant="danger" onClick={doDelete}>
                 Delete
               </Button>
             </AlertDialogFooter>

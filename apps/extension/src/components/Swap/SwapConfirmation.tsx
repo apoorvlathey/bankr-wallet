@@ -27,9 +27,14 @@ import CalldataDecoder from "@/components/CalldataDecoder";
 import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
+import { useTheme } from "@/theme";
 
-// Bauhaus accent colors for call cards (matches BatchTransactionConfirmation)
-const CALL_ACCENTS = ["bauhaus.red", "bauhaus.blue", "bauhaus.yellow"];
+// Theme-aware accent stripes for the per-call cards. Mirrors the cycle used
+// by BatchTransactionConfirmation so a multi-step swap reads as the same kind
+// of "stack of independent calls" in either palette (Bauhaus red/blue/yellow,
+// Midnight indigo/cyan/amber).
+const CALL_ACCENTS = ["accent.primary", "accent.secondary", "accent.highlight"];
+const CALL_ACCENT_FGS = ["accentFg.primary", "accentFg.secondary", "accentFg.highlight"];
 
 interface SwapConfirmationProps {
   transactions: SwapTxEntry[];
@@ -104,6 +109,8 @@ function SwapConfirmation({
   isSubmitting,
 }: SwapConfirmationProps) {
   const config = getChainConfig(chainId);
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const [expandedCalls, setExpandedCalls] = useState<Set<number>>(new Set());
   const [decodedFunctionNames, setDecodedFunctionNames] = useState<Record<number, string>>({});
 
@@ -144,11 +151,14 @@ function SwapConfirmation({
       p={3}
       h="100%"
       overflowY="auto"
-      bg="bg.base"
+      bg="surface.base"
       css={{
         "&::-webkit-scrollbar": { width: "4px" },
         "&::-webkit-scrollbar-track": { background: "transparent" },
-        "&::-webkit-scrollbar-thumb": { background: "#ccc", borderRadius: "2px" },
+        "&::-webkit-scrollbar-thumb": {
+          background: "var(--chakra-colors-border-strong)",
+          borderRadius: "2px",
+        },
       }}
     >
       <VStack spacing={2} align="stretch">
@@ -165,31 +175,35 @@ function SwapConfirmation({
           />
         </HStack>
 
-        {/* Title banner */}
+        {/* Title banner — cool secondary accent (Bauhaus blue / Midnight cyan)
+            with a Bauhaus-only warm corner ornament. Mirrors the title-banner
+            pattern used by BatchTransactionConfirmation. */}
         <Box
-          bg="bauhaus.blue"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
+          bg="accent.secondary"
+          border="2px solid"
+          borderColor="border.default"
+          boxShadow="card"
           py={1.5}
           px={3}
           position="relative"
         >
-          <Box
-            position="absolute"
-            top="-3px"
-            right="-3px"
-            w="8px"
-            h="8px"
-            bg="bauhaus.yellow"
-            border="2px solid"
-            borderColor="bauhaus.black"
-          />
+          {!isDarkTheme && (
+            <Box
+              position="absolute"
+              top="-3px"
+              right="-3px"
+              w="8px"
+              h="8px"
+              bg="accent.highlight"
+              border="2px solid"
+              borderColor="border.default"
+            />
+          )}
           <HStack justify="center" spacing={2}>
             <Text
               fontWeight="900"
               fontSize="sm"
-              color="white"
+              color="accentFg.secondary"
               textTransform="uppercase"
               letterSpacing="wider"
             >
@@ -197,10 +211,10 @@ function SwapConfirmation({
             </Text>
             {isBatched && (
               <Badge
-                bg="bauhaus.yellow"
-                color="bauhaus.black"
+                bg="accent.highlight"
+                color="accentFg.highlight"
                 border="1.5px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
                 fontSize="2xs"
                 fontWeight="900"
                 px={1.5}
@@ -213,10 +227,10 @@ function SwapConfirmation({
 
         {/* Swap summary card */}
         <Box
-          bg="bauhaus.white"
+          bg="surface.raised"
           border="2px solid"
-          borderColor="bauhaus.black"
-          boxShadow="2px 2px 0px 0px #121212"
+          borderColor="border.default"
+          boxShadow="card"
           overflow="hidden"
         >
           {/* Sell row */}
@@ -224,7 +238,7 @@ function SwapConfirmation({
             {sellToken.logoUrl ? (
               <Image src={sellToken.logoUrl} boxSize="32px" borderRadius="full" flexShrink={0} />
             ) : (
-              <Box boxSize="32px" borderRadius="full" bg="gray.200" flexShrink={0} />
+              <Box boxSize="32px" borderRadius="full" bg="surface.sunken" flexShrink={0} />
             )}
             <VStack spacing={0} align="flex-start" flex={1} minW={0}>
               <Text fontSize="xs" color="text.tertiary" fontWeight="700" textTransform="uppercase">
@@ -250,15 +264,15 @@ function SwapConfirmation({
               left={0}
               right={0}
               h="1px"
-              bg="gray.200"
+              bg="border.subtle"
             />
-            {/* Arrow circle */}
+            {/* Arrow circle — cool secondary accent in either palette */}
             <Box
               position="absolute"
               top="50%"
               left="50%"
               transform="translate(-50%, -50%)"
-              bg="bauhaus.blue"
+              bg="accent.secondary"
               borderRadius="full"
               w="28px"
               h="28px"
@@ -266,10 +280,10 @@ function SwapConfirmation({
               alignItems="center"
               justifyContent="center"
               border="2px solid"
-              borderColor="bauhaus.black"
+              borderColor="border.default"
               zIndex={1}
             >
-              <ArrowDownIcon boxSize={4} color="white" />
+              <ArrowDownIcon boxSize={4} color="accentFg.secondary" />
             </Box>
           </Box>
 
@@ -278,7 +292,7 @@ function SwapConfirmation({
             {buyTokenLogoURI ? (
               <Image src={buyTokenLogoURI} boxSize="32px" borderRadius="full" flexShrink={0} />
             ) : (
-              <Box boxSize="32px" borderRadius="full" bg="gray.200" flexShrink={0} />
+              <Box boxSize="32px" borderRadius="full" bg="surface.sunken" flexShrink={0} />
             )}
             <VStack spacing={0} align="flex-start" flex={1} minW={0}>
               <Text fontSize="xs" color="text.tertiary" fontWeight="700" textTransform="uppercase">
@@ -301,7 +315,7 @@ function SwapConfirmation({
             py={2}
             justify="space-between"
             borderTop="1px solid"
-            borderColor="gray.200"
+            borderColor="border.subtle"
           >
             <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
               Network
@@ -311,7 +325,7 @@ function SwapConfirmation({
               bg={config.bg}
               color={config.text}
               border="1.5px solid"
-              borderColor="bauhaus.black"
+              borderColor="border.default"
               fontWeight="700"
               px={2}
               py={0.5}
@@ -333,6 +347,7 @@ function SwapConfirmation({
 
           {transactions.map((entry, i) => {
             const accent = CALL_ACCENTS[i % CALL_ACCENTS.length];
+            const accentFg = CALL_ACCENT_FGS[i % CALL_ACCENT_FGS.length];
             const isExpanded = expandedCalls.has(i);
             const hasCalldata = entry.tx.data && entry.tx.data !== "0x";
             const hasValue = entry.tx.value && entry.tx.value !== "0x0" && entry.tx.value !== "0x";
@@ -342,10 +357,10 @@ function SwapConfirmation({
               <Box
                 key={i}
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
                 borderLeftWidth="4px"
                 borderLeftColor={accent}
-                bg="bauhaus.white"
+                bg="surface.raised"
                 overflow="hidden"
               >
                 {/* Collapsed header */}
@@ -354,18 +369,18 @@ function SwapConfirmation({
                   py={2}
                   cursor="pointer"
                   onClick={() => toggleCall(i)}
-                  _hover={{ bg: "bg.muted" }}
+                  _hover={{ bg: "surface.raisedHover" }}
                   transition="background 0.1s"
                 >
                   <Badge
                     bg={accent}
-                    color={accent === "bauhaus.yellow" ? "bauhaus.black" : "white"}
+                    color={accentFg}
                     fontSize="2xs"
                     fontWeight="800"
                     px={1.5}
                     py={0}
                     border="1px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                     minW="20px"
                     textAlign="center"
                   >
@@ -384,13 +399,14 @@ function SwapConfirmation({
                   />
                 </HStack>
 
-                {/* Expanded content */}
+                {/* Expanded content — explicit borderTop per row so dividers
+                    don't inherit currentColor via Chakra's `divider` prop. */}
                 <Collapse in={isExpanded} animateOpacity>
                   <VStack
                     spacing={0}
-                    divider={<Box h="1px" bg="gray.200" w="full" />}
+                    align="stretch"
                     borderTop="1px solid"
-                    borderColor="gray.200"
+                    borderColor="border.subtle"
                   >
                     {/* To */}
                     <HStack w="full" py={1.5} px={3} justify="space-between">
@@ -401,9 +417,10 @@ function SwapConfirmation({
                         spacing={0.5}
                         px={1.5}
                         py={0.5}
-                        bg="bauhaus.white"
+                        bg="surface.raised"
                         border="1.5px solid"
-                        borderColor="bauhaus.black"
+                        borderColor="border.default"
+                        borderRadius="md"
                       >
                         <Text fontSize="xs" color="text.primary" fontFamily="mono" fontWeight="700">
                           {entry.tx.to.slice(0, 6)}...{entry.tx.to.slice(-4)}
@@ -421,7 +438,7 @@ function SwapConfirmation({
                             onClick={() =>
                               window.open(`${config.explorer}/address/${entry.tx.to}`, "_blank")
                             }
-                            _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                            _hover={{ color: "accent.secondary", bg: "surface.sunken" }}
                           />
                         )}
                       </HStack>
@@ -429,7 +446,14 @@ function SwapConfirmation({
 
                     {/* Value */}
                     {hasValue && (
-                      <HStack w="full" py={1.5} px={3} justify="space-between">
+                      <HStack
+                        w="full"
+                        py={1.5}
+                        px={3}
+                        justify="space-between"
+                        borderTop="1px solid"
+                        borderColor="border.subtle"
+                      >
                         <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
                           Value
                         </Text>
@@ -441,7 +465,13 @@ function SwapConfirmation({
 
                     {/* Calldata */}
                     {hasCalldata && (
-                      <Box w="full" px={2} py={1.5}>
+                      <Box
+                        w="full"
+                        px={2}
+                        py={1.5}
+                        borderTop="1px solid"
+                        borderColor="border.subtle"
+                      >
                         <CalldataDecoder
                           calldata={entry.tx.data}
                           to={entry.tx.to}
@@ -468,7 +498,7 @@ function SwapConfirmation({
         <Box
           position="sticky"
           bottom={-3}
-          bg="bg.base"
+          bg="surface.base"
           pt={1}
           pb={1}
           mx={-3}
@@ -479,12 +509,12 @@ function SwapConfirmation({
             <HStack
               justify="center"
               py={3}
-              bg="bauhaus.blue"
-              border="3px solid"
-              borderColor="bauhaus.black"
+              bg="accent.secondary"
+              border="2px solid"
+              borderColor="border.default"
             >
-              <Spinner size="sm" color="white" />
-              <Text fontSize="sm" color="white" fontWeight="700" textTransform="uppercase">
+              <Spinner size="sm" color="accentFg.secondary" />
+              <Text fontSize="sm" color="accentFg.secondary" fontWeight="700" textTransform="uppercase">
                 Submitting swap...
               </Text>
             </HStack>
@@ -493,7 +523,7 @@ function SwapConfirmation({
               <Button variant="secondary" flex={1} onClick={onCancel}>
                 Cancel
               </Button>
-              <Button variant="yellow" flex={1} onClick={onConfirm}>
+              <Button variant="highlight" flex={1} onClick={onConfirm}>
                 Confirm Swap
               </Button>
             </HStack>

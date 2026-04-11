@@ -183,7 +183,7 @@ function EditChain({
           }}
           isInvalid={isChainNameNotUnique}
           isReadOnly={!isCustom}
-          bg={!isCustom ? "bg.muted" : undefined}
+          bg={!isCustom ? "surface.sunken" : undefined}
           color={!isCustom ? "text.tertiary" : undefined}
           cursor={!isCustom ? "not-allowed" : undefined}
           opacity={!isCustom ? 0.7 : 1}
@@ -194,7 +194,7 @@ function EditChain({
           </Text>
         )}
         {isChainNameNotUnique && (
-          <Text fontSize="xs" color="bauhaus.red" mt={1} fontWeight="700">
+          <Text fontSize="xs" color="accent.primary" mt={1} fontWeight="700">
             Chain name already exists
           </Text>
         )}
@@ -226,7 +226,7 @@ function EditChain({
           placeholder="Chain ID"
           value={chainId}
           isReadOnly
-          bg="bg.muted"
+          bg="surface.sunken"
           color="text.tertiary"
           cursor="not-allowed"
           opacity={0.7}
@@ -275,7 +275,14 @@ function EditChain({
       )}
 
       {rpcWarning && (
-        <Alert status="warning" borderRadius="0" border="2px solid" borderColor="bauhaus.black" py={2} px={3}>
+        <Alert
+          status="warning"
+          borderRadius="0"
+          border="2px solid"
+          borderColor="border.default"
+          py={2}
+          px={3}
+        >
           <WarningTwoIcon mr={2} flexShrink={0} />
           <Text fontSize="xs" fontWeight="600">{rpcWarning}</Text>
         </Alert>
@@ -286,17 +293,7 @@ function EditChain({
           Cancel
         </Button>
         {forceAllowed ? (
-          <Button
-            bg="bauhaus.yellow"
-            color="bauhaus.black"
-            border="2px solid"
-            borderColor="bauhaus.black"
-            borderRadius="0"
-            fontWeight="700"
-            flex={1}
-            onClick={forceSave}
-            _hover={{ opacity: 0.9 }}
-          >
+          <Button variant="highlight" flex={1} onClick={forceSave}>
             Force Save
           </Button>
         ) : (

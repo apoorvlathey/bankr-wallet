@@ -42,7 +42,7 @@ export function ArrayParam({ value, type, chainId }: ArrayParamProps) {
 
       {/* Expanded items */}
       <Collapse in={isOpen} animateOpacity>
-        <Box pl={3} borderLeft="2px solid" borderColor="bauhaus.black" w="full">
+        <Box pl={3} borderLeft="2px solid" borderColor="border.default" w="full">
           <VStack align="start" spacing={1.5} w="full">
             {value.map((item, i) => {
               const indexedItem = {

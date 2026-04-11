@@ -12,7 +12,7 @@ import {
   Spacer,
   Image,
 } from "@chakra-ui/react";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
 import { ArrowBackIcon, ChevronLeftIcon, ChevronRightIcon } from "@chakra-ui/icons";
 import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
 import { getChainConfig } from "@/constants/chainConfig";
@@ -23,6 +23,7 @@ import ChainIcon from "@/components/ChainIcon";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
+import { useTheme, useStripTokens, useIconChipBg } from "@/theme";
 
 interface SignatureRequestConfirmationProps {
   sigRequest: PendingSignatureRequest;
@@ -39,8 +40,8 @@ interface SignatureRequestConfirmationProps {
 
 const scrollStyles = {
   "&::-webkit-scrollbar": { width: "6px" },
-  "&::-webkit-scrollbar-track": { background: "#E0E0E0" },
-  "&::-webkit-scrollbar-thumb": { background: "#121212" },
+  "&::-webkit-scrollbar-track": { background: "var(--chakra-colors-bg-muted)" },
+  "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-default)" },
 };
 
 function getMethodDisplayName(method: string): string {
@@ -116,25 +117,30 @@ function formatSignatureData(method: string, params: any[]): { message: string; 
 
 /** Tabbed Message / Raw display for personal_sign and eth_sign */
 function MessageDataDisplay({ message, rawData }: { message: string; rawData: string }) {
+  const { tokens } = useTheme();
+  // Same theme-aware tab strip pair as CalldataDecoder — see useStripTokens.
+  const { bg: tabActiveBg, fg: tabActiveFg } = useStripTokens();
   const [tab, setTab] = useState<"message" | "raw">("message");
 
   const copyValue = tab === "message" ? message : rawData;
 
   return (
     <Box
-      bg="bauhaus.white"
-      border="2px solid"
-      borderColor="bauhaus.black"
-      boxShadow="4px 4px 0px 0px #121212"
+      bg="surface.raised"
+      border={tokens.borders.thin}
+      borderColor="border.default"
+      borderRadius="lg"
+      boxShadow="card"
+      overflow="hidden"
     >
       {/* Tab header */}
-      <HStack p={0} borderBottom="2px solid" borderColor="bauhaus.black" spacing={0}>
+      <HStack p={0} borderBottom={tokens.borders.thin} borderColor="border.default" spacing={0}>
         <Box
           flex={1}
           py={2}
           px={3}
           cursor="pointer"
-          bg={tab === "message" ? "bauhaus.black" : "transparent"}
+          bg={tab === "message" ? tabActiveBg : "transparent"}
           onClick={() => setTab("message")}
         >
           <Text
@@ -143,18 +149,18 @@ function MessageDataDisplay({ message, rawData }: { message: string; rawData: st
             textTransform="uppercase"
             letterSpacing="wide"
             textAlign="center"
-            color={tab === "message" ? "bauhaus.white" : "text.secondary"}
+            color={tab === "message" ? tabActiveFg : "text.secondary"}
           >
             Message
           </Text>
         </Box>
-        <Box w="2px" bg="bauhaus.black" alignSelf="stretch" />
+        <Box w="2px" bg="border.default" alignSelf="stretch" />
         <Box
           flex={1}
           py={2}
           px={3}
           cursor="pointer"
-          bg={tab === "raw" ? "bauhaus.black" : "transparent"}
+          bg={tab === "raw" ? tabActiveBg : "transparent"}
           onClick={() => setTab("raw")}
         >
           <Text
@@ -163,7 +169,7 @@ function MessageDataDisplay({ message, rawData }: { message: string; rawData: st
             textTransform="uppercase"
             letterSpacing="wide"
             textAlign="center"
-            color={tab === "raw" ? "bauhaus.white" : "text.secondary"}
+            color={tab === "raw" ? tabActiveFg : "text.secondary"}
           >
             Raw
           </Text>
@@ -179,9 +185,10 @@ function MessageDataDisplay({ message, rawData }: { message: string; rawData: st
         {message ? (
           <Box
             p={3}
-            bg="#EEF2FF"
-            border="2px solid"
-            borderColor="bauhaus.black"
+            bg="status.info.bg"
+            border={tokens.borders.thin}
+            borderColor="border.default"
+            borderRadius="md"
             maxH="200px"
             overflowY="auto"
             css={scrollStyles}
@@ -201,9 +208,10 @@ function MessageDataDisplay({ message, rawData }: { message: string; rawData: st
       <Box p={3} display={tab === "raw" ? "block" : "none"}>
         <Box
           p={3}
-          bg="#EEF2FF"
-          border="2px solid"
-          borderColor="bauhaus.black"
+          bg="status.info.bg"
+          border={tokens.borders.thin}
+          borderColor="border.default"
+          borderRadius="md"
           maxH="200px"
           overflowY="auto"
           css={scrollStyles}
@@ -229,7 +237,12 @@ function SignatureRequestConfirmation({
   onNavigate,
   onConfirmed,
 }: SignatureRequestConfirmationProps) {
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
+  const { themeId, tokens } = useTheme();
+  const isDarkTheme = themeId === "midnight";
+  // Same theme-aware count badge pair as TransactionConfirmation — see useStripTokens.
+  const { bg: stripBg, fg: stripFg } = useStripTokens();
+  const iconChipBg = useIconChipBg();
   const { networksInfo } = useNetworks();
   const { signature, origin, chainName, favicon } = sigRequest;
   const resolvedChain = getResolvedChainById(signature.chainId, networksInfo);
@@ -300,10 +313,10 @@ function SignatureRequestConfirmation({
   };
 
   return (
-    <Box pt={1} px={3} pb={3} h="100%" overflowY="auto" overflowX="hidden" bg="bg.base" css={{
+    <Box pt={1} px={3} pb={3} h="100%" overflowY="auto" overflowX="hidden" bg="surface.base" css={{
       "&::-webkit-scrollbar": { width: "4px" },
       "&::-webkit-scrollbar-track": { background: "transparent" },
-      "&::-webkit-scrollbar-thumb": { background: "#ccc", borderRadius: "2px" },
+      "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-strong)", borderRadius: "2px" },
     }}>
       <VStack spacing={2} align="stretch">
         {/* Top row - Back button, navigation, Reject All */}
@@ -313,9 +326,9 @@ function SignatureRequestConfirmation({
             aria-label="Back"
             icon={<ArrowBackIcon />}
             variant="ghost"
-            size="sm"
+            size="md"
+            px={2}
             onClick={onBack}
-            minW="auto"
           />
 
           {/* Center - Navigation (absolutely positioned for true centering) */}
@@ -339,8 +352,8 @@ function SignatureRequestConfirmation({
                 p={1}
               />
               <Badge
-                bg="bauhaus.black"
-                color="bauhaus.white"
+                bg={stripBg}
+                color={stripFg}
                 fontSize="xs"
                 px={3}
                 py={1}
@@ -366,12 +379,14 @@ function SignatureRequestConfirmation({
           {/* Right - Reject All */}
           <Spacer />
           {totalCount > 1 && (
+            // chart.negative is RED in BOTH themes — status.error.fg is WHITE
+            // in Bauhaus and would render invisibly here.
             <Button
               size="xs"
               variant="ghost"
-              color="bauhaus.red"
+              color="chart.negative"
               fontWeight="700"
-              _hover={{ bg: "bauhaus.red", color: "white" }}
+              _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
               onClick={onCancelAll}
               px={2}
             >
@@ -380,53 +395,63 @@ function SignatureRequestConfirmation({
           )}
         </Flex>
 
-        {/* Title row with red background */}
+        {/* Title row — accent.primary (red in Bauhaus) signals "high stakes" */}
         <Box
-          bg="bauhaus.red"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
+          bg="accent.primary"
+          border={tokens.borders.medium}
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
           py={3}
           px={4}
           position="relative"
         >
-          <Box
-            position="absolute"
-            top="-3px"
-            right="-3px"
-            w="0"
-            h="0"
-            borderLeft="6px solid transparent"
-            borderRight="6px solid transparent"
-            borderBottom="12px solid"
-            borderBottomColor="bauhaus.yellow"
-          />
-          <Text fontWeight="900" fontSize="lg" color="white" textAlign="center" textTransform="uppercase" letterSpacing="wider">
+          {/* Bauhaus exuberance — Midnight drops the corner triangle */}
+          {!isDarkTheme && (
+            <Box
+              position="absolute"
+              top="-3px"
+              right="-3px"
+              w="0"
+              h="0"
+              borderLeft="6px solid transparent"
+              borderRight="6px solid transparent"
+              borderBottom="12px solid"
+              borderBottomColor="accent.highlight"
+            />
+          )}
+          <Text fontWeight="900" fontSize="lg" color="accentFg.primary" textAlign="center" textTransform="uppercase" letterSpacing="wider">
             Signature Request
           </Text>
         </Box>
 
         {/* Request Info Card */}
         <Box
-          bg="bauhaus.white"
-          border="2px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
+          bg="surface.raised"
+          border={tokens.borders.thin}
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
+          overflow="hidden"
           position="relative"
         >
-          {/* Corner decoration */}
-          <Box
-            position="absolute"
-            top="-2px"
-            right="-2px"
-            w="8px"
-            h="8px"
-            bg="bauhaus.blue"
-            border="1.5px solid"
-            borderColor="bauhaus.black"
-          />
+          {/* Corner decoration — Bauhaus exuberance only */}
+          {!isDarkTheme && (
+            <Box
+              position="absolute"
+              top="-2px"
+              right="-2px"
+              w="8px"
+              h="8px"
+              bg="accent.secondary"
+              border="1.5px solid"
+              borderColor="border.default"
+            />
+          )}
 
-          <VStack spacing={0} divider={<Box h="1px" bg="gray.300" w="full" />}>
+          {/* Rows use explicit borderTop instead of VStack's `divider` prop
+              — see BatchTransactionConfirmation info card for the rationale. */}
+          <VStack spacing={0} align="stretch">
             {/* Origin */}
             <HStack w="full" py={2} px={3} justify="space-between">
               <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
@@ -434,9 +459,9 @@ function SignatureRequestConfirmation({
               </Text>
               <HStack spacing={1.5}>
                 <Box
-                  bg="gray.100"
+                  bg={iconChipBg}
                   border="1.5px solid"
-                  borderColor="gray.300"
+                  borderColor="border.subtle"
                   borderRadius="md"
                   p={0.5}
                   display="flex"
@@ -458,7 +483,7 @@ function SignatureRequestConfirmation({
                         target.src = googleFallback;
                       }
                     }}
-                    fallback={<Box boxSize="14px" bg="gray.300" borderRadius="sm" />}
+                    fallback={<Box boxSize="14px" bg="bg.muted" borderRadius="sm" />}
                   />
                 </Box>
                 <Text fontSize="xs" fontWeight="700" color="text.primary">
@@ -469,7 +494,14 @@ function SignatureRequestConfirmation({
 
             {/* From */}
             {signerAddress && (
-              <HStack w="full" py={2} px={3} justify="space-between">
+              <HStack
+                w="full"
+                py={2}
+                px={3}
+                justify="space-between"
+                borderTop="1px solid"
+                borderColor="border.subtle"
+              >
                 <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
                   From
                 </Text>
@@ -478,7 +510,14 @@ function SignatureRequestConfirmation({
             )}
 
             {/* Network */}
-            <HStack w="full" py={2} px={3} justify="space-between">
+            <HStack
+              w="full"
+              py={2}
+              px={3}
+              justify="space-between"
+              borderTop="1px solid"
+              borderColor="border.subtle"
+            >
               <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
                 Network
               </Text>
@@ -494,10 +533,10 @@ function SignatureRequestConfirmation({
                 return (
                   <Badge
                     fontSize="xs"
-                    bg={badgeChain.isCustom ? "bauhaus.white" : badgeChain.bg}
-                    color={badgeChain.isCustom ? "bauhaus.black" : badgeChain.text}
+                    bg={badgeChain.isCustom ? "surface.raised" : badgeChain.bg}
+                    color={badgeChain.isCustom ? "fg.primary" : badgeChain.text}
                     border="1.5px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                     fontWeight="700"
                     px={2}
                     py={0.5}
@@ -517,7 +556,14 @@ function SignatureRequestConfirmation({
             </HStack>
 
             {/* Method */}
-            <HStack w="full" py={2} px={3} justify="space-between">
+            <HStack
+              w="full"
+              py={2}
+              px={3}
+              justify="space-between"
+              borderTop="1px solid"
+              borderColor="border.subtle"
+            >
               <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
                 Method
               </Text>
@@ -525,11 +571,11 @@ function SignatureRequestConfirmation({
                 px={1.5}
                 py={0.5}
                 fontSize="xs"
-                bg="bauhaus.white"
+                bg="surface.raised"
                 color="text.primary"
                 fontFamily="mono"
                 border="1.5px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
                 fontWeight="700"
               >
                 {getMethodDisplayName(signature.method)}
@@ -549,7 +595,7 @@ function SignatureRequestConfirmation({
         <Box
           position="sticky"
           bottom={-3}
-          bg="bg.base"
+          bg="surface.base"
           pt={1}
           pb={3}
           mx={-3}
@@ -559,14 +605,15 @@ function SignatureRequestConfirmation({
           {/* Impersonator Info Box */}
           {accountType === "impersonator" && (
             <Box
-              bg="bauhaus.yellow"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="3px 3px 0px 0px #121212"
+              bg="accent.highlight"
+              border={tokens.borders.medium}
+              borderColor="border.default"
+              borderRadius="lg"
+              boxShadow="card"
               p={3}
               mb={2}
             >
-              <Text fontSize="sm" color="bauhaus.black" fontWeight="700">
+              <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
                 Connected via Impersonated account — signing is disabled.
               </Text>
             </Box>
@@ -584,25 +631,11 @@ function SignatureRequestConfirmation({
                 Reject
               </Button>
               <Button
+                variant="highlight"
                 flex={1}
                 onClick={handleConfirm}
                 isLoading={isSubmitting}
                 loadingText="Signing..."
-                bg="bauhaus.yellow"
-                color="bauhaus.black"
-                border="3px solid"
-                borderColor="bauhaus.black"
-                boxShadow="4px 4px 0px 0px #121212"
-                fontWeight="700"
-                _hover={{
-                  bg: "bauhaus.yellow",
-                  transform: "translateY(-2px)",
-                  boxShadow: "6px 6px 0px 0px #121212",
-                }}
-                _active={{
-                  transform: "translate(2px, 2px)",
-                  boxShadow: "none",
-                }}
               >
                 Sign
               </Button>

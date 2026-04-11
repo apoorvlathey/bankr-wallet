@@ -58,11 +58,11 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
           bg={showAddress ? "transparent" : "bg.muted"}
           color="text.tertiary"
           border="1px solid"
-          borderColor="gray.300"
+          borderColor="border.subtle"
           borderRadius={0}
           boxShadow="none"
           onClick={() => setShowAddress(!showAddress)}
-          _hover={{ borderColor: "bauhaus.black", boxShadow: "none" }}
+          _hover={{ borderColor: "border.default", boxShadow: "none" }}
           _active={{ transform: "translate(1px, 1px)", boxShadow: "none" }}
           title={showAddress ? "Show name" : "Show address"}
         >
@@ -76,7 +76,7 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
           src={avatar}
           boxSize="16px"
           border="1px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           objectFit="cover"
         />
       )}
@@ -86,7 +86,7 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
         <Text
           fontSize="xs"
           fontFamily="mono"
-          color="bauhaus.blue"
+          color="accent.secondary"
           fontWeight="700"
         >
           {displayText}
@@ -98,15 +98,15 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
         <Box
           px={1.5}
           py={0.5}
-          bg="bauhaus.blue"
+          bg="accent.secondary"
           border="1.5px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
         >
           <Text
             fontSize="9px"
             fontWeight="800"
             textTransform="uppercase"
-            color="white"
+            color="accentFg.secondary"
             letterSpacing="wide"
           >
             {labels[0]}
@@ -125,7 +125,7 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
               size="xs"
               variant="ghost"
               color="text.secondary"
-              _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+              _hover={{ color: "accent.secondary", bg: "bg.muted" }}
             />
           </Link>
         )}

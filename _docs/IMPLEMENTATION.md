@@ -15,6 +15,49 @@ This document describes the core architecture and transaction handling implement
 - [PK_ACCOUNTS.md](./PK_ACCOUNTS.md) - Private key accounts implementation (security, signing, storage)
 - [CHAT.md](./CHAT.md) - Chat feature implementation (AI conversations with Bankr agent)
 - [CALLDATA.md](./CALLDATA.md) - Calldata decoder UI (rich param components, type routing, unit conversion)
+- [STYLING.md](./STYLING.md) - Token vocabulary, theme authoring rules, design system
+- [THEMING_PRD.md](./THEMING_PRD.md) - Theme engine architecture, token contract, phased rollout history
+
+## Theme Engine
+
+As of v3.2.0 the extension ships a token-driven theme engine with two themes:
+**Bauhaus** (light, geometric, primary colors, hard shadows) and **Midnight**
+(dark, modern, soft luminous shadows, rounded corners). Users select a theme
+from Settings → Appearance; the choice persists in `chrome.storage.local` and
+does NOT sync across devices.
+
+**Architecture:**
+
+```
+apps/extension/src/theme/
+├── tokens.ts                # ThemeTokens interface — every theme satisfies this contract
+├── createTheme.ts           # Factory: tokens → Chakra extendTheme config (Button/Input/
+│                            #   Modal/Menu/Popover/Slider/Tooltip baseStyles)
+├── ThemeProvider.tsx        # React context + ChakraProvider wrapper, switches at runtime
+├── useThemeSelection.ts     # chrome.storage.local read/write
+├── useStripTokens.ts        # Shared dark CTA strip color pair (used in 8+ places)
+├── bootstrap.ts             # Pre-React paint sync to avoid theme flash
+├── themes/
+│   ├── bauhaus.ts           # Default theme
+│   └── midnight.ts          # Dark theme
+└── primitives/              # Theme-aware atoms (ThemedCard, ThemedField, IconBox, …)
+```
+
+**Pre-paint flow:** `index.tsx` and `onboarding.tsx` call `bootstrapThemeAttribute()`
+synchronously before React renders, which reads a localStorage mirror of the
+canonical `chrome.storage.local` selection and sets `<html data-theme=...>`.
+The CSS in `index.css` / `onboarding.css` uses theme-attribute selectors so
+the very first paint matches the user's choice — no flash of the wrong theme.
+
+**Component contract:** Components must consume **intent tokens** —
+`accent.primary`, `surface.raised`, `chart.numeric`, etc. — never theme-color
+literals or names like `bauhaus.red`. The factory translates tokens to a
+Chakra theme per the active `ThemeTokens` shape. To add a new theme, drop a
+file in `themes/` satisfying the contract and register it in `ThemeProvider.tsx`.
+Zero component edits.
+
+See `_docs/STYLING.md` for the full token vocabulary and authoring rules.
+See `_docs/THEMING_PRD.md` for the engine architecture and phased rollout history.
 
 ## Account Types
 

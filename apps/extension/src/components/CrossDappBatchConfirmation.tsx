@@ -46,6 +46,10 @@ function CrossDappBatchConfirmation({
   onNavigate,
 }: CrossDappBatchConfirmationProps) {
   const toast = useToast();
+  // Cross-dapp batch screen tints the page background so it's instantly
+  // distinguishable from a regular dapp batch confirmation. Sourced from
+  // status.warning.tint — Bauhaus = cornsilk wash, Midnight = recessed surface.
+  const pageBgColor = "status.warning.tint";
 
   // Build a synthetic PendingBatchTxRequest so we can reuse the existing batch
   // confirmation UI without forking it. The id and origin are placeholders —
@@ -158,7 +162,7 @@ function CrossDappBatchConfirmation({
       customRejectHandler={handleCustomReject}
       // Soft yellow tint so the cross-dapp batch screen is instantly
       // distinguishable from the standard dapp batch confirmation screen.
-      pageBgColor="#FFF8DC"
+      pageBgColor={pageBgColor}
     />
   );
 }

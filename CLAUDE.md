@@ -88,7 +88,7 @@ walletchan/
 | Arb Bot         | Node.js + viem          | —          | tsc        |
 | Contracts       | Solidity                | —          | Foundry    |
 
-**Design System**: Bauhaus - geometric, primary colors (Red #D02020, Blue #1040C0, Yellow #F0C020), hard shadows, thick borders. See `_docs/STYLING.md`.
+**Design System**: Token-driven theme engine. Two themes ship today — **Bauhaus** (light, geometric, primary colors, hard shadows, thick borders) and **Midnight** (dark, modern, soft luminous shadows, rounded corners). User picks one in Settings → Appearance. Components consume *intent* tokens (`accent.primary`, `surface.raised`, `chart.numeric`, etc.) — never theme-color literals. See `_docs/THEME.md` for the engine handbook (architecture, public API, authoring rules, recipes, how to add a new theme), `_docs/STYLING.md` for the full token vocabulary, and `_docs/THEMING_PRD.md` for the phased rollout history.
 
 ## Commands
 
@@ -179,6 +179,25 @@ apps/extension/src/
 │   └── Settings/
 ├── pages/
 │   └── Onboarding.tsx
+├── theme/                       # Theme engine (see _docs/THEME.md)
+│   ├── tokens.ts                # ThemeTokens interface — contract every theme satisfies
+│   ├── createTheme.ts           # Factory: tokens → Chakra theme (Button/Input/Modal/Menu/Popover/Slider configs)
+│   ├── ThemeProvider.tsx        # React context + ChakraProvider wrapper
+│   ├── useThemeSelection.ts     # Read/write selectedThemeId from chrome.storage.local
+│   ├── useStripTokens.ts        # Shared dark CTA strip color pair (used by tx/sig confirmations, chat header, etc.)
+│   ├── bootstrap.ts             # Pre-React paint sync to avoid theme flash
+│   ├── index.ts                 # Public API barrel (incl. primitives + useStripTokens re-exports)
+│   ├── themes/
+│   │   ├── bauhaus.ts           # Default theme (light, geometric)
+│   │   └── midnight.ts          # Dark theme
+│   └── primitives/              # Theme-aware atoms consumed by migrated screens
+│       ├── ThemedCard.tsx       # Surface card (default/raised/sunken + interactive)
+│       ├── ThemedPanel.tsx      # Larger-padding section container
+│       ├── ThemedField.tsx      # FormControl + Label + Input + helper/error
+│       ├── IconBox.tsx          # Bordered+shadowed icon square
+│       └── Decorator.tsx        # Theme-aware corner ornament (Bauhaus only)
+├── hooks/
+│   └── useThemedToast.tsx       # Theme-aware toast (replaces useBauhausToast — uses status accent tokens)
 └── App.tsx                   # Main popup app
 ```
 
@@ -206,6 +225,8 @@ When working on features, refer to these docs:
 | `_docs/SECURITY.md`                                      | Threat model, access control, pre-commit checklists       |
 | `_docs/CHAT.md`                                          | Chat interface to directly chat & prompt to bankr api     |
 | `_docs/STYLING.md`                                       | UI components, design tokens, Bauhaus system              |
+| `_docs/THEME.md`                                         | Theme engine handbook: architecture, public API, authoring rules, recipes, adding a new theme |
+| `_docs/THEMING_PRD.md`                                   | Theme engine PRD: ADR, design briefs, phased rollout history |
 | `_docs/WEBSITE.md`                                       | Website sections, layout specs, animations                |
 | `_docs/APPS.md`                                          | Apps page data source, fetch script, adding chains        |
 | `_docs/SWAP.md`                                          | Swap page: 0x API integration, fees, slippage, UI         |
@@ -234,7 +255,10 @@ When working on features, refer to these docs:
 - **EIP-6963**: Modern wallet discovery alongside legacy window.ethereum
 - **Shared contract constants**: `packages/shared/src/contracts.ts` is the single source of truth for `BASE_CHAIN_ID`, `BNKRW_TOKEN_ADDRESS`, `SBNKRW_VAULT_ADDRESS`, `BNKRW_POOL_ADDRESS`. Import via `@walletchan/shared/contracts`.
 - **Address display standard**: Whenever a `0x` address is shown in the UI, always include a **copy button** (CopyIcon/CheckIcon toggle) and a **view on explorer** link (ExternalLinkIcon, opens `${chainConfig.explorer}/address/${addr}`). See `TypedDataDisplay.tsx` `AddressValue` component for the reference pattern.
-- **Copy button feedback**: NEVER use toast notifications for copy actions — toasts block nearby buttons (e.g., Reject/Confirm on tx confirmation, Chat button on homepage). Instead, toggle the icon from `CopyIcon` → `CheckIcon` (with `bauhaus.yellow` color) for 2 seconds. Use the shared `CopyButton` component from `components/CopyButton.tsx` when possible. For inline copy buttons, follow the same pattern: `setCopied(true)` + `setTimeout(() => setCopied(false), 2000)`.
+- **Copy button feedback**: NEVER use toast notifications for copy actions — toasts block nearby buttons (e.g., Reject/Confirm on tx confirmation, Chat button on homepage). Instead, toggle the icon from `CopyIcon` → `CheckIcon` (with `accent.highlight` color) for 2 seconds. Use the shared `CopyButton` component from `components/CopyButton.tsx` when possible. For inline copy buttons, follow the same pattern: `setCopied(true)` + `setTimeout(() => setCopied(false), 2000)`.
+- **Token-driven theming**: Components must consume *intent* tokens (`accent.primary/secondary/highlight`, `surface.base/raised/sunken`, `fg.primary/secondary/muted/inverse`, `border.default/focus`, `status.success/warning/error/info.{bg,fg,border,tint}`, `chart.positive/negative/neutral/numeric`) — NEVER hardcoded hex literals or theme-specific names like `bauhaus.red`. The factory in `theme/createTheme.ts` translates intent tokens to a Chakra theme per the active `ThemeTokens` shape. To add a new theme: write `theme/themes/{name}.ts` satisfying the `ThemeTokens` interface, register it in `theme/ThemeProvider.tsx`. Zero component edits required. See `_docs/THEMING_PRD.md` for the full architecture.
+- **Reject All button color**: Use `chart.negative` (NOT `status.error.fg`) for any "destructive ghost button" text. `status.error.fg` is WHITE in Bauhaus (it pairs with the RED bg) and would render invisibly. `chart.negative` is RED in both themes.
+- **Dark CTA strip pattern**: For inverted bars (tx confirmation count badges, chat headers, "Add Token" CTAs, etc.), use `useStripTokens()` from `@/theme` which returns `{ bg, fg }` — Bauhaus paints a literal black bar with white text; Midnight uses recessed `surface.sunken` with primary fg text on top. Don't duplicate the `themeId === "midnight" ? ... : ...` ternary inline.
 
 ## Code Quality Guidelines
 

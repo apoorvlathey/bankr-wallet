@@ -32,7 +32,7 @@ import {
   ArrowBackIcon,
   RepeatIcon,
 } from "@chakra-ui/icons";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
 import type { Account, PasswordType, SeedGroup } from "@/chrome/types";
 import { resolveNameToAddress, isResolvableName } from "@/lib/ensUtils";
 import { isAddress } from "@ethersproject/address";
@@ -59,7 +59,7 @@ function AccountSettingsModal({
   onAccountUpdated,
   totalAccounts,
 }: AccountSettingsModalProps) {
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
   const [view, setView] = useState<ModalView>("settings");
   const [displayName, setDisplayName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -489,15 +489,9 @@ function AccountSettingsModal({
 
     return (
       <Modal isOpen={isOpen} onClose={handleClose} isCentered>
-        <ModalOverlay bg="blackAlpha.700" />
-        <ModalContent
-          bg="bauhaus.white"
-          border="4px solid"
-          borderColor="bauhaus.black"
-          borderRadius="0"
-          boxShadow="8px 8px 0px 0px #121212"
-          mx={4}
-        >
+        <ModalOverlay bg="surface.overlay" />
+        {/* Modal baseStyle paints bg/border/borderRadius/boxShadow from theme tokens. */}
+        <ModalContent mx={4}>
           <ModalHeader
             color="text.primary"
             fontSize="md"
@@ -523,13 +517,13 @@ function AccountSettingsModal({
                 <Box
                   w="full"
                   p={3}
-                  bg="bauhaus.yellow"
+                  bg="status.warning.bg"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="status.warning.border"
                 >
                   <HStack spacing={2}>
-                    <WarningTwoIcon color="bauhaus.black" />
-                    <Text color="bauhaus.black" fontSize="sm" fontWeight="700">
+                    <WarningTwoIcon color="status.warning.fg" />
+                    <Text color="status.warning.fg" fontSize="sm" fontWeight="700">
                       Unlock with master password to access
                     </Text>
                   </HStack>
@@ -564,18 +558,6 @@ function AccountSettingsModal({
                         setApiKeyErrors({});
                       }}
                       pr="3rem"
-                      bg="white"
-                      border="3px solid"
-                      borderColor={
-                        apiKeyErrors.apiKey ? "bauhaus.red" : "bauhaus.black"
-                      }
-                      borderRadius="0"
-                      _focus={{
-                        borderColor: apiKeyErrors.apiKey
-                          ? "bauhaus.red"
-                          : "bauhaus.blue",
-                        boxShadow: "none",
-                      }}
                     />
                     <InputRightElement>
                       <IconButton
@@ -589,7 +571,7 @@ function AccountSettingsModal({
                       />
                     </InputRightElement>
                   </InputGroup>
-                  <FormErrorMessage color="bauhaus.red" fontWeight="700">
+                  <FormErrorMessage color="chart.negative" fontWeight="700">
                     {apiKeyErrors.apiKey}
                   </FormErrorMessage>
                 </FormControl>
@@ -610,22 +592,8 @@ function AccountSettingsModal({
                       setWalletAddress(e.target.value);
                       setApiKeyErrors({});
                     }}
-                    bg="white"
-                    border="3px solid"
-                    borderColor={
-                      apiKeyErrors.walletAddress
-                        ? "bauhaus.red"
-                        : "bauhaus.black"
-                    }
-                    borderRadius="0"
-                    _focus={{
-                      borderColor: apiKeyErrors.walletAddress
-                        ? "bauhaus.red"
-                        : "bauhaus.blue",
-                      boxShadow: "none",
-                    }}
                   />
-                  <FormErrorMessage color="bauhaus.red" fontWeight="700">
+                  <FormErrorMessage color="chart.negative" fontWeight="700">
                     {apiKeyErrors.walletAddress}
                   </FormErrorMessage>
                 </FormControl>
@@ -651,20 +619,6 @@ function AccountSettingsModal({
                             setApiKeyErrors({});
                           }}
                           pr="3rem"
-                          bg="white"
-                          border="3px solid"
-                          borderColor={
-                            apiKeyErrors.password
-                              ? "bauhaus.red"
-                              : "bauhaus.black"
-                          }
-                          borderRadius="0"
-                          _focus={{
-                            borderColor: apiKeyErrors.password
-                              ? "bauhaus.red"
-                              : "bauhaus.blue",
-                            boxShadow: "none",
-                          }}
                         />
                         <InputRightElement>
                           <IconButton
@@ -678,21 +632,20 @@ function AccountSettingsModal({
                           />
                         </InputRightElement>
                       </InputGroup>
-                      <FormErrorMessage color="bauhaus.red" fontWeight="700">
+                      <FormErrorMessage color="chart.negative" fontWeight="700">
                         {apiKeyErrors.password}
                       </FormErrorMessage>
                     </FormControl>
 
                     <Alert
                       status="warning"
-                      bg="bauhaus.yellow"
+                      bg="status.warning.bg"
                       border="2px solid"
-                      borderColor="bauhaus.black"
-                      borderRadius="0"
+                      borderColor="status.warning.border"
                       fontSize="sm"
                     >
-                      <AlertIcon color="bauhaus.black" />
-                      <Text color="bauhaus.black" fontWeight="600">
+                      <AlertIcon color="status.warning.fg" />
+                      <Text color="status.warning.fg" fontWeight="600">
                         Enter your password to save changes. Session expired.
                       </Text>
                     </Alert>
@@ -731,15 +684,9 @@ function AccountSettingsModal({
   if (view === "confirmDelete") {
     return (
       <Modal isOpen={isOpen} onClose={handleClose} isCentered>
-        <ModalOverlay bg="blackAlpha.700" />
-        <ModalContent
-          bg="bauhaus.white"
-          border="4px solid"
-          borderColor="bauhaus.black"
-          borderRadius="0"
-          boxShadow="8px 8px 0px 0px #121212"
-          mx={4}
-        >
+        <ModalOverlay bg="surface.overlay" />
+        {/* Modal baseStyle paints bg/border/borderRadius/boxShadow from theme tokens. */}
+        <ModalContent mx={4}>
           <ModalHeader
             color="text.primary"
             fontSize="md"
@@ -750,11 +697,11 @@ function AccountSettingsModal({
             <Box display="flex" alignItems="center" gap={2}>
               <Box
                 p={1}
-                bg="bauhaus.red"
+                bg="accent.primary"
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
               >
-                <WarningTwoIcon color="white" />
+                <WarningTwoIcon color="accentFg.primary" />
               </Box>
               Remove Account?
             </Box>
@@ -768,9 +715,9 @@ function AccountSettingsModal({
 
               <Box
                 p={3}
-                bg="bg.muted"
+                bg="surface.sunken"
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
               >
                 <Text fontSize="sm" fontWeight="700" color="text.primary">
                   {account.displayName || truncateAddress(account.address)}
@@ -785,11 +732,11 @@ function AccountSettingsModal({
                 <Box
                   w="full"
                   p={3}
-                  bg="bauhaus.red"
+                  bg="status.error.bg"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="status.error.border"
                 >
-                  <Text color="white" fontSize="sm" fontWeight="700">
+                  <Text color="status.error.fg" fontSize="sm" fontWeight="700">
                     {account.type === "seedPhrase"
                       ? "Make sure you have backed up your seed phrase before removing this account!"
                       : "Make sure you have backed up your private key before removing this account!"}
@@ -826,15 +773,9 @@ function AccountSettingsModal({
   // Main settings view
   return (
     <Modal isOpen={isOpen} onClose={handleClose} isCentered>
-      <ModalOverlay bg="blackAlpha.700" />
-      <ModalContent
-        bg="bauhaus.white"
-        border="4px solid"
-        borderColor="bauhaus.black"
-        borderRadius="0"
-        boxShadow="8px 8px 0px 0px #121212"
-        mx={4}
-      >
+      <ModalOverlay bg="surface.overlay" />
+      {/* Modal baseStyle paints bg/border/borderRadius/boxShadow from theme tokens. */}
+      <ModalContent mx={4}>
         <ModalHeader
           color="text.primary"
           fontSize="md"
@@ -845,11 +786,11 @@ function AccountSettingsModal({
           <Box display="flex" alignItems="center" gap={2}>
             <Box
               p={1}
-              bg="bauhaus.blue"
+              bg="accent.secondary"
               border="2px solid"
-              borderColor="bauhaus.black"
+              borderColor="border.default"
             >
-              <SettingsIcon color="white" />
+              <SettingsIcon color="accentFg.secondary" />
             </Box>
             Account Settings
           </Box>
@@ -860,9 +801,9 @@ function AccountSettingsModal({
             {/* Account Info */}
             <Box
               p={3}
-              bg="bg.muted"
+              bg="surface.sunken"
               border="2px solid"
-              borderColor="bauhaus.black"
+              borderColor="border.default"
             >
               <Text fontSize="xs" fontFamily="mono" color="text.tertiary">
                 {account.address}
@@ -873,15 +814,15 @@ function AccountSettingsModal({
                   h={2}
                   bg={
                     account.type === "privateKey"
-                      ? "bauhaus.yellow"
+                      ? "accent.highlight"
                       : account.type === "seedPhrase"
-                        ? "bauhaus.red"
+                        ? "accent.primary"
                         : account.type === "impersonator"
-                          ? "bauhaus.green"
-                          : "bauhaus.blue"
+                          ? "status.success.fg"
+                          : "accent.secondary"
                   }
                   border="1px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   borderRadius={
                     account.type === "privateKey" ||
                     account.type === "seedPhrase"
@@ -922,18 +863,7 @@ function AccountSettingsModal({
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Enter a name..."
-                  bg="white"
-                  border="3px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius="0"
                   size="md"
-                  _focus={{
-                    borderColor: "bauhaus.blue",
-                    boxShadow: "none",
-                  }}
-                  _hover={{
-                    borderColor: "bauhaus.black",
-                  }}
                 />
                 <Button
                   variant="secondary"
@@ -967,18 +897,7 @@ function AccountSettingsModal({
                     value={seedGroupName}
                     onChange={(e) => setSeedGroupName(e.target.value)}
                     placeholder="e.g. Main Seed"
-                    bg="white"
-                    border="3px solid"
-                    borderColor="bauhaus.black"
-                    borderRadius="0"
                     size="md"
-                    _focus={{
-                      borderColor: "bauhaus.blue",
-                      boxShadow: "none",
-                    }}
-                    _hover={{
-                      borderColor: "bauhaus.black",
-                    }}
                   />
                   <Button
                     variant="secondary"
@@ -1002,7 +921,7 @@ function AccountSettingsModal({
               {(account.type === "privateKey" ||
                 account.type === "seedPhrase") && (
                 <Button
-                  variant="yellow"
+                  variant="highlight"
                   size="sm"
                   leftIcon={<ViewIcon />}
                   onClick={handleRevealKey}
@@ -1015,7 +934,7 @@ function AccountSettingsModal({
 
               {account.type === "seedPhrase" && (
                 <Button
-                  variant="yellow"
+                  variant="highlight"
                   size="sm"
                   leftIcon={<ViewIcon />}
                   onClick={handleRevealSeedPhrase}
@@ -1063,19 +982,19 @@ function AccountSettingsModal({
                   size="sm"
                   leftIcon={
                     <DeleteIcon
-                      color={totalAccounts <= 1 ? "gray.400" : "bauhaus.red"}
+                      color={totalAccounts <= 1 ? "fg.muted" : "chart.negative"}
                     />
                   }
                   onClick={() => setView("confirmDelete")}
                   justifyContent="flex-start"
-                  color={totalAccounts <= 1 ? "gray.400" : "bauhaus.red"}
+                  color={totalAccounts <= 1 ? "fg.muted" : "chart.negative"}
                   fontWeight="700"
                   border="2px solid transparent"
                   _hover={
                     totalAccounts > 1
                       ? {
-                          bg: "red.50",
-                          borderColor: "bauhaus.red",
+                          bg: "status.error.bg",
+                          borderColor: "status.error.border",
                         }
                       : undefined
                   }

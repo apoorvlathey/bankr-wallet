@@ -19,6 +19,9 @@ interface UintParamProps {
 const LONG_VALUE_THRESHOLD = 20;
 
 export function UintParam({ value }: UintParamProps) {
+  // Numeric value emphasis — sourced from chart.numeric (Bauhaus dark
+  // goldenrod, Midnight warm amber).
+  const numericColor = "chart.numeric";
   const [selectedOption, setSelectedOption] = useState<ETHSelectedOption>("Wei");
   const [formatted, setFormatted] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -87,15 +90,15 @@ export function UintParam({ value }: UintParamProps) {
       fontSize="9px"
       fontWeight="700"
       textTransform="uppercase"
-      bg={formatted ? "bauhaus.black" : "transparent"}
-      color={formatted ? "bauhaus.white" : "text.tertiary"}
+      bg={formatted ? "fg.primary" : "transparent"}
+      color={formatted ? "fg.inverse" : "text.tertiary"}
       border="1px solid"
-      borderColor={formatted ? "bauhaus.black" : "gray.300"}
+      borderColor={formatted ? "border.default" : "border.subtle"}
       borderRadius={0}
       boxShadow="none"
       flexShrink={0}
       onClick={() => setFormatted(!formatted)}
-      _hover={{ borderColor: "bauhaus.black", boxShadow: "none" }}
+      _hover={{ borderColor: "border.default", boxShadow: "none" }}
       _active={{ transform: "translate(1px, 1px)", boxShadow: "none" }}
     >
       format
@@ -115,11 +118,11 @@ export function UintParam({ value }: UintParamProps) {
         bg="transparent"
         color="text.secondary"
         border="1px solid"
-        borderColor={dropdownOpen ? "bauhaus.black" : "gray.300"}
+        borderColor={dropdownOpen ? "border.default" : "border.subtle"}
         borderRadius={0}
         boxShadow="none"
         onClick={() => setDropdownOpen(!dropdownOpen)}
-        _hover={{ borderColor: "bauhaus.black", boxShadow: "none" }}
+        _hover={{ borderColor: "border.default", boxShadow: "none" }}
         _active={{ transform: "translate(1px, 1px)", boxShadow: "none" }}
         rightIcon={<ChevronDownIcon boxSize={3} />}
       >
@@ -133,10 +136,10 @@ export function UintParam({ value }: UintParamProps) {
             position="fixed"
             top={`${menuPos.top}px`}
             left={`${menuPos.left}px`}
-            bg="bauhaus.white"
+            bg="surface.raised"
             border="1.5px solid"
-            borderColor="bauhaus.black"
-            boxShadow="none"
+            borderColor="border.default"
+            boxShadow="card"
             zIndex={1800}
             spacing={0}
             align="stretch"
@@ -151,9 +154,9 @@ export function UintParam({ value }: UintParamProps) {
                 fontWeight="700"
                 textTransform="uppercase"
                 cursor="pointer"
-                bg={opt === selectedOption ? "bauhaus.black" : "transparent"}
-                color={opt === selectedOption ? "bauhaus.white" : "text.primary"}
-                _hover={{ bg: opt === selectedOption ? "bauhaus.black" : "bg.muted" }}
+                bg={opt === selectedOption ? "fg.primary" : "transparent"}
+                color={opt === selectedOption ? "fg.inverse" : "text.primary"}
+                _hover={{ bg: opt === selectedOption ? "fg.primary" : "bg.muted" }}
                 onClick={() => {
                   setSelectedOption(opt);
                   setDropdownOpen(false);
@@ -180,7 +183,7 @@ export function UintParam({ value }: UintParamProps) {
         <Text
           fontSize="xs"
           fontFamily="mono"
-          color="#B8860B"
+          color={numericColor}
           fontWeight="700"
           wordBreak="break-all"
           w="full"
@@ -200,7 +203,7 @@ export function UintParam({ value }: UintParamProps) {
         <Text
           fontSize="xs"
           fontFamily="mono"
-          color="#B8860B"
+          color={numericColor}
           fontWeight="700"
           maxW="200px"
           isTruncated

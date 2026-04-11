@@ -39,6 +39,22 @@ const MULTICALL3_ADDRESS: Address =
 const PERMIT2_ADDRESS: Address =
   "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 
+/**
+ * Explicit gas cap for eth_call / eth_createAccessList requests.
+ *
+ * Many RPC providers (LlamaRPC, Alchemy, etc.) reject simulation requests
+ * whose gas — either explicitly provided OR auto-filled when omitted —
+ * exceeds their per-call cap, surfacing as viem's IntrinsicGasTooHighError:
+ * "The amount of gas provided for the transaction exceeds the limit allowed
+ * for the block." (matches the RPC nodeMessage `gas limit reached`).
+ *
+ * Empirically, Alchemy mainnet rejects 30M while accepting ≤ ~10M for
+ * eth_createAccessList. 10M is safely below every observed cap and still
+ * comfortably covers the simulator's overhead (state snapshot balanceOf
+ * sweep + user tx + post-tx balanceOf sweep is typically < 5M gas).
+ */
+const SIMULATION_GAS_LIMIT = 10_000_000n;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -544,6 +560,7 @@ async function findBalanceSlot(
         functionName: "balanceOf",
         args: [user],
       }),
+      gas: SIMULATION_GAS_LIMIT,
     });
 
     const tokenEntry = accessList.find(
@@ -579,6 +596,7 @@ async function findAllowanceSlot(
         functionName: "allowance",
         args: [owner, spender],
       }),
+      gas: SIMULATION_GAS_LIMIT,
     });
 
     const tokenEntry = accessList.find(
@@ -756,6 +774,7 @@ export async function simulateAssetChanges(
       to,
       value,
       data,
+      gas: SIMULATION_GAS_LIMIT,
     });
     console.log("[TxSim] Access list entries:", accessList.length, accessList.map(e => e.address));
 
@@ -840,6 +859,7 @@ async function runSimulation(
     account: from,
     to: from,
     data: callData,
+    gas: SIMULATION_GAS_LIMIT,
     stateOverride: [
       {
         address: from,
@@ -1650,6 +1670,7 @@ export async function simulateBatchAssetChanges(
         to: from, // ERC-7821 execute targets the user's own address
         value: totalValue,
         data: batchCalldata,
+        gas: SIMULATION_GAS_LIMIT,
       });
       console.log(`[batchSim] Full-batch AccessList: ${batchAL.accessList.length} entries`);
       accessListEntries = batchAL.accessList;
@@ -1663,6 +1684,7 @@ export async function simulateBatchAssetChanges(
             to: call.to as Address,
             value: call.value && call.value !== "0x0" ? BigInt(call.value) : 0n,
             data: (call.data && call.data !== "0x" ? call.data : "0x") as `0x${string}`,
+            gas: SIMULATION_GAS_LIMIT,
           }).then((res) => {
             console.log(`[batchSim] AccessList call ${i}: ${res.accessList.length} entries`);
             return res;
@@ -1715,6 +1737,7 @@ export async function simulateBatchAssetChanges(
       account: from, // sets tx.origin = from (critical for Permit2 / protocol checks)
       to: from,
       data: callData,
+      gas: SIMULATION_GAS_LIMIT,
       stateOverride: [
         {
           address: from,

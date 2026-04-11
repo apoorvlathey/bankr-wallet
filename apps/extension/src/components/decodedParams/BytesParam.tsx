@@ -15,6 +15,8 @@ interface BytesParamProps {
 type BytesTab = "decoded" | "decimal" | "text";
 
 export function BytesParam({ value, rawValue, chainId }: BytesParamProps) {
+  // See UintParam for the rationale behind chart.numeric.
+  const numericColor = "chart.numeric";
   const { isOpen, onToggle } = useDisclosure();
   const [tab, setTab] = useState<BytesTab>("decoded");
 
@@ -75,7 +77,7 @@ export function BytesParam({ value, rawValue, chainId }: BytesParamProps) {
 
       {/* Expanded content */}
       <Collapse in={isOpen} animateOpacity>
-        <Box pl={3} borderLeft="2px solid" borderColor="bauhaus.black" w="full">
+        <Box pl={3} borderLeft="2px solid" borderColor="border.default" w="full">
           {/* Tab buttons */}
           <HStack spacing={0} mb={2}>
             {hasDecoded && (
@@ -105,11 +107,11 @@ export function BytesParam({ value, rawValue, chainId }: BytesParamProps) {
                 px={1.5}
                 py={0.5}
                 fontSize="10px"
-                bg="bauhaus.blue"
-                color="white"
+                bg="accent.secondary"
+                color="accentFg.secondary"
                 fontFamily="mono"
                 border="1.5px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
                 fontWeight="700"
               >
                 {bytesResult.decoded.functionName}
@@ -128,7 +130,7 @@ export function BytesParam({ value, rawValue, chainId }: BytesParamProps) {
               <Text
                 fontSize="xs"
                 fontFamily="mono"
-                color="#B8860B"
+                color={numericColor}
                 fontWeight="600"
                 wordBreak="break-all"
               >
@@ -180,14 +182,14 @@ function TabButton({
       fontWeight="800"
       textTransform="uppercase"
       letterSpacing="wide"
-      bg={isActive ? "bauhaus.black" : "transparent"}
-      color={isActive ? "bauhaus.white" : "text.tertiary"}
+      bg={isActive ? "fg.primary" : "transparent"}
+      color={isActive ? "fg.inverse" : "text.tertiary"}
       border="1.5px solid"
-      borderColor="bauhaus.black"
+      borderColor="border.default"
       borderRadius={0}
       borderRight={isLast ? undefined : "none"}
       onClick={onClick}
-      _hover={{ bg: "bauhaus.black", color: "bauhaus.white" }}
+      _hover={{ bg: "fg.primary", color: "fg.inverse" }}
       _active={{ transform: "translate(1px, 1px)" }}
     >
       {label}

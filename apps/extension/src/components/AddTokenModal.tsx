@@ -164,29 +164,22 @@ export default function AddTokenModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="sm">
-      <ModalOverlay bg="blackAlpha.700" />
-      <ModalContent
-        bg="bauhaus.white"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="6px 6px 0px 0px #121212"
-        borderRadius="none"
-        mx={4}
-      >
+      <ModalOverlay bg="surface.overlay" />
+      <ModalContent mx={4}>
         <ModalHeader
-          bg="bauhaus.black"
-          color="bauhaus.white"
+          bg="fg.primary"
+          color="fg.inverse"
           fontWeight="900"
           fontSize="md"
           textTransform="uppercase"
           letterSpacing="wider"
           py={2}
           borderBottom="3px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
         >
           Add Token
         </ModalHeader>
-        <ModalCloseButton color="bauhaus.white" top={1} />
+        <ModalCloseButton color="fg.inverse" top={1} />
         <ModalBody py={4} px={4}>
           <VStack spacing={4} align="stretch">
             {/* Chain selector */}
@@ -199,7 +192,7 @@ export default function AddTokenModal({
                   as={Box}
                   cursor="pointer"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   px={3}
                   py={2}
                   _hover={{ bg: "bg.muted" }}
@@ -220,11 +213,10 @@ export default function AddTokenModal({
                   </HStack>
                 </MenuButton>
                 <MenuList
-                  bg="bauhaus.white"
+                  bg="surface.raised"
                   border="3px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius={0}
-                  boxShadow="4px 4px 0px 0px #121212"
+                  borderColor="border.default"
+                  boxShadow="card"
                   maxH="200px"
                   overflowY="auto"
                   p={0}
@@ -266,18 +258,13 @@ export default function AddTokenModal({
                 onChange={(e) => handleAddressChange(e.target.value)}
                 fontFamily="mono"
                 fontSize="sm"
-                border="2px solid"
-                borderColor="bauhaus.black"
-                borderRadius={0}
-                _hover={{ borderColor: "bauhaus.black" }}
-                _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
               />
             </FormControl>
 
             {/* Loading indicator */}
             {loading && (
               <HStack justify="center" py={2}>
-                <Spinner size="sm" color="bauhaus.blue" />
+                <Spinner size="sm" color="accent.secondary" />
                 <Text fontSize="xs" color="text.secondary">
                   Fetching token info...
                 </Text>
@@ -287,14 +274,14 @@ export default function AddTokenModal({
             {/* Error display */}
             {error && (
               <HStack
-                bg="red.50"
+                bg="status.error.bg"
                 border="2px solid"
-                borderColor="bauhaus.red"
+                borderColor="status.error.border"
                 px={3}
                 py={2}
               >
-                <WarningIcon color="bauhaus.red" boxSize="12px" />
-                <Text fontSize="xs" fontWeight="700" color="bauhaus.red">
+                <WarningIcon color="status.error.fg" boxSize="12px" />
+                <Text fontSize="xs" fontWeight="700" color="status.error.fg">
                   {error}
                 </Text>
               </HStack>
@@ -303,14 +290,14 @@ export default function AddTokenModal({
             {/* Duplicate warning */}
             {isDuplicate && (
               <HStack
-                bg="yellow.50"
+                bg="status.warning.bg"
                 border="2px solid"
-                borderColor="bauhaus.yellow"
+                borderColor="status.warning.border"
                 px={3}
                 py={2}
               >
-                <WarningIcon color="orange.500" boxSize="12px" />
-                <Text fontSize="xs" fontWeight="700" color="orange.600">
+                <WarningIcon color="status.warning.fg" boxSize="12px" />
+                <Text fontSize="xs" fontWeight="700" color="status.warning.fg">
                   This token is already in your holdings
                 </Text>
               </HStack>
@@ -327,11 +314,6 @@ export default function AddTokenModal({
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     fontSize="sm"
-                    border="2px solid"
-                    borderColor="bauhaus.black"
-                    borderRadius={0}
-                    _hover={{ borderColor: "bauhaus.black" }}
-                    _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
                   />
                 </FormControl>
                 <HStack spacing={3}>
@@ -343,11 +325,6 @@ export default function AddTokenModal({
                       value={symbol}
                       onChange={(e) => setSymbol(e.target.value)}
                       fontSize="sm"
-                      border="2px solid"
-                      borderColor="bauhaus.black"
-                      borderRadius={0}
-                      _hover={{ borderColor: "bauhaus.black" }}
-                      _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
                     />
                   </FormControl>
                   <FormControl>
@@ -359,11 +336,6 @@ export default function AddTokenModal({
                       onChange={(e) => setDecimals(e.target.value)}
                       fontSize="sm"
                       type="number"
-                      border="2px solid"
-                      borderColor="bauhaus.black"
-                      borderRadius={0}
-                      _hover={{ borderColor: "bauhaus.black" }}
-                      _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
                     />
                   </FormControl>
                 </HStack>
@@ -372,20 +344,10 @@ export default function AddTokenModal({
 
             {/* Save button */}
             <Button
+              variant="primary"
               onClick={handleSave}
               isDisabled={!canSave}
               isLoading={saving}
-              bg="bauhaus.black"
-              color="bauhaus.white"
-              fontWeight="800"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              fontSize="sm"
-              borderRadius={0}
-              border="2px solid"
-              borderColor="bauhaus.black"
-              _hover={{ bg: "gray.800" }}
-              _disabled={{ opacity: 0.4, cursor: "not-allowed" }}
               w="full"
             >
               Add Token

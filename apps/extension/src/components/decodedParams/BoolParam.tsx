@@ -11,7 +11,7 @@ export function BoolParam({ value }: BoolParamProps) {
     <Text
       fontSize="xs"
       fontFamily="mono"
-      color={boolVal ? "bauhaus.green" : "bauhaus.red"}
+      color={boolVal ? "chart.positive" : "chart.negative"}
       fontWeight="700"
     >
       {String(boolVal)}

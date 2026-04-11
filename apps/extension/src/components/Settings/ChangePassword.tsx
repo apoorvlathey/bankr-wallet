@@ -14,8 +14,9 @@ import {
   IconButton,
   Spacer,
 } from "@chakra-ui/react";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
 import { ViewIcon, ViewOffIcon, ArrowBackIcon, InfoIcon } from "@chakra-ui/icons";
+import { ThemedCard } from "@/theme";
 
 interface ChangePasswordProps {
   onComplete: () => void;
@@ -34,7 +35,7 @@ function ChangePassword({ onComplete, onCancel, onSessionExpired }: ChangePasswo
     confirmPassword?: string;
   }>({});
 
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
   const intervalRef = useRef<number | null>(null);
 
   // Check session on mount and periodically
@@ -186,7 +187,7 @@ function ChangePassword({ onComplete, onCancel, onSessionExpired }: ChangePasswo
             />
           </InputRightElement>
         </InputGroup>
-        <FormErrorMessage color="bauhaus.red" fontWeight="700">
+        <FormErrorMessage color="accent.primary" fontWeight="700">
           {errors.newPassword}
         </FormErrorMessage>
       </FormControl>
@@ -202,27 +203,26 @@ function ChangePassword({ onComplete, onCancel, onSessionExpired }: ChangePasswo
           onChange={(e) => setConfirmPassword(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
         />
-        <FormErrorMessage color="bauhaus.red" fontWeight="700">
+        <FormErrorMessage color="accent.primary" fontWeight="700">
           {errors.confirmPassword}
         </FormErrorMessage>
       </FormControl>
 
-      <Box
-        bg="bauhaus.blue"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="4px 4px 0px 0px #121212"
+      <ThemedCard
+        weight="medium"
         p={3}
+        bg="accent.secondary"
+        borderColor="border.default"
       >
         <HStack spacing={2}>
-          <Box p={1} bg="bauhaus.black">
-            <InfoIcon color="white" boxSize={4} />
+          <Box p={1} bg="border.default">
+            <InfoIcon color="surface.raised" boxSize={4} />
           </Box>
-          <Text color="white" fontSize="sm" fontWeight="700">
+          <Text color="accentFg.secondary" fontSize="sm" fontWeight="700">
             You will need to unlock again after changing your password.
           </Text>
         </HStack>
-      </Box>
+      </ThemedCard>
 
       <Box display="flex" gap={2} pt={2}>
         <Button variant="secondary" onClick={onCancel} minW="100px">
