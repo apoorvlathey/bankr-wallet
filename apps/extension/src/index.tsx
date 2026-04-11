@@ -1,16 +1,20 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import App from "./App";
-import { ChakraProvider } from "@chakra-ui/react";
-import theme from "./theme";
+import { ThemeProvider } from "@/theme";
 import "./index.css";
 import { NetworksProvider } from "@/contexts/NetworksContext";
+import { bootstrapThemeAttribute } from "@/theme/bootstrap";
+
+// Resolve and apply the active theme to <html data-theme=...> BEFORE React
+// renders so the very first paint matches the user's selection (no flash).
+bootstrapThemeAttribute();
 
 ReactDOM.render(
-  <ChakraProvider theme={theme}>
+  <ThemeProvider>
     <NetworksProvider>
       <App />
     </NetworksProvider>
-  </ChakraProvider>,
-  document.getElementById("root")
+  </ThemeProvider>,
+  document.getElementById("root"),
 );

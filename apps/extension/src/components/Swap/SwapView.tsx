@@ -25,7 +25,8 @@ import {
 } from "@chakra-ui/react";
 import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon } from "@chakra-ui/icons";
 import { parseEther, parseUnits, formatUnits } from "viem";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
+import { useChainBadgeStyle } from "@/theme";
 import { type PortfolioToken } from "@/chrome/portfolioApi";
 import { fetchOnchainBalances } from "@/chrome/onchainBalances";
 import { loadPortfolioTokenCatalog } from "@/chrome/portfolioTokens";
@@ -111,7 +112,7 @@ function SwapView({
   initialBuyToken,
   initialSellToken,
 }: SwapViewProps) {
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
   const [chainSearch, setChainSearch] = useState("");
   const chainSearchInputRef = useRef<HTMLInputElement>(null);
   const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
@@ -126,6 +127,8 @@ function SwapView({
       )
     : CHAIN_REGISTRY.filter((c) => c.isSwapSupported);
   const chainConfig = getChainConfig(chainId);
+  // Chain MenuButton badge colors — all per-theme branching lives in the hook.
+  const chainBadgeStyle = useChainBadgeStyle(chainConfig.bg, chainConfig.text);
 
   useEffect(() => {
     if (!isChainMenuOpen) return;
@@ -980,7 +983,7 @@ function SwapView({
   // -----------------------------------------------------------------------
   if (!isSwapSupported) {
     return (
-      <Box p={4} minH="100%" bg="bg.base">
+      <Box p={4} minH="100%" bg="surface.base">
         <VStack spacing={4} align="stretch">
           <HStack spacing={2} justify="space-between">
             <HStack spacing={2}>
@@ -1018,9 +1021,10 @@ function SwapView({
               <MenuButton
                 as={Box}
                 cursor="pointer"
-                bg={chainConfig.bg}
+                bg={chainBadgeStyle.bg}
                 border="2px solid"
-                borderColor={chainConfig.border}
+                borderColor={chainBadgeStyle.border}
+                borderRadius="md"
                 px={2}
                 py={1}
                 _hover={{ opacity: 0.8 }}
@@ -1030,25 +1034,21 @@ function SwapView({
                   <Text
                     fontSize="xs"
                     fontWeight="700"
-                    color={chainConfig.text}
+                    color={chainBadgeStyle.fg}
                     textTransform="uppercase"
                   >
                     {chainName}
                   </Text>
-                  <ChevronDownIcon color={chainConfig.text} boxSize={3} />
+                  <ChevronDownIcon color={chainBadgeStyle.fg} boxSize={3} />
                 </HStack>
               </MenuButton>
               <MenuList
-                bg="bauhaus.white"
-                border="3px solid"
-                borderColor="bauhaus.black"
-                boxShadow="4px 4px 0px 0px #121212"
-                borderRadius="0"
+                // Menu baseStyle paints surface tokens — keep only sizing.
                 py={0}
                 minW="160px"
                 zIndex={30}
               >
-                <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+                <Box p={2} borderBottom="2px solid" borderColor="border.default">
                   <InputGroup size="sm">
                     <InputLeftElement pointerEvents="none">
                       <Search2Icon color="text.tertiary" boxSize={3} />
@@ -1059,12 +1059,11 @@ function SwapView({
                       onChange={(e) => setChainSearch(e.target.value)}
                       placeholder="Search chains"
                       border="2px solid"
-                      borderColor="bauhaus.black"
-                      borderRadius="0"
+                      borderColor="border.default"
                       fontWeight="600"
                       pl={9}
-                      _hover={{ borderColor: "bauhaus.black" }}
-                      _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+                      _hover={{ borderColor: "border.default" }}
+                      _focus={{ borderColor: "accent.secondary", boxShadow: "none" }}
                       onKeyDown={(e) => {
                         if (e.key === "ArrowDown") {
                           e.preventDefault();
@@ -1106,12 +1105,11 @@ function SwapView({
                     return (
                       <MenuItem
                         key={c.chainId}
-                        bg={i === highlightedChainIndex ? "bg.muted" : "bauhaus.white"}
-                        _hover={{ bg: "bg.hover" }}
+                        bg={i === highlightedChainIndex ? "surface.sunken" : "transparent"}
                         borderBottom={
                           i < arr.length - 1 ? "2px solid" : "none"
                         }
-                        borderColor="bauhaus.black"
+                        borderColor="border.default"
                         py={2.5}
                         onMouseEnter={() => setHighlightedChainIndex(i)}
                         onClick={() => {
@@ -1142,15 +1140,16 @@ function SwapView({
             </Menu>
           </HStack>
           <Box
-            bg="bauhaus.yellow"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            // Warning surface — Bauhaus yellow / Midnight recessed warning tint.
+            bg="status.warning.bg"
+            color="status.warning.fg"
+            border="2px solid"
+            borderColor="border.default"
+            boxShadow="card"
             p={4}
           >
             <Text
               fontSize="sm"
-              color="bauhaus.black"
               fontWeight="700"
               textAlign="center"
             >
@@ -1158,7 +1157,6 @@ function SwapView({
             </Text>
             <Text
               fontSize="xs"
-              color="bauhaus.black"
               fontWeight="500"
               textAlign="center"
               mt={1}
@@ -1207,12 +1205,12 @@ function SwapView({
       <Box
         p={4}
         minH="100%"
-        bg="bg.base"
+        bg="surface.base"
         display="flex"
         alignItems="center"
         justifyContent="center"
       >
-        <Spinner size="lg" color="bauhaus.blue" thickness="3px" />
+        <Spinner size="lg" color="accent.secondary" thickness="3px" />
       </Box>
     );
   }
@@ -1221,7 +1219,7 @@ function SwapView({
   // Render
   // -----------------------------------------------------------------------
   return (
-    <Box p={4} minH="100%" bg="bg.base">
+    <Box p={4} minH="100%" bg="surface.base">
       <VStack spacing={3} align="stretch">
         {/* Header */}
         <HStack spacing={2} justify="space-between">
@@ -1260,9 +1258,10 @@ function SwapView({
             <MenuButton
               as={Box}
               cursor="pointer"
-              bg={chainConfig.bg}
+              bg={chainBadgeStyle.bg}
               border="2px solid"
-              borderColor={chainConfig.border}
+              borderColor={chainBadgeStyle.border}
+              borderRadius="md"
               px={2}
               py={1}
               _hover={{ opacity: 0.8 }}
@@ -1272,25 +1271,21 @@ function SwapView({
                 <Text
                   fontSize="xs"
                   fontWeight="700"
-                  color={chainConfig.text}
+                  color={chainBadgeStyle.fg}
                   textTransform="uppercase"
                 >
                   {chainName}
                 </Text>
-                <ChevronDownIcon color={chainConfig.text} boxSize={3} />
+                <ChevronDownIcon color={chainBadgeStyle.fg} boxSize={3} />
               </HStack>
             </MenuButton>
             <MenuList
-              bg="bauhaus.white"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="4px 4px 0px 0px #121212"
-              borderRadius="0"
+              // Menu baseStyle paints surface tokens — keep only sizing.
               py={0}
               minW="160px"
               zIndex={30}
             >
-              <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+              <Box p={2} borderBottom="2px solid" borderColor="border.default">
                 <InputGroup size="sm">
                   <InputLeftElement pointerEvents="none">
                     <Search2Icon color="text.tertiary" boxSize={3} />
@@ -1301,12 +1296,11 @@ function SwapView({
                     onChange={(e) => setChainSearch(e.target.value)}
                     placeholder="Search chains"
                     border="2px solid"
-                    borderColor="bauhaus.black"
-                    borderRadius="0"
+                    borderColor="border.default"
                     fontWeight="600"
                     pl={9}
-                    _hover={{ borderColor: "bauhaus.black" }}
-                    _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+                    _hover={{ borderColor: "border.default" }}
+                    _focus={{ borderColor: "accent.secondary", boxShadow: "none" }}
                     onKeyDown={(e) => {
                       if (e.key === "ArrowDown") {
                         e.preventDefault();
@@ -1350,14 +1344,13 @@ function SwapView({
                       key={c.chainId}
                       bg={
                         i === highlightedChainIndex || c.chainId === chainId
-                          ? "bg.muted"
-                          : "bauhaus.white"
+                          ? "surface.sunken"
+                          : "transparent"
                       }
-                      _hover={{ bg: "bg.hover" }}
                       borderBottom={
                         i < arr.length - 1 ? "2px solid" : "none"
                       }
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
                       py={2.5}
                       onMouseEnter={() => setHighlightedChainIndex(i)}
                       onClick={() => {
@@ -1390,10 +1383,11 @@ function SwapView({
 
         {/* You Sell */}
         <Box
-          bg="bauhaus.white"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
+          bg="surface.raised"
+          border="2px solid"
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
           p={3}
         >
           <Text
@@ -1423,13 +1417,13 @@ function SwapView({
                 <Button
                   size="xs"
                   variant="ghost"
-                  color="bauhaus.blue"
+                  color="accent.secondary"
                   fontWeight="800"
                   fontSize="xs"
                   h="20px"
                   px={1}
                   onClick={handleToggleMode}
-                  _hover={{ bg: "bg.muted" }}
+                  _hover={{ bg: "surface.sunken" }}
                 >
                   {isUsdMode ? sellToken.symbol.toUpperCase() : "USD"}
                 </Button>
@@ -1473,12 +1467,11 @@ function SwapView({
                 }}
                 fontFamily="mono"
                 fontSize="sm"
-                border="3px solid"
-                borderColor="bauhaus.black"
-                borderRadius="0"
-                bg="bauhaus.white"
-                _hover={{ borderColor: "bauhaus.blue" }}
-                _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+                border="2px solid"
+                borderColor="border.default"
+                bg="surface.raised"
+                _hover={{ borderColor: "accent.secondary" }}
+                _focus={{ borderColor: "accent.secondary", boxShadow: "none" }}
                 pl={isUsdMode ? "28px" : undefined}
                 pr="50px"
               />
@@ -1486,9 +1479,8 @@ function SwapView({
                 <Button
                   size="xs"
                   variant="ghost"
-                  color="bauhaus.blue"
+                  color="accent.secondary"
                   fontWeight="800"
-                  borderRadius="0"
                   h="full"
                   onClick={() => {
                     if (sellToken) {
@@ -1503,7 +1495,7 @@ function SwapView({
                       }
                     }
                   }}
-                  _hover={{ bg: "bg.muted" }}
+                  _hover={{ bg: "surface.sunken" }}
                 >
                   MAX
                 </Button>
@@ -1558,29 +1550,30 @@ function SwapView({
                     mt={3}
                     fontSize="xs"
                     fontWeight="800"
-                    color={sliderValue >= pct ? "bauhaus.blue" : "gray.400"}
+                    color={sliderValue >= pct ? "accent.secondary" : "text.tertiary"}
                     whiteSpace="nowrap"
                     transform="translateX(-50%)"
                   >
                     {pct}%
                   </SliderMark>
                 ))}
-                <SliderTrack bg="gray.200" h="6px" borderRadius={0}>
-                  <SliderFilledTrack bg="bauhaus.blue" />
+                {/* Slider baseStyle (createTheme.ts) drives track/thumb radii
+                    from theme tokens — Bauhaus square, Midnight rounded. */}
+                <SliderTrack bg="surface.sunken" h="6px">
+                  <SliderFilledTrack bg="accent.secondary" />
                 </SliderTrack>
                 <SliderThumb
                   boxSize={5}
-                  bg="bauhaus.blue"
-                  border="3px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius={0}
+                  bg="accent.secondary"
+                  border="2px solid"
+                  borderColor="border.default"
                   _focus={{ boxShadow: "none" }}
                 />
               </Slider>
             </Box>
           )}
           {insufficientBalance && sellAmountNum > 0 && (
-            <Text fontSize="xs" color="bauhaus.red" fontWeight="700" mt={1}>
+            <Text fontSize="xs" color="chart.negative" fontWeight="700" mt={1}>
               Insufficient balance
             </Text>
           )}
@@ -1592,12 +1585,12 @@ function SwapView({
             aria-label="Swap direction"
             icon={<SwapArrowIcon boxSize={5} />}
             size="sm"
-            bg="bauhaus.blue"
-            color="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            borderRadius={0}
-            _hover={{ bg: "bauhaus.blue", transform: "translateY(-1px)" }}
+            bg="accent.primary"
+            color="accentFg.primary"
+            border="2px solid"
+            borderColor="border.default"
+            borderRadius="md"
+            _hover={{ bg: "accent.primary", transform: "translateY(-1px)" }}
             _active={{ transform: "translate(1px, 1px)" }}
             onClick={handleFlip}
             isDisabled={!buyTokenInfo}
@@ -1606,10 +1599,11 @@ function SwapView({
 
         {/* You Receive */}
         <Box
-          bg="bauhaus.white"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
+          bg="surface.raised"
+          border="2px solid"
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
           p={3}
         >
           <Text
@@ -1659,10 +1653,9 @@ function SwapView({
                 readOnly
                 fontFamily="mono"
                 fontSize="sm"
-                border="3px solid"
-                borderColor="bauhaus.black"
-                borderRadius="0"
-                bg="bg.muted"
+                border="2px solid"
+                borderColor="border.default"
+                bg="surface.sunken"
                 _hover={{}}
                 _focus={{ boxShadow: "none" }}
                 cursor="default"
@@ -1699,7 +1692,7 @@ function SwapView({
                   fontWeight="700"
                   color={
                     priceImpact > 10
-                      ? "bauhaus.red"
+                      ? "chart.negative"
                       : priceImpact > 3
                         ? "orange.500"
                         : "text.tertiary"
@@ -1716,7 +1709,7 @@ function SwapView({
 
         {/* Quote error */}
         {quoteError && (
-          <Text fontSize="xs" color="bauhaus.red" fontWeight="700">
+          <Text fontSize="xs" color="chart.negative" fontWeight="700">
             {quoteError}
           </Text>
         )}
@@ -1745,20 +1738,19 @@ function SwapView({
           />
         )}
 
-        {/* Price impact warning */}
+        {/* Price impact warning — high impact uses semantic error surface,
+            medium impact uses warning. Both intent tokens flip cleanly between
+            Bauhaus's saturated red/yellow and Midnight's recessed tints. */}
         {priceImpact !== null && priceImpact > 3 && (
           <Box
-            bg={priceImpact > 10 ? "red.50" : "orange.50"}
-            border="3px solid"
-            borderColor={priceImpact > 10 ? "bauhaus.red" : "orange.400"}
-            boxShadow="3px 3px 0px 0px #121212"
+            bg={priceImpact > 10 ? "status.error.bg" : "status.warning.bg"}
+            color={priceImpact > 10 ? "status.error.fg" : "status.warning.fg"}
+            border="2px solid"
+            borderColor="border.default"
+            boxShadow="card"
             p={3}
           >
-            <Text
-              fontSize="sm"
-              color={priceImpact > 10 ? "bauhaus.red" : "orange.700"}
-              fontWeight="700"
-            >
+            <Text fontSize="sm" fontWeight="700">
               {priceImpact > 10
                 ? `High price impact (~${priceImpact.toFixed(1)}%). You may receive significantly fewer tokens.`
                 : `Price impact is ~${priceImpact.toFixed(1)}%.`}
@@ -1769,23 +1761,25 @@ function SwapView({
         {/* Impersonator warning */}
         {accountType === "impersonator" && (
           <Box
-            bg="bauhaus.yellow"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="3px 3px 0px 0px #121212"
+            bg="status.warning.bg"
+            color="status.warning.fg"
+            border="2px solid"
+            borderColor="border.default"
+            boxShadow="card"
             p={3}
           >
-            <Text fontSize="sm" color="bauhaus.black" fontWeight="700">
+            <Text fontSize="sm" fontWeight="700">
               View-only account — swaps are disabled.
             </Text>
           </Box>
         )}
 
-        {/* Action button — sticky when content overflows */}
+        {/* Action button — sticky when content overflows. Primary CTA uses
+            the warm primary accent (Bauhaus red / Midnight indigo). */}
         <Box
           position="sticky"
           bottom={-4}
-          bg="bg.base"
+          bg="surface.base"
           pt={2}
           pb={8}
           mx={-4}
@@ -1798,15 +1792,15 @@ function SwapView({
             isLoading={isSubmitting}
             loadingText="Preparing..."
             isDisabled={!canSwap}
-            bg="bauhaus.red"
-            color="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="accent.primary"
+            color="accentFg.primary"
+            border="2px solid"
+            borderColor="border.default"
+            boxShadow="card"
             fontWeight="700"
             _hover={{
               transform: "translateY(-2px)",
-              boxShadow: "6px 6px 0px 0px #121212",
+              boxShadow: "cardHover",
             }}
             _active={{
               transform: "translate(2px, 2px)",
@@ -1850,9 +1844,9 @@ function TokenAddressRow({
         variant="ghost"
         minW="18px"
         h="18px"
-        color={copied ? "bauhaus.yellow" : "text.tertiary"}
+        color={copied ? "accent.highlight" : "text.tertiary"}
         onClick={onCopy}
-        _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+        _hover={{ color: "accent.secondary", bg: "surface.sunken" }}
       />
       {explorer && (
         <IconButton
@@ -1868,7 +1862,7 @@ function TokenAddressRow({
               url: `${explorer}/token/${address}`,
             })
           }
-          _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+          _hover={{ color: "accent.secondary", bg: "surface.sunken" }}
         />
       )}
     </HStack>

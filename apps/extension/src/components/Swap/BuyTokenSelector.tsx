@@ -242,12 +242,13 @@ export default function BuyTokenSelector({
       {/* Trigger */}
       <Box
         cursor="pointer"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        bg="bauhaus.white"
+        border="2px solid"
+        borderColor="border.default"
+        borderRadius="md"
+        bg="surface.base"
         px={2}
         py={1.5}
-        _hover={{ borderColor: "bauhaus.blue" }}
+        _hover={{ borderColor: "accent.secondary" }}
         display="flex"
         alignItems="center"
         onClick={() => setIsOpen(!isOpen)}
@@ -268,22 +269,27 @@ export default function BuyTokenSelector({
         </HStack>
       </Box>
 
-      {/* Dropdown — positioned relative to the parent "You Buy" card */}
+      {/* Dropdown — positioned relative to the parent "You Buy" card. This
+          panel mirrors a Menu surface but is hand-rolled (not <MenuList>),
+          so we set its surface tokens explicitly. surface.sunken gives a
+          recessed look against the You Receive card so the panel reads as
+          a distinct layer in both themes. */}
       {isOpen && (
         <Box
           position="absolute"
           top="100%"
           left={0}
           right={0}
-          bg="bauhaus.white"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
+          bg="surface.sunken"
+          border="2px solid"
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="cardHover"
           zIndex={20}
           mt={-1}
         >
           {/* Search */}
-          <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+          <Box p={2} borderBottom="2px solid" borderColor="border.default">
             <Input
               ref={inputRef}
               placeholder="Search or paste address"
@@ -292,10 +298,9 @@ export default function BuyTokenSelector({
               onKeyDown={(e) => e.stopPropagation()}
               fontSize="sm"
               border="2px solid"
-              borderColor="bauhaus.black"
-              borderRadius={0}
-              bg="bauhaus.white"
-              _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+              borderColor="border.default"
+              bg="surface.raised"
+              _focus={{ borderColor: "accent.secondary", boxShadow: "none" }}
               size="sm"
             />
           </Box>
@@ -306,7 +311,7 @@ export default function BuyTokenSelector({
               px={2}
               py={2}
               borderBottom="2px solid"
-              borderColor="bauhaus.black"
+              borderColor="border.default"
             >
               <Wrap spacing={1.5}>
                 {popularTokens.map((t) => (
@@ -319,15 +324,16 @@ export default function BuyTokenSelector({
                       border="2px solid"
                       borderColor={
                         isSelectedAddr(t.address)
-                          ? "bauhaus.blue"
-                          : "bauhaus.black"
+                          ? "accent.secondary"
+                          : "border.default"
                       }
+                      borderRadius="md"
                       bg={
                         isSelectedAddr(t.address)
-                          ? "bg.muted"
-                          : "bauhaus.white"
+                          ? "surface.raisedHover"
+                          : "surface.raised"
                       }
-                      _hover={{ borderColor: "bauhaus.blue" }}
+                      _hover={{ borderColor: "accent.secondary" }}
                       onClick={() => handleSelect(t)}
                     >
                       <Image
@@ -384,10 +390,10 @@ export default function BuyTokenSelector({
                             ? NATIVE_TOKEN_ADDRESS
                             : h.contractAddress,
                         )
-                          ? "bg.muted"
+                          ? "surface.sunken"
                           : "transparent"
                       }
-                      _hover={{ bg: "bg.hover" }}
+                      _hover={{ bg: "surface.raisedHover" }}
                       onClick={() => handleHoldingSelect(h)}
                       spacing={2}
                     >
@@ -442,7 +448,7 @@ export default function BuyTokenSelector({
                   {visibleRest.length > 0 && (
                     <Box
                       borderBottom="2px solid"
-                      borderColor="bg.muted"
+                      borderColor="border.subtle"
                       mx={3}
                       my={1}
                     />
@@ -459,10 +465,10 @@ export default function BuyTokenSelector({
                   cursor="pointer"
                   bg={
                     isSelectedAddr(token.address)
-                      ? "bg.muted"
+                      ? "surface.sunken"
                       : "transparent"
                   }
-                  _hover={{ bg: "bg.hover" }}
+                  _hover={{ bg: "surface.raisedHover" }}
                   onClick={() => handleSelect(token)}
                   spacing={2}
                 >
@@ -505,21 +511,23 @@ export default function BuyTokenSelector({
               {/* Loading state for custom address resolution */}
               {buyTokenLoading && /^0x[a-fA-F0-9]{40}$/.test(search.trim()) && (
                 <HStack px={3} py={3} spacing={2} justify="center">
-                  <Spinner size="xs" color="bauhaus.blue" />
+                  <Spinner size="xs" color="accent.secondary" />
                   <Text fontSize="xs" fontWeight="700" color="text.tertiary">
                     Loading token...
                   </Text>
                 </HStack>
               )}
 
-              {/* Resolved token from pasted address — user must click to select */}
+              {/* Resolved token from pasted address — uses warm highlight to
+                  draw attention. User must click to select. */}
               {pendingToken && !buyTokenLoading && /^0x[a-fA-F0-9]{40}$/.test(search.trim()) && (
                 <HStack
                   px={3}
                   py={2}
                   cursor="pointer"
-                  bg="bauhaus.yellow"
-                  _hover={{ bg: "#e6b31c" }}
+                  bg="accent.highlight"
+                  color="accentFg.highlight"
+                  _hover={{ filter: "brightness(0.92)" }}
                   onClick={() => {
                     if (onConfirmPending) onConfirmPending(pendingToken);
                     setIsOpen(false);

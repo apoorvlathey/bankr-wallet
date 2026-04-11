@@ -10,6 +10,7 @@ import {
   MenuItem,
 } from "@chakra-ui/react";
 import { ArrowBackIcon, AddIcon, DeleteIcon, HamburgerIcon } from "@chakra-ui/icons";
+import { useStripTokens } from "@/theme";
 
 interface ChatHeaderProps {
   title: string;
@@ -26,11 +27,15 @@ export function ChatHeader({
   onDelete,
   showDelete = true,
 }: ChatHeaderProps) {
+  // Same dark-strip pair used by other inverted bars across the extension —
+  // see useStripTokens for the shared logic.
+  const { bg: stripBg, fg: stripFg } = useStripTokens();
+
   return (
     <Flex
       py={2}
       px={3}
-      bg="bauhaus.black"
+      bg={stripBg}
       alignItems="center"
       position="relative"
     >
@@ -41,7 +46,7 @@ export function ChatHeader({
         left="0"
         right="0"
         h="2px"
-        bg="bauhaus.yellow"
+        bg="accent.highlight"
       />
 
       <IconButton
@@ -49,7 +54,7 @@ export function ChatHeader({
         icon={<ArrowBackIcon />}
         variant="ghost"
         size="sm"
-        color="bauhaus.white"
+        color={stripFg}
         _hover={{ bg: "whiteAlpha.200" }}
         onClick={onBack}
         mr={2}
@@ -57,7 +62,7 @@ export function ChatHeader({
 
       <Text
         fontWeight="700"
-        color="bauhaus.white"
+        color={stripFg}
         fontSize="sm"
         flex="1"
         isTruncated
@@ -73,7 +78,7 @@ export function ChatHeader({
           icon={<AddIcon />}
           variant="ghost"
           size="sm"
-          color="bauhaus.white"
+          color={stripFg}
           _hover={{ bg: "whiteAlpha.200" }}
           onClick={onNewChat}
         />
@@ -86,23 +91,19 @@ export function ChatHeader({
               icon={<HamburgerIcon />}
               variant="ghost"
               size="sm"
-              color="bauhaus.white"
+              color={stripFg}
               _hover={{ bg: "whiteAlpha.200" }}
             />
-            <MenuList
-              bg="bauhaus.white"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="4px 4px 0px 0px #121212"
-              borderRadius="0"
-              py={0}
-              minW="150px"
-            >
+            {/* Menu baseStyle (createTheme.ts:494) already paints
+                bg/border/borderColor/borderRadius/boxShadow from theme tokens,
+                so no inline overrides for those. We DO override the per-item
+                hover bg — the default is `accent.highlight` (yellow/amber) and
+                that clashes with the destructive red text on this lone item. */}
+            <MenuList py={0} minW="150px">
               <MenuItem
-                icon={<DeleteIcon color="bauhaus.red" />}
-                bg="bauhaus.white"
+                icon={<DeleteIcon color="chart.negative" />}
                 _hover={{ bg: "bg.muted" }}
-                color="bauhaus.red"
+                color="chart.negative"
                 fontWeight="700"
                 onClick={onDelete}
               >

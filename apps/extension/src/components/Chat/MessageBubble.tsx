@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, Text, Link, Button, HStack, IconButton } from "@chakra-ui/react";
 import { LockIcon, RepeatIcon, CopyIcon, CheckIcon } from "@chakra-ui/icons";
 import { Message } from "@/chrome/chatStorage";
+import { useTheme } from "@/theme";
 import ShapesLoader from "./ShapesLoader";
 
 
@@ -53,24 +54,32 @@ interface MessageBubbleProps {
 }
 
 export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock, onRetry, onResend }: MessageBubbleProps) {
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const [copied, setCopied] = useState(false);
   const isUser = message.role === "user";
   const isPending = message.status === "pending";
   const isError = message.status === "error";
 
+  // User bubble — secondary accent (Bauhaus blue / Midnight cyan). Reads as
+  // the "cool / your input" half of the cool–warm pair with the assistant.
   const userStyles = {
-    bg: "bauhaus.blue",
-    color: "bauhaus.white",
+    bg: "accent.secondary",
+    color: "accentFg.secondary",
   };
 
+  // Assistant bubble — highlight accent (Bauhaus yellow / Midnight amber).
+  // The "warm / response" half of the pair.
   const assistantStyles = {
-    bg: "bauhaus.yellow",
-    color: "bauhaus.black",
+    bg: "accent.highlight",
+    color: "accentFg.highlight",
   };
 
+  // Error bubble — semantic status. Bauhaus paints saturated red/white;
+  // Midnight uses the recessed dark error tint with bright error foreground.
   const errorStyles = {
-    bg: "bauhaus.red",
-    color: "bauhaus.white",
+    bg: "status.error.bg",
+    color: "status.error.fg",
   };
 
   const styles = isError ? errorStyles : isUser ? userStyles : assistantStyles;
@@ -84,10 +93,10 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
         mb={2}
       >
         <Box
-          bg="bauhaus.yellow"
+          bg="accent.highlight"
           border="2px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
+          borderColor="border.default"
+          boxShadow="card"
           px={3}
           py={2}
         >
@@ -97,7 +106,7 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
               <Text
                 fontSize="xs"
                 fontWeight="600"
-                color="bauhaus.black"
+                color="accentFg.highlight"
                 opacity={0.8}
                 fontStyle="italic"
               >
@@ -119,31 +128,34 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
         mb={2}
       >
         <Box
-          bg="bauhaus.yellow"
+          bg="accent.highlight"
           border="2px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
+          borderColor="border.default"
+          boxShadow="card"
           p={3}
           position="relative"
         >
-          {/* Geometric decoration */}
-          <Box
-            position="absolute"
-            top="-4px"
-            left="-4px"
-            w="8px"
-            h="8px"
-            bg="bauhaus.red"
-            border="1.5px solid"
-            borderColor="bauhaus.black"
-          />
+          {/* Bauhaus geometric decoration — a tiny red square in the corner.
+              Midnight skips ornaments entirely (decorators field omitted). */}
+          {!isDarkTheme && (
+            <Box
+              position="absolute"
+              top="-4px"
+              left="-4px"
+              w="8px"
+              h="8px"
+              bg="accent.primary"
+              border="1.5px solid"
+              borderColor="border.default"
+            />
+          )}
 
           <Button
-            bg="bauhaus.white"
-            color="bauhaus.black"
+            bg="surface.raised"
+            color="fg.primary"
             border="2px solid"
-            borderColor="bauhaus.black"
-            boxShadow="3px 3px 0px 0px #121212"
+            borderColor="border.default"
+            boxShadow="card"
             borderRadius="0"
             fontWeight="700"
             textTransform="uppercase"
@@ -155,14 +167,16 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
             leftIcon={<RepeatIcon boxSize={4} />}
             transition="all 0.15s ease-out"
             _hover={{
-              bg: "bauhaus.black",
-              color: "bauhaus.white",
+              // Bauhaus inverts to black-on-white on hover; Midnight inverts
+              // to its light fg-on-dark inverse, same swap intent.
+              bg: "fg.primary",
+              color: "fg.inverse",
               transform: "translateY(-1px)",
-              boxShadow: "4px 4px 0px 0px #121212",
+              boxShadow: "cardHover",
             }}
             _active={{
               transform: "translate(2px, 2px)",
-              boxShadow: "1px 1px 0px 0px #121212",
+              boxShadow: "none",
             }}
             onClick={onRetry}
           >
@@ -184,25 +198,28 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
         bg={styles.bg}
         color={styles.color}
         border="2px solid"
-        borderColor="bauhaus.black"
-        boxShadow="3px 3px 0px 0px #121212"
+        borderColor="border.default"
+        boxShadow="card"
         p={2}
         position="relative"
         role="group"
       >
-        {/* Geometric decoration */}
-        <Box
-          position="absolute"
-          top="-4px"
-          right={isUser ? "-4px" : "auto"}
-          left={isUser ? "auto" : "-4px"}
-          w="8px"
-          h="8px"
-          bg="bauhaus.red"
-          borderRadius={isUser ? "full" : 0}
-          border="1.5px solid"
-          borderColor="bauhaus.black"
-        />
+        {/* Bauhaus geometric corner ornament — red square (assistant) or red
+            circle (user). Midnight omits ornaments. */}
+        {!isDarkTheme && (
+          <Box
+            position="absolute"
+            top="-4px"
+            right={isUser ? "-4px" : "auto"}
+            left={isUser ? "auto" : "-4px"}
+            w="8px"
+            h="8px"
+            bg="accent.primary"
+            borderRadius={isUser ? "full" : 0}
+            border="1.5px solid"
+            borderColor="border.default"
+          />
+        )}
 
         <Text
           fontWeight="500"
@@ -213,7 +230,10 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
         >
           {parseContentWithLinks(
             message.content,
-            isUser ? "bauhaus.yellow" : "bauhaus.blue"
+            // Cross-tint links: on the cool user bubble use the warm
+            // highlight; on the warm assistant bubble use the cool secondary.
+            // Same crossover in either palette (blue↔yellow / cyan↔amber).
+            isUser ? "accent.highlight" : "accent.secondary"
           )}
         </Text>
 
@@ -239,7 +259,7 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
                 icon={copied ? <CheckIcon /> : <CopyIcon />}
                 size="xs"
                 variant="ghost"
-                color={copied ? "bauhaus.yellow" : styles.color}
+                color={copied ? "accent.highlight" : styles.color}
                 opacity={copied ? 0.7 : 0}
                 _groupHover={{ opacity: 0.7 }}
                 _hover={{ opacity: "1 !important" }}
@@ -278,17 +298,18 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
             isWalletUnlocked ? (
               <Button
                 size="xs"
-                bg="bauhaus.white"
-                color="bauhaus.black"
+                bg="surface.raised"
+                color="fg.primary"
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
                 borderRadius="0"
                 fontWeight="700"
                 textTransform="uppercase"
                 fontSize="xs"
                 leftIcon={<RepeatIcon />}
                 _hover={{
-                  bg: "bauhaus.yellow",
+                  bg: "accent.highlight",
+                  color: "accentFg.highlight",
                 }}
                 onClick={onRetry}
               >
@@ -297,17 +318,18 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
             ) : (
               <Button
                 size="xs"
-                bg="bauhaus.white"
-                color="bauhaus.black"
+                bg="surface.raised"
+                color="fg.primary"
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
                 borderRadius="0"
                 fontWeight="700"
                 textTransform="uppercase"
                 fontSize="xs"
                 leftIcon={<LockIcon />}
                 _hover={{
-                  bg: "bauhaus.yellow",
+                  bg: "accent.highlight",
+                  color: "accentFg.highlight",
                 }}
                 onClick={onUnlock}
               >

@@ -19,6 +19,7 @@ import { getChainConfig } from "@/constants/chainConfig";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { getCombinedRequests, CombinedRequest } from "@/App";
 import ChainIcon from "@/components/ChainIcon";
+import { useStripTokens } from "@/theme";
 
 function getOriginHostname(origin: string): string | null {
   try {
@@ -63,6 +64,8 @@ function PendingTxList({
   onSelectCrossDappBatch,
   onRejectAll,
 }: PendingTxListProps) {
+  // Theme-aware count badge — same pattern used in batch / signature confirmation.
+  const { bg: stripBg, fg: stripFg } = useStripTokens();
   const combinedRequests = getCombinedRequests(
     txRequests,
     signatureRequests,
@@ -101,7 +104,7 @@ function PendingTxList({
   };
 
   return (
-    <Box p={4} minH="100%" bg="bg.base">
+    <Box p={4} minH="100%" bg="surface.base">
       <VStack spacing={4} align="stretch">
         {/* Header */}
         <HStack>
@@ -117,10 +120,10 @@ function PendingTxList({
           </Text>
           <Spacer />
           <Badge
-            bg="bauhaus.yellow"
-            color="bauhaus.black"
+            bg="accent.highlight"
+            color="accentFg.highlight"
             border="2px solid"
-            borderColor="bauhaus.black"
+            borderColor="border.default"
             px={3}
             py={1}
             fontWeight="700"
@@ -138,16 +141,16 @@ function PendingTxList({
               return (
                 <Box
                   key="cross-dapp-batch"
-                  bg="bauhaus.white"
+                  bg="surface.raised"
                   border="3px solid"
-                  borderColor="bauhaus.black"
-                  boxShadow="4px 4px 0px 0px #121212"
+                  borderColor="border.default"
+                  boxShadow="card"
                   p={3}
                   cursor="pointer"
                   onClick={() => onSelectCrossDappBatch?.()}
                   _hover={{
                     transform: "translateY(-2px)",
-                    boxShadow: "6px 6px 0px 0px #121212",
+                    boxShadow: "cardHover",
                   }}
                   _active={{
                     transform: "translate(2px, 2px)",
@@ -161,10 +164,10 @@ function PendingTxList({
                     top="-10px"
                     left="-3px"
                     fontSize="xs"
-                    bg="bauhaus.yellow"
-                    color="bauhaus.black"
+                    bg="accent.highlight"
+                    color="accentFg.highlight"
                     border="2px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                     px={1.5}
                     zIndex={1}
                   >
@@ -173,8 +176,8 @@ function PendingTxList({
                   <HStack justify="space-between">
                     <HStack spacing={3} flex={1}>
                       <Badge
-                        bg="bauhaus.black"
-                        color="bauhaus.white"
+                        bg={stripBg}
+                        color={stripFg}
                         fontSize="xs"
                         minW="28px"
                         textAlign="center"
@@ -202,7 +205,7 @@ function PendingTxList({
                             bg={config.bg}
                             color={config.text}
                             border="2px solid"
-                            borderColor="bauhaus.black"
+                            borderColor="border.default"
                             px={2}
                             py={0.5}
                             display="flex"
@@ -222,8 +225,8 @@ function PendingTxList({
                         </HStack>
                       </Box>
                     </HStack>
-                    <Box bg="bauhaus.black" p={1}>
-                      <ChevronRightIcon color="bauhaus.white" />
+                    <Box bg={stripBg} p={1}>
+                      <ChevronRightIcon color={stripFg} />
                     </Box>
                   </HStack>
                 </Box>
@@ -235,16 +238,16 @@ function PendingTxList({
               return (
                 <Box
                   key={request.id}
-                  bg="bauhaus.white"
+                  bg="surface.raised"
                   border="3px solid"
-                  borderColor="bauhaus.black"
-                  boxShadow="4px 4px 0px 0px #121212"
+                  borderColor="border.default"
+                  boxShadow="card"
                   p={3}
                   cursor="pointer"
                   onClick={() => onSelectTx(request)}
                   _hover={{
                     transform: "translateY(-2px)",
-                    boxShadow: "6px 6px 0px 0px #121212",
+                    boxShadow: "cardHover",
                   }}
                   _active={{
                     transform: "translate(2px, 2px)",
@@ -259,10 +262,10 @@ function PendingTxList({
                     top="-10px"
                     left="-3px"
                     fontSize="xs"
-                    bg="bauhaus.blue"
-                    color="white"
+                    bg="accent.secondary"
+                    color="accentFg.secondary"
                     border="2px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                     px={1.5}
                     zIndex={1}
                   >
@@ -272,8 +275,8 @@ function PendingTxList({
                   <HStack justify="space-between">
                     <HStack spacing={3} flex={1}>
                       <Badge
-                        bg="bauhaus.black"
-                        color="bauhaus.white"
+                        bg={stripBg}
+                        color={stripFg}
                         fontSize="xs"
                         minW="28px"
                         textAlign="center"
@@ -282,9 +285,9 @@ function PendingTxList({
                         #{index + 1}
                       </Badge>
                       <Box
-                        bg="bauhaus.white"
+                        bg="surface.raised"
                         border="2px solid"
-                        borderColor="bauhaus.black"
+                        borderColor="border.default"
                         p={1}
                       >
                         <Image
@@ -320,7 +323,7 @@ function PendingTxList({
                             bg={config.bg}
                             color={config.text}
                             border="2px solid"
-                            borderColor="bauhaus.black"
+                            borderColor="border.default"
                             px={2}
                             py={0.5}
                             display="flex"
@@ -342,8 +345,8 @@ function PendingTxList({
                         </HStack>
                       </Box>
                     </HStack>
-                    <Box bg="bauhaus.black" p={1}>
-                      <ChevronRightIcon color="bauhaus.white" />
+                    <Box bg={stripBg} p={1}>
+                      <ChevronRightIcon color={stripFg} />
                     </Box>
                   </HStack>
                 </Box>
@@ -354,16 +357,16 @@ function PendingTxList({
               return (
                 <Box
                   key={request.id}
-                  bg="bauhaus.white"
+                  bg="surface.raised"
                   border="3px solid"
-                  borderColor="bauhaus.black"
-                  boxShadow="4px 4px 0px 0px #121212"
+                  borderColor="border.default"
+                  boxShadow="card"
                   p={3}
                   cursor="pointer"
                   onClick={() => onSelectBatch?.(request)}
                   _hover={{
                     transform: "translateY(-2px)",
-                    boxShadow: "6px 6px 0px 0px #121212",
+                    boxShadow: "cardHover",
                   }}
                   _active={{
                     transform: "translate(2px, 2px)",
@@ -377,10 +380,10 @@ function PendingTxList({
                     top="-10px"
                     left="-3px"
                     fontSize="xs"
-                    bg="bauhaus.yellow"
-                    color="bauhaus.black"
+                    bg="accent.highlight"
+                    color="accentFg.highlight"
                     border="2px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                     px={1.5}
                     zIndex={1}
                   >
@@ -389,8 +392,8 @@ function PendingTxList({
                   <HStack justify="space-between">
                     <HStack spacing={3} flex={1}>
                       <Badge
-                        bg="bauhaus.black"
-                        color="bauhaus.white"
+                        bg={stripBg}
+                        color={stripFg}
                         fontSize="xs"
                         minW="28px"
                         textAlign="center"
@@ -399,9 +402,9 @@ function PendingTxList({
                         #{index + 1}
                       </Badge>
                       <Box
-                        bg="bauhaus.white"
+                        bg="surface.raised"
                         border="2px solid"
-                        borderColor="bauhaus.black"
+                        borderColor="border.default"
                         p={1}
                       >
                         <Image
@@ -430,7 +433,7 @@ function PendingTxList({
                             bg={config.bg}
                             color={config.text}
                             border="2px solid"
-                            borderColor="bauhaus.black"
+                            borderColor="border.default"
                             px={2}
                             py={0.5}
                             display="flex"
@@ -450,8 +453,8 @@ function PendingTxList({
                         </HStack>
                       </Box>
                     </HStack>
-                    <Box bg="bauhaus.black" p={1}>
-                      <ChevronRightIcon color="bauhaus.white" />
+                    <Box bg={stripBg} p={1}>
+                      <ChevronRightIcon color={stripFg} />
                     </Box>
                   </HStack>
                 </Box>
@@ -462,16 +465,16 @@ function PendingTxList({
               return (
                 <Box
                   key={request.id}
-                  bg="bauhaus.white"
+                  bg="surface.raised"
                   border="3px solid"
-                  borderColor="bauhaus.black"
-                  boxShadow="4px 4px 0px 0px #121212"
+                  borderColor="border.default"
+                  boxShadow="card"
                   p={3}
                   cursor="pointer"
                   onClick={() => onSelectSignature(request)}
                   _hover={{
                     transform: "translateY(-2px)",
-                    boxShadow: "6px 6px 0px 0px #121212",
+                    boxShadow: "cardHover",
                   }}
                   _active={{
                     transform: "translate(2px, 2px)",
@@ -486,10 +489,10 @@ function PendingTxList({
                     top="-10px"
                     left="-3px"
                     fontSize="xs"
-                    bg="bauhaus.red"
-                    color="white"
+                    bg="accent.primary"
+                    color="accentFg.primary"
                     border="2px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                     px={1.5}
                     zIndex={1}
                   >
@@ -499,8 +502,8 @@ function PendingTxList({
                   <HStack justify="space-between">
                     <HStack spacing={3} flex={1}>
                       <Badge
-                        bg="bauhaus.black"
-                        color="bauhaus.white"
+                        bg={stripBg}
+                        color={stripFg}
                         fontSize="xs"
                         minW="28px"
                         textAlign="center"
@@ -509,9 +512,9 @@ function PendingTxList({
                         #{index + 1}
                       </Badge>
                       <Box
-                        bg="bauhaus.white"
+                        bg="surface.raised"
                         border="2px solid"
-                        borderColor="bauhaus.black"
+                        borderColor="border.default"
                         p={1}
                       >
                         <Image
@@ -547,7 +550,7 @@ function PendingTxList({
                             bg={config.bg}
                             color={config.text}
                             border="2px solid"
-                            borderColor="bauhaus.black"
+                            borderColor="border.default"
                             px={2}
                             py={0.5}
                             display="flex"
@@ -567,8 +570,8 @@ function PendingTxList({
                         </HStack>
                       </Box>
                     </HStack>
-                    <Box bg="bauhaus.black" p={1}>
-                      <ChevronRightIcon color="bauhaus.white" />
+                    <Box bg={stripBg} p={1}>
+                      <ChevronRightIcon color={stripFg} />
                     </Box>
                   </HStack>
                 </Box>
@@ -581,9 +584,9 @@ function PendingTxList({
           <Box
             textAlign="center"
             py={8}
-            bg="bauhaus.white"
+            bg="surface.raised"
             border="3px solid"
-            borderColor="bauhaus.black"
+            borderColor="border.default"
           >
             <Text color="text.secondary" fontWeight="500">No pending requests</Text>
           </Box>

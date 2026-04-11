@@ -25,7 +25,8 @@ import {
 } from "@chakra-ui/react";
 import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon } from "@chakra-ui/icons";
 import { blo } from "blo";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
+import { useTheme } from "@/theme";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { isResolvableName } from "@/lib/ensUtils";
@@ -67,15 +68,15 @@ function truncateAddress(address: string): string {
 
 function getAccountTypePillStyles(account: Account) {
   if (account.type === "bankr") {
-    return { label: "Bankr", bg: "bauhaus.blue", color: "white" };
+    return { label: "Bankr", bg: "accent.secondary", color: "accentFg.secondary" };
   }
   if (account.type === "privateKey") {
-    return { label: "Private Key", bg: "bauhaus.yellow", color: "bauhaus.black" };
+    return { label: "Private Key", bg: "accent.highlight", color: "accentFg.highlight" };
   }
   if (account.type === "seedPhrase") {
-    return { label: "Seed Phrase", bg: "bauhaus.red", color: "white" };
+    return { label: "Seed Phrase", bg: "accent.primary", color: "accentFg.primary" };
   }
-  return { label: "View Only", bg: "bauhaus.green", color: "white" };
+  return { label: "View Only", bg: "status.success.fg", color: "status.success.bg" };
 }
 
 interface TokenTransferProps {
@@ -99,7 +100,8 @@ function TokenTransfer({
   onTransferInitiated,
   onSwapInstead,
 }: TokenTransferProps) {
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
+  const { tokens } = useTheme();
   const { networksInfo } = useNetworks();
   const [selectedChainId, setSelectedChainId] = useState(initialToken?.chainId || chainId);
   const [selectedToken, setSelectedToken] = useState<PortfolioToken | null>(initialToken || null);
@@ -586,7 +588,7 @@ function TokenTransfer({
   };
 
   return (
-    <Box p={4} minH="100%" bg="bg.base">
+    <Box p={4} minH="100%" bg="surface.base">
       <VStack spacing={3} align="stretch">
         {/* Header */}
         <HStack spacing={2} justify="space-between">
@@ -606,7 +608,7 @@ function TokenTransfer({
             <Text
               fontSize="xs"
               fontWeight="700"
-              color="bauhaus.blue"
+              color="accent.secondary"
               cursor="pointer"
               onClick={() => onSwapInstead(selectedToken)}
               _hover={{ textDecoration: "underline" }}
@@ -622,16 +624,16 @@ function TokenTransfer({
             spacing={2}
             px={2.5}
             py={1.5}
-            bg="bauhaus.yellow"
+            bg="accent.highlight"
             border="2px solid"
-            borderColor="bauhaus.black"
+            borderColor="border.default"
             justify="space-between"
           >
             <Box>
-              <Text fontSize="2xs" color="bauhaus.black" fontWeight="700">
+              <Text fontSize="2xs" color="accentFg.highlight" fontWeight="700">
                 ✨ Stake 20M+ sWCHAN for gas-free USDC sends
               </Text>
-              <Text fontSize="2xs" color="blackAlpha.700" fontWeight="600">
+              <Text fontSize="2xs" color="accentFg.highlight" opacity={0.7} fontWeight="600">
                 and other pro features!
               </Text>
             </Box>
@@ -639,14 +641,8 @@ function TokenTransfer({
               size="xs"
               h="22px"
               px={2}
-              bg="bauhaus.yellow"
-              color="bauhaus.black"
-              fontWeight="800"
+              variant="highlight"
               fontSize="2xs"
-              borderRadius={0}
-              border="2px solid"
-              borderColor="bauhaus.black"
-              _hover={{ bg: "#e0b01c" }}
               onClick={() => window.open(WALLETCHAN_STAKE_URL, "_blank")}
               flexShrink={0}
             >
@@ -660,10 +656,11 @@ function TokenTransfer({
           <Skeleton h="64px" />
         ) : (
           <Box
-            bg="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="surface.raised"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={3}
           >
             <HStack spacing={3}>
@@ -691,31 +688,31 @@ function TokenTransfer({
                   <HStack spacing={1.5}>
                     <ChainIcon chainId={selectedChainId} chainName={chainName} size="36px" />
                     <Box
-                      bg="bauhaus.white"
+                      bg="surface.raised"
                       border="1.5px solid"
-                      borderColor="bauhaus.black"
-                      borderRadius="none"
+                      borderColor="border.default"
+                      borderRadius="md"
                       minW="18px"
                       h="18px"
                       display="flex"
                       alignItems="center"
                       justifyContent="center"
-                      boxShadow="2px 2px 0px 0px #121212"
+                      boxShadow="card"
                     >
                       <ChevronDownIcon boxSize="12px" />
                     </Box>
                   </HStack>
                 </MenuButton>
                 <MenuList
-                  bg="bauhaus.white"
-                  border="3px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius={0}
-                  boxShadow="4px 4px 0px 0px #121212"
+                  bg="surface.raised"
+                  border={tokens.borders.medium}
+                  borderColor="border.default"
+                  borderRadius="lg"
+                  boxShadow="card"
                   p={0}
                   zIndex={10}
                 >
-                  <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+                  <Box p={2} borderBottom={tokens.borders.thin} borderColor="border.default">
                     <InputGroup size="sm">
                       <InputLeftElement pointerEvents="none">
                         <Search2Icon color="text.tertiary" boxSize={3} />
@@ -725,13 +722,8 @@ function TokenTransfer({
                         value={chainSearch}
                         onChange={(e) => setChainSearch(e.target.value)}
                         placeholder="Search chains"
-                        border="2px solid"
-                        borderColor="bauhaus.black"
-                        borderRadius="0"
                         fontWeight="600"
                         pl={9}
-                        _hover={{ borderColor: "bauhaus.black" }}
-                        _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
                         onKeyDown={(e) => {
                           if (e.key === "ArrowDown") {
                             e.preventDefault();
@@ -798,10 +790,10 @@ function TokenTransfer({
                                 textTransform="uppercase"
                                 px={1.5}
                                 py={0.5}
-                                bg="bauhaus.yellow"
-                                color="bauhaus.black"
+                                bg="accent.highlight"
+                                color="accentFg.highlight"
                                 border="1px solid"
-                                borderColor="bauhaus.black"
+                                borderColor="border.default"
                                 lineHeight="1"
                               >
                                 Testnet
@@ -849,10 +841,10 @@ function TokenTransfer({
                         textTransform="uppercase"
                         px={1.5}
                         py={0.5}
-                        bg="bauhaus.yellow"
-                        color="bauhaus.black"
+                        bg="accent.highlight"
+                        color="accentFg.highlight"
                         border="1px solid"
-                        borderColor="bauhaus.black"
+                        borderColor="border.default"
                         lineHeight="1"
                         flexShrink={0}
                       >
@@ -896,7 +888,7 @@ function TokenTransfer({
                     rightIcon={<ChevronDownIcon boxSize="14px" />}
                     fontWeight="800"
                     fontSize="10px"
-                    color="bauhaus.blue"
+                    color="accent.secondary"
                     textTransform="uppercase"
                     letterSpacing="wide"
                     px={1}
@@ -907,10 +899,11 @@ function TokenTransfer({
                     My Wallets
                   </MenuButton>
                   <MenuList
-                    bg="bauhaus.white"
-                    border="3px solid"
-                    borderColor="bauhaus.black"
-                    borderRadius="0"
+                    bg="surface.raised"
+                    border={tokens.borders.medium}
+                    borderColor="border.default"
+                    borderRadius="lg"
+                    boxShadow="card"
                     py={1}
                     maxH="200px"
                     overflowY="auto"
@@ -934,7 +927,7 @@ function TokenTransfer({
                             minW="20px"
                             borderRadius={getAccountAvatar(account) === "/bankr-icon.png" ? "sm" : "full"}
                             border="2px solid"
-                            borderColor="bauhaus.black"
+                            borderColor="border.default"
                           />
                           <VStack align="start" spacing={0.5}>
                             <Text fontSize="xs" fontWeight="700" color="text.primary" noOfLines={1}>
@@ -951,7 +944,7 @@ function TokenTransfer({
                               py={0}
                               borderRadius="sm"
                               border="1px solid"
-                              borderColor="bauhaus.black"
+                              borderColor="border.default"
                             >
                               <Text
                                 fontSize="8px"
@@ -974,7 +967,7 @@ function TokenTransfer({
             {/* Resolution status - top right */}
             {recipient && (isResolving || isLoadingExtras) && (
               <HStack spacing={1}>
-                <Spinner size="xs" color="bauhaus.blue" />
+                <Spinner size="xs" color="accent.secondary" />
                 <Text fontSize="xs" color="text.tertiary" fontWeight="700">
                   Resolving...
                 </Text>
@@ -989,7 +982,7 @@ function TokenTransfer({
                     boxSize="14px"
                     borderRadius="full"
                     border="1px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                   />
                 )}
                 <Text fontSize="xs" color="text.tertiary" fontFamily="mono" fontWeight="700">
@@ -1002,13 +995,13 @@ function TokenTransfer({
                   variant="ghost"
                   minW="18px"
                   h="18px"
-                  color={copied ? "bauhaus.yellow" : "text.tertiary"}
+                  color={copied ? "accent.highlight" : "text.tertiary"}
                   onClick={async () => {
                     await navigator.clipboard.writeText(resolvedAddress);
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}
-                  _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                  _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                 />
                 {explorerUrl && (
                   <IconButton
@@ -1020,7 +1013,7 @@ function TokenTransfer({
                     h="18px"
                     color="text.tertiary"
                     onClick={() => window.open(`${explorerUrl}/address/${resolvedAddress}`, "_blank")}
-                    _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                    _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                   />
                 )}
               </HStack>
@@ -1034,7 +1027,7 @@ function TokenTransfer({
                     boxSize="14px"
                     borderRadius="full"
                     border="1px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                   />
                 )}
                 <Text fontSize="xs" color="text.tertiary" fontWeight="700">
@@ -1049,19 +1042,10 @@ function TokenTransfer({
             onChange={(e) => setRecipient(e.target.value.trim())}
             fontFamily="mono"
             fontSize="sm"
-            border="3px solid"
-            borderColor={
-              recipient && !isResolving && !isRecipientValid
-                ? "bauhaus.red"
-                : "bauhaus.black"
-            }
-            borderRadius="0"
-            bg="bauhaus.white"
-            _hover={{ borderColor: "bauhaus.blue" }}
-            _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+            isInvalid={!!recipient && !isResolving && !isRecipientValid}
           />
           {recipient && !isResolving && !isRecipientValid && (
-            <Text fontSize="xs" color="bauhaus.red" fontWeight="700" mt={1}>
+            <Text fontSize="xs" color="status.error.fg" fontWeight="700" mt={1}>
               {resolverError || "Invalid address or name"}
             </Text>
           )}
@@ -1077,7 +1061,7 @@ function TokenTransfer({
               <Button
                 size="xs"
                 variant="ghost"
-                color="bauhaus.blue"
+                color="accent.secondary"
                 fontWeight="800"
                 fontSize="xs"
                 h="20px"
@@ -1107,12 +1091,6 @@ function TokenTransfer({
               }}
               fontFamily="mono"
               fontSize="sm"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              borderRadius="0"
-              bg="bauhaus.white"
-              _hover={{ borderColor: "bauhaus.blue" }}
-              _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
               pl={isUsdMode ? "28px" : undefined}
               pr="60px"
             />
@@ -1120,7 +1098,7 @@ function TokenTransfer({
               <Button
                 size="xs"
                 variant="ghost"
-                color="bauhaus.blue"
+                color="accent.secondary"
                 fontWeight="800"
                 onClick={handleMaxAmount}
                 _hover={{ bg: "bg.muted" }}
@@ -1163,29 +1141,30 @@ function TokenTransfer({
                     mt={3}
                     fontSize="xs"
                     fontWeight="800"
-                    color={sliderValue >= pct ? "bauhaus.blue" : "gray.400"}
+                    color={sliderValue >= pct ? "accent.secondary" : "fg.muted"}
                     whiteSpace="nowrap"
                     transform="translateX(-50%)"
                   >
                     {pct}%
                   </SliderMark>
                 ))}
-                <SliderTrack bg="gray.200" h="6px" borderRadius={0}>
-                  <SliderFilledTrack bg="bauhaus.blue" />
+                {/* Slider baseStyle (createTheme.ts) drives track/thumb radii
+                    from theme tokens — Bauhaus square, Midnight rounded. */}
+                <SliderTrack bg="bg.muted" h="6px">
+                  <SliderFilledTrack bg="accent.secondary" />
                 </SliderTrack>
                 <SliderThumb
                   boxSize={5}
-                  bg="bauhaus.blue"
-                  border="3px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius={0}
+                  bg="accent.secondary"
+                  border={tokens.borders.medium}
+                  borderColor="border.default"
                   _focus={{ boxShadow: "none" }}
                 />
               </Slider>
             </Box>
           )}
           {amount && !isAmountValid() && parseFloat(amount) > 0 && (
-            <Text fontSize="xs" color="bauhaus.red" fontWeight="700" mt={1}>
+            <Text fontSize="xs" color="status.error.fg" fontWeight="700" mt={1}>
               Insufficient balance
             </Text>
           )}
@@ -1194,16 +1173,17 @@ function TokenTransfer({
         {/* Sponsored USDC banner */}
         {isUsdcOnBase && !premiumLoading && premiumStatus?.isPremium && accountType !== "impersonator" && (
           <Box
-            bg="bauhaus.blue"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="3px 3px 0px 0px #121212"
+            bg="accent.secondary"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={3}
           >
-            <Text fontSize="md" color="bauhaus.white" fontWeight="900" textTransform="uppercase" textAlign="center">
+            <Text fontSize="md" color="accentFg.secondary" fontWeight="900" textTransform="uppercase" textAlign="center">
               Gas Sponsored by us!
             </Text>
-            <Text fontSize="xs" color="whiteAlpha.800" fontWeight="700" textAlign="center" mt={0.5}>
+            <Text fontSize="xs" color="accentFg.secondary" opacity={0.8} fontWeight="700" textAlign="center" mt={0.5}>
               Free USDC transfer for sWCHAN stakers
             </Text>
           </Box>
@@ -1215,31 +1195,25 @@ function TokenTransfer({
         {/* Sponsored transfer failed — fallback to normal send */}
         {sponsoredFailed && (
           <Box
-            bg="bauhaus.red"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="3px 3px 0px 0px #121212"
+            bg="status.error.bg"
+            border={tokens.borders.medium}
+            borderColor="status.error.border"
+            borderRadius="lg"
+            boxShadow="card"
             p={3}
           >
-            <Text fontSize="xs" color="bauhaus.white" fontWeight="800">
+            <Text fontSize="xs" color="status.error.fg" fontWeight="800">
               ⚠️ Gas-free transfer is temporarily unavailable.
             </Text>
-            <Text fontSize="xs" color="whiteAlpha.800" fontWeight="700" mt={1}>
+            <Text fontSize="xs" color="status.error.fg" opacity={0.8} fontWeight="700" mt={1}>
               You can still send by paying gas yourself.
             </Text>
             <Button
               mt={2}
               w="full"
               size="sm"
-              bg="bauhaus.yellow"
-              color="bauhaus.black"
-              border="2px solid"
-              borderColor="bauhaus.black"
-              borderRadius={0}
-              boxShadow="2px 2px 0px 0px #121212"
-              fontWeight="800"
+              variant="highlight"
               fontSize="xs"
-              textTransform="uppercase"
               isLoading={isSubmitting}
               onClick={handleFallbackSend}
               animation="fallbackBounce 1.5s ease-in-out infinite"
@@ -1249,8 +1223,8 @@ function TokenTransfer({
                   "50%": { transform: "translateY(-3px)" },
                 },
               }}
-              _hover={{ bg: "#e0b01c", animation: "none", transform: "translateY(-1px)", boxShadow: "3px 3px 0px 0px #121212" }}
-              _active={{ animation: "none", transform: "translate(1px, 1px)", boxShadow: "none" }}
+              _hover={{ animation: "none", opacity: 0.9 }}
+              _active={{ animation: "none" }}
             >
               ⛽ Send (Pay Gas)
             </Button>
@@ -1260,13 +1234,14 @@ function TokenTransfer({
         {/* Impersonator warning */}
         {accountType === "impersonator" && (
           <Box
-            bg="bauhaus.yellow"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="3px 3px 0px 0px #121212"
+            bg="accent.highlight"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={3}
           >
-            <Text fontSize="sm" color="bauhaus.black" fontWeight="700">
+            <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
               View-only account — transfers are disabled.
             </Text>
           </Box>
@@ -1287,21 +1262,17 @@ function TokenTransfer({
             onClick={handleSubmit}
             isLoading={isSubmitting}
             isDisabled={!canSubmit || accountType === "impersonator"}
-            bg="bauhaus.blue"
-            color="white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="accent.secondary"
+            color="accentFg.secondary"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            boxShadow="card"
             fontWeight="700"
             fontSize={isSponsoredFlow ? "xs" : undefined}
             _hover={{
-              bg: "bauhaus.blue",
-              transform: "translateY(-2px)",
-              boxShadow: "6px 6px 0px 0px #121212",
-            }}
-            _active={{
-              transform: "translate(2px, 2px)",
-              boxShadow: "none",
+              bg: "accent.secondary",
+              opacity: 0.9,
+              boxShadow: "cardHover",
             }}
           >
             {isSponsoredFlow ? "Sign (Gas-Free)" : "Send"}

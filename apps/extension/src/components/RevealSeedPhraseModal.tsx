@@ -116,19 +116,13 @@ function RevealSeedPhraseModal({ isOpen, onClose, account }: RevealSeedPhraseMod
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} isCentered>
-      <ModalOverlay bg="blackAlpha.700" />
-      <ModalContent
-        bg="bauhaus.white"
-        border="4px solid"
-        borderColor="bauhaus.black"
-        borderRadius="0"
-        boxShadow="8px 8px 0px 0px #121212"
-        mx={4}
-      >
+      <ModalOverlay bg="surface.overlay" />
+      {/* Modal baseStyle paints bg/border/borderRadius/boxShadow from theme tokens. */}
+      <ModalContent mx={4}>
         <ModalHeader color="text.primary" fontSize="md" pb={2} textTransform="uppercase" letterSpacing="wider">
           <Box display="flex" alignItems="center" gap={2}>
-            <Box p={1} bg="bauhaus.red" border="2px solid" borderColor="bauhaus.black">
-              <WarningTwoIcon color="white" />
+            <Box p={1} bg="accent.primary" border="2px solid" borderColor="border.default">
+              <WarningTwoIcon color="accentFg.primary" />
             </Box>
             Reveal Seed Phrase
           </Box>
@@ -146,13 +140,13 @@ function RevealSeedPhraseModal({ isOpen, onClose, account }: RevealSeedPhraseMod
               <Box
                 w="full"
                 p={3}
-                bg="bauhaus.yellow"
+                bg="status.warning.bg"
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="status.warning.border"
               >
                 <HStack spacing={2}>
-                  <LockIcon color="bauhaus.black" />
-                  <Text color="bauhaus.black" fontSize="sm" fontWeight="700">
+                  <LockIcon color="status.warning.fg" />
+                  <Text color="status.warning.fg" fontSize="sm" fontWeight="700">
                     You are unlocked with an agent password.
                   </Text>
                 </HStack>
@@ -165,7 +159,7 @@ function RevealSeedPhraseModal({ isOpen, onClose, account }: RevealSeedPhraseMod
               <Text color="text.secondary" fontSize="sm" fontWeight="500">
                 To reveal the seed phrase:
               </Text>
-              <Box pl={4} borderLeft="4px solid" borderColor="bauhaus.blue">
+              <Box pl={4} borderLeft="4px solid" borderColor="accent.secondary">
                 <Text color="text.secondary" fontSize="sm">1. Lock your wallet</Text>
                 <Text color="text.secondary" fontSize="sm">2. Unlock with your master password</Text>
                 <Text color="text.secondary" fontSize="sm">3. Try revealing the seed phrase again</Text>
@@ -176,11 +170,11 @@ function RevealSeedPhraseModal({ isOpen, onClose, account }: RevealSeedPhraseMod
               <Box
                 w="full"
                 p={3}
-                bg="bauhaus.red"
+                bg="status.error.bg"
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="status.error.border"
               >
-                <Text color="white" fontSize="sm" fontWeight="700">
+                <Text color="status.error.fg" fontSize="sm" fontWeight="700">
                   Never share your seed phrase. Anyone with it has full control of all derived accounts.
                 </Text>
               </Box>
@@ -205,17 +199,7 @@ function RevealSeedPhraseModal({ isOpen, onClose, account }: RevealSeedPhraseMod
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleReveal();
                   }}
-                  bg="white"
-                  border="3px solid"
-                  borderColor={error ? "bauhaus.red" : "bauhaus.black"}
-                  borderRadius="0"
-                  _focus={{
-                    borderColor: error ? "bauhaus.red" : "bauhaus.blue",
-                    boxShadow: "none",
-                  }}
-                  _hover={{
-                    borderColor: error ? "bauhaus.red" : "bauhaus.black",
-                  }}
+                  isInvalid={!!error}
                 />
                 <InputRightElement>
                   <IconButton
@@ -230,7 +214,7 @@ function RevealSeedPhraseModal({ isOpen, onClose, account }: RevealSeedPhraseMod
               </InputGroup>
 
               {error && (
-                <Text color="bauhaus.red" fontSize="sm" fontWeight="600">
+                <Text color="chart.negative" fontSize="sm" fontWeight="600">
                   {error}
                 </Text>
               )}
@@ -240,11 +224,11 @@ function RevealSeedPhraseModal({ isOpen, onClose, account }: RevealSeedPhraseMod
               <Box
                 w="full"
                 p={3}
-                bg="bauhaus.red"
+                bg="status.error.bg"
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="status.error.border"
               >
-                <Text color="white" fontSize="sm" fontWeight="700">
+                <Text color="status.error.fg" fontSize="sm" fontWeight="700">
                   Do not share this seed phrase. Anyone with it can steal your funds.
                 </Text>
               </Box>
@@ -252,9 +236,9 @@ function RevealSeedPhraseModal({ isOpen, onClose, account }: RevealSeedPhraseMod
               <Box
                 w="full"
                 p={3}
-                bg="gray.50"
-                border="3px solid"
-                borderColor="bauhaus.black"
+                bg="surface.sunken"
+                border="2px solid"
+                borderColor="border.default"
                 position="relative"
               >
                 <Code

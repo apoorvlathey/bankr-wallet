@@ -15,6 +15,7 @@ import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { GasEstimate } from "@/chrome/gasEstimation";
 import { GasOverrides } from "@/chrome/txHandlers";
 import { formatEth, formatGwei } from "@/lib/gasFormatUtils";
+import { useTheme } from "@/theme";
 
 interface GasEstimateDisplayProps {
   txRequest: PendingTxRequest;
@@ -64,16 +65,9 @@ function EditableGasRow({
           fontFamily="mono"
           fontWeight="700"
           fontSize="xs"
-          border="2px solid"
-          borderColor={isInvalid ? "bauhaus.red" : "bauhaus.black"}
-          borderRadius="0"
-          bg="bauhaus.white"
+          isInvalid={isInvalid}
           px={2}
           h="24px"
-          _focus={{
-            borderColor: isInvalid ? "bauhaus.red" : "bauhaus.blue",
-            boxShadow: "none",
-          }}
         />
         <Text fontSize="xs" color="text.tertiary" fontWeight="600" minW="35px">
           {suffix}
@@ -114,6 +108,7 @@ function gweiStrToWei(gweiStr: string): string | null {
 
 function RevertWarning({ shortError, fullError }: { shortError: string; fullError: string }) {
   const [copied, setCopied] = useState(false);
+  const { tokens } = useTheme();
 
   const handleCopy = async () => {
     try {
@@ -125,16 +120,17 @@ function RevertWarning({ shortError, fullError }: { shortError: string; fullErro
 
   return (
     <HStack
-      bg="bauhaus.red"
-      border="3px solid"
-      borderColor="bauhaus.black"
-      boxShadow="3px 3px 0px 0px #121212"
+      bg="status.error.bg"
+      border={tokens.borders.medium}
+      borderColor="status.error.border"
+      borderRadius="lg"
+      boxShadow="card"
       px={3}
       py={2}
       spacing={2}
     >
-      <WarningIcon color="white" boxSize={3.5} flexShrink={0} />
-      <Text fontSize="xs" color="white" fontWeight="700" textTransform="uppercase" flex="1" noOfLines={2}>
+      <WarningIcon color="status.error.fg" boxSize={3.5} flexShrink={0} />
+      <Text fontSize="xs" color="status.error.fg" fontWeight="700" textTransform="uppercase" flex="1" noOfLines={2}>
         TX may revert: {shortError}
       </Text>
       <Tooltip label="Copy full error" fontSize="xs" hasArrow>
@@ -143,9 +139,9 @@ function RevertWarning({ shortError, fullError }: { shortError: string; fullErro
           icon={copied ? <CheckIcon /> : <CopyIcon />}
           size="xs"
           variant="ghost"
-          color={copied ? "bauhaus.yellow" : "whiteAlpha.800"}
+          color={copied ? "accent.highlight" : "status.error.fg"}
           onClick={handleCopy}
-          _hover={{ color: "white", bg: "whiteAlpha.200" }}
+          _hover={{ color: "status.error.fg", bg: "blackAlpha.200" }}
           flexShrink={0}
         />
       </Tooltip>
@@ -154,6 +150,7 @@ function RevertWarning({ shortError, fullError }: { shortError: string; fullErro
 }
 
 function GasEstimateDisplay({ txRequest, accountType, onGasOverrides, forceInclusion }: GasEstimateDisplayProps) {
+  const { tokens } = useTheme();
   const [estimate, setEstimate] = useState<GasEstimate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -271,13 +268,14 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides, forceInclu
   if (loading) {
     return (
       <Box
-        border="3px solid"
-        borderColor="bauhaus.black"
-        bg="bauhaus.white"
-        boxShadow="4px 4px 0px 0px #121212"
+        border={tokens.borders.medium}
+        borderColor="border.default"
+        borderRadius="lg"
+        bg="surface.raised"
+        boxShadow="card"
       >
         <HStack px={3} py={3} justify="center">
-          <Spinner size="xs" color="bauhaus.blue" />
+          <Spinner size="xs" color="accent.secondary" />
           <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
             Estimating gas...
           </Text>
@@ -290,10 +288,11 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides, forceInclu
   if (error && !estimate) {
     return (
       <Box
-        border="3px solid"
-        borderColor="bauhaus.black"
-        bg="bauhaus.white"
-        boxShadow="4px 4px 0px 0px #121212"
+        border={tokens.borders.medium}
+        borderColor="border.default"
+        borderRadius="lg"
+        bg="surface.raised"
+        boxShadow="card"
         px={3}
         py={2}
       >
@@ -322,16 +321,17 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides, forceInclu
       {/* Insufficient balance warning */}
       {estimate.insufficientBalance && !estimate.estimationFailed && (
         <HStack
-          bg="bauhaus.yellow"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
+          bg="accent.highlight"
+          border={tokens.borders.medium}
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
           px={3}
           py={2}
           spacing={2}
         >
-          <WarningIcon color="bauhaus.black" boxSize={3.5} />
-          <Text fontSize="xs" color="bauhaus.black" fontWeight="700" textTransform="uppercase">
+          <WarningIcon color="accentFg.highlight" boxSize={3.5} />
+          <Text fontSize="xs" color="accentFg.highlight" fontWeight="700" textTransform="uppercase">
             Insufficient balance for gas
           </Text>
         </HStack>
@@ -340,13 +340,14 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides, forceInclu
       {/* Force inclusion L1 gas banner */}
       {forceInclusion && (
         <Box
-          bg="bauhaus.blue"
-          border="2px solid"
-          borderColor="bauhaus.black"
+          bg="accent.secondary"
+          border={tokens.borders.thin}
+          borderColor="border.default"
+          borderRadius="md"
           px={3}
           py={1.5}
         >
-          <Text fontSize="2xs" color="white" fontWeight="700" textTransform="uppercase">
+          <Text fontSize="2xs" color="accentFg.secondary" fontWeight="700" textTransform="uppercase">
             Gas estimated for L1 deposit transaction
           </Text>
         </Box>
@@ -354,10 +355,11 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides, forceInclu
 
       {/* Gas estimate box */}
       <Box
-        border="3px solid"
-        borderColor="bauhaus.black"
-        bg="bauhaus.white"
-        boxShadow="4px 4px 0px 0px #121212"
+        border={tokens.borders.medium}
+        borderColor="border.default"
+        borderRadius="lg"
+        bg="surface.raised"
+        boxShadow="card"
         position="relative"
       >
         {/* Collapsed header */}
@@ -390,7 +392,7 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides, forceInclu
         {/* Expanded details */}
         <Collapse in={expanded} animateOpacity>
           <VStack align="stretch" spacing={1.5} px={3} pb={3} pt={1}>
-            <Box h="1px" bg="gray.200" />
+            <Box h="1px" bg="border.subtle" />
 
             {isEditable ? (
               <>
@@ -426,7 +428,7 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides, forceInclu
 
             <GasRow label="Base Fee" value={formatGwei(estimate.baseFee)} />
 
-            <Box h="1px" bg="gray.200" mt={0.5} />
+            <Box h="1px" bg="border.subtle" mt={0.5} />
 
             <GasRow
               label="Estimated Cost"
@@ -434,7 +436,7 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides, forceInclu
             />
 
             {estimate.dappProvidedGas && (
-              <Text fontSize="2xs" color="bauhaus.blue" fontWeight="700">
+              <Text fontSize="2xs" color="accent.secondary" fontWeight="700">
                 Gas params suggested by dapp
               </Text>
             )}
@@ -446,7 +448,7 @@ function GasEstimateDisplay({ txRequest, accountType, onGasOverrides, forceInclu
             )}
 
             {hasEdited && !allValid && (
-              <Text fontSize="2xs" color="bauhaus.red" fontWeight="700">
+              <Text fontSize="2xs" color="status.error.fg" fontWeight="700">
                 Invalid gas parameters
               </Text>
             )}

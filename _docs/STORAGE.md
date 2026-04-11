@@ -78,11 +78,12 @@ Syncs across Chrome profiles (if signed in). Persists across restarts.
 
 | Key                  | Shape         | Description                                                                                             | Introduced |
 | -------------------- | ------------- | ------------------------------------------------------------------------------------------------------- | ---------- |
-| `autoLockTimeout`    | `number` (ms) | Auto-lock timeout. `0` = Never (default). Values: 0, 60000, 300000, 900000, 1800000, 3600000, 14400000. | v1.0.0     |
-| `sidePanelMode`      | `boolean`     | Whether sidepanel mode is enabled (vs popup).                                                           | v0.2.0     |
-| `sidePanelVerified`  | `boolean`     | Whether sidepanel has been verified for this browser.                                                   | v0.2.0     |
-| `isArcBrowser`       | `boolean`     | Detected Arc browser — disables sidepanel.                                                              | v0.2.0     |
-| `hidePortfolioValue` | `boolean`     | User preference to hide USD values in portfolio.                                                        | v1.0.0     |
+| `autoLockTimeout`    | `number` (ms)               | Auto-lock timeout. `0` = Never (default). Values: 0, 60000, 300000, 900000, 1800000, 3600000, 14400000. | v1.0.0     |
+| `sidePanelMode`      | `boolean`                   | Whether sidepanel mode is enabled (vs popup).                                                           | v0.2.0     |
+| `sidePanelVerified`  | `boolean`                   | Whether sidepanel has been verified for this browser.                                                   | v0.2.0     |
+| `isArcBrowser`       | `boolean`                   | Detected Arc browser — disables sidepanel.                                                              | v0.2.0     |
+| `hidePortfolioValue` | `boolean`                   | User preference to hide USD values in portfolio.                                                        | v1.0.0     |
+| `selectedThemeId`    | `"bauhaus" \| "midnight"`   | Active theme ID. Absent = default `"bauhaus"`. Mirrored to `window.localStorage` for synchronous pre-React boot (no flash). See `_docs/THEMING_PRD.md`. | v3.2.0 |
 
 ---
 

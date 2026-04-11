@@ -37,7 +37,7 @@ function BlockieAvatar({
       h={`${size}px`}
       borderRadius="sm"
       border="2px solid"
-      borderColor="bauhaus.black"
+      borderColor="border.default"
     />
   );
 }
@@ -52,7 +52,7 @@ function BankrAvatar({ size = 20 }: { size?: number }) {
       h={`${size}px`}
       borderRadius="sm"
       border="2px solid"
-      borderColor="bauhaus.black"
+      borderColor="border.default"
     />
   );
 }
@@ -69,7 +69,7 @@ function EnsAvatar({ src, size = 20 }: { src: string; size?: number }) {
       minW={`${adjustedSize}px`}
       borderRadius="full"
       border="2px solid"
-      borderColor="bauhaus.black"
+      borderColor="border.default"
       objectFit="cover"
     />
   );
@@ -212,13 +212,13 @@ function AccountSwitcher({
         as={Button}
         w="full"
         variant="ghost"
-        bg="bauhaus.white"
+        bg="surface.raised"
         border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="4px 4px 0px 0px #121212"
+        borderColor="border.default"
+        boxShadow="card"
         _hover={{
           transform: "translateY(-2px)",
-          boxShadow: "6px 6px 0px 0px #121212",
+          boxShadow: "cardHover",
         }}
         _active={{
           transform: "translate(2px, 2px)",
@@ -231,8 +231,6 @@ function AccountSwitcher({
         py={2}
         px={3}
         pr={5}
-        borderRadius="0"
-        transition="all 0.2s ease-out"
         overflow="hidden"
         position="relative"
       >
@@ -290,29 +288,29 @@ function AccountSwitcher({
             </HStack>
             <HStack spacing={1} flexWrap="wrap" ml="24px">
               {activeAccount.displayName && getEnsName(activeAccount) && (
-                <Box bg="gray.600" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
+                <Box bg="gray.600" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
                   <Text fontSize="8px" color="white" fontWeight="800" letterSpacing="wide" noOfLines={1}>
                     {getEnsName(activeAccount)}
                   </Text>
                 </Box>
               )}
               {activeAccount.type === "bankr" && (
-                <Box bg="bauhaus.blue" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
-                  <Text fontSize="8px" color="white" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Bankr</Text>
+                <Box bg="accent.secondary" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
+                  <Text fontSize="8px" color="accentFg.secondary" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Bankr</Text>
                 </Box>
               )}
               {activeAccount.type === "privateKey" && (
-                <Box bg="bauhaus.yellow" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
-                  <Text fontSize="8px" color="bauhaus.black" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Private Key</Text>
+                <Box bg="accent.highlight" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
+                  <Text fontSize="8px" color="accentFg.highlight" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Private Key</Text>
                 </Box>
               )}
               {activeAccount.type === "seedPhrase" && (
-                <Box bg="bauhaus.red" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
-                  <Text fontSize="8px" color="white" fontWeight="800" textTransform="uppercase" letterSpacing="wide">{getSeedLabel(activeAccount, seedGroupMap) || "Seed"}</Text>
+                <Box bg="accent.primary" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
+                  <Text fontSize="8px" color="accentFg.primary" fontWeight="800" textTransform="uppercase" letterSpacing="wide">{getSeedLabel(activeAccount, seedGroupMap) || "Seed"}</Text>
                 </Box>
               )}
               {activeAccount.type === "impersonator" && (
-                <Box bg="bauhaus.green" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
+                <Box bg="status.success.fg" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
                   <Text fontSize="8px" color="white" fontWeight="800" textTransform="uppercase" letterSpacing="wide">View Only</Text>
                 </Box>
               )}
@@ -353,29 +351,29 @@ function AccountSwitcher({
               </Text>
               <HStack spacing={1} flexWrap="wrap">
               {activeAccount.displayName && getEnsName(activeAccount) && (
-                <Box bg="gray.600" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
+                <Box bg="gray.600" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
                   <Text fontSize="8px" color="white" fontWeight="800" letterSpacing="wide" noOfLines={1}>
                     {getEnsName(activeAccount)}
                   </Text>
                 </Box>
               )}
               {activeAccount.type === "bankr" && (
-                <Box bg="bauhaus.blue" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
-                  <Text fontSize="8px" color="white" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Bankr</Text>
+                <Box bg="accent.secondary" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
+                  <Text fontSize="8px" color="accentFg.secondary" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Bankr</Text>
                 </Box>
               )}
               {activeAccount.type === "privateKey" && (
-                <Box bg="bauhaus.yellow" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
-                  <Text fontSize="8px" color="bauhaus.black" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Private Key</Text>
+                <Box bg="accent.highlight" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
+                  <Text fontSize="8px" color="accentFg.highlight" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Private Key</Text>
                 </Box>
               )}
               {activeAccount.type === "seedPhrase" && (
-                <Box bg="bauhaus.red" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
-                  <Text fontSize="8px" color="white" fontWeight="800" textTransform="uppercase" letterSpacing="wide">{getSeedLabel(activeAccount, seedGroupMap) || "Seed"}</Text>
+                <Box bg="accent.primary" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
+                  <Text fontSize="8px" color="accentFg.primary" fontWeight="800" textTransform="uppercase" letterSpacing="wide">{getSeedLabel(activeAccount, seedGroupMap) || "Seed"}</Text>
                 </Box>
               )}
               {activeAccount.type === "impersonator" && (
-                <Box bg="bauhaus.green" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="bauhaus.black">
+                <Box bg="status.success.fg" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
                   <Text fontSize="8px" color="white" fontWeight="800" textTransform="uppercase" letterSpacing="wide">View Only</Text>
                 </Box>
               )}
@@ -389,11 +387,10 @@ function AccountSwitcher({
         </Box>
       </MenuButton>
       <MenuList
-        bg="bauhaus.white"
+        bg="surface.raised"
         border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="4px 4px 0px 0px #121212"
-        borderRadius="0"
+        borderColor="border.default"
+        boxShadow="card"
         py={0}
         maxH="300px"
         overflowY="auto"
@@ -401,10 +398,10 @@ function AccountSwitcher({
         {accounts.map((account, i) => (
           <MenuItem
             key={account.id}
-            bg={account.id === activeAccount?.id ? "bg.muted" : "bauhaus.white"}
+            bg={account.id === activeAccount?.id ? "surface.raisedHover" : "surface.raised"}
             _hover={{ bg: "bg.muted" }}
             borderBottom={i < accounts.length - 1 ? "2px solid" : "none"}
-            borderColor="bauhaus.black"
+            borderColor="border.default"
             py={3}
             onClick={() => onAccountSelect(account)}
           >
@@ -433,8 +430,8 @@ function AccountSwitcher({
                         variant="ghost"
                         minW="16px"
                         h="16px"
-                        color={copiedId === account.id ? "bauhaus.green" : "text.tertiary"}
-                        _hover={{ color: "bauhaus.blue", bg: "transparent" }}
+                        color={copiedId === account.id ? "status.success.fg" : "text.tertiary"}
+                        _hover={{ color: "accent.secondary", bg: "transparent" }}
                         onClick={(e) => {
                           e.stopPropagation();
                           navigator.clipboard.writeText(account.address);
@@ -443,7 +440,7 @@ function AccountSwitcher({
                         }}
                       />
                       {account.id === activeAccount?.id && (
-                        <Box w="8px" h="8px" flexShrink={0} bg="bauhaus.green" borderRadius="full" border="2px solid" borderColor="bauhaus.black" />
+                        <Box w="8px" h="8px" flexShrink={0} bg="status.success.fg" borderRadius="full" border="2px solid" borderColor="border.default" />
                       )}
                     </>
                   )}
@@ -460,8 +457,8 @@ function AccountSwitcher({
                       variant="ghost"
                       minW="16px"
                       h="16px"
-                      color={copiedId === account.id ? "bauhaus.green" : "text.tertiary"}
-                      _hover={{ color: "bauhaus.blue", bg: "transparent" }}
+                      color={copiedId === account.id ? "status.success.fg" : "text.tertiary"}
+                      _hover={{ color: "accent.secondary", bg: "transparent" }}
                       onClick={(e) => {
                         e.stopPropagation();
                         navigator.clipboard.writeText(account.address);
@@ -470,7 +467,7 @@ function AccountSwitcher({
                       }}
                     />
                     {account.id === activeAccount?.id && (
-                      <Box w="8px" h="8px" flexShrink={0} bg="bauhaus.green" borderRadius="full" border="2px solid" borderColor="bauhaus.black" />
+                      <Box w="8px" h="8px" flexShrink={0} bg="status.success.fg" borderRadius="full" border="2px solid" borderColor="border.default" />
                     )}
                   </HStack>
                 )}
@@ -482,7 +479,7 @@ function AccountSwitcher({
                       py={0}
                       borderRadius="sm"
                       border="1px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
                       mt={0.5}
                     >
                       <Text
@@ -498,17 +495,17 @@ function AccountSwitcher({
                   )}
                   {account.type === "bankr" && (
                     <Box
-                      bg="bauhaus.blue"
+                      bg="accent.secondary"
                       px={1.5}
                       py={0}
                       borderRadius="sm"
                       border="1px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
                       mt={0.5}
                     >
                       <Text
                         fontSize="8px"
-                        color="white"
+                        color="accentFg.secondary"
                         fontWeight="800"
                         textTransform="uppercase"
                         letterSpacing="wide"
@@ -517,19 +514,20 @@ function AccountSwitcher({
                       </Text>
                     </Box>
                   )}
+
                   {account.type === "privateKey" && (
                     <Box
-                      bg="bauhaus.yellow"
+                      bg="accent.highlight"
                       px={1.5}
                       py={0}
                       borderRadius="sm"
                       border="1px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
                       mt={0.5}
                     >
                       <Text
                         fontSize="8px"
-                        color="bauhaus.black"
+                        color="accentFg.highlight"
                         fontWeight="800"
                         textTransform="uppercase"
                         letterSpacing="wide"
@@ -540,17 +538,17 @@ function AccountSwitcher({
                   )}
                   {account.type === "seedPhrase" && (
                     <Box
-                      bg="bauhaus.red"
+                      bg="accent.primary"
                       px={1.5}
                       py={0}
                       borderRadius="sm"
                       border="1px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
                       mt={0.5}
                     >
                       <Text
                         fontSize="8px"
-                        color="white"
+                        color="accentFg.primary"
                         fontWeight="800"
                         textTransform="uppercase"
                         letterSpacing="wide"
@@ -561,12 +559,12 @@ function AccountSwitcher({
                   )}
                   {account.type === "impersonator" && (
                     <Box
-                      bg="bauhaus.green"
+                      bg="status.success.fg"
                       px={1.5}
                       py={0}
                       borderRadius="sm"
                       border="1px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
                       mt={0.5}
                     >
                       <Text
@@ -589,7 +587,7 @@ function AccountSwitcher({
                   size="xs"
                   variant="ghost"
                   color="text.secondary"
-                  _hover={{ color: "bauhaus.blue", bg: "transparent" }}
+                  _hover={{ color: "accent.secondary", bg: "transparent" }}
                   onClick={(e) => {
                     e.stopPropagation();
                     onAccountSettings(account);
@@ -599,24 +597,24 @@ function AccountSwitcher({
             </HStack>
           </MenuItem>
         ))}
-        <MenuDivider m={0} borderColor="bauhaus.black" borderWidth="2px" />
+        <MenuDivider m={0} borderColor="border.default" borderWidth="2px" />
         <MenuItem
-          bg="bauhaus.white"
+          bg="surface.raised"
           _hover={{ bg: "bg.muted" }}
           py={3}
           onClick={onAddAccount}
         >
           <HStack spacing={3}>
             <Box
-              bg="bauhaus.red"
+              bg="accent.primary"
               border="2px solid"
-              borderColor="bauhaus.black"
+              borderColor="border.default"
               p={1}
               display="flex"
               alignItems="center"
               justifyContent="center"
             >
-              <AddIcon boxSize="14px" color="white" />
+              <AddIcon boxSize="14px" color="accentFg.primary" />
             </Box>
             <Text fontSize="sm" color="text.primary" fontWeight="700">
               Add Account

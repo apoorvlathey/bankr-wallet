@@ -21,6 +21,7 @@ import { getResolvedChainById } from "@/lib/chains";
 import TxDetailModal from "@/components/TxDetailModal";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import ChainIcon from "@/components/ChainIcon";
+import { useIconChipBg } from "@/theme";
 
 interface TxStatusListProps {
   maxItems?: number;
@@ -293,6 +294,7 @@ function TxStatusItem({
   onClick: () => void;
 }) {
   const { networksInfo } = useNetworks();
+  const iconChipBg = useIconChipBg();
   const config = getChainConfig(tx.chainId);
   const explorerBase =
     getResolvedChainById(tx.chainId, networksInfo)?.explorer ||
@@ -356,8 +358,8 @@ function TxStatusItem({
     if (isForcePendingL1) {
       return (
         <HStack spacing={1}>
-          <Spinner size="xs" color="bauhaus.blue" boxSize="10px" />
-          <Text fontSize="2xs" color="bauhaus.blue" fontWeight="600">
+          <Spinner size="xs" color="accent.secondary" boxSize="10px" />
+          <Text fontSize="2xs" color="accent.secondary" fontWeight="600">
             L1 Pending
           </Text>
         </HStack>
@@ -368,12 +370,12 @@ function TxStatusItem({
     if (isForcePendingL2) {
       return (
         <VStack spacing={0} align="flex-end">
-          <Text fontSize="2xs" color="green.500" fontWeight="600">
+          <Text fontSize="2xs" color="chart.positive" fontWeight="600">
             L1 Confirmed
           </Text>
           <HStack spacing={1}>
-            <Spinner size="xs" color="bauhaus.blue" boxSize="10px" />
-            <Text fontSize="2xs" color="bauhaus.blue" fontWeight="600">
+            <Spinner size="xs" color="accent.secondary" boxSize="10px" />
+            <Text fontSize="2xs" color="accent.secondary" fontWeight="600">
               L2 Pending
             </Text>
           </HStack>
@@ -385,8 +387,8 @@ function TxStatusItem({
       case "processing":
         return (
           <HStack spacing={1}>
-            <Spinner size="xs" color="bauhaus.blue" />
-            <Text fontSize="xs" color="bauhaus.blue" fontWeight="600">
+            <Spinner size="xs" color="accent.secondary" />
+            <Text fontSize="xs" color="accent.secondary" fontWeight="600">
               Processing
             </Text>
           </HStack>
@@ -394,15 +396,15 @@ function TxStatusItem({
       case "pending":
         return (
           <HStack spacing={1}>
-            <Spinner size="xs" color="bauhaus.blue" />
-            <Text fontSize="xs" color="bauhaus.blue" fontWeight="600">
+            <Spinner size="xs" color="accent.secondary" />
+            <Text fontSize="xs" color="accent.secondary" fontWeight="600">
               Pending...
             </Text>
           </HStack>
         );
       case "success":
         return (
-          <Text fontSize="2xs" color="green.500" fontWeight="600">
+          <Text fontSize="2xs" color="chart.positive" fontWeight="600">
             {tx.forceInclusionMeta ? "L1 + L2 Confirmed" : "Confirmed"}
           </Text>
         );
@@ -419,8 +421,8 @@ function TxStatusItem({
         }
         return (
           <HStack spacing={1}>
-            <WarningIcon boxSize={2.5} color="bauhaus.red" />
-            <Text fontSize="xs" color="bauhaus.red" fontWeight="600">
+            <WarningIcon boxSize={2.5} color="chart.negative" />
+            <Text fontSize="xs" color="chart.negative" fontWeight="600">
               {label}
             </Text>
           </HStack>
@@ -435,9 +437,9 @@ function TxStatusItem({
       px={1}
       cursor="pointer"
       onClick={onClick}
-      _hover={{ bg: "blackAlpha.50" }}
+      _hover={{ bg: "bg.muted" }}
       borderBottom="1px solid"
-      borderColor="gray.100"
+      borderColor="border.subtle"
       transition="background 0.15s"
     >
       <HStack spacing={3} align="center">
@@ -450,7 +452,7 @@ function TxStatusItem({
               position="absolute"
               left={0}
               top={0}
-              bg="gray.100"
+              bg="bg.muted"
               borderRadius="full"
               w="28px"
               h="28px"
@@ -458,7 +460,8 @@ function TxStatusItem({
               alignItems="center"
               justifyContent="center"
               overflow="hidden"
-              border="2px solid white"
+              border="2px solid"
+              borderColor="surface.raised"
               zIndex={1}
             >
               {tx.swapMeta.sellTokenLogo ? (
@@ -472,7 +475,7 @@ function TxStatusItem({
               position="absolute"
               left="14px"
               top={0}
-              bg="gray.100"
+              bg="bg.muted"
               borderRadius="full"
               w="28px"
               h="28px"
@@ -480,7 +483,8 @@ function TxStatusItem({
               alignItems="center"
               justifyContent="center"
               overflow="hidden"
-              border="2px solid white"
+              border="2px solid"
+              borderColor="surface.raised"
               zIndex={2}
             >
               {tx.swapMeta.buyTokenLogo ? (
@@ -496,9 +500,9 @@ function TxStatusItem({
               w="16px"
               h="16px"
               borderRadius="full"
-              bg="white"
+              bg={iconChipBg}
               border="1.5px solid"
-              borderColor="gray.200"
+              borderColor="border.subtle"
               display="flex"
               alignItems="center"
               justifyContent="center"
@@ -511,7 +515,7 @@ function TxStatusItem({
           /* Standard: single favicon with chain icon overlay */
           <Box position="relative" flexShrink={0} w="36px" h="36px">
             <Box
-              bg="gray.100"
+              bg={iconChipBg}
               borderRadius="full"
               w="36px"
               h="36px"
@@ -529,9 +533,9 @@ function TxStatusItem({
               w="16px"
               h="16px"
               borderRadius="full"
-              bg="white"
+              bg={iconChipBg}
               border="1.5px solid"
-              borderColor="gray.200"
+              borderColor="border.subtle"
               display="flex"
               alignItems="center"
               justifyContent="center"
@@ -572,7 +576,7 @@ function TxStatusItem({
                       color="text.tertiary"
                       cursor="pointer"
                       onClick={handleViewTx}
-                      _hover={{ color: "bauhaus.blue" }}
+                      _hover={{ color: "accent.secondary" }}
                     />
                   )}
                 </>
@@ -599,7 +603,7 @@ function TxStatusItem({
                       color="text.tertiary"
                       cursor="pointer"
                       onClick={handleViewTx}
-                      _hover={{ color: "bauhaus.blue" }}
+                      _hover={{ color: "accent.secondary" }}
                     />
                   )}
               </HStack>

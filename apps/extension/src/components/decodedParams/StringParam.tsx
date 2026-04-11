@@ -15,6 +15,8 @@ interface StringParamProps {
 type TabKey = "rich" | "raw" | "image" | "rawSvg";
 
 export function StringParam({ value, chainId, disableRich }: StringParamProps) {
+  // See UintParam for the rationale behind chart.numeric.
+  const numericColor = "chart.numeric";
   const [activeTab, setActiveTab] = useState<TabKey>("rich");
   const [fetchedContent, setFetchedContent] = useState<string | null>(null);
   const [fetchedImage, setFetchedImage] = useState<string | null>(null);
@@ -113,14 +115,14 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
               fontWeight="800"
               textTransform="uppercase"
               letterSpacing="wide"
-              bg={activeTab === t.key ? "bauhaus.black" : "transparent"}
-              color={activeTab === t.key ? "bauhaus.white" : "text.tertiary"}
+              bg={activeTab === t.key ? "fg.primary" : "transparent"}
+              color={activeTab === t.key ? "fg.inverse" : "text.tertiary"}
               border="1.5px solid"
-              borderColor="bauhaus.black"
+              borderColor="border.default"
               borderRadius={0}
               borderRight={t.key !== tabs[tabs.length - 1].key ? "none" : undefined}
               onClick={() => setActiveTab(t.key)}
-              _hover={{ bg: "bauhaus.black", color: "bauhaus.white" }}
+              _hover={{ bg: "fg.primary", color: "fg.inverse" }}
               _active={{ transform: "translate(1px, 1px)" }}
             >
               {t.label}
@@ -133,7 +135,7 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
       {activeTab === "rich" && (
         <Box w="full">
           {jsonContent ? (
-            <RichJsonTable json={jsonContent} chainId={chainId} />
+            <RichJsonTable json={jsonContent} chainId={chainId} numericColor={numericColor} />
           ) : base64Result && !base64Result.isJSON && !base64Result.isSVG ? (
             <Box>
               <Text fontSize="9px" color="text.tertiary" fontWeight="700" textTransform="uppercase" mb={1}>
@@ -142,7 +144,9 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
               <ScrollableText value={base64Result.decoded} />
             </Box>
           ) : svgContent ? (
-            <Box border="2px solid" borderColor="bauhaus.black" p={2} bg="white" maxW="200px">
+            // SVG preview tile is intentionally a literal white "physical
+            // surface" — same rationale as the QR code tile in QRCodeModal.
+            <Box border="2px solid" borderColor="border.default" p={2} bg="white" maxW="200px">
               <Image
                 src={`data:image/svg+xml;utf8,${encodeURIComponent(svgContent)}`}
                 maxH="120px"
@@ -151,7 +155,7 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
             </Box>
           ) : isURL ? (
             <HStack spacing={1}>
-              <Code fontSize="xs" fontFamily="mono" bg="transparent" color="bauhaus.blue" fontWeight="600" p={0}>
+              <Code fontSize="xs" fontFamily="mono" bg="transparent" color="accent.secondary" fontWeight="600" p={0}>
                 {str.length > 60 ? `${str.slice(0, 60)}...` : str}
               </Code>
               <CopyButton value={str} />
@@ -173,7 +177,7 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
             p={2}
             bg="bg.muted"
             border="2px solid"
-            borderColor="bauhaus.black"
+            borderColor="border.default"
             fontSize="10px"
             fontFamily="mono"
             maxH="120px"
@@ -182,7 +186,7 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
             wordBreak="break-all"
             css={{
               "&::-webkit-scrollbar": { width: "4px" },
-              "&::-webkit-scrollbar-thumb": { background: "#121212" },
+              "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-default)" },
             }}
           >
             {JSON.stringify(JSON.parse(jsonContent), null, 2)}
@@ -190,9 +194,9 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
         </Box>
       )}
 
-      {/* Image view */}
+      {/* Image view — literal white tile is intentional (physical surface) */}
       {activeTab === "image" && (
-        <Box border="2px solid" borderColor="bauhaus.black" p={2} bg="white" maxW="200px">
+        <Box border="2px solid" borderColor="border.default" p={2} bg="white" maxW="200px">
           {fetchedImage ? (
             <Image src={fetchedImage} maxH="120px" objectFit="contain" />
           ) : svgContent ? (
@@ -216,7 +220,7 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
             p={2}
             bg="bg.muted"
             border="2px solid"
-            borderColor="bauhaus.black"
+            borderColor="border.default"
             fontSize="10px"
             fontFamily="mono"
             maxH="120px"
@@ -225,7 +229,7 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
             wordBreak="break-all"
             css={{
               "&::-webkit-scrollbar": { width: "4px" },
-              "&::-webkit-scrollbar-thumb": { background: "#121212" },
+              "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-default)" },
             }}
           >
             {svgContent}
@@ -272,18 +276,26 @@ function ScrollableText({ value }: { value: string }) {
         fontFamily="mono"
         fontWeight="600"
         border="2px solid"
-        borderColor="bauhaus.black"
+        borderColor="border.default"
         borderRadius={0}
         maxH="80px"
         resize="none"
         bg="bg.muted"
-        _focus={{ borderColor: "bauhaus.blue" }}
+        _focus={{ borderColor: "border.focus" }}
       />
     </Box>
   );
 }
 
-function RichJsonTable({ json, chainId }: { json: string; chainId: number }) {
+function RichJsonTable({
+  json,
+  chainId,
+  numericColor,
+}: {
+  json: string;
+  chainId: number;
+  numericColor: string;
+}) {
   try {
     const parsed = JSON.parse(json);
 
@@ -308,7 +320,7 @@ function RichJsonTable({ json, chainId }: { json: string; chainId: number }) {
             >
               {key}:
             </Text>
-            <RichJsonValue value={val} chainId={chainId} />
+            <RichJsonValue value={val} chainId={chainId} numericColor={numericColor} />
           </HStack>
         ))}
       </VStack>
@@ -318,7 +330,15 @@ function RichJsonTable({ json, chainId }: { json: string; chainId: number }) {
   }
 }
 
-function RichJsonValue({ value, chainId }: { value: any; chainId: number }) {
+function RichJsonValue({
+  value,
+  chainId,
+  numericColor,
+}: {
+  value: any;
+  chainId: number;
+  numericColor: string;
+}) {
   if (typeof value === "string" && isAddress(value)) {
     return <AddressParam value={value} chainId={chainId} />;
   }
@@ -346,7 +366,7 @@ function RichJsonValue({ value, chainId }: { value: any; chainId: number }) {
       fontSize="xs"
       fontFamily="mono"
       bg="transparent"
-      color={typeof value === "number" ? "#B8860B" : "text.primary"}
+      color={typeof value === "number" ? numericColor : "text.primary"}
       fontWeight="600"
       p={0}
     >

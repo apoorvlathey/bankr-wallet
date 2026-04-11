@@ -20,6 +20,7 @@ import EditCustomTokenModal from "@/components/EditCustomTokenModal";
 import ChainIcon from "@/components/ChainIcon";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById, getVisibleChains } from "@/lib/chains";
+import { Decorator } from "@/theme";
 
 interface TokenHoldingsProps {
   address: string;
@@ -194,10 +195,10 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
     if (hideCard) return errorContent;
     return (
       <Box
-        bg="bauhaus.white"
+        bg="surface.raised"
         border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="4px 4px 0px 0px #121212"
+        borderColor="border.default"
+        boxShadow="card"
         p={0}
       >
         <Box p={3}>{errorContent}</Box>
@@ -210,7 +211,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       {loading && tokens.length === 0 ? (
         // Loading skeletons
         Array.from({ length: 3 }).map((_, i) => (
-          <HStack key={i} w="full" p={2.5} px={3} borderBottom="1px solid" borderColor="gray.200">
+          <HStack key={i} w="full" p={2.5} px={3} borderBottom="1px solid" borderColor="border.subtle">
             <Skeleton boxSize="24px" borderRadius="sm" />
             <VStack align="start" spacing={0} flex={1}>
               <Skeleton h="14px" w="60px" />
@@ -244,7 +245,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
               p={2.5}
               px={3}
               borderBottom={i < filteredTokens.length - 1 || filteredDefiPositions.length > 0 ? "1px solid" : "none"}
-              borderColor="gray.200"
+              borderColor="border.subtle"
               cursor={hasHover ? "pointer" : "default"}
               _hover={{ bg: "bg.muted", "& > .hover-actions": { opacity: 1 }, "& > .edit-label": { opacity: 1, pointerEvents: "auto" }, "& > .value-col": { opacity: 0 }, "& .copy-addr-btn": { opacity: 1 } }}
               onClick={() => onTokenClick?.(token)}
@@ -268,7 +269,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                     <Text
                       fontSize="10px"
                       fontWeight="800"
-                      color="bauhaus.red"
+                      color="accent.highlight"
                       textTransform="uppercase"
                       letterSpacing="wider"
                       cursor="pointer"
@@ -285,7 +286,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                     <Text
                       fontSize="10px"
                       fontWeight="800"
-                      color="bauhaus.blue"
+                      color="accent.secondary"
                       textTransform="uppercase"
                       letterSpacing="wider"
                       pointerEvents="none"
@@ -302,7 +303,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                   right={3}
                   fontSize="10px"
                   fontWeight="800"
-                  color="bauhaus.red"
+                  color="accent.primary"
                   textTransform="uppercase"
                   letterSpacing="wider"
                   opacity={0}
@@ -362,9 +363,9 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                       bottom="-2px"
                       right="-4px"
                       border="1.5px solid"
-                      borderColor="white"
+                      borderColor="surface.base"
                       borderRadius="full"
-                      bg="white"
+                      bg="surface.base"
                       overflow="hidden"
                       boxSize="14px"
                       display="flex"
@@ -379,7 +380,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
 
               {/* Token info */}
               <VStack align="start" spacing={0} flex={1} minW={0}>
-                <HStack spacing={0.5}>
+                <HStack spacing={1.5}>
                   <Text fontSize="xs" fontWeight="700" color="text.primary" noOfLines={1} textTransform="uppercase">
                     {token.symbol}
                   </Text>
@@ -390,14 +391,14 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                       icon={copiedAddr === `${token.chainId}-${token.contractAddress}` ? <CheckIcon /> : <CopyIcon />}
                       size="xs"
                       variant="ghost"
-                      color={copiedAddr === `${token.chainId}-${token.contractAddress}` ? "bauhaus.yellow" : "text.tertiary"}
+                      color={copiedAddr === `${token.chainId}-${token.contractAddress}` ? "accent.highlight" : "text.tertiary"}
                       opacity={copiedAddr === `${token.chainId}-${token.contractAddress}` ? 1 : 0}
                       transition="opacity 0.15s"
                       minW="auto"
                       h="auto"
                       p={0}
                       fontSize="10px"
-                      _hover={{ color: "bauhaus.blue" }}
+                      _hover={{ color: "accent.secondary" }}
                       onClick={(e) => {
                         e.stopPropagation();
                         navigator.clipboard.writeText(token.contractAddress);
@@ -443,7 +444,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                 py={2}
                 bg="bg.muted"
                 borderBottom="1px solid"
-                borderColor="gray.200"
+                borderColor="border.subtle"
               >
                 <Text fontSize="10px" fontWeight="800" color="text.secondary" textTransform="uppercase" letterSpacing="wider">
                   DeFi Positions
@@ -456,7 +457,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                     key={`defi-${pos.protocol}-${pos.name}-${i}`}
                     w="full"
                     borderBottom={i < filteredDefiPositions.length - 1 ? "1px solid" : "none"}
-                    borderColor="gray.200"
+                    borderColor="border.subtle"
                   >
                     {/* Position header */}
                     <HStack w="full" p={2.5} px={3} spacing={2}>
@@ -494,9 +495,9 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                           bottom="-2px"
                           right="-4px"
                           border="1.5px solid"
-                          borderColor="white"
+                          borderColor="surface.base"
                           borderRadius="full"
-                          bg="white"
+                          bg="surface.base"
                         >
                           <ChainIcon
                             chainId={pos.chainId}
@@ -521,7 +522,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                               h="auto"
                               p={0}
                               fontSize="10px"
-                              _hover={{ color: "bauhaus.blue" }}
+                              _hover={{ color: "accent.secondary" }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 window.open(pos.siteUrl, "_blank");
@@ -582,7 +583,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                                 <Box
                                   bg="bg.muted"
                                   border="1.5px solid"
-                                  borderColor="gray.300"
+                                  borderColor="border.subtle"
                                   borderRadius="full"
                                   w="16px"
                                   h="16px"
@@ -635,27 +636,18 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
 
   return (
     <Box
-      bg="bauhaus.white"
+      bg="surface.raised"
       border="3px solid"
-      borderColor="bauhaus.black"
-      boxShadow="4px 4px 0px 0px #121212"
+      borderColor="border.default"
+      boxShadow="card"
       position="relative"
     >
-      {/* Corner decoration */}
-      <Box
-        position="absolute"
-        top="-3px"
-        right="-3px"
-        w="10px"
-        h="10px"
-        bg="bauhaus.yellow"
-        border="2px solid"
-        borderColor="bauhaus.black"
-      />
+      {/* Corner decoration — Bauhaus only; Decorator renders nothing in Midnight */}
+      <Decorator corner="top-right" accent="highlight" />
 
       {/* Header */}
       {!hideHeader && (
-        <HStack p={3} borderBottom="2px solid" borderColor="bauhaus.black" justify="space-between">
+        <HStack p={3} borderBottom="2px solid" borderColor="border.default" justify="space-between">
           <HStack spacing={2}>
             <Text fontSize="sm" fontWeight="700" color="text.secondary" textTransform="uppercase">
               Holdings
@@ -676,7 +668,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                 variant="ghost"
                 color="text.secondary"
                 onClick={toggleHideValue}
-                _hover={{ color: "bauhaus.blue" }}
+                _hover={{ color: "accent.secondary" }}
                 minW="auto"
               />
             </Tooltip>
@@ -688,7 +680,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                 variant="ghost"
                 color="text.secondary"
                 onClick={() => loadPortfolio(true)}
-                _hover={{ color: "bauhaus.blue" }}
+                _hover={{ color: "accent.secondary" }}
                 minW="auto"
                 isDisabled={loading}
               />

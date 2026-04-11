@@ -80,15 +80,9 @@ export default function SlippageSettings({
           <GearIcon boxSize={3} color="text.tertiary" />
         </HStack>
       </PopoverTrigger>
-      <PopoverContent
-        bg="bauhaus.white"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        borderRadius={0}
-        boxShadow="3px 3px 0px 0px #121212"
-        w="200px"
-        _focus={{ boxShadow: "3px 3px 0px 0px #121212" }}
-      >
+      {/* Popover baseStyle (createTheme.ts) paints
+          bg/border/borderColor/borderRadius/boxShadow from theme tokens. */}
+      <PopoverContent w="200px">
         <PopoverBody p={3}>
           <VStack spacing={2} align="stretch">
             <HStack spacing={1}>
@@ -102,16 +96,19 @@ export default function SlippageSettings({
                     flex={1}
                     justify="center"
                     py={1}
-                    bg={isActive ? "bauhaus.blue" : "bg.muted"}
-                    color={isActive ? "bauhaus.white" : "text.primary"}
+                    // Active preset uses the cool secondary accent
+                    // (Bauhaus blue → Midnight cyan); idle uses the recessed
+                    // surface for a subtle inset look in either palette.
+                    bg={isActive ? "accent.secondary" : "surface.sunken"}
+                    color={isActive ? "accentFg.secondary" : "text.primary"}
                     fontWeight="bold"
                     fontSize="xs"
                     border="2px solid"
                     borderColor={
-                      isActive ? "bauhaus.blue" : "bauhaus.black"
+                      isActive ? "accent.secondary" : "border.default"
                     }
                     _hover={{
-                      bg: isActive ? "bauhaus.blue" : "bg.hover",
+                      bg: isActive ? "accent.secondary" : "surface.raisedHover",
                     }}
                     onClick={() => handlePresetClick(bps)}
                   >
@@ -125,8 +122,8 @@ export default function SlippageSettings({
               border="2px solid"
               borderColor={
                 !isPreset && slippageBps > 0
-                  ? "bauhaus.blue"
-                  : "bauhaus.black"
+                  ? "accent.secondary"
+                  : "border.default"
               }
               px={2}
               py={1}
@@ -151,7 +148,7 @@ export default function SlippageSettings({
             </HStack>
 
             {slippageBps > 1000 && (
-              <Text fontSize="2xs" color="bauhaus.red" fontWeight="bold">
+              <Text fontSize="2xs" color="chart.negative" fontWeight="bold">
                 High slippage — front-run risk
               </Text>
             )}

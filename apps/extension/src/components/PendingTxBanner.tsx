@@ -59,17 +59,17 @@ function PendingTxBanner({
 
   return (
     <Box
-      bg="bauhaus.yellow"
+      bg="accent.highlight"
       border="2px solid"
-      borderColor="bauhaus.black"
-      boxShadow="3px 3px 0px 0px #121212"
+      borderColor="border.default"
+      boxShadow="card"
       px={3}
       py={1.5}
       cursor="pointer"
       onClick={handleClick}
       _hover={{
         transform: "translateY(-2px)",
-        boxShadow: "5px 5px 0px 0px #121212",
+        boxShadow: "cardHover",
       }}
       _active={{
         transform: "translate(2px, 2px)",
@@ -80,26 +80,26 @@ function PendingTxBanner({
       <HStack spacing={2}>
         <Box
           p={1}
-          bg="bauhaus.black"
+          bg="border.default"
           display="flex"
           alignItems="center"
           justifyContent="center"
           flexShrink={0}
         >
-          <BellIcon boxSize={3} color="bauhaus.yellow" sx={{ animation: "bell-ring 1.5s ease-in-out infinite", transformOrigin: "top center" }} />
+          <BellIcon boxSize={3} color="accent.highlight" sx={{ animation: "bell-ring 1.5s ease-in-out infinite", transformOrigin: "top center" }} />
         </Box>
-        <Text flex="1" textAlign="center" fontSize="xs" fontWeight="700" color="bauhaus.black" textTransform="uppercase" letterSpacing="wider">
+        <Text flex="1" textAlign="center" fontSize="xs" fontWeight="700" color="accentFg.highlight" textTransform="uppercase" letterSpacing="wider">
           {getLabel()}
         </Text>
         <Box
-          bg="bauhaus.black"
+          bg="border.default"
           p={0.5}
           display="flex"
           alignItems="center"
           justifyContent="center"
           flexShrink={0}
         >
-          <ChevronRightIcon boxSize={3.5} color="bauhaus.yellow" />
+          <ChevronRightIcon boxSize={3.5} color="accent.highlight" />
         </Box>
       </HStack>
     </Box>

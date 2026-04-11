@@ -10,6 +10,7 @@ import {
 } from "@chakra-ui/react";
 import { ArrowBackIcon, AddIcon, ChatIcon, DeleteIcon, StarIcon } from "@chakra-ui/icons";
 import { Conversation } from "@/chrome/chatStorage";
+import { useStripTokens } from "@/theme";
 
 interface ChatListProps {
   conversations: Conversation[];
@@ -51,13 +52,17 @@ export function ChatList({
   onDeleteConversation,
   onToggleFavorite,
 }: ChatListProps) {
+  // Same dark-strip pair used by ChatHeader and other inverted bars across
+  // the extension — see useStripTokens.
+  const { bg: stripBg, fg: stripFg } = useStripTokens();
+
   return (
-    <Box h="100%" display="flex" flexDirection="column" bg="bg.base">
+    <Box h="100%" display="flex" flexDirection="column" bg="surface.base">
       {/* Header */}
       <Flex
         py={2}
         px={3}
-        bg="bauhaus.black"
+        bg={stripBg}
         alignItems="center"
         position="relative"
       >
@@ -67,7 +72,7 @@ export function ChatList({
           left="0"
           right="0"
           h="2px"
-          bg="bauhaus.yellow"
+          bg="accent.highlight"
         />
 
         <IconButton
@@ -75,7 +80,7 @@ export function ChatList({
           icon={<ArrowBackIcon />}
           variant="ghost"
           size="sm"
-          color="bauhaus.white"
+          color={stripFg}
           _hover={{ bg: "whiteAlpha.200" }}
           onClick={onBack}
           mr={2}
@@ -83,7 +88,7 @@ export function ChatList({
 
         <Text
           fontWeight="700"
-          color="bauhaus.white"
+          color={stripFg}
           fontSize="sm"
           flex="1"
           textTransform="uppercase"
@@ -96,13 +101,13 @@ export function ChatList({
           aria-label="New chat"
           icon={<AddIcon />}
           size="sm"
-          bg="bauhaus.yellow"
-          color="bauhaus.black"
+          bg="accent.highlight"
+          color="accentFg.highlight"
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           borderRadius="0"
           _hover={{
-            bg: "bauhaus.yellow",
+            bg: "accent.highlight",
             transform: "translateY(-1px)",
           }}
           _active={{
@@ -120,14 +125,14 @@ export function ChatList({
               w="50px"
               h="50px"
               border="3px solid"
-              borderColor="bauhaus.black"
-              bg="bauhaus.blue"
+              borderColor="border.default"
+              bg="accent.secondary"
               display="flex"
               alignItems="center"
               justifyContent="center"
-              boxShadow="4px 4px 0px 0px #121212"
+              boxShadow="card"
             >
-              <ChatIcon color="bauhaus.white" boxSize={6} />
+              <ChatIcon color="accentFg.secondary" boxSize={6} />
             </Box>
             <Text
               color="text.secondary"
@@ -141,18 +146,18 @@ export function ChatList({
             </Text>
             <Button
               onClick={onNewChat}
-              bg="bauhaus.yellow"
-              color="bauhaus.black"
+              bg="accent.highlight"
+              color="accentFg.highlight"
               border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="4px 4px 0px 0px #121212"
+              borderColor="border.default"
+              boxShadow="card"
               borderRadius="0"
               fontWeight="700"
               textTransform="uppercase"
               letterSpacing="wide"
               _hover={{
                 transform: "translateY(-2px)",
-                boxShadow: "6px 6px 0px 0px #121212",
+                boxShadow: "cardHover",
               }}
               _active={{
                 transform: "translate(2px, 2px)",
@@ -168,15 +173,15 @@ export function ChatList({
               <HStack
                 key={conv.id}
                 spacing={0}
-                bg="bauhaus.white"
+                bg="surface.raised"
                 border="3px solid"
-                borderColor="bauhaus.black"
-                boxShadow="4px 4px 0px 0px #121212"
+                borderColor="border.default"
+                boxShadow="card"
                 position="relative"
                 transition="all 0.2s ease-out"
                 _hover={{
                   transform: "translateY(-2px)",
-                  boxShadow: "6px 6px 0px 0px #121212",
+                  boxShadow: "cardHover",
                 }}
               >
                 {/* Star/Favorite Button - Top Left Corner */}
@@ -194,15 +199,15 @@ export function ChatList({
                     size="xs"
                     minW="20px"
                     h="20px"
-                    bg={conv.favorite ? "bauhaus.yellow" : "bauhaus.white"}
-                    color={conv.favorite ? "bauhaus.black" : "text.tertiary"}
+                    bg={conv.favorite ? "accent.highlight" : "surface.raised"}
+                    color={conv.favorite ? "accentFg.highlight" : "text.tertiary"}
                     border="2px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                     borderRadius="0"
                     zIndex={1}
                     _hover={{
-                      bg: "bauhaus.yellow",
-                      color: "bauhaus.black",
+                      bg: "accent.highlight",
+                      color: "accentFg.highlight",
                       transform: "scale(1.1)",
                     }}
                     onClick={(e) => {
@@ -254,7 +259,7 @@ export function ChatList({
                   h="full"
                   minW="36px"
                   _hover={{
-                    color: "bauhaus.red",
+                    color: "chart.negative",
                   }}
                   onClick={(e) => {
                     e.stopPropagation();

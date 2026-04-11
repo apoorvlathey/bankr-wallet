@@ -11,6 +11,7 @@ import {
 import { getChainConfig } from "@/constants/chainConfig";
 import type { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
 import ChainIcon from "@/components/ChainIcon";
+import { useStripTokens } from "@/theme";
 
 interface WatchAssetConfirmationProps {
   request: PendingWatchAssetRequest;
@@ -23,6 +24,10 @@ export default function WatchAssetConfirmation({
   onConfirmed,
   onRejected,
 }: WatchAssetConfirmationProps) {
+  // Header bar + Add Token CTA both want a strong "dark" surface that doesn't
+  // compete with the modal-style luminous shadows in Midnight. Shared with the
+  // tx/sig confirmation count badges and chat header — see useStripTokens.
+  const { bg: stripBg, fg: stripFg } = useStripTokens();
   const [confirming, setConfirming] = useState(false);
   const [rejecting, setRejecting] = useState(false);
 
@@ -66,13 +71,13 @@ export default function WatchAssetConfirmation({
       boxSize="48px"
       borderRadius="full"
       border="2px solid"
-      borderColor="bauhaus.black"
+      borderColor="border.default"
       fallback={
         <Box
           boxSize="48px"
           borderRadius="full"
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           bg="bg.muted"
           display="flex"
           alignItems="center"
@@ -89,7 +94,7 @@ export default function WatchAssetConfirmation({
       boxSize="48px"
       borderRadius="full"
       border="2px solid"
-      borderColor="bauhaus.black"
+      borderColor="border.default"
       bg="bg.muted"
       display="flex"
       alignItems="center"
@@ -103,24 +108,24 @@ export default function WatchAssetConfirmation({
 
   return (
     <Box display="flex" flexDirection="column" h="100%">
-      {/* Header */}
+      {/* Header — strong dark strip */}
       <Box
-        bg="bauhaus.black"
+        bg={stripBg}
         px={4}
         py={3}
         borderBottom="3px solid"
-        borderColor="bauhaus.black"
+        borderColor="border.default"
       >
         <Text
           fontSize="md"
           fontWeight="900"
-          color="bauhaus.white"
+          color={stripFg}
           textTransform="uppercase"
           letterSpacing="wider"
         >
           Add Token
         </Text>
-        <Text fontSize="xs" color="whiteAlpha.700" mt={0.5} noOfLines={1}>
+        <Text fontSize="xs" color={stripFg} opacity={0.7} mt={0.5} noOfLines={1}>
           {origin}
         </Text>
       </Box>
@@ -128,9 +133,10 @@ export default function WatchAssetConfirmation({
       {/* Token card — centered */}
       <VStack flex={1} justify="center" px={4} py={6} spacing={0}>
         <Box
+          bg="surface.raised"
           border="2px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
+          borderColor="border.default"
+          boxShadow="card"
           w="full"
           p={5}
         >
@@ -144,9 +150,9 @@ export default function WatchAssetConfirmation({
                   bottom="-2px"
                   right="-4px"
                   border="2px solid"
-                  borderColor="white"
+                  borderColor="surface.raised"
                   borderRadius="full"
-                  bg="white"
+                  bg="surface.raised"
                 >
                   <ChainIcon chainId={request.chainId} chainName={chainConfig.name} size="20px" />
                 </Box>
@@ -174,7 +180,7 @@ export default function WatchAssetConfirmation({
               px={2.5}
               py={1.5}
               border="1px solid"
-              borderColor="gray.200"
+              borderColor="border.subtle"
               w="full"
               textAlign="center"
               noOfLines={1}
@@ -196,15 +202,9 @@ export default function WatchAssetConfirmation({
           isLoading={rejecting}
           isDisabled={confirming}
           variant="outline"
-          borderColor="bauhaus.black"
-          borderWidth="2px"
           fontWeight="800"
-          textTransform="uppercase"
-          letterSpacing="wider"
           fontSize="xs"
-          borderRadius={0}
           h="44px"
-          _hover={{ bg: "bg.muted" }}
           flex={1}
         >
           Reject
@@ -213,17 +213,14 @@ export default function WatchAssetConfirmation({
           onClick={handleConfirm}
           isLoading={confirming}
           isDisabled={rejecting}
-          bg="bauhaus.black"
-          color="bauhaus.white"
+          bg={stripBg}
+          color={stripFg}
           fontWeight="800"
-          textTransform="uppercase"
-          letterSpacing="wider"
           fontSize="xs"
-          borderRadius={0}
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           h="44px"
-          _hover={{ bg: "gray.800" }}
+          _hover={{ bg: stripBg, opacity: 0.9 }}
           flex={1}
         >
           Add Token

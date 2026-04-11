@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Box, HStack, Text, Skeleton } from "@chakra-ui/react";
 import { getSnapshots } from "@/chrome/portfolioSnapshotStorage";
+import { useTheme } from "@/theme";
 
 interface PortfolioChartProps {
   address: string;
@@ -26,6 +27,33 @@ function formatUsdCompact(val: number): string {
   })}`;
 }
 
+/**
+ * Convert a `#rrggbb` (or rgb()) hex string to an rgba() string for SVG fill.
+ * The chart series colors come from theme tokens which may use either form, so
+ * we tolerate both — falling back to the input string when we can't parse.
+ */
+function hexToRgba(input: string, alpha: number): string {
+  if (input.startsWith("#")) {
+    const cleaned = input.slice(1);
+    const expanded =
+      cleaned.length === 3
+        ? cleaned
+            .split("")
+            .map((c) => c + c)
+            .join("")
+        : cleaned;
+    if (expanded.length === 6) {
+      const r = parseInt(expanded.substring(0, 2), 16);
+      const g = parseInt(expanded.substring(2, 4), 16);
+      const b = parseInt(expanded.substring(4, 6), 16);
+      if (![r, g, b].some(Number.isNaN)) {
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+    }
+  }
+  return input;
+}
+
 function formatTimestamp(ts: number): string {
   const d = new Date(ts);
   return d.toLocaleDateString("en-US", {
@@ -41,6 +69,7 @@ export default function PortfolioChart({
   hideValue,
   refreshTrigger = 0,
 }: PortfolioChartProps) {
+  const { tokens } = useTheme();
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -146,10 +175,12 @@ export default function PortfolioChart({
   if (snapshots.length < 2) return null;
 
   const isPositive = change >= 0;
-  const lineColor = isPositive ? "#16a34a" : "#D02020";
-  const fillColor = isPositive
-    ? "rgba(22, 163, 74, 0.1)"
-    : "rgba(208, 32, 32, 0.1)";
+  const lineColor = isPositive
+    ? tokens.colors.chart.positive
+    : tokens.colors.chart.negative;
+  const fillColor = hexToRgba(lineColor, 0.1);
+  const crosshairColor = tokens.colors.border.default;
+  const dotBorderColor = tokens.colors.border.default;
 
   const formatChange = (val: number): string => {
     const abs = Math.abs(val);
@@ -180,7 +211,7 @@ export default function PortfolioChart({
       <HStack spacing={1.5} mb={1} minH="18px">
         {hoveredSnap ? (
           <>
-            <Text fontSize="xs" fontWeight="700" color="bauhaus.black">
+            <Text fontSize="xs" fontWeight="700" color="text.primary">
               {hideValue ? "$***" : formatUsdCompact(hoveredSnap.totalValueUsd)}
             </Text>
             <Text fontSize="xs" fontWeight="500" color="text.secondary">
@@ -216,8 +247,8 @@ export default function PortfolioChart({
         position="relative"
         h={`${CHART_HEIGHT}px`}
         border="1px solid"
-        borderColor="gray.200"
-        bg="white"
+        borderColor="border.subtle"
+        bg="surface.raised"
         cursor="crosshair"
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
@@ -237,7 +268,7 @@ export default function PortfolioChart({
               y1={CHART_HEIGHT - 4}
               x2={xPct}
               y2={CHART_HEIGHT}
-              stroke="#999"
+              stroke={tokens.colors.fg.muted}
               strokeWidth="1"
               vectorEffect="non-scaling-stroke"
             />
@@ -263,7 +294,7 @@ export default function PortfolioChart({
               left={`${hoveredPoint.x}%`}
               h="100%"
               w="1px"
-              borderLeft="1px dashed #121212"
+              borderLeft={`1px dashed ${crosshairColor}`}
               pointerEvents="none"
             />
             <Box
@@ -274,7 +305,7 @@ export default function PortfolioChart({
               h="7px"
               borderRadius="full"
               bg={lineColor}
-              border="1px solid #121212"
+              border={`1px solid ${dotBorderColor}`}
               transform="translate(-50%, -50%)"
               pointerEvents="none"
             />

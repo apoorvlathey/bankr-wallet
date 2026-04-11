@@ -111,17 +111,17 @@ function ForceInclusionProgress({
     <VStack spacing={3} align="stretch" p={3}>
       {/* Title */}
       <Box
-        bg="bauhaus.blue"
+        bg="accent.secondary"
         border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="3px 3px 0px 0px #121212"
+        borderColor="border.default"
+        boxShadow="card"
         py={1.5}
         px={3}
       >
         <Text
           fontWeight="900"
           fontSize="sm"
-          color="white"
+          color="accentFg.secondary"
           textAlign="center"
           textTransform="uppercase"
           letterSpacing="wider"
@@ -132,10 +132,10 @@ function ForceInclusionProgress({
 
       {/* Steps */}
       <Box
-        bg="bauhaus.white"
+        bg="surface.raised"
         border="2px solid"
-        borderColor="bauhaus.black"
-        boxShadow="2px 2px 0px 0px #121212"
+        borderColor="border.default"
+        boxShadow="card"
         p={3}
       >
         <VStack spacing={3} align="stretch">
@@ -152,27 +152,27 @@ function ForceInclusionProgress({
                   h="24px"
                   flexShrink={0}
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   bg={
                     isDone
-                      ? "bauhaus.yellow"
+                      ? "accent.highlight"
                       : isActive
-                        ? "bauhaus.blue"
-                        : "gray.100"
+                        ? "accent.secondary"
+                        : "surface.raisedHover"
                   }
                   display="flex"
                   alignItems="center"
                   justifyContent="center"
                 >
                   {isDone ? (
-                    <CheckIcon boxSize={3} color="bauhaus.black" />
+                    <CheckIcon boxSize={3} color="accentFg.highlight" />
                   ) : isActive && !isError ? (
-                    <Spinner size="xs" color="white" />
+                    <Spinner size="xs" color="accentFg.secondary" />
                   ) : (
                     <Text
                       fontSize="xs"
                       fontWeight="900"
-                      color={isPending ? "gray.400" : "white"}
+                      color={isPending ? "fg.muted" : "accentFg.secondary"}
                     >
                       {idx + 1}
                     </Text>
@@ -221,7 +221,7 @@ function ForceInclusionProgress({
                               )
                             }
                             _hover={{
-                              color: "bauhaus.blue",
+                              color: "accent.secondary",
                               bg: "bg.muted",
                             }}
                           />
@@ -263,7 +263,7 @@ function ForceInclusionProgress({
                             )
                           }
                           _hover={{
-                            color: "bauhaus.blue",
+                            color: "accent.secondary",
                             bg: "bg.muted",
                           }}
                         />
@@ -280,13 +280,13 @@ function ForceInclusionProgress({
       {/* Error display */}
       {isError && progress?.error && (
         <Box
-          bg="bauhaus.red"
+          bg="status.error.bg"
           border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
+          borderColor="status.error.border"
+          boxShadow="card"
           p={3}
         >
-          <Text color="white" fontSize="sm" fontWeight="700">
+          <Text color="status.error.fg" fontSize="sm" fontWeight="700">
             {progress.error}
           </Text>
         </Box>
@@ -296,7 +296,7 @@ function ForceInclusionProgress({
       {!isError && progress?.stage !== "complete" && (
         <Box
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           px={3}
           py={2}
         >

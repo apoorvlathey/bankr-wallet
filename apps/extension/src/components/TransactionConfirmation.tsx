@@ -41,6 +41,7 @@ import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import ChainIcon from "@/components/ChainIcon";
 import { parseApproveCalldata } from "@/lib/erc20Approve";
 import { ethShLabelsUrl, googleFaviconUrl } from "@/constants/externalUrls";
+import { useTheme, useStripTokens, useChainBadgeStyle, useIconChipBg } from "@/theme";
 import {
   getResolvedChainById,
   getStoredNativeCurrencySymbol,
@@ -120,14 +121,14 @@ function CopyButton({
       variant="ghost"
       color={
         copied
-          ? "bauhaus.yellow"
+          ? "accent.highlight"
           : light
             ? "whiteAlpha.800"
             : "text.secondary"
       }
       onClick={handleCopy}
       _hover={{
-        color: light ? "white" : "bauhaus.blue",
+        color: light ? "white" : "accent.secondary",
         bg: light ? "whiteAlpha.200" : "bg.muted",
       }}
     />
@@ -157,7 +158,22 @@ function TransactionConfirmation({
   onAddedToBatch,
 }: TransactionConfirmationProps) {
   const { networksInfo } = useNetworks();
+  const { themeId, tokens } = useTheme();
+  const isDarkTheme = themeId === "midnight";
+  // Bauhaus paints the count badge as a stark black strip with white text;
+  // Midnight uses a recessed dark surface — see useStripTokens.
+  const { bg: stripBg, fg: stripFg } = useStripTokens();
+  const iconChipBg = useIconChipBg();
   const resolvedChain = getResolvedChainById(txRequest.tx.chainId, networksInfo);
+  // Chain badge colors — all per-theme branching lives in `useChainBadgeStyle`.
+  const chainBadgeConfig = getChainConfig(txRequest.tx.chainId);
+  const chainBadgeBrandBg = resolvedChain?.bg ?? chainBadgeConfig.bg;
+  const chainBadgeBrandFg = resolvedChain?.text ?? chainBadgeConfig.text;
+  const chainBadgeStyle = useChainBadgeStyle(
+    chainBadgeBrandBg,
+    chainBadgeBrandFg,
+    resolvedChain?.isCustom ?? false,
+  );
   const [state, setState] = useState<ConfirmationState>("ready");
   const [error, setError] = useState<string>("");
   const [toLabels, setToLabels] = useState<string[]>([]);
@@ -260,7 +276,7 @@ function TransactionConfirmation({
     <Box
       boxSize="14px"
       borderRadius="sm"
-      bg="gray.300"
+      bg="bg.muted"
       display="flex"
       alignItems="center"
       justifyContent="center"
@@ -391,7 +407,7 @@ function TransactionConfirmation({
   // Force inclusion progress screen
   if (state === "forceInclusion" && forceInclusionInfo) {
     return (
-      <Box h="100%" overflowY="auto" bg="bg.base">
+      <Box h="100%" overflowY="auto" bg="surface.base">
         <ForceInclusionProgress
           txId={txRequest.id}
           l1ChainId={forceInclusionInfo.l1ChainId}
@@ -418,7 +434,7 @@ function TransactionConfirmation({
     return (
       <Box
         h="100vh"
-        bg="bg.base"
+        bg="surface.base"
         display="flex"
         flexDirection="column"
         alignItems="center"
@@ -426,54 +442,59 @@ function TransactionConfirmation({
         p={8}
         position="relative"
       >
-        {/* Geometric decorations */}
-        <Box
-          position="absolute"
-          top={6}
-          left={6}
-          w="16px"
-          h="16px"
-          bg="bauhaus.red"
-          border="2px solid"
-          borderColor="bauhaus.black"
-        />
-        <Box
-          position="absolute"
-          top={6}
-          right={6}
-          w="16px"
-          h="16px"
-          bg="bauhaus.blue"
-          borderRadius="full"
-          border="2px solid"
-          borderColor="bauhaus.black"
-        />
-        <Box
-          position="absolute"
-          bottom={6}
-          left={6}
-          w="0"
-          h="0"
-          borderLeft="8px solid transparent"
-          borderRight="8px solid transparent"
-          borderBottom="16px solid"
-          borderBottomColor="bauhaus.yellow"
-        />
+        {/* Geometric decorations — Bauhaus exuberance, Midnight stays restrained */}
+        {!isDarkTheme && (
+          <>
+            <Box
+              position="absolute"
+              top={6}
+              left={6}
+              w="16px"
+              h="16px"
+              bg="accent.primary"
+              border="2px solid"
+              borderColor="border.default"
+            />
+            <Box
+              position="absolute"
+              top={6}
+              right={6}
+              w="16px"
+              h="16px"
+              bg="accent.secondary"
+              borderRadius="full"
+              border="2px solid"
+              borderColor="border.default"
+            />
+            <Box
+              position="absolute"
+              bottom={6}
+              left={6}
+              w="0"
+              h="0"
+              borderLeft="8px solid transparent"
+              borderRight="8px solid transparent"
+              borderBottom="16px solid"
+              borderBottomColor="accent.highlight"
+            />
+          </>
+        )}
 
         <Box
           w="100px"
           h="100px"
-          bg="bauhaus.yellow"
-          border="4px solid"
-          borderColor="bauhaus.black"
-          boxShadow="8px 8px 0px 0px #121212"
+          bg="accent.highlight"
+          border={tokens.borders.thick}
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="modal"
           display="flex"
           alignItems="center"
           justifyContent="center"
           animation={`${scaleIn} 0.4s ease-out`}
           mb={6}
         >
-          <Icon viewBox="0 0 24 24" w="50px" h="50px" color="bauhaus.black">
+          <Icon viewBox="0 0 24 24" w="50px" h="50px" color="accentFg.highlight">
             <path
               fill="none"
               stroke="currentColor"
@@ -512,10 +533,10 @@ function TransactionConfirmation({
   }
 
   return (
-    <Box p={3} h="100%" overflowY="auto" bg="bg.base" css={{
+    <Box p={3} h="100%" overflowY="auto" bg="surface.base" css={{
       "&::-webkit-scrollbar": { width: "4px" },
       "&::-webkit-scrollbar-track": { background: "transparent" },
-      "&::-webkit-scrollbar-thumb": { background: "#ccc", borderRadius: "2px" },
+      "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-strong)", borderRadius: "2px" },
     }}>
       <VStack spacing={2} align="stretch">
         {/* Top row - Back button, navigation, Reject All */}
@@ -525,9 +546,9 @@ function TransactionConfirmation({
             aria-label="Back"
             icon={<ArrowBackIcon />}
             variant="ghost"
-            size="sm"
+            size="md"
+            px={2}
             onClick={onBack}
-            minW="auto"
           />
 
           {/* Center - Navigation (absolutely positioned for true centering) */}
@@ -551,8 +572,8 @@ function TransactionConfirmation({
                 p={1}
               />
               <Badge
-                bg="bauhaus.black"
-                color="bauhaus.white"
+                bg={stripBg}
+                color={stripFg}
                 fontSize="xs"
                 px={3}
                 py={1}
@@ -593,13 +614,16 @@ function TransactionConfirmation({
                 2,
               )}
             />
+            {/* chart.negative is the only token that's RED in BOTH themes —
+                status.error.fg is WHITE in Bauhaus (it pairs with the RED bg)
+                and would render invisibly on the page surface here. */}
             {totalCount > 1 && (
               <Button
                 size="xs"
                 variant="ghost"
-                color="bauhaus.red"
+                color="chart.negative"
                 fontWeight="700"
-                _hover={{ bg: "bauhaus.red", color: "white" }}
+                _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
                 onClick={onRejectAll}
                 px={2}
               >
@@ -609,30 +633,35 @@ function TransactionConfirmation({
           </HStack>
         </Flex>
 
-        {/* Title row */}
+        {/* Title row — approve uses highlight (amber/yellow) accent, normal txs
+            use the secondary (cyan/blue) accent. The corner ornament is a
+            Bauhaus exuberance and is hidden under Midnight. */}
         <Box
-          bg={parsedApproval ? "bauhaus.yellow" : "bauhaus.blue"}
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
+          bg={parsedApproval ? "accent.highlight" : "accent.secondary"}
+          border={tokens.borders.medium}
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
           py={1.5}
           px={3}
           position="relative"
         >
-          <Box
-            position="absolute"
-            top="-3px"
-            right="-3px"
-            w="8px"
-            h="8px"
-            bg={parsedApproval ? "bauhaus.blue" : "bauhaus.yellow"}
-            border="2px solid"
-            borderColor="bauhaus.black"
-          />
+          {!isDarkTheme && (
+            <Box
+              position="absolute"
+              top="-3px"
+              right="-3px"
+              w="8px"
+              h="8px"
+              bg={parsedApproval ? "accent.secondary" : "accent.highlight"}
+              border="2px solid"
+              borderColor="border.default"
+            />
+          )}
           <Text
             fontWeight="900"
             fontSize="sm"
-            color={parsedApproval ? "bauhaus.black" : "white"}
+            color={parsedApproval ? "accentFg.highlight" : "accentFg.secondary"}
             textAlign="center"
             textTransform="uppercase"
             letterSpacing="wider"
@@ -653,13 +682,19 @@ function TransactionConfirmation({
 
         {/* Transaction Info Card */}
         <Box
-          bg="bauhaus.white"
-          border="2px solid"
-          borderColor="bauhaus.black"
-          boxShadow="2px 2px 0px 0px #121212"
+          bg="surface.raised"
+          border={tokens.borders.thin}
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
+          overflow="hidden"
           position="relative"
         >
-          <VStack spacing={0} divider={<Box h="1px" bg="gray.300" w="full" />}>
+          {/* Rows use explicit borderTop instead of VStack's `divider` prop
+              — see BatchTransactionConfirmation info card for the rationale.
+              tl;dr Chakra's divider applies borderBottomWidth:1px with no
+              color, so it inherits currentColor and paints as near-white. */}
+          <VStack spacing={0} align="stretch">
             {/* Origin */}
             <HStack w="full" py={1.5} px={3} justify="space-between">
               <Text
@@ -672,9 +707,9 @@ function TransactionConfirmation({
               </Text>
               <HStack spacing={1.5}>
                 <Box
-                  bg={isInternalWalletChan ? "transparent" : "gray.100"}
+                  bg={isInternalWalletChan ? "transparent" : iconChipBg}
                   border={isInternalWalletChan ? "none" : "1.5px solid"}
-                  borderColor="gray.300"
+                  borderColor="border.subtle"
                   borderRadius="md"
                   p={isInternalWalletChan ? 0 : 0.5}
                   display="flex"
@@ -717,7 +752,14 @@ function TransactionConfirmation({
             </HStack>
 
             {/* From */}
-            <HStack w="full" py={1.5} px={3} justify="space-between">
+            <HStack
+              w="full"
+              py={1.5}
+              px={3}
+              justify="space-between"
+              borderTop="1px solid"
+              borderColor="border.subtle"
+            >
               <Text
                 fontSize="xs"
                 color="text.secondary"
@@ -730,7 +772,14 @@ function TransactionConfirmation({
             </HStack>
 
             {/* Network */}
-            <HStack w="full" py={1.5} px={3} justify="space-between">
+            <HStack
+              w="full"
+              py={1.5}
+              px={3}
+              justify="space-between"
+              borderTop="1px solid"
+              borderColor="border.subtle"
+            >
               <Text
                 fontSize="xs"
                 color="text.secondary"
@@ -740,39 +789,31 @@ function TransactionConfirmation({
                 Network
               </Text>
               <HStack spacing={1}>
-                {(() => {
-                  const config = getChainConfig(tx.chainId);
-                  const badgeChain = resolvedChain ?? {
-                    name: chainName,
-                    bg: config.bg,
-                    text: config.text,
-                    icon: config.icon,
-                    isCustom: false,
-                  };
-                  return (
-                    <Badge
-                      fontSize="xs"
-                      bg={badgeChain.isCustom ? "bauhaus.white" : badgeChain.bg}
-                      color={badgeChain.isCustom ? "bauhaus.black" : badgeChain.text}
-                      border="1.5px solid"
-                      borderColor="bauhaus.black"
-                      fontWeight="700"
-                      px={2}
-                      py={0.5}
-                      display="flex"
-                      alignItems="center"
-                      gap={1}
-                    >
-                      <ChainIcon chainId={tx.chainId} chainName={badgeChain.name} size="12px" />
-                      {badgeChain.name}
-                      {forceInclusion && forceInclusionInfo && (
-                        <Text as="span" fontSize="2xs" opacity={0.7}>
-                          via {forceInclusionInfo.l1ChainName}
-                        </Text>
-                      )}
-                    </Badge>
-                  );
-                })()}
+                <Badge
+                  fontSize="xs"
+                  bg={chainBadgeStyle.bg}
+                  color={chainBadgeStyle.fg}
+                  border="1.5px solid"
+                  borderColor={chainBadgeStyle.border}
+                  fontWeight="700"
+                  px={2}
+                  py={0.5}
+                  display="flex"
+                  alignItems="center"
+                  gap={1}
+                >
+                  <ChainIcon
+                    chainId={tx.chainId}
+                    chainName={resolvedChain?.name ?? chainName}
+                    size="12px"
+                  />
+                  {resolvedChain?.name ?? chainName}
+                  {forceInclusion && forceInclusionInfo && (
+                    <Text as="span" fontSize="2xs" opacity={0.7}>
+                      via {forceInclusionInfo.l1ChainName}
+                    </Text>
+                  )}
+                </Badge>
                 {forceInclusionInfo && (
                   <Tooltip label="Advanced options" fontSize="xs" hasArrow>
                     <IconButton
@@ -782,9 +823,9 @@ function TransactionConfirmation({
                       variant="ghost"
                       minW="20px"
                       h="20px"
-                      color={showAdvanced ? "bauhaus.blue" : "text.tertiary"}
+                      color={showAdvanced ? "accent.secondary" : "text.tertiary"}
                       onClick={() => setShowAdvanced(!showAdvanced)}
-                      _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                      _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                     />
                   </Tooltip>
                 )}
@@ -794,7 +835,7 @@ function TransactionConfirmation({
             {/* Force Inclusion Toggle (advanced options) */}
             {forceInclusionInfo && (
               <Collapse in={showAdvanced} animateOpacity>
-                <Box w="full" py={2} px={3} bg="gray.50">
+                <Box w="full" py={2} px={3} bg="bg.muted">
                   <HStack justify="space-between" mb={1}>
                     <Text fontSize="xs" fontWeight="700" color="text.primary" textTransform="uppercase">
                       Force Inclusion
@@ -814,7 +855,13 @@ function TransactionConfirmation({
             )}
 
             {/* To Address / Contract Deployment */}
-            <Box w="full" py={1.5} px={3}>
+            <Box
+              w="full"
+              py={1.5}
+              px={3}
+              borderTop="1px solid"
+              borderColor="border.subtle"
+            >
               <HStack
                 justify="space-between"
                 mb={toLabels.length > 0 || resolvedToName ? 1 : 0}
@@ -832,10 +879,10 @@ function TransactionConfirmation({
                     {resolvedToName && (
                       <Badge
                         fontSize="2xs"
-                        bg="bauhaus.yellow"
-                        color="bauhaus.black"
+                        bg="accent.highlight"
+                        color="accentFg.highlight"
                         border="1.5px solid"
-                        borderColor="bauhaus.black"
+                        borderColor="border.default"
                         px={1.5}
                         py={0}
                         fontWeight="700"
@@ -849,9 +896,10 @@ function TransactionConfirmation({
                       spacing={0.5}
                       px={1.5}
                       py={0.5}
-                      bg="bauhaus.white"
+                      bg="surface.raised"
                       border="1.5px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
+                      borderRadius="md"
                     >
                       <Text
                         fontSize="xs"
@@ -879,7 +927,7 @@ function TransactionConfirmation({
                                 "_blank"
                               )
                             }
-                            _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                            _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                           />
                         ) : null;
                       })()}
@@ -888,10 +936,10 @@ function TransactionConfirmation({
                 ) : (
                   <Badge
                     fontSize="xs"
-                    bg="bauhaus.yellow"
-                    color="bauhaus.black"
+                    bg="accent.highlight"
+                    color="accentFg.highlight"
                     border="1.5px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                     fontWeight="700"
                     px={2}
                     py={0.5}
@@ -904,10 +952,10 @@ function TransactionConfirmation({
                 <Flex justify="flex-end">
                   <Badge
                     fontSize="2xs"
-                    bg="bauhaus.blue"
-                    color="white"
+                    bg="accent.secondary"
+                    color="accentFg.secondary"
                     border="1.5px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                     px={1.5}
                     py={0}
                     fontWeight="700"
@@ -921,7 +969,14 @@ function TransactionConfirmation({
             </Box>
 
             {/* Value */}
-            <HStack w="full" py={1.5} px={3} justify="space-between">
+            <HStack
+              w="full"
+              py={1.5}
+              px={3}
+              justify="space-between"
+              borderTop="1px solid"
+              borderColor="border.subtle"
+            >
               <Text
                 fontSize="xs"
                 color="text.secondary"
@@ -960,11 +1015,12 @@ function TransactionConfirmation({
         {/* Raw-only fallback for contract deployments */}
         {tx.data && tx.data !== "0x" && !tx.to && (
           <Box
-            bg="bauhaus.white"
+            bg="surface.raised"
             p={3}
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
           >
             <HStack mb={2} alignItems="center">
               <Text
@@ -981,14 +1037,15 @@ function TransactionConfirmation({
             <Box
               p={3}
               bg="bg.muted"
-              border="2px solid"
-              borderColor="bauhaus.black"
+              border={tokens.borders.thin}
+              borderColor="border.default"
+              borderRadius="md"
               maxH="100px"
               overflowY="auto"
               css={{
                 "&::-webkit-scrollbar": { width: "6px" },
-                "&::-webkit-scrollbar-track": { background: "#E0E0E0" },
-                "&::-webkit-scrollbar-thumb": { background: "#121212" },
+                "&::-webkit-scrollbar-track": { background: "var(--chakra-colors-bg-muted)" },
+                "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-default)" },
               }}
             >
               <Text
@@ -1008,7 +1065,7 @@ function TransactionConfirmation({
         <Box
           position="sticky"
           bottom={-3}
-          bg="bg.base"
+          bg="surface.base"
           pt={1}
           pb={1}
           mx={-3}
@@ -1033,8 +1090,9 @@ function TransactionConfirmation({
             <HStack
               spacing={2}
               w="full"
-              border="2px solid"
-              borderColor="bauhaus.black"
+              border={tokens.borders.thin}
+              borderColor="border.default"
+              borderRadius="md"
               px={3}
               py={1.5}
               justify="center"
@@ -1086,7 +1144,7 @@ function TransactionConfirmation({
                  */}
                 <Flex alignSelf="stretch" flexShrink={0}>
                   <Button
-                    variant="yellow"
+                    variant="highlight"
                     onClick={handleAddToBatch}
                     isDisabled={!!addToBatchDisabledReason}
                     fontWeight="800"
@@ -1108,13 +1166,14 @@ function TransactionConfirmation({
         {/* Error Display */}
         {error && state === "error" && (
           <Box
-            bg="bauhaus.red"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="status.error.bg"
+            border={tokens.borders.medium}
+            borderColor="status.error.border"
+            borderRadius="lg"
+            boxShadow="card"
             p={3}
           >
-            <Text color="white" fontSize="sm" fontWeight="700">
+            <Text color="status.error.fg" fontSize="sm" fontWeight="700">
               {error}
             </Text>
           </Box>
@@ -1125,14 +1184,15 @@ function TransactionConfirmation({
           <HStack
             justify="center"
             py={3}
-            bg="bauhaus.blue"
-            border="3px solid"
-            borderColor="bauhaus.black"
+            bg="accent.secondary"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
           >
-            <Spinner size="sm" color="white" />
+            <Spinner size="sm" color="accentFg.secondary" />
             <Text
               fontSize="sm"
-              color="white"
+              color="accentFg.secondary"
               fontWeight="700"
               textTransform="uppercase"
             >
@@ -1144,13 +1204,14 @@ function TransactionConfirmation({
         {/* Impersonator Info Box */}
         {accountType === "impersonator" && (
           <Box
-            bg="bauhaus.yellow"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="3px 3px 0px 0px #121212"
+            bg="accent.highlight"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={3}
           >
-            <Text fontSize="sm" color="bauhaus.black" fontWeight="700">
+            <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
               Connected via Impersonated account — signing is disabled.
             </Text>
           </Box>
@@ -1164,7 +1225,7 @@ function TransactionConfirmation({
             </Button>
             {accountType !== "impersonator" && (
               <Button
-                variant="yellow"
+                variant="highlight"
                 flex={1}
                 onClick={handleConfirm}
                 isDisabled={state === "error"}

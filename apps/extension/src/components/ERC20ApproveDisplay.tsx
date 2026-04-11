@@ -28,6 +28,7 @@ import {
 } from "@/lib/erc20Approve";
 import { updatePendingTxRequestData } from "@/chrome/pendingTxStorage";
 import { ethShLabelsUrl } from "@/constants/externalUrls";
+import { useTheme } from "@/theme";
 import { getChainConfig } from "@/constants/chainConfig";
 import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 
@@ -65,6 +66,7 @@ export default function ERC20ApproveDisplay({
   chainId,
   txId,
 }: ERC20ApproveDisplayProps) {
+  const { tokens } = useTheme();
   const [token, setToken] = useState<TokenMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -196,10 +198,11 @@ export default function ERC20ApproveDisplay({
   if (loading) {
     return (
       <Box
-        bg="bauhaus.white"
-        border="2px solid"
-        borderColor="bauhaus.black"
-        boxShadow="2px 2px 0px 0px #121212"
+        bg="surface.raised"
+        border={tokens.borders.thin}
+        borderColor="border.default"
+        borderRadius="lg"
+        boxShadow="card"
         p={3}
       >
         <HStack justify="center" spacing={2}>
@@ -216,13 +219,17 @@ export default function ERC20ApproveDisplay({
 
   return (
     <Box
-      bg="#EEF2FF"
-      border="2px solid"
-      borderColor="bauhaus.black"
-      boxShadow="2px 2px 0px 0px #121212"
+      bg="status.info.bg"
+      border={tokens.borders.thin}
+      borderColor="border.default"
+      borderRadius="lg"
+      boxShadow="card"
+      overflow="hidden"
       position="relative"
     >
-      <VStack spacing={0} divider={<Box h="1px" bg="gray.300" w="full" />}>
+      {/* Rows use explicit borderTop instead of VStack's `divider` prop
+          — see BatchTransactionConfirmation info card for the rationale. */}
+      <VStack spacing={0} align="stretch">
         {/* Token info */}
         <HStack w="full" py={2} px={3} justify="space-between">
           <Text
@@ -241,20 +248,20 @@ export default function ERC20ApproveDisplay({
                 boxSize="18px"
                 borderRadius="full"
                 border="1.5px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
               />
             ) : (
               <Box
                 boxSize="18px"
-                bg="bauhaus.blue"
+                bg="accent.secondary"
                 borderRadius="full"
                 border="1.5px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
                 display="flex"
                 alignItems="center"
                 justifyContent="center"
               >
-                <Text fontSize="7px" fontWeight="900" color="white">
+                <Text fontSize="7px" fontWeight="900" color="accentFg.secondary">
                   {token.symbol.slice(0, 2)}
                 </Text>
               </Box>
@@ -267,7 +274,7 @@ export default function ERC20ApproveDisplay({
               bg="bg.muted"
               color="text.secondary"
               border="1px solid"
-              borderColor="gray.300"
+              borderColor="border.subtle"
               px={1.5}
               py={0}
               fontWeight="700"
@@ -279,9 +286,9 @@ export default function ERC20ApproveDisplay({
               icon={copiedToken ? <CheckIcon /> : <CopyIcon />}
               size="xs"
               variant="ghost"
-              color={copiedToken ? "bauhaus.yellow" : "text.secondary"}
+              color={copiedToken ? "accent.highlight" : "text.secondary"}
               onClick={handleCopyToken}
-              _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+              _hover={{ color: "accent.secondary", bg: "bg.muted" }}
             />
             {chainConfig.explorer && (
               <IconButton
@@ -298,14 +305,20 @@ export default function ERC20ApproveDisplay({
                     "_blank",
                   )
                 }
-                _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                _hover={{ color: "accent.secondary", bg: "bg.muted" }}
               />
             )}
           </HStack>
         </HStack>
 
         {/* Spender */}
-        <Box w="full" py={2} px={3}>
+        <Box
+          w="full"
+          py={2}
+          px={3}
+          borderTop="1px solid"
+          borderColor="border.subtle"
+        >
           <HStack justify="space-between" mb={spenderLabels.length > 0 ? 1 : 0}>
             <Text
               fontSize="xs"
@@ -319,9 +332,10 @@ export default function ERC20ApproveDisplay({
               spacing={0.5}
               px={1.5}
               py={0.5}
-              bg="bauhaus.white"
+              bg="surface.raised"
               border="1.5px solid"
-              borderColor="bauhaus.black"
+              borderColor="border.default"
+              borderRadius="md"
             >
               <Text
                 fontSize="xs"
@@ -337,9 +351,9 @@ export default function ERC20ApproveDisplay({
                 icon={copiedSpender ? <CheckIcon /> : <CopyIcon />}
                 size="xs"
                 variant="ghost"
-                color={copiedSpender ? "bauhaus.yellow" : "text.secondary"}
+                color={copiedSpender ? "accent.highlight" : "text.secondary"}
                 onClick={handleCopySpender}
-                _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                _hover={{ color: "accent.secondary", bg: "bg.muted" }}
               />
               {chainConfig.explorer && (
                 <IconButton
@@ -356,7 +370,7 @@ export default function ERC20ApproveDisplay({
                       "_blank",
                     )
                   }
-                  _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                  _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                 />
               )}
             </HStack>
@@ -365,10 +379,10 @@ export default function ERC20ApproveDisplay({
             <HStack justify="flex-end">
               <Badge
                 fontSize="2xs"
-                bg="bauhaus.blue"
-                color="white"
+                bg="accent.secondary"
+                color="accentFg.secondary"
                 border="1.5px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
                 px={1.5}
                 py={0}
                 fontWeight="700"
@@ -382,7 +396,13 @@ export default function ERC20ApproveDisplay({
         </Box>
 
         {/* Amount */}
-        <Box w="full" py={2} px={3}>
+        <Box
+          w="full"
+          py={2}
+          px={3}
+          borderTop="1px solid"
+          borderColor="border.subtle"
+        >
           <HStack justify="space-between" align="center">
             <Text
               fontSize="xs"
@@ -402,15 +422,8 @@ export default function ERC20ApproveDisplay({
                   fontFamily="mono"
                   fontWeight="700"
                   fontSize="xs"
-                  border="1.5px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius="none"
                   px={2}
                   py={1}
-                  _focus={{
-                    borderColor: "bauhaus.blue",
-                    boxShadow: "none",
-                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleSaveEdit();
                     if (e.key === "Escape") handleCancelEdit();
@@ -422,18 +435,18 @@ export default function ERC20ApproveDisplay({
                   icon={<CheckIcon />}
                   size="xs"
                   variant="ghost"
-                  color="green.500"
+                  color="status.success.fg"
                   onClick={handleSaveEdit}
-                  _hover={{ bg: "green.50" }}
+                  _hover={{ bg: "status.success.bg" }}
                 />
                 <IconButton
                   aria-label="Cancel"
                   icon={<CloseIcon boxSize="8px" />}
                   size="xs"
                   variant="ghost"
-                  color="bauhaus.red"
+                  color="status.error.fg"
                   onClick={handleCancelEdit}
-                  _hover={{ bg: "red.50" }}
+                  _hover={{ bg: "status.error.bg" }}
                 />
               </HStack>
             ) : (
@@ -443,23 +456,23 @@ export default function ERC20ApproveDisplay({
                     label="This grants unlimited spending of your tokens. Consider setting a specific amount."
                     fontSize="xs"
                     hasArrow
-                    bg="bauhaus.black"
-                    color="white"
+                    bg="fg.primary"
+                    color="fg.inverse"
                     maxW="200px"
                   >
                     <HStack
                       spacing={1.5}
-                      bg="bauhaus.red"
+                      bg="status.error.bg"
                       px={2}
                       py={0.5}
                       border="1.5px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="status.error.border"
                     >
-                      <WarningIcon boxSize={2.5} color="white" />
+                      <WarningIcon boxSize={2.5} color="status.error.fg" />
                       <Text
                         fontSize="xs"
                         fontWeight="900"
-                        color="white"
+                        color="status.error.fg"
                         textTransform="uppercase"
                       >
                         Unlimited
@@ -489,10 +502,10 @@ export default function ERC20ApproveDisplay({
                   icon={<EditIcon boxSize="10px" />}
                   size="xs"
                   variant="ghost"
-                  color="bauhaus.black"
-                  bg="bauhaus.yellow"
+                  color="accentFg.highlight"
+                  bg="accent.highlight"
                   border="1.5px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   borderRadius="none"
                   onClick={handleStartEdit}
                   _hover={{ opacity: 0.85 }}

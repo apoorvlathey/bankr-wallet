@@ -28,6 +28,7 @@ import PortfolioChart from "@/components/PortfolioChart";
 import ChainIcon from "@/components/ChainIcon";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getVisibleChains } from "@/lib/chains";
+import { Decorator, useTheme } from "@/theme";
 
 const TokenHoldings = lazy(() => import("@/components/TokenHoldings"));
 
@@ -53,6 +54,13 @@ interface PortfolioTabsProps {
 const POST_CONFIRM_REFRESH_DELAY = 3000;
 
 export default function PortfolioTabs({ address, activityTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange }: PortfolioTabsProps) {
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
+  // Selected tab uses an inverted contrast strip — Bauhaus paints it BLACK with
+  // white text; Midnight uses a recessed dark surface with light text. There is
+  // no single token pair that produces both effects, hence the conditional.
+  const tabActiveBg = isDarkTheme ? "surface.sunken" : "fg.primary";
+  const tabActiveFg = isDarkTheme ? "fg.primary" : "fg.inverse";
   const [tabIndex, setTabIndex] = useState(activityTabTrigger > 0 ? 1 : 0);
   const [holdingsState, setHoldingsState] = useState<HoldingsState | null>(null);
   const holdingsStateRef = useRef<HoldingsState | null>(null);
@@ -121,30 +129,20 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
 
   return (
     <Box
-      bg="bauhaus.white"
+      bg="surface.raised"
       border="3px solid"
-      borderColor="bauhaus.black"
-      boxShadow="4px 4px 0px 0px #121212"
+      borderColor="border.default"
+      boxShadow="card"
       position="relative"
     >
-      {/* Corner decoration */}
-      <Box
-        position="absolute"
-        top="-3px"
-        right="-3px"
-        w="10px"
-        h="10px"
-        bg="bauhaus.yellow"
-        border="2px solid"
-        borderColor="bauhaus.black"
-        zIndex={1}
-      />
+      {/* Corner decoration — Bauhaus only; Decorator renders nothing in Midnight */}
+      <Decorator corner="top-right" accent="highlight" />
 
       <Tabs index={tabIndex} onChange={setTabIndex} variant="unstyled">
         {/* Tab bar */}
         <HStack
           borderBottom="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           spacing={0}
           justify="space-between"
         >
@@ -157,12 +155,12 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
               textTransform="uppercase"
               letterSpacing="wide"
               borderRadius={0}
-              color={tabIndex === 0 ? "bauhaus.white" : "text.secondary"}
-              bg={tabIndex === 0 ? "bauhaus.black" : "transparent"}
+              color={tabIndex === 0 ? tabActiveFg : "text.secondary"}
+              bg={tabIndex === 0 ? tabActiveBg : "transparent"}
               _hover={tabIndex === 0 ? {} : { bg: "bg.muted" }}
               _selected={{
-                color: "bauhaus.white",
-                bg: "bauhaus.black",
+                color: tabActiveFg,
+                bg: tabActiveBg,
               }}
             >
               <HStack spacing={1.5}>
@@ -172,7 +170,7 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
                     {holdingsState.loading ? (
                       <Skeleton h="12px" w="50px" />
                     ) : (
-                      <Text fontSize="xs" fontWeight="900" color="bauhaus.yellow">
+                      <Text fontSize="xs" fontWeight="900" color="accent.highlight">
                         {formatUsd(holdingsState.totalValueUsd)}
                       </Text>
                     )}
@@ -186,7 +184,7 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
                         e.stopPropagation();
                         holdingsState.toggleHideValue();
                       }}
-                      _hover={{ color: "bauhaus.yellow" }}
+                      _hover={{ color: "accent.highlight" }}
                       minW="auto"
                       h="auto"
                       p={0}
@@ -204,12 +202,12 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
               textTransform="uppercase"
               letterSpacing="wide"
               borderRadius={0}
-              color={tabIndex === 1 ? "bauhaus.white" : "text.secondary"}
-              bg={tabIndex === 1 ? "bauhaus.black" : "transparent"}
+              color={tabIndex === 1 ? tabActiveFg : "text.secondary"}
+              bg={tabIndex === 1 ? tabActiveBg : "transparent"}
               _hover={tabIndex === 1 ? {} : { bg: "bg.muted" }}
               _selected={{
-                color: "bauhaus.white",
-                bg: "bauhaus.black",
+                color: tabActiveFg,
+                bg: tabActiveBg,
               }}
             >
               Activity
@@ -247,9 +245,9 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
               alignItems="center"
               borderRadius="sm"
               border="1.5px solid"
-              borderColor="gray.300"
-              bg="bauhaus.white"
-              _hover={{ borderColor: "bauhaus.black" }}
+              borderColor="border.subtle"
+              bg="surface.raised"
+              _hover={{ borderColor: "border.default" }}
               transition="border-color 0.15s"
             >
               <HStack spacing={1}>
@@ -265,16 +263,15 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
               </HStack>
             </MenuButton>
             <MenuList
-              bg="bauhaus.white"
+              bg="surface.raised"
               border="3px solid"
-              borderColor="bauhaus.black"
-              borderRadius={0}
-              boxShadow="4px 4px 0px 0px #121212"
+              borderColor="border.default"
+              boxShadow="card"
               p={0}
               zIndex={10}
               minW="180px"
             >
-              <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+              <Box p={2} borderBottom="2px solid" borderColor="border.default">
                 <InputGroup size="sm">
                   <InputLeftElement pointerEvents="none">
                     <Search2Icon color="text.tertiary" boxSize={3} />
@@ -284,14 +281,9 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
                     value={chainSearch}
                     onChange={(e) => setChainSearch(e.target.value)}
                     placeholder="Filter by chain"
-                    border="2px solid"
-                    borderColor="bauhaus.black"
-                    borderRadius="0"
                     fontWeight="600"
                     fontSize="xs"
                     pl={9}
-                    _hover={{ borderColor: "bauhaus.black" }}
-                    _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
                     onKeyDown={(e) => {
                       // Total items = "All Networks" (when not searching) + filteredChains
                       const showAll = !chainSearch.trim();
@@ -394,7 +386,7 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
                   variant="ghost"
                   color="text.secondary"
                   onClick={addTokenModal.onOpen}
-                  _hover={{ color: "bauhaus.blue" }}
+                  _hover={{ color: "accent.secondary" }}
                   minW="auto"
                 />
               </Tooltip>
@@ -406,7 +398,7 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
                   variant="ghost"
                   color="text.secondary"
                   onClick={holdingsState.refresh}
-                  _hover={{ color: "bauhaus.blue" }}
+                  _hover={{ color: "accent.secondary" }}
                   minW="auto"
                   isDisabled={holdingsState.loading}
                 />

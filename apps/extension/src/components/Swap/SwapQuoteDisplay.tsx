@@ -83,9 +83,9 @@ export default function SwapQuoteDisplay({
 
   return (
     <Box
-      bg="bg.muted"
-      border="3px solid"
-      borderColor="bauhaus.black"
+      bg="surface.sunken"
+      border="2px solid"
+      borderColor="border.default"
       px={3}
       py={2}
     >
@@ -126,7 +126,7 @@ export default function SwapQuoteDisplay({
           mt={2}
           pt={2}
           borderTop="1px solid"
-          borderColor="border.secondary"
+          borderColor="border.subtle"
         >
           {/* Wallet Fee — always show */}
           <VStack spacing={1} align="stretch">
@@ -148,7 +148,7 @@ export default function SwapQuoteDisplay({
                     fontSize="9px"
                     fontWeight="800"
                     textTransform="uppercase"
-                    color="#B8860B"
+                    color="chart.numeric"
                     letterSpacing="0.5px"
                   >
                     ✨ sWCHAN Staker discount
@@ -235,7 +235,7 @@ export default function SwapQuoteDisplay({
                       px={1.5}
                       py={0.5}
                       border="2px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
                       fontSize="xs"
                       fontWeight="700"
                       whiteSpace="nowrap"

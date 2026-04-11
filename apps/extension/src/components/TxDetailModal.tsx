@@ -42,6 +42,7 @@ import {
   getStoredNativeCurrencySymbol,
   getStoredRpcUrl,
 } from "@/lib/chains";
+import { useTheme, useChainBadgeStyle } from "@/theme";
 
 interface TxDetailModalProps {
   isOpen: boolean;
@@ -120,6 +121,12 @@ function ForceInclusionSteps({
   status: string;
   txHash: string | undefined;
 }) {
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
+  // The step circles are vivid filled discs (red/green/blue) with a small icon
+  // inside. White contrasts well against the vivid Bauhaus palette but vanishes
+  // against Midnight's lighter chart tints — flip to a near-black icon there.
+  const stepIconColor = isDarkTheme ? "fg.inverse" : "white";
   const l1Config = getChainConfig(meta.l1ChainId);
   const l2Config = getChainConfig(meta.l2ChainId);
   const l1HasHash = !!meta.l1TxHash;
@@ -129,8 +136,8 @@ function ForceInclusionSteps({
   return (
     <Box
       border="2px solid"
-      borderColor="bauhaus.black"
-      bg="gray.50"
+      borderColor="border.default"
+      bg="bg.muted"
       p={3}
     >
       <Text fontSize="2xs" fontWeight="700" textTransform="uppercase" color="text.secondary" mb={2}>
@@ -141,64 +148,64 @@ function ForceInclusionSteps({
         <HStack spacing={2}>
           <Box
             w="18px" h="18px" flexShrink={0}
-            border="2px solid" borderColor="bauhaus.black"
-            bg={l1Reverted ? "bauhaus.red" : l1Confirmed ? "green.400" : "bauhaus.blue"}
+            border="2px solid" borderColor="border.default"
+            bg={l1Reverted ? "chart.negative" : l1Confirmed ? "chart.positive" : "accent.secondary"}
             display="flex" alignItems="center" justifyContent="center"
           >
             {l1Reverted ? (
-              <WarningIcon boxSize={2.5} color="white" />
+              <WarningIcon boxSize={2.5} color={stepIconColor} />
             ) : l1Confirmed ? (
-              <CheckCircleIcon boxSize={2.5} color="white" />
+              <CheckCircleIcon boxSize={2.5} color={stepIconColor} />
             ) : (
-              <Spinner size="xs" color="white" boxSize="10px" />
+              <Spinner size="xs" color={stepIconColor} boxSize="10px" />
             )}
           </Box>
           <Text fontSize="xs" fontWeight="700" color="text.primary">
             L1 Deposit ({l1Config.name || "Ethereum"})
           </Text>
           {l1Reverted ? (
-            <Text fontSize="2xs" color="bauhaus.red" fontWeight="600">Failed</Text>
+            <Text fontSize="2xs" color="chart.negative" fontWeight="600">Failed</Text>
           ) : l1Confirmed ? (
-            <Text fontSize="2xs" color="green.500" fontWeight="600">Confirmed</Text>
+            <Text fontSize="2xs" color="chart.positive" fontWeight="600">Confirmed</Text>
           ) : l1HasHash ? (
-            <Text fontSize="2xs" color="bauhaus.blue" fontWeight="600">Pending...</Text>
+            <Text fontSize="2xs" color="accent.secondary" fontWeight="600">Pending...</Text>
           ) : null}
         </HStack>
         {/* Step 2: L2 */}
         <HStack spacing={2}>
           <Box
             w="18px" h="18px" flexShrink={0}
-            border="2px solid" borderColor="bauhaus.black"
+            border="2px solid" borderColor="border.default"
             bg={
               l2Reverted
-                ? "bauhaus.red"
+                ? "chart.negative"
                 : l2Confirmed
-                  ? "green.400"
+                  ? "chart.positive"
                   : l1Confirmed
-                    ? "bauhaus.blue"
-                    : "gray.200"
+                    ? "accent.secondary"
+                    : "border.subtle"
             }
             display="flex" alignItems="center" justifyContent="center"
           >
             {l2Reverted ? (
-              <WarningIcon boxSize={2.5} color="white" />
+              <WarningIcon boxSize={2.5} color={stepIconColor} />
             ) : l2Confirmed ? (
-              <CheckCircleIcon boxSize={2.5} color="white" />
+              <CheckCircleIcon boxSize={2.5} color={stepIconColor} />
             ) : l1Confirmed ? (
-              <Spinner size="xs" color="white" boxSize="10px" />
+              <Spinner size="xs" color={stepIconColor} boxSize="10px" />
             ) : (
-              <Text fontSize="2xs" fontWeight="800" color="gray.400">2</Text>
+              <Text fontSize="2xs" fontWeight="800" color="text.tertiary">2</Text>
             )}
           </Box>
           <Text fontSize="xs" fontWeight="700" color={l1Confirmed ? "text.primary" : "text.tertiary"}>
             L2 Sequencer ({l2Config.name || "L2"})
           </Text>
           {l2Reverted ? (
-            <Text fontSize="2xs" color="bauhaus.red" fontWeight="600">Reverted</Text>
+            <Text fontSize="2xs" color="chart.negative" fontWeight="600">Reverted</Text>
           ) : l2Confirmed ? (
-            <Text fontSize="2xs" color="green.500" fontWeight="600">Confirmed</Text>
+            <Text fontSize="2xs" color="chart.positive" fontWeight="600">Confirmed</Text>
           ) : l1Confirmed ? (
-            <Text fontSize="2xs" color="bauhaus.blue" fontWeight="600">Awaiting inclusion...</Text>
+            <Text fontSize="2xs" color="accent.secondary" fontWeight="600">Awaiting inclusion...</Text>
           ) : null}
         </HStack>
       </VStack>
@@ -210,6 +217,12 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
   const { networksInfo } = useNetworks();
   const resolvedChain = getResolvedChainById(tx.chainId, networksInfo);
   const config = getChainConfig(tx.chainId);
+  // Chain badge colors — all per-theme branching lives in `useChainBadgeStyle`.
+  const chainBadgeStyle = useChainBadgeStyle(
+    resolvedChain?.bg ?? config.bg,
+    resolvedChain?.text ?? config.text,
+    resolvedChain?.isCustom ?? false,
+  );
   const hasCalldata = tx.tx.data && tx.tx.data !== "0x";
   const isContractDeploy = !tx.tx.to;
   const isL2 = OP_STACK_CHAIN_IDS.has(tx.chainId);
@@ -298,13 +311,8 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} scrollBehavior="inside" isCentered>
-      <ModalOverlay bg="blackAlpha.700" />
+      <ModalOverlay bg="surface.overlay" />
       <ModalContent
-        bg="bauhaus.white"
-        border="4px solid"
-        borderColor="bauhaus.black"
-        borderRadius="0"
-        boxShadow="8px 8px 0px 0px #121212"
         mx={3}
         my={3}
         maxH="calc(100vh - 24px)"
@@ -316,7 +324,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
           textTransform="uppercase"
           letterSpacing="wider"
           borderBottom="3px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           display="flex"
           alignItems="center"
           justifyContent="space-between"
@@ -336,38 +344,31 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
           <VStack spacing={3} align="stretch">
             {/* Status + Chain row */}
             <HStack spacing={2} flexWrap="wrap">
-              {(() => {
-                const badgeChain = resolvedChain ?? {
-                  name: tx.chainName,
-                  bg: config.bg,
-                  text: config.text,
-                  icon: config.icon,
-                  isCustom: false,
-                };
-                return (
               <Badge
                 fontSize="xs"
-                bg={badgeChain.isCustom ? "bauhaus.white" : badgeChain.bg}
-                color={badgeChain.isCustom ? "bauhaus.black" : badgeChain.text}
+                bg={chainBadgeStyle.bg}
+                color={chainBadgeStyle.fg}
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor={chainBadgeStyle.border}
                 px={2}
                 py={0.5}
                 display="flex"
                 alignItems="center"
                 gap={1}
               >
-                <ChainIcon chainId={tx.chainId} chainName={badgeChain.name} size="10px" />
-                {badgeChain.name}
+                <ChainIcon
+                  chainId={tx.chainId}
+                  chainName={resolvedChain?.name ?? tx.chainName}
+                  size="10px"
+                />
+                {resolvedChain?.name ?? tx.chainName}
               </Badge>
-                );
-              })()}
               {tx.status === "pending" && !tx.forceInclusionMeta && (
                 <Badge
-                  bg="bauhaus.blue"
-                  color="white"
+                  bg="status.info.bg"
+                  color="status.info.fg"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   px={2}
                   py={0.5}
                   fontSize="xs"
@@ -383,10 +384,10 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
               )}
               {tx.status === "success" && (
                 <Badge
-                  bg="bauhaus.yellow"
-                  color="bauhaus.black"
+                  bg="accent.highlight"
+                  color="accentFg.highlight"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   px={2}
                   py={0.5}
                   fontSize="xs"
@@ -414,10 +415,10 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 }
                 return (
                   <Badge
-                    bg="bauhaus.red"
-                    color="white"
+                    bg="status.error.bg"
+                    color="status.error.fg"
                     border="2px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                     px={2}
                     py={0.5}
                     fontSize="xs"
@@ -454,7 +455,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                       textTransform="uppercase"
                       letterSpacing="wide"
                       border="2px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
                       px={2}
                       h="22px"
                       onClick={() => {
@@ -482,7 +483,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                       textTransform="uppercase"
                       letterSpacing="wide"
                       border="2px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
                       px={2}
                       h="22px"
                       onClick={handleViewOnExplorer}
@@ -502,7 +503,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   textTransform="uppercase"
                   letterSpacing="wide"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   px={2}
                   h="22px"
                   onClick={handleViewOnExplorer}
@@ -529,11 +530,11 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   px={2}
                   py={1}
                   fontSize="xs"
-                  bg="bauhaus.blue"
-                  color="white"
+                  bg="accent.secondary"
+                  color="accentFg.secondary"
                   fontFamily="mono"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   fontWeight="700"
                 >
                   {tx.functionName}
@@ -543,86 +544,110 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
 
             {/* Transfer meta (sponsored transfers) */}
             {tx.transferMeta ? (
-              <>
-                {/* Amount + Token */}
-                <Box>
-                  <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
-                    Amount
-                  </Text>
-                  <HStack spacing={2}>
-                    {tx.transferMeta.tokenLogo && (
-                      <Image
-                        src={tx.transferMeta.tokenLogo}
-                        alt={tx.transferMeta.symbol}
-                        boxSize="20px"
-                        borderRadius="full"
-                      />
-                    )}
-                    <Text fontSize="sm" fontWeight="800" color="text.primary">
-                      {tx.transferMeta.amount} {tx.transferMeta.symbol}
+              <Box
+                bg="surface.sunken"
+                border="1px solid"
+                borderColor="border.subtle"
+                borderRadius="md"
+                p={3}
+              >
+                <VStack align="stretch" spacing={3}>
+                  {/* Amount + Token */}
+                  <Box>
+                    <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
+                      Amount
                     </Text>
-                  </HStack>
-                </Box>
+                    <HStack spacing={2}>
+                      {tx.transferMeta.tokenLogo && (
+                        <Image
+                          src={tx.transferMeta.tokenLogo}
+                          alt={tx.transferMeta.symbol}
+                          boxSize="20px"
+                          borderRadius="full"
+                        />
+                      )}
+                      <Text fontSize="sm" fontWeight="800" color="text.primary">
+                        {tx.transferMeta.amount} {tx.transferMeta.symbol}
+                      </Text>
+                    </HStack>
+                  </Box>
 
-                {/* From */}
-                <Box>
-                  <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
-                    From
-                  </Text>
-                  <FromAccountDisplay address={tx.tx.from} />
-                </Box>
-
-                {/* To (actual recipient) */}
-                <Box>
-                  <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
-                    To
-                  </Text>
-                  <AddressParam value={tx.transferMeta.recipient} chainId={tx.chainId} />
-                </Box>
-              </>
-            ) : (
-              <>
-                {/* From → To row */}
-                <HStack spacing={2} align="start">
-                  {/* From (our wallet) */}
-                  <VStack align="start" spacing={0} flex={1} minW={0}>
+                  {/* From */}
+                  <Box>
                     <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
                       From
                     </Text>
                     <FromAccountDisplay address={tx.tx.from} />
-                  </VStack>
+                  </Box>
 
-                  {/* Arrow */}
-                  <Text fontSize="md" fontWeight="800" color="text.tertiary" pt={5}>
-                    →
-                  </Text>
-
-                  {/* To */}
-                  <VStack align="start" spacing={0} flex={1} minW={0}>
+                  {/* To (actual recipient) */}
+                  <Box>
                     <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
-                      {isContractDeploy ? "Type" : "To"}
+                      To
                     </Text>
-                    {isContractDeploy ? (
-                      <Badge
-                        fontSize="2xs"
-                        bg="bauhaus.yellow"
-                        color="bauhaus.black"
-                        border="2px solid"
-                        borderColor="bauhaus.black"
-                        fontWeight="700"
-                        px={1.5}
-                        py={0.5}
-                      >
-                        Contract Deploy
-                      </Badge>
-                    ) : (
-                      <AddressParam value={tx.tx.to!} chainId={tx.chainId} />
-                    )}
-                  </VStack>
-                </HStack>
+                    <AddressParam value={tx.transferMeta.recipient} chainId={tx.chainId} />
+                  </Box>
+                </VStack>
+              </Box>
+            ) : (
+              <>
+                {/* From → To card — recessed surface + border gives visual
+                    separation from the modal's raised backdrop so each
+                    section reads as its own tile. */}
+                <Box
+                  bg="surface.sunken"
+                  border="1px solid"
+                  borderColor="border.subtle"
+                  borderRadius="md"
+                  p={3}
+                >
+                  <HStack spacing={2} align="start">
+                    {/* From (our wallet) */}
+                    <VStack align="start" spacing={0} flex={1} minW={0}>
+                      <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
+                        From
+                      </Text>
+                      <FromAccountDisplay address={tx.tx.from} />
+                    </VStack>
 
-                {/* Value */}
-                <Box>
+                    {/* Arrow */}
+                    <Text fontSize="md" fontWeight="800" color="text.tertiary" pt={5}>
+                      →
+                    </Text>
+
+                    {/* To */}
+                    <VStack align="start" spacing={0} flex={1} minW={0}>
+                      <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
+                        {isContractDeploy ? "Type" : "To"}
+                      </Text>
+                      {isContractDeploy ? (
+                        <Badge
+                          fontSize="2xs"
+                          bg="accent.highlight"
+                          color="accentFg.highlight"
+                          border="2px solid"
+                          borderColor="border.default"
+                          fontWeight="700"
+                          px={1.5}
+                          py={0.5}
+                        >
+                          Contract Deploy
+                        </Badge>
+                      ) : (
+                        <AddressParam value={tx.tx.to!} chainId={tx.chainId} />
+                      )}
+                    </VStack>
+                  </HStack>
+                </Box>
+
+                {/* Value card */}
+                <Box
+                  bg="surface.sunken"
+                  border="1px solid"
+                  borderColor="border.subtle"
+                  borderRadius="md"
+                  p={3}
+                >
                   <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
                     Value
                   </Text>
@@ -636,8 +661,10 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
             {/* Gas — collapsible */}
             {gasData && txFee && (
               <Box
-                border="2px solid"
-                borderColor="gray.200"
+                bg="surface.sunken"
+                border="1px solid"
+                borderColor="border.subtle"
+                borderRadius="md"
               >
                 <HStack
                   px={3}
@@ -665,7 +692,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
 
                 <Collapse in={gasExpanded} animateOpacity>
                   <VStack align="stretch" spacing={1.5} px={3} pb={3} pt={1}>
-                    <Box h="1px" bg="gray.200" />
+                    <Box h="1px" bg="border.subtle" />
 
                     <GasRow
                       label="Gas Price"
@@ -679,7 +706,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
 
                     {isL2 && (
                       <>
-                        <Box h="1px" bg="gray.200" mt={0.5} mb={0.5} />
+                        <Box h="1px" bg="border.subtle" mt={0.5} mb={0.5} />
                         <GasRow
                           label="L2 Fees Paid"
                           value={formatEth((BigInt(gasData.gasUsed) * BigInt(gasData.effectiveGasPrice)).toString(), nativeSym)}
@@ -724,13 +751,17 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   p={3}
                   bg="bg.muted"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   maxH="100px"
                   overflowY="auto"
                   css={{
                     "&::-webkit-scrollbar": { width: "6px" },
-                    "&::-webkit-scrollbar-track": { background: "#E0E0E0" },
-                    "&::-webkit-scrollbar-thumb": { background: "#121212" },
+                    "&::-webkit-scrollbar-track": {
+                      background: "var(--chakra-colors-bg-muted)",
+                    },
+                    "&::-webkit-scrollbar-thumb": {
+                      background: "var(--chakra-colors-border-strong)",
+                    },
                   }}
                 >
                   <Text fontSize="xs" fontFamily="mono" color="text.tertiary" wordBreak="break-all" whiteSpace="pre-wrap">
@@ -744,14 +775,14 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
             {tx.status === "failed" && tx.error && (
               <Box
                 p={3}
-                bg="bauhaus.red"
+                bg="status.error.bg"
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
               >
-                <Text fontSize="xs" color="white" fontWeight="700" mb={0.5} textTransform="uppercase">
+                <Text fontSize="xs" color="status.error.fg" fontWeight="700" mb={0.5} textTransform="uppercase">
                   Error
                 </Text>
-                <Text fontSize="xs" color="white" fontWeight="500">
+                <Text fontSize="xs" color="status.error.fg" fontWeight="500">
                   {tx.error}
                 </Text>
               </Box>
@@ -760,7 +791,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
           </VStack>
         </ModalBody>
 
-        <ModalFooter borderTop="3px solid" borderColor="bauhaus.black" pt={3} pb={4}>
+        <ModalFooter borderTop="3px solid" borderColor="border.default" pt={3} pb={4}>
           <Button variant="secondary" size="sm" onClick={onClose} w="full">
             Close
           </Button>

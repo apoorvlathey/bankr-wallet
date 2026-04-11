@@ -34,7 +34,7 @@ function TokenIcon({
     <Box
       boxSize={size}
       borderRadius="full"
-      bg="bg.muted"
+      bg="surface.sunken"
       display="flex"
       alignItems="center"
       justifyContent="center"
@@ -125,12 +125,13 @@ export default function TokenSelector({
       <MenuButton
         as={Box}
         cursor="pointer"
-        border={borderless ? "none" : "3px solid"}
-        borderColor="bauhaus.black"
-        bg={borderless ? "transparent" : "bauhaus.white"}
+        border={borderless ? "none" : "2px solid"}
+        borderColor="border.default"
+        borderRadius={borderless ? undefined : "md"}
+        bg={borderless ? "transparent" : "surface.base"}
         px={borderless ? 0 : 2}
         py={borderless ? 0 : 1.5}
-        _hover={borderless ? { opacity: 0.7 } : { borderColor: "bauhaus.blue" }}
+        _hover={borderless ? { opacity: 0.7 } : { borderColor: "accent.secondary" }}
         display="flex"
         alignItems="center"
       >
@@ -145,11 +146,8 @@ export default function TokenSelector({
         </HStack>
       </MenuButton>
       <MenuList
-        bg="bauhaus.white"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        borderRadius={0}
-        boxShadow="4px 4px 0px 0px #121212"
+        // Menu baseStyle paints bg/border/borderRadius/boxShadow from theme
+        // tokens — keep only sizing/scroll/zIndex overrides here.
         maxH="260px"
         overflowY="auto"
         p={0}
@@ -157,7 +155,7 @@ export default function TokenSelector({
       >
         {/* Custom address input */}
         {onCustomAddress && (
-          <Box px={2} py={2} borderBottom="1px solid" borderColor="gray.200">
+          <Box px={2} py={2} borderBottom="1px solid" borderColor="border.subtle">
             <Input
               ref={inputRef}
               placeholder="Paste token address (0x...)"
@@ -168,19 +166,18 @@ export default function TokenSelector({
               fontSize="xs"
               size="sm"
               border="2px solid"
-              borderColor="bauhaus.black"
-              borderRadius={0}
-              bg="bauhaus.white"
-              _hover={{ borderColor: "bauhaus.blue" }}
-              _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+              borderColor="border.default"
+              bg="surface.raised"
+              _hover={{ borderColor: "accent.secondary" }}
+              _focus={{ borderColor: "accent.secondary", boxShadow: "none" }}
             />
           </Box>
         )}
 
         {/* Loading state for custom token */}
         {customTokenLoading && (
-          <HStack px={3} py={3} spacing={2} borderBottom="1px solid" borderColor="gray.200">
-            <Spinner size="xs" color="bauhaus.blue" />
+          <HStack px={3} py={3} spacing={2} borderBottom="1px solid" borderColor="border.subtle">
+            <Spinner size="xs" color="accent.secondary" />
             <Text fontSize="xs" fontWeight="700" color="text.tertiary">
               Loading token...
             </Text>
@@ -189,26 +186,28 @@ export default function TokenSelector({
 
         {/* Error state for custom token */}
         {customTokenError && !customTokenLoading && (
-          <Box px={3} py={2} borderBottom="1px solid" borderColor="gray.200">
-            <Text fontSize="xs" fontWeight="700" color="bauhaus.red">
+          <Box px={3} py={2} borderBottom="1px solid" borderColor="border.subtle">
+            <Text fontSize="xs" fontWeight="700" color="chart.negative">
               {customTokenError}
             </Text>
           </Box>
         )}
 
-        {/* Resolved custom token */}
+        {/* Resolved custom token — uses warm highlight to draw the eye to a
+            freshly-resolved option. Bauhaus yellow / Midnight amber. */}
         {resolvedCustomToken && !customTokenLoading && onSelectCustomToken && (
           <MenuItem
             onClick={() => {
               onSelectCustomToken(resolvedCustomToken);
               setCustomAddr("");
             }}
-            bg="bauhaus.yellow"
-            _hover={{ bg: "#e6b31c" }}
+            bg="accent.highlight"
+            color="accentFg.highlight"
+            _hover={{ bg: "accent.highlight", filter: "brightness(0.92)" }}
             px={3}
             py={2}
             borderBottom="1px solid"
-            borderColor="gray.200"
+            borderColor="border.subtle"
           >
             <HStack spacing={2} w="full">
               <TokenIcon symbol={resolvedCustomToken.symbol} logoUrl={resolvedCustomToken.logoUrl} />
@@ -227,17 +226,17 @@ export default function TokenSelector({
           </MenuItem>
         )}
 
-        {/* Existing holdings */}
+        {/* Existing holdings — selected row uses recessed sunken to mark
+            "current pick"; Menu baseStyle paints the default _hover. */}
         {filtered.map((token) => (
           <MenuItem
             key={`${token.contractAddress}-${token.chainId}`}
             onClick={() => onSelect(token)}
             bg={
               selectedToken?.contractAddress === token.contractAddress
-                ? "bg.muted"
+                ? "surface.sunken"
                 : "transparent"
             }
-            _hover={{ bg: "bg.hover" }}
             px={3}
             py={2}
           >
