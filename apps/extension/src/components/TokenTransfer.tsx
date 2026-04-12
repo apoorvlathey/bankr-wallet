@@ -686,7 +686,7 @@ function TokenTransfer({
                   transition="opacity 0.15s"
                 >
                   <HStack spacing={1.5}>
-                    <ChainIcon chainId={selectedChainId} chainName={chainName} size="36px" />
+                    <ChainIcon chainId={selectedChainId} chainName={chainName} size="36px" withChip />
                     <Box
                       bg="surface.raised"
                       border="1.5px solid"
@@ -779,7 +779,7 @@ function TokenTransfer({
                         py={2}
                       >
                         <HStack spacing={2}>
-                          <ChainIcon chainId={cId} chainName={getChainName(cId)} size="18px" />
+                          <ChainIcon chainId={cId} chainName={getChainName(cId)} size="18px" withChip />
                           <HStack spacing={1.5}>
                             <Text fontWeight="700" fontSize="sm">{getChainName(cId)}</Text>
                             {getChainEnvironmentLabel(cId, getChainName(cId)) && (

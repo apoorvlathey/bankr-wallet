@@ -44,6 +44,7 @@ interface HoldingsState {
 interface PortfolioTabsProps {
   address: string;
   activityTabTrigger?: number;
+  holdingsTabTrigger?: number;
   refreshTrigger?: number;
   onTokenClick?: (token: PortfolioToken) => void;
   onSwapClick?: (token: PortfolioToken) => void;
@@ -53,7 +54,7 @@ interface PortfolioTabsProps {
 /** Delay before refreshing balances after on-chain tx confirmation (ms) */
 const POST_CONFIRM_REFRESH_DELAY = 3000;
 
-export default function PortfolioTabs({ address, activityTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange }: PortfolioTabsProps) {
+export default function PortfolioTabs({ address, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange }: PortfolioTabsProps) {
   const { themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
   // Selected tab uses an inverted contrast strip — Bauhaus paints it BLACK with
@@ -61,7 +62,10 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
   // no single token pair that produces both effects, hence the conditional.
   const tabActiveBg = isDarkTheme ? "surface.sunken" : "fg.primary";
   const tabActiveFg = isDarkTheme ? "fg.primary" : "fg.inverse";
-  const [tabIndex, setTabIndex] = useState(activityTabTrigger > 0 ? 1 : 0);
+  // On (re)mount, default to whichever tab was most recently requested by the parent.
+  // activityTabTrigger increments after a tx is initiated; holdingsTabTrigger
+  // increments when the user backs out of send/swap without submitting.
+  const [tabIndex, setTabIndex] = useState(activityTabTrigger > holdingsTabTrigger ? 1 : 0);
   const [holdingsState, setHoldingsState] = useState<HoldingsState | null>(null);
   const holdingsStateRef = useRef<HoldingsState | null>(null);
   holdingsStateRef.current = holdingsState;
@@ -90,6 +94,14 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, refresh
       setTabIndex(1);
     }
   }, [activityTabTrigger]);
+
+  // Switch to Holdings tab when holdingsTabTrigger increments (e.g. user backs
+  // out of send/swap without submitting a tx).
+  useEffect(() => {
+    if (holdingsTabTrigger > 0) {
+      setTabIndex(0);
+    }
+  }, [holdingsTabTrigger]);
 
   // Listen for tx confirmations from background and auto-refresh balances.
   // Debounce so rapid messages (e.g., batch tx with multiple calls) collapse into one refresh.

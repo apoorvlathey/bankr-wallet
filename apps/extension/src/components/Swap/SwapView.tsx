@@ -1030,7 +1030,7 @@ function SwapView({
                 _hover={{ opacity: 0.8 }}
               >
                 <HStack spacing={1.5}>
-                  <ChainIcon chainId={chainId} chainName={chainName} size="16px" />
+                  <ChainIcon chainId={chainId} chainName={chainName} size="16px" withChip />
                   <Text
                     fontSize="xs"
                     fontWeight="700"
@@ -1119,7 +1119,7 @@ function SwapView({
                         }}
                       >
                         <HStack spacing={2}>
-                          <ChainIcon chainId={c.chainId} chainName={c.name} size="18px" />
+                          <ChainIcon chainId={c.chainId} chainName={c.name} size="18px" withChip />
                           <Text fontWeight="700" fontSize="sm">
                             {c.name}
                           </Text>
@@ -1267,7 +1267,7 @@ function SwapView({
               _hover={{ opacity: 0.8 }}
             >
               <HStack spacing={1.5}>
-                <ChainIcon chainId={chainId} chainName={chainName} size="16px" />
+                <ChainIcon chainId={chainId} chainName={chainName} size="16px" withChip />
                 <Text
                   fontSize="xs"
                   fontWeight="700"
@@ -1360,7 +1360,7 @@ function SwapView({
                       }}
                     >
                       <HStack spacing={2}>
-                        <ChainIcon chainId={c.chainId} chainName={c.name} size="18px" />
+                        <ChainIcon chainId={c.chainId} chainName={c.name} size="18px" withChip />
                         <Text fontWeight="700" fontSize="sm">
                           {c.name}
                         </Text>

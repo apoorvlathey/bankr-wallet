@@ -257,6 +257,7 @@ function App() {
     null,
   );
   const [activityTabTrigger, setActivityTabTrigger] = useState(0);
+  const [holdingsTabTrigger, setHoldingsTabTrigger] = useState(0);
   const [portfolioRefreshTrigger, setPortfolioRefreshTrigger] = useState(0);
 
   const [copied, setCopied] = useState(false);
@@ -1927,6 +1928,7 @@ function App() {
               onBack={() => {
                 setTransferToken(null);
                 setView("main");
+                setHoldingsTabTrigger((n) => n + 1);
               }}
               onTransferInitiated={(sponsored?: boolean) => {
                 setTransferToken(null);
@@ -1971,6 +1973,7 @@ function App() {
                 setSwapInitialBuyToken(undefined);
                 setSwapInitialSellToken(undefined);
                 setView("main");
+                setHoldingsTabTrigger((n) => n + 1);
               }}
               onSwapInitiated={() => {
                 setSwapInitialBuyToken(undefined);
@@ -3338,6 +3341,7 @@ function App() {
               <PortfolioTabs
                 address={address}
                 activityTabTrigger={activityTabTrigger}
+                holdingsTabTrigger={holdingsTabTrigger}
                 refreshTrigger={portfolioRefreshTrigger}
                 onRpcIssuesChange={handleRpcIssuesChange}
                 onTokenClick={(token) => {
