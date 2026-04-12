@@ -973,7 +973,9 @@ function Onboarding({ onComplete }: OnboardingProps) {
                 flex={1}
                 p={4}
                 bg={
-                  accountTypeChoice === "bankr" ? "surface.sunken" : "surface.raised"
+                  accountTypeChoice === "bankr"
+                    ? isDarkTheme ? "surface.raisedHover" : "surface.sunken"
+                    : "surface.raised"
                 }
                 border="2px solid"
                 borderColor={
@@ -1052,7 +1054,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                   p={3}
                   bg={
                     accountTypeChoice === "privateKey"
-                      ? "surface.sunken"
+                      ? isDarkTheme ? "surface.raisedHover" : "surface.sunken"
                       : "surface.raised"
                   }
                   border="2px solid"
@@ -1111,7 +1113,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                   p={3}
                   bg={
                     accountTypeChoice === "seedPhrase"
-                      ? "surface.sunken"
+                      ? isDarkTheme ? "surface.raisedHover" : "surface.sunken"
                       : "surface.raised"
                   }
                   border="2px solid"
@@ -1204,7 +1206,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
               p={6}
               bg="surface.raised"
               border="2px solid"
-              borderColor="border.default"
+              borderColor={isDarkTheme ? "border.strong" : "border.default"}
               boxShadow="card"
               position="relative"
             >
@@ -1376,7 +1378,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
               p={6}
               bg="surface.raised"
               border="2px solid"
-              borderColor="border.default"
+              borderColor={isDarkTheme ? "border.strong" : "border.default"}
               boxShadow="card"
               position="relative"
             >
@@ -1476,7 +1478,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
               p={6}
               bg="surface.raised"
               border="2px solid"
-              borderColor="border.default"
+              borderColor={isDarkTheme ? "border.strong" : "border.default"}
               boxShadow="card"
               position="relative"
             >

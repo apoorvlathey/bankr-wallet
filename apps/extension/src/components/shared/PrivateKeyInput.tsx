@@ -16,6 +16,7 @@ import {
 } from "@chakra-ui/react";
 import { ViewIcon, ViewOffIcon, CheckIcon, RepeatIcon, CopyIcon } from "@chakra-ui/icons";
 import { generatePrivateKey } from "@/utils/privateKeyUtils";
+import { useTheme } from "@/theme";
 
 type PkMode = "import" | "generate";
 
@@ -38,6 +39,8 @@ export default function PrivateKeyInput({
   onContinue,
   autoFocus,
 }: PrivateKeyInputProps) {
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const [pkMode, setPkMode] = useState<PkMode>("import");
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [pkCopied, setPkCopied] = useState(false);
@@ -150,7 +153,7 @@ export default function PrivateKeyInput({
                   />
                   <IconButton
                     aria-label="Copy private key"
-                    icon={pkCopied ? <CheckIcon color="green.500" /> : <CopyIcon />}
+                    icon={pkCopied ? <CheckIcon color="chart.positive" /> : <CopyIcon />}
                     size="xs"
                     variant="ghost"
                     onClick={async () => {
@@ -158,7 +161,7 @@ export default function PrivateKeyInput({
                       setPkCopied(true);
                       setTimeout(() => setPkCopied(false), 2000);
                     }}
-                    color={pkCopied ? "green.500" : "text.secondary"}
+                    color={pkCopied ? "chart.positive" : "text.secondary"}
                     tabIndex={-1}
                   />
                 </HStack>
@@ -202,9 +205,9 @@ export default function PrivateKeyInput({
         <Box
           mt={4}
           p={3}
-          bg="accent.highlight"
+          bg={isDarkTheme ? "status.success.bg" : "accent.highlight"}
           border="2px solid"
-          borderColor="border.default"
+          borderColor={isDarkTheme ? "status.success.border" : "border.default"}
           boxShadow="card"
         >
           <HStack spacing={2} align="center">
@@ -212,25 +215,25 @@ export default function PrivateKeyInput({
               w="22px"
               h="22px"
               minW="22px"
-              bg="accent.secondary"
+              bg={isDarkTheme ? "chart.positive" : "accent.secondary"}
               border="2px solid"
-              borderColor="border.default"
+              borderColor={isDarkTheme ? "status.success.border" : "border.default"}
               borderRadius="full"
               display="flex"
               alignItems="center"
               justifyContent="center"
             >
-              <CheckIcon boxSize="10px" color="accentFg.secondary" />
+              <CheckIcon boxSize="10px" color={isDarkTheme ? "fg.inverse" : "accentFg.secondary"} />
             </Box>
             <Code
               fontSize="10px"
-              bg="surface.raised"
+              bg={isDarkTheme ? "surface.sunken" : "surface.raised"}
               color="text.primary"
               fontFamily="mono"
               fontWeight="700"
               p={1.5}
               border="2px solid"
-              borderColor="border.default"
+              borderColor={isDarkTheme ? "border.strong" : "border.default"}
               overflow="hidden"
               textOverflow="ellipsis"
               whiteSpace="nowrap"
