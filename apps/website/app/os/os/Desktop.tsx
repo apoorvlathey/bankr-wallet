@@ -519,6 +519,7 @@ export function Desktop() {
                       dapp?.chains ?? Object.keys(CHAIN_NAMES).map(Number)
                     }
                     autoConnect={dapp?.autoConnect}
+                    disabled={dapp?.disabled}
                     onChainChange={(chainId) =>
                       switchWindowChain(win.id, chainId)
                     }

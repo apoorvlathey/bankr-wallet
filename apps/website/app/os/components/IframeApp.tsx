@@ -39,6 +39,7 @@ interface IframeAppProps {
   initialChainId?: number;
   onChainChange?: (chainId: number) => void;
   onBack: () => void;
+  disabled?: { reason: string; link?: string };
 }
 
 export function IframeApp({
@@ -50,6 +51,7 @@ export function IframeApp({
   initialChainId,
   onChainChange,
   onBack,
+  disabled,
 }: IframeAppProps) {
   const walletChainId = useChainId();
   const [chainDropdownOpen, setChainDropdownOpen] = useState(false);
@@ -272,6 +274,7 @@ export function IframeApp({
         activeChainId={activeChainId}
         supportedChains={supportedChains}
         autoConnect={autoConnect}
+        disabled={disabled}
         onChainChange={handleChainChange}
       />
     </Box>

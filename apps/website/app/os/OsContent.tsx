@@ -63,6 +63,7 @@ function MobileAppsView() {
         appIconUrl={activeDapp.iconUrl}
         supportedChains={activeDapp.chains}
         autoConnect={activeDapp.autoConnect}
+        disabled={activeDapp.disabled}
         initialChainId={initialChainId}
         onChainChange={(chainId) => updateChainInUrl(activeDapp.url, chainId)}
         onBack={handleBack}
