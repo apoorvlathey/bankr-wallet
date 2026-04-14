@@ -1537,17 +1537,14 @@ export default function AdminContent() {
           {/* Internal Pages */}
           <HStack justify="center" pt={4} spacing={4} flexWrap="wrap" opacity={0.6}>
             {[
-              { href: "/swap", label: "Swap" },
-              { href: "/swap-wchan", label: "Swap WCHAN" },
-              { href: "/verify", label: "Verify" },
-              { href: "/os", label: "OS" },
-              { href: "/migrate", label: "Migrate" },
-              { href: "/mainnet", label: "Bridge to Mainnet" },
-              { href: "/l1-base-deploy", label: "L1 Base Token Deploy" },
-              {
-                href: resolveHref("/compare"),
-                label: "Compare",
-              },
+              { href: resolveHref("/swap"), label: "Swap" },
+              { href: resolveHref("/swap-wchan"), label: "Swap WCHAN" },
+              { href: resolveHref("/verify"), label: "Verify" },
+              { href: resolveHref("/os"), label: "OS" },
+              { href: resolveHref("/migrate"), label: "Migrate" },
+              { href: resolveHref("/mainnet"), label: "Bridge to Mainnet" },
+              { href: resolveHref("/l1-base-deploy"), label: "L1 Base Token Deploy" },
+              { href: resolveHref("/compare"), label: "Compare" },
             ].map(({ href, label }) => (
               <Link
                 key={href}
