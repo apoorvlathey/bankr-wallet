@@ -12,6 +12,7 @@ export const SUBDOMAIN_ROUTES = [
   { path: "/compare", subdomain: "compare.walletchan.com" },
   { path: "/mainnet", subdomain: "mainnet.walletchan.com" },
   { path: "/admin", subdomain: "admin.walletchan.com" },
+  { path: "/test", subdomain: "test.walletchan.com" },
 ] as const;
 
 export type SubdomainRoute = (typeof SUBDOMAIN_ROUTES)[number]["path"];

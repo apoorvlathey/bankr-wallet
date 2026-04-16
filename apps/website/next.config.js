@@ -126,6 +126,17 @@ const nextConfig = {
           ],
           destination: "/os/:path*",
         },
+        // test.walletchan.com -> /test
+        {
+          source: "/:path((?!_next|api|images|og|screenshots).*)",
+          has: [
+            {
+              type: "host",
+              value: "test.walletchan.com",
+            },
+          ],
+          destination: "/test/:path*",
+        },
       ],
     };
   },
