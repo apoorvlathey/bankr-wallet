@@ -19,6 +19,7 @@ import { ChevronDownIcon, AddIcon, SettingsIcon, CopyIcon, CheckIcon } from "@ch
 import { blo } from "blo";
 import type { Account, SeedGroup } from "@/chrome/types";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
+import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 
 // Blockies avatar for PK accounts using blo
 function BlockieAvatar({
@@ -60,9 +61,10 @@ function BankrAvatar({ size = 20 }: { size?: number }) {
 // Resolved ENS/Basename avatar (circular, slightly larger to match blockie visual weight)
 function EnsAvatar({ src, size = 20 }: { src: string; size?: number }) {
   const adjustedSize = size + 4;
+  const cachedSrc = useCachedAvatarSrc(src);
   return (
     <Image
-      src={src}
+      src={cachedSrc || src}
       alt="ENS avatar"
       w={`${adjustedSize}px`}
       h={`${adjustedSize}px`}

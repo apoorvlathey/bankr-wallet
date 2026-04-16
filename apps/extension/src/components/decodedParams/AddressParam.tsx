@@ -5,6 +5,7 @@ import { CopyButton } from "@/components/CopyButton";
 import { resolveAddressToName, getNameAvatar } from "@/lib/ensUtils";
 import { getChainConfig } from "@/constants/chainConfig";
 import { ethShLabelsUrl } from "@/constants/externalUrls";
+import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 
 interface AddressParamProps {
   value: string;
@@ -19,6 +20,7 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
 
   const address = value?.toLowerCase().startsWith("0x") ? value : `0x${value}`;
   const explorer = getChainConfig(chainId).explorer;
+  const cachedAvatar = useCachedAvatarSrc(avatar);
 
   useEffect(() => {
     if (!address || address === "0x") return;
@@ -73,7 +75,7 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
       {/* Avatar */}
       {avatar && (
         <Image
-          src={avatar}
+          src={cachedAvatar || avatar}
           boxSize="16px"
           border="1px solid"
           borderColor="border.default"

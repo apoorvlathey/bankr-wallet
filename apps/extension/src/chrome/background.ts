@@ -197,6 +197,8 @@ import {
   initSidePanel,
 } from "./sidepanelManager";
 
+import { fetchAndCacheAvatarImage } from "./avatarImageCache";
+
 // Handles RPC requests proxied from inpage script (to bypass page CSP)
 async function handleRpcRequest(
   rpcUrl: string,
@@ -1937,6 +1939,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "cacheAvatarImage": {
+      // SECURITY: Only extension pages can trigger avatar fetches. Content
+      // scripts could otherwise enumerate any URL via this proxy.
+      if (!isExtensionPage(sender)) {
+        sendResponse({ dataUrl: null });
+        return false;
+      }
+      const url = typeof message.url === "string" ? message.url : "";
+      if (!url) {
+        sendResponse({ dataUrl: null });
+        return false;
+      }
+      fetchAndCacheAvatarImage(url)
+        .then((dataUrl) => sendResponse({ dataUrl }))
+        .catch(() => sendResponse({ dataUrl: null }));
+      return true;
+    }
+
     case "resolveCoinGeckoNativeAssets": {
       resolveCoinGeckoNativeAssetsBatch(message.requests)
         .then((data) => sendResponse({ success: true, data }))
@@ -2149,6 +2169,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               "accounts",
               "portfolioSnapshots",
               "ensIdentityCache",
+              "ensAvatarImageCache",
               ...notificationKeys,
             ]),
             chrome.storage.sync.remove([

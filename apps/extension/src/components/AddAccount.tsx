@@ -40,6 +40,7 @@ import {
 } from "@/components/shared/AccountTypeIcons";
 import PrivateKeyInput from "@/components/shared/PrivateKeyInput";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
+import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { isResolvableName } from "@/lib/ensUtils";
 
 type AccountType = "bankr" | "privateKey" | "seedPhrase" | "impersonator";
@@ -99,6 +100,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
     isValid: impersonatorIsValid,
     error: impersonatorResolverError,
   } = useAddressResolver(impersonatorAddress);
+  const cachedImpersonatorAvatar = useCachedAvatarSrc(impersonatorAvatar);
 
   // Check existing accounts and seed groups on mount
   useEffect(() => {
@@ -741,7 +743,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                     <HStack spacing={0.5}>
                       {impersonatorAvatar && (
                         <Image
-                          src={impersonatorAvatar}
+                          src={cachedImpersonatorAvatar || impersonatorAvatar}
                           alt="avatar"
                           boxSize="14px"
                           borderRadius="full"
@@ -811,7 +813,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                     <HStack spacing={0.5}>
                       {impersonatorAvatar && (
                         <Image
-                          src={impersonatorAvatar}
+                          src={cachedImpersonatorAvatar || impersonatorAvatar}
                           alt="avatar"
                           boxSize="14px"
                           borderRadius="full"

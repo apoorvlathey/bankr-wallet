@@ -29,6 +29,7 @@ import { useThemedToast } from "@/hooks/useThemedToast";
 import { useTheme } from "@/theme";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
+import { useCachedAvatarSrc, useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import { isResolvableName } from "@/lib/ensUtils";
 import { PortfolioToken } from "@/chrome/portfolioApi";
 import { fetchOnchainBalances } from "@/chrome/onchainBalances";
@@ -280,6 +281,7 @@ function TokenTransfer({
 
   const { resolvedAddress, resolvedName, avatar, isResolving, isLoadingExtras, isValid: isRecipientValid, error: resolverError } =
     useAddressResolver(recipient);
+  const cachedRecipientAvatar = useCachedAvatarSrc(avatar);
 
   const chainName = getChainName(selectedChainId);
   const chainEnvironmentLabel = getChainEnvironmentLabel(selectedChainId, chainName);
@@ -322,6 +324,14 @@ function TokenTransfer({
     [otherAccounts],
   );
   const { identities: otherAccountIdentities } = useEnsIdentities(otherAccountAddresses);
+  const otherAccountAvatarUrls = useMemo(
+    () =>
+      otherAccounts
+        .map((a) => otherAccountIdentities.get(a.address.toLowerCase())?.avatar)
+        .filter((u): u is string => !!u),
+    [otherAccounts, otherAccountIdentities],
+  );
+  const cachedOtherAccountAvatars = useCachedAvatarMap(otherAccountAvatarUrls);
 
   const getAccountDisplayName = useCallback((account: Account): string => {
     if (account.displayName) return account.displayName;
@@ -338,10 +348,10 @@ function TokenTransfer({
 
   const getAccountAvatar = useCallback((account: Account): string => {
     const ensAvatar = otherAccountIdentities.get(account.address.toLowerCase())?.avatar;
-    if (ensAvatar) return ensAvatar;
+    if (ensAvatar) return cachedOtherAccountAvatars.get(ensAvatar) || ensAvatar;
     if (account.type === "bankr") return "/bankr-icon.png";
     return blo(account.address as `0x${string}`);
-  }, [otherAccountIdentities]);
+  }, [otherAccountIdentities, cachedOtherAccountAvatars]);
 
   // Compute the token amount that will actually be sent
   const tokenAmount = useMemo(() => {
@@ -977,7 +987,7 @@ function TokenTransfer({
               <HStack spacing={0.5}>
                 {avatar && (
                   <Image
-                    src={avatar}
+                    src={cachedRecipientAvatar || avatar}
                     alt="avatar"
                     boxSize="14px"
                     borderRadius="full"
@@ -1022,7 +1032,7 @@ function TokenTransfer({
               <HStack spacing={0.5}>
                 {avatar && (
                   <Image
-                    src={avatar}
+                    src={cachedRecipientAvatar || avatar}
                     alt="avatar"
                     boxSize="14px"
                     borderRadius="full"

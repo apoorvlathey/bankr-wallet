@@ -3,6 +3,7 @@ import { HStack, VStack, Text, Box, Image } from "@chakra-ui/react";
 import { blo } from "blo";
 import type { Account } from "@/chrome/types";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
+import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 
 function truncateAddress(address: string): string {
   if (!address) return "";
@@ -32,6 +33,7 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
   }, [address]);
 
   const ens = identities.get(address.toLowerCase());
+  const cachedAvatar = useCachedAvatarSrc(ens?.avatar);
   const displayName =
     fromAccount?.displayName || ens?.name || truncateAddress(address);
   const hasResolvedName = !!(fromAccount?.displayName || ens?.name);
@@ -41,7 +43,7 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
       {/* Avatar */}
       {ens?.avatar ? (
         <Image
-          src={ens.avatar}
+          src={cachedAvatar || ens.avatar}
           alt="ENS avatar"
           w="22px"
           h="22px"
