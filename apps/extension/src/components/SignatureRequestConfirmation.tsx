@@ -193,12 +193,12 @@ function MessageDataDisplay({ message, rawData }: { message: string; rawData: st
             overflowY="auto"
             css={scrollStyles}
           >
-            <Text fontSize="xs" fontFamily="mono" color="text.tertiary" wordBreak="break-all" whiteSpace="pre-wrap">
+            <Text fontSize="xs" fontFamily="mono" color="text.primary" wordBreak="break-all" whiteSpace="pre-wrap">
               {message}
             </Text>
           </Box>
         ) : (
-          <Text fontSize="xs" color="text.tertiary" fontWeight="600">
+          <Text fontSize="xs" color="text.secondary" fontWeight="600">
             No message data
           </Text>
         )}
@@ -216,7 +216,7 @@ function MessageDataDisplay({ message, rawData }: { message: string; rawData: st
           overflowY="auto"
           css={scrollStyles}
         >
-          <Text fontSize="xs" fontFamily="mono" color="text.tertiary" wordBreak="break-all" whiteSpace="pre-wrap">
+          <Text fontSize="xs" fontFamily="mono" color="text.primary" wordBreak="break-all" whiteSpace="pre-wrap">
             {rawData}
           </Text>
         </Box>
@@ -313,15 +313,17 @@ function SignatureRequestConfirmation({
   };
 
   return (
-    <Box pt={1} px={3} pb={3} h="100%" overflowY="auto" overflowX="hidden" bg="surface.base" css={{
+    <Box pt="clamp(1.25rem, calc(8vh - 36px), 3rem)" px={3} pb={3} h="100%" overflowY="auto" overflowX="hidden" bg="surface.base" css={{
       "&::-webkit-scrollbar": { width: "4px" },
       "&::-webkit-scrollbar-track": { background: "transparent" },
       "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-strong)", borderRadius: "2px" },
     }}>
-      <VStack spacing={2} align="stretch">
-        {/* Top row - Back button, navigation, Reject All */}
-        <Flex align="center" position="relative">
-          {/* Left - Back button */}
+      <VStack spacing={2} align="stretch" minH="100%">
+        {/* Header row — back + title pill, inline. accent.primary (red in
+            Bauhaus) signals "high stakes". `mb` only kicks in once the
+            viewport is tall enough to warrant breathing room (~700px+);
+            popup windows (~600px) stay tight against the info card. */}
+        <HStack spacing={2} align="center" mb="clamp(0px, calc(8vh - 56px), 3rem)">
           <IconButton
             aria-label="Back"
             icon={<ArrowBackIcon />}
@@ -329,16 +331,59 @@ function SignatureRequestConfirmation({
             size="md"
             px={2}
             onClick={onBack}
+            flexShrink={0}
           />
 
-          {/* Center - Navigation (absolutely positioned for true centering) */}
-          {totalCount > 1 && (
-            <HStack
-              spacing={0}
-              position="absolute"
-              left="50%"
-              transform="translateX(-50%)"
+          <Box
+            flex="1"
+            minW={0}
+            bg="accent.primary"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
+            py={1.5}
+            px={3}
+            position="relative"
+          >
+            {/* Bauhaus exuberance — Midnight drops the corner triangle */}
+            {!isDarkTheme && (
+              <Box
+                position="absolute"
+                top="-3px"
+                right="-3px"
+                w="0"
+                h="0"
+                borderLeft="6px solid transparent"
+                borderRight="6px solid transparent"
+                borderBottom="12px solid"
+                borderBottomColor="accent.highlight"
+              />
+            )}
+            <Text
+              fontWeight="900"
+              fontSize="sm"
+              color="accentFg.primary"
+              textAlign="center"
+              textTransform="uppercase"
+              letterSpacing="wider"
+              noOfLines={1}
             >
+              Signature Request
+            </Text>
+          </Box>
+
+          {/* Mirror the back button's footprint so the title pill sits
+              visually centered even though there's no right-side action. */}
+          <Box w={10} flexShrink={0} aria-hidden />
+        </HStack>
+
+        {/* Secondary row — navigation + Reject All, only when multiple
+            pending requests. chart.negative is RED in both themes
+            (status.error.fg is white in Bauhaus). */}
+        {totalCount > 1 && (
+          <Flex align="center">
+            <HStack spacing={0}>
               <IconButton
                 aria-label="Previous"
                 icon={<ChevronLeftIcon />}
@@ -374,13 +419,7 @@ function SignatureRequestConfirmation({
                 p={1}
               />
             </HStack>
-          )}
-
-          {/* Right - Reject All */}
-          <Spacer />
-          {totalCount > 1 && (
-            // chart.negative is RED in BOTH themes — status.error.fg is WHITE
-            // in Bauhaus and would render invisibly here.
+            <Spacer />
             <Button
               size="xs"
               variant="ghost"
@@ -392,38 +431,8 @@ function SignatureRequestConfirmation({
             >
               Reject All
             </Button>
-          )}
-        </Flex>
-
-        {/* Title row — accent.primary (red in Bauhaus) signals "high stakes" */}
-        <Box
-          bg="accent.primary"
-          border={tokens.borders.medium}
-          borderColor="border.default"
-          borderRadius="lg"
-          boxShadow="card"
-          py={3}
-          px={4}
-          position="relative"
-        >
-          {/* Bauhaus exuberance — Midnight drops the corner triangle */}
-          {!isDarkTheme && (
-            <Box
-              position="absolute"
-              top="-3px"
-              right="-3px"
-              w="0"
-              h="0"
-              borderLeft="6px solid transparent"
-              borderRight="6px solid transparent"
-              borderBottom="12px solid"
-              borderBottomColor="accent.highlight"
-            />
-          )}
-          <Text fontWeight="900" fontSize="lg" color="accentFg.primary" textAlign="center" textTransform="uppercase" letterSpacing="wider">
-            Signature Request
-          </Text>
-        </Box>
+          </Flex>
+        )}
 
         {/* Request Info Card */}
         <Box
@@ -591,8 +600,11 @@ function SignatureRequestConfirmation({
           <MessageDataDisplay message={message} rawData={rawData} />
         )}
 
-        {/* Pinned bottom section — sticky so buttons are always reachable */}
+        {/* Pinned bottom section — `mt="auto"` keeps it anchored to the
+            bottom when content is shorter than the viewport; `position:sticky`
+            keeps it in view while scrolling long typed-data messages. */}
         <Box
+          mt="auto"
           position="sticky"
           bottom={-3}
           bg="surface.base"

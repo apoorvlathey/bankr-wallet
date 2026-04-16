@@ -349,7 +349,7 @@ function RichJsonValue({
         fontSize="xs"
         fontFamily="mono"
         bg="transparent"
-        color="text.tertiary"
+        color="text.primary"
         fontWeight="600"
         p={0}
         wordBreak="break-all"

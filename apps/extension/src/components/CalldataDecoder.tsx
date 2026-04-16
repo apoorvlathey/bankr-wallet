@@ -346,7 +346,7 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
           <Text
             fontSize="xs"
             fontFamily="mono"
-            color="text.tertiary"
+            color="text.primary"
             wordBreak="break-all"
             whiteSpace="pre-wrap"
           >

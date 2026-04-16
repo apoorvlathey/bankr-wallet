@@ -133,6 +133,53 @@ function UnlockScreen({
     init();
   }, []);
 
+  // Chrome sidepanels don't receive keyboard focus on open — any focus()
+  // call before the user clicks into the panel results in a brief cursor
+  // flash that's immediately lost to the main page (documented Chromium
+  // limitation — https://groups.google.com/a/chromium.org/g/chromium-extensions/c/nb058-YrrWc).
+  // Workaround: when the user clicks on a non-interactive area of the
+  // panel (i.e. the background), the sidepanel's document gains focus;
+  // hand it to the password input so they can start typing immediately.
+  //
+  // Timing gotchas we work around:
+  // 1. On mousedown, Chrome transfers focus to the sidepanel document AFTER
+  //    our listener runs — so focus() called synchronously gets overwritten.
+  //    Defer via rAF + setTimeout(0) so focus() runs after the transfer.
+  // 2. preventDefault() on mousedown stops the browser from auto-focusing
+  //    the clicked non-interactive element (which otherwise lands on body).
+  useEffect(() => {
+    const INTERACTIVE_SELECTOR =
+      "input, textarea, select, button, a, [role='button'], [contenteditable='true']";
+
+    const focusPasswordInput = () => {
+      passwordInputRef.current?.focus({ preventScroll: true });
+    };
+
+    const handleBackgroundMousedown = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      if (!target) return;
+      // Clicked an interactive element — let browser default focus behavior
+      // handle it.
+      if (target.closest(INTERACTIVE_SELECTOR)) return;
+
+      // Stop the browser from shifting focus to the non-interactive target
+      // (which would override our focus() call below).
+      e.preventDefault();
+
+      // Focus now (for popup, where the document is already focused) and
+      // also schedule a deferred focus after Chrome finishes any focus
+      // transfer for sidepanel.
+      focusPasswordInput();
+      requestAnimationFrame(focusPasswordInput);
+      setTimeout(focusPasswordInput, 0);
+    };
+
+    document.addEventListener("mousedown", handleBackgroundMousedown);
+    return () => {
+      document.removeEventListener("mousedown", handleBackgroundMousedown);
+    };
+  }, []);
+
   const toggleSidePanelMode = async () => {
     if (sidePanelMode) {
       // DISABLING: persist and close immediately
@@ -372,7 +419,6 @@ function UnlockScreen({
                 type={showPassword ? "text" : "password"}
                 placeholder="Password"
                 value={password}
-                autoFocus
                 onChange={(e) => {
                   setPassword(e.target.value);
                   if (error) setError("");

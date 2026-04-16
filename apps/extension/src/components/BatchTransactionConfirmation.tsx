@@ -486,7 +486,9 @@ function BatchTransactionConfirmation({
 
   return (
     <Box
-      p={3}
+      pt="clamp(1.25rem, calc(8vh - 36px), 3rem)"
+      px={3}
+      pb={3}
       h="100%"
       overflowY="auto"
       bg={pageBgColor ?? "surface.base"}
@@ -499,9 +501,11 @@ function BatchTransactionConfirmation({
         },
       }}
     >
-      <VStack spacing={2} align="stretch">
-        {/* Top row */}
-        <Flex align="center" position="relative" minH="32px">
+      <VStack spacing={2} align="stretch" minH="100%">
+        {/* Header row — back + title banner + copy, all inline.
+            `mb` only kicks in once the viewport is tall enough (~700px+);
+            popup windows stay tight against the info card. */}
+        <HStack spacing={2} align="center" mb="clamp(0px, calc(8vh - 56px), 3rem)">
           <IconButton
             aria-label="Back"
             icon={<ArrowBackIcon />}
@@ -509,14 +513,116 @@ function BatchTransactionConfirmation({
             size="md"
             px={2}
             onClick={onBack}
+            flexShrink={0}
           />
-          {totalCount > 1 && (
-            <HStack
-              spacing={0}
-              position="absolute"
-              left="50%"
-              transform="translateX(-50%)"
-            >
+
+          <Box
+            flex="1"
+            minW={0}
+            bg="accent.secondary"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
+            py={1.5}
+            px={3}
+            position="relative"
+          >
+            {!isDarkTheme && (
+              <Box
+                position="absolute"
+                top="-3px"
+                right="-3px"
+                w="8px"
+                h="8px"
+                bg="accent.highlight"
+                border="2px solid"
+                borderColor="border.default"
+              />
+            )}
+            {(() => {
+              // Split "X (Y calls)" into a main title line and a count line
+              // so the pill can stack them vertically. titleOverride follows
+              // the same "main (count)" pattern as the default, so we parse
+              // rather than expanding the API to two separate props.
+              const fullTitle = titleOverride ?? `Batch Transaction (${calls.length} calls)`;
+              const openParen = fullTitle.lastIndexOf("(");
+              const hasCount = openParen > 0 && fullTitle.endsWith(")");
+              const titleMain = hasCount ? fullTitle.slice(0, openParen).trim() : fullTitle;
+              const titleCount = hasCount
+                ? fullTitle.slice(openParen + 1, -1).trim()
+                : null;
+              return (
+                <VStack spacing={0.5}>
+                  <Text
+                    fontWeight="900"
+                    fontSize="sm"
+                    color="accentFg.secondary"
+                    textAlign="center"
+                    textTransform="uppercase"
+                    letterSpacing="wider"
+                    noOfLines={1}
+                  >
+                    {titleMain}
+                  </Text>
+                  {(titleCount || isNonAtomic) && (
+                    <HStack spacing={1.5} justify="center">
+                      {titleCount && (
+                        <Text
+                          fontWeight="800"
+                          fontSize="2xs"
+                          color="accentFg.secondary"
+                          textTransform="uppercase"
+                          letterSpacing="wider"
+                          opacity={0.85}
+                        >
+                          ({titleCount})
+                        </Text>
+                      )}
+                      {isNonAtomic && (
+                        <Badge
+                          bg="accent.highlight"
+                          color="accentFg.highlight"
+                          fontSize="9px"
+                          fontWeight="900"
+                          px={1.5}
+                          py={0.5}
+                          border="1.5px solid"
+                          borderColor="border.default"
+                          textTransform="uppercase"
+                          letterSpacing="wider"
+                        >
+                          Auto-Sequential
+                        </Badge>
+                      )}
+                    </HStack>
+                  )}
+                </VStack>
+              );
+            })()}
+          </Box>
+
+          <Box flexShrink={0}>
+            <CopyButton
+              value={JSON.stringify(
+                calls.map((c) => ({
+                  to: c.to || null,
+                  value: c.value && c.value !== "0x0" ? c.value : "0",
+                  data: c.data || "0x",
+                })),
+                null,
+                2,
+              )}
+            />
+          </Box>
+        </HStack>
+
+        {/* Secondary row — navigation + Reject All, only when multiple
+            pending requests. chart.negative is the only token that's RED in
+            both themes (status.error.fg is white in Bauhaus). */}
+        {totalCount > 1 && (
+          <Flex align="center">
+            <HStack spacing={0}>
               <IconButton
                 aria-label="Previous"
                 icon={<ChevronLeftIcon />}
@@ -552,88 +658,20 @@ function BatchTransactionConfirmation({
                 p={1}
               />
             </HStack>
-          )}
-          <Spacer />
-          <HStack spacing={1}>
-            <CopyButton
-              value={JSON.stringify(
-                calls.map((c) => ({
-                  to: c.to || null,
-                  value: c.value && c.value !== "0x0" ? c.value : "0",
-                  data: c.data || "0x",
-                })),
-                null,
-                2,
-              )}
-            />
-            {totalCount > 1 && (
-              <Button
-                size="xs"
-                variant="ghost"
-                color="chart.negative"
-                fontWeight="700"
-                _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
-                onClick={onRejectAll}
-                px={2}
-              >
-                Reject All
-              </Button>
-            )}
-          </HStack>
-        </Flex>
-
-        {/* Title banner */}
-        <Box
-          bg="accent.secondary"
-          border={tokens.borders.medium}
-          borderColor="border.default"
-          borderRadius="lg"
-          boxShadow="card"
-          py={1.5}
-          px={3}
-          position="relative"
-        >
-          {!isDarkTheme && (
-            <Box
-              position="absolute"
-              top="-3px"
-              right="-3px"
-              w="8px"
-              h="8px"
-              bg="accent.highlight"
-              border="2px solid"
-              borderColor="border.default"
-            />
-          )}
-          <VStack spacing={1}>
-            <Text
-              fontWeight="900"
-              fontSize="sm"
-              color="accentFg.secondary"
-              textAlign="center"
-              textTransform="uppercase"
-              letterSpacing="wider"
+            <Spacer />
+            <Button
+              size="xs"
+              variant="ghost"
+              color="chart.negative"
+              fontWeight="700"
+              _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
+              onClick={onRejectAll}
+              px={2}
             >
-              {titleOverride ?? `Batch Transaction (${calls.length} calls)`}
-            </Text>
-            {isNonAtomic && (
-              <Badge
-                bg="accent.highlight"
-                color="accentFg.highlight"
-                fontSize="9px"
-                fontWeight="900"
-                px={1.5}
-                py={0.5}
-                border="1.5px solid"
-                borderColor="border.default"
-                textTransform="uppercase"
-                letterSpacing="wider"
-              >
-                Auto-Sequential
-              </Badge>
-            )}
-          </VStack>
-        </Box>
+              Reject All
+            </Button>
+          </Flex>
+        )}
 
         {/* Info Card */}
         <Box
@@ -949,6 +987,7 @@ function BatchTransactionConfirmation({
           })();
           return (
             <Box
+              mt="auto"
               position="sticky"
               bottom={-3}
               bg={pageBgColor ?? "surface.base"}

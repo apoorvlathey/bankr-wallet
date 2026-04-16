@@ -533,15 +533,19 @@ function TransactionConfirmation({
   }
 
   return (
-    <Box p={3} h="100%" overflowY="auto" bg="surface.base" css={{
+    <Box pt="clamp(1.25rem, calc(8vh - 36px), 3rem)" px={3} pb={3} h="100%" overflowY="auto" bg="surface.base" css={{
       "&::-webkit-scrollbar": { width: "4px" },
       "&::-webkit-scrollbar-track": { background: "transparent" },
       "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-strong)", borderRadius: "2px" },
     }}>
-      <VStack spacing={2} align="stretch">
-        {/* Top row - Back button, navigation, Reject All */}
-        <Flex align="center" position="relative" minH="32px">
-          {/* Left - Back button */}
+      <VStack spacing={2} align="stretch" minH="100%">
+        {/* Header row — back + title pill + copy, all inline.
+            Title pill: approve uses highlight (amber/yellow) accent, normal
+            txs use the secondary (cyan/blue) accent. The corner ornament is
+            a Bauhaus exuberance and is hidden under Midnight. `mb` only
+            kicks in once the viewport is tall enough (~700px+); popup
+            windows stay tight against the info card. */}
+        <HStack spacing={2} align="center" mb="clamp(0px, calc(8vh - 56px), 3rem)">
           <IconButton
             aria-label="Back"
             icon={<ArrowBackIcon />}
@@ -549,16 +553,72 @@ function TransactionConfirmation({
             size="md"
             px={2}
             onClick={onBack}
+            flexShrink={0}
           />
 
-          {/* Center - Navigation (absolutely positioned for true centering) */}
-          {totalCount > 1 && (
-            <HStack
-              spacing={0}
-              position="absolute"
-              left="50%"
-              transform="translateX(-50%)"
+          <Box
+            flex="1"
+            minW={0}
+            bg={parsedApproval ? "accent.highlight" : "accent.secondary"}
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
+            py={1.5}
+            px={3}
+            position="relative"
+          >
+            {!isDarkTheme && (
+              <Box
+                position="absolute"
+                top="-3px"
+                right="-3px"
+                w="8px"
+                h="8px"
+                bg={parsedApproval ? "accent.secondary" : "accent.highlight"}
+                border="2px solid"
+                borderColor="border.default"
+              />
+            )}
+            <Text
+              fontWeight="900"
+              fontSize="sm"
+              color={parsedApproval ? "accentFg.highlight" : "accentFg.secondary"}
+              textAlign="center"
+              textTransform="uppercase"
+              letterSpacing="wider"
+              noOfLines={1}
             >
+              {parsedApproval ? "Token Approval Request" : "Transaction Request"}
+            </Text>
+          </Box>
+
+          <Box flexShrink={0}>
+            <CopyButton
+              label="Copy tx JSON"
+              value={JSON.stringify(
+                {
+                  to: tx.to || null,
+                  value:
+                    tx.value && tx.value !== "0" && tx.value !== "0x0"
+                      ? BigInt(tx.value).toString()
+                      : "0",
+                  data: tx.data || "0x",
+                },
+                null,
+                2,
+              )}
+            />
+          </Box>
+        </HStack>
+
+        {/* Secondary row — navigation + Reject All, only when multiple pending
+            requests are queued. chart.negative is the only token that's RED
+            in BOTH themes — status.error.fg is WHITE in Bauhaus (it pairs
+            with the RED bg) and would render invisibly on this surface. */}
+        {totalCount > 1 && (
+          <Flex align="center">
+            <HStack spacing={0}>
               <IconButton
                 aria-label="Previous"
                 icon={<ChevronLeftIcon />}
@@ -594,81 +654,20 @@ function TransactionConfirmation({
                 p={1}
               />
             </HStack>
-          )}
-
-          {/* Right - Copy tx JSON + Reject All */}
-          <Spacer />
-          <HStack spacing={1}>
-            <CopyButton
-              label="Copy tx JSON"
-              value={JSON.stringify(
-                {
-                  to: tx.to || null,
-                  value:
-                    tx.value && tx.value !== "0" && tx.value !== "0x0"
-                      ? BigInt(tx.value).toString()
-                      : "0",
-                  data: tx.data || "0x",
-                },
-                null,
-                2,
-              )}
-            />
-            {/* chart.negative is the only token that's RED in BOTH themes —
-                status.error.fg is WHITE in Bauhaus (it pairs with the RED bg)
-                and would render invisibly on the page surface here. */}
-            {totalCount > 1 && (
-              <Button
-                size="xs"
-                variant="ghost"
-                color="chart.negative"
-                fontWeight="700"
-                _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
-                onClick={onRejectAll}
-                px={2}
-              >
-                Reject All
-              </Button>
-            )}
-          </HStack>
-        </Flex>
-
-        {/* Title row — approve uses highlight (amber/yellow) accent, normal txs
-            use the secondary (cyan/blue) accent. The corner ornament is a
-            Bauhaus exuberance and is hidden under Midnight. */}
-        <Box
-          bg={parsedApproval ? "accent.highlight" : "accent.secondary"}
-          border={tokens.borders.medium}
-          borderColor="border.default"
-          borderRadius="lg"
-          boxShadow="card"
-          py={1.5}
-          px={3}
-          position="relative"
-        >
-          {!isDarkTheme && (
-            <Box
-              position="absolute"
-              top="-3px"
-              right="-3px"
-              w="8px"
-              h="8px"
-              bg={parsedApproval ? "accent.secondary" : "accent.highlight"}
-              border="2px solid"
-              borderColor="border.default"
-            />
-          )}
-          <Text
-            fontWeight="900"
-            fontSize="sm"
-            color={parsedApproval ? "accentFg.highlight" : "accentFg.secondary"}
-            textAlign="center"
-            textTransform="uppercase"
-            letterSpacing="wider"
-          >
-            {parsedApproval ? "Token Approval Request" : "Transaction Request"}
-          </Text>
-        </Box>
+            <Spacer />
+            <Button
+              size="xs"
+              variant="ghost"
+              color="chart.negative"
+              fontWeight="700"
+              _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
+              onClick={onRejectAll}
+              px={2}
+            >
+              Reject All
+            </Button>
+          </Flex>
+        )}
 
         {/* ERC20 Approve detection — shown above tx info when present */}
         {tx.to && parsedApproval && (
@@ -1051,7 +1050,7 @@ function TransactionConfirmation({
               <Text
                 fontSize="xs"
                 fontFamily="mono"
-                color="text.tertiary"
+                color="text.primary"
                 wordBreak="break-all"
                 whiteSpace="pre-wrap"
               >
@@ -1061,8 +1060,11 @@ function TransactionConfirmation({
           </Box>
         )}
 
-        {/* Pinned bottom section — sticky so buttons are always reachable */}
+        {/* Pinned bottom section — `mt="auto"` keeps it at the bottom when
+            content is shorter than the viewport; `position:sticky` keeps it
+            visible while scrolling long calldata. */}
         <Box
+          mt="auto"
           position="sticky"
           bottom={-3}
           bg="surface.base"

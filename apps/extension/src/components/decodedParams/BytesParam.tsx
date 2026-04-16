@@ -66,7 +66,7 @@ export function BytesParam({ value, rawValue, chainId }: BytesParamProps) {
           fontSize="xs"
           fontFamily="mono"
           bg="transparent"
-          color="text.tertiary"
+          color="text.primary"
           fontWeight="600"
           p={0}
         >

@@ -315,7 +315,7 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
                   {domain.version && (
                     <HStack spacing={1}>
                       <Text fontSize="xs" color="text.secondary" fontWeight="700">version:</Text>
-                      <Text fontSize="xs" color="text.tertiary" fontWeight="600">{domain.version}</Text>
+                      <Text fontSize="xs" color="text.primary" fontWeight="600">{domain.version}</Text>
                     </HStack>
                   )}
                   {domain.chainId && (
@@ -434,7 +434,7 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
             overflowY="auto"
             css={scrollStyles}
           >
-            <Text fontSize="xs" fontFamily="mono" color="text.tertiary" wordBreak="break-all" whiteSpace="pre-wrap">
+            <Text fontSize="xs" fontFamily="mono" color="text.primary" wordBreak="break-all" whiteSpace="pre-wrap">
               {rawData}
             </Text>
           </Box>
