@@ -28,7 +28,7 @@ import PortfolioChart from "@/components/PortfolioChart";
 import ChainIcon from "@/components/ChainIcon";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getVisibleChains } from "@/lib/chains";
-import { Decorator, useTheme } from "@/theme";
+import { Decorator, useIsDarkTheme } from "@/theme";
 
 const TokenHoldings = lazy(() => import("@/components/TokenHoldings"));
 
@@ -55,8 +55,7 @@ interface PortfolioTabsProps {
 const POST_CONFIRM_REFRESH_DELAY = 3000;
 
 export default function PortfolioTabs({ address, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange }: PortfolioTabsProps) {
-  const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = useIsDarkTheme();
   // Selected tab uses an inverted contrast strip — Bauhaus paints it BLACK with
   // white text; Midnight uses a recessed dark surface with light text. There is
   // no single token pair that produces both effects, hence the conditional.

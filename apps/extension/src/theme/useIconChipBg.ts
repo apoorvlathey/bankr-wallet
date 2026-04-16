@@ -15,9 +15,9 @@
  * / `border.default` — this hook only controls the chip fill.
  */
 
-import { useTheme } from "./ThemeProvider";
+import { useIsDarkTheme } from "./useIsDarkTheme";
 
 export function useIconChipBg(): string {
-  const { themeId } = useTheme();
-  return themeId === "midnight" ? "whiteAlpha.900" : "bg.muted";
+  const isDarkTheme = useIsDarkTheme();
+  return isDarkTheme ? "whiteAlpha.900" : "bg.muted";
 }

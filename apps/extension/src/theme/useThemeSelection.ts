@@ -25,7 +25,8 @@ export const DEFAULT_THEME_ID: ThemeId = "bauhaus";
 export function readBootstrapThemeId(): ThemeId {
   if (typeof document === "undefined") return DEFAULT_THEME_ID;
   const attr = document.documentElement.dataset.theme;
-  if (attr === "bauhaus" || attr === "midnight") return attr;
+  if (attr === "bauhaus" || attr === "midnight" || attr === "astra")
+    return attr;
   return DEFAULT_THEME_ID;
 }
 
@@ -39,7 +40,7 @@ export async function loadSelectedThemeId(): Promise<ThemeId> {
   return new Promise((resolve) => {
     chrome.storage.local.get(SELECTED_THEME_STORAGE_KEY, (result) => {
       const value = result?.[SELECTED_THEME_STORAGE_KEY];
-      if (value === "bauhaus" || value === "midnight") {
+      if (value === "bauhaus" || value === "midnight" || value === "astra") {
         resolve(value);
       } else {
         resolve(DEFAULT_THEME_ID);
@@ -110,7 +111,7 @@ export function useThemeSelection(): {
       const change = changes[SELECTED_THEME_STORAGE_KEY];
       if (!change) return;
       const next = change.newValue;
-      if (next === "bauhaus" || next === "midnight") {
+      if (next === "bauhaus" || next === "midnight" || next === "astra") {
         setThemeIdState(next);
       }
     };

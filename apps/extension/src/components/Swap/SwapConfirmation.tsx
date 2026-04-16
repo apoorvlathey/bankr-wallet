@@ -27,7 +27,7 @@ import CalldataDecoder from "@/components/CalldataDecoder";
 import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
-import { useTheme } from "@/theme";
+import { useIsDarkTheme } from "@/theme";
 
 // Theme-aware accent stripes for the per-call cards. Mirrors the cycle used
 // by BatchTransactionConfirmation so a multi-step swap reads as the same kind
@@ -109,8 +109,7 @@ function SwapConfirmation({
   isSubmitting,
 }: SwapConfirmationProps) {
   const config = getChainConfig(chainId);
-  const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = useIsDarkTheme();
   const [expandedCalls, setExpandedCalls] = useState<Set<number>>(new Set());
   const [decodedFunctionNames, setDecodedFunctionNames] = useState<Record<number, string>>({});
 

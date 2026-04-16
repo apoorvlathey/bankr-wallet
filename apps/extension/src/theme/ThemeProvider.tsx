@@ -17,6 +17,7 @@ import { createChakraTheme } from "./createTheme";
 import type { ThemeId, ThemeTokens } from "./tokens";
 import { bauhausTokens } from "./themes/bauhaus";
 import { midnightTokens } from "./themes/midnight";
+import { astraTokens } from "./themes/astra";
 import { useThemeSelection } from "./useThemeSelection";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -26,10 +27,15 @@ import { useThemeSelection } from "./useThemeSelection";
 export const themes: Record<ThemeId, ThemeTokens> = {
   bauhaus: bauhausTokens,
   midnight: midnightTokens,
+  astra: astraTokens,
 };
 
 /** Ordered list for theme picker UIs */
-export const themeList: ThemeTokens[] = [bauhausTokens, midnightTokens];
+export const themeList: ThemeTokens[] = [
+  bauhausTokens,
+  midnightTokens,
+  astraTokens,
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Context

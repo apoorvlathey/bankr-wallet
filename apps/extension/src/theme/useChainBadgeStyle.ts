@@ -35,7 +35,7 @@
  * extending this hook — no consumer component has to change.
  */
 
-import { useTheme } from "./ThemeProvider";
+import { useIsDarkTheme } from "./useIsDarkTheme";
 
 export interface ChainBadgeStyle {
   /** Badge/pill background */
@@ -58,8 +58,7 @@ export function useChainBadgeStyle(
   brandFg: string,
   isCustom = false,
 ): ChainBadgeStyle {
-  const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = useIsDarkTheme();
 
   if (isCustom) {
     return {

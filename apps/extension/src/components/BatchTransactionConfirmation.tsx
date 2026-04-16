@@ -43,7 +43,13 @@ import { isForceInclusionSupportedForAccount, FORCE_INCLUSION_CHAINS } from "@/c
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
-import { useTheme, useStripTokens, useChainBadgeStyle, useIconChipBg } from "@/theme";
+import {
+  useTheme,
+  useIsDarkTheme,
+  useStripTokens,
+  useChainBadgeStyle,
+  useIconChipBg,
+} from "@/theme";
 
 const scaleIn = keyframes`
   0% { transform: scale(0) rotate(-10deg); opacity: 0; }
@@ -145,8 +151,8 @@ function BatchTransactionConfirmation({
   onAddedToBatch,
   pageBgColor,
 }: BatchTransactionConfirmationProps) {
-  const { themeId, tokens } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const { tokens } = useTheme();
+  const isDarkTheme = useIsDarkTheme();
   // Same theme-aware count badge pattern as Phase 5/8 — see useStripTokens.
   const { bg: stripBg, fg: stripFg } = useStripTokens();
   const iconChipBg = useIconChipBg();

@@ -41,7 +41,13 @@ import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import ChainIcon from "@/components/ChainIcon";
 import { parseApproveCalldata } from "@/lib/erc20Approve";
 import { ethShLabelsUrl, googleFaviconUrl } from "@/constants/externalUrls";
-import { useTheme, useStripTokens, useChainBadgeStyle, useIconChipBg } from "@/theme";
+import {
+  useTheme,
+  useIsDarkTheme,
+  useStripTokens,
+  useChainBadgeStyle,
+  useIconChipBg,
+} from "@/theme";
 import {
   getResolvedChainById,
   getStoredNativeCurrencySymbol,
@@ -158,8 +164,8 @@ function TransactionConfirmation({
   onAddedToBatch,
 }: TransactionConfirmationProps) {
   const { networksInfo } = useNetworks();
-  const { themeId, tokens } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const { tokens } = useTheme();
+  const isDarkTheme = useIsDarkTheme();
   // Bauhaus paints the count badge as a stark black strip with white text;
   // Midnight uses a recessed dark surface — see useStripTokens.
   const { bg: stripBg, fg: stripFg } = useStripTokens();

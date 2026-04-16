@@ -23,7 +23,7 @@
  * `isDarkTheme` checks into consumer components.
  */
 
-import { useTheme } from "./ThemeProvider";
+import { useIsDarkTheme } from "./useIsDarkTheme";
 
 export type StripVariant = "inverted" | "elevated";
 
@@ -37,8 +37,7 @@ export interface StripTokens {
 }
 
 export function useStripTokens(variant: StripVariant = "inverted"): StripTokens {
-  const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = useIsDarkTheme();
 
   if (variant === "elevated") {
     // Bauhaus keeps the literal inverted black bar — it's a signature look and

@@ -47,7 +47,7 @@ import {
   Search2Icon,
 } from "@chakra-ui/icons";
 
-import { useTheme, useStripTokens, useIconChipBg } from "@/theme";
+import { useIsDarkTheme, useStripTokens, useIconChipBg } from "@/theme";
 
 // Sidepanel icon
 const SidePanelIcon = (props: any) => (
@@ -218,8 +218,7 @@ type AppView =
   | "crossDappBatchConfirm";
 
 function App() {
-  const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = useIsDarkTheme();
   const stripTokens = useStripTokens();
   const addressPillTokens = useStripTokens("elevated");
   const iconChipBg = useIconChipBg();

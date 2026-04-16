@@ -34,7 +34,7 @@ import {
 import PrivateKeyInput from "@/components/shared/PrivateKeyInput";
 import SeedPhraseSetup from "@/components/SeedPhraseSetup";
 import { TWITTER_URL, BANKR_BOT_API_PAGE, BANKR_BOT_TERMINAL_PAGE } from "@/constants/externalUrls";
-import { useTheme } from "@/theme";
+import { useIsDarkTheme } from "@/theme";
 
 type OnboardingStep =
   | "welcome"
@@ -116,8 +116,7 @@ const bounceArrow = keyframes`
 `;
 
 function Onboarding({ onComplete }: OnboardingProps) {
-  const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = useIsDarkTheme();
   const [step, setStep] = useState<OnboardingStep>("welcome");
   const [isCheckingSetup, setIsCheckingSetup] = useState(true);
   const [accountTypeChoice, setAccountTypeChoice] =

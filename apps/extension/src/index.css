@@ -66,6 +66,10 @@ html[data-theme="midnight"]:has(body.popup-window-mode) {
   background: #0B0E17;
 }
 
+html[data-theme="astra"]:has(body.popup-window-mode) {
+  background: #09090B;
+}
+
 body.popup-window-mode {
   height: 100vh;
   width: 100vw;
@@ -76,6 +80,10 @@ body.popup-window-mode {
 
 html[data-theme="midnight"] body.popup-window-mode {
   background: #0B0E17;
+}
+
+html[data-theme="astra"] body.popup-window-mode {
+  background: #09090B;
 }
 
 body.popup-window-mode #root {

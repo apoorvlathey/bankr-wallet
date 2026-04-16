@@ -1,6 +1,6 @@
 import { Box, Image, Text } from "@chakra-ui/react";
 import { resolveChainIconMeta } from "@/lib/chainIcons";
-import { useTheme } from "@/theme";
+import { useIsDarkTheme } from "@/theme";
 
 /**
  * Renders a shipped chain icon when known, reuses mainnet icons for common
@@ -27,8 +27,8 @@ export default function ChainIcon({
 }) {
   const meta = resolveChainIconMeta(chainId, chainName);
   const altText = chainName || `Chain ${chainId}`;
-  const { themeId } = useTheme();
-  const showChip = withChip && themeId === "midnight" && Boolean(meta.iconSrc);
+  const isDarkTheme = useIsDarkTheme();
+  const showChip = withChip && isDarkTheme && Boolean(meta.iconSrc);
   return (
     <Box position="relative" boxSize={size} flexShrink={0}>
       {showChip && (

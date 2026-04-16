@@ -31,7 +31,12 @@ import {
 
 import { clearChatHistory } from "@/chrome/chatStorage";
 import { TWITTER_URL } from "@/constants/externalUrls";
-import { ThemedCard, Decorator, useStripTokens, useTheme } from "@/theme";
+import {
+  ThemedCard,
+  Decorator,
+  useStripTokens,
+  useIsDarkTheme,
+} from "@/theme";
 import type { DecoratorAccent } from "@/theme";
 import Chains from "./Chains";
 import ChangePassword from "./ChangePassword";
@@ -189,8 +194,7 @@ function Settings({
   const [isAgentPasswordEnabled, setIsAgentPasswordEnabled] = useState(false);
   const [passwordType, setPasswordType] = useState<"master" | "agent" | null>(null);
   const toast = useThemedToast();
-  const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = useIsDarkTheme();
   // Reused for the Chain RPCs chip — same recessed strip pattern as the
   // chevron, so the row reads as a "system" tile in both themes.
   const chainStrip = useStripTokens();

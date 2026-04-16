@@ -20,7 +20,8 @@ export const LOCALSTORAGE_THEME_KEY = "selectedThemeId";
 function readLocalStorageThemeId(): ThemeId {
   try {
     const cached = window.localStorage.getItem(LOCALSTORAGE_THEME_KEY);
-    if (cached === "bauhaus" || cached === "midnight") return cached;
+    if (cached === "bauhaus" || cached === "midnight" || cached === "astra")
+      return cached;
   } catch {
     // localStorage may be unavailable in some Chrome contexts; ignore.
   }

@@ -23,7 +23,12 @@ import ChainIcon from "@/components/ChainIcon";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
-import { useTheme, useStripTokens, useIconChipBg } from "@/theme";
+import {
+  useTheme,
+  useIsDarkTheme,
+  useStripTokens,
+  useIconChipBg,
+} from "@/theme";
 
 interface SignatureRequestConfirmationProps {
   sigRequest: PendingSignatureRequest;
@@ -238,8 +243,8 @@ function SignatureRequestConfirmation({
   onConfirmed,
 }: SignatureRequestConfirmationProps) {
   const toast = useThemedToast();
-  const { themeId, tokens } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const { tokens } = useTheme();
+  const isDarkTheme = useIsDarkTheme();
   // Same theme-aware count badge pair as TransactionConfirmation — see useStripTokens.
   const { bg: stripBg, fg: stripFg } = useStripTokens();
   const iconChipBg = useIconChipBg();

@@ -42,7 +42,7 @@ import {
   getStoredNativeCurrencySymbol,
   getStoredRpcUrl,
 } from "@/lib/chains";
-import { useTheme, useChainBadgeStyle } from "@/theme";
+import { useIsDarkTheme, useChainBadgeStyle } from "@/theme";
 
 interface TxDetailModalProps {
   isOpen: boolean;
@@ -121,8 +121,7 @@ function ForceInclusionSteps({
   status: string;
   txHash: string | undefined;
 }) {
-  const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = useIsDarkTheme();
   // The step circles are vivid filled discs (red/green/blue) with a small icon
   // inside. White contrasts well against the vivid Bauhaus palette but vanishes
   // against Midnight's lighter chart tints — flip to a near-black icon there.

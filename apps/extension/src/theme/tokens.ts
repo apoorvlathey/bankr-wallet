@@ -17,7 +17,7 @@ import type { ComponentType } from "react";
 // Identity
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ThemeId = "bauhaus" | "midnight";
+export type ThemeId = "bauhaus" | "midnight" | "astra";
 
 export interface ThemePreview {
   /** Background color used in the picker card */
