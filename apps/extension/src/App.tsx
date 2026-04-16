@@ -1196,6 +1196,10 @@ function App() {
           ) {
             if (updated.length > 0) {
               setSelectedBatchRequest(updated[0]);
+            } else if (view === "batchTxConfirm" && !isInSidePanel && !isFullscreenTab) {
+              // Popup mode: let BatchTransactionConfirmation play its "sent"
+              // animation and close the window itself. Clearing state here
+              // would unmount the component before the animation runs.
             } else {
               setSelectedBatchRequest(null);
               if (view === "batchTxConfirm") {
@@ -1210,8 +1214,14 @@ function App() {
             changes.crossDappBatch.newValue ?? null;
           setCrossDappBatch(updated);
           // If the cross-dapp batch was just cleared (ship/reject/last-removed)
-          // and we're on its dedicated screen, bounce back home.
-          if (!updated && view === "crossDappBatchConfirm") {
+          // and we're on its dedicated screen, bounce back home — except in
+          // popup mode, where the confirmation screen owns its own "sent"
+          // animation + window.close().
+          if (
+            !updated &&
+            view === "crossDappBatchConfirm" &&
+            (isInSidePanel || isFullscreenTab)
+          ) {
             setActivityTabTrigger((k) => k + 1);
             setView("main");
           }
