@@ -2787,7 +2787,7 @@ function App() {
                     <Text
                       fontSize="2xs"
                       fontWeight="800"
-                      color="text.primary"
+                      color="status.info.fg"
                       textTransform="uppercase"
                       letterSpacing="wide"
                       mb={1}
@@ -2835,17 +2835,17 @@ function App() {
                             );
                           })}
                           {visibleRpcIssueChainIds.length > 2 && (
-                            <Text fontSize="2xs" fontWeight="700" color="text.tertiary">
+                            <Text fontSize="2xs" fontWeight="700" color="status.info.fg" opacity={0.8}>
                               +{visibleRpcIssueChainIds.length - 2} more
                             </Text>
                           )}
                         </HStack>
-                        <Text fontSize="xs" color="text.secondary" fontWeight="600">
+                        <Text fontSize="xs" color="status.info.fg" fontWeight="600" opacity={0.9}>
                           Balance fetch failed. Edit the chain RPC if this persists.
                         </Text>
                       </VStack>
                     ) : (
-                      <Text fontSize="xs" color="text.secondary" fontWeight="600">
+                      <Text fontSize="xs" color="status.info.fg" fontWeight="600" opacity={0.9}>
                         Balance fetch failed for one or more chains. Edit the chain RPC if this persists.
                       </Text>
                     )}
@@ -2853,9 +2853,9 @@ function App() {
                   <Button
                     size="xs"
                     variant="ghost"
-                    color="text.tertiary"
+                    color="status.info.fg"
                     fontWeight="700"
-                    _hover={{ bg: "bg.muted" }}
+                    _hover={{ bg: "whiteAlpha.200" }}
                     onClick={() => setDismissedRpcIssueChainIds(rpcIssueChainIds)}
                   >
                     Dismiss

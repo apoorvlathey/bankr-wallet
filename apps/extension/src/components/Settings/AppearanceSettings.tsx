@@ -23,7 +23,7 @@ import {
 } from "@chakra-ui/react";
 import { ArrowBackIcon, CheckIcon } from "@chakra-ui/icons";
 import { themeList, useTheme } from "@/theme";
-import { ThemedCard, ThemedPanel, Decorator } from "@/theme";
+import { ThemedCard, Decorator } from "@/theme";
 import type { ThemeTokens } from "@/theme";
 import { useThemedToast } from "@/hooks/useThemedToast";
 
@@ -43,6 +43,10 @@ function AppearanceSettings({ onCancel }: AppearanceSettingsProps) {
       status: "success",
       duration: 1500,
       isClosable: true,
+      // Force the toast to render in the theme we just switched TO — the
+      // closure captured pre-switch tokens and would otherwise flash the
+      // previous theme's styling.
+      themeOverride: next,
     });
   };
 
@@ -72,20 +76,6 @@ function AppearanceSettings({ onCancel }: AppearanceSettingsProps) {
       <Text fontSize="sm" color="text.secondary" fontWeight="500">
         Choose how the wallet looks. Your selection persists across browser sessions.
       </Text>
-
-      {/* Rollout warning — remove once Phases 5–12 finish */}
-      <ThemedPanel
-        weight="medium"
-        bg="status.warning.bg"
-        borderColor="status.warning.border"
-        position="relative"
-      >
-        <Decorator corner="top-right" accent="highlight" />
-        <Text color="status.warning.fg" fontSize="xs" fontWeight="700" lineHeight="1.4">
-          Midnight is rolling out one screen at a time. Some screens may still
-          render in Bauhaus colors until the migration completes.
-        </Text>
-      </ThemedPanel>
 
       {/* Theme picker grid */}
       <VStack spacing={3} align="stretch">
