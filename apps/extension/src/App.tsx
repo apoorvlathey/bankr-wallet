@@ -1212,11 +1212,23 @@ function App() {
         if (changes.crossDappBatch) {
           const updated: CrossDappBatch | null =
             changes.crossDappBatch.newValue ?? null;
-          setCrossDappBatch(updated);
+          // Popup mode on the confirm screen: if the batch was just cleared
+          // (ship/reject), skip the state update so the confirmation screen's
+          // "sent" animation keeps its `batch` prop populated until the
+          // component fires window.close() itself. Clearing here would fail
+          // the render guard (`view === "crossDappBatchConfirm" && crossDappBatch`)
+          // and unmount mid-animation.
+          const skipUpdate =
+            !updated &&
+            view === "crossDappBatchConfirm" &&
+            !isInSidePanel &&
+            !isFullscreenTab;
+          if (!skipUpdate) {
+            setCrossDappBatch(updated);
+          }
           // If the cross-dapp batch was just cleared (ship/reject/last-removed)
-          // and we're on its dedicated screen, bounce back home — except in
-          // popup mode, where the confirmation screen owns its own "sent"
-          // animation + window.close().
+          // and we're on its dedicated screen, bounce back home — only in
+          // sidepanel/fullscreen where there's no popup to close.
           if (
             !updated &&
             view === "crossDappBatchConfirm" &&
@@ -2286,11 +2298,19 @@ function App() {
               }}
               onConfirmed={() => {
                 setActivityTabTrigger((k) => k + 1);
-                setView("main");
+                if (isInSidePanel || isFullscreenTab) {
+                  setView("main");
+                }
+                // Popup: CrossDappBatchConfirmation plays its "sent" animation
+                // and closes the window itself via window.close().
               }}
               onRejected={() => {
                 setActivityTabTrigger((k) => k + 1);
-                setView("main");
+                if (isInSidePanel || isFullscreenTab) {
+                  setView("main");
+                } else {
+                  window.close();
+                }
               }}
               onNavigate={(direction) => {
                 const currentIdx = combinedRequests.findIndex(
