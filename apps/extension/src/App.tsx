@@ -5,6 +5,7 @@ import {
   useRef,
   lazy,
   Suspense,
+  type ReactNode,
 } from "react";
 import {
   useUpdateEffect,
@@ -130,8 +131,41 @@ const SwapView = lazy(() => import("@/components/Swap/SwapView"));
 const WatchAssetConfirmation = lazy(() => import("@/components/WatchAssetConfirmation"));
 const AddChain = lazy(() => import("@/components/Settings/AddChain"));
 
+// Preload every lazy screen chunk on idle. Without this, the Suspense
+// fallback renders mid-slide when the user navigates for the first time —
+// the chunk fetches while the screen is already animating in, so content
+// pops into place halfway through the transition. Firing these imports as
+// soon as the popup is idle means chunks are cached by the time the user
+// triggers any navigation and Suspense never has to render its fallback.
+if (typeof window !== "undefined") {
+  const schedule =
+    (window as Window & {
+      requestIdleCallback?: (cb: () => void) => number;
+    }).requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 300));
+  schedule(() => {
+    void import("@/components/Settings");
+    void import("@/components/TransactionConfirmation");
+    void import("@/components/SignatureRequestConfirmation");
+    void import("@/components/PendingTxList");
+    void import("@/components/BatchTransactionConfirmation");
+    void import("@/components/CrossDappBatchConfirmation");
+    void import("@/components/Chat/ChatView");
+    void import("@/components/AccountSwitcher");
+    void import("@/components/AddAccount");
+    void import("@/components/RevealPrivateKeyModal");
+    void import("@/components/RevealSeedPhraseModal");
+    void import("@/components/AccountSettingsModal");
+    void import("@/components/QRCodeModal");
+    void import("@/components/TokenTransfer");
+    void import("@/components/Swap/SwapView");
+    void import("@/components/WatchAssetConfirmation");
+    void import("@/components/Settings/AddChain");
+  });
+}
+
 // Eager load components needed immediately
 import UnlockScreen from "@/components/UnlockScreen";
+import { ScreenStack, type AppView } from "@/components/ScreenTransition";
 import PendingTxBanner from "@/components/PendingTxBanner";
 import PortfolioTabs from "@/components/PortfolioTabs";
 import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
@@ -199,23 +233,6 @@ const LoadingFallback = () => (
     <Spinner size="lg" color="accent.secondary" thickness="3px" />
   </Box>
 );
-
-type AppView =
-  | "main"
-  | "unlock"
-  | "settings"
-  | "settingsAddChain"
-  | "pendingTxList"
-  | "txConfirm"
-  | "signatureConfirm"
-  | "watchAssetConfirm"
-  | "waitingForOnboarding"
-  | "chat"
-  | "addAccount"
-  | "transfer"
-  | "swap"
-  | "batchTxConfirm"
-  | "crossDappBatchConfirm";
 
 function App() {
   const { themeId } = useTheme();
@@ -1579,6 +1596,10 @@ function App() {
     );
   }
 
+  // Render the current screen's JSX — wrapped in ScreenStack below so each
+  // view transitions smoothly (slide for hierarchical nav, sheet-up for dapp
+  // confirmations, fade for unlock). See components/ScreenTransition.tsx.
+  const screen: ReactNode = (() => {
   // Unlock screen
   if (view === "unlock") {
     return (
@@ -3528,6 +3549,13 @@ function App() {
         )}
       </Box>
       {/* End fullscreen centered wrapper */}
+    </Box>
+  );
+  })();
+
+  return (
+    <>
+      <ScreenStack view={view}>{screen}</ScreenStack>
 
       {/* Reveal Private Key Modal */}
       <Suspense fallback={null}>
@@ -3585,7 +3613,7 @@ function App() {
           totalAccounts={accounts.length}
         />
       </Suspense>
-    </Box>
+    </>
   );
 }
 

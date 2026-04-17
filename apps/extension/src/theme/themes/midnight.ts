@@ -249,6 +249,8 @@ export const midnightTokens: ThemeTokens = {
     },
     transitionBase: TRANSITION_BASE,
     transitionSmooth: TRANSITION_SMOOTH,
+    screenDuration: 0.2,
+    screenEase: [0.2, 0.6, 0.2, 1],
   },
 
   // No corner ornaments, no thick dividers. Midnight's personality is in

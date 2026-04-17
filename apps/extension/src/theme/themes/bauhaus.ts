@@ -155,6 +155,8 @@ export const bauhausTokens: ThemeTokens = {
     },
     transitionBase: "all 0.2s ease-out",
     transitionSmooth: "all 0.3s ease-out",
+    screenDuration: 0.22,
+    screenEase: [0.32, 0.72, 0.2, 1],
   },
   decorators: {
     // Bauhaus uses sharp 8px squares as the corner ornament — see e.g. the

@@ -235,6 +235,10 @@ export interface ThemeMotion {
   transitionBase: string;
   /** Smoother / longer transition for layout changes */
   transitionSmooth: string;
+  /** Duration (in seconds) for top-level screen transitions (framer-motion) */
+  screenDuration: number;
+  /** Easing curve for top-level screen transitions — cubic-bezier as [x1,y1,x2,y2] */
+  screenEase: [number, number, number, number];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
