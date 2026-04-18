@@ -2110,6 +2110,11 @@ function App() {
                 // Normal flow: the newPendingTxRequest listener will auto-switch to txConfirm
               }}
               onSwapInstead={(token) => {
+                const tokenChain = getResolvedChainById(token.chainId, networksInfo);
+                if (tokenChain && tokenChain.name !== chainName) {
+                  setChainName(tokenChain.name);
+                  chrome.storage.sync.set({ chainName: tokenChain.name });
+                }
                 setTransferToken(null);
                 setSwapInitialSellToken(token);
                 setView("swap");
@@ -3540,10 +3545,20 @@ function App() {
                 refreshTrigger={portfolioRefreshTrigger}
                 onRpcIssuesChange={handleRpcIssuesChange}
                 onTokenClick={(token) => {
+                  const tokenChain = getResolvedChainById(token.chainId, networksInfo);
+                  if (tokenChain && tokenChain.name !== chainName) {
+                    setChainName(tokenChain.name);
+                    chrome.storage.sync.set({ chainName: tokenChain.name });
+                  }
                   setTransferToken(token);
                   setView("transfer");
                 }}
                 onSwapClick={(token) => {
+                  const tokenChain = getResolvedChainById(token.chainId, networksInfo);
+                  if (tokenChain && tokenChain.name !== chainName) {
+                    setChainName(tokenChain.name);
+                    chrome.storage.sync.set({ chainName: tokenChain.name });
+                  }
                   setSwapInitialSellToken(token);
                   setView("swap");
                 }}
