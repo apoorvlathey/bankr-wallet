@@ -1,4 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "ignoreCommand": "cd \"$(git rev-parse --show-toplevel)\" && [ -n \"$VERCEL_GIT_PREVIOUS_SHA\" ] && git fetch origin \"$VERCEL_GIT_PREVIOUS_SHA\" --depth=1 && git diff --quiet \"$VERCEL_GIT_PREVIOUS_SHA\" HEAD -- apps/website/ packages/shared/ packages/wchan-swap/ packages/contract-addresses/ pnpm-lock.yaml"
+  "ignoreCommand": "bash scripts/vercel-ignore.sh"
 }
