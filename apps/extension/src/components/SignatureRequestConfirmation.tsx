@@ -319,6 +319,63 @@ function SignatureRequestConfirmation({
       "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-strong)", borderRadius: "2px" },
     }}>
       <VStack spacing={2} align="stretch" minH="100%">
+        {/* Top row — navigation centered + Reject All on right, only when
+            multiple pending requests. chart.negative is RED in both themes
+            (status.error.fg is white in Bauhaus). */}
+        {totalCount > 1 && (
+          <Flex align="center" justify="center" position="relative">
+            <HStack spacing={0}>
+              <IconButton
+                aria-label="Previous"
+                icon={<ChevronLeftIcon />}
+                variant="ghost"
+                size="xs"
+                isDisabled={currentIndex === 0}
+                onClick={() => onNavigate("prev")}
+                color="text.secondary"
+                _hover={{ color: "text.primary", bg: "bg.muted" }}
+                minW="auto"
+                p={1}
+              />
+              <Badge
+                bg={stripBg}
+                color={stripFg}
+                fontSize="xs"
+                px={3}
+                py={1}
+                fontWeight="700"
+              >
+                {currentIndex + 1}/{totalCount}
+              </Badge>
+              <IconButton
+                aria-label="Next"
+                icon={<ChevronRightIcon />}
+                variant="ghost"
+                size="xs"
+                isDisabled={currentIndex + 1 === totalCount}
+                onClick={() => onNavigate("next")}
+                color="text.secondary"
+                _hover={{ color: "text.primary", bg: "bg.muted" }}
+                minW="auto"
+                p={1}
+              />
+            </HStack>
+            <Button
+              position="absolute"
+              right={0}
+              size="xs"
+              variant="ghost"
+              color="chart.negative"
+              fontWeight="700"
+              _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
+              onClick={onCancelAll}
+              px={2}
+            >
+              Reject All
+            </Button>
+          </Flex>
+        )}
+
         {/* Header row — back + title pill, inline. accent.primary (red in
             Bauhaus) signals "high stakes". `mb` only kicks in once the
             viewport is tall enough to warrant breathing room (~700px+);
@@ -377,62 +434,6 @@ function SignatureRequestConfirmation({
               visually centered even though there's no right-side action. */}
           <Box w={10} flexShrink={0} aria-hidden />
         </HStack>
-
-        {/* Secondary row — navigation + Reject All, only when multiple
-            pending requests. chart.negative is RED in both themes
-            (status.error.fg is white in Bauhaus). */}
-        {totalCount > 1 && (
-          <Flex align="center">
-            <HStack spacing={0}>
-              <IconButton
-                aria-label="Previous"
-                icon={<ChevronLeftIcon />}
-                variant="ghost"
-                size="xs"
-                isDisabled={currentIndex === 0}
-                onClick={() => onNavigate("prev")}
-                color="text.secondary"
-                _hover={{ color: "text.primary", bg: "bg.muted" }}
-                minW="auto"
-                p={1}
-              />
-              <Badge
-                bg={stripBg}
-                color={stripFg}
-                fontSize="xs"
-                px={3}
-                py={1}
-                fontWeight="700"
-              >
-                {currentIndex + 1}/{totalCount}
-              </Badge>
-              <IconButton
-                aria-label="Next"
-                icon={<ChevronRightIcon />}
-                variant="ghost"
-                size="xs"
-                isDisabled={currentIndex + 1 === totalCount}
-                onClick={() => onNavigate("next")}
-                color="text.secondary"
-                _hover={{ color: "text.primary", bg: "bg.muted" }}
-                minW="auto"
-                p={1}
-              />
-            </HStack>
-            <Spacer />
-            <Button
-              size="xs"
-              variant="ghost"
-              color="chart.negative"
-              fontWeight="700"
-              _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
-              onClick={onCancelAll}
-              px={2}
-            >
-              Reject All
-            </Button>
-          </Flex>
-        )}
 
         {/* Request Info Card */}
         <Box

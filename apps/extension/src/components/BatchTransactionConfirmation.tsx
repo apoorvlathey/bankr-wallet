@@ -502,6 +502,63 @@ function BatchTransactionConfirmation({
       }}
     >
       <VStack spacing={2} align="stretch" minH="100%">
+        {/* Top row — navigation centered + Reject All on right, only when
+            multiple pending requests. chart.negative is the only token that's
+            RED in both themes (status.error.fg is white in Bauhaus). */}
+        {totalCount > 1 && (
+          <Flex align="center" justify="center" position="relative">
+            <HStack spacing={0}>
+              <IconButton
+                aria-label="Previous"
+                icon={<ChevronLeftIcon />}
+                variant="ghost"
+                size="xs"
+                isDisabled={currentIndex === 0}
+                onClick={() => onNavigate("prev")}
+                color="text.secondary"
+                _hover={{ color: "text.primary", bg: "bg.muted" }}
+                minW="auto"
+                p={1}
+              />
+              <Badge
+                bg={stripBg}
+                color={stripFg}
+                fontSize="xs"
+                px={3}
+                py={1}
+                fontWeight="700"
+              >
+                {currentIndex + 1}/{totalCount}
+              </Badge>
+              <IconButton
+                aria-label="Next"
+                icon={<ChevronRightIcon />}
+                variant="ghost"
+                size="xs"
+                isDisabled={currentIndex + 1 === totalCount}
+                onClick={() => onNavigate("next")}
+                color="text.secondary"
+                _hover={{ color: "text.primary", bg: "bg.muted" }}
+                minW="auto"
+                p={1}
+              />
+            </HStack>
+            <Button
+              position="absolute"
+              right={0}
+              size="xs"
+              variant="ghost"
+              color="chart.negative"
+              fontWeight="700"
+              _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
+              onClick={onRejectAll}
+              px={2}
+            >
+              Reject All
+            </Button>
+          </Flex>
+        )}
+
         {/* Header row — back + title banner + copy, all inline.
             `mb` only kicks in once the viewport is tall enough (~700px+);
             popup windows stay tight against the info card. */}
@@ -545,7 +602,11 @@ function BatchTransactionConfirmation({
               // so the pill can stack them vertically. titleOverride follows
               // the same "main (count)" pattern as the default, so we parse
               // rather than expanding the API to two separate props.
-              const fullTitle = titleOverride ?? `Batch Transaction (${calls.length} calls)`;
+              const fullTitle =
+                titleOverride ??
+                (calls.length === 1
+                  ? "Transaction Request"
+                  : `Batch Transaction (${calls.length} calls)`);
               const openParen = fullTitle.lastIndexOf("(");
               const hasCount = openParen > 0 && fullTitle.endsWith(")");
               const titleMain = hasCount ? fullTitle.slice(0, openParen).trim() : fullTitle;
@@ -565,7 +626,7 @@ function BatchTransactionConfirmation({
                   >
                     {titleMain}
                   </Text>
-                  {(titleCount || isNonAtomic) && (
+                  {(titleCount || (isNonAtomic && calls.length > 1)) && (
                     <HStack spacing={1.5} justify="center">
                       {titleCount && (
                         <Text
@@ -579,7 +640,7 @@ function BatchTransactionConfirmation({
                           ({titleCount})
                         </Text>
                       )}
-                      {isNonAtomic && (
+                      {isNonAtomic && calls.length > 1 && (
                         <Badge
                           bg="accent.highlight"
                           color="accentFg.highlight"
@@ -616,62 +677,6 @@ function BatchTransactionConfirmation({
             />
           </Box>
         </HStack>
-
-        {/* Secondary row — navigation + Reject All, only when multiple
-            pending requests. chart.negative is the only token that's RED in
-            both themes (status.error.fg is white in Bauhaus). */}
-        {totalCount > 1 && (
-          <Flex align="center">
-            <HStack spacing={0}>
-              <IconButton
-                aria-label="Previous"
-                icon={<ChevronLeftIcon />}
-                variant="ghost"
-                size="xs"
-                isDisabled={currentIndex === 0}
-                onClick={() => onNavigate("prev")}
-                color="text.secondary"
-                _hover={{ color: "text.primary", bg: "bg.muted" }}
-                minW="auto"
-                p={1}
-              />
-              <Badge
-                bg={stripBg}
-                color={stripFg}
-                fontSize="xs"
-                px={3}
-                py={1}
-                fontWeight="700"
-              >
-                {currentIndex + 1}/{totalCount}
-              </Badge>
-              <IconButton
-                aria-label="Next"
-                icon={<ChevronRightIcon />}
-                variant="ghost"
-                size="xs"
-                isDisabled={currentIndex + 1 === totalCount}
-                onClick={() => onNavigate("next")}
-                color="text.secondary"
-                _hover={{ color: "text.primary", bg: "bg.muted" }}
-                minW="auto"
-                p={1}
-              />
-            </HStack>
-            <Spacer />
-            <Button
-              size="xs"
-              variant="ghost"
-              color="chart.negative"
-              fontWeight="700"
-              _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
-              onClick={onRejectAll}
-              px={2}
-            >
-              Reject All
-            </Button>
-          </Flex>
-        )}
 
         {/* Info Card */}
         <Box
