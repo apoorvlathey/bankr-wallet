@@ -276,6 +276,11 @@ function App() {
   const [activityTabTrigger, setActivityTabTrigger] = useState(0);
   const [holdingsTabTrigger, setHoldingsTabTrigger] = useState(0);
   const [portfolioRefreshTrigger, setPortfolioRefreshTrigger] = useState(0);
+  // Set by navigateToAdjacentRequest when the popup has already pre-switched
+  // to an adjacent pending request. The async onRejected/onCancelled handlers
+  // consume & reset this flag so they skip their fallback routing (which
+  // would otherwise cause a second transition after the pre-nav).
+  const preNavigatedRef = useRef(false);
 
   const [copied, setCopied] = useState(false);
   const [sidePanelSupported, setSidePanelSupported] = useState(false);
@@ -1170,7 +1175,21 @@ function App() {
                 // Let the animation play; popup will close itself
               } else {
                 setSelectedTxRequest(null);
-                if (view === "txConfirm" || view === "pendingTxList") {
+                // Only route to "main" if there are no other pending request
+                // types. If batch/sig/crossDappBatch are still queued, let the
+                // async handler (handleTxRejected / handleTxConfirmed) navigate
+                // directly to the next view — going via "main" first would
+                // cause a visible txConfirm→main→next slide instead of a
+                // single txConfirm→next transition.
+                const hasOtherPending =
+                  pendingBatchRequests.length > 0 ||
+                  pendingSignatureRequests.length > 0 ||
+                  (crossDappBatch != null &&
+                    crossDappBatch.entries.length > 0);
+                if (
+                  !hasOtherPending &&
+                  (view === "txConfirm" || view === "pendingTxList")
+                ) {
                   setActivityTabTrigger((k) => k + 1);
                   setView("main");
                 }
@@ -1196,7 +1215,16 @@ function App() {
                 // Let the popup close itself
               } else {
                 setSelectedSignatureRequest(null);
-                if (view === "signatureConfirm") {
+                // Skip "main" routing when tx/batch/crossDappBatch requests
+                // remain — handleSignatureCancelled will navigate directly to
+                // the next view, avoiding a visible signatureConfirm→main→next
+                // intermediate slide.
+                const hasOtherPending =
+                  pendingRequests.length > 0 ||
+                  pendingBatchRequests.length > 0 ||
+                  (crossDappBatch != null &&
+                    crossDappBatch.entries.length > 0);
+                if (view === "signatureConfirm" && !hasOtherPending) {
                   setView("main");
                 }
               }
@@ -1219,7 +1247,16 @@ function App() {
               // would unmount the component before the animation runs.
             } else {
               setSelectedBatchRequest(null);
-              if (view === "batchTxConfirm") {
+              // Skip "main" routing when tx/sig/crossDappBatch requests
+              // remain — the async onRejected/onConfirmed handler will
+              // navigate directly to the next view, avoiding a visible
+              // batchTxConfirm→main→next intermediate slide.
+              const hasOtherPending =
+                pendingRequests.length > 0 ||
+                pendingSignatureRequests.length > 0 ||
+                (crossDappBatch != null &&
+                  crossDappBatch.entries.length > 0);
+              if (view === "batchTxConfirm" && !hasOtherPending) {
                 setActivityTabTrigger((k) => k + 1);
                 setView("main");
               }
@@ -1273,7 +1310,7 @@ function App() {
 
     chrome.storage.onChanged.addListener(handleStorageChange);
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
-  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, pendingWatchAssetRequest, view, isInSidePanel, isFullscreenTab]);
+  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, selectedBatchRequest, pendingWatchAssetRequest, pendingRequests, pendingBatchRequests, pendingSignatureRequests, crossDappBatch, view, isInSidePanel, isFullscreenTab]);
 
   // Listen for tab activation changes to update chain for current tab
   useEffect(() => {
@@ -1399,6 +1436,79 @@ function App() {
     }
   };
 
+  // Called by confirmation screens BEFORE they fire a reject message to the
+  // background. Pre-switches the popup to the adjacent request in the combined
+  // carousel so that once the rejected request is removed from storage, the UI
+  // is already showing a valid peer — no "selectedX=null while view still
+  // X-confirm" intermediate render that would flash the main screen before
+  // the async onRejected handler catches up. If this is the only pending
+  // request (combined.length <= 1), we bail — onRejected will route to main
+  // or close the popup, which is the correct end state anyway.
+  const navigateToAdjacentRequest = useCallback(() => {
+    const combined = getCombinedRequests(
+      pendingRequests,
+      pendingSignatureRequests,
+      pendingBatchRequests,
+      crossDappBatch,
+    );
+    if (combined.length <= 1) return;
+
+    let currentIdx = -1;
+    if (view === "txConfirm" && selectedTxRequest) {
+      currentIdx = combined.findIndex(
+        (r) => r.type === "tx" && r.request.id === selectedTxRequest.id,
+      );
+    } else if (view === "batchTxConfirm" && selectedBatchRequest) {
+      currentIdx = combined.findIndex(
+        (r) => r.type === "batch" && r.request.id === selectedBatchRequest.id,
+      );
+    } else if (view === "signatureConfirm" && selectedSignatureRequest) {
+      currentIdx = combined.findIndex(
+        (r) =>
+          r.type === "sig" && r.request.id === selectedSignatureRequest.id,
+      );
+    } else if (view === "crossDappBatchConfirm") {
+      currentIdx = combined.findIndex((r) => r.type === "crossDappBatch");
+    }
+    if (currentIdx === -1) return;
+
+    const targetIdx = currentIdx > 0 ? currentIdx - 1 : 1;
+    if (targetIdx >= combined.length) return;
+
+    const target = combined[targetIdx];
+    if (target.type === "tx") {
+      setSelectedBatchRequest(null);
+      setSelectedSignatureRequest(null);
+      setSelectedTxRequest(target.request);
+      if (view !== "txConfirm") setView("txConfirm");
+    } else if (target.type === "batch") {
+      setSelectedTxRequest(null);
+      setSelectedSignatureRequest(null);
+      setSelectedBatchRequest(target.request);
+      if (view !== "batchTxConfirm") setView("batchTxConfirm");
+    } else if (target.type === "sig") {
+      setSelectedTxRequest(null);
+      setSelectedBatchRequest(null);
+      setSelectedSignatureRequest(target.request);
+      if (view !== "signatureConfirm") setView("signatureConfirm");
+    } else if (target.type === "crossDappBatch") {
+      setSelectedTxRequest(null);
+      setSelectedBatchRequest(null);
+      setSelectedSignatureRequest(null);
+      if (view !== "crossDappBatchConfirm") setView("crossDappBatchConfirm");
+    }
+    preNavigatedRef.current = true;
+  }, [
+    pendingRequests,
+    pendingSignatureRequests,
+    pendingBatchRequests,
+    crossDappBatch,
+    selectedTxRequest,
+    selectedBatchRequest,
+    selectedSignatureRequest,
+    view,
+  ]);
+
   const handleTxConfirmed = useCallback(async () => {
     const currentTxId = selectedTxRequest?.id;
     const requests = await loadPendingRequests();
@@ -1415,6 +1525,13 @@ function App() {
   }, [selectedTxRequest?.id]);
 
   const handleTxRejected = useCallback(async () => {
+    // If onBeforeReject pre-navigated to an adjacent pending request, the
+    // popup is already showing the correct next view. Skip all fallback
+    // routing to avoid a second transition.
+    if (preNavigatedRef.current) {
+      preNavigatedRef.current = false;
+      return;
+    }
     const currentTxId = selectedTxRequest?.id;
     const requests = await loadPendingRequests();
 
@@ -1498,6 +1615,12 @@ function App() {
   ]);
 
   const handleSignatureCancelled = useCallback(async () => {
+    // Pre-nav has already routed to an adjacent pending request; skip
+    // fallback routing so we don't stack transitions.
+    if (preNavigatedRef.current) {
+      preNavigatedRef.current = false;
+      return;
+    }
     const currentSigId = selectedSignatureRequest?.id;
     const sigRequests = await loadPendingSignatureRequests();
 
@@ -2122,6 +2245,7 @@ function App() {
               onConfirmed={handleTxConfirmed}
               onRejected={handleTxRejected}
               onRejectAll={handleRejectAll}
+              onBeforeReject={navigateToAdjacentRequest}
               onAddedToBatch={() => {
                 setSelectedTxRequest(null);
                 setView("crossDappBatchConfirm");
@@ -2218,8 +2342,14 @@ function App() {
                 }
               }}
               onRejected={() => {
-                setSelectedBatchRequest(null);
                 setActivityTabTrigger((k) => k + 1);
+                // Pre-nav has already routed to an adjacent request (if any).
+                // Skip fallback routing to avoid a second transition.
+                if (preNavigatedRef.current) {
+                  preNavigatedRef.current = false;
+                  return;
+                }
+                setSelectedBatchRequest(null);
                 if (pendingBatchRequests.length > 1) {
                   const remaining = pendingBatchRequests.filter(
                     (r) => r.id !== selectedBatchRequest.id,
@@ -2238,6 +2368,7 @@ function App() {
                 }
               }}
               onRejectAll={handleRejectAll}
+              onBeforeReject={navigateToAdjacentRequest}
               onNavigate={(direction) => {
                 const currentIdx = combinedRequests.findIndex(
                   (r) =>
@@ -2331,12 +2462,17 @@ function App() {
               }}
               onRejected={() => {
                 setActivityTabTrigger((k) => k + 1);
+                if (preNavigatedRef.current) {
+                  preNavigatedRef.current = false;
+                  return;
+                }
                 if (isInSidePanel || isFullscreenTab) {
                   setView("main");
                 } else {
                   window.close();
                 }
               }}
+              onBeforeReject={navigateToAdjacentRequest}
               onNavigate={(direction) => {
                 const currentIdx = combinedRequests.findIndex(
                   (r) => r.type === "crossDappBatch",
@@ -2404,6 +2540,7 @@ function App() {
               }}
               onCancelled={handleSignatureCancelled}
               onCancelAll={handleCancelAllSignatures}
+              onBeforeCancel={navigateToAdjacentRequest}
               onConfirmed={handleSignatureCancelled}
               onNavigate={(direction) => {
                 const currentIdx = combinedRequests.findIndex(

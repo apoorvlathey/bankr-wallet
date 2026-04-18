@@ -74,6 +74,14 @@ interface TransactionConfirmationProps {
   onConfirmed: () => void;
   onRejected: () => void;
   onRejectAll: () => void;
+  /**
+   * Fired *before* the reject message is sent to the background. Parent uses
+   * this to pre-navigate to an adjacent pending request so the popup never
+   * enters a "view=txConfirm but selectedTx=null" intermediate state (which
+   * would flash the main screen for a frame before onRejected routes to the
+   * next request).
+   */
+  onBeforeReject?: () => void;
   onNavigate: (direction: "prev" | "next") => void;
   /**
    * Currently active cross-dapp batch (if any). Used to gate the
@@ -153,6 +161,7 @@ function TransactionConfirmation({
   onConfirmed,
   onRejected,
   onRejectAll,
+  onBeforeReject,
   onNavigate,
   crossDappBatch,
   onAddedToBatch,
@@ -381,6 +390,7 @@ function TransactionConfirmation({
   };
 
   const handleReject = () => {
+    onBeforeReject?.();
     chrome.runtime.sendMessage(
       { type: "rejectTransaction", txId: txRequest.id },
       () => {

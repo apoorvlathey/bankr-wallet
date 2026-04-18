@@ -32,6 +32,7 @@ interface CrossDappBatchConfirmationProps {
   onBack: () => void;
   onConfirmed: () => void;
   onRejected: () => void;
+  onBeforeReject?: () => void;
   onNavigate: (direction: "prev" | "next") => void;
 }
 
@@ -43,6 +44,7 @@ function CrossDappBatchConfirmation({
   onBack,
   onConfirmed,
   onRejected,
+  onBeforeReject,
   onNavigate,
 }: CrossDappBatchConfirmationProps) {
   const toast = useToast();
@@ -154,6 +156,7 @@ function CrossDappBatchConfirmation({
       onConfirmed={onConfirmed}
       onRejected={onRejected}
       onRejectAll={onRejected}
+      onBeforeReject={onBeforeReject}
       onNavigate={onNavigate}
       onRemoveCall={handleRemoveCall}
       originPerCall={originPerCall}

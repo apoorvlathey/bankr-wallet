@@ -34,6 +34,12 @@ interface SignatureRequestConfirmationProps {
   onBack: () => void;
   onCancelled: () => void;
   onCancelAll: () => void;
+  /**
+   * Fired *before* the cancel message is sent to the background so the parent
+   * can pre-navigate to an adjacent pending request, avoiding a flash of the
+   * main screen between storage update and onCancelled navigation.
+   */
+  onBeforeCancel?: () => void;
   onNavigate: (direction: "prev" | "next") => void;
   onConfirmed?: () => void;
 }
@@ -234,6 +240,7 @@ function SignatureRequestConfirmation({
   onBack,
   onCancelled,
   onCancelAll,
+  onBeforeCancel,
   onNavigate,
   onConfirmed,
 }: SignatureRequestConfirmationProps) {
@@ -251,6 +258,7 @@ function SignatureRequestConfirmation({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleCancel = () => {
+    onBeforeCancel?.();
     chrome.runtime.sendMessage(
       { type: "rejectSignatureRequest", sigId: sigRequest.id },
       () => {

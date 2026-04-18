@@ -73,6 +73,12 @@ interface BatchTransactionConfirmationProps {
   onConfirmed: () => void;
   onRejected: () => void;
   onRejectAll: () => void;
+  /**
+   * Fired *before* the reject message is sent to the background so the parent
+   * can pre-navigate to an adjacent pending request, avoiding a flash of the
+   * main screen between storage update and onRejected navigation.
+   */
+  onBeforeReject?: () => void;
   onNavigate: (direction: "prev" | "next") => void;
   /**
    * Cross-dapp batch only: when set, render a trash icon to the LEFT of each
@@ -135,6 +141,7 @@ function BatchTransactionConfirmation({
   onConfirmed,
   onRejected,
   onRejectAll,
+  onBeforeReject,
   onNavigate,
   onRemoveCall,
   originPerCall,
@@ -311,6 +318,7 @@ function BatchTransactionConfirmation({
   };
 
   const handleReject = () => {
+    onBeforeReject?.();
     if (customRejectHandler) {
       customRejectHandler().then(() => {
         onRejected();
