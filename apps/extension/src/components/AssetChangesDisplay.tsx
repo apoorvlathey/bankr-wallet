@@ -22,6 +22,7 @@ import {
   CheckIcon,
   ExternalLinkIcon,
   InfoOutlineIcon,
+  WarningTwoIcon,
 } from "@chakra-ui/icons";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import type {
@@ -606,14 +607,38 @@ function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChange
     );
   }
 
-  // Hide entirely if simulation failed or no changes
+  // Hide entirely if simulation failed
   if (!result || result.simulationFailed) return null;
 
   const allChanges: AssetChange[] = [];
   if (result.nativeChange) allChanges.push(result.nativeChange);
   allChanges.push(...result.tokenChanges);
 
-  if (allChanges.length === 0) return null;
+  const revertedBanner = !result.txSuccess ? (
+    <Box
+      border={tokens.borders.medium}
+      borderColor="status.error.border"
+      borderRadius="lg"
+      bg="status.error.bg"
+      boxShadow="card"
+      px={3}
+      py={2.5}
+    >
+      <HStack spacing={2} align="flex-start">
+        <WarningTwoIcon
+          boxSize="14px"
+          color="status.error.fg"
+          mt="2px"
+          flexShrink={0}
+        />
+        <Text fontSize="xs" fontWeight="700" color="status.error.fg" lineHeight="short">
+          Simulated transaction reverted — signing this is likely to fail onchain.
+        </Text>
+      </HStack>
+    </Box>
+  ) : null;
+
+  if (allChanges.length === 0) return revertedBanner;
 
   const outChanges = allChanges.filter((c) => c.direction === "out");
   const inChanges = allChanges.filter((c) => c.direction === "in");
@@ -630,7 +655,9 @@ function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChange
   if (moreCount > 0) summaryParts.push(`+${moreCount} more`);
 
   return (
-    <Box
+    <VStack align="stretch" spacing={2}>
+      {revertedBanner}
+      <Box
       border={tokens.borders.medium}
       borderColor="border.default"
       borderRadius="lg"
@@ -741,17 +768,10 @@ function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChange
             </>
           )}
 
-          {!result.txSuccess && (
-            <>
-              <Box h="1px" bg="border.subtle" mt={1.5} />
-              <Text fontSize="2xs" color="chart.negative" fontWeight="700" pt={1}>
-                Note: simulated tx reverted — actual changes may differ
-              </Text>
-            </>
-          )}
         </VStack>
       </Collapse>
     </Box>
+    </VStack>
   );
 }
 
