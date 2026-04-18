@@ -43,8 +43,11 @@ import {
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
+  useCapabilities,
+  useSendCalls,
+  useCallsStatus,
 } from "wagmi";
-import { formatUnits, parseUnits } from "viem";
+import { formatUnits, parseUnits, encodeFunctionData, maxUint256 } from "viem";
 import { Navigation } from "../components/Navigation";
 import { TokenBanner } from "../components/TokenBanner";
 import { Footer } from "../components/Footer";
@@ -157,6 +160,42 @@ export default function MigrateContent() {
   const { isLoading: isWrapConfirming, isSuccess: isWrapConfirmed } =
     useWaitForTransactionReceipt({ hash: wrapTxHash });
 
+  // ERC-5792 capability check: does the connected wallet support atomic batching?
+  // When supported, we bundle approve (if needed) + wrap into a single popup.
+  const { data: walletCapabilities } = useCapabilities({
+    account: address,
+    chainId: MIGRATE_CHAIN_ID,
+    query: { enabled: !!address },
+  });
+  const atomicStatus = walletCapabilities?.atomic?.status;
+  const supportsAtomicBatch =
+    atomicStatus === "supported" || atomicStatus === "ready";
+
+  // Batched approve+wrap via ERC-5792 sendCalls
+  const {
+    sendCalls: sendBatchedCalls,
+    data: batchSendData,
+    isPending: isBatchSending,
+    reset: resetBatch,
+  } = useSendCalls();
+  const batchBundleId = batchSendData?.id;
+  const { data: batchStatusData } = useCallsStatus({
+    id: batchBundleId ?? "",
+    query: {
+      enabled: !!batchBundleId,
+      refetchInterval: ({ state }) =>
+        state.data?.status === "pending" || state.data?.status === undefined
+          ? 1500
+          : false,
+    },
+  });
+  const batchStatus = batchStatusData?.status;
+  const isBatchConfirming =
+    !!batchBundleId &&
+    (batchStatus === "pending" || batchStatus === undefined);
+  const isBatchConfirmed = batchStatus === "success";
+  const batchTxHash = batchStatusData?.receipts?.[0]?.transactionHash;
+
   // Derived state
   const needsApproval =
     parsedAmount !== undefined &&
@@ -169,7 +208,12 @@ export default function MigrateContent() {
     parsedAmount > (bnkrwBalance as bigint);
 
   const isBusy =
-    isApproving || isApproveConfirming || isWrapping || isWrapConfirming;
+    isApproving ||
+    isApproveConfirming ||
+    isWrapping ||
+    isWrapConfirming ||
+    isBatchSending ||
+    isBatchConfirming;
 
   // After approve confirms, refetch allowance then reset
   useEffect(() => {
@@ -301,8 +345,116 @@ export default function MigrateContent() {
     );
   }, [parsedAmount, writeWrap, toast]);
 
-  const handleAction = () => {
+  const handleBatchedMigrate = useCallback(() => {
+    if (!parsedAmount) return;
+
+    const calls: { to: `0x${string}`; value: bigint; data: `0x${string}` }[] =
+      [];
+
     if (needsApproval) {
+      // Use max approval in the bundle so a future top-up doesn't require a
+      // second batch — same UX as a normal "approve once" pattern.
+      calls.push({
+        to: TOKEN_ADDR,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [WCHAN_ADDR, maxUint256],
+        }),
+      });
+    }
+
+    calls.push({
+      to: WCHAN_ADDR,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: wchanAbi,
+        functionName: "wrap",
+        args: [parsedAmount],
+      }),
+    });
+
+    sendBatchedCalls(
+      {
+        calls,
+        chainId: MIGRATE_CHAIN_ID,
+        forceAtomic: true,
+      },
+      {
+        onError: (err) => {
+          toast({
+            title: "Migration failed",
+            description: err.message.split("\n")[0],
+            status: "error",
+            duration: 5000,
+            isClosable: true,
+            position: "bottom-right",
+          });
+        },
+      },
+    );
+  }, [parsedAmount, needsApproval, sendBatchedCalls, toast]);
+
+  // After batched migrate confirms, refetch balances and reset
+  const batchToastedRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (
+      isBatchConfirmed &&
+      batchBundleId &&
+      batchToastedRef.current !== batchBundleId
+    ) {
+      batchToastedRef.current = batchBundleId;
+      refetchBnkrw();
+      refetchWchan();
+      refetchAllowance();
+      setAmount("");
+      setSliderValue(0);
+      const txUrl = batchTxHash
+        ? `https://basescan.org/tx/${batchTxHash}`
+        : undefined;
+      toast({
+        title: "Migration successful",
+        description: (
+          <>
+            Your BNKRW has been wrapped to WCHAN.
+            {txUrl && (
+              <>
+                {" "}
+                <a
+                  href={txUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ textDecoration: "underline" }}
+                >
+                  View on BaseScan
+                </a>
+              </>
+            )}
+          </>
+        ),
+        status: "success",
+        duration: 10000,
+        isClosable: true,
+        position: "bottom-right",
+      });
+      resetBatch();
+    }
+  }, [
+    isBatchConfirmed,
+    batchBundleId,
+    batchTxHash,
+    refetchBnkrw,
+    refetchWchan,
+    refetchAllowance,
+    toast,
+    resetBatch,
+  ]);
+
+  const handleAction = () => {
+    if (supportsAtomicBatch) {
+      handleBatchedMigrate();
+    } else if (needsApproval) {
       handleApprove();
     } else {
       handleWrap();
@@ -310,9 +462,10 @@ export default function MigrateContent() {
   };
 
   const getButtonLabel = (): string => {
+    if (isBatchSending || isBatchConfirming) return "Migrating...";
     if (isApproving || isApproveConfirming) return "Approving...";
     if (isWrapping || isWrapConfirming) return "Migrating...";
-    if (needsApproval) return "Approve BNKRW";
+    if (needsApproval && !supportsAtomicBatch) return "Approve BNKRW";
     return "Migrate";
   };
 
@@ -678,7 +831,7 @@ export default function MigrateContent() {
                 )}
 
                 {/* Tx status indicator */}
-                {(approveTxHash || wrapTxHash) && (
+                {(approveTxHash || wrapTxHash || batchTxHash || isBatchConfirming) && (
                   <HStack
                     w="full"
                     justify="center"
@@ -689,7 +842,7 @@ export default function MigrateContent() {
                     px={4}
                     py={2}
                   >
-                    {(isApproveConfirming || isWrapConfirming) && (
+                    {(isApproveConfirming || isWrapConfirming || isBatchConfirming) && (
                       <>
                         <Spinner size="xs" color="bauhaus.blue" />
                         <Text
@@ -702,20 +855,22 @@ export default function MigrateContent() {
                         </Text>
                       </>
                     )}
-                    <Link
-                      href={`https://basescan.org/tx/${approveTxHash || wrapTxHash}`}
-                      isExternal
-                      fontSize="xs"
-                      fontWeight="700"
-                      color="bauhaus.blue"
-                      textTransform="uppercase"
-                      display="inline-flex"
-                      alignItems="center"
-                      gap={1}
-                    >
-                      View on BaseScan
-                      <ExternalLink size={10} />
-                    </Link>
+                    {(approveTxHash || wrapTxHash || batchTxHash) && (
+                      <Link
+                        href={`https://basescan.org/tx/${batchTxHash || approveTxHash || wrapTxHash}`}
+                        isExternal
+                        fontSize="xs"
+                        fontWeight="700"
+                        color="bauhaus.blue"
+                        textTransform="uppercase"
+                        display="inline-flex"
+                        alignItems="center"
+                        gap={1}
+                      >
+                        View on BaseScan
+                        <ExternalLink size={10} />
+                      </Link>
+                    )}
                   </HStack>
                 )}
 
@@ -770,7 +925,11 @@ export default function MigrateContent() {
                 ) : (
                   <Button
                     w="full"
-                    variant={needsApproval ? "yellow" : "secondary"}
+                    variant={
+                      needsApproval && !supportsAtomicBatch
+                        ? "yellow"
+                        : "secondary"
+                    }
                     size="lg"
                     h="52px"
                     isDisabled={

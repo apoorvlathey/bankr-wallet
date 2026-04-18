@@ -234,6 +234,7 @@ When working on features, refer to these docs:
 | `_docs/CALLDATA.md`                                      | Calldata decoder UI, param components, type routing       |
 | `_docs/ASSET_CHANGES_SIMULATION.md`                      | Tx simulation: state override injection, metadata retry   |
 | `_docs/ERC5792.md`                                       | ERC-5792 batch txs: message flow, ERC-7821 encoding, 7702 plan |
+| `_docs/ERC5792-DAPP-SUPPORT.md`                          | Dapp-side guide: upgrade any dapp from multi-popup → single-popup batched txs via wagmi (`useCapabilities`/`useSendCalls`/`useCallsStatus`) with graceful fallback |
 | `_docs/L2_FORCE_INCLUSION.md`                            | OP Stack force inclusion: L1 deposit flow, portal encoding, 2-step status |
 | `apps/staking-indexer/STAKING_INDEXER_IMPLEMENTATION.md` | Staking indexer: sBNKRW vault events, balance tracking (legacy) |
 | `apps/wchan-vault-indexer/IMPLEMENTATION.md`             | WCHAN vault indexer: sWCHAN balance tracking, APY, snapshots    |
