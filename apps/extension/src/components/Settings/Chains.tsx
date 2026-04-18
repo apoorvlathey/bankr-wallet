@@ -35,7 +35,7 @@ import { useThemedToast } from "@/hooks/useThemedToast";
 import { getChainConfig } from "@/constants/chainConfig";
 import ChainIcon from "@/components/ChainIcon";
 import { getVisibleChains } from "@/lib/chains";
-import { ThemedCard, Decorator } from "@/theme";
+import { ThemedCard, Decorator, useIconChipBg } from "@/theme";
 import EditChain from "./EditChain";
 import AddChain from "./AddChain";
 
@@ -65,6 +65,7 @@ function Chain({
   }) {
   const config = getChainConfig(network.chainId);
   const rpcDisplay = getRpcDisplay(network.rpcUrl);
+  const iconChipBg = useIconChipBg();
 
   return (
     <ThemedCard
@@ -90,7 +91,7 @@ function Chain({
           _hover={{ opacity: 0.88 }}
         >
           <Box
-            bg="surface.raised"
+            bg={iconChipBg}
             border="2px solid"
             borderColor="border.default"
             p={1.5}
@@ -446,15 +447,8 @@ function Chains({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search chains"
-          border="3px solid"
-          borderColor="border.default"
-          borderRadius="0"
-          bg="surface.raised"
-          color="fg.primary"
           fontWeight="600"
           pl={10}
-          _hover={{ borderColor: "border.default" }}
-          _focus={{ borderColor: "border.focus", boxShadow: "none" }}
         />
       </InputGroup>
 

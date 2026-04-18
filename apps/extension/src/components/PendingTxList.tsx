@@ -216,6 +216,7 @@ function PendingTxList({
                               chainId={batch.chainId}
                               chainName={batch.chainName}
                               size="10px"
+                              withChip
                             />
                             {batch.chainName}
                           </Badge>
@@ -334,6 +335,7 @@ function PendingTxList({
                               chainId={request.tx.chainId}
                               chainName={request.chainName}
                               size="10px"
+                              withChip
                             />
                             {request.chainName}
                           </Badge>
@@ -444,6 +446,7 @@ function PendingTxList({
                               chainId={request.chainId}
                               chainName={request.chainName}
                               size="10px"
+                              withChip
                             />
                             {request.chainName}
                           </Badge>
@@ -561,6 +564,7 @@ function PendingTxList({
                               chainId={request.signature.chainId}
                               chainName={request.chainName}
                               size="10px"
+                              withChip
                             />
                             {request.chainName}
                           </Badge>

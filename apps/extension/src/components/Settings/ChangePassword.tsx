@@ -16,7 +16,7 @@ import {
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { ViewIcon, ViewOffIcon, ArrowBackIcon, InfoIcon } from "@chakra-ui/icons";
-import { ThemedCard } from "@/theme";
+import { ThemedCard, useTheme } from "@/theme";
 
 interface ChangePasswordProps {
   onComplete: () => void;
@@ -36,6 +36,8 @@ function ChangePassword({ onComplete, onCancel, onSessionExpired }: ChangePasswo
   }>({});
 
   const toast = useThemedToast();
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const intervalRef = useRef<number | null>(null);
 
   // Check session on mount and periodically
@@ -215,9 +217,13 @@ function ChangePassword({ onComplete, onCancel, onSessionExpired }: ChangePasswo
         borderColor="border.default"
       >
         <HStack spacing={2}>
-          <Box p={1} bg="border.default">
-            <InfoIcon color="surface.raised" boxSize={4} />
-          </Box>
+          {isDarkTheme ? (
+            <InfoIcon color="accentFg.secondary" boxSize={5} />
+          ) : (
+            <Box p={1} bg="border.default">
+              <InfoIcon color="accentFg.secondary" boxSize={4} />
+            </Box>
+          )}
           <Text color="accentFg.secondary" fontSize="sm" fontWeight="700">
             You will need to unlock again after changing your password.
           </Text>

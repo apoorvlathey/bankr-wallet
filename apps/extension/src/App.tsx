@@ -235,7 +235,7 @@ const LoadingFallback = () => (
 );
 
 function App() {
-  const { themeId } = useTheme();
+  const { themeId, tokens } = useTheme();
   const isDarkTheme = themeId === "midnight";
   const stripTokens = useStripTokens();
   const addressPillTokens = useStripTokens("elevated");
@@ -1774,6 +1774,8 @@ function App() {
             flex="1"
             display="flex"
             flexDirection="column"
+            overflowY="auto"
+            minH={0}
           >
             <Suspense fallback={<LoadingFallback />}>
               <Settings
@@ -1854,6 +1856,8 @@ function App() {
             flex="1"
             display="flex"
             flexDirection="column"
+            overflowY="auto"
+            minH={0}
           >
             <Suspense fallback={<LoadingFallback />}>
               <Settings
@@ -2872,6 +2876,7 @@ function App() {
                                   chainId={chain.chainId}
                                   chainName={chain.name}
                                   size="14px"
+                                  withChip
                                 />
                                 <Text
                                   fontSize="xs"
@@ -2990,6 +2995,7 @@ function App() {
                         chainName={selectedChain.name}
                         size="18px"
                         flexShrink={0}
+                        withChip
                       />
                       <Text fontSize="2xs" fontWeight="700" whiteSpace="normal" lineHeight="1.2" textAlign="left">
                         {selectedChain.name}
@@ -3238,8 +3244,9 @@ function App() {
                       key={site.name}
                       as="button"
                       bg="surface.raised"
-                      border="2px solid"
+                      border={tokens.borders.thin}
                       borderColor="border.default"
+                      borderRadius="sm"
                       boxShadow="card"
                       p={0.5}
                       cursor="pointer"

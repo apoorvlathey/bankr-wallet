@@ -805,6 +805,7 @@ function TransactionConfirmation({
                     chainId={tx.chainId}
                     chainName={resolvedChain?.name ?? chainName}
                     size="12px"
+                    withChip
                   />
                   {resolvedChain?.name ?? chainName}
                   {forceInclusion && forceInclusionInfo && (

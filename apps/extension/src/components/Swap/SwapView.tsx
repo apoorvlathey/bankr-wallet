@@ -1198,25 +1198,7 @@ function SwapView({
   }
 
   // -----------------------------------------------------------------------
-  // Loading
-  // -----------------------------------------------------------------------
-  if (holdingsLoading) {
-    return (
-      <Box
-        p={4}
-        minH="100%"
-        bg="surface.base"
-        display="flex"
-        alignItems="center"
-        justifyContent="center"
-      >
-        <Spinner size="lg" color="accent.secondary" thickness="3px" />
-      </Box>
-    );
-  }
-
-  // -----------------------------------------------------------------------
-  // Render
+  // Render — frame renders immediately; holdings fill in as they arrive.
   // -----------------------------------------------------------------------
   return (
     <Box p={4} minH="100%" bg="surface.base">

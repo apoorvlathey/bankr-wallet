@@ -360,6 +360,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   chainId={tx.chainId}
                   chainName={resolvedChain?.name ?? tx.chainName}
                   size="10px"
+                  withChip
                 />
                 {resolvedChain?.name ?? tx.chainName}
               </Badge>

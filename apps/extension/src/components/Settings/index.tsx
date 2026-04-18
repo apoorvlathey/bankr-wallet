@@ -19,15 +19,7 @@ import {
   Icon,
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import {
-  ArrowBackIcon,
-  LockIcon,
-  ChevronRightIcon,
-  DeleteIcon,
-  TimeIcon,
-  ChatIcon,
-  RepeatIcon,
-} from "@chakra-ui/icons";
+import { ArrowBackIcon, ChevronRightIcon } from "@chakra-ui/icons";
 
 import { clearChatHistory } from "@/chrome/chatStorage";
 import { TWITTER_URL } from "@/constants/externalUrls";
@@ -39,35 +31,79 @@ import AutoLockSettings from "./AutoLockSettings";
 import AgentPasswordSettings from "./AgentPasswordSettings";
 import AppearanceSettings from "./AppearanceSettings";
 
-// Robot/Agent icon for Agent Password section
+// Lucide-sourced stroke icons (ISC/MIT). All use currentColor + stroke
+// outlines so they read sharply on any theme and inherit from `iconColor`.
+const lucideProps = {
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+
+const PaletteIcon = (props: any) => (
+  <Icon {...lucideProps} {...props}>
+    <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+    <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+    <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+    <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+  </Icon>
+);
+
+const LockIcon = (props: any) => (
+  <Icon {...lucideProps} {...props}>
+    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </Icon>
+);
+
 const AgentIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" {...props}>
-    <path
-      fill="currentColor"
-      d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5A2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5a2.5 2.5 0 0 0 2.5 2.5a2.5 2.5 0 0 0 2.5-2.5a2.5 2.5 0 0 0-2.5-2.5Z"
-    />
+  <Icon {...lucideProps} {...props}>
+    <path d="M12 8V4H8" />
+    <rect width="16" height="12" x="4" y="8" rx="2" />
+    <path d="M2 14h2" />
+    <path d="M20 14h2" />
+    <path d="M15 13v2" />
+    <path d="M9 13v2" />
   </Icon>
 );
 
-// Paintbrush icon for Appearance section
-const PaintBrushIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" {...props}>
-    <path
-      fill="currentColor"
-      d="M18 4V3a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a2 2 0 0 1 2 2v1a4 4 0 0 1-4 4h-3v2.72A1.28 1.28 0 0 1 11.72 21h-1.44A1.28 1.28 0 0 1 9 19.72V17H6a4 4 0 0 1-4-4V3a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v1a2 2 0 0 1-2 2H5v6h12a3 3 0 0 0 3-3V4Z"
-    />
+const ClockIcon = (props: any) => (
+  <Icon {...lucideProps} {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
   </Icon>
 );
 
-// Chain-link icon for Chain RPCs section. Uses currentColor so it inherits
-// from `iconColor` and themes properly — the previous emoji had fixed colors
-// and could not adapt to dark surfaces.
 const LinkChainIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" {...props}>
-    <path
-      fill="currentColor"
-      d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5"
-    />
+  <Icon {...lucideProps} {...props}>
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </Icon>
+);
+
+const TrashIcon = (props: any) => (
+  <Icon {...lucideProps} {...props}>
+    <path d="M3 6h18" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" x2="10" y1="11" y2="17" />
+    <line x1="14" x2="14" y1="11" y2="17" />
+  </Icon>
+);
+
+const ResetIcon = (props: any) => (
+  <Icon {...lucideProps} {...props}>
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M3 3v5h5" />
+  </Icon>
+);
+
+const ChatBubbleIcon = (props: any) => (
+  <Icon {...lucideProps} {...props}>
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </Icon>
 );
 
@@ -320,7 +356,7 @@ function Settings({
       <SettingsRow
         title="Appearance"
         subtitle="Choose theme and visual style"
-        icon={<PaintBrushIcon boxSize={4} />}
+        icon={<PaletteIcon boxSize={5} />}
         iconBg="accent.secondary"
         iconColor="accentFg.secondary"
         cornerAccent="secondary"
@@ -336,7 +372,7 @@ function Settings({
             ? "Unlock with master password to access"
             : "Update your encryption password"
         }
-        icon={<LockIcon boxSize={4} />}
+        icon={<LockIcon boxSize={5} />}
         iconBg="accent.highlight"
         iconColor="accentFg.highlight"
         cornerAccent="highlight"
@@ -354,19 +390,19 @@ function Settings({
       <SettingsRow
         title="Agent Password"
         subtitle="Allow AI agents to unlock wallet"
-        icon={<AgentIcon boxSize={4} />}
+        icon={<AgentIcon boxSize={5} />}
         iconBg={
           isAgentPasswordEnabled
             ? "accent.secondary"
             : isDarkTheme
-              ? "surface.raisedHover"
+              ? "border.default"
               : "surface.sunken"
         }
         iconColor={
           isAgentPasswordEnabled
             ? "accentFg.secondary"
             : isDarkTheme
-              ? "fg.secondary"
+              ? "fg.primary"
               : "fg.muted"
         }
         cornerAccent="secondary"
@@ -378,14 +414,14 @@ function Settings({
               isAgentPasswordEnabled
                 ? "accent.secondary"
                 : isDarkTheme
-                  ? "surface.raisedHover"
+                  ? "border.default"
                   : "surface.sunken"
             }
             color={
               isAgentPasswordEnabled
                 ? "accentFg.secondary"
                 : isDarkTheme
-                  ? "fg.secondary"
+                  ? "fg.primary"
                   : "fg.muted"
             }
             border="2px solid"
@@ -402,7 +438,7 @@ function Settings({
       <SettingsRow
         title="Auto-Lock"
         subtitle="Configure wallet lock timeout"
-        icon={<TimeIcon boxSize={4} />}
+        icon={<ClockIcon boxSize={5} />}
         iconBg="accent.highlight"
         iconColor="accentFg.highlight"
         cornerAccent="highlight"
@@ -418,7 +454,7 @@ function Settings({
       <SettingsRow
         title="Chain RPCs"
         subtitle="Configure network RPC endpoints"
-        icon={<LinkChainIcon boxSize={4} />}
+        icon={<LinkChainIcon boxSize={5} />}
         iconBg={chainStrip.bg}
         iconColor={chainStrip.fg}
         cornerBg="border.default"
@@ -430,7 +466,7 @@ function Settings({
       <SettingsRow
         title="Clear Transaction History"
         subtitle="Remove all transaction records"
-        icon={<DeleteIcon boxSize={4} />}
+        icon={<TrashIcon boxSize={5} />}
         iconBg="accent.primary"
         iconColor="accentFg.primary"
         cornerAccent="primary"
@@ -441,7 +477,7 @@ function Settings({
       <SettingsRow
         title="Reset Nonce Cache"
         subtitle="Fix stuck transactions from nonce conflicts"
-        icon={<RepeatIcon boxSize={4} />}
+        icon={<ResetIcon boxSize={5} />}
         iconBg="accent.secondary"
         iconColor="accentFg.secondary"
         cornerAccent="secondary"
@@ -452,7 +488,7 @@ function Settings({
       <SettingsRow
         title="Clear Chat History"
         subtitle="Remove all chat conversations"
-        icon={<ChatIcon boxSize={4} />}
+        icon={<ChatBubbleIcon boxSize={5} />}
         iconBg="accent.primary"
         iconColor="accentFg.primary"
         cornerAccent="primary"
@@ -463,21 +499,13 @@ function Settings({
       {/* Delete Transaction History Confirmation Modal */}
       <Modal isOpen={isDeleteModalOpen} onClose={onDeleteModalClose} isCentered>
         <ModalOverlay bg="surface.overlay" />
-        <ModalContent
-          bg="surface.raised"
-          border="3px solid"
-          borderColor="border.default"
-          boxShadow="modal"
-          mx={4}
-          borderRadius="0"
-        >
+        <ModalContent mx={4}>
           <ModalHeader
             color="fg.primary"
             fontWeight="900"
             fontSize="md"
-            textTransform="uppercase"
-            borderBottom="3px solid"
-            borderColor="border.default"
+            borderBottomWidth="1px"
+            borderColor="border.subtle"
           >
             Clear Transaction History?
           </ModalHeader>
@@ -486,7 +514,7 @@ function Settings({
               This will permanently delete all transaction records. This action cannot be undone.
             </Text>
           </ModalBody>
-          <ModalFooter gap={2} borderTop="3px solid" borderColor="border.default">
+          <ModalFooter gap={2} borderTopWidth="1px" borderColor="border.subtle">
             <Button variant="secondary" size="sm" onClick={onDeleteModalClose}>
               Cancel
             </Button>
@@ -504,21 +532,13 @@ function Settings({
       {/* Delete Chat History Confirmation Modal */}
       <Modal isOpen={isChatDeleteModalOpen} onClose={onChatDeleteModalClose} isCentered>
         <ModalOverlay bg="surface.overlay" />
-        <ModalContent
-          bg="surface.raised"
-          border="3px solid"
-          borderColor="border.default"
-          boxShadow="modal"
-          mx={4}
-          borderRadius="0"
-        >
+        <ModalContent mx={4}>
           <ModalHeader
             color="fg.primary"
             fontWeight="900"
             fontSize="md"
-            textTransform="uppercase"
-            borderBottom="3px solid"
-            borderColor="border.default"
+            borderBottomWidth="1px"
+            borderColor="border.subtle"
           >
             Clear Chat History?
           </ModalHeader>
@@ -527,7 +547,7 @@ function Settings({
               This will permanently delete all chat conversations. This action cannot be undone.
             </Text>
           </ModalBody>
-          <ModalFooter gap={2} borderTop="3px solid" borderColor="border.default">
+          <ModalFooter gap={2} borderTopWidth="1px" borderColor="border.subtle">
             <Button variant="secondary" size="sm" onClick={onChatDeleteModalClose}>
               Cancel
             </Button>

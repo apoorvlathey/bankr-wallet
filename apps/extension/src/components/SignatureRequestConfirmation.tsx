@@ -557,6 +557,7 @@ function SignatureRequestConfirmation({
                       chainId={signature.chainId}
                       chainName={badgeChain.name}
                       size="12px"
+                      withChip
                     />
                     {badgeChain.name}
                   </Badge>

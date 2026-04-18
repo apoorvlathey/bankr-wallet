@@ -154,7 +154,7 @@ export default function WatchAssetConfirmation({
                   borderRadius="full"
                   bg="surface.raised"
                 >
-                  <ChainIcon chainId={request.chainId} chainName={chainConfig.name} size="20px" />
+                  <ChainIcon chainId={request.chainId} chainName={chainConfig.name} size="20px" withChip />
                 </Box>
               </Box>
               <Text fontSize="lg" fontWeight="900" mt={1}>

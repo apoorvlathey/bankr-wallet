@@ -55,7 +55,7 @@ interface PortfolioTabsProps {
 const POST_CONFIRM_REFRESH_DELAY = 3000;
 
 export default function PortfolioTabs({ address, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange }: PortfolioTabsProps) {
-  const { themeId } = useTheme();
+  const { themeId, tokens } = useTheme();
   const isDarkTheme = themeId === "midnight";
   // Selected tab uses an inverted contrast strip — Bauhaus paints it BLACK with
   // white text; Midnight uses a recessed dark surface with light text. There is
@@ -142,10 +142,12 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
   return (
     <Box
       bg="surface.raised"
-      border="3px solid"
+      border={tokens.borders.medium}
       borderColor="border.default"
+      borderRadius="lg"
       boxShadow="card"
       position="relative"
+      overflow="hidden"
     >
       {/* Corner decoration — Bauhaus only; Decorator renders nothing in Midnight */}
       <Decorator corner="top-right" accent="highlight" />
@@ -265,7 +267,7 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
               <HStack spacing={1}>
                 {selectedChain ? (
                   <>
-                    <ChainIcon chainId={selectedChain.chainId} chainName={selectedChain.name} size="12px" />
+                    <ChainIcon chainId={selectedChain.chainId} chainName={selectedChain.name} size="12px" withChip />
                     <Text fontSize="11px" fontWeight="600" color="text.secondary">{selectedChain.name}</Text>
                   </>
                 ) : (
@@ -370,7 +372,7 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
                       py={2}
                     >
                       <HStack spacing={2}>
-                        <ChainIcon chainId={chain.chainId} chainName={chain.name} size="18px" />
+                        <ChainIcon chainId={chain.chainId} chainName={chain.name} size="18px" withChip />
                         <Text fontWeight="700" fontSize="sm">{chain.name}</Text>
                       </HStack>
                     </MenuItem>

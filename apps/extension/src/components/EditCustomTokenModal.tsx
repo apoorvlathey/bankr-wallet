@@ -105,7 +105,7 @@ export default function EditCustomTokenModal({
           <VStack spacing={4} align="stretch">
             {/* Chain + address display */}
             <HStack spacing={2}>
-              <ChainIcon chainId={token.chainId} chainName={chainConfig.name} size="18px" />
+              <ChainIcon chainId={token.chainId} chainName={chainConfig.name} size="18px" withChip />
               <Text fontWeight="700" fontSize="sm">
                 {chainConfig.name}
               </Text>

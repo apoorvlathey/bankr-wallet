@@ -22,6 +22,20 @@ import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById, getVisibleChains } from "@/lib/chains";
 import { Decorator } from "@/theme";
 
+// Module-level cache so navigating away and back to the homepage doesn't flash
+// a skeleton. We seed state from here on mount and refetch in the background.
+interface HoldingsSnapshot {
+  tokens: PortfolioToken[];
+  defiPositions: DefiPosition[];
+  totalValueUsd: number;
+  customTokenKeys: Set<string>;
+  rpcIssueChainIds: number[];
+  timestamp: number;
+}
+const holdingsCache = new Map<string, HoldingsSnapshot>();
+const holdingsCacheKey = (address: string, reloadKey: string) =>
+  `${address.toLowerCase()}|${reloadKey}`;
+
 interface TokenHoldingsProps {
   address: string;
   onTokenClick?: (token: PortfolioToken) => void;
@@ -42,17 +56,6 @@ interface TokenHoldingsProps {
 
 function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCard, onRpcIssuesChange, filterChainId, onStateChange }: TokenHoldingsProps) {
   const { networksInfo } = useNetworks();
-  const [tokens, setTokens] = useState<PortfolioToken[]>([]);
-  const [defiPositions, setDefiPositions] = useState<DefiPosition[]>([]);
-  const [totalValueUsd, setTotalValueUsd] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [hideValue, setHideValue] = useState(false);
-  const [lastFetched, setLastFetched] = useState(0);
-  const [customTokenKeys, setCustomTokenKeys] = useState<Set<string>>(new Set());
-  const [editingToken, setEditingToken] = useState<PortfolioToken | null>(null);
-  const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
-  const editModal = useDisclosure();
   const chainReloadKey = useMemo(
     () =>
       getVisibleChains(networksInfo)
@@ -64,6 +67,21 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         .join("|"),
     [networksInfo],
   );
+  // Hydrate from the module cache so the homepage doesn't flash a skeleton
+  // every time the user navigates back. The background refetch in the effect
+  // below keeps the data fresh.
+  const initialSnapshot = holdingsCache.get(holdingsCacheKey(address, chainReloadKey));
+  const [tokens, setTokens] = useState<PortfolioToken[]>(() => initialSnapshot?.tokens ?? []);
+  const [defiPositions, setDefiPositions] = useState<DefiPosition[]>(() => initialSnapshot?.defiPositions ?? []);
+  const [totalValueUsd, setTotalValueUsd] = useState(() => initialSnapshot?.totalValueUsd ?? 0);
+  const [loading, setLoading] = useState(() => !initialSnapshot);
+  const [error, setError] = useState<string | null>(null);
+  const [hideValue, setHideValue] = useState(false);
+  const [lastFetched, setLastFetched] = useState(() => initialSnapshot?.timestamp ?? 0);
+  const [customTokenKeys, setCustomTokenKeys] = useState<Set<string>>(() => initialSnapshot?.customTokenKeys ?? new Set());
+  const [editingToken, setEditingToken] = useState<PortfolioToken | null>(null);
+  const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
+  const editModal = useDisclosure();
 
   // Load hide preference
   useEffect(() => {
@@ -88,7 +106,13 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       // Cache for 60s unless forced
       if (!force && Date.now() - lastFetched < 60_000 && tokens.length > 0) return;
 
-      setLoading(true);
+      // Only show the skeleton when we have nothing on screen yet. If we're
+      // revalidating cached data, keep the old values visible until the fresh
+      // ones land so the homepage feels instantly ready.
+      const hasExistingData = tokens.length > 0;
+      if (!hasExistingData) {
+        setLoading(true);
+      }
       setError(null);
 
       try {
@@ -102,7 +126,9 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         setDefiPositions(catalog.defiPositions || []);
         setTotalValueUsd(catalog.totalValueUsd);
         setLoading(false);
-        setLastFetched(Date.now());
+        const fetchedAt = Date.now();
+        setLastFetched(fetchedAt);
+        const cacheKey = holdingsCacheKey(address, chainReloadKey);
 
         // Enhance with on-chain balances in the background.
         // If RPCs are rate-limited or slow, user already sees API values.
@@ -114,10 +140,26 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
           const defiTotal = (catalog.defiPositions || []).reduce((s: number, p: DefiPosition) => s + p.valueUsd, 0);
           const total = onchain.totalValueUsd + defiTotal;
           setTotalValueUsd(total);
+          holdingsCache.set(cacheKey, {
+            tokens: onchain.tokens,
+            defiPositions: catalog.defiPositions || [],
+            totalValueUsd: total,
+            customTokenKeys: catalog.customTokenKeys,
+            rpcIssueChainIds: onchain.rpcIssueChainIds,
+            timestamp: fetchedAt,
+          });
           // Record snapshot with on-chain enhanced value
           recordSnapshot(address, total).catch(() => {});
         } catch (err) {
           onRpcIssuesChange?.([]);
+          holdingsCache.set(cacheKey, {
+            tokens: mergedTokens,
+            defiPositions: catalog.defiPositions || [],
+            totalValueUsd: catalog.totalValueUsd,
+            customTokenKeys: catalog.customTokenKeys,
+            rpcIssueChainIds: [],
+            timestamp: fetchedAt,
+          });
           // Record snapshot with API-only value
           recordSnapshot(address, catalog.totalValueUsd).catch(() => {});
         }
@@ -127,15 +169,30 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         setLoading(false);
       }
     },
-    [address, lastFetched, tokens.length]
+    [address, chainReloadKey, lastFetched, tokens.length]
   );
 
-  // Reset cache and reload when address changes
+  // Reload when address or the set of visible chains changes. Seed from the
+  // module cache if we have a snapshot for this (address, chains) pair so the
+  // list doesn't flash empty before the refetch completes.
   useEffect(() => {
-    setLastFetched(0);
-    setTokens([]);
-    setDefiPositions([]);
-    setTotalValueUsd(0);
+    const cached = holdingsCache.get(holdingsCacheKey(address, chainReloadKey));
+    if (cached) {
+      setTokens(cached.tokens);
+      setDefiPositions(cached.defiPositions);
+      setTotalValueUsd(cached.totalValueUsd);
+      setCustomTokenKeys(cached.customTokenKeys);
+      setLastFetched(cached.timestamp);
+      setLoading(false);
+      onRpcIssuesChange?.(cached.rpcIssueChainIds);
+    } else {
+      setTokens([]);
+      setDefiPositions([]);
+      setTotalValueUsd(0);
+      setCustomTokenKeys(new Set());
+      setLastFetched(0);
+      setLoading(true);
+    }
     loadPortfolio(true);
   }, [address, chainReloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -372,7 +429,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                       alignItems="center"
                       justifyContent="center"
                     >
-                      <ChainIcon chainId={token.chainId} chainName={chainName} size="14px" />
+                      <ChainIcon chainId={token.chainId} chainName={chainName} size="14px" withChip />
                     </Box>
                   );
                 })()}
@@ -503,6 +560,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                             chainId={pos.chainId}
                             chainName={chainConfig.name}
                             size="14px"
+                            withChip
                           />
                         </Box>
                       </Box>

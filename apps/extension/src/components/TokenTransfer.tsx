@@ -635,8 +635,9 @@ function TokenTransfer({
             px={2.5}
             py={1.5}
             bg="accent.highlight"
-            border="2px solid"
+            border={tokens.borders.thin}
             borderColor="border.default"
+            borderRadius="md"
             justify="space-between"
           >
             <Box>

@@ -25,6 +25,7 @@ import { addCustomToken } from "@/chrome/customTokenStorage";
 import { useNetworks } from "@/contexts/NetworksContext";
 import ChainIcon from "@/components/ChainIcon";
 import { getVisibleChains } from "@/lib/chains";
+import { useStripTokens, useTheme } from "@/theme";
 
 interface AddTokenModalProps {
   isOpen: boolean;
@@ -161,25 +162,25 @@ export default function AddTokenModal({
 
   const selectedChain = chainList.find((c) => c.chainId === selectedChainId);
   const canSave = fetched && !isDuplicate && !loading && !saving && symbol && decimals;
+  const headerStrip = useStripTokens();
+  const { tokens } = useTheme();
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="sm">
       <ModalOverlay bg="surface.overlay" />
-      <ModalContent mx={4}>
+      <ModalContent mx={4} overflow="hidden">
         <ModalHeader
-          bg="fg.primary"
-          color="fg.inverse"
+          bg={headerStrip.bg}
+          color={headerStrip.fg}
           fontWeight="900"
           fontSize="md"
-          textTransform="uppercase"
-          letterSpacing="wider"
           py={2}
-          borderBottom="3px solid"
-          borderColor="border.default"
+          borderBottomWidth="1px"
+          borderColor="border.subtle"
         >
           Add Token
         </ModalHeader>
-        <ModalCloseButton color="fg.inverse" top={1} />
+        <ModalCloseButton color={headerStrip.fg} top={1} />
         <ModalBody py={4} px={4}>
           <VStack spacing={4} align="stretch">
             {/* Chain selector */}
@@ -191,11 +192,13 @@ export default function AddTokenModal({
                 <MenuButton
                   as={Box}
                   cursor="pointer"
-                  border="2px solid"
+                  border={tokens.borders.thin}
                   borderColor="border.default"
+                  borderRadius="md"
+                  bg="surface.raised"
                   px={3}
                   py={2}
-                  _hover={{ bg: "bg.muted" }}
+                  _hover={{ bg: "surface.raisedHover" }}
                   transition="background 0.15s"
                 >
                   <HStack spacing={2} justify="space-between">
@@ -204,6 +207,7 @@ export default function AddTokenModal({
                         chainId={selectedChainId}
                         chainName={selectedChain?.name}
                         size="18px"
+                        withChip
                       />
                       <Text fontWeight="700" fontSize="sm">
                         {selectedChain?.name ?? `Chain ${selectedChainId}`}
@@ -212,22 +216,12 @@ export default function AddTokenModal({
                     <ChevronDownIcon />
                   </HStack>
                 </MenuButton>
-                <MenuList
-                  bg="surface.raised"
-                  border="3px solid"
-                  borderColor="border.default"
-                  boxShadow="card"
-                  maxH="200px"
-                  overflowY="auto"
-                  p={0}
-                  zIndex={10}
-                >
+                <MenuList maxH="200px" overflowY="auto" p={0} zIndex={10}>
                   {chainList.map((chain) => (
                     <MenuItem
                       key={chain.chainId}
                       onClick={() => handleChainChange(chain.chainId)}
-                      bg={chain.chainId === selectedChainId ? "bg.muted" : "transparent"}
-                      _hover={{ bg: "bg.hover" }}
+                      bg={chain.chainId === selectedChainId ? "surface.raisedHover" : "transparent"}
                       px={3}
                       py={2}
                     >
@@ -236,6 +230,7 @@ export default function AddTokenModal({
                           chainId={chain.chainId}
                           chainName={chain.name}
                           size="18px"
+                          withChip
                         />
                         <Text fontWeight="700" fontSize="sm">
                           {chain.name}
@@ -275,8 +270,9 @@ export default function AddTokenModal({
             {error && (
               <HStack
                 bg="status.error.bg"
-                border="2px solid"
+                border={tokens.borders.thin}
                 borderColor="status.error.border"
+                borderRadius="md"
                 px={3}
                 py={2}
               >
@@ -291,8 +287,9 @@ export default function AddTokenModal({
             {isDuplicate && (
               <HStack
                 bg="status.warning.bg"
-                border="2px solid"
+                border={tokens.borders.thin}
                 borderColor="status.warning.border"
+                borderRadius="md"
                 px={3}
                 py={2}
               >

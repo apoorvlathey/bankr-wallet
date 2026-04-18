@@ -333,7 +333,7 @@ function SwapConfirmation({
               alignItems="center"
               gap={1}
             >
-              <ChainIcon chainId={chainId} chainName={chainName} size="12px" />
+              <ChainIcon chainId={chainId} chainName={chainName} size="12px" withChip />
               {chainName}
             </Badge>
           </HStack>

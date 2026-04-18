@@ -27,6 +27,7 @@ function PermissionBadge({ label, allowed }: { label: string; allowed: boolean }
       bg={allowed ? "status.success.bg" : "status.error.bg"}
       border="2px solid"
       borderColor={allowed ? "status.success.border" : "status.error.border"}
+      borderRadius="md"
       px={2}
       py={1}
     >
@@ -321,6 +322,7 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
                 bg={isAgentEnabled ? "accent.secondary" : "surface.sunken"}
                 border="2px solid"
                 borderColor="border.default"
+                borderRadius="md"
               >
                 <LockIcon
                   boxSize={5}
