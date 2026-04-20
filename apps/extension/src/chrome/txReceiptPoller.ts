@@ -7,6 +7,7 @@
 import {
   updateTxInHistory,
   getPendingConfirmationTxs,
+  getTxById,
   type GasData,
 } from "./txHistoryStorage";
 import { getRpcUrl, showNotification } from "./txHandlers";
@@ -19,6 +20,17 @@ const INITIAL_INTERVAL_MS = 2_000;
 const MAX_INTERVAL_MS = 30_000;
 const BACKOFF_FACTOR = 1.5;
 const MAX_POLL_DURATION_MS = 10 * 60 * 1000; // 10 minutes
+
+/**
+ * Dropped-tx detection: when the receipt is null, we also check
+ * eth_getTransactionByHash. If the RPC doesn't know about the tx, it was
+ * likely dropped from the mempool (replaced, evicted, or never propagated).
+ * We require multiple consecutive misses and a minimum age to tolerate
+ * propagation lag and load-balanced RPCs that may briefly not see the tx.
+ */
+const DROPPED_NOT_FOUND_THRESHOLD = 3;
+const DROPPED_MIN_AGE_MS = 60_000;
+const notFoundCounts = new Map<string, number>();
 
 /** Track active pollers by txId to avoid duplicates */
 const activePollers = new Set<string>();
@@ -37,6 +49,7 @@ export function startReceiptPolling(
 
   pollReceipt(txId, txHash, chainId).finally(() => {
     activePollers.delete(txId);
+    notFoundCounts.delete(txId);
   });
 }
 
@@ -82,6 +95,7 @@ async function checkAndFinalizeReceipt(
     const receipt = await fetchReceipt(rpcUrl, txHash);
 
     if (receipt) {
+      notFoundCounts.delete(txId);
       const succeeded = receipt.status === "0x1";
 
       if (succeeded) {
@@ -102,11 +116,59 @@ async function checkAndFinalizeReceipt(
       await showConfirmationNotification(txId, txHash, chainId, succeeded);
       return succeeded;
     }
+
+    // Receipt not yet available — check whether the RPC still knows about the
+    // tx. A null response here means the tx has been dropped from the mempool.
+    const txData = await fetchTxByHash(rpcUrl, txHash);
+    if (txData === null) {
+      const tx = await getTxById(txId);
+      const age = tx ? Date.now() - tx.createdAt : 0;
+      if (age > DROPPED_MIN_AGE_MS) {
+        const count = (notFoundCounts.get(txId) ?? 0) + 1;
+        notFoundCounts.set(txId, count);
+        if (count >= DROPPED_NOT_FOUND_THRESHOLD) {
+          notFoundCounts.delete(txId);
+          await updateTxInHistory(txId, {
+            status: "failed",
+            error: "Transaction dropped from the mempool",
+            completedAt: Date.now(),
+          });
+          await showConfirmationNotification(
+            txId,
+            txHash,
+            chainId,
+            false,
+            "dropped",
+          );
+          return false;
+        }
+      }
+    } else {
+      notFoundCounts.delete(txId);
+    }
   } catch {
     // RPC error — treat as "not yet available"
   }
 
   return null;
+}
+
+async function fetchTxByHash(
+  rpcUrl: string,
+  txHash: string,
+): Promise<any | null> {
+  const response = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "eth_getTransactionByHash",
+      params: [txHash],
+    }),
+  });
+  const json = await response.json();
+  return json.result ?? null;
 }
 
 async function fetchReceipt(
@@ -176,6 +238,7 @@ async function showConfirmationNotification(
   txHash: string,
   chainId: number,
   succeeded: boolean,
+  failureReason: "reverted" | "dropped" = "reverted",
 ): Promise<void> {
   const chainConfig = CHAIN_CONFIG[chainId];
   const chainName = chainConfig?.name || (await getStoredChainName(chainId));
@@ -195,12 +258,17 @@ async function showConfirmationNotification(
     }
   }
 
+  const failureMessage =
+    failureReason === "dropped"
+      ? `Transaction on ${chainName} was dropped from the mempool.`
+      : `Transaction on ${chainName} reverted on-chain.`;
+
   await showNotification(
     notificationId,
     succeeded ? "Transaction Confirmed" : "Transaction Failed",
     succeeded
       ? `Transaction on ${chainName} confirmed on-chain. Click to view.`
-      : `Transaction on ${chainName} reverted on-chain.`,
+      : failureMessage,
   );
 }
 
