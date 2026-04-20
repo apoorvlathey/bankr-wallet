@@ -7,6 +7,9 @@ description: Interact with web3 dapps using the WalletChan browser extension via
 
 Control the [WalletChan](https://walletchan.com/) browser extension to interact with any web3 dapp via Chrome DevTools Protocol (CDP).
 
+> **Install via [skills.sh](https://skills.sh):** `npx skills add apoorvlathey/walletchan-skill`
+> Canonical source: [github.com/apoorvlathey/walletchan-skill](https://github.com/apoorvlathey/walletchan-skill)
+
 ## Prerequisites
 
 1. **Chrome** installed with remote debugging enabled (e.g. `--remote-debugging-port=9222`)

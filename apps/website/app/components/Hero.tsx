@@ -27,6 +27,10 @@ import { COINGECKO_URL, CHROME_STORE_URL } from "../constants";
 const MotionBox = motion(Box);
 
 const SKILL_URL = "https://walletchan.com/SKILL.md";
+const SKILLS_SH_REPO_URL =
+  "https://skills.sh/apoorvlathey/walletchan-skill/walletchan";
+const SKILLS_SH_INSTALL_CMD =
+  "npx skills add https://github.com/apoorvlathey/walletchan-skill --skill walletchan";
 const CLAWHUB_URL = "https://clawhub.ai/apoorvlathey/walletchan";
 const CLAWHUB_INSTALL_CMD = "clawhub install walletchan";
 
@@ -89,7 +93,8 @@ function CopyRow({
             fontFamily="mono"
             fontSize="sm"
             fontWeight="600"
-            noOfLines={1}
+            noOfLines={2}
+            wordBreak="break-all"
             textAlign="left"
           >
             {value}
@@ -108,6 +113,32 @@ function CopyRow({
       >
         <ExternalLink size={18} />
       </Link>
+    </HStack>
+  );
+}
+
+function OrDivider() {
+  return (
+    <HStack spacing={3} align="center">
+      <Box flex={1} h="2px" bg="bauhaus.black" />
+      <Box
+        bg="bauhaus.red"
+        px={3}
+        py={0.5}
+        border="2px solid"
+        borderColor="bauhaus.black"
+      >
+        <Text
+          fontWeight="900"
+          fontSize="xs"
+          textTransform="uppercase"
+          letterSpacing="widest"
+          color="white"
+        >
+          OR
+        </Text>
+      </Box>
+      <Box flex={1} h="2px" bg="bauhaus.black" />
     </HStack>
   );
 }
@@ -424,27 +455,26 @@ export function Hero() {
                 />
               </Box>
 
-              <HStack spacing={3} align="center">
-                <Box flex={1} h="2px" bg="bauhaus.black" />
-                <Box
-                  bg="bauhaus.red"
-                  px={3}
-                  py={0.5}
-                  border="2px solid"
-                  borderColor="bauhaus.black"
+              <OrDivider />
+
+              <Box>
+                <Text
+                  fontSize="xs"
+                  fontWeight="bold"
+                  textTransform="uppercase"
+                  letterSpacing="widest"
+                  mb={2}
                 >
-                  <Text
-                    fontWeight="900"
-                    fontSize="xs"
-                    textTransform="uppercase"
-                    letterSpacing="widest"
-                    color="white"
-                  >
-                    OR
-                  </Text>
-                </Box>
-                <Box flex={1} h="2px" bg="bauhaus.black" />
-              </HStack>
+                  skills.sh install
+                </Text>
+                <CopyRow
+                  value={SKILLS_SH_INSTALL_CMD}
+                  linkHref={SKILLS_SH_REPO_URL}
+                  accentColor="bauhaus.yellow"
+                />
+              </Box>
+
+              <OrDivider />
 
               <Box>
                 <Text
