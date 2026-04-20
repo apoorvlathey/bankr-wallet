@@ -16,6 +16,7 @@ import { fetchOnchainBalances } from "@/chrome/onchainBalances";
 import { loadPortfolioTokenCatalog } from "@/chrome/portfolioTokens";
 import { recordSnapshot } from "@/chrome/portfolioSnapshotStorage";
 import { getChainConfig } from "@/constants/chainConfig";
+import { getChainEnvironmentLabel } from "@/lib/chainIcons";
 import EditCustomTokenModal from "@/components/EditCustomTokenModal";
 import ChainIcon from "@/components/ChainIcon";
 import { useNetworks } from "@/contexts/NetworksContext";
@@ -468,6 +469,15 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                 </HStack>
                 <Text fontSize="10px" color="text.tertiary" fontWeight="500" noOfLines={1}>
                   {hideValue ? "****" : token.balanceFormatted}
+                  {resolvedChain?.name &&
+                    getChainEnvironmentLabel(token.chainId, resolvedChain.name) === "TESTNET" && (
+                      <>
+                        {" · "}
+                        <Text as="span" fontSize="9px" textTransform="uppercase" letterSpacing="wider" fontWeight="700">
+                          {resolvedChain.name}
+                        </Text>
+                      </>
+                    )}
                 </Text>
               </VStack>
 
