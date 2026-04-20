@@ -208,6 +208,7 @@ export default function PrivateKeyInput({
           bg={isDarkTheme ? "status.success.bg" : "accent.highlight"}
           border="2px solid"
           borderColor={isDarkTheme ? "status.success.border" : "border.default"}
+          borderRadius="lg"
           boxShadow="card"
         >
           <HStack spacing={2} align="center">
@@ -234,6 +235,7 @@ export default function PrivateKeyInput({
               p={1.5}
               border="2px solid"
               borderColor={isDarkTheme ? "border.strong" : "border.default"}
+              borderRadius="md"
               overflow="hidden"
               textOverflow="ellipsis"
               whiteSpace="nowrap"

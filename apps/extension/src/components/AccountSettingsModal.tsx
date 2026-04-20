@@ -12,6 +12,7 @@ import {
   ModalHeader,
   ModalBody,
   ModalFooter,
+  ModalCloseButton,
   FormControl,
   FormLabel,
   FormErrorMessage,
@@ -21,6 +22,8 @@ import {
   Alert,
   AlertIcon,
   Tooltip,
+  Divider,
+  Image,
 } from "@chakra-ui/react";
 import {
   SettingsIcon,
@@ -31,12 +34,21 @@ import {
   ViewOffIcon,
   ArrowBackIcon,
   RepeatIcon,
+  ExternalLinkIcon,
+  CheckIcon,
 } from "@chakra-ui/icons";
+import { blo } from "blo";
 import { useThemedToast } from "@/hooks/useThemedToast";
+import { useTheme, IconBox } from "@/theme";
 import type { Account, PasswordType, SeedGroup } from "@/chrome/types";
 import { resolveNameToAddress, isResolvableName } from "@/lib/ensUtils";
 import { isAddress } from "@ethersproject/address";
-import { resolveAndCacheIdentity } from "@/lib/ensIdentityCache";
+import {
+  resolveAndCacheIdentity,
+  getEnsIdentityCache,
+} from "@/lib/ensIdentityCache";
+import { CopyButton } from "./CopyButton";
+import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 
 interface AccountSettingsModalProps {
   isOpen: boolean;
@@ -60,6 +72,8 @@ function AccountSettingsModal({
   totalAccounts,
 }: AccountSettingsModalProps) {
   const toast = useThemedToast();
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const [view, setView] = useState<ModalView>("settings");
   const [displayName, setDisplayName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -88,6 +102,29 @@ function AccountSettingsModal({
     walletAddress?: string;
     password?: string;
   }>({});
+
+  // Cached ENS identity for header avatar/name — refreshed when the modal opens
+  // and whenever the user clicks "Refresh ENS Data".
+  const [ensIdentity, setEnsIdentity] = useState<{
+    name: string | null;
+    avatar: string | null;
+  }>({ name: null, avatar: null });
+
+  useEffect(() => {
+    if (!isOpen || !account) return;
+    let cancelled = false;
+    getEnsIdentityCache().then((cache) => {
+      if (cancelled) return;
+      const entry = cache[account.address.toLowerCase()];
+      setEnsIdentity({
+        name: entry?.name ?? null,
+        avatar: entry?.avatar ?? null,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, account]);
 
   // Reset state when modal opens/account changes
   useEffect(() => {
@@ -411,6 +448,7 @@ function AccountSettingsModal({
     setIsRefreshingEns(true);
     try {
       const result = await resolveAndCacheIdentity(account.address);
+      setEnsIdentity({ name: result.name, avatar: result.avatar });
       if (result.name) {
         toast({
           title: "ENS data refreshed",
@@ -520,6 +558,7 @@ function AccountSettingsModal({
                   bg="status.warning.bg"
                   border="2px solid"
                   borderColor="status.warning.border"
+                  borderRadius="md"
                 >
                   <HStack spacing={2}>
                     <WarningTwoIcon color="status.warning.fg" />
@@ -642,6 +681,7 @@ function AccountSettingsModal({
                       bg="status.warning.bg"
                       border="2px solid"
                       borderColor="status.warning.border"
+                      borderRadius="md"
                       fontSize="sm"
                     >
                       <AlertIcon color="status.warning.fg" />
@@ -695,14 +735,15 @@ function AccountSettingsModal({
             letterSpacing="wider"
           >
             <Box display="flex" alignItems="center" gap={2}>
-              <Box
-                p={1}
-                bg="accent.primary"
-                border="2px solid"
-                borderColor="border.default"
+              <IconBox
+                size="32px"
+                bg={isDarkTheme ? "status.error.fg" : "accent.primary"}
+                noShadow
               >
-                <WarningTwoIcon color="accentFg.primary" />
-              </Box>
+                <WarningTwoIcon
+                  color={isDarkTheme ? "fg.inverse" : "accentFg.primary"}
+                />
+              </IconBox>
               Remove Account?
             </Box>
           </ModalHeader>
@@ -716,8 +757,9 @@ function AccountSettingsModal({
               <Box
                 p={3}
                 bg="surface.sunken"
-                border="2px solid"
+                border={isDarkTheme ? "1px solid" : "2px solid"}
                 borderColor="border.default"
+                borderRadius="md"
               >
                 <Text fontSize="sm" fontWeight="700" color="text.primary">
                   {account.displayName || truncateAddress(account.address)}
@@ -733,8 +775,9 @@ function AccountSettingsModal({
                   w="full"
                   p={3}
                   bg="status.error.bg"
-                  border="2px solid"
+                  border={isDarkTheme ? "1px solid" : "2px solid"}
                   borderColor="status.error.border"
+                  borderRadius="md"
                 >
                   <Text color="status.error.fg" fontSize="sm" fontWeight="700">
                     {account.type === "seedPhrase"
@@ -771,11 +814,47 @@ function AccountSettingsModal({
   }
 
   // Main settings view
+  const displayNameDirty =
+    displayName.trim() !== (account.displayName || "");
+  const seedGroupDirty =
+    !!seedGroupName.trim() &&
+    seedGroupName.trim() !== originalSeedGroupName;
+  const accountTypeLabel =
+    account.type === "privateKey"
+      ? "Private Key"
+      : account.type === "seedPhrase"
+        ? `Seed · #${account.derivationIndex}`
+        : account.type === "impersonator"
+          ? "View-Only"
+          : "Bankr";
+  const accountTypeAccent =
+    account.type === "privateKey"
+      ? "accent.highlight"
+      : account.type === "seedPhrase"
+        ? "accent.primary"
+        : account.type === "impersonator"
+          ? "status.success.fg"
+          : "accent.secondary";
+  const accountTypeAccentFg =
+    account.type === "privateKey"
+      ? "accentFg.highlight"
+      : account.type === "seedPhrase"
+        ? "accentFg.primary"
+        : account.type === "impersonator"
+          ? "status.success.bg"
+          : "accentFg.secondary";
+  const headerName =
+    account.displayName || ensIdentity.name || truncateAddress(account.address);
+  const canReveal =
+    account.type === "privateKey" || account.type === "seedPhrase";
+  const removeDisabled = totalAccounts <= 1;
+
   return (
     <Modal isOpen={isOpen} onClose={handleClose} isCentered>
       <ModalOverlay bg="surface.overlay" />
       {/* Modal baseStyle paints bg/border/borderRadius/boxShadow from theme tokens. */}
       <ModalContent mx={4}>
+        <ModalCloseButton />
         <ModalHeader
           color="text.primary"
           fontSize="md"
@@ -784,70 +863,88 @@ function AccountSettingsModal({
           letterSpacing="wider"
         >
           <Box display="flex" alignItems="center" gap={2}>
-            <Box
-              p={1}
-              bg="accent.secondary"
-              border="2px solid"
-              borderColor="border.default"
-            >
+            <IconBox size="32px" bg="accent.secondary" noShadow>
               <SettingsIcon color="accentFg.secondary" />
-            </Box>
+            </IconBox>
             Account Settings
           </Box>
         </ModalHeader>
 
-        <ModalBody>
-          <VStack spacing={4} align="stretch">
-            {/* Account Info */}
+        <ModalBody pb={6}>
+          <VStack spacing={5} align="stretch">
+            {/* Identity card — avatar + name + address (with copy + explorer) + type pill */}
             <Box
               p={3}
               bg="surface.sunken"
-              border="2px solid"
+              border={isDarkTheme ? "1px solid" : "2px solid"}
               borderColor="border.default"
+              borderRadius="md"
             >
-              <Text fontSize="xs" fontFamily="mono" color="text.tertiary">
-                {account.address}
-              </Text>
-              <HStack mt={1} spacing={2}>
-                <Box
-                  w={2}
-                  h={2}
-                  bg={
-                    account.type === "privateKey"
-                      ? "accent.highlight"
-                      : account.type === "seedPhrase"
-                        ? "accent.primary"
-                        : account.type === "impersonator"
-                          ? "status.success.fg"
-                          : "accent.secondary"
-                  }
-                  border="1px solid"
-                  borderColor="border.default"
-                  borderRadius={
-                    account.type === "privateKey" ||
-                    account.type === "seedPhrase"
-                      ? "none"
-                      : "full"
-                  }
+              <HStack spacing={3} align="center">
+                <AccountAvatar
+                  account={account}
+                  ensAvatar={ensIdentity.avatar}
                 />
-                <Text
-                  fontSize="xs"
-                  color="text.tertiary"
-                  fontWeight="600"
-                  textTransform="uppercase"
-                >
-                  {account.type === "privateKey"
-                    ? "Private Key Account"
-                    : account.type === "seedPhrase"
-                      ? `Seed Phrase Account · #${account.derivationIndex}`
-                      : account.type === "impersonator"
-                        ? "View-Only Account"
-                        : "Bankr Account"}
-                </Text>
+                <VStack spacing={1} align="stretch" flex={1} minW={0}>
+                  <HStack spacing={2} minW={0}>
+                    <Text
+                      fontSize="sm"
+                      fontWeight="800"
+                      color="text.primary"
+                      noOfLines={1}
+                      flex={1}
+                      minW={0}
+                    >
+                      {headerName}
+                    </Text>
+                    <Box
+                      bg={accountTypeAccent}
+                      color={accountTypeAccentFg}
+                      border={isDarkTheme ? "1px solid" : "2px solid"}
+                      borderColor="border.default"
+                      borderRadius="sm"
+                      px={1.5}
+                      py={0}
+                      fontSize="2xs"
+                      fontWeight="800"
+                      textTransform="uppercase"
+                      letterSpacing="wide"
+                      flexShrink={0}
+                    >
+                      {accountTypeLabel}
+                    </Box>
+                  </HStack>
+                  <HStack spacing={1} minW={0}>
+                    <Text
+                      fontSize="xs"
+                      fontFamily="mono"
+                      color="text.tertiary"
+                      noOfLines={1}
+                      flex={1}
+                      minW={0}
+                    >
+                      {truncateAddress(account.address)}
+                    </Text>
+                    <CopyButton value={account.address} />
+                    <IconButton
+                      aria-label="View on explorer"
+                      icon={<ExternalLinkIcon />}
+                      size="xs"
+                      variant="ghost"
+                      color="text.secondary"
+                      _hover={{ color: "accent.secondary", bg: "bg.muted" }}
+                      onClick={() =>
+                        chrome.tabs.create({
+                          url: `https://etherscan.io/address/${account.address}`,
+                        })
+                      }
+                    />
+                  </HStack>
+                </VStack>
               </HStack>
             </Box>
 
-            {/* Display Name */}
+            {/* Display Name — Save appears inline only when dirty */}
             <FormControl>
               <FormLabel
                 fontSize="xs"
@@ -858,29 +955,34 @@ function AccountSettingsModal({
               >
                 Display Name
               </FormLabel>
-              <HStack spacing={3}>
+              <HStack spacing={2}>
                 <Input
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Enter a name..."
                   size="md"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && displayNameDirty && !isSaving) {
+                      handleSaveDisplayName();
+                    }
+                  }}
                 />
-                <Button
-                  variant="secondary"
-                  size="md"
-                  onClick={handleSaveDisplayName}
-                  isLoading={isSaving}
-                  isDisabled={
-                    displayName.trim() === (account.displayName || "")
-                  }
-                  minW="70px"
-                >
-                  Save
-                </Button>
+                {displayNameDirty && (
+                  <Button
+                    variant="primary"
+                    size="md"
+                    onClick={handleSaveDisplayName}
+                    isLoading={isSaving}
+                    minW="70px"
+                    leftIcon={<CheckIcon />}
+                  >
+                    Save
+                  </Button>
+                )}
               </HStack>
             </FormControl>
 
-            {/* Seed Group Name (for seed phrase accounts) */}
+            {/* Seed Group Name — same inline-save pattern */}
             {account.type === "seedPhrase" && (
               <FormControl>
                 <FormLabel
@@ -892,59 +994,49 @@ function AccountSettingsModal({
                 >
                   Seed Group Name
                 </FormLabel>
-                <HStack spacing={3}>
+                <HStack spacing={2}>
                   <Input
                     value={seedGroupName}
                     onChange={(e) => setSeedGroupName(e.target.value)}
                     placeholder="e.g. Main Seed"
                     size="md"
+                    onKeyDown={(e) => {
+                      if (
+                        e.key === "Enter" &&
+                        seedGroupDirty &&
+                        !isSavingSeedGroup
+                      ) {
+                        handleSaveSeedGroupName();
+                      }
+                    }}
                   />
-                  <Button
-                    variant="secondary"
-                    size="md"
-                    onClick={handleSaveSeedGroupName}
-                    isLoading={isSavingSeedGroup}
-                    isDisabled={
-                      !seedGroupName.trim() ||
-                      seedGroupName.trim() === originalSeedGroupName
-                    }
-                    minW="70px"
-                  >
-                    Save
-                  </Button>
+                  {seedGroupDirty && (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      onClick={handleSaveSeedGroupName}
+                      isLoading={isSavingSeedGroup}
+                      minW="70px"
+                      leftIcon={<CheckIcon />}
+                    >
+                      Save
+                    </Button>
+                  )}
                 </HStack>
               </FormControl>
             )}
 
-            {/* Actions */}
-            <VStack spacing={3} align="stretch" pt={2}>
-              {(account.type === "privateKey" ||
-                account.type === "seedPhrase") && (
-                <Button
-                  variant="highlight"
-                  size="sm"
-                  leftIcon={<ViewIcon />}
-                  onClick={handleRevealKey}
-                  justifyContent="flex-start"
-                  w="full"
-                >
-                  Reveal Private Key
-                </Button>
-              )}
-
-              {account.type === "seedPhrase" && (
-                <Button
-                  variant="highlight"
-                  size="sm"
-                  leftIcon={<ViewIcon />}
-                  onClick={handleRevealSeedPhrase}
-                  justifyContent="flex-start"
-                  w="full"
-                >
-                  Reveal Seed Phrase
-                </Button>
-              )}
-
+            {/* Utilities — quiet, low-stakes actions */}
+            <VStack spacing={2} align="stretch">
+              <Text
+                fontSize="2xs"
+                fontWeight="700"
+                color="text.tertiary"
+                textTransform="uppercase"
+                letterSpacing="wider"
+              >
+                Utilities
+              </Text>
               <Button
                 variant="secondary"
                 size="sm"
@@ -957,7 +1049,6 @@ function AccountSettingsModal({
               >
                 Refresh ENS Data
               </Button>
-
               {account.type === "bankr" && (
                 <Button
                   variant="secondary"
@@ -970,28 +1061,82 @@ function AccountSettingsModal({
                   Change API Key & Address
                 </Button>
               )}
+            </VStack>
 
+            <Divider borderColor="border.subtle" />
+
+            {/* Danger zone — reveals + destructive actions grouped together */}
+            <VStack spacing={2} align="stretch">
+              <Text
+                fontSize="2xs"
+                fontWeight="700"
+                color="chart.negative"
+                textTransform="uppercase"
+                letterSpacing="wider"
+              >
+                Danger Zone
+              </Text>
+              {canReveal && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<ViewIcon color="status.warning.fg" />}
+                  onClick={handleRevealKey}
+                  justifyContent="flex-start"
+                  color="status.warning.fg"
+                  fontWeight="700"
+                  borderColor="status.warning.border"
+                  _hover={{
+                    bg: "status.warning.bg",
+                    borderColor: "status.warning.border",
+                  }}
+                  w="full"
+                >
+                  Reveal Private Key
+                </Button>
+              )}
+              {account.type === "seedPhrase" && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<ViewIcon color="status.warning.fg" />}
+                  onClick={handleRevealSeedPhrase}
+                  justifyContent="flex-start"
+                  color="status.warning.fg"
+                  fontWeight="700"
+                  borderColor="status.warning.border"
+                  _hover={{
+                    bg: "status.warning.bg",
+                    borderColor: "status.warning.border",
+                  }}
+                  w="full"
+                >
+                  Reveal Seed Phrase
+                </Button>
+              )}
               <Tooltip
                 label="Cannot remove the last account"
-                isDisabled={totalAccounts > 1}
+                isDisabled={!removeDisabled}
                 placement="top"
                 hasArrow
               >
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
                   leftIcon={
                     <DeleteIcon
-                      color={totalAccounts <= 1 ? "fg.muted" : "chart.negative"}
+                      color={removeDisabled ? "fg.muted" : "chart.negative"}
                     />
                   }
                   onClick={() => setView("confirmDelete")}
                   justifyContent="flex-start"
-                  color={totalAccounts <= 1 ? "fg.muted" : "chart.negative"}
+                  color={removeDisabled ? "fg.muted" : "chart.negative"}
                   fontWeight="700"
-                  border="2px solid transparent"
+                  borderColor={
+                    removeDisabled ? "border.default" : "status.error.border"
+                  }
                   _hover={
-                    totalAccounts > 1
+                    !removeDisabled
                       ? {
                           bg: "status.error.bg",
                           borderColor: "status.error.border",
@@ -999,7 +1144,7 @@ function AccountSettingsModal({
                       : undefined
                   }
                   w="full"
-                  isDisabled={totalAccounts <= 1}
+                  isDisabled={removeDisabled}
                 >
                   Remove Account
                 </Button>
@@ -1007,12 +1152,6 @@ function AccountSettingsModal({
             </VStack>
           </VStack>
         </ModalBody>
-
-        <ModalFooter>
-          <Button variant="secondary" size="md" onClick={handleClose}>
-            Done
-          </Button>
-        </ModalFooter>
       </ModalContent>
     </Modal>
   );
@@ -1021,6 +1160,58 @@ function AccountSettingsModal({
 function truncateAddress(address: string): string {
   if (!address) return "";
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+// Small identity avatar for the settings header — prefers a resolved ENS
+// avatar, then the Bankr mark for Bankr accounts, then a deterministic
+// blockie for everything else (PK / seed phrase / view-only).
+function AccountAvatar({
+  account,
+  ensAvatar,
+}: {
+  account: Account;
+  ensAvatar: string | null;
+}) {
+  const size = 40;
+  const cachedEnsSrc = useCachedAvatarSrc(ensAvatar || "");
+  if (ensAvatar) {
+    return (
+      <Image
+        src={cachedEnsSrc || ensAvatar}
+        alt="ENS avatar"
+        boxSize={`${size}px`}
+        minW={`${size}px`}
+        borderRadius="full"
+        border="2px solid"
+        borderColor="border.default"
+        objectFit="cover"
+      />
+    );
+  }
+  if (account.type === "bankr") {
+    return (
+      <Image
+        src="/bankr-icon.png"
+        alt="Bankr account"
+        boxSize={`${size}px`}
+        minW={`${size}px`}
+        borderRadius="sm"
+        border="2px solid"
+        borderColor="border.default"
+      />
+    );
+  }
+  return (
+    <Image
+      src={blo(account.address as `0x${string}`)}
+      alt="Account avatar"
+      boxSize={`${size}px`}
+      minW={`${size}px`}
+      borderRadius="sm"
+      border="2px solid"
+      borderColor="border.default"
+    />
+  );
 }
 
 export default memo(AccountSettingsModal);

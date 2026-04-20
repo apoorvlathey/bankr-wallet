@@ -30,7 +30,7 @@ import {
   BellIcon,
 } from "@chakra-ui/icons";
 import { TWITTER_URL } from "@/constants/externalUrls";
-import { Decorator } from "@/theme";
+import { Decorator, useTheme } from "@/theme";
 
 // Sidepanel icon
 const SidePanelIcon = (props: any) => (
@@ -66,6 +66,7 @@ function UnlockScreen({
   pendingBatchCount = 0,
 }: UnlockScreenProps) {
   const toast = useThemedToast();
+  const { tokens } = useTheme();
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
@@ -313,8 +314,9 @@ function UnlockScreen({
           left={3}
           right={3}
           bg="accent.highlight"
-          border="2px solid"
+          border={tokens.borders.thin}
           borderColor="border.default"
+          borderRadius={tokens.radii.card}
           boxShadow="card"
           px={3}
           py={1.5}
@@ -323,6 +325,7 @@ function UnlockScreen({
             <Box
               p={1}
               bg="border.default"
+              borderRadius={tokens.radii.badge}
               display="flex"
               alignItems="center"
               justifyContent="center"

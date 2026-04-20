@@ -18,6 +18,7 @@ import {
   Code,
 } from "@chakra-ui/react";
 import { ViewIcon, ViewOffIcon, WarningTwoIcon, CopyIcon, CheckIcon, LockIcon } from "@chakra-ui/icons";
+import { useTheme, IconBox } from "@/theme";
 import type { Account, PasswordType } from "@/chrome/types";
 
 interface RevealPrivateKeyModalProps {
@@ -27,6 +28,8 @@ interface RevealPrivateKeyModalProps {
 }
 
 function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyModalProps) {
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -127,9 +130,9 @@ function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyMod
       <ModalContent mx={4}>
         <ModalHeader color="text.primary" fontSize="md" pb={2} textTransform="uppercase" letterSpacing="wider">
           <Box display="flex" alignItems="center" gap={2}>
-            <Box p={1} bg="accent.highlight" border="2px solid" borderColor="border.default">
+            <IconBox size="32px" bg="accent.highlight" noShadow>
               <WarningTwoIcon color="accentFg.highlight" />
-            </Box>
+            </IconBox>
             Reveal Private Key
           </Box>
         </ModalHeader>
@@ -148,8 +151,9 @@ function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyMod
                 w="full"
                 p={3}
                 bg="status.warning.bg"
-                border="2px solid"
+                border={isDarkTheme ? "1px solid" : "2px solid"}
                 borderColor="status.warning.border"
+                borderRadius={isDarkTheme ? "md" : undefined}
               >
                 <HStack spacing={2}>
                   <LockIcon color="status.warning.fg" />
@@ -178,8 +182,9 @@ function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyMod
                 w="full"
                 p={3}
                 bg="status.error.bg"
-                border="2px solid"
+                border={isDarkTheme ? "1px solid" : "2px solid"}
                 borderColor="status.error.border"
+                borderRadius={isDarkTheme ? "md" : undefined}
               >
                 <Text color="status.error.fg" fontSize="sm" fontWeight="700">
                   Never share your private key. Anyone with it has full control of your wallet.
@@ -232,8 +237,9 @@ function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyMod
                 w="full"
                 p={3}
                 bg="status.error.bg"
-                border="2px solid"
+                border={isDarkTheme ? "1px solid" : "2px solid"}
                 borderColor="status.error.border"
+                borderRadius={isDarkTheme ? "md" : undefined}
               >
                 <Text color="status.error.fg" fontSize="sm" fontWeight="700">
                   Do not share this key. Anyone with it can steal your funds.
@@ -244,8 +250,9 @@ function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyMod
                 w="full"
                 p={3}
                 bg="surface.sunken"
-                border="2px solid"
+                border={isDarkTheme ? "1px solid" : "2px solid"}
                 borderColor="border.default"
+                borderRadius={isDarkTheme ? "md" : undefined}
                 position="relative"
               >
                 <Code

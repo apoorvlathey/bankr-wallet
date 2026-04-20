@@ -19,7 +19,7 @@ import { getChainConfig } from "@/constants/chainConfig";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { getCombinedRequests, CombinedRequest } from "@/App";
 import ChainIcon from "@/components/ChainIcon";
-import { useStripTokens } from "@/theme";
+import { useStripTokens, useTheme, resolveChainBadgeStyle } from "@/theme";
 
 function getOriginHostname(origin: string): string | null {
   try {
@@ -66,6 +66,15 @@ function PendingTxList({
 }: PendingTxListProps) {
   // Theme-aware count badge — same pattern used in batch / signature confirmation.
   const { bg: stripBg, fg: stripFg } = useStripTokens();
+  const { tokens, themeId } = useTheme();
+  const isDark = themeId === "midnight";
+  // Chain pill styling — delegates to the shared resolver so pending-list
+  // pills match the tx request popup's Network pill (light chip + brand text
+  // on Midnight for known chains, neutral surface chip for unknown/custom).
+  const resolveChainPill = (bg: string, fg: string) => {
+    const style = resolveChainBadgeStyle(themeId, bg, fg);
+    return { bg: style.bg, color: style.fg, borderColor: style.border };
+  };
   const combinedRequests = getCombinedRequests(
     txRequests,
     signatureRequests,
@@ -138,12 +147,14 @@ function PendingTxList({
             if (item.type === "crossDappBatch") {
               const batch = item.request;
               const config = getChainConfig(batch.chainId);
+              const chainPill = resolveChainPill(config.bg, config.text);
               return (
                 <Box
                   key="cross-dapp-batch"
                   bg="surface.raised"
-                  border="3px solid"
+                  border={tokens.borders.medium}
                   borderColor="border.default"
+                  borderRadius={tokens.radii.card}
                   boxShadow="card"
                   p={3}
                   cursor="pointer"
@@ -185,27 +196,29 @@ function PendingTxList({
                       >
                         #{index + 1}
                       </Badge>
-                      <Box flex={1}>
-                        <HStack justify="space-between">
+                      <Box flex={1} minW={0}>
+                        <HStack justify="space-between" spacing={2}>
                           <Text
                             fontSize="sm"
                             fontWeight="700"
                             color="text.primary"
                             noOfLines={1}
+                            flex={1}
+                            minW={0}
                           >
                             Cross-Dapp Batch
                           </Text>
-                          <Text fontSize="xs" color="text.tertiary" fontWeight="500">
+                          <Text fontSize="xs" color="text.tertiary" fontWeight="500" whiteSpace="nowrap">
                             {formatTimestamp(batch.createdAt)}
                           </Text>
                         </HStack>
                         <HStack spacing={2} mt={1}>
                           <Badge
                             fontSize="xs"
-                            bg={config.bg}
-                            color={config.text}
-                            border="2px solid"
-                            borderColor="border.default"
+                            bg={chainPill.bg}
+                            color={chainPill.color}
+                            border={isDark ? "1.5px solid" : "2px solid"}
+                            borderColor={chainPill.borderColor}
                             px={2}
                             py={0.5}
                             display="flex"
@@ -220,13 +233,13 @@ function PendingTxList({
                             />
                             {batch.chainName}
                           </Badge>
-                          <Text fontSize="xs" color="text.tertiary" fontWeight="500">
+                          <Text fontSize="xs" color="text.tertiary" fontWeight="500" whiteSpace="nowrap">
                             {batch.entries.length} call{batch.entries.length === 1 ? "" : "s"}
                           </Text>
                         </HStack>
                       </Box>
                     </HStack>
-                    <Box bg={stripBg} p={1}>
+                    <Box bg={stripBg} p={1} borderRadius={tokens.radii.badge} ml={2} flexShrink={0}>
                       <ChevronRightIcon color={stripFg} />
                     </Box>
                   </HStack>
@@ -236,12 +249,14 @@ function PendingTxList({
             if (item.type === "tx") {
               const request = item.request;
               const config = getChainConfig(request.tx.chainId);
+              const chainPill = resolveChainPill(config.bg, config.text);
               return (
                 <Box
                   key={request.id}
                   bg="surface.raised"
-                  border="3px solid"
+                  border={tokens.borders.medium}
                   borderColor="border.default"
+                  borderRadius={tokens.radii.card}
                   boxShadow="card"
                   p={3}
                   cursor="pointer"
@@ -287,16 +302,22 @@ function PendingTxList({
                       </Badge>
                       <Box
                         bg="surface.raised"
-                        border="2px solid"
+                        border={tokens.borders.thin}
                         borderColor="border.default"
+                        borderRadius={tokens.radii.badge}
                         p={1}
+                        flexShrink={0}
+                        lineHeight="0"
                       >
                         <Image
                           src={
                             getFaviconUrl(request.origin, request.favicon)
                           }
                           alt="favicon"
-                          boxSize="24px"
+                          w="24px"
+                          h="24px"
+                          objectFit="contain"
+                          display="block"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             const fallback = getFaviconUrl(request.origin, null);
@@ -304,27 +325,29 @@ function PendingTxList({
                           }}
                         />
                       </Box>
-                      <Box flex={1}>
-                        <HStack justify="space-between">
+                      <Box flex={1} minW={0}>
+                        <HStack justify="space-between" spacing={2}>
                           <Text
                             fontSize="sm"
                             fontWeight="700"
                             color="text.primary"
                             noOfLines={1}
+                            flex={1}
+                            minW={0}
                           >
                             {getOriginDisplay(request.origin)}
                           </Text>
-                          <Text fontSize="xs" color="text.tertiary" fontWeight="500">
+                          <Text fontSize="xs" color="text.tertiary" fontWeight="500" whiteSpace="nowrap">
                             {formatTimestamp(request.timestamp)}
                           </Text>
                         </HStack>
                         <HStack spacing={2} mt={1}>
                           <Badge
                             fontSize="xs"
-                            bg={config.bg}
-                            color={config.text}
-                            border="2px solid"
-                            borderColor="border.default"
+                            bg={chainPill.bg}
+                            color={chainPill.color}
+                            border={isDark ? "1.5px solid" : "2px solid"}
+                            borderColor={chainPill.borderColor}
                             px={2}
                             py={0.5}
                             display="flex"
@@ -339,7 +362,7 @@ function PendingTxList({
                             />
                             {request.chainName}
                           </Badge>
-                          <Text fontSize="xs" color="text.tertiary" fontFamily="mono" fontWeight="500">
+                          <Text fontSize="xs" color="text.tertiary" fontFamily="mono" fontWeight="500" whiteSpace="nowrap">
                             {request.tx.to
                               ? `${request.tx.to.slice(0, 6)}...${request.tx.to.slice(-4)}`
                               : "Contract Deployment"}
@@ -347,7 +370,7 @@ function PendingTxList({
                         </HStack>
                       </Box>
                     </HStack>
-                    <Box bg={stripBg} p={1}>
+                    <Box bg={stripBg} p={1} borderRadius={tokens.radii.badge} ml={2} flexShrink={0}>
                       <ChevronRightIcon color={stripFg} />
                     </Box>
                   </HStack>
@@ -356,12 +379,14 @@ function PendingTxList({
             } else if (item.type === "batch") {
               const request = item.request;
               const config = getChainConfig(request.chainId);
+              const chainPill = resolveChainPill(config.bg, config.text);
               return (
                 <Box
                   key={request.id}
                   bg="surface.raised"
-                  border="3px solid"
+                  border={tokens.borders.medium}
                   borderColor="border.default"
+                  borderRadius={tokens.radii.card}
                   boxShadow="card"
                   p={3}
                   cursor="pointer"
@@ -405,14 +430,20 @@ function PendingTxList({
                       </Badge>
                       <Box
                         bg="surface.raised"
-                        border="2px solid"
+                        border={tokens.borders.thin}
                         borderColor="border.default"
+                        borderRadius={tokens.radii.badge}
                         p={1}
+                        flexShrink={0}
+                        lineHeight="0"
                       >
                         <Image
                           src={getFaviconUrl(request.origin, request.favicon)}
                           alt="favicon"
-                          boxSize="24px"
+                          w="24px"
+                          h="24px"
+                          objectFit="contain"
+                          display="block"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             const fallback = getFaviconUrl(request.origin, null);
@@ -420,22 +451,22 @@ function PendingTxList({
                           }}
                         />
                       </Box>
-                      <Box flex={1}>
-                        <HStack justify="space-between">
-                          <Text fontSize="sm" fontWeight="700" color="text.primary" noOfLines={1}>
+                      <Box flex={1} minW={0}>
+                        <HStack justify="space-between" spacing={2}>
+                          <Text fontSize="sm" fontWeight="700" color="text.primary" noOfLines={1} flex={1} minW={0}>
                             {getOriginDisplay(request.origin)}
                           </Text>
-                          <Text fontSize="xs" color="text.tertiary" fontWeight="500">
+                          <Text fontSize="xs" color="text.tertiary" fontWeight="500" whiteSpace="nowrap">
                             {formatTimestamp(request.timestamp)}
                           </Text>
                         </HStack>
                         <HStack spacing={2} mt={1}>
                           <Badge
                             fontSize="xs"
-                            bg={config.bg}
-                            color={config.text}
-                            border="2px solid"
-                            borderColor="border.default"
+                            bg={chainPill.bg}
+                            color={chainPill.color}
+                            border={isDark ? "1.5px solid" : "2px solid"}
+                            borderColor={chainPill.borderColor}
                             px={2}
                             py={0.5}
                             display="flex"
@@ -450,13 +481,13 @@ function PendingTxList({
                             />
                             {request.chainName}
                           </Badge>
-                          <Text fontSize="xs" color="text.tertiary" fontWeight="500">
+                          <Text fontSize="xs" color="text.tertiary" fontWeight="500" whiteSpace="nowrap">
                             {request.params.calls.length} calls
                           </Text>
                         </HStack>
                       </Box>
                     </HStack>
-                    <Box bg={stripBg} p={1}>
+                    <Box bg={stripBg} p={1} borderRadius={tokens.radii.badge} ml={2} flexShrink={0}>
                       <ChevronRightIcon color={stripFg} />
                     </Box>
                   </HStack>
@@ -465,12 +496,14 @@ function PendingTxList({
             } else {
               const request = item.request as PendingSignatureRequest;
               const config = getChainConfig(request.signature.chainId);
+              const chainPill = resolveChainPill(config.bg, config.text);
               return (
                 <Box
                   key={request.id}
                   bg="surface.raised"
-                  border="3px solid"
+                  border={tokens.borders.medium}
                   borderColor="border.default"
+                  borderRadius={tokens.radii.card}
                   boxShadow="card"
                   p={3}
                   cursor="pointer"
@@ -516,16 +549,22 @@ function PendingTxList({
                       </Badge>
                       <Box
                         bg="surface.raised"
-                        border="2px solid"
+                        border={tokens.borders.thin}
                         borderColor="border.default"
+                        borderRadius={tokens.radii.badge}
                         p={1}
+                        flexShrink={0}
+                        lineHeight="0"
                       >
                         <Image
                           src={
                             getFaviconUrl(request.origin, request.favicon)
                           }
                           alt="favicon"
-                          boxSize="24px"
+                          w="24px"
+                          h="24px"
+                          objectFit="contain"
+                          display="block"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             const fallback = getFaviconUrl(request.origin, null);
@@ -533,27 +572,29 @@ function PendingTxList({
                           }}
                         />
                       </Box>
-                      <Box flex={1}>
-                        <HStack justify="space-between">
+                      <Box flex={1} minW={0}>
+                        <HStack justify="space-between" spacing={2}>
                           <Text
                             fontSize="sm"
                             fontWeight="700"
                             color="text.primary"
                             noOfLines={1}
+                            flex={1}
+                            minW={0}
                           >
                             {getOriginDisplay(request.origin)}
                           </Text>
-                          <Text fontSize="xs" color="text.tertiary" fontWeight="500">
+                          <Text fontSize="xs" color="text.tertiary" fontWeight="500" whiteSpace="nowrap">
                             {formatTimestamp(request.timestamp)}
                           </Text>
                         </HStack>
                         <HStack spacing={2} mt={1}>
                           <Badge
                             fontSize="xs"
-                            bg={config.bg}
-                            color={config.text}
-                            border="2px solid"
-                            borderColor="border.default"
+                            bg={chainPill.bg}
+                            color={chainPill.color}
+                            border={isDark ? "1.5px solid" : "2px solid"}
+                            borderColor={chainPill.borderColor}
                             px={2}
                             py={0.5}
                             display="flex"
@@ -568,13 +609,13 @@ function PendingTxList({
                             />
                             {request.chainName}
                           </Badge>
-                          <Text fontSize="xs" color="text.tertiary" fontFamily="mono" fontWeight="500">
+                          <Text fontSize="xs" color="text.tertiary" fontFamily="mono" fontWeight="500" whiteSpace="nowrap">
                             {getMethodDisplayName(request.signature.method)}
                           </Text>
                         </HStack>
                       </Box>
                     </HStack>
-                    <Box bg={stripBg} p={1}>
+                    <Box bg={stripBg} p={1} borderRadius={tokens.radii.badge} ml={2} flexShrink={0}>
                       <ChevronRightIcon color={stripFg} />
                     </Box>
                   </HStack>
@@ -589,8 +630,9 @@ function PendingTxList({
             textAlign="center"
             py={8}
             bg="surface.raised"
-            border="3px solid"
+            border={tokens.borders.medium}
             borderColor="border.default"
+            borderRadius={tokens.radii.card}
           >
             <Text color="text.secondary" fontWeight="500">No pending requests</Text>
           </Box>

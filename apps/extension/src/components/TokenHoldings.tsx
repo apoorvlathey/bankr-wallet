@@ -281,7 +281,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
           </HStack>
         ))
       ) : filteredTokens.length === 0 && filteredDefiPositions.length === 0 ? (
-        <Box p={3}>
+        <Box p={3} minH="140px" display="flex" alignItems="center" justifyContent="center">
           <Text fontSize="sm" color="text.tertiary" textAlign="center">
             No tokens found
           </Text>

@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { HStack, Box, Text } from "@chakra-ui/react";
 import { BellIcon, ChevronRightIcon } from "@chakra-ui/icons";
+import { useTheme } from "@/theme";
 
 interface PendingTxBannerProps {
   txCount: number;
@@ -24,6 +25,8 @@ function PendingTxBanner({
   onClickBatch,
   onClickCrossDappBatch,
 }: PendingTxBannerProps) {
+  const { tokens, themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const totalCount = txCount + signatureCount + batchCount + crossDappBatchCount;
   if (totalCount === 0) return null;
 
@@ -60,27 +63,29 @@ function PendingTxBanner({
   return (
     <Box
       bg="accent.highlight"
-      border="2px solid"
+      border={tokens.borders.thin}
       borderColor="border.default"
+      borderRadius={tokens.radii.badge}
       boxShadow="card"
       px={3}
       py={1.5}
       cursor="pointer"
       onClick={handleClick}
       _hover={{
-        transform: "translateY(-2px)",
-        boxShadow: "cardHover",
+        transform: tokens.motion.hover.transform,
+        boxShadow: tokens.motion.hover.shadowOverride ?? tokens.shadows.cardHover,
       }}
       _active={{
-        transform: "translate(2px, 2px)",
-        boxShadow: "none",
+        transform: tokens.motion.press.transform,
+        boxShadow: tokens.motion.press.shadowOverride ?? tokens.shadows.card,
       }}
-      transition="all 0.2s ease-out"
+      transition={tokens.motion.transitionBase}
     >
       <HStack spacing={2}>
         <Box
           p={1}
           bg="border.default"
+          borderRadius={tokens.radii.badge}
           display="flex"
           alignItems="center"
           justifyContent="center"
@@ -91,16 +96,21 @@ function PendingTxBanner({
         <Text flex="1" textAlign="center" fontSize="xs" fontWeight="700" color="accentFg.highlight" textTransform="uppercase" letterSpacing="wider">
           {getLabel()}
         </Text>
-        <Box
-          bg="border.default"
-          p={0.5}
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          flexShrink={0}
-        >
-          <ChevronRightIcon boxSize={3.5} color="accent.highlight" />
-        </Box>
+        {isDarkTheme ? (
+          <ChevronRightIcon boxSize={5} color="border.default" flexShrink={0} />
+        ) : (
+          <Box
+            bg="border.default"
+            p={0.5}
+            borderRadius={tokens.radii.badge}
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            flexShrink={0}
+          >
+            <ChevronRightIcon boxSize={3.5} color="accent.highlight" />
+          </Box>
+        )}
       </HStack>
     </Box>
   );

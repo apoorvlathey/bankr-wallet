@@ -52,9 +52,18 @@ const SURFACE_RAISED_HOVER = "#1A2033";
 const SURFACE_SUNKEN = "#070911";
 const SURFACE_OVERLAY = "rgba(5, 7, 14, 0.82)";
 
+// Foreground steps — retuned for legibility on navy surfaces.
+//   primary:   main text (was #E8ECF4, kept)
+//   secondary: supporting text, labels, secondary numeric data (balances).
+//              Lifted from #8B93A7 (~5:1) → #B8C0D4 (~7.5:1 on surface.raised)
+//              so token balances and address subtext read clearly.
+//   muted:    tertiary data (price-per-unit, timestamps, helper text).
+//              Lifted from #525A6E (~2.6:1, fails WCAG AA) → #8891A8 (~4.6:1,
+//              passes AA for normal text) so the USD price column next to
+//              balances stops fading into the background.
 const FG_PRIMARY = "#E8ECF4";
-const FG_SECONDARY = "#8B93A7";
-const FG_MUTED = "#525A6E";
+const FG_SECONDARY = "#B8C0D4";
+const FG_MUTED = "#8891A8";
 const FG_INVERSE = "#0B0E17";
 
 // BORDER_SUBTLE is the hairline divider inside cards — a *slight* grey lift

@@ -16,6 +16,7 @@ import {
 } from "@chakra-ui/react";
 import { ArrowBackIcon, ExternalLinkIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
+import { useTheme } from "@/theme";
 import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 
 interface AddChainProps {
@@ -48,6 +49,8 @@ function AddChain({
   onAdded,
 }: AddChainProps) {
   const { networksInfo, setNetworksInfo, setReloadRequired } = useNetworks();
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
 
   const defaultName = initialRequest?.chainName ?? "";
   const defaultChainId =
@@ -285,7 +288,7 @@ function AddChain({
           status="info"
           bg="accent.secondary"
           color="accentFg.secondary"
-          borderRadius="0"
+          borderRadius={isDarkTheme ? "md" : "0"}
           border="2px solid"
           borderColor="border.default"
           py={2}
@@ -354,6 +357,7 @@ function AddChain({
         bg={mode === "dapp" ? "status.info.bg" : "transparent"}
         border={mode === "dapp" ? "2px solid" : "none"}
         borderColor={mode === "dapp" ? "accent.secondary" : "transparent"}
+        borderRadius={mode === "dapp" && isDarkTheme ? "md" : undefined}
         p={mode === "dapp" ? 3 : 0}
       >
         <FormControl>

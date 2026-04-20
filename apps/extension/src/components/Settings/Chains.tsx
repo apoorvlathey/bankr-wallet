@@ -35,7 +35,7 @@ import { useThemedToast } from "@/hooks/useThemedToast";
 import { getChainConfig } from "@/constants/chainConfig";
 import ChainIcon from "@/components/ChainIcon";
 import { getVisibleChains } from "@/lib/chains";
-import { ThemedCard, Decorator, useIconChipBg } from "@/theme";
+import { ThemedCard, Decorator, useIconChipBg, useTheme } from "@/theme";
 import EditChain from "./EditChain";
 import AddChain from "./AddChain";
 
@@ -66,6 +66,8 @@ function Chain({
   const config = getChainConfig(network.chainId);
   const rpcDisplay = getRpcDisplay(network.rpcUrl);
   const iconChipBg = useIconChipBg();
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
 
   return (
     <ThemedCard
@@ -94,6 +96,7 @@ function Chain({
             bg={iconChipBg}
             border="2px solid"
             borderColor="border.default"
+            borderRadius={isDarkTheme ? "md" : undefined}
             p={1.5}
             flexShrink={0}
           >

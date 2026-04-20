@@ -389,7 +389,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
   }
 
   return (
-    <Box p={4} minH="100%" bg="surface.base">
+    <Box p={4} h="100%" overflowY="auto" bg="surface.base">
       <VStack spacing={4} align="stretch">
         {/* Header */}
         <HStack spacing={3}>
@@ -416,6 +416,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
           bg="surface.raised"
           border="2px solid"
           borderColor="border.default"
+          borderRadius="lg"
           boxShadow="card"
           p={4}
         >
@@ -439,6 +440,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                 bg={accountType === "privateKey" ? "surface.sunken" : "transparent"}
                 border="2px solid"
                 borderColor="border.default"
+                borderRadius="md"
                 cursor="pointer"
                 _hover={{ bg: "surface.raisedHover" }}
               >
@@ -448,6 +450,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                     bg="accent.highlight"
                     border="2px solid"
                     borderColor="border.default"
+                    borderRadius="sm"
                     p={1}
                   >
                     <KeyIcon boxSize="16px" color="accentFg.highlight" />
@@ -469,6 +472,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                 bg={accountType === "seedPhrase" ? "surface.sunken" : "transparent"}
                 border="2px solid"
                 borderColor="border.default"
+                borderRadius="md"
                 cursor="pointer"
                 _hover={{ bg: "surface.raisedHover" }}
               >
@@ -478,6 +482,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                     bg="accent.primary"
                     border="2px solid"
                     borderColor="border.default"
+                    borderRadius="sm"
                     p={1}
                   >
                     <SeedIcon boxSize="16px" color="accentFg.primary" />
@@ -499,6 +504,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                 bg={accountType === "bankr" ? "surface.sunken" : "transparent"}
                 border="2px solid"
                 borderColor="border.default"
+                borderRadius="md"
                 cursor={hasBankrAccount ? "not-allowed" : "pointer"}
                 opacity={hasBankrAccount ? 0.5 : 1}
                 _hover={hasBankrAccount ? {} : { bg: "surface.raisedHover" }}
@@ -519,6 +525,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                     bg="accent.secondary"
                     border="2px solid"
                     borderColor="border.default"
+                    borderRadius="sm"
                     p={1}
                   >
                     <RobotIcon boxSize="16px" color="accentFg.secondary" />
@@ -544,6 +551,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                 bg={accountType === "impersonator" ? "surface.sunken" : "transparent"}
                 border="2px solid"
                 borderColor="border.default"
+                borderRadius="md"
                 cursor="pointer"
                 _hover={{ bg: "surface.raisedHover" }}
               >
@@ -553,6 +561,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                     bg="status.success.fg"
                     border="2px solid"
                     borderColor="border.default"
+                    borderRadius="sm"
                     p={1}
                   >
                     <EyeIcon boxSize="16px" color="status.success.bg" />
@@ -577,6 +586,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
             bg="surface.raised"
             border="2px solid"
             borderColor="border.default"
+            borderRadius="lg"
             boxShadow="card"
             p={4}
           >
@@ -598,6 +608,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
             bg="surface.raised"
             border="2px solid"
             borderColor="border.default"
+            borderRadius="lg"
             boxShadow="card"
             p={4}
           >
@@ -617,6 +628,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                   p={3}
                   border="2px solid"
                   borderColor="border.default"
+                  borderRadius="md"
                   bg="surface.sunken"
                 >
                   <HStack justify="space-between" align="center">
@@ -625,6 +637,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                         bg="accent.primary"
                         border="2px solid"
                         borderColor="border.default"
+                        borderRadius="sm"
                         p={1}
                       >
                         <SeedIcon boxSize="14px" color="accentFg.primary" />
@@ -707,6 +720,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
             bg="surface.raised"
             border="2px solid"
             borderColor="border.default"
+            borderRadius="lg"
             boxShadow="card"
             p={4}
           >
@@ -872,6 +886,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
               bg="status.warning.bg"
               border="2px solid"
               borderColor="status.warning.border"
+              borderRadius="md"
             >
               <Text fontSize="xs" color="status.warning.fg" fontWeight="700">
                 View-only mode: You can view transactions and signatures but
@@ -887,6 +902,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
             bg="surface.raised"
             border="2px solid"
             borderColor="border.default"
+            borderRadius="lg"
             boxShadow="card"
             p={4}
           >
@@ -970,6 +986,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
             bg="surface.raised"
             border="2px solid"
             borderColor="border.default"
+            borderRadius="lg"
             boxShadow="card"
             p={4}
           >
@@ -997,6 +1014,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
             bg="status.warning.bg"
             border="2px solid"
             borderColor="status.warning.border"
+            borderRadius="lg"
             boxShadow="card"
             p={3}
           >

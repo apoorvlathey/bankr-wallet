@@ -170,7 +170,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   if (generatedMnemonic) {
     const words = generatedMnemonic.split(" ");
     return (
-      <Box p={4} minH="100%" bg="surface.base">
+      <Box p={4} h="100%" overflowY="auto" bg="surface.base">
         <VStack spacing={4} align="stretch">
           <HStack spacing={3}>
             <IconButton
@@ -196,6 +196,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
             bg="status.error.bg"
             border="2px solid"
             borderColor="status.error.border"
+            borderRadius="lg"
             boxShadow="card"
             p={3}
           >
@@ -208,6 +209,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
             bg="surface.raised"
             border="2px solid"
             borderColor="border.default"
+            borderRadius="lg"
             boxShadow="card"
             p={4}
             position="relative"
@@ -240,6 +242,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
                   bg="surface.sunken"
                   border="2px solid"
                   borderColor="border.default"
+                  borderRadius="md"
                   px={2}
                   py={1.5}
                   spacing={1}
@@ -288,7 +291,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   // Choose mode: generate or import
   if (mode === "choose") {
     return (
-      <Box p={4} minH="100%" bg="surface.base">
+      <Box p={4} h="100%" overflowY="auto" bg="surface.base">
         <VStack spacing={4} align="stretch">
           <HStack spacing={3}>
             <IconButton
@@ -311,6 +314,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               bg="surface.raised"
               border="2px solid"
               borderColor="border.default"
+              borderRadius="lg"
               boxShadow="card"
               textAlign="left"
               onClick={() => setMode("generate")}
@@ -333,6 +337,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               bg="surface.raised"
               border="2px solid"
               borderColor="border.default"
+              borderRadius="lg"
               boxShadow="card"
               textAlign="left"
               onClick={() => setMode("import")}
@@ -356,7 +361,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   // Generate mode form (display name + generate button)
   if (mode === "generate") {
     return (
-      <Box p={4} minH="100%" bg="surface.base">
+      <Box p={4} h="100%" overflowY="auto" bg="surface.base">
         <VStack spacing={4} align="stretch">
           <HStack spacing={3}>
             <IconButton
@@ -375,6 +380,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
             bg="surface.raised"
             border="2px solid"
             borderColor="border.default"
+            borderRadius="lg"
             boxShadow="card"
             p={4}
           >
@@ -402,7 +408,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
           </Box>
 
           {error && (
-            <Box bg="status.error.bg" border="2px solid" borderColor="status.error.border" p={2}>
+            <Box bg="status.error.bg" border="2px solid" borderColor="status.error.border" borderRadius="md" p={2}>
               <Text fontSize="xs" color="status.error.fg" fontWeight="700">
                 {error}
               </Text>
@@ -444,6 +450,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
           bg="surface.raised"
           border="2px solid"
           borderColor="border.default"
+          borderRadius="lg"
           boxShadow="card"
           p={4}
         >
@@ -497,6 +504,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
           bg="status.warning.bg"
           border="2px solid"
           borderColor="status.warning.border"
+          borderRadius="lg"
           boxShadow="card"
           p={3}
         >

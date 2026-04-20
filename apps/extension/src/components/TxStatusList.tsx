@@ -21,7 +21,7 @@ import { getResolvedChainById } from "@/lib/chains";
 import TxDetailModal from "@/components/TxDetailModal";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import ChainIcon from "@/components/ChainIcon";
-import { useIconChipBg } from "@/theme";
+import { useIconChipBg, useTheme } from "@/theme";
 
 interface TxStatusListProps {
   maxItems?: number;
@@ -295,6 +295,8 @@ function TxStatusItem({
 }) {
   const { networksInfo } = useNetworks();
   const iconChipBg = useIconChipBg();
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const config = getChainConfig(tx.chainId);
   const explorerBase =
     getResolvedChainById(tx.chainId, networksInfo)?.explorer ||
@@ -515,7 +517,7 @@ function TxStatusItem({
           /* Standard: single favicon with chain icon overlay */
           <Box position="relative" flexShrink={0} w="36px" h="36px">
             <Box
-              bg={iconChipBg}
+              bg={isDarkTheme ? "whiteAlpha.800" : iconChipBg}
               borderRadius="full"
               w="36px"
               h="36px"
@@ -523,6 +525,8 @@ function TxStatusItem({
               alignItems="center"
               justifyContent="center"
               overflow="hidden"
+              border={isDarkTheme ? "1px solid" : undefined}
+              borderColor={isDarkTheme ? "border.default" : undefined}
             >
               <ActivityIcon tx={tx} originHostname={originHostname} />
             </Box>

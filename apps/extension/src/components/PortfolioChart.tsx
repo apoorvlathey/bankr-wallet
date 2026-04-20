@@ -69,7 +69,8 @@ export default function PortfolioChart({
   hideValue,
   refreshTrigger = 0,
 }: PortfolioChartProps) {
-  const { tokens } = useTheme();
+  const { themeId, tokens } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -206,7 +207,7 @@ export default function PortfolioChart({
   const hoveredPoint = hoverIndex !== null ? points[hoverIndex] : null;
 
   return (
-    <Box px={3} pt={2} pb={1}>
+    <Box px={3} pt={0} pb={1}>
       {/* Header: change indicator or hover value */}
       <HStack spacing={1.5} mb={1} minH="18px">
         {hoveredSnap ? (
@@ -248,7 +249,8 @@ export default function PortfolioChart({
         h={`${CHART_HEIGHT}px`}
         border="1px solid"
         borderColor="border.subtle"
-        bg="surface.raised"
+        borderRadius={isDarkTheme ? "md" : undefined}
+        bg={isDarkTheme ? "surface.sunken" : "surface.raised"}
         cursor="crosshair"
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}

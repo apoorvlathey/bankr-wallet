@@ -19,7 +19,7 @@ export {
 } from "./useThemeSelection";
 export { useStripTokens } from "./useStripTokens";
 export type { StripTokens, StripVariant } from "./useStripTokens";
-export { useChainBadgeStyle } from "./useChainBadgeStyle";
+export { useChainBadgeStyle, resolveChainBadgeStyle } from "./useChainBadgeStyle";
 export type { ChainBadgeStyle } from "./useChainBadgeStyle";
 export { useIconChipBg } from "./useIconChipBg";
 

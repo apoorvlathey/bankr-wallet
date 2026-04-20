@@ -184,7 +184,13 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
                     {holdingsState.loading ? (
                       <Skeleton h="12px" w="50px" />
                     ) : (
-                      <Text fontSize="xs" fontWeight="900" color="accent.highlight">
+                      <Text
+                        fontSize="xs"
+                        fontWeight="900"
+                        color={
+                          isDarkTheme ? "status.success.fg" : "accent.highlight"
+                        }
+                      >
                         {formatUsd(holdingsState.totalValueUsd)}
                       </Text>
                     )}

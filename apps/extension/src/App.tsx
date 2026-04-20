@@ -2674,18 +2674,24 @@ function App() {
           alignItems="center"
           position="relative"
         >
-          {/* Decorative stripe */}
+          {/* Decorative stripe — Bauhaus paints a thick violet poster stripe;
+              Midnight uses a 1px subtle divider so the header doesn't shout. */}
           <Box
             position="absolute"
             bottom="0"
             left="0"
             right="0"
-            h="3px"
-            bg="accent.primary"
+            h={isDarkTheme ? "1px" : "3px"}
+            bg={isDarkTheme ? "border.subtle" : "accent.primary"}
           />
 
           <HStack spacing={2}>
-            <Box bg="surface.raised" p={0.5}>
+            <Box
+              bg={isDarkTheme ? "white" : "surface.raised"}
+              p={0.5}
+              borderRadius={isDarkTheme ? "md" : undefined}
+              overflow="hidden"
+            >
               <Image src="walletchan-icon-white-bg.png" h="1.75rem" />
             </Box>
             <Text
@@ -2771,95 +2777,159 @@ function App() {
           </HStack>
         </Flex>
 
-        {/* Powered by Banner */}
+        {/* Top credits strip — shared constructivist two-color block across
+            both themes. Left half carries POWERED BY + $WCHAN in the amber
+            family; right half carries WalletChan OS in the navy family.
+            A dedicated 28px diagonal transition block between the two
+            halves gives the hard 45° hand-off. Each half is flex=1 with
+            minW=max-content on the left so content never wraps on narrow
+            popups but the split lands near center on wide viewports.
+            Bauhaus uses saturated poster colors; Midnight dims each to
+            a dark tint of the same hue so the geometry reads the same
+            but the aesthetic stays calm. */}
         <HStack
-          bg="accent.highlight"
-          py={1}
-          px={4}
-          justify="center"
-          spacing={2}
-          borderBottom="3px solid"
-          borderColor="border.default"
+          spacing={0}
+          align="stretch"
+          borderBottom={isDarkTheme ? "1px solid" : "3px solid"}
+          borderColor={isDarkTheme ? "border.subtle" : "border.default"}
         >
-          <Box w="6px" h="6px" bg="border.default" />
-          <Text
-            fontSize="xs"
-            fontWeight="700"
-            color="accentFg.highlight"
-            textTransform="uppercase"
-            letterSpacing="wider"
+          <HStack
+            flex="1"
+            minW="max-content"
+            bg={isDarkTheme ? "#2C1E06" : "accent.highlight"}
+            py={isDarkTheme ? 1.5 : 1}
+            pl={3}
+            pr={2}
+            spacing={2}
           >
-            Powered by
-          </Text>
-          <Link
-            bg="accent.secondary"
-            color="accentFg.secondary"
-            px={2}
-            py={0.5}
-            fontWeight="900"
-            fontSize="xs"
-            textTransform="uppercase"
-            letterSpacing="wide"
-            border="2px solid"
-            borderColor="border.default"
-            _hover={{
-              bg: "accent.primary",
-              color: "accentFg.primary",
-            }}
-            transition="all 0.2s ease-out"
-            cursor="pointer"
-            onClick={() => {
-              // Switch to Base and open swap with WCHAN as buy token
-              const baseName = getResolvedChainById(8453, networksInfo)?.name ?? "Base";
-              if (baseName) {
-                setChainName(baseName);
-                chrome.storage.sync.set({ chainName: baseName });
-              }
-              setSwapInitialBuyToken({
-                address: "0xBa5ED0000e1CA9136a695f0a848012A16008B032",
-                name: "WalletChan",
-                symbol: "WCHAN",
-                decimals: 18,
-                logoURI: WALLETCHAN_ICON_URL,
-              });
-              setView("swap");
-            }}
-          >
-            $WCHAN
-          </Link>
-          <Box w="6px" h="6px" bg="border.default" />
-        </HStack>
-
-        {/* WalletChan OS Banner */}
-        <HStack
-          bg="linear-gradient(90deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%)"
-          py={1.5}
-          px={4}
-          justify="center"
-          spacing={3}
-          borderBottom="2px solid"
-          borderColor="border.default"
-          cursor="pointer"
-          transition="all 0.15s ease-out"
-          _hover={{ opacity: 0.85 }}
-          onClick={() => {
-            chrome.tabs.create({ url: WALLETCHAN_OS_URL });
-          }}
-        >
-          <Text fontSize="sm" fontWeight="900" color="accent.highlight" textTransform="uppercase" letterSpacing="wider" whiteSpace="nowrap">
-            WalletChan OS
-          </Text>
-          <Flex direction="column" align="flex-start">
-            <HStack spacing={1}>
-              <Text fontSize="9px" fontWeight="600" color="gray.400">
-                Your Web3 Operating System
-              </Text>
-              <ExternalLinkIcon boxSize={2} color="gray.500" />
-            </HStack>
-            <Text fontSize="8px" fontWeight="500" color="gray.500">
-              All dapps in one place
+            <Text
+              fontSize="xs"
+              fontWeight="700"
+              color={isDarkTheme ? "#C9B27D" : "accentFg.highlight"}
+              textTransform="uppercase"
+              letterSpacing="wider"
+              whiteSpace="nowrap"
+            >
+              Powered by
             </Text>
-          </Flex>
+            {isDarkTheme ? (
+              <Link
+                color="accent.highlight"
+                fontWeight="800"
+                fontSize="xs"
+                textTransform="uppercase"
+                letterSpacing="wide"
+                px={1}
+                py={0}
+                border="1px solid transparent"
+                borderRadius="sm"
+                _hover={{
+                  bg: "accent.highlight",
+                  color: "accentFg.highlight",
+                  borderColor: "accent.highlight",
+                  textDecoration: "none",
+                }}
+                transition="all 0.15s ease-out"
+                cursor="pointer"
+                onClick={() => {
+                  const baseName = getResolvedChainById(8453, networksInfo)?.name ?? "Base";
+                  if (baseName) {
+                    setChainName(baseName);
+                    chrome.storage.sync.set({ chainName: baseName });
+                  }
+                  setSwapInitialBuyToken({
+                    address: "0xBa5ED0000e1CA9136a695f0a848012A16008B032",
+                    name: "WalletChan",
+                    symbol: "WCHAN",
+                    decimals: 18,
+                    logoURI: WALLETCHAN_ICON_URL,
+                  });
+                  setView("swap");
+                }}
+              >
+                $WCHAN
+              </Link>
+            ) : (
+              <Link
+                bg="accent.secondary"
+                color="accentFg.secondary"
+                px={2}
+                py={0.5}
+                fontWeight="900"
+                fontSize="xs"
+                textTransform="uppercase"
+                letterSpacing="wide"
+                border="2px solid"
+                borderColor="border.default"
+                _hover={{
+                  bg: "accent.primary",
+                  color: "accentFg.primary",
+                }}
+                transition="all 0.2s ease-out"
+                cursor="pointer"
+                onClick={() => {
+                  const baseName = getResolvedChainById(8453, networksInfo)?.name ?? "Base";
+                  if (baseName) {
+                    setChainName(baseName);
+                    chrome.storage.sync.set({ chainName: baseName });
+                  }
+                  setSwapInitialBuyToken({
+                    address: "0xBa5ED0000e1CA9136a695f0a848012A16008B032",
+                    name: "WalletChan",
+                    symbol: "WCHAN",
+                    decimals: 18,
+                    logoURI: WALLETCHAN_ICON_URL,
+                  });
+                  setView("swap");
+                }}
+              >
+                $WCHAN
+              </Link>
+            )}
+          </HStack>
+          <Box
+            w="28px"
+            alignSelf="stretch"
+            bgGradient={
+              isDarkTheme
+                ? "linear(110deg, #2C1E06 50%, #141833 50%)"
+                : "linear(110deg, #F0C020 50%, #1a1a2e 50%)"
+            }
+            flexShrink={0}
+          />
+          <HStack
+            flex="1"
+            bg={isDarkTheme ? "#141833" : undefined}
+            bgGradient={
+              isDarkTheme
+                ? undefined
+                : "linear(90deg, #1a1a2e 0%, #16213e 60%, #1a1a2e 100%)"
+            }
+            py={isDarkTheme ? 1.5 : 1}
+            pl={2}
+            pr={3}
+            spacing={1}
+            justify="flex-end"
+            cursor="pointer"
+            role="group"
+            minW={0}
+            onClick={() => {
+              chrome.tabs.create({ url: WALLETCHAN_OS_URL });
+            }}
+          >
+            <Text
+              fontSize="xs"
+              fontWeight={isDarkTheme ? "800" : "900"}
+              color="accent.highlight"
+              textTransform="uppercase"
+              letterSpacing="wide"
+              whiteSpace="nowrap"
+              _groupHover={{ textDecoration: "underline" }}
+            >
+              WalletChan OS
+            </Text>
+            <ExternalLinkIcon boxSize={3} color="accent.highlight" />
+          </HStack>
         </HStack>
 
         <Container
@@ -2962,29 +3032,34 @@ function App() {
 
             {visibleRpcIssueChainIds.length > 0 && (
               <Box
-                bg="status.info.bg"
-                border="2px solid"
-                borderColor="border.default"
-                boxShadow="card"
+                bg={isDarkTheme ? "status.warning.bg" : "status.info.bg"}
+                border={isDarkTheme ? "1px solid" : "2px solid"}
+                borderColor={isDarkTheme ? "status.warning.border" : "border.default"}
+                borderRadius={isDarkTheme ? "md" : undefined}
+                boxShadow={isDarkTheme ? undefined : "card"}
                 px={3}
                 py={2}
               >
                 <HStack align="start" spacing={2}>
                   <Box
                     p={1}
-                    bg="accent.secondary"
+                    bg={isDarkTheme ? "status.warning.fg" : "accent.secondary"}
                     display="flex"
                     alignItems="center"
                     justifyContent="center"
                     flexShrink={0}
+                    borderRadius={isDarkTheme ? "sm" : undefined}
                   >
-                    <WarningIcon color="accentFg.secondary" boxSize={3} />
+                    <WarningIcon
+                      color={isDarkTheme ? "fg.inverse" : "accentFg.secondary"}
+                      boxSize={3}
+                    />
                   </Box>
                   <Box flex={1} minW={0}>
                     <Text
                       fontSize="2xs"
                       fontWeight="800"
-                      color="status.info.fg"
+                      color={isDarkTheme ? "status.warning.fg" : "status.info.fg"}
                       textTransform="uppercase"
                       letterSpacing="wide"
                       mb={1}
@@ -3033,17 +3108,32 @@ function App() {
                             );
                           })}
                           {visibleRpcIssueChainIds.length > 2 && (
-                            <Text fontSize="2xs" fontWeight="700" color="status.info.fg" opacity={0.8}>
+                            <Text
+                              fontSize="2xs"
+                              fontWeight="700"
+                              color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
+                              opacity={0.8}
+                            >
                               +{visibleRpcIssueChainIds.length - 2} more
                             </Text>
                           )}
                         </HStack>
-                        <Text fontSize="xs" color="status.info.fg" fontWeight="600" opacity={0.9}>
+                        <Text
+                          fontSize="xs"
+                          color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
+                          fontWeight="600"
+                          opacity={isDarkTheme ? 1 : 0.9}
+                        >
                           Balance fetch failed. Edit the chain RPC if this persists.
                         </Text>
                       </VStack>
                     ) : (
-                      <Text fontSize="xs" color="status.info.fg" fontWeight="600" opacity={0.9}>
+                      <Text
+                        fontSize="xs"
+                        color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
+                        fontWeight="600"
+                        opacity={isDarkTheme ? 1 : 0.9}
+                      >
                         Balance fetch failed for one or more chains. Edit the chain RPC if this persists.
                       </Text>
                     )}
@@ -3051,7 +3141,7 @@ function App() {
                   <Button
                     size="xs"
                     variant="ghost"
-                    color="status.info.fg"
+                    color={isDarkTheme ? "status.warning.fg" : "status.info.fg"}
                     fontWeight="700"
                     _hover={{ bg: "whiteAlpha.200" }}
                     onClick={() => setDismissedRpcIssueChainIds(rpcIssueChainIds)}
@@ -3446,8 +3536,10 @@ function App() {
                 </Button>
                 <Button
                   flex={1}
-                  bg="accent.highlight"
-                  color="accentFg.highlight"
+                  bg={isDarkTheme ? "accent.primary" : "accent.highlight"}
+                  color={
+                    isDarkTheme ? "accentFg.primary" : "accentFg.highlight"
+                  }
                   border="3px solid"
                   borderColor="border.default"
                   boxShadow="card"
@@ -3468,7 +3560,7 @@ function App() {
                     setView("transfer");
                   }}
                   _hover={{
-                    bg: "accent.highlight",
+                    bg: isDarkTheme ? "accent.primary" : "accent.highlight",
                     opacity: 0.9,
                     transform: "translateY(-2px)",
                     boxShadow: "cardHover",
@@ -3484,16 +3576,19 @@ function App() {
                   {stakeApy !== null && (
                     <Box
                       position="absolute"
-                      top="-8px"
-                      right="-4px"
+                      top={isDarkTheme ? "-6px" : "-8px"}
+                      right={isDarkTheme ? "-6px" : "-4px"}
                       bg="accent.primary"
                       color="accentFg.primary"
                       fontSize="8px"
                       fontWeight="900"
                       px={1.5}
                       py="1px"
-                      border="2px solid"
-                      borderColor="border.default"
+                      border={isDarkTheme ? "1px solid" : "2px solid"}
+                      borderColor={
+                        isDarkTheme ? "accent.primary" : "border.default"
+                      }
+                      borderRadius={isDarkTheme ? "sm" : undefined}
                       zIndex={1}
                       lineHeight="1.2"
                     >

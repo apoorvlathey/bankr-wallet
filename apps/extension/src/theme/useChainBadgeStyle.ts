@@ -28,14 +28,20 @@
  *   - fg     → brand saturated color
  *   - border → brand saturated color (the brand hue becomes the badge frame)
  *
- * Custom chains (user-added from Settings) don't have a curated brand color;
- * they fall back to neutral surface/foreground tokens in both themes.
+ * Custom chains (user-added from Settings) and unknown chains (not in
+ * CHAIN_REGISTRY) don't have a curated brand color; they fall back to neutral
+ * surface/foreground tokens in both themes — a plain `surface.raised` chip
+ * with `fg.primary` text. Unknown chains are auto-detected by comparing the
+ * incoming brand values against `DEFAULT_CHAIN_CONFIG`, so every consumer
+ * (SwapView, TxConfirmation, PendingTxList, etc.) gets the readable fallback
+ * for free even without passing `isCustom`.
  *
  * Future themes can implement whatever rendering strategy they want by
  * extending this hook — no consumer component has to change.
  */
 
 import { useTheme } from "./ThemeProvider";
+import { DEFAULT_CHAIN_CONFIG } from "@/constants/chainRegistry";
 
 export interface ChainBadgeStyle {
   /** Badge/pill background */
@@ -53,18 +59,30 @@ export interface ChainBadgeStyle {
  * @param brandFg - The chain's registry `text` value (saturated brand color)
  * @param isCustom - Whether this is a user-added custom chain (no brand colors)
  */
-export function useChainBadgeStyle(
+/**
+ * Pure resolver — same logic as the hook, but takes `themeId` as an argument
+ * so it can be called inside render loops (where a hook can't be invoked
+ * per-row). Use this when iterating over many chains in the same component.
+ */
+export function resolveChainBadgeStyle(
+  themeId: string,
   brandBg: string,
   brandFg: string,
   isCustom = false,
 ): ChainBadgeStyle {
-  const { themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
 
-  if (isCustom) {
+  // Chains not in CHAIN_REGISTRY fall back to DEFAULT_CHAIN_CONFIG, whose
+  // sentinel white-on-white values would render the badge unreadable in
+  // Midnight (brand fg #FAFAFA on a whiteAlpha.900 chip). Treat them the same
+  // as user-added custom chains so they pick up neutral surface tokens.
+  const isUnknownChain =
+    brandBg === DEFAULT_CHAIN_CONFIG.bg && brandFg === DEFAULT_CHAIN_CONFIG.text;
+
+  if (isCustom || isUnknownChain) {
     return {
-      bg: isDarkTheme ? "whiteAlpha.900" : "surface.raised",
-      fg: isDarkTheme ? "fg.inverse" : "fg.primary",
+      bg: "surface.raised",
+      fg: "fg.primary",
       border: "border.default",
     };
   }
@@ -82,4 +100,13 @@ export function useChainBadgeStyle(
     fg: brandFg,
     border: "border.default",
   };
+}
+
+export function useChainBadgeStyle(
+  brandBg: string,
+  brandFg: string,
+  isCustom = false,
+): ChainBadgeStyle {
+  const { themeId } = useTheme();
+  return resolveChainBadgeStyle(themeId, brandBg, brandFg, isCustom);
 }

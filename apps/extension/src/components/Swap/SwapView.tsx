@@ -26,7 +26,7 @@ import {
 import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon } from "@chakra-ui/icons";
 import { parseEther, parseUnits, formatUnits } from "viem";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { useChainBadgeStyle } from "@/theme";
+import { useChainBadgeStyle, useTheme } from "@/theme";
 import { type PortfolioToken } from "@/chrome/portfolioApi";
 import { fetchOnchainBalances } from "@/chrome/onchainBalances";
 import { loadPortfolioTokenCatalog } from "@/chrome/portfolioTokens";
@@ -113,6 +113,8 @@ function SwapView({
   initialSellToken,
 }: SwapViewProps) {
   const toast = useThemedToast();
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const [chainSearch, setChainSearch] = useState("");
   const chainSearchInputRef = useRef<HTMLInputElement>(null);
   const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
@@ -1143,9 +1145,10 @@ function SwapView({
             // Warning surface — Bauhaus yellow / Midnight recessed warning tint.
             bg="status.warning.bg"
             color="status.warning.fg"
-            border="2px solid"
-            borderColor="border.default"
-            boxShadow="card"
+            border={isDarkTheme ? "1px solid" : "2px solid"}
+            borderColor={isDarkTheme ? "status.warning.border" : "border.default"}
+            borderRadius={isDarkTheme ? "md" : undefined}
+            boxShadow={isDarkTheme ? undefined : "card"}
             p={4}
           >
             <Text
