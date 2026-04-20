@@ -7,7 +7,9 @@ import {
   Skeleton,
   Spacer,
   Code,
+  IconButton,
 } from "@chakra-ui/react";
+import { ChevronDownIcon, ChevronRightIcon } from "@chakra-ui/icons";
 import { CopyButton } from "@/components/CopyButton";
 import { ShapesLoader } from "@/components/Chat/ShapesLoader";
 import { decodeRecursive } from "@/lib/decoder";
@@ -20,6 +22,13 @@ interface CalldataDecoderProps {
   to: string;
   chainId: number;
   onFunctionName?: (name: string) => void;
+  /**
+   * When true, render the decoder in a collapsed state — only a thin header
+   * with the function name + expand chevron is visible until the user opts
+   * in. Used on ERC20 approval confirmations where the structured approval
+   * card above already conveys the essential info.
+   */
+  defaultCollapsed?: boolean;
 }
 
 /**
@@ -111,7 +120,7 @@ function isAbiDecodeBetter(
   return false;
 }
 
-function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDecoderProps) {
+function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollapsed = false }: CalldataDecoderProps) {
   const { themeId, tokens } = useTheme();
   const isDarkTheme = themeId === "midnight";
   // Selected tab strip uses an inverted contrast (Bauhaus paints it black with
@@ -122,6 +131,7 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
   const [result, setResult] = useState<DecodeRecursiveResult>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"decoded" | "raw">("raw");
+  const [expanded, setExpanded] = useState(!defaultCollapsed);
   const localResultRef = useRef<DecodeRecursiveResult>(null);
 
   useEffect(() => {
@@ -223,6 +233,67 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
 
   const showSpinner = loading;
 
+  // Collapsed state — single row that shows "Calldata · <functionName>" and
+  // expands on click. Used on approval confirmations (see `defaultCollapsed`).
+  if (!expanded) {
+    return (
+      <Box
+        w="full"
+        maxW="100%"
+        bg="surface.raised"
+        border={tokens.borders.thin}
+        borderColor="border.default"
+        borderRadius="lg"
+        boxShadow="card"
+        overflow="hidden"
+      >
+        <HStack
+          as="button"
+          w="full"
+          py={2}
+          px={3}
+          spacing={2}
+          onClick={() => setExpanded(true)}
+          _hover={{ bg: "bg.muted" }}
+          cursor="pointer"
+          role="button"
+          aria-label="Show calldata"
+        >
+          <Text
+            fontSize="xs"
+            fontWeight="800"
+            textTransform="uppercase"
+            letterSpacing="wide"
+            color="text.secondary"
+          >
+            Calldata
+          </Text>
+          {result?.functionName && (
+            <Code
+              px={1.5}
+              py={0}
+              fontSize="2xs"
+              bg="accent.secondary"
+              color="accentFg.secondary"
+              fontFamily="mono"
+              border={tokens.borders.thin}
+              borderColor="border.default"
+              borderRadius="md"
+              fontWeight="700"
+            >
+              {result.functionName}
+            </Code>
+          )}
+          <Spacer />
+          <Text fontSize="2xs" fontWeight="700" color="text.tertiary" textTransform="uppercase">
+            Show
+          </Text>
+          <ChevronRightIcon boxSize={3} color="text.tertiary" />
+        </HStack>
+      </Box>
+    );
+  }
+
   return (
     <Box
       w="full"
@@ -281,6 +352,18 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName }: CalldataDeco
         <Box pr={1}>
           <CopyButton value={copyValue} />
         </Box>
+        {defaultCollapsed && (
+          <IconButton
+            aria-label="Hide calldata"
+            icon={<ChevronDownIcon />}
+            size="xs"
+            variant="ghost"
+            mr={1}
+            color="text.tertiary"
+            onClick={() => setExpanded(false)}
+            _hover={{ color: "accent.secondary", bg: "bg.muted" }}
+          />
+        )}
       </HStack>
 
       {/* Content — both tabs always rendered, inactive hidden to preserve state */}

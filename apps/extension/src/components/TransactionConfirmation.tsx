@@ -414,6 +414,9 @@ function TransactionConfirmation({
     return `${eth.toFixed(6)} ${nativeSym}`;
   };
 
+  const isValueZero =
+    !tx.value || tx.value === "0" || tx.value === "0x0" || tx.value === "0x";
+
   // Force inclusion progress screen
   if (state === "forceInclusion" && forceInclusionInfo) {
     return (
@@ -866,7 +869,12 @@ function TransactionConfirmation({
               </Collapse>
             )}
 
-            {/* To Address / Contract Deployment */}
+            {/* To Address / Contract Deployment.
+                Hidden on ERC20 approvals — the token contract is already
+                surfaced as the TOKEN row in the approval card above, so
+                showing it again here (with the "Circle: USDC Token" label)
+                is pure noise. */}
+            {!parsedApproval && (
             <Box
               w="full"
               py={1.5}
@@ -979,28 +987,33 @@ function TransactionConfirmation({
                 </Flex>
               )}
             </Box>
+            )}
 
-            {/* Value */}
-            <HStack
-              w="full"
-              py={1.5}
-              px={3}
-              justify="space-between"
-              borderTop="1px solid"
-              borderColor="border.subtle"
-            >
-              <Text
-                fontSize="xs"
-                color="text.secondary"
-                fontWeight="700"
-                textTransform="uppercase"
+            {/* Value — hidden on ERC20 approvals when zero (always the
+                common case). A non-zero value on an `approve(...)` call is
+                unusual enough that we still surface it. */}
+            {(!parsedApproval || !isValueZero) && (
+              <HStack
+                w="full"
+                py={1.5}
+                px={3}
+                justify="space-between"
+                borderTop="1px solid"
+                borderColor="border.subtle"
               >
-                Value
-              </Text>
-              <Text fontSize="xs" fontWeight="700" color="text.primary">
-                {formatValue(tx.value)}
-              </Text>
-            </HStack>
+                <Text
+                  fontSize="xs"
+                  color="text.secondary"
+                  fontWeight="700"
+                  textTransform="uppercase"
+                >
+                  Value
+                </Text>
+                <Text fontSize="xs" fontWeight="700" color="text.primary">
+                  {formatValue(tx.value)}
+                </Text>
+              </HStack>
+            )}
           </VStack>
         </Box>
 
@@ -1015,13 +1028,17 @@ function TransactionConfirmation({
           forceInclusion={forceInclusion}
         />
 
-        {/* Calldata (Decoded + Raw) */}
+        {/* Calldata (Decoded + Raw). Collapsed by default on approvals —
+            the structured ERC20ApproveDisplay above already shows function
+            + spender + amount; the decoder panel is redundant for the
+            common case but one click away for power users. */}
         {tx.data && tx.data !== "0x" && tx.to && (
           <CalldataDecoder
             calldata={tx.data}
             to={tx.to}
             chainId={tx.chainId}
             onFunctionName={setDecodedFunctionName}
+            defaultCollapsed={!!parsedApproval}
           />
         )}
         {/* Raw-only fallback for contract deployments */}
