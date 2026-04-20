@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useMemo, useRef } from "react";
+import { memo, useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { layout, prepare } from "@chenglou/pretext";
 import {
   Menu,
@@ -20,6 +20,7 @@ import { blo } from "blo";
 import type { Account, SeedGroup } from "@/chrome/types";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
+import { useTheme } from "@/theme";
 
 // Blockies avatar for PK accounts using blo
 function BlockieAvatar({
@@ -129,6 +130,15 @@ function AccountSwitcher({
   const [containerWidth, setContainerWidth] = useState(0);
   const [nameFont, setNameFont] = useState("");
 
+  // Under midnight, the Private Key tag swaps from loud amber (which competes
+  // with the holdings total) to a muted violet info chip. Bauhaus keeps the
+  // original amber for poster-style emphasis.
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
+  const pkTagBg = isDarkTheme ? "status.info.bg" : "accent.highlight";
+  const pkTagFg = isDarkTheme ? "status.info.fg" : "accentFg.highlight";
+  const pkTagBorder = isDarkTheme ? "status.info.border" : "border.default";
+
   const accountAddresses = useMemo(
     () => accounts.map((a) => a.address),
     [accounts],
@@ -195,6 +205,36 @@ function AccountSwitcher({
     return identities.get(account.address.toLowerCase())?.avatar ?? null;
   }
 
+  // Scroll the active MenuItem into view *once per open*. Menu's onOpen arms
+  // the flag; the callback ref (which also fires on unrelated re-renders like
+  // ENS resolution) only scrolls when armed, then disarms — so manual scrolls
+  // aren't fought by subsequent re-renders.
+  const shouldScrollActiveRef = useRef(false);
+  const activeItemRef = useCallback((node: HTMLElement | null) => {
+    if (!node || !shouldScrollActiveRef.current) return;
+    shouldScrollActiveRef.current = false;
+    // Defer to the next frame: when this ref fires during React commit, later
+    // sibling MenuItems may not be appended yet, so parent.scrollHeight is
+    // short and parent.scrollTop gets clamped to 0. rAF waits until layout is
+    // finalized with all siblings and Chakra's popper positioning applied.
+    requestAnimationFrame(() => {
+      let parent: HTMLElement | null = node.parentElement;
+      while (parent) {
+        const overflowY = window.getComputedStyle(parent).overflowY;
+        if (overflowY === "auto" || overflowY === "scroll") break;
+        parent = parent.parentElement;
+      }
+      if (!parent) return;
+      const parentRect = parent.getBoundingClientRect();
+      const nodeRect = node.getBoundingClientRect();
+      const relativeTop = nodeRect.top - parentRect.top + parent.scrollTop;
+      parent.scrollTop = Math.max(
+        0,
+        relativeTop - (parent.clientHeight - node.offsetHeight) / 2,
+      );
+    });
+  }, []);
+
   // Check if the display name would overflow when rendered next to the avatar
   // Avatar (20px) + gap (6px) + padding-right for chevron (20px) + container padding (12+20=32px)
   const avatarInlineOverhead = 20 + 6 + 20 + 32;
@@ -209,7 +249,14 @@ function AccountSwitcher({
   }, [displayName, nameFont, containerWidth]);
 
   return (
-    <Menu matchWidth isLazy lazyBehavior="unmount">
+    <Menu
+      matchWidth
+      isLazy
+      lazyBehavior="unmount"
+      onOpen={() => {
+        shouldScrollActiveRef.current = true;
+      }}
+    >
       <MenuButton
         as={Button}
         w="full"
@@ -261,12 +308,14 @@ function AccountSwitcher({
           /* Long name layout: name full width on top, avatar + address below */
           <VStack align="start" spacing="3px" minW={0} flex={1}>
             <Text
-              fontSize="sm"
+              fontSize={isDarkTheme ? "md" : "sm"}
               color="text.primary"
               fontWeight="700"
               noOfLines={1}
               maxW="full"
               lineHeight="1.2"
+              alignSelf="stretch"
+              textAlign="center"
             >
               {getAccountDisplayName(activeAccount)}
             </Text>
@@ -275,11 +324,11 @@ function AccountSwitcher({
                 <AccountAvatar
                   account={activeAccount}
                   ensAvatar={getEnsAvatar(activeAccount)}
-                  size={18}
+                  size={isDarkTheme ? 20 : 18}
                 />
               </Box>
               <Text
-                fontSize="xs"
+                fontSize={isDarkTheme ? "sm" : "xs"}
                 color="text.tertiary"
                 fontFamily="mono"
                 noOfLines={1}
@@ -302,8 +351,8 @@ function AccountSwitcher({
                 </Box>
               )}
               {activeAccount.type === "privateKey" && (
-                <Box bg="accent.highlight" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
-                  <Text fontSize="8px" color="accentFg.highlight" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Private Key</Text>
+                <Box bg={pkTagBg} px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor={pkTagBorder}>
+                  <Text fontSize="8px" color={pkTagFg} fontWeight="800" textTransform="uppercase" letterSpacing="wide">Private Key</Text>
                 </Box>
               )}
               {activeAccount.type === "seedPhrase" && (
@@ -331,7 +380,7 @@ function AccountSwitcher({
             <VStack align="start" spacing="2px" minW={0} flex={1}>
               {hasResolvedName(activeAccount) && (
                 <Text
-                  fontSize="sm"
+                  fontSize={isDarkTheme ? "md" : "sm"}
                   color="text.primary"
                   fontWeight="700"
                   noOfLines={1}
@@ -342,7 +391,7 @@ function AccountSwitcher({
                 </Text>
               )}
               <Text
-                fontSize="xs"
+                fontSize={isDarkTheme ? "sm" : "xs"}
                 color={hasResolvedName(activeAccount) ? "text.tertiary" : "text.primary"}
                 fontFamily="mono"
                 fontWeight={hasResolvedName(activeAccount) ? "400" : "700"}
@@ -365,8 +414,8 @@ function AccountSwitcher({
                 </Box>
               )}
               {activeAccount.type === "privateKey" && (
-                <Box bg="accent.highlight" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
-                  <Text fontSize="8px" color="accentFg.highlight" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Private Key</Text>
+                <Box bg={pkTagBg} px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor={pkTagBorder}>
+                  <Text fontSize="8px" color={pkTagFg} fontWeight="800" textTransform="uppercase" letterSpacing="wide">Private Key</Text>
                 </Box>
               )}
               {activeAccount.type === "seedPhrase" && (
@@ -400,6 +449,7 @@ function AccountSwitcher({
         {accounts.map((account, i) => (
           <MenuItem
             key={account.id}
+            ref={account.id === activeAccount?.id ? activeItemRef : undefined}
             bg={account.id === activeAccount?.id ? "surface.raisedHover" : "surface.raised"}
             _hover={{ bg: "bg.muted" }}
             borderBottom={i < accounts.length - 1 ? "2px solid" : "none"}
@@ -519,17 +569,17 @@ function AccountSwitcher({
 
                   {account.type === "privateKey" && (
                     <Box
-                      bg="accent.highlight"
+                      bg={pkTagBg}
                       px={1.5}
                       py={0}
                       borderRadius="sm"
                       border="1px solid"
-                      borderColor="border.default"
+                      borderColor={pkTagBorder}
                       mt={0.5}
                     >
                       <Text
                         fontSize="8px"
-                        color="accentFg.highlight"
+                        color={pkTagFg}
                         fontWeight="800"
                         textTransform="uppercase"
                         letterSpacing="wide"
