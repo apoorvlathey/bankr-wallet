@@ -1,6 +1,20 @@
 import { fetchPortfolio, type DefiPosition, type PortfolioToken } from "@/chrome/portfolioApi";
 import { getCustomTokens } from "@/chrome/customTokenStorage";
-import { getStoredNetworksInfo, getVisibleChains } from "@/lib/chains";
+import { getStoredNetworksInfo, getVisibleChains, getResolvedChainById } from "@/lib/chains";
+import { getChainEnvironmentLabel } from "@/lib/chainIcons";
+import type { NetworksInfo } from "@/types";
+
+function isTestnetChain(chainId: number, networksInfo: NetworksInfo): boolean {
+  const chainName = getResolvedChainById(chainId, networksInfo)?.name;
+  return getChainEnvironmentLabel(chainId, chainName) === "TESTNET";
+}
+
+function isNativeToken(token: PortfolioToken): boolean {
+  return (
+    token.contractAddress === "native" ||
+    token.contractAddress === "0x0000000000000000000000000000000000000000"
+  );
+}
 
 export interface PortfolioTokenCatalog {
   tokens: PortfolioToken[];
@@ -115,11 +129,13 @@ export async function loadPortfolioTokenCatalog(
     new Map(
       [...mergedTokens, ...customChainNativeTokens]
         .filter((token) => {
-          const isNative =
-            token.contractAddress === "native" ||
-            token.contractAddress === "0x0000000000000000000000000000000000000000";
           const customChain = customChainById.get(token.chainId);
-          return isNative && !!customChain && token.priceUsd <= 0;
+          return (
+            isNativeToken(token) &&
+            !!customChain &&
+            token.priceUsd <= 0 &&
+            !isTestnetChain(token.chainId, networksInfo)
+          );
         })
         .map((token) => {
           const customChain = customChainById.get(token.chainId)!;
@@ -164,10 +180,20 @@ export async function loadPortfolioTokenCatalog(
     }),
   );
 
+  const finalTokens = tokensWithCustomNativePrices.map((token) => {
+    if (isNativeToken(token) && isTestnetChain(token.chainId, networksInfo)) {
+      return { ...token, priceUsd: 0, valueUsd: 0 };
+    }
+    return token;
+  });
+
+  const totalValueUsd = finalTokens.reduce((sum, t) => sum + t.valueUsd, 0) +
+    (data.defiPositions || []).reduce((sum, p) => sum + p.valueUsd, 0);
+
   return {
-    tokens: tokensWithCustomNativePrices,
+    tokens: finalTokens,
     defiPositions: data.defiPositions || [],
-    totalValueUsd: data.totalValueUsd,
+    totalValueUsd,
     customTokenKeys: new Set(
       customTokens.map((ct) => `${ct.chainId}-${ct.contractAddress}`),
     ),
