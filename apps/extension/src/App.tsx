@@ -1160,6 +1160,16 @@ function App() {
           const updated: PendingTxRequest[] =
             changes.pendingTxRequests.newValue || [];
           setPendingRequests(updated);
+          // If the selected tx is still present but its contents changed
+          // (e.g. user edited the approval amount → tx.data was updated in
+          // storage), refresh selectedTxRequest so downstream views like
+          // CalldataDecoder re-render with the new data.
+          const stillPresent = selectedTxRequest
+            ? updated.find((r) => r.id === selectedTxRequest.id)
+            : null;
+          if (stillPresent && stillPresent !== selectedTxRequest) {
+            setSelectedTxRequest(stillPresent);
+          }
           // If the currently selected tx was removed, clear it
           if (
             selectedTxRequest &&
