@@ -19,6 +19,7 @@ import {
   savePendingBatchTxRequest,
   removePendingBatchTxRequest,
   getPendingBatchTxRequestById,
+  removeCallFromPendingBatchTxRequest,
 } from "./pendingBatchTxStorage";
 import {
   saveBundleStatus,
@@ -980,6 +981,32 @@ export async function handleRejectBatchTransaction(
     error: "Batch transaction rejected by user",
   });
 
+  return { success: true };
+}
+
+/**
+ * Drop a single call from a pending batch request before the user confirms.
+ *
+ * The dapp asked for an atomic bundle, but the user is allowed to prune
+ * individual calls before signing (e.g. they already have the approval the
+ * bundle re-issues). The remaining calls still ship as one atomic batch.
+ *
+ * If the user removes the last call, fall through to a full rejection so the
+ * dapp's `wallet_sendCalls` promise resolves with an error instead of being
+ * left hanging by an empty batch.
+ */
+export async function handleRemoveCallFromPendingBatch(
+  bundleId: string,
+  callIndex: number,
+): Promise<{ success: boolean; error?: string; rejected?: boolean }> {
+  const result = await removeCallFromPendingBatchTxRequest(bundleId, callIndex);
+  if (!result.found) {
+    return { success: false, error: "Pending batch not found" };
+  }
+  if (result.remainingCalls === 0) {
+    await handleRejectBatchTransaction(bundleId);
+    return { success: true, rejected: true };
+  }
   return { success: true };
 }
 

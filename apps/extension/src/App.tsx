@@ -1245,6 +1245,16 @@ function App() {
           const updated: PendingBatchTxRequest[] =
             changes.pendingBatchTxRequests.newValue || [];
           setPendingBatchRequests(updated);
+          // If the currently selected batch is still in storage but its
+          // params changed (e.g. user removed a call), swap in the latest
+          // snapshot so the confirmation screen re-renders with the new
+          // calls list and the asset/gas displays re-simulate.
+          const stillPresent = selectedBatchRequest
+            ? updated.find((r) => r.id === selectedBatchRequest.id)
+            : null;
+          if (stillPresent && stillPresent !== selectedBatchRequest) {
+            setSelectedBatchRequest(stillPresent);
+          }
           if (
             selectedBatchRequest &&
             !updated.find((r) => r.id === selectedBatchRequest.id)
@@ -2332,6 +2342,20 @@ function App() {
               onAddedToBatch={() => {
                 setSelectedBatchRequest(null);
                 setView("crossDappBatchConfirm");
+              }}
+              onRemoveCall={(callIndex) => {
+                // Background updates pendingBatchTxRequests; the storage
+                // listener above swaps in the new params so the UI re-renders.
+                // If the user removes the last call, the handler rejects the
+                // whole batch and the listener clears the selection.
+                chrome.runtime.sendMessage(
+                  {
+                    type: "removeCallFromPendingBatch",
+                    bundleId: selectedBatchRequest.id,
+                    callIndex,
+                  },
+                  () => {},
+                );
               }}
               onBack={() => {
                 if (totalCount > 1) {

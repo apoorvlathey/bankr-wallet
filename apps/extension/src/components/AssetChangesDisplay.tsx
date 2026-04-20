@@ -488,9 +488,21 @@ function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChange
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
 
+  // Stable signature of the calls list — re-fires simulation when the user
+  // edits the bundle (e.g. removes a call from a dapp-initiated batch).
+  const batchCallsKey = batchCalls
+    ? batchCalls
+        .map((c) => `${c.to ?? ""}|${c.data ?? ""}|${c.value ?? ""}`)
+        .join(";")
+    : null;
+
   // Initial simulation fetch
   useEffect(() => {
     let cancelled = false;
+    // Reset to a fresh loading state so re-simulations (e.g. after a call
+    // is removed from the batch) show the spinner instead of stale results.
+    setLoading(true);
+    setResult(null);
 
     // Batch transactions: simulate each call individually
     // Non-atomic (PK/SP EOA): use eth_simulateV1 with fallback
@@ -526,7 +538,7 @@ function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChange
     return () => {
       cancelled = true;
     };
-  }, [txRequest.id]);
+  }, [txRequest.id, batchCallsKey]);
 
   // Retry metadata fetch if initial attempt was incomplete
   useEffect(() => {

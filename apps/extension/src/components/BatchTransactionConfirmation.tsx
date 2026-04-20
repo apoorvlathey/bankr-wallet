@@ -897,50 +897,51 @@ function BatchTransactionConfirmation({
                 key={index}
                 position="relative"
                 sx={{
+                  // On hover: fade in the trash icon and fade out the chevron
+                  // so the two never visually compete in the same slot.
                   "&:hover .delete-call-btn": {
                     opacity: 1,
                     pointerEvents: "auto",
                   },
+                  "&:hover .call-chevron": { opacity: 0 },
                 }}
               >
                 {card}
                 <Box
                   className="delete-call-btn"
                   position="absolute"
-                  // Anchor to the top of the card (not vertical center) so the
-                  // button stays aligned with the always-visible header row
-                  // when the call is expanded — otherwise top:50% would push
-                  // it into the decoded params area.
-                  top={2}
-                  right={1.5}
+                  // Drop the trash icon onto the chevron's exact footprint:
+                  // the CallCard header has px={3} (12px) and the chevron is
+                  // a 16px icon, so right=12px lands precisely on it.
+                  top={2.5}
+                  right={3}
                   opacity={0}
                   pointerEvents="none"
-                  transition="opacity 0.15s ease-out"
+                  transition="opacity 0.12s ease-out"
                   zIndex={2}
                 >
                   <Box
                     as="button"
                     type="button"
-                    border={tokens.borders.thin}
-                    borderColor="border.default"
-                    borderRadius="md"
-                    bg="surface.raised"
-                    boxShadow="card"
-                    px={1.5}
-                    py={1}
                     cursor="pointer"
+                    bg="transparent"
+                    border="none"
+                    p={0}
+                    lineHeight={0}
+                    color="chart.negative"
+                    transition="color 0.12s ease-out, transform 0.12s ease-out, filter 0.12s ease-out"
+                    _hover={{
+                      filter: "brightness(1.25) saturate(1.2)",
+                      transform: "scale(1.15)",
+                    }}
+                    _active={{ transform: "scale(0.95)" }}
                     onClick={(e) => {
                       e.stopPropagation();
                       onRemoveCall(index);
                     }}
                     aria-label={`Remove call ${index + 1}`}
-                    sx={{
-                      "& svg": { color: "var(--chakra-colors-chart-negative)" },
-                      "&:hover": { bg: "var(--chakra-colors-status-error-bg)" },
-                      "&:hover svg": { color: "var(--chakra-colors-status-error-fg)" },
-                    }}
                   >
-                    <DeleteIcon boxSize={3} />
+                    <DeleteIcon boxSize={4} />
                   </Box>
                 </Box>
               </Box>
@@ -1304,9 +1305,11 @@ function CallCard({
           </Text>
         )}
         <Icon
+          className="call-chevron"
           as={isExpanded ? ChevronUpIcon : ChevronDownIcon}
           boxSize={4}
           color="text.secondary"
+          transition="opacity 0.12s ease-out"
         />
       </HStack>
 

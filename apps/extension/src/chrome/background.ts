@@ -60,6 +60,7 @@ import {
   handleConfirmBatchTransaction,
   handleConfirmBatchTransactionPK,
   handleRejectBatchTransaction,
+  handleRemoveCallFromPendingBatch,
   handleWalletGetCallsStatus,
   handleWalletShowCallsStatus,
 } from "./batchTxHandlers";
@@ -487,6 +488,7 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   // Rejections (prevent malicious page from rejecting user's pending requests)
   "rejectTransaction",
   "rejectBatchTransaction",
+  "removeCallFromPendingBatch",
   "rejectSignatureRequest",
   "rejectAddChain",
   "rejectWatchAsset",
@@ -861,6 +863,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "rejectBatchTransaction": {
       handleRejectBatchTransaction(message.bundleId).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "removeCallFromPendingBatch": {
+      handleRemoveCallFromPendingBatch(
+        message.bundleId,
+        message.callIndex,
+      ).then((result) => {
         sendResponse(result);
       });
       return true;

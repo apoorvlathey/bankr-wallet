@@ -196,6 +196,14 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 | `setAgentPassword`    | Requires `getPasswordType() === "master"`                                |
 | `removeAgentPassword` | Requires explicit master password verification (not just cached)         |
 
+### Dapp-Initiated Batch Handlers (`batchTxHandlers.ts`)
+
+These mutate `pendingBatchTxRequests` (dapp `wallet_sendCalls`) before the user signs. All gated by `EXTENSION_ONLY_MESSAGES`:
+
+| Handler                        | Effect                                                                                                                                                 |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `removeCallFromPendingBatch`   | Drops a single call from the pending bundle's `params.calls`. If the last call is removed, falls through to a full reject (writes `batchTxResult` + sets `bundleStatuses` to OFFCHAIN_FAILURE). The user is the only party who can prune calls — a dapp must not be able to silently shrink its own (or another dapp's) bundle. |
+
 ### Cross-Dapp Batch Handlers (`crossDappBatchHandlers.ts`)
 
 These move pending tx requests in/out of a user-assembled batch and ship the batch via the Bankr API. All five are gated by `EXTENSION_ONLY_MESSAGES` in `background.ts` so a malicious dapp cannot reach into the user's pending tx queue:
