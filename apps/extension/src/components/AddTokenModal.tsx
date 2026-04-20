@@ -19,12 +19,13 @@ import {
   FormControl,
   FormLabel,
   Spinner,
+  Portal,
 } from "@chakra-ui/react";
 import { ChevronDownIcon, WarningIcon } from "@chakra-ui/icons";
 import { addCustomToken } from "@/chrome/customTokenStorage";
 import { useNetworks } from "@/contexts/NetworksContext";
 import ChainIcon from "@/components/ChainIcon";
-import { getVisibleChains } from "@/lib/chains";
+import { getVisibleChains, getResolvedChainByName } from "@/lib/chains";
 import { useStripTokens, useTheme } from "@/theme";
 
 interface AddTokenModalProps {
@@ -74,9 +75,27 @@ export default function AddTokenModal({
       setError(null);
       setFetched(false);
       setSaving(false);
-      setSelectedChainId(chainList[0]?.chainId ?? 8453);
     }
-  }, [isOpen, chainList]);
+  }, [isOpen]);
+
+  // On open, default chain to the wallet's currently selected chain.
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    chrome.storage.sync.get("chainName").then(({ chainName }) => {
+      if (cancelled) return;
+      const activeChain = getResolvedChainByName(chainName, networksInfo);
+      const fallback = chainList[0]?.chainId ?? 8453;
+      const targetId =
+        activeChain && chainList.some((c) => c.chainId === activeChain.chainId)
+          ? activeChain.chainId
+          : fallback;
+      setSelectedChainId(targetId);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, networksInfo, chainList]);
 
   const fetchTokenInfo = useCallback(
     async (address: string, chainId: number) => {
@@ -166,9 +185,15 @@ export default function AddTokenModal({
   const { tokens } = useTheme();
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} isCentered size="sm">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      isCentered
+      size="sm"
+      scrollBehavior="inside"
+    >
       <ModalOverlay bg="surface.overlay" />
-      <ModalContent mx={4} overflow="hidden">
+      <ModalContent mx={4} overflow="hidden" maxH="calc(100vh - 2rem)">
         <ModalHeader
           bg={headerStrip.bg}
           color={headerStrip.fg}
@@ -216,29 +241,31 @@ export default function AddTokenModal({
                     <ChevronDownIcon />
                   </HStack>
                 </MenuButton>
-                <MenuList maxH="200px" overflowY="auto" p={0} zIndex={10}>
-                  {chainList.map((chain) => (
-                    <MenuItem
-                      key={chain.chainId}
-                      onClick={() => handleChainChange(chain.chainId)}
-                      bg={chain.chainId === selectedChainId ? "surface.raisedHover" : "transparent"}
-                      px={3}
-                      py={2}
-                    >
-                      <HStack spacing={2}>
-                        <ChainIcon
-                          chainId={chain.chainId}
-                          chainName={chain.name}
-                          size="18px"
-                          withChip
-                        />
-                        <Text fontWeight="700" fontSize="sm">
-                          {chain.name}
-                        </Text>
-                      </HStack>
-                    </MenuItem>
-                  ))}
-                </MenuList>
+                <Portal>
+                  <MenuList maxH="200px" overflowY="auto" p={0} zIndex="popover">
+                    {chainList.map((chain) => (
+                      <MenuItem
+                        key={chain.chainId}
+                        onClick={() => handleChainChange(chain.chainId)}
+                        bg={chain.chainId === selectedChainId ? "surface.raisedHover" : "transparent"}
+                        px={3}
+                        py={2}
+                      >
+                        <HStack spacing={2}>
+                          <ChainIcon
+                            chainId={chain.chainId}
+                            chainName={chain.name}
+                            size="18px"
+                            withChip
+                          />
+                          <Text fontWeight="700" fontSize="sm">
+                            {chain.name}
+                          </Text>
+                        </HStack>
+                      </MenuItem>
+                    ))}
+                  </MenuList>
+                </Portal>
               </Menu>
             </FormControl>
 
