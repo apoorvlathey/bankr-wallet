@@ -26,6 +26,7 @@ import {
   CloseIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  RepeatIcon,
 } from "@chakra-ui/icons";
 import { CompletedTransaction, GasData, type ForceInclusionMeta } from "@/chrome/txHistoryStorage";
 import { getChainConfig } from "@/constants/chainConfig";
@@ -43,6 +44,7 @@ import {
   getStoredRpcUrl,
 } from "@/lib/chains";
 import { useTheme, useChainBadgeStyle } from "@/theme";
+import { useThemedToast } from "@/hooks/useThemedToast";
 
 interface TxDetailModalProps {
   isOpen: boolean;
@@ -227,6 +229,62 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
   const isContractDeploy = !tx.tx.to;
   const isL2 = OP_STACK_CHAIN_IDS.has(tx.chainId);
   const [gasExpanded, setGasExpanded] = useState(false);
+  const [isRebroadcasting, setIsRebroadcasting] = useState(false);
+  const toast = useThemedToast();
+  const { themeId } = useTheme();
+  // On midnight, the error.fg coral reads as another "error" cue on top of the
+  // already-red container — use a neutral light surface so the CTA feels like
+  // an action, not a warning. Bauhaus error.fg is already WHITE, so it's fine.
+  const rebroadcastBg = themeId === "midnight" ? "fg.primary" : "status.error.fg";
+  const rebroadcastFg = themeId === "midnight" ? "fg.inverse" : "status.error.bg";
+
+  const canRebroadcast =
+    tx.status === "failed" &&
+    !!tx.error &&
+    tx.error.toLowerCase().includes("dropped from the mempool") &&
+    !!tx.tx.to;
+
+  const handleRebroadcast = async () => {
+    if (!tx.tx.to) return;
+    setIsRebroadcasting(true);
+    try {
+      const result = await new Promise<{ success: boolean; error?: string }>(
+        (resolve) => {
+          chrome.runtime.sendMessage(
+            {
+              type: "initiateTransfer",
+              tx: {
+                from: tx.tx.from,
+                to: tx.tx.to,
+                data: tx.tx.data,
+                value: tx.tx.value,
+                chainId: tx.tx.chainId,
+              },
+              chainName: tx.chainName,
+            },
+            resolve,
+          );
+        },
+      );
+      if (result.success) {
+        onClose();
+      } else {
+        toast({
+          title: "Rebroadcast failed",
+          description: result.error || "Could not create a new transaction request",
+          status: "error",
+        });
+      }
+    } catch (e) {
+      toast({
+        title: "Rebroadcast failed",
+        description: e instanceof Error ? e.message : "Unknown error",
+        status: "error",
+      });
+    } finally {
+      setIsRebroadcasting(false);
+    }
+  };
 
   // Native currency symbol — fast for hardcoded chains, async for custom
   const [nativeSym, setNativeSym] = useState(
@@ -779,6 +837,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 bg="status.error.bg"
                 border="2px solid"
                 borderColor="border.default"
+                borderRadius="md"
               >
                 <Text fontSize="xs" color="status.error.fg" fontWeight="700" mb={0.5} textTransform="uppercase">
                   Error
@@ -786,6 +845,22 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 <Text fontSize="xs" color="status.error.fg" fontWeight="500">
                   {tx.error}
                 </Text>
+                {canRebroadcast && (
+                  <Button
+                    size="xs"
+                    leftIcon={<RepeatIcon />}
+                    onClick={handleRebroadcast}
+                    isLoading={isRebroadcasting}
+                    mt={2}
+                    bg={rebroadcastBg}
+                    color={rebroadcastFg}
+                    borderColor={rebroadcastBg}
+                    _hover={{ bg: rebroadcastBg, opacity: 0.85 }}
+                    _active={{ bg: rebroadcastBg, opacity: 0.75 }}
+                  >
+                    Rebroadcast
+                  </Button>
+                )}
               </Box>
             )}
 
