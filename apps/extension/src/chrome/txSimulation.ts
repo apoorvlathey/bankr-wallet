@@ -55,6 +55,20 @@ const PERMIT2_ADDRESS: Address =
  */
 const SIMULATION_GAS_LIMIT = 10_000_000n;
 
+/**
+ * Higher gas cap for the batch-simulation `eth_call` (Step 2 of
+ * simulateBatchAssetChanges). A batched simulation runs N user calls
+ * sequentially plus pre/post balanceOf sweeps over every candidate token,
+ * which routinely exceeds 10M for non-trivial batches (e.g. approve + swap
+ * with a long candidate list) and surfaces as
+ * "out of gas: gas required exceeds: 10000000".
+ *
+ * Only applied to `eth_call` — most RPC providers accept 50M+ for eth_call
+ * while still capping `eth_createAccessList` at ~10M. The access-list step
+ * continues to use SIMULATION_GAS_LIMIT.
+ */
+const BATCH_SIMULATION_GAS_LIMIT = 50_000_000n;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -1737,7 +1751,7 @@ export async function simulateBatchAssetChanges(
       account: from, // sets tx.origin = from (critical for Permit2 / protocol checks)
       to: from,
       data: callData,
-      gas: SIMULATION_GAS_LIMIT,
+      gas: BATCH_SIMULATION_GAS_LIMIT,
       stateOverride: [
         {
           address: from,
