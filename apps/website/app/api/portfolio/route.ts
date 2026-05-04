@@ -1,12 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
+import { SUPPORTED_CHAIN_IDS } from "./chains";
+import { alchemyProvider } from "./providers/alchemy";
+import { duneSimProvider } from "./providers/dune";
+// Octav is intentionally not in the active chain — re-enable by importing and
+// adding `octavProvider` to PROVIDERS below. See ./providers/octav.ts.
+// import { octavProvider } from "./providers/octav";
+import {
+  PortfolioProvider,
+  PortfolioResponse,
+  PortfolioToken,
+  ProviderResult,
+  formatBalance,
+} from "./providers/types";
 
-const OCTAV_API_URL =
-  process.env.OCTAV_API_URL || "https://api.octav.fi";
-const OCTAV_API_KEY = process.env.OCTAV_API_KEY;
+/**
+ * Provider chain. The route tries each in order and falls back on any error
+ * (including 429). Only providers that are `isConfigured()` are attempted.
+ *
+ * To swap providers: reorder this array, add a new provider, or comment one
+ * out. Each provider is a self-contained module under ./providers/.
+ */
+const PROVIDERS: PortfolioProvider[] = [duneSimProvider, alchemyProvider];
+
 const BASE_RPC_URL =
   process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://mainnet.base.org";
 
-// WCHAN token on Base
+// WCHAN token on Base — RPC fallback for cases where the active provider
+// doesn't surface it.
 const WCHAN_ADDRESS = "0xBa5ED0000e1CA9136a695f0a848012A16008B032";
 const WCHAN_CHAIN_ID = 8453;
 const WCHAN_DECIMALS = 18;
@@ -17,14 +37,160 @@ const LOGO_OVERRIDES: Record<string, string> = {
     "https://walletchan.com/images/walletchan-icon.png",
 };
 
-// ERC20 balanceOf selector: 0x70a08231
 const BALANCE_OF_SELECTOR = "0x70a08231";
 
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const address = searchParams.get("address");
+
+    if (!address) {
+      return NextResponse.json(
+        { error: "Address parameter is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!PROVIDERS.some((p) => p.isConfigured())) {
+      return NextResponse.json(
+        { error: "Portfolio API not configured" },
+        { status: 503 }
+      );
+    }
+
+    const [providerOutcome, wchanResult] = await Promise.all([
+      fetchFromProviders(address, SUPPORTED_CHAIN_IDS),
+      fetchWchanBalance(address),
+    ]);
+
+    const { result: providerResult, source } = providerOutcome;
+    const tokens = [...providerResult.tokens];
+    const defiPositions = [...providerResult.defiPositions];
+
+    // Inject WCHAN wallet balance from RPC if the active provider didn't return it.
+    if (wchanResult && wchanResult.balance > 0) {
+      const wchanAddrLower = WCHAN_ADDRESS.toLowerCase();
+      const exists = tokens.some(
+        (t) =>
+          t.chainId === WCHAN_CHAIN_ID &&
+          t.contractAddress.toLowerCase() === wchanAddrLower
+      );
+      if (!exists) {
+        const priceFromOthers = lookupWchanPrice(tokens, defiPositions);
+        const valueUsd = wchanResult.balance * priceFromOthers;
+        tokens.push({
+          symbol: "wchan",
+          name: "walletchan",
+          contractAddress: wchanAddrLower,
+          chainId: WCHAN_CHAIN_ID,
+          decimals: WCHAN_DECIMALS,
+          balance: wchanResult.balance.toString(),
+          balanceFormatted: formatBalance(wchanResult.balance),
+          priceUsd: priceFromOthers,
+          valueUsd,
+        });
+      }
+    }
+
+    // Apply custom logo overrides to both tokens and DeFi assets.
+    for (const token of tokens) {
+      const key = `${token.chainId}:${token.contractAddress.toLowerCase()}`;
+      const override = LOGO_OVERRIDES[key];
+      if (override) token.logoUrl = override;
+    }
+    for (const pos of defiPositions) {
+      for (const a of pos.assets) {
+        const key = `${a.chainId}:${a.contractAddress.toLowerCase()}`;
+        if (LOGO_OVERRIDES[key]) a.logoUrl = LOGO_OVERRIDES[key];
+      }
+      for (const a of pos.rewardAssets) {
+        const key = `${a.chainId}:${a.contractAddress.toLowerCase()}`;
+        if (LOGO_OVERRIDES[key]) a.logoUrl = LOGO_OVERRIDES[key];
+      }
+    }
+
+    tokens.sort((a, b) => b.valueUsd - a.valueUsd);
+    defiPositions.sort((a, b) => b.valueUsd - a.valueUsd);
+
+    const totalValueUsd =
+      providerResult.totalValueUsd ??
+      tokens.reduce((s, t) => s + t.valueUsd, 0) +
+        defiPositions.reduce((s, p) => s + p.valueUsd, 0);
+
+    const result: PortfolioResponse = {
+      tokens,
+      defiPositions,
+      totalValueUsd,
+      source,
+    };
+
+    return NextResponse.json(result, {
+      headers: { "Cache-Control": "public, max-age=60" },
+    });
+  } catch (error) {
+    console.error("Portfolio API error:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json(
+      { error: `Failed to fetch portfolio data: ${message}` },
+      { status: 500 }
+    );
+  }
+}
+
+async function fetchFromProviders(
+  address: string,
+  chainIds: readonly number[]
+): Promise<{ result: ProviderResult; source: string }> {
+  const errors: string[] = [];
+  for (const provider of PROVIDERS) {
+    if (!provider.isConfigured()) continue;
+    try {
+      const result = await provider.fetch(address, chainIds);
+      return { result, source: provider.name };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`${provider.name}: ${msg}`);
+      console.warn(`[portfolio] provider ${provider.name} failed:`, err);
+    }
+  }
+  throw new Error(
+    errors.length
+      ? `All providers failed (${errors.join("; ")})`
+      : "No portfolio providers configured"
+  );
+}
+
+function lookupWchanPrice(
+  tokens: PortfolioToken[],
+  defiPositions: PortfolioResponse["defiPositions"]
+): number {
+  const fromTokens = tokens.find(
+    (t) =>
+      t.symbol.toLowerCase() === "wchan" &&
+      t.chainId === WCHAN_CHAIN_ID &&
+      t.priceUsd > 0
+  )?.priceUsd;
+  if (fromTokens) return fromTokens;
+
+  // Fallback for providers (e.g. Octav) that surface WCHAN inside an LP position.
+  for (const pos of defiPositions) {
+    for (const asset of pos.assets) {
+      if (
+        asset.symbol.toLowerCase() === "wchan" &&
+        asset.chainId === WCHAN_CHAIN_ID
+      ) {
+        const bal = parseFloat(asset.balance);
+        if (bal > 0) return asset.valueUsd / bal;
+      }
+    }
+  }
+  return 0;
+}
+
 /** Fetch WCHAN balance from Base RPC via eth_call */
-async function fetchWchanBalance(address: string): Promise<{
-  balance: number;
-  balanceRaw: string;
-} | null> {
+async function fetchWchanBalance(
+  address: string
+): Promise<{ balance: number; balanceRaw: string } | null> {
   try {
     const paddedAddr = address.toLowerCase().replace("0x", "").padStart(64, "0");
     const calldata = `${BALANCE_OF_SELECTOR}${paddedAddr}`;
@@ -53,380 +219,4 @@ async function fetchWchanBalance(address: string): Promise<{
     console.warn("[portfolio] WCHAN RPC fetch failed:", err);
     return null;
   }
-}
-
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const address = searchParams.get("address");
-
-    if (!address) {
-      return NextResponse.json(
-        { error: "Address parameter is required" },
-        { status: 400 }
-      );
-    }
-
-    if (!OCTAV_API_KEY) {
-      return NextResponse.json(
-        { error: "Portfolio API not configured" },
-        { status: 503 }
-      );
-    }
-
-    const params = new URLSearchParams({ addresses: address, includeImages: "true" });
-
-    // Fetch Octav portfolio and WCHAN balance in parallel
-    const [response, wchanResult] = await Promise.all([
-      fetch(`${OCTAV_API_URL}/v1/portfolio?${params.toString()}`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${OCTAV_API_KEY}`,
-        },
-        next: { revalidate: 60 },
-      }),
-      fetchWchanBalance(address),
-    ]);
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        return NextResponse.json(
-          { error: "Portfolio API authentication failed" },
-          { status: 401 }
-        );
-      }
-      return NextResponse.json(
-        { error: `Portfolio API error: ${response.status}` },
-        { status: response.status }
-      );
-    }
-
-    const data = await response.json();
-    // Octav returns an array; take first item
-    const portfolio = Array.isArray(data) ? data[0] : data;
-
-    // Transform Octav response to provider-agnostic format
-    // Octav structure: assetByProtocols -> protocol -> chains -> chain -> protocolPositions -> type -> assets[]
-    const tokenMap = new Map<string, PortfolioToken>();
-    const defiPositions: DefiPosition[] = [];
-    let totalValueUsd = parseFloat(portfolio?.networth || "0");
-
-    if (portfolio?.assetByProtocols) {
-      for (const [protoKey, protocol] of Object.entries(portfolio.assetByProtocols)) {
-        const proto = protocol as OctavProtocol;
-        if (!proto.chains) continue;
-        const isWallet = protoKey.toLowerCase() === "wallet";
-
-        for (const [chainKey, chainData] of Object.entries(proto.chains)) {
-          const chainId = getChainIdFromOctav(chainKey);
-          if (!chainId) continue;
-
-          const chain = chainData as OctavChain;
-          if (!chain.protocolPositions) continue;
-
-          for (const [posKey, positionType] of Object.entries(chain.protocolPositions)) {
-            const pos = positionType as OctavPositionType;
-
-            if (isWallet) {
-              // Wallet protocol: collect into flat token list
-              collectAssets(pos.assets, chainId, tokenMap);
-            } else {
-              // DeFi protocol: top-level assets as a position
-              if (pos.assets?.length) {
-                const topAssets = toDefiAssets(pos.assets, chainId);
-                if (topAssets.length > 0) {
-                  defiPositions.push({
-                    protocol: proto.name || protoKey,
-                    protocolLogo: proto.imgSmall || proto.imgLarge || undefined,
-                    chainId,
-                    type: posKey,
-                    name: pos.name || posKey,
-                    valueUsd: topAssets.reduce((s, a) => s + a.valueUsd, 0),
-                    assets: topAssets,
-                    rewardAssets: [],
-                  });
-                }
-              }
-
-              // Nested sub-positions (LP, staking, lending)
-              if (pos.protocolPositions) {
-                for (const subPos of pos.protocolPositions as OctavSubPosition[]) {
-                  const assets = toDefiAssets([
-                    ...(subPos.assets || []),
-                    ...(subPos.supplyAssets || []),
-                  ], chainId);
-                  const rewardAssets = toDefiAssets(subPos.rewardAssets, chainId);
-                  const posValueUsd =
-                    assets.reduce((s, a) => s + a.valueUsd, 0) +
-                    rewardAssets.reduce((s, a) => s + a.valueUsd, 0);
-                  if (assets.length === 0 && rewardAssets.length === 0) continue;
-
-                  defiPositions.push({
-                    protocol: proto.name || protoKey,
-                    protocolLogo: proto.imgSmall || proto.imgLarge || undefined,
-                    chainId,
-                    type: posKey,
-                    name: subPos.name || pos.name || posKey,
-                    valueUsd: posValueUsd,
-                    siteUrl: subPos.siteUrl || undefined,
-                    assets,
-                    rewardAssets,
-                  });
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    const tokens = Array.from(tokenMap.values());
-
-    // Inject WCHAN wallet balance from RPC if not already present from Octav
-    if (wchanResult && wchanResult.balance > 0) {
-      const wchanKey = `wchan-${WCHAN_CHAIN_ID}`;
-      if (!tokenMap.has(wchanKey)) {
-        // Find WCHAN price from DeFi positions (it appears in LP assets)
-        let wchanPrice = 0;
-        for (const pos of defiPositions) {
-          for (const asset of pos.assets) {
-            if (
-              asset.symbol.toLowerCase() === "wchan" &&
-              asset.chainId === WCHAN_CHAIN_ID
-            ) {
-              const assetBal = parseFloat(asset.balance);
-              if (assetBal > 0) {
-                wchanPrice = asset.valueUsd / assetBal;
-                break;
-              }
-            }
-          }
-          if (wchanPrice > 0) break;
-        }
-
-        const valueUsd = wchanResult.balance * wchanPrice;
-        const wchanToken: PortfolioToken = {
-          symbol: "wchan",
-          name: "walletchan",
-          contractAddress: WCHAN_ADDRESS.toLowerCase(),
-          chainId: WCHAN_CHAIN_ID,
-          decimals: WCHAN_DECIMALS,
-          balance: wchanResult.balance.toString(),
-          balanceFormatted: formatBalance(wchanResult.balance),
-          priceUsd: wchanPrice,
-          valueUsd,
-          logoUrl: LOGO_OVERRIDES[`${WCHAN_CHAIN_ID}:${WCHAN_ADDRESS.toLowerCase()}`],
-        };
-        tokens.push(wchanToken);
-        totalValueUsd += valueUsd;
-      }
-    }
-
-    // Apply custom logo overrides
-    for (const token of tokens) {
-      const key = `${token.chainId}:${token.contractAddress.toLowerCase()}`;
-      const override = LOGO_OVERRIDES[key];
-      if (override) token.logoUrl = override;
-    }
-    // Sort by USD value descending
-    tokens.sort((a, b) => b.valueUsd - a.valueUsd);
-    // Sort DeFi positions by value descending
-    defiPositions.sort((a, b) => b.valueUsd - a.valueUsd);
-
-    const result: PortfolioResponse = { tokens, defiPositions, totalValueUsd };
-
-    return NextResponse.json(result, {
-      headers: { "Cache-Control": "public, max-age=60" },
-    });
-  } catch (error) {
-    console.error("Portfolio API error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch portfolio data" },
-      { status: 500 }
-    );
-  }
-}
-
-// Types
-interface PortfolioToken {
-  symbol: string;
-  name: string;
-  contractAddress: string;
-  chainId: number;
-  decimals: number;
-  balance: string;
-  balanceFormatted: string;
-  priceUsd: number;
-  valueUsd: number;
-  logoUrl?: string;
-}
-
-interface DefiAsset {
-  symbol: string;
-  name: string;
-  contractAddress: string;
-  chainId: number;
-  balance: string;
-  balanceFormatted: string;
-  valueUsd: number;
-  logoUrl?: string;
-}
-
-interface DefiPosition {
-  protocol: string;
-  protocolLogo?: string;
-  chainId: number;
-  type: string;
-  name: string;
-  valueUsd: number;
-  siteUrl?: string;
-  assets: DefiAsset[];
-  rewardAssets: DefiAsset[];
-}
-
-interface PortfolioResponse {
-  tokens: PortfolioToken[];
-  defiPositions: DefiPosition[];
-  totalValueUsd: number;
-}
-
-// Octav API response types
-interface OctavAsset {
-  name: string;
-  symbol: string;
-  balance: string;
-  price: string;
-  value: string;
-  contract?: string;
-  decimal?: string;
-  imgSmall?: string;
-  imgLarge?: string;
-}
-
-interface OctavSubPosition {
-  name: string;
-  value: string;
-  siteUrl?: string;
-  assets?: OctavAsset[];
-  supplyAssets?: OctavAsset[];
-  borrowAssets?: OctavAsset[];
-  rewardAssets?: OctavAsset[];
-}
-
-interface OctavPositionType {
-  name: string;
-  value: string;
-  assets?: OctavAsset[];
-  protocolPositions?: OctavSubPosition[];
-}
-
-interface OctavChain {
-  name: string;
-  value: string;
-  protocolPositions?: Record<string, OctavPositionType>;
-}
-
-interface OctavProtocol {
-  name: string;
-  value: string;
-  imgSmall?: string;
-  imgLarge?: string;
-  chains?: Record<string, OctavChain>;
-}
-
-// Collect wallet assets into a deduped token map (key: symbol+chainId)
-function collectAssets(
-  assets: OctavAsset[] | undefined,
-  chainId: number,
-  tokenMap: Map<string, PortfolioToken>
-) {
-  if (!assets) return;
-  for (const asset of assets) {
-    const valueUsd = parseFloat(asset.value || "0");
-    const balance = parseFloat(asset.balance || "0");
-    const priceUsd = parseFloat(asset.price || "0");
-    if (balance === 0 && valueUsd === 0) continue;
-
-    const key = `${asset.symbol}-${chainId}`;
-    const existing = tokenMap.get(key);
-    if (existing) {
-      // Aggregate balances for the same token on the same chain
-      const existingBal = parseFloat(existing.balance);
-      const newBal = existingBal + balance;
-      existing.balance = newBal.toString();
-      existing.balanceFormatted = formatBalance(newBal);
-      existing.valueUsd += valueUsd;
-    } else {
-      tokenMap.set(key, {
-        symbol: asset.symbol || "???",
-        name: asset.name || asset.symbol || "Unknown",
-        contractAddress:
-          !asset.contract || asset.contract === "0x0000000000000000000000000000000000000000"
-            ? "native"
-            : asset.contract,
-        chainId,
-        decimals: asset.decimal ? parseInt(asset.decimal, 10) : 18,
-        balance: asset.balance || "0",
-        balanceFormatted: formatBalance(balance),
-        priceUsd,
-        valueUsd,
-        logoUrl: asset.imgSmall || asset.imgLarge || undefined,
-      });
-    }
-  }
-}
-
-// Convert Octav assets to DefiAsset[]
-function toDefiAssets(assets: OctavAsset[] | undefined, chainId: number): DefiAsset[] {
-  if (!assets) return [];
-  const result: DefiAsset[] = [];
-  for (const asset of assets) {
-    const balance = parseFloat(asset.balance || "0");
-    const valueUsd = parseFloat(asset.value || "0");
-    if (balance === 0 && valueUsd === 0) continue;
-    const contractAddress =
-      !asset.contract || asset.contract === "0x0000000000000000000000000000000000000000"
-        ? "native"
-        : asset.contract;
-    let logoUrl = asset.imgSmall || asset.imgLarge || undefined;
-    // Filter out Octav placeholder images
-    if (logoUrl?.includes("NoImageAvailable")) logoUrl = undefined;
-    // Apply logo overrides
-    const overrideKey = `${chainId}:${contractAddress.toLowerCase()}`;
-    if (LOGO_OVERRIDES[overrideKey]) logoUrl = LOGO_OVERRIDES[overrideKey];
-    result.push({
-      symbol: asset.symbol || "???",
-      name: asset.name || asset.symbol || "Unknown",
-      contractAddress,
-      chainId,
-      balance: asset.balance || "0",
-      balanceFormatted: formatBalance(balance),
-      valueUsd,
-      logoUrl,
-    });
-  }
-  return result;
-}
-
-// Map Octav chain names to chain IDs
-function getChainIdFromOctav(chain: string): number | null {
-  const map: Record<string, number> = {
-    ethereum: 1,
-    eth: 1,
-    base: 8453,
-    polygon: 137,
-    matic: 137,
-    unichain: 130,
-  };
-  return map[chain?.toLowerCase()] ?? null;
-}
-
-function formatBalance(balance: number | string | undefined): string {
-  if (!balance) return "0";
-  const num = typeof balance === "string" ? parseFloat(balance) : balance;
-  if (isNaN(num)) return "0";
-  if (num < 0.000001) return "<0.000001";
-  if (num < 1) return num.toPrecision(4);
-  if (num < 1000) return num.toFixed(4);
-  return num.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
