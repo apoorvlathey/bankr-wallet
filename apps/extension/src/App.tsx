@@ -1420,29 +1420,6 @@ function App() {
     );
   }, [isWalletUnlocked]);
 
-  // Listen for force-lock broadcasts from the service worker (e.g. master
-  // password rotation, agent password removal). When received, tear down the
-  // local unlocked state and route back to the unlock screen.
-  useEffect(() => {
-    const handler = (
-      message: { type?: string },
-      _sender: chrome.runtime.MessageSender,
-      sendResponse: (response?: unknown) => void,
-    ) => {
-      if (message?.type === "walletLockedExternal") {
-        setIsWalletUnlocked(false);
-        setPasswordType(null);
-        setView("unlock");
-        sendResponse({ ok: true });
-      }
-      return false; // synchronous response
-    };
-    chrome.runtime.onMessage.addListener(handler);
-    return () => {
-      chrome.runtime.onMessage.removeListener(handler);
-    };
-  }, []);
-
   const handleUnlock = useCallback(async () => {
     // Mark wallet as unlocked
     setIsWalletUnlocked(true);
@@ -1484,6 +1461,38 @@ function App() {
       setView("main");
     }
   }, [returnToChatAfterUnlock]);
+
+  // Cross-surface lock/unlock sync. The originating surface also receives
+  // its own broadcast, so guard the unlock branch with isWalletUnlocked to
+  // avoid re-running handleUnlock and clobbering its view.
+  const isWalletUnlockedRef = useRef(isWalletUnlocked);
+  useEffect(() => {
+    isWalletUnlockedRef.current = isWalletUnlocked;
+  }, [isWalletUnlocked]);
+  useEffect(() => {
+    const handler = (
+      message: { type?: string },
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response?: unknown) => void,
+    ) => {
+      if (message?.type === "walletLockedExternal") {
+        setIsWalletUnlocked(false);
+        setPasswordType(null);
+        setView("unlock");
+        sendResponse({ ok: true });
+      } else if (message?.type === "walletUnlockedExternal") {
+        if (!isWalletUnlockedRef.current) {
+          handleUnlock();
+        }
+        sendResponse({ ok: true });
+      }
+      return false; // synchronous response
+    };
+    chrome.runtime.onMessage.addListener(handler);
+    return () => {
+      chrome.runtime.onMessage.removeListener(handler);
+    };
+  }, [handleUnlock]);
 
   const handleCopyAddress = async () => {
     try {

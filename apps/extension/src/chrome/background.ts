@@ -1028,6 +1028,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "unlockWallet": {
       handleUnlockWallet(message.password).then((result) => {
+        if (result.success) {
+          // Broadcast so any other open UI surface (sidepanel + full-screen
+          // tab simultaneously) auto-unlocks. The message carries no secrets;
+          // each surface re-queries its own state from the SW cache.
+          chrome.runtime.sendMessage({ type: "walletUnlockedExternal" }).catch(() => {});
+        }
         sendResponse(result);
       });
       return true;
