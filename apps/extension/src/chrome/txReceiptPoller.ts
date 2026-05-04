@@ -11,7 +11,7 @@ import {
   type GasData,
 } from "./txHistoryStorage";
 import { getRpcUrl, showNotification } from "./txHandlers";
-import { OP_STACK_CHAIN_IDS } from "../constants/networks";
+import { OP_STACK_CHAIN_IDS, FLASHBLOCKS_CHAIN_IDS } from "../constants/networks";
 import { CHAIN_CONFIG } from "../constants/chainConfig";
 import { getStoredChainName, getStoredExplorerUrl } from "@/lib/chains";
 
@@ -20,6 +20,17 @@ const INITIAL_INTERVAL_MS = 2_000;
 const MAX_INTERVAL_MS = 30_000;
 const BACKOFF_FACTOR = 1.5;
 const MAX_POLL_DURATION_MS = 10 * 60 * 1000; // 10 minutes
+
+/**
+ * Fast-poll phase for chains that support Flashblocks (~200ms preconfs on Base).
+ * On a Flashblocks-aware RPC, eth_getTransactionReceipt resolves within ~200ms;
+ * on a non-aware RPC it just resolves at normal block time and the wasted polls
+ * are negligible. The 5s window covers both the Flashblock arrival and a normal
+ * 2s block confirmation, so even a non-aware RPC will catch the receipt before
+ * we drop into the standard backoff loop.
+ */
+const FLASHBLOCKS_FAST_INTERVAL_MS = 250;
+const FLASHBLOCKS_FAST_PHASE_MS = 5_000;
 
 /**
  * Dropped-tx detection: when the receipt is null, we also check
@@ -59,6 +70,18 @@ async function pollReceipt(
   chainId: number,
 ): Promise<void> {
   const startTime = Date.now();
+
+  // Flashblocks fast phase: tight polling for the first ~5s on chains that
+  // support sub-second preconfirmations.
+  if (FLASHBLOCKS_CHAIN_IDS.has(chainId)) {
+    const fastPhaseEnd = startTime + FLASHBLOCKS_FAST_PHASE_MS;
+    while (Date.now() < fastPhaseEnd) {
+      await sleep(FLASHBLOCKS_FAST_INTERVAL_MS);
+      const confirmed = await checkAndFinalizeReceipt(txId, txHash, chainId);
+      if (confirmed !== null) return;
+    }
+  }
+
   let interval = INITIAL_INTERVAL_MS;
 
   while (Date.now() - startTime < MAX_POLL_DURATION_MS) {

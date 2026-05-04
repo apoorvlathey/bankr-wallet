@@ -893,6 +893,14 @@ The animation shows:
 
 In sidepanel mode, the view navigates back immediately without the animation (sidepanel stays open for further interactions).
 
+### Receipt Polling & Flashblocks
+
+After a tx is broadcast, `txReceiptPoller.startReceiptPolling(txId, txHash, chainId)` polls `eth_getTransactionReceipt` until a receipt is found or the 10-minute timeout elapses. Default cadence: 2s initial, 1.5× exponential backoff up to 30s.
+
+Chains marked with `supportsFlashblocks: true` in `CHAIN_REGISTRY` (Base, Unichain) get an additional **fast phase**: 250ms polling for the first ~5s before the standard schedule kicks in. This delivers ~250ms user-perceived confirmation. The default RPCs for both chains (`mainnet.base.org`, `mainnet.unichain.org`) are already Flashblocks-aware — `eth_getTransactionReceipt` resolves at Flashblock pace without any URL change. Premium providers (Alchemy, QuickNode, Chainstack) also serve Flashblocks data. On a non-Flashblocks-aware RPC the fast phase is harmless polling overhead — the receipt arrives at the normal ~2s mark and the loop transitions to standard backoff.
+
+To enable Flashblocks for another chain (e.g., OP Mainnet), set `supportsFlashblocks: true` on its `CHAIN_REGISTRY` entry. The `FLASHBLOCKS_CHAIN_IDS` set auto-derives, no other code changes required.
+
 ## Browser Notifications
 
 The extension uses Chrome's Notifications API to alert users when transactions complete while the popup/sidepanel is closed.

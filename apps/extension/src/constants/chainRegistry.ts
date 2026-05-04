@@ -49,6 +49,14 @@ export interface ChainEntry {
   nativeCurrency: { name: string; symbol: string; decimals: number };
   /** Whether this chain uses OP Stack (for L1 fee breakdown in gas display) */
   isOpStack: boolean;
+  /**
+   * Whether this chain supports Flashblocks (~200ms preconfirmations exposed via
+   * standard eth_getTransactionReceipt on Flashblocks-aware RPC endpoints).
+   * Triggers a fast-poll phase in the receipt poller. Harmless on RPCs that
+   * don't support Flashblocks — they just respond with normal-block-time
+   * receipts and the poller transitions to standard backoff.
+   */
+  supportsFlashblocks?: boolean;
   /** Whether the Bankr API supports this chain */
   isBankrSupported: boolean;
   /** Whether 0x Swap API supports this chain */
@@ -134,6 +142,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     text: "#0052FF",
     nativeCurrency: ETH_CURRENCY,
     isOpStack: true,
+    supportsFlashblocks: true,
     isBankrSupported: true,
     isSwapSupported: true,
     coingeckoTokenId: "ethereum",
@@ -204,6 +213,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     text: "#FF007A",
     nativeCurrency: ETH_CURRENCY,
     isOpStack: true,
+    supportsFlashblocks: true,
     isBankrSupported: true,
     isSwapSupported: true,
     coingeckoTokenId: "ethereum",
@@ -300,6 +310,10 @@ for (const c of CHAIN_REGISTRY) {
 
 export const OP_STACK_CHAIN_IDS = new Set(
   CHAIN_REGISTRY.filter((c) => c.isOpStack).map((c) => c.chainId)
+);
+
+export const FLASHBLOCKS_CHAIN_IDS = new Set(
+  CHAIN_REGISTRY.filter((c) => c.supportsFlashblocks).map((c) => c.chainId)
 );
 
 export const CHAIN_NAMES: Record<number, string> = {};
