@@ -336,12 +336,11 @@ function BatchTransactionConfirmation({
   // ---------------------------------------------------------------------------
   // Add-to-Batch (dapp-initiated batches only)
   // ---------------------------------------------------------------------------
-  // Cross-dapp batching is only available for Bankr/impersonator accounts (the
-  // ship goes through the Bankr API). The button is hidden entirely on
-  // PK/SP non-atomic batches and on the cross-dapp batch screen itself
-  // (the wrapper doesn't pass `onAddedToBatch`).
-  const canBatchAccount =
-    accountType === "bankr" || accountType === "impersonator";
+  // Cross-dapp batching is only available for Bankr accounts (the ship goes
+  // through the Bankr API). The button is hidden entirely on PK/SP non-atomic
+  // batches, on the cross-dapp batch screen itself (the wrapper doesn't pass
+  // `onAddedToBatch`), and on view-only impersonator accounts.
+  const canBatchAccount = accountType === "bankr";
 
   // If a batch is already pending, the new bundle's from + chain must match.
   // Otherwise show a tooltip explaining why the button is disabled.
@@ -1140,6 +1139,22 @@ function BatchTransactionConfirmation({
                   </HStack>
                 )}
 
+                {/* Impersonator Info Box */}
+                {accountType === "impersonator" && !customConfirmHandler && (
+                  <Box
+                    bg="accent.highlight"
+                    border={tokens.borders.medium}
+                    borderColor="border.default"
+                    borderRadius="lg"
+                    boxShadow="card"
+                    p={3}
+                  >
+                    <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
+                      Connected via Impersonated account — signing is disabled.
+                    </Text>
+                  </Box>
+                )}
+
                 {/* Action Buttons */}
                 {state !== "submitting" && (
                   <HStack spacing={3} pb={1}>
@@ -1148,10 +1163,9 @@ function BatchTransactionConfirmation({
                     </Button>
                     {/*
                      * Cross-dapp batches always show Confirm (the user is on
-                     * a Bankr/impersonator account by definition and the ship
-                     * goes through the Bankr API). For dapp-initiated batches,
-                     * read-only impersonator accounts can't sign, so we hide
-                     * the button.
+                     * a Bankr account by definition and the ship goes through
+                     * the Bankr API). For dapp-initiated batches, read-only
+                     * impersonator accounts can't sign, so we hide the button.
                      */}
                     {(customConfirmHandler || accountType !== "impersonator") && (
                       <Button

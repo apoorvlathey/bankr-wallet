@@ -30,10 +30,22 @@ function ChangePassword({ onComplete, onCancel, onSessionExpired }: ChangePasswo
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [agentEnabled, setAgentEnabled] = useState(false);
   const [errors, setErrors] = useState<{
     newPassword?: string;
     confirmPassword?: string;
   }>({});
+
+  // Check if agent password is enabled (informational banner)
+  useEffect(() => {
+    chrome.runtime.sendMessage(
+      { type: "isAgentPasswordEnabled" },
+      (response: { enabled: boolean }) => {
+        if (chrome.runtime.lastError) return;
+        setAgentEnabled(!!response?.enabled);
+      },
+    );
+  }, []);
 
   const toast = useThemedToast();
   const { themeId } = useTheme();
@@ -162,6 +174,25 @@ function ChangePassword({ onComplete, onCancel, onSessionExpired }: ChangePasswo
       <Text fontSize="sm" color="text.secondary" fontWeight="500">
         Choose a new password to secure your wallet.
       </Text>
+
+      {agentEnabled && (
+        <Box
+          bg="status.warning.tint"
+          color="status.warning.fg"
+          border="1px solid"
+          borderColor="status.warning.border"
+          borderRadius="md"
+          p={3}
+        >
+          <Text fontSize="sm" fontWeight="500" lineHeight="1.5">
+            <Text as="span" fontWeight="700">
+              Heads up:
+            </Text>{" "}
+            This also clears your agent password. Set a new one from Settings →
+            Security afterward.
+          </Text>
+        </Box>
+      )}
 
       <FormControl isInvalid={!!errors.newPassword}>
         <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">

@@ -14,7 +14,7 @@ import {
 } from "../constants/networks";
 import { ALLOWED_CHAIN_IDS } from "../constants/chainRegistry";
 import { CHAIN_CONFIG } from "../constants/chainConfig";
-import { getActiveAccount, getTabAccount } from "./accountStorage";
+import { getActiveAccount, getAccountById } from "./accountStorage";
 import {
   savePendingBatchTxRequest,
   removePendingBatchTxRequest,
@@ -137,10 +137,14 @@ export async function handleWalletGetCapabilities(
 ): Promise<Record<string, any>> {
   const account = await getActiveAccount();
 
-  const isBankrAccount =
-    account?.type === "bankr" || account?.type === "impersonator";
+  const isBankrAccount = account?.type === "bankr";
   const isPKOrSP =
     account?.type === "privateKey" || account?.type === "seedPhrase";
+  // Impersonators advertise batching so wagmi dapps surface the batched flow,
+  // but the popup will show a view-only banner and hide the Confirm button.
+  // Confirm-time signing is still defended at handleConfirmBatchTransaction
+  // and resolvePinnedAccount.
+  const isImpersonator = account?.type === "impersonator";
 
   const capabilities: Record<string, any> = {};
 
@@ -160,7 +164,7 @@ export async function handleWalletGetCapabilities(
   // PK/SP accounts: report "supported" so dapps show the batching option.
   // Actual execution is non-atomic (sequential txs), but if a dapp explicitly
   // requires atomicity via atomicRequired: true, we reject in handleWalletSendCalls.
-  if (isPKOrSP) {
+  if (isPKOrSP || isImpersonator) {
     for (const chainId of ALLOWED_CHAIN_IDS) {
       const hexChainId = `0x${chainId.toString(16)}` as `0x${string}`;
       if (chainIds && chainIds.length > 0 && !chainIds.includes(hexChainId)) {
@@ -185,6 +189,9 @@ export function handleWalletSendCalls(
   origin: string,
   favicon: string | null,
   senderWindowId?: number,
+  senderOrigin?: string,
+  tabId?: number,
+  frameId?: number,
 ): void {
   (async () => {
     // Validate version
@@ -199,14 +206,18 @@ export function handleWalletSendCalls(
 
     const chainId = Number(params.chainId);
 
-    // Validate account type — must be Bankr, PK, or SP (not impersonator read-only)
+    // Validate account type. Impersonator accounts land in the popup so the
+    // user can SEE what the dapp tried to send (banner + disabled Confirm in
+    // BatchTransactionConfirmation.tsx); confirm-time signing is still
+    // defended in handleConfirmBatchTransaction + resolvePinnedAccount.
     const account = await getActiveAccount();
-    const isBankrAccount =
-      account?.type === "bankr" || account?.type === "impersonator";
+
+    const isBankrAccount = account?.type === "bankr";
     const isPKOrSP =
       account?.type === "privateKey" || account?.type === "seedPhrase";
+    const isImpersonator = account?.type === "impersonator";
 
-    if (!account || (!isBankrAccount && !isPKOrSP)) {
+    if (!account || (!isBankrAccount && !isPKOrSP && !isImpersonator)) {
       await writeResultToStorage(`batchTxAck:${bundleId}`, {
         success: false,
         error: "Active account does not support batch transactions",
@@ -259,8 +270,29 @@ export function handleWalletSendCalls(
       return;
     }
 
+    // SECURITY: validate every per-call from (if provided) matches the active account.
+    for (const call of params.calls) {
+      const callFrom = (call as ERC5792Call & { from?: string }).from;
+      if (
+        typeof callFrom === "string" &&
+        callFrom.length > 0 &&
+        callFrom.toLowerCase() !== account.address.toLowerCase()
+      ) {
+        await writeResultToStorage(`batchTxAck:${bundleId}`, {
+          success: false,
+          error: "Call 'from' does not match active account",
+          code: ERC5792_ERRORS.UNAUTHORIZED,
+        });
+        return;
+      }
+    }
+
     const isAtomic = isBankrAccount;
     const chainName = CHAIN_NAMES[chainId] || `Chain ${chainId}`;
+
+    // SECURITY: prefer Chrome-trusted sender.origin for binding; fall back to
+    // the message-derived origin for backward compat.
+    const trustedOrigin = senderOrigin ?? origin;
 
     // Save pending request (include accountType for confirm handler routing)
     const pendingRequest: PendingBatchTxRequest = {
@@ -272,6 +304,12 @@ export function handleWalletSendCalls(
       chainId,
       timestamp: Date.now(),
       accountType: account.type as PendingBatchTxRequest["accountType"],
+      accountId: account.id,
+      accountAddress: account.address.toLowerCase(),
+      tabId,
+      frameId,
+      senderOrigin,
+      requestChainId: chainId,
     };
     await savePendingBatchTxRequest(pendingRequest);
 
@@ -282,6 +320,7 @@ export function handleWalletSendCalls(
       status: BUNDLE_STATUS.PENDING,
       atomic: isAtomic,
       createdAt: Date.now(),
+      origin: trustedOrigin,
     });
 
     // Send ack immediately so the dapp gets the bundle ID
@@ -318,6 +357,27 @@ export async function handleConfirmBatchTransaction(
   if (!pending || Date.now() - pending.timestamp > TX_EXPIRY_MS) {
     if (pending) await removePendingBatchTxRequest(bundleId);
     return { success: false, error: "Batch request expired" };
+  }
+
+  // SECURITY: resolve the pinned account; reject stale/missing bindings.
+  if (!pending.accountId) {
+    return { success: false, error: "Pending request is no longer valid" };
+  }
+  const pinnedAccount = await getAccountById(pending.accountId);
+  if (!pinnedAccount) {
+    return { success: false, error: "Account no longer exists" };
+  }
+  if (
+    pending.accountAddress &&
+    pinnedAccount.address.toLowerCase() !== pending.accountAddress.toLowerCase()
+  ) {
+    return { success: false, error: "Pending request is no longer valid" };
+  }
+  if (pinnedAccount.type !== "bankr") {
+    return {
+      success: false,
+      error: "Pending request is no longer valid",
+    };
   }
 
   // Validate chain support.
@@ -377,7 +437,13 @@ export async function handleConfirmBatchTransaction(
   }
 
   // Process in background
-  processBatchTransactionInBackground(bundleId, pending, apiKey, functionNames);
+  processBatchTransactionInBackground(
+    bundleId,
+    pending,
+    apiKey,
+    pinnedAccount.address,
+    functionNames,
+  );
 
   return { success: true };
 }
@@ -386,19 +452,14 @@ async function processBatchTransactionInBackground(
   bundleId: string,
   pending: PendingBatchTxRequest,
   apiKey: string,
+  pinnedAddress: string,
   functionNames?: string[],
 ): Promise<void> {
-  const account = await getActiveAccount();
-  if (!account) {
-    await handleBatchFailure(bundleId, pending, "No active account");
-    return;
-  }
-
-  // Encode calls into single ERC-7821 tx
-  const batchTx = encodeBatchCalls(pending.params.calls, account.address);
+  // Encode calls into single ERC-7821 tx using the pinned account address.
+  const batchTx = encodeBatchCalls(pending.params.calls, pinnedAddress);
 
   const tx: TransactionParams = {
-    from: account.address,
+    from: pinnedAddress,
     to: batchTx.to,
     data: batchTx.data,
     value: batchTx.value,
@@ -546,6 +607,7 @@ async function handleBatchFailure(
 export async function handleConfirmBatchTransactionPK(
   bundleId: string,
   password: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   tabId?: number,
   functionNames?: string[],
   precomputedGasEstimates?: import("./gasEstimation").GasEstimate[],
@@ -563,11 +625,22 @@ export async function handleConfirmBatchTransactionPK(
 
   processingBundleIds.add(bundleId);
 
-  // Get the account (same pattern as handleConfirmTransactionAsyncPK)
-  const account = tabId ? await getTabAccount(tabId) : await getActiveAccount();
+  // SECURITY: resolve the pinned account; do NOT fall back to getActiveAccount().
+  if (!pending.accountId) {
+    processingBundleIds.delete(bundleId);
+    return { success: false, error: "Pending request is no longer valid" };
+  }
+  const account = await getAccountById(pending.accountId);
   if (!account) {
     processingBundleIds.delete(bundleId);
-    return { success: false, error: "No account found" };
+    return { success: false, error: "Account no longer exists" };
+  }
+  if (
+    pending.accountAddress &&
+    account.address.toLowerCase() !== pending.accountAddress.toLowerCase()
+  ) {
+    processingBundleIds.delete(bundleId);
+    return { success: false, error: "Pending request is no longer valid" };
   }
 
   if (account.type !== "privateKey" && account.type !== "seedPhrase") {
@@ -1016,9 +1089,12 @@ export async function handleRemoveCallFromPendingBatch(
 
 export async function handleWalletGetCallsStatus(
   bundleId: string,
+  requestOrigin?: string,
 ): Promise<WalletGetCallsStatusResult | { error: string; code: number }> {
   const status = await getBundleStatus(bundleId);
-  if (!status) {
+  // Scope lookup to the origin that created the bundle. Legacy entries
+  // without `origin` are treated as unknown (safer than leaking status).
+  if (!status || !status.origin || status.origin !== requestOrigin) {
     return {
       error: "Unknown bundle ID",
       code: ERC5792_ERRORS.UNKNOWN_BUNDLE_ID,
@@ -1041,9 +1117,12 @@ export async function handleWalletGetCallsStatus(
 
 export async function handleWalletShowCallsStatus(
   bundleId: string,
+  requestOrigin?: string,
 ): Promise<void> {
   const status = await getBundleStatus(bundleId);
-  if (status?.txHash) {
+  // Refuse to act if origin doesn't match the bundle's creator.
+  if (!status || !status.origin || status.origin !== requestOrigin) return;
+  if (status.txHash) {
     const chainConfig = CHAIN_CONFIG[status.chainId];
     if (chainConfig?.explorer) {
       chrome.tabs.create({

@@ -5,7 +5,7 @@
  * `eth_sendTransaction` requests that came from different dapps (or in-wallet
  * transfers) and ship them in one onchain transaction via the Bankr API.
  *
- * Bankr-API accounts only (`type: "bankr"` or `type: "impersonator"`).
+ * Bankr-API accounts only (`type: "bankr"`).
  *
  * Lifecycle:
  *   1. dapp calls `eth_sendTransaction` → standard pending tx request created
@@ -73,8 +73,15 @@ export async function handleAddToCrossDappBatch(
   }
 
   // Only Bankr-API accounts can use cross-dapp batching.
+  // SECURITY: impersonator (view-only) accounts are rejected here.
   const account = await getActiveAccount();
-  if (!account || (account.type !== "bankr" && account.type !== "impersonator")) {
+  if (!account || account.type === "impersonator") {
+    return {
+      success: false,
+      error: "View-only accounts cannot use cross-dapp batching",
+    };
+  }
+  if (account.type !== "bankr") {
     return {
       success: false,
       error: "Cross-dapp batching is only available for Bankr accounts",
@@ -125,9 +132,10 @@ export async function handleAddToCrossDappBatch(
         fromAddress: pending.tx.from,
         chainId: txChainId,
         chainName: pending.chainName,
-        accountType: account.type as "bankr" | "impersonator",
+        accountType: "bankr",
         entries: [newEntry],
         createdAt: Date.now(),
+        accountId: account.id,
       };
 
   await setCrossDappBatch(next);
@@ -165,8 +173,15 @@ export async function handleAddCallsToCrossDappBatch(
   }
 
   // Only Bankr-API accounts can use cross-dapp batching.
+  // SECURITY: impersonator (view-only) accounts are rejected here.
   const account = await getActiveAccount();
-  if (!account || (account.type !== "bankr" && account.type !== "impersonator")) {
+  if (!account || account.type === "impersonator") {
+    return {
+      success: false,
+      error: "View-only accounts cannot use cross-dapp batching",
+    };
+  }
+  if (account.type !== "bankr") {
     return {
       success: false,
       error: "Cross-dapp batching is only available for Bankr accounts",
@@ -235,9 +250,10 @@ export async function handleAddCallsToCrossDappBatch(
         fromAddress: pending.params.from || account.address,
         chainId: pending.chainId,
         chainName: pending.chainName,
-        accountType: account.type as "bankr" | "impersonator",
+        accountType: "bankr",
         entries: newEntries,
         createdAt: now,
+        accountId: account.id,
       };
 
   await setCrossDappBatch(next);
@@ -370,6 +386,8 @@ export async function handleRejectCrossDappBatch(): Promise<{
 // Ship the cross-dapp batch (atomic via Bankr API)
 // ---------------------------------------------------------------------------
 
+const BATCH_EXPIRY_MS = 30 * 60 * 1000;
+
 export async function handleConfirmCrossDappBatch(
   password: string,
 ): Promise<{ success: boolean; error?: string; txHash?: string }> {
@@ -382,11 +400,38 @@ export async function handleConfirmCrossDappBatch(
     return { success: false, error: "No batch to confirm" };
   }
 
+  // SECURITY: re-check expiry at confirm time in case cleanup didn't run.
+  if (Date.now() - batch.createdAt > BATCH_EXPIRY_MS) {
+    await clearCrossDappBatch();
+    return { success: false, error: "Batch request expired" };
+  }
+
   if (!BANKR_SUPPORTED_CHAIN_IDS.has(batch.chainId)) {
     return {
       success: false,
       error: `Chain ${batch.chainName} is not supported for Bankr API accounts`,
     };
+  }
+
+  // SECURITY: the cross-dapp batch ships via the active Bankr API key. If the
+  // user has switched accounts since assembling the batch, the API key now
+  // belongs to a different account and the actual signer would not match the
+  // address shown to the user. Refuse rather than silently rebind.
+  const liveActiveAccount = await getActiveAccount();
+  if (!liveActiveAccount || liveActiveAccount.type !== "bankr") {
+    return { success: false, error: "Pending request is no longer valid" };
+  }
+  if (
+    batch.accountId &&
+    liveActiveAccount.id !== batch.accountId
+  ) {
+    return { success: false, error: "Pending request is no longer valid" };
+  }
+  if (
+    liveActiveAccount.address.toLowerCase() !==
+    batch.fromAddress.toLowerCase()
+  ) {
+    return { success: false, error: "Pending request is no longer valid" };
   }
 
   isProcessing = true;

@@ -174,6 +174,17 @@ export async function signTypedData(
   // Parse typed data if it's a string
   const data = typeof typedData === "string" ? JSON.parse(typedData) : typedData;
 
+  // Bind to request chain: reject mismatched domain.chainId to prevent
+  // cross-chain replay/confusion attacks. Absent chainId is permitted.
+  if (data?.domain && data.domain.chainId !== undefined && data.domain.chainId !== null) {
+    const domainChainId = Number(data.domain.chainId);
+    if (Number.isFinite(domainChainId) && domainChainId !== chainId) {
+      throw new Error(
+        `Provided chainId "${domainChainId}" must match the active chainId "${chainId}"`,
+      );
+    }
+  }
+
   const signature = await account.signTypedData({
     domain: data.domain,
     types: data.types,
@@ -194,6 +205,26 @@ export async function handleSignatureRequest(
   params: any[],
   chainId: number
 ): Promise<string> {
+  // Defense in depth: derive the address from the private key and verify
+  // it matches the signer address provided in the dapp request.
+  const derivedAddress = privateKeyToAccount(privateKey).address.toLowerCase();
+  let signerParam: string | undefined;
+  if (method === "personal_sign") signerParam = params[1];
+  else if (
+    method === "eth_sign" ||
+    method === "eth_signTypedData" ||
+    method === "eth_signTypedData_v3" ||
+    method === "eth_signTypedData_v4"
+  )
+    signerParam = params[0];
+
+  if (
+    typeof signerParam === "string" &&
+    signerParam.toLowerCase() !== derivedAddress
+  ) {
+    throw new Error("Signer address does not match active account");
+  }
+
   switch (method) {
     case "personal_sign": {
       // params[0] is the message (hex), params[1] is the address

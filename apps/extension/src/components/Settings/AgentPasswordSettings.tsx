@@ -142,7 +142,7 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
       });
 
       if (!response.success) {
-        if (response.error?.includes("master password")) {
+        if (response.error?.includes("Must be unlocked with master password")) {
           toast({
             title: "Master password required",
             description: "You must be unlocked with master password to set agent password",

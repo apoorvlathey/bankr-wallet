@@ -67,6 +67,14 @@ export interface PendingBatchTxRequest {
   timestamp: number;
   /** Account type at time of request — determines atomic vs non-atomic path */
   accountType?: "bankr" | "impersonator" | "privateKey" | "seedPhrase";
+  // SECURITY: trusted context captured at request arrival. Optional for
+  // backward compat with entries written by older builds.
+  accountId?: string;
+  accountAddress?: string;
+  tabId?: number;
+  frameId?: number;
+  senderOrigin?: string;
+  requestChainId?: number;
 }
 
 /** Status codes per ERC-5792 */
@@ -90,6 +98,8 @@ export interface BundleStatus {
   createdAt: number;
   completedAt?: number;
   error?: string;
+  /** Origin of the dapp that created this bundle — used to scope status lookups. Optional for backward compat with pre-fix entries. */
+  origin?: string;
 }
 
 // ---------------------------------------------------------------------------
