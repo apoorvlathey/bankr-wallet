@@ -22,11 +22,12 @@ import {
 } from "@chakra-ui/react";
 import { motion } from "framer-motion";
 import { ExternalLink, Copy, Check } from "lucide-react";
-import { COINGECKO_URL, CHROME_STORE_URL } from "../constants";
+import { COINGECKO_URL, CHROME_STORE_URL, GITHUB_URL } from "../constants";
 
 const MotionBox = motion(Box);
 
-const SKILL_URL = "https://walletchan.com/SKILL.md";
+const SKILL_URL =
+  "https://raw.githubusercontent.com/apoorvlathey/walletchan-skill/main/skills/walletchan/SKILL.md";
 const CLAWHUB_URL = "https://clawhub.ai/apoorvlathey/walletchan";
 const CLAWHUB_INSTALL_CMD = "clawhub install walletchan";
 
@@ -219,9 +220,11 @@ export function Hero() {
                   <Button
                     variant="outline"
                     size={{ base: "md", md: "lg" }}
-                    onClick={onOpen}
+                    as="a"
+                    href={GITHUB_URL}
+                    target="_blank"
                   >
-                    🤖 Add to your Agent
+                    View on GitHub
                   </Button>
                 </HStack>
               </motion.div>

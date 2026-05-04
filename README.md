@@ -12,6 +12,10 @@
   <a href="https://walletchan.com/">https://walletchan.com/</a>
 </p>
 
+<p align="center">
+  Agent Skills for WalletChan: <a href="https://github.com/apoorvlathey/walletchan-skill">apoorvlathey/walletchan-skill</a>
+</p>
+
 <table>
   <tr>
     <td><img src="./apps/website/public/screenshots/password-page.png" alt="Password Page" /></td>

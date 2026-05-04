@@ -246,7 +246,7 @@ When working on features, refer to these docs:
 | `apps/arb-bot/IMPLEMENTATION.md`                         | Arb bot: cross-pool arb strategy, batched RPC, encoding   |
 | `_docs/TOKEN_GATED_TG.md`                                | Token-gated TG system: architecture, DB schema, security  |
 | `openclaw-skills/bankr/SKILL.md`                         | Bankr API interactions, workflows, error handling         |
-| `apps/website/public/SKILL.md`                           | Public agent skill for driving the WalletChan extension via CDP. Published at [github.com/apoorvlathey/walletchan-skill](https://github.com/apoorvlathey/walletchan-skill) (install: `npx skills add apoorvlathey/walletchan-skill`). **Keep the website copy and the published repo in sync.** |
+| [github.com/apoorvlathey/walletchan-skill](https://github.com/apoorvlathey/walletchan-skill) | Public agent skill for driving the WalletChan extension via CDP. Canonical source lives in this separate repo; the website links directly to its raw `SKILL.md` (`https://raw.githubusercontent.com/apoorvlathey/walletchan-skill/main/skills/walletchan/SKILL.md`) and does not host its own copy. |
 
 ## Important Patterns
 
