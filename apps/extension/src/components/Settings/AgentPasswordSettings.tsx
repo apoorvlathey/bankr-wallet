@@ -17,7 +17,7 @@ import {
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { ViewIcon, ViewOffIcon, ArrowBackIcon, WarningIcon, LockIcon, CheckIcon, CloseIcon } from "@chakra-ui/icons";
-import { ThemedCard } from "@/theme";
+import { ThemedCard, useTheme } from "@/theme";
 
 // Simple permission badge component
 function PermissionBadge({ label, allowed }: { label: string; allowed: boolean }) {
@@ -77,6 +77,8 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
   const [removeError, setRemoveError] = useState("");
 
   const toast = useThemedToast();
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const masterPasswordInputRef = useRef<HTMLInputElement>(null);
 
@@ -449,6 +451,7 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
           bg="accent.highlight"
           border="2px solid"
           borderColor="border.default"
+          borderRadius={isDarkTheme ? "md" : undefined}
           p={2}
         >
           <Text color="accentFg.highlight" fontSize="xs" fontWeight="700">

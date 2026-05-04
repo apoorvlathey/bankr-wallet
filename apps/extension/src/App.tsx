@@ -3232,6 +3232,7 @@ function App() {
                                 bg="surface.raised"
                                 border="1.5px solid"
                                 borderColor="border.default"
+                                borderRadius={isDarkTheme ? "md" : undefined}
                                 px={1.5}
                                 py={1}
                                 cursor="pointer"

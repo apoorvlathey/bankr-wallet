@@ -150,6 +150,8 @@ function SettingsRow({
   // Midnight. The previous `bg="fg.primary"` rendered as a stark off-white
   // square in Midnight (because fg.primary is near-white there).
   const chevronStrip = useStripTokens();
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   return (
     <ThemedCard
       weight="medium"
@@ -169,7 +171,12 @@ function SettingsRow({
 
       <HStack justify="space-between">
         <HStack spacing={3}>
-          <Box p={2} bg={iconBg} color={iconColor}>
+          <Box
+            p={2}
+            bg={iconBg}
+            color={iconColor}
+            borderRadius={isDarkTheme ? "md" : undefined}
+          >
             {icon}
           </Box>
           <Box>
@@ -185,7 +192,11 @@ function SettingsRow({
           </Box>
         </HStack>
         {showChevron && (
-          <Box bg={chevronStrip.bg} p={1}>
+          <Box
+            bg={chevronStrip.bg}
+            p={1}
+            borderRadius={isDarkTheme ? "md" : undefined}
+          >
             <ChevronRightIcon color={chevronStrip.fg} />
           </Box>
         )}
@@ -383,10 +394,10 @@ function Settings({
 
       {/* Agent Password — OFF state needs different neutrals per theme:
           Bauhaus has a white sunken surface and dark fg.muted that read as
-          "disabled but visible". Midnight's surface.sunken (#070911) +
-          fg.muted (#525A6E) are both dark and collapse into an invisible
-          black void. Lift the chip onto surface.raisedHover with fg.secondary
-          there so the OFF state still reads as a recessed neutral. */}
+          "disabled but visible". In Midnight, lift the chip onto
+          border.strong with fg.primary so the OFF tile reads as a clearly
+          elevated neutral against the card (the previous border.default was
+          too close to the card surface and faded out). */}
       <SettingsRow
         title="Agent Password"
         subtitle="Allow AI agents to unlock wallet"
@@ -395,7 +406,7 @@ function Settings({
           isAgentPasswordEnabled
             ? "accent.secondary"
             : isDarkTheme
-              ? "border.default"
+              ? "border.strong"
               : "surface.sunken"
         }
         iconColor={
@@ -414,7 +425,7 @@ function Settings({
               isAgentPasswordEnabled
                 ? "accent.secondary"
                 : isDarkTheme
-                  ? "border.default"
+                  ? "border.strong"
                   : "surface.sunken"
             }
             color={
@@ -446,17 +457,16 @@ function Settings({
         onClick={() => setTab("autoLock")}
       />
 
-      {/* Chain RPCs — uses the same inverted strip palette as the chevron so
-          the chip reads as a "system" tile in both themes (BLACK chip in
-          Bauhaus, recessed surface.sunken in Midnight). The previous
-          `iconBg="fg.primary"` rendered as a glaring near-white square in
-          Midnight. Emoji replaced with an SVG so iconColor actually applies. */}
+      {/* Chain RPCs — Bauhaus uses the inverted-strip pattern (BLACK chip)
+          which is a signature look. Midnight's surface.sunken read as a dark
+          "hole" against the card, so we lift onto border.strong for a clearly
+          elevated neutral system chip with primary fg on top. */}
       <SettingsRow
         title="Chain RPCs"
         subtitle="Configure network RPC endpoints"
         icon={<LinkChainIcon boxSize={5} />}
-        iconBg={chainStrip.bg}
-        iconColor={chainStrip.fg}
+        iconBg={isDarkTheme ? "border.strong" : chainStrip.bg}
+        iconColor={isDarkTheme ? "fg.primary" : chainStrip.fg}
         cornerBg="border.default"
         showChevron
         onClick={() => setTab("chains")}
