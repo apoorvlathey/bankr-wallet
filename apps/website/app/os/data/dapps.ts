@@ -59,12 +59,7 @@ const HIDDEN_CHAINS = new Set([
 ]);
 
 /** Temporarily disabled apps — keyed by dapp ID */
-const DISABLED_APPS: Record<number, DappEntry["disabled"]> = {
-  74: {
-    reason: "CoW Swap UI is currently compromised. Do not interact with it.",
-    link: "https://x.com/pcaversaccio/status/2044079587798417564",
-  },
-};
+const DISABLED_APPS: Record<number, DappEntry["disabled"]> = {};
 
 export const DAPPS: DappEntry[] = dappsData.map((dapp) => ({
   ...dapp,
