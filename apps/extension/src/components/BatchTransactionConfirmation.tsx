@@ -175,6 +175,9 @@ function BatchTransactionConfirmation({
     Record<number, string>
   >({});
   const [cachedGasEstimates, setCachedGasEstimates] = useState<any[] | null>(null);
+  // Bubbled from MultiTxGasEstimateDisplay — false while the user has the
+  // Custom-tier shared editor in an inconsistent state.
+  const [gasValid, setGasValid] = useState(true);
   const [forceInclusion, setForceInclusion] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -972,6 +975,7 @@ function BatchTransactionConfirmation({
           // Fire for ANY non-atomic batch (normal or force inclusion) so the user's
           // edited L2 gas limits get passed through to the background.
           onGasEstimates={isNonAtomic ? setCachedGasEstimates : undefined}
+          onValidityChange={setGasValid}
           forceInclusion={forceInclusion}
           // Atomic (Bankr): estimate gas for the single ERC-7821 encoded batch tx
           // When force inclusion is on, estimate L1 gas for the encoded batch
@@ -1172,7 +1176,7 @@ function BatchTransactionConfirmation({
                         variant="highlight"
                         flex={1}
                         onClick={handleConfirm}
-                        isDisabled={state === "error"}
+                        isDisabled={state === "error" || !gasValid}
                         // "Confirm Batch" is longer than the default "Confirm"
                         // — shrink the font so it sits comfortably next to the
                         // Reject button without wrapping or clipping.

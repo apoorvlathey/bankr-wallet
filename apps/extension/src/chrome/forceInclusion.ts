@@ -40,6 +40,7 @@ import { type PendingTxRequest } from "./pendingTxStorage";
 import { fetchNativeCoinGeckoPrice } from "./coingeckoService";
 import { getNativeCurrencySymbol } from "@/constants/chainRegistry";
 import type { GasEstimate } from "./gasEstimation";
+import { estimateFees } from "./feeEstimation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -179,7 +180,7 @@ export async function estimateForceInclusionGas(
             value,
           })
           .catch(() => null),
-        l1Client.estimateFeesPerGas().catch(() => null),
+        estimateFees(l1Client, info.l1ChainId).catch(() => null),
         l1Client.getBalance({ address: from }).catch(() => 0n),
         fetchNativeCoinGeckoPrice(info.l1ChainId),
         getNativeCurrencySymbol(info.l1ChainId),
@@ -192,10 +193,7 @@ export async function estimateForceInclusionGas(
 
     const maxFeePerGas = l1Fees?.maxFeePerGas ?? 0n;
     const maxPriorityFeePerGas = l1Fees?.maxPriorityFeePerGas ?? 0n;
-    const baseFee =
-      maxFeePerGas > maxPriorityFeePerGas
-        ? maxFeePerGas - maxPriorityFeePerGas
-        : 0n;
+    const baseFee = l1Fees?.baseFee ?? 0n;
     const estimatedCostWei = l1GasLimit * maxFeePerGas;
     const totalCost = estimatedCostWei + value;
     const insufficientBalance = l1Balance < totalCost;

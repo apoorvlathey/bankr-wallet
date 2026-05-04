@@ -2138,6 +2138,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleExecuteSwapDirect(
         message.transactions,
         message.chainName,
+        message.gasEstimates,
       ).then((result) => {
         sendResponse(result);
       });

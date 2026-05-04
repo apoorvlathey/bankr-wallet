@@ -55,6 +55,18 @@ interface SwapConfirmationProps {
   onConfirm: () => void;
   onCancel: () => void;
   isSubmitting: boolean;
+  /**
+   * Per-call gas estimates picked from the tier picker. Fired by
+   * MultiTxGasEstimateDisplay whenever the user picks a tier or edits the
+   * Custom inputs. Parent uses these as the gas params for each non-atomic
+   * swap tx (approve / swap). Bankr atomic swaps ignore this — Bankr API
+   * computes gas server-side.
+   */
+  onGasEstimates?: (estimates: import("@/chrome/gasEstimation").GasEstimate[]) => void;
+  /** Bubbles invalid Custom-tier state up so the parent disables Confirm. */
+  onValidityChange?: (valid: boolean) => void;
+  /** Disables Confirm Swap when the gas editor is in an inconsistent state. */
+  isConfirmDisabled?: boolean;
 }
 
 function formatTokenDisplay(amount: string): string {
@@ -107,6 +119,9 @@ function SwapConfirmation({
   onConfirm,
   onCancel,
   isSubmitting,
+  onGasEstimates,
+  onValidityChange,
+  isConfirmDisabled,
 }: SwapConfirmationProps) {
   const config = getChainConfig(chainId);
   const { themeId } = useTheme();
@@ -492,6 +507,14 @@ function SwapConfirmation({
           transactions={gasTransactions}
           accountType={accountType}
           batchedTx={gasBatchedTx}
+          // Mirror BatchTransactionConfirmation: when this is a non-atomic
+          // swap (PK / Seed signing each tx separately), use sequential
+          // estimation so the picker has tier data to render. Atomic Bankr
+          // swaps keep server-managed gas (the picker stays hidden inside
+          // MultiTxGasEstimateDisplay because batchedTx is set).
+          isNonAtomic={!isBatched}
+          onGasEstimates={!isBatched ? onGasEstimates : undefined}
+          onValidityChange={!isBatched ? onValidityChange : undefined}
         />
 
         {/* Action buttons */}
@@ -523,7 +546,12 @@ function SwapConfirmation({
               <Button variant="secondary" flex={1} onClick={onCancel}>
                 Cancel
               </Button>
-              <Button variant="highlight" flex={1} onClick={onConfirm}>
+              <Button
+                variant="highlight"
+                flex={1}
+                onClick={onConfirm}
+                isDisabled={isConfirmDisabled}
+              >
                 Confirm Swap
               </Button>
             </HStack>

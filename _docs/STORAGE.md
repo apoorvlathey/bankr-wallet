@@ -85,6 +85,7 @@ Syncs across Chrome profiles (if signed in). Persists across restarts.
 | `isArcBrowser`       | `boolean`                   | Detected Arc browser — disables sidepanel.                                                              | v0.2.0     |
 | `hidePortfolioValue` | `boolean`                   | User preference to hide USD values in portfolio.                                                        | v1.0.0     |
 | `selectedThemeId`    | `"bauhaus" \| "midnight"`   | Active theme ID. Absent = default `"bauhaus"`. Mirrored to `window.localStorage` for synchronous pre-React boot (no flash). See `_docs/THEMING_PRD.md`. | v3.2.0 |
+| `defaultGasTier`     | `"slow" \| "standard" \| "fast"` | User's last preset gas-tier choice from the tx-confirmation tier picker. Absent = default `"standard"`. The Custom tier is intentionally not persisted — it's always a one-shot opt-in for the current confirmation. | v3.4.0 |
 
 ---
 

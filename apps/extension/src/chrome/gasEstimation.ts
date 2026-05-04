@@ -13,6 +13,15 @@ import {
 import { getRpcUrl } from "./txHandlers";
 import { getNativeCurrencySymbol } from "@/constants/chainRegistry";
 import { fetchNativeCoinGeckoPrice } from "./coingeckoService";
+import { estimateFees, type TierName } from "./feeEstimation";
+
+/** Per-tier preset fees. Wei strings to keep JSON-safe across chrome.runtime. */
+export interface GasEstimateTier {
+  maxFeePerGas: string;
+  maxPriorityFeePerGas: string;
+}
+
+export type GasEstimateTiers = Record<TierName, GasEstimateTier>;
 
 export interface GasEstimate {
   gasLimit: string;
@@ -39,6 +48,16 @@ export interface GasEstimate {
    * over-estimate directly increases L1 burn cost.
    */
   fallbackUsed?: boolean;
+  /**
+   * Slow / Standard / Fast preset fee pairs. Populated whenever feeEstimation
+   * was able to read eth_feeHistory. The tier picker reads this; signing reads
+   * `maxFeePerGas` / `maxPriorityFeePerGas` (which point at the standard tier
+   * by default — the picker overwrites them via GasOverrides on confirm).
+   * Optional because force-inclusion paths and dapp-provided-fees skip it.
+   */
+  tiers?: GasEstimateTiers;
+  /** EIP-1559 next-block baseFee prediction (wei). Used by Custom-tier UI. */
+  predictedNextBaseFee?: string;
 }
 
 /** RPC timeout for gas estimation */
@@ -147,8 +166,11 @@ export async function estimateGas(
             return gasLimit;
           }),
 
-    // 2. Estimate EIP-1559 fees (still fetch for baseFee even if dapp provided fees)
-    client.estimateFeesPerGas().catch(() => null),
+    // 2. Estimate EIP-1559 fees (still fetch for baseFee even if dapp provided fees).
+    //    Uses our own feeHistory-based estimator with per-chain priority fee
+    //    floors and a 2× base fee multiplier — see feeEstimation.ts for why
+    //    viem's default produced stuck-then-dropped txs on ETH mainnet.
+    estimateFees(client, tx.chainId).catch(() => null),
 
     // 3. Get sender balance
     client.getBalance({ address: from }).catch(() => 0n),
@@ -174,12 +196,8 @@ export async function estimateGas(
     maxPriorityFeePerGas = feesResult?.maxPriorityFeePerGas ?? 0n;
   }
 
-  // baseFee from network estimate (informational)
-  const networkMaxFee = feesResult?.maxFeePerGas ?? 0n;
-  const networkPriorityFee = feesResult?.maxPriorityFeePerGas ?? 0n;
-  const baseFee = networkMaxFee > networkPriorityFee
-    ? networkMaxFee - networkPriorityFee
-    : 0n;
+  // baseFee from latest block (informational, used by the UI gas editor).
+  const baseFee = feesResult?.baseFee ?? 0n;
 
   // Estimated cost = gasLimit * maxFeePerGas
   const estimatedCostWei = gasLimit * maxFeePerGas;
@@ -187,6 +205,29 @@ export async function estimateGas(
   // Check if balance is sufficient for gas + tx value
   const totalCost = estimatedCostWei + value;
   const insufficientBalance = balance < totalCost;
+
+  // Tiers come from feeEstimation. We expose them whenever they exist —
+  // even when the dapp pinned gas params — so the user can still opt into
+  // the wallet's Slow/Standard/Fast estimates instead of being forced to
+  // accept whatever the dapp suggested. The default tier on the UI side
+  // flips to Custom in that case so the dapp's values stay pre-filled.
+  const tiersRaw = feesResult?.tiers;
+  const tiers: GasEstimateTiers | undefined = tiersRaw
+    ? {
+        slow: {
+          maxFeePerGas: tiersRaw.slow.maxFeePerGas.toString(),
+          maxPriorityFeePerGas: tiersRaw.slow.maxPriorityFeePerGas.toString(),
+        },
+        standard: {
+          maxFeePerGas: tiersRaw.standard.maxFeePerGas.toString(),
+          maxPriorityFeePerGas: tiersRaw.standard.maxPriorityFeePerGas.toString(),
+        },
+        fast: {
+          maxFeePerGas: tiersRaw.fast.maxFeePerGas.toString(),
+          maxPriorityFeePerGas: tiersRaw.fast.maxPriorityFeePerGas.toString(),
+        },
+      }
+    : undefined;
 
   return {
     gasLimit: gasLimit.toString(),
@@ -198,6 +239,8 @@ export async function estimateGas(
     nativeCurrencySymbol,
     accountBalance: balance.toString(),
     insufficientBalance,
+    tiers,
+    predictedNextBaseFee: feesResult?.predictedNextBaseFee?.toString(),
     estimationFailed,
     estimationError,
     estimationErrorFull,

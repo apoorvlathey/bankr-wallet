@@ -688,22 +688,31 @@ Each transaction maintains its own storage-based result channel (`txResult:{txId
 
 Pre-confirmation gas estimation shown on the transaction confirmation screen. Fetches gas limit, EIP-1559 fees, sender balance, and native token USD price.
 
-**Background estimation (`gasEstimation.ts`):**
+**Background estimation (`gasEstimation.ts` + `feeEstimation.ts`):**
 
 - Uses viem `createPublicClient` with cached clients (keyed by chainId), reuses `getRpcUrl()` from `txHandlers.ts`
-- Parallel RPC calls: `estimateGas` (gas limit + 20% buffer), `estimateFeesPerGas` (EIP-1559 fees), `getBalance` (sender balance)
+- Parallel RPC calls: `estimateGas` (gas limit + 20% buffer), `estimateFeeTiers` (EIP-1559 fees from `eth_feeHistory`), `getBalance` (sender balance)
 - CoinGecko price fetch with 60s in-memory cache for USD display
 - Background CoinGecko service with shared storage-backed cache for native asset prices/logos
-- If dapp provided gas params (`gas`, `maxFeePerGas`, `maxPriorityFeePerGas`, `gasPrice`), uses them as defaults instead of RPC estimates
-- Returns `GasEstimate` with `dappProvidedGas` flag
+- If dapp provided gas params (`gas`, `maxFeePerGas`, `maxPriorityFeePerGas`, `gasPrice`), uses them as defaults and suppresses the tier picker
+- Returns `GasEstimate` with `dappProvidedGas` flag, optional `tiers` (Slow / Standard / Fast preset fees), and `predictedNextBaseFee`
 
-**UI component (`GasEstimateDisplay.tsx`):**
+**Fee estimation (`feeEstimation.ts`):**
+
+`estimateFeeTiers(client, chainId)` is the single source of truth for EIP-1559 fees. It runs `eth_feeHistory` over the last 10 blocks at the 50p reward, applies an IQR outlier filter + zero-tip drop, and emits three tiers: **slow = p25 / standard = p60 / fast = p90** of the cleaned sample. Each tier's `maxFeePerGas` is `predictedNextBaseFee × multiplier + tip` (multipliers: slow 1.25× / standard 1.50× / fast 2.00×). Per-chain priority fee floors prevent the broken-near-zero values that quiet RPCs return on ETH mainnet from producing stuck txs. `estimateFees()` is a thin wrapper that returns the standard tier — used by force-inclusion paths and any caller that doesn't want the picker. The `predictedNextBaseFee` is the EIP-1559 next-block predictor (no decreases — sticky downward to avoid stuck-tx pathology).
+
+**UI component (`GasEstimateDisplay.tsx`) + tier picker (`GasTierPicker.tsx`):**
 
 - Collapsible box showing estimated gas fee in ETH + USD (collapsed) with detailed breakdown (expanded)
-- **PK/Seed accounts**: Gas Limit, Max Priority Fee, Max Fee are editable inputs. Overrides sent back via `onGasOverrides` callback
-- **Bankr accounts**: All read-only with "Gas managed by Bankr API" note
-- **Impersonator accounts**: All read-only
-- When dapp provided gas params, shows "Gas params suggested by dapp" indicator
+- **PK/Seed accounts** with tiers available: 4-button segmented control (Slow / Standard / Fast / Custom) at the top of the expanded panel. Tier selection auto-populates the Priority + Max Fee inputs from the corresponding preset. Last preset choice persists to `chrome.storage.sync.defaultGasTier`.
+- **Custom tier** opens the editable Priority + Max Fee + Gas Limit rows. Priority and Max Fee are coupled: editing Priority recomputes Max Fee = predictedNextBaseFee × 1.5 + Priority unless the user has manually edited Max Fee (sticky-edit; flips a `[linked] → [manual]` badge). The relink icon next to the badge restores the formula. Max Fee < Base Fee + Priority blocks Confirm (bubbled to parent via `onValidityChange`).
+- **Bankr accounts**: All read-only with "Gas managed by Bankr API" note. Picker hidden.
+- **Impersonator accounts**: All read-only. No Confirm button.
+- When dapp provided gas params, picker is suppressed and the editable fields show in Custom-style mode.
+
+**Batch tx tier picker (`MultiTxGasEstimateDisplay.tsx`):**
+
+For non-atomic PK/SP batches (and cross-dapp batches), one shared `<GasTierPicker>` at the top applies its Priority / Max Fee uniformly to every call. Per-call gas limit editor stays as before. Atomic Bankr batches keep their server-managed gas UX. Same Custom-tier coupling rules as the single-tx editor.
 
 **Warnings:**
 | Condition | Display |

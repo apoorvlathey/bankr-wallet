@@ -191,6 +191,15 @@ function SwapView({
   const [preparedTransactions, setPreparedTransactions] = useState<SwapTxEntry[] | null>(null);
   const [preparedBatchTx, setPreparedBatchTx] = useState<{ to: string; data: string; value: string } | null>(null);
   const [preparedQuote, setPreparedQuote] = useState<SwapQuoteResponse | null>(null);
+  // Per-call gas estimates from the SwapConfirmation tier picker. Bubbled
+  // up from MultiTxGasEstimateDisplay → SwapConfirmation → here, then
+  // forwarded to handleExecuteSwapDirect so the user's tier choice
+  // actually takes effect at signing time. Bankr atomic swaps don't use
+  // this — Bankr API computes gas server-side.
+  const [swapGasEstimates, setSwapGasEstimates] = useState<
+    import("@/chrome/gasEstimation").GasEstimate[] | null
+  >(null);
+  const [swapGasValid, setSwapGasValid] = useState(true);
 
   const quoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenInfoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -906,6 +915,16 @@ function SwapView({
               type: "executeSwapDirect",
               transactions: preparedTransactions,
               chainName,
+              // Forward the tier-picker selections so each tx gets the
+              // user's chosen Priority / Max Fee. Falls back to viem's
+              // built-in estimate when null.
+              gasEstimates: swapGasEstimates
+                ? swapGasEstimates.map((e) => ({
+                    gasLimit: e.gasLimit,
+                    maxFeePerGas: e.maxFeePerGas,
+                    maxPriorityFeePerGas: e.maxPriorityFeePerGas,
+                  }))
+                : undefined,
             },
             resolve,
           );
@@ -1196,6 +1215,9 @@ function SwapView({
         onConfirm={handleConfirmSwap}
         onCancel={handleCancelConfirmation}
         isSubmitting={isSubmitting}
+        onGasEstimates={setSwapGasEstimates}
+        onValidityChange={setSwapGasValid}
+        isConfirmDisabled={!swapGasValid}
       />
     );
   }

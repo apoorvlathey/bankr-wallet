@@ -1697,6 +1697,10 @@ export interface SwapTxEntry {
 export async function handleExecuteSwapDirect(
   transactions: SwapTxEntry[],
   chainName: string,
+  // Per-call gas overrides from the swap confirmation's tier picker. One
+  // entry per `transactions[i]`. Optional for back-compat — Bankr accounts
+  // and the legacy code paths still work without this.
+  gasEstimates?: { gasLimit: string; maxFeePerGas: string; maxPriorityFeePerGas: string }[],
 ): Promise<{ success: boolean; txIds?: string[]; error?: string }> {
   if (transactions.length === 0) {
     return { success: false, error: "No transactions provided" };
@@ -1844,10 +1848,27 @@ export async function handleExecuteSwapDirect(
     prepared.push({ txId, pending, nonce, functionName: entry.functionName, swapMeta: entry.swapMeta });
   }
 
-  // Phase 2 (concurrent): broadcast all TXs with pre-assigned nonces
-  for (const item of prepared) {
+  // Phase 2 (concurrent): broadcast all TXs with pre-assigned nonces.
+  // gasEstimates[i] aligns with prepared[i] because we built `prepared`
+  // by iterating `transactions` in order — same indexing the UI used.
+  for (let i = 0; i < prepared.length; i++) {
+    const item = prepared[i];
+    const gasOverride = gasEstimates?.[i];
     broadcastSwapTxLocal(
-      item.txId, item.pending, account, privateKey, item.nonce, rpcUrl, customChainMeta,
+      item.txId,
+      item.pending,
+      account,
+      privateKey,
+      item.nonce,
+      rpcUrl,
+      customChainMeta,
+      gasOverride
+        ? {
+            gasLimit: gasOverride.gasLimit,
+            maxFeePerGas: gasOverride.maxFeePerGas,
+            maxPriorityFeePerGas: gasOverride.maxPriorityFeePerGas,
+          }
+        : undefined,
     );
   }
 
@@ -1935,12 +1956,25 @@ async function broadcastSwapTxLocal(
   nonce: number,
   rpcUrl?: string,
   customChainMeta?: { name: string; nativeCurrency?: { name: string; symbol: string; decimals: number }; explorer?: string },
+  gasOverrides?: GasOverrides,
 ): Promise<void> {
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
 
   try {
-    const txForSigning = { ...pending.tx, nonce };
+    // Apply tier-picker / Custom-tier overrides if the UI passed them in.
+    // Clears legacy gasPrice the same way processLocalTransactionInBackground
+    // does, to avoid an EIP-1559 / legacy field conflict at signing time.
+    const txForSigning = gasOverrides
+      ? {
+          ...pending.tx,
+          nonce,
+          gas: gasOverrides.gasLimit,
+          maxFeePerGas: gasOverrides.maxFeePerGas,
+          maxPriorityFeePerGas: gasOverrides.maxPriorityFeePerGas,
+          gasPrice: undefined,
+        }
+      : { ...pending.tx, nonce };
 
     const result = await signAndBroadcastTransaction(
       privateKey,
