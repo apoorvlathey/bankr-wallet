@@ -37,7 +37,11 @@ export async function GET(req: NextRequest) {
         cspBlocked = true;
       }
       // If it lists specific domains but no wildcard, likely blocked for us
-      else if (!value.includes("*") && !value.includes("walletchan.com")) {
+      else if (
+        !value.includes("*") &&
+        !value.includes("walletchan.com") &&
+        !value.includes("walletchan.xyz")
+      ) {
         cspBlocked = true;
       }
     }

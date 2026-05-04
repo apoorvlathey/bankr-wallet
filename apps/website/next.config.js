@@ -1,4 +1,34 @@
 /** @type {import('next').NextConfig} */
+
+// Subdomain rewrites are mirrored across these TLDs. Add a new TLD here once
+// it's configured in Vercel and DNS, and every rewrite below will pick it up.
+const SUBDOMAIN_TLDS = ["walletchan.com", "walletchan.xyz"];
+
+const SUBDOMAIN_REWRITES = [
+  // coins.* rewrite removed (redirects to homepage now)
+  { slug: "stake" },
+  { slug: "migrate" },
+  { slug: "admin" },
+  { slug: "compare" },
+  { slug: "mainnet" },
+  { slug: "os" },
+  { slug: "test" },
+];
+
+function buildRewrites() {
+  const rewrites = [];
+  for (const { slug } of SUBDOMAIN_REWRITES) {
+    for (const tld of SUBDOMAIN_TLDS) {
+      rewrites.push({
+        source: "/:path((?!_next|api|images|og|screenshots).*)",
+        has: [{ type: "host", value: `${slug}.${tld}` }],
+        destination: `/${slug}/:path*`,
+      });
+    }
+  }
+  return rewrites;
+}
+
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@walletchan/shared"],
@@ -15,6 +45,12 @@ const nextConfig = {
         source: "/:path*",
         has: [{ type: "host", value: "coins.walletchan.com" }],
         destination: "https://walletchan.com",
+        permanent: false,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "coins.walletchan.xyz" }],
+        destination: "https://walletchan.xyz",
         permanent: false,
       },
       {
@@ -58,86 +94,7 @@ const nextConfig = {
   },
   async rewrites() {
     return {
-      beforeFiles: [
-        // coins.walletchan.com rewrite removed (redirects to homepage now)
-        // stake.walletchan.com -> /stake
-        {
-          source: "/:path((?!_next|api|images|og|screenshots).*)",
-          has: [
-            {
-              type: "host",
-              value: "stake.walletchan.com",
-            },
-          ],
-          destination: "/stake/:path*",
-        },
-        // migrate.walletchan.com -> /migrate
-        {
-          source: "/:path((?!_next|api|images|og|screenshots).*)",
-          has: [
-            {
-              type: "host",
-              value: "migrate.walletchan.com",
-            },
-          ],
-          destination: "/migrate/:path*",
-        },
-        // admin.walletchan.com -> /admin
-        {
-          source: "/:path((?!_next|api|images|og|screenshots).*)",
-          has: [
-            {
-              type: "host",
-              value: "admin.walletchan.com",
-            },
-          ],
-          destination: "/admin/:path*",
-        },
-        // compare.walletchan.com -> /compare
-        {
-          source: "/:path((?!_next|api|images|og|screenshots).*)",
-          has: [
-            {
-              type: "host",
-              value: "compare.walletchan.com",
-            },
-          ],
-          destination: "/compare/:path*",
-        },
-        // mainnet.walletchan.com -> /mainnet
-        {
-          source: "/:path((?!_next|api|images|og|screenshots).*)",
-          has: [
-            {
-              type: "host",
-              value: "mainnet.walletchan.com",
-            },
-          ],
-          destination: "/mainnet/:path*",
-        },
-        // os.walletchan.com -> /os
-        {
-          source: "/:path((?!_next|api|images|og|screenshots).*)",
-          has: [
-            {
-              type: "host",
-              value: "os.walletchan.com",
-            },
-          ],
-          destination: "/os/:path*",
-        },
-        // test.walletchan.com -> /test
-        {
-          source: "/:path((?!_next|api|images|og|screenshots).*)",
-          has: [
-            {
-              type: "host",
-              value: "test.walletchan.com",
-            },
-          ],
-          destination: "/test/:path*",
-        },
-      ],
+      beforeFiles: buildRewrites(),
     };
   },
 };
