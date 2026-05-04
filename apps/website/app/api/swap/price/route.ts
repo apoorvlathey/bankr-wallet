@@ -41,6 +41,13 @@ const SUPPORTED_CHAIN_IDS = new Set([
 ]);
 
 const NATIVE_PLACEHOLDER = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+/** 0x expects `0xEeee...EEeE` for native ETH. Some clients send the zero
+ *  address as a "native" sentinel — coerce so quotes don't fail. */
+function normalizeNativeAddress(addr: string): string {
+  return addr.toLowerCase() === ZERO_ADDRESS ? NATIVE_PLACEHOLDER : addr;
+}
 
 // ---------------------------------------------------------------------------
 // 0x price fetch helper
@@ -82,18 +89,21 @@ async function fetch0xPrice(
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
-  const sellToken = searchParams.get("sellToken");
-  const buyToken = searchParams.get("buyToken");
+  const sellTokenRaw = searchParams.get("sellToken");
+  const buyTokenRaw = searchParams.get("buyToken");
   const sellAmount = searchParams.get("sellAmount");
   const taker = searchParams.get("taker");
 
   // Validate required params
-  if (!sellToken || !buyToken || !sellAmount) {
+  if (!sellTokenRaw || !buyTokenRaw || !sellAmount) {
     return NextResponse.json(
       { error: "Missing required parameters: sellToken, buyToken, sellAmount" },
       { status: 400 },
     );
   }
+
+  const sellToken = normalizeNativeAddress(sellTokenRaw);
+  const buyToken = normalizeNativeAddress(buyTokenRaw);
 
   if (
     sellToken.toLowerCase() !== NATIVE_PLACEHOLDER.toLowerCase() &&
