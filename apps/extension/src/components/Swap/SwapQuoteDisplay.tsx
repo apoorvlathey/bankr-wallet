@@ -86,6 +86,7 @@ export default function SwapQuoteDisplay({
       bg="surface.sunken"
       border="2px solid"
       borderColor="border.default"
+      borderRadius="lg"
       px={3}
       py={2}
     >
@@ -217,16 +218,15 @@ export default function SwapQuoteDisplay({
               >
                 Route
               </Text>
-              <VStack spacing={0} align="flex-end">
+              <VStack spacing={0.5} align="center">
                 {uniqueSources.map((source, i) => (
-                  <Box key={i}>
+                  <Box key={i} display="contents">
                     {i > 0 && (
                       <Text
                         fontSize="xs"
                         color="text.tertiary"
                         fontWeight="bold"
-                        textAlign="center"
-                        lineHeight="1.4"
+                        lineHeight="1"
                       >
                         ↓
                       </Text>
@@ -236,6 +236,7 @@ export default function SwapQuoteDisplay({
                       py={0.5}
                       border="2px solid"
                       borderColor="border.default"
+                      borderRadius="md"
                       fontSize="xs"
                       fontWeight="700"
                       whiteSpace="nowrap"

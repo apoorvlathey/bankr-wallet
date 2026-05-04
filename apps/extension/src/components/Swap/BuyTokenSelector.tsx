@@ -15,7 +15,19 @@ import type { TokenListEntry } from "@/chrome/swapApi";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import { getChainConfig } from "@/constants/chainConfig";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import { WALLETCHAN_ICON_URL } from "@/constants/externalUrls";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
+
+/** Canonical WCHAN entry on Base. Injected into the popular-tokens list so
+ *  WCHAN reliably appears as a quick-select even if the swap API's token list
+ *  doesn't include it. Address mirrors KNOWN_TOKEN_LOGOS in txSimulation.ts. */
+const WCHAN_BASE_ENTRY: TokenListEntry = {
+  address: "0xBa5ED0000e1CA9136a695f0a848012A16008B032",
+  name: "WalletChan",
+  symbol: "WCHAN",
+  decimals: 18,
+  logoURI: WALLETCHAN_ICON_URL,
+};
 
 /** Canonical native-token icon. ETH-based chains share one diamond logo;
  *  for non-ETH natives (BNB, POL) the chain icon doubles as the token icon. */
@@ -36,7 +48,7 @@ const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const POPULAR_PER_CHAIN: Record<number, string[]> = {
   1: ["ETH", "USDC", "USDT", "WBTC", "WETH"],
   42161: ["ETH", "USDC", "USDT", "WETH"],
-  8453: ["WCHAN", "ETH", "USDC", "USDT", "WBTC"],
+  8453: ["ETH", "WCHAN", "USDC", "USDT", "WBTC"],
   56: ["BNB", "USDC", "USDT", "WBTC", "WETH"],
   137: ["POL", "USDC", "WETH"],
   130: ["ETH", "USDC", "WBTC", "WETH"],
@@ -222,6 +234,20 @@ export default function BuyTokenSelector({
         symbol: existing?.symbol ?? native.symbol,
         decimals: existing?.decimals ?? native.decimals,
         logoURI: canonicalLogo,
+      });
+    }
+
+    // WCHAN on Base: ensure our token always shows in the popular chips
+    // regardless of whether the swap API's token list includes it. Pin the
+    // logo to our canonical asset.
+    if (chainId === 8453) {
+      const existing = bySymbol.get("WCHAN");
+      bySymbol.set("WCHAN", {
+        address: existing?.address ?? WCHAN_BASE_ENTRY.address,
+        name: existing?.name ?? WCHAN_BASE_ENTRY.name,
+        symbol: existing?.symbol ?? WCHAN_BASE_ENTRY.symbol,
+        decimals: existing?.decimals ?? WCHAN_BASE_ENTRY.decimals,
+        logoURI: WCHAN_BASE_ENTRY.logoURI,
       });
     }
 
