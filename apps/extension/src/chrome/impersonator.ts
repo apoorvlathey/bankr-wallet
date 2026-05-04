@@ -25,6 +25,7 @@ interface EIP6963AnnounceProviderEvent extends CustomEvent {
 }
 
 import { WALLET_ICON } from "./walletIcon";
+import { makeProviderError } from "./providerErrors";
 
 // Session UUID for EIP-6963 (generated once per page load)
 const SESSION_UUID = crypto.randomUUID();
@@ -94,7 +95,7 @@ function rpcCall(rpcUrl: string, method: string, params: any[]): Promise<any> {
     setTimeout(() => {
       if (pendingRpcCallbacks.has(requestId)) {
         pendingRpcCallbacks.delete(requestId);
-        reject(new Error("RPC request timeout"));
+        reject(makeProviderError("RPC request timeout"));
       }
     }, 30000);
   });
@@ -201,7 +202,7 @@ class ImpersonatorProvider extends EventEmitter {
                   self_add.setChainId(msg.chainId, msg.rpcUrl);
                   resolve(null);
                 } else {
-                  reject(new Error(msg.error || `Failed to add chain ${addChainId}`));
+                  reject(makeProviderError(msg.error || `Failed to add chain ${addChainId}`));
                 }
               }
             },
@@ -264,7 +265,7 @@ class ImpersonatorProvider extends EventEmitter {
                   if (errorChainId === chainId) {
                     controller.abort();
                     reject(
-                      new Error(
+                      makeProviderError(
                         e.data.msg.error || `Chain ${chainId} is not supported`,
                       ),
                     );
@@ -321,7 +322,7 @@ class ImpersonatorProvider extends EventEmitter {
         }
 
         if (assetType !== "ERC20") {
-          throw new Error("Only ERC20 tokens are supported");
+          throw makeProviderError("Only ERC20 tokens are supported");
         }
 
         const watchId = crypto.randomUUID();
@@ -360,7 +361,7 @@ class ImpersonatorProvider extends EventEmitter {
           setTimeout(() => {
             if (pendingCapabilitiesCallbacks.has(capId)) {
               pendingCapabilitiesCallbacks.delete(capId);
-              reject(new Error("wallet_getCapabilities timeout"));
+              reject(makeProviderError("wallet_getCapabilities timeout"));
             }
           }, 15000);
         });
@@ -386,7 +387,7 @@ class ImpersonatorProvider extends EventEmitter {
           setTimeout(() => {
             if (pendingBatchCallbacks.has(sendCallsId)) {
               pendingBatchCallbacks.delete(sendCallsId);
-              reject(new Error("wallet_sendCalls timeout"));
+              reject(makeProviderError("wallet_sendCalls timeout"));
             }
           }, 5 * 60 * 1000);
         });
@@ -398,7 +399,7 @@ class ImpersonatorProvider extends EventEmitter {
         const bundleId = params?.[0];
 
         if (!bundleId) {
-          return Promise.reject(new Error("Missing bundle ID"));
+          return Promise.reject(makeProviderError("Missing bundle ID"));
         }
 
         return new Promise<any>((resolve, reject) => {
@@ -415,7 +416,7 @@ class ImpersonatorProvider extends EventEmitter {
           setTimeout(() => {
             if (pendingCallsStatusCallbacks.has(statusId)) {
               pendingCallsStatusCallbacks.delete(statusId);
-              reject(new Error("wallet_getCallsStatus timeout"));
+              reject(makeProviderError("wallet_getCallsStatus timeout"));
             }
           }, 15000);
         });
@@ -665,11 +666,9 @@ window.addEventListener("message", (e: any) => {
             errorMessage.toLowerCase().includes("rejected by user") ||
             errorMessage.toLowerCase().includes("user rejected") ||
             errorMessage.toLowerCase().includes("user denied");
-          const error = new Error(errorMessage) as Error & { code: number };
-          if (isUserRejection) {
-            error.code = 4001; // EIP-1193: User Rejected Request
-          }
-          callbacks.reject(error);
+          callbacks.reject(
+            makeProviderError(errorMessage, isUserRejection ? 4001 : undefined),
+          );
         }
       }
       break;
@@ -693,17 +692,8 @@ window.addEventListener("message", (e: any) => {
           // Check if this is an EIP-712 schema validation error (JSON-RPC error code -32603)
           const isSchemaError = errorMessage.includes("EIP-712 schema");
 
-          // Prefix error message with "WalletChan - " for clarity
-          const prefixedMessage = `WalletChan - ${errorMessage}`;
-          const error = new Error(prefixedMessage) as Error & { code: number };
-
-          if (isUserRejection) {
-            error.code = 4001; // EIP-1193: User Rejected Request
-          } else if (isSchemaError) {
-            error.code = -32603; // JSON-RPC Internal Error
-          }
-
-          callbacks.reject(error);
+          const code = isUserRejection ? 4001 : isSchemaError ? -32603 : undefined;
+          callbacks.reject(makeProviderError(errorMessage, code));
         }
       }
       break;
@@ -716,9 +706,9 @@ window.addEventListener("message", (e: any) => {
         if (e.data.msg.success) {
           callbacks.resolve(true);
         } else {
-          const error = new Error(e.data.msg.error || "User rejected token addition") as Error & { code: number };
-          error.code = 4001;
-          callbacks.reject(error);
+          callbacks.reject(
+            makeProviderError(e.data.msg.error || "User rejected token addition", 4001),
+          );
         }
       }
       break;
@@ -729,7 +719,7 @@ window.addEventListener("message", (e: any) => {
       if (callbacks) {
         pendingRpcCallbacks.delete(requestId);
         if (e.data.msg.error) {
-          callbacks.reject(new Error(e.data.msg.error));
+          callbacks.reject(makeProviderError(e.data.msg.error));
         } else {
           callbacks.resolve(e.data.msg.result);
         }
@@ -745,7 +735,7 @@ window.addEventListener("message", (e: any) => {
         if (e.data.msg.success) {
           callbacks.resolve(e.data.msg.result);
         } else {
-          callbacks.reject(new Error(e.data.msg.error || "Failed to get capabilities"));
+          callbacks.reject(makeProviderError(e.data.msg.error || "Failed to get capabilities"));
         }
       }
       break;
@@ -758,9 +748,9 @@ window.addEventListener("message", (e: any) => {
         if (e.data.msg.success) {
           callbacks.resolve(e.data.msg.result);
         } else {
-          const error = new Error(e.data.msg.error || "wallet_sendCalls failed") as Error & { code: number };
-          if (e.data.msg.code) error.code = e.data.msg.code;
-          callbacks.reject(error);
+          callbacks.reject(
+            makeProviderError(e.data.msg.error || "wallet_sendCalls failed", e.data.msg.code),
+          );
         }
       }
       break;
@@ -773,9 +763,9 @@ window.addEventListener("message", (e: any) => {
         if (e.data.msg.success) {
           callbacks.resolve(e.data.msg.result);
         } else {
-          const error = new Error(e.data.msg.error || "Failed to get calls status") as Error & { code: number };
-          if (e.data.msg.code) error.code = e.data.msg.code;
-          callbacks.reject(error);
+          callbacks.reject(
+            makeProviderError(e.data.msg.error || "Failed to get calls status", e.data.msg.code),
+          );
         }
       }
       break;
