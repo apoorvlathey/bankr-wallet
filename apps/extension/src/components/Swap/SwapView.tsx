@@ -304,7 +304,8 @@ function SwapView({
 
         const chainTokens = tokens.filter((t) => t.chainId === chainId);
         setHoldings(chainTokens);
-        // If initialSellToken provided, find the matching token from portfolio
+        // If initialSellToken provided, find the matching token from portfolio.
+        // Otherwise leave the sell token unselected — the user picks one explicitly.
         if (initialSellToken) {
           const match = chainTokens.find(
             (t) => t.contractAddress.toLowerCase() === initialSellToken.contractAddress.toLowerCase(),
@@ -314,12 +315,6 @@ function SwapView({
           } else {
             setSellToken(initialSellToken);
           }
-        } else {
-          const native = chainTokens.find(
-            (t) => t.contractAddress === "native",
-          );
-          if (native) setSellToken(native);
-          else if (chainTokens.length > 0) setSellToken(chainTokens[0]);
         }
       } catch {
         // silently fail
@@ -627,25 +622,49 @@ function SwapView({
   // -----------------------------------------------------------------------
   const handleFlip = () => {
     if (!buyTokenInfo || !buyTokenAddress) return;
-    const addr = buyTokenAddress.trim().toLowerCase();
+    const addr = buyTokenAddress.trim();
+    const addrLower = addr.toLowerCase();
+    const isNative = addrLower === NATIVE_TOKEN_ADDRESS.toLowerCase();
     const buyInHoldings = holdings.find(
       (t) =>
-        t.contractAddress.toLowerCase() === addr ||
-        (addr === NATIVE_TOKEN_ADDRESS.toLowerCase() &&
-          t.contractAddress === "native"),
+        t.contractAddress.toLowerCase() === addrLower ||
+        (isNative && t.contractAddress === "native"),
     );
-    if (!buyInHoldings) return;
+
+    // If the buy token isn't in the user's holdings, build a stub PortfolioToken
+    // from the metadata we already have. SwapView's on-chain balance + price
+    // hydration effects will fill `balance` / `priceUsd` after the flip.
+    const nextSellToken: PortfolioToken =
+      buyInHoldings ?? {
+        symbol: buyTokenInfo.symbol,
+        name: buyTokenInfo.name,
+        contractAddress: isNative ? "native" : addr,
+        chainId,
+        decimals: buyTokenInfo.decimals,
+        balance: "0",
+        balanceFormatted: "0",
+        priceUsd: buyTokenPriceUsd,
+        valueUsd: 0,
+        logoUrl: buyTokenLogoURI,
+      };
 
     const prevSellToken = sellToken;
-    setSellToken(buyInHoldings);
-    setBuyTokenAddress(prevSellToken ? to0xToken(prevSellToken) : "");
+    setSellToken(nextSellToken);
     if (prevSellToken) {
+      // Skip the buyTokenAddress useEffect that would otherwise refetch and
+      // wipe the metadata we already have for prevSellToken.
+      buyInfoSetBySelectRef.current = true;
+      setBuyTokenAddress(to0xToken(prevSellToken));
       setBuyTokenInfo({
         name: prevSellToken.name,
         symbol: prevSellToken.symbol,
         decimals: prevSellToken.decimals,
       });
       setBuyTokenLogoURI(prevSellToken.logoUrl);
+    } else {
+      setBuyTokenAddress("");
+      setBuyTokenInfo(null);
+      setBuyTokenLogoURI(undefined);
     }
     setSellAmount("");
     setSliderValue(0);

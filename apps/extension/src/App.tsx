@@ -2969,6 +2969,20 @@ function App() {
                     decimals: 18,
                     logoURI: WALLETCHAN_ICON_URL,
                   });
+                  // Auto-fill the sell side with native ETH on Base so the
+                  // user lands on a ready-to-quote pair. Balance/price are
+                  // hydrated by SwapView's on-chain + price-fetch effects.
+                  setSwapInitialSellToken({
+                    symbol: "ETH",
+                    name: "Ether",
+                    contractAddress: "native",
+                    chainId: 8453,
+                    decimals: 18,
+                    balance: "0",
+                    balanceFormatted: "0",
+                    priceUsd: 0,
+                    valueUsd: 0,
+                  });
                   setView("swap");
                 }}
               >
@@ -3004,6 +3018,20 @@ function App() {
                     symbol: "WCHAN",
                     decimals: 18,
                     logoURI: WALLETCHAN_ICON_URL,
+                  });
+                  // Auto-fill the sell side with native ETH on Base so the
+                  // user lands on a ready-to-quote pair. Balance/price are
+                  // hydrated by SwapView's on-chain + price-fetch effects.
+                  setSwapInitialSellToken({
+                    symbol: "ETH",
+                    name: "Ether",
+                    contractAddress: "native",
+                    chainId: 8453,
+                    decimals: 18,
+                    balance: "0",
+                    balanceFormatted: "0",
+                    priceUsd: 0,
+                    valueUsd: 0,
                   });
                   setView("swap");
                 }}
