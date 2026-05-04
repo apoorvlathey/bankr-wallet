@@ -27,10 +27,6 @@ import { COINGECKO_URL, CHROME_STORE_URL } from "../constants";
 const MotionBox = motion(Box);
 
 const SKILL_URL = "https://walletchan.com/SKILL.md";
-const SKILLS_SH_REPO_URL =
-  "https://skills.sh/apoorvlathey/walletchan-skill/walletchan";
-const SKILLS_SH_INSTALL_CMD =
-  "npx skills add https://github.com/apoorvlathey/walletchan-skill --skill walletchan";
 const CLAWHUB_URL = "https://clawhub.ai/apoorvlathey/walletchan";
 const CLAWHUB_INSTALL_CMD = "clawhub install walletchan";
 
@@ -452,25 +448,6 @@ export function Hero() {
                   value={SKILL_URL}
                   linkHref="/SKILL.md"
                   accentColor="bauhaus.blue"
-                />
-              </Box>
-
-              <OrDivider />
-
-              <Box>
-                <Text
-                  fontSize="xs"
-                  fontWeight="bold"
-                  textTransform="uppercase"
-                  letterSpacing="widest"
-                  mb={2}
-                >
-                  skills.sh install
-                </Text>
-                <CopyRow
-                  value={SKILLS_SH_INSTALL_CMD}
-                  linkHref={SKILLS_SH_REPO_URL}
-                  accentColor="bauhaus.yellow"
                 />
               </Box>
 
