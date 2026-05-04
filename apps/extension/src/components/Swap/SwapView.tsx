@@ -46,6 +46,7 @@ import {
 } from "@/constants/chainRegistry";
 import { getChainConfig } from "@/constants/chainConfig";
 import { getStoredRpcUrl } from "@/lib/chains";
+import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
 import type { ERC5792Call } from "@/chrome/erc5792Types";
 import type { SwapTxEntry } from "@/chrome/txHandlers";
@@ -547,6 +548,10 @@ function SwapView({
       const balance = formatUnits(rawBalance, decimals);
       const balanceNum = parseFloat(balance);
 
+      const addrLower = tokenAddress.toLowerCase();
+      const listMatch = tokenList.find((t) => t.address.toLowerCase() === addrLower);
+      const logoUrl = listMatch?.logoURI || KNOWN_TOKEN_LOGOS[addrLower] || "";
+
       setResolvedSellToken({
         contractAddress: tokenAddress,
         name,
@@ -554,7 +559,7 @@ function SwapView({
         decimals,
         balance,
         balanceFormatted: balanceNum < 0.0001 && balanceNum > 0 ? "<0.0001" : parseFloat(balanceNum.toPrecision(6)).toString(),
-        logoUrl: "",
+        logoUrl,
         valueUsd: 0,
         priceUsd: 0,
         chainId,
@@ -615,7 +620,7 @@ function SwapView({
             name: res.data.name,
             symbol: res.data.symbol,
             decimals: res.data.decimals,
-            logoURI: "",
+            logoURI: KNOWN_TOKEN_LOGOS[address.toLowerCase()] || "",
           });
         }
       },
@@ -1440,8 +1445,10 @@ function SwapView({
           <HStack spacing={2}>
             <TokenSelector
               holdings={holdings}
+              tokenList={tokenList}
               selectedToken={sellToken}
               excludeAddress={buyTokenAddress || undefined}
+              chainId={chainId}
               onSelect={(t) => {
                 setSellToken(t);
                 setSellAmount("");

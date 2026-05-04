@@ -13,6 +13,21 @@ import {
 import { ChevronDownIcon } from "@chakra-ui/icons";
 import type { TokenListEntry } from "@/chrome/swapApi";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
+import { getChainConfig } from "@/constants/chainConfig";
+import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
+
+/** Canonical native-token icon. ETH-based chains share one diamond logo;
+ *  for non-ETH natives (BNB, POL) the chain icon doubles as the token icon. */
+function nativeLogoForChain(chainId: number, nativeSymbol: string): string {
+  if (nativeSymbol.toUpperCase() === "ETH") return "/chainIcons/ethereum.svg";
+  return getChainConfig(chainId)?.icon || "";
+}
+
+function getNativeCurrencyForChain(
+  chainId: number,
+): { name: string; symbol: string; decimals: number } | undefined {
+  return CHAIN_REGISTRY.find((c) => c.chainId === chainId)?.nativeCurrency;
+}
 
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
@@ -181,7 +196,7 @@ export default function BuyTokenSelector({
     const symbols = POPULAR_PER_CHAIN[chainId];
     if (!symbols) return [];
 
-    // Build lookup maps: symbol → entry (first match wins)
+    // Build lookup maps: symbol → entry (first match wins).
     const bySymbol = new Map<string, TokenListEntry>();
     for (const h of holdings) {
       const sym = h.symbol.toUpperCase();
@@ -190,6 +205,23 @@ export default function BuyTokenSelector({
     for (const t of tokenList) {
       const sym = t.symbol.toUpperCase();
       if (!bySymbol.has(sym)) bySymbol.set(sym, t);
+    }
+
+    // Native token: ensure the symbol exists (token list is ERC-20-only) and
+    // pin its logo to our canonical icon — portfolio-API logos for native ETH
+    // can come back wrong/missing on L2s like Base.
+    const native = getNativeCurrencyForChain(chainId);
+    if (native) {
+      const nativeSym = native.symbol.toUpperCase();
+      const canonicalLogo = nativeLogoForChain(chainId, native.symbol);
+      const existing = bySymbol.get(nativeSym);
+      bySymbol.set(nativeSym, {
+        address: existing?.address ?? NATIVE_TOKEN_ADDRESS,
+        name: existing?.name ?? native.name,
+        symbol: existing?.symbol ?? native.symbol,
+        decimals: existing?.decimals ?? native.decimals,
+        logoURI: canonicalLogo,
+      });
     }
 
     const result: TokenListEntry[] = [];
@@ -527,7 +559,7 @@ export default function BuyTokenSelector({
                   cursor="pointer"
                   bg="accent.highlight"
                   color="accentFg.highlight"
-                  _hover={{ filter: "brightness(0.92)" }}
+                  _hover={{ filter: "brightness(0.85)" }}
                   onClick={() => {
                     if (onConfirmPending) onConfirmPending(pendingToken);
                     setIsOpen(false);
@@ -545,11 +577,11 @@ export default function BuyTokenSelector({
                     <Text fontWeight="700" fontSize="sm" textTransform="uppercase" isTruncated lineHeight="short">
                       {pendingToken.symbol}
                     </Text>
-                    <Text fontSize="2xs" color="text.tertiary" fontFamily="mono" isTruncated lineHeight="short">
+                    <Text fontSize="2xs" color="accentFg.highlight" opacity={0.75} fontFamily="mono" isTruncated lineHeight="short">
                       {truncateAddress(pendingToken.address)}
                     </Text>
                   </Box>
-                  <Text fontSize="xs" color="text.secondary" fontWeight="700">
+                  <Text fontSize="xs" color="accentFg.highlight" fontWeight="700">
                     Choose
                   </Text>
                 </HStack>
