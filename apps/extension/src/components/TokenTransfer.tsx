@@ -143,11 +143,6 @@ function TokenTransfer({
 
         if (cancelled) return;
         setAllTokens(tokens);
-
-        if (!selectedToken) {
-          const onChain = tokens.filter((t) => t.chainId === selectedChainId);
-          if (onChain.length > 0) setSelectedToken(onChain[0]);
-        }
       } finally {
         if (!cancelled) setHoldingsLoading(false);
       }
@@ -254,6 +249,60 @@ function TokenTransfer({
       cancelled = true;
     };
   }, [selectedToken, fromAddress]);
+
+  // -----------------------------------------------------------------------
+  // USD price fallback for the selected ERC-20. The portfolio API supplies
+  // priceUsd for known tokens but may be down (priceUsd=0 for everything)
+  // or simply not price a custom/exotic token. Resolve directly through
+  // `fetchTokenPrice` (proxy → CoinGecko → GeckoTerminal fallback chain) so
+  // USD-mode and the value display still work. Native tokens already get
+  // prices through the catalog's native resolver.
+  //
+  // We deliberately do NOT use a `cancelled` flag here: the on-chain balance
+  // fallback above also calls `setSelectedToken`, and any state update that
+  // changes `selectedToken` would trigger this effect's cleanup mid-flight
+  // and silently drop the price response. The `setSelectedToken` updater
+  // below already guards staleness by matching (chainId, address), so a
+  // late response for a token the user has since switched away from is a
+  // no-op. Combined with `resolvedTokenPriceRef`, each (chainId, address)
+  // is fetched at most once per mount.
+  // -----------------------------------------------------------------------
+  const resolvedTokenPriceRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!selectedToken) return;
+    if (selectedToken.priceUsd > 0) return;
+    if (selectedToken.contractAddress === "native") return;
+    if (!/^0x[a-fA-F0-9]{40}$/.test(selectedToken.contractAddress)) return;
+
+    const tokenAddr = selectedToken.contractAddress;
+    const tokenChainId = selectedToken.chainId;
+    const key = `${tokenChainId}:${tokenAddr.toLowerCase()}`;
+    if (resolvedTokenPriceRef.current.has(key)) return;
+    resolvedTokenPriceRef.current.add(key);
+
+    chrome.runtime.sendMessage(
+      { type: "fetchTokenPrice", chainId: tokenChainId, address: tokenAddr },
+      (res) => {
+        const priceUsd = Number(res?.priceUsd ?? 0);
+        if (!res?.success || !(priceUsd > 0)) return;
+        setSelectedToken((prev) => {
+          if (
+            !prev ||
+            prev.contractAddress.toLowerCase() !== tokenAddr.toLowerCase() ||
+            prev.chainId !== tokenChainId
+          ) {
+            return prev;
+          }
+          const balanceNum = parseFloat(prev.balance || "0");
+          return {
+            ...prev,
+            priceUsd,
+            valueUsd: balanceNum > 0 ? balanceNum * priceUsd : 0,
+          };
+        });
+      },
+    );
+  }, [selectedToken]);
 
   // Centralized chain list: built-ins + custom overrides/custom additions.
   const allChains = useMemo(() => {

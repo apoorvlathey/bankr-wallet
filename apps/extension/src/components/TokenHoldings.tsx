@@ -31,6 +31,7 @@ interface HoldingsSnapshot {
   totalValueUsd: number;
   customTokenKeys: Set<string>;
   rpcIssueChainIds: number[];
+  apiUnavailable: boolean;
   timestamp: number;
 }
 const holdingsCache = new Map<string, HoldingsSnapshot>();
@@ -52,6 +53,7 @@ interface TokenHoldingsProps {
     toggleHideValue: () => void;
     refresh: () => void;
     tokenKeys: Set<string>;
+    apiUnavailable: boolean;
   }) => void;
 }
 
@@ -80,6 +82,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
   const [hideValue, setHideValue] = useState(false);
   const [lastFetched, setLastFetched] = useState(() => initialSnapshot?.timestamp ?? 0);
   const [customTokenKeys, setCustomTokenKeys] = useState<Set<string>>(() => initialSnapshot?.customTokenKeys ?? new Set());
+  const [apiUnavailable, setApiUnavailable] = useState(() => initialSnapshot?.apiUnavailable ?? false);
   const [editingToken, setEditingToken] = useState<PortfolioToken | null>(null);
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
   const editModal = useDisclosure();
@@ -121,12 +124,33 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         const mergedTokens = catalog.tokens;
 
         setCustomTokenKeys(catalog.customTokenKeys);
+        setApiUnavailable(catalog.apiUnavailable);
+
+        // Hide tokens whose balance is still 0 in the catalog. The catalog
+        // injects a native placeholder per visible chain (so on-chain balance
+        // resolution has something to fetch for) but those placeholders show
+        // up as a row of "0 ETH / $0" entries that vanish a second later
+        // when RPC reports the real balance — a flicker the user definitely
+        // notices. Render only the tokens we already know are non-zero, then
+        // let `fetchOnchainBalances` (still receiving the full `mergedTokens`)
+        // fill the rest in.
+        const knownNonZeroTokens = mergedTokens.filter(
+          (t) => parseFloat(t.balance) > 0,
+        );
 
         // Show merged data immediately so user isn't stuck on skeleton loader
-        setTokens(mergedTokens);
+        setTokens(knownNonZeroTokens);
         setDefiPositions(catalog.defiPositions || []);
         setTotalValueUsd(catalog.totalValueUsd);
-        setLoading(false);
+        // Only flip out of the skeleton state if we already have something
+        // to render. When the portfolio API is down (or returned nothing
+        // useful), `knownNonZeroTokens` is empty and the on-chain pass is
+        // about to fill in native balances — flipping `loading` off here
+        // would briefly show "No tokens found" until that pass resolves.
+        const hasInitialContent =
+          knownNonZeroTokens.length > 0 ||
+          (catalog.defiPositions || []).length > 0;
+        if (hasInitialContent) setLoading(false);
         const fetchedAt = Date.now();
         setLastFetched(fetchedAt);
         const cacheKey = holdingsCacheKey(address, chainReloadKey);
@@ -137,6 +161,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
           const onchain = await fetchOnchainBalances(address, mergedTokens);
           onRpcIssuesChange?.(onchain.rpcIssueChainIds);
           setTokens(onchain.tokens);
+          setLoading(false);
           // Total = on-chain corrected wallet tokens + DeFi positions
           const defiTotal = (catalog.defiPositions || []).reduce((s: number, p: DefiPosition) => s + p.valueUsd, 0);
           const total = onchain.totalValueUsd + defiTotal;
@@ -147,18 +172,24 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
             totalValueUsd: total,
             customTokenKeys: catalog.customTokenKeys,
             rpcIssueChainIds: onchain.rpcIssueChainIds,
+            apiUnavailable: catalog.apiUnavailable,
             timestamp: fetchedAt,
           });
           // Record snapshot with on-chain enhanced value
           recordSnapshot(address, total).catch(() => {});
         } catch (err) {
           onRpcIssuesChange?.([]);
+          setLoading(false);
+          // RPC failed entirely — keep only the known non-zero tokens in
+          // the cache too, so a refresh from cache doesn't bring back the
+          // zero-balance placeholder rows we just suppressed.
           holdingsCache.set(cacheKey, {
-            tokens: mergedTokens,
+            tokens: knownNonZeroTokens,
             defiPositions: catalog.defiPositions || [],
             totalValueUsd: catalog.totalValueUsd,
             customTokenKeys: catalog.customTokenKeys,
             rpcIssueChainIds: [],
+            apiUnavailable: catalog.apiUnavailable,
             timestamp: fetchedAt,
           });
           // Record snapshot with API-only value
@@ -183,6 +214,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       setDefiPositions(cached.defiPositions);
       setTotalValueUsd(cached.totalValueUsd);
       setCustomTokenKeys(cached.customTokenKeys);
+      setApiUnavailable(cached.apiUnavailable);
       setLastFetched(cached.timestamp);
       setLoading(false);
       onRpcIssuesChange?.(cached.rpcIssueChainIds);
@@ -191,6 +223,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       setDefiPositions([]);
       setTotalValueUsd(0);
       setCustomTokenKeys(new Set());
+      setApiUnavailable(false);
       setLastFetched(0);
       setLoading(true);
     }
@@ -225,8 +258,9 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       toggleHideValue: () => toggleHideValueRef.current(),
       refresh: () => loadPortfolioRef.current(true),
       tokenKeys,
+      apiUnavailable,
     });
-  }, [totalValueUsd, loading, hideValue, onStateChange, tokenKeys]);
+  }, [totalValueUsd, loading, hideValue, onStateChange, tokenKeys, apiUnavailable]);
 
   const formatUsd = (value: number): string => {
     if (hideValue) return "****";

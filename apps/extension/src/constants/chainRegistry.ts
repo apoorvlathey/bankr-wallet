@@ -57,6 +57,14 @@ export interface ChainEntry {
   coingeckoTokenId?: string;
   /** CoinGecko platform ID for token list lookups (e.g. "base", "ethereum") */
   coingeckoPlatformId?: string;
+  /**
+   * GeckoTerminal network slug (e.g. "eth", "base", "polygon_pos"). Used as
+   * a fallback price source for tokens CoinGecko doesn't index. GeckoTerminal
+   * derives prices from on-chain DEX liquidity so it covers exotic / new
+   * tokens that the CoinGecko `/simple/token_price` endpoint misses.
+   * undefined = no GeckoTerminal coverage for this chain.
+   */
+  geckoTerminalNetworkId?: string;
   /** Pre-built viem Chain object (for chains in viem/chains). Omit for custom chains. */
   viemChain?: Chain;
 }
@@ -94,6 +102,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isSwapSupported: true,
     coingeckoTokenId: "ethereum",
     coingeckoPlatformId: "ethereum",
+    geckoTerminalNetworkId: "eth",
     viemChain: mainnet,
   },
   {
@@ -111,6 +120,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isSwapSupported: true,
     coingeckoTokenId: "ethereum",
     coingeckoPlatformId: "arbitrum-one",
+    geckoTerminalNetworkId: "arbitrum",
     viemChain: arbitrum,
   },
   {
@@ -128,6 +138,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isSwapSupported: true,
     coingeckoTokenId: "ethereum",
     coingeckoPlatformId: "base",
+    geckoTerminalNetworkId: "base",
     viemChain: base,
   },
   {
@@ -145,6 +156,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isSwapSupported: true,
     coingeckoTokenId: "binancecoin",
     coingeckoPlatformId: "binance-smart-chain",
+    geckoTerminalNetworkId: "bsc",
     viemChain: bsc,
   },
   {
@@ -160,7 +172,8 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isOpStack: true,
     isBankrSupported: false,
     isSwapSupported: false,
-    coingeckoTokenId: undefined,
+    coingeckoTokenId: "ethereum",
+    geckoTerminalNetworkId: "megaeth",
   },
   {
     chainId: 137,
@@ -177,6 +190,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isSwapSupported: true,
     coingeckoTokenId: "matic-network",
     coingeckoPlatformId: "polygon-pos",
+    geckoTerminalNetworkId: "polygon_pos",
     viemChain: polygon,
   },
   {
@@ -194,6 +208,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isSwapSupported: true,
     coingeckoTokenId: "ethereum",
     coingeckoPlatformId: "unichain",
+    geckoTerminalNetworkId: "unichain",
   },
 ] as const;
 
@@ -273,6 +288,13 @@ export const COINGECKO_PLATFORM_IDS: Record<number, string> = {};
 for (const c of CHAIN_REGISTRY) {
   if (c.coingeckoPlatformId) {
     COINGECKO_PLATFORM_IDS[c.chainId] = c.coingeckoPlatformId;
+  }
+}
+
+export const GECKOTERMINAL_NETWORK_IDS: Record<number, string> = {};
+for (const c of CHAIN_REGISTRY) {
+  if (c.geckoTerminalNetworkId) {
+    GECKOTERMINAL_NETWORK_IDS[c.chainId] = c.geckoTerminalNetworkId;
   }
 }
 

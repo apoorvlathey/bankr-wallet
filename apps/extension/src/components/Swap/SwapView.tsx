@@ -415,6 +415,62 @@ function SwapView({
   }, [sellToken, fromAddress]);
 
   // -----------------------------------------------------------------------
+  // USD price fallback for the sell token. The portfolio API is the primary
+  // price source but it can be down (then every token comes back with
+  // priceUsd=0) or it may simply not price an exotic ERC-20. Either way,
+  // resolve the price directly through `fetchTokenPrice` (proxy → CoinGecko
+  // → GeckoTerminal fallback chain) so USD-mode entry stays usable. Native
+  // tokens already have their own resolution path inside
+  // `loadPortfolioTokenCatalog`.
+  //
+  // We deliberately do NOT use a `cancelled` flag here: the on-chain
+  // balance verification effect above also calls `setSellToken`, and any
+  // state update that changes `sellToken` would trigger this effect's
+  // cleanup mid-flight and silently drop the price response (which can
+  // take 1-2s when CoinGecko misses and we fall through to GeckoTerminal).
+  // The `setSellToken` updater below already guards staleness by matching
+  // (chainId, address), so a late response for a token the user has since
+  // switched away from is a no-op. Combined with `resolvedSellPriceRef`,
+  // each (chainId, address) is fetched at most once per mount.
+  // -----------------------------------------------------------------------
+  const resolvedSellPriceRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!sellToken) return;
+    if (sellToken.priceUsd > 0) return;
+    if (sellToken.contractAddress === "native") return;
+    if (!/^0x[a-fA-F0-9]{40}$/.test(sellToken.contractAddress)) return;
+
+    const tokenAddr = sellToken.contractAddress;
+    const tokenChainId = sellToken.chainId;
+    const key = `${tokenChainId}:${tokenAddr.toLowerCase()}`;
+    if (resolvedSellPriceRef.current.has(key)) return;
+    resolvedSellPriceRef.current.add(key);
+
+    chrome.runtime.sendMessage(
+      { type: "fetchTokenPrice", chainId: tokenChainId, address: tokenAddr },
+      (res) => {
+        const priceUsd = Number(res?.priceUsd ?? 0);
+        if (!res?.success || !(priceUsd > 0)) return;
+        setSellToken((prev) => {
+          if (
+            !prev ||
+            prev.contractAddress.toLowerCase() !== tokenAddr.toLowerCase() ||
+            prev.chainId !== tokenChainId
+          ) {
+            return prev;
+          }
+          const balanceNum = parseFloat(prev.balance || "0");
+          return {
+            ...prev,
+            priceUsd,
+            valueUsd: balanceNum > 0 ? balanceNum * priceUsd : 0,
+          };
+        });
+      },
+    );
+  }, [sellToken]);
+
+  // -----------------------------------------------------------------------
   // Load token list for current chain
   // -----------------------------------------------------------------------
   useEffect(() => {

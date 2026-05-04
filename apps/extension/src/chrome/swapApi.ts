@@ -373,20 +373,32 @@ export async function getCachedTokenList(
 }
 
 // ---------------------------------------------------------------------------
-// Token Price (USD via CoinGecko, proxied through walletchan.com)
+// Token Price (USD via CoinGecko, proxied through walletchan.com with a
+// direct CoinGecko fallback when the proxy is unreachable or returns 0)
 // ---------------------------------------------------------------------------
 
 export async function fetchTokenPrice(
   chainId: number,
   tokenAddress: string,
 ): Promise<number> {
-  const res = await fetch(
-    `${SWAP_API_BASE}/token-price?chainId=${chainId}&address=${tokenAddress}`,
-    { signal: AbortSignal.timeout(10_000) },
-  );
-  if (!res.ok) return 0;
-  const data = await res.json();
-  return data.priceUsd ?? 0;
+  try {
+    const res = await fetch(
+      `${SWAP_API_BASE}/token-price?chainId=${chainId}&address=${tokenAddress}`,
+      { signal: AbortSignal.timeout(10_000) },
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const priceUsd = Number(data.priceUsd ?? 0);
+      if (priceUsd > 0) return priceUsd;
+    }
+  } catch {
+    // Fall through to direct CoinGecko.
+  }
+
+  // Direct CoinGecko fallback so price still resolves when the proxy is
+  // down (e.g. portfolio API outage takes the same backend with it).
+  const { fetchCoinGeckoTokenPriceDirect } = await import("./coingeckoService");
+  return fetchCoinGeckoTokenPriceDirect(chainId, tokenAddress);
 }
 
 // ---------------------------------------------------------------------------
