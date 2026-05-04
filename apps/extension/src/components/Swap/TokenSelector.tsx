@@ -15,6 +15,7 @@ import type { PortfolioToken } from "@/chrome/portfolioApi";
 import type { TokenListEntry } from "@/chrome/swapApi";
 import { getChainConfig } from "@/constants/chainConfig";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
@@ -288,9 +289,6 @@ export default function TokenSelector({
     setSearch("");
   };
 
-  const fallbackIcon =
-    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect fill='%23ccc' width='20' height='20'/%3E%3C/svg%3E";
-
   const isSelectedAddr = (addr: string) => {
     if (!selectedToken) return false;
     const selAddr =
@@ -321,14 +319,26 @@ export default function TokenSelector({
         onClick={() => setIsOpen(!isOpen)}
       >
         <HStack spacing={2}>
-          {selectedToken?.logoUrl && (
-            <Image
-              src={selectedToken.logoUrl}
-              boxSize="20px"
-              borderRadius="full"
-              fallbackSrc={fallbackIcon}
-            />
-          )}
+          {selectedToken &&
+            (selectedToken.logoUrl ? (
+              <Image
+                src={selectedToken.logoUrl}
+                alt={selectedToken.symbol}
+                boxSize="20px"
+                borderRadius="full"
+                fallback={
+                  <TokenSymbolFallback
+                    symbol={selectedToken.symbol}
+                    size="20px"
+                  />
+                }
+              />
+            ) : (
+              <TokenSymbolFallback
+                symbol={selectedToken.symbol}
+                size="20px"
+              />
+            ))}
           <Text fontWeight="700" fontSize="sm" textTransform="uppercase">
             {selectedToken?.symbol || "Select"}
           </Text>
@@ -405,12 +415,25 @@ export default function TokenSelector({
                         _hover={{ borderColor: "accent.secondary" }}
                         onClick={() => handleSelectPortfolio(t)}
                       >
-                        <Image
-                          src={t.logoUrl}
-                          boxSize="16px"
-                          borderRadius="full"
-                          fallbackSrc={fallbackIcon}
-                        />
+                        {t.logoUrl ? (
+                          <Image
+                            src={t.logoUrl}
+                            alt={t.symbol}
+                            boxSize="16px"
+                            borderRadius="full"
+                            fallback={
+                              <TokenSymbolFallback
+                                symbol={t.symbol}
+                                size="16px"
+                              />
+                            }
+                          />
+                        ) : (
+                          <TokenSymbolFallback
+                            symbol={t.symbol}
+                            size="16px"
+                          />
+                        )}
                         <Text
                           fontWeight="700"
                           fontSize="xs"
@@ -472,12 +495,25 @@ export default function TokenSelector({
                     }}
                     spacing={2}
                   >
-                    <Image
-                      src={resolvedCustomToken.logoUrl}
-                      boxSize="20px"
-                      borderRadius="full"
-                      fallbackSrc={fallbackIcon}
-                    />
+                    {resolvedCustomToken.logoUrl ? (
+                      <Image
+                        src={resolvedCustomToken.logoUrl}
+                        alt={resolvedCustomToken.symbol}
+                        boxSize="20px"
+                        borderRadius="full"
+                        fallback={
+                          <TokenSymbolFallback
+                            symbol={resolvedCustomToken.symbol}
+                            size="20px"
+                          />
+                        }
+                      />
+                    ) : (
+                      <TokenSymbolFallback
+                        symbol={resolvedCustomToken.symbol}
+                        size="20px"
+                      />
+                    )}
                     <Box flex={1} minW={0}>
                       <Text
                         fontWeight="700"
@@ -543,12 +579,25 @@ export default function TokenSelector({
                         onClick={() => handleSelectHolding(h)}
                         spacing={2}
                       >
-                        <Image
-                          src={h.logoUrl}
-                          boxSize="20px"
-                          borderRadius="full"
-                          fallbackSrc={fallbackIcon}
-                        />
+                        {h.logoUrl ? (
+                          <Image
+                            src={h.logoUrl}
+                            alt={h.symbol}
+                            boxSize="20px"
+                            borderRadius="full"
+                            fallback={
+                              <TokenSymbolFallback
+                                symbol={h.symbol}
+                                size="20px"
+                              />
+                            }
+                          />
+                        ) : (
+                          <TokenSymbolFallback
+                            symbol={h.symbol}
+                            size="20px"
+                          />
+                        )}
                         <Box flex={1} minW={0}>
                           <Text
                             fontWeight="700"
@@ -619,12 +668,25 @@ export default function TokenSelector({
                   onClick={() => handleSelectListEntry(token)}
                   spacing={2}
                 >
-                  <Image
-                    src={token.logoURI}
-                    boxSize="20px"
-                    borderRadius="full"
-                    fallbackSrc={fallbackIcon}
-                  />
+                  {token.logoURI ? (
+                    <Image
+                      src={token.logoURI}
+                      alt={token.symbol}
+                      boxSize="20px"
+                      borderRadius="full"
+                      fallback={
+                        <TokenSymbolFallback
+                          symbol={token.symbol}
+                          size="20px"
+                        />
+                      }
+                    />
+                  ) : (
+                    <TokenSymbolFallback
+                      symbol={token.symbol}
+                      size="20px"
+                    />
+                  )}
                   <Box flex={1} minW={0}>
                     <Text
                       fontWeight="700"

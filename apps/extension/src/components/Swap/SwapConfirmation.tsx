@@ -27,6 +27,7 @@ import CalldataDecoder from "@/components/CalldataDecoder";
 import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
+import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { useTheme } from "@/theme";
 
 // Theme-aware accent stripes for the per-call cards. Mirrors the cycle used
@@ -197,6 +198,7 @@ function SwapConfirmation({
           bg="accent.secondary"
           border="2px solid"
           borderColor="border.default"
+          borderRadius="lg"
           boxShadow="card"
           py={1.5}
           px={3}
@@ -245,15 +247,23 @@ function SwapConfirmation({
           bg="surface.raised"
           border="2px solid"
           borderColor="border.default"
+          borderRadius="lg"
           boxShadow="card"
           overflow="hidden"
         >
           {/* Sell row */}
           <HStack px={3} py={2.5} spacing={3}>
             {sellToken.logoUrl ? (
-              <Image src={sellToken.logoUrl} boxSize="32px" borderRadius="full" flexShrink={0} />
+              <Image
+                src={sellToken.logoUrl}
+                alt={sellToken.symbol}
+                boxSize="32px"
+                borderRadius="full"
+                flexShrink={0}
+                fallback={<TokenSymbolFallback symbol={sellToken.symbol} size="32px" />}
+              />
             ) : (
-              <Box boxSize="32px" borderRadius="full" bg="surface.sunken" flexShrink={0} />
+              <TokenSymbolFallback symbol={sellToken.symbol} size="32px" />
             )}
             <VStack spacing={0} align="flex-start" flex={1} minW={0}>
               <Text fontSize="xs" color="text.tertiary" fontWeight="700" textTransform="uppercase">
@@ -305,9 +315,16 @@ function SwapConfirmation({
           {/* Buy row */}
           <HStack px={3} py={2.5} spacing={3}>
             {buyTokenLogoURI ? (
-              <Image src={buyTokenLogoURI} boxSize="32px" borderRadius="full" flexShrink={0} />
+              <Image
+                src={buyTokenLogoURI}
+                alt={buyTokenInfo.symbol}
+                boxSize="32px"
+                borderRadius="full"
+                flexShrink={0}
+                fallback={<TokenSymbolFallback symbol={buyTokenInfo.symbol} size="32px" />}
+              />
             ) : (
-              <Box boxSize="32px" borderRadius="full" bg="surface.sunken" flexShrink={0} />
+              <TokenSymbolFallback symbol={buyTokenInfo.symbol} size="32px" />
             )}
             <VStack spacing={0} align="flex-start" flex={1} minW={0}>
               <Text fontSize="xs" color="text.tertiary" fontWeight="700" textTransform="uppercase">
@@ -375,6 +392,13 @@ function SwapConfirmation({
                 borderColor="border.default"
                 borderLeftWidth="4px"
                 borderLeftColor={accent}
+                // Left edge is square so the colored accent stripe runs flush
+                // top-to-bottom; only the right side rounds. Mirrors the
+                // pattern in BatchTransactionConfirmation.
+                borderTopLeftRadius="0"
+                borderBottomLeftRadius="0"
+                borderTopRightRadius="lg"
+                borderBottomRightRadius="lg"
                 bg="surface.raised"
                 overflow="hidden"
               >
@@ -535,6 +559,7 @@ function SwapConfirmation({
               bg="accent.secondary"
               border="2px solid"
               borderColor="border.default"
+              borderRadius="lg"
             >
               <Spinner size="sm" color="accentFg.secondary" />
               <Text fontSize="sm" color="accentFg.secondary" fontWeight="700" textTransform="uppercase">

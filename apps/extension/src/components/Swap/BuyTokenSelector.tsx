@@ -15,6 +15,7 @@ import type { TokenListEntry } from "@/chrome/swapApi";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import { getChainConfig } from "@/constants/chainConfig";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 
 /** Canonical native-token icon. ETH-based chains share one diamond logo;
  *  for non-ETH natives (BNB, POL) the chain icon doubles as the token icon. */
@@ -263,9 +264,6 @@ export default function BuyTokenSelector({
     }
   }, [search]);
 
-  const fallbackIcon =
-    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect fill='%23ccc' width='20' height='20'/%3E%3C/svg%3E";
-
   const isSelectedAddr = (addr: string) =>
     selectedToken?.address.toLowerCase() === addr.toLowerCase();
 
@@ -286,14 +284,26 @@ export default function BuyTokenSelector({
         onClick={() => setIsOpen(!isOpen)}
       >
         <HStack spacing={2}>
-          {selectedToken?.logoURI && (
-            <Image
-              src={selectedToken.logoURI}
-              boxSize="20px"
-              borderRadius="full"
-              fallbackSrc={fallbackIcon}
-            />
-          )}
+          {selectedToken &&
+            (selectedToken.logoURI ? (
+              <Image
+                src={selectedToken.logoURI}
+                alt={selectedToken.symbol}
+                boxSize="20px"
+                borderRadius="full"
+                fallback={
+                  <TokenSymbolFallback
+                    symbol={selectedToken.symbol}
+                    size="20px"
+                  />
+                }
+              />
+            ) : (
+              <TokenSymbolFallback
+                symbol={selectedToken.symbol}
+                size="20px"
+              />
+            ))}
           <Text fontWeight="700" fontSize="sm" textTransform="uppercase">
             {selectedToken?.symbol || "Select"}
           </Text>
@@ -368,12 +378,22 @@ export default function BuyTokenSelector({
                       _hover={{ borderColor: "accent.secondary" }}
                       onClick={() => handleSelect(t)}
                     >
-                      <Image
-                        src={t.logoURI}
-                        boxSize="16px"
-                        borderRadius="full"
-                        fallbackSrc={fallbackIcon}
-                      />
+                      {t.logoURI ? (
+                        <Image
+                          src={t.logoURI}
+                          alt={t.symbol}
+                          boxSize="16px"
+                          borderRadius="full"
+                          fallback={
+                            <TokenSymbolFallback
+                              symbol={t.symbol}
+                              size="16px"
+                            />
+                          }
+                        />
+                      ) : (
+                        <TokenSymbolFallback symbol={t.symbol} size="16px" />
+                      )}
                       <Text
                         fontWeight="700"
                         fontSize="xs"
@@ -429,12 +449,22 @@ export default function BuyTokenSelector({
                       onClick={() => handleHoldingSelect(h)}
                       spacing={2}
                     >
-                      <Image
-                        src={h.logoUrl}
-                        boxSize="20px"
-                        borderRadius="full"
-                        fallbackSrc={fallbackIcon}
-                      />
+                      {h.logoUrl ? (
+                        <Image
+                          src={h.logoUrl}
+                          alt={h.symbol}
+                          boxSize="20px"
+                          borderRadius="full"
+                          fallback={
+                            <TokenSymbolFallback
+                              symbol={h.symbol}
+                              size="20px"
+                            />
+                          }
+                        />
+                      ) : (
+                        <TokenSymbolFallback symbol={h.symbol} size="20px" />
+                      )}
                       <Box flex={1} minW={0}>
                         <Text
                           fontWeight="700"
@@ -504,12 +534,25 @@ export default function BuyTokenSelector({
                   onClick={() => handleSelect(token)}
                   spacing={2}
                 >
-                  <Image
-                    src={token.logoURI}
-                    boxSize="20px"
-                    borderRadius="full"
-                    fallbackSrc={fallbackIcon}
-                  />
+                  {token.logoURI ? (
+                    <Image
+                      src={token.logoURI}
+                      alt={token.symbol}
+                      boxSize="20px"
+                      borderRadius="full"
+                      fallback={
+                        <TokenSymbolFallback
+                          symbol={token.symbol}
+                          size="20px"
+                        />
+                      }
+                    />
+                  ) : (
+                    <TokenSymbolFallback
+                      symbol={token.symbol}
+                      size="20px"
+                    />
+                  )}
                   <Box flex={1} minW={0}>
                     <Text
                       fontWeight="700"
@@ -567,12 +610,25 @@ export default function BuyTokenSelector({
                   }}
                   spacing={2}
                 >
-                  <Image
-                    src={pendingToken.logoURI}
-                    boxSize="20px"
-                    borderRadius="full"
-                    fallbackSrc={fallbackIcon}
-                  />
+                  {pendingToken.logoURI ? (
+                    <Image
+                      src={pendingToken.logoURI}
+                      alt={pendingToken.symbol}
+                      boxSize="20px"
+                      borderRadius="full"
+                      fallback={
+                        <TokenSymbolFallback
+                          symbol={pendingToken.symbol}
+                          size="20px"
+                        />
+                      }
+                    />
+                  ) : (
+                    <TokenSymbolFallback
+                      symbol={pendingToken.symbol}
+                      size="20px"
+                    />
+                  )}
                   <Box flex={1} minW={0}>
                     <Text fontWeight="700" fontSize="sm" textTransform="uppercase" isTruncated lineHeight="short">
                       {pendingToken.symbol}

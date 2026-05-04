@@ -333,6 +333,88 @@ function SwapView({
   }, [fromAddress, chainId, isSwapSupported]);
 
   // -----------------------------------------------------------------------
+  // Verify zero balances via direct RPC.
+  //
+  // The portfolio API can return an empty/incomplete catalog (rate-limit, 5xx,
+  // etc.) which leaves the user looking at "Balance: 0" for a token they
+  // actually hold. It can also happen any time the user selects a token from
+  // the token-list dropdown that isn't in their holdings — `entryToPortfolio
+  // Token` defaults balance to "0" because we don't know yet.
+  //
+  // To avoid that footgun, whenever a sellToken has a 0 reported balance we
+  // fall back to a direct on-chain `balanceOf` (or `eth_getBalance` for
+  // native) — same RPC path the custom-token resolver already uses. We
+  // memoize per (chainId, token, owner) so we don't refetch repeatedly when
+  // the user types into the amount field.
+  // -----------------------------------------------------------------------
+  const verifiedZeroBalancesRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!sellToken || !fromAddress) return;
+    if (parseFloat(sellToken.balance) > 0) return;
+
+    const tokenAddr = sellToken.contractAddress;
+    const tokenChainId = sellToken.chainId;
+    const tokenDecimals = sellToken.decimals;
+    const key = `${tokenChainId}:${tokenAddr.toLowerCase()}:${fromAddress.toLowerCase()}`;
+    if (verifiedZeroBalancesRef.current.has(key)) return;
+    verifiedZeroBalancesRef.current.add(key);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const rpcUrl = await getStoredRpcUrl(tokenChainId);
+        if (!rpcUrl || cancelled) return;
+        const { createPublicClient, http, erc20Abi } = await import("viem");
+        const client = createPublicClient({
+          transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }),
+        });
+        const isNative = tokenAddr === "native";
+        const rawBalance = isNative
+          ? await client.getBalance({ address: fromAddress as `0x${string}` })
+          : ((await client.readContract({
+              address: tokenAddr as `0x${string}`,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [fromAddress as `0x${string}`],
+            })) as bigint);
+        if (cancelled || rawBalance === 0n) return;
+
+        const balance = formatUnits(rawBalance, tokenDecimals);
+        const balanceNum = parseFloat(balance);
+        const balanceFormatted =
+          balanceNum > 0 && balanceNum < 0.0001
+            ? "<0.0001"
+            : parseFloat(balanceNum.toPrecision(6)).toString();
+
+        setSellToken((prev) => {
+          // Only patch if user is still on the same token. Avoid clobbering
+          // a more recent selection.
+          if (
+            !prev ||
+            prev.contractAddress.toLowerCase() !== tokenAddr.toLowerCase() ||
+            prev.chainId !== tokenChainId
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            balance,
+            balanceFormatted,
+            valueUsd: balanceNum * prev.priceUsd,
+          };
+        });
+      } catch {
+        // Silent: keep showing 0 if the RPC call fails. The submit-time
+        // balance check at line ~668 will still cap on-chain.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sellToken, fromAddress]);
+
+  // -----------------------------------------------------------------------
   // Load token list for current chain
   // -----------------------------------------------------------------------
   useEffect(() => {
