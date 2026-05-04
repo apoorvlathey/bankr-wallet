@@ -614,6 +614,11 @@ function SwapView({
       }
       const { name, symbol, decimals } = infoResult.data;
 
+      const addrLower = tokenAddress.toLowerCase();
+      const isNative =
+        addrLower === "0x0000000000000000000000000000000000000000" ||
+        addrLower === NATIVE_TOKEN_ADDRESS.toLowerCase();
+
       const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
       const rpcUrl = await getStoredRpcUrl(chainId);
       if (!rpcUrl) {
@@ -621,21 +626,26 @@ function SwapView({
         return;
       }
       const client = createPublicClient({ transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }) });
-      const rawBalance = await client.readContract({
-        address: tokenAddress as `0x${string}`,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [fromAddress as `0x${string}`],
-      });
+      const rawBalance = isNative
+        ? await client.getBalance({ address: fromAddress as `0x${string}` })
+        : await client.readContract({
+            address: tokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [fromAddress as `0x${string}`],
+          });
       const balance = formatUnits(rawBalance, decimals);
       const balanceNum = parseFloat(balance);
 
-      const addrLower = tokenAddress.toLowerCase();
       const listMatch = tokenList.find((t) => t.address.toLowerCase() === addrLower);
-      const logoUrl = listMatch?.logoURI || KNOWN_TOKEN_LOGOS[addrLower] || "";
+      const logoUrl = isNative
+        ? symbol.toUpperCase() === "ETH"
+          ? "/chainIcons/ethereum.svg"
+          : getChainConfig(chainId)?.icon || ""
+        : listMatch?.logoURI || KNOWN_TOKEN_LOGOS[addrLower] || "";
 
       setResolvedSellToken({
-        contractAddress: tokenAddress,
+        contractAddress: isNative ? "native" : tokenAddress,
         name,
         symbol,
         decimals,

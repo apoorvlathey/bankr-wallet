@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import {
   Box,
   VStack,
@@ -24,7 +24,7 @@ const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const POPULAR_PER_CHAIN: Record<number, string[]> = {
   1: ["ETH", "USDC", "USDT", "WBTC", "WETH"],
   42161: ["ETH", "USDC", "USDT", "WETH"],
-  8453: ["WCHAN", "ETH", "USDC", "USDT", "WBTC"],
+  8453: ["ETH", "USDC", "USDT", "WBTC"],
   56: ["BNB", "USDC", "USDT", "WBTC", "WETH"],
   137: ["POL", "USDC", "WETH"],
   130: ["ETH", "USDC", "WBTC", "WETH"],
@@ -92,6 +92,10 @@ interface TokenSelectorProps {
   customTokenError?: string | null;
   /** Chain name shown in empty state */
   chainName?: string;
+  /** Which edge of the trigger the dropdown anchors to. Defaults to "left"
+   *  (swap UI). Send UI passes "right" so the dropdown opens leftward into
+   *  the available popup space. */
+  dropdownAlign?: "left" | "right";
 }
 
 export default function TokenSelector({
@@ -107,11 +111,14 @@ export default function TokenSelector({
   customTokenLoading,
   customTokenError,
   chainName,
+  dropdownAlign = "left",
 }: TokenSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(60);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastSubmittedRef = useRef("");
@@ -140,6 +147,46 @@ export default function TokenSelector({
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
+
+  // Fixed-positioned dropdown: anchor to the trigger, but flip horizontally
+  // when the popup viewport is narrower than the dropdown placed at the
+  // trigger's left edge. Keeps Swap (trigger on the left) anchored left and
+  // Send (trigger on the right) anchored right — both fitting the popup.
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setDropdownPos(null);
+      return;
+    }
+    const compute = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const padding = 8;
+      const viewportW = document.documentElement.clientWidth;
+      const desiredW = 280;
+      const width = Math.min(desiredW, viewportW - padding * 2);
+      let left: number;
+      if (dropdownAlign === "right") {
+        // Pin to the popup viewport's right edge so the dropdown sits in the
+        // empty right-of-trigger space (used by the Send page where the
+        // trigger lives in a narrow left-side column).
+        left = viewportW - padding - width;
+      } else {
+        // Anchor to trigger's left edge; flip if it would overflow right.
+        left = rect.left;
+        if (left + width > viewportW - padding) left = rect.right - width;
+      }
+      if (left < padding) left = padding;
+      setDropdownPos({ top: rect.bottom, left, width });
+    };
+    compute();
+    window.addEventListener("resize", compute);
+    window.addEventListener("scroll", compute, true);
+    return () => {
+      window.removeEventListener("resize", compute);
+      window.removeEventListener("scroll", compute, true);
+    };
+  }, [isOpen, dropdownAlign]);
 
   useEffect(() => {
     setVisibleCount(60);
@@ -306,6 +353,7 @@ export default function TokenSelector({
     <Box ref={containerRef} position="relative">
       {/* Trigger */}
       <Box
+        ref={triggerRef}
         cursor="pointer"
         border="2px solid"
         borderColor="border.default"
@@ -347,20 +395,18 @@ export default function TokenSelector({
       </Box>
 
       {/* Dropdown */}
-      {isOpen && (
+      {isOpen && dropdownPos && (
         <Box
-          position="absolute"
-          top="100%"
-          left={0}
-          right={0}
-          minW="280px"
+          position="fixed"
+          top={`${dropdownPos.top - 4}px`}
+          left={`${dropdownPos.left}px`}
+          w={`${dropdownPos.width}px`}
           bg="surface.sunken"
           border="2px solid"
           borderColor="border.default"
           borderRadius="lg"
           boxShadow="cardHover"
           zIndex={20}
-          mt={-1}
         >
           {/* Search */}
           <Box p={2} borderBottom="2px solid" borderColor="border.default">
