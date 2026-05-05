@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo } from "react";
+import { useState, useEffect, useMemo, memo, useRef } from "react";
 import {
   Box,
   VStack,
@@ -151,6 +151,82 @@ function CopyButton({
   );
 }
 
+/**
+ * Split-mode gating: when this PendingTxRequest is one slice of a user-split
+ * `wallet_sendCalls` bundle and is NOT the first slice, the Confirm button
+ * stays disabled until the prior slice has actually landed on-chain so the
+ * downstream gas estimation runs against fresh state. Returns:
+ *   - { ready: true }                            when no prior to wait for
+ *   - { ready: false, label: "Waiting for…" }   while prior is processing
+ *   - { ready: true, justResolvedAt: number }    instant prior just succeeded
+ *                                                (timestamp lets the caller
+ *                                                trigger a fresh estimate)
+ *   - { ready: false, label: "Previous tx …" }  prior failed/rejected
+ */
+type SplitPriorTxState =
+  | { ready: true; justResolvedAt?: number }
+  | { ready: false; label: string };
+
+function useSplitPriorTxState(txRequest: PendingTxRequest): SplitPriorTxState {
+  const parentBundleId = txRequest.parentBundleId;
+  const bundleIndex = txRequest.bundleIndex;
+  const noPrior = !parentBundleId || bundleIndex === undefined || bundleIndex === 0;
+
+  const [state, setState] = useState<SplitPriorTxState>(
+    noPrior
+      ? { ready: true }
+      : { ready: false, label: "Waiting for previous transaction to confirm…" },
+  );
+
+  useEffect(() => {
+    if (noPrior) {
+      setState({ ready: true });
+      return;
+    }
+    const priorTxId = `${parentBundleId}:split:${(bundleIndex as number) - 1}`;
+    let cancelled = false;
+
+    const apply = (tx: { status: string; error?: string }) => {
+      if (cancelled) return;
+      if (tx.status === "success") {
+        setState((prev) =>
+          prev.ready ? prev : { ready: true, justResolvedAt: Date.now() },
+        );
+      } else if (tx.status === "failed") {
+        setState({
+          ready: false,
+          label: `Previous transaction ${
+            tx.error?.includes("dropped") ? "was dropped" : "failed"
+          } — bundle cancelled`,
+        });
+      }
+    };
+
+    // Initial load via existing getTxHistory message (TxStatusList uses the
+    // same channel); no new background handler needed.
+    chrome.runtime.sendMessage({ type: "getTxHistory" }, (history) => {
+      if (cancelled || !Array.isArray(history)) return;
+      const prior = history.find((t: any) => t.id === priorTxId);
+      if (prior) apply(prior);
+    });
+
+    // Live updates: every history mutation fires `txHistoryUpdated` with the
+    // updated entry inline. We just filter for our prior tx id.
+    const onMessage = (msg: { type: string; updatedTx?: { id: string; status: string; error?: string } }) => {
+      if (msg.type !== "txHistoryUpdated" || !msg.updatedTx) return;
+      if (msg.updatedTx.id !== priorTxId) return;
+      apply(msg.updatedTx);
+    };
+    chrome.runtime.onMessage.addListener(onMessage);
+    return () => {
+      cancelled = true;
+      chrome.runtime.onMessage.removeListener(onMessage);
+    };
+  }, [parentBundleId, bundleIndex, noPrior]);
+
+  return state;
+}
+
 function TransactionConfirmation({
   txRequest,
   currentIndex,
@@ -197,6 +273,27 @@ function TransactionConfirmation({
   const [gasValid, setGasValid] = useState(true);
   const [forceInclusion, setForceInclusion] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Split-mode state. When this tx is part of a user-split wallet_sendCalls
+  // bundle we need to (a) gate Confirm until the prior split tx lands and
+  // (b) force a fresh gas estimate against the post-prior-tx chain state.
+  // The `gasEstimateKey` bumps each time the prior tx flips to success;
+  // changing the React `key` on GasEstimateDisplay remounts it so its own
+  // useEffect re-runs and pulls a new estimate.
+  const splitState = useSplitPriorTxState(txRequest);
+  const [gasEstimateKey, setGasEstimateKey] = useState(0);
+  const lastSeenSplitResolveRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (splitState.ready && splitState.justResolvedAt &&
+        splitState.justResolvedAt !== lastSeenSplitResolveRef.current) {
+      lastSeenSplitResolveRef.current = splitState.justResolvedAt;
+      setGasEstimateKey((k) => k + 1);
+      // Optimistically reset validity so Confirm stays disabled while the
+      // remounted GasEstimateDisplay re-runs estimation. It'll flip back to
+      // true via onValidityChange once the new estimate resolves.
+      setGasValid(false);
+    }
+  }, [splitState]);
 
   // Force inclusion info — non-null when the chain supports it and account can submit.
   // For Bankr accounts this also requires the L1 chain (e.g. Ethereum mainnet) to be
@@ -688,6 +785,43 @@ function TransactionConfirmation({
           </Box>
         </HStack>
 
+        {/* Split-mode step indicator. Shown when this confirmation is one
+            slice of a user-split wallet_sendCalls bundle. Helps the user
+            keep track of "where are we" across the sequence. */}
+        {txRequest.parentBundleId !== undefined &&
+          txRequest.bundleIndex !== undefined &&
+          txRequest.bundleTotalCalls !== undefined && (
+            <HStack
+              w="full"
+              py={2}
+              px={3}
+              bg="accent.secondary"
+              border={tokens.borders.medium}
+              borderColor="border.default"
+              borderRadius="lg"
+              justify="space-between"
+            >
+              <Text
+                fontSize="xs"
+                color="accentFg.secondary"
+                fontWeight="700"
+                textTransform="uppercase"
+              >
+                Split batch
+              </Text>
+              <Badge
+                fontSize="xs"
+                bg="accentFg.secondary"
+                color="accent.secondary"
+                fontWeight="900"
+                px={2}
+                py={0.5}
+              >
+                Step {txRequest.bundleIndex + 1} of {txRequest.bundleTotalCalls}
+              </Badge>
+            </HStack>
+          )}
+
         {/* ERC20 Approve detection — shown above tx info when present */}
         {tx.to && parsedApproval && (
           <ERC20ApproveDisplay
@@ -1024,8 +1158,11 @@ function TransactionConfirmation({
         {/* Asset Changes (simulation) */}
         {tx.to && <AssetChangesDisplay txRequest={txRequest} />}
 
-        {/* Gas Estimate */}
+        {/* Gas Estimate. The `key` includes the split-resolution counter so
+            the component remounts after the prior split tx lands, forcing a
+            fresh eth_estimateGas against the new chain state. */}
         <GasEstimateDisplay
+          key={gasEstimateKey}
           txRequest={txRequest}
           accountType={accountType}
           onGasOverrides={setGasOverrides}
@@ -1254,6 +1391,36 @@ function TransactionConfirmation({
           </Box>
         )}
 
+        {/* Split-mode status banner. Shown when this confirmation is part of
+            a user-split bundle and we're either waiting for the prior call
+            to confirm on-chain or re-estimating gas against the new state. */}
+        {(!splitState.ready ||
+          (txRequest.parentBundleId && txRequest.bundleIndex !== undefined &&
+           txRequest.bundleIndex > 0 && !gasValid)) && state !== "submitting" && (
+          <HStack
+            justify="center"
+            py={3}
+            bg="bg.muted"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+          >
+            {splitState.ready ? null : (
+              <Spinner size="sm" color="text.secondary" />
+            )}
+            <Text
+              fontSize="sm"
+              color="text.secondary"
+              fontWeight="700"
+              textTransform="uppercase"
+            >
+              {!splitState.ready
+                ? splitState.label
+                : "Estimating gas with new chain state…"}
+            </Text>
+          </HStack>
+        )}
+
         {/* Action Buttons */}
         {state !== "submitting" && (
           <HStack spacing={3} pb={1}>
@@ -1265,7 +1432,7 @@ function TransactionConfirmation({
                 variant="highlight"
                 flex={1}
                 onClick={handleConfirm}
-                isDisabled={state === "error" || !gasValid}
+                isDisabled={state === "error" || !gasValid || !splitState.ready}
               >
                 Confirm
               </Button>

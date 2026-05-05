@@ -52,6 +52,11 @@ export interface CompletedTransaction {
   swapMeta?: SwapMeta;
   transferMeta?: TransferMeta;
   forceInclusionMeta?: ForceInclusionMeta;
+  // Set on tx-history entries that are one slice of a user-split
+  // wallet_sendCalls bundle. Used by the receipt poller and rejection
+  // paths to advance the parent bundle's split sequencer.
+  parentBundleId?: string;
+  bundleIndex?: number;
 }
 
 export interface GasData {

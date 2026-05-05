@@ -636,10 +636,28 @@ export async function handleConfirmTransaction(
 }
 
 /**
- * Handles rejection from the popup
+ * Handles rejection from the popup. Looks up the pending request before
+ * removing it so we can detect split-bundle membership and advance the
+ * sequencer (mark the bundle stopped at this index). Idempotent: if the
+ * request is already gone, returns the standard rejection result.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function handleRejectTransaction(_txId: string): TransactionResult {
+export async function handleRejectTransaction(
+  txId: string,
+): Promise<TransactionResult> {
+  const pending = await getPendingTxRequestById(txId);
+  await removePendingTxRequest(txId);
+  await writeResultToStorage(`txResult:${txId}`, {
+    success: false,
+    error: "Transaction rejected by user",
+  });
+  if (pending?.parentBundleId && pending.bundleIndex !== undefined) {
+    const { advanceSplitBundle } = await import("./splitBatchSequencer");
+    await advanceSplitBundle({
+      bundleId: pending.parentBundleId,
+      bundleIndex: pending.bundleIndex,
+      outcome: "rejected",
+    });
+  }
   return { success: false, error: "Transaction rejected by user" };
 }
 
@@ -1029,6 +1047,18 @@ async function handleTransactionFailure(
     completedAt: Date.now(),
   });
 
+  // Advance the parent bundle's split sequencer so it doesn't hang at PENDING
+  // forever when a sign-time / RPC-side failure happens before broadcast.
+  if (pending.parentBundleId && pending.bundleIndex !== undefined) {
+    const { advanceSplitBundle } = await import("./splitBatchSequencer");
+    await advanceSplitBundle({
+      bundleId: pending.parentBundleId,
+      bundleIndex: pending.bundleIndex,
+      outcome: "rejected",
+      errorMessage: error,
+    });
+  }
+
   // Store failed result for display when opening from notification
   failedTxResults.set(notificationId, {
     txId,
@@ -1086,6 +1116,8 @@ async function processLocalTransactionInBackground(
     createdAt: pending.timestamp,
     accountType: account.type as "privateKey" | "seedPhrase",
     functionName,
+    parentBundleId: pending.parentBundleId,
+    bundleIndex: pending.bundleIndex,
   });
 
   // If no function name provided by UI, try background lookup

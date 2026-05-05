@@ -15,6 +15,13 @@ import {
   Collapse,
   Switch,
   Tooltip,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import {
@@ -61,6 +68,20 @@ const checkmarkDraw = keyframes`
 // call still gets a distinct identity stripe in either theme.
 const CALL_ACCENTS = ["accent.primary", "accent.secondary", "accent.highlight"];
 const CALL_ACCENT_FGS = ["accentFg.primary", "accentFg.secondary", "accentFg.highlight"];
+
+// Lucide `Unlink` glyph — two open chain-link halves separated by a gap.
+// Used as the affordance for split mode on the CALLS header. Inline because
+// the project doesn't depend on react-icons / lucide-react.
+const UnlinkIcon = (props: React.ComponentProps<typeof Icon>) => (
+  <Icon viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="m18.84 12.25 1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71" />
+    <path d="m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71" />
+    <line x1="8" x2="8" y1="2" y2="5" />
+    <line x1="2" x2="5" y1="8" y2="8" />
+    <line x1="16" x2="16" y1="19" y2="22" />
+    <line x1="19" x2="22" y1="16" y2="16" />
+  </Icon>
+);
 
 interface BatchTransactionConfirmationProps {
   batchRequest: PendingBatchTxRequest;
@@ -180,6 +201,13 @@ function BatchTransactionConfirmation({
   const [gasValid, setGasValid] = useState(true);
   const [forceInclusion, setForceInclusion] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  // Split-mode modal: opens when the user clicks the gear next to "Calls".
+  const {
+    isOpen: isSplitModalOpen,
+    onOpen: onSplitModalOpen,
+    onClose: onSplitModalClose,
+  } = useDisclosure();
+  const [splitting, setSplitting] = useState(false);
 
   const { params, origin, chainName, favicon, chainId } = batchRequest;
   const calls = params.calls;
@@ -243,6 +271,45 @@ function BatchTransactionConfirmation({
 
   const isNonAtomic =
     accountType === "privateKey" || accountType === "seedPhrase";
+
+  // Split mode: only meaningful for PK/Seed accounts. Cross-dapp batches
+  // (`customConfirmHandler` present) and Bankr/impersonator accounts are
+  // excluded — different code paths that don't have the gas-estimation
+  // problem split solves. Force-inclusion is exclusive too: the split path
+  // queues plain individual txs and would silently drop the user's force-
+  // inclusion choice. Note that `params.atomicRequired` is intentionally
+  // NOT checked here: PK/SP auto-sequential broadcast already ignores it
+  // (see ERC5792.md), so the dapp's atomicity contract is the same whether
+  // the user picks the default Confirm or the Split escape hatch.
+  const canSplitBatch =
+    isNonAtomic &&
+    !customConfirmHandler &&
+    !forceInclusion &&
+    calls.length > 0;
+
+  const handleConfirmSplit = async () => {
+    if (splitting) return;
+    setSplitting(true);
+    try {
+      const result = await new Promise<{ success: boolean; error?: string }>(
+        (resolve) => {
+          chrome.runtime.sendMessage(
+            { type: "splitBatchIntoIndividualTxs", bundleId: batchRequest.id },
+            (r) => resolve(r),
+          );
+        },
+      );
+      if (!result?.success) {
+        setError(result?.error || "Failed to split batch");
+        setState("error");
+      }
+      // On success the popup closes itself via the same `batchTxResult` ack
+      // channel that confirm/reject use — no explicit navigation here.
+      onSplitModalClose();
+    } finally {
+      setSplitting(false);
+    }
+  };
 
   // Force inclusion info — non-null when chain supports it and account can submit.
   // For Bankr accounts this also requires the L1 chain (e.g. Ethereum mainnet) to be
@@ -861,15 +928,40 @@ function BatchTransactionConfirmation({
 
         {/* Calls List */}
         <VStack spacing={1.5} align="stretch">
-          <Text
-            fontSize="xs"
-            fontWeight="700"
-            color="text.secondary"
-            textTransform="uppercase"
-            px={1}
-          >
-            Calls
-          </Text>
+          <HStack justify="space-between" align="center" px={1}>
+            <Text
+              fontSize="xs"
+              fontWeight="700"
+              color="text.secondary"
+              textTransform="uppercase"
+            >
+              Calls
+            </Text>
+            {/*
+             * Split-mode escape hatch. Surfaced only for PK/Seed accounts on
+             * non-atomicRequired bundles, so dapp gas-estimation failures on
+             * unknown custom chains (MegaETH-like dual-gas models, etc.) can
+             * be worked around by confirming each call individually with
+             * fresh per-call gas estimates. Hidden — not disabled — for the
+             * exempt account/bundle types so the affordance doesn't tease.
+             */}
+            {canSplitBatch && (
+              <Tooltip label="Split into individual transactions" fontSize="xs" hasArrow>
+                <IconButton
+                  aria-label="Split into individual transactions"
+                  icon={<UnlinkIcon boxSize={3} />}
+                  variant="ghost"
+                  size="xs"
+                  onClick={onSplitModalOpen}
+                  color="text.tertiary"
+                  _hover={{ color: "accent.secondary", bg: "bg.muted" }}
+                  minW="auto"
+                  h="auto"
+                  p={0.5}
+                />
+              </Tooltip>
+            )}
+          </HStack>
           {calls.map((call, index) => {
             const callOrigin = originPerCall?.[index];
             const card = (
@@ -1193,6 +1285,107 @@ function BatchTransactionConfirmation({
           );
         })()}
       </VStack>
+
+      {/* Split-mode confirmation modal */}
+      <Modal isOpen={isSplitModalOpen} onClose={onSplitModalClose} isCentered>
+        <ModalOverlay bg="surface.overlay" />
+        <ModalContent mx={4}>
+          <ModalHeader
+            color="fg.primary"
+            fontWeight="900"
+            fontSize="md"
+            borderBottomWidth="1px"
+            borderColor="border.subtle"
+          >
+            Split into individual transactions?
+          </ModalHeader>
+          <ModalBody py={4}>
+            <VStack align="stretch" spacing={4}>
+              {/* Visual: 1 batched request → N numbered confirmations.
+                  Numbered chips reuse the per-call accent palette from the
+                  call cards so the mapping is visually consistent. */}
+              <HStack justify="center" spacing={3} pt={1}>
+                <Box
+                  px={3}
+                  py={2}
+                  borderRadius="md"
+                  border="1.5px solid"
+                  borderColor="border.default"
+                  bg="surface.raised"
+                >
+                  <Text
+                    fontSize="2xs"
+                    fontWeight="700"
+                    color="text.secondary"
+                    textTransform="uppercase"
+                    textAlign="center"
+                  >
+                    1 Batch
+                  </Text>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="900"
+                    color="text.primary"
+                    textAlign="center"
+                  >
+                    {calls.length} calls
+                  </Text>
+                </Box>
+                <Icon as={ChevronRightIcon} boxSize={5} color="text.tertiary" />
+                <HStack spacing={1.5}>
+                  {calls.slice(0, 4).map((_, i) => (
+                    <Box
+                      key={i}
+                      w={7}
+                      h={7}
+                      borderRadius="md"
+                      bg={CALL_ACCENTS[i % CALL_ACCENTS.length]}
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                    >
+                      <Text
+                        fontSize="xs"
+                        fontWeight="900"
+                        color={CALL_ACCENT_FGS[i % CALL_ACCENT_FGS.length]}
+                      >
+                        {i + 1}
+                      </Text>
+                    </Box>
+                  ))}
+                  {calls.length > 4 && (
+                    <Text fontSize="xs" fontWeight="700" color="text.tertiary">
+                      +{calls.length - 4}
+                    </Text>
+                  )}
+                </HStack>
+              </HStack>
+              <Text color="text.secondary" fontSize="sm" fontWeight="500" textAlign="center">
+                You'll confirm each call as its own transaction, in order.
+              </Text>
+            </VStack>
+          </ModalBody>
+          <ModalFooter gap={2} borderTopWidth="1px" borderColor="border.subtle">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onSplitModalClose}
+              isDisabled={splitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleConfirmSplit}
+              isLoading={splitting}
+              loadingText="Splitting"
+            >
+              Split
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }

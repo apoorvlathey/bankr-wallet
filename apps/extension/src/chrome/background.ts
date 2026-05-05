@@ -64,6 +64,7 @@ import {
   handleWalletGetCallsStatus,
   handleWalletShowCallsStatus,
 } from "./batchTxHandlers";
+import { handleSplitBatchIntoIndividualTxs } from "./splitBatchSequencer";
 import {
   handleAddToCrossDappBatch,
   handleAddCallsToCrossDappBatch,
@@ -972,6 +973,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "splitBatchIntoIndividualTxs": {
+      const senderWindowId = sender.tab?.windowId;
+      handleSplitBatchIntoIndividualTxs(
+        message.bundleId,
+        senderWindowId,
+      ).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
     case "removeCallFromPendingBatch": {
       handleRemoveCallFromPendingBatch(
         message.bundleId,
@@ -1059,9 +1071,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "rejectTransaction": {
-      const result = handleRejectTransaction(message.txId);
-      removePendingTxRequest(message.txId).then(async () => {
-        await writeResultToStorage(`txResult:${message.txId}`, result);
+      handleRejectTransaction(message.txId).then((result) => {
         sendResponse(result);
       });
       return true;

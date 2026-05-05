@@ -146,7 +146,36 @@ export async function applyReceiptToHistory(
   }
 
   await showConfirmationNotification(txId, txHash, chainId, succeeded);
+
+  // If this tx is a slice of a user-split wallet_sendCalls bundle, advance
+  // the sequencer (queues next call or finalizes the bundle).
+  await maybeAdvanceSplitBundle(txId, txHash, succeeded ? "success" : "reverted", receipt);
+
   return succeeded;
+}
+
+/**
+ * Read the tx-history entry's parent-bundle pointer (if any) and advance the
+ * split sequencer. Inlined here as a small helper so callers don't need to
+ * remember the lookup. Lazy import avoids a circular reference between
+ * splitBatchSequencer (which imports txHandlers) and this module.
+ */
+async function maybeAdvanceSplitBundle(
+  txId: string,
+  txHash: string | undefined,
+  outcome: "success" | "reverted" | "dropped",
+  receipt?: any,
+): Promise<void> {
+  const tx = await getTxById(txId);
+  if (!tx?.parentBundleId || tx.bundleIndex === undefined) return;
+  const { advanceSplitBundle } = await import("./splitBatchSequencer");
+  await advanceSplitBundle({
+    bundleId: tx.parentBundleId,
+    bundleIndex: tx.bundleIndex,
+    outcome,
+    txHash,
+    receipt,
+  });
 }
 
 /**
@@ -197,6 +226,7 @@ async function checkAndFinalizeReceipt(
             false,
             "dropped",
           );
+          await maybeAdvanceSplitBundle(txId, txHash, "dropped");
           return false;
         }
       }

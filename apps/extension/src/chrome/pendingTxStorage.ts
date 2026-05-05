@@ -21,6 +21,14 @@ export interface PendingTxRequest {
   frameId?: number;
   senderOrigin?: string;
   requestChainId?: number;
+  // Split mode: this request is one slice of a wallet_sendCalls bundle the
+  // user manually split into N sequential single-tx confirmations. The
+  // confirmation UI uses these to (a) show "Step N of M", (b) gate the
+  // Confirm button until the prior split tx lands on-chain, and (c) tell
+  // the finalization hook which bundle to advance after this tx terminates.
+  parentBundleId?: string;
+  bundleIndex?: number;
+  bundleTotalCalls?: number;
 }
 
 const STORAGE_KEY = "pendingTxRequests";

@@ -100,6 +100,35 @@ export interface BundleStatus {
   error?: string;
   /** Origin of the dapp that created this bundle — used to scope status lookups. Optional for backward compat with pre-fix entries. */
   origin?: string;
+
+  // Split mode: user manually broke a dapp-pushed batch into N sequential
+  // single-tx confirmations as an escape hatch for non-standard custom chains
+  // where batched gas estimation can't be trusted. The bundle stays alive so
+  // wallet_getCallsStatus aggregates the per-call receipts.
+  /** True after the user clicked "Split into individual txs" on the batch popup. */
+  splitMode?: boolean;
+  /** Original calls captured at split time so we can drive sequential confirms. */
+  splitCalls?: ERC5792Call[];
+  /** Index of the next call to surface. Starts at 0; increments after each terminal state. */
+  splitNextIndex?: number;
+  /**
+   * Snapshot of the trusted context from the original PendingBatchTxRequest,
+   * captured at split time. Needed because we delete the batch request once
+   * split mode starts but still need account/tab/origin info for each
+   * individual PendingTxRequest we queue.
+   */
+  splitContext?: {
+    accountId?: string;
+    accountAddress?: string;
+    accountType?: "privateKey" | "seedPhrase";
+    origin: string;
+    favicon: string | null;
+    chainName: string;
+    tabId?: number;
+    frameId?: number;
+    senderOrigin?: string;
+    senderWindowId?: number;
+  };
 }
 
 // ---------------------------------------------------------------------------
