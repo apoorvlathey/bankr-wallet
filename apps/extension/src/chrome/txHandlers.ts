@@ -15,6 +15,9 @@ import {
   CHAIN_NAMES,
   OP_STACK_CHAIN_IDS,
 } from "../constants/networks";
+import { CHAIN_REGISTRY } from "../constants/chainRegistry";
+
+const CHAIN_BY_ID_TX = new Map(CHAIN_REGISTRY.map((c) => [c.chainId, c]));
 import { CHAIN_CONFIG } from "../constants/chainConfig";
 import { getStoredResolvedChainById, getStoredRpcUrl } from "@/lib/chains";
 import type { Account } from "./types";
@@ -74,7 +77,7 @@ import {
   getSidePanelMode,
   isSidePanelSupported,
 } from "./sidepanelManager";
-import { startReceiptPolling } from "./txReceiptPoller";
+import { startReceiptPolling, applyReceiptToHistory } from "./txReceiptPoller";
 import {
   getNextNonce,
   resetNonce,
@@ -202,9 +205,19 @@ export function handleTransactionRequest(
       return;
     }
 
+    // On chains whose gas model differs from standard EVM (MegaETH), dapp-side
+    // gas estimates from wagmi/ethers are systematically wrong (computed against
+    // standard EVM rules, missing MegaETH's storage gas component). Strip the
+    // dapp's gas value at intake so all downstream code (UI estimation,
+    // signing) re-estimates via the chain's own eth_estimateGas. Fee fields
+    // are preserved — under-priced fees only delay inclusion, not revert.
+    const sanitizedTx = CHAIN_BY_ID_TX.get(tx.chainId)?.usesNonStandardGasModel
+      ? { ...tx, gas: undefined }
+      : tx;
+
     const pendingRequest: PendingTxRequest = {
       id: txId,
-      tx,
+      tx: sanitizedTx,
       origin,
       favicon: favicon || null,
       chainName,
@@ -1118,15 +1131,21 @@ async function processLocalTransactionInBackground(
     );
     const txHash = result.txHash;
 
-    // Tx is broadcast but not yet confirmed — mark as pending
-    await updateTxInHistory(txId, {
-      status: "pending",
-      txHash,
-    });
-
-    // Start polling for on-chain confirmation
+    // Sync-send chains (e.g., MegaETH) return the receipt with the broadcast —
+    // jump straight to the final state with no intermediate "pending" flash.
+    // Otherwise mark pending and start the poller.
     if (txHash) {
-      startReceiptPolling(txId, txHash, pending.tx.chainId);
+      if (result.receipt) {
+        await applyReceiptToHistory(txId, txHash, pending.tx.chainId, result.receipt, {
+          rpcUrl,
+          signedGasLimit: result.signedGasLimit,
+        });
+      } else {
+        await updateTxInHistory(txId, { status: "pending", txHash });
+        startReceiptPolling(txId, txHash, pending.tx.chainId);
+      }
+    } else {
+      await updateTxInHistory(txId, { status: "pending", txHash });
     }
 
     await writeResultToStorage(`txResult:${txId}`, { success: true, txHash });
@@ -1984,8 +2003,22 @@ async function broadcastSwapTxLocal(
     );
     const txHash = result.txHash;
 
-    await updateTxInHistory(txId, { status: "pending", txHash });
-    if (txHash) startReceiptPolling(txId, txHash, pending.tx.chainId);
+    if (txHash) {
+      if (result.receipt) {
+        // Sync-send path (e.g., MegaETH): receipt arrived with the broadcast,
+        // so skip the intermediate "pending" write and jump straight to the
+        // final state. Otherwise the UI would briefly flash pending → success.
+        await applyReceiptToHistory(txId, txHash, pending.tx.chainId, result.receipt, {
+          rpcUrl,
+          signedGasLimit: result.signedGasLimit,
+        });
+      } else {
+        await updateTxInHistory(txId, { status: "pending", txHash });
+        startReceiptPolling(txId, txHash, pending.tx.chainId);
+      }
+    } else {
+      await updateTxInHistory(txId, { status: "pending", txHash });
+    }
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";

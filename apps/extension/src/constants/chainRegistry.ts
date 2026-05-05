@@ -14,6 +14,7 @@ import { type Chain } from "viem";
 import {
   arbitrum,
   mainnet,
+  megaeth,
   polygon,
   base,
   bsc,
@@ -57,6 +58,35 @@ export interface ChainEntry {
    * receipts and the poller transitions to standard backoff.
    */
   supportsFlashblocks?: boolean;
+  /**
+   * Whether this chain supports EIP-7966 eth_sendRawTransactionSync — submit
+   * a signed tx and the RPC returns the full receipt in one round trip
+   * (MegaETH ~100ms). Local-signing only (PK/Seed); Bankr accounts ignore.
+   * On failure or timeout the broadcaster falls back to standard send +
+   * receipt polling.
+   */
+  supportsSyncSend?: boolean;
+  /**
+   * Multiplier applied to the eth_estimateGas result to allow headroom for
+   * state changes between estimate and inclusion. Default 20 (= 1.2×).
+   */
+  gasBufferPct?: number;
+  /**
+   * Whether this chain uses a gas model that differs from standard EVM
+   * (e.g., MegaETH's dual compute + storage gas accounting with SSTORE
+   * bucket multipliers). When true:
+   *
+   *   1. Dapp-provided `tx.gas` values are stripped at intake — wagmi/ethers
+   *      compute against standard EVM rules and produce wrong values.
+   *   2. Batch gas estimation skips the GAS-opcode-based bytecode injection
+   *      trick — it counts only compute gas, missing the storage dimension.
+   *   3. We always defer to the chain's own `eth_estimateGas`, which knows
+   *      its gas model and returns accurate values.
+   *
+   * Fee fields (maxFeePerGas etc.) are still honored — under-priced fees
+   * only delay inclusion, they don't cause reverts.
+   */
+  usesNonStandardGasModel?: boolean;
   /** Whether the Bankr API supports this chain */
   isBankrSupported: boolean;
   /** Whether 0x Swap API supports this chain */
@@ -169,6 +199,25 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     viemChain: bsc,
   },
   {
+    chainId: 10,
+    name: "Optimism",
+    rpcUrl: "https://mainnet.optimism.io",
+    explorer: "https://optimistic.etherscan.io",
+    icon: "/chainIcons/optimism.svg",
+    bg: "rgba(255, 4, 32, 0.15)",
+    border: "rgba(255, 4, 32, 0.4)",
+    text: "#FF0420",
+    nativeCurrency: ETH_CURRENCY,
+    isOpStack: true,
+    supportsFlashblocks: true,
+    isBankrSupported: false,
+    isSwapSupported: true,
+    coingeckoTokenId: "ethereum",
+    coingeckoPlatformId: "optimistic-ethereum",
+    geckoTerminalNetworkId: "optimism",
+    viemChain: optimism,
+  },
+  {
     chainId: 4326,
     name: "MegaETH",
     rpcUrl: "https://mainnet.megaeth.com/rpc",
@@ -179,10 +228,17 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     text: "#19191A",
     nativeCurrency: ETH_CURRENCY,
     isOpStack: true,
+    supportsSyncSend: true,
+    // MegaETH's dual gas model (compute + storage with SSTORE bucket
+    // multipliers) differs from standard EVM. Locally-computed gas values
+    // (dapp-provided, GAS-opcode-based simulation) are systematically wrong;
+    // we must defer to the chain's own eth_estimateGas which is accurate.
+    usesNonStandardGasModel: true,
     isBankrSupported: false,
     isSwapSupported: false,
     coingeckoTokenId: "ethereum",
     geckoTerminalNetworkId: "megaeth",
+    viemChain: megaeth,
   },
   {
     chainId: 137,
@@ -314,6 +370,17 @@ export const OP_STACK_CHAIN_IDS = new Set(
 
 export const FLASHBLOCKS_CHAIN_IDS = new Set(
   CHAIN_REGISTRY.filter((c) => c.supportsFlashblocks).map((c) => c.chainId)
+);
+
+/**
+ * Chains whose gas model differs enough from standard EVM that batched
+ * gas estimation is unreliable (MegaETH's compute+storage dual gas, etc.).
+ * The wallet hides ERC-5792 batch capability for these so dapps fall back
+ * to individual eth_sendTransaction, where the chain's own RPC produces
+ * accurate per-tx estimates.
+ */
+export const NON_STANDARD_GAS_CHAIN_IDS = new Set(
+  CHAIN_REGISTRY.filter((c) => c.usesNonStandardGasModel).map((c) => c.chainId)
 );
 
 export const CHAIN_NAMES: Record<number, string> = {};

@@ -146,3 +146,15 @@ Migration from v1.0.0+:
 - Migration is idempotent and checks format before re-encrypting
 - Both formats continue to work (backward compatible)
 - Agent password can sign transactions after migration completes
+
+### v3.5.0 (Optimism added as built-in chain)
+
+No new keys. Migration touches existing `networksInfo` and `chainName`.
+
+Migration from any prior version:
+
+- `migrateCustomOptimismChain()` in background.ts runs on `onInstalled` reason `update`
+- Scans `networksInfo` for any entry with `chainId === 10` keyed under a name other than `"Optimism"`
+- Rekeys it to `"Optimism"` preserving the user's `rpcUrl` and `hidden` flag (custom `explorer`/`nativeCurrency` overrides are dropped — registry defaults take over since they are universal for OP)
+- If `chainName` (the global selected-chain key) pointed at the old custom name, rewrites it to `"Optimism"` so the user's active chain doesn't silently revert to the default
+- Idempotent: short-circuits when no non-canonical chainId-10 entry is found

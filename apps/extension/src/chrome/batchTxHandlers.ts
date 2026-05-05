@@ -12,7 +12,10 @@ import {
   BANKR_SUPPORTED_CHAIN_IDS,
   CHAIN_NAMES,
 } from "../constants/networks";
-import { ALLOWED_CHAIN_IDS } from "../constants/chainRegistry";
+import {
+  ALLOWED_CHAIN_IDS,
+  NON_STANDARD_GAS_CHAIN_IDS,
+} from "../constants/chainRegistry";
 import { CHAIN_CONFIG } from "../constants/chainConfig";
 import { getActiveAccount, getAccountById } from "./accountStorage";
 import {
@@ -39,7 +42,7 @@ import {
 import { loadDecryptedApiKey } from "./crypto";
 import { handleUnlockWallet } from "./authHandlers";
 import { addTxToHistory, updateTxInHistory, getTxById } from "./txHistoryStorage";
-import { startReceiptPolling } from "./txReceiptPoller";
+import { startReceiptPolling, applyReceiptToHistory } from "./txReceiptPoller";
 import { openExtensionPopup, writeResultToStorage, showNotification, getRpcUrl } from "./txHandlers";
 import { signAndBroadcastTransaction } from "./localSigner";
 import { getNextNonce, resetNonce } from "./nonceManager";
@@ -164,8 +167,16 @@ export async function handleWalletGetCapabilities(
   // PK/SP accounts: report "supported" so dapps show the batching option.
   // Actual execution is non-atomic (sequential txs), but if a dapp explicitly
   // requires atomicity via atomicRequired: true, we reject in handleWalletSendCalls.
+  //
+  // Chains with a non-standard gas model (MegaETH) are excluded — batched gas
+  // estimation can't reliably account for state-dependent calls there
+  // (eth_simulateV1 unsupported; bytecode injection only counts compute gas,
+  // missing the storage gas dimension). Without batch capability advertised,
+  // dapps fall back to individual eth_sendTransaction where each tx hits the
+  // chain's own RPC for an accurate per-tx estimate.
   if (isPKOrSP || isImpersonator) {
     for (const chainId of ALLOWED_CHAIN_IDS) {
+      if (NON_STANDARD_GAS_CHAIN_IDS.has(chainId)) continue;
       const hexChainId = `0x${chainId.toString(16)}` as `0x${string}`;
       if (chainIds && chainIds.length > 0 && !chainIds.includes(hexChainId)) {
         continue;
@@ -837,15 +848,23 @@ async function processBatchTransactionNonAtomicInBackground(
         customChainMeta,
       );
 
-      await updateTxInHistory(item.txId, {
-        status: "pending",
-        txHash: result.txHash,
-      });
-
-      // Start individual receipt polling — uses exponential backoff (2s→30s)
-      // to avoid rate-limiting. Updates tx history when receipts arrive.
-      // Bundle status is tracked separately via local storage polling.
-      startReceiptPolling(item.txId, result.txHash, chainId);
+      // Sync-send chains return the receipt with the broadcast — jump straight
+      // to the final state with no intermediate "pending" flash. Otherwise mark
+      // pending and start individual receipt polling (exponential backoff
+      // 2s→30s to avoid rate-limiting). Bundle status is tracked separately
+      // via local storage polling.
+      if (result.receipt) {
+        await applyReceiptToHistory(item.txId, result.txHash, chainId, result.receipt, {
+          rpcUrl,
+          signedGasLimit: result.signedGasLimit,
+        });
+      } else {
+        await updateTxInHistory(item.txId, {
+          status: "pending",
+          txHash: result.txHash,
+        });
+        startReceiptPolling(item.txId, result.txHash, chainId);
+      }
 
       return { txId: item.txId, success: true, txHash: result.txHash };
     } catch (error) {

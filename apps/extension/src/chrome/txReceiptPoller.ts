@@ -100,6 +100,56 @@ async function pollReceipt(
 }
 
 /**
+ * Apply a known receipt directly to tx history without polling. Used by
+ * sync-send broadcast paths (e.g., MegaETH EIP-7966) where the RPC returns
+ * the receipt as part of the send call itself, and by checkAndFinalizeReceipt
+ * after a poll.
+ *
+ * Accepts both raw RPC receipts (status: "0x1"/"0x0", hex bigints) and
+ * viem-formatted receipts (status: "success"/"reverted", bigints). Returns
+ * true on success, false on revert.
+ */
+export async function applyReceiptToHistory(
+  txId: string,
+  txHash: string,
+  chainId: number,
+  receipt: any,
+  options: { rpcUrl?: string; signedGasLimit?: bigint | string } = {},
+): Promise<boolean> {
+  const succeeded =
+    receipt.status === "success" ||
+    receipt.status === "0x1" ||
+    receipt.status === 1 ||
+    receipt.status === 1n;
+
+  if (succeeded) {
+    const gasData = await buildGasData(
+      options.rpcUrl,
+      txHash,
+      receipt,
+      chainId,
+      options.signedGasLimit,
+    );
+    await updateTxInHistory(txId, {
+      status: "success",
+      txHash,
+      completedAt: Date.now(),
+      gasData,
+    });
+  } else {
+    await updateTxInHistory(txId, {
+      status: "failed",
+      txHash,
+      error: "Transaction reverted on-chain",
+      completedAt: Date.now(),
+    });
+  }
+
+  await showConfirmationNotification(txId, txHash, chainId, succeeded);
+  return succeeded;
+}
+
+/**
  * Check receipt and finalize tx if found.
  * Returns true/false if resolved, null if receipt not yet available.
  */
@@ -119,25 +169,9 @@ async function checkAndFinalizeReceipt(
 
     if (receipt) {
       notFoundCounts.delete(txId);
-      const succeeded = receipt.status === "0x1";
-
-      if (succeeded) {
-        const gasData = await buildGasData(rpcUrl, txHash, receipt, chainId);
-        await updateTxInHistory(txId, {
-          status: "success",
-          completedAt: Date.now(),
-          gasData,
-        });
-      } else {
-        await updateTxInHistory(txId, {
-          status: "failed",
-          error: "Transaction reverted on-chain",
-          completedAt: Date.now(),
-        });
-      }
-
-      await showConfirmationNotification(txId, txHash, chainId, succeeded);
-      return succeeded;
+      return await applyReceiptToHistory(txId, txHash, chainId, receipt, {
+        rpcUrl,
+      });
     }
 
     // Receipt not yet available — check whether the RPC still knows about the
@@ -213,35 +247,41 @@ async function fetchReceipt(
 }
 
 async function buildGasData(
-  rpcUrl: string,
+  rpcUrl: string | undefined,
   txHash: string,
   receipt: any,
   chainId: number,
+  signedGasLimit?: bigint | string,
 ): Promise<GasData> {
-  // Fetch tx data for gas limit
-  let txData: any = null;
-  try {
-    const response = await fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "eth_getTransactionByHash",
-        params: [txHash],
-      }),
-    });
-    const json = await response.json();
-    txData = json.result;
-  } catch {
-    // Non-critical
+  // Resolve gas limit. Prefer the value the caller already knows (sync-send
+  // path passes the signed gas limit). Otherwise fetch it via
+  // eth_getTransactionByHash, which is necessary because receipts only carry
+  // gasUsed.
+  let gasLimitStr: string | undefined;
+  if (signedGasLimit !== undefined) {
+    gasLimitStr = BigInt(signedGasLimit).toString();
+  } else if (rpcUrl) {
+    try {
+      const response = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "eth_getTransactionByHash",
+          params: [txHash],
+        }),
+      });
+      const json = await response.json();
+      if (json.result?.gas) gasLimitStr = BigInt(json.result.gas).toString();
+    } catch {
+      // Non-critical
+    }
   }
 
   const gasData: GasData = {
     gasUsed: BigInt(receipt.gasUsed).toString(),
-    gasLimit: txData?.gas
-      ? BigInt(txData.gas).toString()
-      : BigInt(receipt.gasUsed).toString(),
+    gasLimit: gasLimitStr ?? BigInt(receipt.gasUsed).toString(),
     effectiveGasPrice: BigInt(receipt.effectiveGasPrice).toString(),
   };
 

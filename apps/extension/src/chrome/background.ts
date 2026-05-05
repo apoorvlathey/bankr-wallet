@@ -392,6 +392,58 @@ async function migrateFromLegacyStorage(): Promise<boolean> {
   }
 }
 
+/**
+ * Migrates a user's custom OP Mainnet (chainId 10) entry to the built-in
+ * "Optimism" chain. If a user manually added chainId 10 under any name before
+ * it became built-in, this rekeys their networksInfo entry to "Optimism"
+ * (preserving the custom RPC URL and hidden flag) and rewrites the global
+ * `chainName` selection if it pointed at the old custom name. Without this,
+ * the user's selected chain would silently fall back to the default after
+ * the update because chainName is keyed by name, not id.
+ *
+ * Idempotent: short-circuits if no chainId-10 entry exists under a non-
+ * canonical key.
+ */
+async function migrateCustomOptimismChain(): Promise<void> {
+  try {
+    const { networksInfo, chainName } = await chrome.storage.sync.get([
+      "networksInfo",
+      "chainName",
+    ]);
+    if (!networksInfo || typeof networksInfo !== "object") return;
+
+    let oldName: string | null = null;
+    for (const [name, entry] of Object.entries(
+      networksInfo as Record<string, { chainId?: number }>,
+    )) {
+      if (entry?.chainId === 10 && name !== "Optimism") {
+        oldName = name;
+        break;
+      }
+    }
+    if (!oldName) return;
+
+    const oldEntry = (networksInfo as Record<string, any>)[oldName];
+    const next = { ...(networksInfo as Record<string, any>) };
+    delete next[oldName];
+    next["Optimism"] = {
+      chainId: 10,
+      rpcUrl: oldEntry.rpcUrl,
+      hidden: oldEntry.hidden,
+    };
+
+    const updates: Record<string, unknown> = { networksInfo: next };
+    if (chainName === oldName) updates.chainName = "Optimism";
+
+    await chrome.storage.sync.set(updates);
+    console.log(
+      `[WalletChan] Migrated custom chain "${oldName}" (chainId 10) → built-in "Optimism"`,
+    );
+  } catch (error) {
+    console.error("[WalletChan] OP Mainnet migration failed:", error);
+  }
+}
+
 // Handle extension install/update
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === "install") {
@@ -401,6 +453,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   } else if (details.reason === "update") {
     // Migrate from v0.1.1/v0.2.0 legacy storage to multi-account system
     await migrateFromLegacyStorage();
+    // v3.5.0: rekey custom OP entries now that Optimism is built-in
+    await migrateCustomOptimismChain();
   }
 });
 

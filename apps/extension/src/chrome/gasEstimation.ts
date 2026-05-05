@@ -11,7 +11,10 @@ import {
   type Address,
 } from "viem";
 import { getRpcUrl } from "./txHandlers";
-import { getNativeCurrencySymbol } from "@/constants/chainRegistry";
+import { getNativeCurrencySymbol, CHAIN_REGISTRY } from "@/constants/chainRegistry";
+
+const CHAIN_BY_ID_GAS = new Map(CHAIN_REGISTRY.map((c) => [c.chainId, c]));
+const DEFAULT_GAS_BUFFER_PCT = 20;
 import { fetchNativeCoinGeckoPrice } from "./coingeckoService";
 import { estimateFees, type TierName } from "./feeEstimation";
 
@@ -134,7 +137,12 @@ export async function estimateGas(
   const data = tx.data && tx.data !== "0x" ? (tx.data as `0x${string}`) : undefined;
 
   // Check if dapp provided gas parameters
-  const dappGas = tx.gas ? BigInt(tx.gas) : null;
+  const chainEntry = CHAIN_BY_ID_GAS.get(tx.chainId);
+  // Chains with a non-standard gas model (MegaETH) have systematically wrong
+  // dapp-side estimates; always re-estimate via the chain's own RPC. Fee
+  // values are fine to honor — under-priced fees just delay inclusion.
+  const dappGas =
+    !chainEntry?.usesNonStandardGasModel && tx.gas ? BigInt(tx.gas) : null;
   const dappMaxFee = tx.maxFeePerGas ? BigInt(tx.maxFeePerGas) : null;
   const dappPriorityFee = tx.maxPriorityFeePerGas ? BigInt(tx.maxPriorityFeePerGas) : null;
   const dappGasPrice = tx.gasPrice ? BigInt(tx.gasPrice) : null;
@@ -153,8 +161,11 @@ export async function estimateGas(
       : client
           .estimateGas({ account: from, to, value, data })
           .then((gas) => {
-            // Add 20% buffer
-            gasLimit = (gas * 120n) / 100n;
+            // Per-chain buffer (default 20%, override via gasBufferPct).
+            const bufferPct =
+              chainEntry?.gasBufferPct ?? DEFAULT_GAS_BUFFER_PCT;
+            gasLimit =
+              bufferPct === 0 ? gas : (gas * BigInt(100 + bufferPct)) / 100n;
             return gasLimit;
           })
           .catch((err: any) => {

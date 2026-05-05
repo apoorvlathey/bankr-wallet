@@ -27,7 +27,9 @@ import {
   type Address,
 } from "viem";
 import { getRpcUrl } from "./txHandlers";
-import { getNativeCurrencySymbol } from "@/constants/chainRegistry";
+import { getNativeCurrencySymbol, CHAIN_REGISTRY } from "@/constants/chainRegistry";
+
+const CHAIN_BY_ID_BATCH = new Map(CHAIN_REGISTRY.map((c) => [c.chainId, c]));
 import { fetchNativePrice } from "./gasEstimation";
 import type { GasEstimate, GasEstimateTiers } from "./gasEstimation";
 import { estimateFees } from "./feeEstimation";
@@ -131,23 +133,33 @@ export async function estimateBatchGasSequential(
     : undefined;
   const predictedNextBaseFee = feesResult?.predictedNextBaseFee?.toString();
 
-  // Tier 1: eth_simulateV1 — fastest path on supported RPCs (Geth 1.14.9+, Alchemy)
-  const simV1Result = await tryEthSimulateV1(calls, fromAddress, chainId, rpcUrl);
-  if (simV1Result) {
-    return simV1Result.map(({ gasLimit, fallbackUsed }) =>
-      buildEstimate(gasLimit, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, fallbackUsed, tiers, predictedNextBaseFee),
-    );
-  }
+  // Chains with a non-standard gas model (MegaETH) skip both simulation tiers
+  // and go straight to per-call eth_estimateGas, which the chain's RPC computes
+  // using its own (correct) gas accounting. Tier 1's eth_simulateV1 isn't
+  // supported there anyway, and tier 2's bytecode injection counts gas via the
+  // GAS opcode — only compute gas, not MegaETH's separate storage gas dimension
+  // — so it systematically under-estimates SSTORE-heavy ops like ERC20 approve.
+  const nonStandardGas = CHAIN_BY_ID_BATCH.get(chainId)?.usesNonStandardGasModel;
 
-  // Tier 2: TxSimulator bytecode injection — universal sequential simulation.
-  // Works on any chain that supports eth_call state overrides. Runs all calls
-  // sequentially in one eth_call so dependent calls (swap-after-approve) see
-  // the prior call's state and estimate correctly.
-  const injectionResult = await tryBatchGasInjection(calls, fromAddress, chainId, rpcUrl);
-  if (injectionResult) {
-    return injectionResult.map(({ gasLimit, fallbackUsed }) =>
-      buildEstimate(gasLimit, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, fallbackUsed, tiers, predictedNextBaseFee),
-    );
+  if (!nonStandardGas) {
+    // Tier 1: eth_simulateV1 — fastest path on supported RPCs (Geth 1.14.9+, Alchemy)
+    const simV1Result = await tryEthSimulateV1(calls, fromAddress, chainId, rpcUrl);
+    if (simV1Result) {
+      return simV1Result.map(({ gasLimit, fallbackUsed }) =>
+        buildEstimate(gasLimit, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, fallbackUsed, tiers, predictedNextBaseFee),
+      );
+    }
+
+    // Tier 2: TxSimulator bytecode injection — universal sequential simulation.
+    // Works on any chain that supports eth_call state overrides. Runs all calls
+    // sequentially in one eth_call so dependent calls (swap-after-approve) see
+    // the prior call's state and estimate correctly.
+    const injectionResult = await tryBatchGasInjection(calls, fromAddress, chainId, rpcUrl);
+    if (injectionResult) {
+      return injectionResult.map(({ gasLimit, fallbackUsed }) =>
+        buildEstimate(gasLimit, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, fallbackUsed, tiers, predictedNextBaseFee),
+      );
+    }
   }
 
   // Tier 3 (last resort): estimate each call independently with hardcoded buffer.
