@@ -3,10 +3,20 @@
 import { Input, Text } from "@chakra-ui/react";
 import { useState } from "react";
 import { useAccount, useChainId } from "wagmi";
-import { encodeFunctionData, erc20Abi, maxUint256, toHex } from "viem";
+import {
+  encodeFunctionData,
+  erc20Abi,
+  maxUint256,
+  toHex,
+  type Address,
+} from "viem";
 import { useEip1193 } from "../hooks/useEip1193";
 import { TEST_CHAINS } from "../constants";
 import { TestButton } from "./TestButton";
+
+const BASE_CHAIN_ID = 8453;
+const WCHAN_BASE: Address = "0xBa5ED0000e1CA9136a695f0a848012A16008B032";
+const ONE_USDC = 1_000_000n; // 6 decimals
 
 export function BatchSection() {
   const request = useEip1193();
@@ -98,6 +108,70 @@ export function BatchSection() {
     });
   };
 
+  const sendUsdcSwapBatch = async () => {
+    if (chainId !== BASE_CHAIN_ID) {
+      throw new Error("Switch to Base — this test uses USDC + WCHAN on Base");
+    }
+    if (!usdc) throw new Error("No USDC config for Base");
+
+    const params = new URLSearchParams({
+      sellToken: usdc.address,
+      buyToken: WCHAN_BASE,
+      sellAmount: ONE_USDC.toString(),
+      taker: address,
+      chainId: String(BASE_CHAIN_ID),
+    });
+    const res = await fetch(`/api/swap/quote?${params.toString()}`);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(
+        data.error || data.reason || `Quote API ${res.status}`,
+      );
+    }
+    const quote = (await res.json()) as {
+      transaction?: { to: string; data: string; value: string };
+      allowanceTarget?: string;
+      issues?: { allowance?: { spender?: string } };
+    };
+    if (!quote.transaction?.to || !quote.transaction.data) {
+      throw new Error("Quote missing transaction data");
+    }
+    const spender = (quote.issues?.allowance?.spender ??
+      quote.allowanceTarget) as Address | undefined;
+    if (!spender) throw new Error("Quote missing allowance spender");
+
+    const approve = (amount: bigint) => ({
+      to: usdc.address,
+      value: "0x0",
+      data: encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [spender, amount],
+      }),
+    });
+
+    return request({
+      method: "wallet_sendCalls",
+      params: [
+        {
+          version: "2.0.0",
+          from: address,
+          chainId: chainIdHex,
+          atomicRequired: true,
+          calls: [
+            approve(ONE_USDC),
+            {
+              to: quote.transaction.to,
+              value: toHex(BigInt(quote.transaction.value || "0")),
+              data: quote.transaction.data,
+            },
+            approve(0n),
+          ],
+        },
+      ],
+    });
+  };
+
   const getStatus = () => {
     if (!bundleId.trim()) throw new Error("Enter a bundle id first");
     return request({
@@ -132,6 +206,12 @@ export function BatchSection() {
         description="atomicRequired=false, 2 USDC transfers + 1 native. Exercises mixed calls."
         onRun={sendNonAtomicBatch}
         isDisabled={!usdc}
+      />
+      <TestButton
+        label="USDC → WCHAN swap (3-call batch)"
+        description="approve(spender, 1 USDC) → swap 1 USDC → WCHAN via 0x → approve(spender, 0). Base only."
+        onRun={sendUsdcSwapBatch}
+        isDisabled={chainId !== BASE_CHAIN_ID || !usdc}
       />
       <TestButton
         label="Batch with a reverting call"
