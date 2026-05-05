@@ -1004,11 +1004,18 @@ function BatchTransactionConfirmation({
                 <Box
                   className="delete-call-btn"
                   position="absolute"
-                  // Drop the trash icon onto the chevron's exact footprint:
-                  // the CallCard header has px={3} (12px) and the chevron is
-                  // a 16px icon, so right=12px lands precisely on it.
-                  top={2.5}
+                  // Drop the trash icon onto the chevron's exact footprint.
+                  // The CallCard header is an HStack with py={2} that centers
+                  // children; the chevron's Y depends on the row's tallest
+                  // child (taller when a hostname row is shown). Mirror that
+                  // by spanning the header's full height and flex-centering,
+                  // so the trash always lands on the chevron — for both the
+                  // no-hostname (32px) and hostname (46px) layouts.
+                  top={0}
                   right={3}
+                  height={callOrigin?.origin ? "46px" : "32px"}
+                  display="flex"
+                  alignItems="center"
                   opacity={0}
                   pointerEvents="none"
                   transition="opacity 0.12s ease-out"
