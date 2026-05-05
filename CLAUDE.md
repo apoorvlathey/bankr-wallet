@@ -10,20 +10,49 @@ Browser wallet extension + landing page website in a pnpm workspace monorepo.
 
 ## Critical: Test ALL Wallet Types
 
-**IMPORTANT**: WalletChan supports THREE wallet types:
+**Supported wallet types**:
 
-1. **Bankr API accounts** (`type: "impersonator"`) - API-based impersonation, transactions via Bankr API
-2. **Private Key accounts** (`type: "privateKey"`) - Local signing with imported private keys
-3. **Seed Phrase accounts** (`type: "seedPhrase"`) - Local signing with HD wallet derivation
+1. **Bankr API accounts** (`type: "bankr"`) — API-based signing, per-account API key
+2. **Private Key accounts** (`type: "privateKey"`) — local signing
+3. **Seed Phrase accounts** (`type: "seedPhrase"`) — local HD-wallet signing
+4. **Impersonator accounts** (`type: "impersonator"`) — **view-only**, address-only metadata, cannot execute transactions or sign messages
 
 **When implementing ANY feature that touches transactions, signatures, or authentication:**
 
-- **Test with ALL THREE wallet types** before considering it done
+- **Test with all four wallet types** before considering it done
 - Different wallet types use different code paths (e.g., `confirmTransactionAsync` vs `confirmTransactionAsyncPK`)
-- Agent password must work for signing transactions/messages for ALL types (not just Bankr API accounts)
+- Agent password must work for signing transactions/messages for ALL signing types (not just Bankr API accounts)
 - Private key reveal is blocked for agent password regardless of wallet type
+- Execution features must reject impersonator accounts (they're view-only)
 
-**Common mistake**: Fixing something only for Bankr API accounts and forgetting that private key/seed phrase accounts have separate handlers.
+**Common mistake**: Fixing something only for Bankr API accounts and forgetting that private key/seed phrase accounts have separate handlers, or forgetting that impersonator accounts must be blocked from any execution path.
+
+## Critical: Tx-Confirmation UI Consistency
+
+**ALL transaction confirmation screens must offer the same gas-fee UX.** The wallet has multiple confirmation surfaces and they must stay in lockstep — when one ships a new gas feature, the others have to ship it too, or users get inconsistent behavior depending on how they triggered the tx.
+
+**Confirmation surfaces today:**
+
+| Surface | File | Underlying gas component |
+|---|---|---|
+| Single-tx confirmation (dapp-initiated) | `apps/extension/src/components/TransactionConfirmation.tsx` | `GasEstimateDisplay.tsx` |
+| Batch tx confirmation (ERC-5792, dapp-initiated) | `apps/extension/src/components/BatchTransactionConfirmation.tsx` | `MultiTxGasEstimateDisplay.tsx` |
+| Cross-dapp batch confirmation (user-assembled) | `apps/extension/src/components/CrossDappBatchConfirmation.tsx` | `MultiTxGasEstimateDisplay.tsx` (wraps BatchTransactionConfirmation) |
+| **Swap confirmation (internal)** | `apps/extension/src/components/Swap/SwapConfirmation.tsx` | `MultiTxGasEstimateDisplay.tsx` |
+
+**When you change anything about gas params, the tier picker, validity, or override plumbing in ANY of these screens, audit the others.** The swap path in particular is easy to miss — it's its own confirmation UI separate from the dapp-initiated batch flow but uses the same underlying `MultiTxGasEstimateDisplay`.
+
+**Required wiring for any tx-confirmation surface (PK / Seed accounts)**:
+
+1. Pass `isNonAtomic={true}` to `MultiTxGasEstimateDisplay` (or use `GasEstimateDisplay` for single tx) so the tier picker actually renders.
+2. Wire `onGasEstimates` (or `onGasOverrides` for single tx) to a parent state.
+3. Wire `onValidityChange` to a `gasValid` state and disable the Confirm button on `!gasValid`.
+4. Send the gas estimates / overrides through to the background handler that signs the tx.
+5. Make sure the background handler actually applies them at sign time (clears legacy `gasPrice`, sets `maxFeePerGas` / `maxPriorityFeePerGas` / `gas` from the override).
+
+**Bankr / impersonator paths are exempt:** Bankr handles gas server-side; impersonator can't broadcast. The gas component handles these gracefully (picker auto-hides), but the parent should still set `isNonAtomic` correctly so the picker only fires its callbacks for PK / Seed.
+
+**When adding a NEW tx-confirmation surface**: list it in the table above and make sure every gas feature here works on it before merging.
 
 ## AI Session Workflow
 

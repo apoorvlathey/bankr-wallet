@@ -27,9 +27,12 @@ import {
   type Address,
 } from "viem";
 import { getRpcUrl } from "./txHandlers";
-import { getNativeCurrencySymbol } from "@/constants/chainRegistry";
+import { getNativeCurrencySymbol, CHAIN_REGISTRY } from "@/constants/chainRegistry";
+
+const CHAIN_BY_ID_BATCH = new Map(CHAIN_REGISTRY.map((c) => [c.chainId, c]));
 import { fetchNativePrice } from "./gasEstimation";
-import type { GasEstimate } from "./gasEstimation";
+import type { GasEstimate, GasEstimateTiers } from "./gasEstimation";
+import { estimateFees } from "./feeEstimation";
 import { SIMULATOR_BYTECODE } from "./txSimulation";
 
 const RPC_TIMEOUT = 15_000;
@@ -93,9 +96,11 @@ export async function estimateBatchGasSequential(
     transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
   });
 
-  // Fetch fee params + balance + price in parallel with gas estimation
+  // Fetch fee params + balance + price in parallel with gas estimation.
+  // Uses feeHistory-based estimator with per-chain priority fee floors —
+  // see feeEstimation.ts for the rationale.
   const [feesResult, balance, nativePriceUsd, nativeCurrencySymbol] = await Promise.all([
-    client.estimateFeesPerGas().catch(() => null),
+    estimateFees(client, chainId).catch(() => null),
     client.getBalance({ address: fromAddress as Address }).catch(() => 0n),
     fetchNativePrice(chainId),
     getNativeCurrencySymbol(chainId),
@@ -103,27 +108,58 @@ export async function estimateBatchGasSequential(
 
   const maxFeePerGas = feesResult?.maxFeePerGas ?? 0n;
   const maxPriorityFeePerGas = feesResult?.maxPriorityFeePerGas ?? 0n;
-  const baseFee = maxFeePerGas > maxPriorityFeePerGas
-    ? maxFeePerGas - maxPriorityFeePerGas
-    : 0n;
+  const baseFee = feesResult?.baseFee ?? 0n;
 
-  // Tier 1: eth_simulateV1 — fastest path on supported RPCs (Geth 1.14.9+, Alchemy)
-  const simV1Result = await tryEthSimulateV1(calls, fromAddress, chainId, rpcUrl);
-  if (simV1Result) {
-    return simV1Result.map(({ gasLimit, fallbackUsed }) =>
-      buildEstimate(gasLimit, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, fallbackUsed),
-    );
-  }
+  // Serialize tiers once so every per-call estimate carries the same picker
+  // data. Wei strings to keep the GasEstimate JSON-safe over chrome.runtime.
+  const tiers: GasEstimateTiers | undefined = feesResult?.tiers
+    ? {
+        slow: {
+          maxFeePerGas: feesResult.tiers.slow.maxFeePerGas.toString(),
+          maxPriorityFeePerGas:
+            feesResult.tiers.slow.maxPriorityFeePerGas.toString(),
+        },
+        standard: {
+          maxFeePerGas: feesResult.tiers.standard.maxFeePerGas.toString(),
+          maxPriorityFeePerGas:
+            feesResult.tiers.standard.maxPriorityFeePerGas.toString(),
+        },
+        fast: {
+          maxFeePerGas: feesResult.tiers.fast.maxFeePerGas.toString(),
+          maxPriorityFeePerGas:
+            feesResult.tiers.fast.maxPriorityFeePerGas.toString(),
+        },
+      }
+    : undefined;
+  const predictedNextBaseFee = feesResult?.predictedNextBaseFee?.toString();
 
-  // Tier 2: TxSimulator bytecode injection — universal sequential simulation.
-  // Works on any chain that supports eth_call state overrides. Runs all calls
-  // sequentially in one eth_call so dependent calls (swap-after-approve) see
-  // the prior call's state and estimate correctly.
-  const injectionResult = await tryBatchGasInjection(calls, fromAddress, chainId, rpcUrl);
-  if (injectionResult) {
-    return injectionResult.map(({ gasLimit, fallbackUsed }) =>
-      buildEstimate(gasLimit, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, fallbackUsed),
-    );
+  // Chains with a non-standard gas model (MegaETH) skip both simulation tiers
+  // and go straight to per-call eth_estimateGas, which the chain's RPC computes
+  // using its own (correct) gas accounting. Tier 1's eth_simulateV1 isn't
+  // supported there anyway, and tier 2's bytecode injection counts gas via the
+  // GAS opcode — only compute gas, not MegaETH's separate storage gas dimension
+  // — so it systematically under-estimates SSTORE-heavy ops like ERC20 approve.
+  const nonStandardGas = CHAIN_BY_ID_BATCH.get(chainId)?.usesNonStandardGasModel;
+
+  if (!nonStandardGas) {
+    // Tier 1: eth_simulateV1 — fastest path on supported RPCs (Geth 1.14.9+, Alchemy)
+    const simV1Result = await tryEthSimulateV1(calls, fromAddress, chainId, rpcUrl);
+    if (simV1Result) {
+      return simV1Result.map(({ gasLimit, fallbackUsed }) =>
+        buildEstimate(gasLimit, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, fallbackUsed, tiers, predictedNextBaseFee),
+      );
+    }
+
+    // Tier 2: TxSimulator bytecode injection — universal sequential simulation.
+    // Works on any chain that supports eth_call state overrides. Runs all calls
+    // sequentially in one eth_call so dependent calls (swap-after-approve) see
+    // the prior call's state and estimate correctly.
+    const injectionResult = await tryBatchGasInjection(calls, fromAddress, chainId, rpcUrl);
+    if (injectionResult) {
+      return injectionResult.map(({ gasLimit, fallbackUsed }) =>
+        buildEstimate(gasLimit, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, fallbackUsed, tiers, predictedNextBaseFee),
+      );
+    }
   }
 
   // Tier 3 (last resort): estimate each call independently with hardcoded buffer.
@@ -133,7 +169,7 @@ export async function estimateBatchGasSequential(
   const gasResults = await estimateIndividualWithFallback(calls, fromAddress, client);
 
   return gasResults.map(({ gasLimit, fallbackUsed }) =>
-    buildEstimate(gasLimit, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, fallbackUsed),
+    buildEstimate(gasLimit, maxFeePerGas, maxPriorityFeePerGas, baseFee, balance, nativePriceUsd, nativeCurrencySymbol, fallbackUsed, tiers, predictedNextBaseFee),
   );
 }
 
@@ -400,6 +436,8 @@ function buildEstimate(
   nativePriceUsd: number | null,
   nativeCurrencySymbol: string,
   fallbackUsed: boolean,
+  tiers: GasEstimateTiers | undefined,
+  predictedNextBaseFee: string | undefined,
 ): GasEstimate {
   const estimatedCostWei = gasLimit * maxFeePerGas;
 
@@ -416,6 +454,8 @@ function buildEstimate(
     estimationFailed: false,
     dappProvidedGas: false,
     fallbackUsed,
+    tiers,
+    predictedNextBaseFee,
   };
 }
 

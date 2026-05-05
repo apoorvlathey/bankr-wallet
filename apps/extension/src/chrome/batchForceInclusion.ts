@@ -32,6 +32,7 @@ import {
   type ForceInclusionStage,
   type ForceInclusionProgressData,
 } from "./forceInclusion";
+import { estimateFees } from "./feeEstimation";
 import type { PendingBatchTxRequest } from "./erc5792Types";
 
 // ---------------------------------------------------------------------------
@@ -307,7 +308,7 @@ export async function processForceInclusionBatchLocal(
       address: viemAccount.address,
       blockTag: "pending",
     }),
-    l1PublicClient.estimateFeesPerGas().catch(() => null),
+    estimateFees(l1PublicClient, l1ChainId).catch(() => null),
   ]);
 
   try {

@@ -688,22 +688,31 @@ Each transaction maintains its own storage-based result channel (`txResult:{txId
 
 Pre-confirmation gas estimation shown on the transaction confirmation screen. Fetches gas limit, EIP-1559 fees, sender balance, and native token USD price.
 
-**Background estimation (`gasEstimation.ts`):**
+**Background estimation (`gasEstimation.ts` + `feeEstimation.ts`):**
 
 - Uses viem `createPublicClient` with cached clients (keyed by chainId), reuses `getRpcUrl()` from `txHandlers.ts`
-- Parallel RPC calls: `estimateGas` (gas limit + 20% buffer), `estimateFeesPerGas` (EIP-1559 fees), `getBalance` (sender balance)
+- Parallel RPC calls: `estimateGas` (gas limit + 20% buffer), `estimateFeeTiers` (EIP-1559 fees from `eth_feeHistory`), `getBalance` (sender balance)
 - CoinGecko price fetch with 60s in-memory cache for USD display
 - Background CoinGecko service with shared storage-backed cache for native asset prices/logos
-- If dapp provided gas params (`gas`, `maxFeePerGas`, `maxPriorityFeePerGas`, `gasPrice`), uses them as defaults instead of RPC estimates
-- Returns `GasEstimate` with `dappProvidedGas` flag
+- If dapp provided gas params (`gas`, `maxFeePerGas`, `maxPriorityFeePerGas`, `gasPrice`), uses them as defaults and suppresses the tier picker
+- Returns `GasEstimate` with `dappProvidedGas` flag, optional `tiers` (Slow / Standard / Fast preset fees), and `predictedNextBaseFee`
 
-**UI component (`GasEstimateDisplay.tsx`):**
+**Fee estimation (`feeEstimation.ts`):**
+
+`estimateFeeTiers(client, chainId)` is the single source of truth for EIP-1559 fees. It runs `eth_feeHistory` over the last 10 blocks at the 50p reward, applies an IQR outlier filter + zero-tip drop, and emits three tiers: **slow = p25 / standard = p60 / fast = p90** of the cleaned sample. Each tier's `maxFeePerGas` is `predictedNextBaseFee × multiplier + tip` (multipliers: slow 1.25× / standard 1.50× / fast 2.00×). Per-chain priority fee floors prevent the broken-near-zero values that quiet RPCs return on ETH mainnet from producing stuck txs. `estimateFees()` is a thin wrapper that returns the standard tier — used by force-inclusion paths and any caller that doesn't want the picker. The `predictedNextBaseFee` is the EIP-1559 next-block predictor (no decreases — sticky downward to avoid stuck-tx pathology).
+
+**UI component (`GasEstimateDisplay.tsx`) + tier picker (`GasTierPicker.tsx`):**
 
 - Collapsible box showing estimated gas fee in ETH + USD (collapsed) with detailed breakdown (expanded)
-- **PK/Seed accounts**: Gas Limit, Max Priority Fee, Max Fee are editable inputs. Overrides sent back via `onGasOverrides` callback
-- **Bankr accounts**: All read-only with "Gas managed by Bankr API" note
-- **Impersonator accounts**: All read-only
-- When dapp provided gas params, shows "Gas params suggested by dapp" indicator
+- **PK/Seed accounts** with tiers available: 4-button segmented control (Slow / Standard / Fast / Custom) at the top of the expanded panel. Tier selection auto-populates the Priority + Max Fee inputs from the corresponding preset. Last preset choice persists to `chrome.storage.sync.defaultGasTier`.
+- **Custom tier** opens the editable Priority + Max Fee + Gas Limit rows. Priority and Max Fee are coupled: editing Priority recomputes Max Fee = predictedNextBaseFee × 1.5 + Priority unless the user has manually edited Max Fee (sticky-edit; flips a `[linked] → [manual]` badge). The relink icon next to the badge restores the formula. Max Fee < Base Fee + Priority blocks Confirm (bubbled to parent via `onValidityChange`).
+- **Bankr accounts**: All read-only with "Gas managed by Bankr API" note. Picker hidden.
+- **Impersonator accounts**: All read-only. No Confirm button.
+- When dapp provided gas params, picker is suppressed and the editable fields show in Custom-style mode.
+
+**Batch tx tier picker (`MultiTxGasEstimateDisplay.tsx`):**
+
+For non-atomic PK/SP batches (and cross-dapp batches), one shared `<GasTierPicker>` at the top applies its Priority / Max Fee uniformly to every call. Per-call gas limit editor stays as before. Atomic Bankr batches keep their server-managed gas UX. Same Custom-tier coupling rules as the single-tx editor.
 
 **Warnings:**
 | Condition | Display |
@@ -883,6 +892,44 @@ The animation shows:
 - Auto-closes popup after 1 second
 
 In sidepanel mode, the view navigates back immediately without the animation (sidepanel stays open for further interactions).
+
+### Receipt Polling & Flashblocks
+
+After a tx is broadcast, `txReceiptPoller.startReceiptPolling(txId, txHash, chainId)` polls `eth_getTransactionReceipt` until a receipt is found or the 10-minute timeout elapses. Default cadence: 2s initial, 1.5× exponential backoff up to 30s.
+
+Chains marked with `supportsFlashblocks: true` in `CHAIN_REGISTRY` (Base, Unichain, Optimism) get an additional **fast phase**: 250ms polling for the first ~5s before the standard schedule kicks in. This delivers ~250ms user-perceived confirmation. The default RPCs for all three (`mainnet.base.org`, `mainnet.unichain.org`, `mainnet.optimism.io`) are already Flashblocks-aware — `eth_getTransactionReceipt` resolves at Flashblock pace without any URL change. Premium providers (Alchemy, QuickNode, Chainstack) also serve Flashblocks data. On a non-Flashblocks-aware RPC the fast phase is harmless polling overhead — the receipt arrives at the normal ~2s mark and the loop transitions to standard backoff.
+
+To enable Flashblocks for another chain, set `supportsFlashblocks: true` on its `CHAIN_REGISTRY` entry. The `FLASHBLOCKS_CHAIN_IDS` set auto-derives, no other code changes required.
+
+### Sync Send (EIP-7966)
+
+Chains marked with `supportsSyncSend: true` (MegaETH today) skip the receipt poller entirely on local-signed (PK/Seed) txs. `signAndBroadcastTransaction` in `localSigner.ts` signs the tx locally, then posts `eth_sendRawTransactionSync` directly to the RPC — the response is the **full receipt** in a single round trip (~100ms on MegaETH). The receipt is written directly to tx history via `applyReceiptToHistory()` in `txReceiptPoller.ts`, no polling.
+
+To avoid an intermediate "pending" flash on the activity tab, all three broadcast call sites (`processLocalTransactionInBackground` in `txHandlers.ts`, `broadcastSwapTxLocal`, and the batch broadcast loop in `batchTxHandlers.ts`) branch on `result.receipt`: when present, jump straight to the final state via `applyReceiptToHistory`; otherwise mark the tx as `pending` and start the poller. The history's `txHash` field is now also written by `applyReceiptToHistory` so the sync-send path doesn't need a placeholder write.
+
+**MegaETH RPC quirk:** EIP-7966 specifies the `timeout` param as a hex-encoded Quantity (`"0x1388"` for 5000ms), and viem's `sendRawTransactionSync` follows the spec via `numberToHex(timeout)`. MegaETH's RPC rejects this with `Invalid params: timeout must be a positive number` and only accepts a plain integer. We bypass viem's wrapper and call `client.request({ method: "eth_sendRawTransactionSync", params: [serialized, 5000] })` directly. The receipt comes back in raw RPC shape (status `"0x1"`/`"0x0"`, hex bigints) which `applyReceiptToHistory` already normalizes for both viem-formatted and raw receipts.
+
+If the sync call throws or times out (5s), the broadcaster transparently falls through to the standard `client.sendTransaction()` + `startReceiptPolling()` path. Users always get *some* outcome.
+
+The same path covers ERC-5792 batched txs because the ERC-7821 wrapper is itself a single signed tx. Bankr-API accounts are unaffected (MegaETH is `isBankrSupported: false`).
+
+### Per-chain gas buffer
+
+All chains add a 20% buffer on top of `eth_estimateGas` to absorb state changes between estimate and inclusion. The buffer can be overridden per-chain via `gasBufferPct` on the registry entry (default 20). No chain currently overrides it.
+
+### Non-standard gas models (MegaETH)
+
+Some chains use gas accounting that differs from standard EVM. MegaETH uses a [dual gas model](https://github.com/megaeth-labs/mega-evm/blob/main/docs/DUAL_GAS_MODEL.md) — compute gas and storage gas tracked separately, plus SSTORE bucket multipliers that scale storage cost. Locally-computed gas values (dapp-provided, GAS-opcode-based simulation tricks) miss the storage component and systematically under-estimate, causing OOG reverts on storage-heavy ops like ERC20 approve.
+
+Chains with `usesNonStandardGasModel: true` on the registry entry get three behavioral changes that all defer gas computation to the chain's own `eth_estimateGas` (which knows its model and is accurate):
+
+1. **Intake strip** (`txHandlers.ts` `handleTransactionRequest`): the dapp's `tx.gas` field is removed before storing as a pending request. All downstream code (UI estimation, signing) sees `gas: undefined` and re-estimates via the chain.
+2. **Single-tx UI estimation** (`gasEstimation.ts`): `dappGas` is forced to `null` so the standard `eth_estimateGas + 20% buffer` path always runs.
+3. **Batch UI estimation** (`batchGasEstimation.ts`): tier 1 (`eth_simulateV1`) and tier 2 (TxSimulator bytecode injection via state override) are skipped. Tier 2 in particular counts gas via the GAS opcode, which only sees compute gas — wrong on dual-model chains. Falls through to tier 3's per-call `eth_estimateGas`. For dependent calls (e.g., swap-after-approve) where the prior call hasn't been broadcast yet, the per-call estimate fails and tier 3's `DEPENDENT_CALL_GAS_LIMIT` (500k) fallback kicks in with `fallbackUsed: true` flagged to the UI.
+
+Fee fields (`maxFeePerGas`, `maxPriorityFeePerGas`, `gasPrice`) are still honored — under-priced fees only delay inclusion, they don't cause reverts.
+
+MegaETH is the only chain with this flag set today.
 
 ## Browser Notifications
 
@@ -1870,6 +1917,8 @@ Build command: `pnpm build`
 | `newPendingTxRequest`        | Notifies views of new pending transaction       |
 | `newPendingSignatureRequest` | Notifies views of new pending signature request |
 | `accountsUpdated`            | Notifies views that accounts list changed       |
+| `walletLockedExternal`       | Force-lock signal (password rotation, agent removal, manual lock) — all surfaces route to unlock screen |
+| `walletUnlockedExternal`     | Unlock-sync signal — sibling surfaces (sidepanel + full-screen tab) auto-unlock by re-running their post-unlock flow against the SW credential cache |
 | `ping`                       | Check if any extension view is open             |
 
 ### Views → Background (response)

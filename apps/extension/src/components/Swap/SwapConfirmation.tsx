@@ -27,6 +27,7 @@ import CalldataDecoder from "@/components/CalldataDecoder";
 import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
+import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { useTheme } from "@/theme";
 
 // Theme-aware accent stripes for the per-call cards. Mirrors the cycle used
@@ -55,6 +56,18 @@ interface SwapConfirmationProps {
   onConfirm: () => void;
   onCancel: () => void;
   isSubmitting: boolean;
+  /**
+   * Per-call gas estimates picked from the tier picker. Fired by
+   * MultiTxGasEstimateDisplay whenever the user picks a tier or edits the
+   * Custom inputs. Parent uses these as the gas params for each non-atomic
+   * swap tx (approve / swap). Bankr atomic swaps ignore this — Bankr API
+   * computes gas server-side.
+   */
+  onGasEstimates?: (estimates: import("@/chrome/gasEstimation").GasEstimate[]) => void;
+  /** Bubbles invalid Custom-tier state up so the parent disables Confirm. */
+  onValidityChange?: (valid: boolean) => void;
+  /** Disables Confirm Swap when the gas editor is in an inconsistent state. */
+  isConfirmDisabled?: boolean;
 }
 
 function formatTokenDisplay(amount: string): string {
@@ -107,6 +120,9 @@ function SwapConfirmation({
   onConfirm,
   onCancel,
   isSubmitting,
+  onGasEstimates,
+  onValidityChange,
+  isConfirmDisabled,
 }: SwapConfirmationProps) {
   const config = getChainConfig(chainId);
   const { themeId } = useTheme();
@@ -182,6 +198,7 @@ function SwapConfirmation({
           bg="accent.secondary"
           border="2px solid"
           borderColor="border.default"
+          borderRadius="lg"
           boxShadow="card"
           py={1.5}
           px={3}
@@ -230,15 +247,23 @@ function SwapConfirmation({
           bg="surface.raised"
           border="2px solid"
           borderColor="border.default"
+          borderRadius="lg"
           boxShadow="card"
           overflow="hidden"
         >
           {/* Sell row */}
           <HStack px={3} py={2.5} spacing={3}>
             {sellToken.logoUrl ? (
-              <Image src={sellToken.logoUrl} boxSize="32px" borderRadius="full" flexShrink={0} />
+              <Image
+                src={sellToken.logoUrl}
+                alt={sellToken.symbol}
+                boxSize="32px"
+                borderRadius="full"
+                flexShrink={0}
+                fallback={<TokenSymbolFallback symbol={sellToken.symbol} size="32px" />}
+              />
             ) : (
-              <Box boxSize="32px" borderRadius="full" bg="surface.sunken" flexShrink={0} />
+              <TokenSymbolFallback symbol={sellToken.symbol} size="32px" />
             )}
             <VStack spacing={0} align="flex-start" flex={1} minW={0}>
               <Text fontSize="xs" color="text.tertiary" fontWeight="700" textTransform="uppercase">
@@ -290,9 +315,16 @@ function SwapConfirmation({
           {/* Buy row */}
           <HStack px={3} py={2.5} spacing={3}>
             {buyTokenLogoURI ? (
-              <Image src={buyTokenLogoURI} boxSize="32px" borderRadius="full" flexShrink={0} />
+              <Image
+                src={buyTokenLogoURI}
+                alt={buyTokenInfo.symbol}
+                boxSize="32px"
+                borderRadius="full"
+                flexShrink={0}
+                fallback={<TokenSymbolFallback symbol={buyTokenInfo.symbol} size="32px" />}
+              />
             ) : (
-              <Box boxSize="32px" borderRadius="full" bg="surface.sunken" flexShrink={0} />
+              <TokenSymbolFallback symbol={buyTokenInfo.symbol} size="32px" />
             )}
             <VStack spacing={0} align="flex-start" flex={1} minW={0}>
               <Text fontSize="xs" color="text.tertiary" fontWeight="700" textTransform="uppercase">
@@ -360,6 +392,13 @@ function SwapConfirmation({
                 borderColor="border.default"
                 borderLeftWidth="4px"
                 borderLeftColor={accent}
+                // Left edge is square so the colored accent stripe runs flush
+                // top-to-bottom; only the right side rounds. Mirrors the
+                // pattern in BatchTransactionConfirmation.
+                borderTopLeftRadius="0"
+                borderBottomLeftRadius="0"
+                borderTopRightRadius="lg"
+                borderBottomRightRadius="lg"
                 bg="surface.raised"
                 overflow="hidden"
               >
@@ -492,6 +531,14 @@ function SwapConfirmation({
           transactions={gasTransactions}
           accountType={accountType}
           batchedTx={gasBatchedTx}
+          // Mirror BatchTransactionConfirmation: when this is a non-atomic
+          // swap (PK / Seed signing each tx separately), use sequential
+          // estimation so the picker has tier data to render. Atomic Bankr
+          // swaps keep server-managed gas (the picker stays hidden inside
+          // MultiTxGasEstimateDisplay because batchedTx is set).
+          isNonAtomic={!isBatched}
+          onGasEstimates={!isBatched ? onGasEstimates : undefined}
+          onValidityChange={!isBatched ? onValidityChange : undefined}
         />
 
         {/* Action buttons */}
@@ -512,6 +559,7 @@ function SwapConfirmation({
               bg="accent.secondary"
               border="2px solid"
               borderColor="border.default"
+              borderRadius="lg"
             >
               <Spinner size="sm" color="accentFg.secondary" />
               <Text fontSize="sm" color="accentFg.secondary" fontWeight="700" textTransform="uppercase">
@@ -523,7 +571,12 @@ function SwapConfirmation({
               <Button variant="secondary" flex={1} onClick={onCancel}>
                 Cancel
               </Button>
-              <Button variant="highlight" flex={1} onClick={onConfirm}>
+              <Button
+                variant="highlight"
+                flex={1}
+                onClick={onConfirm}
+                isDisabled={isConfirmDisabled}
+              >
                 Confirm Swap
               </Button>
             </HStack>

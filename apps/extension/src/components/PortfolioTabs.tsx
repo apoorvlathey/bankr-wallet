@@ -20,7 +20,7 @@ import {
   InputGroup,
   InputLeftElement,
 } from "@chakra-ui/react";
-import { AddIcon, ChevronDownIcon, RepeatIcon, Search2Icon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { AddIcon, ChevronDownIcon, RepeatIcon, Search2Icon, ViewIcon, ViewOffIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import TxStatusList from "@/components/TxStatusList";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import AddTokenModal from "@/components/AddTokenModal";
@@ -39,6 +39,7 @@ interface HoldingsState {
   toggleHideValue: () => void;
   refresh: () => void;
   tokenKeys: Set<string>;
+  apiUnavailable: boolean;
 }
 
 interface PortfolioTabsProps {
@@ -434,6 +435,55 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
               hideValue={holdingsState?.hideValue}
               refreshTrigger={refreshTrigger}
             />
+            {holdingsState?.apiUnavailable && (
+              <HStack
+                spacing={2.5}
+                px={3}
+                py={2}
+                bg="status.warning.bg"
+                borderTop="2px solid"
+                borderBottom="2px solid"
+                borderColor="border.default"
+              >
+                <WarningTwoIcon
+                  color="status.warning.fg"
+                  boxSize="14px"
+                  flexShrink={0}
+                />
+                <Box flex={1} minW={0}>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="800"
+                    color="status.warning.fg"
+                    lineHeight="1.25"
+                    noOfLines={1}
+                  >
+                    Onchain balances loaded
+                  </Text>
+                  <Text
+                    fontSize="2xs"
+                    fontWeight="600"
+                    color="status.warning.fg"
+                    opacity={0.85}
+                    lineHeight="1.25"
+                    noOfLines={1}
+                  >
+                    Couldn’t reach the Portfolio service
+                  </Text>
+                </Box>
+                <Tooltip label="Retry" hasArrow>
+                  <IconButton
+                    aria-label="Retry portfolio"
+                    icon={<RepeatIcon />}
+                    size="xs"
+                    variant="ghost"
+                    color="status.warning.fg"
+                    onClick={() => holdingsState?.refresh()}
+                    isDisabled={holdingsState?.loading}
+                  />
+                </Tooltip>
+              </HStack>
+            )}
             <Suspense fallback={<Skeleton h="100px" />}>
               <TokenHoldings
                 key={`${address}:${refreshTrigger}`}

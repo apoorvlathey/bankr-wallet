@@ -181,7 +181,7 @@ import {
 } from "@/chrome/crossDappBatchStorage";
 import { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
 import { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
-import type { Account } from "@/chrome/types";
+import type { Account, PasswordType } from "@/chrome/types";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import { TWITTER_URL, WALLETCHAN_ICON_URL, WALLETCHAN_OS_URL, WALLETCHAN_STAKE_URL, WALLETCHAN_VAULT_DATA_API } from "@/constants/externalUrls";
 import {
@@ -301,6 +301,7 @@ function App() {
     string | null
   >(null);
   const [isWalletUnlocked, setIsWalletUnlocked] = useState(false);
+  const [passwordType, setPasswordType] = useState<PasswordType | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
   const [revealAccount, setRevealAccount] = useState<Account | null>(null);
@@ -1404,6 +1405,21 @@ function App() {
     }
   }, [reloadRequired, networksInfo, activeAccount?.type]);
 
+  // Track agent vs master session so the header can show the agent badge.
+  useEffect(() => {
+    if (!isWalletUnlocked) {
+      setPasswordType(null);
+      return;
+    }
+    chrome.runtime.sendMessage(
+      { type: "getPasswordType" },
+      (response: { passwordType: PasswordType | null }) => {
+        if (chrome.runtime.lastError) return;
+        setPasswordType(response?.passwordType ?? null);
+      },
+    );
+  }, [isWalletUnlocked]);
+
   const handleUnlock = useCallback(async () => {
     // Mark wallet as unlocked
     setIsWalletUnlocked(true);
@@ -1445,6 +1461,38 @@ function App() {
       setView("main");
     }
   }, [returnToChatAfterUnlock]);
+
+  // Cross-surface lock/unlock sync. The originating surface also receives
+  // its own broadcast, so guard the unlock branch with isWalletUnlocked to
+  // avoid re-running handleUnlock and clobbering its view.
+  const isWalletUnlockedRef = useRef(isWalletUnlocked);
+  useEffect(() => {
+    isWalletUnlockedRef.current = isWalletUnlocked;
+  }, [isWalletUnlocked]);
+  useEffect(() => {
+    const handler = (
+      message: { type?: string },
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response?: unknown) => void,
+    ) => {
+      if (message?.type === "walletLockedExternal") {
+        setIsWalletUnlocked(false);
+        setPasswordType(null);
+        setView("unlock");
+        sendResponse({ ok: true });
+      } else if (message?.type === "walletUnlockedExternal") {
+        if (!isWalletUnlockedRef.current) {
+          handleUnlock();
+        }
+        sendResponse({ ok: true });
+      }
+      return false; // synchronous response
+    };
+    chrome.runtime.onMessage.addListener(handler);
+    return () => {
+      chrome.runtime.onMessage.removeListener(handler);
+    };
+  }, [handleUnlock]);
 
   const handleCopyAddress = async () => {
     try {
@@ -2724,9 +2772,50 @@ function App() {
               bg={isDarkTheme ? "white" : "surface.raised"}
               p={0.5}
               borderRadius={isDarkTheme ? "md" : undefined}
-              overflow="hidden"
+              overflow="visible"
+              position="relative"
             >
               <Image src="walletchan-icon-white-bg.png" h="1.75rem" />
+              {passwordType === "agent" && (
+                <Tooltip
+                  label="Agent session — limited permissions. Master-only actions (reveal keys, rotate API key, add/remove accounts) are blocked."
+                  placement="bottom"
+                  hasArrow
+                >
+                  <Box
+                    position="absolute"
+                    bottom="-6px"
+                    right="-8px"
+                    p="3px"
+                    borderRadius="full"
+                    bg={headerBg}
+                    border="1.5px solid"
+                    borderColor={headerFg}
+                    color={headerFg}
+                    cursor="help"
+                    aria-label="Agent session"
+                    lineHeight={0}
+                  >
+                    <Icon
+                      viewBox="0 0 24 24"
+                      boxSize="0.7rem"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2.25}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      display="block"
+                    >
+                      <path d="M12 8V4H8" />
+                      <rect width="16" height="12" x="4" y="8" rx="2" />
+                      <path d="M2 14h2" />
+                      <path d="M20 14h2" />
+                      <path d="M15 13v2" />
+                      <path d="M9 13v2" />
+                    </Icon>
+                  </Box>
+                </Tooltip>
+              )}
             </Box>
             <Text
               fontWeight="900"
@@ -2765,6 +2854,8 @@ function App() {
                 _hover={{ bg: headerHoverBg }}
                 onClick={() => {
                   chrome.runtime.sendMessage({ type: "lockWallet" }, () => {
+                    setIsWalletUnlocked(false);
+                    setPasswordType(null);
                     setView("unlock");
                   });
                 }}
@@ -2878,6 +2969,20 @@ function App() {
                     decimals: 18,
                     logoURI: WALLETCHAN_ICON_URL,
                   });
+                  // Auto-fill the sell side with native ETH on Base so the
+                  // user lands on a ready-to-quote pair. Balance/price are
+                  // hydrated by SwapView's on-chain + price-fetch effects.
+                  setSwapInitialSellToken({
+                    symbol: "ETH",
+                    name: "Ether",
+                    contractAddress: "native",
+                    chainId: 8453,
+                    decimals: 18,
+                    balance: "0",
+                    balanceFormatted: "0",
+                    priceUsd: 0,
+                    valueUsd: 0,
+                  });
                   setView("swap");
                 }}
               >
@@ -2913,6 +3018,20 @@ function App() {
                     symbol: "WCHAN",
                     decimals: 18,
                     logoURI: WALLETCHAN_ICON_URL,
+                  });
+                  // Auto-fill the sell side with native ETH on Base so the
+                  // user lands on a ready-to-quote pair. Balance/price are
+                  // hydrated by SwapView's on-chain + price-fetch effects.
+                  setSwapInitialSellToken({
+                    symbol: "ETH",
+                    name: "Ether",
+                    contractAddress: "native",
+                    chainId: 8453,
+                    decimals: 18,
+                    balance: "0",
+                    balanceFormatted: "0",
+                    priceUsd: 0,
+                    valueUsd: 0,
                   });
                   setView("swap");
                 }}
@@ -3113,6 +3232,7 @@ function App() {
                                 bg="surface.raised"
                                 border="1.5px solid"
                                 borderColor="border.default"
+                                borderRadius={isDarkTheme ? "md" : undefined}
                                 px={1.5}
                                 py={1}
                                 cursor="pointer"

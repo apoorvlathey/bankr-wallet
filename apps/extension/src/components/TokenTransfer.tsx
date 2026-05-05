@@ -38,6 +38,8 @@ import { buildTransferTx } from "@/chrome/transferUtils";
 import { SWAP_SUPPORTED_CHAIN_IDS } from "@/constants/chainRegistry";
 import type { Account } from "@/chrome/types";
 import TokenSelector from "@/components/Swap/TokenSelector";
+import { NATIVE_TOKEN_ADDRESS, type TokenListEntry } from "@/chrome/swapApi";
+import { getChainConfig } from "@/constants/chainConfig";
 import { WALLETCHAN_STAKE_URL } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import ChainIcon from "@/components/ChainIcon";
@@ -107,6 +109,7 @@ function TokenTransfer({
   const [selectedChainId, setSelectedChainId] = useState(initialToken?.chainId || chainId);
   const [selectedToken, setSelectedToken] = useState<PortfolioToken | null>(initialToken || null);
   const [allTokens, setAllTokens] = useState<PortfolioToken[]>([]);
+  const [tokenList, setTokenList] = useState<TokenListEntry[]>([]);
   const [holdingsLoading, setHoldingsLoading] = useState(false);
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
@@ -140,11 +143,6 @@ function TokenTransfer({
 
         if (cancelled) return;
         setAllTokens(tokens);
-
-        if (!selectedToken) {
-          const onChain = tokens.filter((t) => t.chainId === selectedChainId);
-          if (onChain.length > 0) setSelectedToken(onChain[0]);
-        }
       } finally {
         if (!cancelled) setHoldingsLoading(false);
       }
@@ -157,6 +155,154 @@ function TokenTransfer({
     () => allTokens.filter((t) => t.chainId === selectedChainId),
     [allTokens, selectedChainId],
   );
+
+  // Swap token list for the selected chain — feeds the Send dropdown's "All
+  // tokens" group and lets popular chips (USDC, USDT, ...) appear even when
+  // the user has zero on-chain balance of them. Mirrors SwapView's fetch.
+  useEffect(() => {
+    if (!SWAP_SUPPORTED_CHAIN_IDS.has(selectedChainId)) {
+      setTokenList([]);
+      return;
+    }
+    let cancelled = false;
+    chrome.runtime.sendMessage(
+      { type: "fetchSwapTokenList", chainId: selectedChainId },
+      (res) => {
+        if (cancelled) return;
+        if (res?.success && Array.isArray(res.data)) setTokenList(res.data);
+        else setTokenList([]);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedChainId]);
+
+  // -----------------------------------------------------------------------
+  // On-chain balance fallback for the selected token. Mirrors SwapView's
+  // verification: when the chosen token reports a 0 balance (either because
+  // the portfolio API hasn't picked it up yet, or because the user picked
+  // it from the swap token list which defaults balance to "0"), fall back
+  // to a direct `balanceOf` / `eth_getBalance` so the user sees the truth.
+  // Memoized per (chain, token, owner) so it doesn't refetch on every render.
+  // -----------------------------------------------------------------------
+  const verifiedZeroBalancesRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!selectedToken || !fromAddress) return;
+    if (parseFloat(selectedToken.balance) > 0) return;
+
+    const tokenAddr = selectedToken.contractAddress;
+    const tokenChainId = selectedToken.chainId;
+    const tokenDecimals = selectedToken.decimals;
+    const key = `${tokenChainId}:${tokenAddr.toLowerCase()}:${fromAddress.toLowerCase()}`;
+    if (verifiedZeroBalancesRef.current.has(key)) return;
+    verifiedZeroBalancesRef.current.add(key);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const rpcUrl = await getStoredRpcUrl(tokenChainId);
+        if (!rpcUrl || cancelled) return;
+        const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
+        const client = createPublicClient({
+          transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }),
+        });
+        const isNative = tokenAddr === "native";
+        const rawBalance = isNative
+          ? await client.getBalance({ address: fromAddress as `0x${string}` })
+          : ((await client.readContract({
+              address: tokenAddr as `0x${string}`,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [fromAddress as `0x${string}`],
+            })) as bigint);
+        if (cancelled || rawBalance === 0n) return;
+
+        const balance = formatUnits(rawBalance, tokenDecimals);
+        const balanceNum = parseFloat(balance);
+        const balanceFormatted =
+          balanceNum > 0 && balanceNum < 0.0001
+            ? "<0.0001"
+            : parseFloat(balanceNum.toPrecision(6)).toString();
+
+        setSelectedToken((prev) => {
+          if (
+            !prev ||
+            prev.contractAddress.toLowerCase() !== tokenAddr.toLowerCase() ||
+            prev.chainId !== tokenChainId
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            balance,
+            balanceFormatted,
+            valueUsd: balanceNum * prev.priceUsd,
+          };
+        });
+      } catch {
+        // Silent: keep showing 0 if RPC fails.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedToken, fromAddress]);
+
+  // -----------------------------------------------------------------------
+  // USD price fallback for the selected ERC-20. The portfolio API supplies
+  // priceUsd for known tokens but may be down (priceUsd=0 for everything)
+  // or simply not price a custom/exotic token. Resolve directly through
+  // `fetchTokenPrice` (proxy → CoinGecko → GeckoTerminal fallback chain) so
+  // USD-mode and the value display still work. Native tokens already get
+  // prices through the catalog's native resolver.
+  //
+  // We deliberately do NOT use a `cancelled` flag here: the on-chain balance
+  // fallback above also calls `setSelectedToken`, and any state update that
+  // changes `selectedToken` would trigger this effect's cleanup mid-flight
+  // and silently drop the price response. The `setSelectedToken` updater
+  // below already guards staleness by matching (chainId, address), so a
+  // late response for a token the user has since switched away from is a
+  // no-op. Combined with `resolvedTokenPriceRef`, each (chainId, address)
+  // is fetched at most once per mount.
+  // -----------------------------------------------------------------------
+  const resolvedTokenPriceRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!selectedToken) return;
+    if (selectedToken.priceUsd > 0) return;
+    if (selectedToken.contractAddress === "native") return;
+    if (!/^0x[a-fA-F0-9]{40}$/.test(selectedToken.contractAddress)) return;
+
+    const tokenAddr = selectedToken.contractAddress;
+    const tokenChainId = selectedToken.chainId;
+    const key = `${tokenChainId}:${tokenAddr.toLowerCase()}`;
+    if (resolvedTokenPriceRef.current.has(key)) return;
+    resolvedTokenPriceRef.current.add(key);
+
+    chrome.runtime.sendMessage(
+      { type: "fetchTokenPrice", chainId: tokenChainId, address: tokenAddr },
+      (res) => {
+        const priceUsd = Number(res?.priceUsd ?? 0);
+        if (!res?.success || !(priceUsd > 0)) return;
+        setSelectedToken((prev) => {
+          if (
+            !prev ||
+            prev.contractAddress.toLowerCase() !== tokenAddr.toLowerCase() ||
+            prev.chainId !== tokenChainId
+          ) {
+            return prev;
+          }
+          const balanceNum = parseFloat(prev.balance || "0");
+          return {
+            ...prev,
+            priceUsd,
+            valueUsd: balanceNum > 0 ? balanceNum * priceUsd : 0,
+          };
+        });
+      },
+    );
+  }, [selectedToken]);
 
   // Centralized chain list: built-ins + custom overrides/custom additions.
   const allChains = useMemo(() => {
@@ -201,7 +347,11 @@ function TokenTransfer({
       }
       const { name, symbol, decimals } = infoResult.data;
 
-      // Fetch balance via balanceOf
+      const addrLower = tokenAddress.toLowerCase();
+      const isNative =
+        addrLower === "0x0000000000000000000000000000000000000000" ||
+        addrLower === NATIVE_TOKEN_ADDRESS.toLowerCase();
+
       const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
       const rpcUrl = await getStoredRpcUrl(selectedChainId);
       if (!rpcUrl) {
@@ -209,23 +359,31 @@ function TokenTransfer({
         return;
       }
       const client = createPublicClient({ transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }) });
-      const rawBalance = await client.readContract({
-        address: tokenAddress as `0x${string}`,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [fromAddress as `0x${string}`],
-      });
+      const rawBalance = isNative
+        ? await client.getBalance({ address: fromAddress as `0x${string}` })
+        : await client.readContract({
+            address: tokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [fromAddress as `0x${string}`],
+          });
       const balance = formatUnits(rawBalance, decimals);
       const balanceNum = parseFloat(balance);
 
+      const logoUrl = isNative
+        ? symbol.toUpperCase() === "ETH"
+          ? "/chainIcons/ethereum.svg"
+          : getChainConfig(selectedChainId)?.icon || ""
+        : "";
+
       setResolvedCustomToken({
-        contractAddress: tokenAddress,
+        contractAddress: isNative ? "native" : tokenAddress,
         name,
         symbol,
         decimals,
         balance,
         balanceFormatted: balanceNum < 0.0001 && balanceNum > 0 ? "<0.0001" : parseFloat(balanceNum.toPrecision(6)).toString(),
-        logoUrl: "",
+        logoUrl,
         valueUsd: 0,
         priceUsd: 0,
         chainId: selectedChainId,
@@ -663,10 +821,7 @@ function TokenTransfer({
         )}
 
         {/* Token selector card */}
-        {holdingsLoading && !token ? (
-          <Skeleton h="64px" />
-        ) : (
-          <Box
+        <Box
             bg="surface.raised"
             border={tokens.borders.medium}
             borderColor="border.default"
@@ -674,7 +829,7 @@ function TokenTransfer({
             boxShadow="card"
             p={3}
           >
-            <HStack spacing={3}>
+            <HStack spacing={3} align="center">
               {/* Chain selector */}
               <Menu
                 isOpen={isChainMenuOpen}
@@ -825,55 +980,62 @@ function TokenTransfer({
                 </MenuList>
               </Menu>
 
-              {/* Token selector + balance */}
-              <VStack align="start" spacing={0} flex={1} minW={0}>
-                <TokenSelector
-                  holdings={holdings}
-                  selectedToken={token}
-                  onSelect={handleTokenSelect}
-                  borderless
-                  onCustomAddress={resolveCustomAddress}
-                  onSelectCustomToken={handleSelectCustomToken}
-                  resolvedCustomToken={resolvedCustomToken}
-                  customTokenLoading={customTokenLoading}
-                  customTokenError={customTokenError}
-                  chainName={chainName}
-                />
-                {token && (
-                  <HStack spacing={1.5} mt={0.5} minW={0} flexWrap="wrap">
-                    <Text fontSize="xs" fontWeight="700" color="text.tertiary" noOfLines={1}>
-                      on {chainName.replace(/\s+testnet$/i, "")}
-                    </Text>
-                    {chainEnvironmentLabel && (
-                      <Text
-                        fontSize="8px"
-                        fontWeight="900"
-                        letterSpacing="0.08em"
-                        textTransform="uppercase"
-                        px={1.5}
-                        py={0.5}
-                        bg="accent.highlight"
-                        color="accentFg.highlight"
-                        border="1px solid"
-                        borderColor="border.default"
-                        lineHeight="1"
-                        flexShrink={0}
-                      >
-                        {chainEnvironmentLabel}
-                      </Text>
-                    )}
-                  </HStack>
-                )}
-              </VStack>
+              {/* Testnet pill — only on non-mainnet chains. Inline with the
+                  chain selector so it reads as a row-level safety signal. */}
+              {chainEnvironmentLabel && (
+                <Text
+                  fontSize="8px"
+                  fontWeight="900"
+                  letterSpacing="0.08em"
+                  textTransform="uppercase"
+                  px={1.5}
+                  py={0.5}
+                  bg="accent.highlight"
+                  color="accentFg.highlight"
+                  border="1px solid"
+                  borderColor="border.default"
+                  lineHeight="1"
+                  flexShrink={0}
+                >
+                  {chainEnvironmentLabel}
+                </Text>
+              )}
+
+              {/* Token selector — content-sized; balance sits flush right
+                  via ml="auto" so the trigger button stays compact. */}
+              <TokenSelector
+                holdings={holdings}
+                tokenList={tokenList}
+                chainId={selectedChainId}
+                selectedToken={token}
+                onSelect={handleTokenSelect}
+                onCustomAddress={resolveCustomAddress}
+                onSelectCustomToken={handleSelectCustomToken}
+                resolvedCustomToken={resolvedCustomToken}
+                customTokenLoading={customTokenLoading}
+                customTokenError={customTokenError}
+                chainName={chainName}
+                dropdownAlign="right"
+              />
 
               {/* Balance */}
               {token && (
-                <VStack align="end" spacing={0} flexShrink={0}>
+                <VStack align="end" spacing={0} flexShrink={0} ml="auto">
+                  <Text
+                    fontSize="2xs"
+                    fontWeight="800"
+                    color="text.tertiary"
+                    textTransform="uppercase"
+                    letterSpacing="0.06em"
+                    lineHeight="1"
+                  >
+                    Balance
+                  </Text>
                   <Text fontSize="sm" fontWeight="800" color="text.primary" noOfLines={1}>
                     {token.balanceFormatted}
                   </Text>
                   {hasPrice && (
-                    <Text fontSize="xs" fontWeight="700" color="text.tertiary">
+                    <Text fontSize="xs" fontWeight="700" color="text.tertiary" lineHeight="1.2">
                       {formatUsd(parseFloat(token.balance) * token.priceUsd)}
                     </Text>
                   )}
@@ -881,7 +1043,6 @@ function TokenTransfer({
               )}
             </HStack>
           </Box>
-        )}
 
         {/* Recipient input */}
         <Box>

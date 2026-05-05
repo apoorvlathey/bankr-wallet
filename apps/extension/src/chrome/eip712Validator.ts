@@ -20,6 +20,11 @@ export interface EIP712ValidationResult {
 // Legitimate DeFi protocols rarely exceed 10 levels
 const MAX_NESTING_DEPTH = 50;
 
+// Hard size caps to prevent DoS via oversized payloads
+const MAX_PAYLOAD_BYTES = 128 * 1024;
+const MAX_TYPES = 64;
+const MAX_FIELDS_PER_TYPE = 32;
+
 /**
  * Validates EIP-712 typed data structure
  * Only validates eth_signTypedData_v3 and eth_signTypedData_v4
@@ -33,6 +38,20 @@ export function validateEIP712TypedData(
     return { valid: true };
   }
 
+  // Enforce hard payload size cap before any further parsing/walking
+  try {
+    const serialized =
+      typeof typedData === "string" ? typedData : JSON.stringify(typedData);
+    if (serialized.length > MAX_PAYLOAD_BYTES) {
+      return {
+        valid: false,
+        error: `Typed data exceeds maximum size of ${MAX_PAYLOAD_BYTES} bytes`,
+      };
+    }
+  } catch {
+    return { valid: false, error: "Typed data could not be serialized" };
+  }
+
   // Parse if stringified
   let data: any;
   try {
@@ -44,6 +63,24 @@ export function validateEIP712TypedData(
   // Validate required fields exist
   if (!data.types || typeof data.types !== "object") {
     return { valid: false, error: "Missing or invalid 'types' field" };
+  }
+
+  // Cap total number of types and fields per type
+  const typeNames = Object.keys(data.types);
+  if (typeNames.length > MAX_TYPES) {
+    return {
+      valid: false,
+      error: `Typed data exceeds maximum of ${MAX_TYPES} types`,
+    };
+  }
+  for (const typeName of typeNames) {
+    const fields = data.types[typeName];
+    if (Array.isArray(fields) && fields.length > MAX_FIELDS_PER_TYPE) {
+      return {
+        valid: false,
+        error: `Type '${typeName}' exceeds maximum of ${MAX_FIELDS_PER_TYPE} fields`,
+      };
+    }
   }
 
   if (!data.domain || typeof data.domain !== "object") {

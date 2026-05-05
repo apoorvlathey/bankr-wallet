@@ -15,6 +15,9 @@ import {
   CHAIN_NAMES,
   OP_STACK_CHAIN_IDS,
 } from "../constants/networks";
+import { CHAIN_REGISTRY } from "../constants/chainRegistry";
+
+const CHAIN_BY_ID_TX = new Map(CHAIN_REGISTRY.map((c) => [c.chainId, c]));
 import { CHAIN_CONFIG } from "../constants/chainConfig";
 import { getStoredResolvedChainById, getStoredRpcUrl } from "@/lib/chains";
 import type { Account } from "./types";
@@ -22,7 +25,6 @@ import {
   getActiveAccount,
   getAccountById,
   getAccounts,
-  getTabAccount,
   addPrivateKeyAccount as addPKAccountStorage,
   removeAccount,
   addressExists,
@@ -75,7 +77,7 @@ import {
   getSidePanelMode,
   isSidePanelSupported,
 } from "./sidepanelManager";
-import { startReceiptPolling } from "./txReceiptPoller";
+import { startReceiptPolling, applyReceiptToHistory } from "./txReceiptPoller";
 import {
   getNextNonce,
   resetNonce,
@@ -111,11 +113,42 @@ export async function writeResultToStorage(
 // Active transaction AbortControllers for cancellation
 export const activeAbortControllers = new Map<string, AbortController>();
 
+/**
+ * SECURITY: resolve the pinned account for a pending request. Refuses if the
+ * binding is missing (legacy entry from older build), if the account no longer
+ * exists, or if its address has changed since the request was captured.
+ */
+export async function resolvePinnedAccount(
+  pending: { accountId?: string; accountAddress?: string },
+): Promise<{ ok: true; account: Account } | { ok: false; error: string }> {
+  if (!pending.accountId) {
+    return { ok: false, error: "Pending request is no longer valid" };
+  }
+  const account = await getAccountById(pending.accountId);
+  if (!account) {
+    return { ok: false, error: "Account no longer exists" };
+  }
+  if (
+    pending.accountAddress &&
+    account.address.toLowerCase() !== pending.accountAddress.toLowerCase()
+  ) {
+    return { ok: false, error: "Pending request is no longer valid" };
+  }
+  if (account.type === "impersonator") {
+    return {
+      ok: false,
+      error: "View-only accounts cannot send transactions",
+    };
+  }
+  return { ok: true, account };
+}
+
 // Prevent double-execution: tracks txIds currently being processed
 const processingTxIds = new Set<string>();
 
 // Transaction expiry: reject confirmations for requests older than 30 minutes
 const TX_EXPIRY_MS = 30 * 60 * 1000;
+const SIGNATURE_EXPIRY_MS = 30 * 60 * 1000;
 
 // Store failed transaction results for display when opening from notification
 export interface FailedTxResult {
@@ -139,6 +172,9 @@ export function handleTransactionRequest(
   },
   txId: string,
   senderWindowId?: number,
+  senderOrigin?: string,
+  tabId?: number,
+  frameId?: number,
 ): void {
   const { tx, origin, favicon } = message;
 
@@ -146,13 +182,53 @@ export function handleTransactionRequest(
   (async () => {
     const chainName = CHAIN_NAMES[tx.chainId] || `Chain ${tx.chainId}`;
 
+    // SECURITY: snapshot the active account at arrival time so confirm-time
+    // account switches cannot redirect signing to a different account.
+    const activeAccount = await getActiveAccount();
+    if (!activeAccount) {
+      await writeResultToStorage(`txResult:${txId}`, {
+        success: false,
+        error: "No active account",
+      });
+      return;
+    }
+    // SECURITY: dapp-supplied tx.from must match the active account address.
+    if (
+      typeof tx.from === "string" &&
+      tx.from.length > 0 &&
+      tx.from.toLowerCase() !== activeAccount.address.toLowerCase()
+    ) {
+      await writeResultToStorage(`txResult:${txId}`, {
+        success: false,
+        error: "Transaction 'from' does not match active account",
+      });
+      return;
+    }
+
+    // On chains whose gas model differs from standard EVM (MegaETH), dapp-side
+    // gas estimates from wagmi/ethers are systematically wrong (computed against
+    // standard EVM rules, missing MegaETH's storage gas component). Strip the
+    // dapp's gas value at intake so all downstream code (UI estimation,
+    // signing) re-estimates via the chain's own eth_estimateGas. Fee fields
+    // are preserved — under-priced fees only delay inclusion, not revert.
+    const sanitizedTx = CHAIN_BY_ID_TX.get(tx.chainId)?.usesNonStandardGasModel
+      ? { ...tx, gas: undefined }
+      : tx;
+
     const pendingRequest: PendingTxRequest = {
       id: txId,
-      tx,
+      tx: sanitizedTx,
       origin,
       favicon: favicon || null,
       chainName,
       timestamp: Date.now(),
+      accountId: activeAccount.id,
+      accountAddress: activeAccount.address.toLowerCase(),
+      accountType: activeAccount.type as PendingTxRequest["accountType"],
+      tabId,
+      frameId,
+      senderOrigin,
+      requestChainId: tx.chainId,
     };
 
     await savePendingTxRequest(pendingRequest);
@@ -177,6 +253,9 @@ export function handleSignatureRequest(
   },
   sigId: string,
   senderWindowId?: number,
+  senderOrigin?: string,
+  tabId?: number,
+  frameId?: number,
 ): void {
   const { signature, origin, favicon } = message;
 
@@ -187,6 +266,58 @@ export function handleSignatureRequest(
     const chainName =
       CHAIN_NAMES[signature.chainId] || `Chain ${signature.chainId}`;
 
+    // SECURITY: snapshot the active account at arrival time.
+    const activeAccount = await getActiveAccount();
+    if (!activeAccount) {
+      await writeResultToStorage(`sigResult:${sigId}`, {
+        success: false,
+        error: "No active account",
+      });
+      return;
+    }
+    // SECURITY: validate signer param matches active account address.
+    const signerParam = extractSignerParam(signature.method, signature.params);
+    if (
+      typeof signerParam === "string" &&
+      signerParam.length > 0 &&
+      signerParam.toLowerCase() !== activeAccount.address.toLowerCase()
+    ) {
+      await writeResultToStorage(`sigResult:${sigId}`, {
+        success: false,
+        error: "Signer address does not match active account",
+      });
+      return;
+    }
+
+    // SECURITY: typed data domain.chainId must match the request chainId.
+    if (
+      signature.method === "eth_signTypedData_v3" ||
+      signature.method === "eth_signTypedData_v4"
+    ) {
+      let typedData: any = signature.params?.[1];
+      if (typeof typedData === "string") {
+        try {
+          typedData = JSON.parse(typedData);
+        } catch {
+          /* validator already ran in background.ts; leave as-is */
+        }
+      }
+      const domainChainId = typedData?.domain?.chainId;
+      if (domainChainId !== undefined && domainChainId !== null) {
+        const numDomainChainId = Number(domainChainId);
+        if (
+          Number.isFinite(numDomainChainId) &&
+          numDomainChainId !== signature.chainId
+        ) {
+          await writeResultToStorage(`sigResult:${sigId}`, {
+            success: false,
+            error: `Provided chainId "${numDomainChainId}" must match the active chainId "${signature.chainId}"`,
+          });
+          return;
+        }
+      }
+    }
+
     const pendingRequest: PendingSignatureRequest = {
       id: sigId,
       signature,
@@ -194,6 +325,13 @@ export function handleSignatureRequest(
       favicon: favicon || null,
       chainName,
       timestamp: Date.now(),
+      accountId: activeAccount.id,
+      accountAddress: activeAccount.address.toLowerCase(),
+      accountType: activeAccount.type as PendingSignatureRequest["accountType"],
+      tabId,
+      frameId,
+      senderOrigin,
+      requestChainId: signature.chainId,
     };
 
     await savePendingSignatureRequest(pendingRequest);
@@ -414,6 +552,27 @@ export async function handleConfirmTransaction(
   if (!pending || Date.now() - pending.timestamp > TX_EXPIRY_MS) {
     if (pending) await removePendingTxRequest(txId);
     return { success: false, error: "Transaction request expired" };
+  }
+
+  // SECURITY: resolve the account pinned at request arrival; reject if the
+  // binding is stale or the account is gone.
+  const pinned = await resolvePinnedAccount(pending);
+  if (!pinned.ok) {
+    return { success: false, error: pinned.error };
+  }
+  // SECURITY: this handler signs via the Bankr API.
+  if (pinned.account.type !== "bankr") {
+    return { success: false, error: "Pending request is no longer valid" };
+  }
+  if (
+    typeof pending.tx.from === "string" &&
+    pending.tx.from.length > 0 &&
+    pending.tx.from.toLowerCase() !== pinned.account.address.toLowerCase()
+  ) {
+    return {
+      success: false,
+      error: "Transaction 'from' does not match active account",
+    };
   }
 
   // Try to use cached API key first
@@ -650,6 +809,30 @@ export async function handleConfirmTransactionAsync(
   if (!pending || Date.now() - pending.timestamp > TX_EXPIRY_MS) {
     if (pending) await removePendingTxRequest(txId);
     return { success: false, error: "Transaction request expired" };
+  }
+
+  // SECURITY: resolve the pinned account; reject stale/missing/impersonator
+  // bindings. Do NOT fall back to getActiveAccount() — that re-introduces the
+  // confirm-time-account-switch attack.
+  const pinned = await resolvePinnedAccount(pending);
+  if (!pinned.ok) {
+    return { success: false, error: pinned.error };
+  }
+  // SECURITY: this handler signs via the Bankr API. Refuse if the pinned
+  // account is not a Bankr account (the live active account may be Bankr now,
+  // but signing through the API would not match the pinned address).
+  if (pinned.account.type !== "bankr") {
+    return { success: false, error: "Pending request is no longer valid" };
+  }
+  if (
+    typeof pending.tx.from === "string" &&
+    pending.tx.from.length > 0 &&
+    pending.tx.from.toLowerCase() !== pinned.account.address.toLowerCase()
+  ) {
+    return {
+      success: false,
+      error: "Transaction 'from' does not match active account",
+    };
   }
 
   // Validate chain is supported for Bankr API accounts.
@@ -948,15 +1131,21 @@ async function processLocalTransactionInBackground(
     );
     const txHash = result.txHash;
 
-    // Tx is broadcast but not yet confirmed — mark as pending
-    await updateTxInHistory(txId, {
-      status: "pending",
-      txHash,
-    });
-
-    // Start polling for on-chain confirmation
+    // Sync-send chains (e.g., MegaETH) return the receipt with the broadcast —
+    // jump straight to the final state with no intermediate "pending" flash.
+    // Otherwise mark pending and start the poller.
     if (txHash) {
-      startReceiptPolling(txId, txHash, pending.tx.chainId);
+      if (result.receipt) {
+        await applyReceiptToHistory(txId, txHash, pending.tx.chainId, result.receipt, {
+          rpcUrl,
+          signedGasLimit: result.signedGasLimit,
+        });
+      } else {
+        await updateTxInHistory(txId, { status: "pending", txHash });
+        startReceiptPolling(txId, txHash, pending.tx.chainId);
+      }
+    } else {
+      await updateTxInHistory(txId, { status: "pending", txHash });
     }
 
     await writeResultToStorage(`txResult:${txId}`, { success: true, txHash });
@@ -998,16 +1187,30 @@ export async function handleConfirmTransactionAsyncPK(
 
   processingTxIds.add(txId);
 
-  // Get the account for this tab
-  const account = tabId ? await getTabAccount(tabId) : await getActiveAccount();
-  if (!account) {
+  // SECURITY: resolve the pinned account; do NOT fall back to getActiveAccount().
+  const pinned = await resolvePinnedAccount(pending);
+  if (!pinned.ok) {
     processingTxIds.delete(txId);
-    return { success: false, error: "No account found" };
+    return { success: false, error: pinned.error };
   }
+  const account = pinned.account;
 
   if (account.type !== "privateKey" && account.type !== "seedPhrase") {
     processingTxIds.delete(txId);
     return { success: false, error: "Account does not support local signing" };
+  }
+
+  // Defense-in-depth: tx.from must match the pinned account address.
+  if (
+    typeof pending.tx.from === "string" &&
+    pending.tx.from.length > 0 &&
+    pending.tx.from.toLowerCase() !== account.address.toLowerCase()
+  ) {
+    processingTxIds.delete(txId);
+    return {
+      success: false,
+      error: "Transaction 'from' does not match active account",
+    };
   }
 
   // Try to get private key from cache first
@@ -1088,22 +1291,52 @@ export async function handleConfirmTransactionAsyncPK(
 }
 
 /**
+ * Extracts the signer address param from a signature request based on the method.
+ */
+function extractSignerParam(
+  method: SignatureParams["method"],
+  params: any[],
+): string | undefined {
+  if (method === "personal_sign") return params?.[1];
+  return params?.[0];
+}
+
+/**
  * Handles signature confirmation for PK accounts
  */
 export async function handleConfirmSignatureRequest(
   sigId: string,
   password: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   tabId?: number,
 ): Promise<SignatureResult> {
   const pending = await getPendingSignatureRequestById(sigId);
-  if (!pending) {
-    return { success: false, error: "Signature request not found or expired" };
+  // SECURITY: re-check expiry at confirm time in case cleanup didn't run.
+  if (!pending || Date.now() - pending.timestamp > SIGNATURE_EXPIRY_MS) {
+    if (pending) await removePendingSignatureRequest(sigId);
+    return { success: false, error: "Signature request expired" };
   }
 
-  // Get the account for this tab
-  const account = tabId ? await getTabAccount(tabId) : await getActiveAccount();
-  if (!account) {
-    return { success: false, error: "No account found" };
+  // SECURITY: resolve the account pinned at request arrival.
+  const pinned = await resolvePinnedAccount(pending);
+  if (!pinned.ok) {
+    return { success: false, error: pinned.error };
+  }
+  const account = pinned.account;
+
+  // SECURITY: enforce that the dapp-supplied signer matches the pinned account
+  const signerParam = extractSignerParam(
+    pending.signature.method,
+    pending.signature.params,
+  );
+  if (
+    typeof signerParam === "string" &&
+    signerParam.toLowerCase() !== account.address.toLowerCase()
+  ) {
+    return {
+      success: false,
+      error: "Signer address does not match active account",
+    };
   }
 
   if (account.type !== "privateKey" && account.type !== "seedPhrase") {
@@ -1197,8 +1430,37 @@ export async function handleConfirmSignatureRequestBankr(
   password: string,
 ): Promise<SignatureResult> {
   const pending = await getPendingSignatureRequestById(sigId);
-  if (!pending) {
-    return { success: false, error: "Signature request not found or expired" };
+  // SECURITY: re-check expiry at confirm time in case cleanup didn't run.
+  if (!pending || Date.now() - pending.timestamp > SIGNATURE_EXPIRY_MS) {
+    if (pending) await removePendingSignatureRequest(sigId);
+    return { success: false, error: "Signature request expired" };
+  }
+
+  // SECURITY: resolve the account pinned at request arrival.
+  // The Bankr API signs with the API key's owner address regardless of any
+  // signer param; reject mismatched requests so users aren't shown a spoofed
+  // address. Use the pinned account, not whatever is active right now.
+  const pinned = await resolvePinnedAccount(pending);
+  if (!pinned.ok) {
+    return { success: false, error: pinned.error };
+  }
+  const pinnedAccount = pinned.account;
+  // SECURITY: this handler signs via the Bankr API.
+  if (pinnedAccount.type !== "bankr") {
+    return { success: false, error: "Pending request is no longer valid" };
+  }
+  const signerParam = extractSignerParam(
+    pending.signature.method,
+    pending.signature.params,
+  );
+  if (
+    typeof signerParam === "string" &&
+    signerParam.toLowerCase() !== pinnedAccount.address.toLowerCase()
+  ) {
+    return {
+      success: false,
+      error: "Signer address does not match active account",
+    };
   }
 
   // Try to use cached API key first
@@ -1454,6 +1716,10 @@ export interface SwapTxEntry {
 export async function handleExecuteSwapDirect(
   transactions: SwapTxEntry[],
   chainName: string,
+  // Per-call gas overrides from the swap confirmation's tier picker. One
+  // entry per `transactions[i]`. Optional for back-compat — Bankr accounts
+  // and the legacy code paths still work without this.
+  gasEstimates?: { gasLimit: string; maxFeePerGas: string; maxPriorityFeePerGas: string }[],
 ): Promise<{ success: boolean; txIds?: string[]; error?: string }> {
   if (transactions.length === 0) {
     return { success: false, error: "No transactions provided" };
@@ -1473,8 +1739,13 @@ export async function handleExecuteSwapDirect(
     return { success: false, error: "No account found" };
   }
 
+  // SECURITY: impersonator accounts are view-only — block all swap execution.
+  if (account.type === "impersonator") {
+    return { success: false, error: "View-only accounts cannot execute swaps" };
+  }
+
   // --- Bankr API accounts ---
-  if (account.type === "impersonator" || account.type === "bankr") {
+  if (account.type === "bankr") {
     if (!BANKR_SUPPORTED_CHAIN_IDS.has(chainId)) {
       return { success: false, error: `Chain not supported for Bankr API accounts` };
     }
@@ -1596,10 +1867,27 @@ export async function handleExecuteSwapDirect(
     prepared.push({ txId, pending, nonce, functionName: entry.functionName, swapMeta: entry.swapMeta });
   }
 
-  // Phase 2 (concurrent): broadcast all TXs with pre-assigned nonces
-  for (const item of prepared) {
+  // Phase 2 (concurrent): broadcast all TXs with pre-assigned nonces.
+  // gasEstimates[i] aligns with prepared[i] because we built `prepared`
+  // by iterating `transactions` in order — same indexing the UI used.
+  for (let i = 0; i < prepared.length; i++) {
+    const item = prepared[i];
+    const gasOverride = gasEstimates?.[i];
     broadcastSwapTxLocal(
-      item.txId, item.pending, account, privateKey, item.nonce, rpcUrl, customChainMeta,
+      item.txId,
+      item.pending,
+      account,
+      privateKey,
+      item.nonce,
+      rpcUrl,
+      customChainMeta,
+      gasOverride
+        ? {
+            gasLimit: gasOverride.gasLimit,
+            maxFeePerGas: gasOverride.maxFeePerGas,
+            maxPriorityFeePerGas: gasOverride.maxPriorityFeePerGas,
+          }
+        : undefined,
     );
   }
 
@@ -1687,12 +1975,25 @@ async function broadcastSwapTxLocal(
   nonce: number,
   rpcUrl?: string,
   customChainMeta?: { name: string; nativeCurrency?: { name: string; symbol: string; decimals: number }; explorer?: string },
+  gasOverrides?: GasOverrides,
 ): Promise<void> {
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
 
   try {
-    const txForSigning = { ...pending.tx, nonce };
+    // Apply tier-picker / Custom-tier overrides if the UI passed them in.
+    // Clears legacy gasPrice the same way processLocalTransactionInBackground
+    // does, to avoid an EIP-1559 / legacy field conflict at signing time.
+    const txForSigning = gasOverrides
+      ? {
+          ...pending.tx,
+          nonce,
+          gas: gasOverrides.gasLimit,
+          maxFeePerGas: gasOverrides.maxFeePerGas,
+          maxPriorityFeePerGas: gasOverrides.maxPriorityFeePerGas,
+          gasPrice: undefined,
+        }
+      : { ...pending.tx, nonce };
 
     const result = await signAndBroadcastTransaction(
       privateKey,
@@ -1702,8 +2003,22 @@ async function broadcastSwapTxLocal(
     );
     const txHash = result.txHash;
 
-    await updateTxInHistory(txId, { status: "pending", txHash });
-    if (txHash) startReceiptPolling(txId, txHash, pending.tx.chainId);
+    if (txHash) {
+      if (result.receipt) {
+        // Sync-send path (e.g., MegaETH): receipt arrived with the broadcast,
+        // so skip the intermediate "pending" write and jump straight to the
+        // final state. Otherwise the UI would briefly flash pending → success.
+        await applyReceiptToHistory(txId, txHash, pending.tx.chainId, result.receipt, {
+          rpcUrl,
+          signedGasLimit: result.signedGasLimit,
+        });
+      } else {
+        await updateTxInHistory(txId, { status: "pending", txHash });
+        startReceiptPolling(txId, txHash, pending.tx.chainId);
+      }
+    } else {
+      await updateTxInHistory(txId, { status: "pending", txHash });
+    }
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
@@ -1735,7 +2050,14 @@ export async function handleExecuteSwapBatch(
 
   // Resolve account
   const account = await getActiveAccount();
-  if (!account || (account.type !== "impersonator" && account.type !== "bankr")) {
+  if (!account) {
+    return { success: false, error: "No account found" };
+  }
+  // SECURITY: impersonator accounts are view-only — block all swap execution.
+  if (account.type === "impersonator") {
+    return { success: false, error: "View-only accounts cannot execute swaps" };
+  }
+  if (account.type !== "bankr") {
     return { success: false, error: "Batch swap requires a Bankr account" };
   }
 

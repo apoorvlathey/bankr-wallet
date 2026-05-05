@@ -9,14 +9,41 @@ import {
   Input,
   IconButton,
   Tooltip,
+  Icon,
 } from "@chakra-ui/react";
-import { ChevronDownIcon, ChevronUpIcon, WarningIcon, ExternalLinkIcon } from "@chakra-ui/icons";
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  WarningIcon,
+  ExternalLinkIcon,
+} from "@chakra-ui/icons";
 import { GasEstimate } from "@/chrome/gasEstimation";
-import { formatEth } from "@/lib/gasFormatUtils";
+import { formatEth, formatGwei } from "@/lib/gasFormatUtils";
 import { getChainConfig } from "@/constants/chainConfig";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
 import { useTheme } from "@/theme";
+import GasTierPicker from "./GasTierPicker";
+import {
+  DEFAULT_TIER,
+  getStoredGasTier,
+  setStoredGasTier,
+  type GasTierSelection,
+} from "@/lib/gasTiers";
+
+// Inline icons for the Auto / Edited badge — kept in sync with
+// GasEstimateDisplay.tsx so single-tx and batch UX read identically.
+const ChainLinkIcon = (props: any) => (
+  <Icon viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" />
+  </Icon>
+);
+
+const PencilIcon = (props: any) => (
+  <Icon viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+  </Icon>
+);
 
 interface TxGasInput {
   tx: { from: string; to: string; data: string; value: string; chainId: number };
@@ -40,8 +67,66 @@ interface MultiTxGasEstimateDisplayProps {
    *   on L1 at broadcast time)
    */
   onGasEstimates?: (estimates: GasEstimate[]) => void;
+  /**
+   * Reports whether the current gas params are valid for broadcast — bubbled
+   * to the parent confirm UI so it can disable the Confirm button while the
+   * Custom-tier editor is in an inconsistent state.
+   */
+  onValidityChange?: (valid: boolean) => void;
   /** When true, estimate gas for L1 deposit transactions (force inclusion) */
   forceInclusion?: boolean;
+}
+
+/**
+ * Replace the space AFTER short prepositions with a non-breaking space so
+ * orphan words like "for" / "to" / "on" stay glued to the noun that follows
+ * when the label wraps. CSS can break anywhere whitespace allows — this
+ * makes "Approve USDC for swap" wrap to "Approve USDC / for swap" instead
+ * of the more awkward "Approve USDC for / swap".
+ *
+ * Conservative list: only short, semantically-light prepositions where
+ * splitting them off the following word reads as bad typography. We don't
+ * touch verbs/longer particles since their orphaning is rarely awkward.
+ */
+function preserveOrphans(label: string): string {
+  return label.replace(
+    /\s(for|to|on|at|in|with|of|by|from|into|via)\s/gi,
+    " $1 ",
+  );
+}
+
+/** Convert wei string to gwei display string */
+function weiToGweiStr(wei: string): string {
+  try {
+    const gwei = Number(BigInt(wei)) / 1e9;
+    if (gwei === 0) return "0";
+    return gwei.toFixed(9).replace(/0+$/, "").replace(/\.$/, "");
+  } catch {
+    return "0";
+  }
+}
+
+/** Convert gwei display string to wei string (returns null if invalid) */
+function gweiStrToWei(gweiStr: string): string | null {
+  const val = Number(gweiStr);
+  if (isNaN(val) || val < 0) return null;
+  try {
+    return BigInt(Math.round(val * 1e9)).toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Same Custom-mode coupling rule as the single-tx editor (see
+ * GasEstimateDisplay.tsx). Kept inline rather than extracted because the
+ * batch and single-tx UIs have meaningfully different surrounding state.
+ */
+function deriveBatchMaxFee(
+  priorityWei: bigint,
+  predictedNextBaseFee: bigint,
+): bigint {
+  return (predictedNextBaseFee * 150n) / 100n + priorityWei;
 }
 
 /** Format USD from wei + price */
@@ -113,6 +198,7 @@ function MultiTxGasEstimateDisplay({
   isNonAtomic,
   onInsufficientBalance,
   onGasEstimates,
+  onValidityChange,
   forceInclusion,
 }: MultiTxGasEstimateDisplayProps) {
   const { tokens } = useTheme();
@@ -140,6 +226,26 @@ function MultiTxGasEstimateDisplay({
   // Whether we've already auto-expanded for a fallback warning (so we don't
   // keep re-expanding if the user manually collapses)
   const [autoExpanded, setAutoExpanded] = useState(false);
+
+  // Tier picker state for non-atomic PK/SP batches. One shared selection
+  // applies to ALL calls in the batch — sequential nonces mean a per-call
+  // tier choice can't actually reorder execution, so a single picker matches
+  // the user's mental model ("the batch is too slow → bump the whole thing").
+  const [tier, setTier] = useState<GasTierSelection>(DEFAULT_TIER);
+  // Shared Custom-tier fee inputs (gwei strings).
+  const [editPriority, setEditPriority] = useState("");
+  const [editMaxFee, setEditMaxFee] = useState("");
+  // Sticky-edit flag: stops auto-deriving Max Fee once the user touches it.
+  const [maxFeeManual, setMaxFeeManual] = useState(false);
+
+  // Rehydrate the user's last preset choice. Re-runs on mount only.
+  useEffect(() => {
+    let cancelled = false;
+    getStoredGasTier().then((stored) => {
+      if (!cancelled) setTier(stored);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const isEditable =
     (accountType === "privateKey" || accountType === "seedPhrase") &&
@@ -278,6 +384,19 @@ function MultiTxGasEstimateDisplay({
           setEstimates(results);
           setPassthroughEstimates(results);
           setEditedGasLimits(results.map((e) => e.gasLimit));
+          // Seed Custom-tier shared inputs from the first call's standard
+          // tier (or its raw fees when tiers are absent). All calls share
+          // the same fee market, so it's correct to seed from index 0.
+          const seed = results[0];
+          if (seed) {
+            const seedFees = seed.tiers?.standard ?? {
+              maxFeePerGas: seed.maxFeePerGas,
+              maxPriorityFeePerGas: seed.maxPriorityFeePerGas,
+            };
+            setEditPriority(weiToGweiStr(seedFees.maxPriorityFeePerGas));
+            setEditMaxFee(weiToGweiStr(seedFees.maxFeePerGas));
+            setMaxFeeManual(false);
+          }
           setLoading(false);
 
           if (onInsufficientBalance) {
@@ -335,7 +454,60 @@ function MultiTxGasEstimateDisplay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estimateKey]);
 
-  // Propagate (possibly edited) gas estimates to the parent.
+  // Picker is shown only for non-atomic PK/SP batches with tier data and
+  // not in force-inclusion mode (force inclusion uses L1 fees recomputed at
+  // broadcast). Atomic Bankr batches keep their server-managed gas UX.
+  const showPicker =
+    isEditable &&
+    !forceInclusion &&
+    !!passthroughEstimates &&
+    !!passthroughEstimates[0]?.tiers;
+  const showCustomEditor = showPicker && tier === "custom";
+
+  // The fees that should be applied to every call in the batch. Derived from
+  // the tier selection plus the (possibly edited) Custom inputs.
+  const appliedFees = useMemo<{
+    maxFeePerGas: string;
+    maxPriorityFeePerGas: string;
+  } | null>(() => {
+    if (!passthroughEstimates || passthroughEstimates.length === 0) return null;
+    const seed = passthroughEstimates[0];
+    if (tier !== "custom" && seed.tiers) {
+      const t = seed.tiers[tier];
+      return {
+        maxFeePerGas: t.maxFeePerGas,
+        maxPriorityFeePerGas: t.maxPriorityFeePerGas,
+      };
+    }
+    if (tier === "custom") {
+      const maxFeeWei = gweiStrToWei(editMaxFee);
+      const priorityWei = gweiStrToWei(editPriority);
+      if (!maxFeeWei || !priorityWei) return null;
+      return { maxFeePerGas: maxFeeWei, maxPriorityFeePerGas: priorityWei };
+    }
+    // tier !== custom but no tiers data — fall back to whatever the estimate
+    // already had (likely standard tier from estimateFees default).
+    return {
+      maxFeePerGas: seed.maxFeePerGas,
+      maxPriorityFeePerGas: seed.maxPriorityFeePerGas,
+    };
+  }, [tier, passthroughEstimates, editMaxFee, editPriority]);
+
+  // Custom-tier validation — same rule as single-tx editor.
+  const isCustomFeeValid = useMemo(() => {
+    if (tier !== "custom") return true;
+    if (!passthroughEstimates || passthroughEstimates.length === 0) return false;
+    const seed = passthroughEstimates[0];
+    const maxFeeWei = gweiStrToWei(editMaxFee);
+    const priorityWei = gweiStrToWei(editPriority);
+    if (!maxFeeWei || !priorityWei) return false;
+    if (BigInt(maxFeeWei) <= 0n) return false;
+    const baseFeeWei = BigInt(seed.baseFee || "0");
+    return BigInt(maxFeeWei) >= baseFeeWei + BigInt(priorityWei);
+  }, [tier, passthroughEstimates, editMaxFee, editPriority]);
+
+  // Propagate (possibly edited) gas estimates to the parent. Includes the
+  // tier-selected fees so all calls get the same Priority / Max Fee.
   // onGasEstimates is intentionally NOT in deps — parent passes a useState
   // setter (stable identity), so re-firing on identity changes would only
   // create extra renders without changing behavior.
@@ -345,14 +517,32 @@ function MultiTxGasEstimateDisplay({
 
     const allValid = editedGasLimits.every(isValidGasLimit);
     if (!allValid) return;
+    if (!isCustomFeeValid) return;
 
     const merged = passthroughEstimates.map((est, i) => ({
       ...est,
       gasLimit: editedGasLimits[i] || est.gasLimit,
+      // Apply tier-selected fees uniformly. For force-inclusion the
+      // background recomputes fees on L1 anyway, so this is harmless.
+      ...(appliedFees && {
+        maxFeePerGas: appliedFees.maxFeePerGas,
+        maxPriorityFeePerGas: appliedFees.maxPriorityFeePerGas,
+      }),
     }));
     onGasEstimates(merged);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [passthroughEstimates, editedGasLimits]);
+  }, [passthroughEstimates, editedGasLimits, appliedFees, isCustomFeeValid]);
+
+  // Bubble validity to the parent confirm button.
+  useEffect(() => {
+    if (!onValidityChange) return;
+    if (!isEditable) {
+      onValidityChange(true);
+      return;
+    }
+    const allLimitsValid = editedGasLimits.every(isValidGasLimit);
+    onValidityChange(allLimitsValid && isCustomFeeValid);
+  }, [editedGasLimits, isCustomFeeValid, isEditable, onValidityChange]);
 
   const handleEditGasLimit = useCallback((index: number, val: string) => {
     setEditedGasLimits((prev) => {
@@ -363,17 +553,94 @@ function MultiTxGasEstimateDisplay({
     setHasEdited(true);
   }, []);
 
+  const handleTierChange = useCallback(
+    (next: GasTierSelection) => {
+      setTier(next);
+      setStoredGasTier(next);
+      if (
+        next !== "custom" &&
+        passthroughEstimates &&
+        passthroughEstimates[0]?.tiers
+      ) {
+        const t = passthroughEstimates[0].tiers[next];
+        setEditPriority(weiToGweiStr(t.maxPriorityFeePerGas));
+        setEditMaxFee(weiToGweiStr(t.maxFeePerGas));
+        setMaxFeeManual(false);
+      }
+    },
+    [passthroughEstimates],
+  );
+
+  const handlePriorityEdit = useCallback(
+    (val: string) => {
+      setEditPriority(val);
+      const seed = passthroughEstimates?.[0];
+      if (!maxFeeManual && seed?.predictedNextBaseFee) {
+        const priorityWei = gweiStrToWei(val);
+        if (priorityWei !== null) {
+          const derived = deriveBatchMaxFee(
+            BigInt(priorityWei),
+            BigInt(seed.predictedNextBaseFee),
+          );
+          setEditMaxFee(weiToGweiStr(derived.toString()));
+        }
+      }
+    },
+    [maxFeeManual, passthroughEstimates],
+  );
+
+  const handleMaxFeeEdit = useCallback((val: string) => {
+    setEditMaxFee(val);
+    setMaxFeeManual(true);
+  }, []);
+
+  const handleRelinkMaxFee = useCallback(() => {
+    const seed = passthroughEstimates?.[0];
+    if (!seed?.predictedNextBaseFee) return;
+    const priorityWei = gweiStrToWei(editPriority);
+    if (priorityWei === null) return;
+    const derived = deriveBatchMaxFee(
+      BigInt(priorityWei),
+      BigInt(seed.predictedNextBaseFee),
+    );
+    setEditMaxFee(weiToGweiStr(derived.toString()));
+    setMaxFeeManual(false);
+  }, [editPriority, passthroughEstimates]);
+
   // Compute totals
   const validEstimates = estimates.filter((e): e is GasEstimate => e !== null);
-  const totalCostWei = validEstimates.reduce(
-    (sum, e) => sum + BigInt(e.estimatedCostWei || "0"),
-    0n,
-  ).toString();
   const nativePriceUsd = validEstimates[0]?.nativePriceUsd ?? null;
   const sym = validEstimates[0]?.nativeCurrencySymbol || "ETH";
   const anyFailed = validEstimates.some((e) => e.estimationFailed);
   const anyInsufficient = validEstimates.some((e) => e.insufficientBalance);
   const anyEditInvalid = hasEdited && editedGasLimits.some((g) => !isValidGasLimit(g));
+
+  // Per-call display cost. Uses the applied tier's maxFeePerGas × the
+  // (possibly edited) gas limit so the breakdown matches the picker choice.
+  // Falls back to the original estimate's cost when applied fees aren't ready
+  // (e.g., still loading or atomic batch with no tier picker).
+  const perCallDisplayCostWei = useMemo<string[]>(() => {
+    return toEstimate.map((_, i) => {
+      const est = estimates[i];
+      if (!est) return "0";
+      const editedLimit = editedGasLimits[i];
+      if (appliedFees && editedLimit && isValidGasLimit(editedLimit)) {
+        try {
+          return (
+            BigInt(editedLimit) * BigInt(appliedFees.maxFeePerGas)
+          ).toString();
+        } catch {
+          // Fall through to estimate's cost.
+        }
+      }
+      return est.estimatedCostWei || "0";
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estimates, editedGasLimits, appliedFees]);
+
+  const totalCostWei = perCallDisplayCostWei
+    .reduce((sum, w) => sum + BigInt(w || "0"), 0n)
+    .toString();
 
   // Detect which calls used the hardcoded fallback instead of a real estimate.
   // Read from passthroughEstimates (the L2 gas source — for force inclusion
@@ -569,21 +836,194 @@ function MultiTxGasEstimateDisplay({
           <VStack align="stretch" spacing={1.5} px={3} pb={3} pt={1}>
             <Box h="1px" bg="border.subtle" />
 
+            {/* Tier picker (non-atomic PK/SP only). Lives at the top of the
+                expanded section so the user picks once and the per-call rows
+                below all reflect the chosen fees. */}
+            {showPicker && (
+              <GasTierPicker
+                tiers={passthroughEstimates![0].tiers}
+                gasLimit={(() => {
+                  // Sum of (possibly edited) per-call gas limits — drives the
+                  // per-tier total cost preview in the picker buttons.
+                  try {
+                    return editedGasLimits.reduce(
+                      (sum, g) =>
+                        sum + (isValidGasLimit(g) ? BigInt(g) : 0n),
+                      0n,
+                    );
+                  } catch {
+                    return null;
+                  }
+                })()}
+                nativePriceUsd={nativePriceUsd}
+                nativeCurrencySymbol={sym}
+                selected={tier}
+                onChange={handleTierChange}
+              />
+            )}
+
+            {/* Custom-tier shared fee editor — one Priority + one Max Fee
+                applied to every call in the batch (sequential nonces mean
+                per-call differentiation can't actually reorder execution). */}
+            {showCustomEditor && passthroughEstimates && passthroughEstimates[0] && (
+              <VStack align="stretch" spacing={1.5}>
+                <HStack justify="space-between" w="full">
+                  <Text fontSize="xs" color="text.tertiary" fontWeight="600">
+                    Max Priority Fee
+                  </Text>
+                  <HStack spacing={1}>
+                    <Input
+                      size="xs"
+                      value={editPriority}
+                      onChange={(e) => handlePriorityEdit(e.target.value)}
+                      w="100px"
+                      textAlign="right"
+                      fontFamily="mono"
+                      fontWeight="700"
+                      fontSize="xs"
+                      isInvalid={gweiStrToWei(editPriority) === null}
+                      px={2}
+                      h="24px"
+                    />
+                    <Text fontSize="xs" color="text.tertiary" fontWeight="600" minW="35px">
+                      Gwei
+                    </Text>
+                  </HStack>
+                </HStack>
+                <HStack justify="space-between" w="full">
+                  <HStack spacing={1.5}>
+                    <Text fontSize="xs" color="text.tertiary" fontWeight="600">
+                      Max Fee
+                    </Text>
+                    {maxFeeManual ? (
+                      <Tooltip
+                        label="You edited Max Fee. Click to auto-link it back to Priority Fee."
+                        fontSize="2xs"
+                        hasArrow
+                        openDelay={300}
+                      >
+                        <HStack
+                          as="button"
+                          type="button"
+                          onClick={handleRelinkMaxFee}
+                          spacing={1}
+                          px={1.5}
+                          py={0.5}
+                          borderRadius="md"
+                          bg="accent.highlight"
+                          cursor="pointer"
+                          _hover={{ filter: "brightness(0.95)" }}
+                          _focus={{ outline: "none", boxShadow: "none" }}
+                          transition="filter 100ms ease-out"
+                        >
+                          <PencilIcon boxSize="9px" color="accentFg.highlight" />
+                          <Text
+                            fontSize="2xs"
+                            fontWeight="700"
+                            textTransform="uppercase"
+                            color="accentFg.highlight"
+                            letterSpacing="wide"
+                          >
+                            Edited
+                          </Text>
+                        </HStack>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip
+                        label="Max Fee follows your Priority Fee changes."
+                        fontSize="2xs"
+                        hasArrow
+                        openDelay={300}
+                      >
+                        <HStack spacing={1} color="text.tertiary">
+                          <ChainLinkIcon boxSize="9px" />
+                          <Text
+                            fontSize="2xs"
+                            fontWeight="700"
+                            textTransform="uppercase"
+                            letterSpacing="wide"
+                          >
+                            Auto
+                          </Text>
+                        </HStack>
+                      </Tooltip>
+                    )}
+                  </HStack>
+                  <HStack spacing={1}>
+                    <Input
+                      size="xs"
+                      value={editMaxFee}
+                      onChange={(e) => handleMaxFeeEdit(e.target.value)}
+                      w="100px"
+                      textAlign="right"
+                      fontFamily="mono"
+                      fontWeight="700"
+                      fontSize="xs"
+                      isInvalid={!isCustomFeeValid}
+                      px={2}
+                      h="24px"
+                    />
+                    <Text fontSize="xs" color="text.tertiary" fontWeight="600" minW="35px">
+                      Gwei
+                    </Text>
+                  </HStack>
+                </HStack>
+                <HStack justify="space-between" w="full">
+                  <Text fontSize="xs" color="text.tertiary" fontWeight="600">
+                    Base Fee
+                  </Text>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="700"
+                    color="text.primary"
+                    fontFamily="mono"
+                    textAlign="right"
+                  >
+                    {formatGwei(passthroughEstimates[0].baseFee || "0")}
+                  </Text>
+                </HStack>
+                {!isCustomFeeValid && (
+                  <Text fontSize="2xs" color="status.error.fg" fontWeight="700">
+                    Max Fee must be at least Base Fee + Priority Fee
+                  </Text>
+                )}
+              </VStack>
+            )}
+
+            {showPicker && <Box h="1px" bg="border.subtle" mt={0.5} />}
+
             {/* Per-transaction cost breakdown */}
             {toEstimate.map((item, i) => {
               const est = estimates[i];
               if (!est) return null;
 
-              const costUsd = formatUsd(est.estimatedCostWei, est.nativePriceUsd);
+              const callCost = perCallDisplayCostWei[i] || est.estimatedCostWei;
+              const costUsd = formatUsd(callCost, est.nativePriceUsd);
 
               return (
-                <HStack key={i} justify="space-between" w="full">
-                  <Text fontSize="xs" color="text.tertiary" fontWeight="600" noOfLines={1} maxW="55%">
-                    {item.label}
+                // align="flex-start" so a wrapped label keeps the cost
+                // anchored at the top right rather than visually drifting
+                // down to the second line of the label.
+                <HStack
+                  key={i}
+                  justify="space-between"
+                  w="full"
+                  align="flex-start"
+                  spacing={2}
+                >
+                  <Text
+                    fontSize="xs"
+                    color="text.tertiary"
+                    fontWeight="600"
+                    maxW="55%"
+                    wordBreak="break-word"
+                    lineHeight="1.35"
+                  >
+                    {preserveOrphans(item.label)}
                   </Text>
-                  <HStack spacing={1}>
+                  <HStack spacing={1} flexShrink={0}>
                     <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono" textAlign="right">
-                      {formatEth(est.estimatedCostWei, sym)}
+                      {formatEth(callCost, sym)}
                     </Text>
                     {costUsd && (
                       <Text fontSize="xs" color="text.tertiary" fontWeight="600">
@@ -634,18 +1074,28 @@ function MultiTxGasEstimateDisplay({
                     !!targetAddr &&
                     targetAddr !== "0x0000000000000000000000000000000000000000";
                   return (
-                    <HStack key={`edit-${i}`} justify="space-between" w="full" spacing={1}>
-                      <HStack spacing={1} maxW="55%" flex="1" minW={0}>
+                    // align="flex-start" + wrapping label so multi-line
+                    // function names ("Approve USDC for Permit2..." etc.)
+                    // stay readable instead of getting cut to "Approve...".
+                    <HStack
+                      key={`edit-${i}`}
+                      justify="space-between"
+                      w="full"
+                      spacing={1}
+                      align="flex-start"
+                    >
+                      <HStack spacing={1} maxW="55%" flex="1" minW={0} align="flex-start">
                         {isRowFallback && (
-                          <WarningIcon color="accent.highlight" boxSize={2.5} flexShrink={0} />
+                          <WarningIcon color="accent.highlight" boxSize={2.5} flexShrink={0} mt={1} />
                         )}
                         <Text
                           fontSize="xs"
                           color={isRowFallback ? "text.primary" : "text.tertiary"}
                           fontWeight={isRowFallback ? "800" : "600"}
-                          noOfLines={1}
+                          wordBreak="break-word"
+                          lineHeight="1.35"
                         >
-                          {item.label}
+                          {preserveOrphans(item.label)}
                         </Text>
                         {canLinkToExplorer && (
                           <Tooltip

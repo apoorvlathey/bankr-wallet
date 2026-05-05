@@ -13,6 +13,34 @@ import {
 import { ChevronDownIcon } from "@chakra-ui/icons";
 import type { TokenListEntry } from "@/chrome/swapApi";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
+import { getChainConfig } from "@/constants/chainConfig";
+import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import { WALLETCHAN_ICON_URL } from "@/constants/externalUrls";
+import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
+
+/** Canonical WCHAN entry on Base. Injected into the popular-tokens list so
+ *  WCHAN reliably appears as a quick-select even if the swap API's token list
+ *  doesn't include it. Address mirrors KNOWN_TOKEN_LOGOS in txSimulation.ts. */
+const WCHAN_BASE_ENTRY: TokenListEntry = {
+  address: "0xBa5ED0000e1CA9136a695f0a848012A16008B032",
+  name: "WalletChan",
+  symbol: "WCHAN",
+  decimals: 18,
+  logoURI: WALLETCHAN_ICON_URL,
+};
+
+/** Canonical native-token icon. ETH-based chains share one diamond logo;
+ *  for non-ETH natives (BNB, POL) the chain icon doubles as the token icon. */
+function nativeLogoForChain(chainId: number, nativeSymbol: string): string {
+  if (nativeSymbol.toUpperCase() === "ETH") return "/chainIcons/ethereum.svg";
+  return getChainConfig(chainId)?.icon || "";
+}
+
+function getNativeCurrencyForChain(
+  chainId: number,
+): { name: string; symbol: string; decimals: number } | undefined {
+  return CHAIN_REGISTRY.find((c) => c.chainId === chainId)?.nativeCurrency;
+}
 
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
@@ -20,7 +48,7 @@ const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const POPULAR_PER_CHAIN: Record<number, string[]> = {
   1: ["ETH", "USDC", "USDT", "WBTC", "WETH"],
   42161: ["ETH", "USDC", "USDT", "WETH"],
-  8453: ["WCHAN", "ETH", "USDC", "USDT", "WBTC"],
+  8453: ["ETH", "WCHAN", "USDC", "USDT", "WBTC"],
   56: ["BNB", "USDC", "USDT", "WBTC", "WETH"],
   137: ["POL", "USDC", "WETH"],
   130: ["ETH", "USDC", "WBTC", "WETH"],
@@ -181,7 +209,7 @@ export default function BuyTokenSelector({
     const symbols = POPULAR_PER_CHAIN[chainId];
     if (!symbols) return [];
 
-    // Build lookup maps: symbol → entry (first match wins)
+    // Build lookup maps: symbol → entry (first match wins).
     const bySymbol = new Map<string, TokenListEntry>();
     for (const h of holdings) {
       const sym = h.symbol.toUpperCase();
@@ -190,6 +218,37 @@ export default function BuyTokenSelector({
     for (const t of tokenList) {
       const sym = t.symbol.toUpperCase();
       if (!bySymbol.has(sym)) bySymbol.set(sym, t);
+    }
+
+    // Native token: ensure the symbol exists (token list is ERC-20-only) and
+    // pin its logo to our canonical icon — portfolio-API logos for native ETH
+    // can come back wrong/missing on L2s like Base.
+    const native = getNativeCurrencyForChain(chainId);
+    if (native) {
+      const nativeSym = native.symbol.toUpperCase();
+      const canonicalLogo = nativeLogoForChain(chainId, native.symbol);
+      const existing = bySymbol.get(nativeSym);
+      bySymbol.set(nativeSym, {
+        address: existing?.address ?? NATIVE_TOKEN_ADDRESS,
+        name: existing?.name ?? native.name,
+        symbol: existing?.symbol ?? native.symbol,
+        decimals: existing?.decimals ?? native.decimals,
+        logoURI: canonicalLogo,
+      });
+    }
+
+    // WCHAN on Base: ensure our token always shows in the popular chips
+    // regardless of whether the swap API's token list includes it. Pin the
+    // logo to our canonical asset.
+    if (chainId === 8453) {
+      const existing = bySymbol.get("WCHAN");
+      bySymbol.set("WCHAN", {
+        address: existing?.address ?? WCHAN_BASE_ENTRY.address,
+        name: existing?.name ?? WCHAN_BASE_ENTRY.name,
+        symbol: existing?.symbol ?? WCHAN_BASE_ENTRY.symbol,
+        decimals: existing?.decimals ?? WCHAN_BASE_ENTRY.decimals,
+        logoURI: WCHAN_BASE_ENTRY.logoURI,
+      });
     }
 
     const result: TokenListEntry[] = [];
@@ -231,9 +290,6 @@ export default function BuyTokenSelector({
     }
   }, [search]);
 
-  const fallbackIcon =
-    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect fill='%23ccc' width='20' height='20'/%3E%3C/svg%3E";
-
   const isSelectedAddr = (addr: string) =>
     selectedToken?.address.toLowerCase() === addr.toLowerCase();
 
@@ -254,14 +310,26 @@ export default function BuyTokenSelector({
         onClick={() => setIsOpen(!isOpen)}
       >
         <HStack spacing={2}>
-          {selectedToken?.logoURI && (
-            <Image
-              src={selectedToken.logoURI}
-              boxSize="20px"
-              borderRadius="full"
-              fallbackSrc={fallbackIcon}
-            />
-          )}
+          {selectedToken &&
+            (selectedToken.logoURI ? (
+              <Image
+                src={selectedToken.logoURI}
+                alt={selectedToken.symbol}
+                boxSize="20px"
+                borderRadius="full"
+                fallback={
+                  <TokenSymbolFallback
+                    symbol={selectedToken.symbol}
+                    size="20px"
+                  />
+                }
+              />
+            ) : (
+              <TokenSymbolFallback
+                symbol={selectedToken.symbol}
+                size="20px"
+              />
+            ))}
           <Text fontWeight="700" fontSize="sm" textTransform="uppercase">
             {selectedToken?.symbol || "Select"}
           </Text>
@@ -336,12 +404,22 @@ export default function BuyTokenSelector({
                       _hover={{ borderColor: "accent.secondary" }}
                       onClick={() => handleSelect(t)}
                     >
-                      <Image
-                        src={t.logoURI}
-                        boxSize="16px"
-                        borderRadius="full"
-                        fallbackSrc={fallbackIcon}
-                      />
+                      {t.logoURI ? (
+                        <Image
+                          src={t.logoURI}
+                          alt={t.symbol}
+                          boxSize="16px"
+                          borderRadius="full"
+                          fallback={
+                            <TokenSymbolFallback
+                              symbol={t.symbol}
+                              size="16px"
+                            />
+                          }
+                        />
+                      ) : (
+                        <TokenSymbolFallback symbol={t.symbol} size="16px" />
+                      )}
                       <Text
                         fontWeight="700"
                         fontSize="xs"
@@ -397,12 +475,22 @@ export default function BuyTokenSelector({
                       onClick={() => handleHoldingSelect(h)}
                       spacing={2}
                     >
-                      <Image
-                        src={h.logoUrl}
-                        boxSize="20px"
-                        borderRadius="full"
-                        fallbackSrc={fallbackIcon}
-                      />
+                      {h.logoUrl ? (
+                        <Image
+                          src={h.logoUrl}
+                          alt={h.symbol}
+                          boxSize="20px"
+                          borderRadius="full"
+                          fallback={
+                            <TokenSymbolFallback
+                              symbol={h.symbol}
+                              size="20px"
+                            />
+                          }
+                        />
+                      ) : (
+                        <TokenSymbolFallback symbol={h.symbol} size="20px" />
+                      )}
                       <Box flex={1} minW={0}>
                         <Text
                           fontWeight="700"
@@ -472,12 +560,25 @@ export default function BuyTokenSelector({
                   onClick={() => handleSelect(token)}
                   spacing={2}
                 >
-                  <Image
-                    src={token.logoURI}
-                    boxSize="20px"
-                    borderRadius="full"
-                    fallbackSrc={fallbackIcon}
-                  />
+                  {token.logoURI ? (
+                    <Image
+                      src={token.logoURI}
+                      alt={token.symbol}
+                      boxSize="20px"
+                      borderRadius="full"
+                      fallback={
+                        <TokenSymbolFallback
+                          symbol={token.symbol}
+                          size="20px"
+                        />
+                      }
+                    />
+                  ) : (
+                    <TokenSymbolFallback
+                      symbol={token.symbol}
+                      size="20px"
+                    />
+                  )}
                   <Box flex={1} minW={0}>
                     <Text
                       fontWeight="700"
@@ -527,7 +628,7 @@ export default function BuyTokenSelector({
                   cursor="pointer"
                   bg="accent.highlight"
                   color="accentFg.highlight"
-                  _hover={{ filter: "brightness(0.92)" }}
+                  _hover={{ filter: "brightness(0.85)" }}
                   onClick={() => {
                     if (onConfirmPending) onConfirmPending(pendingToken);
                     setIsOpen(false);
@@ -535,21 +636,34 @@ export default function BuyTokenSelector({
                   }}
                   spacing={2}
                 >
-                  <Image
-                    src={pendingToken.logoURI}
-                    boxSize="20px"
-                    borderRadius="full"
-                    fallbackSrc={fallbackIcon}
-                  />
+                  {pendingToken.logoURI ? (
+                    <Image
+                      src={pendingToken.logoURI}
+                      alt={pendingToken.symbol}
+                      boxSize="20px"
+                      borderRadius="full"
+                      fallback={
+                        <TokenSymbolFallback
+                          symbol={pendingToken.symbol}
+                          size="20px"
+                        />
+                      }
+                    />
+                  ) : (
+                    <TokenSymbolFallback
+                      symbol={pendingToken.symbol}
+                      size="20px"
+                    />
+                  )}
                   <Box flex={1} minW={0}>
                     <Text fontWeight="700" fontSize="sm" textTransform="uppercase" isTruncated lineHeight="short">
                       {pendingToken.symbol}
                     </Text>
-                    <Text fontSize="2xs" color="text.tertiary" fontFamily="mono" isTruncated lineHeight="short">
+                    <Text fontSize="2xs" color="accentFg.highlight" opacity={0.75} fontFamily="mono" isTruncated lineHeight="short">
                       {truncateAddress(pendingToken.address)}
                     </Text>
                   </Box>
-                  <Text fontSize="xs" color="text.secondary" fontWeight="700">
+                  <Text fontSize="xs" color="accentFg.highlight" fontWeight="700">
                     Choose
                   </Text>
                 </HStack>

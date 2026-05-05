@@ -56,3 +56,6 @@ marketing/video/out
 
 # ERADICATE2 generated init code
 apps/contracts/wchan_init_code_*.hex
+
+# Semgrep static analysis scan output
+static_analysis_semgrep*/

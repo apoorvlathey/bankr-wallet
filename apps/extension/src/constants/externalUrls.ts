@@ -58,6 +58,16 @@ export const SOURCIFY_BASE = "https://sourcify.dev/server/v2/contract";
 // ---------------------------------------------------------------------------
 export const COINGECKO_PRICE_API =
   "https://api.coingecko.com/api/v3/simple/price";
+export const COINGECKO_TOKEN_PRICE_API =
+  "https://api.coingecko.com/api/v3/simple/token_price";
+/**
+ * GeckoTerminal — DEX-based on-chain token price feed. Used as a fallback
+ * for tokens CoinGecko's `/simple/token_price` endpoint doesn't index
+ * (newer / lower-cap / DEX-only tokens). Endpoint shape:
+ *   /simple/networks/{network}/token_price/{addresses}
+ */
+export const GECKOTERMINAL_TOKEN_PRICE_API =
+  "https://api.geckoterminal.com/api/v2/simple/networks";
 export const COINGECKO_MARKETS_API =
   "https://api.coingecko.com/api/v3/coins/markets";
 export const COINGECKO_SEARCH_API =

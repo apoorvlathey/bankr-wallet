@@ -46,6 +46,7 @@ import {
 } from "@/constants/chainRegistry";
 import { getChainConfig } from "@/constants/chainConfig";
 import { getStoredRpcUrl } from "@/lib/chains";
+import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
 import type { ERC5792Call } from "@/chrome/erc5792Types";
 import type { SwapTxEntry } from "@/chrome/txHandlers";
@@ -191,6 +192,15 @@ function SwapView({
   const [preparedTransactions, setPreparedTransactions] = useState<SwapTxEntry[] | null>(null);
   const [preparedBatchTx, setPreparedBatchTx] = useState<{ to: string; data: string; value: string } | null>(null);
   const [preparedQuote, setPreparedQuote] = useState<SwapQuoteResponse | null>(null);
+  // Per-call gas estimates from the SwapConfirmation tier picker. Bubbled
+  // up from MultiTxGasEstimateDisplay → SwapConfirmation → here, then
+  // forwarded to handleExecuteSwapDirect so the user's tier choice
+  // actually takes effect at signing time. Bankr atomic swaps don't use
+  // this — Bankr API computes gas server-side.
+  const [swapGasEstimates, setSwapGasEstimates] = useState<
+    import("@/chrome/gasEstimation").GasEstimate[] | null
+  >(null);
+  const [swapGasValid, setSwapGasValid] = useState(true);
 
   const quoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenInfoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -294,7 +304,8 @@ function SwapView({
 
         const chainTokens = tokens.filter((t) => t.chainId === chainId);
         setHoldings(chainTokens);
-        // If initialSellToken provided, find the matching token from portfolio
+        // If initialSellToken provided, find the matching token from portfolio.
+        // Otherwise leave the sell token unselected — the user picks one explicitly.
         if (initialSellToken) {
           const match = chainTokens.find(
             (t) => t.contractAddress.toLowerCase() === initialSellToken.contractAddress.toLowerCase(),
@@ -304,12 +315,6 @@ function SwapView({
           } else {
             setSellToken(initialSellToken);
           }
-        } else {
-          const native = chainTokens.find(
-            (t) => t.contractAddress === "native",
-          );
-          if (native) setSellToken(native);
-          else if (chainTokens.length > 0) setSellToken(chainTokens[0]);
         }
       } catch {
         // silently fail
@@ -321,6 +326,144 @@ function SwapView({
       cancelled = true;
     };
   }, [fromAddress, chainId, isSwapSupported]);
+
+  // -----------------------------------------------------------------------
+  // Verify zero balances via direct RPC.
+  //
+  // The portfolio API can return an empty/incomplete catalog (rate-limit, 5xx,
+  // etc.) which leaves the user looking at "Balance: 0" for a token they
+  // actually hold. It can also happen any time the user selects a token from
+  // the token-list dropdown that isn't in their holdings — `entryToPortfolio
+  // Token` defaults balance to "0" because we don't know yet.
+  //
+  // To avoid that footgun, whenever a sellToken has a 0 reported balance we
+  // fall back to a direct on-chain `balanceOf` (or `eth_getBalance` for
+  // native) — same RPC path the custom-token resolver already uses. We
+  // memoize per (chainId, token, owner) so we don't refetch repeatedly when
+  // the user types into the amount field.
+  // -----------------------------------------------------------------------
+  const verifiedZeroBalancesRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!sellToken || !fromAddress) return;
+    if (parseFloat(sellToken.balance) > 0) return;
+
+    const tokenAddr = sellToken.contractAddress;
+    const tokenChainId = sellToken.chainId;
+    const tokenDecimals = sellToken.decimals;
+    const key = `${tokenChainId}:${tokenAddr.toLowerCase()}:${fromAddress.toLowerCase()}`;
+    if (verifiedZeroBalancesRef.current.has(key)) return;
+    verifiedZeroBalancesRef.current.add(key);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const rpcUrl = await getStoredRpcUrl(tokenChainId);
+        if (!rpcUrl || cancelled) return;
+        const { createPublicClient, http, erc20Abi } = await import("viem");
+        const client = createPublicClient({
+          transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }),
+        });
+        const isNative = tokenAddr === "native";
+        const rawBalance = isNative
+          ? await client.getBalance({ address: fromAddress as `0x${string}` })
+          : ((await client.readContract({
+              address: tokenAddr as `0x${string}`,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [fromAddress as `0x${string}`],
+            })) as bigint);
+        if (cancelled || rawBalance === 0n) return;
+
+        const balance = formatUnits(rawBalance, tokenDecimals);
+        const balanceNum = parseFloat(balance);
+        const balanceFormatted =
+          balanceNum > 0 && balanceNum < 0.0001
+            ? "<0.0001"
+            : parseFloat(balanceNum.toPrecision(6)).toString();
+
+        setSellToken((prev) => {
+          // Only patch if user is still on the same token. Avoid clobbering
+          // a more recent selection.
+          if (
+            !prev ||
+            prev.contractAddress.toLowerCase() !== tokenAddr.toLowerCase() ||
+            prev.chainId !== tokenChainId
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            balance,
+            balanceFormatted,
+            valueUsd: balanceNum * prev.priceUsd,
+          };
+        });
+      } catch {
+        // Silent: keep showing 0 if the RPC call fails. The submit-time
+        // balance check at line ~668 will still cap on-chain.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sellToken, fromAddress]);
+
+  // -----------------------------------------------------------------------
+  // USD price fallback for the sell token. The portfolio API is the primary
+  // price source but it can be down (then every token comes back with
+  // priceUsd=0) or it may simply not price an exotic ERC-20. Either way,
+  // resolve the price directly through `fetchTokenPrice` (proxy → CoinGecko
+  // → GeckoTerminal fallback chain) so USD-mode entry stays usable. Native
+  // tokens already have their own resolution path inside
+  // `loadPortfolioTokenCatalog`.
+  //
+  // We deliberately do NOT use a `cancelled` flag here: the on-chain
+  // balance verification effect above also calls `setSellToken`, and any
+  // state update that changes `sellToken` would trigger this effect's
+  // cleanup mid-flight and silently drop the price response (which can
+  // take 1-2s when CoinGecko misses and we fall through to GeckoTerminal).
+  // The `setSellToken` updater below already guards staleness by matching
+  // (chainId, address), so a late response for a token the user has since
+  // switched away from is a no-op. Combined with `resolvedSellPriceRef`,
+  // each (chainId, address) is fetched at most once per mount.
+  // -----------------------------------------------------------------------
+  const resolvedSellPriceRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!sellToken) return;
+    if (sellToken.priceUsd > 0) return;
+    if (sellToken.contractAddress === "native") return;
+    if (!/^0x[a-fA-F0-9]{40}$/.test(sellToken.contractAddress)) return;
+
+    const tokenAddr = sellToken.contractAddress;
+    const tokenChainId = sellToken.chainId;
+    const key = `${tokenChainId}:${tokenAddr.toLowerCase()}`;
+    if (resolvedSellPriceRef.current.has(key)) return;
+    resolvedSellPriceRef.current.add(key);
+
+    chrome.runtime.sendMessage(
+      { type: "fetchTokenPrice", chainId: tokenChainId, address: tokenAddr },
+      (res) => {
+        const priceUsd = Number(res?.priceUsd ?? 0);
+        if (!res?.success || !(priceUsd > 0)) return;
+        setSellToken((prev) => {
+          if (
+            !prev ||
+            prev.contractAddress.toLowerCase() !== tokenAddr.toLowerCase() ||
+            prev.chainId !== tokenChainId
+          ) {
+            return prev;
+          }
+          const balanceNum = parseFloat(prev.balance || "0");
+          return {
+            ...prev,
+            priceUsd,
+            valueUsd: balanceNum > 0 ? balanceNum * priceUsd : 0,
+          };
+        });
+      },
+    );
+  }, [sellToken]);
 
   // -----------------------------------------------------------------------
   // Load token list for current chain
@@ -479,25 +622,49 @@ function SwapView({
   // -----------------------------------------------------------------------
   const handleFlip = () => {
     if (!buyTokenInfo || !buyTokenAddress) return;
-    const addr = buyTokenAddress.trim().toLowerCase();
+    const addr = buyTokenAddress.trim();
+    const addrLower = addr.toLowerCase();
+    const isNative = addrLower === NATIVE_TOKEN_ADDRESS.toLowerCase();
     const buyInHoldings = holdings.find(
       (t) =>
-        t.contractAddress.toLowerCase() === addr ||
-        (addr === NATIVE_TOKEN_ADDRESS.toLowerCase() &&
-          t.contractAddress === "native"),
+        t.contractAddress.toLowerCase() === addrLower ||
+        (isNative && t.contractAddress === "native"),
     );
-    if (!buyInHoldings) return;
+
+    // If the buy token isn't in the user's holdings, build a stub PortfolioToken
+    // from the metadata we already have. SwapView's on-chain balance + price
+    // hydration effects will fill `balance` / `priceUsd` after the flip.
+    const nextSellToken: PortfolioToken =
+      buyInHoldings ?? {
+        symbol: buyTokenInfo.symbol,
+        name: buyTokenInfo.name,
+        contractAddress: isNative ? "native" : addr,
+        chainId,
+        decimals: buyTokenInfo.decimals,
+        balance: "0",
+        balanceFormatted: "0",
+        priceUsd: buyTokenPriceUsd,
+        valueUsd: 0,
+        logoUrl: buyTokenLogoURI,
+      };
 
     const prevSellToken = sellToken;
-    setSellToken(buyInHoldings);
-    setBuyTokenAddress(prevSellToken ? to0xToken(prevSellToken) : "");
+    setSellToken(nextSellToken);
     if (prevSellToken) {
+      // Skip the buyTokenAddress useEffect that would otherwise refetch and
+      // wipe the metadata we already have for prevSellToken.
+      buyInfoSetBySelectRef.current = true;
+      setBuyTokenAddress(to0xToken(prevSellToken));
       setBuyTokenInfo({
         name: prevSellToken.name,
         symbol: prevSellToken.symbol,
         decimals: prevSellToken.decimals,
       });
       setBuyTokenLogoURI(prevSellToken.logoUrl);
+    } else {
+      setBuyTokenAddress("");
+      setBuyTokenInfo(null);
+      setBuyTokenLogoURI(undefined);
     }
     setSellAmount("");
     setSliderValue(0);
@@ -522,6 +689,11 @@ function SwapView({
       }
       const { name, symbol, decimals } = infoResult.data;
 
+      const addrLower = tokenAddress.toLowerCase();
+      const isNative =
+        addrLower === "0x0000000000000000000000000000000000000000" ||
+        addrLower === NATIVE_TOKEN_ADDRESS.toLowerCase();
+
       const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
       const rpcUrl = await getStoredRpcUrl(chainId);
       if (!rpcUrl) {
@@ -529,23 +701,32 @@ function SwapView({
         return;
       }
       const client = createPublicClient({ transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }) });
-      const rawBalance = await client.readContract({
-        address: tokenAddress as `0x${string}`,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [fromAddress as `0x${string}`],
-      });
+      const rawBalance = isNative
+        ? await client.getBalance({ address: fromAddress as `0x${string}` })
+        : await client.readContract({
+            address: tokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [fromAddress as `0x${string}`],
+          });
       const balance = formatUnits(rawBalance, decimals);
       const balanceNum = parseFloat(balance);
 
+      const listMatch = tokenList.find((t) => t.address.toLowerCase() === addrLower);
+      const logoUrl = isNative
+        ? symbol.toUpperCase() === "ETH"
+          ? "/chainIcons/ethereum.svg"
+          : getChainConfig(chainId)?.icon || ""
+        : listMatch?.logoURI || KNOWN_TOKEN_LOGOS[addrLower] || "";
+
       setResolvedSellToken({
-        contractAddress: tokenAddress,
+        contractAddress: isNative ? "native" : tokenAddress,
         name,
         symbol,
         decimals,
         balance,
         balanceFormatted: balanceNum < 0.0001 && balanceNum > 0 ? "<0.0001" : parseFloat(balanceNum.toPrecision(6)).toString(),
-        logoUrl: "",
+        logoUrl,
         valueUsd: 0,
         priceUsd: 0,
         chainId,
@@ -606,7 +787,7 @@ function SwapView({
             name: res.data.name,
             symbol: res.data.symbol,
             decimals: res.data.decimals,
-            logoURI: "",
+            logoURI: KNOWN_TOKEN_LOGOS[address.toLowerCase()] || "",
           });
         }
       },
@@ -906,6 +1087,16 @@ function SwapView({
               type: "executeSwapDirect",
               transactions: preparedTransactions,
               chainName,
+              // Forward the tier-picker selections so each tx gets the
+              // user's chosen Priority / Max Fee. Falls back to viem's
+              // built-in estimate when null.
+              gasEstimates: swapGasEstimates
+                ? swapGasEstimates.map((e) => ({
+                    gasLimit: e.gasLimit,
+                    maxFeePerGas: e.maxFeePerGas,
+                    maxPriorityFeePerGas: e.maxPriorityFeePerGas,
+                  }))
+                : undefined,
             },
             resolve,
           );
@@ -1196,6 +1387,9 @@ function SwapView({
         onConfirm={handleConfirmSwap}
         onCancel={handleCancelConfirmation}
         isSubmitting={isSubmitting}
+        onGasEstimates={setSwapGasEstimates}
+        onValidityChange={setSwapGasValid}
+        isConfirmDisabled={!swapGasValid}
       />
     );
   }
@@ -1418,8 +1612,10 @@ function SwapView({
           <HStack spacing={2}>
             <TokenSelector
               holdings={holdings}
+              tokenList={tokenList}
               selectedToken={sellToken}
               excludeAddress={buyTokenAddress || undefined}
+              chainId={chainId}
               onSelect={(t) => {
                 setSellToken(t);
                 setSellAmount("");

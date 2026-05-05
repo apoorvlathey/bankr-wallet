@@ -12,6 +12,15 @@ export interface PendingTxRequest {
   favicon: string | null;
   chainName: string;
   timestamp: number;
+  // SECURITY: trusted context captured at request arrival. Optional for
+  // backward compat with entries written by older builds.
+  accountId?: string;
+  accountAddress?: string;
+  accountType?: "bankr" | "privateKey" | "seedPhrase";
+  tabId?: number;
+  frameId?: number;
+  senderOrigin?: string;
+  requestChainId?: number;
 }
 
 const STORAGE_KEY = "pendingTxRequests";

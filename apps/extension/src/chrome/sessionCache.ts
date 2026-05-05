@@ -148,11 +148,15 @@ export function setCachedApiKeyDirect(apiKey: string): void {
 
 /**
  * Sets the cached password directly (without updating API key)
- * Used during unlock flows
+ * Used during unlock flows. Pass null to clear.
  */
-export function setCachedPasswordDirect(password: string): void {
+export function setCachedPasswordDirect(password: string | null): void {
   cachedPassword = password;
-  cacheTimestamp = Date.now();
+  if (password) {
+    cacheTimestamp = Date.now();
+  } else {
+    cacheTimestamp = 0;
+  }
 }
 
 /**
@@ -203,9 +207,9 @@ export function getCachedVaultKey(): CryptoKey | null {
 }
 
 /**
- * Sets cached vault key
+ * Sets cached vault key. Pass null to clear.
  */
-export function setCachedVaultKey(key: CryptoKey): void {
+export function setCachedVaultKey(key: CryptoKey | null): void {
   cachedVaultKey = key;
 }
 
@@ -217,10 +221,32 @@ export function getPasswordType(): PasswordType | null {
 }
 
 /**
- * Sets cached password type
+ * Sets cached password type. Pass null to clear.
  */
-export function setCachedPasswordType(type: PasswordType): void {
+export function setCachedPasswordType(type: PasswordType | null): void {
   cachedPasswordType = type;
+}
+
+/**
+ * Returns the currently-cached password type, restoring session from
+ * chrome.storage.session if the cache is empty and auto-lock is "Never".
+ *
+ * SECURITY: Use this instead of getPasswordType() in master-only guards.
+ * After an MV3 service worker restart cachedPasswordType is null, so a raw
+ * `getPasswordType() === "agent"` check evaluates false and bypasses the
+ * guard before later restore logic re-populates the agent type.
+ */
+export async function resolvePasswordType(
+  unlockFn: (password: string) => Promise<{ success: boolean; passwordType?: PasswordType }>
+): Promise<PasswordType | null> {
+  const cached = getPasswordType();
+  if (cached !== null) return cached;
+
+  const timeout = await getAutoLockTimeout();
+  if (timeout !== 0) return null;
+
+  await tryRestoreSession(unlockFn);
+  return getPasswordType();
 }
 
 /**
@@ -437,4 +463,58 @@ export function decrementUIConnections(): void {
       vaultCacheTimestamp = Date.now();
     }
   }
+}
+
+/**
+ * SECURITY: Tear down all in-memory and on-disk auth state. Call this on
+ * lock, on master-password change (after verify), and on agent-password
+ * removal. The popup must re-route to the unlock screen via a separate
+ * broadcast.
+ */
+export async function clearAllAuthState(): Promise<void> {
+  clearCachedApiKey();
+  clearCachedVault();
+  setCachedVaultKey(null);
+  setCachedPasswordDirect(null);
+  setCachedPasswordType(null);
+  setCurrentSessionId(null);
+  await clearSessionStorage();
+}
+
+/**
+ * Atomic counterpart to storeSessionMetadata + storeSessionPassword.
+ * Writes both records in one chrome.storage.session.set so a handler that
+ * runs between awaits cannot observe a half-populated session record.
+ *
+ * Encryption logic mirrors storeSessionPassword exactly — only the write
+ * granularity changes.
+ */
+export async function storeSessionAtomic(
+  sessionId: string,
+  isUnlocked: boolean,
+  passwordType: PasswordType,
+  password: string,
+): Promise<void> {
+  const sessionKey = crypto.getRandomValues(new Uint8Array(32));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+
+  const key = await crypto.subtle.importKey("raw", sessionKey, "AES-GCM", false, ["encrypt"]);
+  const encoded = new TextEncoder().encode(password);
+  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
+
+  // Single chrome.storage.session.set with both metadata and ciphertext.
+  await chrome.storage.session.set({
+    sessionId,
+    sessionStartedAt: Date.now(),
+    autoLockNever: isUnlocked,
+    passwordType,
+    encryptedSessionPassword: {
+      data: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
+      iv: btoa(String.fromCharCode(...iv)),
+    },
+  });
+  // The AES key half lives in chrome.storage.local (mirrors storeSessionPassword).
+  await chrome.storage.local.set({
+    [SESSION_KEY_LOCAL]: btoa(String.fromCharCode(...sessionKey)),
+  });
 }

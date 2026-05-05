@@ -22,7 +22,7 @@
  *    `bundleId` and are added/removed/resolved together so the dapp's
  *    atomicity expectation is preserved.
  *
- * Bankr-API accounts only (`type: "bankr"` or `type: "impersonator"`).
+ * Bankr-API accounts only (`type: "bankr"`).
  */
 
 import type { TransactionParams } from "./bankrApi";
@@ -67,9 +67,12 @@ export interface CrossDappBatch {
   /** Locked at first add */
   chainId: number;
   chainName: string;
-  accountType: "bankr" | "impersonator";
+  accountType: "bankr";
   entries: CrossDappBatchEntry[];
   createdAt: number;
+  // SECURITY: pinned to the account that created the batch; optional for
+  // backward compat with batches written by older builds.
+  accountId?: string;
 }
 
 export async function getCrossDappBatch(): Promise<CrossDappBatch | null> {

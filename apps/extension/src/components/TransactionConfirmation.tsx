@@ -191,6 +191,10 @@ function TransactionConfirmation({
     string | undefined
   >();
   const [gasOverrides, setGasOverrides] = useState<GasOverrides | null>(null);
+  // Gas-editor validity bubbled up from GasEstimateDisplay. Disables the
+  // Confirm button while the user has the Custom-tier editor in an
+  // inconsistent state (e.g., Max Fee < Base Fee + Priority).
+  const [gasValid, setGasValid] = useState(true);
   const [forceInclusion, setForceInclusion] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -210,12 +214,12 @@ function TransactionConfirmation({
     : null;
 
   // ─── Cross-Dapp Batch Eligibility ──────────────────────────────────────
-  // The "Add to Batch" action is only meaningful for Bankr-API-style accounts
+  // The "Add to Batch" action is only meaningful for Bankr accounts
   // (atomic ship via Bankr API). PK / SP accounts are intentionally excluded:
   // for them every call still requires its own signature, so combining them
   // adds friction without benefit. A future 7702 path will lift this.
-  const canBatchAccount =
-    accountType === "bankr" || accountType === "impersonator";
+  // SECURITY: impersonator (view-only) accounts cannot ship batches.
+  const canBatchAccount = accountType === "bankr";
 
   // Reason the button is disabled, or null if it's enabled. Used for the
   // tooltip popover. The button is rendered ONLY when canBatchAccount is true.
@@ -1025,6 +1029,7 @@ function TransactionConfirmation({
           txRequest={txRequest}
           accountType={accountType}
           onGasOverrides={setGasOverrides}
+          onValidityChange={setGasValid}
           forceInclusion={forceInclusion}
         />
 
@@ -1260,7 +1265,7 @@ function TransactionConfirmation({
                 variant="highlight"
                 flex={1}
                 onClick={handleConfirm}
-                isDisabled={state === "error"}
+                isDisabled={state === "error" || !gasValid}
               >
                 Confirm
               </Button>
