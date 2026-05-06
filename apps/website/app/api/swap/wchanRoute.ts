@@ -59,6 +59,11 @@ const ESTIMATE_RPC_URLS = Array.from(
   new Set([BASE_RPC_URL, "https://base.llamarpc.com"]),
 );
 
+// Captured during estimateTxGas so we can surface what actually went wrong
+// in the API response (Vercel logs are hard to grab; this is a temporary
+// debug aid until we know why eth_estimateGas keeps hitting fallback).
+const estimateTrace: string[] = [];
+
 async function tryEstimateOnce(
   rpcUrl: string,
   opts: { taker: string; to: string; data: string; valueHex: string },
@@ -66,6 +71,7 @@ async function tryEstimateOnce(
 ): Promise<number | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ESTIMATE_GAS_TIMEOUT);
+  const tag = `${new URL(rpcUrl).host} ov=${withOverride}`;
   try {
     const params: unknown[] = [
       {
@@ -90,19 +96,21 @@ async function tryEstimateOnce(
       }),
       signal: controller.signal,
     });
-    const json = await res.json();
-    if (json.error || !json.result) {
-      console.warn(
-        `[wchanRoute] eth_estimateGas failed via ${rpcUrl} (override=${withOverride}):`,
-        json.error?.message,
-      );
+    if (!res.ok) {
+      estimateTrace.push(`${tag}: HTTP ${res.status}`);
       return null;
     }
+    const json = await res.json();
+    if (json.error || !json.result) {
+      const msg = json.error?.message || "no result";
+      estimateTrace.push(`${tag}: ${String(msg).slice(0, 120)}`);
+      return null;
+    }
+    estimateTrace.push(`${tag}: ok=${parseInt(json.result, 16)}`);
     return parseInt(json.result as string, 16);
   } catch (err) {
-    console.warn(
-      `[wchanRoute] eth_estimateGas threw via ${rpcUrl} (override=${withOverride}):`,
-      err,
+    estimateTrace.push(
+      `${tag}: threw ${(err as Error).name}: ${String((err as Error).message).slice(0, 120)}`,
     );
     return null;
   } finally {
@@ -120,6 +128,9 @@ async function estimateTxGas(opts: {
   const fallback =
     opts.route === "via-bnkrw" ? FALLBACK_GAS_VIA_BNKRW : FALLBACK_GAS_DIRECT;
 
+  // Reset per-call so we don't accumulate across requests in a warm worker.
+  estimateTrace.length = 0;
+
   // Try each RPC, both with and without state override, until one returns
   // a usable result. With-override goes first since the API is often hit by
   // takers that don't have enough native balance to cover the simulation.
@@ -134,6 +145,10 @@ async function estimateTxGas(opts: {
   if (raw === null) return fallback;
   const buffered = Math.ceil(raw * 1.5);
   return buffered < fallback ? fallback : buffered;
+}
+
+export function getLastEstimateTrace(): string[] {
+  return estimateTrace.slice();
 }
 
 // ---------------------------------------------------------------------------
@@ -320,6 +335,10 @@ export async function formatWchanResponse(opts: FormatOptions) {
     },
     routeSource: "wchan-v4",
     wchanRoute: quote.route,
+    // TEMP: surface RPC failure reasons so we can see why eth_estimateGas
+    // keeps falling back to the conservative gas value in production.
+    // Remove once the underlying issue is identified and fixed.
+    _estimateTrace: getLastEstimateTrace(),
   };
 
   if (tx) {
