@@ -44,8 +44,10 @@ const GAS_BUFFER_DEN = 2n; // 1.5x
 const FALLBACK_GAS_DIRECT = 700_000n;
 const FALLBACK_GAS_VIA_BNKRW = 1_200_000n;
 const ESTIMATE_GAS_TIMEOUT = 5_000;
-// 100 ETH override balance — generous enough for any quote we'd ever route.
-const STATE_OVERRIDE_BALANCE = `0x${(100n * 10n ** 18n).toString(16)}`;
+// 100 ETH override balance, generous enough for any quote we'd ever route.
+// Hardcoded literal because Vercel/NFT's static analyzer chokes on
+// `10n ** 18n` during file tracing (TypeError: Cannot mix BigInt...).
+const STATE_OVERRIDE_BALANCE = "0x56bc75e2d63100000";
 
 // RPCs to try in order for gas estimation. We try the configured one first,
 // then llamarpc as a public fallback. Some Base providers (mainnet.base.org,
