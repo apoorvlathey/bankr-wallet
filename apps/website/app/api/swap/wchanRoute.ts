@@ -185,51 +185,38 @@ export async function formatWchanResponse(opts: FormatOptions) {
   // Without this, gas accounting is a heuristic over the V4 quoter's partial
   // gasEstimate, which misses the second hop on via-bnkrw and OOGs on-chain.
   let tx: { to: `0x${string}`; data: `0x${string}`; value: bigint } | null = null;
+  // For gas estimation only, we re-encode with minAmountOut=0 so pool drift
+  // between the quote and the simulation doesn't trip the slippage check
+  // and revert eth_estimateGas (which would force us back to the fallback).
+  // The on-the-wire tx still uses the user's slippage.
+  let estimateTx: { to: `0x${string}`; data: `0x${string}`; value: bigint } | null = null;
   if (includeTransaction && taker) {
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 30 * 60); // 30 min
 
-    if (quote.direction === "buy") {
-      tx =
-        quote.route === "via-bnkrw"
-          ? encodeBuyWchanViaBnkrw(
-              BASE_CHAIN_ID,
-              quote.amountIn,
-              minBuyAmount,
-              deadline,
-            )
-          : encodeBuyWchan(
-              BASE_CHAIN_ID,
-              quote.amountIn,
-              minBuyAmount,
-              deadline,
-            );
-    } else {
-      tx =
-        quote.route === "via-bnkrw"
-          ? encodeSellWchanViaBnkrw(
-              BASE_CHAIN_ID,
-              quote.amountIn,
-              minBuyAmount,
-              deadline,
-            )
-          : encodeSellWchan(
-              BASE_CHAIN_ID,
-              quote.amountIn,
-              minBuyAmount,
-              deadline,
-            );
-    }
+    const encode = (minOut: bigint) => {
+      if (quote.direction === "buy") {
+        return quote.route === "via-bnkrw"
+          ? encodeBuyWchanViaBnkrw(BASE_CHAIN_ID, quote.amountIn, minOut, deadline)
+          : encodeBuyWchan(BASE_CHAIN_ID, quote.amountIn, minOut, deadline);
+      }
+      return quote.route === "via-bnkrw"
+        ? encodeSellWchanViaBnkrw(BASE_CHAIN_ID, quote.amountIn, minOut, deadline)
+        : encodeSellWchan(BASE_CHAIN_ID, quote.amountIn, minOut, deadline);
+    };
+
+    tx = encode(minBuyAmount);
+    estimateTx = encode(0n);
   }
 
   const fallback =
     quote.route === "via-bnkrw" ? FALLBACK_GAS_VIA_BNKRW : FALLBACK_GAS_DIRECT;
   const gasBigint =
-    tx && taker
+    estimateTx && taker
       ? await estimateTxGas({
           taker,
-          to: tx.to,
-          data: tx.data,
-          value: tx.value,
+          to: estimateTx.to,
+          data: estimateTx.data,
+          value: estimateTx.value,
           route: quote.route,
         })
       : fallback;
