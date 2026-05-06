@@ -28,6 +28,31 @@ const BASE_RPC_URL =
 const DEFAULT_SLIPPAGE_BPS = 100; // 1%
 const QUOTE_TIMEOUT = 8_000;
 
+// Gas accounting for the encoded Universal Router tx. The V4 quoter only
+// reports the gas inside `PoolManager.swap` — UR routing, WRAP/SWEEP, hook
+// callbacks, and (for via-bnkrw) the BNKRW↔WCHAN wrap call all live outside
+// it. We add a fixed per-route overhead, then a 1.5x safety multiplier so
+// users don't OOG. (On Base unused gas is refunded — overestimating is safe.)
+const UR_OVERHEAD_DIRECT = 120_000n;   // WRAP_ETH + V4_SWAP wrapper + SWEEP
+const UR_OVERHEAD_VIA_BNKRW = 200_000n; // + BNKRW↔WCHAN wrap call
+const GAS_BUFFER_NUM = 3n;
+const GAS_BUFFER_DEN = 2n; // 1.5x
+const FALLBACK_GAS_DIRECT = 500_000n;
+const FALLBACK_GAS_VIA_BNKRW = 700_000n;
+
+function estimateTxGas(quote: { gasEstimate: bigint; route: "direct" | "via-bnkrw" }): bigint {
+  const overhead =
+    quote.route === "via-bnkrw" ? UR_OVERHEAD_VIA_BNKRW : UR_OVERHEAD_DIRECT;
+  const fallback =
+    quote.route === "via-bnkrw" ? FALLBACK_GAS_VIA_BNKRW : FALLBACK_GAS_DIRECT;
+  // If the quoter returned 0 (unlikely, but guard anyway), fall back to a
+  // safe constant rather than just shipping the overhead.
+  if (quote.gasEstimate === 0n) return fallback;
+  const withOverhead = quote.gasEstimate + overhead;
+  const buffered = (withOverhead * GAS_BUFFER_NUM) / GAS_BUFFER_DEN;
+  return buffered < fallback ? fallback : buffered;
+}
+
 // ---------------------------------------------------------------------------
 // Detection
 // ---------------------------------------------------------------------------
@@ -114,6 +139,7 @@ export function formatWchanResponse(opts: FormatOptions) {
 
   const minBuyAmount = applySlippage(quote.amountOut, slippageBps);
   const addrs = getAddresses(BASE_CHAIN_ID);
+  const gas = estimateTxGas(quote).toString();
 
   // Build response matching 0x shape
   const response: Record<string, unknown> = {
@@ -121,8 +147,7 @@ export function formatWchanResponse(opts: FormatOptions) {
     sellAmount: quote.amountIn.toString(),
     buyToken,
     sellToken,
-    gas: quote.route === "via-bnkrw" ? "350000" : "250000",
-    gasPrice: "0",
+    gas,
     totalNetworkFee: "0",
     liquidityAvailable: true,
     minBuyAmount: minBuyAmount.toString(),
@@ -217,7 +242,6 @@ export function formatWchanResponse(opts: FormatOptions) {
       data: tx.data,
       value: tx.value.toString(),
       gas: response.gas,
-      gasPrice: "0",
     };
   }
 

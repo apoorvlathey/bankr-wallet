@@ -17,6 +17,8 @@ export interface WchanQuote {
   amountOut: bigint;
   direction: SwapDirection;
   route: SwapRoute;
+  /** V4 quoter's gas estimate for the swap call itself (excludes UR/wrap overhead). */
+  gasEstimate: bigint;
 }
 
 export interface SwapConfig {
