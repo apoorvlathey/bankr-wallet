@@ -47,6 +47,66 @@ const ESTIMATE_GAS_TIMEOUT = 5_000;
 // 100 ETH override balance — generous enough for any quote we'd ever route.
 const STATE_OVERRIDE_BALANCE = `0x${(100n * 10n ** 18n).toString(16)}`;
 
+// RPCs to try in order for gas estimation. We try the configured one first,
+// then llamarpc as a public fallback. Some Base providers (mainnet.base.org,
+// some Alchemy tiers) ignore or reject state overrides on eth_estimateGas,
+// which would push us to the hardcoded fallback even when llamarpc could
+// have given us a real estimate.
+const ESTIMATE_RPC_URLS = Array.from(
+  new Set([BASE_RPC_URL, "https://base.llamarpc.com"]),
+);
+
+async function tryEstimateOnce(
+  rpcUrl: string,
+  opts: { taker: string; to: string; data: string; value: bigint },
+  withOverride: boolean,
+): Promise<bigint | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ESTIMATE_GAS_TIMEOUT);
+  try {
+    const params: unknown[] = [
+      {
+        from: opts.taker,
+        to: opts.to,
+        data: opts.data,
+        value: `0x${opts.value.toString(16)}`,
+      },
+      "latest",
+    ];
+    if (withOverride) {
+      params.push({ [opts.taker]: { balance: STATE_OVERRIDE_BALANCE } });
+    }
+    const res = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "eth_estimateGas",
+        params,
+      }),
+      signal: controller.signal,
+    });
+    const json = await res.json();
+    if (json.error || !json.result) {
+      console.warn(
+        `[wchanRoute] eth_estimateGas failed via ${rpcUrl} (override=${withOverride}):`,
+        json.error?.message,
+      );
+      return null;
+    }
+    return BigInt(json.result as string);
+  } catch (err) {
+    console.warn(
+      `[wchanRoute] eth_estimateGas threw via ${rpcUrl} (override=${withOverride}):`,
+      err,
+    );
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function estimateTxGas(opts: {
   taker: string;
   to: string;
@@ -56,42 +116,21 @@ async function estimateTxGas(opts: {
 }): Promise<bigint> {
   const fallback =
     opts.route === "via-bnkrw" ? FALLBACK_GAS_VIA_BNKRW : FALLBACK_GAS_DIRECT;
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), ESTIMATE_GAS_TIMEOUT);
-    const res = await fetch(BASE_RPC_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "eth_estimateGas",
-        params: [
-          {
-            from: opts.taker,
-            to: opts.to,
-            data: opts.data,
-            value: `0x${opts.value.toString(16)}`,
-          },
-          "latest",
-          { [opts.taker]: { balance: STATE_OVERRIDE_BALANCE } },
-        ],
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    const json = await res.json();
-    if (json.error || !json.result) {
-      console.warn("[wchanRoute] eth_estimateGas failed:", json.error);
-      return fallback;
+
+  // Try each RPC, both with and without state override, until one returns
+  // a usable result. With-override goes first since the API is often hit by
+  // takers that don't have enough native balance to cover the simulation.
+  let raw: bigint | null = null;
+  outer: for (const rpcUrl of ESTIMATE_RPC_URLS) {
+    for (const withOverride of [true, false]) {
+      raw = await tryEstimateOnce(rpcUrl, opts, withOverride);
+      if (raw !== null) break outer;
     }
-    const raw = BigInt(json.result as string);
-    const buffered = (raw * GAS_BUFFER_NUM) / GAS_BUFFER_DEN;
-    return buffered < fallback ? fallback : buffered;
-  } catch (err) {
-    console.warn("[wchanRoute] eth_estimateGas threw:", err);
-    return fallback;
   }
+
+  if (raw === null) return fallback;
+  const buffered = (raw * GAS_BUFFER_NUM) / GAS_BUFFER_DEN;
+  return buffered < fallback ? fallback : buffered;
 }
 
 // ---------------------------------------------------------------------------
