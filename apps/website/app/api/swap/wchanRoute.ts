@@ -39,14 +39,15 @@ const QUOTE_TIMEOUT = 8_000;
 // using a state override so the call works even if the taker doesn't have
 // enough native balance to cover the swap value. Any failure or RPC hiccup
 // falls back to a conservative hardcoded value.
-const GAS_BUFFER_NUM = 3n;
-const GAS_BUFFER_DEN = 2n; // 1.5x
-const FALLBACK_GAS_DIRECT = 700_000n;
-const FALLBACK_GAS_VIA_BNKRW = 1_200_000n;
+// All gas values are well within Number's safe integer range (< 2^53), so
+// we use plain numbers here. We tried with BigInt math originally but
+// Vercel's @vercel/nft static analyzer chokes on BigInt binary expressions
+// during file tracing — fails the production build with "Cannot mix BigInt
+// and other types". Numbers sidestep that entirely.
+const FALLBACK_GAS_DIRECT = 700_000;
+const FALLBACK_GAS_VIA_BNKRW = 1_200_000;
 const ESTIMATE_GAS_TIMEOUT = 5_000;
-// 100 ETH override balance, generous enough for any quote we'd ever route.
-// Hardcoded literal because Vercel/NFT's static analyzer chokes on
-// `10n ** 18n` during file tracing (TypeError: Cannot mix BigInt...).
+// 100 ETH override balance, generous for any quote we'd ever route.
 const STATE_OVERRIDE_BALANCE = "0x56bc75e2d63100000";
 
 // RPCs to try in order for gas estimation. We try the configured one first,
@@ -60,9 +61,9 @@ const ESTIMATE_RPC_URLS = Array.from(
 
 async function tryEstimateOnce(
   rpcUrl: string,
-  opts: { taker: string; to: string; data: string; value: bigint },
+  opts: { taker: string; to: string; data: string; valueHex: string },
   withOverride: boolean,
-): Promise<bigint | null> {
+): Promise<number | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ESTIMATE_GAS_TIMEOUT);
   try {
@@ -71,7 +72,7 @@ async function tryEstimateOnce(
         from: opts.taker,
         to: opts.to,
         data: opts.data,
-        value: `0x${opts.value.toString(16)}`,
+        value: opts.valueHex,
       },
       "latest",
     ];
@@ -97,7 +98,7 @@ async function tryEstimateOnce(
       );
       return null;
     }
-    return BigInt(json.result as string);
+    return parseInt(json.result as string, 16);
   } catch (err) {
     console.warn(
       `[wchanRoute] eth_estimateGas threw via ${rpcUrl} (override=${withOverride}):`,
@@ -113,16 +114,16 @@ async function estimateTxGas(opts: {
   taker: string;
   to: string;
   data: string;
-  value: bigint;
+  valueHex: string;
   route: "direct" | "via-bnkrw";
-}): Promise<bigint> {
+}): Promise<number> {
   const fallback =
     opts.route === "via-bnkrw" ? FALLBACK_GAS_VIA_BNKRW : FALLBACK_GAS_DIRECT;
 
   // Try each RPC, both with and without state override, until one returns
   // a usable result. With-override goes first since the API is often hit by
   // takers that don't have enough native balance to cover the simulation.
-  let raw: bigint | null = null;
+  let raw: number | null = null;
   outer: for (const rpcUrl of ESTIMATE_RPC_URLS) {
     for (const withOverride of [true, false]) {
       raw = await tryEstimateOnce(rpcUrl, opts, withOverride);
@@ -131,7 +132,7 @@ async function estimateTxGas(opts: {
   }
 
   if (raw === null) return fallback;
-  const buffered = (raw * GAS_BUFFER_NUM) / GAS_BUFFER_DEN;
+  const buffered = Math.ceil(raw * 1.5);
   return buffered < fallback ? fallback : buffered;
 }
 
@@ -251,17 +252,17 @@ export async function formatWchanResponse(opts: FormatOptions) {
 
   const fallback =
     quote.route === "via-bnkrw" ? FALLBACK_GAS_VIA_BNKRW : FALLBACK_GAS_DIRECT;
-  const gasBigint =
+  const gasNum =
     estimateTx && taker
       ? await estimateTxGas({
           taker,
           to: estimateTx.to,
           data: estimateTx.data,
-          value: estimateTx.value,
+          valueHex: `0x${estimateTx.value.toString(16)}`,
           route: quote.route,
         })
       : fallback;
-  const gas = gasBigint.toString();
+  const gas = gasNum.toString();
 
   // Build response matching 0x shape
   const response: Record<string, unknown> = {
