@@ -182,7 +182,7 @@ export async function GET(request: NextRequest) {
         console.warn("[wchanRoute] Custom quote failed:", wchanResult.reason);
       }
 
-      const best = compareBestRoute(
+      const best = await compareBestRoute(
         zeroXRes?.data ?? null,
         zeroXRes?.ok ?? false,
         wchanQuote,
