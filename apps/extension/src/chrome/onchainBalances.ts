@@ -78,7 +78,10 @@ export async function fetchOnchainBalances(
     async ([chainId, entries]) => {
       const client = await getClient(chainId);
       if (!client) {
-        rpcIssueChainIds.add(chainId);
+        // No RPC configured for this chain (e.g. portfolio API returned a
+        // token on a chain the user hasn't added). Skip silently — there's
+        // nothing to "fix" and surfacing it as an RPC issue would point the
+        // user to a chain entry that doesn't exist.
         return;
       }
 
