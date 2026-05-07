@@ -95,7 +95,8 @@ export interface SwapQuoteResponse {
     data: string;
     value: string;
     gas: string;
-    gasPrice: string;
+    /** Optional: 0x sets this; the custom WCHAN route omits it. */
+    gasPrice?: string;
   };
   /** True when the taker qualifies for reduced premium fees (sWCHAN staker) */
   isPremiumFee?: boolean;

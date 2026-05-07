@@ -75,6 +75,10 @@ export async function submitTransactionDirect(
       chainId: tx.chainId,
       value: hexToDecimalString(tx.value),
       data: tx.data && tx.data !== "0x" ? tx.data : undefined,
+      // Forward an explicit gas limit when we have one (e.g., we pre-estimated
+      // a V4 swap with 1.5x buffer because Bankr's server-side estimator
+      // underestimates UR/V4 hook calls).
+      gas: tx.gas || undefined,
       gasPrice: tx.gasPrice || undefined,
       maxFeePerGas: tx.maxFeePerGas || undefined,
       maxPriorityFeePerGas: tx.maxPriorityFeePerGas || undefined,

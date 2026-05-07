@@ -2140,12 +2140,30 @@ export async function handleExecuteSwapBatch(
     .join(", ");
   const swapMeta = originalTransactions.find((t) => t.swapMeta)?.swapMeta;
 
+  // Pre-estimate gas for the outer ERC-7821 batch tx and forward it to Bankr.
+  // Bankr's server-side estimator underestimates Universal Router / V4-hook
+  // calls (the ETH↔WCHAN custom route in particular) which OOGs on-chain. We
+  // run eth_estimateGas locally with a 50% buffer so the user pays for actual
+  // observed cost on Base (unused gas refunds, so over-budgeting is safe).
+  const { estimateGasLimitWithBuffer } = await import("./gasEstimation");
+  const buffered = await estimateGasLimitWithBuffer(
+    {
+      from: fromAddress,
+      to: batchTx.to,
+      data: batchTx.data,
+      value: batchTx.value,
+      chainId,
+    },
+    50,
+  );
+
   const batchTxParams: TransactionParams = {
     from: fromAddress,
     to: batchTx.to,
     data: batchTx.data,
     value: batchTx.value,
     chainId,
+    ...(buffered ? { gas: buffered.toString() } : {}),
   };
 
   const pending = pinnedTxRequest(account, {

@@ -52,6 +52,55 @@ Uses **0x Swap API v2** with the **AllowanceHolder** flow (single-signature UX, 
 - AllowanceHolder address on Base: `0x0000000000001fF3684f28c67538d4D072C22734`
 - Native ETH address for 0x: `0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`
 
+## WCHAN Custom Route
+
+ETH ↔ WCHAN swaps on Base **bypass 0x** and route through Uniswap V4's Universal Router directly. The `/api/swap/price` and `/api/swap/quote` endpoints detect this pair and quote both 0x *and* the custom route in parallel, returning whichever produces a higher `buyAmount`.
+
+**Why a custom route**: WCHAN has its own V4 pools (a direct WETH↔WCHAN pool plus a WETH↔BNKRW + BNKRW↔WCHAN-wrap two-hop), and 0x doesn't always pick them up. We compare both quotes and pick the better output.
+
+**Implementation:**
+| File | Role |
+|---|---|
+| `apps/website/app/api/swap/wchanRoute.ts` | Detection (`detectWchanSwap`), quote fetcher (`fetchWchanQuote`), comparison (`compareBestRoute`), response shaping (`formatWchanResponse`) |
+| `packages/wchan-swap/` | Shared package: V4 quoter ABI, pool keys, encoders (`encodeBuyWchan`, `encodeBuyWchanViaBnkrw`, `encodeSellWchan*`), slippage, addresses |
+| `apps/website/lib/wchan-swap/` | Thin wrapper that forwards to the shared package — used by the website's own `/swap-wchan` page (which calls the V4 quoter directly client-side) |
+
+**Routes:**
+- `direct` — single-hop WETH↔WCHAN (UR commands: `WRAP_ETH → V4_SWAP → SWEEP`)
+- `via-bnkrw` — two-hop WETH↔BNKRW + BNKRW↔WCHAN wrap (V4 actions: `SWAP_EXACT_IN → SETTLE → TAKE_ALL`)
+
+The chosen route is exposed in the response as `wchanRoute: "direct" | "via-bnkrw"` and `routeSource: "wchan-v4"`.
+
+### Gas budgeting (the hard part)
+
+Universal Router + V4 with hooks is **systematically under-estimated** by every "cheap" gas-estimation method we tried. Specifically:
+
+1. **The V4 quoter's `gasEstimate` only covers `PoolManager.swap` itself.** It misses UR routing overhead, `WRAP_ETH`/`SWEEP` commands, hook callbacks, and (for `via-bnkrw`) the BNKRW↔WCHAN wrap call entirely. Heuristics like "quoter gas + fixed overhead × buffer" produced values that OOG'd on-chain.
+
+2. **`eth_simulateV1` consistently under-reports** for V4-with-hooks calls — observed ~25% below real on-chain need on Base, regardless of provider. (Likely a quirk in how simulators account for dynamic hook gas vs. real EVM execution.) Trusting `simulateV1 × 1.2` would silently downgrade a correct API gas value at signing time.
+
+**What the API does (`wchanRoute.ts:estimateTxGas`):**
+
+1. Encode the actual UR tx **with `minAmountOut = 0`** so simulation isn't tripped by pool-state drift between the quote and the estimation call. The on-the-wire response tx uses the user's real slippage.
+2. Run `eth_estimateGas` against the encoded tx. Try the configured RPC first, then `base.llamarpc.com` as a fallback. For each, try **with** state override (taker balance set to 100 ETH so callers without funds can still simulate) and **without** (some providers reject the override param). First success wins.
+3. Apply **1.5× buffer** to the result.
+4. Floor to a hardcoded minimum: **`FALLBACK_GAS_DIRECT = 700_000`** / **`FALLBACK_GAS_VIA_BNKRW = 1_200_000`**. The floor catches the case where the buffered estimate is suspiciously low and provides a safety net when every RPC attempt fails.
+
+Unused gas refunds on Base, so over-budgeting is cheap; an OOG revert is much worse.
+
+**What the extension does (`MultiTxGasEstimateDisplay.tsx`):**
+
+The extension's local pre-confirmation gas estimation runs `eth_simulateV1` (then bytecode injection, then per-call `eth_estimateGas`) and applies a 20% buffer. For UR/V4 swaps, the simulator under-reports — so without a guard, the local estimate would replace the API's correctly-budgeted gas at signing.
+
+The component now **floors each estimate to the dapp/API-provided `tx.gas`**: `gasLimit = max(simulated × buffer, dapp_tx_gas)`. Concretely, when the API hands the extension `tx.gas = 1_200_000` and `eth_simulateV1` returns ~520k → 624k after buffer, we keep 1_200_000. The user can still edit downward in the picker if they want, but the default never silently downgrades a correct API value.
+
+**Knobs & references:**
+- `apps/website/app/api/swap/wchanRoute.ts` — `tryEstimateOnce`, `estimateTxGas`, `formatWchanResponse`
+- `packages/wchan-swap/src/quotes.ts` — the V4 quoter call (note: returns `gasEstimate` alongside `amountOut`, but we no longer rely on it for our own budget — kept on `WchanQuote` for completeness)
+- `apps/extension/src/components/MultiTxGasEstimateDisplay.tsx` — see the `floored` mapping in the `isNonAtomic` branch
+
+> **Lesson (broader than swaps):** Whenever an API or dapp ships a transaction with a `gas` field, the extension's local estimation must **floor** to it, never replace it. Local sims are an *additional* signal, not a source of truth for already-budgeted txs. Worth applying the same floor pattern to the other estimation paths if a similar regression shows up.
+
 ## File Structure
 
 ```

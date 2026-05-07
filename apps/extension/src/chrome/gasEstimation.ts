@@ -90,6 +90,46 @@ export async function fetchNativePrice(chainId: number): Promise<number | null> 
 }
 
 /**
+ * Estimate gas limit for a single tx, with a custom buffer multiplier.
+ * Returns null if no RPC is configured or estimation fails — callers decide
+ * how to fall back. Used by paths that must hand the chain a hand-buffered
+ * gas value (e.g., Bankr swap batches where Bankr's server-side estimate
+ * underestimates V4-with-hooks calls).
+ */
+export async function estimateGasLimitWithBuffer(
+  tx: {
+    from: string;
+    to: string;
+    data?: string;
+    value?: string;
+    chainId: number;
+  },
+  bufferPct: number,
+): Promise<bigint | null> {
+  const client = await getClient(tx.chainId);
+  if (!client) return null;
+
+  const value =
+    tx.value && tx.value !== "0x0" && tx.value !== "0"
+      ? BigInt(tx.value)
+      : 0n;
+  const data =
+    tx.data && tx.data !== "0x" ? (tx.data as `0x${string}`) : undefined;
+
+  try {
+    const raw = await client.estimateGas({
+      account: tx.from as Address,
+      to: tx.to as Address,
+      value,
+      data,
+    });
+    return (raw * BigInt(100 + bufferPct)) / 100n;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Estimate gas for a transaction.
  * If the dapp provided gas params, those are used as defaults.
  * Returns gas params, estimated cost, balance, and warnings.

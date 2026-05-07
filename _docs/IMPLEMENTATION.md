@@ -714,6 +714,8 @@ Pre-confirmation gas estimation shown on the transaction confirmation screen. Fe
 
 For non-atomic PK/SP batches (and cross-dapp batches), one shared `<GasTierPicker>` at the top applies its Priority / Max Fee uniformly to every call. Per-call gas limit editor stays as before. Atomic Bankr batches keep their server-managed gas UX. Same Custom-tier coupling rules as the single-tx editor.
 
+**Dapp-provided gas as a floor (non-atomic path):** When the input transactions carry a `tx.gas` value (e.g., a swap response from `/api/swap/quote` whose gas was already estimated + buffered server-side), the component clamps each per-call gas limit to `max(simulated × buffer, dapp_tx_gas)` after `estimateBatchGasSequential` returns. This prevents simulator under-estimates — `eth_simulateV1` has been observed ~25% below real need for Uniswap V4-with-hooks swaps on Base, regardless of RPC provider — from silently downgrading a correct API value at signing time. The user can still edit downward in the picker. See `_docs/SWAP.md` ("Gas budgeting") for the full background.
+
 **Warnings:**
 | Condition | Display |
 |---|---|

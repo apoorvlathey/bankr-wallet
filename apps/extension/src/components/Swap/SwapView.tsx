@@ -997,7 +997,9 @@ function SwapView({
           value: `0x${BigInt(swapTx.value).toString(16)}`,
           chainId,
           gas: swapTx.gas,
-          gasPrice: swapTx.gasPrice,
+          // Only forward gasPrice when the API returned one (0x). The WCHAN
+          // route omits it so viem/Bankr can pick the right EIP-1559 fees.
+          ...(swapTx.gasPrice ? { gasPrice: swapTx.gasPrice } : {}),
         },
         origin: `Swap ${sellToken.symbol.toUpperCase()} to ${buyTokenInfo.symbol.toUpperCase()}`,
         favicon: sellToken.logoUrl || null,

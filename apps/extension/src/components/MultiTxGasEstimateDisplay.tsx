@@ -381,9 +381,29 @@ function MultiTxGasEstimateDisplay({
             setLoading(false);
             return;
           }
-          setEstimates(results);
-          setPassthroughEstimates(results);
-          setEditedGasLimits(results.map((e) => e.gasLimit));
+          // Apply dapp-provided gas as a floor on each estimate. Without this,
+          // a low local simulation (eth_simulateV1 has been observed ~25%
+          // under real need on Base for V4-with-hooks calls — likely a
+          // gas-accounting quirk in the simulator's handling of dynamic
+          // hook gas) would silently downgrade a correct dapp/API gas value
+          // at signing time. Taking the max is safe: unused gas refunds on
+          // Base, and the user can still edit downward in the picker.
+          const floored = results.map((r, i) => {
+            const dappGasStr = transactions[i]?.tx.gas;
+            if (!dappGasStr) return r;
+            try {
+              const dappGas = BigInt(dappGasStr);
+              const simGas = BigInt(r.gasLimit);
+              return dappGas > simGas
+                ? { ...r, gasLimit: dappGas.toString() }
+                : r;
+            } catch {
+              return r;
+            }
+          });
+          setEstimates(floored);
+          setPassthroughEstimates(floored);
+          setEditedGasLimits(floored.map((e) => e.gasLimit));
           // Seed Custom-tier shared inputs from the first call's standard
           // tier (or its raw fees when tiers are absent). All calls share
           // the same fee market, so it's correct to seed from index 0.
@@ -534,15 +554,28 @@ function MultiTxGasEstimateDisplay({
   }, [passthroughEstimates, editedGasLimits, appliedFees, isCustomFeeValid]);
 
   // Bubble validity to the parent confirm button.
+  // We gate on three things: estimation is done (loading=false), at least one
+  // gas limit is populated (`editedGasLimits.length > 0`), and every populated
+  // limit parses as a valid number. The length check matters: `[].every()`
+  // returns `true` (vacuous), which would otherwise enable the Confirm button
+  // before the first estimate has landed — letting a fast click submit with
+  // dapp-provided gas (sometimes too low) and skip our local revert detection.
+  // Non-editable surfaces (Bankr-managed gas) bypass these checks entirely.
   useEffect(() => {
     if (!onValidityChange) return;
     if (!isEditable) {
       onValidityChange(true);
       return;
     }
-    const allLimitsValid = editedGasLimits.every(isValidGasLimit);
+    if (loading) {
+      onValidityChange(false);
+      return;
+    }
+    const hasEstimates = editedGasLimits.length > 0;
+    const allLimitsValid =
+      hasEstimates && editedGasLimits.every(isValidGasLimit);
     onValidityChange(allLimitsValid && isCustomFeeValid);
-  }, [editedGasLimits, isCustomFeeValid, isEditable, onValidityChange]);
+  }, [editedGasLimits, isCustomFeeValid, isEditable, loading, onValidityChange]);
 
   const handleEditGasLimit = useCallback((index: number, val: string) => {
     setEditedGasLimits((prev) => {
