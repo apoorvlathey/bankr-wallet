@@ -319,10 +319,10 @@ export async function processForceInclusionBankr(
       timeout: L1_RECEIPT_TIMEOUT,
     });
 
-    // Critical: L1 tx may have reverted on-chain even if Bankr API said "success"
+    // Critical: L1 tx may have reverted onchain even if Bankr API said "success"
     if (receipt.status === "reverted") {
-      await progress("error", { error: "L1 deposit transaction reverted on-chain" });
-      await writeFailure(txId, pending, "L1 deposit transaction reverted on-chain");
+      await progress("error", { error: "L1 deposit transaction reverted onchain" });
+      await writeFailure(txId, pending, "L1 deposit transaction reverted onchain");
       return;
     }
 
@@ -488,10 +488,10 @@ export async function processForceInclusionLocal(
       timeout: L1_RECEIPT_TIMEOUT,
     });
 
-    // Critical: L1 tx may have reverted on-chain even if it was broadcast successfully
+    // Critical: L1 tx may have reverted onchain even if it was broadcast successfully
     if (receipt.status === "reverted") {
-      await progress("error", { error: "L1 deposit transaction reverted on-chain" });
-      await writeFailure(txId, pending, "L1 deposit transaction reverted on-chain");
+      await progress("error", { error: "L1 deposit transaction reverted onchain" });
+      await writeFailure(txId, pending, "L1 deposit transaction reverted onchain");
       return;
     }
 
@@ -722,7 +722,7 @@ export async function recoverStuckForceInclusionTxs(): Promise<void> {
       if (receipt.status === "reverted") {
         await updateTxInHistory(tx.id, {
           status: "failed",
-          error: "L1 deposit transaction reverted on-chain",
+          error: "L1 deposit transaction reverted onchain",
           completedAt: Date.now(),
         });
         console.log(`[ForceInclusion Recovery] Marked ${tx.id} as failed (L1 reverted)`);

@@ -140,7 +140,7 @@ export async function applyReceiptToHistory(
     await updateTxInHistory(txId, {
       status: "failed",
       txHash,
-      error: "Transaction reverted on-chain",
+      error: "Transaction reverted onchain",
       completedAt: Date.now(),
     });
   }
@@ -354,13 +354,13 @@ async function showConfirmationNotification(
   const failureMessage =
     failureReason === "dropped"
       ? `Transaction on ${chainName} was dropped from the mempool.`
-      : `Transaction on ${chainName} reverted on-chain.`;
+      : `Transaction on ${chainName} reverted onchain.`;
 
   await showNotification(
     notificationId,
     succeeded ? "Transaction Confirmed" : "Transaction Failed",
     succeeded
-      ? `Transaction on ${chainName} confirmed on-chain. Click to view.`
+      ? `Transaction on ${chainName} confirmed onchain. Click to view.`
       : failureMessage,
   );
 }

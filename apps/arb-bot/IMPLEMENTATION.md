@@ -259,7 +259,7 @@ index.ts
 ├── client.ts                    (viem clients — only used for tx send + receipt)
 │   └── config.ts
 ├── logger.ts
-├── poolState.ts                 (reads on-chain state via raw fetch)
+├── poolState.ts                 (reads onchain state via raw fetch)
 │   ├── config.ts
 │   └── @walletchan/wchan-swap (addresses, pool keys)
 ├── priceComparison.ts           (detects arb direction)

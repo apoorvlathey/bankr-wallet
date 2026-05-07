@@ -87,7 +87,7 @@ const MAX_HISTORY_SIZE = 50;
  * Whichever writer runs second clobbers the first writer's update. Symptom
  * we hit in production: in a non-atomic batch force inclusion, one sub-tx
  * transitions to "L1 Confirmed / L2 Pending" but the other stays stuck on
- * "L1 Pending" forever — even though both L1 receipts are actually on-chain.
+ * "L1 Pending" forever — even though both L1 receipts are actually onchain.
  *
  * This mutex serializes ALL writes to TX_HISTORY_KEY so each read-modify-write
  * is atomic from the perspective of the in-process callers. (Multi-process
@@ -179,7 +179,7 @@ export async function getProcessingTxs(): Promise<CompletedTransaction[]> {
 }
 
 /**
- * Get transactions awaiting on-chain confirmation (have txHash but not yet confirmed)
+ * Get transactions awaiting onchain confirmation (have txHash but not yet confirmed)
  */
 export async function getPendingConfirmationTxs(): Promise<
   CompletedTransaction[]

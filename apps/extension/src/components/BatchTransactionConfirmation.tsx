@@ -362,7 +362,7 @@ function BatchTransactionConfirmation({
         // Pass pre-computed gas estimates so background doesn't re-estimate.
         // For normal non-atomic batches: used directly as gas + fees for signing.
         // For force inclusion batches: only the `gasLimit` field is used (as the L2
-        //   `_gasLimit` override in the portal call); L1 fees are computed on-chain.
+        //   `_gasLimit` override in the portal call); L1 fees are computed onchain.
         ...(isNonAtomic && cachedGasEstimates ? { gasEstimates: cachedGasEstimates } : {}),
         ...(forceInclusion ? { forceInclusion: true } : {}),
       },

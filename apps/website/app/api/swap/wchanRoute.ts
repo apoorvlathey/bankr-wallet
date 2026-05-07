@@ -32,7 +32,7 @@ const QUOTE_TIMEOUT = 8_000;
 // quoter's `gasEstimate` alone — it only reports the gas inside
 // `PoolManager.swap` and misses UR routing, WRAP_ETH/SWEEP, hook callbacks,
 // and (for via-bnkrw) the BNKRW↔WCHAN wrap call entirely. Underestimating
-// here causes on-chain OOG (the wrap call ran with only the leftover
+// here causes onchain OOG (the wrap call ran with only the leftover
 // gas after the first swap consumed most of it).
 //
 // `estimateTxGas` does a real `eth_estimateGas` against the encoded tx,
@@ -216,7 +216,7 @@ export async function formatWchanResponse(opts: FormatOptions) {
 
   // Encode the tx up front so we can run a real `eth_estimateGas` against it.
   // Without this, gas accounting is a heuristic over the V4 quoter's partial
-  // gasEstimate, which misses the second hop on via-bnkrw and OOGs on-chain.
+  // gasEstimate, which misses the second hop on via-bnkrw and OOGs onchain.
   let tx: { to: `0x${string}`; data: `0x${string}`; value: bigint } | null = null;
   // For gas estimation only, we re-encode with minAmountOut=0 so pool drift
   // between the quote and the simulation doesn't trip the slippage check

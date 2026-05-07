@@ -52,7 +52,7 @@ interface PortfolioTabsProps {
   onRpcIssuesChange?: (chainIds: number[]) => void;
 }
 
-/** Delay before refreshing balances after on-chain tx confirmation (ms) */
+/** Delay before refreshing balances after onchain tx confirmation (ms) */
 const POST_CONFIRM_REFRESH_DELAY = 3000;
 
 export default function PortfolioTabs({ address, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange }: PortfolioTabsProps) {

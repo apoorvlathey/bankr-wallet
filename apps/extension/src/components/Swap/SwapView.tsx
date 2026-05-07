@@ -337,7 +337,7 @@ function SwapView({
   // Token` defaults balance to "0" because we don't know yet.
   //
   // To avoid that footgun, whenever a sellToken has a 0 reported balance we
-  // fall back to a direct on-chain `balanceOf` (or `eth_getBalance` for
+  // fall back to a direct onchain `balanceOf` (or `eth_getBalance` for
   // native) — same RPC path the custom-token resolver already uses. We
   // memoize per (chainId, token, owner) so we don't refetch repeatedly when
   // the user types into the amount field.
@@ -400,7 +400,7 @@ function SwapView({
         });
       } catch {
         // Silent: keep showing 0 if the RPC call fails. The submit-time
-        // balance check at line ~668 will still cap on-chain.
+        // balance check at line ~668 will still cap onchain.
       }
     })();
 
@@ -418,7 +418,7 @@ function SwapView({
   // tokens already have their own resolution path inside
   // `loadPortfolioTokenCatalog`.
   //
-  // We deliberately do NOT use a `cancelled` flag here: the on-chain
+  // We deliberately do NOT use a `cancelled` flag here: the onchain
   // balance verification effect above also calls `setSellToken`, and any
   // state update that changes `sellToken` would trigger this effect's
   // cleanup mid-flight and silently drop the price response (which can
@@ -632,7 +632,7 @@ function SwapView({
     );
 
     // If the buy token isn't in the user's holdings, build a stub PortfolioToken
-    // from the metadata we already have. SwapView's on-chain balance + price
+    // from the metadata we already have. SwapView's onchain balance + price
     // hydration effects will fill `balance` / `priceUsd` after the flip.
     const nextSellToken: PortfolioToken =
       buyInHoldings ?? {
@@ -774,7 +774,7 @@ function SwapView({
       setPendingBuyLoading(false);
       return;
     }
-    // Resolve on-chain
+    // Resolve onchain
     setPendingBuyToken(null);
     setPendingBuyLoading(true);
     chrome.runtime.sendMessage(
@@ -830,7 +830,7 @@ function SwapView({
         return;
       }
 
-      // 1b. For non-native tokens, cap at on-chain balance to avoid rounding
+      // 1b. For non-native tokens, cap at onchain balance to avoid rounding
       // issues where parseUnits(formattedBalance) > actual wei balance
       if (sellToken.contractAddress !== "native") {
         const balRes = await new Promise<{ success: boolean; balance?: string }>((resolve) => {
@@ -893,7 +893,7 @@ function SwapView({
         buyTokenLogo: buyTokenLogoURI || null,
       };
 
-      // Check on-chain allowance and add approval TX if needed.
+      // Check onchain allowance and add approval TX if needed.
       // Spender comes from the indicative price quote's issues.allowance.spender
       // (authoritative per 0x docs — address varies by chain/flow).
       const allowanceSpender = quote.issues?.allowance?.spender;

@@ -155,7 +155,7 @@ export default function ERC20ApproveDisplay({
   useEffect(() => {
     setLoading(true);
 
-    // Fetch on-chain info via background
+    // Fetch onchain info via background
     const infoPromise = new Promise<{
       success: boolean;
       data?: { name: string; symbol: string; decimals: number };
@@ -218,7 +218,7 @@ export default function ERC20ApproveDisplay({
   }, [approval.spender, chainId]);
 
   // Reverse resolve the spender address to ENS/Basename/WNS. Shown as a
-  // separate badge so an on-chain name and an eth.sh label can coexist
+  // separate badge so an onchain name and an eth.sh label can coexist
   // (same pattern as the outer "To" row).
   useEffect(() => {
     setResolvedSpenderName(null);

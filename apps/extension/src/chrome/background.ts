@@ -738,7 +738,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const requests = await getPendingWatchAssetRequests();
         const pending = requests.find((r) => r.id === message.watchAssetId);
         if (pending) {
-          // Try to fetch the real token name from on-chain
+          // Try to fetch the real token name from onchain
           let tokenName = pending.asset.symbol;
           try {
             const info = await fetchTokenInfo(pending.asset.address, pending.chainId);

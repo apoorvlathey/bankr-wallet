@@ -2971,7 +2971,7 @@ function App() {
                   });
                   // Auto-fill the sell side with native ETH on Base so the
                   // user lands on a ready-to-quote pair. Balance/price are
-                  // hydrated by SwapView's on-chain + price-fetch effects.
+                  // hydrated by SwapView's onchain + price-fetch effects.
                   setSwapInitialSellToken({
                     symbol: "ETH",
                     name: "Ether",
@@ -3021,7 +3021,7 @@ function App() {
                   });
                   // Auto-fill the sell side with native ETH on Base so the
                   // user lands on a ready-to-quote pair. Balance/price are
-                  // hydrated by SwapView's on-chain + price-fetch effects.
+                  // hydrated by SwapView's onchain + price-fetch effects.
                   setSwapInitialSellToken({
                     symbol: "ETH",
                     name: "Ether",

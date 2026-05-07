@@ -310,7 +310,7 @@ function TxStatusItem({
 
   // For force inclusion: link to L1 explorer until the L2 sequencer has
   // actually included the tx. L2 explorers don't index force-inclusion txs
-  // until they appear on-chain — linking to L2 in the "L1 Confirmed / L2
+  // until they appear onchain — linking to L2 in the "L1 Confirmed / L2
   // Pending" window leads to a "tx not found" page, which is confusing.
   const l1ExplorerBase = isForceInclusion
     ? getChainConfig(tx.forceInclusionMeta!.l1ChainId).explorer || ""
@@ -324,7 +324,7 @@ function TxStatusItem({
     if (isForceInclusion) {
       const l1Hash = tx.forceInclusionMeta!.l1TxHash;
       const txHashIsL2 = tx.txHash && tx.txHash !== l1Hash;
-      // Link to L2 once the L2 tx has actually resolved on-chain. That means
+      // Link to L2 once the L2 tx has actually resolved onchain. That means
       // either status === "success" (the L2 receipt poller confirmed) or
       // status === "failed" with a distinct L2 hash (the L2 tx executed and
       // reverted — the explorer DOES know about it). The only case where the

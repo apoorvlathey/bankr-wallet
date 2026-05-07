@@ -291,6 +291,10 @@ When working on features, refer to these docs:
 - **Reject All button color**: Use `chart.negative` (NOT `status.error.fg`) for any "destructive ghost button" text. `status.error.fg` is WHITE in Bauhaus (it pairs with the RED bg) and would render invisibly. `chart.negative` is RED in both themes.
 - **Dark CTA strip pattern**: For inverted bars (tx confirmation count badges, chat headers, "Add Token" CTAs, etc.), use `useStripTokens()` from `@/theme` which returns `{ bg, fg }` — Bauhaus paints a literal black bar with white text; Midnight uses recessed `surface.sunken` with primary fg text on top. Don't duplicate the `themeId === "midnight" ? ... : ...` ternary inline.
 
+## Writing Conventions
+
+- **Use "onchain", not "on-chain".** Project-wide spelling — applies to user-facing strings (notifications, UI copy), code comments, doc files, and identifiers. Same for derived forms: "onchain balance", "confirmed onchain", etc. Don't reintroduce the hyphenated form.
+
 ## Code Quality Guidelines
 
 ### File Size & Modularity

@@ -23,7 +23,7 @@ export interface PortfolioTokenCatalog {
   customTokenKeys: Set<string>;
   /**
    * True when the upstream portfolio API failed. Native balances are still
-   * resolved on-chain in that case, but ERC-20 balances and DeFi positions
+   * resolved onchain in that case, but ERC-20 balances and DeFi positions
    * returned by the API are missing. The UI uses this to show a "Portfolio
    * unavailable" banner while still rendering native holdings.
    */
@@ -86,7 +86,7 @@ export async function loadPortfolioTokenCatalog(
 
   const apiUnavailable = !portfolioResult.ok;
   if (apiUnavailable) {
-    console.warn("[portfolio] API unavailable, falling back to on-chain native balances:", portfolioResult.err);
+    console.warn("[portfolio] API unavailable, falling back to onchain native balances:", portfolioResult.err);
   }
   const data = portfolioResult.ok
     ? portfolioResult.data

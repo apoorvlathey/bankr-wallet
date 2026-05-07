@@ -286,7 +286,7 @@ export async function advanceSplitBundle(params: SplitAdvanceParams): Promise<vo
         ? `User rejected call ${bundleIndex + 1} of split batch`
         : outcome === "dropped"
           ? `Call ${bundleIndex + 1} of split batch was dropped from the mempool`
-          : `Call ${bundleIndex + 1} of split batch reverted on-chain`),
+          : `Call ${bundleIndex + 1} of split batch reverted onchain`),
   });
 }
 

@@ -61,7 +61,7 @@ export const COINGECKO_PRICE_API =
 export const COINGECKO_TOKEN_PRICE_API =
   "https://api.coingecko.com/api/v3/simple/token_price";
 /**
- * GeckoTerminal — DEX-based on-chain token price feed. Used as a fallback
+ * GeckoTerminal — DEX-based onchain token price feed. Used as a fallback
  * for tokens CoinGecko's `/simple/token_price` endpoint doesn't index
  * (newer / lower-cap / DEX-only tokens). Endpoint shape:
  *   /simple/networks/{network}/token_price/{addresses}

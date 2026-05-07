@@ -803,7 +803,7 @@ async function processBatchTransactionNonAtomicInBackground(
 
   // Use pre-computed gas estimates from the UI if available (avoids duplicate RPC calls).
   // Otherwise, compute them now so dependent calls (e.g., swap after approve) get valid
-  // gas limits without needing on-chain state from prior calls.
+  // gas limits without needing onchain state from prior calls.
   let gasEstimates = precomputedGasEstimates;
   if (!gasEstimates || gasEstimates.length !== calls.length) {
     const { estimateBatchGasSequential } = await import("./batchGasEstimation");

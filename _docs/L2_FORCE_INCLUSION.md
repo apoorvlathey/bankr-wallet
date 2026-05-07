@@ -157,9 +157,9 @@ interface ForceInclusionMeta {
 | L1 building/submitting | "L1 Pending" (spinner) | L1 explorer (once hash available) |
 | L1 confirmed, L2 pending | "L1 Confirmed" + "L2 Pending" (spinner) | **L1 explorer** (L2 isn't yet indexed by the L2 explorer) |
 | Both confirmed | "L1 + L2 Confirmed" | L2 explorer |
-| Reverted on L1 | "Failed" with error "L1 deposit transaction reverted on-chain" | L1 explorer |
+| Reverted on L1 | "Failed" with error "L1 deposit transaction reverted onchain" | L1 explorer |
 
-**Explorer link rules** — `handleViewTx` in `TxStatusList.tsx` only routes to the L2 explorer when `tx.status === "success"` (i.e. the L2 receipt poller has confirmed the tx is actually on-chain). Until then, every state links to the L1 explorer, because L2 explorers don't index force-inclusion txs until the sequencer includes them — linking earlier just leads to a "tx not found" page.
+**Explorer link rules** — `handleViewTx` in `TxStatusList.tsx` only routes to the L2 explorer when `tx.status === "success"` (i.e. the L2 receipt poller has confirmed the tx is actually onchain). Until then, every state links to the L1 explorer, because L2 explorers don't index force-inclusion txs until the sequencer includes them — linking earlier just leads to a "tx not found" page.
 
 There's also a fallback guard for the case where `extractL2Hash` failed: `tx.txHash` falls back to the L1 hash, so the L2 link is hidden entirely (`TxDetailModal.tsx`'s "L2 Tx" button) or rerouted to the L1 explorer (`TxStatusList.handleViewTx`) to avoid generating a broken URL like `basescan.org/tx/<L1_hash>`.
 
@@ -392,7 +392,7 @@ The UI surfaces this via `MultiTxGasEstimateDisplay`:
    - > Edit highlighted row below — too high wastes L1 burn, too low reverts on L2 (burn lost).
 4. **Highlighted rows** — affected rows show a warning icon next to the function name, bolded label, yellow-bordered editable input, light yellow input background.
 5. **Editable input** — PK/Seed accounts only; Bankr atomic batches aren't editable because Bankr manages gas. Validation: positive integer. Red border if invalid.
-6. **Explorer link per call** — each row has a small external-link icon after the function name. Clicking opens `${explorer}/address/${call.to}` so power users can sanity-check the contract's typical gas usage on-chain before deciding what number to enter. Tooltip: "View contract on explorer — check past txs to learn typical gas".
+6. **Explorer link per call** — each row has a small external-link icon after the function name. Clicking opens `${explorer}/address/${call.to}` so power users can sanity-check the contract's typical gas usage onchain before deciding what number to enter. Tooltip: "View contract on explorer — check past txs to learn typical gas".
 7. **Edit propagation** — `MultiTxGasEstimateDisplay` merges `editedGasLimits[i]` into `passthroughEstimates[i].gasLimit` and fires `onGasEstimates`. `BatchTransactionConfirmation` caches the result in `cachedGasEstimates`, passes it via the confirm message as `gasEstimates`, `background.ts` routes it to `handleConfirmBatchTransactionPK`, which forwards it to `processForceInclusionBatchLocal` as `precomputedL2GasEstimates`.
 
 The L1 cost shown to the user is the initial estimate (computed before editing). A small italic note — "L1 cost is re-estimated at broadcast based on these values" — tells power users that bumping the L2 gas will change the final L1 burn.
@@ -444,8 +444,8 @@ const receipt = await l1Client.waitForTransactionReceipt({
 });
 
 if (receipt.status === "reverted") {
-  await progress("error", { error: "L1 deposit transaction reverted on-chain" });
-  await writeFailure(txId, pending, "L1 deposit transaction reverted on-chain");
+  await progress("error", { error: "L1 deposit transaction reverted onchain" });
+  await writeFailure(txId, pending, "L1 deposit transaction reverted onchain");
   return;
 }
 
@@ -481,7 +481,7 @@ For each tx in history with forceInclusionMeta and status ∈ {processing, pendi
 
   l1Client.getTransactionReceipt(l1TxHash)
     ├─ no receipt yet → leave as-is
-    ├─ reverted → mark as "failed" with "L1 deposit transaction reverted on-chain"
+    ├─ reverted → mark as "failed" with "L1 deposit transaction reverted onchain"
     └─ success → try extractL2Hash again
         ├─ L2 hash found → update tx to "pending" with l2Hash, start L2 polling
         └─ still no L2 hash + status was "processing" → bump to "pending" with L1 hash as txHash

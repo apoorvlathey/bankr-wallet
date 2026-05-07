@@ -436,7 +436,7 @@
   {
     "id": 36,
     "name": "DODO",
-    "description": "DODO - Your on-chain liquidity provider.",
+    "description": "DODO - Your onchain liquidity provider.",
     "url": "https://app.dodoex.io",
     "iconUrl": "/images/dapp-icons/36.png",
     "chains": [

@@ -982,7 +982,7 @@ async function processTransactionInBackground(
         "Transaction reverted",
       );
     } else if (result.status === "success" && txHash) {
-      // API confirmed on-chain (waitForConfirmation: true) — mark success
+      // API confirmed onchain (waitForConfirmation: true) — mark success
       await updateTxInHistory(txId, {
         status: "success",
         txHash,
@@ -1018,7 +1018,7 @@ async function processTransactionInBackground(
         txHash,
       });
 
-      // Start polling for on-chain confirmation
+      // Start polling for onchain confirmation
       if (txHash) {
         startReceiptPolling(txId, txHash, pending.tx.chainId);
       }
@@ -2014,7 +2014,7 @@ async function processSwapTxBankr(
     if (result.status === "reverted") {
       // Save txHash before marking as failed so explorer link works
       if (txHash) await updateTxInHistory(txId, { txHash });
-      await handleTransactionFailure(txId, pending, "Transaction reverted on-chain");
+      await handleTransactionFailure(txId, pending, "Transaction reverted onchain");
     } else if (result.status === "success" && txHash) {
       await updateTxInHistory(txId, {
         status: "success",
@@ -2170,7 +2170,7 @@ export async function handleExecuteSwapBatch(
 
   // Pre-estimate gas for the outer ERC-7821 batch tx and forward it to Bankr.
   // Bankr's server-side estimator underestimates Universal Router / V4-hook
-  // calls (the ETH↔WCHAN custom route in particular) which OOGs on-chain. We
+  // calls (the ETH↔WCHAN custom route in particular) which OOGs onchain. We
   // run eth_estimateGas locally with a 50% buffer so the user pays for actual
   // observed cost on Base (unused gas refunds, so over-budgeting is safe).
   const { estimateGasLimitWithBuffer } = await import("./gasEstimation");

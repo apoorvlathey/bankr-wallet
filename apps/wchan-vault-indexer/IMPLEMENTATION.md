@@ -13,7 +13,7 @@ Ponder-based indexer for the sWCHAN ERC-4626 vault on Base. Tracks vault snapsho
 
 ### `vault_snapshot`
 
-Stores every vault event with on-chain totalAssets/totalShares for APY tracking.
+Stores every vault event with onchain totalAssets/totalShares for APY tracking.
 
 | Column          | Type    | Description                                        |
 | --------------- | ------- | -------------------------------------------------- |
@@ -57,7 +57,7 @@ Uses read-then-upsert pattern (`find` -> `insert`/`onConflictDoUpdate`).
 
 ### `WCHANVault:Deposit` / `WCHANVault:Withdraw`
 
-Reads on-chain `totalAssets()` and `totalSupply()` post-event, stores snapshot for APY calculation.
+Reads onchain `totalAssets()` and `totalSupply()` post-event, stores snapshot for APY calculation.
 
 ### `WCHANVault:Donate` / `WCHANVault:DonateReward` / `WCHANVault:EarlyWithdrawPenalty`
 

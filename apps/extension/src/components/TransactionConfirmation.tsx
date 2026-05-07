@@ -154,7 +154,7 @@ function CopyButton({
 /**
  * Split-mode gating: when this PendingTxRequest is one slice of a user-split
  * `wallet_sendCalls` bundle and is NOT the first slice, the Confirm button
- * stays disabled until the prior slice has actually landed on-chain so the
+ * stays disabled until the prior slice has actually landed onchain so the
  * downstream gas estimation runs against fresh state. Returns:
  *   - { ready: true }                            when no prior to wait for
  *   - { ready: false, label: "Waiting for…" }   while prior is processing
@@ -1393,7 +1393,7 @@ function TransactionConfirmation({
 
         {/* Split-mode status banner. Shown when this confirmation is part of
             a user-split bundle and we're either waiting for the prior call
-            to confirm on-chain or re-estimating gas against the new state. */}
+            to confirm onchain or re-estimating gas against the new state. */}
         {(!splitState.ready ||
           (txRequest.parentBundleId && txRequest.bundleIndex !== undefined &&
            txRequest.bundleIndex > 0 && !gasValid)) && state !== "submitting" && (

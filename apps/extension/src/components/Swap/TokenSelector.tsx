@@ -52,7 +52,7 @@ function getNativeCurrencyForChain(chainId: number) {
 
 /** Convert a static token-list entry into the PortfolioToken shape parents
  *  consume for the sell side. Tokens not in the user's holdings get a zero
- *  balance — the swap quote will still load against on-chain balance. */
+ *  balance — the swap quote will still load against onchain balance. */
 function entryToPortfolioToken(
   t: TokenListEntry,
   chainId: number,

@@ -75,9 +75,9 @@ The chosen route is exposed in the response as `wchanRoute: "direct" | "via-bnkr
 
 Universal Router + V4 with hooks is **systematically under-estimated** by every "cheap" gas-estimation method we tried. Specifically:
 
-1. **The V4 quoter's `gasEstimate` only covers `PoolManager.swap` itself.** It misses UR routing overhead, `WRAP_ETH`/`SWEEP` commands, hook callbacks, and (for `via-bnkrw`) the BNKRW↔WCHAN wrap call entirely. Heuristics like "quoter gas + fixed overhead × buffer" produced values that OOG'd on-chain.
+1. **The V4 quoter's `gasEstimate` only covers `PoolManager.swap` itself.** It misses UR routing overhead, `WRAP_ETH`/`SWEEP` commands, hook callbacks, and (for `via-bnkrw`) the BNKRW↔WCHAN wrap call entirely. Heuristics like "quoter gas + fixed overhead × buffer" produced values that OOG'd onchain.
 
-2. **`eth_simulateV1` consistently under-reports** for V4-with-hooks calls — observed ~25% below real on-chain need on Base, regardless of provider. (Likely a quirk in how simulators account for dynamic hook gas vs. real EVM execution.) Trusting `simulateV1 × 1.2` would silently downgrade a correct API gas value at signing time.
+2. **`eth_simulateV1` consistently under-reports** for V4-with-hooks calls — observed ~25% below real onchain need on Base, regardless of provider. (Likely a quirk in how simulators account for dynamic hook gas vs. real EVM execution.) Trusting `simulateV1 × 1.2` would silently downgrade a correct API gas value at signing time.
 
 **What the API does (`wchanRoute.ts:estimateTxGas`):**
 

@@ -67,7 +67,7 @@ Findings from a comprehensive security audit of the extension's injected scripts
 
 - **Status:** [x] NOT AN ISSUE
 - **File:** `batchTxHandlers.ts:502-521`
-- **Reason:** Bundle IDs are `crypto.randomUUID()` (unguessable). The returned data (txHash, receipts) is publicly queryable on-chain anyway. Consistent with ERC-5792 spec behavior and how traditional transactions work.
+- **Reason:** Bundle IDs are `crypto.randomUUID()` (unguessable). The returned data (txHash, receipts) is publicly queryable onchain anyway. Consistent with ERC-5792 spec behavior and how traditional transactions work.
 
 ### 5. ~~Dapp-Provided Gas Values Not Capped~~
 

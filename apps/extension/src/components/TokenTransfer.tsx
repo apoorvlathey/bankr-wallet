@@ -158,7 +158,7 @@ function TokenTransfer({
 
   // Swap token list for the selected chain — feeds the Send dropdown's "All
   // tokens" group and lets popular chips (USDC, USDT, ...) appear even when
-  // the user has zero on-chain balance of them. Mirrors SwapView's fetch.
+  // the user has zero onchain balance of them. Mirrors SwapView's fetch.
   useEffect(() => {
     if (!SWAP_SUPPORTED_CHAIN_IDS.has(selectedChainId)) {
       setTokenList([]);
@@ -179,7 +179,7 @@ function TokenTransfer({
   }, [selectedChainId]);
 
   // -----------------------------------------------------------------------
-  // On-chain balance fallback for the selected token. Mirrors SwapView's
+  // Onchain balance fallback for the selected token. Mirrors SwapView's
   // verification: when the chosen token reports a 0 balance (either because
   // the portfolio API hasn't picked it up yet, or because the user picked
   // it from the swap token list which defaults balance to "0"), fall back
@@ -258,7 +258,7 @@ function TokenTransfer({
   // USD-mode and the value display still work. Native tokens already get
   // prices through the catalog's native resolver.
   //
-  // We deliberately do NOT use a `cancelled` flag here: the on-chain balance
+  // We deliberately do NOT use a `cancelled` flag here: the onchain balance
   // fallback above also calls `setSelectedToken`, and any state update that
   // changes `selectedToken` would trigger this effect's cleanup mid-flight
   // and silently drop the price response. The `setSelectedToken` updater
@@ -331,7 +331,7 @@ function TokenTransfer({
   const [resolvedCustomToken, setResolvedCustomToken] = useState<PortfolioToken | null>(null);
   const [customTokenError, setCustomTokenError] = useState<string | null>(null);
 
-  // Resolve a custom ERC20 address: fetch on-chain info + balance
+  // Resolve a custom ERC20 address: fetch onchain info + balance
   const resolveCustomAddress = async (tokenAddress: string) => {
     setCustomTokenLoading(true);
     setResolvedCustomToken(null);

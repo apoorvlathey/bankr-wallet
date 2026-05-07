@@ -183,7 +183,7 @@ export async function fetchSwapQuote(
 }
 
 // ---------------------------------------------------------------------------
-// Token Info (on-chain multicall)
+// Token Info (onchain multicall)
 // ---------------------------------------------------------------------------
 
 export async function fetchTokenInfo(
@@ -233,7 +233,7 @@ export async function fetchTokenInfo(
 }
 
 // ---------------------------------------------------------------------------
-// Token Allowance Check (on-chain)
+// Token Allowance Check (onchain)
 // ---------------------------------------------------------------------------
 
 export async function getTokenBalanceWei(

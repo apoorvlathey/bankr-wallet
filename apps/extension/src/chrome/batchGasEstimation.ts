@@ -412,7 +412,7 @@ async function estimateIndividualWithFallback(
         return { gasLimit: (gas * 120n) / 100n, fallbackUsed: false };
       } catch {
         // Estimation failed (likely a dependent call) — use generous buffer.
-        // On-chain gas will be correct because prior calls execute first (nonce ordering).
+        // Onchain gas will be correct because prior calls execute first (nonce ordering).
         // We flag this so the UI can surface the uncertainty to the user; this matters
         // a lot for force inclusion where the value gets baked into the portal _gasLimit
         // and directly drives L1 burn cost on mainnet.

@@ -74,7 +74,7 @@ For each token with a non-zero balance change, we need `name`, `symbol`, `decima
 
 1. **Swap token list** (`getCachedTokenList`) — cached 24h from `walletchan.com/api/swap/token-list`. Has name, symbol, decimals, logoURI for ~1000 popular tokens per chain. Fastest and most reliable.
 
-2. **On-chain multicall** — for tokens not in the list, batch `name()`, `symbol()`, `decimals()` via Multicall3 (`0xcA11bde05977b3631167028862bE2a173976CA11`). Must pass `multicallAddress` explicitly since the viem client is created without a `chain` object.
+2. **Onchain multicall** — for tokens not in the list, batch `name()`, `symbol()`, `decimals()` via Multicall3 (`0xcA11bde05977b3631167028862bE2a173976CA11`). Must pass `multicallAddress` explicitly since the viem client is created without a `chain` object.
 
 3. **Known token logos** (`KNOWN_TOKEN_LOGOS`) — hardcoded map for tokens like WCHAN that aren't in the swap token list.
 
@@ -98,7 +98,7 @@ The simulation makes 3+ RPC calls in quick succession (alongside gas estimation)
 **Phase 2** — `AssetChangesDisplay` detects `metadataComplete === false` and calls `retryTokenMetadata` after 2.5 seconds. This function:
 
 1. Retries the token list lookup (may have cached since first attempt)
-2. Retries on-chain multicall for tokens still showing address-like symbols
+2. Retries onchain multicall for tokens still showing address-like symbols
 3. Retries price fetches for tokens missing USD values
 4. Merges updates into existing results (recomputes formatted amounts if decimals changed)
 
@@ -171,7 +171,7 @@ ERC-721 implements `balanceOf(address) returns (uint256)` (the count of NFTs own
 
 4. **`nextTokenId()` fallback (`_enumerateViaNextTokenId`)** — Counter-based ERC-721s like **Uniswap V4 PositionManager** have neither receiver hook nor Enumerable. They expose `nextTokenId() returns (uint256)`, an incrementing counter advanced on every `_mint`. Before the inner call we snapshot `nextTokenId()` for every candidate (returning a sentinel for contracts that don't expose it). After the call, for each candidate with positive ERC-721 delta and an advanced counter, we walk `[nextBefore, nextAfter)` calling `ownerOf(id)` and push every id currently owned by the user. This catches contracts that mint via `_mint` AND don't implement Enumerable. Same 50-iteration cap.
 
-5. **In-simulator tokenURI capture (`_captureTokenUris`)** — After the call finishes and all NFT entries are populated (via hook + Enumerable + nextTokenId paths), the simulator staticcalls `tokenURI(id)` (ERC-721) or `uri(id)` (ERC-1155) for every entry and stores the **raw return bytes** in the `NftReceived.tokenUriRaw` field. This is critical for state-dependent on-chain metadata (Uniswap V3/V4 position SVGs render the current pool tick + price range — querying `tokenURI` *after* `eth_call` returns would give the pre-tx state because the chain doesn't actually change). TS decodes the raw bytes via `decodeAbiParameters([{type:"string"}], raw)`.
+5. **In-simulator tokenURI capture (`_captureTokenUris`)** — After the call finishes and all NFT entries are populated (via hook + Enumerable + nextTokenId paths), the simulator staticcalls `tokenURI(id)` (ERC-721) or `uri(id)` (ERC-1155) for every entry and stores the **raw return bytes** in the `NftReceived.tokenUriRaw` field. This is critical for state-dependent onchain metadata (Uniswap V3/V4 position SVGs render the current pool tick + price range — querying `tokenURI` *after* `eth_call` returns would give the pre-tx state because the chain doesn't actually change). TS decodes the raw bytes via `decodeAbiParameters([{type:"string"}], raw)`.
 
 6. **URI resolution** — `enrichReceivedNfts()` decodes each `tokenUriRaw` into a string and feeds it to `resolveNftMetadata()`, which handles:
    - `data:application/json;base64,...` and `data:application/json,...` (synchronous)

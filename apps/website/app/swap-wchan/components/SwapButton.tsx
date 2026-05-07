@@ -40,7 +40,7 @@ import {
   type Hex,
 } from "viem";
 
-// Permit2.approve(token, spender, amount, expiration) — on-chain Permit2 allowance,
+// Permit2.approve(token, spender, amount, expiration) — onchain Permit2 allowance,
 // the alternative to a signed PermitSingle. Used inside ERC-5792 bundles where we
 // can't include a typed-data signature mid-batch.
 const permit2ApproveAbi = [
@@ -138,7 +138,7 @@ export function SwapButton({
     useWaitForTransactionReceipt({ hash: txHash });
 
   // ERC-5792 capability check — when supported, sell collapses [approve →
-  // sign permit → swap] into a single popup using on-chain Permit2 allowance
+  // sign permit → swap] into a single popup using onchain Permit2 allowance
   // instead of a signed PermitSingle.
   const { data: walletCapabilities } = useCapabilities({
     account: address,
@@ -320,7 +320,7 @@ export function SwapButton({
         setStep("idle");
       } else if (supportsAtomicBatch) {
         // Sell via ERC-5792 bundle: collapses approve + permit2.approve + UR.execute
-        // into a single wallet popup. We use on-chain Permit2 allowance instead
+        // into a single wallet popup. We use onchain Permit2 allowance instead
         // of a signed PermitSingle, since typed-data signatures can't ride inside
         // wallet_sendCalls.
         const addrs = getAddresses(chainId);

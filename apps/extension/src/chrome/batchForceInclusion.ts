@@ -143,10 +143,10 @@ export async function processForceInclusionBatchBankr(
       timeout: L1_RECEIPT_TIMEOUT,
     });
 
-    // Critical: L1 tx may have reverted on-chain even if it was broadcast successfully
+    // Critical: L1 tx may have reverted onchain even if it was broadcast successfully
     if (receipt.status === "reverted") {
-      await progress("error", { error: "L1 deposit transaction reverted on-chain" });
-      await handleBatchForceInclusionFailure(bundleId, pending, "L1 deposit transaction reverted on-chain");
+      await progress("error", { error: "L1 deposit transaction reverted onchain" });
+      await handleBatchForceInclusionFailure(bundleId, pending, "L1 deposit transaction reverted onchain");
       return;
     }
 
@@ -224,7 +224,7 @@ export async function processForceInclusionBatchLocal(
   /**
    * L2 gas estimates pre-computed by the UI (possibly edited by the user).
    * Only the `gasLimit` field is used — as the `_gasLimit` baked into the
-   * portal call. L1 fees are still computed on-chain at broadcast.
+   * portal call. L1 fees are still computed onchain at broadcast.
    */
   precomputedL2GasEstimates?: import("./gasEstimation").GasEstimate[],
 ): Promise<void> {
@@ -558,7 +558,7 @@ export async function processForceInclusionBatchLocal(
       if (receipt.status === "reverted") {
         await updateTxInHistory(item.txId, {
           status: "failed",
-          error: "L1 deposit transaction reverted on-chain",
+          error: "L1 deposit transaction reverted onchain",
           completedAt: Date.now(),
           forceInclusionMeta: {
             l1TxHash: item.l1TxHash!,

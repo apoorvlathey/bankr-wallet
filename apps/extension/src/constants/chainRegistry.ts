@@ -98,7 +98,7 @@ export interface ChainEntry {
   /**
    * GeckoTerminal network slug (e.g. "eth", "base", "polygon_pos"). Used as
    * a fallback price source for tokens CoinGecko doesn't index. GeckoTerminal
-   * derives prices from on-chain DEX liquidity so it covers exotic / new
+   * derives prices from onchain DEX liquidity so it covers exotic / new
    * tokens that the CoinGecko `/simple/token_price` endpoint misses.
    * undefined = no GeckoTerminal coverage for this chain.
    */

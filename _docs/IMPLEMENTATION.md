@@ -359,7 +359,7 @@ src/
 │   ├── gasEstimation.ts     # Pre-confirmation gas estimation (RPC fees, CoinGecko USD price)
 │   ├── bankrApi.ts          # Bankr API client (submit, sign, job polling)
 │   ├── portfolioApi.ts      # Portfolio API client (fetches token holdings via website)
-│   ├── onchainBalances.ts   # On-chain balance verification via Multicall3 batching
+│   ├── onchainBalances.ts   # Onchain balance verification via Multicall3 batching
 │   ├── transferUtils.ts     # ERC20/native token transfer calldata builders
 │   ├── chatApi.ts           # Chat API client for Bankr agent
 │   ├── chatStorage.ts       # Persistent storage for chat conversations
@@ -1085,9 +1085,9 @@ Token holdings are fetched via a website API route that wraps the Octav API:
 - **Extension client**: `portfolioApi.ts` fetches from `https://walletchan.com/api/portfolio`
 - **Response format**: Provider-agnostic `PortfolioResponse` with `tokens[]` and `totalValueUsd`
 
-### On-Chain Balance Verification
+### Onchain Balance Verification
 
-API portfolio data is shown immediately, while on-chain balances are verified in the background via `onchainBalances.ts`:
+API portfolio data is shown immediately, while onchain balances are verified in the background via `onchainBalances.ts`:
 
 - **Multicall3** (`0xcA11bde05977b3631167028862bE2a173976CA11`, same address on all chains) batches native `getEthBalance` and ERC20 `balanceOf` calls into a single multicall per chain
 - Calls are chunked into batches of 100 to avoid oversized RPC requests
@@ -1139,7 +1139,7 @@ Important constraints:
 
 **How it works:**
 
-- `recordSnapshot(address, totalValueUsd)` is called fire-and-forget from `TokenHoldings.tsx` after each portfolio load (preferring on-chain enhanced value, falling back to API-only)
+- `recordSnapshot(address, totalValueUsd)` is called fire-and-forget from `TokenHoldings.tsx` after each portfolio load (preferring onchain enhanced value, falling back to API-only)
 - Snapshots are deduplicated: skipped if the last snapshot for the address is <1 hour old
 - Entries older than 8 days are pruned on each write
 - Addresses are normalized to lowercase
@@ -1780,13 +1780,13 @@ Users can cancel in-progress transactions (PK/Seed Phrase accounts only):
 
 1. **Local Abort**: `AbortController` aborts the in-flight RPC broadcast
 
-**Bankr API accounts** cannot be cancelled — `/agent/submit` is synchronous (tx is already broadcast on-chain by the time the response returns). The cancel button is hidden in the UI for Bankr account transactions.
+**Bankr API accounts** cannot be cancelled — `/agent/submit` is synchronous (tx is already broadcast onchain by the time the response returns). The cancel button is hidden in the UI for Bankr account transactions.
 
 ## Response Handling
 
 The `/agent/submit` API returns a structured response:
 
-- `status: "success"` — transaction confirmed on-chain, `transactionHash` contains the hash
+- `status: "success"` — transaction confirmed onchain, `transactionHash` contains the hash
 - `status: "reverted"` — transaction confirmed but reverted, treated as failure
 - `status: "pending"` — transaction submitted but not yet confirmed, treated as success
 

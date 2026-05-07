@@ -127,7 +127,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         setApiUnavailable(catalog.apiUnavailable);
 
         // Hide tokens whose balance is still 0 in the catalog. The catalog
-        // injects a native placeholder per visible chain (so on-chain balance
+        // injects a native placeholder per visible chain (so onchain balance
         // resolution has something to fetch for) but those placeholders show
         // up as a row of "0 ETH / $0" entries that vanish a second later
         // when RPC reports the real balance — a flicker the user definitely
@@ -144,7 +144,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         setTotalValueUsd(catalog.totalValueUsd);
         // Only flip out of the skeleton state if we already have something
         // to render. When the portfolio API is down (or returned nothing
-        // useful), `knownNonZeroTokens` is empty and the on-chain pass is
+        // useful), `knownNonZeroTokens` is empty and the onchain pass is
         // about to fill in native balances — flipping `loading` off here
         // would briefly show "No tokens found" until that pass resolves.
         const hasInitialContent =
@@ -155,14 +155,14 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         setLastFetched(fetchedAt);
         const cacheKey = holdingsCacheKey(address, chainReloadKey);
 
-        // Enhance with on-chain balances in the background.
+        // Enhance with onchain balances in the background.
         // If RPCs are rate-limited or slow, user already sees API values.
         try {
           const onchain = await fetchOnchainBalances(address, mergedTokens);
           onRpcIssuesChange?.(onchain.rpcIssueChainIds);
           setTokens(onchain.tokens);
           setLoading(false);
-          // Total = on-chain corrected wallet tokens + DeFi positions
+          // Total = onchain corrected wallet tokens + DeFi positions
           const defiTotal = (catalog.defiPositions || []).reduce((s: number, p: DefiPosition) => s + p.valueUsd, 0);
           const total = onchain.totalValueUsd + defiTotal;
           setTotalValueUsd(total);
@@ -175,7 +175,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
             apiUnavailable: catalog.apiUnavailable,
             timestamp: fetchedAt,
           });
-          // Record snapshot with on-chain enhanced value
+          // Record snapshot with onchain enhanced value
           recordSnapshot(address, total).catch(() => {});
         } catch (err) {
           onRpcIssuesChange?.([]);

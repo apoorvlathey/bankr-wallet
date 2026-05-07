@@ -144,7 +144,7 @@ You can also skip the approve entirely if `allowance >= amount`, by checking wit
 
 ## Step 3 — Track confirmation with `useCallsStatus`
 
-`useSendCalls` returns the bundle ID **immediately** (before the user confirms). To know when the bundle actually lands on-chain, poll with `useCallsStatus`:
+`useSendCalls` returns the bundle ID **immediately** (before the user confirms). To know when the bundle actually lands onchain, poll with `useCallsStatus`:
 
 ```tsx
 import { useCallsStatus } from "wagmi";
@@ -178,10 +178,10 @@ const txHash = status?.receipts?.[0]?.transactionHash;
 |---|---|
 | `undefined` | Awaiting user confirmation or just submitted |
 | `"pending"` | Submitted, waiting for inclusion |
-| `"success"` | All calls landed on-chain successfully |
+| `"success"` | All calls landed onchain successfully |
 | `"failure"` | Bundle reverted or was rejected |
 
-The `receipts` array contains one receipt per **on-chain transaction** in the bundle (one for atomic, multiple for non-atomic). Each receipt has the same shape as a normal `eth_getTransactionReceipt` (logs, gasUsed, status, transactionHash).
+The `receipts` array contains one receipt per **onchain transaction** in the bundle (one for atomic, multiple for non-atomic). Each receipt has the same shape as a normal `eth_getTransactionReceipt` (logs, gasUsed, status, transactionHash).
 
 ---
 

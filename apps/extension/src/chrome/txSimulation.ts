@@ -93,7 +93,7 @@ export interface NftAssetInfo {
   /**
    * The tokenURI / uri string captured INSIDE the simulator (so it reflects
    * post-tx state). The retry path uses this directly instead of re-querying
-   * the contract — for state-dependent on-chain SVG metadata the post-tx
+   * the contract — for state-dependent onchain SVG metadata the post-tx
    * state is no longer available after eth_call returns.
    */
   tokenUri?: string;
@@ -169,7 +169,7 @@ const NFT_RECEIVED_TUPLE = {
     { name: "amount", type: "uint256" as const },
     { name: "standard", type: "uint8" as const }, // 1 = ERC-721, 2 = ERC-1155
     // Raw return bytes from tokenURI(id) / uri(id), captured AFTER the inner
-    // call so on-chain SVG metadata reflects post-tx state. Decoded TS-side.
+    // call so onchain SVG metadata reflects post-tx state. Decoded TS-side.
     { name: "tokenUriRaw", type: "bytes" as const },
   ],
 } as const;
@@ -813,7 +813,7 @@ export async function simulateAssetChanges(
     const simResult = await runSimulation(client, from, to, value, data, candidates, []);
 
     // Step 2b: If inner tx reverted, retry with balance + approval + Permit2 overrides.
-    // Common reasons: user lacks on-chain token balance (impersonator account),
+    // Common reasons: user lacks onchain token balance (impersonator account),
     // missing ERC-20 approval to Permit2, or missing Permit2 allowance to router.
     if (!simResult.txSuccess && simResult.tokens.length === 0) {
       console.log("[TxSim] Inner tx reverted with no changes — retrying with balance + approval overrides...");
@@ -997,7 +997,7 @@ async function buildSimulationResult(
 }
 
 // ---------------------------------------------------------------------------
-// Token enrichment: token list → on-chain fallback → price fetch
+// Token enrichment: token list → onchain fallback → price fetch
 // ---------------------------------------------------------------------------
 
 /** ABI for ERC-165 supportsInterface — used to detect NFT contracts */
@@ -1069,7 +1069,7 @@ async function detectNftStandards(
 /**
  * Build per-NFT AssetChange entries from receiver-hook captures. The
  * tokenURI / uri string was already captured INSIDE the simulator (so it
- * reflects post-tx state for on-chain SVG metadata like Uniswap V3/V4
+ * reflects post-tx state for onchain SVG metadata like Uniswap V3/V4
  * positions); we just decode and resolve it here.
  */
 async function enrichReceivedNfts(
@@ -1179,7 +1179,7 @@ async function enrichTokenChanges(
     tokenListMap.set(t.address.toLowerCase(), t);
   }
 
-  // 2. Identify tokens NOT in the token list — need on-chain metadata
+  // 2. Identify tokens NOT in the token list — need onchain metadata
   const unknownIndices: number[] = [];
   for (let i = 0; i < tokens.length; i++) {
     if (!tokenListMap.has(tokens[i].toLowerCase())) {
@@ -1198,7 +1198,7 @@ async function enrichTokenChanges(
         )
       : new Map<string, NftStandard>();
 
-  // 3. On-chain multicall for unknown ERC-20s only: name(), symbol(), decimals().
+  // 3. Onchain multicall for unknown ERC-20s only: name(), symbol(), decimals().
   //    NFTs use a separate (lighter) lookup path below since they have no decimals.
   let metadataComplete = true;
   const onchainMeta = new Map<string, { name: string; symbol: string; decimals: number }>();
@@ -1436,7 +1436,7 @@ export async function retryTokenMetadata(
 
   // Retry NFT metadata using the URI captured during the original simulation.
   // Re-querying tokenURI/uri here would return CURRENT state, not the post-tx
-  // state we want for on-chain SVG metadata. The captured URI is correct.
+  // state we want for onchain SVG metadata. The captured URI is correct.
   const nftRetries = needsRetry.filter(
     (c) =>
       c.nft?.metadataLoading &&
@@ -1464,7 +1464,7 @@ export async function retryTokenMetadata(
     tokenListMap.set(t.address.toLowerCase(), t);
   }
 
-  // 2. Identify tokens still needing on-chain metadata (ERC-20s only)
+  // 2. Identify tokens still needing onchain metadata (ERC-20s only)
   const onchainNeeded = needsRetry.filter(
     (c) => !c.nft && c.symbol.includes("...") && !tokenListMap.has(c.address.toLowerCase()),
   );
@@ -1676,7 +1676,7 @@ export async function simulateBatchAssetChanges(
     });
 
     // Try full-batch access list first; fall back to per-call if it fails
-    // (e.g. if the account isn't an ERC-7821 smart account on-chain yet)
+    // (e.g. if the account isn't an ERC-7821 smart account onchain yet)
     let accessListEntries: { address: string }[] = [];
     try {
       const batchAL = await client.createAccessList({

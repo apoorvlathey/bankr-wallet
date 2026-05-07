@@ -12,7 +12,7 @@ const COINGECKO_PLATFORM_IDS: Record<string, string> = {
 
 /**
  * GeckoTerminal network slugs. Strict superset of the CoinGecko coverage —
- * GeckoTerminal derives prices from on-chain DEX liquidity, so it picks up
+ * GeckoTerminal derives prices from onchain DEX liquidity, so it picks up
  * newer / lower-cap / DEX-only tokens that the CoinGecko `/simple/token_price`
  * endpoint returns nothing for. Also supports MegaETH which CoinGecko's
  * platform map doesn't cover at all.

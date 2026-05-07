@@ -794,7 +794,7 @@ export default function DripSection() {
     !!dripOwner &&
     address.toLowerCase() !== (dripOwner as string).toLowerCase();
 
-  // On-chain reads
+  // Onchain reads
   const { data: vaultTotalAssets, refetch: refetchAssets } = useReadContract({
     address: vaultAddr,
     abi: wchanVaultAbi,

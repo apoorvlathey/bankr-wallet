@@ -434,7 +434,7 @@ export async function resolveCoinGeckoNativeAssetsBatch(
  * Tries CoinGecko's `/simple/token_price/{platform_id}` endpoint first (the
  * canonical price source for established tokens). When it returns no price —
  * which is common for newer / lower-cap / DEX-only tokens — falls through
- * to GeckoTerminal's on-chain DEX price feed via `/simple/networks/{network}
+ * to GeckoTerminal's onchain DEX price feed via `/simple/networks/{network}
  * /token_price/{addresses}`. Returns 0 only when both fail or the chain has
  * neither registry mapping.
  *
