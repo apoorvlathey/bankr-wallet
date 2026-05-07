@@ -34,7 +34,7 @@ import {
 } from "./pendingBatchTxStorage";
 import {
   savePendingTxRequest,
-  type PendingTxRequest,
+  type PinnedTxRequest,
 } from "./pendingTxStorage";
 import { openExtensionPopup, writeResultToStorage } from "./txHandlers";
 import {
@@ -82,6 +82,18 @@ export async function handleSplitBatchIntoIndividualTxs(
       error: "Split mode is only available for private-key / seed-phrase accounts",
     };
   }
+  // Refuse to split legacy entries that lack pinning — every queued single-tx
+  // confirmation needs `accountId` + `accountAddress` to satisfy
+  // `resolvePinnedAccount` at confirm time.
+  if (!pending.accountId || !pending.accountAddress) {
+    return {
+      success: false,
+      error: "Pending request is no longer valid",
+    };
+  }
+  const pinnedAccountId = pending.accountId;
+  const pinnedAccountAddress = pending.accountAddress;
+  const pinnedAccountType = pending.accountType;
 
   // Note: `params.atomicRequired` is NOT enforced here. PK/SP auto-sequential
   // broadcast already ignores it (see ERC5792.md "supported for EOAs" note),
@@ -101,9 +113,9 @@ export async function handleSplitBatchIntoIndividualTxs(
     splitNextIndex: 0,
     atomic: false,
     splitContext: {
-      accountId: pending.accountId,
-      accountAddress: pending.accountAddress,
-      accountType: pending.accountType,
+      accountId: pinnedAccountId,
+      accountAddress: pinnedAccountAddress,
+      accountType: pinnedAccountType,
       origin: pending.origin,
       favicon: pending.favicon,
       chainName: pending.chainName,
@@ -149,12 +161,11 @@ async function enqueueNextSplitCall(bundleId: string): Promise<void> {
 
   const call = status.splitCalls[index];
   const ctx = status.splitContext;
-  const fromAddr = ctx.accountAddress ?? "";
 
-  const pending: PendingTxRequest = {
+  const pending: PinnedTxRequest = {
     id: splitTxId(bundleId, index),
     tx: {
-      from: fromAddr,
+      from: ctx.accountAddress,
       to: call.to ?? "0x0000000000000000000000000000000000000000",
       data: call.data ?? "0x",
       value: call.value ?? "0x0",

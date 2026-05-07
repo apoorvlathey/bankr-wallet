@@ -47,6 +47,7 @@ import {
   removePendingTxRequest,
   getPendingTxRequestById,
   PendingTxRequest,
+  PinnedTxRequest,
 } from "./pendingTxStorage";
 import {
   savePendingSignatureRequest,
@@ -55,6 +56,7 @@ import {
   PendingSignatureRequest,
   SignatureParams,
 } from "./pendingSignatureStorage";
+import { pinnedTxRequest, pinnedSignatureRequest } from "./pinnedRequest";
 import {
   addTxToHistory,
   updateTxInHistory,
@@ -192,6 +194,15 @@ export function handleTransactionRequest(
       });
       return;
     }
+    // SECURITY: impersonator accounts are view-only — block at intake instead
+    // of letting the request queue and fail later.
+    if (activeAccount.type === "impersonator") {
+      await writeResultToStorage(`txResult:${txId}`, {
+        success: false,
+        error: "View-only accounts cannot send transactions",
+      });
+      return;
+    }
     // SECURITY: dapp-supplied tx.from must match the active account address.
     if (
       typeof tx.from === "string" &&
@@ -215,21 +226,18 @@ export function handleTransactionRequest(
       ? { ...tx, gas: undefined }
       : tx;
 
-    const pendingRequest: PendingTxRequest = {
+    const pendingRequest = pinnedTxRequest(activeAccount, {
       id: txId,
       tx: sanitizedTx,
       origin,
       favicon: favicon || null,
       chainName,
       timestamp: Date.now(),
-      accountId: activeAccount.id,
-      accountAddress: activeAccount.address.toLowerCase(),
-      accountType: activeAccount.type as PendingTxRequest["accountType"],
       tabId,
       frameId,
       senderOrigin,
       requestChainId: tx.chainId,
-    };
+    });
 
     await savePendingTxRequest(pendingRequest);
 
@@ -272,6 +280,14 @@ export function handleSignatureRequest(
       await writeResultToStorage(`sigResult:${sigId}`, {
         success: false,
         error: "No active account",
+      });
+      return;
+    }
+    // SECURITY: impersonator accounts are view-only — block at intake.
+    if (activeAccount.type === "impersonator") {
+      await writeResultToStorage(`sigResult:${sigId}`, {
+        success: false,
+        error: "View-only accounts cannot sign messages",
       });
       return;
     }
@@ -318,21 +334,18 @@ export function handleSignatureRequest(
       }
     }
 
-    const pendingRequest: PendingSignatureRequest = {
+    const pendingRequest = pinnedSignatureRequest(activeAccount, {
       id: sigId,
       signature,
       origin,
       favicon: favicon || null,
       chainName,
       timestamp: Date.now(),
-      accountId: activeAccount.id,
-      accountAddress: activeAccount.address.toLowerCase(),
-      accountType: activeAccount.type as PendingSignatureRequest["accountType"],
       tabId,
       frameId,
       senderOrigin,
       requestChainId: signature.chainId,
-    };
+    });
 
     await savePendingSignatureRequest(pendingRequest);
 
@@ -1707,16 +1720,27 @@ export async function handleInitiateTransfer(message: {
     };
   }
 
+  // SECURITY: pin the active account onto the request so the confirm-time
+  // `resolvePinnedAccount` check in `handleConfirmTransaction*` succeeds.
+  // Without this the user gets "Pending request is no longer valid" on confirm.
+  const activeAccount = await getActiveAccount();
+  if (!activeAccount) {
+    return { success: false, error: "No active account" };
+  }
+  if (activeAccount.type === "impersonator") {
+    return { success: false, error: "View-only accounts cannot send transactions" };
+  }
+
   const txId = crypto.randomUUID();
 
-  const pendingRequest: PendingTxRequest = {
+  const pendingRequest = pinnedTxRequest(activeAccount, {
     id: txId,
     tx,
     origin: tokenName ? `Send ${tokenName}` : "WalletChan",
     favicon: tokenLogo ?? null,
     chainName,
     timestamp: Date.now(),
-  };
+  });
 
   await savePendingTxRequest(pendingRequest);
 
@@ -1800,14 +1824,14 @@ export async function handleExecuteSwapDirect(
     for (const entry of transactions) {
       const txId = crypto.randomUUID();
       txIds.push(txId);
-      const pending: PendingTxRequest = {
+      const pending = pinnedTxRequest(account, {
         id: txId,
         tx: entry.tx,
         origin: entry.origin,
         favicon: entry.favicon,
         chainName,
         timestamp: Date.now(),
-      };
+      });
       // Await each TX so approval is broadcast before swap starts
       await processSwapTxBankr(txId, pending, apiKey, entry.functionName, entry.swapMeta);
     }
@@ -1858,7 +1882,7 @@ export async function handleExecuteSwapDirect(
   // This avoids the addTxToHistory race condition and ensures correct nonces.
   const prepared: Array<{
     txId: string;
-    pending: PendingTxRequest;
+    pending: PinnedTxRequest;
     nonce: number;
     functionName?: string;
     swapMeta?: SwapMeta;
@@ -1873,14 +1897,14 @@ export async function handleExecuteSwapDirect(
 
     const nonce = await getNextNonce(fromAddr, chainId);
 
-    const pending: PendingTxRequest = {
+    const pending = pinnedTxRequest(account, {
       id: txId,
       tx: entry.tx,
       origin: entry.origin,
       favicon: entry.favicon,
       chainName,
       timestamp: Date.now(),
-    };
+    });
 
     await addTxToHistory({
       id: txId,
@@ -1929,7 +1953,7 @@ export async function handleExecuteSwapDirect(
 /** Fire-and-forget: sign+broadcast a single swap tx via Bankr API */
 async function processSwapTxBankr(
   txId: string,
-  pending: PendingTxRequest,
+  pending: PinnedTxRequest,
   apiKey: string,
   functionName?: string,
   swapMeta?: SwapMeta,
@@ -2001,7 +2025,7 @@ async function processSwapTxBankr(
  */
 async function broadcastSwapTxLocal(
   txId: string,
-  pending: PendingTxRequest,
+  pending: PinnedTxRequest,
   account: Account,
   privateKey: `0x${string}`,
   nonce: number,
@@ -2124,14 +2148,14 @@ export async function handleExecuteSwapBatch(
     chainId,
   };
 
-  const pending: PendingTxRequest = {
+  const pending = pinnedTxRequest(account, {
     id: txId,
     tx: batchTxParams,
     origin: `Batch: ${functionNames}`,
     favicon: originalTransactions[0]?.favicon ?? null,
     chainName,
     timestamp: Date.now(),
-  };
+  });
 
   // Fire-and-forget: process in background
   processSwapTxBankr(txId, pending, apiKey, `Batch: ${functionNames}`, swapMeta);

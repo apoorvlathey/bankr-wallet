@@ -12,8 +12,10 @@ export interface PendingTxRequest {
   favicon: string | null;
   chainName: string;
   timestamp: number;
-  // SECURITY: trusted context captured at request arrival. Optional for
-  // backward compat with entries written by older builds.
+  // SECURITY: trusted context captured at request arrival. Optional on the
+  // STORED shape for backward compat with entries written by older builds —
+  // new requests must use `PinnedTxRequest` (see below) so the compiler
+  // forces these to be set at creation time.
   accountId?: string;
   accountAddress?: string;
   accountType?: "bankr" | "privateKey" | "seedPhrase";
@@ -30,6 +32,15 @@ export interface PendingTxRequest {
   bundleIndex?: number;
   bundleTotalCalls?: number;
 }
+
+/**
+ * Creation-time shape: pinning fields are REQUIRED. Every new pending
+ * request must be constructed with `pinnedTxRequest(account, base)` from
+ * `./pinnedRequest`, which guarantees these fields and excludes
+ * impersonator accounts at the type level.
+ */
+export type PinnedTxRequest = PendingTxRequest &
+  Required<Pick<PendingTxRequest, "accountId" | "accountAddress" | "accountType">>;
 
 const STORAGE_KEY = "pendingTxRequests";
 const TX_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
@@ -48,7 +59,7 @@ export async function getPendingTxRequests(): Promise<PendingTxRequest[]> {
  * Save a new pending transaction request
  */
 export async function savePendingTxRequest(
-  request: PendingTxRequest
+  request: PinnedTxRequest
 ): Promise<void> {
   const requests = await getPendingTxRequests();
   requests.push(request);

@@ -67,8 +67,10 @@ export interface PendingBatchTxRequest {
   timestamp: number;
   /** Account type at time of request — determines atomic vs non-atomic path */
   accountType?: "bankr" | "impersonator" | "privateKey" | "seedPhrase";
-  // SECURITY: trusted context captured at request arrival. Optional for
-  // backward compat with entries written by older builds.
+  // SECURITY: trusted context captured at request arrival. Optional on the
+  // STORED shape for backward compat with entries written by older builds —
+  // new requests must use `PinnedBatchTxRequest` (see below) so the compiler
+  // forces these to be set at creation time.
   accountId?: string;
   accountAddress?: string;
   tabId?: number;
@@ -76,6 +78,13 @@ export interface PendingBatchTxRequest {
   senderOrigin?: string;
   requestChainId?: number;
 }
+
+/**
+ * Creation-time shape: pinning fields are REQUIRED. Construct via
+ * `pinnedBatchTxRequest(account, base)` in `./pinnedRequest`.
+ */
+export type PinnedBatchTxRequest = PendingBatchTxRequest &
+  Required<Pick<PendingBatchTxRequest, "accountId" | "accountAddress" | "accountType">>;
 
 /** Status codes per ERC-5792 */
 export const BUNDLE_STATUS = {
@@ -116,11 +125,15 @@ export interface BundleStatus {
    * captured at split time. Needed because we delete the batch request once
    * split mode starts but still need account/tab/origin info for each
    * individual PendingTxRequest we queue.
+   *
+   * Account fields are required: split mode is only allowed for batches that
+   * have a fully pinned account, so each queued single-tx confirmation can
+   * also be a `PinnedTxRequest`.
    */
   splitContext?: {
-    accountId?: string;
-    accountAddress?: string;
-    accountType?: "privateKey" | "seedPhrase";
+    accountId: string;
+    accountAddress: string;
+    accountType: "privateKey" | "seedPhrase";
     origin: string;
     favicon: string | null;
     chainName: string;

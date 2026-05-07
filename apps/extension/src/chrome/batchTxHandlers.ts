@@ -58,6 +58,7 @@ import type {
 } from "./erc5792Types";
 import { BUNDLE_STATUS, ERC5792_ERRORS } from "./erc5792Types";
 import { OP_STACK_CHAIN_IDS } from "../constants/networks";
+import { pinnedBatchTxRequest } from "./pinnedRequest";
 
 // ---------------------------------------------------------------------------
 // ERC-7821 batch encoding
@@ -306,7 +307,7 @@ export function handleWalletSendCalls(
     const trustedOrigin = senderOrigin ?? origin;
 
     // Save pending request (include accountType for confirm handler routing)
-    const pendingRequest: PendingBatchTxRequest = {
+    const pendingRequest = pinnedBatchTxRequest(account, {
       id: bundleId,
       params,
       origin,
@@ -314,14 +315,11 @@ export function handleWalletSendCalls(
       chainName,
       chainId,
       timestamp: Date.now(),
-      accountType: account.type as PendingBatchTxRequest["accountType"],
-      accountId: account.id,
-      accountAddress: account.address.toLowerCase(),
       tabId,
       frameId,
       senderOrigin,
       requestChainId: chainId,
-    };
+    });
     await savePendingBatchTxRequest(pendingRequest);
 
     // Create initial bundle status (pending)

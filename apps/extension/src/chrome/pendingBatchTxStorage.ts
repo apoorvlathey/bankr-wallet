@@ -3,7 +3,7 @@
  * Mirrors pendingTxStorage.ts pattern
  */
 
-import type { PendingBatchTxRequest } from "./erc5792Types";
+import type { PendingBatchTxRequest, PinnedBatchTxRequest } from "./erc5792Types";
 
 const STORAGE_KEY = "pendingBatchTxRequests";
 const TX_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
@@ -14,7 +14,7 @@ export async function getPendingBatchTxRequests(): Promise<PendingBatchTxRequest
 }
 
 export async function savePendingBatchTxRequest(
-  request: PendingBatchTxRequest,
+  request: PinnedBatchTxRequest,
 ): Promise<void> {
   const requests = await getPendingBatchTxRequests();
   requests.push(request);
