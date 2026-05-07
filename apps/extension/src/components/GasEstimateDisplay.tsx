@@ -237,6 +237,12 @@ function GasEstimateDisplay({
   // Sticky-edit flag for Custom mode: once the user touches Max Fee directly,
   // we stop auto-deriving it from Priority. Cleared by the relink button.
   const [maxFeeManual, setMaxFeeManual] = useState(false);
+  // True when we defaulted to a preset tier despite dappProvidedGas because
+  // the dapp's fees were unusable. The first time the user opens Custom we
+  // re-seed the editable fields with the dapp's original values so they can
+  // still see and edit what the dapp asked for.
+  const [dappValuesPendingForCustom, setDappValuesPendingForCustom] =
+    useState(false);
 
   const isLocalAccount =
     accountType === "privateKey" || accountType === "seedPhrase";
@@ -256,6 +262,7 @@ function GasEstimateDisplay({
     setEstimate(null);
     setError(null);
     setMaxFeeManual(false);
+    setDappValuesPendingForCustom(false);
 
     const messageType = forceInclusion ? "estimateForceInclusionGas" : "estimateGas";
 
@@ -281,10 +288,23 @@ function GasEstimateDisplay({
         // instead. Without this override the stored default (typically
         // "standard") would silently replace the dapp's request, breaking
         // dapps that rely on a specific gas budget (e.g. flashbots / MEV).
-        const initialTier: GasTierSelection = result.dappProvidedGas
-          ? "custom"
-          : tier;
+        //
+        // Exception: if the dapp's fees are unusable (any of priority/max/
+        // gasPrice is literal 0), defaulting to Custom would broadcast a
+        // tx that gets dropped from the mempool. Fall back to the stored
+        // tier (Standard by default) — the user can still flip to Custom
+        // to inspect or use the dapp's values.
+        const initialTier: GasTierSelection =
+          result.dappProvidedGas && !result.dappGasInvalid
+            ? "custom"
+            : tier;
         if (initialTier !== tier) setTier(initialTier);
+
+        // Preserve the dapp's original values for the Custom tab so the user
+        // can still inspect them after we auto-switched away.
+        if (result.dappProvidedGas && initialTier !== "custom") {
+          setDappValuesPendingForCustom(true);
+        }
 
         // If tiers are available and the active tier is a preset, use that
         // tier's fees. Otherwise (Custom, or tiers absent) fall back to the
@@ -322,9 +342,17 @@ function GasEstimateDisplay({
         setEditMaxFee(weiToGweiStr(t.maxFeePerGas));
         setEditPriorityFee(weiToGweiStr(t.maxPriorityFeePerGas));
         setMaxFeeManual(false);
+      } else if (next === "custom" && dappValuesPendingForCustom && estimate) {
+        // First visit to Custom after we auto-switched away from a
+        // dapp-suggested-but-unusable default. Re-seed with the dapp's
+        // values so the user can review/edit them.
+        setEditMaxFee(weiToGweiStr(estimate.maxFeePerGas));
+        setEditPriorityFee(weiToGweiStr(estimate.maxPriorityFeePerGas));
+        setMaxFeeManual(false);
+        setDappValuesPendingForCustom(false);
       }
     },
-    [estimate],
+    [estimate, dappValuesPendingForCustom],
   );
 
   // Custom-mode coupling: editing Priority recomputes Max Fee unless the
@@ -696,11 +724,30 @@ function GasEstimateDisplay({
             ) : (
               <>
                 <GasRow label="Gas Limit" value={estimate.gasLimit} />
-                <GasRow
-                  label="Max Priority Fee"
-                  value={formatGwei(estimate.maxPriorityFeePerGas)}
-                />
-                <GasRow label="Max Fee" value={formatGwei(estimate.maxFeePerGas)} />
+                {(() => {
+                  // Resolve the fees to display for the currently selected
+                  // preset tier. Falling back to `estimate.maxFeePerGas` is
+                  // wrong here when the dapp suggested unusable fees — the
+                  // raw estimate carries those values, not the active
+                  // tier's, so the user would see "0" priority while the
+                  // picker says "Standard".
+                  const fees =
+                    tier !== "custom" && estimate.tiers
+                      ? estimate.tiers[tier]
+                      : { maxFeePerGas: estimate.maxFeePerGas, maxPriorityFeePerGas: estimate.maxPriorityFeePerGas };
+                  return (
+                    <>
+                      <GasRow
+                        label="Max Priority Fee"
+                        value={formatGwei(fees.maxPriorityFeePerGas)}
+                      />
+                      <GasRow
+                        label="Max Fee"
+                        value={formatGwei(fees.maxFeePerGas)}
+                      />
+                    </>
+                  );
+                })()}
               </>
             )}
 

@@ -43,6 +43,15 @@ export interface GasEstimate {
   /** Whether the dapp provided gas params (shown as "Dapp suggested" in UI) */
   dappProvidedGas: boolean;
   /**
+   * True when the dapp explicitly supplied a fee value of zero — either
+   * `maxFeePerGas`, `maxPriorityFeePerGas`, or legacy `gasPrice`. Such txs
+   * land in the mempool but get dropped (no tip = no inclusion incentive),
+   * so the UI defaults the picker to Standard instead of Custom even when
+   * `dappProvidedGas` is set. The user can still flip back to Custom to see
+   * or edit the dapp's original values.
+   */
+  dappGasInvalid?: boolean;
+  /**
    * True when this estimate is a hardcoded dependent-call fallback (not a real
    * eth_estimateGas or eth_simulateV1 result). Set by estimateBatchGasSequential
    * when a later call in the batch can't be estimated because it depends on state
@@ -187,6 +196,15 @@ export async function estimateGas(
   const dappPriorityFee = tx.maxPriorityFeePerGas ? BigInt(tx.maxPriorityFeePerGas) : null;
   const dappGasPrice = tx.gasPrice ? BigInt(tx.gasPrice) : null;
   const dappProvidedGas = !!(dappGas || dappMaxFee || dappPriorityFee || dappGasPrice);
+  // A literal-zero fee from the dapp (priority, max, or legacy gasPrice) is
+  // treated as unusable — txs broadcast with priority=0 land in the mempool
+  // but get dropped at the next block clear since miners have no inclusion
+  // incentive. Surface the flag so the UI defaults to our Standard tier.
+  const dappGasInvalid =
+    dappProvidedGas &&
+    ((dappMaxFee !== null && dappMaxFee === 0n) ||
+      (dappPriorityFee !== null && dappPriorityFee === 0n) ||
+      (dappGasPrice !== null && dappGasPrice === 0n));
 
   // Run gas estimation, fee estimation, balance fetch, and price fetch in parallel
   let gasLimit = 0n;
@@ -296,5 +314,6 @@ export async function estimateGas(
     estimationError,
     estimationErrorFull,
     dappProvidedGas,
+    dappGasInvalid,
   };
 }

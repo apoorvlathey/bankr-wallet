@@ -1117,11 +1117,24 @@ async function processLocalTransactionInBackground(
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
 
+  // Persist the gas params we're about to broadcast — not the dapp's raw
+  // suggestion — so the tx-detail modal can show what was really used. The
+  // dapp's gasPrice (legacy) is dropped to mirror what `txForSigning` does.
+  const txForHistory = gasOverrides
+    ? {
+        ...pending.tx,
+        gas: gasOverrides.gasLimit,
+        maxFeePerGas: gasOverrides.maxFeePerGas,
+        maxPriorityFeePerGas: gasOverrides.maxPriorityFeePerGas,
+        gasPrice: undefined,
+      }
+    : pending.tx;
+
   // Save to history as "processing" immediately
   await addTxToHistory({
     id: txId,
     status: "processing",
-    tx: pending.tx,
+    tx: txForHistory,
     origin: pending.origin,
     favicon: pending.favicon,
     chainName: pending.chainName,
@@ -1891,7 +1904,8 @@ export async function handleExecuteSwapDirect(
   const txIds: string[] = [];
   const fromAddr = transactions[0].tx.from;
 
-  for (const entry of transactions) {
+  for (let i = 0; i < transactions.length; i++) {
+    const entry = transactions[i];
     const txId = crypto.randomUUID();
     txIds.push(txId);
 
@@ -1906,10 +1920,24 @@ export async function handleExecuteSwapDirect(
       timestamp: Date.now(),
     });
 
+    // Persist the per-call gas overrides (when supplied) so the tx-detail
+    // modal can show what was really broadcast rather than the dapp's
+    // / quote's raw suggestion.
+    const gasOverride = gasEstimates?.[i];
+    const txForHistory = gasOverride
+      ? {
+          ...entry.tx,
+          gas: gasOverride.gasLimit,
+          maxFeePerGas: gasOverride.maxFeePerGas,
+          maxPriorityFeePerGas: gasOverride.maxPriorityFeePerGas,
+          gasPrice: undefined,
+        }
+      : entry.tx;
+
     await addTxToHistory({
       id: txId,
       status: "processing",
-      tx: entry.tx,
+      tx: txForHistory,
       origin: entry.origin,
       favicon: entry.favicon,
       chainName,
