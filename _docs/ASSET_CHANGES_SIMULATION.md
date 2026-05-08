@@ -68,6 +68,8 @@ Non-token addresses (routers, pools, factories) either revert on `balanceOf` (ca
 
 **Why override balance to 100,000 ETH?** So the call doesn't revert due to insufficient funds. The ETH delta calculation is still correct: `after - before = -(value sent) + (value received back)`. Gas is NOT included (eth_call doesn't consume gas — that's shown separately in the gas estimate).
 
+**Gotcha — checksum the address before passing to viem.** viem's `formatStateOverride` runs `getAddress(...)` on override map keys, while `formatTransactionRequest` leaves the tx `from` field untouched. If `accountAddress` arrives lowercase (typical for impersonator accounts pasted by the user), the JSON-RPC request goes out with mismatched casing — lowercase `from`, EIP-55 mixed-case override key — and some RPCs (Coinbase's `mainnet.base.org` proxy among them) reject it as `-32602 "Missing or invalid parameters"`. PK/Bankr accounts dodge this because their addresses are already stored checksummed. Always run `getAddress(accountAddress)` and `getAddress(tx.to)` at the top of `simulateAssetChanges` so both sides of the request use the same casing.
+
 #### Step 3: Resolve Token Metadata
 
 For each token with a non-zero balance change, we need `name`, `symbol`, `decimals`, `logoUrl`, and `priceUsd`. Three sources, in priority order:

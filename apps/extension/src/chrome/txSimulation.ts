@@ -20,6 +20,7 @@ import {
   parseEther,
   keccak256,
   encodeAbiParameters,
+  getAddress,
   toHex,
   type PublicClient,
   type Address,
@@ -775,37 +776,53 @@ export async function simulateAssetChanges(
     return { ...EMPTY, simulationFailed: true, simulationError: "No RPC URL" };
   }
 
-  const from = accountAddress as Address;
-  const to = tx.to as Address;
+  // Checksum addresses. viem's `formatStateOverride` runs `getAddress` on
+  // override keys, while `formatTransactionRequest` leaves the `from` field
+  // as-is. If we pass a lowercase address (common for impersonated accounts
+  // pasted by the user), the request ends up with mismatched casing between
+  // the tx `from` and the override key, which some RPCs reject as "invalid
+  // params". Checksumming both sides up-front keeps them in lockstep.
+  const from = getAddress(accountAddress);
+  const to = getAddress(tx.to);
   const value = tx.value && tx.value !== "0x0" ? BigInt(tx.value) : 0n;
   const data = (tx.data && tx.data !== "0x" ? tx.data : "0x") as `0x${string}`;
 
   try {
-    // Step 1: Get access list to discover touched contracts
+    // Step 1: Get access list to discover touched contracts. Some RPCs
+    // (e.g. Alchemy) reject createAccessList when `from` has no ETH balance
+    // — common for impersonator accounts and freshly-created EOAs. Fall back
+    // to `[to]` as the sole candidate so the eth_call simulation (which uses
+    // a state-override balance) still runs and surfaces direct token flows.
     console.log("[TxSim] Step 1: Creating access list...");
-    const { accessList } = await client.createAccessList({
-      account: from,
-      to,
-      value,
-      data,
-      gas: SIMULATION_GAS_LIMIT,
-    });
-    console.log("[TxSim] Access list entries:", accessList.length, accessList.map(e => e.address));
+    let candidates: Address[];
+    try {
+      const { accessList } = await client.createAccessList({
+        account: from,
+        to,
+        value,
+        data,
+        gas: SIMULATION_GAS_LIMIT,
+      });
+      console.log("[TxSim] Access list entries:", accessList.length, accessList.map(e => e.address));
 
-    // Collect unique candidate addresses (include `to` — it could be a token)
-    const seen = new Set<string>();
-    seen.add(from.toLowerCase()); // exclude user's own address
-    const candidates: Address[] = [];
-    for (const entry of accessList) {
-      const addr = entry.address.toLowerCase();
-      if (!seen.has(addr)) {
-        seen.add(addr);
-        candidates.push(entry.address as Address);
+      // Collect unique candidate addresses (include `to` — it could be a token)
+      const seen = new Set<string>();
+      seen.add(from.toLowerCase()); // exclude user's own address
+      candidates = [];
+      for (const entry of accessList) {
+        const addr = entry.address.toLowerCase();
+        if (!seen.has(addr)) {
+          seen.add(addr);
+          candidates.push(entry.address as Address);
+        }
       }
-    }
-    // Also include `to` if not already present
-    if (!seen.has(to.toLowerCase())) {
-      candidates.push(to);
+      // Also include `to` if not already present
+      if (!seen.has(to.toLowerCase())) {
+        candidates.push(to);
+      }
+    } catch (alErr: any) {
+      console.warn("[TxSim] createAccessList failed, falling back to [to]:", alErr.shortMessage || alErr.message || alErr);
+      candidates = [to];
     }
     console.log("[TxSim] Candidate tokens:", candidates.length, candidates);
 
@@ -829,7 +846,7 @@ export async function simulateAssetChanges(
 
     return await buildSimulationResult(client, tx.chainId, accountAddress, simResult, EMPTY);
   } catch (err: any) {
-    console.error("[TxSim] Simulation error:", err.shortMessage || err.message || err);
+    console.warn("[TxSim] Simulation error:", err.shortMessage || err.message || err);
     return {
       ...EMPTY,
       metadataComplete: true,

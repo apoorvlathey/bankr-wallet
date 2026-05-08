@@ -194,15 +194,10 @@ export function handleTransactionRequest(
       });
       return;
     }
-    // SECURITY: impersonator accounts are view-only — block at intake instead
-    // of letting the request queue and fail later.
-    if (activeAccount.type === "impersonator") {
-      await writeResultToStorage(`txResult:${txId}`, {
-        success: false,
-        error: "View-only accounts cannot send transactions",
-      });
-      return;
-    }
+    // Impersonator accounts land in the popup so the user can SEE what the
+    // dapp tried to send (banner + hidden Confirm button in
+    // TransactionConfirmation.tsx). Confirm-time signing is still defended in
+    // resolvePinnedAccount.
     // SECURITY: dapp-supplied tx.from must match the active account address.
     if (
       typeof tx.from === "string" &&
@@ -283,14 +278,10 @@ export function handleSignatureRequest(
       });
       return;
     }
-    // SECURITY: impersonator accounts are view-only — block at intake.
-    if (activeAccount.type === "impersonator") {
-      await writeResultToStorage(`sigResult:${sigId}`, {
-        success: false,
-        error: "View-only accounts cannot sign messages",
-      });
-      return;
-    }
+    // Impersonator accounts land in the popup so the user can SEE what the
+    // dapp tried to sign (banner + hidden Sign button in
+    // SignatureRequestConfirmation.tsx). Confirm-time signing is still
+    // defended in the per-account-type sign handlers.
     // SECURITY: validate signer param matches active account address.
     const signerParam = extractSignerParam(signature.method, signature.params);
     if (
