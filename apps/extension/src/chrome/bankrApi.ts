@@ -69,19 +69,19 @@ export async function submitTransactionDirect(
   tx: TransactionParams,
   signal?: AbortSignal
 ): Promise<SubmitTransactionDirectResponse> {
+  // Bankr's /agent/submit schema rejects any non-whitelisted key in
+  // `params.transaction` (zod `unrecognized_keys`). Bankr handles gas
+  // server-side, so we only forward to/value/data/chainId here. Any
+  // `tx.gas` / `tx.gasPrice` / `tx.maxFeePerGas` / `tx.maxPriorityFeePerGas`
+  // fields on the pending tx (from the dapp, our local sim, or the user's
+  // tier picker) are intentionally dropped on this path — they only apply
+  // to local-signing accounts (PK/Seed).
   const body: Record<string, any> = {
     transaction: {
       to: tx.to || undefined,
       chainId: tx.chainId,
       value: hexToDecimalString(tx.value),
       data: tx.data && tx.data !== "0x" ? tx.data : undefined,
-      // Forward an explicit gas limit when we have one (e.g., we pre-estimated
-      // a V4 swap with 1.5x buffer because Bankr's server-side estimator
-      // underestimates UR/V4 hook calls).
-      gas: tx.gas || undefined,
-      gasPrice: tx.gasPrice || undefined,
-      maxFeePerGas: tx.maxFeePerGas || undefined,
-      maxPriorityFeePerGas: tx.maxPriorityFeePerGas || undefined,
     },
     waitForConfirmation: true,
   };
