@@ -14,7 +14,7 @@ WalletChan is distributed through two channels.
 
 ### Two Zip Variants
 
-CWS **rejects** uploads containing `key` or `update_url` fields in `manifest.json`. Use `pnpm zip:cws` to create a CWS-ready zip — it builds the extension and strips these fields from the build output before zipping (via `scripts/strip-cws-keys.sh`). The plain `pnpm zip` builds and keeps all fields intact (used for GitHub Releases).
+CWS **rejects** uploads containing a `key` field in `manifest.json` (it assigns its own extension ID). The shipped `manifest.json` does not include `key`, so `pnpm zip` and `pnpm zip:cws` produce equivalent output today; the strip step in `scripts/strip-cws-keys.sh` is kept as a safety net in case `key` is ever re-introduced.
 
 Both `zip` and `zip:cws` run `pnpm build` automatically — no need to build separately first.
 
@@ -66,8 +66,8 @@ Once approved, **CWS users** receive the update.
 If you need to create a release without the automated workflow:
 
 ```bash
-pnpm zip        # builds + zips with key + update_url (for GitHub Release)
-pnpm zip:cws    # builds + zips without key + update_url (for CWS upload)
+pnpm zip        # builds + zips with `key` (for GitHub Release)
+pnpm zip:cws    # builds + zips without `key` (for CWS upload)
 ```
 
 Then upload `apps/extension/zip/walletchan-vX.Y.Z.zip` to a new GitHub release.
@@ -88,7 +88,7 @@ GitHub Releases provide a ZIP file for users who want to sideload the extension 
 
 Chrome **blocks enabling sideloaded CRX extensions** that aren't from the Chrome Web Store. Dragging a `.crx` file into `chrome://extensions` will install it, but Chrome disables it with the warning: _"This extension is not listed in the Chrome Web Store and may have been added without your knowledge."_
 
-This is why we only distribute ZIP files (for unpacked loading) and not CRX files on GitHub Releases. CRX-based auto-update via `update_url` only works for enterprise/managed installs deployed via group policy.
+This is why we only distribute ZIP files (for unpacked loading) and not CRX files on GitHub Releases. CRX-based auto-update only works for enterprise/managed installs deployed via group policy (which supplies its own `update_url` via policy, not via the manifest).
 
 ### Version Flow
 

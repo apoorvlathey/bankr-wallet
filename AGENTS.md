@@ -109,8 +109,8 @@ pnpm build:extension    # Build extension only (output: apps/extension/build/)
 pnpm build:website      # Build website only
 
 # Extension-specific
-pnpm zip                # Build + zip (keeps all manifest fields, for GitHub Releases)
-pnpm zip:cws            # Build + zip (strips key + update_url, for CWS upload)
+pnpm zip                # Build + zip (for GitHub Releases)
+pnpm zip:cws            # Build + zip (strips `key` defensively, for CWS upload)
 pnpm lint               # Lint extension code
 
 # Contracts
