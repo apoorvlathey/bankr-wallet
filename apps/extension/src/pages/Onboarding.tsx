@@ -33,6 +33,7 @@ import {
 } from "@/components/shared/AccountTypeIcons";
 import PrivateKeyInput from "@/components/shared/PrivateKeyInput";
 import SeedPhraseSetup from "@/components/SeedPhraseSetup";
+import ThemeSwitcher from "@/components/shared/ThemeSwitcher";
 import { TWITTER_URL, BANKR_BOT_API_PAGE, BANKR_BOT_TERMINAL_PAGE } from "@/constants/externalUrls";
 import { useTheme } from "@/theme";
 
@@ -73,6 +74,8 @@ function StepIndicator({
   currentStep: number;
   totalSteps: number;
 }) {
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const colors = ["accent.primary", "accent.secondary", "accent.highlight"];
   return (
     <VStack spacing={2}>
@@ -83,9 +86,12 @@ function StepIndicator({
             w="12px"
             h="12px"
             bg={index <= currentStep ? colors[index] : "surface.raised"}
-            border="2px solid"
+            border={isDarkTheme ? "1px solid" : "2px solid"}
             borderColor="border.default"
-            transform={index === currentStep ? "rotate(45deg)" : "none"}
+            borderRadius={isDarkTheme ? "full" : "none"}
+            transform={
+              !isDarkTheme && index === currentStep ? "rotate(45deg)" : "none"
+            }
             transition="all 0.2s"
           />
         ))}
@@ -579,6 +585,11 @@ function Onboarding({ onComplete }: OnboardingProps) {
         p={8}
         position="relative"
       >
+        {/* Theme switcher — top-right corner on every onboarding screen. */}
+        <Box position="absolute" top={3} right={3} zIndex={2}>
+          <ThemeSwitcher />
+        </Box>
+
         {/* Bauhaus-only geometric decorations — Midnight has no corner ornaments. */}
         {!isDarkTheme && (
           <>
@@ -591,17 +602,6 @@ function Onboarding({ onComplete }: OnboardingProps) {
               bg="accent.primary"
               border="3px solid"
               borderColor="border.default"
-            />
-            <Box
-              position="absolute"
-              top={8}
-              right={8}
-              w="20px"
-              h="20px"
-              bg="accent.secondary"
-              border="3px solid"
-              borderColor="border.default"
-              borderRadius="full"
             />
             <Box
               position="absolute"
@@ -622,6 +622,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
             bg="accent.highlight"
             border="2px solid"
             borderColor="border.default"
+            borderRadius="lg"
             boxShadow="card"
             p={4}
           >
@@ -704,31 +705,23 @@ function Onboarding({ onComplete }: OnboardingProps) {
         p={8}
         position="relative"
       >
+        {/* Theme switcher — top-right corner on every onboarding screen. */}
+        <Box position="absolute" top={3} right={3} zIndex={2}>
+          <ThemeSwitcher />
+        </Box>
+
         {/* Bauhaus-only geometric decorations */}
         {!isDarkTheme && (
-          <>
-            <Box
-              position="absolute"
-              top={8}
-              left={8}
-              w="16px"
-              h="16px"
-              bg="accent.primary"
-              border="2px solid"
-              borderColor="border.default"
-            />
-            <Box
-              position="absolute"
-              top={8}
-              right={8}
-              w="16px"
-              h="16px"
-              bg="accent.secondary"
-              border="2px solid"
-              borderColor="border.default"
-              borderRadius="full"
-            />
-          </>
+          <Box
+            position="absolute"
+            top={8}
+            left={8}
+            w="16px"
+            h="16px"
+            bg="accent.primary"
+            border="2px solid"
+            borderColor="border.default"
+          />
         )}
 
         {/* Floating arrow pointing to extension area */}
@@ -766,6 +759,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
             py={2}
             border="2px solid"
             borderColor="border.default"
+            borderRadius="lg"
             boxShadow="card"
           >
             <Image src="/walletchan-icon.png" w="20px" h="20px" />
@@ -792,6 +786,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
             bg="accent.highlight"
             border="2px solid"
             borderColor="border.default"
+            borderRadius="lg"
             boxShadow="card"
             display="flex"
             alignItems="center"
@@ -872,22 +867,29 @@ function Onboarding({ onComplete }: OnboardingProps) {
         minH="100vh"
         bg="surface.base"
         display="flex"
+        flexDirection="column"
         alignItems="center"
-        justifyContent="center"
-        p={8}
+        justifyContent="flex-start"
+        px={8}
+        pt={32}
+        pb={8}
+        position="relative"
       >
-        <Box w="full" maxW="400px">
-          <SeedPhraseSetup
-            onBack={() => setStep("accountType")}
-            onComplete={() => {}}
-            onCollect={(mnemonic, groupName, accountDisplayName) => {
-              setCollectedMnemonic(mnemonic);
-              setSeedGroupName(groupName || "");
-              setSeedAccountDisplayName(accountDisplayName || "");
-              setStep("password");
-            }}
-          />
+        {/* Theme switcher — top-right corner on every onboarding screen. */}
+        <Box position="absolute" top={3} right={3} zIndex={2}>
+          <ThemeSwitcher />
         </Box>
+
+        <SeedPhraseSetup
+          onBack={() => setStep("accountType")}
+          onComplete={() => {}}
+          onCollect={(mnemonic, groupName, accountDisplayName) => {
+            setCollectedMnemonic(mnemonic);
+            setSeedGroupName(groupName || "");
+            setSeedAccountDisplayName(accountDisplayName || "");
+            setStep("password");
+          }}
+        />
       </Box>
     );
   }
@@ -900,35 +902,29 @@ function Onboarding({ onComplete }: OnboardingProps) {
       display="flex"
       flexDirection="column"
       alignItems="center"
-      justifyContent="center"
-      p={8}
+      justifyContent="flex-start"
+      px={8}
+      pt={32}
+      pb={8}
       position="relative"
     >
+      {/* Theme switcher — top-right corner on every onboarding screen. */}
+      <Box position="absolute" top={3} right={3} zIndex={2}>
+        <ThemeSwitcher />
+      </Box>
+
       {/* Bauhaus-only geometric decorations */}
       {!isDarkTheme && (
-        <>
-          <Box
-            position="absolute"
-            top={8}
-            left={8}
-            w="12px"
-            h="12px"
-            bg="accent.primary"
-            border="2px solid"
-            borderColor="border.default"
-          />
-          <Box
-            position="absolute"
-            top={8}
-            right={8}
-            w="12px"
-            h="12px"
-            bg="accent.secondary"
-            border="2px solid"
-            borderColor="border.default"
-            borderRadius="full"
-          />
-        </>
+        <Box
+          position="absolute"
+          top={8}
+          left={8}
+          w="12px"
+          h="12px"
+          bg="accent.primary"
+          border="2px solid"
+          borderColor="border.default"
+        />
       )}
 
       <VStack spacing={6} w="full" maxW="400px">
@@ -983,6 +979,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                     ? "accent.secondary"
                     : "border.default"
                 }
+                borderRadius="lg"
                 boxShadow="card"
                 textAlign="left"
                 onClick={() => setAccountTypeChoice("bankr")}
@@ -997,6 +994,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                     bg="accent.secondary"
                     border="2px solid"
                     borderColor="border.default"
+                    borderRadius="md"
                     p={2}
                   >
                     <RobotIcon boxSize="20px" color="accentFg.secondary" />
@@ -1063,6 +1061,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                       ? "accent.highlight"
                       : "border.default"
                   }
+                  borderRadius="lg"
                   boxShadow="card"
                   textAlign="left"
                   onClick={() => setAccountTypeChoice("privateKey")}
@@ -1073,6 +1072,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                       bg="accent.highlight"
                       border="2px solid"
                       borderColor="border.default"
+                      borderRadius="md"
                       p={1.5}
                     >
                       <KeyIcon boxSize="16px" color="accentFg.highlight" />
@@ -1101,6 +1101,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                         bg="accent.highlight"
                         border="2px solid"
                         borderColor="border.default"
+                        borderRadius={isDarkTheme ? "full" : "none"}
                       />
                     )}
                   </HStack>
@@ -1122,6 +1123,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                       ? "accent.primary"
                       : "border.default"
                   }
+                  borderRadius="lg"
                   boxShadow="card"
                   textAlign="left"
                   onClick={() => setAccountTypeChoice("seedPhrase")}
@@ -1132,6 +1134,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                       bg="accent.primary"
                       border="2px solid"
                       borderColor="border.default"
+                      borderRadius="md"
                       p={1.5}
                     >
                       <SeedIcon boxSize="16px" color="accentFg.primary" />
@@ -1160,7 +1163,8 @@ function Onboarding({ onComplete }: OnboardingProps) {
                         bg="accent.primary"
                         border="2px solid"
                         borderColor="border.default"
-                        transform="rotate(45deg)"
+                        borderRadius={isDarkTheme ? "full" : "none"}
+                        transform={isDarkTheme ? "none" : "rotate(45deg)"}
                       />
                     )}
                   </HStack>
@@ -1207,6 +1211,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
               bg="surface.raised"
               border="2px solid"
               borderColor={isDarkTheme ? "border.strong" : "border.default"}
+              borderRadius="lg"
               boxShadow="card"
               position="relative"
             >
@@ -1379,6 +1384,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
               bg="surface.raised"
               border="2px solid"
               borderColor={isDarkTheme ? "border.strong" : "border.default"}
+              borderRadius="lg"
               boxShadow="card"
               position="relative"
             >
@@ -1432,11 +1438,18 @@ function Onboarding({ onComplete }: OnboardingProps) {
               bg="status.warning.bg"
               border="2px solid"
               borderColor="status.warning.border"
+              borderRadius="lg"
               boxShadow="card"
               spacing={2}
               align="center"
             >
-              <Box w="8px" h="8px" minW="8px" bg="status.warning.fg" />
+              <Box
+                w="8px"
+                h="8px"
+                minW="8px"
+                bg="status.warning.fg"
+                borderRadius={isDarkTheme ? "full" : "none"}
+              />
               <Text fontSize="xs" color="status.warning.fg" fontWeight="700">
                 Never share your private key with anyone. It will be encrypted
                 and stored only on this device.
@@ -1479,6 +1492,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
               bg="surface.raised"
               border="2px solid"
               borderColor={isDarkTheme ? "border.strong" : "border.default"}
+              borderRadius="lg"
               boxShadow="card"
               position="relative"
             >
@@ -1575,6 +1589,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
               bg="status.warning.bg"
               border="2px solid"
               borderColor="status.warning.border"
+              borderRadius="lg"
               boxShadow="card"
             >
               <Text fontSize="sm" color="status.warning.fg" fontWeight="700">
