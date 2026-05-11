@@ -128,7 +128,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   {
     chainId: 1,
     name: "Ethereum",
-    rpcUrl: "https://eth.llamarpc.com",
+    rpcUrl: "https://eth.drpc.org",
     explorer: "https://etherscan.io",
     icon: "/chainIcons/ethereum.svg",
     bg: "rgba(98, 126, 234, 0.15)",
@@ -164,7 +164,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   {
     chainId: 8453,
     name: "Base",
-    rpcUrl: "https://mainnet.base.org",
+    rpcUrl: "https://base.drpc.org",
     explorer: "https://basescan.org",
     icon: "/chainIcons/base.svg",
     bg: "rgba(0, 82, 255, 0.15)",
@@ -243,7 +243,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   {
     chainId: 137,
     name: "Polygon",
-    rpcUrl: "https://polygon-rpc.com",
+    rpcUrl: "https://polygon.drpc.org",
     explorer: "https://polygonscan.com",
     icon: "/chainIcons/polygon.svg",
     bg: "rgba(130, 71, 229, 0.15)",

@@ -28,7 +28,6 @@ import {
 import {
   FORCE_INCLUSION_CHAINS,
   type ForceInclusionChainInfo,
-  RPC_URLS,
 } from "@/constants/chainRegistry";
 import { submitTransactionDirect, type TransactionParams } from "./bankrApi";
 import { getRpcUrl } from "./txHandlers";
@@ -100,14 +99,14 @@ export function getL1Chain(l1ChainId: number) {
 }
 
 export async function getL1RpcUrl(l1ChainId: number): Promise<string> {
-  // Check for user-configured override first
+  // getRpcUrl already cascades user-override → CHAIN_REGISTRY default.
   const stored = await getRpcUrl(l1ChainId);
   if (stored) return stored;
-  // Fallback to built-in registry or well-known public RPCs
-  if (RPC_URLS[l1ChainId]) return RPC_URLS[l1ChainId];
-  return l1ChainId === 1
-    ? "https://eth.llamarpc.com"
-    : "https://ethereum-sepolia-rpc.publicnode.com";
+  // Sepolia isn't in CHAIN_REGISTRY; keep a well-known public fallback for it.
+  if (l1ChainId === sepolia.id) {
+    return "https://ethereum-sepolia-rpc.publicnode.com";
+  }
+  throw new Error(`No L1 RPC URL configured for chain ${l1ChainId}`);
 }
 
 export function createL1PublicClient(rpcUrl: string): PublicClient {

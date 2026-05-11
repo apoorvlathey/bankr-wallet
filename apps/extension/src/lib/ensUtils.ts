@@ -30,13 +30,14 @@ const BASENAME_L2_RESOLVER_ADDRESS =
 // Public Clients (use user-configured RPCs from storage)
 // ============================================================================
 
+// Resolves via chainRegistry → user override > registry default. Throws if the
+// chain isn't registered; only call with chain IDs known to be in CHAIN_REGISTRY.
 async function getUserRpcUrl(chainId: number): Promise<string> {
   const rpcUrl = await getStoredRpcUrl(chainId).catch(() => undefined);
-  if (rpcUrl) return rpcUrl;
-  // Hardcoded last resort
-  return chainId === base.id
-    ? "https://mainnet.base.org"
-    : "https://eth.llamarpc.com";
+  if (!rpcUrl) {
+    throw new Error(`No RPC URL configured for chain ${chainId}`);
+  }
+  return rpcUrl;
 }
 
 async function getMainnetClient() {

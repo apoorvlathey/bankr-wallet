@@ -14,12 +14,10 @@
 export const CONTRACT = "0x0000000000696760E15f265e828DB644A0c242EB";
 export const BASE_PORTAL = "0x49048044D57e1C92A77f79988d21Fa8fAF74E97e";
 
-let RPC_ENDPOINTS = [
-  "https://eth.llamarpc.com",
-  "https://ethereum.publicnode.com",
-  "https://1rpc.io/eth",
-  "https://eth.drpc.org",
-];
+// Populated via config({ rpc }) — callers must set this before resolve/reverseResolve.
+// Keeping this empty by default ensures CHAIN_REGISTRY (via ensUtils.getUserRpcUrl) is
+// the single source of truth for the Ethereum mainnet RPC used by .wei resolution.
+let RPC_ENDPOINTS: string[] = [];
 
 // Function selectors
 const SEL = {
