@@ -1,4 +1,4 @@
-import { useState, useEffect, memo, type ReactNode } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import {
   HStack,
   VStack,
@@ -6,9 +6,12 @@ import {
   Link,
   Box,
   Button,
-  Badge,
   IconButton,
   Spacer,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  InputRightElement,
   Modal,
   ModalOverlay,
   ModalContent,
@@ -16,197 +19,38 @@ import {
   ModalBody,
   ModalFooter,
   useDisclosure,
-  Icon,
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { ArrowBackIcon, ChevronRightIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon, Search2Icon, SmallCloseIcon } from "@chakra-ui/icons";
 
 import { clearChatHistory } from "@/chrome/chatStorage";
 import { TWITTER_URL } from "@/constants/externalUrls";
-import { ThemedCard, Decorator, useStripTokens, useTheme } from "@/theme";
-import type { DecoratorAccent } from "@/theme";
+import { useStripTokens, useTheme } from "@/theme";
 import Chains from "./Chains";
 import ChangePassword from "./ChangePassword";
 import AutoLockSettings from "./AutoLockSettings";
 import AgentPasswordSettings from "./AgentPasswordSettings";
 import AppearanceSettings from "./AppearanceSettings";
-
-// Lucide-sourced stroke icons (ISC/MIT). All use currentColor + stroke
-// outlines so they read sharply on any theme and inherit from `iconColor`.
-const lucideProps = {
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 2,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-};
-
-const PaletteIcon = (props: any) => (
-  <Icon {...lucideProps} {...props}>
-    <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
-    <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
-    <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
-    <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
-    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
-  </Icon>
-);
-
-const LockIcon = (props: any) => (
-  <Icon {...lucideProps} {...props}>
-    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </Icon>
-);
-
-const AgentIcon = (props: any) => (
-  <Icon {...lucideProps} {...props}>
-    <path d="M12 8V4H8" />
-    <rect width="16" height="12" x="4" y="8" rx="2" />
-    <path d="M2 14h2" />
-    <path d="M20 14h2" />
-    <path d="M15 13v2" />
-    <path d="M9 13v2" />
-  </Icon>
-);
-
-const ClockIcon = (props: any) => (
-  <Icon {...lucideProps} {...props}>
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="12 6 12 12 16 14" />
-  </Icon>
-);
-
-const LinkChainIcon = (props: any) => (
-  <Icon {...lucideProps} {...props}>
-    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-  </Icon>
-);
-
-const TrashIcon = (props: any) => (
-  <Icon {...lucideProps} {...props}>
-    <path d="M3 6h18" />
-    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-    <line x1="10" x2="10" y1="11" y2="17" />
-    <line x1="14" x2="14" y1="11" y2="17" />
-  </Icon>
-);
-
-const ResetIcon = (props: any) => (
-  <Icon {...lucideProps} {...props}>
-    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-    <path d="M3 3v5h5" />
-  </Icon>
-);
-
-const ChatBubbleIcon = (props: any) => (
-  <Icon {...lucideProps} {...props}>
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-  </Icon>
-);
-
-/**
- * Internal settings row — wraps ThemedCard with the consistent layout used by
- * every entry on the Settings menu (icon swatch + title + subtitle + chevron).
- *
- * `iconBg` and `iconColor` accept any Chakra color token so callers can mix
- * intent tokens (`accent.highlight`, `accent.primary`) with status colors as
- * needed. The corner ornament is rendered via `<Decorator>` so it's
- * automatically suppressed in themes without `decorators.cardCorner`.
- */
-interface SettingsRowProps {
-  title: string;
-  subtitle: string;
-  icon: ReactNode;
-  iconBg: string;
-  iconColor?: string;
-  cornerAccent?: DecoratorAccent;
-  cornerBg?: string;
-  showChevron?: boolean;
-  onClick?: () => void;
-  disabled?: boolean;
-  badge?: ReactNode;
-  borderRadiusFull?: boolean;
-}
-
-function SettingsRow({
-  title,
-  subtitle,
-  icon,
-  iconBg,
-  iconColor = "fg.inverse",
-  cornerAccent = "highlight",
-  cornerBg,
-  showChevron = false,
-  onClick,
-  disabled = false,
-  badge,
-  borderRadiusFull = false,
-}: SettingsRowProps) {
-  // Strip tokens give us the proper inverted bar in each theme: BLACK box +
-  // WHITE chevron in Bauhaus, recessed surface.sunken + light chevron in
-  // Midnight. The previous `bg="fg.primary"` rendered as a stark off-white
-  // square in Midnight (because fg.primary is near-white there).
-  const chevronStrip = useStripTokens();
-  const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
-  return (
-    <ThemedCard
-      weight="medium"
-      interactive={!disabled}
-      p={4}
-      position="relative"
-      cursor={disabled ? "not-allowed" : "pointer"}
-      onClick={disabled ? undefined : onClick}
-      opacity={disabled ? 0.55 : 1}
-    >
-      <Decorator
-        corner="top-right"
-        accent={cornerAccent}
-        {...(cornerBg ? { bg: cornerBg } : {})}
-        {...(borderRadiusFull ? { borderRadius: "full" } : {})}
-      />
-
-      <HStack justify="space-between">
-        <HStack spacing={3}>
-          <Box
-            p={2}
-            bg={iconBg}
-            color={iconColor}
-            borderRadius={isDarkTheme ? "md" : undefined}
-          >
-            {icon}
-          </Box>
-          <Box>
-            <HStack spacing={2}>
-              <Text fontWeight="700" color="text.primary">
-                {title}
-              </Text>
-              {badge}
-            </HStack>
-            <Text fontSize="xs" color="text.secondary" fontWeight="500">
-              {subtitle}
-            </Text>
-          </Box>
-        </HStack>
-        {showChevron && (
-          <Box
-            bg={chevronStrip.bg}
-            p={1}
-            borderRadius={isDarkTheme ? "md" : undefined}
-          >
-            <ChevronRightIcon color={chevronStrip.fg} />
-          </Box>
-        )}
-      </HStack>
-    </ThemedCard>
-  );
-}
+import SecuritySettings from "./SecuritySettings";
+import DataSettings from "./DataSettings";
+import { SettingsRow } from "./SettingsRow";
+import {
+  LEAF_ENTRIES,
+  filterLeaves,
+  renderLeafRow,
+  type NavigableLeafId,
+  type ActionLeafId,
+  type RowContext,
+} from "./settingsRegistry";
+import {
+  ShieldIcon,
+  DatabaseIcon,
+} from "./icons";
 
 type SettingsTab =
   | "main"
+  | "security"
+  | "data"
   | "chains"
   | "changePassword"
   | "autoLock"
@@ -235,6 +79,8 @@ function Settings({
   const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [isAgentPasswordEnabled, setIsAgentPasswordEnabled] = useState(false);
   const [passwordType, setPasswordType] = useState<"master" | "agent" | null>(null);
+  const [query, setQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const toast = useThemedToast();
   const { themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
@@ -283,6 +129,16 @@ function Settings({
     checkPasswordType();
   }, []);
 
+  // Auto-focus the search input when landing on the main settings list.
+  // Guarded so we don't yank focus when the user navigates back from a leaf
+  // screen mid-session (focus restoration there is handled by individual leaf
+  // screens). Only fire on the initial mount in main.
+  useEffect(() => {
+    if (tab === "main") {
+      searchInputRef.current?.focus();
+    }
+  }, [tab]);
+
   const checkAgentPassword = async () => {
     const response = await new Promise<{ enabled: boolean }>((resolve) => {
       chrome.runtime.sendMessage({ type: "isAgentPasswordEnabled" }, resolve);
@@ -295,6 +151,31 @@ function Settings({
       chrome.runtime.sendMessage({ type: "getPasswordType" }, resolve);
     });
     setPasswordType(response.passwordType);
+  };
+
+  const navigateToLeaf = (id: NavigableLeafId) => {
+    // NavigableLeafId values intentionally line up 1:1 with SettingsTab values.
+    setQuery("");
+    setTab(id);
+  };
+
+  const fireAction = (id: ActionLeafId) => {
+    // After firing, drop the search query so the user lands back on the
+    // default main list (clean state) once any modal closes / toast fires.
+    setQuery("");
+    if (id === "clearTxHistory") onDeleteModalOpen();
+    else if (id === "clearChatHistory") onChatDeleteModalOpen();
+    else if (id === "resetNonce") handleResetNonce();
+  };
+
+  const rowCtx: RowContext = {
+    isDarkTheme,
+    chainStripBg: chainStrip.bg,
+    chainStripFg: chainStrip.fg,
+    passwordType,
+    isAgentPasswordEnabled,
+    onNavigate: navigateToLeaf,
+    onAction: fireAction,
   };
 
   if (tab === "chains") {
@@ -344,6 +225,17 @@ function Settings({
     return <AppearanceSettings onCancel={() => setTab("main")} />;
   }
 
+  if (tab === "security") {
+    return <SecuritySettings onBack={() => setTab("main")} ctx={rowCtx} />;
+  }
+
+  if (tab === "data") {
+    return <DataSettings onBack={() => setTab("main")} ctx={rowCtx} />;
+  }
+
+  const trimmedQuery = query.trim();
+  const matches = trimmedQuery ? filterLeaves(trimmedQuery) : [];
+
   return (
     <VStack spacing={4} align="stretch" flex="1">
       {/* Header */}
@@ -363,148 +255,77 @@ function Settings({
         <Spacer />
       </HStack>
 
-      {/* Appearance — first row, themed picker entry */}
-      <SettingsRow
-        title="Appearance"
-        subtitle="Choose theme and visual style"
-        icon={<PaletteIcon boxSize={5} />}
-        iconBg="accent.secondary"
-        iconColor="accentFg.secondary"
-        cornerAccent="secondary"
-        showChevron
-        onClick={() => setTab("appearance")}
-      />
+      {/* Search */}
+      <InputGroup>
+        <InputLeftElement pointerEvents="none">
+          <Search2Icon color="fg.muted" />
+        </InputLeftElement>
+        <Input
+          ref={searchInputRef}
+          placeholder="Search settings..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          autoFocus
+        />
+        {query && (
+          <InputRightElement>
+            <IconButton
+              aria-label="Clear search"
+              icon={<SmallCloseIcon />}
+              size="xs"
+              variant="ghost"
+              onClick={() => {
+                setQuery("");
+                searchInputRef.current?.focus();
+              }}
+            />
+          </InputRightElement>
+        )}
+      </InputGroup>
 
-      {/* Change Password — disabled when unlocked with agent password */}
-      <SettingsRow
-        title="Change Password"
-        subtitle={
-          passwordType === "agent"
-            ? "Unlock with master password to access"
-            : "Update your encryption password"
-        }
-        icon={<LockIcon boxSize={5} />}
-        iconBg="accent.highlight"
-        iconColor="accentFg.highlight"
-        cornerAccent="highlight"
-        showChevron={passwordType !== "agent"}
-        onClick={() => setTab("changePassword")}
-        disabled={passwordType === "agent"}
-      />
+      {trimmedQuery ? (
+        matches.length > 0 ? (
+          <>{matches.map((e) => renderLeafRow(e.id, rowCtx))}</>
+        ) : (
+          <Box py={6} textAlign="center">
+            <Text fontSize="sm" color="text.secondary" fontWeight="500">
+              No settings match &ldquo;{trimmedQuery}&rdquo;
+            </Text>
+          </Box>
+        )
+      ) : (
+        <>
+          {/* Appearance — first row, themed picker entry */}
+          {renderLeafRow("appearance", rowCtx)}
 
-      {/* Agent Password — OFF state needs different neutrals per theme:
-          Bauhaus has a white sunken surface and dark fg.muted that read as
-          "disabled but visible". In Midnight, lift the chip onto
-          border.strong with fg.primary so the OFF tile reads as a clearly
-          elevated neutral against the card (the previous border.default was
-          too close to the card surface and faded out). */}
-      <SettingsRow
-        title="Agent Password"
-        subtitle="Allow AI agents to unlock wallet"
-        icon={<AgentIcon boxSize={5} />}
-        iconBg={
-          isAgentPasswordEnabled
-            ? "accent.secondary"
-            : isDarkTheme
-              ? "border.strong"
-              : "surface.sunken"
-        }
-        iconColor={
-          isAgentPasswordEnabled
-            ? "accentFg.secondary"
-            : isDarkTheme
-              ? "fg.primary"
-              : "fg.muted"
-        }
-        cornerAccent="secondary"
-        showChevron
-        onClick={() => setTab("agentPassword")}
-        badge={
-          <Badge
-            bg={
-              isAgentPasswordEnabled
-                ? "accent.secondary"
-                : isDarkTheme
-                  ? "border.strong"
-                  : "surface.sunken"
-            }
-            color={
-              isAgentPasswordEnabled
-                ? "accentFg.secondary"
-                : isDarkTheme
-                  ? "fg.primary"
-                  : "fg.muted"
-            }
-            border="2px solid"
-            borderColor="border.default"
-            fontSize="xs"
-            fontWeight="700"
-          >
-            {isAgentPasswordEnabled ? "ON" : "OFF"}
-          </Badge>
-        }
-      />
+          {/* Security group */}
+          <SettingsRow
+            title="Security"
+            subtitle="Password, agent access, auto-lock"
+            icon={<ShieldIcon boxSize={5} />}
+            iconBg="accent.highlight"
+            iconColor="accentFg.highlight"
+            cornerAccent="highlight"
+            showChevron
+            onClick={() => setTab("security")}
+          />
 
-      {/* Auto-Lock Settings */}
-      <SettingsRow
-        title="Auto-Lock"
-        subtitle="Configure wallet lock timeout"
-        icon={<ClockIcon boxSize={5} />}
-        iconBg="accent.highlight"
-        iconColor="accentFg.highlight"
-        cornerAccent="highlight"
-        showChevron
-        onClick={() => setTab("autoLock")}
-      />
+          {/* Chain RPCs — top-level single entry */}
+          {renderLeafRow("chains", rowCtx)}
 
-      {/* Chain RPCs — Bauhaus uses the inverted-strip pattern (BLACK chip)
-          which is a signature look. Midnight's surface.sunken read as a dark
-          "hole" against the card, so we lift onto border.strong for a clearly
-          elevated neutral system chip with primary fg on top. */}
-      <SettingsRow
-        title="Chain RPCs"
-        subtitle="Configure network RPC endpoints"
-        icon={<LinkChainIcon boxSize={5} />}
-        iconBg={isDarkTheme ? "border.strong" : chainStrip.bg}
-        iconColor={isDarkTheme ? "fg.primary" : chainStrip.fg}
-        cornerBg="border.default"
-        showChevron
-        onClick={() => setTab("chains")}
-      />
-
-      {/* Clear Transaction History */}
-      <SettingsRow
-        title="Clear Transaction History"
-        subtitle="Remove all transaction records"
-        icon={<TrashIcon boxSize={5} />}
-        iconBg="accent.primary"
-        iconColor="accentFg.primary"
-        cornerAccent="primary"
-        onClick={onDeleteModalOpen}
-      />
-
-      {/* Reset Nonce Cache */}
-      <SettingsRow
-        title="Reset Nonce Cache"
-        subtitle="Fix stuck transactions from nonce conflicts"
-        icon={<ResetIcon boxSize={5} />}
-        iconBg="accent.secondary"
-        iconColor="accentFg.secondary"
-        cornerAccent="secondary"
-        onClick={handleResetNonce}
-      />
-
-      {/* Clear Chat History — circular corner ornament marks the soft action */}
-      <SettingsRow
-        title="Clear Chat History"
-        subtitle="Remove all chat conversations"
-        icon={<ChatBubbleIcon boxSize={5} />}
-        iconBg="accent.primary"
-        iconColor="accentFg.primary"
-        cornerAccent="primary"
-        borderRadiusFull
-        onClick={onChatDeleteModalOpen}
-      />
+          {/* Data group */}
+          <SettingsRow
+            title="Data"
+            subtitle="Clear history, reset nonce cache"
+            icon={<DatabaseIcon boxSize={5} />}
+            iconBg="accent.primary"
+            iconColor="accentFg.primary"
+            cornerAccent="primary"
+            showChevron
+            onClick={() => setTab("data")}
+          />
+        </>
+      )}
 
       {/* Delete Transaction History Confirmation Modal */}
       <Modal isOpen={isDeleteModalOpen} onClose={onDeleteModalClose} isCentered>
@@ -609,5 +430,9 @@ function Settings({
     </VStack>
   );
 }
+
+// LEAF_ENTRIES is exported from registry for any external consumer that needs
+// to enumerate settings; re-export for backwards compatibility if needed.
+export { LEAF_ENTRIES };
 
 export default memo(Settings);
