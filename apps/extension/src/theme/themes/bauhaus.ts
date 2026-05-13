@@ -59,6 +59,12 @@ export const bauhausTokens: ThemeTokens = {
       raisedHover: "#F5F5F5",
       sunken: WHITE,
       overlay: "rgba(0, 0, 0, 0.6)",
+      // Soft warm cream — gentle warm wash that visibly distinguishes the
+      // clear-signing card from the surrounding WHITE `raised` cards without
+      // shouting. Subtler than the warning `tint` (#FFF8DC) since this is an
+      // attention cue, not an alert; subtler than the original saturated
+      // #FFF1C2 so it stays elegant rather than feeling sticker-applied.
+      accentTint: "#FFF6D9",
     },
     fg: {
       primary: TEXT_PRIMARY,

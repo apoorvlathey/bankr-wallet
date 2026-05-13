@@ -86,6 +86,12 @@ import {
   addMessageToConversation,
   updateMessageInConversation,
 } from "./chatStorage";
+import {
+  handleGetClearSigningDescriptor,
+  handleInvalidateClearSigningCache,
+  getClearSigningEnabled,
+  setClearSigningEnabled,
+} from "./clearSigningHandlers";
 
 // Session & cache management
 import {
@@ -190,7 +196,7 @@ import {
   getPendingAddChainRequests,
   PendingAddChainRequest,
 } from "./pendingAddChainStorage";
-import { addCustomToken } from "./customTokenStorage";
+import { addCustomToken, getCustomTokens } from "./customTokenStorage";
 import { getResolvedChainById } from "@/lib/chains";
 
 import {
@@ -751,6 +757,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             symbol: pending.asset.symbol,
             name: tokenName,
             decimals: pending.asset.decimals,
+            image: pending.asset.image,
           });
           await removePendingWatchAssetRequest(message.watchAssetId);
           await writeResultToStorage(`watchAssetResult:${message.watchAssetId}`, {
@@ -2100,6 +2107,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "lookupCustomToken": {
+      // Read-only lookup against the user's customTokens storage.
+      // Used by inline token-amount views as a logo fallback when the swap
+      // list / KNOWN_TOKEN_LOGOS don't have the address.
+      (async () => {
+        try {
+          const tokens = await getCustomTokens();
+          const addr = String(message.tokenAddress || "").toLowerCase();
+          const match = tokens.find(
+            (t) =>
+              t.chainId === Number(message.chainId) &&
+              t.contractAddress === addr,
+          );
+          sendResponse({ success: true, data: match || null });
+        } catch (err) {
+          sendResponse({
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })();
+      return true;
+    }
+
     case "fetchTokenPrice": {
       fetchTokenPrice(message.chainId, message.address)
         .then((priceUsd) =>
@@ -2436,6 +2467,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       ).then((conversation) => {
         sendResponse(conversation);
       });
+      return true;
+    }
+
+    case "GET_CLEAR_SIGNING_DESCRIPTOR": {
+      handleGetClearSigningDescriptor(message)
+        .then((response) => sendResponse(response))
+        .catch((err) =>
+          sendResponse({
+            descriptor: null,
+            enabled: true,
+            error: err?.message,
+          }),
+        );
+      return true;
+    }
+
+    case "INVALIDATE_CLEAR_SIGNING_CACHE": {
+      handleInvalidateClearSigningCache()
+        .then((r) => sendResponse({ success: true, ...r }))
+        .catch((err) => sendResponse({ success: false, error: err?.message }));
+      return true;
+    }
+
+    case "getClearSigningEnabled": {
+      getClearSigningEnabled()
+        .then((enabled) => sendResponse({ enabled }))
+        .catch((err) => sendResponse({ enabled: true, error: err?.message }));
+      return true;
+    }
+
+    case "setClearSigningEnabled": {
+      setClearSigningEnabled(!!message.value)
+        .then(() => sendResponse({ success: true }))
+        .catch((err) => sendResponse({ success: false, error: err?.message }));
       return true;
     }
 

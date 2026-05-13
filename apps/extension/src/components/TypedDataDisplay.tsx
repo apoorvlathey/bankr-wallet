@@ -18,6 +18,11 @@ import { useStripTokens, useTheme } from "@/theme";
 interface TypedDataDisplayProps {
   typedData: any;
   rawData: string;
+  /**
+   * When true, render only a thin collapsed header — used when a
+   * clear-signing descriptor above already conveys the essential info.
+   */
+  defaultCollapsed?: boolean;
 }
 
 function CopyBtn({ value }: { value: string }) {
@@ -213,7 +218,7 @@ const scrollStyles = {
   "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-default)" },
 };
 
-function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
+function TypedDataDisplay({ typedData, rawData, defaultCollapsed = false }: TypedDataDisplayProps) {
   const { tokens } = useTheme();
   // Same theme-aware tab strip pair as MessageDataDisplay / CalldataDecoder.
   const { bg: tabActiveBg, fg: tabActiveFg } = useStripTokens();
@@ -222,11 +227,37 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
   const numericColor = "chart.numeric";
   const [tab, setTab] = useState<"structured" | "raw">("structured");
   const [typesOpen, setTypesOpen] = useState(false);
+  const [expanded, setExpanded] = useState(!defaultCollapsed);
   const domain = typedData?.domain;
   const message = typedData?.message;
   const primaryType = typedData?.primaryType;
   const types = typedData?.types;
   const chainId = domain?.chainId ? Number(domain.chainId) : undefined;
+
+  if (!expanded) {
+    return (
+      <Box
+        bg="surface.raised"
+        border={tokens.borders.thin}
+        borderColor="border.default"
+        borderRadius="lg"
+        boxShadow="card"
+        overflow="hidden"
+        p={2}
+        cursor="pointer"
+        onClick={() => setExpanded(true)}
+        _hover={{ bg: "surface.sunken" }}
+      >
+        <HStack>
+          <Text fontSize="xs" color="fg.secondary" fontWeight="700" textTransform="uppercase">
+            Show raw typed data
+          </Text>
+          <Spacer />
+          <ChevronDownIcon color="fg.muted" />
+        </HStack>
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -282,6 +313,21 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
         <Box pr={1}>
           <CopyBtn value={rawData} />
         </Box>
+        {/* Collapse-back affordance, matching CalldataDecoder. Only shown
+            when the view was opened from a collapsed default (e.g. clear
+            signing matched) so the user can return to that compact state. */}
+        {defaultCollapsed && (
+          <IconButton
+            aria-label="Hide raw typed data"
+            icon={<ChevronDownIcon />}
+            size="xs"
+            variant="ghost"
+            mr={1}
+            color="text.tertiary"
+            onClick={() => setExpanded(false)}
+            _hover={{ color: "accent.secondary", bg: "bg.muted" }}
+          />
+        )}
       </HStack>
 
       {/* Content */}

@@ -41,6 +41,50 @@ interface AssetChangesDisplayProps {
   batchCalls?: { to?: string; data?: string; value?: string }[];
   /** Use eth_simulateV1-based non-atomic simulation (for PK/SP EOA accounts) */
   isNonAtomic?: boolean;
+  /**
+   * Fired whenever the simulated `txSuccess` flag flips. Parents use this to
+   * surface a standalone "simulated transaction reverted" banner at the very
+   * top of the confirmation surface, above the clear-signing card. The
+   * inline banner that used to live inside this component is intentionally
+   * suppressed so the warning lands in front of the user immediately.
+   */
+  onRevertedChange?: (reverted: boolean) => void;
+}
+
+/**
+ * Standalone simulated-revert banner. Lives at the top of every tx
+ * confirmation surface so users see "this is likely to fail" before reading
+ * the rest of the screen. Parents drive it via `AssetChangesDisplay`'s
+ * `onRevertedChange` callback.
+ */
+export function SimulationRevertedBanner({
+  borders,
+}: {
+  borders: { medium: string };
+}) {
+  return (
+    <Box
+      border={borders.medium}
+      borderColor="status.error.border"
+      borderRadius="lg"
+      bg="status.error.bg"
+      boxShadow="card"
+      px={3}
+      py={2.5}
+    >
+      <HStack spacing={2} align="flex-start">
+        <WarningTwoIcon
+          boxSize="14px"
+          color="status.error.fg"
+          mt="2px"
+          flexShrink={0}
+        />
+        <Text fontSize="xs" fontWeight="700" color="status.error.fg" lineHeight="short">
+          Simulated transaction reverted. Signing this is likely to fail onchain.
+        </Text>
+      </HStack>
+    </Box>
+  );
 }
 
 /** Format USD value for display */
@@ -482,7 +526,12 @@ const MAX_RETRIES = 3;
 /** Delay before each retry (ms) */
 const RETRY_DELAY = 2_500;
 
-function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChangesDisplayProps) {
+function AssetChangesDisplay({
+  txRequest,
+  batchCalls,
+  isNonAtomic,
+  onRevertedChange,
+}: AssetChangesDisplayProps) {
   const { tokens } = useTheme();
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -539,6 +588,20 @@ function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChange
       cancelled = true;
     };
   }, [txRequest.id, batchCallsKey]);
+
+  // Surface the simulated-revert flag to the parent so it can render the
+  // banner at the very top of the confirmation surface. Fires on each
+  // result change so transitions (loading → reverted, loading → success)
+  // propagate. We pass `false` when there is no result or simulation
+  // itself failed (latter is a different failure mode — not a revert).
+  useEffect(() => {
+    if (!onRevertedChange) return;
+    if (!result || result.simulationFailed) {
+      onRevertedChange(false);
+      return;
+    }
+    onRevertedChange(!result.txSuccess);
+  }, [result, onRevertedChange]);
 
   // Retry metadata fetch if initial attempt was incomplete
   useEffect(() => {
@@ -626,31 +689,10 @@ function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChange
   if (result.nativeChange) allChanges.push(result.nativeChange);
   allChanges.push(...result.tokenChanges);
 
-  const revertedBanner = !result.txSuccess ? (
-    <Box
-      border={tokens.borders.medium}
-      borderColor="status.error.border"
-      borderRadius="lg"
-      bg="status.error.bg"
-      boxShadow="card"
-      px={3}
-      py={2.5}
-    >
-      <HStack spacing={2} align="flex-start">
-        <WarningTwoIcon
-          boxSize="14px"
-          color="status.error.fg"
-          mt="2px"
-          flexShrink={0}
-        />
-        <Text fontSize="xs" fontWeight="700" color="status.error.fg" lineHeight="short">
-          Simulated transaction reverted — signing this is likely to fail onchain.
-        </Text>
-      </HStack>
-    </Box>
-  ) : null;
-
-  if (allChanges.length === 0) return revertedBanner;
+  // The "simulated transaction reverted" banner used to live here, but is now
+  // hoisted to the top of the confirmation surface via `onRevertedChange` so
+  // it lands in the user's field of view before they read anything else.
+  if (allChanges.length === 0) return null;
 
   const outChanges = allChanges.filter((c) => c.direction === "out");
   const inChanges = allChanges.filter((c) => c.direction === "in");
@@ -668,7 +710,6 @@ function AssetChangesDisplay({ txRequest, batchCalls, isNonAtomic }: AssetChange
 
   return (
     <VStack align="stretch" spacing={2}>
-      {revertedBanner}
       <Box
       border={tokens.borders.medium}
       borderColor="border.default"

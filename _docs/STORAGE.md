@@ -58,6 +58,13 @@ Persists across extension restarts. Cleared only on manual reset or uninstall.
 | `sigResult:{sigId}` | `{ result: { success, signature?, error? }, timestamp }` | Signature result. Written by background on confirm/reject, read+deleted by content script. Stale keys cleaned >30m.    |
 | `rpcResult:{id}`    | `{ result: { result?, error? }, timestamp }`             | RPC proxy result. Written by background after RPC call, read+deleted by content script. 30s timeout, stale keys cleaned >30m. |
 
+### Clear Signing (ERC-7730)
+
+| Key Pattern                              | Shape                                                  | Description                                                                                                          |
+| ---------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `cs:enabled`                             | `boolean`                                              | Master toggle for clear-signing descriptor fetching. Absent or `true` = enabled; `false` = opt-out, no network calls. |
+| `cs:desc:{chainId}:{address}:{kind}`     | `{ updatedAt: number; descriptor: Descriptor \| null }` | Per-contract descriptor cache. Hits TTL 7d, misses TTL 1d. `kind` is `"calldata"` or `"eip712"`. See `_docs/CLEAR_SIGNING.md`. |
+
 ---
 
 ## chrome.storage.sync
