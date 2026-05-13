@@ -9,6 +9,7 @@ import {
   TrashIcon,
   ResetIcon,
   ChatBubbleIcon,
+  ShieldIcon,
 } from "./icons";
 
 export type LeafId =
@@ -17,6 +18,7 @@ export type LeafId =
   | "agentPassword"
   | "autoLock"
   | "chains"
+  | "clearSigning"
   | "clearTxHistory"
   | "resetNonce"
   | "clearChatHistory";
@@ -68,6 +70,13 @@ export const LEAF_ENTRIES: readonly LeafEntry[] = [
     group: null,
   },
   {
+    id: "clearSigning",
+    title: "Clear Signing",
+    subtitle: "Show human-readable summaries for known contracts",
+    keywords: ["clear", "signing", "erc-7730", "descriptor", "privacy", "human", "readable"],
+    group: "security",
+  },
+  {
     id: "clearTxHistory",
     title: "Clear Transaction History",
     subtitle: "Remove all transaction records",
@@ -105,7 +114,8 @@ export type NavigableLeafId =
   | "changePassword"
   | "agentPassword"
   | "autoLock"
-  | "chains";
+  | "chains"
+  | "clearSigning";
 
 export type ActionLeafId = "clearTxHistory" | "resetNonce" | "clearChatHistory";
 
@@ -226,6 +236,21 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
           iconBg={ctx.isDarkTheme ? "border.strong" : ctx.chainStripBg}
           iconColor={ctx.isDarkTheme ? "fg.primary" : ctx.chainStripFg}
           cornerBg="border.default"
+          showChevron
+          onClick={() => ctx.onNavigate(id)}
+        />
+      );
+
+    case "clearSigning":
+      return (
+        <SettingsRow
+          key={id}
+          title="Clear Signing"
+          subtitle="Show human-readable summaries for known contracts"
+          icon={<ShieldIcon boxSize={5} />}
+          iconBg="accent.primary"
+          iconColor="accentFg.primary"
+          cornerAccent="primary"
           showChevron
           onClick={() => ctx.onNavigate(id)}
         />

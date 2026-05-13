@@ -31,6 +31,7 @@ import ChangePassword from "./ChangePassword";
 import AutoLockSettings from "./AutoLockSettings";
 import AgentPasswordSettings from "./AgentPasswordSettings";
 import AppearanceSettings from "./AppearanceSettings";
+import ClearSigningSettings from "./ClearSigningSettings";
 import SecuritySettings from "./SecuritySettings";
 import DataSettings from "./DataSettings";
 import { SettingsRow } from "./SettingsRow";
@@ -55,7 +56,8 @@ type SettingsTab =
   | "changePassword"
   | "autoLock"
   | "agentPassword"
-  | "appearance";
+  | "appearance"
+  | "clearSigning";
 
 interface SettingsProps {
   close: () => void;
@@ -223,6 +225,10 @@ function Settings({
 
   if (tab === "appearance") {
     return <AppearanceSettings onCancel={() => setTab("main")} />;
+  }
+
+  if (tab === "clearSigning") {
+    return <ClearSigningSettings onBack={() => setTab("main")} />;
   }
 
   if (tab === "security") {

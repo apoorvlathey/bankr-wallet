@@ -1,0 +1,1763 @@
+{
+  "updatedAt": "2026-05-12T23:22:13.352Z",
+  "source": "https://github.com/ethereum/clear-signing-erc7730-registry@master",
+  "entries": {
+    "1": {
+      "0x1111111254eeb25477b68fb85ed929f73a960582": {
+        "calldata": "registry/1inch/calldata-AggregationRouterV5.json"
+      },
+      "0x11111112542d85b3ef69ae05771c2dccff4faa26": {
+        "calldata": "registry/1inch/calldata-AggregationRouterV3.json"
+      },
+      "0x1111111254fb6c44bac0bed2854e76f90643097d": {
+        "calldata": "registry/1inch/calldata-AggregationRouterV4-eth.json"
+      },
+      "0x7d2768de32b0b80b7a3454c06bdac94a69ddc7a9": {
+        "calldata": "registry/aave/calldata-lpv2.json"
+      },
+      "0xd01607c3c5ecaba394d8be377a08590149325722": {
+        "calldata": "registry/aave/calldata-WrappedTokenGatewayV3.json"
+      },
+      "0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      },
+      "0x111111125421ca6dc452d289314280a0f8842a65": {
+        "eip712": "registry/1inch/eip712-AggregationRouterV6.json",
+        "calldata": "registry/1inch/calldata-AggregationRouterV6.json"
+      },
+      "0x119c71d3bbac22029622cbaec24854d3d32d2828": {
+        "eip712": "registry/1inch/eip712-1inch-limit-order.json"
+      },
+      "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": {
+        "eip712": "registry/circle/eip712-ReceiveWithAuthorization.json"
+      },
+      "0xe12e0f117d23a5ccc57f8935cd8c4e80cd91ff01": {
+        "calldata": "registry/1inch/calldata-NativeOrderFactory.json"
+      },
+      "0x00000000219ab540356cbb839cbe05303d7705fa": {
+        "calldata": "registry/consensus-specs/calldata-DepositContract.json"
+      },
+      "0xe63602a9b3dfe983187525ac985fec4f57b24ed5": {
+        "eip712": "registry/degate/eip712-degate.json"
+      },
+      "0x9d39a5de30e57443bff2a8307a4256c8797a3497": {
+        "calldata": "registry/ethena/calldata-ethena.json"
+      },
+      "0x25d598cbb74fa73290e74697616de2740d280745": {
+        "calldata": "registry/fellow-fund/calldata-fellow-fund.json"
+      },
+      "0x8b0d88b8be3c15d746feb0b1f18c883c03b6aa62": {
+        "calldata": "registry/figment/calldata-figment-batch-deposit.json"
+      },
+      "0x0000000000000000000000000000000000000000": {
+        "eip712": "registry/hyperliquid/eip712-withdraw.json"
+      },
+      "0x576834cb068e677db4aff6ca245c7bde16c3867e": {
+        "calldata": "registry/kiln/calldata-kiln-batch-deposit-v2.json"
+      },
+      "0x004c226fff73aa94b78a4df1a0e861797ba16819": {
+        "calldata": "registry/kiln/calldata-kiln-batch-exit.json"
+      },
+      "0x8659eeff31cfcff580d37af8e7af250f8998aa83": {
+        "calldata": "registry/kiln/calldata-kiln-fee-splitter-factory.json"
+      },
+      "0xae7ab96520de3a18e5e111b5eaab095312d7fe84": {
+        "calldata": "registry/lido/calldata-stETH.json"
+      },
+      "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0": {
+        "calldata": "registry/lido/calldata-wstETH.json"
+      },
+      "0x889edc2edab5f40e902b864ad4d7ade8e412f9b1": {
+        "calldata": "registry/lido/calldata-WithdrawalQueueERC721.json"
+      },
+      "0xa88f0329c2c4ce51ba3fc619bbf44efe7120dd0d": {
+        "calldata": "registry/lido/calldata-wstETH-referral-staker.json"
+      },
+      "0x8236a87084f8b84306f72007f36f2618a5634494": {
+        "calldata": "registry/lombard/calldata-lbtc-mainnet.json",
+        "eip712": "registry/lombard/eip712-network-fee-authorization-mainnet.json"
+      },
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0x99361435420711723af805f08187c9e6bf796683": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xa8a5c4ff4c86a459ebbdc39c5be77833b3a15d88": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x10cc8dbca90db7606013d8cd2e77eb024df693bd": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xfe8de16f2663c61187c1e15fb04d773e6ac668cc": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xe092737d412e0b290380f9c8548cb5a58174704f": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xce0a2953a5d46400af601a9857235312d1924ac7": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xd0bbc3a811e3a3502a07b130346dcc4cc9355c95": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x41438435c20b1c2f1fca702d387889f346a0c3de": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xba9fd2850965053ffab368df8aa7ed2486f11024": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xc21511edd1e6ecdc36e8ad4c82117033e50d5921": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xf89febef93c54618c4420ee4173e69cd21b27e3a": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x416ec6e04c009f9bae99a47ef836bf2cc64ec93c": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x164645fbc7220a3b4f8f5c6b473bcf1b6db146dd": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xd6fd5d4fa64fc7131e0ec3a4a53dc620a0ffc1bc": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x5ad2e3d65f8ecdc36eeba38bae3cc6ff258d2dfa": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xc93bb8d5581d74272f0e304593af9ab4e3a0181b": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xafcc1c556ee0436c10a3054b3d615abb93a352b5": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xa6d60a71844bc134f4303f5e40169d817b491e37": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x695fb34b07a8cec2411b1bb519fd8f1731850c81": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x5ae23d23b7986a708cba9bf808ad9a43bf77d1b7": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x8493f1f2b834c2837c87075b0edac17f5273789a": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xd1c5cbabb367783fb6b40935c64512ef06cbb4f4": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x8f382ae7bbdbecda835d26ce3ba64010eaee1386": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x34031e751da2ab19009d8f7eb268face2bdfd0dd": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xaa192f810106b6161cbe5fe531289c0e3b196deb": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x2ddc913e4c7674a7e42c55db48a92c47158e91c6": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x30acceedff97a3fe11ab52ee7425af4589338c06": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x5e154946561aea4e750aac6dead23d37e00e47f6": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x52e808bd3496c69c705028a258aee0a6e1a5b35d": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x5455222ccdd32f85c1998f57dc6cf613b4498c2a": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x57b3be350c777892611cedc93bcf8c099a9ecdab": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xed22a9861c6edd4f1292aeab1e44661d5f3fe65e": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x9a5cf6c0a1cee5226e31e3d0a81f2ca2462d8387": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x54602a8e47bf82073d75e0ac2aef67f84fbcb8e4": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x511d88e64d843ee11bf039a3eb837393001aede7": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x0f7e323103b29e1b18d521de957ed0c4c0a8189e": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xf6e51d24f4793ac5e71e0502213a9bbe3a6d4517": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x569d7dccbf6923350521ecbc28a555a500c4f0ec": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x19ab19e61a930bc5c7b75bf06cdd954218ca9f0b": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x0d89c1c4799353f3805a3e6c4e1cbbb83217d123": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x30d9d1e76869516aea980390494aaed45c3efc1a": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x9b2c5e30e3b1f6369fc746a1c1e47277396af15d": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xac14a14f578c143625fc8f54218911e8f634184d": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x5356b8e06589de894d86b24f4079c629e8565234": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x8bee3870ad8293dce79e6f4cb049f7531bd57c22": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x44b0440e35c596e858cea433d0d82f5a985fd19c": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x6be2f55816efd0d91f52720f096006d63c366e98": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x5aea6d35ed7b3b7ae78694b7da2ee880756af5c0": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x97acdfb3956403c4c6bbe837dc611e3a6ba1b3a7": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x1fe17936c1cdc73c857263997716e3a60b9291c7": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x4bcfda0a844b49da8bb19562ee52cc385395001a": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x7b83aa7b4ce8c7a021cafc862a030129cebf799d": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xfaae52c6a6d477f859a740a76b29c33559ace18c": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xe042678e6c6871fa279e037c11e390f31334ba0b": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x2db1ec186acdeaf7d0fc78bffe335560b0fe0085": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x2d7d5b1706653796602617350571b3f8999b950c": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xf4f042d90f0c0d3aba4a30caa6ac124b14a7e600": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x9f7dd5462c183b6577858e16a13a4d864ce2f972": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x71efa7af1686c5c04aa34a120a91cb4262679c44": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xa7c6c173d38dcf0543b5c479b845a430529a9a96": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xa85b5dd222a71602fca40410bc1f158bff1fa458": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x37769af173ea65dfc2880179940d5566817af6ae": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xf0c91bbae7f67c4e595d723ef5fb38b59f2008cf": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x649f8698068ad143a7e18ba9cb0be112d5986aeb": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x5572eb7f4fb679ff6a99203f12b0484dc1062d78": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x4fd4dd7171d14e5bd93025ec35374d2b9b4321b0": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x319a05e260acc2490768a726ccfd341d4b3d5106": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x9c3743582e8b2d7ccb5e08caf3c9c33780ac446f": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x15f724b35a75f0c28f352b952ea9d1b24e348c57": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x16d4f955b0aa1b1570fe3e9bb2f8c19c407cdb67": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xb02cc77ee137436d71b9de46958a3bb5d7346cca": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xc37edf7d955020d547b45f762027b49947d02550": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xc33dada688f224c514682ec6ba940888d43c4b29": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x70ba3211f2584bf1c8a2acdf0a00dba559ce1ffa": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xbbbbbbbbbb9cc5e90e3b3af64bdaf62c37eeffcb": {
+        "calldata": "registry/morpho/calldata-MorphoBlue.json"
+      },
+      "0x6566194141eefa99af43bb5aa71460ca2dc90245": {
+        "calldata": "registry/morpho/calldata-MorphoBundlerV3.json"
+      },
+      "0x5e1f62dac767b0491e3ce72469c217365d5b48cc": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x28b1dc1a5e3699a428bc51d234dfab7c9cb2a183": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      },
+      "0x7f268357a8c2552623316e2562d90e642bb538e5": {
+        "eip712": "registry/opensea/eip712-opensea.json"
+      },
+      "0x91e677b07f7af907ec9a428aafa9fc14a0d3a338": {
+        "calldata": "registry/p2p/calldata-EigenPodManager.json"
+      },
+      "0xb72668d6ff7a0e318f83097a754c6aed0f8af034": {
+        "calldata": "registry/p2p/calldata-NativeTokenVault.json"
+      },
+      "0x23be839a14cec3d6d716d904f09368bbf9c750eb": {
+        "calldata": "registry/p2p/calldata-P2pOrgUnlimitedEthDepositor.json"
+      },
+      "0x5ed861aec31ccb496689fd2e0a1a3f8e8d7b8824": {
+        "calldata": "registry/p2p/calldata-P2pSsvProxyFactory.json"
+      },
+      "0xdef171fe48cf0115b1d80b88dc8eab59176fee57": {
+        "calldata": "registry/paraswap/calldata-AugustusSwapper-v5.json"
+      },
+      "0x4e1224f513048e18e7a1883985b45dc0fe1d917e": {
+        "calldata": "registry/p2p/calldata-P2pMessageSender.json"
+      },
+      "0x0000000000bbf5c5fd284e657f01bd000933c96d": {
+        "eip712": "registry/paraswap/eip712-Velora-DeltaV2.json"
+      },
+      "0xe92b586627cca7a83dc919cc7127196d70f55a06": {
+        "eip712": "registry/paraswap/eip712-paraswap.json"
+      },
+      "0x6a000f20005980200259b80c5102003040001068": {
+        "calldata": "registry/paraswap/calldata-AugustusSwapper-v6.2.json"
+      },
+      "0x0bb4d3e88243f4a057db77341e6916b0e449b158": {
+        "calldata": "registry/poap/calldata-PoapBridge.json"
+      },
+      "0xb66a603f4cfe17e3d27b87a8bfcad319856518b8": {
+        "eip712": "registry/rarible/eip712-rarible-erc-1155.json"
+      },
+      "0xc9154424b823b10579895ccbe442d41b9abd96ed": {
+        "eip712": "registry/rarible/eip712-rarible-erc-721.json"
+      },
+      "0x9757f2d2b135150bbeb65308d4a91804107cd8d6": {
+        "eip712": "registry/rarible/eip712-rarible-exchange-v2.json"
+      },
+      "0x2cc8475177918e8c4d840150b68815a4b6f0f5f3": {
+        "calldata": "registry/safe/calldata-BatchExecutor.json"
+      },
+      "0x7f19564c35c681099c0c857a7141836cf7edaa53": {
+        "eip712": "registry/rarible/eip712-rarible-exchange-wrapper.json"
+      },
+      "0xa6b71e26c5e0845f74c812102ca7114b6a896ab2": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.3.0.json"
+      },
+      "0xc22834581ebc8527d974f8a1c97e1bea4ef910bc": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.3.0.json"
+      },
+      "0x4e1dcf7ad4e460cfd30791ccc4f9c8a4f820ec67": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.4.1.json"
+      },
+      "0x14f2982d601c9458f93bd70b218933a6f8165e7b": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.5.0.json"
+      },
+      "0xd9db270c1b5e3bd161e8c8503c55ceabee709552": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x69f4d1788e39c87893c980c06edf4b7f686e2938": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x41675c099f32341bf84bfc5382af534df5c7461a": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0xff51a5898e281db6dfc7855790607438df2ca44b": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x3e5c63644e683549055b9be8653de26e0b4cd36e": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0xfb1bffc9d739b8d520daf37df666da4c687191ea": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x29fcb43b46531bca003ddc8fcb67ffe91900c762": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0xedd160febbd92e350d4d398fb636302fccd67c7e": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x72e9d9038ce484ee986fea183f8d8df93f9ada13": {
+        "eip712": "registry/smartcredit/eip712-smartcredit.json"
+      },
+      "0xce5485cfb26914c5dce00b9baf0580364dafc7a4": {
+        "calldata": "registry/starkgate/calldata-StarkGate-STRK.json"
+      },
+      "0xfae103dc9cf190ed75350761e95403b7b8afa6c0": {
+        "calldata": "registry/swell/calldata-swell.json"
+      },
+      "0xb36fc5e542cb4fc562a624912f55da2758998113": {
+        "calldata": "registry/serenita/calldata-EthVault.json"
+      },
+      "0x66a28b080918184851774a89ab94850a41f6a1e5": {
+        "calldata": "registry/swissborg/calldata-NttManager.json"
+      },
+      "0xaa854688caab725fe17b7d21b46fda5af365985a": {
+        "calldata": "registry/swissborg/calldata-ChsbToBorgMigrator.json"
+      },
+      "0x45e581d6841f0a99fc34f70871ef56b353813ddb": {
+        "calldata": "registry/swissborg/calldata-WormholeTransceiver.json"
+      },
+      "0xdbd27635a534a3d3169ef0498beb56fb9c937489": {
+        "eip712": "registry/tally/eip712-tally-ethereum-bitcoin-governor.json"
+      },
+      "0x408ed6354d4973f66138c91495f2f2fcbd8724c3": {
+        "eip712": "registry/tally/eip712-tally-ethereum-bravo-governor.json"
+      },
+      "0xc18360217d8f7ab5e7c516566761ea12ce7f9d72": {
+        "eip712": "registry/tally/eip712-tally-ethereum-ens-token.json"
+      },
+      "0x323a76393544d5ecca80cd6ef2a560c6a395b7e3": {
+        "eip712": "registry/tally/eip712-tally-ethereum-ens-governor.json"
+      },
+      "0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45": {
+        "calldata": "registry/uniswap/calldata-UniswapV3Router02.json"
+      },
+      "0xde30da39c46104798bb5aa3fe8b9e0e1f348163f": {
+        "eip712": "registry/tally/eip712-tally-ethereum-gtk-token.json"
+      },
+      "0xed8bdb5895b8b7f9fdb3c087628fd8410e853d48": {
+        "eip712": "registry/tally/eip712-tally-ethereum-hop-governor.json"
+      },
+      "0xc5102fe9359fd9a28f877a67e36b0f050d81a3cc": {
+        "eip712": "registry/tally/eip712-tally-ethereum-hop-token.json"
+      },
+      "0x0cec1a9154ff802e7934fc916ed7ca50bde6844e": {
+        "eip712": "registry/tally/eip712-tally-ethereum-pool-token.json"
+      },
+      "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+        "eip712": "registry/uniswap/eip712-uniswap-permit2.json"
+      },
+      "0xb3a87172f555ae2a2ab79be60b336d2f7d0187f0": {
+        "eip712": "registry/tally/eip712-tally-ethereum-pooltogether-governor.json"
+      },
+      "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984": {
+        "eip712": "registry/tally/eip712-tally-ethereum-uni-token.json"
+      },
+      "0xdac17f958d2ee523a2206206994597c13d831ec7": {
+        "calldata": "registry/tether/calldata-usdt.json"
+      },
+      "0xef4461891dfb3ac8572ccf7c794664a8dd927945": {
+        "calldata": "registry/walletconnect/calldata-wct.json"
+      },
+      "0xb929b89153fc2eed442e81e5a1add4e2fa39028f": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0x56d783ca8e0b998c57a428bf1c26a8baca50524e": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0x857679d69fe50e7b722f94acd2629d80c355163d": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0xf30cf4ed712d3734161fdaab5b1dbb49fd2d0e5c": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0x5a10de50160126a5f936506bd342c541ac44e943": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0x35b1ca0f398905cf752e6fe122b51c88022fca32": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0xd9e6987d77bf2c6d0647b8181fd68a259f838c36": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0xd14a87025109013b0a2354a775cb335f926af65a": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0xa6e768fef2d1af36c0cfdb276422e7881a83e951": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0x467585aaea860f9d8b3b43bb994e4da8a93788a7": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0x06998af8f39ff8630d1fb515d22781da4dc2ca71": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0xc7757805b983ee1b6272c1840c18e66837de858e": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0xe3e9ba8c8c696f8537cf16b23eddf118bbd7f21f": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0x875e901465a639f2e71fcfc10f426ed32f5a909a": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0x2905b3387c9550ea57fa3ee7d4b7e5abf3acd3d2": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0x15c2b3adca66e26b6f230b4023f52a285b7f9995": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0x2ea3c215daeacc1c90b51443ab5d08a9ad816138": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-pol-validator.json"
+      },
+      "0x2d152fb171353e70e45322d32bc748f8a61d9971": {
+        "calldata": "registry/yieldxyz/calldata-yieldxyz-usde-vault.json"
+      },
+      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": {
+        "calldata": "registry/weth/calldata-weth.json"
+      }
+    },
+    "10": {
+      "0x1111111254eeb25477b68fb85ed929f73a960582": {
+        "calldata": "registry/1inch/calldata-AggregationRouterV5.json"
+      },
+      "0x5f2508cae9923b02316254026cd43d7902866725": {
+        "calldata": "registry/aave/calldata-WrappedTokenGatewayV3.json"
+      },
+      "0x794a61358d6845594f94dc1db02a252b5b4814ad": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      },
+      "0x111111125421ca6dc452d289314280a0f8842a65": {
+        "eip712": "registry/1inch/eip712-AggregationRouterV6.json",
+        "calldata": "registry/1inch/calldata-AggregationRouterV6.json"
+      },
+      "0x11431a89893025d2a48dca4eddc396f8c8117187": {
+        "eip712": "registry/1inch/eip712-1inch-limit-order.json"
+      },
+      "0x0b2c639c533813f4aa9d7837caf62653d097ff85": {
+        "eip712": "registry/circle/eip712-ReceiveWithAuthorization.json"
+      },
+      "0xe12e0f117d23a5ccc57f8935cd8c4e80cd91ff01": {
+        "calldata": "registry/1inch/calldata-NativeOrderFactory.json"
+      },
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0x6733eb2e75b1625f1fe5f18ad2cb2babda510d19": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0xdd5e9b947c99aa60bab00ca4631dce63b49983e7": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      },
+      "0x0ac34fe133bde3a2ef589a18a4e10b6a7d253829": {
+        "calldata": "registry/opencover/calldata-Quote.json"
+      },
+      "0x0000000000bbf5c5fd284e657f01bd000933c96d": {
+        "eip712": "registry/paraswap/eip712-Velora-DeltaV2.json"
+      },
+      "0x0927fd43a7a87e3e8b81df2c44b03c4756849f6d": {
+        "eip712": "registry/paraswap/eip712-paraswap.json"
+      },
+      "0x6a000f20005980200259b80c5102003040001068": {
+        "calldata": "registry/paraswap/calldata-AugustusSwapper-v6.2.json"
+      },
+      "0xd0efb07126e865ac95b60381b468081ef648ec5f": {
+        "calldata": "registry/safe/calldata-BatchExecutor.json"
+      },
+      "0xa6b71e26c5e0845f74c812102ca7114b6a896ab2": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.3.0.json"
+      },
+      "0xc22834581ebc8527d974f8a1c97e1bea4ef910bc": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.3.0.json"
+      },
+      "0x4e1dcf7ad4e460cfd30791ccc4f9c8a4f820ec67": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.4.1.json"
+      },
+      "0xd9db270c1b5e3bd161e8c8503c55ceabee709552": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x69f4d1788e39c87893c980c06edf4b7f686e2938": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x41675c099f32341bf84bfc5382af534df5c7461a": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x3e5c63644e683549055b9be8653de26e0b4cd36e": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0xfb1bffc9d739b8d520daf37df666da4c687191ea": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x29fcb43b46531bca003ddc8fcb67ffe91900c762": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+        "eip712": "registry/uniswap/eip712-uniswap-permit2.json"
+      },
+      "0x521b4c065bbdbe3e20b3727340730936912dfa46": {
+        "calldata": "registry/walletconnect/calldata-stakeweight.json"
+      },
+      "0xef4461891dfb3ac8572ccf7c794664a8dd927945": {
+        "calldata": "registry/walletconnect/calldata-wct.json"
+      }
+    },
+    "14": {
+      "0x9c7a4c83842b29bb4a082b0e689cb9474bd938d0": {
+        "calldata": "registry/flare/calldata-DistributionToDelegators-Flare.json"
+      },
+      "0xc8294a2335c6c45de827121090ce4ba9977907d2": {
+        "calldata": "registry/flare/calldata-PollingFoundation-Flare.json"
+      },
+      "0xc8f55c5aa2c752ee285bd872855c749f4ee6239b": {
+        "calldata": "registry/flare/calldata-RewardManager-Flare.json"
+      },
+      "0xc0cf3aaf93bd978c5bc662564aa73e331f2ec0b5": {
+        "calldata": "registry/flare/calldata-ValidatorRewardManager-Flare.json"
+      }
+    },
+    "19": {
+      "0x79df47237292dbd1477502cff3f61cd535b0face": {
+        "calldata": "registry/flare/calldata-PollingFoundation-Songbird.json"
+      },
+      "0xe26ad68b17224951b5740f33926cc438764eb9a7": {
+        "calldata": "registry/flare/calldata-RewardManager-Songbird.json"
+      }
+    },
+    "25": {
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0xcf76984119c7f6ae56fafe680d39c08278b7ecf4": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x25e7f77f33206d311a0130d4b5b881e5db1181b1": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "30": {
+      "0xf454a52da2157686ef99702c0c19c0e8d66bc03c": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x79a15707e2766d486681569bd1041821f5e32998": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x82dd60b6e3f1f3db025a715952b0e9f96b7d7a53": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x99d22115fd6706b78703ff015de897d43667d12f": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xe7a1a676d0cca2e20a69add500985c7271a40205": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x4f4da20f45ce2c94e84b93e4d73f3f3f33b8b570": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      }
+    },
+    "56": {
+      "0x1111111254eeb25477b68fb85ed929f73a960582": {
+        "calldata": "registry/1inch/calldata-AggregationRouterV5.json"
+      },
+      "0x11111112542d85b3ef69ae05771c2dccff4faa26": {
+        "calldata": "registry/1inch/calldata-AggregationRouterV3.json"
+      },
+      "0x111111125421ca6dc452d289314280a0f8842a65": {
+        "eip712": "registry/1inch/eip712-AggregationRouterV6.json",
+        "calldata": "registry/1inch/calldata-AggregationRouterV6.json"
+      },
+      "0x1e38eff998df9d3669e32f4ff400031385bf6362": {
+        "eip712": "registry/1inch/eip712-1inch-limit-order.json"
+      },
+      "0xe12e0f117d23a5ccc57f8935cd8c4e80cd91ff01": {
+        "calldata": "registry/1inch/calldata-NativeOrderFactory.json"
+      },
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0x30b59844ec16aba3ec4ca0bd97557ccb670d924e": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x7aee9020df0ac01bc6f3ceef6b1b7cbf3d0937e4": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x73685bd72df34b92bc81d43ef35cff4300de8625": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xf76e650f8a9526fe5e4b40f1b567c5c1b427ee43": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x3156020dff8d99af1ddc523ebdfb1ad2018554a0": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x62ccef0b4545166f721caa9fee13c1d3767e27dc": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      },
+      "0xdef171fe48cf0115b1d80b88dc8eab59176fee57": {
+        "calldata": "registry/paraswap/calldata-AugustusSwapper-v5.json"
+      },
+      "0x0000000000bbf5c5fd284e657f01bd000933c96d": {
+        "eip712": "registry/paraswap/eip712-Velora-DeltaV2.json"
+      },
+      "0x8dcdfe88ef0351f27437284d0710cd65b20288bb": {
+        "eip712": "registry/paraswap/eip712-paraswap.json"
+      },
+      "0x6a000f20005980200259b80c5102003040001068": {
+        "calldata": "registry/paraswap/calldata-AugustusSwapper-v6.2.json"
+      },
+      "0xa6b71e26c5e0845f74c812102ca7114b6a896ab2": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.3.0.json"
+      },
+      "0xc22834581ebc8527d974f8a1c97e1bea4ef910bc": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.3.0.json"
+      },
+      "0x4e1dcf7ad4e460cfd30791ccc4f9c8a4f820ec67": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.4.1.json"
+      },
+      "0xd9db270c1b5e3bd161e8c8503c55ceabee709552": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x69f4d1788e39c87893c980c06edf4b7f686e2938": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x41675c099f32341bf84bfc5382af534df5c7461a": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x3e5c63644e683549055b9be8653de26e0b4cd36e": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0xfb1bffc9d739b8d520daf37df666da4c687191ea": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x29fcb43b46531bca003ddc8fcb67ffe91900c762": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+        "eip712": "registry/uniswap/eip712-uniswap-permit2.json"
+      }
+    },
+    "100": {
+      "0x721b9abab6511b46b9ee83a1aba23bdacb004149": {
+        "calldata": "registry/aave/calldata-WrappedTokenGatewayV3.json"
+      },
+      "0xb50201558b00496a145fe76f7424749556e326d8": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      },
+      "0x111111125421ca6dc452d289314280a0f8842a65": {
+        "eip712": "registry/1inch/eip712-AggregationRouterV6.json",
+        "calldata": "registry/1inch/calldata-AggregationRouterV6.json"
+      },
+      "0xe12e0f117d23a5ccc57f8935cd8c4e80cd91ff01": {
+        "calldata": "registry/1inch/calldata-NativeOrderFactory.json"
+      },
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      }
+    },
+    "106": {
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      }
+    },
+    "122": {
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      }
+    },
+    "130": {
+      "0x23e2f2fa1967faffde2e05fdecbb3fa787a5d3e5": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x6733eb2e75b1625f1fe5f18ad2cb2babda510d19": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "137": {
+      "0x1111111254eeb25477b68fb85ed929f73a960582": {
+        "calldata": "registry/1inch/calldata-AggregationRouterV5.json"
+      },
+      "0x11111112542d85b3ef69ae05771c2dccff4faa26": {
+        "calldata": "registry/1inch/calldata-AggregationRouterV3.json"
+      },
+      "0x8dff5e27ea6b7ac08ebfdf9eb090f32ee9a30fcf": {
+        "calldata": "registry/aave/calldata-lpv2.json"
+      },
+      "0xbc302053db3aa514a3c86b9221082f162b91ad63": {
+        "calldata": "registry/aave/calldata-WrappedTokenGatewayV3.json"
+      },
+      "0x794a61358d6845594f94dc1db02a252b5b4814ad": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      },
+      "0x111111125421ca6dc452d289314280a0f8842a65": {
+        "eip712": "registry/1inch/eip712-AggregationRouterV6.json",
+        "calldata": "registry/1inch/calldata-AggregationRouterV6.json"
+      },
+      "0x94bc2a1c732bcad7343b25af48385fe76e08734f": {
+        "eip712": "registry/1inch/eip712-1inch-limit-order.json"
+      },
+      "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359": {
+        "eip712": "registry/circle/eip712-ReceiveWithAuthorization.json"
+      },
+      "0xe12e0f117d23a5ccc57f8935cd8c4e80cd91ff01": {
+        "calldata": "registry/1inch/calldata-NativeOrderFactory.json"
+      },
+      "0xdb46d1dc155634fbc732f92e853b10b288ad5a1d": {
+        "eip712": "registry/dispatch/eip712-dispatch.json"
+      },
+      "0xd4f2f33680fccb36748fa9831851643781608844": {
+        "eip712": "registry/lens/eip712-lens-token-handle-registry.json"
+      },
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0x33c6eec1723b12c46732f7ab41398de45641fa42": {
+        "eip712": "registry/ledgerquest/eip712-ledgerquest.json"
+      },
+      "0x057cfd839aa88994d1a8a8c6d336cf21550f05ef": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0xf6e1b4b201e220fc3741bd7a75675ffea25c02ad": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      },
+      "0x0ac34fe133bde3a2ef589a18a4e10b6a7d253829": {
+        "calldata": "registry/opencover/calldata-Quote.json"
+      },
+      "0xdef171fe48cf0115b1d80b88dc8eab59176fee57": {
+        "calldata": "registry/paraswap/calldata-AugustusSwapper-v5.json"
+      },
+      "0xf3cd476c3c4d3ac5ca2724767f269070ca09a043": {
+        "eip712": "registry/paraswap/eip712-paraswap.json"
+      },
+      "0x6a000f20005980200259b80c5102003040001068": {
+        "calldata": "registry/paraswap/calldata-AugustusSwapper-v6.2.json"
+      },
+      "0x7f19564c35c681099c0c857a7141836cf7edaa53": {
+        "eip712": "registry/rarible/eip712-rarible-exchange-v2.json"
+      },
+      "0xa5e0829caced8ffdd4de3c43696c57f7d7a678ff": {
+        "calldata": "registry/quickswap/calldata-QuickSwap.json"
+      },
+      "0x2cc8475177918e8c4d840150b68815a4b6f0f5f3": {
+        "calldata": "registry/safe/calldata-BatchExecutor.json"
+      },
+      "0xa6b71e26c5e0845f74c812102ca7114b6a896ab2": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.3.0.json"
+      },
+      "0xc22834581ebc8527d974f8a1c97e1bea4ef910bc": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.3.0.json"
+      },
+      "0x4e1dcf7ad4e460cfd30791ccc4f9c8a4f820ec67": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.4.1.json"
+      },
+      "0xd9db270c1b5e3bd161e8c8503c55ceabee709552": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x69f4d1788e39c87893c980c06edf4b7f686e2938": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x41675c099f32341bf84bfc5382af534df5c7461a": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x3e5c63644e683549055b9be8653de26e0b4cd36e": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0xfb1bffc9d739b8d520daf37df666da4c687191ea": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x29fcb43b46531bca003ddc8fcb67ffe91900c762": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+        "eip712": "registry/uniswap/eip712-uniswap-permit2.json"
+      },
+      "0xc2132d05d31c914a87c6611c10748aeb04b58e8f": {
+        "calldata": "registry/tether/calldata-usdt.json"
+      }
+    },
+    "143": {
+      "0xdf7deb47635af76da5e455c6b0f4e26222326fd9": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x2ce347decfc8dab433c4eb6ca171747e5a82c332": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x6088d94c5a40cecd3ae2d4e0710ca687b91c61d0": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x7a7ad9aa93cd0a2d0255326e5fb145cec14997ff": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "146": {
+      "0x061d8e131f26512348ee5fa42e2df1ba9d6505e9": {
+        "calldata": "registry/aave/calldata-WrappedTokenGatewayV3.json"
+      },
+      "0x5362dbb1e601abf3a4c14c22ffeda64042e5eaa3": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      },
+      "0x111111125421ca6dc452d289314280a0f8842a65": {
+        "calldata": "registry/1inch/calldata-AggregationRouterV6.json"
+      },
+      "0xe12e0f117d23a5ccc57f8935cd8c4e80cd91ff01": {
+        "calldata": "registry/1inch/calldata-NativeOrderFactory.json"
+      },
+      "0x86f752f1f662f39bfbcbef95ee56b6c20d178969": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x79f7c6c6dc16ed3154e85a8ef9c1ef31cefaeb19": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "169": {
+      "0x8feb9e84b7e9dc86adc6cd6eb554c5b4355c8405": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x69c236e021f5775b0d0328ded5eac708e3b869df": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "196": {
+      "0xd1b8997aac08c619d40be2e4284c9c72cab33954": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0xbec6d0e341102732e4fd62ec50e2f0a9d1bd1d33": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "204": {
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      }
+    },
+    "239": {
+      "0x762b366fd2c460f3b08d7cb279140fe39df2e5ca": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xbd2ce9d5f2c682fca3ce587bf1c041ad8ddd2a69": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x5e65feda93cdf3286d4b70ba6d3e2a0e86594cdd": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x911f9af9138284a49b29f9894571fb86e29d1d79": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      }
+    },
+    "250": {
+      "0x111111125421ca6dc452d289314280a0f8842a65": {
+        "eip712": "registry/1inch/eip712-AggregationRouterV6.json",
+        "calldata": "registry/1inch/calldata-AggregationRouterV6.json"
+      },
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0xcf76984119c7f6ae56fafe680d39c08278b7ecf4": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x25e7f77f33206d311a0130d4b5b881e5db1181b1": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "252": {
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      }
+    },
+    "288": {
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      }
+    },
+    "324": {
+      "0xae2b00d676130bdf22582781bbba8f4f21e8b0ff": {
+        "calldata": "registry/aave/calldata-WrappedTokenGatewayV3.json"
+      },
+      "0x78e30497a3c7527d953c6b1e3541b021a98ac43c": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      },
+      "0x6fd4383cb451173d5f9304f041c7bcbf27d561ff": {
+        "eip712": "registry/1inch/eip712-AggregationRouterV6.json"
+      },
+      "0x341e94069f53234fe6dabef707ad424830525715": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0x3163ed233a3cb5e6b7f10a6f02b01f15867a8779": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x6f7c20464258c732577c87a9b467619e03e5c158": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "999": {
+      "0x65d0a14dd083c38244542bac0e0cd16d51c37458": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x36094abe5e589691b8f60505823a72f5fdedc953": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      }
+    },
+    "1030": {
+      "0x23e2f2fa1967faffde2e05fdecbb3fa787a5d3e5": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x95418635f012ffd10eafcdaf4137e90371f06917": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "1088": {
+      "0x90df02551bb792286e8d4f13e0e357b4bf1d6a57": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      },
+      "0x24ca98fb6972f5ee05f0db00595c7f68d9fafd68": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0xdd5e9b947c99aa60bab00ca4631dce63b49983e7": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x25e7f77f33206d311a0130d4b5b881e5db1181b1": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "1101": {
+      "0x79f7c6c6dc16ed3154e85a8ef9c1ef31cefaeb19": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x6f7c20464258c732577c87a9b467619e03e5c158": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "1116": {
+      "0xf5fa1728babc3f8d2a617397fac2696c958c3409": {
+        "calldata": "registry/corestake/calldata-corestake.json"
+      },
+      "0x0000000000000000000000000000000000001011": {
+        "calldata": "registry/corestake/calldata-coreagent.json"
+      },
+      "0x0000000000000000000000000000000000001010": {
+        "calldata": "registry/corestake/calldata-stakehub.json"
+      }
+    },
+    "1284": {
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      }
+    },
+    "1285": {
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      }
+    },
+    "1329": {
+      "0x0000000000000000000000000000000000001005": {
+        "calldata": "registry/sei/calldata-sei-staking.json"
+      },
+      "0x0000000000000000000000000000000000001007": {
+        "calldata": "registry/sei/calldata-sei-distribution.json"
+      }
+    },
+    "1776": {
+      "0x8f42ef868cac8bbed00a1343cf06373fea1c40c0": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xc5a2adeacc1cf8424630c0c6b09e1df6e871c65a": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      }
+    },
+    "1868": {
+      "0x6376d4df995f32f308f2d5049a7a320943023232": {
+        "calldata": "registry/aave/calldata-WrappedTokenGatewayV3.json"
+      },
+      "0xdd3d7a7d03d9fd9ef45f3e587287922ef65ca38b": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      }
+    },
+    "4200": {
+      "0xd3b3e6433d6a7f94c28ce907311fb21b0f0b659e": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x6f7c20464258c732577c87a9b467619e03e5c158": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "5000": {
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0xf5402ccc5fc3181b45d7571512999d3eea0257b6": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0xcf76984119c7f6ae56fafe680d39c08278b7ecf4": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "7000": {
+      "0x8feb9e84b7e9dc86adc6cd6eb554c5b4355c8405": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0xf5402ccc5fc3181b45d7571512999d3eea0257b6": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "8217": {
+      "0x111111125421ca6dc452d289314280a0f8842a65": {
+        "eip712": "registry/1inch/eip712-AggregationRouterV6.json",
+        "calldata": "registry/1inch/calldata-AggregationRouterV6.json"
+      }
+    },
+    "8453": {
+      "0x1111111254eeb25477b68fb85ed929f73a960582": {
+        "calldata": "registry/1inch/calldata-AggregationRouterV5.json"
+      },
+      "0xa0d9c1e9e48ca30c8d8c3b5d69ff5dc1f6dffc24": {
+        "calldata": "registry/aave/calldata-WrappedTokenGatewayV3.json"
+      },
+      "0xa238dd80c259a72e81d7e4664a9801593f98d1c5": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      },
+      "0x111111125421ca6dc452d289314280a0f8842a65": {
+        "eip712": "registry/1inch/eip712-AggregationRouterV6.json",
+        "calldata": "registry/1inch/calldata-AggregationRouterV6.json"
+      },
+      "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": {
+        "eip712": "registry/circle/eip712-ReceiveWithAuthorization.json"
+      },
+      "0xe12e0f117d23a5ccc57f8935cd8c4e80cd91ff01": {
+        "calldata": "registry/1inch/calldata-NativeOrderFactory.json"
+      },
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0x8978e327fe7c72fa4eaf4649c23147e279ae1470": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x80b666d60293217661e7382737bb3e42348f7ce5": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x2fd18b0878967e19292e9a8bf38bb1415f6ad653": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x263a7ace5e77986b77dca125859248feed52383c": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x3aac6fd73fa4e16ec683bd4aaf5ec89bb2c0edc2": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xfecc6fdff76fb2a2de42b787dc3d02b634a8b6d9": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xea22f8c1624c17c1b58727235292684831a08d56": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x5f09aff8b9b1f488b7d1bbad4d89648579e55d61": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x2a8c22e3b10036f3aef5875d04f8441d4188b656": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xf804a646c034749b5484bf7dfe875f6a4f969840": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x0e0eb6cdad90174f1db606ec186ddd0b5ed80847": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x25d30cf795602e807d2038c1326ad6643f822cea": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xa8a5c4ff4c86a459ebbdc39c5be77833b3a15d88": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x5cb155d19696ed296dc4942bedb6eec69367c332": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x86811ad3430dba37e1641538729bf346c20a5412": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x9bf00b7cfc00d6a7a2e2c994db8c8dca467ee359": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xbbbbbbbbbb9cc5e90e3b3af64bdaf62c37eeffcb": {
+        "calldata": "registry/morpho/calldata-MorphoBlue.json"
+      },
+      "0x6bfd8137e702540e7a42b74178a4a49ba43920c4": {
+        "calldata": "registry/morpho/calldata-MorphoBundlerV3.json"
+      },
+      "0x4409921ae43a39a11d90f7b7f96cfd0b8093d9fc": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0xc8f6b8ba0dc0f175b568b99440b0867f69a29265": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      },
+      "0xd68647555e5da198d50866334eed647cbe3d1556": {
+        "calldata": "registry/opencover/calldata-Quote.json"
+      },
+      "0x0000000000bbf5c5fd284e657f01bd000933c96d": {
+        "eip712": "registry/paraswap/eip712-Velora-DeltaV2.json"
+      },
+      "0x6a000f20005980200259b80c5102003040001068": {
+        "calldata": "registry/paraswap/calldata-AugustusSwapper-v6.2.json"
+      },
+      "0xd0efb07126e865ac95b60381b468081ef648ec5f": {
+        "calldata": "registry/safe/calldata-BatchExecutor.json"
+      },
+      "0xa6b71e26c5e0845f74c812102ca7114b6a896ab2": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.3.0.json"
+      },
+      "0xc22834581ebc8527d974f8a1c97e1bea4ef910bc": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.3.0.json"
+      },
+      "0x4e1dcf7ad4e460cfd30791ccc4f9c8a4f820ec67": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.4.1.json"
+      },
+      "0xd9db270c1b5e3bd161e8c8503c55ceabee709552": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x69f4d1788e39c87893c980c06edf4b7f686e2938": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x41675c099f32341bf84bfc5382af534df5c7461a": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x3e5c63644e683549055b9be8653de26e0b4cd36e": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0xfb1bffc9d739b8d520daf37df666da4c687191ea": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x29fcb43b46531bca003ddc8fcb67ffe91900c762": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+        "eip712": "registry/uniswap/eip712-uniswap-permit2.json"
+      },
+      "0xef4461891dfb3ac8572ccf7c794664a8dd927945": {
+        "calldata": "registry/walletconnect/calldata-wct.json"
+      }
+    },
+    "9001": {
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      }
+    },
+    "9745": {
+      "0x54bdcc37c4143f944a3ee51c892a6cbdf305e7a0": {
+        "calldata": "registry/aave/calldata-WrappedTokenGatewayV3.json"
+      },
+      "0x925a2a7214ed92428b5b1b090f80b25700095e12": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      },
+      "0x2b690cab819a815732544aeb422474efdc1b0615": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x4ef9ff56162bd3cb5073fb20dbd355c59084093f": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xa603cf264adeb8e7f0f063c116929adac2d4286e": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x24e49d2ad8f0bcd0cf7f2a5ab560ca4319f6bd75": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x69ecab6aa7bdfddd99def0891c0317076430ae50": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x880661f9b412065d616890ca458dccd0146cb77c": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x5c1c902e7e04de98b49acd3de68e12bee2d7908d": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x19d345f95a80cc136d898f41b490e023cff78658": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "16661": {
+      "0x72a93168ae79f269deb2b1892f2afd7eaa800271": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x9dae503014edc48a4d8fe789f22c70ae650eb79b": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      }
+    },
+    "23294": {
+      "0xd7fe0e91c05cafdd26da4b176eec2b883795bdcc": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xf939e88ecad43115116c7106dfdbdc4b1315a7ee": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      }
+    },
+    "34443": {
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      }
+    },
+    "42161": {
+      "0x1111111254eeb25477b68fb85ed929f73a960582": {
+        "calldata": "registry/1inch/calldata-AggregationRouterV5.json"
+      },
+      "0x5283beced7adf6d003225c13896e536f2d4264ff": {
+        "calldata": "registry/aave/calldata-WrappedTokenGatewayV3.json"
+      },
+      "0x794a61358d6845594f94dc1db02a252b5b4814ad": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      },
+      "0x111111125421ca6dc452d289314280a0f8842a65": {
+        "eip712": "registry/1inch/eip712-AggregationRouterV6.json",
+        "calldata": "registry/1inch/calldata-AggregationRouterV6.json"
+      },
+      "0x7f069df72b7a39bce9806e3afaf579e54d8cf2b9": {
+        "eip712": "registry/1inch/eip712-1inch-limit-order.json"
+      },
+      "0xaf88d065e77c8cc2239327c5edb3a432268e5831": {
+        "eip712": "registry/circle/eip712-ReceiveWithAuthorization.json"
+      },
+      "0xe12e0f117d23a5ccc57f8935cd8c4e80cd91ff01": {
+        "calldata": "registry/1inch/calldata-NativeOrderFactory.json"
+      },
+      "0x0000000000000000000000000000000000000000": {
+        "eip712": "registry/hyperliquid/eip712-withdraw.json"
+      },
+      "0xa95d9c1f655341597c94393fddc30cf3c08e4fce": {
+        "calldata": "registry/hyperliquid/calldata-CctpExtension.json"
+      },
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0x643f73a6a3ffc5d6c6be7c97cc30422763cfb1d0": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x01bff1379ce9f0877141a18670d4214dfaf630be": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x2c851a37ef2d607f198ddb259309dcd2b398e8f9": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xb285f7699206c88a0aec8bb004e42793de8139e0": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x9815fffe5600cf71342579f0f3e0dd8ccbd496d8": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x8ac12d5b71e4f046459b67077f8704ba0a86f8f9": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xe03cd34de0e47c67bf881db22feab83121b50cc3": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x6d6e88b8514ea404d33f38d505d611b5eee23afd": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xe8a95184516c39469a68ba50d134c25fc5a6c9c8": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x139ec173b9c355241dfa91a1de3453adae0a9083": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x368e01160c2244b0363a35b3ff0a971e44a89284": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x7cf6b330b437e9fb432b1400de17b03357cf049a": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      },
+      "0x0ac34fe133bde3a2ef589a18a4e10b6a7d253829": {
+        "calldata": "registry/opencover/calldata-Quote.json"
+      },
+      "0x0927fd43a7a87e3e8b81df2c44b03c4756849f6d": {
+        "eip712": "registry/paraswap/eip712-paraswap.json"
+      },
+      "0x6a000f20005980200259b80c5102003040001068": {
+        "calldata": "registry/paraswap/calldata-AugustusSwapper-v6.2.json"
+      },
+      "0xd0efb07126e865ac95b60381b468081ef648ec5f": {
+        "calldata": "registry/safe/calldata-BatchExecutor.json"
+      },
+      "0xa6b71e26c5e0845f74c812102ca7114b6a896ab2": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.3.0.json"
+      },
+      "0xc22834581ebc8527d974f8a1c97e1bea4ef910bc": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.3.0.json"
+      },
+      "0x4e1dcf7ad4e460cfd30791ccc4f9c8a4f820ec67": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.4.1.json"
+      },
+      "0xd9db270c1b5e3bd161e8c8503c55ceabee709552": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x69f4d1788e39c87893c980c06edf4b7f686e2938": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x41675c099f32341bf84bfc5382af534df5c7461a": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x3e5c63644e683549055b9be8653de26e0b4cd36e": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0xfb1bffc9d739b8d520daf37df666da4c687191ea": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x29fcb43b46531bca003ddc8fcb67ffe91900c762": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x912ce59144191c1204e64559fe8253a0e49e6548": {
+        "eip712": "registry/tally/eip712-tally-arbitrum-arb-token.json"
+      },
+      "0xf07ded9dc292157749b6fd268e37df6ea38395b9": {
+        "eip712": "registry/tally/eip712-tally-arbitrum-core-governor.json"
+      },
+      "0x789fc99093b09ad01c34dc7251d0c89ce743e5a4": {
+        "eip712": "registry/tally/eip712-tally-arbitrum-treasury-governor.json"
+      },
+      "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+        "eip712": "registry/uniswap/eip712-uniswap-permit2.json"
+      }
+    },
+    "42170": {
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      }
+    },
+    "42220": {
+      "0x3e59a31363e2ad014dcbc521c4a0d5757d9f3402": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      },
+      "0x8d6677192144292870907e3fa8a5527fe55a7ff6": {
+        "calldata": "registry/celo/calldata-celo_election.json"
+      },
+      "0xd533ca259b330c7a88f74e000a3faea2d63b7972": {
+        "calldata": "registry/celo/calldata-celo_governance.json"
+      },
+      "0x7d21685c17607338b313a7174bab6620bad0aab7": {
+        "calldata": "registry/celo/calldata-celo_accounts.json"
+      },
+      "0xaeb865bca93ddc8f47b8e29f40c5399ce34d0c58": {
+        "calldata": "registry/celo/calldata-celo_validators.json"
+      },
+      "0x55e1a0c8f376964bd339167476063bfed7f213d5": {
+        "calldata": "registry/celo/calldata-locked_celo.json"
+      },
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+        "eip712": "registry/uniswap/eip712-uniswap-permit2.json"
+      }
+    },
+    "43114": {
+      "0x4f01aed16d97e3ab5ab2b501154dc9bb0f1a5a2c": {
+        "calldata": "registry/aave/calldata-lpv2.json"
+      },
+      "0x2825ce5921538d17cc15ae00a8b24ff759c6cdae": {
+        "calldata": "registry/aave/calldata-WrappedTokenGatewayV3.json"
+      },
+      "0x794a61358d6845594f94dc1db02a252b5b4814ad": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      },
+      "0x111111125421ca6dc452d289314280a0f8842a65": {
+        "eip712": "registry/1inch/eip712-AggregationRouterV6.json",
+        "calldata": "registry/1inch/calldata-AggregationRouterV6.json"
+      },
+      "0x2b2c81e08f1af8835a78bb2a90ae924ace0ea4be": {
+        "calldata": "registry/benqi/calldata-sAVAX.json"
+      },
+      "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e": {
+        "eip712": "registry/circle/eip712-ReceiveWithAuthorization.json"
+      },
+      "0xe12e0f117d23a5ccc57f8935cd8c4e80cd91ff01": {
+        "calldata": "registry/1inch/calldata-NativeOrderFactory.json"
+      },
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0x8adfb0d24cdb09c6eb6b001a41820ece98831b91": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0xa94fcf9fc56a864f8de51e6315aee5863ad63c91": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      },
+      "0x6a000f20005980200259b80c5102003040001068": {
+        "calldata": "registry/paraswap/calldata-AugustusSwapper-v6.2.json"
+      },
+      "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+        "eip712": "registry/uniswap/eip712-uniswap-permit2.json"
+      }
+    },
+    "44787": {
+      "0x1c3edf937cfc2f6f51784d20deb1af1f9a8655fa": {
+        "calldata": "registry/celo/calldata-celo_election.json"
+      },
+      "0xaa963fc97281d9632d96700ab62a4d1340f9a28a": {
+        "calldata": "registry/celo/calldata-celo_governance.json"
+      },
+      "0xed7f51a34b4e71fbe69b3091fcf879cd14bd73a9": {
+        "calldata": "registry/celo/calldata-celo_accounts.json"
+      },
+      "0x9acf2a99914e083ad0d610672e93d14b0736bbcc": {
+        "calldata": "registry/celo/calldata-celo_validators.json"
+      },
+      "0x6a4cc5693dc5bfa3799c699f3b941ba2cb00c341": {
+        "calldata": "registry/celo/calldata-locked_celo.json"
+      }
+    },
+    "59144": {
+      "0x1111111254eeb25477b68fb85ed929f73a960582": {
+        "calldata": "registry/1inch/calldata-AggregationRouterV5.json"
+      },
+      "0x31a239f3e39c5d8ba6b201ba81ed584492ae960f": {
+        "calldata": "registry/aave/calldata-WrappedTokenGatewayV3.json"
+      },
+      "0xc47b8c00b0f69a36fa203ffeac0334874574a8ac": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      },
+      "0x111111125421ca6dc452d289314280a0f8842a65": {
+        "calldata": "registry/1inch/calldata-AggregationRouterV6.json"
+      },
+      "0xe12e0f117d23a5ccc57f8935cd8c4e80cd91ff01": {
+        "calldata": "registry/1inch/calldata-NativeOrderFactory.json"
+      },
+      "0xde1e598b81620773454588b85d6b5d4eec32573e": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0x9eabf1d34819d9ec9fe5fd3db4e9dcd12fa05284": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x2e1dee213ba8d7af0934c49a23187babeaca8764": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "80001": {
+      "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+        "eip712": "registry/uniswap/eip712-uniswap-permit2.json"
+      }
+    },
+    "81457": {
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0xc9da86c392101047188bae98ccc192271a136a13": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0xcf76984119c7f6ae56fafe680d39c08278b7ecf4": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      },
+      "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+        "eip712": "registry/uniswap/eip712-uniswap-permit2.json"
+      }
+    },
+    "84532": {
+      "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+        "eip712": "registry/uniswap/eip712-uniswap-permit2.json"
+      }
+    },
+    "98866": {
+      "0xb05f6aa8c2ea9ab8537cf09a9b765a21de249224": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x8f38a24d064b41c990a3f47439a7a7ee713bf8dc": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x23de49c9ecb8baaf4abded123fafbb7d5b7a0ee2": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xe6f0c60fca2bd97d633a3d9d49dbefdf19636d8c": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xc4e4aca6a81794562c46da86c20dc652ba2af25e": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x71dd2570a843b0d1c74ffab23f348193f19f18b1": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x3ac6b2bf09f470e5674c3da60be7d2da2791f897": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x9b0d0bdae237116f711e8c9d900b5ddcc8ef8b5d": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xc874394cd67f7de462eb5c25889bec9744bc0f80": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x331af8984d9f10c5173e69537f41313996e7c3cc": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0xf22ad227b3082557dbda8ad99b694eb295c06092": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x3cd58efe911b1e936c014695ccfab8c8825e3a63": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      }
+    },
+    "167004": {
+      "0x3a9a5dba8fe1c4da98187ce4755701bca182f63b": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      }
+    },
+    "421614": {
+      "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+        "eip712": "registry/uniswap/eip712-uniswap-permit2.json"
+      }
+    },
+    "534352": {
+      "0xe79ca44408dae5a57ea2a9594532f1e84d2edaa4": {
+        "calldata": "registry/aave/calldata-WrappedTokenGatewayV3.json"
+      },
+      "0x11fcfe756c05ad438e312a7fd934381537d3cffe": {
+        "calldata": "registry/aave/calldata-lpv3.json"
+      },
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      },
+      "0xca1c871f8ae2571cb126a46861fc06cb9e645152": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x8d3702c41adeb3b6d0c5679899efcf34aab07cf2": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0x904ea8d7fcab7351758fac82bdbc738e2010bc25": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x5c33073ea1d21936d760e32a7a7a748bd21b773e": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x6733eb2e75b1625f1fe5f18ad2cb2babda510d19": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.7-multi-commission.json"
+      },
+      "0x5e2f47bd7d4b357fcfd0bb224eb665773b1b9801": {
+        "calldata": "registry/okx/calldata-OkxDexRouterV1.0.8-suffix-compat.json"
+      }
+    },
+    "560048": {
+      "0x00000000219ab540356cbb839cbe05303d7705fa": {
+        "calldata": "registry/consensus-specs/calldata-DepositContract.json"
+      },
+      "0x7ac74cb69104cea773cc3154d47c930ca6462fe8": {
+        "calldata": "registry/figment/calldata-figment-batch-deposit.json"
+      },
+      "0x00ae9b96ef8d5d54cfcc02d9a1ccc19acd688b72": {
+        "calldata": "registry/kiln/calldata-kiln-batch-deposit-v2.json"
+      },
+      "0x06f9c32a3093dde837a2e172041df79b4b850a2e": {
+        "calldata": "registry/kiln/calldata-kiln-batch-exit.json"
+      },
+      "0x1a76bc69922744807e86375f8b8ab8a7cf18eb7a": {
+        "calldata": "registry/kiln/calldata-kiln-fee-splitter-factory.json"
+      },
+      "0xcd1442415fc5c29aa848a49d2e232720be07976c": {
+        "calldata": "registry/p2p/calldata-EigenPodManager.json"
+      },
+      "0x8f73c1ce7fe0e17f45b317b33620924a94256fbb": {
+        "calldata": "registry/p2p/calldata-NativeTokenVault.json"
+      },
+      "0x933acc6f337489d78188cbef2141cd9d6466d07d": {
+        "calldata": "registry/p2p/calldata-P2pOrgUnlimitedEthDepositor.json"
+      },
+      "0xf8dc5f11dc81c4f57286fa4849a15345d51a838b": {
+        "calldata": "registry/p2p/calldata-P2pOrgUnlimitedEthDepositor.json"
+      },
+      "0x2444fae9394debf503775940af2a3e9364a31e34": {
+        "calldata": "registry/p2p/calldata-P2pSsvProxyFactory.json"
+      },
+      "0x91234ffd7d65aa5e4fda60a2e7b9513175df3272": {
+        "calldata": "registry/p2p/calldata-P2pSsvProxyFactory.json"
+      },
+      "0x917105cc314c12890d9c8224aee5af9574f871cf": {
+        "calldata": "registry/p2p/calldata-P2pMessageSender.json"
+      },
+      "0x158f2bbef21cf9f92cf4a294999ba422948c8242": {
+        "calldata": "registry/p2p/calldata-P2pMessageSender.json"
+      }
+    },
+    "747474": {
+      "0x175a9b122bf22ac2b193a0a775d7370d5a75268e": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xcb7d9a25f7b9bdd0eee77b1ceb2894d39debca1c": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xe93e6cf151588d63bb669138277d20f28c2e7cda": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      },
+      "0x8e3865b9d2d8e562d8bb3b15d9b4941aee6f67f1": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      }
+    },
+    "1440000": {
+      "0x30fbc82a72ca674aa250cd6c27bcca1fe602f1bb": {
+        "calldata": "registry/midas/calldata-MinterVault.json"
+      },
+      "0xdac1b058ce42b67ba33dbfdba972d76c83c085d6": {
+        "calldata": "registry/midas/calldata-RedemptionVault.json"
+      }
+    },
+    "11155111": {
+      "0x731efa688f3679688cf60a3993b8658138953ed6": {
+        "calldata": "registry/lombard/calldata-lbtc-sepolia.json",
+        "eip712": "registry/lombard/eip712-network-fee-authorization-sepolia.json"
+      },
+      "0x2cc8475177918e8c4d840150b68815a4b6f0f5f3": {
+        "calldata": "registry/safe/calldata-BatchExecutor.json"
+      },
+      "0xa6b71e26c5e0845f74c812102ca7114b6a896ab2": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.3.0.json"
+      },
+      "0xc22834581ebc8527d974f8a1c97e1bea4ef910bc": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.3.0.json"
+      },
+      "0x4e1dcf7ad4e460cfd30791ccc4f9c8a4f820ec67": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.4.1.json"
+      },
+      "0x14f2982d601c9458f93bd70b218933a6f8165e7b": {
+        "calldata": "registry/safe/calldata-SafeProxyFactory-1.5.0.json"
+      },
+      "0xd9db270c1b5e3bd161e8c8503c55ceabee709552": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x69f4d1788e39c87893c980c06edf4b7f686e2938": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x41675c099f32341bf84bfc5382af534df5c7461a": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0xff51a5898e281db6dfc7855790607438df2ca44b": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x3e5c63644e683549055b9be8653de26e0b4cd36e": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0xfb1bffc9d739b8d520daf37df666da4c687191ea": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x29fcb43b46531bca003ddc8fcb67ffe91900c762": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0xedd160febbd92e350d4d398fb636302fccd67c7e": {
+        "eip712": "registry/safe/eip712-Safe-Multisig.json"
+      },
+      "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+        "eip712": "registry/uniswap/eip712-uniswap-permit2.json"
+      },
+      "0xfff9976782d46cc05630d1f6ebab18b2324d6b14": {
+        "calldata": "registry/weth/calldata-weth.json"
+      }
+    },
+    "11155420": {
+      "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+        "eip712": "registry/uniswap/eip712-uniswap-permit2.json"
+      }
+    },
+    "1313161554": {
+      "0x111111125421ca6dc452d289314280a0f8842a65": {
+        "eip712": "registry/1inch/eip712-AggregationRouterV6.json",
+        "calldata": "registry/1inch/calldata-AggregationRouterV6.json"
+      },
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      }
+    },
+    "1666600000": {
+      "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": {
+        "calldata": "registry/lifi/calldata-LIFIDiamond.json"
+      }
+    }
+  }
+}

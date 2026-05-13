@@ -39,7 +39,8 @@ import type { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import CalldataDecoder from "@/components/CalldataDecoder";
-import AssetChangesDisplay from "@/components/AssetChangesDisplay";
+import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
+import AssetChangesDisplay, { SimulationRevertedBanner } from "@/components/AssetChangesDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
@@ -201,6 +202,9 @@ function BatchTransactionConfirmation({
   const [gasValid, setGasValid] = useState(true);
   const [forceInclusion, setForceInclusion] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  // Fed by AssetChangesDisplay below. Drives the top-of-screen revert
+  // banner so the warning lands above the clear-signing summary.
+  const [simulationReverted, setSimulationReverted] = useState(false);
   // Split-mode modal: opens when the user clicks the gear next to "Calls".
   const {
     isOpen: isSplitModalOpen,
@@ -755,6 +759,20 @@ function BatchTransactionConfirmation({
           </Box>
         </HStack>
 
+        {/* Simulated-revert banner — top-of-screen warning so the user
+            sees "this is likely to fail" before the clear-signing summary
+            or call list. Fed by AssetChangesDisplay below. */}
+        {simulationReverted && (
+          <SimulationRevertedBanner borders={tokens.borders} />
+        )}
+
+        {/* Clear-signing summary — one card per call that has a matching
+            ERC-7730 descriptor, labeled with its position in the batch. Lives
+            at the very top so the human-readable intent is the first thing
+            the user reads; the per-call cards below stay collapsed by default
+            and only carry the raw decoder. */}
+        <BatchClearSigningSummary calls={calls} chainId={chainId} />
+
         {/* Info Card */}
         <Box
           bg="surface.raised"
@@ -1055,6 +1073,7 @@ function BatchTransactionConfirmation({
           txRequest={syntheticTxRequest}
           batchCalls={calls.map((c) => ({ to: c.to, data: c.data, value: c.value }))}
           isNonAtomic={isNonAtomic}
+          onRevertedChange={setSimulationReverted}
         />
 
         {/* Gas Estimate */}
@@ -1398,6 +1417,84 @@ function BatchTransactionConfirmation({
 }
 
 // ---------------------------------------------------------------------------
+// BatchClearSigningSummary — clear-signing cards for the batch, rendered at
+// the very top of the confirmation in call order. Each card carries a small
+// "Call N of M" caption so the user knows which tx the human-readable view
+// describes. Calls without a registry-matched descriptor render nothing.
+// ---------------------------------------------------------------------------
+
+function BatchClearSigningSummary({
+  calls,
+  chainId,
+}: {
+  calls: ERC5792Call[];
+  chainId: number;
+}) {
+  return (
+    <VStack spacing={3} align="stretch">
+      {calls.map((call, i) =>
+        call.data && call.data !== "0x" && call.to ? (
+          <PerCallClearSigning
+            key={i}
+            index={i}
+            total={calls.length}
+            to={call.to}
+            data={call.data}
+            chainId={chainId}
+          />
+        ) : null,
+      )}
+    </VStack>
+  );
+}
+
+function PerCallClearSigning({
+  index,
+  total,
+  to,
+  data,
+  chainId,
+}: {
+  index: number;
+  total: number;
+  to: string;
+  data: string;
+  chainId: number;
+}) {
+  const [matched, setMatched] = useState(false);
+  return (
+    <Box>
+      {/* Caption only appears once a descriptor actually matches — keeps the
+          layout silent for calls that have no friendly view. */}
+      {matched && (
+        <HStack mb={1.5} spacing={2} align="center">
+          <Text
+            fontSize="10px"
+            color="fg.muted"
+            fontWeight="700"
+            textTransform="uppercase"
+            letterSpacing="0.06em"
+            flexShrink={0}
+          >
+            Call {index + 1}
+            {total > 1 ? ` of ${total}` : ""}
+          </Text>
+          <Box flex={1} h="1px" bg="border.subtle" />
+        </HStack>
+      )}
+      <ClearSigningView
+        kind="calldata"
+        chainId={chainId}
+        to={to}
+        calldata={data}
+        onResolved={setMatched}
+        hideLoadingSkeleton
+      />
+    </Box>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // CallCard — individual call in the batch (collapsible)
 // ---------------------------------------------------------------------------
 
@@ -1616,7 +1713,9 @@ function CallCard({
             </HStack>
           )}
 
-          {/* Calldata */}
+          {/* Calldata — per-call clear-signing lives at the top of the batch
+              confirmation now (rendered by BatchClearSigningSummary), not
+              inline here. Each collapsed call only shows its raw decoder. */}
           {hasCalldata && call.to && (
             <Box
               w="full"

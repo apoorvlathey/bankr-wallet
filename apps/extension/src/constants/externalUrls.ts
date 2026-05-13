@@ -13,6 +13,15 @@ export const WALLETCHAN_SWAP_API_BASE = `${WALLETCHAN_API_BASE}/swap`;
 export const WALLETCHAN_SPONSORED_TRANSFER_API = `${WALLETCHAN_API_BASE}/sponsored-transfer`;
 export const WALLETCHAN_PREMIUM_STATUS_API = `${WALLETCHAN_API_BASE}/premium-status`;
 export const WALLETCHAN_VAULT_DATA_API = `${WALLETCHAN_API_BASE}/vault-data`;
+// Clear-signing proxy. `pnpm dev:extension` runs `vite build --mode development`
+// which sets `import.meta.env.MODE === 'development'` — point at a local
+// Next.js dev server so descriptor lookups work end-to-end without a deploy.
+// Production builds hit walletchan.com. (Note: `import.meta.env.DEV` is *not*
+// the right toggle — it's only true under `vite` dev-server, not `vite build`.)
+export const WALLETCHAN_CLEAR_SIGNING_API =
+  import.meta.env.MODE === "development"
+    ? "http://localhost:3000/api/clearsigning/descriptor"
+    : `${WALLETCHAN_API_BASE}/clearsigning/descriptor`;
 
 // ---------------------------------------------------------------------------
 // WalletChan Assets & Pages

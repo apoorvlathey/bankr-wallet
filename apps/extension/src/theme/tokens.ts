@@ -44,6 +44,14 @@ export interface SurfaceColors {
   sunken: string;
   /** Modal scrim / backdrop overlay */
   overlay: string;
+  /**
+   * Soft accent-tinted surface — used to make a card visually distinct from
+   * the standard `raised` cards around it without using a loud status color.
+   * Currently used by the clear-signing card so the human-readable intent
+   * draws the eye before Origin/From/Network metadata. Should remain *very*
+   * subtle: a wash, not a banner.
+   */
+  accentTint: string;
 }
 
 /** Foreground / text hierarchy */

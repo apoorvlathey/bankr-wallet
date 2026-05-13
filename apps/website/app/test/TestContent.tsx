@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import {
   Box,
   Button,
@@ -22,6 +23,7 @@ import { BatchSection } from "./sections/BatchSection";
 import { WatchAssetSection } from "./sections/WatchAssetSection";
 import { ChainSection } from "./sections/ChainSection";
 import { RpcProxySection } from "./sections/RpcProxySection";
+import { ClearSigningSection } from "./sections/ClearSigningSection";
 import { TEST_CHAINS } from "./constants";
 
 function SectionCard({
@@ -68,6 +70,12 @@ function SectionCard({
   );
 }
 
+// Base is the preferred chain for testing: the ERC-7730 registry covers more
+// of our test surface on Base (Aave V3, Permit2) and gas is cheap enough to
+// burn through the full clear-signing matrix. Default to Base on first
+// connect; respect manual switches afterwards.
+const PREFERRED_TEST_CHAIN_ID = 8453;
+
 export default function TestContent() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -75,6 +83,26 @@ export default function TestContent() {
 
   const activeChain = TEST_CHAINS[chainId];
   const isSupportedChain = !!activeChain;
+
+  // One-shot switch to Base on first render after a wallet connect. Tracks
+  // "have we already nudged" via a ref so the user can manually switch to
+  // another chain without us bouncing them back.
+  const autoSwitchedRef = useRef(false);
+  useEffect(() => {
+    if (!isConnected) {
+      autoSwitchedRef.current = false;
+      return;
+    }
+    if (autoSwitchedRef.current) return;
+    autoSwitchedRef.current = true;
+    if (chainId !== PREFERRED_TEST_CHAIN_ID) {
+      try {
+        switchChain({ chainId: PREFERRED_TEST_CHAIN_ID });
+      } catch {
+        // Wallet may reject (e.g. chain not added) — leave the user where they are.
+      }
+    }
+  }, [isConnected, chainId, switchChain]);
 
   return (
     <Box minH="100vh" bg="bauhaus.background">
@@ -197,6 +225,10 @@ export default function TestContent() {
 
             <SectionCard title="Batch (ERC-5792)" accent="green">
               <BatchSection />
+            </SectionCard>
+
+            <SectionCard title="Clear Signing (ERC-7730)" accent="yellow">
+              <ClearSigningSection />
             </SectionCard>
 
             <SectionCard title="Watch Asset" accent="blue">

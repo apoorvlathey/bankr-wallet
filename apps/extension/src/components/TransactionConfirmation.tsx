@@ -34,8 +34,9 @@ import { getChainConfig } from "@/constants/chainConfig";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { resolveAddressToName } from "@/lib/ensUtils";
 import CalldataDecoder from "@/components/CalldataDecoder";
+import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
 import GasEstimateDisplay from "@/components/GasEstimateDisplay";
-import AssetChangesDisplay from "@/components/AssetChangesDisplay";
+import AssetChangesDisplay, { SimulationRevertedBanner } from "@/components/AssetChangesDisplay";
 import ERC20ApproveDisplay from "@/components/ERC20ApproveDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import ChainIcon from "@/components/ChainIcon";
@@ -266,6 +267,22 @@ function TransactionConfirmation({
   const [decodedFunctionName, setDecodedFunctionName] = useState<
     string | undefined
   >();
+  // Clear-signing resolution lifecycle — "loading" until the descriptor
+  // fetch settles. Holding off the raw CalldataDecoder until then prevents a
+  // flash-open / collapse glitch when a descriptor matches.
+  const clearSigningEligible = !!(
+    txRequest.tx.data &&
+    txRequest.tx.data !== "0x" &&
+    txRequest.tx.to
+  );
+  const [clearSigningStatus, setClearSigningStatus] = useState<
+    "loading" | "matched" | "absent"
+  >(clearSigningEligible ? "loading" : "absent");
+  const clearSigningMatched = clearSigningStatus === "matched";
+  // Surfaced from AssetChangesDisplay's simulation result. Drives the
+  // top-of-screen "simulated transaction reverted" banner so the warning
+  // lands in front of the user before they read clear-signing / origin info.
+  const [simulationReverted, setSimulationReverted] = useState(false);
   const [gasOverrides, setGasOverrides] = useState<GasOverrides | null>(null);
   // Gas-editor validity bubbled up from GasEstimateDisplay. Disables the
   // Confirm button while the user has the Custom-tier editor in an
@@ -832,6 +849,31 @@ function TransactionConfirmation({
           />
         )}
 
+        {/* Simulated-revert banner — rendered at the very top, ABOVE the
+            clear-signing card, so the "this is likely to fail onchain"
+            warning is the first thing the user sees. State is fed by the
+            AssetChangesDisplay simulation result further down. */}
+        {simulationReverted && (
+          <SimulationRevertedBanner borders={tokens.borders} />
+        )}
+
+        {/* Clear-signing (ERC-7730) view — rendered ABOVE the tx info card,
+            matching the ERC-20 approve display's placement. The human-readable
+            intent is the primary content; Origin/From/Network are secondary.
+            The raw CalldataDecoder further down stays collapsed when this
+            resolves (see `clearSigningMatched`). */}
+        {clearSigningEligible && (
+          <ClearSigningView
+            kind="calldata"
+            chainId={tx.chainId}
+            to={tx.to!}
+            calldata={tx.data!}
+            onResolved={(matched) =>
+              setClearSigningStatus(matched ? "matched" : "absent")
+            }
+          />
+        )}
+
         {/* Transaction Info Card */}
         <Box
           bg="surface.raised"
@@ -1156,7 +1198,12 @@ function TransactionConfirmation({
         </Box>
 
         {/* Asset Changes (simulation) */}
-        {tx.to && <AssetChangesDisplay txRequest={txRequest} />}
+        {tx.to && (
+          <AssetChangesDisplay
+            txRequest={txRequest}
+            onRevertedChange={setSimulationReverted}
+          />
+        )}
 
         {/* Gas Estimate. The `key` includes the split-resolution counter so
             the component remounts after the prior split tx lands, forcing a
@@ -1173,14 +1220,16 @@ function TransactionConfirmation({
         {/* Calldata (Decoded + Raw). Collapsed by default on approvals —
             the structured ERC20ApproveDisplay above already shows function
             + spender + amount; the decoder panel is redundant for the
-            common case but one click away for power users. */}
-        {tx.data && tx.data !== "0x" && tx.to && (
+            common case but one click away for power users. Also collapses
+            when a clear-signing descriptor matched above. Held back until
+            clear-signing resolves so we don't flash-open then collapse. */}
+        {tx.data && tx.data !== "0x" && tx.to && clearSigningStatus !== "loading" && (
           <CalldataDecoder
             calldata={tx.data}
             to={tx.to}
             chainId={tx.chainId}
             onFunctionName={setDecodedFunctionName}
-            defaultCollapsed={!!parsedApproval}
+            defaultCollapsed={!!parsedApproval || clearSigningMatched}
           />
         )}
         {/* Raw-only fallback for contract deployments */}

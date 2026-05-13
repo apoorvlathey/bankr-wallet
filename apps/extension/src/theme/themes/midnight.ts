@@ -141,6 +141,14 @@ export const midnightTokens: ThemeTokens = {
       raisedHover: SURFACE_RAISED_HOVER,
       sunken: SURFACE_SUNKEN,
       overlay: SURFACE_OVERLAY,
+      // Whitish lift one step *above* `surface.raised` (#131826) — clearly
+      // distinguishable as the most elevated card without any violet cast that
+      // would compete with the CTA. Kept neutral grey-blue so it reads as
+      // "premium elevated surface" instead of "tinted alert". Used by the
+      // clear-signing card to draw the eye to the human-readable intent;
+      // should be more prominent than the standard raised cards (e.g. the
+      // ERC20 approval display) that sit on `surface.raised`.
+      accentTint: "#1F2638",
     },
     fg: {
       primary: FG_PRIMARY,

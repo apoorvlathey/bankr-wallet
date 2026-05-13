@@ -17,13 +17,14 @@ import { ArrowBackIcon, ChevronLeftIcon, ChevronRightIcon } from "@chakra-ui/ico
 import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import TypedDataDisplay from "@/components/TypedDataDisplay";
+import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
-import { useTheme, useStripTokens, useIconChipBg } from "@/theme";
+import { useTheme, useStripTokens, useIconChipBg, useChainBadgeStyle } from "@/theme";
 
 interface SignatureRequestConfirmationProps {
   sigRequest: PendingSignatureRequest;
@@ -253,9 +254,27 @@ function SignatureRequestConfirmation({
   const { networksInfo } = useNetworks();
   const { signature, origin, chainName, favicon } = sigRequest;
   const resolvedChain = getResolvedChainById(signature.chainId, networksInfo);
+  // Chain badge colors — mirrors TransactionConfirmation so the pill looks
+  // identical across surfaces. All per-theme branching lives in
+  // `useChainBadgeStyle`.
+  const chainBadgeConfig = getChainConfig(signature.chainId);
+  const chainBadgeBrandBg = resolvedChain?.bg ?? chainBadgeConfig.bg;
+  const chainBadgeBrandFg = resolvedChain?.text ?? chainBadgeConfig.text;
+  const chainBadgeStyle = useChainBadgeStyle(
+    chainBadgeBrandBg,
+    chainBadgeBrandFg,
+    resolvedChain?.isCustom ?? false,
+  );
   const { message, rawData, typedData } = formatSignatureData(signature.method, signature.params);
   const signerAddress = getSignerAddress(signature.method, signature.params);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Clear-signing resolution lifecycle. Eligible = there's a verifyingContract
+  // to look up; once eligible, we hold off rendering the raw structured/raw
+  // tabs until resolution settles so we don't get a flash-then-collapse.
+  const clearSigningEligible = !!typedData?.domain?.verifyingContract;
+  const [clearSigningStatus, setClearSigningStatus] = useState<
+    "loading" | "matched" | "absent"
+  >(clearSigningEligible ? "loading" : "absent");
 
   const handleCancel = () => {
     onBeforeCancel?.();
@@ -443,6 +462,25 @@ function SignatureRequestConfirmation({
           <Box w={10} flexShrink={0} aria-hidden />
         </HStack>
 
+        {/* Clear-signing (ERC-7730) view — rendered ABOVE the request info
+            card on purpose, mirroring how the ERC-20 approval display sits
+            above the Origin/From/Network rows on tx confirmations. The
+            human-readable intent ("what is this actually doing?") is the
+            primary content the user needs; provenance metadata is secondary.
+            We hold off rendering the structured/raw block further down until
+            this resolves to avoid a flash-then-collapse. */}
+        {clearSigningEligible && (
+          <ClearSigningView
+            kind="eip712"
+            chainId={signature.chainId}
+            verifyingContract={typedData.domain.verifyingContract}
+            typedData={typedData}
+            onResolved={(matched) =>
+              setClearSigningStatus(matched ? "matched" : "absent")
+            }
+          />
+        )}
+
         {/* Request Info Card */}
         <Box
           bg="surface.raised"
@@ -539,39 +577,27 @@ function SignatureRequestConfirmation({
               <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
                 Network
               </Text>
-              {(() => {
-                const config = getChainConfig(signature.chainId);
-                const badgeChain = resolvedChain ?? {
-                  name: chainName,
-                  bg: config.bg,
-                  text: config.text,
-                  icon: config.icon,
-                  isCustom: false,
-                };
-                return (
-                  <Badge
-                    fontSize="xs"
-                    bg={badgeChain.isCustom ? "surface.raised" : badgeChain.bg}
-                    color={badgeChain.isCustom ? "fg.primary" : badgeChain.text}
-                    border="1.5px solid"
-                    borderColor="border.default"
-                    fontWeight="700"
-                    px={2}
-                    py={0.5}
-                    display="flex"
-                    alignItems="center"
-                    gap={1}
-                  >
-                    <ChainIcon
-                      chainId={signature.chainId}
-                      chainName={badgeChain.name}
-                      size="12px"
-                      withChip
-                    />
-                    {badgeChain.name}
-                  </Badge>
-                );
-              })()}
+              <Badge
+                fontSize="xs"
+                bg={chainBadgeStyle.bg}
+                color={chainBadgeStyle.fg}
+                border="1.5px solid"
+                borderColor={chainBadgeStyle.border}
+                fontWeight="700"
+                px={2}
+                py={0.5}
+                display="flex"
+                alignItems="center"
+                gap={1}
+              >
+                <ChainIcon
+                  chainId={signature.chainId}
+                  chainName={resolvedChain?.name ?? chainName}
+                  size="12px"
+                  withChip
+                />
+                {resolvedChain?.name ?? chainName}
+              </Badge>
             </HStack>
 
             {/* Method */}
@@ -603,12 +629,19 @@ function SignatureRequestConfirmation({
           </VStack>
         </Box>
 
-        {/* Typed Data Display (structured + raw) */}
-        {typedData ? (
-          <TypedDataDisplay typedData={typedData} rawData={rawData} />
-        ) : (
-          <MessageDataDisplay message={message} rawData={rawData} />
-        )}
+        {/* Typed Data Display (structured + raw). Defaults collapsed when a
+            clear-signing card sits above it — the human-readable view is the
+            primary surface, raw stays available behind a one-tap toggle. */}
+        {clearSigningStatus !== "loading" &&
+          (typedData ? (
+            <TypedDataDisplay
+              typedData={typedData}
+              rawData={rawData}
+              defaultCollapsed={clearSigningStatus === "matched"}
+            />
+          ) : (
+            <MessageDataDisplay message={message} rawData={rawData} />
+          ))}
 
         {/* Pinned bottom section — `mt="auto"` keeps it anchored to the
             bottom when content is shorter than the viewport; `position:sticky`
