@@ -126,7 +126,7 @@ walletchan/
 pnpm install
 
 # Development
-pnpm dev:extension         # Build extension in dev mode
+pnpm dev:extension         # Build extension in DEVELOPMENT mode (vite build --mode development)
 pnpm dev:website           # Start website dev server at localhost:3000
 pnpm dev:staking-indexer   # Start staking indexer at localhost:42070
 pnpm dev:tg-bot            # Start TG bot + API at localhost:3001
@@ -134,7 +134,7 @@ pnpm dev:arb-bot           # Start arb bot (requires .env with PRIVATE_KEY + BAS
 
 # Build
 pnpm build              # Build both extension and website
-pnpm build:extension    # Build extension only (output: apps/extension/build/)
+pnpm build:extension    # Build extension in PRODUCTION mode (output: apps/extension/build/)
 pnpm build:website      # Build website only
 
 # Extension-specific
@@ -496,9 +496,28 @@ Railway's default Nixpacks builder does NOT work for this pnpm monorepo with `wo
 - Do NOT set Root Directory, Build Command, or Start Command in Railway UI — `railway.toml` handles it
 - For Ponder indexers: start command uses `--schema $RAILWAY_DEPLOYMENT_ID` for zero-downtime deploys
 
+## Extension Build Modes: Development vs Production
+
+The extension has two build modes, selected via Vite's `--mode` flag. They produce the same output directory (`apps/extension/build/`), but some code paths gate behavior on `import.meta.env.MODE`.
+
+| Command               | Vite mode    | `import.meta.env.MODE` | Use when                                 |
+| --------------------- | ------------ | ---------------------- | ---------------------------------------- |
+| `pnpm dev:extension`  | `development`| `"development"`        | Testing changes locally against `pnpm dev:website` |
+| `pnpm build:extension`| `production` | `"production"`         | Releases, CWS uploads, GitHub Releases (anything users install) |
+
+**What flips between modes** (grep for `import.meta.env.MODE` to find current usages):
+
+- **Clear-signing descriptor API** (`apps/extension/src/constants/externalUrls.ts`) — development hits `http://localhost:3000/api/clearsigning/descriptor` (your local Next.js dev server), production hits `https://walletchan.com/api/clearsigning/descriptor`.
+
+**Rule of thumb:**
+- Building to test a change end-to-end against the local website dev server → `pnpm dev:extension`.
+- Building anything that will ship to users (zip, release, CWS) → `pnpm build:extension` (or `pnpm zip` / `pnpm zip:cws`, which call it internally).
+
+Note: `import.meta.env.DEV` is **not** the right toggle — it's only true under the `vite` dev-server, not under `vite build`, so a `dev:extension` build would otherwise look like prod. Always gate on `MODE === "development"`.
+
 ## Testing Extension Changes
 
-1. `pnpm build:extension`
+1. `pnpm dev:extension` (for local testing against `pnpm dev:website`) or `pnpm build:extension` (production-mode build)
 2. Go to `chrome://extensions`
 3. Click refresh icon on WalletChan card
 4. Test in a dapp (e.g., app.aave.com)
