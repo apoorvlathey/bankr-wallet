@@ -26,11 +26,16 @@ export const sharedBuildConfig: BuildOptions = {
     keep_fnames: true,
   },
 };
+
+// Per-browser build output. Set BROWSER=firefox to emit a Firefox build into
+// build-firefox/ without touching the Chrome build path (build/).
+export const buildDir = process.env.BROWSER === "firefox" ? "build-firefox" : "build";
+
 export default defineConfig({
   ...sharedConfig,
   build: {
     ...sharedBuildConfig,
-    outDir: "build",
+    outDir: buildDir,
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, "index.html"),

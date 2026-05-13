@@ -7,6 +7,11 @@
  */
 
 import type { DecryptedEntry, PasswordType } from "./types";
+import {
+  getSessionItems,
+  setSessionItems,
+  clearSession,
+} from "./sessionStorage";
 
 // Session cache for decrypted API key and password (cleared on restart/suspend)
 let cachedApiKey: string | null = null;
@@ -284,7 +289,7 @@ export async function storeSessionPassword(password: string): Promise<void> {
   const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
 
   // Split key material across two storage areas
-  await chrome.storage.session.set({
+  await setSessionItems({
     encryptedSessionPassword: {
       data: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
       iv: btoa(String.fromCharCode(...iv)),
@@ -302,7 +307,7 @@ export async function storeSessionPassword(password: string): Promise<void> {
  */
 export async function getSessionPassword(): Promise<string | null> {
   const [session, local] = await Promise.all([
-    chrome.storage.session.get("encryptedSessionPassword"),
+    getSessionItems<{ data: string; iv: string }>("encryptedSessionPassword"),
     chrome.storage.local.get(SESSION_KEY_LOCAL),
   ]);
 
@@ -336,7 +341,7 @@ export async function storeSessionMetadata(
   autoLockNever: boolean,
   passwordType?: PasswordType
 ): Promise<void> {
-  await chrome.storage.session.set({
+  await setSessionItems({
     sessionId,
     sessionStartedAt: Date.now(),
     autoLockNever,
@@ -352,7 +357,7 @@ export async function storeSessionMetadata(
 export async function clearSessionStorage(): Promise<void> {
   currentSessionId = null;
   await Promise.all([
-    chrome.storage.session.clear(),
+    clearSession(),
     chrome.storage.local.remove(SESSION_KEY_LOCAL),
   ]);
 }
@@ -367,7 +372,7 @@ export async function clearSessionStorage(): Promise<void> {
 export async function tryRestoreSession(
   unlockFn: (password: string) => Promise<{ success: boolean; passwordType?: PasswordType }>
 ): Promise<boolean> {
-  const session = await chrome.storage.session.get([
+  const session = await getSessionItems<unknown>([
     "sessionId",
     "autoLockNever",
     "encryptedSessionPassword",
@@ -502,8 +507,8 @@ export async function storeSessionAtomic(
   const encoded = new TextEncoder().encode(password);
   const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
 
-  // Single chrome.storage.session.set with both metadata and ciphertext.
-  await chrome.storage.session.set({
+  // Single session storage write with both metadata and ciphertext.
+  await setSessionItems({
     sessionId,
     sessionStartedAt: Date.now(),
     autoLockNever: isUnlocked,

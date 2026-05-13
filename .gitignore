@@ -20,6 +20,7 @@ node_modules
 
 # production builds
 build
+build-firefox
 zip
 cws-zip
 .next

@@ -4,9 +4,31 @@
  *
  * KEY DESIGN: We never use openPanelOnActionClick (it suppresses the popup completely).
  * Instead, we control behavior via chrome.action.setPopup():
- * - Popup mode: setPopup({ popup: 'popup-init.html' }) → native popup opens
+ * - Popup mode: setPopup({ popup: POPUP_PATH }) → native popup opens
  * - Sidepanel mode: setPopup({ popup: '' }) → action.onClicked fires → sidePanel.open() with fallback
+ *
+ * POPUP_PATH differs by browser:
+ * - Chrome: 'popup-init.html' — a tiny splash that sets popup dimensions then
+ *   meta-refreshes to /index.html (prevents flash-of-unstyled-content while
+ *   main.js loads in the inline toolbar popup).
+ * - Firefox: empty string. Firefox / Firefox-forks (Zen) don't reliably render
+ *   the inline toolbar popup, so we keep `default_popup` unset in the Firefox
+ *   manifest and clear it at runtime too — that makes `action.onClicked` fire
+ *   on icon click, and the listener routes to `openPopupWindow()` which uses
+ *   `chrome.windows.create({type:"popup"})` (confirmed working in Firefox).
+ *   Slight UX trade-off: detached popup window instead of toolbar-attached,
+ *   but reliable across all Firefox-family browsers.
+ *
+ * Firefox sidepanel: deliberately NOT offered. Firefox's `sidebar_action` /
+ * `chrome.sidebarAction` API exists but (a) Zen and other Firefox forks hide
+ * the native sidebar UI, so the panel never surfaces, and (b) even on standard
+ * Firefox the integration didn't render reliably during testing. We stay
+ * popup-only on Firefox.
  */
+const IS_CHROMIUM_WITH_SIDEPANEL =
+  typeof chrome !== "undefined" && typeof chrome.sidePanel !== "undefined";
+
+export const POPUP_PATH = IS_CHROMIUM_WITH_SIDEPANEL ? "popup-init.html" : "";
 
 /**
  * Checks if this is a non-Chrome Chromium browser (Arc, Brave, Opera, etc.)
@@ -99,7 +121,7 @@ export async function setSidePanelMode(enabled: boolean): Promise<boolean> {
       return false;
     }
     await chrome.storage.sync.set({ sidePanelMode: false });
-    await chrome.action.setPopup({ popup: "popup-init.html" });
+    await chrome.action.setPopup({ popup: POPUP_PATH });
     return true;
   }
 
@@ -111,14 +133,14 @@ export async function setSidePanelMode(enabled: boolean): Promise<boolean> {
       return true;
     } else {
       // Restore native popup
-      await chrome.action.setPopup({ popup: "popup-init.html" });
+      await chrome.action.setPopup({ popup: POPUP_PATH });
       await chrome.storage.sync.set({ sidePanelMode: false });
       return true;
     }
   } catch (error) {
     console.warn("Failed to set sidepanel mode:", error);
     await chrome.storage.sync.set({ sidePanelMode: false });
-    await chrome.action.setPopup({ popup: "popup-init.html" });
+    await chrome.action.setPopup({ popup: POPUP_PATH });
     return false;
   }
 }
@@ -148,7 +170,7 @@ export async function initSidePanel(): Promise<void> {
     ]);
 
     if (storedIsArc) {
-      await chrome.action.setPopup({ popup: "popup-init.html" });
+      await chrome.action.setPopup({ popup: POPUP_PATH });
       return;
     }
 
@@ -158,12 +180,12 @@ export async function initSidePanel(): Promise<void> {
       await chrome.action.setPopup({ popup: "" });
     } else {
       // Default: ensure popup mode
-      await chrome.action.setPopup({ popup: "popup-init.html" });
+      await chrome.action.setPopup({ popup: POPUP_PATH });
     }
   } catch (error) {
     console.error("Error during sidepanel initialization:", error);
     try {
-      await chrome.action.setPopup({ popup: "popup-init.html" });
+      await chrome.action.setPopup({ popup: POPUP_PATH });
     } catch {
       // Last resort - ignore
     }

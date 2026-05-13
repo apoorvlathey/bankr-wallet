@@ -142,6 +142,12 @@ pnpm zip                # Build + zip (for GitHub Releases)
 pnpm zip:cws            # Build + zip (strips `key` defensively, for CWS upload)
 pnpm lint               # Lint extension code
 
+# Firefox build (separate output dir: apps/extension/build-firefox/)
+pnpm build:extension:firefox   # Production Firefox build
+pnpm dev:extension:firefox     # Dev Firefox build (uses local website)
+pnpm zip:firefox               # Build + zip Firefox artifact for archival
+pnpm sign:firefox              # Build + submit to AMO (requires WEB_EXT_API_KEY / WEB_EXT_API_SECRET)
+
 # Contracts
 pnpm build:contracts    # Compile Solidity contracts
 pnpm test:contracts     # Run Foundry tests
@@ -165,11 +171,32 @@ The extension has 5 build targets (see `apps/extension/vite.config.*.ts`):
 | onboarding.js | Full-page onboarding wizard                        |
 | inpage.js     | Injected provider (EIP-6963 + window.ethereum)     |
 | inject.js     | Content script (bridges inpage ↔ background)       |
-| background.js | Service worker (API calls, storage, notifications) |
+| background.js | Service worker / event page (API calls, storage, notifications) |
 
 **Message flow**: Dapp → inpage.js → inject.js → background.js → Bankr API
 
 For detailed architecture, message types, and flows, see `_docs/IMPLEMENTATION.md`.
+
+### Browser targets (Chrome + Firefox)
+
+The same Vite pipeline produces two artifacts:
+
+- `pnpm build:extension` → `apps/extension/build/` (Chrome MV3 — `service_worker` background, `side_panel`)
+- `pnpm build:extension:firefox` → `apps/extension/build-firefox/` (Firefox MV3 — `background.scripts` event page, no sidepanel)
+
+`BROWSER=firefox` is the gating env. It flips Vite's `outDir` to `build-firefox/` and switches the background bundle from ES module to IIFE (Firefox event pages can't load ES modules). A post-build script (`scripts/swap-manifest.mjs`) overwrites the Chrome manifest in `build-firefox/` with the Firefox variant kept at `apps/extension/manifest.firefox.json` (deliberately stored OUTSIDE `public/` so it doesn't leak into the Chrome zip).
+
+**Drift control**: whenever you edit `apps/extension/public/manifest.json`, mirror the equivalent change in `apps/extension/manifest.firefox.json`. They share `name`, `version`, `description`, `icons`, `action`, `content_scripts`, `host_permissions`, `web_accessible_resources`, and the non-Chrome-only entries of `permissions`. Chrome-only keys (`side_panel`, `permissions: ["sidePanel"]`, `background.service_worker`/`type:"module"`) MUST stay out of the Firefox manifest; Firefox-only keys (`background.scripts`, `browser_specific_settings.gecko.*`) stay out of the Chrome manifest.
+
+**Sidepanel is Chrome-only.** Firefox has no `chrome.sidePanel` (and its `sidebar_action` equivalent didn't render reliably across Firefox-family browsers in testing, including Zen). Firefox UX is popup-only — toolbar icon → `chrome.action.onClicked` → `openPopupWindow()` → `chrome.windows.create({type:"popup"})`. Don't reintroduce `sidebar_action` to the Firefox manifest.
+
+Firefox does not provide `chrome.storage.session`. All session storage goes through `apps/extension/src/chrome/sessionStorage.ts` — a shim that passes through to `chrome.storage.session` on Chrome and falls back to `chrome.storage.local` (with a `__session__` key prefix + `runtime.onStartup` clear) on Firefox. Direct `chrome.storage.session.*` calls are forbidden in `src/`; the only place that file legitimately appears is `sessionStorage.ts` itself.
+
+**Never hardcode `chrome-extension://` anywhere.** Firefox extension pages live at `moz-extension://<UUID>/...`, so any URL-prefix check that bakes in `chrome-extension://` silently breaks on Firefox (the `isExtensionPage()` auth gate hit exactly this — 40+ message types started returning "Unauthorized"). Always derive the extension origin from `chrome.runtime.getURL("/")`, which returns the correct scheme + identifier for whichever browser is running. Filters that skip extension/internal URLs should also include `moz-extension://` and `about:` alongside `chrome-extension://` and `chrome://`.
+
+**The toolbar popup uses different mechanisms per browser.** Chrome uses `action.default_popup` (inline popup attached to the toolbar icon). Firefox-family browsers don't render that reliably (confirmed broken in Zen), so the Firefox manifest has no `default_popup` — clicking the icon fires `chrome.action.onClicked`, which routes through `openPopupWindow()` to `chrome.windows.create({type: "popup"})`. `POPUP_PATH` in `sidepanelManager.ts` controls the runtime equivalent: `"popup-init.html"` on Chrome, `""` on Firefox.
+
+See `_docs/FIREFOX.md` for the full Firefox port doc (port rationale, AMO release flow, known gaps).
 
 ## Key Extension Files
 
@@ -269,6 +296,7 @@ When working on features, refer to these docs:
 | `apps/wchan-vault-indexer/IMPLEMENTATION.md`             | WCHAN vault indexer: sWCHAN balance tracking, APY, snapshots    |
 | `_docs/DEVELOPMENT.md`                                   | Build process, dev environment setup                      |
 | `_docs/PUBLISHING.md`                                    | Release workflow, CWS upload, auto-update, signing        |
+| `_docs/FIREFOX.md`                                       | Firefox port: build pipeline, manifest divergence, storage.session shim, AMO release |
 | `_docs/STORAGE.md`                                       | Every chrome.storage key, shapes, version history         |
 | `_docs/ADD_CHAIN.md`                                     | How to add a new chain (single registry entry)            |
 | `apps/tg-bot/IMPLEMENTATION.md`                          | TG bot: verification flow, commands, API, balance checker |

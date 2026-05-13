@@ -205,6 +205,7 @@ import {
   getSidePanelMode,
   setSidePanelMode,
   initSidePanel,
+  POPUP_PATH,
 } from "./sidepanelManager";
 
 import { fetchAndCacheAvatarImage } from "./avatarImageCache";
@@ -260,8 +261,13 @@ async function handleRpcRequest(
  * as opposed to a content script running on a web page.
  * Content scripts have sender.url set to the web page URL, not the extension URL.
  */
+// chrome.runtime.getURL("/") returns the extension root: `chrome-extension://<id>/`
+// on Chrome, `moz-extension://<uuid>/` on Firefox. Computing it once avoids hardcoding
+// the URL scheme (which was Firefox-broken: Firefox uses moz-extension://).
+const EXTENSION_ORIGIN_PREFIX = chrome.runtime.getURL("/");
+
 function isExtensionPage(sender: chrome.runtime.MessageSender): boolean {
-  return !!sender.url?.startsWith(`chrome-extension://${chrome.runtime.id}/`);
+  return !!sender.url?.startsWith(EXTENSION_ORIGIN_PREFIX);
 }
 
 // ─── Chrome Event Listeners ──────────────────────────────────────────────────
@@ -286,7 +292,9 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
             tab.id &&
             tab.url &&
             !tab.url.startsWith("chrome://") &&
-            !tab.url.startsWith("chrome-extension://")
+            !tab.url.startsWith("chrome-extension://") &&
+            !tab.url.startsWith("moz-extension://") &&
+            !tab.url.startsWith("about:")
           ) {
             chrome.tabs
               .sendMessage(tab.id, {
@@ -486,6 +494,11 @@ recoverStuckForceInclusionTxs();
 // successfully but silently do nothing, so we check for a SIDE_PANEL context after a delay.
 chrome.action.onClicked.addListener(async (tab) => {
   try {
+    if (!chrome.sidePanel?.open) {
+      // Firefox / browser without sidePanel API — fall back immediately
+      await openPopupWindow();
+      return;
+    }
     await chrome.sidePanel.open({ windowId: tab.windowId! });
 
     // Verify the sidepanel actually opened — some browsers (Arc) resolve the promise
@@ -1999,7 +2012,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           isArcBrowser: true,
         });
         // Restore native popup so clicks work on Arc
-        chrome.action.setPopup({ popup: "popup-init.html" }).catch(() => {});
+        chrome.action.setPopup({ popup: POPUP_PATH }).catch(() => {});
       }
       sendResponse({ success: true });
       return false;

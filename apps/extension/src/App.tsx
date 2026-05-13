@@ -801,6 +801,7 @@ function App() {
     } else {
       // ENABLING: open sidepanel, persist, close popup — all fire-and-forget
       try {
+        if (!chrome.sidePanel?.open) return; // Firefox / unsupported browser
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         const windowId = tabs[0]?.windowId;
         if (!windowId) return;

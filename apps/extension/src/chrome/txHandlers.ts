@@ -378,6 +378,10 @@ export async function openExtensionPopup(
 
     // Try sidePanel.open() with the sender's window, then verify it actually opened
     try {
+      if (!chrome.sidePanel?.open) {
+        // Firefox / browser without sidePanel API — skip and fall through to popup
+        throw new Error("sidePanel API unavailable");
+      }
       const windowId =
         senderWindowId ||
         (await chrome.windows.getLastFocused({ populate: false })).id;

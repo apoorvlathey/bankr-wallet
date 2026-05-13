@@ -1,12 +1,12 @@
 import { defineConfig } from "vite";
 import path from "path";
-import { sharedConfig, sharedBuildConfig } from "./vite.config";
+import { sharedConfig, sharedBuildConfig, buildDir } from "./vite.config";
 
 export default defineConfig({
   ...sharedConfig,
   build: {
     ...sharedBuildConfig,
-    outDir: "build/static/js",
+    outDir: `${buildDir}/static/js`,
     emptyOutDir: false,
     lib: {
       formats: ["iife"],

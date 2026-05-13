@@ -1,12 +1,12 @@
 import { defineConfig } from "vite";
 import path from "path";
-import { sharedConfig, sharedBuildConfig } from "./vite.config";
+import { sharedConfig, sharedBuildConfig, buildDir } from "./vite.config";
 
 export default defineConfig({
   ...sharedConfig,
   build: {
     ...sharedBuildConfig,
-    outDir: "build",
+    outDir: buildDir,
     emptyOutDir: false, // Don't clear the build directory (other builds output here too)
     rollupOptions: {
       input: {

@@ -3,7 +3,8 @@
 # Usage: bash scripts/release.sh <patch|minor|major>
 #
 # Handles the monorepo correctly: bumps version in package.json,
-# syncs to manifest.json, commits both files, tags, and pushes.
+# syncs to public/manifest.json (Chrome) and manifest.firefox.json (Firefox),
+# commits all three files, tags, and pushes.
 
 set -euo pipefail
 
@@ -45,19 +46,21 @@ pkg.version = '$NEW_VERSION';
 fs.writeFileSync('$EXT_DIR/package.json', JSON.stringify(pkg, null, 2) + '\n');
 "
 
-# 2. Sync to manifest.json
+# 2. Sync to manifest.json (Chrome) and manifest.firefox.json (Firefox)
 node -e "
 const fs = require('fs');
-const manifest = JSON.parse(fs.readFileSync('$EXT_DIR/public/manifest.json', 'utf8'));
-manifest.version = '$NEW_VERSION';
-fs.writeFileSync('$EXT_DIR/public/manifest.json', JSON.stringify(manifest, null, 2) + '\n');
+for (const path of ['$EXT_DIR/public/manifest.json', '$EXT_DIR/manifest.firefox.json']) {
+  const manifest = JSON.parse(fs.readFileSync(path, 'utf8'));
+  manifest.version = '$NEW_VERSION';
+  fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n');
+}
 "
 
-echo "Synced version $NEW_VERSION to manifest.json"
+echo "Synced version $NEW_VERSION to manifest.json (Chrome) and manifest.firefox.json (Firefox)"
 
 # 3. Commit from repo root (so git paths resolve correctly)
 cd "$REPO_ROOT"
-git add apps/extension/package.json apps/extension/public/manifest.json
+git add apps/extension/package.json apps/extension/public/manifest.json apps/extension/manifest.firefox.json
 git commit --no-gpg-sign -m "chore: release v$NEW_VERSION"
 
 # 4. Tag and push
