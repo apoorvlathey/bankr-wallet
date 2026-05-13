@@ -31,12 +31,16 @@ jobs:
         id: version
         run: echo "version=$(node -p "require('./apps/extension/package.json').version")" >> $GITHUB_OUTPUT
 
-      - name: Create zip
+      - name: Create Chrome zip
         run: pnpm zip
+
+      - name: Create Firefox zip
+        run: pnpm zip:firefox
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             apps/extension/zip/walletchan-v${{ steps.version.outputs.version }}.zip
+            apps/extension/zip/walletchan-firefox-v${{ steps.version.outputs.version }}.zip
           generate_release_notes: true
