@@ -102,6 +102,30 @@ export function SendTxSection() {
     });
   };
 
+  // ── Malformed-calldata attack vectors ─────────────────────────────────────
+  // Non-canonical ABI encoding where the upper 12 bytes of an address-typed
+  // argument are non-zero. A naive ".slice(-40)" parser would render a
+  // "clean" recipient in the structured approval/transfer card while the
+  // actual calldata is malformed — the wallet must REFUSE to sign these.
+  //
+  // Payloads from external bug report (see commit / PR description).
+  const MALFORMED_APPROVE =
+    "0x095ea7b310000000000000000000000000001f78189be22c3498cff1b8e02272c3220000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+  const MALFORMED_INCREASE_ALLOWANCE =
+    "0x3950935100010000000000000000000000001f78189be22c3498cff1b8e02272c3220000000000000000000000000000000000000000000023e6e54c450cad4f671c71c7";
+  // Self-built malformed transfer: same pattern (non-zero high byte on the
+  // recipient slot) since the bug-report transfer payloads were canonical.
+  const MALFORMED_TRANSFER =
+    "0xa9059cbb01000000000000000000000039317192afcb3d6e66e91023ecb2287e015ef3610000000000000000000000000000000000000000000000009a3298afb5ac71c7";
+
+  const sendMalformed = (data: string) => {
+    if (!usdc) throw new Error(`No USDC configured on ${chain?.name ?? chainId}`);
+    return request({
+      method: "eth_sendTransaction",
+      params: [{ from: address, to: usdc.address, data, value: "0x0" }],
+    });
+  };
+
   return (
     <>
       <TestButton
@@ -137,6 +161,27 @@ export function SendTxSection() {
         label={`USDC.approve(Permit2, MAX_UINT) on ${chain?.name ?? "…"}`}
         description="Unlimited approval. Shows the red 'Unlimited' warning chip."
         onRun={approveUnlimitedUsdc}
+        isDisabled={!usdc}
+      />
+      <TestButton
+        label={`Malformed approve (non-zero address padding) on ${chain?.name ?? "…"}`}
+        description="Bug-report payload: ERC20 approve calldata where the upper 12 bytes of the spender slot are non-zero. Wallet MUST show a red 'Malformed calldata' banner and disable Confirm."
+        onRun={() => sendMalformed(MALFORMED_APPROVE)}
+        variant="outline"
+        isDisabled={!usdc}
+      />
+      <TestButton
+        label={`Malformed increaseAllowance on ${chain?.name ?? "…"}`}
+        description="Bug-report payload: increaseAllowance with non-canonical address encoding. Confirm must stay disabled."
+        onRun={() => sendMalformed(MALFORMED_INCREASE_ALLOWANCE)}
+        variant="outline"
+        isDisabled={!usdc}
+      />
+      <TestButton
+        label={`Malformed transfer on ${chain?.name ?? "…"}`}
+        description="Same non-zero-padding pattern applied to ERC20 transfer. Confirm must stay disabled."
+        onRun={() => sendMalformed(MALFORMED_TRANSFER)}
+        variant="outline"
         isDisabled={!usdc}
       />
     </>

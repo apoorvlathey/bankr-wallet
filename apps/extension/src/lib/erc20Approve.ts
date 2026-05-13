@@ -37,12 +37,18 @@ export function parseApproveCalldata(
 ): ParsedApproval | null {
   if (!isErc20Approve(data)) return null;
 
-  // Minimum length: 4 bytes selector + 32 bytes address + 32 bytes uint256 = 68 bytes = 138 hex chars (with 0x)
-  if (data.length < 138) return null;
+  // Strict length: 4 bytes selector + 32 bytes address + 32 bytes uint256 = 68 bytes = 138 hex chars (with 0x)
+  if (data.length !== 138) return null;
 
   try {
-    // Bytes 4–36: spender address (last 20 bytes of the 32-byte word)
-    const spenderWord = data.slice(10, 74); // skip "0x" + 8 hex selector chars
+    // Bytes 4–36: spender address word. ABI-encoded addresses are right-aligned
+    // in a 32-byte slot — the upper 12 bytes (24 hex chars) MUST be zero. Crafted
+    // calldata with non-zero high bytes can hide the real spender from naive
+    // ".slice(-40)" parsers while remaining non-canonical onchain. Refusing to
+    // parse here hides the structured approval card so the user falls back to
+    // the raw calldata view (and the malformed-calldata banner blocks signing).
+    const spenderWord = data.slice(10, 74).toLowerCase();
+    if (!/^0{24}[0-9a-f]{40}$/.test(spenderWord)) return null;
     const spender = `0x${spenderWord.slice(-40)}` as `0x${string}`;
 
     // Bytes 36–68: uint256 amount

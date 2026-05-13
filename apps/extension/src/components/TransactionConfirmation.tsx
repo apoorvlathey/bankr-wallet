@@ -41,6 +41,8 @@ import ERC20ApproveDisplay from "@/components/ERC20ApproveDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import ChainIcon from "@/components/ChainIcon";
 import { parseApproveCalldata } from "@/lib/erc20Approve";
+import { detectAbiEncodingError } from "@/lib/calldataValidation";
+import { MalformedCalldataBanner } from "@/components/MalformedCalldataBanner";
 import { ethShLabelsUrl, googleFaviconUrl } from "@/constants/externalUrls";
 import { useTheme, useStripTokens, useChainBadgeStyle, useIconChipBg } from "@/theme";
 import {
@@ -523,6 +525,16 @@ function TransactionConfirmation({
     [tx.to, tx.data],
   );
 
+  // Strict ABI validation for known ERC20 selectors. When this fires we block
+  // signing and show a red banner — the structured approval card is also
+  // suppressed because parseApproveCalldata applies the same padding check.
+  // See `lib/calldataValidation.ts` for the rationale.
+  const calldataValidation = useMemo(
+    () => detectAbiEncodingError(tx.data),
+    [tx.data],
+  );
+  const isCalldataMalformed = calldataValidation.malformed;
+
   const formatValue = (value: string | undefined): string => {
     if (!value || value === "0" || value === "0x0") {
       return `0 ${nativeSym}`;
@@ -839,8 +851,23 @@ function TransactionConfirmation({
             </HStack>
           )}
 
-        {/* ERC20 Approve detection — shown above tx info when present */}
-        {tx.to && parsedApproval && (
+        {/* Malformed-calldata banner — surfaces ABOVE everything else when the
+            calldata starts with a known ERC20 selector but is not canonically
+            ABI-encoded (non-zero address padding, wrong length). Signing is
+            blocked while this is visible. */}
+        {isCalldataMalformed && (
+          <MalformedCalldataBanner
+            borders={tokens.borders}
+            reason={calldataValidation.reason!}
+            functionName={calldataValidation.functionName}
+          />
+        )}
+
+        {/* ERC20 Approve detection — shown above tx info when present.
+            Suppressed when calldata is malformed: parseApproveCalldata
+            already returns null in that case, but guarding here too keeps
+            the intent explicit. */}
+        {tx.to && parsedApproval && !isCalldataMalformed && (
           <ERC20ApproveDisplay
             tokenAddress={tx.to}
             approval={parsedApproval}
@@ -1481,7 +1508,12 @@ function TransactionConfirmation({
                 variant="highlight"
                 flex={1}
                 onClick={handleConfirm}
-                isDisabled={state === "error" || !gasValid || !splitState.ready}
+                isDisabled={
+                  state === "error" ||
+                  !gasValid ||
+                  !splitState.ready ||
+                  isCalldataMalformed
+                }
               >
                 Confirm
               </Button>

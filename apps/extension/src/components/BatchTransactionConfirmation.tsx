@@ -41,6 +41,8 @@ import { getChainConfig } from "@/constants/chainConfig";
 import CalldataDecoder from "@/components/CalldataDecoder";
 import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
 import AssetChangesDisplay, { SimulationRevertedBanner } from "@/components/AssetChangesDisplay";
+import { detectAbiEncodingError } from "@/lib/calldataValidation";
+import { MalformedCalldataBanner } from "@/components/MalformedCalldataBanner";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
@@ -215,6 +217,21 @@ function BatchTransactionConfirmation({
 
   const { params, origin, chainName, favicon, chainId } = batchRequest;
   const calls = params.calls;
+
+  // Strict ABI validation across every call in the batch. If any single call's
+  // calldata is malformed (non-zero address padding on a known ERC20 selector,
+  // wrong length, …) we block confirmation for the whole batch. See
+  // `lib/calldataValidation.ts` for the rationale.
+  const malformedCallInfo = useMemo(() => {
+    for (let i = 0; i < calls.length; i++) {
+      const result = detectAbiEncodingError(calls[i].data);
+      if (result.malformed) {
+        return { index: i, ...result };
+      }
+    }
+    return null;
+  }, [calls]);
+  const isCalldataMalformed = !!malformedCallInfo;
 
   const originHostname = (() => {
     try {
@@ -759,6 +776,16 @@ function BatchTransactionConfirmation({
           </Box>
         </HStack>
 
+        {/* Malformed-calldata banner — blocks signing when any call in the
+            batch has non-canonical ABI encoding for a known ERC20 selector. */}
+        {malformedCallInfo && (
+          <MalformedCalldataBanner
+            borders={tokens.borders}
+            reason={`Call #${malformedCallInfo.index + 1}: ${malformedCallInfo.reason}`}
+            functionName={malformedCallInfo.functionName}
+          />
+        )}
+
         {/* Simulated-revert banner — top-of-screen warning so the user
             sees "this is likely to fail" before the clear-signing summary
             or call list. Fed by AssetChangesDisplay below. */}
@@ -1294,7 +1321,9 @@ function BatchTransactionConfirmation({
                         variant="highlight"
                         flex={1}
                         onClick={handleConfirm}
-                        isDisabled={state === "error" || !gasValid}
+                        isDisabled={
+                          state === "error" || !gasValid || isCalldataMalformed
+                        }
                         // "Confirm Batch" is longer than the default "Confirm"
                         // — shrink the font so it sits comfortably next to the
                         // Reject button without wrapping or clipping.
@@ -1406,6 +1435,7 @@ function BatchTransactionConfirmation({
               onClick={handleConfirmSplit}
               isLoading={splitting}
               loadingText="Splitting"
+              isDisabled={isCalldataMalformed}
             >
               Split
             </Button>
