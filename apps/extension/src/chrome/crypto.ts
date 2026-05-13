@@ -118,11 +118,16 @@ export async function loadDecryptedApiKey(
 }
 
 /**
- * Checks if an encrypted API key exists in storage
+ * Checks if an encrypted API key exists in storage (legacy or vault-key form).
+ * After the vault-key migration runs (during first unlock), the legacy
+ * `encryptedApiKey` is nulled and the credential lives at
+ * `encryptedApiKeyVault`. Callers using this as a "wallet is set up" gate
+ * must see both.
  */
 export async function hasEncryptedApiKey(): Promise<boolean> {
-  const { encryptedApiKey } = await chrome.storage.local.get("encryptedApiKey");
-  return !!encryptedApiKey;
+  const { encryptedApiKey, encryptedApiKeyVault } =
+    await chrome.storage.local.get(["encryptedApiKey", "encryptedApiKeyVault"]);
+  return !!encryptedApiKey || !!encryptedApiKeyVault;
 }
 
 /**
