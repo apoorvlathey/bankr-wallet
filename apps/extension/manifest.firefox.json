@@ -58,7 +58,8 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "static/js/inpage.js"
+        "static/js/inpage.js",
+        "walletchan-animated.gif"
       ],
       "matches": [
         "file://*/*",

@@ -24,8 +24,13 @@ interface EIP6963AnnounceProviderEvent extends CustomEvent {
   detail: EIP6963ProviderDetail;
 }
 
-import { WALLET_ICON } from "./walletIcon";
 import { makeProviderError } from "./providerErrors";
+
+// Wallet icon URL is set by inject.ts as a data-attribute on the <script>
+// element that loads this bundle. Reading it at module init keeps the
+// multi-MB animated GIF out of the inpage bundle (AMO rejects files >5MB).
+const WALLET_ICON =
+  (document.currentScript as HTMLScriptElement | null)?.dataset.walletIcon ?? "";
 
 // Session UUID for EIP-6963 (generated once per page load)
 const SESSION_UUID = crypto.randomUUID();
