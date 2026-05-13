@@ -9,7 +9,12 @@
     "render:v1": "remotion render src/index.ts V1Launch out/v1-launch.mp4",
     "render:v1:gif": "remotion render src/index.ts V1Launch out/v1-launch.gif --image-format png",
     "render:rebrand": "remotion render src/index.ts Rebrand out/rebrand.mp4",
-    "render:rebrand:gif": "remotion render src/index.ts Rebrand out/rebrand.gif --image-format png"
+    "render:rebrand:gif": "remotion render src/index.ts Rebrand out/rebrand.gif --image-format png",
+    "render:clearsigning": "remotion render src/index.ts ClearSigningLaunch out/clearsigning-launch.mp4",
+    "render:clearsigning:gif": "remotion render src/index.ts ClearSigningLaunch out/clearsigning-launch.gif --image-format png",
+    "tts": "node --env-file=.env scripts/generate-tts-elevenlabs.mjs",
+    "tts:adam": "ELEVENLABS_VOICE=adam node --env-file=.env scripts/generate-tts-elevenlabs.mjs",
+    "tts:rachel": "ELEVENLABS_VOICE=rachel node --env-file=.env scripts/generate-tts-elevenlabs.mjs"
   },
   "dependencies": {
     "@remotion/cli": "4.0.419",

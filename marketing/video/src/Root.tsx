@@ -2,6 +2,7 @@ import { Composition } from "remotion";
 import { AIAgentsNeedWallets } from "./compositions/AIAgentsNeedWallets";
 import { V1Launch } from "./compositions/V1Launch";
 import { Rebrand } from "./compositions/Rebrand";
+import { ClearSigningLaunch } from "./compositions/ClearSigningLaunch";
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -26,6 +27,14 @@ export const RemotionRoot: React.FC = () => {
         id="Rebrand"
         component={Rebrand}
         durationInFrames={1102}
+        fps={30}
+        width={1080}
+        height={1080}
+      />
+      <Composition
+        id="ClearSigningLaunch"
+        component={ClearSigningLaunch}
+        durationInFrames={901}
         fps={30}
         width={1080}
         height={1080}
