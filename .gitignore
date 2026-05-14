@@ -49,9 +49,6 @@ source.zip
 # Vercel
 .vercel
 
-# Marketing video renders
-marketing/video/out
-
 # Claude Code local settings (may contain API keys/tokens)
 .claude/settings.local.json
 
