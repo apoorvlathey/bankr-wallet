@@ -25,7 +25,8 @@ import {
 } from "@chakra-ui/react";
 import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon } from "@chakra-ui/icons";
 import { parseEther, parseUnits, formatUnits } from "viem";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
+import { useChainBadgeStyle, useTheme } from "@/theme";
 import { type PortfolioToken } from "@/chrome/portfolioApi";
 import { fetchOnchainBalances } from "@/chrome/onchainBalances";
 import { loadPortfolioTokenCatalog } from "@/chrome/portfolioTokens";
@@ -45,6 +46,7 @@ import {
 } from "@/constants/chainRegistry";
 import { getChainConfig } from "@/constants/chainConfig";
 import { getStoredRpcUrl } from "@/lib/chains";
+import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
 import type { ERC5792Call } from "@/chrome/erc5792Types";
 import type { SwapTxEntry } from "@/chrome/txHandlers";
@@ -111,7 +113,9 @@ function SwapView({
   initialBuyToken,
   initialSellToken,
 }: SwapViewProps) {
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const [chainSearch, setChainSearch] = useState("");
   const chainSearchInputRef = useRef<HTMLInputElement>(null);
   const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
@@ -126,6 +130,8 @@ function SwapView({
       )
     : CHAIN_REGISTRY.filter((c) => c.isSwapSupported);
   const chainConfig = getChainConfig(chainId);
+  // Chain MenuButton badge colors — all per-theme branching lives in the hook.
+  const chainBadgeStyle = useChainBadgeStyle(chainConfig.bg, chainConfig.text);
 
   useEffect(() => {
     if (!isChainMenuOpen) return;
@@ -186,6 +192,15 @@ function SwapView({
   const [preparedTransactions, setPreparedTransactions] = useState<SwapTxEntry[] | null>(null);
   const [preparedBatchTx, setPreparedBatchTx] = useState<{ to: string; data: string; value: string } | null>(null);
   const [preparedQuote, setPreparedQuote] = useState<SwapQuoteResponse | null>(null);
+  // Per-call gas estimates from the SwapConfirmation tier picker. Bubbled
+  // up from MultiTxGasEstimateDisplay → SwapConfirmation → here, then
+  // forwarded to handleExecuteSwapDirect so the user's tier choice
+  // actually takes effect at signing time. Bankr atomic swaps don't use
+  // this — Bankr API computes gas server-side.
+  const [swapGasEstimates, setSwapGasEstimates] = useState<
+    import("@/chrome/gasEstimation").GasEstimate[] | null
+  >(null);
+  const [swapGasValid, setSwapGasValid] = useState(true);
 
   const quoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenInfoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -289,7 +304,8 @@ function SwapView({
 
         const chainTokens = tokens.filter((t) => t.chainId === chainId);
         setHoldings(chainTokens);
-        // If initialSellToken provided, find the matching token from portfolio
+        // If initialSellToken provided, find the matching token from portfolio.
+        // Otherwise leave the sell token unselected — the user picks one explicitly.
         if (initialSellToken) {
           const match = chainTokens.find(
             (t) => t.contractAddress.toLowerCase() === initialSellToken.contractAddress.toLowerCase(),
@@ -299,12 +315,6 @@ function SwapView({
           } else {
             setSellToken(initialSellToken);
           }
-        } else {
-          const native = chainTokens.find(
-            (t) => t.contractAddress === "native",
-          );
-          if (native) setSellToken(native);
-          else if (chainTokens.length > 0) setSellToken(chainTokens[0]);
         }
       } catch {
         // silently fail
@@ -316,6 +326,144 @@ function SwapView({
       cancelled = true;
     };
   }, [fromAddress, chainId, isSwapSupported]);
+
+  // -----------------------------------------------------------------------
+  // Verify zero balances via direct RPC.
+  //
+  // The portfolio API can return an empty/incomplete catalog (rate-limit, 5xx,
+  // etc.) which leaves the user looking at "Balance: 0" for a token they
+  // actually hold. It can also happen any time the user selects a token from
+  // the token-list dropdown that isn't in their holdings — `entryToPortfolio
+  // Token` defaults balance to "0" because we don't know yet.
+  //
+  // To avoid that footgun, whenever a sellToken has a 0 reported balance we
+  // fall back to a direct onchain `balanceOf` (or `eth_getBalance` for
+  // native) — same RPC path the custom-token resolver already uses. We
+  // memoize per (chainId, token, owner) so we don't refetch repeatedly when
+  // the user types into the amount field.
+  // -----------------------------------------------------------------------
+  const verifiedZeroBalancesRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!sellToken || !fromAddress) return;
+    if (parseFloat(sellToken.balance) > 0) return;
+
+    const tokenAddr = sellToken.contractAddress;
+    const tokenChainId = sellToken.chainId;
+    const tokenDecimals = sellToken.decimals;
+    const key = `${tokenChainId}:${tokenAddr.toLowerCase()}:${fromAddress.toLowerCase()}`;
+    if (verifiedZeroBalancesRef.current.has(key)) return;
+    verifiedZeroBalancesRef.current.add(key);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const rpcUrl = await getStoredRpcUrl(tokenChainId);
+        if (!rpcUrl || cancelled) return;
+        const { createPublicClient, http, erc20Abi } = await import("viem");
+        const client = createPublicClient({
+          transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }),
+        });
+        const isNative = tokenAddr === "native";
+        const rawBalance = isNative
+          ? await client.getBalance({ address: fromAddress as `0x${string}` })
+          : ((await client.readContract({
+              address: tokenAddr as `0x${string}`,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [fromAddress as `0x${string}`],
+            })) as bigint);
+        if (cancelled || rawBalance === 0n) return;
+
+        const balance = formatUnits(rawBalance, tokenDecimals);
+        const balanceNum = parseFloat(balance);
+        const balanceFormatted =
+          balanceNum > 0 && balanceNum < 0.0001
+            ? "<0.0001"
+            : parseFloat(balanceNum.toPrecision(6)).toString();
+
+        setSellToken((prev) => {
+          // Only patch if user is still on the same token. Avoid clobbering
+          // a more recent selection.
+          if (
+            !prev ||
+            prev.contractAddress.toLowerCase() !== tokenAddr.toLowerCase() ||
+            prev.chainId !== tokenChainId
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            balance,
+            balanceFormatted,
+            valueUsd: balanceNum * prev.priceUsd,
+          };
+        });
+      } catch {
+        // Silent: keep showing 0 if the RPC call fails. The submit-time
+        // balance check at line ~668 will still cap onchain.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sellToken, fromAddress]);
+
+  // -----------------------------------------------------------------------
+  // USD price fallback for the sell token. The portfolio API is the primary
+  // price source but it can be down (then every token comes back with
+  // priceUsd=0) or it may simply not price an exotic ERC-20. Either way,
+  // resolve the price directly through `fetchTokenPrice` (proxy → CoinGecko
+  // → GeckoTerminal fallback chain) so USD-mode entry stays usable. Native
+  // tokens already have their own resolution path inside
+  // `loadPortfolioTokenCatalog`.
+  //
+  // We deliberately do NOT use a `cancelled` flag here: the onchain
+  // balance verification effect above also calls `setSellToken`, and any
+  // state update that changes `sellToken` would trigger this effect's
+  // cleanup mid-flight and silently drop the price response (which can
+  // take 1-2s when CoinGecko misses and we fall through to GeckoTerminal).
+  // The `setSellToken` updater below already guards staleness by matching
+  // (chainId, address), so a late response for a token the user has since
+  // switched away from is a no-op. Combined with `resolvedSellPriceRef`,
+  // each (chainId, address) is fetched at most once per mount.
+  // -----------------------------------------------------------------------
+  const resolvedSellPriceRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!sellToken) return;
+    if (sellToken.priceUsd > 0) return;
+    if (sellToken.contractAddress === "native") return;
+    if (!/^0x[a-fA-F0-9]{40}$/.test(sellToken.contractAddress)) return;
+
+    const tokenAddr = sellToken.contractAddress;
+    const tokenChainId = sellToken.chainId;
+    const key = `${tokenChainId}:${tokenAddr.toLowerCase()}`;
+    if (resolvedSellPriceRef.current.has(key)) return;
+    resolvedSellPriceRef.current.add(key);
+
+    chrome.runtime.sendMessage(
+      { type: "fetchTokenPrice", chainId: tokenChainId, address: tokenAddr },
+      (res) => {
+        const priceUsd = Number(res?.priceUsd ?? 0);
+        if (!res?.success || !(priceUsd > 0)) return;
+        setSellToken((prev) => {
+          if (
+            !prev ||
+            prev.contractAddress.toLowerCase() !== tokenAddr.toLowerCase() ||
+            prev.chainId !== tokenChainId
+          ) {
+            return prev;
+          }
+          const balanceNum = parseFloat(prev.balance || "0");
+          return {
+            ...prev,
+            priceUsd,
+            valueUsd: balanceNum > 0 ? balanceNum * priceUsd : 0,
+          };
+        });
+      },
+    );
+  }, [sellToken]);
 
   // -----------------------------------------------------------------------
   // Load token list for current chain
@@ -474,25 +622,49 @@ function SwapView({
   // -----------------------------------------------------------------------
   const handleFlip = () => {
     if (!buyTokenInfo || !buyTokenAddress) return;
-    const addr = buyTokenAddress.trim().toLowerCase();
+    const addr = buyTokenAddress.trim();
+    const addrLower = addr.toLowerCase();
+    const isNative = addrLower === NATIVE_TOKEN_ADDRESS.toLowerCase();
     const buyInHoldings = holdings.find(
       (t) =>
-        t.contractAddress.toLowerCase() === addr ||
-        (addr === NATIVE_TOKEN_ADDRESS.toLowerCase() &&
-          t.contractAddress === "native"),
+        t.contractAddress.toLowerCase() === addrLower ||
+        (isNative && t.contractAddress === "native"),
     );
-    if (!buyInHoldings) return;
+
+    // If the buy token isn't in the user's holdings, build a stub PortfolioToken
+    // from the metadata we already have. SwapView's onchain balance + price
+    // hydration effects will fill `balance` / `priceUsd` after the flip.
+    const nextSellToken: PortfolioToken =
+      buyInHoldings ?? {
+        symbol: buyTokenInfo.symbol,
+        name: buyTokenInfo.name,
+        contractAddress: isNative ? "native" : addr,
+        chainId,
+        decimals: buyTokenInfo.decimals,
+        balance: "0",
+        balanceFormatted: "0",
+        priceUsd: buyTokenPriceUsd,
+        valueUsd: 0,
+        logoUrl: buyTokenLogoURI,
+      };
 
     const prevSellToken = sellToken;
-    setSellToken(buyInHoldings);
-    setBuyTokenAddress(prevSellToken ? to0xToken(prevSellToken) : "");
+    setSellToken(nextSellToken);
     if (prevSellToken) {
+      // Skip the buyTokenAddress useEffect that would otherwise refetch and
+      // wipe the metadata we already have for prevSellToken.
+      buyInfoSetBySelectRef.current = true;
+      setBuyTokenAddress(to0xToken(prevSellToken));
       setBuyTokenInfo({
         name: prevSellToken.name,
         symbol: prevSellToken.symbol,
         decimals: prevSellToken.decimals,
       });
       setBuyTokenLogoURI(prevSellToken.logoUrl);
+    } else {
+      setBuyTokenAddress("");
+      setBuyTokenInfo(null);
+      setBuyTokenLogoURI(undefined);
     }
     setSellAmount("");
     setSliderValue(0);
@@ -517,6 +689,11 @@ function SwapView({
       }
       const { name, symbol, decimals } = infoResult.data;
 
+      const addrLower = tokenAddress.toLowerCase();
+      const isNative =
+        addrLower === "0x0000000000000000000000000000000000000000" ||
+        addrLower === NATIVE_TOKEN_ADDRESS.toLowerCase();
+
       const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
       const rpcUrl = await getStoredRpcUrl(chainId);
       if (!rpcUrl) {
@@ -524,23 +701,32 @@ function SwapView({
         return;
       }
       const client = createPublicClient({ transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }) });
-      const rawBalance = await client.readContract({
-        address: tokenAddress as `0x${string}`,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [fromAddress as `0x${string}`],
-      });
+      const rawBalance = isNative
+        ? await client.getBalance({ address: fromAddress as `0x${string}` })
+        : await client.readContract({
+            address: tokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [fromAddress as `0x${string}`],
+          });
       const balance = formatUnits(rawBalance, decimals);
       const balanceNum = parseFloat(balance);
 
+      const listMatch = tokenList.find((t) => t.address.toLowerCase() === addrLower);
+      const logoUrl = isNative
+        ? symbol.toUpperCase() === "ETH"
+          ? "/chainIcons/ethereum.svg"
+          : getChainConfig(chainId)?.icon || ""
+        : listMatch?.logoURI || KNOWN_TOKEN_LOGOS[addrLower] || "";
+
       setResolvedSellToken({
-        contractAddress: tokenAddress,
+        contractAddress: isNative ? "native" : tokenAddress,
         name,
         symbol,
         decimals,
         balance,
         balanceFormatted: balanceNum < 0.0001 && balanceNum > 0 ? "<0.0001" : parseFloat(balanceNum.toPrecision(6)).toString(),
-        logoUrl: "",
+        logoUrl,
         valueUsd: 0,
         priceUsd: 0,
         chainId,
@@ -588,7 +774,7 @@ function SwapView({
       setPendingBuyLoading(false);
       return;
     }
-    // Resolve on-chain
+    // Resolve onchain
     setPendingBuyToken(null);
     setPendingBuyLoading(true);
     chrome.runtime.sendMessage(
@@ -601,7 +787,7 @@ function SwapView({
             name: res.data.name,
             symbol: res.data.symbol,
             decimals: res.data.decimals,
-            logoURI: "",
+            logoURI: KNOWN_TOKEN_LOGOS[address.toLowerCase()] || "",
           });
         }
       },
@@ -644,7 +830,7 @@ function SwapView({
         return;
       }
 
-      // 1b. For non-native tokens, cap at on-chain balance to avoid rounding
+      // 1b. For non-native tokens, cap at onchain balance to avoid rounding
       // issues where parseUnits(formattedBalance) > actual wei balance
       if (sellToken.contractAddress !== "native") {
         const balRes = await new Promise<{ success: boolean; balance?: string }>((resolve) => {
@@ -707,7 +893,7 @@ function SwapView({
         buyTokenLogo: buyTokenLogoURI || null,
       };
 
-      // Check on-chain allowance and add approval TX if needed.
+      // Check onchain allowance and add approval TX if needed.
       // Spender comes from the indicative price quote's issues.allowance.spender
       // (authoritative per 0x docs — address varies by chain/flow).
       const allowanceSpender = quote.issues?.allowance?.spender;
@@ -811,7 +997,9 @@ function SwapView({
           value: `0x${BigInt(swapTx.value).toString(16)}`,
           chainId,
           gas: swapTx.gas,
-          gasPrice: swapTx.gasPrice,
+          // Only forward gasPrice when the API returned one (0x). The WCHAN
+          // route omits it so viem/Bankr can pick the right EIP-1559 fees.
+          ...(swapTx.gasPrice ? { gasPrice: swapTx.gasPrice } : {}),
         },
         origin: `Swap ${sellToken.symbol.toUpperCase()} to ${buyTokenInfo.symbol.toUpperCase()}`,
         favicon: sellToken.logoUrl || null,
@@ -901,6 +1089,16 @@ function SwapView({
               type: "executeSwapDirect",
               transactions: preparedTransactions,
               chainName,
+              // Forward the tier-picker selections so each tx gets the
+              // user's chosen Priority / Max Fee. Falls back to viem's
+              // built-in estimate when null.
+              gasEstimates: swapGasEstimates
+                ? swapGasEstimates.map((e) => ({
+                    gasLimit: e.gasLimit,
+                    maxFeePerGas: e.maxFeePerGas,
+                    maxPriorityFeePerGas: e.maxPriorityFeePerGas,
+                  }))
+                : undefined,
             },
             resolve,
           );
@@ -980,7 +1178,7 @@ function SwapView({
   // -----------------------------------------------------------------------
   if (!isSwapSupported) {
     return (
-      <Box p={4} minH="100%" bg="bg.base">
+      <Box p={4} minH="100%" bg="surface.base">
         <VStack spacing={4} align="stretch">
           <HStack spacing={2} justify="space-between">
             <HStack spacing={2}>
@@ -1018,37 +1216,34 @@ function SwapView({
               <MenuButton
                 as={Box}
                 cursor="pointer"
-                bg={chainConfig.bg}
+                bg={chainBadgeStyle.bg}
                 border="2px solid"
-                borderColor={chainConfig.border}
+                borderColor={chainBadgeStyle.border}
+                borderRadius="md"
                 px={2}
                 py={1}
                 _hover={{ opacity: 0.8 }}
               >
                 <HStack spacing={1.5}>
-                  <ChainIcon chainId={chainId} chainName={chainName} size="16px" />
+                  <ChainIcon chainId={chainId} chainName={chainName} size="16px" withChip />
                   <Text
                     fontSize="xs"
                     fontWeight="700"
-                    color={chainConfig.text}
+                    color={chainBadgeStyle.fg}
                     textTransform="uppercase"
                   >
                     {chainName}
                   </Text>
-                  <ChevronDownIcon color={chainConfig.text} boxSize={3} />
+                  <ChevronDownIcon color={chainBadgeStyle.fg} boxSize={3} />
                 </HStack>
               </MenuButton>
               <MenuList
-                bg="bauhaus.white"
-                border="3px solid"
-                borderColor="bauhaus.black"
-                boxShadow="4px 4px 0px 0px #121212"
-                borderRadius="0"
+                // Menu baseStyle paints surface tokens — keep only sizing.
                 py={0}
                 minW="160px"
                 zIndex={30}
               >
-                <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+                <Box p={2} borderBottom="2px solid" borderColor="border.default">
                   <InputGroup size="sm">
                     <InputLeftElement pointerEvents="none">
                       <Search2Icon color="text.tertiary" boxSize={3} />
@@ -1059,12 +1254,11 @@ function SwapView({
                       onChange={(e) => setChainSearch(e.target.value)}
                       placeholder="Search chains"
                       border="2px solid"
-                      borderColor="bauhaus.black"
-                      borderRadius="0"
+                      borderColor="border.default"
                       fontWeight="600"
                       pl={9}
-                      _hover={{ borderColor: "bauhaus.black" }}
-                      _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+                      _hover={{ borderColor: "border.default" }}
+                      _focus={{ borderColor: "accent.secondary", boxShadow: "none" }}
                       onKeyDown={(e) => {
                         if (e.key === "ArrowDown") {
                           e.preventDefault();
@@ -1106,12 +1300,11 @@ function SwapView({
                     return (
                       <MenuItem
                         key={c.chainId}
-                        bg={i === highlightedChainIndex ? "bg.muted" : "bauhaus.white"}
-                        _hover={{ bg: "bg.hover" }}
+                        bg={i === highlightedChainIndex ? "surface.sunken" : "transparent"}
                         borderBottom={
                           i < arr.length - 1 ? "2px solid" : "none"
                         }
-                        borderColor="bauhaus.black"
+                        borderColor="border.default"
                         py={2.5}
                         onMouseEnter={() => setHighlightedChainIndex(i)}
                         onClick={() => {
@@ -1121,7 +1314,7 @@ function SwapView({
                         }}
                       >
                         <HStack spacing={2}>
-                          <ChainIcon chainId={c.chainId} chainName={c.name} size="18px" />
+                          <ChainIcon chainId={c.chainId} chainName={c.name} size="18px" withChip />
                           <Text fontWeight="700" fontSize="sm">
                             {c.name}
                           </Text>
@@ -1142,15 +1335,17 @@ function SwapView({
             </Menu>
           </HStack>
           <Box
-            bg="bauhaus.yellow"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            // Warning surface — Bauhaus yellow / Midnight recessed warning tint.
+            bg="status.warning.bg"
+            color="status.warning.fg"
+            border={isDarkTheme ? "1px solid" : "2px solid"}
+            borderColor={isDarkTheme ? "status.warning.border" : "border.default"}
+            borderRadius={isDarkTheme ? "md" : undefined}
+            boxShadow={isDarkTheme ? undefined : "card"}
             p={4}
           >
             <Text
               fontSize="sm"
-              color="bauhaus.black"
               fontWeight="700"
               textAlign="center"
             >
@@ -1158,7 +1353,6 @@ function SwapView({
             </Text>
             <Text
               fontSize="xs"
-              color="bauhaus.black"
               fontWeight="500"
               textAlign="center"
               mt={1}
@@ -1195,33 +1389,18 @@ function SwapView({
         onConfirm={handleConfirmSwap}
         onCancel={handleCancelConfirmation}
         isSubmitting={isSubmitting}
+        onGasEstimates={setSwapGasEstimates}
+        onValidityChange={setSwapGasValid}
+        isConfirmDisabled={!swapGasValid}
       />
     );
   }
 
   // -----------------------------------------------------------------------
-  // Loading
-  // -----------------------------------------------------------------------
-  if (holdingsLoading) {
-    return (
-      <Box
-        p={4}
-        minH="100%"
-        bg="bg.base"
-        display="flex"
-        alignItems="center"
-        justifyContent="center"
-      >
-        <Spinner size="lg" color="bauhaus.blue" thickness="3px" />
-      </Box>
-    );
-  }
-
-  // -----------------------------------------------------------------------
-  // Render
+  // Render — frame renders immediately; holdings fill in as they arrive.
   // -----------------------------------------------------------------------
   return (
-    <Box p={4} minH="100%" bg="bg.base">
+    <Box p={4} minH="100%" bg="surface.base">
       <VStack spacing={3} align="stretch">
         {/* Header */}
         <HStack spacing={2} justify="space-between">
@@ -1260,37 +1439,34 @@ function SwapView({
             <MenuButton
               as={Box}
               cursor="pointer"
-              bg={chainConfig.bg}
+              bg={chainBadgeStyle.bg}
               border="2px solid"
-              borderColor={chainConfig.border}
+              borderColor={chainBadgeStyle.border}
+              borderRadius="md"
               px={2}
               py={1}
               _hover={{ opacity: 0.8 }}
             >
               <HStack spacing={1.5}>
-                <ChainIcon chainId={chainId} chainName={chainName} size="16px" />
+                <ChainIcon chainId={chainId} chainName={chainName} size="16px" withChip />
                 <Text
                   fontSize="xs"
                   fontWeight="700"
-                  color={chainConfig.text}
+                  color={chainBadgeStyle.fg}
                   textTransform="uppercase"
                 >
                   {chainName}
                 </Text>
-                <ChevronDownIcon color={chainConfig.text} boxSize={3} />
+                <ChevronDownIcon color={chainBadgeStyle.fg} boxSize={3} />
               </HStack>
             </MenuButton>
             <MenuList
-              bg="bauhaus.white"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="4px 4px 0px 0px #121212"
-              borderRadius="0"
+              // Menu baseStyle paints surface tokens — keep only sizing.
               py={0}
               minW="160px"
               zIndex={30}
             >
-              <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+              <Box p={2} borderBottom="2px solid" borderColor="border.default">
                 <InputGroup size="sm">
                   <InputLeftElement pointerEvents="none">
                     <Search2Icon color="text.tertiary" boxSize={3} />
@@ -1301,12 +1477,11 @@ function SwapView({
                     onChange={(e) => setChainSearch(e.target.value)}
                     placeholder="Search chains"
                     border="2px solid"
-                    borderColor="bauhaus.black"
-                    borderRadius="0"
+                    borderColor="border.default"
                     fontWeight="600"
                     pl={9}
-                    _hover={{ borderColor: "bauhaus.black" }}
-                    _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+                    _hover={{ borderColor: "border.default" }}
+                    _focus={{ borderColor: "accent.secondary", boxShadow: "none" }}
                     onKeyDown={(e) => {
                       if (e.key === "ArrowDown") {
                         e.preventDefault();
@@ -1350,14 +1525,13 @@ function SwapView({
                       key={c.chainId}
                       bg={
                         i === highlightedChainIndex || c.chainId === chainId
-                          ? "bg.muted"
-                          : "bauhaus.white"
+                          ? "surface.sunken"
+                          : "transparent"
                       }
-                      _hover={{ bg: "bg.hover" }}
                       borderBottom={
                         i < arr.length - 1 ? "2px solid" : "none"
                       }
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
                       py={2.5}
                       onMouseEnter={() => setHighlightedChainIndex(i)}
                       onClick={() => {
@@ -1367,7 +1541,7 @@ function SwapView({
                       }}
                     >
                       <HStack spacing={2}>
-                        <ChainIcon chainId={c.chainId} chainName={c.name} size="18px" />
+                        <ChainIcon chainId={c.chainId} chainName={c.name} size="18px" withChip />
                         <Text fontWeight="700" fontSize="sm">
                           {c.name}
                         </Text>
@@ -1390,10 +1564,11 @@ function SwapView({
 
         {/* You Sell */}
         <Box
-          bg="bauhaus.white"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
+          bg="surface.raised"
+          border="2px solid"
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
           p={3}
         >
           <Text
@@ -1423,13 +1598,13 @@ function SwapView({
                 <Button
                   size="xs"
                   variant="ghost"
-                  color="bauhaus.blue"
+                  color="accent.secondary"
                   fontWeight="800"
                   fontSize="xs"
                   h="20px"
                   px={1}
                   onClick={handleToggleMode}
-                  _hover={{ bg: "bg.muted" }}
+                  _hover={{ bg: "surface.sunken" }}
                 >
                   {isUsdMode ? sellToken.symbol.toUpperCase() : "USD"}
                 </Button>
@@ -1439,8 +1614,10 @@ function SwapView({
           <HStack spacing={2}>
             <TokenSelector
               holdings={holdings}
+              tokenList={tokenList}
               selectedToken={sellToken}
               excludeAddress={buyTokenAddress || undefined}
+              chainId={chainId}
               onSelect={(t) => {
                 setSellToken(t);
                 setSellAmount("");
@@ -1473,12 +1650,11 @@ function SwapView({
                 }}
                 fontFamily="mono"
                 fontSize="sm"
-                border="3px solid"
-                borderColor="bauhaus.black"
-                borderRadius="0"
-                bg="bauhaus.white"
-                _hover={{ borderColor: "bauhaus.blue" }}
-                _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+                border="2px solid"
+                borderColor="border.default"
+                bg="surface.raised"
+                _hover={{ borderColor: "accent.secondary" }}
+                _focus={{ borderColor: "accent.secondary", boxShadow: "none" }}
                 pl={isUsdMode ? "28px" : undefined}
                 pr="50px"
               />
@@ -1486,9 +1662,8 @@ function SwapView({
                 <Button
                   size="xs"
                   variant="ghost"
-                  color="bauhaus.blue"
+                  color="accent.secondary"
                   fontWeight="800"
-                  borderRadius="0"
                   h="full"
                   onClick={() => {
                     if (sellToken) {
@@ -1503,7 +1678,7 @@ function SwapView({
                       }
                     }
                   }}
-                  _hover={{ bg: "bg.muted" }}
+                  _hover={{ bg: "surface.sunken" }}
                 >
                   MAX
                 </Button>
@@ -1558,29 +1733,30 @@ function SwapView({
                     mt={3}
                     fontSize="xs"
                     fontWeight="800"
-                    color={sliderValue >= pct ? "bauhaus.blue" : "gray.400"}
+                    color={sliderValue >= pct ? "accent.secondary" : "text.tertiary"}
                     whiteSpace="nowrap"
                     transform="translateX(-50%)"
                   >
                     {pct}%
                   </SliderMark>
                 ))}
-                <SliderTrack bg="gray.200" h="6px" borderRadius={0}>
-                  <SliderFilledTrack bg="bauhaus.blue" />
+                {/* Slider baseStyle (createTheme.ts) drives track/thumb radii
+                    from theme tokens — Bauhaus square, Midnight rounded. */}
+                <SliderTrack bg="surface.sunken" h="6px">
+                  <SliderFilledTrack bg="accent.secondary" />
                 </SliderTrack>
                 <SliderThumb
                   boxSize={5}
-                  bg="bauhaus.blue"
-                  border="3px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius={0}
+                  bg="accent.secondary"
+                  border="2px solid"
+                  borderColor="border.default"
                   _focus={{ boxShadow: "none" }}
                 />
               </Slider>
             </Box>
           )}
           {insufficientBalance && sellAmountNum > 0 && (
-            <Text fontSize="xs" color="bauhaus.red" fontWeight="700" mt={1}>
+            <Text fontSize="xs" color="chart.negative" fontWeight="700" mt={1}>
               Insufficient balance
             </Text>
           )}
@@ -1592,12 +1768,12 @@ function SwapView({
             aria-label="Swap direction"
             icon={<SwapArrowIcon boxSize={5} />}
             size="sm"
-            bg="bauhaus.blue"
-            color="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            borderRadius={0}
-            _hover={{ bg: "bauhaus.blue", transform: "translateY(-1px)" }}
+            bg="accent.primary"
+            color="accentFg.primary"
+            border="2px solid"
+            borderColor="border.default"
+            borderRadius="md"
+            _hover={{ bg: "accent.primary", transform: "translateY(-1px)" }}
             _active={{ transform: "translate(1px, 1px)" }}
             onClick={handleFlip}
             isDisabled={!buyTokenInfo}
@@ -1606,10 +1782,11 @@ function SwapView({
 
         {/* You Receive */}
         <Box
-          bg="bauhaus.white"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
+          bg="surface.raised"
+          border="2px solid"
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
           p={3}
         >
           <Text
@@ -1659,10 +1836,9 @@ function SwapView({
                 readOnly
                 fontFamily="mono"
                 fontSize="sm"
-                border="3px solid"
-                borderColor="bauhaus.black"
-                borderRadius="0"
-                bg="bg.muted"
+                border="2px solid"
+                borderColor="border.default"
+                bg="surface.sunken"
                 _hover={{}}
                 _focus={{ boxShadow: "none" }}
                 cursor="default"
@@ -1699,7 +1875,7 @@ function SwapView({
                   fontWeight="700"
                   color={
                     priceImpact > 10
-                      ? "bauhaus.red"
+                      ? "chart.negative"
                       : priceImpact > 3
                         ? "orange.500"
                         : "text.tertiary"
@@ -1716,7 +1892,7 @@ function SwapView({
 
         {/* Quote error */}
         {quoteError && (
-          <Text fontSize="xs" color="bauhaus.red" fontWeight="700">
+          <Text fontSize="xs" color="chart.negative" fontWeight="700">
             {quoteError}
           </Text>
         )}
@@ -1745,20 +1921,19 @@ function SwapView({
           />
         )}
 
-        {/* Price impact warning */}
+        {/* Price impact warning — high impact uses semantic error surface,
+            medium impact uses warning. Both intent tokens flip cleanly between
+            Bauhaus's saturated red/yellow and Midnight's recessed tints. */}
         {priceImpact !== null && priceImpact > 3 && (
           <Box
-            bg={priceImpact > 10 ? "red.50" : "orange.50"}
-            border="3px solid"
-            borderColor={priceImpact > 10 ? "bauhaus.red" : "orange.400"}
-            boxShadow="3px 3px 0px 0px #121212"
+            bg={priceImpact > 10 ? "status.error.bg" : "status.warning.bg"}
+            color={priceImpact > 10 ? "status.error.fg" : "status.warning.fg"}
+            border="2px solid"
+            borderColor="border.default"
+            boxShadow="card"
             p={3}
           >
-            <Text
-              fontSize="sm"
-              color={priceImpact > 10 ? "bauhaus.red" : "orange.700"}
-              fontWeight="700"
-            >
+            <Text fontSize="sm" fontWeight="700">
               {priceImpact > 10
                 ? `High price impact (~${priceImpact.toFixed(1)}%). You may receive significantly fewer tokens.`
                 : `Price impact is ~${priceImpact.toFixed(1)}%.`}
@@ -1769,23 +1944,25 @@ function SwapView({
         {/* Impersonator warning */}
         {accountType === "impersonator" && (
           <Box
-            bg="bauhaus.yellow"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="3px 3px 0px 0px #121212"
+            bg="status.warning.bg"
+            color="status.warning.fg"
+            border="2px solid"
+            borderColor="border.default"
+            boxShadow="card"
             p={3}
           >
-            <Text fontSize="sm" color="bauhaus.black" fontWeight="700">
+            <Text fontSize="sm" fontWeight="700">
               View-only account — swaps are disabled.
             </Text>
           </Box>
         )}
 
-        {/* Action button — sticky when content overflows */}
+        {/* Action button — sticky when content overflows. Primary CTA uses
+            the warm primary accent (Bauhaus red / Midnight indigo). */}
         <Box
           position="sticky"
           bottom={-4}
-          bg="bg.base"
+          bg="surface.base"
           pt={2}
           pb={8}
           mx={-4}
@@ -1798,15 +1975,15 @@ function SwapView({
             isLoading={isSubmitting}
             loadingText="Preparing..."
             isDisabled={!canSwap}
-            bg="bauhaus.red"
-            color="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="accent.primary"
+            color="accentFg.primary"
+            border="2px solid"
+            borderColor="border.default"
+            boxShadow="card"
             fontWeight="700"
             _hover={{
               transform: "translateY(-2px)",
-              boxShadow: "6px 6px 0px 0px #121212",
+              boxShadow: "cardHover",
             }}
             _active={{
               transform: "translate(2px, 2px)",
@@ -1850,9 +2027,9 @@ function TokenAddressRow({
         variant="ghost"
         minW="18px"
         h="18px"
-        color={copied ? "bauhaus.yellow" : "text.tertiary"}
+        color={copied ? "accent.highlight" : "text.tertiary"}
         onClick={onCopy}
-        _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+        _hover={{ color: "accent.secondary", bg: "surface.sunken" }}
       />
       {explorer && (
         <IconButton
@@ -1868,7 +2045,7 @@ function TokenAddressRow({
               url: `${explorer}/token/${address}`,
             })
           }
-          _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+          _hover={{ color: "accent.secondary", bg: "surface.sunken" }}
         />
       )}
     </HStack>

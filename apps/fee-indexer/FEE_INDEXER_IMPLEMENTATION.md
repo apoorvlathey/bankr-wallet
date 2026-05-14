@@ -13,7 +13,7 @@ Ponder-based indexer for tracking historical fee claims from ClankerFeeLocker an
 
 ### Why a Separate Indexer
 
-The admin dashboard reads **pending** (unclaimed) fees on-chain. This indexer tracks **historical claimed** amounts — data that can't be derived from current contract state. Kept separate from the coin launch indexer and staking indexer for independent scaling and reindexing.
+The admin dashboard reads **pending** (unclaimed) fees onchain. This indexer tracks **historical claimed** amounts — data that can't be derived from current contract state. Kept separate from the coin launch indexer and staking indexer for independent scaling and reindexing.
 
 ### Event Filtering
 
@@ -157,4 +157,4 @@ Uses `Dockerfile` + `railway.toml` pattern (same as staking-indexer):
 
 ## Consumer
 
-The admin dashboard (`apps/website/app/admin/AdminContent.tsx`) fetches `/stats` to display total claimed fees alongside the on-chain pending fee reads.
+The admin dashboard (`apps/website/app/admin/AdminContent.tsx`) fetches `/stats` to display total claimed fees alongside the onchain pending fee reads.

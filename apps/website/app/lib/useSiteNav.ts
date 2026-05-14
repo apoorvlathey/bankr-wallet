@@ -7,8 +7,8 @@ import {
   isOnSubdomain as _isOnSubdomain,
   getCurrentSubdomainRoute,
   getBasePath,
+  getMainSite,
   resolveHref,
-  MAIN_SITE,
   type SubdomainRoute,
 } from "./siteRouting";
 
@@ -42,8 +42,8 @@ export function useSiteNav() {
     [hostname]
   );
 
-  /** Logo / home link: main site URL on subdomains, "/" otherwise. */
-  const homeHref = onSubdomain ? MAIN_SITE : "/";
+  /** Logo / home link: main site URL on subdomains (preserving TLD), "/" otherwise. */
+  const homeHref = onSubdomain ? getMainSite(hostname) : "/";
 
   return {
     /** Resolve an internal path to the correct href */

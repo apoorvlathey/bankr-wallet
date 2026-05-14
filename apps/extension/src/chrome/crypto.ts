@@ -177,9 +177,17 @@ export async function encryptVaultKey(
  * Returns null if decryption fails (wrong password)
  */
 export async function tryDecryptVaultKey(
-  encryptedVaultKey: EncryptedData,
+  encryptedVaultKey: EncryptedData | null | undefined,
   password: string
 ): Promise<Uint8Array | null> {
+  if (
+    !encryptedVaultKey ||
+    !encryptedVaultKey.salt ||
+    !encryptedVaultKey.iv ||
+    !encryptedVaultKey.ciphertext
+  ) {
+    return null;
+  }
   try {
     const salt = base64ToUint8Array(encryptedVaultKey.salt);
     const iv = base64ToUint8Array(encryptedVaultKey.iv);

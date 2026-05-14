@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback } from "react";
-import { SUBDOMAIN_ROUTES } from "../lib/siteRouting";
+import { SUBDOMAIN_ROUTES, hostnameMatchesSlug } from "../lib/siteRouting";
 
 const MAINNET_ROUTE = SUBDOMAIN_ROUTES.find((r) => r.path === "/mainnet")!;
 
 /**
- * On mainnet.walletchan.com the /mainnet route is served at /.
+ * On mainnet.walletchan.{com,xyz} the /mainnet route is served at /.
  * Internal links need to drop the /mainnet prefix when on the subdomain.
  *
  * In production (Vercel), the subdomain rewrite handles routing, so we always
@@ -16,7 +16,7 @@ const MAINNET_ROUTE = SUBDOMAIN_ROUTES.find((r) => r.path === "/mainnet")!;
 function isSubdomain(): boolean {
   if (process.env.NODE_ENV === "production") return true;
   if (typeof window === "undefined") return false;
-  return window.location.hostname === MAINNET_ROUTE.subdomain;
+  return hostnameMatchesSlug(window.location.hostname, MAINNET_ROUTE.slug);
 }
 
 /** Convert a /mainnet/* path to the correct href for the current host. */

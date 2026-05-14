@@ -1,7 +1,13 @@
-import { CHAIN_TOKEN_IDS } from "@/constants/chainRegistry";
+import {
+  CHAIN_TOKEN_IDS,
+  COINGECKO_PLATFORM_IDS,
+  GECKOTERMINAL_NETWORK_IDS,
+} from "@/constants/chainRegistry";
 import {
   COINGECKO_MARKETS_API,
   COINGECKO_SEARCH_API,
+  COINGECKO_TOKEN_PRICE_API,
+  GECKOTERMINAL_TOKEN_PRICE_API,
 } from "@/constants/externalUrls";
 
 const MARKET_CACHE_STORAGE_KEY = "coingeckoMarketCache";
@@ -420,4 +426,59 @@ export async function resolveCoinGeckoNativeAssetsBatch(
   requests: NativeAssetLookupRequest[],
 ): Promise<NativeAssetLookupResult[]> {
   return service.resolveNativeAssetsBatch(requests);
+}
+
+/**
+ * Fetch a USD price for an ERC-20 token by (chainId, contractAddress).
+ *
+ * Tries CoinGecko's `/simple/token_price/{platform_id}` endpoint first (the
+ * canonical price source for established tokens). When it returns no price —
+ * which is common for newer / lower-cap / DEX-only tokens — falls through
+ * to GeckoTerminal's onchain DEX price feed via `/simple/networks/{network}
+ * /token_price/{addresses}`. Returns 0 only when both fail or the chain has
+ * neither registry mapping.
+ *
+ * Used as a direct fallback when the walletchan proxy is unreachable.
+ */
+export async function fetchCoinGeckoTokenPriceDirect(
+  chainId: number,
+  contractAddress: string,
+): Promise<number> {
+  if (!/^0x[a-fA-F0-9]{40}$/.test(contractAddress)) return 0;
+  const addr = contractAddress.toLowerCase();
+
+  const platformId = COINGECKO_PLATFORM_IDS[chainId];
+  if (platformId) {
+    try {
+      const url = `${COINGECKO_TOKEN_PRICE_API}/${platformId}?contract_addresses=${addr}&vs_currencies=usd`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      if (res.ok) {
+        const data = (await res.json()) as Record<string, { usd?: number }>;
+        const price = Number(data[addr]?.usd ?? 0);
+        if (price > 0) return price;
+      }
+    } catch {
+      // Fall through to GeckoTerminal.
+    }
+  }
+
+  const gtNetwork = GECKOTERMINAL_NETWORK_IDS[chainId];
+  if (gtNetwork) {
+    try {
+      const url = `${GECKOTERMINAL_TOKEN_PRICE_API}/${gtNetwork}/token_price/${addr}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      if (res.ok) {
+        const data = (await res.json()) as {
+          data?: { attributes?: { token_prices?: Record<string, string> } };
+        };
+        const priceStr = data?.data?.attributes?.token_prices?.[addr];
+        const price = priceStr ? Number(priceStr) : 0;
+        if (price > 0) return price;
+      }
+    } catch {
+      // Final fallback exhausted.
+    }
+  }
+
+  return 0;
 }

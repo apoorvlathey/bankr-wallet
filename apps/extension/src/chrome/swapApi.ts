@@ -10,7 +10,10 @@ import {
   type Address,
 } from "viem";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
-import { WALLETCHAN_SWAP_API_BASE } from "@/constants/externalUrls";
+import {
+  WALLETCHAN_SWAP_API_BASE,
+  WALLETCHAN_ICON_URL,
+} from "@/constants/externalUrls";
 import { getRpcUrl } from "./txHandlers";
 import { getStoredResolvedChainById } from "@/lib/chains";
 
@@ -92,8 +95,11 @@ export interface SwapQuoteResponse {
     data: string;
     value: string;
     gas: string;
-    gasPrice: string;
+    /** Optional: 0x sets this; the custom WCHAN route omits it. */
+    gasPrice?: string;
   };
+  /** True when the taker qualifies for reduced premium fees (sWCHAN staker) */
+  isPremiumFee?: boolean;
 }
 
 export interface SwapPriceParams {
@@ -177,7 +183,7 @@ export async function fetchSwapQuote(
 }
 
 // ---------------------------------------------------------------------------
-// Token Info (on-chain multicall)
+// Token Info (onchain multicall)
 // ---------------------------------------------------------------------------
 
 export async function fetchTokenInfo(
@@ -227,7 +233,7 @@ export async function fetchTokenInfo(
 }
 
 // ---------------------------------------------------------------------------
-// Token Allowance Check (on-chain)
+// Token Allowance Check (onchain)
 // ---------------------------------------------------------------------------
 
 export async function getTokenBalanceWei(
@@ -288,6 +294,51 @@ interface CachedTokenList {
   fetchedAt: number;
 }
 
+/** Tokens we manually pin into the swap token list per chain. The 0x token
+ *  list doesn't always pick these up (too new, niche, or proprietary), so we
+ *  guarantee they appear by merging at the swapApi layer — every consumer
+ *  (Send dropdown, You Sell, You Buy) sees them automatically. */
+const EXTRA_TOKENS_PER_CHAIN: Record<number, TokenListEntry[]> = {
+  // Base
+  8453: [
+    {
+      address: "0xBa5ED0000e1CA9136a695f0a848012A16008B032",
+      name: "WalletChan",
+      symbol: "WCHAN",
+      decimals: 18,
+      logoURI: WALLETCHAN_ICON_URL,
+    },
+  ],
+};
+
+/** Merge in our pinned tokens. Pinned entries override the API entry for the
+ *  same address (so our canonical logo/name win when the API has a stale
+ *  record), and unmatched pinned entries are prepended — consumers that
+ *  sort the list will reorder them naturally. */
+function mergePinnedTokens(
+  chainId: number,
+  apiTokens: TokenListEntry[],
+): TokenListEntry[] {
+  const pinned = EXTRA_TOKENS_PER_CHAIN[chainId];
+  if (!pinned || pinned.length === 0) return apiTokens;
+  const pinnedByAddr = new Map(
+    pinned.map((t) => [t.address.toLowerCase(), t]),
+  );
+  const seen = new Set<string>();
+  const merged: TokenListEntry[] = [];
+  for (const t of pinned) {
+    merged.push(t);
+    seen.add(t.address.toLowerCase());
+  }
+  for (const t of apiTokens) {
+    const addr = t.address.toLowerCase();
+    if (seen.has(addr)) continue;
+    if (pinnedByAddr.has(addr)) continue;
+    merged.push(t);
+  }
+  return merged;
+}
+
 export async function getCachedTokenList(
   chainId: number,
 ): Promise<TokenListEntry[]> {
@@ -297,7 +348,7 @@ export async function getCachedTokenList(
   const stored = await chrome.storage.local.get(key);
   const cached: CachedTokenList | undefined = stored[key];
   if (cached && Date.now() - cached.fetchedAt < TOKEN_LIST_CACHE_TTL) {
-    return cached.tokens;
+    return mergePinnedTokens(chainId, cached.tokens);
   }
 
   // Fetch fresh
@@ -306,36 +357,49 @@ export async function getCachedTokenList(
       `${SWAP_API_BASE}/token-list?chainId=${chainId}`,
       { signal: AbortSignal.timeout(15_000) },
     );
-    if (!res.ok) return cached?.tokens ?? [];
+    if (!res.ok) return mergePinnedTokens(chainId, cached?.tokens ?? []);
     const data = await res.json();
     const tokens: TokenListEntry[] = data.tokens ?? [];
 
-    // Cache
+    // Cache the raw API response — pinning happens at read time so changes
+    // to EXTRA_TOKENS_PER_CHAIN take effect without invalidating the cache.
     await chrome.storage.local.set({
       [key]: { tokens, fetchedAt: Date.now() } satisfies CachedTokenList,
     });
 
-    return tokens;
+    return mergePinnedTokens(chainId, tokens);
   } catch {
-    return cached?.tokens ?? [];
+    return mergePinnedTokens(chainId, cached?.tokens ?? []);
   }
 }
 
 // ---------------------------------------------------------------------------
-// Token Price (USD via CoinGecko, proxied through walletchan.com)
+// Token Price (USD via CoinGecko, proxied through walletchan.com with a
+// direct CoinGecko fallback when the proxy is unreachable or returns 0)
 // ---------------------------------------------------------------------------
 
 export async function fetchTokenPrice(
   chainId: number,
   tokenAddress: string,
 ): Promise<number> {
-  const res = await fetch(
-    `${SWAP_API_BASE}/token-price?chainId=${chainId}&address=${tokenAddress}`,
-    { signal: AbortSignal.timeout(10_000) },
-  );
-  if (!res.ok) return 0;
-  const data = await res.json();
-  return data.priceUsd ?? 0;
+  try {
+    const res = await fetch(
+      `${SWAP_API_BASE}/token-price?chainId=${chainId}&address=${tokenAddress}`,
+      { signal: AbortSignal.timeout(10_000) },
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const priceUsd = Number(data.priceUsd ?? 0);
+      if (priceUsd > 0) return priceUsd;
+    }
+  } catch {
+    // Fall through to direct CoinGecko.
+  }
+
+  // Direct CoinGecko fallback so price still resolves when the proxy is
+  // down (e.g. portfolio API outage takes the same backend with it).
+  const { fetchCoinGeckoTokenPriceDirect } = await import("./coingeckoService");
+  return fetchCoinGeckoTokenPriceDirect(chainId, tokenAddress);
 }
 
 // ---------------------------------------------------------------------------

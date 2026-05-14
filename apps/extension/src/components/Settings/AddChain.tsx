@@ -16,6 +16,7 @@ import {
 } from "@chakra-ui/react";
 import { ArrowBackIcon, ExternalLinkIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
+import { useTheme } from "@/theme";
 import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 
 interface AddChainProps {
@@ -48,6 +49,8 @@ function AddChain({
   onAdded,
 }: AddChainProps) {
   const { networksInfo, setNetworksInfo, setReloadRequired } = useNetworks();
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
 
   const defaultName = initialRequest?.chainName ?? "";
   const defaultChainId =
@@ -260,12 +263,12 @@ function AddChain({
           size="xs"
           variant="ghost"
           rightIcon={<ExternalLinkIcon boxSize={3} />}
-          color="bauhaus.blue"
+          color="accent.secondary"
           fontWeight="800"
           textTransform="uppercase"
           letterSpacing="wide"
           onClick={() => chrome.tabs.create({ url: "https://chainlist.org" })}
-          _hover={{ bg: "transparent", color: "bauhaus.red" }}
+          _hover={{ bg: "transparent", color: "accent.primary" }}
           _active={{ bg: "transparent" }}
           px={1}
         >
@@ -283,16 +286,16 @@ function AddChain({
       {mode === "dapp" && requestedBy && (
         <Alert
           status="info"
-          bg="bauhaus.blue"
-          color="bauhaus.white"
-          borderRadius="0"
+          bg="accent.secondary"
+          color="accentFg.secondary"
+          borderRadius={isDarkTheme ? "md" : "0"}
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           py={2}
           px={3}
         >
-          <AlertIcon color="bauhaus.white" />
-          <Text fontSize="xs" fontWeight="700" color="bauhaus.white">
+          <AlertIcon color="accentFg.secondary" />
+          <Text fontSize="xs" fontWeight="700" color="accentFg.secondary">
             Requested by {requestedBy}
           </Text>
         </Alert>
@@ -315,7 +318,7 @@ function AddChain({
           Paste or type an RPC URL — chain ID is auto-detected
         </Text>
         {rpcError && (
-          <Text fontSize="xs" color="bauhaus.red" mt={1} fontWeight="700">
+          <Text fontSize="xs" color="accent.primary" mt={1} fontWeight="700">
             {rpcError}
           </Text>
         )}
@@ -335,7 +338,15 @@ function AddChain({
           }}
         />
         {chainIdConflict && (
-          <Alert status="warning" mt={2} borderRadius="0" border="2px solid" borderColor="bauhaus.black" py={2} px={3}>
+          <Alert
+            status="warning"
+            mt={2}
+            borderRadius="0"
+            border="2px solid"
+            borderColor="border.default"
+            py={2}
+            px={3}
+          >
             <AlertIcon />
             <Text fontSize="xs" fontWeight="600">{chainIdConflict}</Text>
           </Alert>
@@ -343,14 +354,15 @@ function AddChain({
       </FormControl>
 
       <Box
-        bg={mode === "dapp" ? "rgba(16, 64, 192, 0.06)" : "transparent"}
+        bg={mode === "dapp" ? "status.info.bg" : "transparent"}
         border={mode === "dapp" ? "2px solid" : "none"}
-        borderColor={mode === "dapp" ? "bauhaus.blue" : "transparent"}
+        borderColor={mode === "dapp" ? "accent.secondary" : "transparent"}
+        borderRadius={mode === "dapp" && isDarkTheme ? "md" : undefined}
         p={mode === "dapp" ? 3 : 0}
       >
         <FormControl>
           <FormLabel
-            color={mode === "dapp" ? "bauhaus.blue" : "text.secondary"}
+            color={mode === "dapp" ? "accent.secondary" : "text.secondary"}
             fontWeight="800"
             textTransform="uppercase"
             fontSize="xs"
@@ -366,12 +378,12 @@ function AddChain({
               if (nameError) setNameError("");
             }}
             isInvalid={!!nameError}
-            borderColor={mode === "dapp" ? "bauhaus.blue" : undefined}
+            borderColor={mode === "dapp" ? "accent.secondary" : undefined}
             _focusVisible={
               mode === "dapp"
                 ? {
-                    borderColor: "bauhaus.blue",
-                    boxShadow: "0 0 0 1px #1040C0",
+                    borderColor: "accent.secondary",
+                    boxShadow: "focus",
                   }
                 : undefined
             }
@@ -382,7 +394,7 @@ function AddChain({
             </Text>
           )}
           {nameError && (
-            <Text fontSize="xs" color="bauhaus.red" mt={1} fontWeight="700">
+            <Text fontSize="xs" color="accent.primary" mt={1} fontWeight="700">
               {nameError}
             </Text>
           )}
@@ -424,7 +436,14 @@ function AddChain({
       </HStack>
 
       {rpcWarning && (
-        <Alert status="warning" borderRadius="0" border="2px solid" borderColor="bauhaus.black" py={2} px={3}>
+        <Alert
+          status="warning"
+          borderRadius="0"
+          border="2px solid"
+          borderColor="border.default"
+          py={2}
+          px={3}
+        >
           <WarningTwoIcon mr={2} />
           <Text fontSize="xs" fontWeight="600">{rpcWarning}</Text>
         </Alert>
@@ -436,7 +455,7 @@ function AddChain({
         pt={2}
         position="sticky"
         bottom={3}
-        bg="bauhaus.background"
+        bg="surface.base"
         zIndex={1}
       >
         <Button variant="secondary" flex={1} onClick={back}>

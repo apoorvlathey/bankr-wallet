@@ -17,6 +17,7 @@ import {
   Image,
   Spacer,
   Collapse,
+  Spinner,
 } from "@chakra-ui/react";
 import {
   CheckCircleIcon,
@@ -25,8 +26,9 @@ import {
   CloseIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  RepeatIcon,
 } from "@chakra-ui/icons";
-import { CompletedTransaction, GasData } from "@/chrome/txHistoryStorage";
+import { CompletedTransaction, GasData, type ForceInclusionMeta } from "@/chrome/txHistoryStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import { OP_STACK_CHAIN_IDS } from "@/constants/networks";
 import { useNetworks } from "@/contexts/NetworksContext";
@@ -41,6 +43,8 @@ import {
   getStoredNativeCurrencySymbol,
   getStoredRpcUrl,
 } from "@/lib/chains";
+import { useTheme, useChainBadgeStyle } from "@/theme";
+import { useThemedToast } from "@/hooks/useThemedToast";
 
 interface TxDetailModalProps {
   isOpen: boolean;
@@ -81,14 +85,206 @@ function GasRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * Compute the force-inclusion 2-step progress states from a tx record.
+ *
+ * The discriminator is `hasDistinctL2Hash`: when the L2 receipt poller
+ * updates a tx to status="failed" because the L2 tx reverted, it preserves
+ * the L2 hash that was set when L1 was originally confirmed. So:
+ *   - tx.txHash !== meta.l1TxHash → L1 succeeded, L2 hash was extracted
+ *   - tx.txHash === meta.l1TxHash (or absent) → L1 never produced an L2 hash
+ *     (either L1 reverted, or extractL2Hash fell back to the L1 hash)
+ *
+ * This lets us distinguish "L1 failed" from "L2 failed" purely from the
+ * stored state, without parsing error strings.
+ */
+function getForceInclusionState(
+  meta: ForceInclusionMeta,
+  status: string,
+  txHash: string | undefined,
+) {
+  const hasDistinctL2Hash = !!(txHash && txHash !== meta.l1TxHash);
+  const l1Confirmed =
+    status === "pending" ||
+    status === "success" ||
+    (status === "failed" && hasDistinctL2Hash);
+  const l1Reverted = status === "failed" && !hasDistinctL2Hash;
+  const l2Confirmed = meta.l2Confirmed || status === "success";
+  const l2Reverted = status === "failed" && hasDistinctL2Hash;
+  return { hasDistinctL2Hash, l1Confirmed, l1Reverted, l2Confirmed, l2Reverted };
+}
+
+function ForceInclusionSteps({
+  meta,
+  status,
+  txHash,
+}: {
+  meta: ForceInclusionMeta;
+  status: string;
+  txHash: string | undefined;
+}) {
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
+  // The step circles are vivid filled discs (red/green/blue) with a small icon
+  // inside. White contrasts well against the vivid Bauhaus palette but vanishes
+  // against Midnight's lighter chart tints — flip to a near-black icon there.
+  const stepIconColor = isDarkTheme ? "fg.inverse" : "white";
+  const l1Config = getChainConfig(meta.l1ChainId);
+  const l2Config = getChainConfig(meta.l2ChainId);
+  const l1HasHash = !!meta.l1TxHash;
+  const { l1Confirmed, l1Reverted, l2Confirmed, l2Reverted } =
+    getForceInclusionState(meta, status, txHash);
+
+  return (
+    <Box
+      border="2px solid"
+      borderColor="border.default"
+      bg="bg.muted"
+      p={3}
+    >
+      <Text fontSize="2xs" fontWeight="700" textTransform="uppercase" color="text.secondary" mb={2}>
+        Force Inclusion Progress
+      </Text>
+      <VStack spacing={2} align="stretch">
+        {/* Step 1: L1 */}
+        <HStack spacing={2}>
+          <Box
+            w="18px" h="18px" flexShrink={0}
+            border="2px solid" borderColor="border.default"
+            bg={l1Reverted ? "chart.negative" : l1Confirmed ? "chart.positive" : "accent.secondary"}
+            display="flex" alignItems="center" justifyContent="center"
+          >
+            {l1Reverted ? (
+              <WarningIcon boxSize={2.5} color={stepIconColor} />
+            ) : l1Confirmed ? (
+              <CheckCircleIcon boxSize={2.5} color={stepIconColor} />
+            ) : (
+              <Spinner size="xs" color={stepIconColor} boxSize="10px" />
+            )}
+          </Box>
+          <Text fontSize="xs" fontWeight="700" color="text.primary">
+            L1 Deposit ({l1Config.name || "Ethereum"})
+          </Text>
+          {l1Reverted ? (
+            <Text fontSize="2xs" color="chart.negative" fontWeight="600">Failed</Text>
+          ) : l1Confirmed ? (
+            <Text fontSize="2xs" color="chart.positive" fontWeight="600">Confirmed</Text>
+          ) : l1HasHash ? (
+            <Text fontSize="2xs" color="accent.secondary" fontWeight="600">Pending...</Text>
+          ) : null}
+        </HStack>
+        {/* Step 2: L2 */}
+        <HStack spacing={2}>
+          <Box
+            w="18px" h="18px" flexShrink={0}
+            border="2px solid" borderColor="border.default"
+            bg={
+              l2Reverted
+                ? "chart.negative"
+                : l2Confirmed
+                  ? "chart.positive"
+                  : l1Confirmed
+                    ? "accent.secondary"
+                    : "border.subtle"
+            }
+            display="flex" alignItems="center" justifyContent="center"
+          >
+            {l2Reverted ? (
+              <WarningIcon boxSize={2.5} color={stepIconColor} />
+            ) : l2Confirmed ? (
+              <CheckCircleIcon boxSize={2.5} color={stepIconColor} />
+            ) : l1Confirmed ? (
+              <Spinner size="xs" color={stepIconColor} boxSize="10px" />
+            ) : (
+              <Text fontSize="2xs" fontWeight="800" color="text.tertiary">2</Text>
+            )}
+          </Box>
+          <Text fontSize="xs" fontWeight="700" color={l1Confirmed ? "text.primary" : "text.tertiary"}>
+            L2 Sequencer ({l2Config.name || "L2"})
+          </Text>
+          {l2Reverted ? (
+            <Text fontSize="2xs" color="chart.negative" fontWeight="600">Reverted</Text>
+          ) : l2Confirmed ? (
+            <Text fontSize="2xs" color="chart.positive" fontWeight="600">Confirmed</Text>
+          ) : l1Confirmed ? (
+            <Text fontSize="2xs" color="accent.secondary" fontWeight="600">Awaiting inclusion...</Text>
+          ) : null}
+        </HStack>
+      </VStack>
+    </Box>
+  );
+}
+
 function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
   const { networksInfo } = useNetworks();
   const resolvedChain = getResolvedChainById(tx.chainId, networksInfo);
   const config = getChainConfig(tx.chainId);
+  // Chain badge colors — all per-theme branching lives in `useChainBadgeStyle`.
+  const chainBadgeStyle = useChainBadgeStyle(
+    resolvedChain?.bg ?? config.bg,
+    resolvedChain?.text ?? config.text,
+    resolvedChain?.isCustom ?? false,
+  );
   const hasCalldata = tx.tx.data && tx.tx.data !== "0x";
   const isContractDeploy = !tx.tx.to;
   const isL2 = OP_STACK_CHAIN_IDS.has(tx.chainId);
   const [gasExpanded, setGasExpanded] = useState(false);
+  const [isRebroadcasting, setIsRebroadcasting] = useState(false);
+  const toast = useThemedToast();
+  const { themeId } = useTheme();
+  // On midnight, the error.fg coral reads as another "error" cue on top of the
+  // already-red container — use a neutral light surface so the CTA feels like
+  // an action, not a warning. Bauhaus error.fg is already WHITE, so it's fine.
+  const rebroadcastBg = themeId === "midnight" ? "fg.primary" : "status.error.fg";
+  const rebroadcastFg = themeId === "midnight" ? "fg.inverse" : "status.error.bg";
+
+  const canRebroadcast =
+    tx.status === "failed" &&
+    !!tx.error &&
+    tx.error.toLowerCase().includes("dropped from the mempool") &&
+    !!tx.tx.to;
+
+  const handleRebroadcast = async () => {
+    if (!tx.tx.to) return;
+    setIsRebroadcasting(true);
+    try {
+      const result = await new Promise<{ success: boolean; error?: string }>(
+        (resolve) => {
+          chrome.runtime.sendMessage(
+            {
+              type: "initiateTransfer",
+              tx: {
+                from: tx.tx.from,
+                to: tx.tx.to,
+                data: tx.tx.data,
+                value: tx.tx.value,
+                chainId: tx.tx.chainId,
+              },
+              chainName: tx.chainName,
+            },
+            resolve,
+          );
+        },
+      );
+      if (result.success) {
+        onClose();
+      } else {
+        toast({
+          title: "Rebroadcast failed",
+          description: result.error || "Could not create a new transaction request",
+          status: "error",
+        });
+      }
+    } catch (e) {
+      toast({
+        title: "Rebroadcast failed",
+        description: e instanceof Error ? e.message : "Unknown error",
+        status: "error",
+      });
+    } finally {
+      setIsRebroadcasting(false);
+    }
+  };
 
   // Native currency symbol — fast for hardcoded chains, async for custom
   const [nativeSym, setNativeSym] = useState(
@@ -171,15 +367,30 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
     : undefined;
   const displayTimestamp = tx.completedAt ?? tx.createdAt;
 
+  // Gas params we set / signed with. For PK/Seed paths these reflect the
+  // tier-picker / Custom override; for Bankr / dapp-sponsored txs they
+  // mirror whatever the dapp suggested. Used as a pre-confirmation fallback
+  // so pending txs still show gas info before a receipt arrives.
+  const setGas = tx.tx.gas;
+  const setMaxFee = tx.tx.maxFeePerGas;
+  const setPriority = tx.tx.maxPriorityFeePerGas;
+  const setGasPrice = tx.tx.gasPrice;
+  const hasSetGasParams = !!(setGas || setMaxFee || setPriority || setGasPrice);
+  const estimatedMaxCost = (() => {
+    if (!setGas) return undefined;
+    const priceStr = setMaxFee || setGasPrice;
+    if (!priceStr) return undefined;
+    try {
+      return (BigInt(setGas) * BigInt(priceStr)).toString();
+    } catch {
+      return undefined;
+    }
+  })();
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} scrollBehavior="inside" isCentered>
-      <ModalOverlay bg="blackAlpha.700" />
+      <ModalOverlay bg="surface.overlay" />
       <ModalContent
-        bg="bauhaus.white"
-        border="4px solid"
-        borderColor="bauhaus.black"
-        borderRadius="0"
-        boxShadow="8px 8px 0px 0px #121212"
         mx={3}
         my={3}
         maxH="calc(100vh - 24px)"
@@ -191,7 +402,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
           textTransform="uppercase"
           letterSpacing="wider"
           borderBottom="3px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           display="flex"
           alignItems="center"
           justifyContent="space-between"
@@ -211,38 +422,32 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
           <VStack spacing={3} align="stretch">
             {/* Status + Chain row */}
             <HStack spacing={2} flexWrap="wrap">
-              {(() => {
-                const badgeChain = resolvedChain ?? {
-                  name: tx.chainName,
-                  bg: config.bg,
-                  text: config.text,
-                  icon: config.icon,
-                  isCustom: false,
-                };
-                return (
               <Badge
                 fontSize="xs"
-                bg={badgeChain.isCustom ? "bauhaus.white" : badgeChain.bg}
-                color={badgeChain.isCustom ? "bauhaus.black" : badgeChain.text}
+                bg={chainBadgeStyle.bg}
+                color={chainBadgeStyle.fg}
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor={chainBadgeStyle.border}
                 px={2}
                 py={0.5}
                 display="flex"
                 alignItems="center"
                 gap={1}
               >
-                <ChainIcon chainId={tx.chainId} chainName={badgeChain.name} size="10px" />
-                {badgeChain.name}
+                <ChainIcon
+                  chainId={tx.chainId}
+                  chainName={resolvedChain?.name ?? tx.chainName}
+                  size="10px"
+                  withChip
+                />
+                {resolvedChain?.name ?? tx.chainName}
               </Badge>
-                );
-              })()}
-              {tx.status === "pending" && (
+              {tx.status === "pending" && !tx.forceInclusionMeta && (
                 <Badge
-                  bg="bauhaus.blue"
-                  color="white"
+                  bg="status.info.bg"
+                  color="status.info.fg"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   px={2}
                   py={0.5}
                   fontSize="xs"
@@ -258,10 +463,10 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
               )}
               {tx.status === "success" && (
                 <Badge
-                  bg="bauhaus.yellow"
-                  color="bauhaus.black"
+                  bg="accent.highlight"
+                  color="accentFg.highlight"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   px={2}
                   py={0.5}
                   fontSize="xs"
@@ -270,30 +475,105 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   gap={1}
                 >
                   <CheckCircleIcon boxSize={3} />
-                  Confirmed
+                  {tx.forceInclusionMeta ? "L1 + L2 Confirmed" : "Confirmed"}
                 </Badge>
               )}
-              {tx.status === "failed" && (
-                <Badge
-                  bg="bauhaus.red"
-                  color="white"
-                  border="2px solid"
-                  borderColor="bauhaus.black"
-                  px={2}
-                  py={0.5}
-                  fontSize="xs"
-                  display="flex"
-                  alignItems="center"
-                  gap={1}
-                >
-                  <WarningIcon boxSize={3} />
-                  Failed
-                </Badge>
-              )}
+              {tx.status === "failed" && (() => {
+                // For force inclusion, distinguish L1 vs L2 failure so the user
+                // immediately sees which side broke. The discriminator is
+                // hasDistinctL2Hash — see getForceInclusionState above.
+                let label = "Failed";
+                if (tx.forceInclusionMeta) {
+                  const { l1Reverted, l2Reverted } = getForceInclusionState(
+                    tx.forceInclusionMeta,
+                    tx.status,
+                    tx.txHash,
+                  );
+                  if (l1Reverted) label = "L1 Failed";
+                  else if (l2Reverted) label = "L2 Failed";
+                }
+                return (
+                  <Badge
+                    bg="status.error.bg"
+                    color="status.error.fg"
+                    border="2px solid"
+                    borderColor="border.default"
+                    px={2}
+                    py={0.5}
+                    fontSize="xs"
+                    display="flex"
+                    alignItems="center"
+                    gap={1}
+                  >
+                    <WarningIcon boxSize={3} />
+                    {label}
+                  </Badge>
+                );
+              })()}
             </HStack>
 
+            {/* Force Inclusion 2-step status */}
+            {tx.forceInclusionMeta && (
+              <ForceInclusionSteps
+                meta={tx.forceInclusionMeta}
+                status={tx.status}
+                txHash={tx.txHash}
+              />
+            )}
+
             <HStack justify="space-between" align="center" spacing={3}>
-              {tx.txHash && explorerBase ? (
+              {tx.forceInclusionMeta ? (
+                <HStack spacing={2}>
+                  {/* L1 explorer link */}
+                  {tx.forceInclusionMeta.l1TxHash && (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      fontWeight="700"
+                      fontSize="2xs"
+                      textTransform="uppercase"
+                      letterSpacing="wide"
+                      border="2px solid"
+                      borderColor="border.default"
+                      px={2}
+                      h="22px"
+                      onClick={() => {
+                        const l1Explorer = getChainConfig(tx.forceInclusionMeta!.l1ChainId).explorer;
+                        if (l1Explorer) chrome.tabs.create({ url: `${l1Explorer}/tx/${tx.forceInclusionMeta!.l1TxHash}` });
+                      }}
+                      rightIcon={<ExternalLinkIcon boxSize={2.5} />}
+                      _hover={{ bg: "bg.muted" }}
+                    >
+                      L1 Tx
+                    </Button>
+                  )}
+                  {/* L2 explorer link — show whenever we have a distinct L2 hash
+                       AND the L2 tx has resolved (success or failed/reverted).
+                       During the L1-Confirmed/L2-Pending window (status === "pending")
+                       the L2 explorer doesn't have the tx yet, so we still hide it.
+                       Also hidden when txHash falls back to the L1 hash
+                       (extractL2Hash failed — no real L2 hash to link). */}
+                  {(tx.status === "success" || tx.status === "failed") && tx.txHash && tx.txHash !== tx.forceInclusionMeta.l1TxHash && explorerBase && (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      fontWeight="700"
+                      fontSize="2xs"
+                      textTransform="uppercase"
+                      letterSpacing="wide"
+                      border="2px solid"
+                      borderColor="border.default"
+                      px={2}
+                      h="22px"
+                      onClick={handleViewOnExplorer}
+                      rightIcon={<ExternalLinkIcon boxSize={2.5} />}
+                      _hover={{ bg: "bg.muted" }}
+                    >
+                      L2 Tx
+                    </Button>
+                  )}
+                </HStack>
+              ) : tx.txHash && explorerBase ? (
                 <Button
                   size="xs"
                   variant="ghost"
@@ -302,7 +582,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   textTransform="uppercase"
                   letterSpacing="wide"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   px={2}
                   h="22px"
                   onClick={handleViewOnExplorer}
@@ -329,11 +609,11 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   px={2}
                   py={1}
                   fontSize="xs"
-                  bg="bauhaus.blue"
-                  color="white"
+                  bg="accent.secondary"
+                  color="accentFg.secondary"
                   fontFamily="mono"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   fontWeight="700"
                 >
                   {tx.functionName}
@@ -343,86 +623,110 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
 
             {/* Transfer meta (sponsored transfers) */}
             {tx.transferMeta ? (
-              <>
-                {/* Amount + Token */}
-                <Box>
-                  <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
-                    Amount
-                  </Text>
-                  <HStack spacing={2}>
-                    {tx.transferMeta.tokenLogo && (
-                      <Image
-                        src={tx.transferMeta.tokenLogo}
-                        alt={tx.transferMeta.symbol}
-                        boxSize="20px"
-                        borderRadius="full"
-                      />
-                    )}
-                    <Text fontSize="sm" fontWeight="800" color="text.primary">
-                      {tx.transferMeta.amount} {tx.transferMeta.symbol}
+              <Box
+                bg="surface.sunken"
+                border="1px solid"
+                borderColor="border.subtle"
+                borderRadius="md"
+                p={3}
+              >
+                <VStack align="stretch" spacing={3}>
+                  {/* Amount + Token */}
+                  <Box>
+                    <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
+                      Amount
                     </Text>
-                  </HStack>
-                </Box>
+                    <HStack spacing={2}>
+                      {tx.transferMeta.tokenLogo && (
+                        <Image
+                          src={tx.transferMeta.tokenLogo}
+                          alt={tx.transferMeta.symbol}
+                          boxSize="20px"
+                          borderRadius="full"
+                        />
+                      )}
+                      <Text fontSize="sm" fontWeight="800" color="text.primary">
+                        {tx.transferMeta.amount} {tx.transferMeta.symbol}
+                      </Text>
+                    </HStack>
+                  </Box>
 
-                {/* From */}
-                <Box>
-                  <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
-                    From
-                  </Text>
-                  <FromAccountDisplay address={tx.tx.from} />
-                </Box>
-
-                {/* To (actual recipient) */}
-                <Box>
-                  <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
-                    To
-                  </Text>
-                  <AddressParam value={tx.transferMeta.recipient} chainId={tx.chainId} />
-                </Box>
-              </>
-            ) : (
-              <>
-                {/* From → To row */}
-                <HStack spacing={2} align="start">
-                  {/* From (our wallet) */}
-                  <VStack align="start" spacing={0} flex={1} minW={0}>
+                  {/* From */}
+                  <Box>
                     <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
                       From
                     </Text>
                     <FromAccountDisplay address={tx.tx.from} />
-                  </VStack>
+                  </Box>
 
-                  {/* Arrow */}
-                  <Text fontSize="md" fontWeight="800" color="text.tertiary" pt={5}>
-                    →
-                  </Text>
-
-                  {/* To */}
-                  <VStack align="start" spacing={0} flex={1} minW={0}>
+                  {/* To (actual recipient) */}
+                  <Box>
                     <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
-                      {isContractDeploy ? "Type" : "To"}
+                      To
                     </Text>
-                    {isContractDeploy ? (
-                      <Badge
-                        fontSize="2xs"
-                        bg="bauhaus.yellow"
-                        color="bauhaus.black"
-                        border="2px solid"
-                        borderColor="bauhaus.black"
-                        fontWeight="700"
-                        px={1.5}
-                        py={0.5}
-                      >
-                        Contract Deploy
-                      </Badge>
-                    ) : (
-                      <AddressParam value={tx.tx.to!} chainId={tx.chainId} />
-                    )}
-                  </VStack>
-                </HStack>
+                    <AddressParam value={tx.transferMeta.recipient} chainId={tx.chainId} />
+                  </Box>
+                </VStack>
+              </Box>
+            ) : (
+              <>
+                {/* From → To card — recessed surface + border gives visual
+                    separation from the modal's raised backdrop so each
+                    section reads as its own tile. */}
+                <Box
+                  bg="surface.sunken"
+                  border="1px solid"
+                  borderColor="border.subtle"
+                  borderRadius="md"
+                  p={3}
+                >
+                  <HStack spacing={2} align="start">
+                    {/* From (our wallet) */}
+                    <VStack align="start" spacing={0} flex={1} minW={0}>
+                      <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
+                        From
+                      </Text>
+                      <FromAccountDisplay address={tx.tx.from} />
+                    </VStack>
 
-                {/* Value */}
-                <Box>
+                    {/* Arrow */}
+                    <Text fontSize="md" fontWeight="800" color="text.tertiary" pt={5}>
+                      →
+                    </Text>
+
+                    {/* To */}
+                    <VStack align="start" spacing={0} flex={1} minW={0}>
+                      <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
+                        {isContractDeploy ? "Type" : "To"}
+                      </Text>
+                      {isContractDeploy ? (
+                        <Badge
+                          fontSize="2xs"
+                          bg="accent.highlight"
+                          color="accentFg.highlight"
+                          border="2px solid"
+                          borderColor="border.default"
+                          fontWeight="700"
+                          px={1.5}
+                          py={0.5}
+                        >
+                          Contract Deploy
+                        </Badge>
+                      ) : (
+                        <AddressParam value={tx.tx.to!} chainId={tx.chainId} />
+                      )}
+                    </VStack>
+                  </HStack>
+                </Box>
+
+                {/* Value card */}
+                <Box
+                  bg="surface.sunken"
+                  border="1px solid"
+                  borderColor="border.subtle"
+                  borderRadius="md"
+                  p={3}
+                >
                   <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
                     Value
                   </Text>
@@ -433,72 +737,117 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
               </>
             )}
 
-            {/* Gas — collapsible */}
-            {gasData && txFee && (
-              <Box
-                border="2px solid"
-                borderColor="gray.200"
-              >
-                <HStack
-                  px={3}
-                  py={2}
-                  cursor="pointer"
-                  onClick={() => setGasExpanded(!gasExpanded)}
-                  _hover={{ bg: "bg.muted" }}
-                  justify="space-between"
+            {/* Gas — collapsible. Shows the receipt-side effective fee once
+                gasData lands, and falls back to the gas params we signed
+                with (gas limit, max fee, priority fee) so pending txs aren't
+                blank. */}
+            {(() => {
+              const showConfirmedFee = !!(gasData && txFee);
+              const showSetParams = !showConfirmedFee && hasSetGasParams;
+              if (!showConfirmedFee && !showSetParams) return null;
+
+              const headerLabel = showConfirmedFee ? "Transaction Fee" : "Estimated Max Fee";
+              const headerCost = showConfirmedFee
+                ? formatEth(txFee!, nativeSym)
+                : estimatedMaxCost
+                  ? formatEth(estimatedMaxCost, nativeSym)
+                  : null;
+
+              return (
+                <Box
+                  bg="surface.sunken"
+                  border="1px solid"
+                  borderColor="border.subtle"
+                  borderRadius="md"
                 >
-                  <HStack spacing={2}>
-                    <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-                      Transaction Fee
-                    </Text>
+                  <HStack
+                    px={3}
+                    py={2}
+                    cursor="pointer"
+                    onClick={() => setGasExpanded(!gasExpanded)}
+                    _hover={{ bg: "bg.muted" }}
+                    justify="space-between"
+                  >
+                    <HStack spacing={2}>
+                      <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
+                        {headerLabel}
+                      </Text>
+                    </HStack>
+                    <HStack spacing={1}>
+                      {headerCost && (
+                        <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono">
+                          {headerCost}
+                        </Text>
+                      )}
+                      {gasExpanded
+                        ? <ChevronUpIcon boxSize={4} color="text.tertiary" />
+                        : <ChevronDownIcon boxSize={4} color="text.tertiary" />
+                      }
+                    </HStack>
                   </HStack>
-                  <HStack spacing={1}>
-                    <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono">
-                      {formatEth(txFee, nativeSym)}
-                    </Text>
-                    {gasExpanded
-                      ? <ChevronUpIcon boxSize={4} color="text.tertiary" />
-                      : <ChevronDownIcon boxSize={4} color="text.tertiary" />
-                    }
-                  </HStack>
-                </HStack>
 
-                <Collapse in={gasExpanded} animateOpacity>
-                  <VStack align="stretch" spacing={1.5} px={3} pb={3} pt={1}>
-                    <Box h="1px" bg="gray.200" />
+                  <Collapse in={gasExpanded} animateOpacity>
+                    <VStack align="stretch" spacing={1.5} px={3} pb={3} pt={1}>
+                      <Box h="1px" bg="border.subtle" />
 
-                    <GasRow
-                      label="Gas Price"
-                      value={formatGwei(gasData.effectiveGasPrice)}
-                    />
+                      {showConfirmedFee ? (
+                        <>
+                          <GasRow
+                            label="Gas Price"
+                            value={formatGwei(gasData!.effectiveGasPrice)}
+                          />
 
-                    <GasRow
-                      label="Gas Limit & Usage"
-                      value={`${formatNumber(gasData.gasLimit)} | ${formatNumber(gasData.gasUsed)} (${gasUsagePercent}%)`}
-                    />
+                          <GasRow
+                            label="Gas Limit & Usage"
+                            value={`${formatNumber(gasData!.gasLimit)} | ${formatNumber(gasData!.gasUsed)} (${gasUsagePercent}%)`}
+                          />
 
-                    {isL2 && (
-                      <>
-                        <Box h="1px" bg="gray.200" mt={0.5} mb={0.5} />
-                        <GasRow
-                          label="L2 Fees Paid"
-                          value={formatEth((BigInt(gasData.gasUsed) * BigInt(gasData.effectiveGasPrice)).toString(), nativeSym)}
-                        />
-                        {gasData.l1Fee && (
-                          <GasRow label="L1 Fees Paid" value={formatEth(gasData.l1Fee, nativeSym)} />
-                        )}
-                        {gasData.l1GasPrice && (
-                          <GasRow label="L1 Gas Price" value={formatGwei(gasData.l1GasPrice)} />
-                        )}
-                        {gasData.l1GasUsed && (
-                          <GasRow label="L1 Gas Used" value={formatNumber(gasData.l1GasUsed)} />
-                        )}
-                      </>
-                    )}
-                  </VStack>
-                </Collapse>
-              </Box>
-            )}
+                          {isL2 && (
+                            <>
+                              <Box h="1px" bg="border.subtle" mt={0.5} mb={0.5} />
+                              <GasRow
+                                label="L2 Fees Paid"
+                                value={formatEth((BigInt(gasData!.gasUsed) * BigInt(gasData!.effectiveGasPrice)).toString(), nativeSym)}
+                              />
+                              {gasData!.l1Fee && (
+                                <GasRow label="L1 Fees Paid" value={formatEth(gasData!.l1Fee, nativeSym)} />
+                              )}
+                              {gasData!.l1GasPrice && (
+                                <GasRow label="L1 Gas Price" value={formatGwei(gasData!.l1GasPrice)} />
+                              )}
+                              {gasData!.l1GasUsed && (
+                                <GasRow label="L1 Gas Used" value={formatNumber(gasData!.l1GasUsed)} />
+                              )}
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {setGas && (
+                            <GasRow
+                              label="Gas Limit"
+                              value={formatNumber(BigInt(setGas).toString())}
+                            />
+                          )}
+                          {setMaxFee && (
+                            <GasRow label="Max Fee" value={formatGwei(setMaxFee)} />
+                          )}
+                          {setPriority && (
+                            <GasRow
+                              label="Max Priority Fee"
+                              value={formatGwei(setPriority)}
+                            />
+                          )}
+                          {setGasPrice && !setMaxFee && (
+                            <GasRow label="Gas Price" value={formatGwei(setGasPrice)} />
+                          )}
+                        </>
+                      )}
+                    </VStack>
+                  </Collapse>
+                </Box>
+              );
+            })()}
 
             {/* Calldata */}
             {hasCalldata && !isContractDeploy && tx.tx.to && (
@@ -524,13 +873,17 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   p={3}
                   bg="bg.muted"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   maxH="100px"
                   overflowY="auto"
                   css={{
                     "&::-webkit-scrollbar": { width: "6px" },
-                    "&::-webkit-scrollbar-track": { background: "#E0E0E0" },
-                    "&::-webkit-scrollbar-thumb": { background: "#121212" },
+                    "&::-webkit-scrollbar-track": {
+                      background: "var(--chakra-colors-bg-muted)",
+                    },
+                    "&::-webkit-scrollbar-thumb": {
+                      background: "var(--chakra-colors-border-strong)",
+                    },
                   }}
                 >
                   <Text fontSize="xs" fontFamily="mono" color="text.tertiary" wordBreak="break-all" whiteSpace="pre-wrap">
@@ -544,23 +897,40 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
             {tx.status === "failed" && tx.error && (
               <Box
                 p={3}
-                bg="bauhaus.red"
+                bg="status.error.bg"
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
+                borderRadius="md"
               >
-                <Text fontSize="xs" color="white" fontWeight="700" mb={0.5} textTransform="uppercase">
+                <Text fontSize="xs" color="status.error.fg" fontWeight="700" mb={0.5} textTransform="uppercase">
                   Error
                 </Text>
-                <Text fontSize="xs" color="white" fontWeight="500">
+                <Text fontSize="xs" color="status.error.fg" fontWeight="500">
                   {tx.error}
                 </Text>
+                {canRebroadcast && (
+                  <Button
+                    size="xs"
+                    leftIcon={<RepeatIcon />}
+                    onClick={handleRebroadcast}
+                    isLoading={isRebroadcasting}
+                    mt={2}
+                    bg={rebroadcastBg}
+                    color={rebroadcastFg}
+                    borderColor={rebroadcastBg}
+                    _hover={{ bg: rebroadcastBg, opacity: 0.85 }}
+                    _active={{ bg: rebroadcastBg, opacity: 0.75 }}
+                  >
+                    Rebroadcast
+                  </Button>
+                )}
               </Box>
             )}
 
           </VStack>
         </ModalBody>
 
-        <ModalFooter borderTop="3px solid" borderColor="bauhaus.black" pt={3} pb={4}>
+        <ModalFooter borderTop="3px solid" borderColor="border.default" pt={3} pb={4}>
           <Button variant="secondary" size="sm" onClick={onClose} w="full">
             Close
           </Button>

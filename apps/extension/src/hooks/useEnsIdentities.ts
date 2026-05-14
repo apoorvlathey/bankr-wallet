@@ -28,6 +28,46 @@ export function useEnsIdentities(addresses: string[]): UseEnsIdentitiesReturn {
     .sort()
     .join(",");
 
+  // Listen for storage changes so refreshes from other UI surfaces
+  // (e.g. AccountSettingsModal's "Refresh ENS Data") propagate immediately.
+  useEffect(() => {
+    const lowerAddresses = addresses.map((a) => a.toLowerCase());
+    if (lowerAddresses.length === 0) return;
+
+    const listener = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string
+    ) => {
+      if (areaName !== "local" || !changes.ensIdentityCache) return;
+      const newCache = changes.ensIdentityCache.newValue as
+        | Record<string, EnsIdentityCacheEntry>
+        | undefined;
+      if (!newCache) return;
+
+      setIdentities((prev) => {
+        const updated = new Map(prev);
+        let mutated = false;
+        for (const lower of lowerAddresses) {
+          const entry = newCache[lower];
+          if (!entry) continue;
+          const existing = prev.get(lower);
+          if (
+            !existing ||
+            existing.name !== entry.name ||
+            existing.avatar !== entry.avatar
+          ) {
+            updated.set(lower, { name: entry.name, avatar: entry.avatar });
+            mutated = true;
+          }
+        }
+        return mutated ? updated : prev;
+      });
+    };
+
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }, [addressesKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     let cancelled = false;
 

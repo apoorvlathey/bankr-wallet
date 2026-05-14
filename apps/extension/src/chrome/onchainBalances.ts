@@ -50,7 +50,7 @@ async function getClient(chainId: number): Promise<PublicClient | null> {
 }
 
 /**
- * Fetch real on-chain balances for all tokens via multicall.
+ * Fetch real onchain balances for all tokens via multicall.
  * Both native (via Multicall3.getEthBalance) and ERC20 (via balanceOf)
  * are batched into a single multicall per chain, chunked to avoid
  * oversized requests.
@@ -78,7 +78,10 @@ export async function fetchOnchainBalances(
     async ([chainId, entries]) => {
       const client = await getClient(chainId);
       if (!client) {
-        rpcIssueChainIds.add(chainId);
+        // No RPC configured for this chain (e.g. portfolio API returned a
+        // token on a chain the user hasn't added). Skip silently — there's
+        // nothing to "fix" and surfacing it as an RPC issue would point the
+        // user to a chain entry that doesn't exist.
         return;
       }
 
@@ -152,7 +155,7 @@ export async function fetchOnchainBalances(
 
   await Promise.all(chainPromises);
 
-  // Filter out tokens with zero on-chain balance and sort by USD value descending
+  // Filter out tokens with zero onchain balance and sort by USD value descending
   const filtered = options?.preserveZeroBalanceTokens
     ? updated
     : updated.filter((t) => parseFloat(t.balance) > 0);

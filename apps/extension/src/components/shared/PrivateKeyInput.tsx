@@ -16,6 +16,7 @@ import {
 } from "@chakra-ui/react";
 import { ViewIcon, ViewOffIcon, CheckIcon, RepeatIcon, CopyIcon } from "@chakra-ui/icons";
 import { generatePrivateKey } from "@/utils/privateKeyUtils";
+import { useTheme } from "@/theme";
 
 type PkMode = "import" | "generate";
 
@@ -38,21 +39,23 @@ export default function PrivateKeyInput({
   onContinue,
   autoFocus,
 }: PrivateKeyInputProps) {
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const [pkMode, setPkMode] = useState<PkMode>("import");
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [pkCopied, setPkCopied] = useState(false);
 
   return (
     <>
-      {/* Import / Generate Toggle */}
+      {/* Import / Generate Toggle — active state uses fg.primary as a high-contrast
+          "selected" pill in either palette. */}
       <HStack spacing={2} mb={4}>
         <Button
           size="sm"
-          bg={pkMode === "import" ? "bauhaus.black" : "bauhaus.white"}
-          color={pkMode === "import" ? "bauhaus.white" : "text.primary"}
+          bg={pkMode === "import" ? "fg.primary" : "surface.raised"}
+          color={pkMode === "import" ? "surface.raised" : "text.primary"}
           border="2px solid"
-          borderColor="bauhaus.black"
-          borderRadius="0"
+          borderColor="border.default"
           fontWeight="700"
           textTransform="uppercase"
           fontSize="xs"
@@ -66,11 +69,10 @@ export default function PrivateKeyInput({
         </Button>
         <Button
           size="sm"
-          bg={pkMode === "generate" ? "bauhaus.black" : "bauhaus.white"}
-          color={pkMode === "generate" ? "bauhaus.white" : "text.primary"}
+          bg={pkMode === "generate" ? "fg.primary" : "surface.raised"}
+          color={pkMode === "generate" ? "surface.raised" : "text.primary"}
           border="2px solid"
-          borderColor="bauhaus.black"
-          borderRadius="0"
+          borderColor="border.default"
           fontWeight="700"
           textTransform="uppercase"
           fontSize="xs"
@@ -119,7 +121,7 @@ export default function PrivateKeyInput({
               />
             </InputRightElement>
           </InputGroup>
-          <FormErrorMessage color="bauhaus.red" fontWeight="700">
+          <FormErrorMessage color="chart.negative" fontWeight="700">
             {error}
           </FormErrorMessage>
         </FormControl>
@@ -151,7 +153,7 @@ export default function PrivateKeyInput({
                   />
                   <IconButton
                     aria-label="Copy private key"
-                    icon={pkCopied ? <CheckIcon color="green.500" /> : <CopyIcon />}
+                    icon={pkCopied ? <CheckIcon color="chart.positive" /> : <CopyIcon />}
                     size="xs"
                     variant="ghost"
                     onClick={async () => {
@@ -159,22 +161,22 @@ export default function PrivateKeyInput({
                       setPkCopied(true);
                       setTimeout(() => setPkCopied(false), 2000);
                     }}
-                    color={pkCopied ? "green.500" : "text.secondary"}
+                    color={pkCopied ? "chart.positive" : "text.secondary"}
                     tabIndex={-1}
                   />
                 </HStack>
               </InputRightElement>
             </InputGroup>
-            <FormErrorMessage color="bauhaus.red" fontWeight="700">
+            <FormErrorMessage color="chart.negative" fontWeight="700">
               {error}
             </FormErrorMessage>
           </FormControl>
 
           <HStack spacing={2} align="center">
-            <Text fontSize="xs" color="bauhaus.red" fontWeight="700" whiteSpace="nowrap">
+            <Text fontSize="xs" color="chart.negative" fontWeight="700" whiteSpace="nowrap">
               Save this key — cannot be recovered!
             </Text>
-            <Box flex={1} h="2px" bg="bauhaus.red" />
+            <Box flex={1} h="2px" bg="chart.negative" />
             <HStack
               as="button"
               spacing={1}
@@ -203,35 +205,37 @@ export default function PrivateKeyInput({
         <Box
           mt={4}
           p={3}
-          bg="bauhaus.yellow"
+          bg={isDarkTheme ? "status.success.bg" : "accent.highlight"}
           border="2px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
+          borderColor={isDarkTheme ? "status.success.border" : "border.default"}
+          borderRadius="lg"
+          boxShadow="card"
         >
           <HStack spacing={2} align="center">
             <Box
               w="22px"
               h="22px"
               minW="22px"
-              bg="bauhaus.blue"
+              bg={isDarkTheme ? "chart.positive" : "accent.secondary"}
               border="2px solid"
-              borderColor="bauhaus.black"
+              borderColor={isDarkTheme ? "status.success.border" : "border.default"}
               borderRadius="full"
               display="flex"
               alignItems="center"
               justifyContent="center"
             >
-              <CheckIcon boxSize="10px" color="white" />
+              <CheckIcon boxSize="10px" color={isDarkTheme ? "fg.inverse" : "accentFg.secondary"} />
             </Box>
             <Code
               fontSize="10px"
-              bg="bauhaus.white"
-              color="bauhaus.black"
+              bg={isDarkTheme ? "surface.sunken" : "surface.raised"}
+              color="text.primary"
               fontFamily="mono"
               fontWeight="700"
               p={1.5}
               border="2px solid"
-              borderColor="bauhaus.black"
+              borderColor={isDarkTheme ? "border.strong" : "border.default"}
+              borderRadius="md"
               overflow="hidden"
               textOverflow="ellipsis"
               whiteSpace="nowrap"

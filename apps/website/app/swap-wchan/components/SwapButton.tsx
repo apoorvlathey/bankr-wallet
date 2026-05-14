@@ -28,8 +28,41 @@ import {
   useWriteContract,
   usePublicClient,
   useSignTypedData,
+  useCapabilities,
+  useSendCalls,
+  useCallsStatus,
 } from "wagmi";
-import { erc20Abi, maxUint256, type Address, type Hex } from "viem";
+import {
+  erc20Abi,
+  encodeFunctionData,
+  maxUint256,
+  type Address,
+  type Hex,
+} from "viem";
+
+// Permit2.approve(token, spender, amount, expiration) — onchain Permit2 allowance,
+// the alternative to a signed PermitSingle. Used inside ERC-5792 bundles where we
+// can't include a typed-data signature mid-batch.
+const permit2ApproveAbi = [
+  {
+    name: "approve",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint160" },
+      { name: "expiration", type: "uint48" },
+    ],
+    outputs: [],
+  },
+] as const;
+
+const PERMIT2_MAX_AMOUNT = (1n << 160n) - 1n;
+// Compute via BigInt — plain JS `(1 << 48) - 1` silently truncates to 32-bit and
+// yields 65535, which is a 1970 timestamp and trips Permit2's AllowanceExpired
+// check immediately. 2^48 - 1 = 281474976710655, well below Number.MAX_SAFE_INTEGER.
+const PERMIT2_MAX_EXPIRATION = Number((1n << 48n) - 1n);
 import {
   type SwapDirection,
   type WchanQuote,
@@ -104,6 +137,42 @@ export function SwapButton({
   const { isLoading: isConfirming, isSuccess: isConfirmed } =
     useWaitForTransactionReceipt({ hash: txHash });
 
+  // ERC-5792 capability check — when supported, sell collapses [approve →
+  // sign permit → swap] into a single popup using onchain Permit2 allowance
+  // instead of a signed PermitSingle.
+  const { data: walletCapabilities } = useCapabilities({
+    account: address,
+    chainId,
+    query: { enabled: !!address },
+  });
+  const atomicStatus = walletCapabilities?.atomic?.status;
+  const supportsAtomicBatch =
+    atomicStatus === "supported" || atomicStatus === "ready";
+
+  const {
+    sendCalls: sendBatchedCalls,
+    data: batchData,
+    isPending: isBatchSending,
+    reset: resetBatch,
+  } = useSendCalls();
+  const batchBundleId = batchData?.id;
+  const { data: batchStatusData } = useCallsStatus({
+    id: batchBundleId ?? "",
+    query: {
+      enabled: !!batchBundleId,
+      refetchInterval: ({ state }) =>
+        state.data?.status === "pending" || state.data?.status === undefined
+          ? 1500
+          : false,
+    },
+  });
+  const isBatchConfirming =
+    !!batchBundleId &&
+    (batchStatusData?.status === "pending" ||
+      batchStatusData?.status === undefined);
+  const isBatchConfirmed = batchStatusData?.status === "success";
+  const batchTxHash = batchStatusData?.receipts?.[0]?.transactionHash;
+
   const live = isChainLive(chainId);
 
   // Stable reference: only re-run when the actual sell amount changes,
@@ -112,8 +181,16 @@ export function SwapButton({
 
   // Pre-fetch allowances for sell direction to show the multi-step stepper
   // before the user clicks, so they know how many wallet interactions are needed.
+  // When ERC-5792 atomic batching is supported, the entire sell flow collapses
+  // to a single popup, so we skip the stepper entirely.
   useEffect(() => {
-    if (direction !== "sell" || !quoteAmountIn || !client || !address) {
+    if (
+      direction !== "sell" ||
+      !quoteAmountIn ||
+      !client ||
+      !address ||
+      supportsAtomicBatch
+    ) {
       setSellFlowSteps([]);
       setSellCurrentStepIdx(0);
       setApproveTxHash(undefined);
@@ -194,6 +271,19 @@ export function SwapButton({
     }
   }, [isConfirmed, txHash]);
 
+  // Notify parent + reset batch state when an ERC-5792 bundle confirms.
+  const firedForBundle = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (
+      isBatchConfirmed &&
+      batchBundleId &&
+      firedForBundle.current !== batchBundleId
+    ) {
+      firedForBundle.current = batchBundleId;
+      if (batchTxHash) onTxConfirmedRef.current?.(batchTxHash);
+    }
+  }, [isBatchConfirmed, batchBundleId, batchTxHash]);
+
   // The current sell step title determines what clicking the button does.
   const currentSellStepTitle = sellFlowSteps[sellCurrentStepIdx]?.title;
 
@@ -202,6 +292,7 @@ export function SwapButton({
 
     setError(null);
     setTxHash(undefined);
+    resetBatch();
 
     try {
       // Switch chain if needed
@@ -227,6 +318,91 @@ export function SwapButton({
         });
         setTxHash(hash);
         setStep("idle");
+      } else if (supportsAtomicBatch) {
+        // Sell via ERC-5792 bundle: collapses approve + permit2.approve + UR.execute
+        // into a single wallet popup. We use onchain Permit2 allowance instead
+        // of a signed PermitSingle, since typed-data signatures can't ride inside
+        // wallet_sendCalls.
+        const addrs = getAddresses(chainId);
+        const erc20Allowance = await getErc20AllowanceToPermit2(
+          client,
+          chainId,
+          address
+        );
+        const permit2Allowance = await getPermit2Allowance(
+          client,
+          chainId,
+          address,
+          addrs.universalRouter
+        );
+        const now = Math.floor(Date.now() / 1000);
+
+        const calls: { to: Address; value: bigint; data: Hex }[] = [];
+
+        if (erc20Allowance < quote.amountIn) {
+          calls.push({
+            to: addrs.wchan,
+            value: 0n,
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              functionName: "approve",
+              args: [addrs.permit2, maxUint256],
+            }),
+          });
+        }
+
+        if (
+          permit2Allowance.amount < quote.amountIn ||
+          permit2Allowance.expiration < now
+        ) {
+          calls.push({
+            to: addrs.permit2,
+            value: 0n,
+            data: encodeFunctionData({
+              abi: permit2ApproveAbi,
+              functionName: "approve",
+              args: [
+                addrs.wchan,
+                addrs.universalRouter,
+                PERMIT2_MAX_AMOUNT,
+                PERMIT2_MAX_EXPIRATION,
+              ],
+            }),
+          });
+        }
+
+        const deadline = BigInt(Math.floor(Date.now() / 1000) + 1800);
+        const minAmountOut = applySlippage(quote.amountOut, slippageBps);
+        const sellTx =
+          quote.route === "via-bnkrw"
+            ? encodeSellWchanViaBnkrw(
+                chainId,
+                quote.amountIn,
+                minAmountOut,
+                deadline
+              )
+            : encodeSellWchan(chainId, quote.amountIn, minAmountOut, deadline);
+        calls.push({ to: sellTx.to, value: sellTx.value, data: sellTx.data });
+
+        setStep("swapping");
+        sendBatchedCalls(
+          { calls, chainId, forceAtomic: true },
+          {
+            onError: (err) => {
+              setStep("idle");
+              if (
+                err.message.includes("User rejected") ||
+                err.message.includes("User denied")
+              ) {
+                return;
+              }
+              setError(err.message.slice(0, 200));
+            },
+            onSuccess: () => {
+              setStep("idle");
+            },
+          }
+        );
       } else {
         // Sell: each button press executes only the current step.
         const addrs = getAddresses(chainId);
@@ -328,10 +504,16 @@ export function SwapButton({
     if (step === "approving") return "Approving...";
     if (step === "signing-permit") return "Signing...";
     if (step === "swapping") return "Confirm in Wallet...";
-    if (isConfirming) return "Confirming...";
+    if (isConfirming || isBatchConfirming) return "Confirming...";
 
-    // Sell: button text matches the current step
-    if (direction === "sell" && sellFlowSteps.length > 1) {
+    // Sell with legacy multi-step flow: button text matches the current step.
+    // When ERC-5792 batching is supported, the stepper is hidden and we always
+    // show the action label ("Sell WCHAN").
+    if (
+      direction === "sell" &&
+      !supportsAtomicBatch &&
+      sellFlowSteps.length > 1
+    ) {
       if (currentSellStepTitle === "Approve") return "Approve WCHAN";
       if (currentSellStepTitle === "Sign Permit") return "Sign Permit";
     }
@@ -347,7 +529,9 @@ export function SwapButton({
     insufficientBalance ||
     step !== "idle" ||
     isQuoteLoading ||
-    isConfirming;
+    isConfirming ||
+    isBatchSending ||
+    isBatchConfirming;
 
   const explorerBase = "https://basescan.org";
 
@@ -426,9 +610,11 @@ export function SwapButton({
         py={6}
       >
         <HStack spacing={3}>
-          {(step !== "idle" || isConfirming || isQuoteLoading) && (
-            <LoadingShapes />
-          )}
+          {(step !== "idle" ||
+            isConfirming ||
+            isQuoteLoading ||
+            isBatchSending ||
+            isBatchConfirming) && <LoadingShapes />}
           <Text>{getButtonText()}</Text>
         </HStack>
       </Button>
@@ -444,16 +630,16 @@ export function SwapButton({
         </Text>
       )}
 
-      {isConfirmed && txHash && (
+      {((isConfirmed && txHash) || (isBatchConfirmed && batchTxHash)) && (
         <Text fontSize="sm" fontWeight="bold" textAlign="center">
           Swap confirmed!{" "}
           <Link
-            href={`${explorerBase}/tx/${txHash}`}
+            href={`${explorerBase}/tx/${batchTxHash || txHash}`}
             isExternal
             color="bauhaus.blue"
             textDecoration="underline"
           >
-            View on Etherscan
+            View on BaseScan
           </Link>
         </Text>
       )}

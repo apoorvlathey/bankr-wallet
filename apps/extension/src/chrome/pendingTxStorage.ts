@@ -12,7 +12,35 @@ export interface PendingTxRequest {
   favicon: string | null;
   chainName: string;
   timestamp: number;
+  // SECURITY: trusted context captured at request arrival. Optional on the
+  // STORED shape for backward compat with entries written by older builds —
+  // new requests must use `PinnedTxRequest` (see below) so the compiler
+  // forces these to be set at creation time.
+  accountId?: string;
+  accountAddress?: string;
+  accountType?: "bankr" | "privateKey" | "seedPhrase";
+  tabId?: number;
+  frameId?: number;
+  senderOrigin?: string;
+  requestChainId?: number;
+  // Split mode: this request is one slice of a wallet_sendCalls bundle the
+  // user manually split into N sequential single-tx confirmations. The
+  // confirmation UI uses these to (a) show "Step N of M", (b) gate the
+  // Confirm button until the prior split tx lands onchain, and (c) tell
+  // the finalization hook which bundle to advance after this tx terminates.
+  parentBundleId?: string;
+  bundleIndex?: number;
+  bundleTotalCalls?: number;
 }
+
+/**
+ * Creation-time shape: pinning fields are REQUIRED. Every new pending
+ * request must be constructed with `pinnedTxRequest(account, base)` from
+ * `./pinnedRequest`, which guarantees these fields and excludes
+ * impersonator accounts at the type level.
+ */
+export type PinnedTxRequest = PendingTxRequest &
+  Required<Pick<PendingTxRequest, "accountId" | "accountAddress" | "accountType">>;
 
 const STORAGE_KEY = "pendingTxRequests";
 const TX_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
@@ -31,7 +59,7 @@ export async function getPendingTxRequests(): Promise<PendingTxRequest[]> {
  * Save a new pending transaction request
  */
 export async function savePendingTxRequest(
-  request: PendingTxRequest
+  request: PinnedTxRequest
 ): Promise<void> {
   const requests = await getPendingTxRequests();
   requests.push(request);
@@ -74,15 +102,22 @@ export async function clearExpiredTxRequests(): Promise<void> {
 }
 
 /**
- * Update the extension badge with pending counts (combines tx, signature, and batch requests)
+ * Update the extension badge with pending counts (combines tx, signature, batch
+ * requests, and any entries the user has staged in the cross-dapp batch).
  */
 export async function updateBadge(): Promise<void> {
   const txRequests = await getPendingTxRequests();
   const { getPendingSignatureRequests } = await import("./pendingSignatureStorage");
   const { getPendingBatchTxRequests } = await import("./pendingBatchTxStorage");
+  const { getCrossDappBatch } = await import("./crossDappBatchStorage");
   const sigRequests = await getPendingSignatureRequests();
   const batchRequests = await getPendingBatchTxRequests();
-  const count = txRequests.length + sigRequests.length + batchRequests.length;
+  const crossDappBatch = await getCrossDappBatch();
+  const count =
+    txRequests.length +
+    sigRequests.length +
+    batchRequests.length +
+    (crossDappBatch?.entries.length ?? 0);
 
   if (count > 0) {
     await chrome.action.setBadgeText({ text: count.toString() });

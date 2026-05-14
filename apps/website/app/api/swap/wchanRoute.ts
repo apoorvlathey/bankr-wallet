@@ -28,6 +28,105 @@ const BASE_RPC_URL =
 const DEFAULT_SLIPPAGE_BPS = 100; // 1%
 const QUOTE_TIMEOUT = 8_000;
 
+// Gas budget for the encoded Universal Router tx. We can't trust the V4
+// quoter's `gasEstimate` alone — it only reports the gas inside
+// `PoolManager.swap` and misses UR routing, WRAP_ETH/SWEEP, hook callbacks,
+// and (for via-bnkrw) the BNKRW↔WCHAN wrap call entirely. Underestimating
+// here causes onchain OOG (the wrap call ran with only the leftover
+// gas after the first swap consumed most of it).
+//
+// `estimateTxGas` does a real `eth_estimateGas` against the encoded tx,
+// using a state override so the call works even if the taker doesn't have
+// enough native balance to cover the swap value. Any failure or RPC hiccup
+// falls back to a conservative hardcoded value.
+// All gas values are well within Number's safe integer range (< 2^53), so
+// we use plain numbers here. We tried with BigInt math originally but
+// Vercel's @vercel/nft static analyzer chokes on BigInt binary expressions
+// during file tracing — fails the production build with "Cannot mix BigInt
+// and other types". Numbers sidestep that entirely.
+const FALLBACK_GAS_DIRECT = 700_000;
+const FALLBACK_GAS_VIA_BNKRW = 1_200_000;
+const ESTIMATE_GAS_TIMEOUT = 5_000;
+// 100 ETH override balance, generous for any quote we'd ever route.
+const STATE_OVERRIDE_BALANCE = "0x56bc75e2d63100000";
+
+// RPCs to try in order for gas estimation. We try the configured one first,
+// then llamarpc as a public fallback. Some Base providers (mainnet.base.org,
+// some Alchemy tiers) ignore or reject state overrides on eth_estimateGas,
+// which would push us to the hardcoded fallback even when llamarpc could
+// have given us a real estimate.
+const ESTIMATE_RPC_URLS = Array.from(
+  new Set([BASE_RPC_URL, "https://base.llamarpc.com"]),
+);
+
+async function tryEstimateOnce(
+  rpcUrl: string,
+  opts: { taker: string; to: string; data: string; valueHex: string },
+  withOverride: boolean,
+): Promise<number | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ESTIMATE_GAS_TIMEOUT);
+  try {
+    const params: unknown[] = [
+      {
+        from: opts.taker,
+        to: opts.to,
+        data: opts.data,
+        value: opts.valueHex,
+      },
+      "latest",
+    ];
+    if (withOverride) {
+      params.push({ [opts.taker]: { balance: STATE_OVERRIDE_BALANCE } });
+    }
+    const res = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "eth_estimateGas",
+        params,
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.error || !json.result) return null;
+    return parseInt(json.result as string, 16);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function estimateTxGas(opts: {
+  taker: string;
+  to: string;
+  data: string;
+  valueHex: string;
+  route: "direct" | "via-bnkrw";
+}): Promise<number> {
+  const fallback =
+    opts.route === "via-bnkrw" ? FALLBACK_GAS_VIA_BNKRW : FALLBACK_GAS_DIRECT;
+
+  // Try each RPC, both with and without state override, until one returns
+  // a usable result. With-override goes first since the API is often hit by
+  // takers that don't have enough native balance to cover the simulation.
+  let raw: number | null = null;
+  outer: for (const rpcUrl of ESTIMATE_RPC_URLS) {
+    for (const withOverride of [true, false]) {
+      raw = await tryEstimateOnce(rpcUrl, opts, withOverride);
+      if (raw !== null) break outer;
+    }
+  }
+
+  if (raw === null) return fallback;
+  const buffered = Math.ceil(raw * 1.5);
+  return buffered < fallback ? fallback : buffered;
+}
+
 // ---------------------------------------------------------------------------
 // Detection
 // ---------------------------------------------------------------------------
@@ -101,7 +200,7 @@ interface FormatOptions {
   includeTransaction?: boolean;
 }
 
-export function formatWchanResponse(opts: FormatOptions) {
+export async function formatWchanResponse(opts: FormatOptions) {
   const {
     quote,
     sellToken,
@@ -115,14 +214,54 @@ export function formatWchanResponse(opts: FormatOptions) {
   const minBuyAmount = applySlippage(quote.amountOut, slippageBps);
   const addrs = getAddresses(BASE_CHAIN_ID);
 
+  // Encode the tx up front so we can run a real `eth_estimateGas` against it.
+  // Without this, gas accounting is a heuristic over the V4 quoter's partial
+  // gasEstimate, which misses the second hop on via-bnkrw and OOGs onchain.
+  let tx: { to: `0x${string}`; data: `0x${string}`; value: bigint } | null = null;
+  // For gas estimation only, we re-encode with minAmountOut=0 so pool drift
+  // between the quote and the simulation doesn't trip the slippage check
+  // and revert eth_estimateGas (which would force us back to the fallback).
+  // The on-the-wire tx still uses the user's slippage.
+  let estimateTx: { to: `0x${string}`; data: `0x${string}`; value: bigint } | null = null;
+  if (includeTransaction && taker) {
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 30 * 60); // 30 min
+
+    const encode = (minOut: bigint) => {
+      if (quote.direction === "buy") {
+        return quote.route === "via-bnkrw"
+          ? encodeBuyWchanViaBnkrw(BASE_CHAIN_ID, quote.amountIn, minOut, deadline)
+          : encodeBuyWchan(BASE_CHAIN_ID, quote.amountIn, minOut, deadline);
+      }
+      return quote.route === "via-bnkrw"
+        ? encodeSellWchanViaBnkrw(BASE_CHAIN_ID, quote.amountIn, minOut, deadline)
+        : encodeSellWchan(BASE_CHAIN_ID, quote.amountIn, minOut, deadline);
+    };
+
+    tx = encode(minBuyAmount);
+    estimateTx = encode(0n);
+  }
+
+  const fallback =
+    quote.route === "via-bnkrw" ? FALLBACK_GAS_VIA_BNKRW : FALLBACK_GAS_DIRECT;
+  const gasNum =
+    estimateTx && taker
+      ? await estimateTxGas({
+          taker,
+          to: estimateTx.to,
+          data: estimateTx.data,
+          valueHex: `0x${estimateTx.value.toString(16)}`,
+          route: quote.route,
+        })
+      : fallback;
+  const gas = gasNum.toString();
+
   // Build response matching 0x shape
   const response: Record<string, unknown> = {
     buyAmount: quote.amountOut.toString(),
     sellAmount: quote.amountIn.toString(),
     buyToken,
     sellToken,
-    gas: quote.route === "via-bnkrw" ? "350000" : "250000",
-    gasPrice: "0",
+    gas,
     totalNetworkFee: "0",
     liquidityAvailable: true,
     minBuyAmount: minBuyAmount.toString(),
@@ -174,50 +313,12 @@ export function formatWchanResponse(opts: FormatOptions) {
     wchanRoute: quote.route,
   };
 
-  // Encode transaction data for quote endpoint
-  if (includeTransaction && taker) {
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + 30 * 60); // 30 min
-
-    let tx: { to: `0x${string}`; data: `0x${string}`; value: bigint };
-
-    if (quote.direction === "buy") {
-      tx =
-        quote.route === "via-bnkrw"
-          ? encodeBuyWchanViaBnkrw(
-              BASE_CHAIN_ID,
-              quote.amountIn,
-              minBuyAmount,
-              deadline,
-            )
-          : encodeBuyWchan(
-              BASE_CHAIN_ID,
-              quote.amountIn,
-              minBuyAmount,
-              deadline,
-            );
-    } else {
-      tx =
-        quote.route === "via-bnkrw"
-          ? encodeSellWchanViaBnkrw(
-              BASE_CHAIN_ID,
-              quote.amountIn,
-              minBuyAmount,
-              deadline,
-            )
-          : encodeSellWchan(
-              BASE_CHAIN_ID,
-              quote.amountIn,
-              minBuyAmount,
-              deadline,
-            );
-    }
-
+  if (tx) {
     response.transaction = {
       to: tx.to,
       data: tx.data,
       value: tx.value.toString(),
-      gas: response.gas,
-      gasPrice: "0",
+      gas,
     };
   }
 
@@ -228,7 +329,7 @@ export function formatWchanResponse(opts: FormatOptions) {
  * Compare parsed 0x response against custom WCHAN quote.
  * Returns the formatted response for whichever is better.
  */
-export function compareBestRoute(
+export async function compareBestRoute(
   zeroXData: Record<string, unknown> | null,
   zeroXOk: boolean,
   wchanQuote: WchanQuote | null,
@@ -238,7 +339,7 @@ export function compareBestRoute(
   slippageBps: number,
   taker?: string,
   includeTransaction?: boolean,
-): { data: Record<string, unknown>; source: string } | null {
+): Promise<{ data: Record<string, unknown>; source: string } | null> {
   const zeroXBuyAmount =
     zeroXOk && zeroXData?.buyAmount
       ? BigInt(zeroXData.buyAmount as string)
@@ -262,7 +363,7 @@ export function compareBestRoute(
 
   // Only WCHAN succeeded
   if (!zeroXOk && wchanQuote) {
-    const formatted = formatWchanResponse({
+    const formatted = await formatWchanResponse({
       quote: wchanQuote,
       sellToken,
       buyToken,
@@ -279,7 +380,7 @@ export function compareBestRoute(
     console.log(
       `[wchanRoute] WCHAN route wins: ${wchanBuyAmount} > ${zeroXBuyAmount} (${wchanQuote!.route})`,
     );
-    const formatted = formatWchanResponse({
+    const formatted = await formatWchanResponse({
       quote: wchanQuote!,
       sellToken,
       buyToken,

@@ -150,7 +150,7 @@ Submit raw transactions directly to the blockchain.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `description` | string | - | Human-readable description for logging |
-| `waitForConfirmation` | boolean | `true` | Wait for on-chain confirmation |
+| `waitForConfirmation` | boolean | `true` | Wait for onchain confirmation |
 
 ### Request Examples
 
@@ -303,7 +303,7 @@ await submit({ transaction: swapTx });
 |---------|---------------|-------------|---------------|
 | Input | Natural language | Structured data | Transaction object |
 | Response | Async (job ID) | Sync (signature) | Sync (tx hash) |
-| Executes on-chain | Via AI agent | No | Yes |
+| Executes onchain | Via AI agent | No | Yes |
 | Best for | General queries | Auth, permits | Raw transactions |
 
 ## Security Notes

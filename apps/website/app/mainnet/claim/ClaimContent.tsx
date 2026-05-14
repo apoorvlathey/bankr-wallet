@@ -622,7 +622,7 @@ export default function ClaimContent() {
         }
       }
 
-      // Get on-chain timestamp for history display
+      // Get onchain timestamp for history display
       let txTimestamp: number | undefined;
       try {
         const block = await l2Client.getBlock({

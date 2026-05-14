@@ -33,7 +33,9 @@ import {
 } from "@/components/shared/AccountTypeIcons";
 import PrivateKeyInput from "@/components/shared/PrivateKeyInput";
 import SeedPhraseSetup from "@/components/SeedPhraseSetup";
+import ThemeSwitcher from "@/components/shared/ThemeSwitcher";
 import { TWITTER_URL, BANKR_BOT_API_PAGE, BANKR_BOT_TERMINAL_PAGE } from "@/constants/externalUrls";
+import { useTheme } from "@/theme";
 
 type OnboardingStep =
   | "welcome"
@@ -64,7 +66,7 @@ function isArcBrowser(): boolean {
   }
 }
 
-// Step indicator component
+// Step indicator component — three intent accents that cycle correctly in either palette.
 function StepIndicator({
   currentStep,
   totalSteps,
@@ -72,7 +74,9 @@ function StepIndicator({
   currentStep: number;
   totalSteps: number;
 }) {
-  const colors = ["bauhaus.red", "bauhaus.blue", "bauhaus.yellow"];
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
+  const colors = ["accent.primary", "accent.secondary", "accent.highlight"];
   return (
     <VStack spacing={2}>
       <HStack spacing={3}>
@@ -81,10 +85,13 @@ function StepIndicator({
             key={index}
             w="12px"
             h="12px"
-            bg={index <= currentStep ? colors[index] : "bauhaus.white"}
-            border="2px solid"
-            borderColor="bauhaus.black"
-            transform={index === currentStep ? "rotate(45deg)" : "none"}
+            bg={index <= currentStep ? colors[index] : "surface.raised"}
+            border={isDarkTheme ? "1px solid" : "2px solid"}
+            borderColor="border.default"
+            borderRadius={isDarkTheme ? "full" : "none"}
+            transform={
+              !isDarkTheme && index === currentStep ? "rotate(45deg)" : "none"
+            }
             transition="all 0.2s"
           />
         ))}
@@ -115,6 +122,8 @@ const bounceArrow = keyframes`
 `;
 
 function Onboarding({ onComplete }: OnboardingProps) {
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const [step, setStep] = useState<OnboardingStep>("welcome");
   const [isCheckingSetup, setIsCheckingSetup] = useState(true);
   const [accountTypeChoice, setAccountTypeChoice] =
@@ -546,7 +555,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
     return (
       <Box
         minH="100vh"
-        bg="bg.base"
+        bg="surface.base"
         display="flex"
         alignItems="center"
         justifyContent="center"
@@ -568,7 +577,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
     return (
       <Box
         minH="100vh"
-        bg="bg.base"
+        bg="surface.base"
         display="flex"
         flexDirection="column"
         alignItems="center"
@@ -576,46 +585,45 @@ function Onboarding({ onComplete }: OnboardingProps) {
         p={8}
         position="relative"
       >
-        {/* Geometric decorations */}
-        <Box
-          position="absolute"
-          top={8}
-          left={8}
-          w="20px"
-          h="20px"
-          bg="bauhaus.red"
-          border="3px solid"
-          borderColor="bauhaus.black"
-        />
-        <Box
-          position="absolute"
-          top={8}
-          right={8}
-          w="20px"
-          h="20px"
-          bg="bauhaus.blue"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          borderRadius="full"
-        />
-        <Box
-          position="absolute"
-          bottom={20}
-          left={8}
-          w="0"
-          h="0"
-          borderLeft="10px solid transparent"
-          borderRight="10px solid transparent"
-          borderBottom="20px solid"
-          borderBottomColor="bauhaus.yellow"
-        />
+        {/* Theme switcher — top-right corner on every onboarding screen. */}
+        <Box position="absolute" top={3} right={3} zIndex={2}>
+          <ThemeSwitcher />
+        </Box>
+
+        {/* Bauhaus-only geometric decorations — Midnight has no corner ornaments. */}
+        {!isDarkTheme && (
+          <>
+            <Box
+              position="absolute"
+              top={8}
+              left={8}
+              w="20px"
+              h="20px"
+              bg="accent.primary"
+              border="3px solid"
+              borderColor="border.default"
+            />
+            <Box
+              position="absolute"
+              bottom={20}
+              left={8}
+              w="0"
+              h="0"
+              borderLeft="10px solid transparent"
+              borderRight="10px solid transparent"
+              borderBottom="20px solid"
+              borderBottomColor="var(--chakra-colors-accent-highlight)"
+            />
+          </>
+        )}
 
         <VStack spacing={8} maxW="400px" textAlign="center">
           <Box
-            bg="bauhaus.yellow"
-            border="4px solid"
-            borderColor="bauhaus.black"
-            boxShadow="6px 6px 0px 0px #121212"
+            bg="accent.highlight"
+            border="2px solid"
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={4}
           >
             <Image src="/walletchan-icon.png" w="60px" />
@@ -660,9 +668,9 @@ function Onboarding({ onComplete }: OnboardingProps) {
             display="flex"
             alignItems="center"
             gap={1}
-            color="bauhaus.blue"
+            color="accent.secondary"
             fontWeight="700"
-            _hover={{ color: "bauhaus.red" }}
+            _hover={{ color: "accent.highlight" }}
             href={TWITTER_URL}
             isExternal
           >
@@ -689,7 +697,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
     return (
       <Box
         minH="100vh"
-        bg="bg.base"
+        bg="surface.base"
         display="flex"
         flexDirection="column"
         alignItems="center"
@@ -697,28 +705,24 @@ function Onboarding({ onComplete }: OnboardingProps) {
         p={8}
         position="relative"
       >
-        {/* Geometric decorations */}
-        <Box
-          position="absolute"
-          top={8}
-          left={8}
-          w="16px"
-          h="16px"
-          bg="bauhaus.red"
-          border="2px solid"
-          borderColor="bauhaus.black"
-        />
-        <Box
-          position="absolute"
-          top={8}
-          right={8}
-          w="16px"
-          h="16px"
-          bg="bauhaus.blue"
-          border="2px solid"
-          borderColor="bauhaus.black"
-          borderRadius="full"
-        />
+        {/* Theme switcher — top-right corner on every onboarding screen. */}
+        <Box position="absolute" top={3} right={3} zIndex={2}>
+          <ThemeSwitcher />
+        </Box>
+
+        {/* Bauhaus-only geometric decorations */}
+        {!isDarkTheme && (
+          <Box
+            position="absolute"
+            top={8}
+            left={8}
+            w="16px"
+            h="16px"
+            bg="accent.primary"
+            border="2px solid"
+            borderColor="border.default"
+          />
+        )}
 
         {/* Floating arrow pointing to extension area */}
         <Box
@@ -738,7 +742,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
             w="40px"
             h="40px"
             fill="none"
-            stroke="var(--chakra-colors-bauhaus-blue)"
+            stroke="var(--chakra-colors-accent-secondary)"
             strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -750,21 +754,22 @@ function Onboarding({ onComplete }: OnboardingProps) {
           <HStack
             mt={2}
             spacing={2}
-            bg="bauhaus.yellow"
+            bg="accent.highlight"
             px={3}
             py={2}
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="3px 3px 0px 0px #121212"
+            border="2px solid"
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
           >
             <Image src="/walletchan-icon.png" w="20px" h="20px" />
-            <Text fontSize="sm" color="bauhaus.black" fontWeight="700">
+            <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
               WalletChan
             </Text>
           </HStack>
           <Text
             fontSize="xs"
-            color="bauhaus.blue"
+            color="accent.secondary"
             fontWeight="700"
             mt={1}
             textAlign="center"
@@ -778,10 +783,11 @@ function Onboarding({ onComplete }: OnboardingProps) {
           <Box
             w="80px"
             h="80px"
-            bg="bauhaus.yellow"
-            border="4px solid"
-            borderColor="bauhaus.black"
-            boxShadow="6px 6px 0px 0px #121212"
+            bg="accent.highlight"
+            border="2px solid"
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             display="flex"
             alignItems="center"
             justifyContent="center"
@@ -789,7 +795,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
               animation: `${scaleIn} 0.5s ease-out`,
             }}
           >
-            <CheckIcon boxSize="40px" color="bauhaus.black" />
+            <CheckIcon boxSize="40px" color="accentFg.highlight" />
           </Box>
 
           <VStack spacing={2}>
@@ -830,9 +836,9 @@ function Onboarding({ onComplete }: OnboardingProps) {
             display="flex"
             alignItems="center"
             gap={1}
-            color="bauhaus.blue"
+            color="accent.secondary"
             fontWeight="700"
-            _hover={{ color: "bauhaus.red" }}
+            _hover={{ color: "accent.highlight" }}
             href={TWITTER_URL}
             isExternal
           >
@@ -859,24 +865,31 @@ function Onboarding({ onComplete }: OnboardingProps) {
     return (
       <Box
         minH="100vh"
-        bg="bg.base"
+        bg="surface.base"
         display="flex"
+        flexDirection="column"
         alignItems="center"
-        justifyContent="center"
-        p={8}
+        justifyContent="flex-start"
+        px={8}
+        pt={32}
+        pb={8}
+        position="relative"
       >
-        <Box w="full" maxW="400px">
-          <SeedPhraseSetup
-            onBack={() => setStep("accountType")}
-            onComplete={() => {}}
-            onCollect={(mnemonic, groupName, accountDisplayName) => {
-              setCollectedMnemonic(mnemonic);
-              setSeedGroupName(groupName || "");
-              setSeedAccountDisplayName(accountDisplayName || "");
-              setStep("password");
-            }}
-          />
+        {/* Theme switcher — top-right corner on every onboarding screen. */}
+        <Box position="absolute" top={3} right={3} zIndex={2}>
+          <ThemeSwitcher />
         </Box>
+
+        <SeedPhraseSetup
+          onBack={() => setStep("accountType")}
+          onComplete={() => {}}
+          onCollect={(mnemonic, groupName, accountDisplayName) => {
+            setCollectedMnemonic(mnemonic);
+            setSeedGroupName(groupName || "");
+            setSeedAccountDisplayName(accountDisplayName || "");
+            setStep("password");
+          }}
+        />
       </Box>
     );
   }
@@ -885,36 +898,34 @@ function Onboarding({ onComplete }: OnboardingProps) {
   return (
     <Box
       minH="100vh"
-      bg="bg.base"
+      bg="surface.base"
       display="flex"
       flexDirection="column"
       alignItems="center"
-      justifyContent="center"
-      p={8}
+      justifyContent="flex-start"
+      px={8}
+      pt={32}
+      pb={8}
       position="relative"
     >
-      {/* Geometric decorations */}
-      <Box
-        position="absolute"
-        top={8}
-        left={8}
-        w="12px"
-        h="12px"
-        bg="bauhaus.red"
-        border="2px solid"
-        borderColor="bauhaus.black"
-      />
-      <Box
-        position="absolute"
-        top={8}
-        right={8}
-        w="12px"
-        h="12px"
-        bg="bauhaus.blue"
-        border="2px solid"
-        borderColor="bauhaus.black"
-        borderRadius="full"
-      />
+      {/* Theme switcher — top-right corner on every onboarding screen. */}
+      <Box position="absolute" top={3} right={3} zIndex={2}>
+        <ThemeSwitcher />
+      </Box>
+
+      {/* Bauhaus-only geometric decorations */}
+      {!isDarkTheme && (
+        <Box
+          position="absolute"
+          top={8}
+          left={8}
+          w="12px"
+          h="12px"
+          bg="accent.primary"
+          border="2px solid"
+          borderColor="border.default"
+        />
+      )}
 
       <VStack spacing={6} w="full" maxW="400px">
         {/* Header with back button */}
@@ -958,18 +969,21 @@ function Onboarding({ onComplete }: OnboardingProps) {
                 flex={1}
                 p={4}
                 bg={
-                  accountTypeChoice === "bankr" ? "bg.muted" : "bauhaus.white"
+                  accountTypeChoice === "bankr"
+                    ? isDarkTheme ? "surface.raisedHover" : "surface.sunken"
+                    : "surface.raised"
                 }
-                border="3px solid"
+                border="2px solid"
                 borderColor={
                   accountTypeChoice === "bankr"
-                    ? "bauhaus.blue"
-                    : "bauhaus.black"
+                    ? "accent.secondary"
+                    : "border.default"
                 }
-                boxShadow="4px 4px 0px 0px #121212"
+                borderRadius="lg"
+                boxShadow="card"
                 textAlign="left"
                 onClick={() => setAccountTypeChoice("bankr")}
-                _hover={{ bg: "bg.muted" }}
+                _hover={{ bg: "surface.raisedHover" }}
                 display="flex"
                 flexDirection="column"
                 alignItems="center"
@@ -977,12 +991,13 @@ function Onboarding({ onComplete }: OnboardingProps) {
               >
                 <VStack spacing={2}>
                   <Box
-                    bg="bauhaus.blue"
+                    bg="accent.secondary"
                     border="2px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
+                    borderRadius="md"
                     p={2}
                   >
-                    <RobotIcon boxSize="20px" color="white" />
+                    <RobotIcon boxSize="20px" color="accentFg.secondary" />
                   </Box>
                   <VStack spacing={0}>
                     <Text
@@ -1007,9 +1022,9 @@ function Onboarding({ onComplete }: OnboardingProps) {
                     <Box
                       w="12px"
                       h="12px"
-                      bg="bauhaus.blue"
+                      bg="accent.secondary"
                       border="2px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
                       borderRadius="full"
                     />
                   )}
@@ -1037,28 +1052,30 @@ function Onboarding({ onComplete }: OnboardingProps) {
                   p={3}
                   bg={
                     accountTypeChoice === "privateKey"
-                      ? "bg.muted"
-                      : "bauhaus.white"
+                      ? isDarkTheme ? "surface.raisedHover" : "surface.sunken"
+                      : "surface.raised"
                   }
-                  border="3px solid"
+                  border="2px solid"
                   borderColor={
                     accountTypeChoice === "privateKey"
-                      ? "bauhaus.yellow"
-                      : "bauhaus.black"
+                      ? "accent.highlight"
+                      : "border.default"
                   }
-                  boxShadow="4px 4px 0px 0px #121212"
+                  borderRadius="lg"
+                  boxShadow="card"
                   textAlign="left"
                   onClick={() => setAccountTypeChoice("privateKey")}
-                  _hover={{ bg: "bg.muted" }}
+                  _hover={{ bg: "surface.raisedHover" }}
                 >
                   <HStack spacing={2}>
                     <Box
-                      bg="bauhaus.yellow"
+                      bg="accent.highlight"
                       border="2px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
+                      borderRadius="md"
                       p={1.5}
                     >
-                      <KeyIcon boxSize="16px" color="bauhaus.black" />
+                      <KeyIcon boxSize="16px" color="accentFg.highlight" />
                     </Box>
                     <VStack align="start" spacing={0} flex={1}>
                       <Text
@@ -1081,9 +1098,10 @@ function Onboarding({ onComplete }: OnboardingProps) {
                       <Box
                         w="10px"
                         h="10px"
-                        bg="bauhaus.yellow"
+                        bg="accent.highlight"
                         border="2px solid"
-                        borderColor="bauhaus.black"
+                        borderColor="border.default"
+                        borderRadius={isDarkTheme ? "full" : "none"}
                       />
                     )}
                   </HStack>
@@ -1096,28 +1114,30 @@ function Onboarding({ onComplete }: OnboardingProps) {
                   p={3}
                   bg={
                     accountTypeChoice === "seedPhrase"
-                      ? "bg.muted"
-                      : "bauhaus.white"
+                      ? isDarkTheme ? "surface.raisedHover" : "surface.sunken"
+                      : "surface.raised"
                   }
-                  border="3px solid"
+                  border="2px solid"
                   borderColor={
                     accountTypeChoice === "seedPhrase"
-                      ? "bauhaus.red"
-                      : "bauhaus.black"
+                      ? "accent.primary"
+                      : "border.default"
                   }
-                  boxShadow="4px 4px 0px 0px #121212"
+                  borderRadius="lg"
+                  boxShadow="card"
                   textAlign="left"
                   onClick={() => setAccountTypeChoice("seedPhrase")}
-                  _hover={{ bg: "bg.muted" }}
+                  _hover={{ bg: "surface.raisedHover" }}
                 >
                   <HStack spacing={2}>
                     <Box
-                      bg="bauhaus.red"
+                      bg="accent.primary"
                       border="2px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
+                      borderRadius="md"
                       p={1.5}
                     >
-                      <SeedIcon boxSize="16px" color="white" />
+                      <SeedIcon boxSize="16px" color="accentFg.primary" />
                     </Box>
                     <VStack align="start" spacing={0} flex={1}>
                       <Text
@@ -1140,10 +1160,11 @@ function Onboarding({ onComplete }: OnboardingProps) {
                       <Box
                         w="10px"
                         h="10px"
-                        bg="bauhaus.red"
+                        bg="accent.primary"
                         border="2px solid"
-                        borderColor="bauhaus.black"
-                        transform="rotate(45deg)"
+                        borderColor="border.default"
+                        borderRadius={isDarkTheme ? "full" : "none"}
+                        transform={isDarkTheme ? "none" : "rotate(45deg)"}
                       />
                     )}
                   </HStack>
@@ -1187,24 +1208,27 @@ function Onboarding({ onComplete }: OnboardingProps) {
             <Box
               w="full"
               p={6}
-              bg="bauhaus.white"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="4px 4px 0px 0px #121212"
+              bg="surface.raised"
+              border="2px solid"
+              borderColor={isDarkTheme ? "border.strong" : "border.default"}
+              borderRadius="lg"
+              boxShadow="card"
               position="relative"
             >
-              {/* Corner decoration */}
-              <Box
-                position="absolute"
-                top="-3px"
-                right="-3px"
-                w="10px"
-                h="10px"
-                bg="bauhaus.blue"
-                border="2px solid"
-                borderColor="bauhaus.black"
-                borderRadius="full"
-              />
+              {/* Bauhaus-only corner decoration */}
+              {!isDarkTheme && (
+                <Box
+                  position="absolute"
+                  top="-3px"
+                  right="-3px"
+                  w="10px"
+                  h="10px"
+                  bg="accent.secondary"
+                  border="2px solid"
+                  borderColor="border.default"
+                  borderRadius="full"
+                />
+              )}
 
               <VStack spacing={4}>
                 <FormControl isInvalid={!!errors.apiKey}>
@@ -1246,7 +1270,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                       />
                     </InputRightElement>
                   </InputGroup>
-                  <FormErrorMessage color="bauhaus.red" fontWeight="700">
+                  <FormErrorMessage color="chart.negative" fontWeight="700">
                     {errors.apiKey}
                   </FormErrorMessage>
                 </FormControl>
@@ -1275,7 +1299,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                       if (e.key === "Enter") handleContinue();
                     }}
                   />
-                  <FormErrorMessage color="bauhaus.red" fontWeight="700">
+                  <FormErrorMessage color="chart.negative" fontWeight="700">
                     {errors.walletAddress}
                   </FormErrorMessage>
                 </FormControl>
@@ -1304,21 +1328,21 @@ function Onboarding({ onComplete }: OnboardingProps) {
             <VStack spacing={2} w="full">
               <Link
                 fontSize="sm"
-                color="bauhaus.blue"
+                color="accent.secondary"
                 fontWeight="700"
                 href={BANKR_BOT_API_PAGE}
                 isExternal
-                _hover={{ color: "bauhaus.red", textDecoration: "underline" }}
+                _hover={{ color: "accent.highlight", textDecoration: "underline" }}
               >
                 Don't have an API key? Get one from bankr.bot
               </Link>
               <Link
                 fontSize="sm"
-                color="bauhaus.blue"
+                color="accent.secondary"
                 fontWeight="700"
                 href={BANKR_BOT_TERMINAL_PAGE}
                 isExternal
-                _hover={{ color: "bauhaus.red", textDecoration: "underline" }}
+                _hover={{ color: "accent.highlight", textDecoration: "underline" }}
               >
                 Find your wallet address at bankr.bot/terminal
               </Link>
@@ -1357,23 +1381,26 @@ function Onboarding({ onComplete }: OnboardingProps) {
             <Box
               w="full"
               p={6}
-              bg="bauhaus.white"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="4px 4px 0px 0px #121212"
+              bg="surface.raised"
+              border="2px solid"
+              borderColor={isDarkTheme ? "border.strong" : "border.default"}
+              borderRadius="lg"
+              boxShadow="card"
               position="relative"
             >
-              {/* Corner decoration */}
-              <Box
-                position="absolute"
-                top="-3px"
-                right="-3px"
-                w="10px"
-                h="10px"
-                bg="bauhaus.yellow"
-                border="2px solid"
-                borderColor="bauhaus.black"
-              />
+              {/* Bauhaus-only corner decoration */}
+              {!isDarkTheme && (
+                <Box
+                  position="absolute"
+                  top="-3px"
+                  right="-3px"
+                  w="10px"
+                  h="10px"
+                  bg="accent.highlight"
+                  border="2px solid"
+                  borderColor="border.default"
+                />
+              )}
 
               <PrivateKeyInput
                 privateKey={privateKey}
@@ -1408,15 +1435,22 @@ function Onboarding({ onComplete }: OnboardingProps) {
             <HStack
               w="full"
               p={3}
-              bg="bauhaus.yellow"
+              bg="status.warning.bg"
               border="2px solid"
-              borderColor="bauhaus.black"
-              boxShadow="3px 3px 0px 0px #121212"
+              borderColor="status.warning.border"
+              borderRadius="lg"
+              boxShadow="card"
               spacing={2}
               align="center"
             >
-              <Box w="8px" h="8px" minW="8px" bg="bauhaus.black" />
-              <Text fontSize="xs" color="bauhaus.black" fontWeight="700">
+              <Box
+                w="8px"
+                h="8px"
+                minW="8px"
+                bg="status.warning.fg"
+                borderRadius={isDarkTheme ? "full" : "none"}
+              />
+              <Text fontSize="xs" color="status.warning.fg" fontWeight="700">
                 Never share your private key with anyone. It will be encrypted
                 and stored only on this device.
               </Text>
@@ -1455,24 +1489,27 @@ function Onboarding({ onComplete }: OnboardingProps) {
             <Box
               w="full"
               p={6}
-              bg="bauhaus.white"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="4px 4px 0px 0px #121212"
+              bg="surface.raised"
+              border="2px solid"
+              borderColor={isDarkTheme ? "border.strong" : "border.default"}
+              borderRadius="lg"
+              boxShadow="card"
               position="relative"
             >
-              {/* Corner decoration */}
-              <Box
-                position="absolute"
-                top="-3px"
-                right="-3px"
-                w="0"
-                h="0"
-                borderLeft="6px solid transparent"
-                borderRight="6px solid transparent"
-                borderBottom="10px solid"
-                borderBottomColor="bauhaus.yellow"
-              />
+              {/* Bauhaus-only corner decoration */}
+              {!isDarkTheme && (
+                <Box
+                  position="absolute"
+                  top="-3px"
+                  right="-3px"
+                  w="0"
+                  h="0"
+                  borderLeft="6px solid transparent"
+                  borderRight="6px solid transparent"
+                  borderBottom="10px solid"
+                  borderBottomColor="var(--chakra-colors-accent-highlight)"
+                />
+              )}
 
               <VStack spacing={4}>
                 <FormControl isInvalid={!!errors.password}>
@@ -1513,7 +1550,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                       />
                     </InputRightElement>
                   </InputGroup>
-                  <FormErrorMessage color="bauhaus.red" fontWeight="700">
+                  <FormErrorMessage color="chart.negative" fontWeight="700">
                     {errors.password}
                   </FormErrorMessage>
                 </FormControl>
@@ -1539,7 +1576,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
                       if (e.key === "Enter") handleContinue();
                     }}
                   />
-                  <FormErrorMessage color="bauhaus.red" fontWeight="700">
+                  <FormErrorMessage color="chart.negative" fontWeight="700">
                     {errors.confirmPassword}
                   </FormErrorMessage>
                 </FormControl>
@@ -1549,12 +1586,13 @@ function Onboarding({ onComplete }: OnboardingProps) {
             <Box
               w="full"
               p={4}
-              bg="bauhaus.yellow"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="4px 4px 0px 0px #121212"
+              bg="status.warning.bg"
+              border="2px solid"
+              borderColor="status.warning.border"
+              borderRadius="lg"
+              boxShadow="card"
             >
-              <Text fontSize="sm" color="bauhaus.black" fontWeight="700">
+              <Text fontSize="sm" color="status.warning.fg" fontWeight="700">
                 Keep your password safe. If you forget it, you'll need to reset
                 the extension and reconfigure your API key.
               </Text>
@@ -1589,9 +1627,9 @@ function Onboarding({ onComplete }: OnboardingProps) {
           display="flex"
           alignItems="center"
           gap={1}
-          color="bauhaus.blue"
+          color="accent.secondary"
           fontWeight="700"
-          _hover={{ color: "bauhaus.red" }}
+          _hover={{ color: "accent.highlight" }}
           href={TWITTER_URL}
           isExternal
         >

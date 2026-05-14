@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import {
   HStack,
   VStack,
@@ -6,9 +6,12 @@ import {
   Link,
   Box,
   Button,
-  Badge,
   IconButton,
   Spacer,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  InputRightElement,
   Modal,
   ModalOverlay,
   ModalContent,
@@ -16,37 +19,45 @@ import {
   ModalBody,
   ModalFooter,
   useDisclosure,
-  Icon,
 } from "@chakra-ui/react";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
-import {
-  ArrowBackIcon,
-  LockIcon,
-  ChevronRightIcon,
-  DeleteIcon,
-  TimeIcon,
-  ChatIcon,
-  RepeatIcon,
-} from "@chakra-ui/icons";
+import { useThemedToast } from "@/hooks/useThemedToast";
+import { ArrowBackIcon, Search2Icon, SmallCloseIcon } from "@chakra-ui/icons";
 
 import { clearChatHistory } from "@/chrome/chatStorage";
 import { TWITTER_URL } from "@/constants/externalUrls";
+import { useStripTokens, useTheme } from "@/theme";
 import Chains from "./Chains";
 import ChangePassword from "./ChangePassword";
 import AutoLockSettings from "./AutoLockSettings";
 import AgentPasswordSettings from "./AgentPasswordSettings";
+import AppearanceSettings from "./AppearanceSettings";
+import ClearSigningSettings from "./ClearSigningSettings";
+import SecuritySettings from "./SecuritySettings";
+import DataSettings from "./DataSettings";
+import { SettingsRow } from "./SettingsRow";
+import {
+  LEAF_ENTRIES,
+  filterLeaves,
+  renderLeafRow,
+  type NavigableLeafId,
+  type ActionLeafId,
+  type RowContext,
+} from "./settingsRegistry";
+import {
+  ShieldIcon,
+  DatabaseIcon,
+} from "./icons";
 
-// Robot/Agent icon for Agent Password section
-const AgentIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" {...props}>
-    <path
-      fill="currentColor"
-      d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5A2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5a2.5 2.5 0 0 0 2.5 2.5a2.5 2.5 0 0 0 2.5-2.5a2.5 2.5 0 0 0-2.5-2.5Z"
-    />
-  </Icon>
-);
-
-type SettingsTab = "main" | "chains" | "changePassword" | "autoLock" | "agentPassword";
+type SettingsTab =
+  | "main"
+  | "security"
+  | "data"
+  | "chains"
+  | "changePassword"
+  | "autoLock"
+  | "agentPassword"
+  | "appearance"
+  | "clearSigning";
 
 interface SettingsProps {
   close: () => void;
@@ -70,7 +81,14 @@ function Settings({
   const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [isAgentPasswordEnabled, setIsAgentPasswordEnabled] = useState(false);
   const [passwordType, setPasswordType] = useState<"master" | "agent" | null>(null);
-  const toast = useBauhausToast();
+  const [query, setQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const toast = useThemedToast();
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
+  // Reused for the Chain RPCs chip — same recessed strip pattern as the
+  // chevron, so the row reads as a "system" tile in both themes.
+  const chainStrip = useStripTokens();
   const { isOpen: isDeleteModalOpen, onOpen: onDeleteModalOpen, onClose: onDeleteModalClose } = useDisclosure();
   const { isOpen: isChatDeleteModalOpen, onOpen: onChatDeleteModalOpen, onClose: onChatDeleteModalClose } = useDisclosure();
 
@@ -113,6 +131,16 @@ function Settings({
     checkPasswordType();
   }, []);
 
+  // Auto-focus the search input when landing on the main settings list.
+  // Guarded so we don't yank focus when the user navigates back from a leaf
+  // screen mid-session (focus restoration there is handled by individual leaf
+  // screens). Only fire on the initial mount in main.
+  useEffect(() => {
+    if (tab === "main") {
+      searchInputRef.current?.focus();
+    }
+  }, [tab]);
+
   const checkAgentPassword = async () => {
     const response = await new Promise<{ enabled: boolean }>((resolve) => {
       chrome.runtime.sendMessage({ type: "isAgentPasswordEnabled" }, resolve);
@@ -125,6 +153,31 @@ function Settings({
       chrome.runtime.sendMessage({ type: "getPasswordType" }, resolve);
     });
     setPasswordType(response.passwordType);
+  };
+
+  const navigateToLeaf = (id: NavigableLeafId) => {
+    // NavigableLeafId values intentionally line up 1:1 with SettingsTab values.
+    setQuery("");
+    setTab(id);
+  };
+
+  const fireAction = (id: ActionLeafId) => {
+    // After firing, drop the search query so the user lands back on the
+    // default main list (clean state) once any modal closes / toast fires.
+    setQuery("");
+    if (id === "clearTxHistory") onDeleteModalOpen();
+    else if (id === "clearChatHistory") onChatDeleteModalOpen();
+    else if (id === "resetNonce") handleResetNonce();
+  };
+
+  const rowCtx: RowContext = {
+    isDarkTheme,
+    chainStripBg: chainStrip.bg,
+    chainStripFg: chainStrip.fg,
+    passwordType,
+    isAgentPasswordEnabled,
+    onNavigate: navigateToLeaf,
+    onAction: fireAction,
   };
 
   if (tab === "chains") {
@@ -170,6 +223,25 @@ function Settings({
     );
   }
 
+  if (tab === "appearance") {
+    return <AppearanceSettings onCancel={() => setTab("main")} />;
+  }
+
+  if (tab === "clearSigning") {
+    return <ClearSigningSettings onBack={() => setTab("main")} />;
+  }
+
+  if (tab === "security") {
+    return <SecuritySettings onBack={() => setTab("main")} ctx={rowCtx} />;
+  }
+
+  if (tab === "data") {
+    return <DataSettings onBack={() => setTab("main")} ctx={rowCtx} />;
+  }
+
+  const trimmedQuery = query.trim();
+  const matches = trimmedQuery ? filterLeaves(trimmedQuery) : [];
+
   return (
     <VStack spacing={4} align="stretch" flex="1">
       {/* Header */}
@@ -189,394 +261,88 @@ function Settings({
         <Spacer />
       </HStack>
 
-      {/* Change Password Section - only accessible with master password */}
-      <Box
-          bg={passwordType === "agent" ? "gray.100" : "bauhaus.white"}
-          border="3px solid"
-          borderColor={passwordType === "agent" ? "gray.300" : "bauhaus.black"}
-          boxShadow={passwordType === "agent" ? "none" : "4px 4px 0px 0px #121212"}
-          p={4}
-          cursor={passwordType === "agent" ? "not-allowed" : "pointer"}
-          onClick={passwordType === "agent" ? undefined : () => setTab("changePassword")}
-          _hover={passwordType === "agent" ? {} : {
-            transform: "translateY(-2px)",
-            boxShadow: "6px 6px 0px 0px #121212",
-          }}
-          _active={passwordType === "agent" ? {} : {
-            transform: "translate(2px, 2px)",
-            boxShadow: "none",
-          }}
-          transition="all 0.2s ease-out"
-          position="relative"
-        >
-          {/* Corner decoration */}
-          <Box
-            position="absolute"
-            top="-3px"
-            right="-3px"
-            w="8px"
-            h="8px"
-            bg={passwordType === "agent" ? "gray.400" : "bauhaus.yellow"}
-            border="2px solid"
-            borderColor={passwordType === "agent" ? "gray.300" : "bauhaus.black"}
+      {/* Search */}
+      <InputGroup>
+        <InputLeftElement pointerEvents="none">
+          <Search2Icon color="fg.muted" />
+        </InputLeftElement>
+        <Input
+          ref={searchInputRef}
+          placeholder="Search settings..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          autoFocus
+        />
+        {query && (
+          <InputRightElement>
+            <IconButton
+              aria-label="Clear search"
+              icon={<SmallCloseIcon />}
+              size="xs"
+              variant="ghost"
+              onClick={() => {
+                setQuery("");
+                searchInputRef.current?.focus();
+              }}
+            />
+          </InputRightElement>
+        )}
+      </InputGroup>
+
+      {trimmedQuery ? (
+        matches.length > 0 ? (
+          <>{matches.map((e) => renderLeafRow(e.id, rowCtx))}</>
+        ) : (
+          <Box py={6} textAlign="center">
+            <Text fontSize="sm" color="text.secondary" fontWeight="500">
+              No settings match &ldquo;{trimmedQuery}&rdquo;
+            </Text>
+          </Box>
+        )
+      ) : (
+        <>
+          {/* Appearance — first row, themed picker entry */}
+          {renderLeafRow("appearance", rowCtx)}
+
+          {/* Security group */}
+          <SettingsRow
+            title="Security"
+            subtitle="Password, agent access, auto-lock"
+            icon={<ShieldIcon boxSize={5} />}
+            iconBg="accent.highlight"
+            iconColor="accentFg.highlight"
+            cornerAccent="highlight"
+            showChevron
+            onClick={() => setTab("security")}
           />
 
-          <HStack justify="space-between">
-            <HStack spacing={3}>
-              <Box p={2} bg={passwordType === "agent" ? "gray.300" : "bauhaus.yellow"}>
-                <LockIcon boxSize={4} color={passwordType === "agent" ? "gray.400" : "bauhaus.black"} />
-              </Box>
-              <Box>
-                <Text fontWeight="700" color={passwordType === "agent" ? "gray.400" : "text.primary"}>
-                  Change Password
-                </Text>
-                <Text fontSize="xs" color={passwordType === "agent" ? "text.secondary" : "text.secondary"} fontWeight="500">
-                  {passwordType === "agent"
-                    ? "Unlock with master password to access"
-                    : "Update your encryption password"}
-                </Text>
-              </Box>
-            </HStack>
-            {passwordType !== "agent" && (
-              <Box bg="bauhaus.black" p={1}>
-                <ChevronRightIcon color="bauhaus.white" />
-              </Box>
-            )}
-          </HStack>
-        </Box>
+          {/* Chain RPCs — top-level single entry */}
+          {renderLeafRow("chains", rowCtx)}
 
-      {/* Agent Password Section */}
-      <Box
-        bg="bauhaus.white"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="4px 4px 0px 0px #121212"
-        p={4}
-        cursor="pointer"
-        onClick={() => setTab("agentPassword")}
-        _hover={{
-          transform: "translateY(-2px)",
-          boxShadow: "6px 6px 0px 0px #121212",
-        }}
-        _active={{
-          transform: "translate(2px, 2px)",
-          boxShadow: "none",
-        }}
-        transition="all 0.2s ease-out"
-        position="relative"
-      >
-        {/* Corner decoration */}
-        <Box
-          position="absolute"
-          top="-3px"
-          right="-3px"
-          w="8px"
-          h="8px"
-          bg={isAgentPasswordEnabled ? "bauhaus.blue" : "gray.300"}
-          border="2px solid"
-          borderColor="bauhaus.black"
-        />
-
-        <HStack justify="space-between">
-          <HStack spacing={3}>
-            <Box p={2} bg={isAgentPasswordEnabled ? "bauhaus.blue" : "gray.200"}>
-              <AgentIcon boxSize={4} color={isAgentPasswordEnabled ? "white" : "gray.600"} />
-            </Box>
-            <Box>
-              <HStack spacing={2}>
-                <Text fontWeight="700" color="text.primary">
-                  Agent Password
-                </Text>
-                <Badge
-                  bg={isAgentPasswordEnabled ? "bauhaus.blue" : "gray.200"}
-                  color={isAgentPasswordEnabled ? "white" : "gray.600"}
-                  border="2px solid"
-                  borderColor="bauhaus.black"
-                  fontSize="xs"
-                  fontWeight="700"
-                >
-                  {isAgentPasswordEnabled ? "ON" : "OFF"}
-                </Badge>
-              </HStack>
-              <Text fontSize="xs" color="text.secondary" fontWeight="500">
-                Allow AI agents to unlock wallet
-              </Text>
-            </Box>
-          </HStack>
-          <Box bg="bauhaus.black" p={1}>
-            <ChevronRightIcon color="bauhaus.white" />
-          </Box>
-        </HStack>
-      </Box>
-
-      {/* Auto-Lock Settings Section */}
-      <Box
-        bg="bauhaus.white"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="4px 4px 0px 0px #121212"
-        p={4}
-        cursor="pointer"
-        onClick={() => setTab("autoLock")}
-        _hover={{
-          transform: "translateY(-2px)",
-          boxShadow: "6px 6px 0px 0px #121212",
-        }}
-        _active={{
-          transform: "translate(2px, 2px)",
-          boxShadow: "none",
-        }}
-        transition="all 0.2s ease-out"
-        position="relative"
-      >
-        {/* Corner decoration */}
-        <Box
-          position="absolute"
-          top="-3px"
-          right="-3px"
-          w="8px"
-          h="8px"
-          bg="bauhaus.yellow"
-          border="2px solid"
-          borderColor="bauhaus.black"
-        />
-
-        <HStack justify="space-between">
-          <HStack spacing={3}>
-            <Box p={2} bg="bauhaus.yellow">
-              <TimeIcon boxSize={4} color="bauhaus.black" />
-            </Box>
-            <Box>
-              <Text fontWeight="700" color="text.primary">
-                Auto-Lock
-              </Text>
-              <Text fontSize="xs" color="text.secondary" fontWeight="500">
-                Configure wallet lock timeout
-              </Text>
-            </Box>
-          </HStack>
-          <Box bg="bauhaus.black" p={1}>
-            <ChevronRightIcon color="bauhaus.white" />
-          </Box>
-        </HStack>
-      </Box>
-
-      {/* Chain RPCs Section */}
-      <Box
-        bg="bauhaus.white"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="4px 4px 0px 0px #121212"
-        p={4}
-        cursor="pointer"
-        onClick={() => setTab("chains")}
-        _hover={{
-          transform: "translateY(-2px)",
-          boxShadow: "6px 6px 0px 0px #121212",
-        }}
-        _active={{
-          transform: "translate(2px, 2px)",
-          boxShadow: "none",
-        }}
-        transition="all 0.2s ease-out"
-        position="relative"
-      >
-        {/* Corner decoration */}
-        <Box
-          position="absolute"
-          top="-3px"
-          right="-3px"
-          w="8px"
-          h="8px"
-          bg="bauhaus.black"
-          border="2px solid"
-          borderColor="bauhaus.black"
-        />
-
-        <HStack justify="space-between">
-          <HStack spacing={3}>
-            <Box p={2} bg="bauhaus.black">
-              <Text fontSize="lg">⛓️</Text>
-            </Box>
-            <Box>
-              <Text fontWeight="700" color="text.primary">
-                Chain RPCs
-              </Text>
-              <Text fontSize="xs" color="text.secondary" fontWeight="500">
-                Configure network RPC endpoints
-              </Text>
-            </Box>
-          </HStack>
-          <Box bg="bauhaus.black" p={1}>
-            <ChevronRightIcon color="bauhaus.white" />
-          </Box>
-        </HStack>
-      </Box>
-
-      {/* Clear Transaction History Section */}
-      <Box
-        bg="bauhaus.white"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="4px 4px 0px 0px #121212"
-        p={4}
-        cursor="pointer"
-        onClick={onDeleteModalOpen}
-        _hover={{
-          transform: "translateY(-2px)",
-          boxShadow: "6px 6px 0px 0px #121212",
-        }}
-        _active={{
-          transform: "translate(2px, 2px)",
-          boxShadow: "none",
-        }}
-        transition="all 0.2s ease-out"
-        position="relative"
-      >
-        {/* Corner decoration */}
-        <Box
-          position="absolute"
-          top="-3px"
-          right="-3px"
-          w="8px"
-          h="8px"
-          bg="bauhaus.red"
-          border="2px solid"
-          borderColor="bauhaus.black"
-        />
-
-        <HStack justify="space-between">
-          <HStack spacing={3}>
-            <Box p={2} bg="bauhaus.red">
-              <DeleteIcon boxSize={4} color="white" />
-            </Box>
-            <Box>
-              <Text fontWeight="700" color="text.primary">
-                Clear Transaction History
-              </Text>
-              <Text fontSize="xs" color="text.secondary" fontWeight="500">
-                Remove all transaction records
-              </Text>
-            </Box>
-          </HStack>
-        </HStack>
-      </Box>
-
-      {/* Reset Nonce Cache Section */}
-      <Box
-        bg="bauhaus.white"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="4px 4px 0px 0px #121212"
-        p={4}
-        cursor="pointer"
-        onClick={handleResetNonce}
-        _hover={{
-          transform: "translateY(-2px)",
-          boxShadow: "6px 6px 0px 0px #121212",
-        }}
-        _active={{
-          transform: "translate(2px, 2px)",
-          boxShadow: "none",
-        }}
-        transition="all 0.2s ease-out"
-        position="relative"
-      >
-        <Box
-          position="absolute"
-          top="-3px"
-          right="-3px"
-          w="8px"
-          h="8px"
-          bg="bauhaus.blue"
-          border="2px solid"
-          borderColor="bauhaus.black"
-        />
-        <HStack justify="space-between">
-          <HStack spacing={3}>
-            <Box p={2} bg="bauhaus.blue">
-              <RepeatIcon boxSize={4} color="white" />
-            </Box>
-            <Box>
-              <Text fontWeight="700" color="text.primary">
-                Reset Nonce Cache
-              </Text>
-              <Text fontSize="xs" color="text.secondary" fontWeight="500">
-                Fix stuck transactions from nonce conflicts
-              </Text>
-            </Box>
-          </HStack>
-        </HStack>
-      </Box>
-
-      {/* Clear Chat History Section */}
-      <Box
-        bg="bauhaus.white"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="4px 4px 0px 0px #121212"
-        p={4}
-        cursor="pointer"
-        onClick={onChatDeleteModalOpen}
-        _hover={{
-          transform: "translateY(-2px)",
-          boxShadow: "6px 6px 0px 0px #121212",
-        }}
-        _active={{
-          transform: "translate(2px, 2px)",
-          boxShadow: "none",
-        }}
-        transition="all 0.2s ease-out"
-        position="relative"
-      >
-        {/* Corner decoration */}
-        <Box
-          position="absolute"
-          top="-3px"
-          right="-3px"
-          w="8px"
-          h="8px"
-          bg="bauhaus.red"
-          border="2px solid"
-          borderColor="bauhaus.black"
-          borderRadius="full"
-        />
-
-        <HStack justify="space-between">
-          <HStack spacing={3}>
-            <Box p={2} bg="bauhaus.red">
-              <ChatIcon boxSize={4} color="white" />
-            </Box>
-            <Box>
-              <Text fontWeight="700" color="text.primary">
-                Clear Chat History
-              </Text>
-              <Text fontSize="xs" color="text.secondary" fontWeight="500">
-                Remove all chat conversations
-              </Text>
-            </Box>
-          </HStack>
-        </HStack>
-      </Box>
+          {/* Data group */}
+          <SettingsRow
+            title="Data"
+            subtitle="Clear history, reset nonce cache"
+            icon={<DatabaseIcon boxSize={5} />}
+            iconBg="accent.primary"
+            iconColor="accentFg.primary"
+            cornerAccent="primary"
+            showChevron
+            onClick={() => setTab("data")}
+          />
+        </>
+      )}
 
       {/* Delete Transaction History Confirmation Modal */}
       <Modal isOpen={isDeleteModalOpen} onClose={onDeleteModalClose} isCentered>
-        <ModalOverlay bg="blackAlpha.800" />
-        <ModalContent
-          bg="bauhaus.white"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="8px 8px 0px 0px #121212"
-          mx={4}
-          borderRadius="0"
-        >
+        <ModalOverlay bg="surface.overlay" />
+        <ModalContent mx={4}>
           <ModalHeader
-            color="bauhaus.black"
+            color="fg.primary"
             fontWeight="900"
             fontSize="md"
-            textTransform="uppercase"
-            borderBottom="3px solid"
-            borderColor="bauhaus.black"
+            borderBottomWidth="1px"
+            borderColor="border.subtle"
           >
             Clear Transaction History?
           </ModalHeader>
@@ -585,7 +351,7 @@ function Settings({
               This will permanently delete all transaction records. This action cannot be undone.
             </Text>
           </ModalBody>
-          <ModalFooter gap={2} borderTop="3px solid" borderColor="bauhaus.black">
+          <ModalFooter gap={2} borderTopWidth="1px" borderColor="border.subtle">
             <Button variant="secondary" size="sm" onClick={onDeleteModalClose}>
               Cancel
             </Button>
@@ -602,22 +368,14 @@ function Settings({
 
       {/* Delete Chat History Confirmation Modal */}
       <Modal isOpen={isChatDeleteModalOpen} onClose={onChatDeleteModalClose} isCentered>
-        <ModalOverlay bg="blackAlpha.800" />
-        <ModalContent
-          bg="bauhaus.white"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="8px 8px 0px 0px #121212"
-          mx={4}
-          borderRadius="0"
-        >
+        <ModalOverlay bg="surface.overlay" />
+        <ModalContent mx={4}>
           <ModalHeader
-            color="bauhaus.black"
+            color="fg.primary"
             fontWeight="900"
             fontSize="md"
-            textTransform="uppercase"
-            borderBottom="3px solid"
-            borderColor="bauhaus.black"
+            borderBottomWidth="1px"
+            borderColor="border.subtle"
           >
             Clear Chat History?
           </ModalHeader>
@@ -626,7 +384,7 @@ function Settings({
               This will permanently delete all chat conversations. This action cannot be undone.
             </Text>
           </ModalBody>
-          <ModalFooter gap={2} borderTop="3px solid" borderColor="bauhaus.black">
+          <ModalFooter gap={2} borderTopWidth="1px" borderColor="border.subtle">
             <Button variant="secondary" size="sm" onClick={onChatDeleteModalClose}>
               Cancel
             </Button>
@@ -644,7 +402,7 @@ function Settings({
       {/* Spacer to push footer to bottom */}
       <Box flex="1" />
 
-      <Box h="3px" bg="bauhaus.black" w="full" />
+      <Box h="3px" bg="border.default" w="full" />
 
       <HStack spacing={1} justify="center">
         <Text fontSize="sm" color="text.tertiary" fontWeight="500">
@@ -654,9 +412,9 @@ function Settings({
           display="flex"
           alignItems="center"
           gap={1}
-          color="bauhaus.blue"
+          color="accent.secondary"
           fontWeight="700"
-          _hover={{ color: "bauhaus.red" }}
+          _hover={{ color: "accent.primary" }}
           onClick={() => {
             chrome.tabs.create({ url: TWITTER_URL });
           }}
@@ -678,5 +436,9 @@ function Settings({
     </VStack>
   );
 }
+
+// LEAF_ENTRIES is exported from registry for any external consumer that needs
+// to enumerate settings; re-export for backwards compatibility if needed.
+export { LEAF_ENTRIES };
 
 export default memo(Settings);

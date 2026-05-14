@@ -19,7 +19,7 @@ import {
   Image,
   Spinner,
 } from "@chakra-ui/react";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
 import SeedPhraseSetup from "@/components/SeedPhraseSetup";
 import {
   ViewIcon,
@@ -40,6 +40,7 @@ import {
 } from "@/components/shared/AccountTypeIcons";
 import PrivateKeyInput from "@/components/shared/PrivateKeyInput";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
+import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { isResolvableName } from "@/lib/ensUtils";
 
 type AccountType = "bankr" | "privateKey" | "seedPhrase" | "impersonator";
@@ -63,7 +64,7 @@ interface AddAccountProps {
 }
 
 function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
 
   const [accountType, setAccountType] = useState<AccountType>("privateKey");
   const [privateKey, setPrivateKey] = useState("");
@@ -99,6 +100,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
     isValid: impersonatorIsValid,
     error: impersonatorResolverError,
   } = useAddressResolver(impersonatorAddress);
+  const cachedImpersonatorAvatar = useCachedAvatarSrc(impersonatorAvatar);
 
   // Check existing accounts and seed groups on mount
   useEffect(() => {
@@ -387,7 +389,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
   }
 
   return (
-    <Box p={4} minH="100%" bg="bg.base">
+    <Box p={4} h="100%" overflowY="auto" bg="surface.base">
       <VStack spacing={4} align="stretch">
         {/* Header */}
         <HStack spacing={3}>
@@ -411,10 +413,11 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
 
         {/* Account Type Selection */}
         <Box
-          bg="bauhaus.white"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
+          bg="surface.raised"
+          border="2px solid"
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
           p={4}
         >
           <Text
@@ -434,21 +437,23 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
               <Box
                 as="label"
                 p={3}
-                bg={accountType === "privateKey" ? "bg.muted" : "transparent"}
+                bg={accountType === "privateKey" ? "surface.sunken" : "transparent"}
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
+                borderRadius="md"
                 cursor="pointer"
-                _hover={{ bg: "bg.muted" }}
+                _hover={{ bg: "surface.raisedHover" }}
               >
                 <HStack spacing={3}>
                   <Radio value="privateKey" colorScheme="yellow" />
                   <Box
-                    bg="bauhaus.yellow"
+                    bg="accent.highlight"
                     border="2px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
+                    borderRadius="sm"
                     p={1}
                   >
-                    <KeyIcon boxSize="16px" color="bauhaus.black" />
+                    <KeyIcon boxSize="16px" color="accentFg.highlight" />
                   </Box>
                   <VStack align="start" spacing={0}>
                     <Text fontSize="sm" fontWeight="700" color="text.primary">
@@ -464,21 +469,23 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
               <Box
                 as="label"
                 p={3}
-                bg={accountType === "seedPhrase" ? "bg.muted" : "transparent"}
+                bg={accountType === "seedPhrase" ? "surface.sunken" : "transparent"}
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
+                borderRadius="md"
                 cursor="pointer"
-                _hover={{ bg: "bg.muted" }}
+                _hover={{ bg: "surface.raisedHover" }}
               >
                 <HStack spacing={3}>
                   <Radio value="seedPhrase" colorScheme="red" />
                   <Box
-                    bg="bauhaus.red"
+                    bg="accent.primary"
                     border="2px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
+                    borderRadius="sm"
                     p={1}
                   >
-                    <SeedIcon boxSize="16px" color="bauhaus.white" />
+                    <SeedIcon boxSize="16px" color="accentFg.primary" />
                   </Box>
                   <VStack align="start" spacing={0}>
                     <Text fontSize="sm" fontWeight="700" color="text.primary">
@@ -494,12 +501,13 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
               <Box
                 as="label"
                 p={3}
-                bg={accountType === "bankr" ? "bg.muted" : "transparent"}
+                bg={accountType === "bankr" ? "surface.sunken" : "transparent"}
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
+                borderRadius="md"
                 cursor={hasBankrAccount ? "not-allowed" : "pointer"}
                 opacity={hasBankrAccount ? 0.5 : 1}
-                _hover={hasBankrAccount ? {} : { bg: "bg.muted" }}
+                _hover={hasBankrAccount ? {} : { bg: "surface.raisedHover" }}
                 onClick={(e) => {
                   if (hasBankrAccount) {
                     e.preventDefault();
@@ -514,12 +522,13 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                     isDisabled={hasBankrAccount}
                   />
                   <Box
-                    bg="bauhaus.blue"
+                    bg="accent.secondary"
                     border="2px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
+                    borderRadius="sm"
                     p={1}
                   >
-                    <RobotIcon boxSize="16px" color="white" />
+                    <RobotIcon boxSize="16px" color="accentFg.secondary" />
                   </Box>
                   <VStack align="start" spacing={0}>
                     <Text fontSize="sm" fontWeight="700" color="text.primary">
@@ -529,7 +538,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                       Use Bankr API for transactions
                     </Text>
                     {hasBankrAccount && (
-                      <Text fontSize="xs" color="bauhaus.red" fontWeight="700">
+                      <Text fontSize="xs" color="chart.negative" fontWeight="700">
                         BankrAPI already added
                       </Text>
                     )}
@@ -539,21 +548,23 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
               <Box
                 as="label"
                 p={3}
-                bg={accountType === "impersonator" ? "bg.muted" : "transparent"}
+                bg={accountType === "impersonator" ? "surface.sunken" : "transparent"}
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
+                borderRadius="md"
                 cursor="pointer"
-                _hover={{ bg: "bg.muted" }}
+                _hover={{ bg: "surface.raisedHover" }}
               >
                 <HStack spacing={3}>
                   <Radio value="impersonator" colorScheme="green" />
                   <Box
-                    bg="bauhaus.green"
+                    bg="status.success.fg"
                     border="2px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
+                    borderRadius="sm"
                     p={1}
                   >
-                    <EyeIcon boxSize="16px" color="bauhaus.black" />
+                    <EyeIcon boxSize="16px" color="status.success.bg" />
                   </Box>
                   <VStack align="start" spacing={0}>
                     <Text fontSize="sm" fontWeight="700" color="text.primary">
@@ -572,10 +583,11 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
         {/* Private Key Input */}
         {accountType === "privateKey" && (
           <Box
-            bg="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="surface.raised"
+            border="2px solid"
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={4}
           >
             <PrivateKeyInput
@@ -593,10 +605,11 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
         {/* Seed Phrase: Existing Groups + Derive */}
         {accountType === "seedPhrase" && seedGroups.length > 0 && (
           <Box
-            bg="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="surface.raised"
+            border="2px solid"
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={4}
           >
             <Text
@@ -614,29 +627,30 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                   key={group.id}
                   p={3}
                   border="2px solid"
-                  borderColor="bauhaus.black"
-                  bg="bg.muted"
+                  borderColor="border.default"
+                  borderRadius="md"
+                  bg="surface.sunken"
                 >
                   <HStack justify="space-between" align="center">
                     <HStack spacing={2}>
                       <Box
-                        bg="bauhaus.red"
+                        bg="accent.primary"
                         border="2px solid"
-                        borderColor="bauhaus.black"
+                        borderColor="border.default"
+                        borderRadius="sm"
                         p={1}
                       >
-                        <SeedIcon boxSize="14px" color="bauhaus.white" />
+                        <SeedIcon boxSize="14px" color="accentFg.primary" />
                       </Box>
                       <Text fontSize="sm" fontWeight="700" color="text.primary">
                         {group.name}
                       </Text>
                       <Badge
-                        bg="bauhaus.black"
-                        color="bauhaus.white"
+                        bg="fg.primary"
+                        color="surface.raised"
                         fontSize="xs"
                         fontWeight="700"
                         px={2}
-                        borderRadius={0}
                       >
                         {group.accountCount}{" "}
                         {group.accountCount === 1 ? "account" : "accounts"}
@@ -673,7 +687,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
             </VStack>
 
             <HStack my={4} align="center">
-              <Divider borderColor="bauhaus.black" />
+              <Divider borderColor="border.default" />
               <Text
                 fontSize="xs"
                 color="text.secondary"
@@ -683,7 +697,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
               >
                 OR
               </Text>
-              <Divider borderColor="bauhaus.black" />
+              <Divider borderColor="border.default" />
             </HStack>
 
             <Button
@@ -691,7 +705,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
               w="full"
               size="sm"
               border="2px solid"
-              borderColor="bauhaus.black"
+              borderColor="border.default"
               fontWeight="700"
               onClick={() => setShowSeedSetup(true)}
             >
@@ -703,10 +717,11 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
         {/* Impersonator Address Input */}
         {accountType === "impersonator" && (
           <Box
-            bg="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="surface.raised"
+            border="2px solid"
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={4}
           >
             <FormControl isInvalid={!!errors.impersonatorAddress}>
@@ -724,7 +739,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                 {impersonatorAddress &&
                   (impersonatorIsResolving || impersonatorIsLoadingExtras) && (
                     <HStack spacing={1}>
-                      <Spinner size="xs" color="bauhaus.blue" />
+                      <Spinner size="xs" color="accent.secondary" />
                       <Text
                         fontSize="xs"
                         color="text.tertiary"
@@ -742,12 +757,12 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                     <HStack spacing={0.5}>
                       {impersonatorAvatar && (
                         <Image
-                          src={impersonatorAvatar}
+                          src={cachedImpersonatorAvatar || impersonatorAvatar}
                           alt="avatar"
                           boxSize="14px"
                           borderRadius="full"
                           border="1px solid"
-                          borderColor="bauhaus.black"
+                          borderColor="border.default"
                         />
                       )}
                       <Text
@@ -774,7 +789,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                         h="18px"
                         color={
                           impersonatorCopied
-                            ? "bauhaus.yellow"
+                            ? "accent.highlight"
                             : "text.tertiary"
                         }
                         onClick={async () => {
@@ -784,7 +799,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                           setImpersonatorCopied(true);
                           setTimeout(() => setImpersonatorCopied(false), 2000);
                         }}
-                        _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                        _hover={{ color: "accent.secondary", bg: "surface.sunken" }}
                       />
                       <IconButton
                         aria-label="View on explorer"
@@ -800,7 +815,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                             "_blank",
                           )
                         }
-                        _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                        _hover={{ color: "accent.secondary", bg: "surface.sunken" }}
                       />
                     </HStack>
                   )}
@@ -812,12 +827,12 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                     <HStack spacing={0.5}>
                       {impersonatorAvatar && (
                         <Image
-                          src={impersonatorAvatar}
+                          src={cachedImpersonatorAvatar || impersonatorAvatar}
                           alt="avatar"
                           boxSize="14px"
                           borderRadius="full"
                           border="1px solid"
-                          borderColor="bauhaus.black"
+                          borderColor="border.default"
                         />
                       )}
                       <Text
@@ -842,13 +857,10 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                     }));
                 }}
                 fontFamily="mono"
-                border="3px solid"
-                borderColor={
-                  impersonatorAddress &&
+                isInvalid={
+                  !!impersonatorAddress &&
                   !impersonatorIsResolving &&
                   !impersonatorIsValid
-                    ? "bauhaus.red"
-                    : undefined
                 }
               />
               {impersonatorAddress &&
@@ -857,25 +869,26 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                 !errors.impersonatorAddress && (
                   <Text
                     fontSize="xs"
-                    color="bauhaus.red"
+                    color="chart.negative"
                     fontWeight="700"
                     mt={1}
                   >
                     {impersonatorResolverError || "Invalid address or name"}
                   </Text>
                 )}
-              <FormErrorMessage color="bauhaus.red" fontWeight="700">
+              <FormErrorMessage color="chart.negative" fontWeight="700">
                 {errors.impersonatorAddress}
               </FormErrorMessage>
             </FormControl>
             <Box
               mt={3}
               p={2}
-              bg="bauhaus.yellow"
+              bg="status.warning.bg"
               border="2px solid"
-              borderColor="bauhaus.black"
+              borderColor="status.warning.border"
+              borderRadius="md"
             >
-              <Text fontSize="xs" color="bauhaus.black" fontWeight="700">
+              <Text fontSize="xs" color="status.warning.fg" fontWeight="700">
                 View-only mode: You can view transactions and signatures but
                 cannot sign or send.
               </Text>
@@ -886,10 +899,11 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
         {/* Bankr API Key and Address Input */}
         {accountType === "bankr" && (
           <Box
-            bg="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="surface.raised"
+            border="2px solid"
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={4}
           >
             <VStack spacing={4} align="stretch">
@@ -931,7 +945,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                     />
                   </InputRightElement>
                 </InputGroup>
-                <FormErrorMessage color="bauhaus.red" fontWeight="700">
+                <FormErrorMessage color="chart.negative" fontWeight="700">
                   {errors.bankrApiKey}
                 </FormErrorMessage>
               </FormControl>
@@ -958,7 +972,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                   }}
                   fontFamily="mono"
                 />
-                <FormErrorMessage color="bauhaus.red" fontWeight="700">
+                <FormErrorMessage color="chart.negative" fontWeight="700">
                   {errors.bankrAddress}
                 </FormErrorMessage>
               </FormControl>
@@ -969,10 +983,11 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
         {/* Display Name (Optional) - not shown for seed phrase */}
         {accountType !== "seedPhrase" && (
           <Box
-            bg="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="surface.raised"
+            border="2px solid"
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={4}
           >
             <FormControl>
@@ -996,13 +1011,14 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
         {/* Security Warning for PK */}
         {accountType === "privateKey" && (
           <Box
-            bg="bauhaus.yellow"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="status.warning.bg"
+            border="2px solid"
+            borderColor="status.warning.border"
+            borderRadius="lg"
+            boxShadow="card"
             p={3}
           >
-            <Text fontSize="sm" color="bauhaus.black" fontWeight="700">
+            <Text fontSize="sm" color="status.warning.fg" fontWeight="700">
               Your private key will be encrypted and stored locally. Never share
               it with anyone.
             </Text>

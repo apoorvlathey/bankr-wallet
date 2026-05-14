@@ -68,13 +68,15 @@ Non-token addresses (routers, pools, factories) either revert on `balanceOf` (ca
 
 **Why override balance to 100,000 ETH?** So the call doesn't revert due to insufficient funds. The ETH delta calculation is still correct: `after - before = -(value sent) + (value received back)`. Gas is NOT included (eth_call doesn't consume gas — that's shown separately in the gas estimate).
 
+**Gotcha — checksum the address before passing to viem.** viem's `formatStateOverride` runs `getAddress(...)` on override map keys, while `formatTransactionRequest` leaves the tx `from` field untouched. If `accountAddress` arrives lowercase (typical for impersonator accounts pasted by the user), the JSON-RPC request goes out with mismatched casing — lowercase `from`, EIP-55 mixed-case override key — and some RPCs (Coinbase's `mainnet.base.org` proxy among them) reject it as `-32602 "Missing or invalid parameters"`. PK/Bankr accounts dodge this because their addresses are already stored checksummed. Always run `getAddress(accountAddress)` and `getAddress(tx.to)` at the top of `simulateAssetChanges` so both sides of the request use the same casing.
+
 #### Step 3: Resolve Token Metadata
 
 For each token with a non-zero balance change, we need `name`, `symbol`, `decimals`, `logoUrl`, and `priceUsd`. Three sources, in priority order:
 
 1. **Swap token list** (`getCachedTokenList`) — cached 24h from `walletchan.com/api/swap/token-list`. Has name, symbol, decimals, logoURI for ~1000 popular tokens per chain. Fastest and most reliable.
 
-2. **On-chain multicall** — for tokens not in the list, batch `name()`, `symbol()`, `decimals()` via Multicall3 (`0xcA11bde05977b3631167028862bE2a173976CA11`). Must pass `multicallAddress` explicitly since the viem client is created without a `chain` object.
+2. **Onchain multicall** — for tokens not in the list, batch `name()`, `symbol()`, `decimals()` via Multicall3 (`0xcA11bde05977b3631167028862bE2a173976CA11`). Must pass `multicallAddress` explicitly since the viem client is created without a `chain` object.
 
 3. **Known token logos** (`KNOWN_TOKEN_LOGOS`) — hardcoded map for tokens like WCHAN that aren't in the swap token list.
 
@@ -98,7 +100,7 @@ The simulation makes 3+ RPC calls in quick succession (alongside gas estimation)
 **Phase 2** — `AssetChangesDisplay` detects `metadataComplete === false` and calls `retryTokenMetadata` after 2.5 seconds. This function:
 
 1. Retries the token list lookup (may have cached since first attempt)
-2. Retries on-chain multicall for tokens still showing address-like symbols
+2. Retries onchain multicall for tokens still showing address-like symbols
 3. Retries price fetches for tokens missing USD values
 4. Merges updates into existing results (recomputes formatted amounts if decimals changed)
 
@@ -152,6 +154,50 @@ Inside `TransactionConfirmation.tsx`, the asset changes card sits between the tr
 - Collapsible (expanded by default)
 - Skipped for contract deployments (no `to` address)
 - Hidden entirely if simulation fails (best-effort, non-blocking)
+
+## NFT Support (ERC-721 + ERC-1155)
+
+NFTs are detected and rendered separately from ERC-20 token changes — they use a count (not a `formatUnits` result) and show the specific tokenId + image preview where possible.
+
+### Why NFTs need special handling
+
+ERC-721 implements `balanceOf(address) returns (uint256)` (the count of NFTs owned), so the existing `_tryBalanceOf` path picks up `+1`/`-1` deltas. But ERC-721 has no `decimals()`, so the multicall fallback would set `decimals = 18` and `formatUnits(1n, 18)` rendered as `<0.000001` — the original bug. ERC-1155's `balanceOf(address, uint256)` requires a tokenId arg and just reverts under `_tryBalanceOf`, so it never even appeared.
+
+### How we capture NFTs now
+
+1. **Detection** — `detectNftStandards()` runs `supportsInterface(0x80ac58cd)` (ERC-721) and `supportsInterface(0xd9b67a26)` (ERC-1155) for every unknown candidate via a single Multicall3 call. Tokens already in the swap token list are skipped (they're guaranteed ERC-20s).
+
+2. **Receiver-hook capture (incoming NFTs)** — `TxSimulator.sol` implements `onERC721Received`, `onERC1155Received`, `onERC1155BatchReceived`, plus `supportsInterface` for the receiver interfaces. When the simulated call uses `safeTransferFrom` / `_safeMint`, those callbacks fire on the user's address (because the simulator bytecode is injected there), and each `(token, tokenId, amount, standard)` tuple is appended to a storage-backed `NftReceived[]`.
+
+3. **ERC-721 Enumerable fallback (`_enumerateNewErc721Tokens`)** — Some collections call plain `_mint` instead of `_safeMint` so the receiver hook never fires. After the inner call, for each candidate with a positive `balanceOf` delta the simulator walks `tokenOfOwnerByIndex(this, idx)` for indices `[balanceBefore, balanceAfter)` and pushes any tokenIds not already captured by the hook. Bounded to 50 iterations per collection (so a runaway ERC-20 with a colossal delta can't loop forever) and breaks immediately when the contract isn't Enumerable (the staticcall just reverts). Catches Uniswap V3's NonfungiblePositionManager.
+
+4. **`nextTokenId()` fallback (`_enumerateViaNextTokenId`)** — Counter-based ERC-721s like **Uniswap V4 PositionManager** have neither receiver hook nor Enumerable. They expose `nextTokenId() returns (uint256)`, an incrementing counter advanced on every `_mint`. Before the inner call we snapshot `nextTokenId()` for every candidate (returning a sentinel for contracts that don't expose it). After the call, for each candidate with positive ERC-721 delta and an advanced counter, we walk `[nextBefore, nextAfter)` calling `ownerOf(id)` and push every id currently owned by the user. This catches contracts that mint via `_mint` AND don't implement Enumerable. Same 50-iteration cap.
+
+5. **In-simulator tokenURI capture (`_captureTokenUris`)** — After the call finishes and all NFT entries are populated (via hook + Enumerable + nextTokenId paths), the simulator staticcalls `tokenURI(id)` (ERC-721) or `uri(id)` (ERC-1155) for every entry and stores the **raw return bytes** in the `NftReceived.tokenUriRaw` field. This is critical for state-dependent onchain metadata (Uniswap V3/V4 position SVGs render the current pool tick + price range — querying `tokenURI` *after* `eth_call` returns would give the pre-tx state because the chain doesn't actually change). TS decodes the raw bytes via `decodeAbiParameters([{type:"string"}], raw)`.
+
+6. **URI resolution** — `enrichReceivedNfts()` decodes each `tokenUriRaw` into a string and feeds it to `resolveNftMetadata()`, which handles:
+   - `data:application/json;base64,...` and `data:application/json,...` (synchronous)
+   - `data:image/...` (returned directly)
+   - `ipfs://...` (rewritten to `https://ipfs.io/ipfs/`)
+   - `https://...` / `http://...` (5-second timeout, `referrerPolicy: "no-referrer"`, `credentials: "omit"`)
+   - JSON metadata fields: `image`, `image_url`, `imageUrl`, `image_data`, `animation_url` (first non-empty wins)
+   - Inline SVG markup → wrapped as `data:image/svg+xml;utf8,...`
+
+7. **Outgoing NFTs / non-safe transfers** — These don't trigger the receiver callbacks. We fall back to the `balanceOf` delta and show `±N` for the collection without specific tokenIds (the `NftAssetInfo.tokenId` field is `null`). For incoming non-safe mints we still get tokenIds via the Enumerable fallback (step 3) or `nextTokenId()` fallback (step 4).
+
+8. **Two-phase metadata + retry** — Initial simulation returns immediately with `metadataLoading: true` for any NFT whose IPFS/HTTPS fetch hasn't completed yet. The retry loop in `AssetChangesDisplay` then calls `retryTokenMetadata`, which uses the **already-captured `tokenUri` string** (stored on the `AssetChange.nft` entry) — it does NOT re-query the contract, because the post-tx state is no longer available. NFT entries are excluded from the ERC-20 decimals/price retry path entirely.
+
+### Sandboxed image rendering
+
+NFT images render inside an iframe with `sandbox=""` (a unique opaque origin — no `allow-scripts`, no `allow-same-origin`, no DOM access to the parent). Even if a contract returns an SVG with embedded `<script>` tags or external resources, scripts cannot reach the extension's privileged context. The image src is also gated by `isSafeImageUrl()` (only `https://`, `http://`, `data:image/`), HTML-escaped via `htmlEscape()` before injection into `srcDoc`, and `<meta name="referrer" content="no-referrer">` suppresses the referrer header.
+
+### NFT-specific limitations
+
+- **Outgoing tokenId tracking** — We only know "user lost N from this collection" via the `balanceOf` delta. The specific tokenIds aren't recoverable without log access.
+- **ERC-1155 outgoing** — Single-arg `balanceOf` reverts and no callback fires for outgoing transfers, so ERC-1155 sends are invisible. (ERC-1155 *receives* via `_safeMint` / `safeTransferFrom` work fine.)
+- **Non-Enumerable + non-`nextTokenId` + non-safe-mint ERC-721s** — If a contract uses plain `_mint`, doesn't implement ERC-721 Enumerable, AND doesn't expose `nextTokenId()`, none of the three discovery paths work. We see the count delta but not the tokenId, so the row shows `±N` without an image. Most production ERC-721 contracts (Uniswap V3, Uniswap V4, OpenSea collections, ERC721A, etc.) hit at least one of these paths.
+- **Slow IPFS gateways** — `ipfs.io` is best-effort with a 5s timeout. Users will see the placeholder until the retry loop resolves the metadata (or all 3 retries are exhausted).
+- **Enumerable ordering assumption** — The fallback assumes ERC-721 Enumerable appends new tokens to the end of the owner's list (the OpenZeppelin/standard behavior). For collections that insert in the middle or reorder, the recovered tokenIds may be wrong. Standard implementations are safe.
 
 ## Batch Transaction Simulation
 

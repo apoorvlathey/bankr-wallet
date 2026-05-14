@@ -32,10 +32,10 @@ export function ChatInput({
 
   return (
     <Box
-      bg="bauhaus.white"
+      bg="surface.raised"
       border="2px solid"
-      borderColor="bauhaus.black"
-      boxShadow="3px 3px 0px 0px #121212"
+      borderColor="border.default"
+      boxShadow="card"
       p={1.5}
     >
       <HStack spacing={2}>
@@ -46,12 +46,12 @@ export function ChatInput({
           placeholder={placeholder}
           disabled={isLoading}
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           borderRadius="0"
-          bg="bg.base"
-          _hover={{ borderColor: "bauhaus.blue" }}
+          bg="surface.base"
+          _hover={{ borderColor: "accent.secondary" }}
           _focus={{
-            borderColor: "bauhaus.blue",
+            borderColor: "accent.secondary",
             boxShadow: "none",
           }}
           _disabled={{
@@ -66,13 +66,16 @@ export function ChatInput({
           icon={<ArrowForwardIcon />}
           onClick={handleSend}
           isDisabled={!input.trim() || isLoading}
-          bg="bauhaus.blue"
-          color="bauhaus.white"
+          bg="accent.secondary"
+          color="accentFg.secondary"
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           borderRadius="0"
           _hover={{
-            bg: "bauhaus.red",
+            // Bauhaus shifts blue → red on hover (accent.secondary →
+            // accent.primary). In Midnight that becomes cyan → indigo, which
+            // reads as the same "warm up on hover" beat in either palette.
+            bg: "accent.primary",
             transform: "translateY(-1px)",
           }}
           _active={{
@@ -81,7 +84,7 @@ export function ChatInput({
           _disabled={{
             opacity: 0.5,
             cursor: "not-allowed",
-            _hover: { bg: "bauhaus.blue", transform: "none" },
+            _hover: { bg: "accent.secondary", transform: "none" },
           }}
         />
       </HStack>

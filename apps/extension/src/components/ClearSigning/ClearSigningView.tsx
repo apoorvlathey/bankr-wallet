@@ -1,0 +1,781 @@
+/**
+ * ClearSigningView — renders an ERC-7730 descriptor for a tx or EIP-712 message.
+ *
+ * Mounts in:
+ *   - TransactionConfirmation.tsx          (kind="calldata")
+ *   - BatchTransactionConfirmation.tsx     (kind="calldata", per call)
+ *   - SignatureRequestConfirmation.tsx     (kind="eip712")
+ *
+ * Returns `null` until a descriptor is resolved and a format matches. Callers
+ * pass an `onResolved` callback so they can collapse the raw decoder beneath.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import {
+  Box,
+  HStack,
+  VStack,
+  Text,
+  Image,
+  IconButton,
+  Skeleton,
+  Divider,
+} from "@chakra-ui/react";
+import { CopyIcon, CheckIcon, ExternalLinkIcon } from "@chakra-ui/icons";
+import { blo } from "blo";
+
+import { ThemedCard } from "@/theme/primitives/ThemedCard";
+import { getChainConfig } from "@/constants/chainConfig";
+import { ethShLabelsUrl } from "@/constants/externalUrls";
+import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
+import type { Account } from "@/chrome/types";
+import { useEnsIdentities } from "@/hooks/useEnsIdentities";
+import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
+import { matchCalldataFormat, matchEip712Format, verifyDeployment } from "@/lib/clearSigning/matchDescriptor";
+import { applyFormat, type RenderedField, type RenderedValue } from "@/lib/clearSigning/applyFormat";
+import { decodeCalldataForDescriptor } from "@/lib/clearSigning/decodeForDescriptor";
+import { resolveDescriptor } from "@/lib/clearSigning/resolver";
+import type { Erc7730Descriptor } from "@/lib/clearSigning/types";
+
+interface CalldataProps {
+  kind: "calldata";
+  chainId: number;
+  to: string;
+  calldata: string;
+}
+
+interface Eip712Props {
+  kind: "eip712";
+  chainId: number;
+  verifyingContract: string;
+  typedData: {
+    primaryType: string;
+    types: Record<string, Array<{ name: string; type: string }>>;
+    message: Record<string, unknown>;
+  };
+}
+
+export type ClearSigningViewProps = (CalldataProps | Eip712Props) & {
+  /**
+   * Called once when the view determines whether it has anything to render.
+   * Parent can use this to collapse the raw decoder when `matched` is true.
+   */
+  onResolved?: (matched: boolean) => void;
+  /**
+   * When true, render nothing during descriptor resolution instead of the
+   * default skeleton card. Used by the batch summary view where we mount one
+   * `ClearSigningView` per call — most won't match, so the skeletons would
+   * appear briefly only to disappear. Quiet by default for parents that want
+   * to keep their layout stable until something is actually known.
+   */
+  hideLoadingSkeleton?: boolean;
+};
+
+interface MatchedState {
+  descriptor: Erc7730Descriptor;
+  fields: RenderedField[];
+  intent: string;
+  ownerName?: string;
+}
+
+export function ClearSigningView(props: ClearSigningViewProps) {
+  const { kind, chainId, hideLoadingSkeleton } = props;
+  const lookupAddress = kind === "calldata" ? props.to : props.verifyingContract;
+  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState<MatchedState | null>(null);
+  const { onResolved } = props;
+
+  // Stable signature for the effect dependency array — re-run whenever the
+  // payload we'd render against changes.
+  const calldataValue = kind === "calldata" ? props.calldata : "";
+  const typedDataKey =
+    kind === "eip712"
+      ? `${props.typedData?.primaryType || ""}:${JSON.stringify(props.typedData?.message || {})}`
+      : "";
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setState(null);
+
+    const tag = `[clear-signing] ${kind} ${chainId}:${lookupAddress}`;
+
+    (async () => {
+      console.log(`${tag} → resolving descriptor…`);
+      const { descriptor, enabled } = await resolveDescriptor({
+        chainId,
+        address: lookupAddress,
+        kind,
+      });
+
+      if (cancelled) return;
+      if (!enabled) {
+        console.log(`${tag} ✗ feature disabled in settings`);
+        setLoading(false);
+        onResolved?.(false);
+        return;
+      }
+      if (!descriptor) {
+        console.log(`${tag} ✗ no descriptor returned (404 / not in registry)`);
+        setLoading(false);
+        onResolved?.(false);
+        return;
+      }
+      console.log(`${tag} ✓ descriptor loaded`, descriptor);
+
+      // Validate the deployment context actually covers this (chainId, address).
+      if (!verifyDeployment(descriptor, kind, chainId, lookupAddress)) {
+        const deployments =
+          kind === "calldata"
+            ? descriptor.context?.contract?.deployments
+            : descriptor.context?.eip712?.deployments;
+        console.log(
+          `${tag} ✗ deployment mismatch — descriptor lists`,
+          deployments,
+          `but we asked for chain ${chainId} / ${lookupAddress}`,
+        );
+        setLoading(false);
+        onResolved?.(false);
+        return;
+      }
+
+      const matched =
+        kind === "calldata"
+          ? matchCalldataFormat(descriptor, props.calldata)
+          : matchEip712Format(descriptor, props.typedData);
+
+      if (!matched) {
+        const formatKeys = Object.keys(descriptor.display?.formats || {});
+        if (kind === "calldata") {
+          const selector = props.calldata.slice(0, 10).toLowerCase();
+          console.log(
+            `${tag} ✗ no format matches selector ${selector}. Descriptor has formats:`,
+            formatKeys,
+          );
+        } else {
+          console.log(
+            `${tag} ✗ no format matches primaryType "${props.typedData.primaryType}". Descriptor has formats:`,
+            formatKeys,
+          );
+        }
+        setLoading(false);
+        onResolved?.(false);
+        return;
+      }
+      console.log(`${tag} ✓ matched format`, matched.formatKey);
+
+      const data =
+        kind === "calldata"
+          ? decodeCalldataForDescriptor(matched.formatKey, props.calldata)
+          : props.typedData.message;
+
+      if (!data) {
+        console.log(
+          `${tag} ✗ decode failed for format "${matched.formatKey}" (calldata likely doesn't match the signature ABI)`,
+        );
+        setLoading(false);
+        onResolved?.(false);
+        return;
+      }
+      console.log(`${tag} ✓ decoded data`, data);
+
+      const fields = applyFormat(matched.format, { data, chainId });
+      if (fields.length === 0) {
+        console.log(`${tag} ✗ applyFormat produced 0 fields`);
+        setLoading(false);
+        onResolved?.(false);
+        return;
+      }
+      console.log(`${tag} ✓ rendering ${fields.length} field(s)`);
+
+      setState({
+        descriptor,
+        fields,
+        intent: matched.format.intent || matched.format.$id || "",
+        ownerName: descriptor.metadata?.owner,
+      });
+      setLoading(false);
+      onResolved?.(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, chainId, lookupAddress, calldataValue, typedDataKey, onResolved]);
+
+  if (loading) {
+    if (hideLoadingSkeleton) return null;
+    return (
+      <ThemedCard variant="default" weight="thin" p={4} bg="surface.accentTint">
+        <Skeleton height="10px" width="35%" mb={2} />
+        <Skeleton height="18px" width="70%" mb={3} />
+        <VStack align="stretch" spacing={2}>
+          <Skeleton height="12px" width="80%" />
+          <Skeleton height="12px" width="65%" />
+          <Skeleton height="12px" width="75%" />
+        </VStack>
+      </ThemedCard>
+    );
+  }
+
+  if (!state) return null;
+
+  // `surface.accentTint` is a step lighter than the default `surface.raised`
+  // used by the surrounding cards (ERC20 approval, Origin/From info). Quietly
+  // draws the eye to the human-readable intent without a colored wash — neutral
+  // whitish lift in Midnight, soft warm cream in Bauhaus.
+  return (
+    <ThemedCard variant="default" weight="thin" p={3} bg="surface.accentTint">
+      {/* Header — title + small "via Owner" attribution sitting tight on the
+          same row. Owner name is the source of the human-readable copy, not a
+          safety claim, so it stays muted. */}
+      <HStack mb={2} align="baseline" spacing={2}>
+        <Text
+          fontSize="md"
+          color="fg.primary"
+          fontWeight="700"
+          lineHeight="1.2"
+          flex={1}
+          minW={0}
+        >
+          {state.intent || "Action"}
+        </Text>
+        {state.ownerName && (
+          <Text
+            fontSize="10px"
+            color="fg.muted"
+            fontWeight="600"
+            flexShrink={0}
+            whiteSpace="nowrap"
+          >
+            via {state.ownerName}
+          </Text>
+        )}
+      </HStack>
+
+      <Divider borderColor="border.default" mb={2.5} />
+
+      <VStack align="stretch" spacing={2}>
+        {state.fields.map((field, idx) => (
+          <FieldRow key={`${field.label}-${idx}`} field={field} chainId={chainId} />
+        ))}
+      </VStack>
+    </ThemedCard>
+  );
+}
+
+interface FieldRowProps {
+  field: RenderedField;
+  chainId: number;
+}
+
+function FieldRow({ field, chainId }: FieldRowProps) {
+  // Grouped fields (e.g. Permit2 `details.[]` iteration) — each item gets a
+  // numbered pill chip + a full-width rule so batched permits read as distinct
+  // sections without a nested card-in-card. Single-group case skips the header.
+  if (field.groups && field.groups.length > 0) {
+    const total = field.groups.length;
+    const itemLabel = field.label || "Item";
+    return (
+      <VStack align="stretch" spacing={3.5}>
+        {field.groups.map((group, gi) => (
+          <Box key={gi}>
+            {total > 1 && (
+              <HStack mb={2.5} spacing={2} align="center">
+                <HStack
+                  spacing={1}
+                  px={2}
+                  py="2px"
+                  borderRadius="full"
+                  bg="accent.secondary"
+                  flexShrink={0}
+                >
+                  <Text
+                    fontSize="10px"
+                    color="accentFg.secondary"
+                    fontWeight="800"
+                    lineHeight="1.2"
+                  >
+                    {gi + 1}
+                  </Text>
+                  <Text
+                    fontSize="10px"
+                    color="accentFg.secondary"
+                    fontWeight="700"
+                    opacity={0.75}
+                    lineHeight="1.2"
+                  >
+                    / {total}
+                  </Text>
+                </HStack>
+                <Text
+                  fontSize="10px"
+                  color="fg.secondary"
+                  fontWeight="700"
+                  textTransform="uppercase"
+                  letterSpacing="0.08em"
+                  flexShrink={0}
+                >
+                  {itemLabel}
+                </Text>
+                <Box flex={1} h="1px" bg="border.default" />
+              </HStack>
+            )}
+            <VStack align="stretch" spacing={2}>
+              {group.map((sub, si) => (
+                <FieldRow key={`${sub.label}-${si}`} field={sub} chainId={chainId} />
+              ))}
+            </VStack>
+          </Box>
+        ))}
+      </VStack>
+    );
+  }
+
+  // Always render label-left / value-right. Addresses display as a short
+  // 0x….0x form plus copy + explorer icons — narrow enough to live on the
+  // right; long ENS labels wrap inside the value column without breaking
+  // the layout because `minW={0}` lets the flex column shrink.
+  return (
+    <HStack align="start" spacing={3} justify="space-between" w="full">
+      <Text
+        fontSize="xs"
+        color="fg.secondary"
+        fontWeight="600"
+        flexShrink={0}
+        pt="1px"
+      >
+        {field.label || "—"}
+      </Text>
+      <Box flex="1" minW={0} textAlign="right">
+        {field.values.length === 0 ? (
+          <Text fontSize="xs" color="fg.muted">—</Text>
+        ) : (
+          <VStack align="end" spacing={0.5}>
+            {field.values.map((v, i) => (
+              <RenderedValueView key={i} value={v} chainId={chainId} />
+            ))}
+          </VStack>
+        )}
+      </Box>
+    </HStack>
+  );
+}
+
+function RenderedValueView({ value, chainId }: { value: RenderedValue; chainId: number }) {
+  switch (value.kind) {
+    case "raw":
+      return (
+        <Text fontSize="xs" fontFamily="mono" color="fg.primary" wordBreak="break-all">
+          {value.text}
+        </Text>
+      );
+    case "address":
+      return <AddressInline address={value.address} chainId={chainId} />;
+    case "tokenAmount":
+      return (
+        <TokenAmountInline
+          amountRaw={value.amountRaw}
+          tokenAddress={value.tokenAddress}
+          native={value.native}
+          chainId={chainId}
+        />
+      );
+    case "amount":
+      return <TokenAmountInline amountRaw={value.amountRaw} native chainId={chainId} />;
+    case "date":
+      return (
+        <Text fontSize="xs" color="fg.primary" fontWeight="600">
+          {formatTimestamp(value.timestamp)}
+        </Text>
+      );
+    case "unit": {
+      const formatted = formatUnit(value.raw, value.decimals);
+      const base = value.base || "";
+      return (
+        <Text fontSize="xs" fontFamily="mono" color="chart.numeric" fontWeight="600">
+          {value.prefix ? `${base}${formatted}` : `${formatted}${base}`}
+        </Text>
+      );
+    }
+    case "missing":
+      return (
+        <Text fontSize="xs" color="fg.muted">
+          (missing)
+        </Text>
+      );
+  }
+}
+
+function AddressInline({ address, chainId }: { address: string; chainId: number }) {
+  const [account, setAccount] = useState<Account | null>(null);
+  const [externalLabel, setExternalLabel] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const addresses = useMemo(() => [address], [address]);
+  const { identities } = useEnsIdentities(addresses);
+  const ens = identities.get(address.toLowerCase());
+  const cachedAvatar = useCachedAvatarSrc(ens?.avatar);
+
+  const explorerUrl = useMemo(() => {
+    const config = getChainConfig(chainId);
+    return config?.explorer ? `${config.explorer}/address/${address}` : null;
+  }, [address, chainId]);
+
+  // User-account lookup — if this address belongs to one of the user's saved
+  // wallets we'll show its displayName + the FromAccountDisplay-style avatar
+  // instead of the bare 0x form.
+  useEffect(() => {
+    if (!address?.startsWith("0x")) return;
+    let cancelled = false;
+    chrome.runtime.sendMessage(
+      { type: "getAccounts" },
+      (accounts: Account[] | null) => {
+        if (cancelled) return;
+        if (!accounts) return;
+        const match = accounts.find(
+          (a) => a.address.toLowerCase() === address.toLowerCase(),
+        );
+        setAccount(match || null);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
+
+  // External label (eth.sh) — only meaningful for addresses that are *not* one
+  // of the user's accounts (Permit2, routers, etc.). Skip the fetch when the
+  // account lookup has matched to keep noise out of the network panel.
+  useEffect(() => {
+    if (!address?.startsWith("0x")) return;
+    if (account) return;
+    let cancelled = false;
+    fetch(ethShLabelsUrl(address, chainId))
+      .then((r) => (r.ok ? r.json() : []))
+      .then((l) => {
+        if (cancelled) return;
+        if (Array.isArray(l) && l.length > 0) setExternalLabel(l[0]);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [address, chainId, account]);
+
+  const short = `${address.slice(0, 6)}...${address.slice(-4)}`;
+  const primaryLabel = account?.displayName || ens?.name || null;
+
+  // Avatar selection mirrors FromAccountDisplay's hierarchy so wallet
+  // accounts feel identical across surfaces: ENS avatar > Bankr icon for
+  // Bankr-typed accounts > blockie. External addresses skip the avatar
+  // entirely (we don't want to fabricate identity for strangers).
+  const avatar = (() => {
+    if (ens?.avatar) {
+      return (
+        <Image
+          src={cachedAvatar || ens.avatar}
+          alt="ENS avatar"
+          boxSize="22px"
+          minW="22px"
+          borderRadius="full"
+          objectFit="cover"
+          border="1px solid"
+          borderColor="border.subtle"
+        />
+      );
+    }
+    if (account?.type === "bankr") {
+      return (
+        <Image
+          src="/bankr-icon.png"
+          alt="Bankr account"
+          boxSize="22px"
+          minW="22px"
+          borderRadius="sm"
+          border="1px solid"
+          borderColor="border.subtle"
+        />
+      );
+    }
+    if (account) {
+      return (
+        <Image
+          src={blo(address as `0x${string}`)}
+          alt="Account avatar"
+          boxSize="22px"
+          minW="22px"
+          borderRadius="sm"
+          border="1px solid"
+          borderColor="border.subtle"
+        />
+      );
+    }
+    return null;
+  })();
+
+  const copyButton = (
+    <IconButton
+      aria-label="Copy"
+      icon={copied ? <CheckIcon boxSize="10px" /> : <CopyIcon boxSize="10px" />}
+      size="xs"
+      variant="ghost"
+      minW="14px"
+      h="14px"
+      color={copied ? "accent.highlight" : "fg.muted"}
+      onClick={async () => {
+        await navigator.clipboard.writeText(address);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+    />
+  );
+
+  const explorerButton = explorerUrl ? (
+    <IconButton
+      aria-label="Open in explorer"
+      icon={<ExternalLinkIcon boxSize="10px" />}
+      size="xs"
+      variant="ghost"
+      minW="14px"
+      h="14px"
+      color="fg.muted"
+      onClick={() => window.open(explorerUrl, "_blank")}
+    />
+  ) : null;
+
+  // When we have a primary label, render two stacked rows right-aligned:
+  //   row 1: avatar + resolved name + copy/explorer icons (the action row)
+  //   row 2: short 0x… form alone (quiet reference)
+  // Icons live with the name so the user's eye lands on the recognizable
+  // identity + actions together; the raw hex hangs below as supporting info.
+  if (primaryLabel) {
+    return (
+      <VStack align="end" spacing={0.5}>
+        <HStack spacing={1.5} align="center">
+          {avatar}
+          <Text fontSize="xs" color="fg.primary" fontWeight="700" noOfLines={1}>
+            {primaryLabel}
+          </Text>
+          {/* Inner HStack with spacing=0 — keeps copy + explorer visually
+              paired without inheriting the parent row's 1.5 gap. */}
+          <HStack spacing={0} align="center">
+            {copyButton}
+            {explorerButton}
+          </HStack>
+        </HStack>
+        <Text fontSize="2xs" color="fg.muted" fontFamily="mono" noOfLines={1}>
+          {short}
+        </Text>
+      </VStack>
+    );
+  }
+
+  // External address — single inline row with the short 0x… form, an
+  // optional eth.sh label, and the action icons.
+  return (
+    <HStack spacing={1} align="center" justify="flex-end">
+      <Text fontSize="xs" fontFamily="mono" color="accent.secondary" fontWeight="600">
+        {short}
+      </Text>
+      {externalLabel && (
+        <Text fontSize="10px" color="fg.secondary" fontWeight="700">
+          ({externalLabel})
+        </Text>
+      )}
+      <HStack spacing={0} align="center">
+        {copyButton}
+        {explorerButton}
+      </HStack>
+    </HStack>
+  );
+}
+
+interface TokenInfo {
+  symbol: string;
+  decimals: number;
+  logoUrl?: string;
+}
+
+function TokenLogo({ src, alt }: { src?: string; alt: string }) {
+  if (!src) return null;
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      boxSize="20px"
+      borderRadius="full"
+      fallback={<Box boxSize="20px" borderRadius="full" bg="bg.muted" />}
+    />
+  );
+}
+
+function TokenAmountInline({
+  amountRaw,
+  tokenAddress,
+  native,
+  chainId,
+}: {
+  amountRaw: string;
+  tokenAddress?: string;
+  native?: boolean;
+  chainId: number;
+}) {
+  const [info, setInfo] = useState<TokenInfo | null>(null);
+
+  useEffect(() => {
+    if (native || !tokenAddress) return;
+    let cancelled = false;
+    // Resolve metadata + logo from three sources in parallel:
+    //   1. onchain ERC-20 (canonical symbol / decimals — always works)
+    //   2. CoinGecko swap list (best logo source for popular tokens)
+    //   3. user's customTokens storage (logos for watchAsset-added tokens
+    //      that CoinGecko doesn't index)
+    // KNOWN_TOKEN_LOGOS is the final hardcoded fallback.
+    const infoPromise = new Promise<{
+      success: boolean;
+      data?: { symbol: string; decimals: number };
+    }>((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: "fetchTokenInfo", tokenAddress, chainId },
+        resolve,
+      );
+    });
+    const listPromise = new Promise<{
+      success: boolean;
+      data?: Array<{ address: string; logoURI: string }>;
+    }>((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: "fetchSwapTokenList", chainId },
+        resolve,
+      );
+    });
+    const customPromise = new Promise<{
+      success: boolean;
+      data?: { symbol: string; decimals: number; image?: string } | null;
+    }>((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: "lookupCustomToken", tokenAddress, chainId },
+        resolve,
+      );
+    });
+
+    Promise.all([infoPromise, listPromise, customPromise]).then(
+      ([infoRes, listRes, customRes]) => {
+        if (cancelled) return;
+        const addrLower = tokenAddress.toLowerCase();
+        const listEntry = listRes?.data?.find(
+          (t) => t.address.toLowerCase() === addrLower,
+        );
+        const custom = customRes?.data || null;
+
+        // Symbol/decimals: prefer onchain → fall back to custom-token entry
+        // (works even if the RPC read failed for some reason).
+        const symbol = infoRes?.data?.symbol ?? custom?.symbol;
+        const decimals = infoRes?.data?.decimals ?? custom?.decimals;
+        if (symbol === undefined || decimals === undefined) return;
+
+        setInfo({
+          symbol,
+          decimals,
+          // Logo priority: swap list → custom token's stored image →
+          // hardcoded fallback. Swap list is highest-quality when present.
+          logoUrl:
+            listEntry?.logoURI ||
+            custom?.image ||
+            KNOWN_TOKEN_LOGOS[addrLower] ||
+            undefined,
+        });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [tokenAddress, chainId, native]);
+
+  // Friendly amount color: `fg.primary` (white in Midnight, black in Bauhaus).
+  // Bumped to `lg` size — token amounts are the headline value the user needs
+  // to see at a glance. Logo and symbol scale up alongside so the trio reads
+  // as a single confident unit instead of three timid tokens.
+  if (native) {
+    const config = getChainConfig(chainId);
+    const symbol = config?.nativeCurrency?.symbol || "ETH";
+    const decimals = config?.nativeCurrency?.decimals ?? 18;
+    return (
+      <HStack spacing={2} justify="flex-end" align="center">
+        <Text fontSize="lg" color="fg.primary" fontWeight="700" lineHeight="1.1">
+          {formatUnit(amountRaw, decimals)}
+        </Text>
+        <Text fontSize="sm" color="fg.secondary" fontWeight="600">
+          {symbol}
+        </Text>
+      </HStack>
+    );
+  }
+
+  if (!info) {
+    return (
+      <Text fontSize="sm" fontFamily="mono" color="fg.muted">
+        {amountRaw}
+      </Text>
+    );
+  }
+
+  return (
+    <HStack spacing={2} justify="flex-end" align="center">
+      <Text fontSize="lg" color="fg.primary" fontWeight="700" lineHeight="1.1">
+        {formatUnit(amountRaw, info.decimals)}
+      </Text>
+      <TokenLogo src={info.logoUrl} alt={info.symbol} />
+      <Text fontSize="sm" color="fg.secondary" fontWeight="600">
+        {info.symbol}
+      </Text>
+    </HStack>
+  );
+}
+
+function formatUnit(raw: string, decimals: number): string {
+  if (decimals <= 0) return raw;
+  let big: bigint;
+  try {
+    big = BigInt(raw);
+  } catch {
+    return raw;
+  }
+  // Special-case max uint as "unlimited".
+  const MAX_UINT = (1n << 256n) - 1n;
+  if (big === MAX_UINT) return "unlimited";
+  const neg = big < 0n;
+  if (neg) big = -big;
+  const divisor = 10n ** BigInt(decimals);
+  const whole = big / divisor;
+  const frac = big % divisor;
+  if (frac === 0n) return `${neg ? "-" : ""}${whole.toString()}`;
+  let fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
+  // Cap to 8 fractional digits for display sanity.
+  if (fracStr.length > 8) fracStr = fracStr.slice(0, 8);
+  return `${neg ? "-" : ""}${whole.toString()}.${fracStr}`;
+}
+
+function formatTimestamp(ts: number): string {
+  if (!Number.isFinite(ts) || ts <= 0) return "—";
+  // Heuristic: values > 1e12 are already milliseconds.
+  const ms = ts > 1e12 ? ts : ts * 1000;
+  try {
+    const date = new Date(ms);
+    // "Jun 12, 2026 · 5:26 AM" — compact, scannable, no seconds noise.
+    const datePart = date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const timePart = date.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    return `${datePart} · ${timePart}`;
+  } catch {
+    return String(ts);
+  }
+}

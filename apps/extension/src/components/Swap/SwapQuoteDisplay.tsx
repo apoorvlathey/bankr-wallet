@@ -63,9 +63,18 @@ export default function SwapQuoteDisplay({
   })();
   const integratorFee = quote.fees?.integratorFee;
   const zeroExFee = quote.fees?.zeroExFee;
+
+  // Determine if fee is collected in sell or buy token
+  const isFeeInBuyToken = integratorFee
+    ? integratorFee.token.toLowerCase() === quote.buyToken.toLowerCase()
+    : false;
+  const feeTokenDecimals = isFeeInBuyToken ? buyTokenDecimals : sellTokenDecimals;
+  const feeTokenSymbol = isFeeInBuyToken ? buyTokenSymbol : sellTokenSymbol;
+  const feeBaseAmount = isFeeInBuyToken ? quote.buyAmount : quote.sellAmount;
+
   const walletFeePercent = integratorFee
     ? (
-        (parseFloat(integratorFee.amount) / parseFloat(quote.sellAmount)) *
+        (parseFloat(integratorFee.amount) / parseFloat(feeBaseAmount)) *
         100
       ).toFixed(1)
     : "0";
@@ -74,9 +83,10 @@ export default function SwapQuoteDisplay({
 
   return (
     <Box
-      bg="bg.muted"
-      border="3px solid"
-      borderColor="bauhaus.black"
+      bg="surface.sunken"
+      border="2px solid"
+      borderColor="border.default"
+      borderRadius="lg"
       px={3}
       py={2}
     >
@@ -117,7 +127,7 @@ export default function SwapQuoteDisplay({
           mt={2}
           pt={2}
           borderTop="1px solid"
-          borderColor="border.secondary"
+          borderColor="border.subtle"
         >
           {/* Wallet Fee — always show */}
           <VStack spacing={1} align="stretch">
@@ -130,9 +140,22 @@ export default function SwapQuoteDisplay({
               >
                 Wallet Fee
               </Text>
-              <Text fontSize="sm" fontWeight="500">
-                {walletFeePercent}%
-              </Text>
+              <VStack spacing={0} align="flex-end">
+                <Text fontSize="sm" fontWeight="500">
+                  {walletFeePercent}%
+                </Text>
+                {quote.isPremiumFee && (
+                  <Text
+                    fontSize="9px"
+                    fontWeight="800"
+                    textTransform="uppercase"
+                    color="chart.numeric"
+                    letterSpacing="0.5px"
+                  >
+                    ✨ sWCHAN Staker discount
+                  </Text>
+                )}
+              </VStack>
             </HStack>
             {(integratorFee || zeroExFee) && (
               <VStack spacing={0} align="stretch" pl={2}>
@@ -173,8 +196,8 @@ export default function SwapQuoteDisplay({
                         {item!.label}
                       </Text>
                       <Text fontSize="xs" fontWeight="500" color="text.tertiary">
-                        {formatAmount(item!.fee.amount, sellTokenDecimals)}{" "}
-                        {sellTokenSymbol}
+                        {formatAmount(item!.fee.amount, feeTokenDecimals)}{" "}
+                        {feeTokenSymbol}
                       </Text>
                     </HStack>
                   ))}
@@ -195,16 +218,15 @@ export default function SwapQuoteDisplay({
               >
                 Route
               </Text>
-              <VStack spacing={0} align="flex-end">
+              <VStack spacing={0.5} align="center">
                 {uniqueSources.map((source, i) => (
-                  <Box key={i}>
+                  <Box key={i} display="contents">
                     {i > 0 && (
                       <Text
                         fontSize="xs"
                         color="text.tertiary"
                         fontWeight="bold"
-                        textAlign="center"
-                        lineHeight="1.4"
+                        lineHeight="1"
                       >
                         ↓
                       </Text>
@@ -213,7 +235,8 @@ export default function SwapQuoteDisplay({
                       px={1.5}
                       py={0.5}
                       border="2px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
+                      borderRadius="md"
                       fontSize="xs"
                       fontWeight="700"
                       whiteSpace="nowrap"

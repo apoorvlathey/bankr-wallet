@@ -19,12 +19,14 @@ import {
   FormControl,
   FormLabel,
   Spinner,
+  Portal,
 } from "@chakra-ui/react";
 import { ChevronDownIcon, WarningIcon } from "@chakra-ui/icons";
 import { addCustomToken } from "@/chrome/customTokenStorage";
 import { useNetworks } from "@/contexts/NetworksContext";
 import ChainIcon from "@/components/ChainIcon";
-import { getVisibleChains } from "@/lib/chains";
+import { getVisibleChains, getResolvedChainByName } from "@/lib/chains";
+import { useStripTokens, useTheme } from "@/theme";
 
 interface AddTokenModalProps {
   isOpen: boolean;
@@ -73,9 +75,27 @@ export default function AddTokenModal({
       setError(null);
       setFetched(false);
       setSaving(false);
-      setSelectedChainId(chainList[0]?.chainId ?? 8453);
     }
-  }, [isOpen, chainList]);
+  }, [isOpen]);
+
+  // On open, default chain to the wallet's currently selected chain.
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    chrome.storage.sync.get("chainName").then(({ chainName }) => {
+      if (cancelled) return;
+      const activeChain = getResolvedChainByName(chainName, networksInfo);
+      const fallback = chainList[0]?.chainId ?? 8453;
+      const targetId =
+        activeChain && chainList.some((c) => c.chainId === activeChain.chainId)
+          ? activeChain.chainId
+          : fallback;
+      setSelectedChainId(targetId);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, networksInfo, chainList]);
 
   const fetchTokenInfo = useCallback(
     async (address: string, chainId: number) => {
@@ -161,32 +181,31 @@ export default function AddTokenModal({
 
   const selectedChain = chainList.find((c) => c.chainId === selectedChainId);
   const canSave = fetched && !isDuplicate && !loading && !saving && symbol && decimals;
+  const headerStrip = useStripTokens();
+  const { tokens } = useTheme();
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} isCentered size="sm">
-      <ModalOverlay bg="blackAlpha.700" />
-      <ModalContent
-        bg="bauhaus.white"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="6px 6px 0px 0px #121212"
-        borderRadius="none"
-        mx={4}
-      >
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      isCentered
+      size="sm"
+      scrollBehavior="inside"
+    >
+      <ModalOverlay bg="surface.overlay" />
+      <ModalContent mx={4} overflow="hidden" maxH="calc(100vh - 2rem)">
         <ModalHeader
-          bg="bauhaus.black"
-          color="bauhaus.white"
+          bg={headerStrip.bg}
+          color={headerStrip.fg}
           fontWeight="900"
           fontSize="md"
-          textTransform="uppercase"
-          letterSpacing="wider"
           py={2}
-          borderBottom="3px solid"
-          borderColor="bauhaus.black"
+          borderBottomWidth="1px"
+          borderColor="border.subtle"
         >
           Add Token
         </ModalHeader>
-        <ModalCloseButton color="bauhaus.white" top={1} />
+        <ModalCloseButton color={headerStrip.fg} top={1} />
         <ModalBody py={4} px={4}>
           <VStack spacing={4} align="stretch">
             {/* Chain selector */}
@@ -198,11 +217,13 @@ export default function AddTokenModal({
                 <MenuButton
                   as={Box}
                   cursor="pointer"
-                  border="2px solid"
-                  borderColor="bauhaus.black"
+                  border={tokens.borders.thin}
+                  borderColor="border.default"
+                  borderRadius="md"
+                  bg="surface.raised"
                   px={3}
                   py={2}
-                  _hover={{ bg: "bg.muted" }}
+                  _hover={{ bg: "surface.raisedHover" }}
                   transition="background 0.15s"
                 >
                   <HStack spacing={2} justify="space-between">
@@ -211,6 +232,7 @@ export default function AddTokenModal({
                         chainId={selectedChainId}
                         chainName={selectedChain?.name}
                         size="18px"
+                        withChip
                       />
                       <Text fontWeight="700" fontSize="sm">
                         {selectedChain?.name ?? `Chain ${selectedChainId}`}
@@ -219,39 +241,31 @@ export default function AddTokenModal({
                     <ChevronDownIcon />
                   </HStack>
                 </MenuButton>
-                <MenuList
-                  bg="bauhaus.white"
-                  border="3px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius={0}
-                  boxShadow="4px 4px 0px 0px #121212"
-                  maxH="200px"
-                  overflowY="auto"
-                  p={0}
-                  zIndex={10}
-                >
-                  {chainList.map((chain) => (
-                    <MenuItem
-                      key={chain.chainId}
-                      onClick={() => handleChainChange(chain.chainId)}
-                      bg={chain.chainId === selectedChainId ? "bg.muted" : "transparent"}
-                      _hover={{ bg: "bg.hover" }}
-                      px={3}
-                      py={2}
-                    >
-                      <HStack spacing={2}>
-                        <ChainIcon
-                          chainId={chain.chainId}
-                          chainName={chain.name}
-                          size="18px"
-                        />
-                        <Text fontWeight="700" fontSize="sm">
-                          {chain.name}
-                        </Text>
-                      </HStack>
-                    </MenuItem>
-                  ))}
-                </MenuList>
+                <Portal>
+                  <MenuList maxH="200px" overflowY="auto" p={0} zIndex="popover">
+                    {chainList.map((chain) => (
+                      <MenuItem
+                        key={chain.chainId}
+                        onClick={() => handleChainChange(chain.chainId)}
+                        bg={chain.chainId === selectedChainId ? "surface.raisedHover" : "transparent"}
+                        px={3}
+                        py={2}
+                      >
+                        <HStack spacing={2}>
+                          <ChainIcon
+                            chainId={chain.chainId}
+                            chainName={chain.name}
+                            size="18px"
+                            withChip
+                          />
+                          <Text fontWeight="700" fontSize="sm">
+                            {chain.name}
+                          </Text>
+                        </HStack>
+                      </MenuItem>
+                    ))}
+                  </MenuList>
+                </Portal>
               </Menu>
             </FormControl>
 
@@ -266,18 +280,13 @@ export default function AddTokenModal({
                 onChange={(e) => handleAddressChange(e.target.value)}
                 fontFamily="mono"
                 fontSize="sm"
-                border="2px solid"
-                borderColor="bauhaus.black"
-                borderRadius={0}
-                _hover={{ borderColor: "bauhaus.black" }}
-                _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
               />
             </FormControl>
 
             {/* Loading indicator */}
             {loading && (
               <HStack justify="center" py={2}>
-                <Spinner size="sm" color="bauhaus.blue" />
+                <Spinner size="sm" color="accent.secondary" />
                 <Text fontSize="xs" color="text.secondary">
                   Fetching token info...
                 </Text>
@@ -287,14 +296,15 @@ export default function AddTokenModal({
             {/* Error display */}
             {error && (
               <HStack
-                bg="red.50"
-                border="2px solid"
-                borderColor="bauhaus.red"
+                bg="status.error.bg"
+                border={tokens.borders.thin}
+                borderColor="status.error.border"
+                borderRadius="md"
                 px={3}
                 py={2}
               >
-                <WarningIcon color="bauhaus.red" boxSize="12px" />
-                <Text fontSize="xs" fontWeight="700" color="bauhaus.red">
+                <WarningIcon color="status.error.fg" boxSize="12px" />
+                <Text fontSize="xs" fontWeight="700" color="status.error.fg">
                   {error}
                 </Text>
               </HStack>
@@ -303,14 +313,15 @@ export default function AddTokenModal({
             {/* Duplicate warning */}
             {isDuplicate && (
               <HStack
-                bg="yellow.50"
-                border="2px solid"
-                borderColor="bauhaus.yellow"
+                bg="status.warning.bg"
+                border={tokens.borders.thin}
+                borderColor="status.warning.border"
+                borderRadius="md"
                 px={3}
                 py={2}
               >
-                <WarningIcon color="orange.500" boxSize="12px" />
-                <Text fontSize="xs" fontWeight="700" color="orange.600">
+                <WarningIcon color="status.warning.fg" boxSize="12px" />
+                <Text fontSize="xs" fontWeight="700" color="status.warning.fg">
                   This token is already in your holdings
                 </Text>
               </HStack>
@@ -327,11 +338,6 @@ export default function AddTokenModal({
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     fontSize="sm"
-                    border="2px solid"
-                    borderColor="bauhaus.black"
-                    borderRadius={0}
-                    _hover={{ borderColor: "bauhaus.black" }}
-                    _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
                   />
                 </FormControl>
                 <HStack spacing={3}>
@@ -343,11 +349,6 @@ export default function AddTokenModal({
                       value={symbol}
                       onChange={(e) => setSymbol(e.target.value)}
                       fontSize="sm"
-                      border="2px solid"
-                      borderColor="bauhaus.black"
-                      borderRadius={0}
-                      _hover={{ borderColor: "bauhaus.black" }}
-                      _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
                     />
                   </FormControl>
                   <FormControl>
@@ -359,11 +360,6 @@ export default function AddTokenModal({
                       onChange={(e) => setDecimals(e.target.value)}
                       fontSize="sm"
                       type="number"
-                      border="2px solid"
-                      borderColor="bauhaus.black"
-                      borderRadius={0}
-                      _hover={{ borderColor: "bauhaus.black" }}
-                      _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
                     />
                   </FormControl>
                 </HStack>
@@ -372,20 +368,10 @@ export default function AddTokenModal({
 
             {/* Save button */}
             <Button
+              variant="primary"
               onClick={handleSave}
               isDisabled={!canSave}
               isLoading={saving}
-              bg="bauhaus.black"
-              color="bauhaus.white"
-              fontWeight="800"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              fontSize="sm"
-              borderRadius={0}
-              border="2px solid"
-              borderColor="bauhaus.black"
-              _hover={{ bg: "gray.800" }}
-              _disabled={{ opacity: 0.4, cursor: "not-allowed" }}
               w="full"
             >
               Add Token

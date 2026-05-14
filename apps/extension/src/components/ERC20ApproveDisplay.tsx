@@ -11,6 +11,7 @@ import {
   IconButton,
   Spinner,
   Tooltip,
+  Spacer,
 } from "@chakra-ui/react";
 import {
   WarningIcon,
@@ -27,7 +28,9 @@ import {
   INFINITE_THRESHOLD,
 } from "@/lib/erc20Approve";
 import { updatePendingTxRequestData } from "@/chrome/pendingTxStorage";
+import { resolveAddressToName } from "@/lib/ensUtils";
 import { ethShLabelsUrl } from "@/constants/externalUrls";
+import { useTheme } from "@/theme";
 import { getChainConfig } from "@/constants/chainConfig";
 import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 
@@ -50,13 +53,67 @@ interface ERC20ApproveDisplayProps {
 }
 
 /**
- * Format a large number with commas for readability.
+ * Format an ERC20 approval amount for compact display on the approval card.
+ *
+ * Small values (≤9 integer digits) render with comma separators; the decimal
+ * part is trimmed of trailing zeros and capped at 6 dp so "100.000000" doesn't
+ * waste card width over "100".
+ *
+ * Larger values abbreviate with B / T / Q suffixes — approvals in the billions
+ * and above stop being readable as comma-separated strings and the exact
+ * number is rarely the thing the user is deciding on. Two decimal places are
+ * retained so `1,234,567,890` → `1.23B` distinguishes from `9.99B`.
+ *
+ * Beyond quadrillion (>18 integer digits) falls back to scientific notation
+ * (`1.15e20`) — at that point the user just needs to see the order of
+ * magnitude; the `Tooltip` in the caller always carries the exact value.
+ *
+ * BigInt math is used throughout so we stay accurate against arbitrary
+ * uint256 amounts; Number() would silently lose precision past 2^53.
  */
-function formatWithCommas(value: string): string {
-  const [integer, decimal] = value.split(".");
-  const formatted = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  if (decimal) return `${formatted}.${decimal}`;
-  return formatted;
+interface FormattedApprovalAmount {
+  /** The numeric portion, shown in the primary text color. */
+  value: string;
+  /** Optional magnitude suffix ("B", "e20", etc.) — rendered in a distinct
+   *  accent color so users don't miss it when scanning at speed. Empty
+   *  string when the display is fully spelled out with commas. */
+  suffix: string;
+}
+
+function formatApprovalAmount(value: string): FormattedApprovalAmount {
+  const [integer = "0", decimal = ""] = value.split(".");
+  const digits = integer.length;
+
+  if (digits <= 9) {
+    const formatted = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    const trimmed = decimal.replace(/0+$/, "").slice(0, 6);
+    return {
+      value: trimmed ? `${formatted}.${trimmed}` : formatted,
+      suffix: "",
+    };
+  }
+
+  // 10–12 digits → billions with two decimals (1.23B up to 999.99B). Past
+  // that (≥ 1 trillion) stops being a number users reason about — fall back
+  // to scientific notation rather than piling on T / Q / etc. suffixes.
+  if (digits <= 12) {
+    const intBig = BigInt(integer);
+    const scaled = (intBig * 100n) / 1_000_000_000n;
+    const whole = scaled / 100n;
+    const frac = scaled % 100n;
+    return {
+      value: `${whole}.${frac.toString().padStart(2, "0")}`,
+      suffix: "B",
+    };
+  }
+
+  const first = integer[0];
+  const next = integer.slice(1, 3).padEnd(2, "0");
+  const exponent = digits - 1;
+  return {
+    value: `${first}.${next}`,
+    suffix: `e${exponent}`,
+  };
 }
 
 export default function ERC20ApproveDisplay({
@@ -65,6 +122,22 @@ export default function ERC20ApproveDisplay({
   chainId,
   txId,
 }: ERC20ApproveDisplayProps) {
+  const { tokens, themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
+  // Approval card bg.
+  //   Bauhaus: cornsilk `status.warning.tint` (#FFF8DC) — a warm pale
+  //     yellow that (a) reads "caution / approve with care", (b) ties in
+  //     with the amber header pill without competing (much paler than the
+  //     amber), and (c) keeps dark text comfortably legible. Plain greys
+  //     were too close to the app bg (#F0F0F0) to actually differentiate
+  //     the card.
+  //   Midnight: `surface.raisedHover` (#1A2033) — a clearly lifted navy
+  //     against the darker surface.raised (#131826) info card below,
+  //     without introducing any saturated color that would fight the
+  //     amber header pill.
+  const approvalCardBg = isDarkTheme
+    ? "surface.raisedHover"
+    : "status.warning.tint";
   const [token, setToken] = useState<TokenMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -72,6 +145,7 @@ export default function ERC20ApproveDisplay({
   const [currentAmount, setCurrentAmount] = useState(approval.amount);
   const [isInfinite, setIsInfinite] = useState(approval.isInfinite);
   const [spenderLabels, setSpenderLabels] = useState<string[]>([]);
+  const [resolvedSpenderName, setResolvedSpenderName] = useState<string | null>(null);
   const [copiedSpender, setCopiedSpender] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
 
@@ -81,7 +155,7 @@ export default function ERC20ApproveDisplay({
   useEffect(() => {
     setLoading(true);
 
-    // Fetch on-chain info via background
+    // Fetch onchain info via background
     const infoPromise = new Promise<{
       success: boolean;
       data?: { name: string; symbol: string; decimals: number };
@@ -143,10 +217,27 @@ export default function ERC20ApproveDisplay({
       .catch(() => {});
   }, [approval.spender, chainId]);
 
+  // Reverse resolve the spender address to ENS/Basename/WNS. Shown as a
+  // separate badge so an onchain name and an eth.sh label can coexist
+  // (same pattern as the outer "To" row).
+  useEffect(() => {
+    setResolvedSpenderName(null);
+    resolveAddressToName(approval.spender)
+      .then((name) => {
+        if (name) setResolvedSpenderName(name);
+      })
+      .catch(() => {});
+  }, [approval.spender]);
+
   const formattedAmount =
     token && !isInfinite
-      ? formatWithCommas(formatUnits(currentAmount, token.decimals))
+      ? formatApprovalAmount(formatUnits(currentAmount, token.decimals))
       : null;
+  const formattedAmountDisplay = formattedAmount
+    ? formattedAmount.suffix
+      ? `${formattedAmount.value}${formattedAmount.suffix}`
+      : formattedAmount.value
+    : null;
 
   const handleStartEdit = useCallback(() => {
     if (!token) return;
@@ -196,10 +287,11 @@ export default function ERC20ApproveDisplay({
   if (loading) {
     return (
       <Box
-        bg="bauhaus.white"
-        border="2px solid"
-        borderColor="bauhaus.black"
-        boxShadow="2px 2px 0px 0px #121212"
+        bg="surface.raised"
+        border={tokens.borders.thin}
+        borderColor="border.default"
+        borderRadius="lg"
+        boxShadow="card"
         p={3}
       >
         <HStack justify="center" spacing={2}>
@@ -214,293 +306,391 @@ export default function ERC20ApproveDisplay({
 
   if (!token) return null;
 
+  const tokenLogo = token.logoUrl ? (
+    <Image
+      src={token.logoUrl}
+      alt={token.symbol}
+      boxSize="20px"
+      borderRadius="full"
+      border="1.5px solid"
+      borderColor="border.default"
+    />
+  ) : (
+    <Box
+      boxSize="20px"
+      bg="accent.secondary"
+      borderRadius="full"
+      border="1.5px solid"
+      borderColor="border.default"
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+    >
+      <Text fontSize="8px" fontWeight="900" color="accentFg.secondary">
+        {token.symbol.slice(0, 2)}
+      </Text>
+    </Box>
+  );
+
   return (
     <Box
-      bg="#EEF2FF"
-      border="2px solid"
-      borderColor="bauhaus.black"
-      boxShadow="2px 2px 0px 0px #121212"
+      bg={approvalCardBg}
+      border={tokens.borders.thin}
+      borderColor="border.default"
+      borderRadius="lg"
+      boxShadow="card"
+      overflow="hidden"
       position="relative"
     >
-      <VStack spacing={0} divider={<Box h="1px" bg="gray.300" w="full" />}>
-        {/* Token info */}
-        <HStack w="full" py={2} px={3} justify="space-between">
+      <VStack spacing={0} align="stretch">
+        {/* Token header strip — identifies which token is being approved.
+            Midnight gets a recessed sunken navy so the strip reads as a
+            subtle title bar against the raisedHover card bg. Bauhaus
+            leaves the strip transparent (inheriting card bg); the bottom
+            divider + logo + bold name already signal "token header", and
+            a grey-on-grey lip would be invisible since Bauhaus's
+            `bg.muted` resolves to the same value as `surface.raisedHover`. */}
+        <HStack
+          w="full"
+          py={1.5}
+          px={3}
+          spacing={2}
+          bg={isDarkTheme ? "surface.sunken" : "transparent"}
+        >
+          {tokenLogo}
+          <Text fontSize="xs" fontWeight="700" color="text.primary" isTruncated>
+            {token.name}
+          </Text>
+          <Badge
+            fontSize="2xs"
+            bg="surface.raised"
+            color="text.secondary"
+            border="1px solid"
+            borderColor="border.subtle"
+            px={1.5}
+            py={0}
+            fontWeight="700"
+          >
+            {token.symbol}
+          </Badge>
+          <Spacer />
+          <IconButton
+            aria-label="Copy token address"
+            icon={copiedToken ? <CheckIcon boxSize="10px" /> : <CopyIcon boxSize="10px" />}
+            size="xs"
+            variant="ghost"
+            minW="20px"
+            h="20px"
+            color={copiedToken ? "accent.highlight" : "text.tertiary"}
+            onClick={handleCopyToken}
+            _hover={{ color: "accent.secondary", bg: "surface.raised" }}
+          />
+          {chainConfig.explorer && (
+            <IconButton
+              aria-label="View token on explorer"
+              icon={<ExternalLinkIcon boxSize="10px" />}
+              size="xs"
+              variant="ghost"
+              minW="20px"
+              h="20px"
+              color="text.tertiary"
+              onClick={() =>
+                window.open(
+                  `${chainConfig.explorer}/address/${tokenAddress}`,
+                  "_blank",
+                )
+              }
+              _hover={{ color: "accent.secondary", bg: "surface.raised" }}
+            />
+          )}
+        </HStack>
+
+        {/* Approve amount — the dominant line. Users should answer "how
+            much am I handing over?" by glancing at this one block. Label
+            sits above; the value below is noticeably bigger than anything
+            else on the card. Edit button keeps the inline affordance but
+            docked to the right so it doesn't compete with the number. */}
+        <Box
+          w="full"
+          py={3}
+          px={3}
+          borderTop="1px solid"
+          borderColor="border.subtle"
+        >
           <Text
-            fontSize="xs"
+            fontSize="2xs"
             color="text.secondary"
             fontWeight="700"
             textTransform="uppercase"
+            letterSpacing="wider"
+            mb={1}
           >
-            Token
+            Approve Amount
           </Text>
-          <HStack spacing={1.5}>
-            {token.logoUrl ? (
-              <Image
-                src={token.logoUrl}
-                alt={token.symbol}
-                boxSize="18px"
-                borderRadius="full"
-                border="1.5px solid"
-                borderColor="bauhaus.black"
-              />
-            ) : (
-              <Box
-                boxSize="18px"
-                bg="bauhaus.blue"
-                borderRadius="full"
-                border="1.5px solid"
-                borderColor="bauhaus.black"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Text fontSize="7px" fontWeight="900" color="white">
-                  {token.symbol.slice(0, 2)}
-                </Text>
-              </Box>
-            )}
-            <Text fontSize="xs" fontWeight="700" color="text.primary">
-              {token.name}
-            </Text>
-            <Badge
-              fontSize="2xs"
-              bg="bg.muted"
-              color="text.secondary"
-              border="1px solid"
-              borderColor="gray.300"
-              px={1.5}
-              py={0}
-              fontWeight="700"
-            >
-              {token.symbol}
-            </Badge>
-            <IconButton
-              aria-label="Copy token address"
-              icon={copiedToken ? <CheckIcon /> : <CopyIcon />}
-              size="xs"
-              variant="ghost"
-              color={copiedToken ? "bauhaus.yellow" : "text.secondary"}
-              onClick={handleCopyToken}
-              _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
-            />
-            {chainConfig.explorer && (
-              <IconButton
-                aria-label="View token on explorer"
-                icon={<ExternalLinkIcon boxSize="10px" />}
-                size="xs"
-                variant="ghost"
-                minW="18px"
-                h="18px"
-                color="text.tertiary"
-                onClick={() =>
-                  window.open(
-                    `${chainConfig.explorer}/address/${tokenAddress}`,
-                    "_blank",
-                  )
-                }
-                _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
-              />
-            )}
-          </HStack>
-        </HStack>
-
-        {/* Spender */}
-        <Box w="full" py={2} px={3}>
-          <HStack justify="space-between" mb={spenderLabels.length > 0 ? 1 : 0}>
-            <Text
-              fontSize="xs"
-              color="text.secondary"
-              fontWeight="700"
-              textTransform="uppercase"
-            >
-              Spender
-            </Text>
-            <HStack
-              spacing={0.5}
-              px={1.5}
-              py={0.5}
-              bg="bauhaus.white"
-              border="1.5px solid"
-              borderColor="bauhaus.black"
-            >
-              <Text
-                fontSize="xs"
-                color="text.primary"
+          {editing ? (
+            <HStack spacing={1} w="full">
+              <Input
+                size="sm"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
                 fontFamily="mono"
                 fontWeight="700"
-              >
-                {approval.spender.slice(0, 6)}...
-                {approval.spender.slice(-4)}
-              </Text>
-              <IconButton
-                aria-label="Copy spender"
-                icon={copiedSpender ? <CheckIcon /> : <CopyIcon />}
-                size="xs"
-                variant="ghost"
-                color={copiedSpender ? "bauhaus.yellow" : "text.secondary"}
-                onClick={handleCopySpender}
-                _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                fontSize="md"
+                px={2}
+                py={1}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveEdit();
+                  if (e.key === "Escape") handleCancelEdit();
+                }}
+                autoFocus
               />
-              {chainConfig.explorer && (
-                <IconButton
-                  aria-label="View on explorer"
-                  icon={<ExternalLinkIcon boxSize="10px" />}
-                  size="xs"
-                  variant="ghost"
-                  minW="18px"
-                  h="18px"
-                  color="text.tertiary"
-                  onClick={() =>
-                    window.open(
-                      `${chainConfig.explorer}/address/${approval.spender}`,
-                      "_blank",
-                    )
-                  }
-                  _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
-                />
-              )}
+              <IconButton
+                aria-label="Save"
+                icon={<CheckIcon />}
+                size="sm"
+                variant="ghost"
+                color="status.success.fg"
+                onClick={handleSaveEdit}
+                _hover={{ bg: "status.success.bg" }}
+              />
+              <IconButton
+                aria-label="Cancel"
+                icon={<CloseIcon boxSize="8px" />}
+                size="sm"
+                variant="ghost"
+                color="status.error.fg"
+                onClick={handleCancelEdit}
+                _hover={{ bg: "status.error.bg" }}
+              />
             </HStack>
-          </HStack>
-          {spenderLabels.length > 0 && (
-            <HStack justify="flex-end">
-              <Badge
-                fontSize="2xs"
-                bg="bauhaus.blue"
-                color="white"
-                border="1.5px solid"
-                borderColor="bauhaus.black"
-                px={1.5}
-                py={0}
-                fontWeight="700"
-                maxW="200px"
-                isTruncated
-              >
-                {spenderLabels[0]}
-              </Badge>
+          ) : (
+            <HStack justify="space-between" align="center" spacing={2}>
+              {isInfinite ? (
+                <Tooltip
+                  label="This grants unlimited spending of your tokens. Consider setting a specific amount."
+                  fontSize="xs"
+                  hasArrow
+                  bg="fg.primary"
+                  color="fg.inverse"
+                  maxW="240px"
+                >
+                  {/* Unlimited warning. Bauhaus: sharp rectangle with a
+                      thick 1.5px red stroke — the "danger sign" idiom.
+                      Midnight: soft-radius chip without the hard border;
+                      the tinted error bg + red foreground + warning glyph
+                      already carry the warning weight without the poster
+                      stroke. */}
+                  <HStack
+                    spacing={1.5}
+                    bg="status.error.bg"
+                    px={2}
+                    py={1}
+                    border={isDarkTheme ? "none" : "1.5px solid"}
+                    borderColor={isDarkTheme ? undefined : "status.error.border"}
+                    borderRadius={isDarkTheme ? "md" : "none"}
+                  >
+                    <WarningIcon boxSize={3} color="status.error.fg" />
+                    <Text
+                      fontSize="md"
+                      fontWeight="900"
+                      color="status.error.fg"
+                      textTransform="uppercase"
+                      letterSpacing="wide"
+                    >
+                      Unlimited
+                    </Text>
+                  </HStack>
+                </Tooltip>
+              ) : (
+                <Tooltip
+                  label={formatUnits(currentAmount, token.decimals)}
+                  fontSize="xs"
+                  hasArrow
+                  // Show the exact value whenever the display differs from
+                  // the raw formatUnits output — i.e. abbreviated/trimmed
+                  // cases. Skipped only when the card is showing the full
+                  // number already (nothing hidden to reveal).
+                  isDisabled={
+                    !formattedAmountDisplay ||
+                    formatUnits(currentAmount, token.decimals) ===
+                      formattedAmountDisplay
+                  }
+                >
+                  <Text
+                    fontSize="xl"
+                    fontWeight="900"
+                    color="text.primary"
+                    fontFamily="mono"
+                    lineHeight="1.1"
+                    isTruncated
+                    flex={1}
+                    minW={0}
+                  >
+                    {formattedAmount?.value}
+                    {/* Magnitude suffix ("B", "e20", etc.) so users
+                        skimming a huge number can't mistake `1.15` for a
+                        normal amount.
+                        Midnight: `chart.numeric` (amber) — pops on dark
+                          navy without fighting the violet accents.
+                        Bauhaus: `chart.negative` (red) — amber would fade
+                          into the cornsilk card bg, whereas red flags the
+                          magnitude as "be careful, this is large". */}
+                    {formattedAmount?.suffix && (
+                      <Text
+                        as="span"
+                        fontSize="xl"
+                        fontWeight="900"
+                        color={isDarkTheme ? "chart.numeric" : "chart.negative"}
+                        ml={0.5}
+                      >
+                        {formattedAmount.suffix}
+                      </Text>
+                    )}{" "}
+                    <Text as="span" fontSize="sm" fontWeight="700" color="text.secondary">
+                      {token.symbol}
+                    </Text>
+                  </Text>
+                </Tooltip>
+              )}
+              {/* Edit button. Bauhaus: hard square pill in amber with the
+                  thick-border look. Midnight: a soft-radius chip with the
+                  same amber fill but no hard stroke — Midnight borrows
+                  weight from luminous shadows instead of thick borders, so
+                  the Bauhaus rectangle reads as out-of-place there. */}
+              <IconButton
+                aria-label="Edit amount"
+                icon={<EditIcon boxSize="11px" />}
+                size="sm"
+                color="accentFg.highlight"
+                bg="accent.highlight"
+                border={isDarkTheme ? "none" : "1.5px solid"}
+                borderColor={isDarkTheme ? undefined : "border.default"}
+                borderRadius={isDarkTheme ? "md" : "none"}
+                boxShadow={isDarkTheme ? "button" : undefined}
+                onClick={handleStartEdit}
+                _hover={
+                  isDarkTheme
+                    ? { opacity: 0.9, transform: "translateY(-1px)" }
+                    : { opacity: 0.85 }
+                }
+                _active={isDarkTheme ? { transform: "scale(0.96)" } : undefined}
+                minW="26px"
+                h="26px"
+                flexShrink={0}
+              />
             </HStack>
           )}
         </Box>
 
-        {/* Amount */}
-        <Box w="full" py={2} px={3}>
-          <HStack justify="space-between" align="center">
+        {/* Spender — secondary. Mirrors the outer "To" row pattern:
+            an ENS/Basename/WNS badge (highlight) on top, the address pill
+            in the middle, and the eth.sh label badge (secondary) on the
+            bottom. All three are optional; any subset may be visible. */}
+        <Box
+          w="full"
+          py={2}
+          px={3}
+          borderTop="1px solid"
+          borderColor="border.subtle"
+        >
+          <HStack
+            justify="space-between"
+            align="flex-start"
+            spacing={2}
+          >
             <Text
-              fontSize="xs"
+              fontSize="2xs"
               color="text.secondary"
               fontWeight="700"
               textTransform="uppercase"
+              letterSpacing="wider"
+              pt={0.5}
             >
-              Amount
+              Spender
             </Text>
-
-            {editing ? (
-              <HStack spacing={1} flex={1} ml={3}>
-                <Input
-                  size="xs"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
+            <VStack spacing={1} align="flex-end" minW={0}>
+              {resolvedSpenderName && (
+                <Badge
+                  fontSize="2xs"
+                  bg="accent.highlight"
+                  color="accentFg.highlight"
+                  border="1.5px solid"
+                  borderColor="border.default"
+                  px={1.5}
+                  py={0}
+                  fontWeight="700"
+                  maxW="180px"
+                  isTruncated
+                >
+                  {resolvedSpenderName}
+                </Badge>
+              )}
+              <HStack
+                spacing={0.5}
+                px={1.5}
+                py={0.5}
+                bg="surface.raised"
+                border="1.5px solid"
+                borderColor="border.default"
+                borderRadius="md"
+                flexShrink={0}
+              >
+                <Text
+                  fontSize="2xs"
+                  color="text.secondary"
                   fontFamily="mono"
                   fontWeight="700"
-                  fontSize="xs"
-                  border="1.5px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius="none"
-                  px={2}
-                  py={1}
-                  _focus={{
-                    borderColor: "bauhaus.blue",
-                    boxShadow: "none",
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSaveEdit();
-                    if (e.key === "Escape") handleCancelEdit();
-                  }}
-                  autoFocus
-                />
+                >
+                  {approval.spender.slice(0, 6)}...
+                  {approval.spender.slice(-4)}
+                </Text>
                 <IconButton
-                  aria-label="Save"
-                  icon={<CheckIcon />}
+                  aria-label="Copy spender"
+                  icon={copiedSpender ? <CheckIcon boxSize="9px" /> : <CopyIcon boxSize="9px" />}
                   size="xs"
                   variant="ghost"
-                  color="green.500"
-                  onClick={handleSaveEdit}
-                  _hover={{ bg: "green.50" }}
+                  minW="18px"
+                  h="18px"
+                  color={copiedSpender ? "accent.highlight" : "text.tertiary"}
+                  onClick={handleCopySpender}
+                  _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                 />
-                <IconButton
-                  aria-label="Cancel"
-                  icon={<CloseIcon boxSize="8px" />}
-                  size="xs"
-                  variant="ghost"
-                  color="bauhaus.red"
-                  onClick={handleCancelEdit}
-                  _hover={{ bg: "red.50" }}
-                />
-              </HStack>
-            ) : (
-              <HStack spacing={1.5}>
-                {isInfinite ? (
-                  <Tooltip
-                    label="This grants unlimited spending of your tokens. Consider setting a specific amount."
-                    fontSize="xs"
-                    hasArrow
-                    bg="bauhaus.black"
-                    color="white"
-                    maxW="200px"
-                  >
-                    <HStack
-                      spacing={1.5}
-                      bg="bauhaus.red"
-                      px={2}
-                      py={0.5}
-                      border="1.5px solid"
-                      borderColor="bauhaus.black"
-                    >
-                      <WarningIcon boxSize={2.5} color="white" />
-                      <Text
-                        fontSize="xs"
-                        fontWeight="900"
-                        color="white"
-                        textTransform="uppercase"
-                      >
-                        Unlimited
-                      </Text>
-                    </HStack>
-                  </Tooltip>
-                ) : (
-                  <Tooltip
-                    label={formatUnits(currentAmount, token.decimals)}
-                    fontSize="xs"
-                    hasArrow
-                    isDisabled={!formattedAmount || formattedAmount.length < 20}
-                  >
-                    <Text
-                      fontSize="xs"
-                      fontWeight="700"
-                      color="text.primary"
-                      maxW="160px"
-                      isTruncated
-                    >
-                      {formattedAmount} {token.symbol}
-                    </Text>
-                  </Tooltip>
+                {chainConfig.explorer && (
+                  <IconButton
+                    aria-label="View on explorer"
+                    icon={<ExternalLinkIcon boxSize="9px" />}
+                    size="xs"
+                    variant="ghost"
+                    minW="18px"
+                    h="18px"
+                    color="text.tertiary"
+                    onClick={() =>
+                      window.open(
+                        `${chainConfig.explorer}/address/${approval.spender}`,
+                        "_blank",
+                      )
+                    }
+                    _hover={{ color: "accent.secondary", bg: "bg.muted" }}
+                  />
                 )}
-                <IconButton
-                  aria-label="Edit amount"
-                  icon={<EditIcon boxSize="10px" />}
-                  size="xs"
-                  variant="ghost"
-                  color="bauhaus.black"
-                  bg="bauhaus.yellow"
-                  border="1.5px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius="none"
-                  onClick={handleStartEdit}
-                  _hover={{ opacity: 0.85 }}
-                  minW="22px"
-                  h="22px"
-                />
               </HStack>
-            )}
+              {spenderLabels.length > 0 && (
+                <Badge
+                  fontSize="2xs"
+                  bg="accent.secondary"
+                  color="accentFg.secondary"
+                  border="1.5px solid"
+                  borderColor="border.default"
+                  px={1.5}
+                  py={0}
+                  fontWeight="700"
+                  maxW="200px"
+                  isTruncated
+                >
+                  {spenderLabels[0]}
+                </Badge>
+              )}
+            </VStack>
           </HStack>
         </Box>
       </VStack>

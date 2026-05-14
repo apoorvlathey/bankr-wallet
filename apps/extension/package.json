@@ -1,6 +1,6 @@
 {
   "name": "@walletchan/extension",
-  "version": "2.1.0",
+  "version": "3.6.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -42,7 +42,7 @@
     "@scure/bip39": "^2.0.1",
     "blo": "^2.0.0",
     "ethers": "6",
-    "framer-motion": "^4.1.17",
+    "framer-motion": "^11.18.2",
     "qrcode.react": "^4.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

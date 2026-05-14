@@ -11,9 +11,10 @@ import {
   FormErrorMessage,
   IconButton,
   SimpleGrid,
+  Spinner,
   Textarea,
 } from "@chakra-ui/react";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
 import { ArrowBackIcon, CopyIcon, CheckIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 
 type Mode = "choose" | "generate" | "import";
@@ -26,7 +27,79 @@ interface SeedPhraseSetupProps {
 }
 
 function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps) {
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
+
+  // When rendered inside onboarding (`onCollect` set), match the outer layout
+  // of Onboarding's form-step wrapper so the back button and heading stay
+  // pinned at the same screen position across every internal screen (choose,
+  // mnemonic display, import). Outside onboarding (Settings → AddAccount),
+  // keep the existing scrollable full-height panel.
+  const isOnboarding = !!onCollect;
+
+  const Wrapper = ({ children }: { children: React.ReactNode }) =>
+    isOnboarding ? (
+      <VStack spacing={6} w="full" maxW="400px" align="stretch">
+        {children}
+      </VStack>
+    ) : (
+      <Box p={4} h="100%" overflowY="auto" bg="surface.base">
+        <VStack spacing={4} align="stretch">
+          {children}
+        </VStack>
+      </Box>
+    );
+
+  const Header = ({
+    title,
+    onBackClick,
+  }: {
+    title: string;
+    onBackClick: () => void;
+  }) =>
+    isOnboarding ? (
+      <HStack w="full" justify="space-between" align="center">
+        <IconButton
+          aria-label="Back"
+          icon={<ArrowBackIcon />}
+          variant="ghost"
+          size="sm"
+          onClick={onBackClick}
+        />
+        <Text
+          fontWeight="900"
+          fontSize="md"
+          color="text.primary"
+          textTransform="uppercase"
+          letterSpacing="wide"
+          noOfLines={1}
+          flex={1}
+          textAlign="center"
+          mx={2}
+        >
+          {title}
+        </Text>
+        <Box w="32px" flexShrink={0} />
+      </HStack>
+    ) : (
+      <HStack spacing={3}>
+        <IconButton
+          aria-label="Back"
+          icon={<ArrowBackIcon />}
+          variant="ghost"
+          size="sm"
+          onClick={onBackClick}
+        />
+        <Text
+          fontWeight="900"
+          fontSize="lg"
+          color="text.primary"
+          textTransform="uppercase"
+          letterSpacing="wide"
+        >
+          {title}
+        </Text>
+      </HStack>
+    );
 
   const [mode, setMode] = useState<Mode>("choose");
   const [generatedMnemonic, setGeneratedMnemonic] = useState<string | null>(null);
@@ -170,45 +243,38 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   if (generatedMnemonic) {
     const words = generatedMnemonic.split(" ");
     return (
-      <Box p={4} minH="100%" bg="bg.base">
-        <VStack spacing={4} align="stretch">
-          <HStack spacing={3}>
-            <IconButton
-              aria-label="Back"
-              icon={<ArrowBackIcon />}
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                if (!confirmed) {
-                  setGeneratedMnemonic(null);
-                  setMode("choose");
-                } else {
-                  onComplete();
-                }
-              }}
-            />
-            <Text fontWeight="900" fontSize="lg" color="text.primary" textTransform="uppercase" letterSpacing="wide">
-              Save Your Seed Phrase
-            </Text>
-          </HStack>
+      <Wrapper>
+          <Header
+            title="Save Your Seed Phrase"
+            onBackClick={() => {
+              if (!confirmed) {
+                setGeneratedMnemonic(null);
+                setMode("choose");
+              } else {
+                onComplete();
+              }
+            }}
+          />
 
           <Box
-            bg="bauhaus.red"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="status.error.bg"
+            border="2px solid"
+            borderColor="status.error.border"
+            borderRadius="lg"
+            boxShadow="card"
             p={3}
           >
-            <Text fontSize="xs" color="bauhaus.white" fontWeight="700">
+            <Text fontSize="xs" color="status.error.fg" fontWeight="700">
               Write down these 12 words in order. This is the ONLY way to recover your accounts. Never share your seed phrase!
             </Text>
           </Box>
 
           <Box
-            bg="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="surface.raised"
+            border="2px solid"
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={4}
             position="relative"
           >
@@ -225,7 +291,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
                 icon={mnemonicCopied ? <CheckIcon /> : <CopyIcon />}
                 size="xs"
                 variant="ghost"
-                color={mnemonicCopied ? "bauhaus.yellow" : undefined}
+                color={mnemonicCopied ? "accent.highlight" : undefined}
                 onClick={async () => {
                   await navigator.clipboard.writeText(generatedMnemonic);
                   setMnemonicCopied(true);
@@ -237,9 +303,10 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               {words.map((word, i) => (
                 <HStack
                   key={i}
-                  bg="bg.muted"
+                  bg="surface.sunken"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
+                  borderRadius="md"
                   px={2}
                   py={1.5}
                   spacing={1}
@@ -280,63 +347,70 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
           >
             I've Saved My Seed Phrase
           </Button>
-        </VStack>
-      </Box>
+      </Wrapper>
     );
   }
 
   // Choose mode: generate or import
   if (mode === "choose") {
     return (
-      <Box p={4} minH="100%" bg="bg.base">
-        <VStack spacing={4} align="stretch">
-          <HStack spacing={3}>
-            <IconButton
-              aria-label="Back"
-              icon={<ArrowBackIcon />}
-              variant="ghost"
-              size="sm"
-              onClick={onBack}
-            />
-            <Text fontWeight="900" fontSize="lg" color="text.primary" textTransform="uppercase" letterSpacing="wide">
-              Seed Phrase
-            </Text>
-          </HStack>
+      <Wrapper>
+          <Header title="Seed Phrase" onBackClick={onBack} />
 
-          <VStack spacing={3}>
+          <VStack spacing={3} align="stretch">
             <Box
               as="button"
               w="full"
               p={4}
-              bg="bauhaus.white"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="4px 4px 0px 0px #121212"
+              bg="surface.raised"
+              border="2px solid"
+              borderColor="border.default"
+              borderRadius="lg"
+              boxShadow="card"
               textAlign="left"
-              onClick={() => setMode("generate")}
-              _hover={{ bg: "bg.muted" }}
+              disabled={isSubmitting}
+              opacity={isSubmitting ? 0.6 : 1}
+              cursor={isSubmitting ? "not-allowed" : "pointer"}
+              onClick={() => {
+                if (onCollect) {
+                  // Skip the intermediate "name your account" screen during
+                  // onboarding — generate immediately and jump to the mnemonic
+                  // display. Naming happens later in settings.
+                  handleGenerate();
+                } else {
+                  setMode("generate");
+                }
+              }}
+              _hover={isSubmitting ? {} : { bg: "surface.raisedHover" }}
             >
-              <VStack align="start" spacing={1}>
-                <Text fontSize="sm" fontWeight="900" color="text.primary" textTransform="uppercase">
-                  Generate New
-                </Text>
-                <Text fontSize="xs" color="text.secondary" fontWeight="500">
-                  Create a new 12-word seed phrase and derive your first account
-                </Text>
-              </VStack>
+              <HStack spacing={3} align="center">
+                <VStack align="start" spacing={1} flex={1}>
+                  <Text fontSize="sm" fontWeight="900" color="text.primary" textTransform="uppercase">
+                    Generate New
+                  </Text>
+                  <Text fontSize="xs" color="text.secondary" fontWeight="500">
+                    Create a new 12-word seed phrase and derive your first account
+                  </Text>
+                </VStack>
+                {isSubmitting && <Spinner size="sm" color="accent.primary" flexShrink={0} />}
+              </HStack>
             </Box>
 
             <Box
               as="button"
               w="full"
               p={4}
-              bg="bauhaus.white"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              boxShadow="4px 4px 0px 0px #121212"
+              bg="surface.raised"
+              border="2px solid"
+              borderColor="border.default"
+              borderRadius="lg"
+              boxShadow="card"
               textAlign="left"
+              disabled={isSubmitting}
+              opacity={isSubmitting ? 0.6 : 1}
+              cursor={isSubmitting ? "not-allowed" : "pointer"}
               onClick={() => setMode("import")}
-              _hover={{ bg: "bg.muted" }}
+              _hover={isSubmitting ? {} : { bg: "surface.raisedHover" }}
             >
               <VStack align="start" spacing={1}>
                 <Text fontSize="sm" fontWeight="900" color="text.primary" textTransform="uppercase">
@@ -348,62 +422,67 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               </VStack>
             </Box>
           </VStack>
-        </VStack>
-      </Box>
+      </Wrapper>
     );
   }
 
   // Generate mode form (display name + generate button)
   if (mode === "generate") {
     return (
-      <Box p={4} minH="100%" bg="bg.base">
-        <VStack spacing={4} align="stretch">
-          <HStack spacing={3}>
-            <IconButton
-              aria-label="Back"
-              icon={<ArrowBackIcon />}
-              variant="ghost"
-              size="sm"
-              onClick={() => setMode("choose")}
-            />
-            <Text fontWeight="900" fontSize="lg" color="text.primary" textTransform="uppercase" letterSpacing="wide">
-              Generate Seed Phrase
-            </Text>
-          </HStack>
+      <Wrapper>
+          <Header title="Generate Seed Phrase" onBackClick={() => setMode("choose")} />
 
-          <Box
-            bg="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
-            p={4}
-          >
-            <FormControl>
-              <FormLabel fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-                Group Name (Optional)
-              </FormLabel>
-              <Input
-                placeholder="e.g., My Seed Wallet"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-              />
-            </FormControl>
+          {onCollect ? (
+            <Box
+              bg="surface.raised"
+              border="2px solid"
+              borderColor="border.default"
+              borderRadius="lg"
+              boxShadow="card"
+              p={4}
+            >
+              <Text fontSize="sm" color="text.secondary" fontWeight="500">
+                A new 12-word recovery phrase will be generated for your wallet. You can name your account later from settings.
+              </Text>
+            </Box>
+          ) : (
+            <Box
+              bg="surface.raised"
+              border="2px solid"
+              borderColor="border.default"
+              borderRadius="lg"
+              boxShadow="card"
+              p={4}
+            >
+              <VStack spacing={4} align="stretch">
+                <FormControl>
+                  <FormLabel fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
+                    Group Name (Optional)
+                  </FormLabel>
+                  <Input
+                    placeholder="e.g., My Seed Wallet"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                  />
+                </FormControl>
 
-            <FormControl>
-              <FormLabel fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-                Account Display Name (Optional)
-              </FormLabel>
-              <Input
-                placeholder="e.g., Main Account"
-                value={accountDisplayName}
-                onChange={(e) => setAccountDisplayName(e.target.value)}
-              />
-            </FormControl>
-          </Box>
+                <FormControl>
+                  <FormLabel fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
+                    Account Display Name (Optional)
+                  </FormLabel>
+                  <Input
+                    placeholder="e.g., Main Account"
+                    value={accountDisplayName}
+                    onChange={(e) => setAccountDisplayName(e.target.value)}
+                  />
+                </FormControl>
+              </VStack>
+            </Box>
+          )}
 
           {error && (
-            <Box bg="bauhaus.red" border="2px solid" borderColor="bauhaus.black" p={2}>
-              <Text fontSize="xs" color="bauhaus.white" fontWeight="700">
+            <Box bg="status.error.bg" border="2px solid" borderColor="status.error.border" borderRadius="md" p={2}>
+              <Text fontSize="xs" color="status.error.fg" fontWeight="700">
                 {error}
               </Text>
             </Box>
@@ -418,33 +497,21 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
           >
             Generate Seed Phrase
           </Button>
-        </VStack>
-      </Box>
+      </Wrapper>
     );
   }
 
   // Import mode form
   return (
-    <Box p={4} minH="100%" bg="bg.base">
-      <VStack spacing={4} align="stretch">
-        <HStack spacing={3}>
-          <IconButton
-            aria-label="Back"
-            icon={<ArrowBackIcon />}
-            variant="ghost"
-            size="sm"
-            onClick={() => setMode("choose")}
-          />
-          <Text fontWeight="900" fontSize="lg" color="text.primary" textTransform="uppercase" letterSpacing="wide">
-            Import Seed Phrase
-          </Text>
-        </HStack>
+    <Wrapper>
+        <Header title="Import Seed Phrase" onBackClick={() => setMode("choose")} />
 
         <Box
-          bg="bauhaus.white"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
+          bg="surface.raised"
+          border="2px solid"
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
           p={4}
         >
           <VStack spacing={4} align="stretch">
@@ -464,43 +531,48 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
                 rows={3}
                 resize="none"
               />
-              <FormErrorMessage color="bauhaus.red" fontWeight="700">
+              <FormErrorMessage color="chart.negative" fontWeight="700">
                 {error}
               </FormErrorMessage>
             </FormControl>
 
-            <FormControl>
-              <FormLabel fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-                Group Name (Optional)
-              </FormLabel>
-              <Input
-                placeholder="e.g., My Imported Seed"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-              />
-            </FormControl>
+            {!onCollect && (
+              <>
+                <FormControl>
+                  <FormLabel fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
+                    Group Name (Optional)
+                  </FormLabel>
+                  <Input
+                    placeholder="e.g., My Imported Seed"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                  />
+                </FormControl>
 
-            <FormControl>
-              <FormLabel fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-                Account Display Name (Optional)
-              </FormLabel>
-              <Input
-                placeholder="e.g., Main Account"
-                value={accountDisplayName}
-                onChange={(e) => setAccountDisplayName(e.target.value)}
-              />
-            </FormControl>
+                <FormControl>
+                  <FormLabel fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
+                    Account Display Name (Optional)
+                  </FormLabel>
+                  <Input
+                    placeholder="e.g., Main Account"
+                    value={accountDisplayName}
+                    onChange={(e) => setAccountDisplayName(e.target.value)}
+                  />
+                </FormControl>
+              </>
+            )}
           </VStack>
         </Box>
 
         <Box
-          bg="bauhaus.yellow"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
+          bg="status.warning.bg"
+          border="2px solid"
+          borderColor="status.warning.border"
+          borderRadius="lg"
+          boxShadow="card"
           p={3}
         >
-          <Text fontSize="sm" color="bauhaus.black" fontWeight="700">
+          <Text fontSize="sm" color="status.warning.fg" fontWeight="700">
             Your seed phrase will be encrypted and stored locally. Never share it with anyone.
           </Text>
         </Box>
@@ -515,8 +587,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
         >
           Import & Derive Account
         </Button>
-      </VStack>
-    </Box>
+    </Wrapper>
   );
 }
 

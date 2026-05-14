@@ -5,19 +5,49 @@ import {
   fetchWchanQuote,
   compareBestRoute,
 } from "../wchanRoute";
+import { resolveFeeBps } from "../feeResolver";
+import { resolveSwapFeeToken } from "../preferredFeeTokens";
 
 const ZEROX_API_KEY = process.env.ZEROX_API_KEY ?? "";
 const ZEROX_BASE_URL = "https://api.0x.org";
 const DEFAULT_CHAIN_ID = "8453"; // Base
 
 const FEE_RECIPIENT = process.env.SWAP_FEE_RECIPIENT ?? "";
-const FEE_BPS = "90"; // 0.9%
 
+// https://docs.0x.org/docs/introduction/supported-chains
 const SUPPORTED_CHAIN_IDS = new Set([
-  "1", "42161", "8453", "56", "137", "130",
+  "1",      // Ethereum
+  "10",     // Optimism
+  "56",     // BSC
+  "130",    // Unichain
+  "137",    // Polygon
+  "143",    // Monad
+  "146",    // Sonic
+  "480",    // World Chain
+  "999",    // HyperEVM
+  "2741",   // Abstract
+  "4217",   // Tempo
+  "5000",   // Mantle
+  "8453",   // Base
+  "9745",   // Plasma
+  "34443",  // Mode
+  "42161",  // Arbitrum
+  "43114",  // Avalanche
+  "57073",  // Ink
+  "59144",  // Linea
+  "80094",  // Berachain
+  "81457",  // Blast
+  "534352", // Scroll
 ]);
 
 const NATIVE_PLACEHOLDER = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+/** 0x expects `0xEeee...EEeE` for native ETH. Some clients send the zero
+ *  address as a "native" sentinel — coerce so quotes don't fail. */
+function normalizeNativeAddress(addr: string): string {
+  return addr.toLowerCase() === ZERO_ADDRESS ? NATIVE_PLACEHOLDER : addr;
+}
 
 // ---------------------------------------------------------------------------
 // 0x price fetch helper
@@ -28,6 +58,8 @@ async function fetch0xPrice(
   sellToken: string,
   buyToken: string,
   sellAmount: string,
+  feeBps: string,
+  feeToken: string,
   taker?: string,
   slippageBps?: string,
 ): Promise<{ ok: boolean; data: Record<string, unknown> }> {
@@ -35,8 +67,8 @@ async function fetch0xPrice(
 
   if (FEE_RECIPIENT) {
     params.set("swapFeeRecipient", FEE_RECIPIENT);
-    params.set("swapFeeBps", FEE_BPS);
-    params.set("swapFeeToken", sellToken);
+    params.set("swapFeeBps", feeBps);
+    params.set("swapFeeToken", feeToken);
   }
   if (taker) params.set("taker", taker);
   if (slippageBps) params.set("slippageBps", slippageBps);
@@ -57,18 +89,21 @@ async function fetch0xPrice(
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
-  const sellToken = searchParams.get("sellToken");
-  const buyToken = searchParams.get("buyToken");
+  const sellTokenRaw = searchParams.get("sellToken");
+  const buyTokenRaw = searchParams.get("buyToken");
   const sellAmount = searchParams.get("sellAmount");
   const taker = searchParams.get("taker");
 
   // Validate required params
-  if (!sellToken || !buyToken || !sellAmount) {
+  if (!sellTokenRaw || !buyTokenRaw || !sellAmount) {
     return NextResponse.json(
       { error: "Missing required parameters: sellToken, buyToken, sellAmount" },
       { status: 400 },
     );
   }
+
+  const sellToken = normalizeNativeAddress(sellTokenRaw);
+  const buyToken = normalizeNativeAddress(buyTokenRaw);
 
   if (
     sellToken.toLowerCase() !== NATIVE_PLACEHOLDER.toLowerCase() &&
@@ -114,6 +149,10 @@ export async function GET(request: NextRequest) {
   const slippageBps = searchParams.get("slippageBps") ?? undefined;
   const slippageBpsNum = slippageBps && /^\d+$/.test(slippageBps) ? Number(slippageBps) : 100;
 
+  // Resolve fee tier and preferred fee token
+  const { feeBps, isPremiumFee } = await resolveFeeBps(taker ?? undefined);
+  const feeToken = resolveSwapFeeToken(chainIdParam, sellToken, buyToken);
+
   // -----------------------------------------------------------------------
   // WCHAN custom routing: compare 0x vs Uniswap V4
   // -----------------------------------------------------------------------
@@ -122,7 +161,7 @@ export async function GET(request: NextRequest) {
   if (wchanCheck.isWchan) {
     try {
       const [zeroXResult, wchanResult] = await Promise.allSettled([
-        fetch0xPrice(chainIdParam, sellToken, buyToken, sellAmount, taker ?? undefined, slippageBps),
+        fetch0xPrice(chainIdParam, sellToken, buyToken, sellAmount, feeBps, feeToken, taker ?? undefined, slippageBps),
         fetchWchanQuote(wchanCheck.direction, sellAmount),
       ]);
 
@@ -135,7 +174,7 @@ export async function GET(request: NextRequest) {
         console.warn("[wchanRoute] Custom quote failed:", wchanResult.reason);
       }
 
-      const best = compareBestRoute(
+      const best = await compareBestRoute(
         zeroXRes?.data ?? null,
         zeroXRes?.ok ?? false,
         wchanQuote,
@@ -148,7 +187,7 @@ export async function GET(request: NextRequest) {
       );
 
       if (best) {
-        return NextResponse.json(best.data);
+        return NextResponse.json({ ...best.data, isPremiumFee });
       }
 
       // Both failed — return 0x error if we have it
@@ -174,6 +213,8 @@ export async function GET(request: NextRequest) {
       sellToken,
       buyToken,
       sellAmount,
+      feeBps,
+      feeToken,
       taker ?? undefined,
       slippageBps,
     );
@@ -182,7 +223,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(result.data, { status: 502 });
     }
 
-    return NextResponse.json(result.data);
+    return NextResponse.json({ ...result.data, isPremiumFee });
   } catch (error) {
     console.error("0x price API error:", error);
     return NextResponse.json(

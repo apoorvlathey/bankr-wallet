@@ -1,9 +1,7 @@
 {
   "name": "WalletChan",
-  "version": "2.1.0",
+  "version": "3.6.0",
   "manifest_version": 3,
-  "update_url": "https://walletchan.com/api/extension/update.xml",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv0CV4nJANqVs2y4f57bscKbk/tEAQd1BSzIlZ61PB0L4T4qvhZxVhkGoslFoWzgBGL7AOzIp9lzI1pPXvS7G3rVPrBQ6/2Uu0abLSJkzZErEMqg1ESt6fOnKAugtRcm/uGX9YxJFj4abeIrAP6PIAqo8TCJEQSqp8ANvdI5/soTxPwwCe9Vv0GVqw77yUsma96AFEkWFor0grKo1HkRWZ6LGMRJtNKQh8F0+lZvdKomZoVn/f+c0ENCQsq+SleJPJbdOmLAXZzCc5IfRdzbRUBCWfkUVOrPUXLCIb/0vhdfjKJp2FwVvlgPE572+G9udaYtbonI4W9BAqm51yqUebQIDAQAB",
   "description": "WalletChan",
   "homepage_url": "https://walletchan.com",
   "browser_specific_settings": {

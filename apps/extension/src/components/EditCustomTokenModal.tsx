@@ -85,34 +85,27 @@ export default function EditCustomTokenModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="sm">
-      <ModalOverlay bg="blackAlpha.700" />
-      <ModalContent
-        bg="bauhaus.white"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="6px 6px 0px 0px #121212"
-        borderRadius="none"
-        mx={4}
-      >
+      <ModalOverlay bg="surface.overlay" />
+      <ModalContent mx={4}>
         <ModalHeader
-          bg="bauhaus.black"
-          color="bauhaus.white"
+          bg="fg.primary"
+          color="fg.inverse"
           fontWeight="900"
           fontSize="md"
           textTransform="uppercase"
           letterSpacing="wider"
           py={2}
           borderBottom="3px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
         >
           Edit Token
         </ModalHeader>
-        <ModalCloseButton color="bauhaus.white" top={1} />
+        <ModalCloseButton color="fg.inverse" top={1} />
         <ModalBody py={4} px={4}>
           <VStack spacing={4} align="stretch">
             {/* Chain + address display */}
             <HStack spacing={2}>
-              <ChainIcon chainId={token.chainId} chainName={chainConfig.name} size="18px" />
+              <ChainIcon chainId={token.chainId} chainName={chainConfig.name} size="18px" withChip />
               <Text fontWeight="700" fontSize="sm">
                 {chainConfig.name}
               </Text>
@@ -125,7 +118,7 @@ export default function EditCustomTokenModal({
               px={2}
               py={1.5}
               border="1px solid"
-              borderColor="gray.200"
+              borderColor="border.subtle"
               noOfLines={1}
             >
               {token.contractAddress}
@@ -140,11 +133,6 @@ export default function EditCustomTokenModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 fontSize="sm"
-                border="2px solid"
-                borderColor="bauhaus.black"
-                borderRadius={0}
-                _hover={{ borderColor: "bauhaus.black" }}
-                _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
               />
             </FormControl>
             <HStack spacing={3}>
@@ -156,11 +144,6 @@ export default function EditCustomTokenModal({
                   value={symbol}
                   onChange={(e) => setSymbol(e.target.value)}
                   fontSize="sm"
-                  border="2px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius={0}
-                  _hover={{ borderColor: "bauhaus.black" }}
-                  _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
                 />
               </FormControl>
               <FormControl>
@@ -172,11 +155,6 @@ export default function EditCustomTokenModal({
                   onChange={(e) => setDecimals(e.target.value)}
                   fontSize="sm"
                   type="number"
-                  border="2px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius={0}
-                  _hover={{ borderColor: "bauhaus.black" }}
-                  _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
                 />
               </FormControl>
             </HStack>
@@ -186,36 +164,18 @@ export default function EditCustomTokenModal({
               <Button
                 onClick={handleRemoveClick}
                 isLoading={saving}
-                variant={confirmingRemove ? "solid" : "outline"}
-                color={confirmingRemove ? "bauhaus.white" : "bauhaus.red"}
-                bg={confirmingRemove ? "bauhaus.red" : "transparent"}
-                borderColor="bauhaus.red"
-                borderWidth="2px"
-                fontWeight="800"
-                textTransform="uppercase"
-                letterSpacing="wider"
+                variant="danger"
                 fontSize="xs"
-                borderRadius={0}
-                _hover={{ bg: confirmingRemove ? "red.600" : "red.50" }}
                 flex={1}
               >
                 {confirmingRemove ? "Confirm?" : "Remove"}
               </Button>
               <Button
+                variant="primary"
                 onClick={handleSave}
                 isDisabled={!symbol || !decimals || saving}
                 isLoading={saving}
-                bg="bauhaus.black"
-                color="bauhaus.white"
-                fontWeight="800"
-                textTransform="uppercase"
-                letterSpacing="wider"
                 fontSize="xs"
-                borderRadius={0}
-                border="2px solid"
-                borderColor="bauhaus.black"
-                _hover={{ bg: "gray.800" }}
-                _disabled={{ opacity: 0.4, cursor: "not-allowed" }}
                 flex={1}
               >
                 Save

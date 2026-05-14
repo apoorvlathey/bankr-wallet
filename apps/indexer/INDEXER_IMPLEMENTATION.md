@@ -15,7 +15,7 @@ Base chain
 └──────────┬───────────┘
            ▼
 ┌──────────────────────┐
-│  src/index.ts        │  Filters by beneficiary pattern, reads on-chain metadata,
+│  src/index.ts        │  Filters by beneficiary pattern, reads onchain metadata,
 │                      │  extracts poolId from PoolManager Initialize log in receipt
 └──────────┬───────────┘
            ▼
@@ -77,7 +77,7 @@ For each qualifying Lock event:
 
 1. **Extract data** - pool address (= coin address) and `beneficiaries[2]` (= creator address)
 2. **Extract poolId** - fetch the transaction receipt via `context.client.getTransactionReceipt()`, scan its logs for the Initialize event from PoolManager (matched by address + topic0), read `topics[1]` as the poolId (bytes32)
-3. **Read on-chain metadata** - call `name()`, `symbol()`, `tokenURI()` on the coin address via `context.client.multicall()`. To optimize for 1 RPC call instead of 3.
+3. **Read onchain metadata** - call `name()`, `symbol()`, `tokenURI()` on the coin address via `context.client.multicall()`. To optimize for 1 RPC call instead of 3.
 4. **Resolve tweetUrl** - if `tokenURI` is an `ipfs://` URI, fetch the IPFS metadata and extract the `tweet_url` field. Uses a gateway fallback chain: dedicated Pinata gateway (if configured) → public `ipfs.io` → public `gateway.pinata.cloud`. If one gateway fails, the next is tried automatically.
 5. **Insert into DB** - write to `coin_launch` table with `onConflictDoNothing()` for idempotency (the primary key is the lowercased coin address)
 
@@ -90,9 +90,9 @@ For each qualifying Lock event:
 | `id`              | text (PK)       | Pool/coin address, lowercased                        |
 | `coinAddress`     | hex             | Pool/coin address (checksummed)                      |
 | `poolId`          | hex (nullable)  | Uniswap V4 pool ID (bytes32) from Initialize event   |
-| `name`            | text (nullable) | From `name()` on-chain call                          |
-| `symbol`          | text (nullable) | From `symbol()` on-chain call                        |
-| `tokenURI`        | text (nullable) | From `tokenURI()` on-chain call                      |
+| `name`            | text (nullable) | From `name()` onchain call                          |
+| `symbol`          | text (nullable) | From `symbol()` onchain call                        |
+| `tokenURI`        | text (nullable) | From `tokenURI()` onchain call                      |
 | `tweetUrl`        | text (nullable) | Resolved from IPFS tokenURI metadata (gateway fallback chain) |
 | `creatorAddress`  | hex             | `beneficiaries[2].account`                           |
 | `blockNumber`     | bigint          | Block the Lock event was emitted in                  |

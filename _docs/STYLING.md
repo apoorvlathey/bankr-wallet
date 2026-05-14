@@ -35,7 +35,151 @@ Always aim to:
 </role>
 
 <design-system>
+
+# WalletChan Theme Engine
+
+> **Read this section first.** As of v3.2.0, WalletChan ships a token-driven
+> theme engine with two themes (Bauhaus + Midnight) — components must consume
+> intent tokens, NOT theme-specific color literals. The Bauhaus design brief
+> below this section is preserved as the original style spec but is no longer
+> the canonical reference for component code.
+
+## Token-Driven Architecture
+
+The extension uses a single token contract (`apps/extension/src/theme/tokens.ts`)
+implemented by every theme. The factory in `apps/extension/src/theme/createTheme.ts`
+translates a `ThemeTokens` object into a Chakra `extendTheme` config. Components
+read from intent tokens (`accent.primary`, `surface.raised`, etc.) — they don't
+know whether the active theme is Bauhaus, Midnight, or any future addition.
+
+```
+ThemeTokens (contract)
+  ↓
+themes/bauhaus.ts ┐
+themes/midnight.ts ┴ → createChakraTheme() → ChakraProvider → React tree
+```
+
+To add a new theme: write `themes/{name}.ts` satisfying `ThemeTokens`, register
+it in `theme/ThemeProvider.tsx`. Zero component edits required.
+
+## Token Vocabulary
+
+All tokens are **intent-based**, never color-named. A token called `red` would
+break the moment a theme decided red wasn't the right CTA color.
+
+### Surface (background layers)
+| Token | Purpose |
+|---|---|
+| `surface.base` | Page background — the deepest layer |
+| `surface.raised` | Cards, modals, headers — one step elevated |
+| `surface.raisedHover` | Hover state for `raised` (subtle shift) |
+| `surface.sunken` | Input fields, recessed containers |
+| `surface.overlay` | Modal scrim / backdrop overlay |
+
+### Foreground (text + icon hierarchy)
+| Token | Purpose |
+|---|---|
+| `fg.primary` | Main body text |
+| `fg.secondary` | Labels, metadata, secondary text |
+| `fg.muted` | Placeholders, disabled states |
+| `fg.inverse` | Text on filled accent backgrounds (button labels, badges) |
+
+### Border
+| Token | Purpose |
+|---|---|
+| `border.subtle` | Hairline dividers |
+| `border.default` | Standard borders |
+| `border.strong` | Strong dividers, card outlines |
+| `border.focus` | Focus ring color |
+
+### Accent (action colors — INTENT-named)
+| Token | Purpose |
+|---|---|
+| `accent.primary` | Main CTA — primary actions (Bauhaus = red, Midnight = indigo) |
+| `accent.secondary` | Secondary actions, links (Bauhaus = blue, Midnight = cyan) |
+| `accent.highlight` | Attention, callouts (Bauhaus = yellow, Midnight = amber) |
+| `accentFg.primary` / `secondary` / `highlight` | Contrast text colors paired with each accent |
+
+### Status
+| Token | Purpose |
+|---|---|
+| `status.{success,warning,error,info}.bg` | Filled status surface |
+| `status.{success,warning,error,info}.fg` | Foreground (icons, text) |
+| `status.{success,warning,error,info}.border` | Status border color |
+| `status.warning.tint` | Soft tinted warning wash (Bauhaus cornsilk, Midnight recessed) |
+
+### Chart / data viz
+| Token | Purpose |
+|---|---|
+| `chart.positive` | Up / received (RED in Bauhaus is wrong — uses GREEN) |
+| `chart.negative` | Down / sent — **the only RED-in-both-themes token** |
+| `chart.neutral` | Unchanged |
+| `chart.numeric` | Numeric value emphasis in calldata/typed-data displays |
+| `chart.series[0..4]` | Multi-line chart series |
+
+### Decorators (theme-specific flourishes)
+| Token | Purpose |
+|---|---|
+| `decorators.cardCorner` | "dot" / "square" / "triangle" / "none" |
+| `decorators.dividerStyle` | "solid-thick" / "solid-thin" / "dashed-glow" / "none" |
+| `decorators.shapesLogo` | Optional theme-supplied loader component |
+
+## Authoring Rules (the law)
+
+1. **NEVER use hex literals in components.** Hex belongs only in `theme/themes/*.ts`
+   (the theme definitions) and a few exempt locations: `lib/chainIcons.ts`,
+   `constants/chainRegistry.ts` (chain brand colors), Chrome API badge calls,
+   the WalletChan OS brand banner gradient.
+2. **NEVER use legacy color names like `bauhaus.red`, `bauhaus.black`, `bauhaus.yellow`.**
+   They're banned in component code as of Phase 13. Use intent tokens.
+3. **`text.*` is permitted** as a permanent compat alias for `fg.*` (610+ existing
+   call sites). New code should still prefer `fg.*` — it's the intent name.
+4. **`status.error.fg` is WHITE in Bauhaus.** It pairs with the RED bg. If you
+   want "red text on a neutral surface" (Reject All buttons, error labels),
+   use `chart.negative` — the only token that's RED in both themes.
+5. **For inverted "dark CTA strip" bars** (tx confirmation count badges, chat
+   header, Add Token CTA), use the shared `useStripTokens()` hook from `@/theme`.
+   Don't duplicate the `themeId === "midnight" ? ... : ...` ternary inline.
+6. **For toasts**, use `useThemedToast()` from `@/hooks/useThemedToast`. The
+   hook maps each status to an accent intent and respects both themes.
+7. **`<ModalContent>` and `<MenuList>` should NOT carry inline `bg`/`border`/
+   `borderRadius`/`boxShadow` overrides.** The Modal and Menu baseStyles in
+   `createTheme.ts` paint them from theme tokens. Same for `<PopoverContent>`
+   and `<SliderTrack>` / `<SliderThumb>` as of Phase 13.
+8. **For invalid form inputs**, set `isInvalid={...}` and let the Input baseStyle's
+   `_invalid` state in `createTheme.ts` paint the border/shadow. Don't pass a
+   ternary to `borderColor`.
+9. **For Bauhaus-only ornaments** (corner squares, triangles, decorative dots),
+   wrap them in `{!isDarkTheme && (...)}` so Midnight skips them entirely.
+10. **For SVG `stroke=` and CSS triangle hacks via `borderBottomColor`**, use the
+    CSS-var form `var(--chakra-colors-accent-highlight)` instead of token names —
+    Chakra style props don't always resolve token paths in those slots.
+
+## Theme Authoring Guide
+
+To add a new theme (e.g. `themes/paper.ts`):
+
+1. Copy `themes/bauhaus.ts` or `themes/midnight.ts` as a starting point.
+2. Provide every field of `ThemeTokens` (the type checker will tell you what's
+   missing). Pay special attention to:
+   - `accentFg.*` — must read well on `accent.*` backgrounds (test contrast)
+   - `chart.numeric` — must be visible on `surface.raised`
+   - `chart.negative` — must be RED in your theme (it's the only RED-in-both
+     guarantee component code relies on)
+   - `status.warning.tint` — soft warning wash, distinct from `status.warning.bg`
+3. Register the theme in `theme/ThemeProvider.tsx` (`themeList` array) and
+   `theme/useThemeSelection.ts` (`isThemeId` validator).
+4. Add a `ThemePreview` for the picker card.
+5. Build, load the extension, switch themes from Settings → Appearance, walk
+   through every screen × every wallet type to spot-check.
+
+The full architecture, phased rollout history, and design decisions are in
+`_docs/THEMING_PRD.md`.
+
+---
+
 # Design Style: Bauhaus
+*(historical reference — preserved as the original style spec for the Bauhaus theme)*
 
 ## 1. Design Philosophy
 

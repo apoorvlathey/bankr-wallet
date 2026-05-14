@@ -13,6 +13,12 @@ html, body {
   background-color: #F0F0F0;
 }
 
+/* Theme-aware base background — bootstrap.ts sets data-theme on <html>
+   synchronously before paint so the wrong-theme flash never appears. */
+html[data-theme="midnight"], html[data-theme="midnight"] body {
+  background-color: #0B0E17;
+}
+
 #onboarding-root {
   min-height: 100vh;
   display: flex;

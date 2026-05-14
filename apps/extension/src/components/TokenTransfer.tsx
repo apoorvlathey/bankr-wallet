@@ -25,9 +25,11 @@ import {
 } from "@chakra-ui/react";
 import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon } from "@chakra-ui/icons";
 import { blo } from "blo";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
+import { useTheme } from "@/theme";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
+import { useCachedAvatarSrc, useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import { isResolvableName } from "@/lib/ensUtils";
 import { PortfolioToken } from "@/chrome/portfolioApi";
 import { fetchOnchainBalances } from "@/chrome/onchainBalances";
@@ -36,6 +38,8 @@ import { buildTransferTx } from "@/chrome/transferUtils";
 import { SWAP_SUPPORTED_CHAIN_IDS } from "@/constants/chainRegistry";
 import type { Account } from "@/chrome/types";
 import TokenSelector from "@/components/Swap/TokenSelector";
+import { NATIVE_TOKEN_ADDRESS, type TokenListEntry } from "@/chrome/swapApi";
+import { getChainConfig } from "@/constants/chainConfig";
 import { WALLETCHAN_STAKE_URL } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import ChainIcon from "@/components/ChainIcon";
@@ -67,15 +71,15 @@ function truncateAddress(address: string): string {
 
 function getAccountTypePillStyles(account: Account) {
   if (account.type === "bankr") {
-    return { label: "Bankr", bg: "bauhaus.blue", color: "white" };
+    return { label: "Bankr", bg: "accent.secondary", color: "accentFg.secondary" };
   }
   if (account.type === "privateKey") {
-    return { label: "Private Key", bg: "bauhaus.yellow", color: "bauhaus.black" };
+    return { label: "Private Key", bg: "accent.highlight", color: "accentFg.highlight" };
   }
   if (account.type === "seedPhrase") {
-    return { label: "Seed Phrase", bg: "bauhaus.red", color: "white" };
+    return { label: "Seed Phrase", bg: "accent.primary", color: "accentFg.primary" };
   }
-  return { label: "View Only", bg: "bauhaus.green", color: "white" };
+  return { label: "View Only", bg: "status.success.fg", color: "status.success.bg" };
 }
 
 interface TokenTransferProps {
@@ -99,11 +103,13 @@ function TokenTransfer({
   onTransferInitiated,
   onSwapInstead,
 }: TokenTransferProps) {
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
+  const { tokens } = useTheme();
   const { networksInfo } = useNetworks();
   const [selectedChainId, setSelectedChainId] = useState(initialToken?.chainId || chainId);
   const [selectedToken, setSelectedToken] = useState<PortfolioToken | null>(initialToken || null);
   const [allTokens, setAllTokens] = useState<PortfolioToken[]>([]);
+  const [tokenList, setTokenList] = useState<TokenListEntry[]>([]);
   const [holdingsLoading, setHoldingsLoading] = useState(false);
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
@@ -137,11 +143,6 @@ function TokenTransfer({
 
         if (cancelled) return;
         setAllTokens(tokens);
-
-        if (!selectedToken) {
-          const onChain = tokens.filter((t) => t.chainId === selectedChainId);
-          if (onChain.length > 0) setSelectedToken(onChain[0]);
-        }
       } finally {
         if (!cancelled) setHoldingsLoading(false);
       }
@@ -154,6 +155,154 @@ function TokenTransfer({
     () => allTokens.filter((t) => t.chainId === selectedChainId),
     [allTokens, selectedChainId],
   );
+
+  // Swap token list for the selected chain — feeds the Send dropdown's "All
+  // tokens" group and lets popular chips (USDC, USDT, ...) appear even when
+  // the user has zero onchain balance of them. Mirrors SwapView's fetch.
+  useEffect(() => {
+    if (!SWAP_SUPPORTED_CHAIN_IDS.has(selectedChainId)) {
+      setTokenList([]);
+      return;
+    }
+    let cancelled = false;
+    chrome.runtime.sendMessage(
+      { type: "fetchSwapTokenList", chainId: selectedChainId },
+      (res) => {
+        if (cancelled) return;
+        if (res?.success && Array.isArray(res.data)) setTokenList(res.data);
+        else setTokenList([]);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedChainId]);
+
+  // -----------------------------------------------------------------------
+  // Onchain balance fallback for the selected token. Mirrors SwapView's
+  // verification: when the chosen token reports a 0 balance (either because
+  // the portfolio API hasn't picked it up yet, or because the user picked
+  // it from the swap token list which defaults balance to "0"), fall back
+  // to a direct `balanceOf` / `eth_getBalance` so the user sees the truth.
+  // Memoized per (chain, token, owner) so it doesn't refetch on every render.
+  // -----------------------------------------------------------------------
+  const verifiedZeroBalancesRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!selectedToken || !fromAddress) return;
+    if (parseFloat(selectedToken.balance) > 0) return;
+
+    const tokenAddr = selectedToken.contractAddress;
+    const tokenChainId = selectedToken.chainId;
+    const tokenDecimals = selectedToken.decimals;
+    const key = `${tokenChainId}:${tokenAddr.toLowerCase()}:${fromAddress.toLowerCase()}`;
+    if (verifiedZeroBalancesRef.current.has(key)) return;
+    verifiedZeroBalancesRef.current.add(key);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const rpcUrl = await getStoredRpcUrl(tokenChainId);
+        if (!rpcUrl || cancelled) return;
+        const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
+        const client = createPublicClient({
+          transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }),
+        });
+        const isNative = tokenAddr === "native";
+        const rawBalance = isNative
+          ? await client.getBalance({ address: fromAddress as `0x${string}` })
+          : ((await client.readContract({
+              address: tokenAddr as `0x${string}`,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [fromAddress as `0x${string}`],
+            })) as bigint);
+        if (cancelled || rawBalance === 0n) return;
+
+        const balance = formatUnits(rawBalance, tokenDecimals);
+        const balanceNum = parseFloat(balance);
+        const balanceFormatted =
+          balanceNum > 0 && balanceNum < 0.0001
+            ? "<0.0001"
+            : parseFloat(balanceNum.toPrecision(6)).toString();
+
+        setSelectedToken((prev) => {
+          if (
+            !prev ||
+            prev.contractAddress.toLowerCase() !== tokenAddr.toLowerCase() ||
+            prev.chainId !== tokenChainId
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            balance,
+            balanceFormatted,
+            valueUsd: balanceNum * prev.priceUsd,
+          };
+        });
+      } catch {
+        // Silent: keep showing 0 if RPC fails.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedToken, fromAddress]);
+
+  // -----------------------------------------------------------------------
+  // USD price fallback for the selected ERC-20. The portfolio API supplies
+  // priceUsd for known tokens but may be down (priceUsd=0 for everything)
+  // or simply not price a custom/exotic token. Resolve directly through
+  // `fetchTokenPrice` (proxy → CoinGecko → GeckoTerminal fallback chain) so
+  // USD-mode and the value display still work. Native tokens already get
+  // prices through the catalog's native resolver.
+  //
+  // We deliberately do NOT use a `cancelled` flag here: the onchain balance
+  // fallback above also calls `setSelectedToken`, and any state update that
+  // changes `selectedToken` would trigger this effect's cleanup mid-flight
+  // and silently drop the price response. The `setSelectedToken` updater
+  // below already guards staleness by matching (chainId, address), so a
+  // late response for a token the user has since switched away from is a
+  // no-op. Combined with `resolvedTokenPriceRef`, each (chainId, address)
+  // is fetched at most once per mount.
+  // -----------------------------------------------------------------------
+  const resolvedTokenPriceRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!selectedToken) return;
+    if (selectedToken.priceUsd > 0) return;
+    if (selectedToken.contractAddress === "native") return;
+    if (!/^0x[a-fA-F0-9]{40}$/.test(selectedToken.contractAddress)) return;
+
+    const tokenAddr = selectedToken.contractAddress;
+    const tokenChainId = selectedToken.chainId;
+    const key = `${tokenChainId}:${tokenAddr.toLowerCase()}`;
+    if (resolvedTokenPriceRef.current.has(key)) return;
+    resolvedTokenPriceRef.current.add(key);
+
+    chrome.runtime.sendMessage(
+      { type: "fetchTokenPrice", chainId: tokenChainId, address: tokenAddr },
+      (res) => {
+        const priceUsd = Number(res?.priceUsd ?? 0);
+        if (!res?.success || !(priceUsd > 0)) return;
+        setSelectedToken((prev) => {
+          if (
+            !prev ||
+            prev.contractAddress.toLowerCase() !== tokenAddr.toLowerCase() ||
+            prev.chainId !== tokenChainId
+          ) {
+            return prev;
+          }
+          const balanceNum = parseFloat(prev.balance || "0");
+          return {
+            ...prev,
+            priceUsd,
+            valueUsd: balanceNum > 0 ? balanceNum * priceUsd : 0,
+          };
+        });
+      },
+    );
+  }, [selectedToken]);
 
   // Centralized chain list: built-ins + custom overrides/custom additions.
   const allChains = useMemo(() => {
@@ -182,7 +331,7 @@ function TokenTransfer({
   const [resolvedCustomToken, setResolvedCustomToken] = useState<PortfolioToken | null>(null);
   const [customTokenError, setCustomTokenError] = useState<string | null>(null);
 
-  // Resolve a custom ERC20 address: fetch on-chain info + balance
+  // Resolve a custom ERC20 address: fetch onchain info + balance
   const resolveCustomAddress = async (tokenAddress: string) => {
     setCustomTokenLoading(true);
     setResolvedCustomToken(null);
@@ -198,7 +347,11 @@ function TokenTransfer({
       }
       const { name, symbol, decimals } = infoResult.data;
 
-      // Fetch balance via balanceOf
+      const addrLower = tokenAddress.toLowerCase();
+      const isNative =
+        addrLower === "0x0000000000000000000000000000000000000000" ||
+        addrLower === NATIVE_TOKEN_ADDRESS.toLowerCase();
+
       const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
       const rpcUrl = await getStoredRpcUrl(selectedChainId);
       if (!rpcUrl) {
@@ -206,23 +359,31 @@ function TokenTransfer({
         return;
       }
       const client = createPublicClient({ transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }) });
-      const rawBalance = await client.readContract({
-        address: tokenAddress as `0x${string}`,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [fromAddress as `0x${string}`],
-      });
+      const rawBalance = isNative
+        ? await client.getBalance({ address: fromAddress as `0x${string}` })
+        : await client.readContract({
+            address: tokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [fromAddress as `0x${string}`],
+          });
       const balance = formatUnits(rawBalance, decimals);
       const balanceNum = parseFloat(balance);
 
+      const logoUrl = isNative
+        ? symbol.toUpperCase() === "ETH"
+          ? "/chainIcons/ethereum.svg"
+          : getChainConfig(selectedChainId)?.icon || ""
+        : "";
+
       setResolvedCustomToken({
-        contractAddress: tokenAddress,
+        contractAddress: isNative ? "native" : tokenAddress,
         name,
         symbol,
         decimals,
         balance,
         balanceFormatted: balanceNum < 0.0001 && balanceNum > 0 ? "<0.0001" : parseFloat(balanceNum.toPrecision(6)).toString(),
-        logoUrl: "",
+        logoUrl,
         valueUsd: 0,
         priceUsd: 0,
         chainId: selectedChainId,
@@ -255,6 +416,7 @@ function TokenTransfer({
   const [premiumStatus, setPremiumStatus] = useState<{
     isPremium: boolean;
     balance: string;
+    sponsoredTransfersEnabled: boolean;
   } | null>(null);
   const [premiumLoading, setPremiumLoading] = useState(false);
 
@@ -266,17 +428,18 @@ function TokenTransfer({
     setPremiumLoading(true);
     chrome.runtime.sendMessage(
       { type: "checkPremiumStatus", address: fromAddress },
-      (result: { isPremium: boolean; balance: string } | undefined) => {
+      (result: { isPremium: boolean; balance: string; sponsoredTransfersEnabled: boolean } | undefined) => {
         if (result) setPremiumStatus(result);
         setPremiumLoading(false);
       }
     );
   }, [isUsdcOnBase, fromAddress]);
 
-  const isSponsoredFlow = isUsdcOnBase && premiumStatus?.isPremium && accountType !== "impersonator";
+  const isSponsoredFlow = isUsdcOnBase && premiumStatus?.isPremium && premiumStatus?.sponsoredTransfersEnabled && accountType !== "impersonator";
 
   const { resolvedAddress, resolvedName, avatar, isResolving, isLoadingExtras, isValid: isRecipientValid, error: resolverError } =
     useAddressResolver(recipient);
+  const cachedRecipientAvatar = useCachedAvatarSrc(avatar);
 
   const chainName = getChainName(selectedChainId);
   const chainEnvironmentLabel = getChainEnvironmentLabel(selectedChainId, chainName);
@@ -319,6 +482,14 @@ function TokenTransfer({
     [otherAccounts],
   );
   const { identities: otherAccountIdentities } = useEnsIdentities(otherAccountAddresses);
+  const otherAccountAvatarUrls = useMemo(
+    () =>
+      otherAccounts
+        .map((a) => otherAccountIdentities.get(a.address.toLowerCase())?.avatar)
+        .filter((u): u is string => !!u),
+    [otherAccounts, otherAccountIdentities],
+  );
+  const cachedOtherAccountAvatars = useCachedAvatarMap(otherAccountAvatarUrls);
 
   const getAccountDisplayName = useCallback((account: Account): string => {
     if (account.displayName) return account.displayName;
@@ -335,10 +506,10 @@ function TokenTransfer({
 
   const getAccountAvatar = useCallback((account: Account): string => {
     const ensAvatar = otherAccountIdentities.get(account.address.toLowerCase())?.avatar;
-    if (ensAvatar) return ensAvatar;
+    if (ensAvatar) return cachedOtherAccountAvatars.get(ensAvatar) || ensAvatar;
     if (account.type === "bankr") return "/bankr-icon.png";
     return blo(account.address as `0x${string}`);
-  }, [otherAccountIdentities]);
+  }, [otherAccountIdentities, cachedOtherAccountAvatars]);
 
   // Compute the token amount that will actually be sent
   const tokenAmount = useMemo(() => {
@@ -585,7 +756,7 @@ function TokenTransfer({
   };
 
   return (
-    <Box p={4} minH="100%" bg="bg.base">
+    <Box p={4} minH="100%" bg="surface.base">
       <VStack spacing={3} align="stretch">
         {/* Header */}
         <HStack spacing={2} justify="space-between">
@@ -605,7 +776,7 @@ function TokenTransfer({
             <Text
               fontSize="xs"
               fontWeight="700"
-              color="bauhaus.blue"
+              color="accent.secondary"
               cursor="pointer"
               onClick={() => onSwapInstead(selectedToken)}
               _hover={{ textDecoration: "underline" }}
@@ -621,16 +792,17 @@ function TokenTransfer({
             spacing={2}
             px={2.5}
             py={1.5}
-            bg="bauhaus.yellow"
-            border="2px solid"
-            borderColor="bauhaus.black"
+            bg="accent.highlight"
+            border={tokens.borders.thin}
+            borderColor="border.default"
+            borderRadius="md"
             justify="space-between"
           >
             <Box>
-              <Text fontSize="2xs" color="bauhaus.black" fontWeight="700">
+              <Text fontSize="2xs" color="accentFg.highlight" fontWeight="700">
                 ✨ Stake 20M+ sWCHAN for gas-free USDC sends
               </Text>
-              <Text fontSize="2xs" color="blackAlpha.700" fontWeight="600">
+              <Text fontSize="2xs" color="accentFg.highlight" opacity={0.7} fontWeight="600">
                 and other pro features!
               </Text>
             </Box>
@@ -638,14 +810,8 @@ function TokenTransfer({
               size="xs"
               h="22px"
               px={2}
-              bg="bauhaus.yellow"
-              color="bauhaus.black"
-              fontWeight="800"
+              variant="highlight"
               fontSize="2xs"
-              borderRadius={0}
-              border="2px solid"
-              borderColor="bauhaus.black"
-              _hover={{ bg: "#e0b01c" }}
               onClick={() => window.open(WALLETCHAN_STAKE_URL, "_blank")}
               flexShrink={0}
             >
@@ -655,17 +821,15 @@ function TokenTransfer({
         )}
 
         {/* Token selector card */}
-        {holdingsLoading && !token ? (
-          <Skeleton h="64px" />
-        ) : (
-          <Box
-            bg="bauhaus.white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+        <Box
+            bg="surface.raised"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={3}
           >
-            <HStack spacing={3}>
+            <HStack spacing={3} align="center">
               {/* Chain selector */}
               <Menu
                 isOpen={isChainMenuOpen}
@@ -688,33 +852,33 @@ function TokenTransfer({
                   transition="opacity 0.15s"
                 >
                   <HStack spacing={1.5}>
-                    <ChainIcon chainId={selectedChainId} chainName={chainName} size="36px" />
+                    <ChainIcon chainId={selectedChainId} chainName={chainName} size="36px" withChip />
                     <Box
-                      bg="bauhaus.white"
+                      bg="surface.raised"
                       border="1.5px solid"
-                      borderColor="bauhaus.black"
-                      borderRadius="none"
+                      borderColor="border.default"
+                      borderRadius="md"
                       minW="18px"
                       h="18px"
                       display="flex"
                       alignItems="center"
                       justifyContent="center"
-                      boxShadow="2px 2px 0px 0px #121212"
+                      boxShadow="card"
                     >
                       <ChevronDownIcon boxSize="12px" />
                     </Box>
                   </HStack>
                 </MenuButton>
                 <MenuList
-                  bg="bauhaus.white"
-                  border="3px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius={0}
-                  boxShadow="4px 4px 0px 0px #121212"
+                  bg="surface.raised"
+                  border={tokens.borders.medium}
+                  borderColor="border.default"
+                  borderRadius="lg"
+                  boxShadow="card"
                   p={0}
                   zIndex={10}
                 >
-                  <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+                  <Box p={2} borderBottom={tokens.borders.thin} borderColor="border.default">
                     <InputGroup size="sm">
                       <InputLeftElement pointerEvents="none">
                         <Search2Icon color="text.tertiary" boxSize={3} />
@@ -724,13 +888,8 @@ function TokenTransfer({
                         value={chainSearch}
                         onChange={(e) => setChainSearch(e.target.value)}
                         placeholder="Search chains"
-                        border="2px solid"
-                        borderColor="bauhaus.black"
-                        borderRadius="0"
                         fontWeight="600"
                         pl={9}
-                        _hover={{ borderColor: "bauhaus.black" }}
-                        _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
                         onKeyDown={(e) => {
                           if (e.key === "ArrowDown") {
                             e.preventDefault();
@@ -786,7 +945,7 @@ function TokenTransfer({
                         py={2}
                       >
                         <HStack spacing={2}>
-                          <ChainIcon chainId={cId} chainName={getChainName(cId)} size="18px" />
+                          <ChainIcon chainId={cId} chainName={getChainName(cId)} size="18px" withChip />
                           <HStack spacing={1.5}>
                             <Text fontWeight="700" fontSize="sm">{getChainName(cId)}</Text>
                             {getChainEnvironmentLabel(cId, getChainName(cId)) && (
@@ -797,10 +956,10 @@ function TokenTransfer({
                                 textTransform="uppercase"
                                 px={1.5}
                                 py={0.5}
-                                bg="bauhaus.yellow"
-                                color="bauhaus.black"
+                                bg="accent.highlight"
+                                color="accentFg.highlight"
                                 border="1px solid"
-                                borderColor="bauhaus.black"
+                                borderColor="border.default"
                                 lineHeight="1"
                               >
                                 Testnet
@@ -821,55 +980,62 @@ function TokenTransfer({
                 </MenuList>
               </Menu>
 
-              {/* Token selector + balance */}
-              <VStack align="start" spacing={0} flex={1} minW={0}>
-                <TokenSelector
-                  holdings={holdings}
-                  selectedToken={token}
-                  onSelect={handleTokenSelect}
-                  borderless
-                  onCustomAddress={resolveCustomAddress}
-                  onSelectCustomToken={handleSelectCustomToken}
-                  resolvedCustomToken={resolvedCustomToken}
-                  customTokenLoading={customTokenLoading}
-                  customTokenError={customTokenError}
-                  chainName={chainName}
-                />
-                {token && (
-                  <HStack spacing={1.5} mt={0.5} minW={0} flexWrap="wrap">
-                    <Text fontSize="xs" fontWeight="700" color="text.tertiary" noOfLines={1}>
-                      on {chainName.replace(/\s+testnet$/i, "")}
-                    </Text>
-                    {chainEnvironmentLabel && (
-                      <Text
-                        fontSize="8px"
-                        fontWeight="900"
-                        letterSpacing="0.08em"
-                        textTransform="uppercase"
-                        px={1.5}
-                        py={0.5}
-                        bg="bauhaus.yellow"
-                        color="bauhaus.black"
-                        border="1px solid"
-                        borderColor="bauhaus.black"
-                        lineHeight="1"
-                        flexShrink={0}
-                      >
-                        {chainEnvironmentLabel}
-                      </Text>
-                    )}
-                  </HStack>
-                )}
-              </VStack>
+              {/* Testnet pill — only on non-mainnet chains. Inline with the
+                  chain selector so it reads as a row-level safety signal. */}
+              {chainEnvironmentLabel && (
+                <Text
+                  fontSize="8px"
+                  fontWeight="900"
+                  letterSpacing="0.08em"
+                  textTransform="uppercase"
+                  px={1.5}
+                  py={0.5}
+                  bg="accent.highlight"
+                  color="accentFg.highlight"
+                  border="1px solid"
+                  borderColor="border.default"
+                  lineHeight="1"
+                  flexShrink={0}
+                >
+                  {chainEnvironmentLabel}
+                </Text>
+              )}
+
+              {/* Token selector — content-sized; balance sits flush right
+                  via ml="auto" so the trigger button stays compact. */}
+              <TokenSelector
+                holdings={holdings}
+                tokenList={tokenList}
+                chainId={selectedChainId}
+                selectedToken={token}
+                onSelect={handleTokenSelect}
+                onCustomAddress={resolveCustomAddress}
+                onSelectCustomToken={handleSelectCustomToken}
+                resolvedCustomToken={resolvedCustomToken}
+                customTokenLoading={customTokenLoading}
+                customTokenError={customTokenError}
+                chainName={chainName}
+                dropdownAlign="right"
+              />
 
               {/* Balance */}
               {token && (
-                <VStack align="end" spacing={0} flexShrink={0}>
+                <VStack align="end" spacing={0} flexShrink={0} ml="auto">
+                  <Text
+                    fontSize="2xs"
+                    fontWeight="800"
+                    color="text.tertiary"
+                    textTransform="uppercase"
+                    letterSpacing="0.06em"
+                    lineHeight="1"
+                  >
+                    Balance
+                  </Text>
                   <Text fontSize="sm" fontWeight="800" color="text.primary" noOfLines={1}>
                     {token.balanceFormatted}
                   </Text>
                   {hasPrice && (
-                    <Text fontSize="xs" fontWeight="700" color="text.tertiary">
+                    <Text fontSize="xs" fontWeight="700" color="text.tertiary" lineHeight="1.2">
                       {formatUsd(parseFloat(token.balance) * token.priceUsd)}
                     </Text>
                   )}
@@ -877,7 +1043,6 @@ function TokenTransfer({
               )}
             </HStack>
           </Box>
-        )}
 
         {/* Recipient input */}
         <Box>
@@ -895,7 +1060,7 @@ function TokenTransfer({
                     rightIcon={<ChevronDownIcon boxSize="14px" />}
                     fontWeight="800"
                     fontSize="10px"
-                    color="bauhaus.blue"
+                    color="accent.secondary"
                     textTransform="uppercase"
                     letterSpacing="wide"
                     px={1}
@@ -906,10 +1071,11 @@ function TokenTransfer({
                     My Wallets
                   </MenuButton>
                   <MenuList
-                    bg="bauhaus.white"
-                    border="3px solid"
-                    borderColor="bauhaus.black"
-                    borderRadius="0"
+                    bg="surface.raised"
+                    border={tokens.borders.medium}
+                    borderColor="border.default"
+                    borderRadius="lg"
+                    boxShadow="card"
                     py={1}
                     maxH="200px"
                     overflowY="auto"
@@ -933,7 +1099,7 @@ function TokenTransfer({
                             minW="20px"
                             borderRadius={getAccountAvatar(account) === "/bankr-icon.png" ? "sm" : "full"}
                             border="2px solid"
-                            borderColor="bauhaus.black"
+                            borderColor="border.default"
                           />
                           <VStack align="start" spacing={0.5}>
                             <Text fontSize="xs" fontWeight="700" color="text.primary" noOfLines={1}>
@@ -950,7 +1116,7 @@ function TokenTransfer({
                               py={0}
                               borderRadius="sm"
                               border="1px solid"
-                              borderColor="bauhaus.black"
+                              borderColor="border.default"
                             >
                               <Text
                                 fontSize="8px"
@@ -973,7 +1139,7 @@ function TokenTransfer({
             {/* Resolution status - top right */}
             {recipient && (isResolving || isLoadingExtras) && (
               <HStack spacing={1}>
-                <Spinner size="xs" color="bauhaus.blue" />
+                <Spinner size="xs" color="accent.secondary" />
                 <Text fontSize="xs" color="text.tertiary" fontWeight="700">
                   Resolving...
                 </Text>
@@ -983,12 +1149,12 @@ function TokenTransfer({
               <HStack spacing={0.5}>
                 {avatar && (
                   <Image
-                    src={avatar}
+                    src={cachedRecipientAvatar || avatar}
                     alt="avatar"
                     boxSize="14px"
                     borderRadius="full"
                     border="1px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                   />
                 )}
                 <Text fontSize="xs" color="text.tertiary" fontFamily="mono" fontWeight="700">
@@ -1001,13 +1167,13 @@ function TokenTransfer({
                   variant="ghost"
                   minW="18px"
                   h="18px"
-                  color={copied ? "bauhaus.yellow" : "text.tertiary"}
+                  color={copied ? "accent.highlight" : "text.tertiary"}
                   onClick={async () => {
                     await navigator.clipboard.writeText(resolvedAddress);
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}
-                  _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                  _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                 />
                 {explorerUrl && (
                   <IconButton
@@ -1019,7 +1185,7 @@ function TokenTransfer({
                     h="18px"
                     color="text.tertiary"
                     onClick={() => window.open(`${explorerUrl}/address/${resolvedAddress}`, "_blank")}
-                    _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                    _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                   />
                 )}
               </HStack>
@@ -1028,12 +1194,12 @@ function TokenTransfer({
               <HStack spacing={0.5}>
                 {avatar && (
                   <Image
-                    src={avatar}
+                    src={cachedRecipientAvatar || avatar}
                     alt="avatar"
                     boxSize="14px"
                     borderRadius="full"
                     border="1px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                   />
                 )}
                 <Text fontSize="xs" color="text.tertiary" fontWeight="700">
@@ -1048,19 +1214,10 @@ function TokenTransfer({
             onChange={(e) => setRecipient(e.target.value.trim())}
             fontFamily="mono"
             fontSize="sm"
-            border="3px solid"
-            borderColor={
-              recipient && !isResolving && !isRecipientValid
-                ? "bauhaus.red"
-                : "bauhaus.black"
-            }
-            borderRadius="0"
-            bg="bauhaus.white"
-            _hover={{ borderColor: "bauhaus.blue" }}
-            _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+            isInvalid={!!recipient && !isResolving && !isRecipientValid}
           />
           {recipient && !isResolving && !isRecipientValid && (
-            <Text fontSize="xs" color="bauhaus.red" fontWeight="700" mt={1}>
+            <Text fontSize="xs" color="status.error.fg" fontWeight="700" mt={1}>
               {resolverError || "Invalid address or name"}
             </Text>
           )}
@@ -1076,7 +1233,7 @@ function TokenTransfer({
               <Button
                 size="xs"
                 variant="ghost"
-                color="bauhaus.blue"
+                color="accent.secondary"
                 fontWeight="800"
                 fontSize="xs"
                 h="20px"
@@ -1106,12 +1263,6 @@ function TokenTransfer({
               }}
               fontFamily="mono"
               fontSize="sm"
-              border="3px solid"
-              borderColor="bauhaus.black"
-              borderRadius="0"
-              bg="bauhaus.white"
-              _hover={{ borderColor: "bauhaus.blue" }}
-              _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
               pl={isUsdMode ? "28px" : undefined}
               pr="60px"
             />
@@ -1119,7 +1270,7 @@ function TokenTransfer({
               <Button
                 size="xs"
                 variant="ghost"
-                color="bauhaus.blue"
+                color="accent.secondary"
                 fontWeight="800"
                 onClick={handleMaxAmount}
                 _hover={{ bg: "bg.muted" }}
@@ -1162,29 +1313,30 @@ function TokenTransfer({
                     mt={3}
                     fontSize="xs"
                     fontWeight="800"
-                    color={sliderValue >= pct ? "bauhaus.blue" : "gray.400"}
+                    color={sliderValue >= pct ? "accent.secondary" : "fg.muted"}
                     whiteSpace="nowrap"
                     transform="translateX(-50%)"
                   >
                     {pct}%
                   </SliderMark>
                 ))}
-                <SliderTrack bg="gray.200" h="6px" borderRadius={0}>
-                  <SliderFilledTrack bg="bauhaus.blue" />
+                {/* Slider baseStyle (createTheme.ts) drives track/thumb radii
+                    from theme tokens — Bauhaus square, Midnight rounded. */}
+                <SliderTrack bg="bg.muted" h="6px">
+                  <SliderFilledTrack bg="accent.secondary" />
                 </SliderTrack>
                 <SliderThumb
                   boxSize={5}
-                  bg="bauhaus.blue"
-                  border="3px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius={0}
+                  bg="accent.secondary"
+                  border={tokens.borders.medium}
+                  borderColor="border.default"
                   _focus={{ boxShadow: "none" }}
                 />
               </Slider>
             </Box>
           )}
           {amount && !isAmountValid() && parseFloat(amount) > 0 && (
-            <Text fontSize="xs" color="bauhaus.red" fontWeight="700" mt={1}>
+            <Text fontSize="xs" color="status.error.fg" fontWeight="700" mt={1}>
               Insufficient balance
             </Text>
           )}
@@ -1193,16 +1345,17 @@ function TokenTransfer({
         {/* Sponsored USDC banner */}
         {isUsdcOnBase && !premiumLoading && premiumStatus?.isPremium && accountType !== "impersonator" && (
           <Box
-            bg="bauhaus.blue"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="3px 3px 0px 0px #121212"
+            bg="accent.secondary"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={3}
           >
-            <Text fontSize="md" color="bauhaus.white" fontWeight="900" textTransform="uppercase" textAlign="center">
+            <Text fontSize="md" color="accentFg.secondary" fontWeight="900" textTransform="uppercase" textAlign="center">
               Gas Sponsored by us!
             </Text>
-            <Text fontSize="xs" color="whiteAlpha.800" fontWeight="700" textAlign="center" mt={0.5}>
+            <Text fontSize="xs" color="accentFg.secondary" opacity={0.8} fontWeight="700" textAlign="center" mt={0.5}>
               Free USDC transfer for sWCHAN stakers
             </Text>
           </Box>
@@ -1214,31 +1367,25 @@ function TokenTransfer({
         {/* Sponsored transfer failed — fallback to normal send */}
         {sponsoredFailed && (
           <Box
-            bg="bauhaus.red"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="3px 3px 0px 0px #121212"
+            bg="status.error.bg"
+            border={tokens.borders.medium}
+            borderColor="status.error.border"
+            borderRadius="lg"
+            boxShadow="card"
             p={3}
           >
-            <Text fontSize="xs" color="bauhaus.white" fontWeight="800">
+            <Text fontSize="xs" color="status.error.fg" fontWeight="800">
               ⚠️ Gas-free transfer is temporarily unavailable.
             </Text>
-            <Text fontSize="xs" color="whiteAlpha.800" fontWeight="700" mt={1}>
+            <Text fontSize="xs" color="status.error.fg" opacity={0.8} fontWeight="700" mt={1}>
               You can still send by paying gas yourself.
             </Text>
             <Button
               mt={2}
               w="full"
               size="sm"
-              bg="bauhaus.yellow"
-              color="bauhaus.black"
-              border="2px solid"
-              borderColor="bauhaus.black"
-              borderRadius={0}
-              boxShadow="2px 2px 0px 0px #121212"
-              fontWeight="800"
+              variant="highlight"
               fontSize="xs"
-              textTransform="uppercase"
               isLoading={isSubmitting}
               onClick={handleFallbackSend}
               animation="fallbackBounce 1.5s ease-in-out infinite"
@@ -1248,8 +1395,8 @@ function TokenTransfer({
                   "50%": { transform: "translateY(-3px)" },
                 },
               }}
-              _hover={{ bg: "#e0b01c", animation: "none", transform: "translateY(-1px)", boxShadow: "3px 3px 0px 0px #121212" }}
-              _active={{ animation: "none", transform: "translate(1px, 1px)", boxShadow: "none" }}
+              _hover={{ animation: "none", opacity: 0.9 }}
+              _active={{ animation: "none" }}
             >
               ⛽ Send (Pay Gas)
             </Button>
@@ -1259,13 +1406,14 @@ function TokenTransfer({
         {/* Impersonator warning */}
         {accountType === "impersonator" && (
           <Box
-            bg="bauhaus.yellow"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="3px 3px 0px 0px #121212"
+            bg="accent.highlight"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={3}
           >
-            <Text fontSize="sm" color="bauhaus.black" fontWeight="700">
+            <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
               View-only account — transfers are disabled.
             </Text>
           </Box>
@@ -1286,21 +1434,17 @@ function TokenTransfer({
             onClick={handleSubmit}
             isLoading={isSubmitting}
             isDisabled={!canSubmit || accountType === "impersonator"}
-            bg="bauhaus.blue"
-            color="white"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="accent.secondary"
+            color="accentFg.secondary"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            boxShadow="card"
             fontWeight="700"
             fontSize={isSponsoredFlow ? "xs" : undefined}
             _hover={{
-              bg: "bauhaus.blue",
-              transform: "translateY(-2px)",
-              boxShadow: "6px 6px 0px 0px #121212",
-            }}
-            _active={{
-              transform: "translate(2px, 2px)",
-              boxShadow: "none",
+              bg: "accent.secondary",
+              opacity: 0.9,
+              boxShadow: "cardHover",
             }}
           >
             {isSponsoredFlow ? "Sign (Gas-Free)" : "Send"}

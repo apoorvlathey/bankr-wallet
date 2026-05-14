@@ -68,7 +68,18 @@ const TRANSFER_WITH_AUTHORIZATION_ABI = [
   },
 ] as const;
 
+/** Kill switch: set SPONSORED_USDC_TRANSFER_DISABLED=true to disable gasless transfers */
+const isSponsoredDisabled =
+  process.env.SPONSORED_USDC_TRANSFER_DISABLED?.toLowerCase() === "true";
+
 export async function POST(req: NextRequest) {
+  if (isSponsoredDisabled) {
+    return NextResponse.json(
+      { error: "Sponsored transfers are temporarily disabled" },
+      { status: 503 }
+    );
+  }
+
   let body: {
     from: string;
     to: string;

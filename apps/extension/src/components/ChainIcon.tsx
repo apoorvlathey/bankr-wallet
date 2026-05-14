@@ -1,26 +1,46 @@
 import { Box, Image, Text } from "@chakra-ui/react";
 import { resolveChainIconMeta } from "@/lib/chainIcons";
+import { useTheme } from "@/theme";
 
 /**
  * Renders a shipped chain icon when known, reuses mainnet icons for common
  * testnets with a small overlay label, and falls back to deterministic initials
  * for custom chains we do not recognize yet.
+ *
+ * `withChip`: opt-in light circular fill painted behind the icon. Several chain
+ * SVGs (MegaETH, Mantle, HyperEVM, Linea, Ink, ApeChain, Monad) ship as a dark
+ * glyph on a transparent canvas — they vanish on Midnight's dark surfaces. Pass
+ * `withChip` from chain dropdowns / selected-chain badges so the glyph stays
+ * legible in dark themes. The chip is layout-neutral (sits inside the existing
+ * boxSize) and is a no-op in light themes.
  */
 export default function ChainIcon({
   chainId,
   chainName,
   size = "18px",
+  withChip = false,
 }: {
   chainId: number;
   chainName?: string;
   size?: string;
+  withChip?: boolean;
 }) {
   const meta = resolveChainIconMeta(chainId, chainName);
   const altText = chainName || `Chain ${chainId}`;
+  const { themeId } = useTheme();
+  const showChip = withChip && themeId === "midnight" && Boolean(meta.iconSrc);
   return (
     <Box position="relative" boxSize={size} flexShrink={0}>
+      {showChip && (
+        <Box
+          position="absolute"
+          inset={0}
+          bg="whiteAlpha.900"
+          borderRadius="full"
+        />
+      )}
       {meta.iconSrc ? (
-        <Image src={meta.iconSrc} alt={altText} boxSize={size} />
+        <Image src={meta.iconSrc} alt={altText} boxSize={size} position="relative" />
       ) : (
         <Box
           bg={meta.bg}
@@ -48,10 +68,10 @@ export default function ChainIcon({
           minW="10px"
           h="10px"
           borderRadius="999px"
-          bg="bauhaus.black"
-          color="bauhaus.white"
+          bg="black"
+          color="white"
           border="1px solid"
-          borderColor="bauhaus.white"
+          borderColor="white"
           display="flex"
           alignItems="center"
           justifyContent="center"

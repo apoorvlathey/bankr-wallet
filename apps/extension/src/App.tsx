@@ -5,6 +5,7 @@ import {
   useRef,
   lazy,
   Suspense,
+  type ReactNode,
 } from "react";
 import {
   useUpdateEffect,
@@ -46,6 +47,8 @@ import {
   AddIcon,
   Search2Icon,
 } from "@chakra-ui/icons";
+
+import { useTheme, useStripTokens, useIconChipBg } from "@/theme";
 
 // Sidepanel icon
 const SidePanelIcon = (props: any) => (
@@ -105,6 +108,9 @@ const PendingTxList = lazy(() => import("@/components/PendingTxList"));
 const BatchTransactionConfirmation = lazy(
   () => import("@/components/BatchTransactionConfirmation"),
 );
+const CrossDappBatchConfirmation = lazy(
+  () => import("@/components/CrossDappBatchConfirmation"),
+);
 const ChatView = lazy(() => import("@/components/Chat/ChatView"));
 const AccountSwitcher = lazy(() => import("@/components/AccountSwitcher"));
 const AddAccount = lazy(() => import("@/components/AddAccount"));
@@ -125,8 +131,41 @@ const SwapView = lazy(() => import("@/components/Swap/SwapView"));
 const WatchAssetConfirmation = lazy(() => import("@/components/WatchAssetConfirmation"));
 const AddChain = lazy(() => import("@/components/Settings/AddChain"));
 
+// Preload every lazy screen chunk on idle. Without this, the Suspense
+// fallback renders mid-slide when the user navigates for the first time —
+// the chunk fetches while the screen is already animating in, so content
+// pops into place halfway through the transition. Firing these imports as
+// soon as the popup is idle means chunks are cached by the time the user
+// triggers any navigation and Suspense never has to render its fallback.
+if (typeof window !== "undefined") {
+  const schedule =
+    (window as Window & {
+      requestIdleCallback?: (cb: () => void) => number;
+    }).requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 300));
+  schedule(() => {
+    void import("@/components/Settings");
+    void import("@/components/TransactionConfirmation");
+    void import("@/components/SignatureRequestConfirmation");
+    void import("@/components/PendingTxList");
+    void import("@/components/BatchTransactionConfirmation");
+    void import("@/components/CrossDappBatchConfirmation");
+    void import("@/components/Chat/ChatView");
+    void import("@/components/AccountSwitcher");
+    void import("@/components/AddAccount");
+    void import("@/components/RevealPrivateKeyModal");
+    void import("@/components/RevealSeedPhraseModal");
+    void import("@/components/AccountSettingsModal");
+    void import("@/components/QRCodeModal");
+    void import("@/components/TokenTransfer");
+    void import("@/components/Swap/SwapView");
+    void import("@/components/WatchAssetConfirmation");
+    void import("@/components/Settings/AddChain");
+  });
+}
+
 // Eager load components needed immediately
 import UnlockScreen from "@/components/UnlockScreen";
+import { ScreenStack, type AppView } from "@/components/ScreenTransition";
 import PendingTxBanner from "@/components/PendingTxBanner";
 import PortfolioTabs from "@/components/PortfolioTabs";
 import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
@@ -136,9 +175,13 @@ import { hasEncryptedApiKey } from "@/chrome/crypto";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
+import {
+  getCrossDappBatch,
+  type CrossDappBatch,
+} from "@/chrome/crossDappBatchStorage";
 import { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
 import { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
-import type { Account } from "@/chrome/types";
+import type { Account, PasswordType } from "@/chrome/types";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import { TWITTER_URL, WALLETCHAN_ICON_URL, WALLETCHAN_OS_URL, WALLETCHAN_STAKE_URL, WALLETCHAN_VAULT_DATA_API } from "@/constants/externalUrls";
 import {
@@ -152,21 +195,30 @@ import {
 export type CombinedRequest =
   | { type: "tx"; request: PendingTxRequest }
   | { type: "sig"; request: PendingSignatureRequest }
-  | { type: "batch"; request: PendingBatchTxRequest };
+  | { type: "batch"; request: PendingBatchTxRequest }
+  | { type: "crossDappBatch"; request: CrossDappBatch };
 
-// Helper to combine and sort requests by timestamp
+// Helper to combine and sort requests by timestamp.
+// The cross-dapp batch (when present) is always prepended as the FIRST element
+// so it has a dedicated, prominent slot in the carousel.
 export function getCombinedRequests(
   txRequests: PendingTxRequest[],
   sigRequests: PendingSignatureRequest[],
   batchRequests: PendingBatchTxRequest[] = [],
+  crossDappBatch?: CrossDappBatch | null,
 ): CombinedRequest[] {
-  const combined: CombinedRequest[] = [
+  const rest: CombinedRequest[] = [
     ...txRequests.map((r) => ({ type: "tx" as const, request: r })),
     ...sigRequests.map((r) => ({ type: "sig" as const, request: r })),
     ...batchRequests.map((r) => ({ type: "batch" as const, request: r })),
   ];
-  // Sort by timestamp ascending (oldest first)
-  return combined.sort((a, b) => a.request.timestamp - b.request.timestamp);
+  // Sort the rest by timestamp ascending (oldest first)
+  rest.sort((a, b) => a.request.timestamp - b.request.timestamp);
+
+  if (crossDappBatch && crossDappBatch.entries.length > 0) {
+    return [{ type: "crossDappBatch", request: crossDappBatch }, ...rest];
+  }
+  return rest;
 }
 
 // Loading fallback component
@@ -178,27 +230,16 @@ const LoadingFallback = () => (
     justifyContent="center"
     bg="bg.base"
   >
-    <Spinner size="lg" color="bauhaus.blue" thickness="3px" />
+    <Spinner size="lg" color="accent.secondary" thickness="3px" />
   </Box>
 );
 
-type AppView =
-  | "main"
-  | "unlock"
-  | "settings"
-  | "settingsAddChain"
-  | "pendingTxList"
-  | "txConfirm"
-  | "signatureConfirm"
-  | "watchAssetConfirm"
-  | "waitingForOnboarding"
-  | "chat"
-  | "addAccount"
-  | "transfer"
-  | "swap"
-  | "batchTxConfirm";
-
 function App() {
+  const { themeId, tokens } = useTheme();
+  const isDarkTheme = themeId === "midnight";
+  const stripTokens = useStripTokens();
+  const addressPillTokens = useStripTokens("elevated");
+  const iconChipBg = useIconChipBg();
   const { networksInfo, reloadRequired, setReloadRequired } = useNetworks();
   const [view, setView] = useState<AppView>("main");
   const [isLoading, setIsLoading] = useState(true);
@@ -227,8 +268,19 @@ function App() {
   >([]);
   const [selectedBatchRequest, setSelectedBatchRequest] =
     useState<PendingBatchTxRequest | null>(null);
+  // User-assembled cross-dapp batch (Bankr/impersonator accounts only).
+  // Single batch at a time, locked to the from + chainId of whatever was added first.
+  const [crossDappBatch, setCrossDappBatch] = useState<CrossDappBatch | null>(
+    null,
+  );
   const [activityTabTrigger, setActivityTabTrigger] = useState(0);
+  const [holdingsTabTrigger, setHoldingsTabTrigger] = useState(0);
   const [portfolioRefreshTrigger, setPortfolioRefreshTrigger] = useState(0);
+  // Set by navigateToAdjacentRequest when the popup has already pre-switched
+  // to an adjacent pending request. The async onRejected/onCancelled handlers
+  // consume & reset this flag so they skip their fallback routing (which
+  // would otherwise cause a second transition after the pre-nav).
+  const preNavigatedRef = useRef(false);
 
   const [copied, setCopied] = useState(false);
   const [sidePanelSupported, setSidePanelSupported] = useState(false);
@@ -249,6 +301,7 @@ function App() {
     string | null
   >(null);
   const [isWalletUnlocked, setIsWalletUnlocked] = useState(false);
+  const [passwordType, setPasswordType] = useState<PasswordType | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
   const [revealAccount, setRevealAccount] = useState<Account | null>(null);
@@ -448,6 +501,12 @@ function App() {
     });
     setPendingBatchRequests(requests || []);
     return requests || [];
+  };
+
+  const loadCrossDappBatch = async () => {
+    const batch = await getCrossDappBatch();
+    setCrossDappBatch(batch);
+    return batch;
   };
 
   const loadPendingWatchAssetRequests = async () => {
@@ -815,6 +874,7 @@ function App() {
       const batchRequests = await loadPendingBatchRequests();
       const watchAssetRequests = await loadPendingWatchAssetRequests();
       const addChainRequests = await loadPendingAddChainRequests();
+      await loadCrossDappBatch();
 
       // Load accounts
       let { accounts: loadedAccounts, activeAccount: loadedActive } =
@@ -1101,6 +1161,16 @@ function App() {
           const updated: PendingTxRequest[] =
             changes.pendingTxRequests.newValue || [];
           setPendingRequests(updated);
+          // If the selected tx is still present but its contents changed
+          // (e.g. user edited the approval amount → tx.data was updated in
+          // storage), refresh selectedTxRequest so downstream views like
+          // CalldataDecoder re-render with the new data.
+          const stillPresent = selectedTxRequest
+            ? updated.find((r) => r.id === selectedTxRequest.id)
+            : null;
+          if (stillPresent && stillPresent !== selectedTxRequest) {
+            setSelectedTxRequest(stillPresent);
+          }
           // If the currently selected tx was removed, clear it
           if (
             selectedTxRequest &&
@@ -1116,7 +1186,21 @@ function App() {
                 // Let the animation play; popup will close itself
               } else {
                 setSelectedTxRequest(null);
-                if (view === "txConfirm" || view === "pendingTxList") {
+                // Only route to "main" if there are no other pending request
+                // types. If batch/sig/crossDappBatch are still queued, let the
+                // async handler (handleTxRejected / handleTxConfirmed) navigate
+                // directly to the next view — going via "main" first would
+                // cause a visible txConfirm→main→next slide instead of a
+                // single txConfirm→next transition.
+                const hasOtherPending =
+                  pendingBatchRequests.length > 0 ||
+                  pendingSignatureRequests.length > 0 ||
+                  (crossDappBatch != null &&
+                    crossDappBatch.entries.length > 0);
+                if (
+                  !hasOtherPending &&
+                  (view === "txConfirm" || view === "pendingTxList")
+                ) {
                   setActivityTabTrigger((k) => k + 1);
                   setView("main");
                 }
@@ -1142,7 +1226,16 @@ function App() {
                 // Let the popup close itself
               } else {
                 setSelectedSignatureRequest(null);
-                if (view === "signatureConfirm") {
+                // Skip "main" routing when tx/batch/crossDappBatch requests
+                // remain — handleSignatureCancelled will navigate directly to
+                // the next view, avoiding a visible signatureConfirm→main→next
+                // intermediate slide.
+                const hasOtherPending =
+                  pendingRequests.length > 0 ||
+                  pendingBatchRequests.length > 0 ||
+                  (crossDappBatch != null &&
+                    crossDappBatch.entries.length > 0);
+                if (view === "signatureConfirm" && !hasOtherPending) {
                   setView("main");
                 }
               }
@@ -1153,19 +1246,71 @@ function App() {
           const updated: PendingBatchTxRequest[] =
             changes.pendingBatchTxRequests.newValue || [];
           setPendingBatchRequests(updated);
+          // If the currently selected batch is still in storage but its
+          // params changed (e.g. user removed a call), swap in the latest
+          // snapshot so the confirmation screen re-renders with the new
+          // calls list and the asset/gas displays re-simulate.
+          const stillPresent = selectedBatchRequest
+            ? updated.find((r) => r.id === selectedBatchRequest.id)
+            : null;
+          if (stillPresent && stillPresent !== selectedBatchRequest) {
+            setSelectedBatchRequest(stillPresent);
+          }
           if (
             selectedBatchRequest &&
             !updated.find((r) => r.id === selectedBatchRequest.id)
           ) {
             if (updated.length > 0) {
               setSelectedBatchRequest(updated[0]);
+            } else if (view === "batchTxConfirm" && !isInSidePanel && !isFullscreenTab) {
+              // Popup mode: let BatchTransactionConfirmation play its "sent"
+              // animation and close the window itself. Clearing state here
+              // would unmount the component before the animation runs.
             } else {
               setSelectedBatchRequest(null);
-              if (view === "batchTxConfirm") {
+              // Skip "main" routing when tx/sig/crossDappBatch requests
+              // remain — the async onRejected/onConfirmed handler will
+              // navigate directly to the next view, avoiding a visible
+              // batchTxConfirm→main→next intermediate slide.
+              const hasOtherPending =
+                pendingRequests.length > 0 ||
+                pendingSignatureRequests.length > 0 ||
+                (crossDappBatch != null &&
+                  crossDappBatch.entries.length > 0);
+              if (view === "batchTxConfirm" && !hasOtherPending) {
                 setActivityTabTrigger((k) => k + 1);
                 setView("main");
               }
             }
+          }
+        }
+        if (changes.crossDappBatch) {
+          const updated: CrossDappBatch | null =
+            changes.crossDappBatch.newValue ?? null;
+          // Popup mode on the confirm screen: if the batch was just cleared
+          // (ship/reject), skip the state update so the confirmation screen's
+          // "sent" animation keeps its `batch` prop populated until the
+          // component fires window.close() itself. Clearing here would fail
+          // the render guard (`view === "crossDappBatchConfirm" && crossDappBatch`)
+          // and unmount mid-animation.
+          const skipUpdate =
+            !updated &&
+            view === "crossDappBatchConfirm" &&
+            !isInSidePanel &&
+            !isFullscreenTab;
+          if (!skipUpdate) {
+            setCrossDappBatch(updated);
+          }
+          // If the cross-dapp batch was just cleared (ship/reject/last-removed)
+          // and we're on its dedicated screen, bounce back home — only in
+          // sidepanel/fullscreen where there's no popup to close.
+          if (
+            !updated &&
+            view === "crossDappBatchConfirm" &&
+            (isInSidePanel || isFullscreenTab)
+          ) {
+            setActivityTabTrigger((k) => k + 1);
+            setView("main");
           }
         }
         if (changes.pendingWatchAssetRequests) {
@@ -1186,7 +1331,7 @@ function App() {
 
     chrome.storage.onChanged.addListener(handleStorageChange);
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
-  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, pendingWatchAssetRequest, view, isInSidePanel, isFullscreenTab]);
+  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, selectedBatchRequest, pendingWatchAssetRequest, pendingRequests, pendingBatchRequests, pendingSignatureRequests, crossDappBatch, view, isInSidePanel, isFullscreenTab]);
 
   // Listen for tab activation changes to update chain for current tab
   useEffect(() => {
@@ -1260,6 +1405,21 @@ function App() {
     }
   }, [reloadRequired, networksInfo, activeAccount?.type]);
 
+  // Track agent vs master session so the header can show the agent badge.
+  useEffect(() => {
+    if (!isWalletUnlocked) {
+      setPasswordType(null);
+      return;
+    }
+    chrome.runtime.sendMessage(
+      { type: "getPasswordType" },
+      (response: { passwordType: PasswordType | null }) => {
+        if (chrome.runtime.lastError) return;
+        setPasswordType(response?.passwordType ?? null);
+      },
+    );
+  }, [isWalletUnlocked]);
+
   const handleUnlock = useCallback(async () => {
     // Mark wallet as unlocked
     setIsWalletUnlocked(true);
@@ -1302,6 +1462,38 @@ function App() {
     }
   }, [returnToChatAfterUnlock]);
 
+  // Cross-surface lock/unlock sync. The originating surface also receives
+  // its own broadcast, so guard the unlock branch with isWalletUnlocked to
+  // avoid re-running handleUnlock and clobbering its view.
+  const isWalletUnlockedRef = useRef(isWalletUnlocked);
+  useEffect(() => {
+    isWalletUnlockedRef.current = isWalletUnlocked;
+  }, [isWalletUnlocked]);
+  useEffect(() => {
+    const handler = (
+      message: { type?: string },
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response?: unknown) => void,
+    ) => {
+      if (message?.type === "walletLockedExternal") {
+        setIsWalletUnlocked(false);
+        setPasswordType(null);
+        setView("unlock");
+        sendResponse({ ok: true });
+      } else if (message?.type === "walletUnlockedExternal") {
+        if (!isWalletUnlockedRef.current) {
+          handleUnlock();
+        }
+        sendResponse({ ok: true });
+      }
+      return false; // synchronous response
+    };
+    chrome.runtime.onMessage.addListener(handler);
+    return () => {
+      chrome.runtime.onMessage.removeListener(handler);
+    };
+  }, [handleUnlock]);
+
   const handleCopyAddress = async () => {
     try {
       await navigator.clipboard.writeText(address);
@@ -1311,6 +1503,79 @@ function App() {
       // Ignore clipboard failures in restricted browser contexts.
     }
   };
+
+  // Called by confirmation screens BEFORE they fire a reject message to the
+  // background. Pre-switches the popup to the adjacent request in the combined
+  // carousel so that once the rejected request is removed from storage, the UI
+  // is already showing a valid peer — no "selectedX=null while view still
+  // X-confirm" intermediate render that would flash the main screen before
+  // the async onRejected handler catches up. If this is the only pending
+  // request (combined.length <= 1), we bail — onRejected will route to main
+  // or close the popup, which is the correct end state anyway.
+  const navigateToAdjacentRequest = useCallback(() => {
+    const combined = getCombinedRequests(
+      pendingRequests,
+      pendingSignatureRequests,
+      pendingBatchRequests,
+      crossDappBatch,
+    );
+    if (combined.length <= 1) return;
+
+    let currentIdx = -1;
+    if (view === "txConfirm" && selectedTxRequest) {
+      currentIdx = combined.findIndex(
+        (r) => r.type === "tx" && r.request.id === selectedTxRequest.id,
+      );
+    } else if (view === "batchTxConfirm" && selectedBatchRequest) {
+      currentIdx = combined.findIndex(
+        (r) => r.type === "batch" && r.request.id === selectedBatchRequest.id,
+      );
+    } else if (view === "signatureConfirm" && selectedSignatureRequest) {
+      currentIdx = combined.findIndex(
+        (r) =>
+          r.type === "sig" && r.request.id === selectedSignatureRequest.id,
+      );
+    } else if (view === "crossDappBatchConfirm") {
+      currentIdx = combined.findIndex((r) => r.type === "crossDappBatch");
+    }
+    if (currentIdx === -1) return;
+
+    const targetIdx = currentIdx > 0 ? currentIdx - 1 : 1;
+    if (targetIdx >= combined.length) return;
+
+    const target = combined[targetIdx];
+    if (target.type === "tx") {
+      setSelectedBatchRequest(null);
+      setSelectedSignatureRequest(null);
+      setSelectedTxRequest(target.request);
+      if (view !== "txConfirm") setView("txConfirm");
+    } else if (target.type === "batch") {
+      setSelectedTxRequest(null);
+      setSelectedSignatureRequest(null);
+      setSelectedBatchRequest(target.request);
+      if (view !== "batchTxConfirm") setView("batchTxConfirm");
+    } else if (target.type === "sig") {
+      setSelectedTxRequest(null);
+      setSelectedBatchRequest(null);
+      setSelectedSignatureRequest(target.request);
+      if (view !== "signatureConfirm") setView("signatureConfirm");
+    } else if (target.type === "crossDappBatch") {
+      setSelectedTxRequest(null);
+      setSelectedBatchRequest(null);
+      setSelectedSignatureRequest(null);
+      if (view !== "crossDappBatchConfirm") setView("crossDappBatchConfirm");
+    }
+    preNavigatedRef.current = true;
+  }, [
+    pendingRequests,
+    pendingSignatureRequests,
+    pendingBatchRequests,
+    crossDappBatch,
+    selectedTxRequest,
+    selectedBatchRequest,
+    selectedSignatureRequest,
+    view,
+  ]);
 
   const handleTxConfirmed = useCallback(async () => {
     const currentTxId = selectedTxRequest?.id;
@@ -1328,6 +1593,13 @@ function App() {
   }, [selectedTxRequest?.id]);
 
   const handleTxRejected = useCallback(async () => {
+    // If onBeforeReject pre-navigated to an adjacent pending request, the
+    // popup is already showing the correct next view. Skip all fallback
+    // routing to avoid a second transition.
+    if (preNavigatedRef.current) {
+      preNavigatedRef.current = false;
+      return;
+    }
     const currentTxId = selectedTxRequest?.id;
     const requests = await loadPendingRequests();
 
@@ -1379,11 +1651,21 @@ function App() {
         );
       });
     }
+    // Reject the cross-dapp batch (if any). The handler fans out a rejection
+    // to every dapp that contributed a tx to the batch.
+    if (crossDappBatch) {
+      await new Promise<void>((resolve) => {
+        chrome.runtime.sendMessage({ type: "rejectCrossDappBatch" }, () =>
+          resolve(),
+        );
+      });
+    }
     // Only close popup after rejecting all (not sidepanel or fullscreen tab)
     if (isInSidePanel || isFullscreenTab) {
       setPendingRequests([]);
       setPendingBatchRequests([]);
       setPendingSignatureRequests([]);
+      setCrossDappBatch(null);
       setSelectedTxRequest(null);
       setSelectedBatchRequest(null);
       setSelectedSignatureRequest(null);
@@ -1395,11 +1677,18 @@ function App() {
     pendingRequests,
     pendingBatchRequests,
     pendingSignatureRequests,
+    crossDappBatch,
     isInSidePanel,
     isFullscreenTab,
   ]);
 
   const handleSignatureCancelled = useCallback(async () => {
+    // Pre-nav has already routed to an adjacent pending request; skip
+    // fallback routing so we don't stack transitions.
+    if (preNavigatedRef.current) {
+      preNavigatedRef.current = false;
+      return;
+    }
     const currentSigId = selectedSignatureRequest?.id;
     const sigRequests = await loadPendingSignatureRequests();
 
@@ -1498,6 +1787,10 @@ function App() {
     );
   }
 
+  // Render the current screen's JSX — wrapped in ScreenStack below so each
+  // view transitions smoothly (slide for hierarchical nav, sheet-up for dapp
+  // confirmations, fade for unlock). See components/ScreenTransition.tsx.
+  const screen: ReactNode = (() => {
   // Unlock screen
   if (view === "unlock") {
     return (
@@ -1535,7 +1828,7 @@ function App() {
         >
           <Box
             minH="300px"
-            bg="bg.base"
+            bg="surface.base"
             display="flex"
             flexDirection="column"
             alignItems="center"
@@ -1545,35 +1838,39 @@ function App() {
             position="relative"
             flex="1"
           >
-            {/* Geometric decorations */}
-            <Box
-              position="absolute"
-              top={4}
-              left={4}
-              w="12px"
-              h="12px"
-              bg="bauhaus.red"
-              border="2px solid"
-              borderColor="bauhaus.black"
-            />
-            <Box
-              position="absolute"
-              top={4}
-              right={4}
-              w="12px"
-              h="12px"
-              bg="bauhaus.blue"
-              border="2px solid"
-              borderColor="bauhaus.black"
-              borderRadius="full"
-            />
+            {/* Geometric decorations — Bauhaus only */}
+            {!isDarkTheme && (
+              <>
+                <Box
+                  position="absolute"
+                  top={4}
+                  left={4}
+                  w="12px"
+                  h="12px"
+                  bg="accent.primary"
+                  border="2px solid"
+                  borderColor="border.default"
+                />
+                <Box
+                  position="absolute"
+                  top={4}
+                  right={4}
+                  w="12px"
+                  h="12px"
+                  bg="accent.secondary"
+                  border="2px solid"
+                  borderColor="border.default"
+                  borderRadius="full"
+                />
+              </>
+            )}
 
             <VStack spacing={4}>
               <Box
-                bg="bauhaus.yellow"
+                bg="accent.highlight"
                 border="3px solid"
-                borderColor="bauhaus.black"
-                boxShadow="4px 4px 0px 0px #121212"
+                borderColor="border.default"
+                boxShadow="card"
                 p={3}
               >
                 <Image src="walletchan-icon.png" w="3rem" />
@@ -1622,9 +1919,9 @@ function App() {
                   display="flex"
                   alignItems="center"
                   gap={1}
-                  color="bauhaus.blue"
+                  color="accent.secondary"
                   fontWeight="700"
-                  _hover={{ color: "bauhaus.red" }}
+                  _hover={{ color: "accent.primary" }}
                   onClick={() => {
                     chrome.tabs.create({ url: TWITTER_URL });
                   }}
@@ -1668,6 +1965,8 @@ function App() {
             flex="1"
             display="flex"
             flexDirection="column"
+            overflowY="auto"
+            minH={0}
           >
             <Suspense fallback={<LoadingFallback />}>
               <Settings
@@ -1748,6 +2047,8 @@ function App() {
             flex="1"
             display="flex"
             flexDirection="column"
+            overflowY="auto"
+            minH={0}
           >
             <Suspense fallback={<LoadingFallback />}>
               <Settings
@@ -1865,6 +2166,7 @@ function App() {
               onBack={() => {
                 setTransferToken(null);
                 setView("main");
+                setHoldingsTabTrigger((n) => n + 1);
               }}
               onTransferInitiated={(sponsored?: boolean) => {
                 setTransferToken(null);
@@ -1876,6 +2178,11 @@ function App() {
                 // Normal flow: the newPendingTxRequest listener will auto-switch to txConfirm
               }}
               onSwapInstead={(token) => {
+                const tokenChain = getResolvedChainById(token.chainId, networksInfo);
+                if (tokenChain && tokenChain.name !== chainName) {
+                  setChainName(tokenChain.name);
+                  chrome.storage.sync.set({ chainName: tokenChain.name });
+                }
                 setTransferToken(null);
                 setSwapInitialSellToken(token);
                 setView("swap");
@@ -1909,6 +2216,7 @@ function App() {
                 setSwapInitialBuyToken(undefined);
                 setSwapInitialSellToken(undefined);
                 setView("main");
+                setHoldingsTabTrigger((n) => n + 1);
               }}
               onSwapInitiated={() => {
                 setSwapInitialBuyToken(undefined);
@@ -1946,6 +2254,7 @@ function App() {
               txRequests={pendingRequests}
               signatureRequests={pendingSignatureRequests}
               batchRequests={pendingBatchRequests}
+              crossDappBatch={crossDappBatch}
               onBack={() => setView("main")}
               onSelectTx={(tx) => {
                 setSelectedTxRequest(tx);
@@ -1959,6 +2268,7 @@ function App() {
                 setSelectedBatchRequest(batch);
                 setView("batchTxConfirm");
               }}
+              onSelectCrossDappBatch={() => setView("crossDappBatchConfirm")}
               onRejectAll={handleRejectAll}
             />
           </Suspense>
@@ -1973,6 +2283,7 @@ function App() {
       pendingRequests,
       pendingSignatureRequests,
       pendingBatchRequests,
+      crossDappBatch,
     );
     const currentIndex = combinedRequests.findIndex(
       (r) => r.type === "tx" && r.request.id === selectedTxRequest.id,
@@ -1996,6 +2307,7 @@ function App() {
               totalCount={totalCount}
               isInSidePanel={isInSidePanel || isFullscreenTab}
               accountType={activeAccount?.type}
+              crossDappBatch={crossDappBatch}
               onBack={() => {
                 if (totalCount > 1) {
                   setView("pendingTxList");
@@ -2006,6 +2318,11 @@ function App() {
               onConfirmed={handleTxConfirmed}
               onRejected={handleTxRejected}
               onRejectAll={handleRejectAll}
+              onBeforeReject={navigateToAdjacentRequest}
+              onAddedToBatch={() => {
+                setSelectedTxRequest(null);
+                setView("crossDappBatchConfirm");
+              }}
               onNavigate={(direction) => {
                 const currentIdx = combinedRequests.findIndex(
                   (r) =>
@@ -2021,6 +2338,9 @@ function App() {
                     setSelectedTxRequest(null);
                     setSelectedBatchRequest(nextRequest.request);
                     setView("batchTxConfirm");
+                  } else if (nextRequest.type === "crossDappBatch") {
+                    setSelectedTxRequest(null);
+                    setView("crossDappBatchConfirm");
                   } else {
                     setSelectedTxRequest(null);
                     setSelectedSignatureRequest(nextRequest.request);
@@ -2041,6 +2361,7 @@ function App() {
       pendingRequests,
       pendingSignatureRequests,
       pendingBatchRequests,
+      crossDappBatch,
     );
     const currentIndex = combinedRequests.findIndex(
       (r) => r.type === "batch" && r.request.id === selectedBatchRequest.id,
@@ -2065,6 +2386,25 @@ function App() {
               isInSidePanel={isInSidePanel || isFullscreenTab}
               accountType={activeAccount?.type}
               accountAddress={address}
+              crossDappBatch={crossDappBatch}
+              onAddedToBatch={() => {
+                setSelectedBatchRequest(null);
+                setView("crossDappBatchConfirm");
+              }}
+              onRemoveCall={(callIndex) => {
+                // Background updates pendingBatchTxRequests; the storage
+                // listener above swaps in the new params so the UI re-renders.
+                // If the user removes the last call, the handler rejects the
+                // whole batch and the listener clears the selection.
+                chrome.runtime.sendMessage(
+                  {
+                    type: "removeCallFromPendingBatch",
+                    bundleId: selectedBatchRequest.id,
+                    callIndex,
+                  },
+                  () => {},
+                );
+              }}
               onBack={() => {
                 if (totalCount > 1) {
                   setView("pendingTxList");
@@ -2089,8 +2429,14 @@ function App() {
                 }
               }}
               onRejected={() => {
-                setSelectedBatchRequest(null);
                 setActivityTabTrigger((k) => k + 1);
+                // Pre-nav has already routed to an adjacent request (if any).
+                // Skip fallback routing to avoid a second transition.
+                if (preNavigatedRef.current) {
+                  preNavigatedRef.current = false;
+                  return;
+                }
+                setSelectedBatchRequest(null);
                 if (pendingBatchRequests.length > 1) {
                   const remaining = pendingBatchRequests.filter(
                     (r) => r.id !== selectedBatchRequest.id,
@@ -2109,6 +2455,7 @@ function App() {
                 }
               }}
               onRejectAll={handleRejectAll}
+              onBeforeReject={navigateToAdjacentRequest}
               onNavigate={(direction) => {
                 const currentIdx = combinedRequests.findIndex(
                   (r) =>
@@ -2125,8 +2472,109 @@ function App() {
                     setSelectedBatchRequest(null);
                     setSelectedTxRequest(nextRequest.request);
                     setView("txConfirm");
+                  } else if (nextRequest.type === "crossDappBatch") {
+                    setSelectedBatchRequest(null);
+                    setView("crossDappBatchConfirm");
                   } else {
                     setSelectedBatchRequest(null);
+                    setSelectedSignatureRequest(nextRequest.request);
+                    setView("signatureConfirm");
+                  }
+                }
+              }}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
+  // Cross-dapp batch confirmation view (user-assembled)
+  if (view === "crossDappBatchConfirm" && crossDappBatch) {
+    const combinedRequests = getCombinedRequests(
+      pendingRequests,
+      pendingSignatureRequests,
+      pendingBatchRequests,
+      crossDappBatch,
+    );
+    const currentIndex = combinedRequests.findIndex(
+      (r) => r.type === "crossDappBatch",
+    );
+    const totalCount = combinedRequests.length;
+    // Distinctive tinted background so this screen is instantly recognizable
+    // as the user-assembled cross-dapp batch (vs the standard surface.base
+    // used by every other tx/sig/batch confirmation screen). Sourced from
+    // status.warning.tint — Bauhaus = cornsilk wash, Midnight = recessed surface.
+    const crossDappBg = "status.warning.tint";
+    return (
+      <Box bg={crossDappBg} h="100%" display="flex" flexDirection="column">
+        {/* Theme-accent strip across the top of the page — vivid yellow in
+            Bauhaus, warm amber in Midnight (both via accent.highlight). */}
+        <Box
+          h="6px"
+          w="100%"
+          bg="accent.highlight"
+          borderBottom="2px solid"
+          borderColor="border.default"
+          flexShrink={0}
+        />
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <CrossDappBatchConfirmation
+              batch={crossDappBatch}
+              currentIndex={currentIndex >= 0 ? currentIndex : 0}
+              totalCount={totalCount}
+              isInSidePanel={isInSidePanel || isFullscreenTab}
+              onBack={() => {
+                if (totalCount > 1) {
+                  setView("pendingTxList");
+                } else {
+                  setView("main");
+                }
+              }}
+              onConfirmed={() => {
+                setActivityTabTrigger((k) => k + 1);
+                if (isInSidePanel || isFullscreenTab) {
+                  setView("main");
+                }
+                // Popup: CrossDappBatchConfirmation plays its "sent" animation
+                // and closes the window itself via window.close().
+              }}
+              onRejected={() => {
+                setActivityTabTrigger((k) => k + 1);
+                if (preNavigatedRef.current) {
+                  preNavigatedRef.current = false;
+                  return;
+                }
+                if (isInSidePanel || isFullscreenTab) {
+                  setView("main");
+                } else {
+                  window.close();
+                }
+              }}
+              onBeforeReject={navigateToAdjacentRequest}
+              onNavigate={(direction) => {
+                const currentIdx = combinedRequests.findIndex(
+                  (r) => r.type === "crossDappBatch",
+                );
+                const newIdx =
+                  direction === "prev" ? currentIdx - 1 : currentIdx + 1;
+                if (newIdx >= 0 && newIdx < combinedRequests.length) {
+                  const nextRequest = combinedRequests[newIdx];
+                  if (nextRequest.type === "tx") {
+                    setSelectedTxRequest(nextRequest.request);
+                    setView("txConfirm");
+                  } else if (nextRequest.type === "batch") {
+                    setSelectedBatchRequest(nextRequest.request);
+                    setView("batchTxConfirm");
+                  } else if (nextRequest.type === "sig") {
                     setSelectedSignatureRequest(nextRequest.request);
                     setView("signatureConfirm");
                   }
@@ -2145,6 +2593,7 @@ function App() {
       pendingRequests,
       pendingSignatureRequests,
       pendingBatchRequests,
+      crossDappBatch,
     );
     const currentIndex = combinedRequests.findIndex(
       (r) => r.type === "sig" && r.request.id === selectedSignatureRequest.id,
@@ -2178,6 +2627,7 @@ function App() {
               }}
               onCancelled={handleSignatureCancelled}
               onCancelAll={handleCancelAllSignatures}
+              onBeforeCancel={navigateToAdjacentRequest}
               onConfirmed={handleSignatureCancelled}
               onNavigate={(direction) => {
                 const currentIdx = combinedRequests.findIndex(
@@ -2191,10 +2641,17 @@ function App() {
                   const nextRequest = combinedRequests[newIdx];
                   if (nextRequest.type === "sig") {
                     setSelectedSignatureRequest(nextRequest.request);
-                  } else {
+                  } else if (nextRequest.type === "tx") {
                     setSelectedSignatureRequest(null);
                     setSelectedTxRequest(nextRequest.request);
                     setView("txConfirm");
+                  } else if (nextRequest.type === "batch") {
+                    setSelectedSignatureRequest(null);
+                    setSelectedBatchRequest(nextRequest.request);
+                    setView("batchTxConfirm");
+                  } else if (nextRequest.type === "crossDappBatch") {
+                    setSelectedSignatureRequest(null);
+                    setView("crossDappBatchConfirm");
                   }
                 }
               }}
@@ -2273,8 +2730,15 @@ function App() {
   }
 
   // Main view
+  // Header bar — same dark CTA strip pair used by tx/sig confirmation badges,
+  // chat header, etc. (see useStripTokens). The hover overlay is the only
+  // non-shared bit so it stays inline.
+  const headerBg = stripTokens.bg;
+  const headerFg = stripTokens.fg;
+  const headerHoverBg = isDarkTheme ? "whiteAlpha.100" : "whiteAlpha.200";
+
   return (
-    <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+    <Box bg="surface.base" h="100%" display="flex" flexDirection="column">
       {/* Fullscreen centered wrapper */}
       <Box
         maxW={isFullscreenTab ? "480px" : "100%"}
@@ -2288,27 +2752,74 @@ function App() {
         <Flex
           py={3}
           px={4}
-          bg="bauhaus.black"
+          bg={headerBg}
           alignItems="center"
           position="relative"
         >
-          {/* Decorative stripe */}
+          {/* Decorative stripe — Bauhaus paints a thick violet poster stripe;
+              Midnight uses a 1px subtle divider so the header doesn't shout. */}
           <Box
             position="absolute"
             bottom="0"
             left="0"
             right="0"
-            h="3px"
-            bg="bauhaus.red"
+            h={isDarkTheme ? "1px" : "3px"}
+            bg={isDarkTheme ? "border.subtle" : "accent.primary"}
           />
 
           <HStack spacing={2}>
-            <Box bg="bauhaus.white" p={0.5}>
+            <Box
+              bg={isDarkTheme ? "white" : "surface.raised"}
+              p={0.5}
+              borderRadius={isDarkTheme ? "md" : undefined}
+              overflow="visible"
+              position="relative"
+            >
               <Image src="walletchan-icon-white-bg.png" h="1.75rem" />
+              {passwordType === "agent" && (
+                <Tooltip
+                  label="Agent session — limited permissions. Master-only actions (reveal keys, rotate API key, add/remove accounts) are blocked."
+                  placement="bottom"
+                  hasArrow
+                >
+                  <Box
+                    position="absolute"
+                    bottom="-6px"
+                    right="-8px"
+                    p="3px"
+                    borderRadius="full"
+                    bg={headerBg}
+                    border="1.5px solid"
+                    borderColor={headerFg}
+                    color={headerFg}
+                    cursor="help"
+                    aria-label="Agent session"
+                    lineHeight={0}
+                  >
+                    <Icon
+                      viewBox="0 0 24 24"
+                      boxSize="0.7rem"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2.25}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      display="block"
+                    >
+                      <path d="M12 8V4H8" />
+                      <rect width="16" height="12" x="4" y="8" rx="2" />
+                      <path d="M2 14h2" />
+                      <path d="M20 14h2" />
+                      <path d="M15 13v2" />
+                      <path d="M9 13v2" />
+                    </Icon>
+                  </Box>
+                </Tooltip>
+              )}
             </Box>
             <Text
               fontWeight="900"
-              color="bauhaus.white"
+              color={headerFg}
               textTransform="uppercase"
               letterSpacing="wider"
             >
@@ -2324,8 +2835,8 @@ function App() {
                   icon={<ChatIcon />}
                   variant="ghost"
                   size="sm"
-                  color="bauhaus.white"
-                  _hover={{ bg: "whiteAlpha.200" }}
+                  color={headerFg}
+                  _hover={{ bg: headerHoverBg }}
                   onClick={() => {
                     setStartChatWithNew(false);
                     setView("chat");
@@ -2339,10 +2850,12 @@ function App() {
                 icon={<LockIcon />}
                 variant="ghost"
                 size="sm"
-                color="bauhaus.white"
-                _hover={{ bg: "whiteAlpha.200" }}
+                color={headerFg}
+                _hover={{ bg: headerHoverBg }}
                 onClick={() => {
                   chrome.runtime.sendMessage({ type: "lockWallet" }, () => {
+                    setIsWalletUnlocked(false);
+                    setPasswordType(null);
                     setView("unlock");
                   });
                 }}
@@ -2358,8 +2871,8 @@ function App() {
                   icon={<SidePanelIcon />}
                   variant="ghost"
                   size="sm"
-                  color="bauhaus.white"
-                  _hover={{ bg: "whiteAlpha.200" }}
+                  color={headerFg}
+                  _hover={{ bg: headerHoverBg }}
                   onClick={toggleSidePanelMode}
                 />
               </Tooltip>
@@ -2371,8 +2884,8 @@ function App() {
                   icon={<FullscreenIcon />}
                   variant="ghost"
                   size="sm"
-                  color="bauhaus.white"
-                  _hover={{ bg: "whiteAlpha.200" }}
+                  color={headerFg}
+                  _hover={{ bg: headerHoverBg }}
                   onClick={openInFullscreenTab}
                 />
               </Tooltip>
@@ -2382,102 +2895,194 @@ function App() {
               icon={<SettingsIcon />}
               variant="ghost"
               size="sm"
-              color="bauhaus.white"
-              _hover={{ bg: "whiteAlpha.200" }}
+              color={headerFg}
+              _hover={{ bg: headerHoverBg }}
               onClick={() => setView("settings")}
             />
           </HStack>
         </Flex>
 
-        {/* Powered by Banner */}
+        {/* Top credits strip — shared constructivist two-color block across
+            both themes. Left half carries POWERED BY + $WCHAN in the amber
+            family; right half carries WalletChan OS in the navy family.
+            A dedicated 28px diagonal transition block between the two
+            halves gives the hard 45° hand-off. Each half is flex=1 with
+            minW=max-content on the left so content never wraps on narrow
+            popups but the split lands near center on wide viewports.
+            Bauhaus uses saturated poster colors; Midnight dims each to
+            a dark tint of the same hue so the geometry reads the same
+            but the aesthetic stays calm. */}
         <HStack
-          bg="bauhaus.yellow"
-          py={1}
-          px={4}
-          justify="center"
-          spacing={2}
-          borderBottom="3px solid"
-          borderColor="bauhaus.black"
+          spacing={0}
+          align="stretch"
+          borderBottom={isDarkTheme ? "1px solid" : "3px solid"}
+          borderColor={isDarkTheme ? "border.subtle" : "border.default"}
         >
-          <Box w="6px" h="6px" bg="bauhaus.black" />
-          <Text
-            fontSize="xs"
-            fontWeight="700"
-            color="bauhaus.black"
-            textTransform="uppercase"
-            letterSpacing="wider"
+          <HStack
+            flex="1"
+            minW="max-content"
+            bg={isDarkTheme ? "#2C1E06" : "accent.highlight"}
+            py={isDarkTheme ? 1.5 : 1}
+            pl={3}
+            pr={2}
+            spacing={2}
           >
-            Powered by
-          </Text>
-          <Link
-            bg="bauhaus.blue"
-            color="bauhaus.white"
-            px={2}
-            py={0.5}
-            fontWeight="900"
-            fontSize="xs"
-            textTransform="uppercase"
-            letterSpacing="wide"
-            border="2px solid"
-            borderColor="bauhaus.black"
-            _hover={{
-              bg: "#F97316",
-              color: "bauhaus.white",
-            }}
-            transition="all 0.2s ease-out"
-            cursor="pointer"
-            onClick={() => {
-              // Switch to Base and open swap with WCHAN as buy token
-              const baseName = getResolvedChainById(8453, networksInfo)?.name ?? "Base";
-              if (baseName) {
-                setChainName(baseName);
-                chrome.storage.sync.set({ chainName: baseName });
-              }
-              setSwapInitialBuyToken({
-                address: "0xBa5ED0000e1CA9136a695f0a848012A16008B032",
-                name: "WalletChan",
-                symbol: "WCHAN",
-                decimals: 18,
-                logoURI: WALLETCHAN_ICON_URL,
-              });
-              setView("swap");
-            }}
-          >
-            $WCHAN
-          </Link>
-          <Box w="6px" h="6px" bg="bauhaus.black" />
-        </HStack>
-
-        {/* WalletChan OS Banner */}
-        <HStack
-          bg="linear-gradient(90deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%)"
-          py={1.5}
-          px={4}
-          justify="center"
-          spacing={3}
-          borderBottom="2px solid"
-          borderColor="bauhaus.black"
-          cursor="pointer"
-          transition="all 0.15s ease-out"
-          _hover={{ opacity: 0.85 }}
-          onClick={() => {
-            chrome.tabs.create({ url: WALLETCHAN_OS_URL });
-          }}
-        >
-          <Text fontSize="sm" fontWeight="900" color="bauhaus.yellow" textTransform="uppercase" letterSpacing="wider" whiteSpace="nowrap">
-            WalletChan OS
-          </Text>
-          <Flex direction="column" align="flex-start">
-            <HStack spacing={1}>
-              <Text fontSize="9px" fontWeight="600" color="gray.400">
-                Your Web3 Operating System
-              </Text>
-              <ExternalLinkIcon boxSize={2} color="gray.500" />
-            </HStack>
-            <Text fontSize="8px" fontWeight="500" color="gray.500">
-              All dapps in one place
+            <Text
+              fontSize="xs"
+              fontWeight="700"
+              color={isDarkTheme ? "#C9B27D" : "accentFg.highlight"}
+              textTransform="uppercase"
+              letterSpacing="wider"
+              whiteSpace="nowrap"
+            >
+              Powered by
             </Text>
-          </Flex>
+            {isDarkTheme ? (
+              <Link
+                color="accent.highlight"
+                fontWeight="800"
+                fontSize="xs"
+                textTransform="uppercase"
+                letterSpacing="wide"
+                px={1}
+                py={0}
+                border="1px solid transparent"
+                borderRadius="sm"
+                _hover={{
+                  bg: "accent.highlight",
+                  color: "accentFg.highlight",
+                  borderColor: "accent.highlight",
+                  textDecoration: "none",
+                }}
+                transition="all 0.15s ease-out"
+                cursor="pointer"
+                onClick={() => {
+                  const baseName = getResolvedChainById(8453, networksInfo)?.name ?? "Base";
+                  if (baseName) {
+                    setChainName(baseName);
+                    chrome.storage.sync.set({ chainName: baseName });
+                  }
+                  setSwapInitialBuyToken({
+                    address: "0xBa5ED0000e1CA9136a695f0a848012A16008B032",
+                    name: "WalletChan",
+                    symbol: "WCHAN",
+                    decimals: 18,
+                    logoURI: WALLETCHAN_ICON_URL,
+                  });
+                  // Auto-fill the sell side with native ETH on Base so the
+                  // user lands on a ready-to-quote pair. Balance/price are
+                  // hydrated by SwapView's onchain + price-fetch effects.
+                  setSwapInitialSellToken({
+                    symbol: "ETH",
+                    name: "Ether",
+                    contractAddress: "native",
+                    chainId: 8453,
+                    decimals: 18,
+                    balance: "0",
+                    balanceFormatted: "0",
+                    priceUsd: 0,
+                    valueUsd: 0,
+                  });
+                  setView("swap");
+                }}
+              >
+                $WCHAN
+              </Link>
+            ) : (
+              <Link
+                bg="accent.secondary"
+                color="accentFg.secondary"
+                px={2}
+                py={0.5}
+                fontWeight="900"
+                fontSize="xs"
+                textTransform="uppercase"
+                letterSpacing="wide"
+                border="2px solid"
+                borderColor="border.default"
+                _hover={{
+                  bg: "accent.primary",
+                  color: "accentFg.primary",
+                }}
+                transition="all 0.2s ease-out"
+                cursor="pointer"
+                onClick={() => {
+                  const baseName = getResolvedChainById(8453, networksInfo)?.name ?? "Base";
+                  if (baseName) {
+                    setChainName(baseName);
+                    chrome.storage.sync.set({ chainName: baseName });
+                  }
+                  setSwapInitialBuyToken({
+                    address: "0xBa5ED0000e1CA9136a695f0a848012A16008B032",
+                    name: "WalletChan",
+                    symbol: "WCHAN",
+                    decimals: 18,
+                    logoURI: WALLETCHAN_ICON_URL,
+                  });
+                  // Auto-fill the sell side with native ETH on Base so the
+                  // user lands on a ready-to-quote pair. Balance/price are
+                  // hydrated by SwapView's onchain + price-fetch effects.
+                  setSwapInitialSellToken({
+                    symbol: "ETH",
+                    name: "Ether",
+                    contractAddress: "native",
+                    chainId: 8453,
+                    decimals: 18,
+                    balance: "0",
+                    balanceFormatted: "0",
+                    priceUsd: 0,
+                    valueUsd: 0,
+                  });
+                  setView("swap");
+                }}
+              >
+                $WCHAN
+              </Link>
+            )}
+          </HStack>
+          <Box
+            w="28px"
+            alignSelf="stretch"
+            bgGradient={
+              isDarkTheme
+                ? "linear(110deg, #2C1E06 50%, #141833 50%)"
+                : "linear(110deg, #F0C020 50%, #1a1a2e 50%)"
+            }
+            flexShrink={0}
+          />
+          <HStack
+            flex="1"
+            bg={isDarkTheme ? "#141833" : undefined}
+            bgGradient={
+              isDarkTheme
+                ? undefined
+                : "linear(90deg, #1a1a2e 0%, #16213e 60%, #1a1a2e 100%)"
+            }
+            py={isDarkTheme ? 1.5 : 1}
+            pl={2}
+            pr={3}
+            spacing={1}
+            justify="flex-end"
+            cursor="pointer"
+            role="group"
+            minW={0}
+            onClick={() => {
+              chrome.tabs.create({ url: WALLETCHAN_OS_URL });
+            }}
+          >
+            <Text
+              fontSize="xs"
+              fontWeight={isDarkTheme ? "800" : "900"}
+              color="accent.highlight"
+              textTransform="uppercase"
+              letterSpacing="wide"
+              whiteSpace="nowrap"
+              _groupHover={{ textDecoration: "underline" }}
+            >
+              WalletChan OS
+            </Text>
+            <ExternalLinkIcon boxSize={3} color="accent.highlight" />
+          </HStack>
         </HStack>
 
         <Container
@@ -2492,26 +3097,26 @@ function App() {
             {/* Failed Transaction Error */}
             {failedTxError && (
               <Box
-                bg="bauhaus.red"
+                bg="accent.primary"
                 border="3px solid"
-                borderColor="bauhaus.black"
-                boxShadow="4px 4px 0px 0px #121212"
+                borderColor="border.default"
+                boxShadow="card"
                 p={3}
                 position="relative"
               >
                 <HStack w="full" justify="space-between" mb={2}>
                   <HStack>
-                    <Box p={1} bg="bauhaus.black">
-                      <WarningIcon color="bauhaus.red" boxSize={4} />
+                    <Box p={1} bg="border.default">
+                      <WarningIcon color="accent.primary" boxSize={4} />
                     </Box>
-                    <Text fontSize="sm" color="white" fontWeight="700">
+                    <Text fontSize="sm" color="accentFg.primary" fontWeight="700">
                       Transaction Failed
                     </Text>
                   </HStack>
                   <Button
                     size="xs"
                     variant="ghost"
-                    color="white"
+                    color="accentFg.primary"
                     _hover={{ bg: "whiteAlpha.200" }}
                     onClick={() => setFailedTxError(null)}
                   >
@@ -2526,7 +3131,7 @@ function App() {
                 >
                   {failedTxError.origin}
                 </Text>
-                <Text fontSize="sm" color="white" fontWeight="500">
+                <Text fontSize="sm" color="accentFg.primary" fontWeight="500">
                   {failedTxError.error}
                 </Text>
               </Box>
@@ -2537,8 +3142,14 @@ function App() {
               txCount={pendingRequests.length}
               signatureCount={pendingSignatureRequests.length}
               batchCount={pendingBatchRequests.length}
+              crossDappBatchCount={crossDappBatch?.entries.length ?? 0}
               onClickTx={() => {
-                if (pendingRequests.length === 1 && pendingSignatureRequests.length === 0 && pendingBatchRequests.length === 0) {
+                const onlyOneTx =
+                  pendingRequests.length === 1 &&
+                  pendingSignatureRequests.length === 0 &&
+                  pendingBatchRequests.length === 0 &&
+                  !crossDappBatch;
+                if (onlyOneTx) {
                   setSelectedTxRequest(pendingRequests[0]);
                   setView("txConfirm");
                 } else {
@@ -2552,40 +3163,56 @@ function App() {
                 }
               }}
               onClickBatch={() => {
-                if (pendingBatchRequests.length === 1 && pendingRequests.length === 0 && pendingSignatureRequests.length === 0) {
+                const onlyOneBatch =
+                  pendingBatchRequests.length === 1 &&
+                  pendingRequests.length === 0 &&
+                  pendingSignatureRequests.length === 0 &&
+                  !crossDappBatch;
+                if (onlyOneBatch) {
                   setSelectedBatchRequest(pendingBatchRequests[0]);
                   setView("batchTxConfirm");
                 } else {
                   setView("pendingTxList");
                 }
               }}
+              onClickCrossDappBatch={() => {
+                // The cross-dapp batch always has its own dedicated screen.
+                if (crossDappBatch) {
+                  setView("crossDappBatchConfirm");
+                }
+              }}
             />
 
             {visibleRpcIssueChainIds.length > 0 && (
               <Box
-                bg="#EEF2FF"
-                border="2px solid"
-                borderColor="bauhaus.black"
-                boxShadow="3px 3px 0px 0px #121212"
+                bg={isDarkTheme ? "status.warning.bg" : "status.info.bg"}
+                border={isDarkTheme ? "1px solid" : "2px solid"}
+                borderColor={isDarkTheme ? "status.warning.border" : "border.default"}
+                borderRadius={isDarkTheme ? "md" : undefined}
+                boxShadow={isDarkTheme ? undefined : "card"}
                 px={3}
                 py={2}
               >
                 <HStack align="start" spacing={2}>
                   <Box
                     p={1}
-                    bg="bauhaus.blue"
+                    bg={isDarkTheme ? "status.warning.fg" : "accent.secondary"}
                     display="flex"
                     alignItems="center"
                     justifyContent="center"
                     flexShrink={0}
+                    borderRadius={isDarkTheme ? "sm" : undefined}
                   >
-                    <WarningIcon color="bauhaus.white" boxSize={3} />
+                    <WarningIcon
+                      color={isDarkTheme ? "fg.inverse" : "accentFg.secondary"}
+                      boxSize={3}
+                    />
                   </Box>
                   <Box flex={1} minW={0}>
                     <Text
                       fontSize="2xs"
                       fontWeight="800"
-                      color="text.primary"
+                      color={isDarkTheme ? "status.warning.fg" : "status.info.fg"}
                       textTransform="uppercase"
                       letterSpacing="wide"
                       mb={1}
@@ -2602,9 +3229,10 @@ function App() {
                               <HStack
                                 key={chainId}
                                 spacing={1.5}
-                                bg="bauhaus.white"
+                                bg="surface.raised"
                                 border="1.5px solid"
-                                borderColor="bauhaus.black"
+                                borderColor="border.default"
+                                borderRadius={isDarkTheme ? "md" : undefined}
                                 px={1.5}
                                 py={1}
                                 cursor="pointer"
@@ -2619,6 +3247,7 @@ function App() {
                                   chainId={chain.chainId}
                                   chainName={chain.name}
                                   size="14px"
+                                  withChip
                                 />
                                 <Text
                                   fontSize="xs"
@@ -2633,17 +3262,32 @@ function App() {
                             );
                           })}
                           {visibleRpcIssueChainIds.length > 2 && (
-                            <Text fontSize="2xs" fontWeight="700" color="text.tertiary">
+                            <Text
+                              fontSize="2xs"
+                              fontWeight="700"
+                              color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
+                              opacity={0.8}
+                            >
                               +{visibleRpcIssueChainIds.length - 2} more
                             </Text>
                           )}
                         </HStack>
-                        <Text fontSize="xs" color="text.secondary" fontWeight="600">
+                        <Text
+                          fontSize="xs"
+                          color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
+                          fontWeight="600"
+                          opacity={isDarkTheme ? 1 : 0.9}
+                        >
                           Balance fetch failed. Edit the chain RPC if this persists.
                         </Text>
                       </VStack>
                     ) : (
-                      <Text fontSize="xs" color="text.secondary" fontWeight="600">
+                      <Text
+                        fontSize="xs"
+                        color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
+                        fontWeight="600"
+                        opacity={isDarkTheme ? 1 : 0.9}
+                      >
                         Balance fetch failed for one or more chains. Edit the chain RPC if this persists.
                       </Text>
                     )}
@@ -2651,9 +3295,9 @@ function App() {
                   <Button
                     size="xs"
                     variant="ghost"
-                    color="text.tertiary"
+                    color={isDarkTheme ? "status.warning.fg" : "status.info.fg"}
                     fontWeight="700"
-                    _hover={{ bg: "bg.muted" }}
+                    _hover={{ bg: "whiteAlpha.200" }}
                     onClick={() => setDismissedRpcIssueChainIds(rpcIssueChainIds)}
                   >
                     Dismiss
@@ -2700,35 +3344,46 @@ function App() {
                 <MenuButton
                   as={Button}
                   variant="ghost"
-                  bg="bauhaus.white"
+                  bg="surface.raised"
                   border="3px solid"
-                  borderColor="bauhaus.black"
-                  boxShadow="4px 4px 0px 0px #121212"
+                  borderColor="border.default"
+                  boxShadow="card"
                   _hover={{
                     transform: "translateY(-2px)",
-                    boxShadow: "6px 6px 0px 0px #121212",
+                    boxShadow: "cardHover",
                   }}
                   _active={{
                     transform: "translate(2px, 2px)",
                     boxShadow: "none",
                   }}
-                  rightIcon={<ChevronDownIcon />}
                   fontWeight="700"
                   h="full"
                   py={3}
                   px={3}
-                  borderRadius="0"
                   transition="all 0.2s ease-out"
-                  flexShrink={0}
+                  flexShrink={1}
+                  minW={0}
+                  maxW="40%"
+                  overflow="hidden"
+                  position="relative"
                 >
+                  <ChevronDownIcon
+                    position="absolute"
+                    bottom="8px"
+                    right="4px"
+                    boxSize="14px"
+                    color="text.secondary"
+                  />
                   {selectedChain ? (
-                    <HStack spacing={1.5}>
+                    <HStack spacing={1.5} minW={0} align="center" pr={3}>
                       <ChainIcon
                         chainId={selectedChain.chainId}
                         chainName={selectedChain.name}
                         size="18px"
+                        flexShrink={0}
+                        withChip
                       />
-                      <Text fontSize="xs" fontWeight="700" noOfLines={1}>
+                      <Text fontSize="2xs" fontWeight="700" whiteSpace="normal" lineHeight="1.2" textAlign="left">
                         {selectedChain.name}
                       </Text>
                     </HStack>
@@ -2739,17 +3394,16 @@ function App() {
                   )}
                 </MenuButton>
                 <MenuList
-                  bg="bauhaus.white"
+                  bg="surface.raised"
                   border="3px solid"
-                  borderColor="bauhaus.black"
-                  boxShadow="4px 4px 0px 0px #121212"
-                  borderRadius="0"
+                  borderColor="border.default"
+                  boxShadow="card"
                   py={0}
                   minW="160px"
                   maxH="320px"
                   overflow="hidden"
                 >
-                  <Box p={2} borderBottom="2px solid" borderColor="bauhaus.black">
+                  <Box p={2} borderBottom="2px solid" borderColor="border.default">
                     <InputGroup size="sm">
                       <InputLeftElement pointerEvents="none">
                         <Search2Icon color="text.tertiary" boxSize={3} />
@@ -2759,13 +3413,8 @@ function App() {
                         value={chainSearch}
                         onChange={(e) => setChainSearch(e.target.value)}
                         placeholder="Search chains"
-                        border="2px solid"
-                        borderColor="bauhaus.black"
-                        borderRadius="0"
                         fontWeight="600"
                         pl={9}
-                        _hover={{ borderColor: "bauhaus.black" }}
-                        _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
                         onKeyDown={(e) => {
                           if (e.key === "ArrowDown") {
                             e.preventDefault();
@@ -2803,23 +3452,24 @@ function App() {
                     {filteredVisibleChains.map((_chain, i, currentChains) => (
                           <MenuItem
                             key={_chain.chainId}
-                            bg={i === highlightedChainIndex ? "bg.muted" : "bauhaus.white"}
-                            _hover={{ bg: "bg.muted" }}
+                            bg={i === highlightedChainIndex ? "surface.raisedHover" : "surface.raised"}
+                            _hover={{ bg: "surface.raisedHover" }}
                             borderBottom={
                               i < currentChains.length - 1
                                 ? "2px solid"
                                 : "none"
                             }
-                            borderColor="bauhaus.black"
+                            borderColor="border.default"
                             py={3}
                             onMouseEnter={() => setHighlightedChainIndex(i)}
                             onClick={() => handleHomepageChainSelect(_chain.name)}
                           >
                             <HStack spacing={2}>
                               <Box
-                                bg="bauhaus.white"
+                                bg={iconChipBg}
                                 border="2px solid"
-                                borderColor="bauhaus.black"
+                                borderColor="border.default"
+                                borderRadius="md"
                                 p={0.5}
                               >
                                 <ChainIcon
@@ -2845,22 +3495,25 @@ function App() {
                   {/* Add Chain button — only for non-bankr accounts */}
                   {activeAccount?.type !== "bankr" && (
                     <>
-                      <MenuDivider borderColor="bauhaus.black" m={0} />
+                      <MenuDivider borderColor="border.default" m={0} />
                       <MenuItem
-                        bg="bauhaus.white"
-                        _hover={{ bg: "bg.muted" }}
+                        bg="surface.raised"
+                        _hover={{ bg: "surface.raisedHover" }}
                         py={3}
                         onClick={() => setView("settingsAddChain")}
                       >
                         <HStack spacing={2}>
                           <Box
-                            bg="bauhaus.black"
+                            bg="border.default"
                             p={0.5}
                             display="flex"
                             alignItems="center"
                             justifyContent="center"
                           >
-                            <AddIcon color="bauhaus.white" boxSize="14px" p="2px" />
+                            {/* Tiny add icon on a dark square — kept literal
+                                white in both themes; the dark `border.default`
+                                square provides plenty of contrast. */}
+                            <AddIcon color="white" boxSize="14px" p="2px" />
                           </Box>
                           <Text color="text.secondary" fontWeight="700" fontSize="sm">
                             Add Chain
@@ -2873,12 +3526,20 @@ function App() {
               </Menu>
             </HStack>
 
-            {/* Address Bar — compact utility row */}
+            {/* Address Bar — compact utility row.
+                Uses the `elevated` strip variant so Bauhaus keeps its stark
+                black band while Midnight gets a framed raised card (sunken
+                was too close to the page wash and blended in). Both per-theme
+                details live in `useStripTokens`. */}
             {address && (
               <HStack spacing={2} align="center">
                 {/* Address pill */}
                 <HStack
-                  bg="bauhaus.black"
+                  bg={addressPillTokens.bg}
+                  color={addressPillTokens.fg}
+                  border="1px solid"
+                  borderColor={addressPillTokens.border}
+                  borderRadius="md"
                   px={2}
                   py={1}
                   spacing={2}
@@ -2900,9 +3561,9 @@ function App() {
                     }
                     size="xs"
                     variant="ghost"
-                    color="bauhaus.white"
+                    color="inherit"
                     onClick={onQROpen}
-                    _hover={{ color: "bauhaus.yellow" }}
+                    _hover={{ color: "accent.highlight" }}
                     minW="auto"
                     h="auto"
                     p={0}
@@ -2912,9 +3573,9 @@ function App() {
                     icon={copied ? <CheckIcon /> : <CopyIcon />}
                     size="xs"
                     variant="ghost"
-                    color={copied ? "bauhaus.yellow" : "bauhaus.white"}
+                    color={copied ? "accent.highlight" : "inherit"}
                     onClick={handleCopyAddress}
-                    _hover={{ color: "bauhaus.yellow" }}
+                    _hover={{ color: "accent.highlight" }}
                     minW="auto"
                     h="auto"
                     p={0}
@@ -2927,13 +3588,13 @@ function App() {
                         icon={<ExternalLinkIcon />}
                         size="xs"
                         variant="ghost"
-                        color="bauhaus.white"
+                        color="inherit"
                         onClick={() => {
                           chrome.tabs.create({
                             url: `${explorer}/address/${address}`,
                           });
                         }}
-                        _hover={{ color: "bauhaus.yellow" }}
+                        _hover={{ color: "accent.highlight" }}
                         minW="auto"
                         h="auto"
                         p={0}
@@ -2968,16 +3629,17 @@ function App() {
                     <Box
                       key={site.name}
                       as="button"
-                      bg="bauhaus.white"
-                      border="2px solid"
-                      borderColor="bauhaus.black"
-                      boxShadow="2px 2px 0px 0px #121212"
+                      bg="surface.raised"
+                      border={tokens.borders.thin}
+                      borderColor="border.default"
+                      borderRadius="sm"
+                      boxShadow="card"
                       p={0.5}
                       cursor="pointer"
                       transition="all 0.15s ease-out"
                       _hover={{
                         transform: "translateY(-1px)",
-                        boxShadow: "3px 3px 0px 0px #121212",
+                        boxShadow: "cardHover",
                       }}
                       _active={{
                         transform: "translate(2px, 2px)",
@@ -3000,25 +3662,24 @@ function App() {
               <HStack spacing={2}>
                 <Button
                   flex={1}
-                  bg="bauhaus.blue"
-                  color="bauhaus.white"
+                  bg="accent.secondary"
+                  color="accentFg.secondary"
                   border="3px solid"
-                  borderColor="bauhaus.black"
-                  boxShadow="4px 4px 0px 0px #121212"
+                  borderColor="border.default"
+                  boxShadow="card"
                   fontWeight="800"
                   fontSize="sm"
                   textTransform="uppercase"
                   letterSpacing="wider"
-                  borderRadius={0}
                   leftIcon={<SwapIcon boxSize={5} />}
                   onClick={() => {
                     setSwapInitialBuyToken(undefined);
                     setView("swap");
                   }}
                   _hover={{
-                    bg: "bauhaus.blue",
+                    bg: "accent.secondary",
                     transform: "translateY(-2px)",
-                    boxShadow: "6px 6px 0px 0px #121212",
+                    boxShadow: "cardHover",
                   }}
                   _active={{
                     transform: "translate(2px, 2px)",
@@ -3029,16 +3690,17 @@ function App() {
                 </Button>
                 <Button
                   flex={1}
-                  bg="bauhaus.yellow"
-                  color="bauhaus.black"
+                  bg={isDarkTheme ? "accent.primary" : "accent.highlight"}
+                  color={
+                    isDarkTheme ? "accentFg.primary" : "accentFg.highlight"
+                  }
                   border="3px solid"
-                  borderColor="bauhaus.black"
-                  boxShadow="4px 4px 0px 0px #121212"
+                  borderColor="border.default"
+                  boxShadow="card"
                   fontWeight="800"
                   fontSize="sm"
                   textTransform="uppercase"
                   letterSpacing="wider"
-                  borderRadius={0}
                   leftIcon={
                     <Icon viewBox="0 0 24 24" boxSize={5}>
                       <path
@@ -3052,9 +3714,10 @@ function App() {
                     setView("transfer");
                   }}
                   _hover={{
-                    bg: "#e6b31c",
+                    bg: isDarkTheme ? "accent.primary" : "accent.highlight",
+                    opacity: 0.9,
                     transform: "translateY(-2px)",
-                    boxShadow: "6px 6px 0px 0px #121212",
+                    boxShadow: "cardHover",
                   }}
                   _active={{
                     transform: "translate(2px, 2px)",
@@ -3067,16 +3730,19 @@ function App() {
                   {stakeApy !== null && (
                     <Box
                       position="absolute"
-                      top="-8px"
-                      right="-4px"
-                      bg="bauhaus.red"
-                      color="bauhaus.white"
+                      top={isDarkTheme ? "-6px" : "-8px"}
+                      right={isDarkTheme ? "-6px" : "-4px"}
+                      bg="accent.primary"
+                      color="accentFg.primary"
                       fontSize="8px"
                       fontWeight="900"
                       px={1.5}
                       py="1px"
-                      border="2px solid"
-                      borderColor="bauhaus.black"
+                      border={isDarkTheme ? "1px solid" : "2px solid"}
+                      borderColor={
+                        isDarkTheme ? "accent.primary" : "border.default"
+                      }
+                      borderRadius={isDarkTheme ? "sm" : undefined}
                       zIndex={1}
                       lineHeight="1.2"
                     >
@@ -3085,16 +3751,15 @@ function App() {
                   )}
                   <Button
                     w="100%"
-                    bg="bauhaus.white"
-                    color="bauhaus.black"
+                    bg="surface.raised"
+                    color="text.primary"
                     border="3px solid"
-                    borderColor="bauhaus.black"
-                    boxShadow="4px 4px 0px 0px #121212"
+                    borderColor="border.default"
+                    boxShadow="card"
                     fontWeight="800"
                     fontSize="sm"
                     textTransform="uppercase"
                     letterSpacing="wider"
-                    borderRadius={0}
                     leftIcon={
                       <Icon viewBox="0 0 24 24" boxSize={5} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M12 3v12m0 0l-4-4m4 4l4-4" />
@@ -3105,9 +3770,9 @@ function App() {
                       chrome.tabs.create({ url: WALLETCHAN_STAKE_URL });
                     }}
                     _hover={{
-                      bg: "gray.100",
+                      bg: "surface.raisedHover",
                       transform: "translateY(-2px)",
-                      boxShadow: "6px 6px 0px 0px #121212",
+                      boxShadow: "cardHover",
                     }}
                     _active={{
                       transform: "translate(2px, 2px)",
@@ -3125,13 +3790,24 @@ function App() {
               <PortfolioTabs
                 address={address}
                 activityTabTrigger={activityTabTrigger}
+                holdingsTabTrigger={holdingsTabTrigger}
                 refreshTrigger={portfolioRefreshTrigger}
                 onRpcIssuesChange={handleRpcIssuesChange}
                 onTokenClick={(token) => {
+                  const tokenChain = getResolvedChainById(token.chainId, networksInfo);
+                  if (tokenChain && tokenChain.name !== chainName) {
+                    setChainName(tokenChain.name);
+                    chrome.storage.sync.set({ chainName: tokenChain.name });
+                  }
                   setTransferToken(token);
                   setView("transfer");
                 }}
                 onSwapClick={(token) => {
+                  const tokenChain = getResolvedChainById(token.chainId, networksInfo);
+                  if (tokenChain && tokenChain.name !== chainName) {
+                    setChainName(tokenChain.name);
+                    chrome.storage.sync.set({ chainName: tokenChain.name });
+                  }
                   setSwapInitialSellToken(token);
                   setView("swap");
                 }}
@@ -3141,28 +3817,28 @@ function App() {
             {/* Reload Required Alert */}
             {reloadRequired && (
               <Box
-                bg="bauhaus.yellow"
+                bg="accent.highlight"
                 border="3px solid"
-                borderColor="bauhaus.black"
-                boxShadow="4px 4px 0px 0px #121212"
+                borderColor="border.default"
+                boxShadow="card"
                 p={3}
               >
                 <HStack justify="space-between">
                   <HStack spacing={2}>
-                    <Box p={1} bg="bauhaus.black">
-                      <InfoIcon color="bauhaus.yellow" boxSize={4} />
+                    <Box p={1} bg="border.default">
+                      <InfoIcon color="accent.highlight" boxSize={4} />
                     </Box>
                     <Box>
                       <Text
                         fontSize="sm"
-                        color="bauhaus.black"
+                        color="accentFg.highlight"
                         fontWeight="700"
                       >
                         Reload page required
                       </Text>
                       <Text
                         fontSize="xs"
-                        color="bauhaus.black"
+                        color="accentFg.highlight"
                         opacity={0.8}
                         fontWeight="500"
                       >
@@ -3172,8 +3848,8 @@ function App() {
                   </HStack>
                   <Button
                     size="sm"
-                    bg="bauhaus.black"
-                    color="bauhaus.yellow"
+                    bg="border.default"
+                    color="accent.highlight"
                     _hover={{ opacity: 0.9 }}
                     _active={{ transform: "translate(2px, 2px)" }}
                     onClick={async () => {
@@ -3197,65 +3873,72 @@ function App() {
           <Box
             position="sticky"
             bottom={0}
-            bg="bg.base"
+            bg="surface.base"
             borderTop="3px solid"
-            borderColor="bauhaus.black"
+            borderColor="border.default"
             p={3}
           >
             <Box position="relative">
-              {/* Geometric decorations */}
-              <Box
-                position="absolute"
-                top="-8px"
-                left="10px"
-                w="12px"
-                h="12px"
-                bg="bauhaus.red"
-                borderRadius="full"
-                border="2px solid"
-                borderColor="bauhaus.black"
-                zIndex={1}
-              />
-              <Box
-                position="absolute"
-                top="-6px"
-                right="12px"
-                w="10px"
-                h="10px"
-                bg="bauhaus.blue"
-                transform="rotate(45deg)"
-                border="2px solid"
-                borderColor="bauhaus.black"
-                zIndex={1}
-              />
-              <Box
-                position="absolute"
-                bottom="-8px"
-                right="40px"
-                w={0}
-                h={0}
-                borderLeft="7px solid transparent"
-                borderRight="7px solid transparent"
-                borderBottom="12px solid"
-                borderBottomColor="bauhaus.green"
-                zIndex={1}
-              />
+              {/* Geometric flourishes — circle, diamond, triangle. These are
+                  pure Bauhaus exuberance; Midnight stays restrained, so we hide
+                  the whole group when the corner ornament token is absent. */}
+              {!isDarkTheme && (
+                <>
+                  <Box
+                    position="absolute"
+                    top="-8px"
+                    left="10px"
+                    w="12px"
+                    h="12px"
+                    bg="accent.primary"
+                    borderRadius="full"
+                    border="2px solid"
+                    borderColor="border.default"
+                    zIndex={1}
+                  />
+                  <Box
+                    position="absolute"
+                    top="-6px"
+                    right="12px"
+                    w="10px"
+                    h="10px"
+                    bg="accent.secondary"
+                    transform="rotate(45deg)"
+                    border="2px solid"
+                    borderColor="border.default"
+                    zIndex={1}
+                  />
+                  <Box
+                    position="absolute"
+                    bottom="-8px"
+                    right="40px"
+                    w={0}
+                    h={0}
+                    borderLeft="7px solid transparent"
+                    borderRight="7px solid transparent"
+                    borderBottom="12px solid"
+                    borderBottomColor="status.success.fg"
+                    zIndex={1}
+                  />
+                </>
+              )}
 
               <Button
                 w="full"
-                bg="bauhaus.yellow"
-                color="bauhaus.black"
+                bg="accent.highlight"
+                color="accentFg.highlight"
                 border="3px solid"
-                borderColor="bauhaus.black"
-                boxShadow="4px 4px 0px 0px #121212"
+                borderColor="border.default"
+                boxShadow="card"
                 fontWeight="900"
                 textTransform="uppercase"
                 letterSpacing="wider"
                 py={6}
                 _hover={{
-                  bg: "bauhaus.yellow",
+                  bg: "accent.highlight",
+                  opacity: 0.9,
                   transform: "translateY(-2px)",
-                  boxShadow: "6px 6px 0px 0px #121212",
+                  boxShadow: "cardHover",
                 }}
                 _active={{
                   transform: "translate(2px, 2px)",
@@ -3274,6 +3957,13 @@ function App() {
         )}
       </Box>
       {/* End fullscreen centered wrapper */}
+    </Box>
+  );
+  })();
+
+  return (
+    <>
+      <ScreenStack view={view}>{screen}</ScreenStack>
 
       {/* Reveal Private Key Modal */}
       <Suspense fallback={null}>
@@ -3331,7 +4021,7 @@ function App() {
           totalAccounts={accounts.length}
         />
       </Suspense>
-    </Box>
+    </>
   );
 }
 

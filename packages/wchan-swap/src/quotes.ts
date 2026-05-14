@@ -64,9 +64,9 @@ export async function getQuote(
   const data = json.result as `0x${string}`;
   if (!data || data === "0x") throw new Error("Empty quoter response");
 
-  const [amountOut] = decodeAbiParameters(RETURN_TYPES, data);
+  const [amountOut, gasEstimate] = decodeAbiParameters(RETURN_TYPES, data);
 
-  return { amountIn, amountOut, direction, route: "direct" as const };
+  return { amountIn, amountOut, direction, route: "direct" as const, gasEstimate };
 }
 
 /**
@@ -125,10 +125,10 @@ export async function getQuoteViaBnkrw(
   const data = json.result as `0x${string}`;
   if (!data || data === "0x") throw new Error("Empty quoter response (via-bnkrw)");
 
-  const [amountOut] = decodeAbiParameters(RETURN_TYPES, data);
+  const [amountOut, gasEstimate] = decodeAbiParameters(RETURN_TYPES, data);
 
   // amountOut from WETH↔BNKRW hop = final WCHAN amount (1:1 wrap)
-  return { amountIn, amountOut, direction, route: "via-bnkrw" as const };
+  return { amountIn, amountOut, direction, route: "via-bnkrw" as const, gasEstimate };
 }
 
 /**

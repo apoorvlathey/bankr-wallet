@@ -145,6 +145,7 @@ async function poll(): Promise<boolean> {
 }
 
 async function main(): Promise<void> {
+  log.info("Arb bot disabled — idling. Remove this line to re-enable."); await new Promise(() => {});
   log.info("=== WCHAN/BNKRW Cross-Pool Arb Bot ===");
   log.info(`Bot address: ${account.address}`);
   log.info(`Chain: ${config.chainId} (Base)`);

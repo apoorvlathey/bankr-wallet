@@ -9,6 +9,14 @@ export interface CustomToken {
   symbol: string;
   name: string;
   decimals: number;
+  /**
+   * Optional logo URL. Populated when the token is added via
+   * `wallet_watchAsset` (dapps pass an `image` field). User-added tokens
+   * entered manually won't have one. Surfaced anywhere we render token
+   * amounts inline (e.g. clear-signing card) so user-recognized tokens
+   * keep their logo.
+   */
+  image?: string;
   addedAt: number;
 }
 
@@ -37,7 +45,7 @@ export async function addCustomToken(
 export async function updateCustomToken(
   chainId: number,
   contractAddress: string,
-  updates: Partial<Pick<CustomToken, "name" | "symbol" | "decimals">>
+  updates: Partial<Pick<CustomToken, "name" | "symbol" | "decimals" | "image">>
 ): Promise<void> {
   const existing = await getCustomTokens();
   const addr = contractAddress.toLowerCase();

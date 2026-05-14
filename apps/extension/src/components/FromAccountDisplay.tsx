@@ -3,6 +3,7 @@ import { HStack, VStack, Text, Box, Image } from "@chakra-ui/react";
 import { blo } from "blo";
 import type { Account } from "@/chrome/types";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
+import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 
 function truncateAddress(address: string): string {
   if (!address) return "";
@@ -32,6 +33,7 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
   }, [address]);
 
   const ens = identities.get(address.toLowerCase());
+  const cachedAvatar = useCachedAvatarSrc(ens?.avatar);
   const displayName =
     fromAccount?.displayName || ens?.name || truncateAddress(address);
   const hasResolvedName = !!(fromAccount?.displayName || ens?.name);
@@ -41,14 +43,14 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
       {/* Avatar */}
       {ens?.avatar ? (
         <Image
-          src={ens.avatar}
+          src={cachedAvatar || ens.avatar}
           alt="ENS avatar"
           w="22px"
           h="22px"
           minW="22px"
           borderRadius="full"
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           objectFit="cover"
         />
       ) : fromAccount?.type === "bankr" ? (
@@ -60,7 +62,7 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
           minW="20px"
           borderRadius="sm"
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
         />
       ) : (
         <Image
@@ -71,7 +73,7 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
           minW="20px"
           borderRadius="sm"
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
         />
       )}
       <VStack align="start" spacing={0} minW={0}>
@@ -95,7 +97,7 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
             py={0}
             borderRadius="sm"
             border="1px solid"
-            borderColor="bauhaus.black"
+            borderColor="border.default"
             mt={0.5}
           >
             <Text

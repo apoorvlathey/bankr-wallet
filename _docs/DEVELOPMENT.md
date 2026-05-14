@@ -55,8 +55,8 @@ From the root directory:
 | `pnpm build`           | Build both extension and website                                  |
 | `pnpm dev:extension`   | Run extension in dev mode                                         |
 | `pnpm dev:website`     | Run website in dev mode                                           |
-| `pnpm zip`             | Create extension zip for distribution (keeps all manifest fields) |
-| `pnpm zip:cws`         | Create CWS-ready zip (strips `key` + `update_url`)                |
+| `pnpm zip`             | Create extension zip for distribution (GitHub Releases)           |
+| `pnpm zip:cws`         | Create CWS-ready zip (strips `key` defensively, no-op today)      |
 | `pnpm lint`            | Lint the extension code                                           |
 
 ## Releasing & Publishing

@@ -6,7 +6,7 @@
  * NOT used for Bankr API accounts (the API manages nonces server-side).
  *
  * Safeguards against going out of sync:
- * - Always fetches on-chain nonce and takes max(cached, onChain)
+ * - Always fetches onchain nonce and takes max(cached, onChain)
  * - Cached values expire after 30s (only useful for rapid-fire txs)
  * - Cache resets on tx failure, account removal, and extension reset
  * - In-memory Map clears naturally on service worker restart
@@ -40,7 +40,7 @@ export async function getNextNonce(
   const key = cacheKey(address, chainId);
   const cached = nonceCache.get(key);
 
-  // Fetch on-chain nonce (pending count)
+  // Fetch onchain nonce (pending count)
   const onChainNonce = await fetchNonceFromRpc(address, chainId);
 
   if (onChainNonce === null) {

@@ -13,6 +13,15 @@ export const WALLETCHAN_SWAP_API_BASE = `${WALLETCHAN_API_BASE}/swap`;
 export const WALLETCHAN_SPONSORED_TRANSFER_API = `${WALLETCHAN_API_BASE}/sponsored-transfer`;
 export const WALLETCHAN_PREMIUM_STATUS_API = `${WALLETCHAN_API_BASE}/premium-status`;
 export const WALLETCHAN_VAULT_DATA_API = `${WALLETCHAN_API_BASE}/vault-data`;
+// Clear-signing proxy. `pnpm dev:extension` runs `vite build --mode development`
+// which sets `import.meta.env.MODE === 'development'` — point at a local
+// Next.js dev server so descriptor lookups work end-to-end without a deploy.
+// Production builds hit walletchan.com. (Note: `import.meta.env.DEV` is *not*
+// the right toggle — it's only true under `vite` dev-server, not `vite build`.)
+export const WALLETCHAN_CLEAR_SIGNING_API =
+  import.meta.env.MODE === "development"
+    ? "http://localhost:3000/api/clearsigning/descriptor"
+    : `${WALLETCHAN_API_BASE}/clearsigning/descriptor`;
 
 // ---------------------------------------------------------------------------
 // WalletChan Assets & Pages
@@ -58,6 +67,16 @@ export const SOURCIFY_BASE = "https://sourcify.dev/server/v2/contract";
 // ---------------------------------------------------------------------------
 export const COINGECKO_PRICE_API =
   "https://api.coingecko.com/api/v3/simple/price";
+export const COINGECKO_TOKEN_PRICE_API =
+  "https://api.coingecko.com/api/v3/simple/token_price";
+/**
+ * GeckoTerminal — DEX-based onchain token price feed. Used as a fallback
+ * for tokens CoinGecko's `/simple/token_price` endpoint doesn't index
+ * (newer / lower-cap / DEX-only tokens). Endpoint shape:
+ *   /simple/networks/{network}/token_price/{addresses}
+ */
+export const GECKOTERMINAL_TOKEN_PRICE_API =
+  "https://api.geckoterminal.com/api/v2/simple/networks";
 export const COINGECKO_MARKETS_API =
   "https://api.coingecko.com/api/v3/coins/markets";
 export const COINGECKO_SEARCH_API =

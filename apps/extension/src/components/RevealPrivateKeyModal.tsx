@@ -18,6 +18,7 @@ import {
   Code,
 } from "@chakra-ui/react";
 import { ViewIcon, ViewOffIcon, WarningTwoIcon, CopyIcon, CheckIcon, LockIcon } from "@chakra-ui/icons";
+import { useTheme, IconBox } from "@/theme";
 import type { Account, PasswordType } from "@/chrome/types";
 
 interface RevealPrivateKeyModalProps {
@@ -27,6 +28,8 @@ interface RevealPrivateKeyModalProps {
 }
 
 function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyModalProps) {
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -122,20 +125,14 @@ function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyMod
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} isCentered>
-      <ModalOverlay bg="blackAlpha.700" />
-      <ModalContent
-        bg="bauhaus.white"
-        border="4px solid"
-        borderColor="bauhaus.black"
-        borderRadius="0"
-        boxShadow="8px 8px 0px 0px #121212"
-        mx={4}
-      >
+      <ModalOverlay bg="surface.overlay" />
+      {/* Modal baseStyle paints bg/border/borderRadius/boxShadow from theme tokens. */}
+      <ModalContent mx={4}>
         <ModalHeader color="text.primary" fontSize="md" pb={2} textTransform="uppercase" letterSpacing="wider">
           <Box display="flex" alignItems="center" gap={2}>
-            <Box p={1} bg="bauhaus.yellow" border="2px solid" borderColor="bauhaus.black">
-              <WarningTwoIcon color="bauhaus.black" />
-            </Box>
+            <IconBox size="32px" bg="accent.highlight" noShadow>
+              <WarningTwoIcon color="accentFg.highlight" />
+            </IconBox>
             Reveal Private Key
           </Box>
         </ModalHeader>
@@ -153,13 +150,14 @@ function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyMod
               <Box
                 w="full"
                 p={3}
-                bg="bauhaus.yellow"
-                border="2px solid"
-                borderColor="bauhaus.black"
+                bg="status.warning.bg"
+                border={isDarkTheme ? "1px solid" : "2px solid"}
+                borderColor="status.warning.border"
+                borderRadius={isDarkTheme ? "md" : undefined}
               >
                 <HStack spacing={2}>
-                  <LockIcon color="bauhaus.black" />
-                  <Text color="bauhaus.black" fontSize="sm" fontWeight="700">
+                  <LockIcon color="status.warning.fg" />
+                  <Text color="status.warning.fg" fontSize="sm" fontWeight="700">
                     You are unlocked with an agent password.
                   </Text>
                 </HStack>
@@ -172,7 +170,7 @@ function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyMod
               <Text color="text.secondary" fontSize="sm" fontWeight="500">
                 To reveal the private key:
               </Text>
-              <Box pl={4} borderLeft="4px solid" borderColor="bauhaus.blue">
+              <Box pl={4} borderLeft="4px solid" borderColor="accent.secondary">
                 <Text color="text.secondary" fontSize="sm">1. Lock your wallet</Text>
                 <Text color="text.secondary" fontSize="sm">2. Unlock with your master password</Text>
                 <Text color="text.secondary" fontSize="sm">3. Try revealing the key again</Text>
@@ -183,11 +181,12 @@ function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyMod
               <Box
                 w="full"
                 p={3}
-                bg="bauhaus.red"
-                border="2px solid"
-                borderColor="bauhaus.black"
+                bg="status.error.bg"
+                border={isDarkTheme ? "1px solid" : "2px solid"}
+                borderColor="status.error.border"
+                borderRadius={isDarkTheme ? "md" : undefined}
               >
-                <Text color="white" fontSize="sm" fontWeight="700">
+                <Text color="status.error.fg" fontSize="sm" fontWeight="700">
                   Never share your private key. Anyone with it has full control of your wallet.
                 </Text>
               </Box>
@@ -212,17 +211,7 @@ function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyMod
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleReveal();
                   }}
-                  bg="white"
-                  border="3px solid"
-                  borderColor={error ? "bauhaus.red" : "bauhaus.black"}
-                  borderRadius="0"
-                  _focus={{
-                    borderColor: error ? "bauhaus.red" : "bauhaus.blue",
-                    boxShadow: "none",
-                  }}
-                  _hover={{
-                    borderColor: error ? "bauhaus.red" : "bauhaus.black",
-                  }}
+                  isInvalid={!!error}
                 />
                 <InputRightElement>
                   <IconButton
@@ -237,7 +226,7 @@ function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyMod
               </InputGroup>
 
               {error && (
-                <Text color="bauhaus.red" fontSize="sm" fontWeight="600">
+                <Text color="chart.negative" fontSize="sm" fontWeight="600">
                   {error}
                 </Text>
               )}
@@ -247,11 +236,12 @@ function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyMod
               <Box
                 w="full"
                 p={3}
-                bg="bauhaus.red"
-                border="2px solid"
-                borderColor="bauhaus.black"
+                bg="status.error.bg"
+                border={isDarkTheme ? "1px solid" : "2px solid"}
+                borderColor="status.error.border"
+                borderRadius={isDarkTheme ? "md" : undefined}
               >
-                <Text color="white" fontSize="sm" fontWeight="700">
+                <Text color="status.error.fg" fontSize="sm" fontWeight="700">
                   Do not share this key. Anyone with it can steal your funds.
                 </Text>
               </Box>
@@ -259,9 +249,10 @@ function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyMod
               <Box
                 w="full"
                 p={3}
-                bg="gray.50"
-                border="3px solid"
-                borderColor="bauhaus.black"
+                bg="surface.sunken"
+                border={isDarkTheme ? "1px solid" : "2px solid"}
+                borderColor="border.default"
+                borderRadius={isDarkTheme ? "md" : undefined}
                 position="relative"
               >
                 <Code

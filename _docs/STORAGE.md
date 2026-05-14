@@ -33,6 +33,7 @@ Persists across extension restarts. Cleared only on manual reset or uninstall.
 | -------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------- |
 | `pendingTxRequests`        | `PendingTxRequest[]` — `{ id, tx, origin, favicon, chainName, timestamp }`               | Pending transaction requests awaiting user confirmation. 30-minute expiry. | v0.1.0     |
 | `pendingSignatureRequests` | `PendingSignatureRequest[]` — `{ id, signature, origin, favicon, chainName, timestamp }` | Pending signature requests awaiting user confirmation. 30-minute expiry.   | v1.0.0     |
+| `crossDappBatch`           | `CrossDappBatch \| null` — `{ fromAddress, chainId, chainName, accountType, entries: [{ txId, tx, origin, favicon, addedAt, source? }], createdAt }` | Single user-assembled cross-dapp batch (Bankr/impersonator only). Locked to the `fromAddress` + `chainId` of the first entry added. Cleared on ship/reject/last-removed. Each entry's `source` is `{ kind: "eth_sendTransaction" }` (default) or `{ kind: "wallet_sendCalls", bundleId, callIndex, totalCalls }`. For `eth_sendTransaction` entries the dapp promise is held open in inject.ts and resolved by writing `txResult:{txId}` on ship/reject. For `wallet_sendCalls` entries the dapp already received its bundle id via `batchTxAck`; we keep its `bundleStatuses` entry at PENDING while the calls live in the batch and transition it to CONFIRMED/REVERTED/OFFCHAIN_FAILURE on ship/remove/reject. Sibling calls from the same bundle are added/removed/resolved as a unit. | v2.4.0     |
 | `txHistory`                | `CompletedTransaction[]` — `{ id, status, tx, origin, chainName, chainId, txHash, ... }` | Completed transaction history. Max 50 entries.                             | v1.0.0     |
 
 ### Chat & Portfolio
@@ -42,6 +43,7 @@ Persists across extension restarts. Cleared only on manual reset or uninstall.
 | `chatHistory`        | `Conversation[]` — `{ id, title, messages, createdAt, updatedAt }` | Chat conversations with Bankr AI. Max 50 conversations, 100 messages each.   | v0.2.0     |
 | `portfolioSnapshots` | `Record<address, HoldingsSnapshot[]>`                              | Portfolio value snapshots per address. 1-hour min interval, 8-day retention. | v1.0.0     |
 | `ensIdentityCache`   | `Record<address, { name, avatar, resolvedAt }>`                    | Resolved ENS/Basename/WNS/Mega names and avatars. 6-hour cache.              | v1.0.0     |
+| `ensAvatarImageCache` | `Record<url, { dataUrl, sizeBytes, cachedAt, lastAccessedAt }>`   | Avatar image bytes re-encoded to WebP (via `createImageBitmap` + `OffscreenCanvas`, background-only) and stored as data URLs for instant render on reopen. Keyed by source URL, 14-day TTL, LRU-pruned to 200 entries / 5 MB. Re-encoding strips SVG scripts/metadata so cached bytes are guaranteed raster pixels. | v3.3.0 |
 | `customTokens`       | `CustomToken[]` — `{ contractAddress, chainId, symbol, name, decimals, addedAt }` | User-added custom ERC-20 tokens for portfolio tracking. Merged into holdings on each load; skipped if API already returns the token. | v2.2.0 |
 | `coingeckoMarketCache` | `Record<coinId, { priceUsd, logoUrl?, fetchedAt }>`             | Shared CoinGecko market cache for native asset price + image lookups. Used by gas estimation and custom-chain native token resolution. | v2.3.0 |
 | `coingeckoSearchCache` | `Record<query, { coins, fetchedAt }>`                            | Cached CoinGecko search responses for resolving unknown custom native assets to a coin ID. | v2.3.0 |
@@ -55,6 +57,13 @@ Persists across extension restarts. Cleared only on manual reset or uninstall.
 | `txResult:{txId}`   | `{ result: { success, txHash?, error? }, timestamp }`   | Transaction result. Written by background on confirm/reject, read+deleted by content script. Stale keys cleaned >30m.  |
 | `sigResult:{sigId}` | `{ result: { success, signature?, error? }, timestamp }` | Signature result. Written by background on confirm/reject, read+deleted by content script. Stale keys cleaned >30m.    |
 | `rpcResult:{id}`    | `{ result: { result?, error? }, timestamp }`             | RPC proxy result. Written by background after RPC call, read+deleted by content script. 30s timeout, stale keys cleaned >30m. |
+
+### Clear Signing (ERC-7730)
+
+| Key Pattern                              | Shape                                                  | Description                                                                                                          |
+| ---------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `cs:enabled`                             | `boolean`                                              | Master toggle for clear-signing descriptor fetching. Absent or `true` = enabled; `false` = opt-out, no network calls. |
+| `cs:desc:{chainId}:{address}:{kind}`     | `{ updatedAt: number; descriptor: Descriptor \| null }` | Per-contract descriptor cache. Hits TTL 7d, misses TTL 1d. `kind` is `"calldata"` or `"eip712"`. See `_docs/CLEAR_SIGNING.md`. |
 
 ---
 
@@ -77,11 +86,13 @@ Syncs across Chrome profiles (if signed in). Persists across restarts.
 
 | Key                  | Shape         | Description                                                                                             | Introduced |
 | -------------------- | ------------- | ------------------------------------------------------------------------------------------------------- | ---------- |
-| `autoLockTimeout`    | `number` (ms) | Auto-lock timeout. `0` = Never (default). Values: 0, 60000, 300000, 900000, 1800000, 3600000, 14400000. | v1.0.0     |
-| `sidePanelMode`      | `boolean`     | Whether sidepanel mode is enabled (vs popup).                                                           | v0.2.0     |
-| `sidePanelVerified`  | `boolean`     | Whether sidepanel has been verified for this browser.                                                   | v0.2.0     |
-| `isArcBrowser`       | `boolean`     | Detected Arc browser — disables sidepanel.                                                              | v0.2.0     |
-| `hidePortfolioValue` | `boolean`     | User preference to hide USD values in portfolio.                                                        | v1.0.0     |
+| `autoLockTimeout`    | `number` (ms)               | Auto-lock timeout. `0` = Never (default). Values: 0, 60000, 300000, 900000, 1800000, 3600000, 14400000. | v1.0.0     |
+| `sidePanelMode`      | `boolean`                   | Whether sidepanel mode is enabled (vs popup).                                                           | v0.2.0     |
+| `sidePanelVerified`  | `boolean`                   | Whether sidepanel has been verified for this browser.                                                   | v0.2.0     |
+| `isArcBrowser`       | `boolean`                   | Detected Arc browser — disables sidepanel.                                                              | v0.2.0     |
+| `hidePortfolioValue` | `boolean`                   | User preference to hide USD values in portfolio.                                                        | v1.0.0     |
+| `selectedThemeId`    | `"bauhaus" \| "midnight"`   | Active theme ID. Absent = default `"bauhaus"`. Mirrored to `window.localStorage` for synchronous pre-React boot (no flash). See `_docs/THEMING_PRD.md`. | v3.2.0 |
+| `defaultGasTier`     | `"slow" \| "standard" \| "fast"` | User's last preset gas-tier choice from the tx-confirmation tier picker. Absent = default `"standard"`. The Custom tier is intentionally not persisted — it's always a one-shot opt-in for the current confirmation. | v3.4.0 |
 
 ---
 
@@ -142,3 +153,15 @@ Migration from v1.0.0+:
 - Migration is idempotent and checks format before re-encrypting
 - Both formats continue to work (backward compatible)
 - Agent password can sign transactions after migration completes
+
+### v3.5.0 (Optimism added as built-in chain)
+
+No new keys. Migration touches existing `networksInfo` and `chainName`.
+
+Migration from any prior version:
+
+- `migrateCustomOptimismChain()` in background.ts runs on `onInstalled` reason `update`
+- Scans `networksInfo` for any entry with `chainId === 10` keyed under a name other than `"Optimism"`
+- Rekeys it to `"Optimism"` preserving the user's `rpcUrl` and `hidden` flag (custom `explorer`/`nativeCurrency` overrides are dropped — registry defaults take over since they are universal for OP)
+- If `chainName` (the global selected-chain key) pointed at the old custom name, rewrites it to `"Optimism"` so the user's active chain doesn't silently revert to the default
+- Idempotent: short-circuits when no non-canonical chainId-10 entry is found

@@ -23,7 +23,7 @@ export const WCHANVaultAbi = [
     ],
     anonymous: false,
   },
-  // View functions (for reading on-chain state in handlers)
+  // View functions (for reading onchain state in handlers)
   {
     type: "function",
     name: "totalAssets",

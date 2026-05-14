@@ -21,6 +21,18 @@ export interface TransferMeta {
   tokenLogo: string | null;
 }
 
+/** Metadata for force-inclusion (OP Stack L1 deposit) transactions */
+export interface ForceInclusionMeta {
+  /** L1 transaction hash (the deposit tx on Ethereum/Sepolia) */
+  l1TxHash: string;
+  /** L1 chain ID (1 for mainnet, 11155111 for Sepolia) */
+  l1ChainId: number;
+  /** L2 chain ID (the original target chain, e.g. Base) */
+  l2ChainId: number;
+  /** Whether the L2 tx has been confirmed by the sequencer */
+  l2Confirmed?: boolean;
+}
+
 export interface CompletedTransaction {
   id: string;
   status: TxStatus;
@@ -39,6 +51,12 @@ export interface CompletedTransaction {
   gasData?: GasData;
   swapMeta?: SwapMeta;
   transferMeta?: TransferMeta;
+  forceInclusionMeta?: ForceInclusionMeta;
+  // Set on tx-history entries that are one slice of a user-split
+  // wallet_sendCalls bundle. Used by the receipt poller and rejection
+  // paths to advance the parent bundle's split sequencer.
+  parentBundleId?: string;
+  bundleIndex?: number;
 }
 
 export interface GasData {
@@ -55,6 +73,37 @@ const TX_HISTORY_KEY = "txHistory";
 const MAX_HISTORY_SIZE = 50;
 
 /**
+ * Module-level serializer for tx history writes.
+ *
+ * `addTxToHistory` and `updateTxInHistory` both follow a read-modify-write
+ * pattern on the same chrome.storage key. Without serialization, two
+ * concurrent updaters race:
+ *
+ *   T0 (approve receipt resolves):  read history (both processing)
+ *   T0 (swap receipt resolves):     read history (both processing)
+ *   T1 (approve):                   write { approve: pending, swap: processing }
+ *   T2 (swap):                      write { approve: processing, swap: pending }
+ *
+ * Whichever writer runs second clobbers the first writer's update. Symptom
+ * we hit in production: in a non-atomic batch force inclusion, one sub-tx
+ * transitions to "L1 Confirmed / L2 Pending" but the other stays stuck on
+ * "L1 Pending" forever — even though both L1 receipts are actually onchain.
+ *
+ * This mutex serializes ALL writes to TX_HISTORY_KEY so each read-modify-write
+ * is atomic from the perspective of the in-process callers. (Multi-process
+ * concurrency isn't a concern: chrome.storage in MV3 is only written by the
+ * service worker.)
+ */
+let txHistoryWriteLock: Promise<unknown> = Promise.resolve();
+function withTxHistoryLock<T>(fn: () => Promise<T>): Promise<T> {
+  // Chain the new task onto the previous one (success OR failure — we always
+  // release the lock so a thrown error can't permanently freeze the queue).
+  const next = txHistoryWriteLock.then(fn, fn);
+  txHistoryWriteLock = next.catch(() => undefined);
+  return next;
+}
+
+/**
  * Get all transaction history (newest first)
  */
 export async function getTxHistory(): Promise<CompletedTransaction[]> {
@@ -66,22 +115,24 @@ export async function getTxHistory(): Promise<CompletedTransaction[]> {
  * Add a new transaction to history
  */
 export async function addTxToHistory(tx: CompletedTransaction): Promise<void> {
-  const history = await getTxHistory();
+  return withTxHistoryLock(async () => {
+    const history = await getTxHistory();
 
-  // Add at beginning (newest first)
-  history.unshift(tx);
+    // Add at beginning (newest first)
+    history.unshift(tx);
 
-  // Trim to max size
-  const trimmed = history.slice(0, MAX_HISTORY_SIZE);
+    // Trim to max size
+    const trimmed = history.slice(0, MAX_HISTORY_SIZE);
 
-  await chrome.storage.local.set({ [TX_HISTORY_KEY]: trimmed });
+    await chrome.storage.local.set({ [TX_HISTORY_KEY]: trimmed });
 
-  // Notify open views about update
-  chrome.runtime
-    .sendMessage({ type: "txHistoryUpdated", updatedTx: tx })
-    .catch(() => {
-      // Ignore errors if no listeners
-    });
+    // Notify open views about update
+    chrome.runtime
+      .sendMessage({ type: "txHistoryUpdated", updatedTx: tx })
+      .catch(() => {
+        // Ignore errors if no listeners
+      });
+  });
 }
 
 /**
@@ -91,20 +142,22 @@ export async function updateTxInHistory(
   txId: string,
   updates: Partial<CompletedTransaction>
 ): Promise<void> {
-  const history = await getTxHistory();
-  const index = history.findIndex((tx) => tx.id === txId);
+  return withTxHistoryLock(async () => {
+    const history = await getTxHistory();
+    const index = history.findIndex((tx) => tx.id === txId);
 
-  if (index !== -1) {
-    history[index] = { ...history[index], ...updates };
-    await chrome.storage.local.set({ [TX_HISTORY_KEY]: history });
+    if (index !== -1) {
+      history[index] = { ...history[index], ...updates };
+      await chrome.storage.local.set({ [TX_HISTORY_KEY]: history });
 
-    // Notify open views
-    chrome.runtime
-      .sendMessage({ type: "txHistoryUpdated", updatedTx: history[index] })
-      .catch(() => {
-        // Ignore errors if no listeners
-      });
-  }
+      // Notify open views
+      chrome.runtime
+        .sendMessage({ type: "txHistoryUpdated", updatedTx: history[index] })
+        .catch(() => {
+          // Ignore errors if no listeners
+        });
+    }
+  });
 }
 
 /**
@@ -126,7 +179,7 @@ export async function getProcessingTxs(): Promise<CompletedTransaction[]> {
 }
 
 /**
- * Get transactions awaiting on-chain confirmation (have txHash but not yet confirmed)
+ * Get transactions awaiting onchain confirmation (have txHash but not yet confirmed)
  */
 export async function getPendingConfirmationTxs(): Promise<
   CompletedTransaction[]
@@ -138,29 +191,37 @@ export async function getPendingConfirmationTxs(): Promise<
 /**
  * Mark any txs stuck in "processing" for longer than the threshold as failed.
  * This handles edge cases like service worker restart mid-processing.
+ *
+ * Force inclusion txs are intentionally skipped — they can legitimately stay
+ * in "processing" for the full L1 wait window (up to L1_RECEIPT_TIMEOUT, ~10
+ * min). recoverStuckForceInclusionTxs() handles them by re-fetching the L1
+ * receipt directly instead of timing out blindly.
  */
 export async function cleanupStaleProcessingTxs(
   maxAgeMs: number = 5 * 60 * 1000,
 ): Promise<void> {
-  const history = await getTxHistory();
-  const now = Date.now();
-  let changed = false;
+  return withTxHistoryLock(async () => {
+    const history = await getTxHistory();
+    const now = Date.now();
+    let changed = false;
 
-  for (const tx of history) {
-    if (tx.status === "processing" && now - tx.createdAt > maxAgeMs) {
-      tx.status = "failed";
-      tx.error = "Transaction timed out";
-      tx.completedAt = now;
-      changed = true;
+    for (const tx of history) {
+      if (tx.forceInclusionMeta) continue; // recovery handles these
+      if (tx.status === "processing" && now - tx.createdAt > maxAgeMs) {
+        tx.status = "failed";
+        tx.error = "Transaction timed out";
+        tx.completedAt = now;
+        changed = true;
+      }
     }
-  }
 
-  if (changed) {
-    await chrome.storage.local.set({ [TX_HISTORY_KEY]: history });
-    chrome.runtime
-      .sendMessage({ type: "txHistoryUpdated" })
-      .catch(() => {});
-  }
+    if (changed) {
+      await chrome.storage.local.set({ [TX_HISTORY_KEY]: history });
+      chrome.runtime
+        .sendMessage({ type: "txHistoryUpdated" })
+        .catch(() => {});
+    }
+  });
 }
 
 /**

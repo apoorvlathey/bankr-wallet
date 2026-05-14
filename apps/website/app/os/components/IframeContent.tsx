@@ -48,6 +48,8 @@ export interface IframeContentProps {
   onChainChange?: (chainId: number) => void;
   /** Called when the iframe receives its first Safe SDK message */
   onSafeConnected?: () => void;
+  /** If set, the app is temporarily disabled — shows a warning instead of loading */
+  disabled?: { reason: string; link?: string };
 }
 
 export function IframeContent({
@@ -58,6 +60,7 @@ export function IframeContent({
   autoConnect = true,
   onChainChange,
   onSafeConnected,
+  disabled,
 }: IframeContentProps) {
   const { address, isConnected, status: accountStatus } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -167,6 +170,47 @@ export function IframeContent({
     },
     [walletClient]
   );
+
+  // Disabled app state
+  if (disabled) {
+    return (
+      <VStack flex={1} justify="center" spacing={4} p={8} h="100%">
+        <Text fontSize="3xl">⚠️</Text>
+        <Text
+          fontWeight="900"
+          fontSize="lg"
+          textTransform="uppercase"
+          letterSpacing="wide"
+          color="red.500"
+        >
+          Temporarily Disabled
+        </Text>
+        <Text color="gray.600" fontWeight="500" textAlign="center" maxW="400px">
+          {disabled.reason}
+        </Text>
+        {disabled.link && (
+          <Box
+            as="a"
+            href={disabled.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            display="inline-flex"
+            alignItems="center"
+            gap={2}
+            px={4}
+            py={2}
+            fontWeight="700"
+            fontSize="sm"
+            color="blue.500"
+            _hover={{ textDecoration: "underline" }}
+          >
+            Learn more
+            <ExternalLink size={14} />
+          </Box>
+        )}
+      </VStack>
+    );
+  }
 
   // Not connected state
   if (accountStatus === "disconnected") {

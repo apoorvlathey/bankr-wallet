@@ -15,26 +15,32 @@ import {
   Spacer,
   Badge,
 } from "@chakra-ui/react";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
 import { ViewIcon, ViewOffIcon, ArrowBackIcon, WarningIcon, LockIcon, CheckIcon, CloseIcon } from "@chakra-ui/icons";
+import { ThemedCard, useTheme } from "@/theme";
 
 // Simple permission badge component
 function PermissionBadge({ label, allowed }: { label: string; allowed: boolean }) {
   return (
     <HStack
       spacing={1}
-      bg={allowed ? "green.50" : "red.50"}
+      bg={allowed ? "status.success.bg" : "status.error.bg"}
       border="2px solid"
-      borderColor={allowed ? "green.500" : "red.400"}
+      borderColor={allowed ? "status.success.border" : "status.error.border"}
+      borderRadius="md"
       px={2}
       py={1}
     >
       {allowed ? (
-        <CheckIcon boxSize={3} color="green.600" />
+        <CheckIcon boxSize={3} color="status.success.fg" />
       ) : (
-        <CloseIcon boxSize={2.5} color="red.500" />
+        <CloseIcon boxSize={2.5} color="status.error.fg" />
       )}
-      <Text fontSize="xs" fontWeight="700" color={allowed ? "green.700" : "red.600"}>
+      <Text
+        fontSize="xs"
+        fontWeight="700"
+        color={allowed ? "status.success.fg" : "status.error.fg"}
+      >
         {label}
       </Text>
     </HStack>
@@ -70,7 +76,9 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
   const [showMasterPassword, setShowMasterPassword] = useState(false);
   const [removeError, setRemoveError] = useState("");
 
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const masterPasswordInputRef = useRef<HTMLInputElement>(null);
 
@@ -136,7 +144,7 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
       });
 
       if (!response.success) {
-        if (response.error?.includes("master password")) {
+        if (response.error?.includes("Must be unlocked with master password")) {
           toast({
             title: "Master password required",
             description: "You must be unlocked with master password to set agent password",
@@ -266,10 +274,10 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
           </Text>
           <Spacer />
           <Badge
-            bg={isAgentEnabled ? "bauhaus.blue" : "gray.200"}
-            color={isAgentEnabled ? "white" : "gray.600"}
+            bg={isAgentEnabled ? "accent.secondary" : "surface.sunken"}
+            color={isAgentEnabled ? "accentFg.secondary" : "fg.muted"}
             border="2px solid"
-            borderColor="bauhaus.black"
+            borderColor="border.default"
             fontSize="xs"
             fontWeight="700"
             px={2}
@@ -280,31 +288,23 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
 
         {/* Warning for agent session - simplified */}
         {isAgentSession && (
-          <Box
-            bg="bauhaus.yellow"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+          <ThemedCard
+            weight="medium"
             p={3}
+            bg="accent.highlight"
+            borderColor="border.default"
           >
             <HStack spacing={2}>
-              <WarningIcon color="bauhaus.black" boxSize={4} />
-              <Text color="bauhaus.black" fontSize="sm" fontWeight="700">
+              <WarningIcon color="accentFg.highlight" boxSize={4} />
+              <Text color="accentFg.highlight" fontSize="sm" fontWeight="700">
                 Unlock with master password to manage settings
               </Text>
             </HStack>
-          </Box>
+          </ThemedCard>
         )}
 
         {/* Main status card - more visual */}
-        <Box
-          bg="bauhaus.white"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
-          position="relative"
-          overflow="hidden"
-        >
+        <ThemedCard weight="medium" p={0} position="relative" overflow="hidden">
           {/* Geometric accent */}
           <Box
             position="absolute"
@@ -312,7 +312,7 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
             right={0}
             w="60px"
             h="60px"
-            bg={isAgentEnabled ? "bauhaus.blue" : "gray.200"}
+            bg={isAgentEnabled ? "accent.secondary" : "surface.sunken"}
             clipPath="polygon(100% 0, 0 0, 100% 100%)"
           />
 
@@ -321,11 +321,15 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
             <HStack spacing={3}>
               <Box
                 p={3}
-                bg={isAgentEnabled ? "bauhaus.blue" : "gray.200"}
+                bg={isAgentEnabled ? "accent.secondary" : "surface.sunken"}
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
+                borderRadius="md"
               >
-                <LockIcon boxSize={5} color={isAgentEnabled ? "white" : "gray.500"} />
+                <LockIcon
+                  boxSize={5}
+                  color={isAgentEnabled ? "accentFg.secondary" : "fg.muted"}
+                />
               </Box>
               <Box flex={1}>
                 <Text fontWeight="800" color="text.primary" textTransform="uppercase" fontSize="sm">
@@ -340,7 +344,7 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
             </HStack>
 
             {/* Permissions visual */}
-            <Box borderTop="2px solid" borderColor="gray.200" pt={3}>
+            <Box borderTop="2px solid" borderColor="border.subtle" pt={3}>
               <Text fontSize="xs" fontWeight="700" color="text.secondary" textTransform="uppercase" mb={2}>
                 Agent Can
               </Text>
@@ -363,7 +367,7 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
               </Button>
             )}
           </VStack>
-        </Box>
+        </ThemedCard>
       </VStack>
     );
   }
@@ -417,7 +421,7 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
               />
             </InputRightElement>
           </InputGroup>
-          <FormErrorMessage color="bauhaus.red" fontWeight="700">
+          <FormErrorMessage color="accent.primary" fontWeight="700">
             {errors.agentPassword}
           </FormErrorMessage>
         </FormControl>
@@ -438,18 +442,19 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
               if (e.key === "Enter") handleSetAgentPassword();
             }}
           />
-          <FormErrorMessage color="bauhaus.red" fontWeight="700">
+          <FormErrorMessage color="accent.primary" fontWeight="700">
             {errors.confirmPassword}
           </FormErrorMessage>
         </FormControl>
 
         <Box
-          bg="bauhaus.yellow"
+          bg="accent.highlight"
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
+          borderRadius={isDarkTheme ? "md" : undefined}
           p={2}
         >
-          <Text color="bauhaus.black" fontSize="xs" fontWeight="700">
+          <Text color="accentFg.highlight" fontSize="xs" fontWeight="700">
             Store securely — needed to unlock wallet
           </Text>
         </Box>
@@ -522,19 +527,19 @@ function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: Agent
             </InputRightElement>
           </InputGroup>
           {removeError && (
-            <Text color="bauhaus.red" fontSize="sm" fontWeight="700" mt={2}>
+            <Text color="accent.primary" fontSize="sm" fontWeight="700" mt={2}>
               {removeError}
             </Text>
           )}
         </FormControl>
 
         <Box
-          bg="bauhaus.red"
+          bg="accent.primary"
           border="2px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
           p={2}
         >
-          <Text color="white" fontSize="xs" fontWeight="700">
+          <Text color="accentFg.primary" fontSize="xs" fontWeight="700">
             Only master password will work after removal
           </Text>
         </Box>

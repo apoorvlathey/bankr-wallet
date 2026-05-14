@@ -13,10 +13,16 @@ import { CopyIcon, CheckIcon, ExternalLinkIcon, ChevronDownIcon } from "@chakra-
 
 import { getChainConfig } from "@/constants/chainConfig";
 import { ethShLabelsUrl } from "@/constants/externalUrls";
+import { useStripTokens, useTheme } from "@/theme";
 
 interface TypedDataDisplayProps {
   typedData: any;
   rawData: string;
+  /**
+   * When true, render only a thin collapsed header — used when a
+   * clear-signing descriptor above already conveys the essential info.
+   */
+  defaultCollapsed?: boolean;
 }
 
 function CopyBtn({ value }: { value: string }) {
@@ -28,13 +34,13 @@ function CopyBtn({ value }: { value: string }) {
       icon={copied ? <CheckIcon /> : <CopyIcon />}
       size="xs"
       variant="ghost"
-      color={copied ? "bauhaus.yellow" : "text.secondary"}
+      color={copied ? "accent.highlight" : "text.secondary"}
       onClick={async () => {
         await navigator.clipboard.writeText(value);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       }}
-      _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+      _hover={{ color: "accent.secondary", bg: "bg.muted" }}
     />
   );
 }
@@ -66,7 +72,7 @@ function AddressValue({ address, chainId }: { address: string; chainId?: number 
 
   return (
     <HStack spacing={0.5}>
-      <Text fontSize="xs" fontFamily="mono" color="bauhaus.blue" fontWeight="600">
+      <Text fontSize="xs" fontFamily="mono" color="accent.secondary" fontWeight="600">
         {truncateAddr(address)}
       </Text>
       <IconButton
@@ -76,13 +82,13 @@ function AddressValue({ address, chainId }: { address: string; chainId?: number 
         variant="ghost"
         minW="18px"
         h="18px"
-        color={copied ? "bauhaus.yellow" : "text.tertiary"}
+        color={copied ? "accent.highlight" : "text.tertiary"}
         onClick={async () => {
           await navigator.clipboard.writeText(address);
           setCopied(true);
           setTimeout(() => setCopied(false), 2000);
         }}
-        _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+        _hover={{ color: "accent.secondary", bg: "bg.muted" }}
       />
       {explorerUrl && (
         <IconButton
@@ -94,7 +100,7 @@ function AddressValue({ address, chainId }: { address: string; chainId?: number 
           h="18px"
           color="text.tertiary"
           onClick={() => window.open(explorerUrl, "_blank")}
-          _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+          _hover={{ color: "accent.secondary", bg: "bg.muted" }}
         />
       )}
       {label && (
@@ -106,7 +112,19 @@ function AddressValue({ address, chainId }: { address: string; chainId?: number 
   );
 }
 
-function MessageField({ name, value, depth = 0, chainId }: { name: string; value: any; depth?: number; chainId?: number }) {
+function MessageField({
+  name,
+  value,
+  depth = 0,
+  chainId,
+  numericColor,
+}: {
+  name: string;
+  value: any;
+  depth?: number;
+  chainId?: number;
+  numericColor: string;
+}) {
   if (value === null || value === undefined) return null;
 
   // Address
@@ -128,7 +146,7 @@ function MessageField({ name, value, depth = 0, chainId }: { name: string; value
         <Text fontSize="xs" color="text.secondary" fontWeight="700" minW="fit-content">
           {name}:
         </Text>
-        <Text fontSize="xs" fontFamily="mono" color="#B8860B" fontWeight="600" wordBreak="break-all">
+        <Text fontSize="xs" fontFamily="mono" color={numericColor} fontWeight="600" wordBreak="break-all">
           {String(value)}
         </Text>
       </HStack>
@@ -142,7 +160,7 @@ function MessageField({ name, value, depth = 0, chainId }: { name: string; value
         <Text fontSize="xs" color="text.secondary" fontWeight="700" minW="fit-content">
           {name}:
         </Text>
-        <Text fontSize="xs" fontFamily="mono" color={value ? "bauhaus.green" : "bauhaus.red"} fontWeight="600">
+        <Text fontSize="xs" fontFamily="mono" color={value ? "chart.positive" : "chart.negative"} fontWeight="600">
           {String(value)}
         </Text>
       </HStack>
@@ -156,9 +174,9 @@ function MessageField({ name, value, depth = 0, chainId }: { name: string; value
         <Text fontSize="xs" color="text.secondary" fontWeight="700">
           {name}:
         </Text>
-        <VStack align="start" spacing={1} pl={3} borderLeft="2px solid" borderColor="bauhaus.black">
+        <VStack align="start" spacing={1} pl={3} borderLeft="2px solid" borderColor="border.default">
           {Object.entries(value).map(([k, v]) => (
-            <MessageField key={k} name={k} value={v} depth={0} chainId={chainId} />
+            <MessageField key={k} name={k} value={v} depth={0} chainId={chainId} numericColor={numericColor} />
           ))}
         </VStack>
       </VStack>
@@ -172,9 +190,9 @@ function MessageField({ name, value, depth = 0, chainId }: { name: string; value
         <Text fontSize="xs" color="text.secondary" fontWeight="700">
           {name}: [{value.length}]
         </Text>
-        <VStack align="start" spacing={1} pl={3} borderLeft="2px solid" borderColor="bauhaus.black">
+        <VStack align="start" spacing={1} pl={3} borderLeft="2px solid" borderColor="border.default">
           {value.map((item, i) => (
-            <MessageField key={i} name={`[${i}]`} value={item} depth={0} chainId={chainId} />
+            <MessageField key={i} name={`[${i}]`} value={item} depth={0} chainId={chainId} numericColor={numericColor} />
           ))}
         </VStack>
       </VStack>
@@ -196,34 +214,68 @@ function MessageField({ name, value, depth = 0, chainId }: { name: string; value
 
 const scrollStyles = {
   "&::-webkit-scrollbar": { width: "6px" },
-  "&::-webkit-scrollbar-track": { background: "#E0E0E0" },
-  "&::-webkit-scrollbar-thumb": { background: "#121212" },
+  "&::-webkit-scrollbar-track": { background: "var(--chakra-colors-bg-muted)" },
+  "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-default)" },
 };
 
-function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
+function TypedDataDisplay({ typedData, rawData, defaultCollapsed = false }: TypedDataDisplayProps) {
+  const { tokens } = useTheme();
+  // Same theme-aware tab strip pair as MessageDataDisplay / CalldataDecoder.
+  const { bg: tabActiveBg, fg: tabActiveFg } = useStripTokens();
+  // Numeric value emphasis — Bauhaus dark goldenrod, Midnight warm amber.
+  // Sourced from chart.numeric so the contrast intent stays in the theme.
+  const numericColor = "chart.numeric";
   const [tab, setTab] = useState<"structured" | "raw">("structured");
   const [typesOpen, setTypesOpen] = useState(false);
+  const [expanded, setExpanded] = useState(!defaultCollapsed);
   const domain = typedData?.domain;
   const message = typedData?.message;
   const primaryType = typedData?.primaryType;
   const types = typedData?.types;
   const chainId = domain?.chainId ? Number(domain.chainId) : undefined;
 
+  if (!expanded) {
+    return (
+      <Box
+        bg="surface.raised"
+        border={tokens.borders.thin}
+        borderColor="border.default"
+        borderRadius="lg"
+        boxShadow="card"
+        overflow="hidden"
+        p={2}
+        cursor="pointer"
+        onClick={() => setExpanded(true)}
+        _hover={{ bg: "surface.sunken" }}
+      >
+        <HStack>
+          <Text fontSize="xs" color="fg.secondary" fontWeight="700" textTransform="uppercase">
+            Show raw typed data
+          </Text>
+          <Spacer />
+          <ChevronDownIcon color="fg.muted" />
+        </HStack>
+      </Box>
+    );
+  }
+
   return (
     <Box
-      bg="bauhaus.white"
-      border="2px solid"
-      borderColor="bauhaus.black"
-      boxShadow="4px 4px 0px 0px #121212"
+      bg="surface.raised"
+      border={tokens.borders.thin}
+      borderColor="border.default"
+      borderRadius="lg"
+      boxShadow="card"
+      overflow="hidden"
     >
       {/* Tab header */}
-      <HStack p={0} borderBottom="2px solid" borderColor="bauhaus.black" spacing={0}>
+      <HStack p={0} borderBottom={tokens.borders.thin} borderColor="border.default" spacing={0}>
         <Box
           flex={1}
           py={2}
           px={3}
           cursor="pointer"
-          bg={tab === "structured" ? "bauhaus.black" : "transparent"}
+          bg={tab === "structured" ? tabActiveBg : "transparent"}
           onClick={() => setTab("structured")}
         >
           <Text
@@ -232,18 +284,18 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
             textTransform="uppercase"
             letterSpacing="wide"
             textAlign="center"
-            color={tab === "structured" ? "bauhaus.white" : "text.secondary"}
+            color={tab === "structured" ? tabActiveFg : "text.secondary"}
           >
             Structured
           </Text>
         </Box>
-        <Box w="2px" bg="bauhaus.black" alignSelf="stretch" />
+        <Box w="2px" bg="border.default" alignSelf="stretch" />
         <Box
           flex={1}
           py={2}
           px={3}
           cursor="pointer"
-          bg={tab === "raw" ? "bauhaus.black" : "transparent"}
+          bg={tab === "raw" ? tabActiveBg : "transparent"}
           onClick={() => setTab("raw")}
         >
           <Text
@@ -252,7 +304,7 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
             textTransform="uppercase"
             letterSpacing="wide"
             textAlign="center"
-            color={tab === "raw" ? "bauhaus.white" : "text.secondary"}
+            color={tab === "raw" ? tabActiveFg : "text.secondary"}
           >
             Raw
           </Text>
@@ -261,6 +313,21 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
         <Box pr={1}>
           <CopyBtn value={rawData} />
         </Box>
+        {/* Collapse-back affordance, matching CalldataDecoder. Only shown
+            when the view was opened from a collapsed default (e.g. clear
+            signing matched) so the user can return to that compact state. */}
+        {defaultCollapsed && (
+          <IconButton
+            aria-label="Hide raw typed data"
+            icon={<ChevronDownIcon />}
+            size="xs"
+            variant="ghost"
+            mr={1}
+            color="text.tertiary"
+            onClick={() => setExpanded(false)}
+            _hover={{ color: "accent.secondary", bg: "bg.muted" }}
+          />
+        )}
       </HStack>
 
       {/* Content */}
@@ -274,11 +341,12 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
                   px={2}
                   py={0.5}
                   fontSize="10px"
-                  bg="bauhaus.red"
-                  color="white"
+                  bg="accent.primary"
+                  color="accentFg.primary"
                   fontWeight="800"
-                  border="2px solid"
-                  borderColor="bauhaus.black"
+                  border={tokens.borders.thin}
+                  borderColor="border.default"
+                  borderRadius="md"
                   textTransform="uppercase"
                 >
                   Domain
@@ -293,13 +361,13 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
                   {domain.version && (
                     <HStack spacing={1}>
                       <Text fontSize="xs" color="text.secondary" fontWeight="700">version:</Text>
-                      <Text fontSize="xs" color="text.tertiary" fontWeight="600">{domain.version}</Text>
+                      <Text fontSize="xs" color="text.primary" fontWeight="600">{domain.version}</Text>
                     </HStack>
                   )}
                   {domain.chainId && (
                     <HStack spacing={1}>
                       <Text fontSize="xs" color="text.secondary" fontWeight="700">chainId:</Text>
-                      <Text fontSize="xs" fontFamily="mono" color="#B8860B" fontWeight="600">
+                      <Text fontSize="xs" fontFamily="mono" color={numericColor} fontWeight="600">
                         {String(domain.chainId)}
                       </Text>
                     </HStack>
@@ -320,11 +388,12 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
                 px={2}
                 py={1}
                 fontSize="xs"
-                bg="bauhaus.blue"
-                color="white"
+                bg="accent.secondary"
+                color="accentFg.secondary"
                 fontFamily="mono"
-                border="2px solid"
-                borderColor="bauhaus.black"
+                border={tokens.borders.thin}
+                borderColor="border.default"
+                borderRadius="md"
                 fontWeight="700"
               >
                 {primaryType}
@@ -335,7 +404,7 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
             {message && (
               <VStack align="start" spacing={1.5} w="full">
                 {Object.entries(message).map(([key, val]) => (
-                  <MessageField key={key} name={key} value={val} chainId={chainId} />
+                  <MessageField key={key} name={key} value={val} chainId={chainId} numericColor={numericColor} />
                 ))}
               </VStack>
             )}
@@ -353,11 +422,12 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
                     px={2}
                     py={0.5}
                     fontSize="10px"
-                    bg="bauhaus.yellow"
-                    color="bauhaus.black"
+                    bg="accent.highlight"
+                    color="accentFg.highlight"
                     fontWeight="800"
-                    border="2px solid"
-                    borderColor="bauhaus.black"
+                    border={tokens.borders.thin}
+                    borderColor="border.default"
+                    borderRadius="md"
                     textTransform="uppercase"
                   >
                     Types
@@ -379,10 +449,10 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
                         <Text fontSize="xs" color="text.primary" fontWeight="700">
                           {typeName}
                         </Text>
-                        <VStack align="start" spacing={0} pl={3} borderLeft="2px solid" borderColor="bauhaus.black">
+                        <VStack align="start" spacing={0} pl={3} borderLeft="2px solid" borderColor="border.default">
                           {Array.isArray(typeFields) && typeFields.map((field: any, i: number) => (
                             <HStack key={i} spacing={1}>
-                              <Text fontSize="10px" fontFamily="mono" color="bauhaus.blue" fontWeight="600">
+                              <Text fontSize="10px" fontFamily="mono" color="accent.secondary" fontWeight="600">
                                 {field.type}
                               </Text>
                               <Text fontSize="10px" fontFamily="mono" color="text.secondary" fontWeight="600">
@@ -403,13 +473,14 @@ function TypedDataDisplay({ typedData, rawData }: TypedDataDisplayProps) {
           <Box
             p={3}
             bg="bg.muted"
-            border="2px solid"
-            borderColor="bauhaus.black"
+            border={tokens.borders.thin}
+            borderColor="border.default"
+            borderRadius="md"
             maxH="200px"
             overflowY="auto"
             css={scrollStyles}
           >
-            <Text fontSize="xs" fontFamily="mono" color="text.tertiary" wordBreak="break-all" whiteSpace="pre-wrap">
+            <Text fontSize="xs" fontFamily="mono" color="text.primary" wordBreak="break-all" whiteSpace="pre-wrap">
               {rawData}
             </Text>
           </Box>

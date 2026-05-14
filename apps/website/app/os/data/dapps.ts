@@ -10,6 +10,8 @@ export interface DappEntry {
   categories?: string[];
   /** true = tested & auto-connects, false = tested & does NOT, undefined = untested */
   autoConnect?: boolean;
+  /** If set, the app is temporarily disabled — shows a warning instead of loading the iframe */
+  disabled?: { reason: string; link?: string };
 }
 
 /** Ordered list of categories for the filter bar */
@@ -56,9 +58,13 @@ const HIDDEN_CHAINS = new Set([
   369, // PulseChain
 ]);
 
+/** Temporarily disabled apps — keyed by dapp ID */
+const DISABLED_APPS: Record<number, DappEntry["disabled"]> = {};
+
 export const DAPPS: DappEntry[] = dappsData.map((dapp) => ({
   ...dapp,
   chains: dapp.chains.filter((c) => !HIDDEN_CHAINS.has(c)),
+  ...(DISABLED_APPS[dapp.id] ? { disabled: DISABLED_APPS[dapp.id] } : {}),
 }));
 
 export const CHAIN_NAMES: Record<number, string> = {

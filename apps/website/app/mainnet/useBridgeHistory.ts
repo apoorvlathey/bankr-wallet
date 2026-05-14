@@ -12,7 +12,7 @@ export type WithdrawalStatus =
 export interface BridgeHistoryEntry {
   txHash: `0x${string}`;
   addedAt: number;
-  txTimestamp?: number; // unix ms from the on-chain block timestamp
+  txTimestamp?: number; // unix ms from the onchain block timestamp
   lastStatus: WithdrawalStatus | null;
   lastCheckedAt: number | null;
   tokenSymbol?: string;

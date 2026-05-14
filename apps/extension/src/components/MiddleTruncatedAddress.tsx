@@ -150,7 +150,7 @@ export default function MiddleTruncatedAddress({
       minW={0}
       fontSize="sm"
       fontFamily="mono"
-      color="bauhaus.white"
+      color="inherit"
       align="center"
     >
       <Text

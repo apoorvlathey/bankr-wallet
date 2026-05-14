@@ -1,4 +1,4 @@
-import { resolveEnsIdentity } from "./ensUtils";
+import { resolveEnsIdentity, sanitizeResolvedName } from "./ensUtils";
 
 // ============================================================================
 // Types
@@ -29,7 +29,14 @@ export function isCacheValid(entry: EnsIdentityCacheEntry): boolean {
 
 export async function getEnsIdentityCache(): Promise<EnsIdentityCache> {
   const result = await chrome.storage.local.get(CACHE_KEY);
-  return (result[CACHE_KEY] as EnsIdentityCache) || {};
+  const raw = (result[CACHE_KEY] as EnsIdentityCache) || {};
+  // Defense-in-depth: entries written before the unicode-sanitization patch may
+  // still hold hazardous names. Re-sanitize on every read so legacy caches
+  // can't bypass the new guard until the 6h TTL expires.
+  for (const addr of Object.keys(raw)) {
+    raw[addr] = { ...raw[addr], name: sanitizeResolvedName(raw[addr].name) };
+  }
+  return raw;
 }
 
 async function saveEnsIdentityCache(cache: EnsIdentityCache): Promise<void> {

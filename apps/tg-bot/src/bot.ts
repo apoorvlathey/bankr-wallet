@@ -29,6 +29,73 @@ export function createBot(): Bot {
     await ctx.reply(text, { parse_mode: "Markdown" });
   });
 
+  // Admin-only: post a message (with any attachments) to the general channel
+  bot.command("post", async (ctx) => {
+    if (!isAdmin(ctx.from!.id)) return;
+
+    if (!ctx.message) return;
+
+    if (!config.GENERAL_CHAT_ID) {
+      await ctx.reply("GENERAL_CHAT_ID is not configured.");
+      return;
+    }
+
+    // Must have either text (after /post) or an attachment (photo, video, etc.)
+    const hasText = !!ctx.match;
+    const hasAttachment =
+      !!ctx.message.photo ||
+      !!ctx.message.video ||
+      !!ctx.message.document ||
+      !!ctx.message.animation;
+
+    if (!hasText && !hasAttachment) {
+      await ctx.reply(
+        "Usage: `/post <message>` — can include photos, videos, documents, or GIFs",
+        { parse_mode: "Markdown" },
+      );
+      return;
+    }
+
+    const threadOpts = config.GENERAL_THREAD_ID
+      ? { message_thread_id: config.GENERAL_THREAD_ID }
+      : {};
+    const caption = ctx.match || undefined;
+
+    // Re-send manually so the "/post" prefix is stripped
+    const photo = ctx.message.photo;
+    const video = ctx.message.video;
+    const document = ctx.message.document;
+    const animation = ctx.message.animation;
+
+    if (photo) {
+      await bot.api.sendPhoto(config.GENERAL_CHAT_ID, photo[photo.length - 1].file_id, {
+        caption,
+        ...threadOpts,
+      });
+    } else if (video) {
+      await bot.api.sendVideo(config.GENERAL_CHAT_ID, video.file_id, {
+        caption,
+        ...threadOpts,
+      });
+    } else if (animation) {
+      await bot.api.sendAnimation(config.GENERAL_CHAT_ID, animation.file_id, {
+        caption,
+        ...threadOpts,
+      });
+    } else if (document) {
+      await bot.api.sendDocument(config.GENERAL_CHAT_ID, document.file_id, {
+        caption,
+        ...threadOpts,
+      });
+    } else {
+      await bot.api.sendMessage(config.GENERAL_CHAT_ID, ctx.match, {
+        ...threadOpts,
+      });
+    }
+
+    await ctx.reply("Posted.");
+  });
+
   // Block all other commands in groups
   bot.use(async (ctx, next) => {
     if (ctx.chat && !isDM(ctx.chat.type) && !ctx.chatMember) return;

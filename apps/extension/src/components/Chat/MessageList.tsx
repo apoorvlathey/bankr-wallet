@@ -35,8 +35,9 @@ export function MessageList({ messages, isLoading, statusUpdateText, isWalletUnl
             w="40px"
             h="40px"
             border="3px solid"
-            borderColor="bauhaus.black"
-            bg="bauhaus.yellow"
+            borderColor="border.default"
+            bg="accent.highlight"
+            color="accentFg.highlight"
             display="flex"
             alignItems="center"
             justifyContent="center"
@@ -83,7 +84,7 @@ export function MessageList({ messages, isLoading, statusUpdateText, isWalletUnl
           background: "transparent",
         },
         "&::-webkit-scrollbar-thumb": {
-          background: "#121212",
+          background: "var(--chakra-colors-border-strong)",
           borderRadius: "0",
         },
       }}

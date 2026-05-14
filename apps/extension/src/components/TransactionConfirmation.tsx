@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo } from "react";
+import { useState, useEffect, useMemo, memo, useRef } from "react";
 import {
   Box,
   VStack,
@@ -13,6 +13,8 @@ import {
   Image,
   Icon,
   Tooltip,
+  Switch,
+  Collapse,
 } from "@chakra-ui/react";
 
 import { keyframes } from "@emotion/react";
@@ -23,25 +25,36 @@ import {
   CopyIcon,
   CheckIcon,
   ExternalLinkIcon,
+  SettingsIcon,
 } from "@chakra-ui/icons";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { CalldataDigestDisplay } from "@/components/DigestDisplay";
+import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
 import { GasOverrides } from "@/chrome/txHandlers";
 import { getChainConfig } from "@/constants/chainConfig";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { resolveAddressToName } from "@/lib/ensUtils";
 import CalldataDecoder from "@/components/CalldataDecoder";
+import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
 import GasEstimateDisplay from "@/components/GasEstimateDisplay";
-import AssetChangesDisplay from "@/components/AssetChangesDisplay";
+import AssetChangesDisplay, { SimulationRevertedBanner } from "@/components/AssetChangesDisplay";
 import ERC20ApproveDisplay from "@/components/ERC20ApproveDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import ChainIcon from "@/components/ChainIcon";
 import { parseApproveCalldata } from "@/lib/erc20Approve";
+import { detectAbiEncodingError } from "@/lib/calldataValidation";
+import { MalformedCalldataBanner } from "@/components/MalformedCalldataBanner";
 import { ethShLabelsUrl, googleFaviconUrl } from "@/constants/externalUrls";
+import { useTheme, useStripTokens, useChainBadgeStyle, useIconChipBg } from "@/theme";
 import {
   getResolvedChainById,
   getStoredNativeCurrencySymbol,
 } from "@/lib/chains";
+import {
+  isForceInclusionSupportedForAccount,
+  FORCE_INCLUSION_CHAINS,
+} from "@/constants/chainRegistry";
+import ForceInclusionProgress from "@/components/ForceInclusionProgress";
 
 // Success animation keyframes
 const scaleIn = keyframes`
@@ -65,10 +78,30 @@ interface TransactionConfirmationProps {
   onConfirmed: () => void;
   onRejected: () => void;
   onRejectAll: () => void;
+  /**
+   * Fired *before* the reject message is sent to the background. Parent uses
+   * this to pre-navigate to an adjacent pending request so the popup never
+   * enters a "view=txConfirm but selectedTx=null" intermediate state (which
+   * would flash the main screen for a frame before onRejected routes to the
+   * next request).
+   */
+  onBeforeReject?: () => void;
   onNavigate: (direction: "prev" | "next") => void;
+  /**
+   * Currently active cross-dapp batch (if any). Used to gate the
+   * "Add to Batch" button (account/chain mismatch → disabled with popover)
+   * and to surface a "Batch: N calls" sub-label.
+   */
+  crossDappBatch?: CrossDappBatch | null;
+  /**
+   * Called after the tx is successfully added to the cross-dapp batch.
+   * Parent should switch the view to the cross-dapp batch confirmation
+   * screen so the user lands directly on the assembled batch.
+   */
+  onAddedToBatch?: () => void;
 }
 
-type ConfirmationState = "ready" | "submitting" | "sent" | "error";
+type ConfirmationState = "ready" | "submitting" | "sent" | "error" | "forceInclusion";
 
 // Copy button component
 function CopyButton({
@@ -100,14 +133,14 @@ function CopyButton({
       variant="ghost"
       color={
         copied
-          ? "bauhaus.yellow"
+          ? "accent.highlight"
           : light
             ? "whiteAlpha.800"
             : "text.secondary"
       }
       onClick={handleCopy}
       _hover={{
-        color: light ? "white" : "bauhaus.blue",
+        color: light ? "white" : "accent.secondary",
         bg: light ? "whiteAlpha.200" : "bg.muted",
       }}
     />
@@ -122,6 +155,82 @@ function CopyButton({
   );
 }
 
+/**
+ * Split-mode gating: when this PendingTxRequest is one slice of a user-split
+ * `wallet_sendCalls` bundle and is NOT the first slice, the Confirm button
+ * stays disabled until the prior slice has actually landed onchain so the
+ * downstream gas estimation runs against fresh state. Returns:
+ *   - { ready: true }                            when no prior to wait for
+ *   - { ready: false, label: "Waiting for…" }   while prior is processing
+ *   - { ready: true, justResolvedAt: number }    instant prior just succeeded
+ *                                                (timestamp lets the caller
+ *                                                trigger a fresh estimate)
+ *   - { ready: false, label: "Previous tx …" }  prior failed/rejected
+ */
+type SplitPriorTxState =
+  | { ready: true; justResolvedAt?: number }
+  | { ready: false; label: string };
+
+function useSplitPriorTxState(txRequest: PendingTxRequest): SplitPriorTxState {
+  const parentBundleId = txRequest.parentBundleId;
+  const bundleIndex = txRequest.bundleIndex;
+  const noPrior = !parentBundleId || bundleIndex === undefined || bundleIndex === 0;
+
+  const [state, setState] = useState<SplitPriorTxState>(
+    noPrior
+      ? { ready: true }
+      : { ready: false, label: "Waiting for previous transaction to confirm…" },
+  );
+
+  useEffect(() => {
+    if (noPrior) {
+      setState({ ready: true });
+      return;
+    }
+    const priorTxId = `${parentBundleId}:split:${(bundleIndex as number) - 1}`;
+    let cancelled = false;
+
+    const apply = (tx: { status: string; error?: string }) => {
+      if (cancelled) return;
+      if (tx.status === "success") {
+        setState((prev) =>
+          prev.ready ? prev : { ready: true, justResolvedAt: Date.now() },
+        );
+      } else if (tx.status === "failed") {
+        setState({
+          ready: false,
+          label: `Previous transaction ${
+            tx.error?.includes("dropped") ? "was dropped" : "failed"
+          } — bundle cancelled`,
+        });
+      }
+    };
+
+    // Initial load via existing getTxHistory message (TxStatusList uses the
+    // same channel); no new background handler needed.
+    chrome.runtime.sendMessage({ type: "getTxHistory" }, (history) => {
+      if (cancelled || !Array.isArray(history)) return;
+      const prior = history.find((t: any) => t.id === priorTxId);
+      if (prior) apply(prior);
+    });
+
+    // Live updates: every history mutation fires `txHistoryUpdated` with the
+    // updated entry inline. We just filter for our prior tx id.
+    const onMessage = (msg: { type: string; updatedTx?: { id: string; status: string; error?: string } }) => {
+      if (msg.type !== "txHistoryUpdated" || !msg.updatedTx) return;
+      if (msg.updatedTx.id !== priorTxId) return;
+      apply(msg.updatedTx);
+    };
+    chrome.runtime.onMessage.addListener(onMessage);
+    return () => {
+      cancelled = true;
+      chrome.runtime.onMessage.removeListener(onMessage);
+    };
+  }, [parentBundleId, bundleIndex, noPrior]);
+
+  return state;
+}
+
 function TransactionConfirmation({
   txRequest,
   currentIndex,
@@ -132,10 +241,28 @@ function TransactionConfirmation({
   onConfirmed,
   onRejected,
   onRejectAll,
+  onBeforeReject,
   onNavigate,
+  crossDappBatch,
+  onAddedToBatch,
 }: TransactionConfirmationProps) {
   const { networksInfo } = useNetworks();
+  const { themeId, tokens } = useTheme();
+  const isDarkTheme = themeId === "midnight";
+  // Bauhaus paints the count badge as a stark black strip with white text;
+  // Midnight uses a recessed dark surface — see useStripTokens.
+  const { bg: stripBg, fg: stripFg } = useStripTokens();
+  const iconChipBg = useIconChipBg();
   const resolvedChain = getResolvedChainById(txRequest.tx.chainId, networksInfo);
+  // Chain badge colors — all per-theme branching lives in `useChainBadgeStyle`.
+  const chainBadgeConfig = getChainConfig(txRequest.tx.chainId);
+  const chainBadgeBrandBg = resolvedChain?.bg ?? chainBadgeConfig.bg;
+  const chainBadgeBrandFg = resolvedChain?.text ?? chainBadgeConfig.text;
+  const chainBadgeStyle = useChainBadgeStyle(
+    chainBadgeBrandBg,
+    chainBadgeBrandFg,
+    resolvedChain?.isCustom ?? false,
+  );
   const [state, setState] = useState<ConfirmationState>("ready");
   const [error, setError] = useState<string>("");
   const [toLabels, setToLabels] = useState<string[]>([]);
@@ -143,13 +270,106 @@ function TransactionConfirmation({
   const [decodedFunctionName, setDecodedFunctionName] = useState<
     string | undefined
   >();
+  // Clear-signing resolution lifecycle — "loading" until the descriptor
+  // fetch settles. Holding off the raw CalldataDecoder until then prevents a
+  // flash-open / collapse glitch when a descriptor matches.
+  const clearSigningEligible = !!(
+    txRequest.tx.data &&
+    txRequest.tx.data !== "0x" &&
+    txRequest.tx.to
+  );
+  const [clearSigningStatus, setClearSigningStatus] = useState<
+    "loading" | "matched" | "absent"
+  >(clearSigningEligible ? "loading" : "absent");
+  const clearSigningMatched = clearSigningStatus === "matched";
+  // Surfaced from AssetChangesDisplay's simulation result. Drives the
+  // top-of-screen "simulated transaction reverted" banner so the warning
+  // lands in front of the user before they read clear-signing / origin info.
+  const [simulationReverted, setSimulationReverted] = useState(false);
   const [gasOverrides, setGasOverrides] = useState<GasOverrides | null>(null);
+  // Gas-editor validity bubbled up from GasEstimateDisplay. Disables the
+  // Confirm button while the user has the Custom-tier editor in an
+  // inconsistent state (e.g., Max Fee < Base Fee + Priority).
+  const [gasValid, setGasValid] = useState(true);
+  const [forceInclusion, setForceInclusion] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Split-mode state. When this tx is part of a user-split wallet_sendCalls
+  // bundle we need to (a) gate Confirm until the prior split tx lands and
+  // (b) force a fresh gas estimate against the post-prior-tx chain state.
+  // The `gasEstimateKey` bumps each time the prior tx flips to success;
+  // changing the React `key` on GasEstimateDisplay remounts it so its own
+  // useEffect re-runs and pulls a new estimate.
+  const splitState = useSplitPriorTxState(txRequest);
+  const [gasEstimateKey, setGasEstimateKey] = useState(0);
+  const lastSeenSplitResolveRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (splitState.ready && splitState.justResolvedAt &&
+        splitState.justResolvedAt !== lastSeenSplitResolveRef.current) {
+      lastSeenSplitResolveRef.current = splitState.justResolvedAt;
+      setGasEstimateKey((k) => k + 1);
+      // Optimistically reset validity so Confirm stays disabled while the
+      // remounted GasEstimateDisplay re-runs estimation. It'll flip back to
+      // true via onValidityChange once the new estimate resolves.
+      setGasValid(false);
+    }
+  }, [splitState]);
+
+  // Force inclusion info — non-null when the chain supports it and account can submit.
+  // For Bankr accounts this also requires the L1 chain (e.g. Ethereum mainnet) to be
+  // in BANKR_SUPPORTED_CHAIN_IDS, since Bankr API submits the L1 deposit on their end.
+  const forceInclusionInfo = useMemo(() => {
+    if (!isForceInclusionSupportedForAccount(txRequest.tx.chainId, accountType)) return null;
+    const entry = FORCE_INCLUSION_CHAINS.get(txRequest.tx.chainId)!;
+    return { l1ChainId: entry.l1ChainId, l1ChainName: entry.l1ChainName };
+  }, [txRequest.tx.chainId, accountType]);
 
   const { tx, origin, chainName, favicon } = txRequest;
   const isInternalWalletChan = origin === "WalletChan";
   const internalSendTokenLabel = origin.startsWith("Send ")
     ? origin.slice(5).trim()
     : null;
+
+  // ─── Cross-Dapp Batch Eligibility ──────────────────────────────────────
+  // The "Add to Batch" action is only meaningful for Bankr accounts
+  // (atomic ship via Bankr API). PK / SP accounts are intentionally excluded:
+  // for them every call still requires its own signature, so combining them
+  // adds friction without benefit. A future 7702 path will lift this.
+  // SECURITY: impersonator (view-only) accounts cannot ship batches.
+  const canBatchAccount = accountType === "bankr";
+
+  // Reason the button is disabled, or null if it's enabled. Used for the
+  // tooltip popover. The button is rendered ONLY when canBatchAccount is true.
+  const addToBatchDisabledReason = useMemo<string | null>(() => {
+    if (!crossDappBatch) return null; // first add — no constraints yet
+    if (
+      crossDappBatch.fromAddress.toLowerCase() !== tx.from.toLowerCase()
+    ) {
+      return "Pending batch on another account — clear it first.";
+    }
+    if (crossDappBatch.chainId !== tx.chainId) {
+      return `Pending batch on ${crossDappBatch.chainName} — clear it first.`;
+    }
+    return null;
+  }, [crossDappBatch, tx.from, tx.chainId]);
+
+  const handleAddToBatch = () => {
+    chrome.runtime.sendMessage(
+      { type: "addToCrossDappBatch", txId: txRequest.id },
+      (result: { success: boolean; error?: string } | undefined) => {
+        if (!result?.success) {
+          setError(result?.error || "Failed to add to batch");
+          setState("error");
+          return;
+        }
+        // Success: jump straight to the cross-dapp batch confirmation
+        // screen so the user sees the assembled batch they just added to.
+        onAddedToBatch?.();
+      },
+    );
+  };
+
+  const batchedCount = crossDappBatch?.entries.length ?? 0;
 
   // Native currency symbol for display
   const [nativeSym, setNativeSym] = useState(
@@ -186,7 +406,7 @@ function TransactionConfirmation({
     <Box
       boxSize="14px"
       borderRadius="sm"
-      bg="gray.300"
+      bg="bg.muted"
       display="flex"
       alignItems="center"
       justifyContent="center"
@@ -265,11 +485,14 @@ function TransactionConfirmation({
         password: "",
         functionName,
         ...(gasOverrides ? { gasOverrides } : {}),
+        ...(forceInclusion ? { forceInclusion: true } : {}),
       },
       (result: { success: boolean; error?: string }) => {
         if (result.success) {
-          // Transaction submitted
-          if (isInSidePanel) {
+          if (forceInclusion) {
+            // Stay open to show force inclusion progress
+            setState("forceInclusion");
+          } else if (isInSidePanel) {
             // In sidepanel, navigate away immediately
             onConfirmed();
           } else {
@@ -288,6 +511,7 @@ function TransactionConfirmation({
   };
 
   const handleReject = () => {
+    onBeforeReject?.();
     chrome.runtime.sendMessage(
       { type: "rejectTransaction", txId: txRequest.id },
       () => {
@@ -302,6 +526,16 @@ function TransactionConfirmation({
     [tx.to, tx.data],
   );
 
+  // Strict ABI validation for known ERC20 selectors. When this fires we block
+  // signing and show a red banner — the structured approval card is also
+  // suppressed because parseApproveCalldata applies the same padding check.
+  // See `lib/calldataValidation.ts` for the rationale.
+  const calldataValidation = useMemo(
+    () => detectAbiEncodingError(tx.data),
+    [tx.data],
+  );
+  const isCalldataMalformed = calldataValidation.malformed;
+
   const formatValue = (value: string | undefined): string => {
     if (!value || value === "0" || value === "0x0") {
       return `0 ${nativeSym}`;
@@ -311,12 +545,40 @@ function TransactionConfirmation({
     return `${eth.toFixed(6)} ${nativeSym}`;
   };
 
+  const isValueZero =
+    !tx.value || tx.value === "0" || tx.value === "0x0" || tx.value === "0x";
+
+  // Force inclusion progress screen
+  if (state === "forceInclusion" && forceInclusionInfo) {
+    return (
+      <Box h="100%" overflowY="auto" bg="surface.base">
+        <ForceInclusionProgress
+          txId={txRequest.id}
+          l1ChainId={forceInclusionInfo.l1ChainId}
+          l2ChainId={tx.chainId}
+          onComplete={() => {
+            if (isInSidePanel) {
+              onConfirmed();
+            } else {
+              setState("sent");
+              setTimeout(() => window.close(), 1500);
+            }
+          }}
+          onError={(err) => {
+            setError(err);
+            setState("error");
+          }}
+        />
+      </Box>
+    );
+  }
+
   // Success animation screen (popup mode only)
   if (state === "sent") {
     return (
       <Box
         h="100vh"
-        bg="bg.base"
+        bg="surface.base"
         display="flex"
         flexDirection="column"
         alignItems="center"
@@ -324,54 +586,59 @@ function TransactionConfirmation({
         p={8}
         position="relative"
       >
-        {/* Geometric decorations */}
-        <Box
-          position="absolute"
-          top={6}
-          left={6}
-          w="16px"
-          h="16px"
-          bg="bauhaus.red"
-          border="2px solid"
-          borderColor="bauhaus.black"
-        />
-        <Box
-          position="absolute"
-          top={6}
-          right={6}
-          w="16px"
-          h="16px"
-          bg="bauhaus.blue"
-          borderRadius="full"
-          border="2px solid"
-          borderColor="bauhaus.black"
-        />
-        <Box
-          position="absolute"
-          bottom={6}
-          left={6}
-          w="0"
-          h="0"
-          borderLeft="8px solid transparent"
-          borderRight="8px solid transparent"
-          borderBottom="16px solid"
-          borderBottomColor="bauhaus.yellow"
-        />
+        {/* Geometric decorations — Bauhaus exuberance, Midnight stays restrained */}
+        {!isDarkTheme && (
+          <>
+            <Box
+              position="absolute"
+              top={6}
+              left={6}
+              w="16px"
+              h="16px"
+              bg="accent.primary"
+              border="2px solid"
+              borderColor="border.default"
+            />
+            <Box
+              position="absolute"
+              top={6}
+              right={6}
+              w="16px"
+              h="16px"
+              bg="accent.secondary"
+              borderRadius="full"
+              border="2px solid"
+              borderColor="border.default"
+            />
+            <Box
+              position="absolute"
+              bottom={6}
+              left={6}
+              w="0"
+              h="0"
+              borderLeft="8px solid transparent"
+              borderRight="8px solid transparent"
+              borderBottom="16px solid"
+              borderBottomColor="accent.highlight"
+            />
+          </>
+        )}
 
         <Box
           w="100px"
           h="100px"
-          bg="bauhaus.yellow"
-          border="4px solid"
-          borderColor="bauhaus.black"
-          boxShadow="8px 8px 0px 0px #121212"
+          bg="accent.highlight"
+          border={tokens.borders.thick}
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="modal"
           display="flex"
           alignItems="center"
           justifyContent="center"
           animation={`${scaleIn} 0.4s ease-out`}
           mb={6}
         >
-          <Icon viewBox="0 0 24 24" w="50px" h="50px" color="bauhaus.black">
+          <Icon viewBox="0 0 24 24" w="50px" h="50px" color="accentFg.highlight">
             <path
               fill="none"
               stroke="currentColor"
@@ -410,32 +677,20 @@ function TransactionConfirmation({
   }
 
   return (
-    <Box p={3} h="100%" overflowY="auto" bg="bg.base" css={{
+    <Box pt="clamp(1.25rem, calc(8vh - 36px), 3rem)" px={3} pb={3} h="100%" overflowY="auto" bg="surface.base" css={{
       "&::-webkit-scrollbar": { width: "4px" },
       "&::-webkit-scrollbar-track": { background: "transparent" },
-      "&::-webkit-scrollbar-thumb": { background: "#ccc", borderRadius: "2px" },
+      "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-strong)", borderRadius: "2px" },
     }}>
-      <VStack spacing={2} align="stretch">
-        {/* Top row - Back button, navigation, Reject All */}
-        <Flex align="center" position="relative" minH="32px">
-          {/* Left - Back button */}
-          <IconButton
-            aria-label="Back"
-            icon={<ArrowBackIcon />}
-            variant="ghost"
-            size="sm"
-            onClick={onBack}
-            minW="auto"
-          />
-
-          {/* Center - Navigation (absolutely positioned for true centering) */}
-          {totalCount > 1 && (
-            <HStack
-              spacing={0}
-              position="absolute"
-              left="50%"
-              transform="translateX(-50%)"
-            >
+      <VStack spacing={2} align="stretch" minH="100%">
+        {/* Top row — navigation centered + Reject All on right, only when
+            multiple pending requests are queued. chart.negative is the only
+            token that's RED in BOTH themes — status.error.fg is WHITE in
+            Bauhaus (it pairs with the RED bg) and would render invisibly
+            on this surface. */}
+        {totalCount > 1 && (
+          <Flex align="center" justify="center" position="relative">
+            <HStack spacing={0}>
               <IconButton
                 aria-label="Previous"
                 icon={<ChevronLeftIcon />}
@@ -449,8 +704,8 @@ function TransactionConfirmation({
                 p={1}
               />
               <Badge
-                bg="bauhaus.black"
-                color="bauhaus.white"
+                bg={stripBg}
+                color={stripFg}
                 fontSize="xs"
                 px={3}
                 py={1}
@@ -471,11 +726,77 @@ function TransactionConfirmation({
                 p={1}
               />
             </HStack>
-          )}
+            <Button
+              position="absolute"
+              right={0}
+              size="xs"
+              variant="ghost"
+              color="chart.negative"
+              fontWeight="700"
+              _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
+              onClick={onRejectAll}
+              px={2}
+            >
+              Reject All
+            </Button>
+          </Flex>
+        )}
 
-          {/* Right - Copy tx JSON + Reject All */}
-          <Spacer />
-          <HStack spacing={1}>
+        {/* Header row — back + title pill + copy, all inline.
+            Title pill: approve uses highlight (amber/yellow) accent, normal
+            txs use the secondary (cyan/blue) accent. The corner ornament is
+            a Bauhaus exuberance and is hidden under Midnight. `mb` only
+            kicks in once the viewport is tall enough (~700px+); popup
+            windows stay tight against the info card. */}
+        <HStack spacing={2} align="center" mb="clamp(0px, calc(8vh - 56px), 3rem)">
+          <IconButton
+            aria-label="Back"
+            icon={<ArrowBackIcon />}
+            variant="ghost"
+            size="md"
+            px={2}
+            onClick={onBack}
+            flexShrink={0}
+          />
+
+          <Box
+            flex="1"
+            minW={0}
+            bg={parsedApproval ? "accent.highlight" : "accent.secondary"}
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
+            py={1.5}
+            px={3}
+            position="relative"
+          >
+            {!isDarkTheme && (
+              <Box
+                position="absolute"
+                top="-3px"
+                right="-3px"
+                w="8px"
+                h="8px"
+                bg={parsedApproval ? "accent.secondary" : "accent.highlight"}
+                border="2px solid"
+                borderColor="border.default"
+              />
+            )}
+            <Text
+              fontWeight="900"
+              fontSize="sm"
+              color={parsedApproval ? "accentFg.highlight" : "accentFg.secondary"}
+              textAlign="center"
+              textTransform="uppercase"
+              letterSpacing="wider"
+              noOfLines={1}
+            >
+              {parsedApproval ? "Token Approval Request" : "Transaction Request"}
+            </Text>
+          </Box>
+
+          <Box flexShrink={0}>
             <CopyButton
               label="Copy tx JSON"
               value={JSON.stringify(
@@ -491,56 +812,63 @@ function TransactionConfirmation({
                 2,
               )}
             />
-            {totalCount > 1 && (
-              <Button
-                size="xs"
-                variant="ghost"
-                color="bauhaus.red"
+          </Box>
+        </HStack>
+
+        {/* Split-mode step indicator. Shown when this confirmation is one
+            slice of a user-split wallet_sendCalls bundle. Helps the user
+            keep track of "where are we" across the sequence. */}
+        {txRequest.parentBundleId !== undefined &&
+          txRequest.bundleIndex !== undefined &&
+          txRequest.bundleTotalCalls !== undefined && (
+            <HStack
+              w="full"
+              py={2}
+              px={3}
+              bg="accent.secondary"
+              border={tokens.borders.medium}
+              borderColor="border.default"
+              borderRadius="lg"
+              justify="space-between"
+            >
+              <Text
+                fontSize="xs"
+                color="accentFg.secondary"
                 fontWeight="700"
-                _hover={{ bg: "bauhaus.red", color: "white" }}
-                onClick={onRejectAll}
-                px={2}
+                textTransform="uppercase"
               >
-                Reject All
-              </Button>
-            )}
-          </HStack>
-        </Flex>
+                Split batch
+              </Text>
+              <Badge
+                fontSize="xs"
+                bg="accentFg.secondary"
+                color="accent.secondary"
+                fontWeight="900"
+                px={2}
+                py={0.5}
+              >
+                Step {txRequest.bundleIndex + 1} of {txRequest.bundleTotalCalls}
+              </Badge>
+            </HStack>
+          )}
 
-        {/* Title row */}
-        <Box
-          bg={parsedApproval ? "bauhaus.yellow" : "bauhaus.blue"}
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
-          py={1.5}
-          px={3}
-          position="relative"
-        >
-          <Box
-            position="absolute"
-            top="-3px"
-            right="-3px"
-            w="8px"
-            h="8px"
-            bg={parsedApproval ? "bauhaus.blue" : "bauhaus.yellow"}
-            border="2px solid"
-            borderColor="bauhaus.black"
+        {/* Malformed-calldata banner — surfaces ABOVE everything else when the
+            calldata starts with a known ERC20 selector but is not canonically
+            ABI-encoded (non-zero address padding, wrong length). Signing is
+            blocked while this is visible. */}
+        {isCalldataMalformed && (
+          <MalformedCalldataBanner
+            borders={tokens.borders}
+            reason={calldataValidation.reason!}
+            functionName={calldataValidation.functionName}
           />
-          <Text
-            fontWeight="900"
-            fontSize="sm"
-            color={parsedApproval ? "bauhaus.black" : "white"}
-            textAlign="center"
-            textTransform="uppercase"
-            letterSpacing="wider"
-          >
-            {parsedApproval ? "Token Approval Request" : "Transaction Request"}
-          </Text>
-        </Box>
+        )}
 
-        {/* ERC20 Approve detection — shown above tx info when present */}
-        {tx.to && parsedApproval && (
+        {/* ERC20 Approve detection — shown above tx info when present.
+            Suppressed when calldata is malformed: parseApproveCalldata
+            already returns null in that case, but guarding here too keeps
+            the intent explicit. */}
+        {tx.to && parsedApproval && !isCalldataMalformed && (
           <ERC20ApproveDisplay
             tokenAddress={tx.to}
             approval={parsedApproval}
@@ -549,15 +877,46 @@ function TransactionConfirmation({
           />
         )}
 
+        {/* Simulated-revert banner — rendered at the very top, ABOVE the
+            clear-signing card, so the "this is likely to fail onchain"
+            warning is the first thing the user sees. State is fed by the
+            AssetChangesDisplay simulation result further down. */}
+        {simulationReverted && (
+          <SimulationRevertedBanner borders={tokens.borders} />
+        )}
+
+        {/* Clear-signing (ERC-7730) view — rendered ABOVE the tx info card,
+            matching the ERC-20 approve display's placement. The human-readable
+            intent is the primary content; Origin/From/Network are secondary.
+            The raw CalldataDecoder further down stays collapsed when this
+            resolves (see `clearSigningMatched`). */}
+        {clearSigningEligible && (
+          <ClearSigningView
+            kind="calldata"
+            chainId={tx.chainId}
+            to={tx.to!}
+            calldata={tx.data!}
+            onResolved={(matched) =>
+              setClearSigningStatus(matched ? "matched" : "absent")
+            }
+          />
+        )}
+
         {/* Transaction Info Card */}
         <Box
-          bg="bauhaus.white"
-          border="2px solid"
-          borderColor="bauhaus.black"
-          boxShadow="2px 2px 0px 0px #121212"
+          bg="surface.raised"
+          border={tokens.borders.thin}
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
+          overflow="hidden"
           position="relative"
         >
-          <VStack spacing={0} divider={<Box h="1px" bg="gray.300" w="full" />}>
+          {/* Rows use explicit borderTop instead of VStack's `divider` prop
+              — see BatchTransactionConfirmation info card for the rationale.
+              tl;dr Chakra's divider applies borderBottomWidth:1px with no
+              color, so it inherits currentColor and paints as near-white. */}
+          <VStack spacing={0} align="stretch">
             {/* Origin */}
             <HStack w="full" py={1.5} px={3} justify="space-between">
               <Text
@@ -570,9 +929,9 @@ function TransactionConfirmation({
               </Text>
               <HStack spacing={1.5}>
                 <Box
-                  bg={isInternalWalletChan ? "transparent" : "gray.100"}
+                  bg={isInternalWalletChan ? "transparent" : iconChipBg}
                   border={isInternalWalletChan ? "none" : "1.5px solid"}
-                  borderColor="gray.300"
+                  borderColor="border.subtle"
                   borderRadius="md"
                   p={isInternalWalletChan ? 0 : 0.5}
                   display="flex"
@@ -615,7 +974,14 @@ function TransactionConfirmation({
             </HStack>
 
             {/* From */}
-            <HStack w="full" py={1.5} px={3} justify="space-between">
+            <HStack
+              w="full"
+              py={1.5}
+              px={3}
+              justify="space-between"
+              borderTop="1px solid"
+              borderColor="border.subtle"
+            >
               <Text
                 fontSize="xs"
                 color="text.secondary"
@@ -628,7 +994,14 @@ function TransactionConfirmation({
             </HStack>
 
             {/* Network */}
-            <HStack w="full" py={1.5} px={3} justify="space-between">
+            <HStack
+              w="full"
+              py={1.5}
+              px={3}
+              justify="space-between"
+              borderTop="1px solid"
+              borderColor="border.subtle"
+            >
               <Text
                 fontSize="xs"
                 color="text.secondary"
@@ -637,38 +1010,86 @@ function TransactionConfirmation({
               >
                 Network
               </Text>
-              {(() => {
-                const config = getChainConfig(tx.chainId);
-                const badgeChain = resolvedChain ?? {
-                  name: chainName,
-                  bg: config.bg,
-                  text: config.text,
-                  icon: config.icon,
-                  isCustom: false,
-                };
-                return (
-                  <Badge
-                    fontSize="xs"
-                    bg={badgeChain.isCustom ? "bauhaus.white" : badgeChain.bg}
-                    color={badgeChain.isCustom ? "bauhaus.black" : badgeChain.text}
-                    border="1.5px solid"
-                    borderColor="bauhaus.black"
-                    fontWeight="700"
-                    px={2}
-                    py={0.5}
-                    display="flex"
-                    alignItems="center"
-                    gap={1}
-                  >
-                    <ChainIcon chainId={tx.chainId} chainName={badgeChain.name} size="12px" />
-                    {badgeChain.name}
-                  </Badge>
-                );
-              })()}
+              <HStack spacing={1}>
+                <Badge
+                  fontSize="xs"
+                  bg={chainBadgeStyle.bg}
+                  color={chainBadgeStyle.fg}
+                  border="1.5px solid"
+                  borderColor={chainBadgeStyle.border}
+                  fontWeight="700"
+                  px={2}
+                  py={0.5}
+                  display="flex"
+                  alignItems="center"
+                  gap={1}
+                >
+                  <ChainIcon
+                    chainId={tx.chainId}
+                    chainName={resolvedChain?.name ?? chainName}
+                    size="12px"
+                    withChip
+                  />
+                  {resolvedChain?.name ?? chainName}
+                  {forceInclusion && forceInclusionInfo && (
+                    <Text as="span" fontSize="2xs" opacity={0.7}>
+                      via {forceInclusionInfo.l1ChainName}
+                    </Text>
+                  )}
+                </Badge>
+                {forceInclusionInfo && (
+                  <Tooltip label="Advanced options" fontSize="xs" hasArrow>
+                    <IconButton
+                      aria-label="Advanced options"
+                      icon={<SettingsIcon boxSize="10px" />}
+                      size="xs"
+                      variant="ghost"
+                      minW="20px"
+                      h="20px"
+                      color={showAdvanced ? "accent.secondary" : "text.tertiary"}
+                      onClick={() => setShowAdvanced(!showAdvanced)}
+                      _hover={{ color: "accent.secondary", bg: "bg.muted" }}
+                    />
+                  </Tooltip>
+                )}
+              </HStack>
             </HStack>
 
-            {/* To Address / Contract Deployment */}
-            <Box w="full" py={1.5} px={3}>
+            {/* Force Inclusion Toggle (advanced options) */}
+            {forceInclusionInfo && (
+              <Collapse in={showAdvanced} animateOpacity>
+                <Box w="full" py={2} px={3} bg="bg.muted">
+                  <HStack justify="space-between" mb={1}>
+                    <Text fontSize="xs" fontWeight="700" color="text.primary" textTransform="uppercase">
+                      Force Inclusion
+                    </Text>
+                    <Switch
+                      size="sm"
+                      isChecked={forceInclusion}
+                      onChange={(e) => setForceInclusion(e.target.checked)}
+                      colorScheme="blue"
+                    />
+                  </HStack>
+                  <Text fontSize="2xs" color="text.tertiary" fontWeight="500">
+                    Submit via L1 deposit ({forceInclusionInfo.l1ChainName}) to guarantee inclusion. Takes ~1-10 min.
+                  </Text>
+                </Box>
+              </Collapse>
+            )}
+
+            {/* To Address / Contract Deployment.
+                Hidden on ERC20 approvals — the token contract is already
+                surfaced as the TOKEN row in the approval card above, so
+                showing it again here (with the "Circle: USDC Token" label)
+                is pure noise. */}
+            {!parsedApproval && (
+            <Box
+              w="full"
+              py={1.5}
+              px={3}
+              borderTop="1px solid"
+              borderColor="border.subtle"
+            >
               <HStack
                 justify="space-between"
                 mb={toLabels.length > 0 || resolvedToName ? 1 : 0}
@@ -686,10 +1107,10 @@ function TransactionConfirmation({
                     {resolvedToName && (
                       <Badge
                         fontSize="2xs"
-                        bg="bauhaus.yellow"
-                        color="bauhaus.black"
+                        bg="accent.highlight"
+                        color="accentFg.highlight"
                         border="1.5px solid"
-                        borderColor="bauhaus.black"
+                        borderColor="border.default"
                         px={1.5}
                         py={0}
                         fontWeight="700"
@@ -703,9 +1124,10 @@ function TransactionConfirmation({
                       spacing={0.5}
                       px={1.5}
                       py={0.5}
-                      bg="bauhaus.white"
+                      bg="surface.raised"
                       border="1.5px solid"
-                      borderColor="bauhaus.black"
+                      borderColor="border.default"
+                      borderRadius="md"
                     >
                       <Text
                         fontSize="xs"
@@ -733,7 +1155,7 @@ function TransactionConfirmation({
                                 "_blank"
                               )
                             }
-                            _hover={{ color: "bauhaus.blue", bg: "bg.muted" }}
+                            _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                           />
                         ) : null;
                       })()}
@@ -742,10 +1164,10 @@ function TransactionConfirmation({
                 ) : (
                   <Badge
                     fontSize="xs"
-                    bg="bauhaus.yellow"
-                    color="bauhaus.black"
+                    bg="accent.highlight"
+                    color="accentFg.highlight"
                     border="1.5px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                     fontWeight="700"
                     px={2}
                     py={0.5}
@@ -758,10 +1180,10 @@ function TransactionConfirmation({
                 <Flex justify="flex-end">
                   <Badge
                     fontSize="2xs"
-                    bg="bauhaus.blue"
-                    color="white"
+                    bg="accent.secondary"
+                    color="accentFg.secondary"
                     border="1.5px solid"
-                    borderColor="bauhaus.black"
+                    borderColor="border.default"
                     px={1.5}
                     py={0}
                     fontWeight="700"
@@ -773,51 +1195,80 @@ function TransactionConfirmation({
                 </Flex>
               )}
             </Box>
+            )}
 
-            {/* Value */}
-            <HStack w="full" py={1.5} px={3} justify="space-between">
-              <Text
-                fontSize="xs"
-                color="text.secondary"
-                fontWeight="700"
-                textTransform="uppercase"
+            {/* Value — hidden on ERC20 approvals when zero (always the
+                common case). A non-zero value on an `approve(...)` call is
+                unusual enough that we still surface it. */}
+            {(!parsedApproval || !isValueZero) && (
+              <HStack
+                w="full"
+                py={1.5}
+                px={3}
+                justify="space-between"
+                borderTop="1px solid"
+                borderColor="border.subtle"
               >
-                Value
-              </Text>
-              <Text fontSize="xs" fontWeight="700" color="text.primary">
-                {formatValue(tx.value)}
-              </Text>
-            </HStack>
+                <Text
+                  fontSize="xs"
+                  color="text.secondary"
+                  fontWeight="700"
+                  textTransform="uppercase"
+                >
+                  Value
+                </Text>
+                <Text fontSize="xs" fontWeight="700" color="text.primary">
+                  {formatValue(tx.value)}
+                </Text>
+              </HStack>
+            )}
           </VStack>
         </Box>
 
         {/* Asset Changes (simulation) */}
-        {tx.to && <AssetChangesDisplay txRequest={txRequest} />}
+        {tx.to && (
+          <AssetChangesDisplay
+            txRequest={txRequest}
+            onRevertedChange={setSimulationReverted}
+          />
+        )}
 
-        {/* Gas Estimate */}
+        {/* Gas Estimate. The `key` includes the split-resolution counter so
+            the component remounts after the prior split tx lands, forcing a
+            fresh eth_estimateGas against the new chain state. */}
         <GasEstimateDisplay
+          key={gasEstimateKey}
           txRequest={txRequest}
           accountType={accountType}
           onGasOverrides={setGasOverrides}
+          onValidityChange={setGasValid}
+          forceInclusion={forceInclusion}
         />
 
-        {/* Calldata (Decoded + Raw) */}
-        {tx.data && tx.data !== "0x" && tx.to && (
+        {/* Calldata (Decoded + Raw). Collapsed by default on approvals —
+            the structured ERC20ApproveDisplay above already shows function
+            + spender + amount; the decoder panel is redundant for the
+            common case but one click away for power users. Also collapses
+            when a clear-signing descriptor matched above. Held back until
+            clear-signing resolves so we don't flash-open then collapse. */}
+        {tx.data && tx.data !== "0x" && tx.to && clearSigningStatus !== "loading" && (
           <CalldataDecoder
             calldata={tx.data}
             to={tx.to}
             chainId={tx.chainId}
             onFunctionName={setDecodedFunctionName}
+            defaultCollapsed={!!parsedApproval || clearSigningMatched}
           />
         )}
         {/* Raw-only fallback for contract deployments */}
         {tx.data && tx.data !== "0x" && !tx.to && (
           <Box
-            bg="bauhaus.white"
+            bg="surface.raised"
             p={3}
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
           >
             <HStack mb={2} alignItems="center">
               <Text
@@ -834,20 +1285,21 @@ function TransactionConfirmation({
             <Box
               p={3}
               bg="bg.muted"
-              border="2px solid"
-              borderColor="bauhaus.black"
+              border={tokens.borders.thin}
+              borderColor="border.default"
+              borderRadius="md"
               maxH="100px"
               overflowY="auto"
               css={{
                 "&::-webkit-scrollbar": { width: "6px" },
-                "&::-webkit-scrollbar-track": { background: "#E0E0E0" },
-                "&::-webkit-scrollbar-thumb": { background: "#121212" },
+                "&::-webkit-scrollbar-track": { background: "var(--chakra-colors-bg-muted)" },
+                "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-default)" },
               }}
             >
               <Text
                 fontSize="xs"
                 fontFamily="mono"
-                color="text.tertiary"
+                color="text.primary"
                 wordBreak="break-all"
                 whiteSpace="pre-wrap"
               >
@@ -856,11 +1308,15 @@ function TransactionConfirmation({
             </Box>
           </Box>
         )}
-        {/* Pinned bottom section — sticky so buttons are always reachable */}
+
+        {/* Pinned bottom section — `mt="auto"` keeps it at the bottom when
+            content is shorter than the viewport; `position:sticky` keeps it
+            visible while scrolling long calldata. */}
         <Box
+          mt="auto"
           position="sticky"
           bottom={-3}
-          bg="bg.base"
+          bg="surface.base"
           pt={1}
           pb={1}
           mx={-3}
@@ -872,7 +1328,7 @@ function TransactionConfirmation({
         {tx.data && tx.data !== "0x" && (
           <CalldataDigestDisplay calldata={tx.data} />
         )}
-        {/* Simulate on Tenderly */}
+        {/* Simulate on Tenderly + (single-pending) Add-to-Batch pill */}
         {(() => {
           const tenderlyUrl = (() => {
             const params = new URLSearchParams({
@@ -884,12 +1340,14 @@ function TransactionConfirmation({
             });
             return `https://dashboard.tenderly.co/simulator/new?${params}`;
           })();
-          return (
+          const showInlineBatch = canBatchAccount;
+          const tenderlyBox = (
             <HStack
               spacing={2}
               w="full"
-              border="2px solid"
-              borderColor="bauhaus.black"
+              border={tokens.borders.thin}
+              borderColor="border.default"
+              borderRadius="md"
               px={3}
               py={1.5}
               justify="center"
@@ -920,18 +1378,57 @@ function TransactionConfirmation({
               </HStack>
             </HStack>
           );
+          if (!showInlineBatch) return tenderlyBox;
+          return (
+            <HStack spacing={1.5} w="full" align="stretch">
+              <Box flex={1} minW={0}>
+                {tenderlyBox}
+              </Box>
+              <Tooltip
+                label={addToBatchDisabledReason ?? ""}
+                isDisabled={!addToBatchDisabledReason}
+                hasArrow
+                fontSize="xs"
+              >
+                {/*
+                 * Wrapper Flex stretches to the HStack height (cross axis)
+                 * and the inner Button fills it 100%. We avoid Chakra's
+                 * `size="sm"` because its fixed `h={8}` wins over
+                 * `h="auto"`/`alignSelf="stretch"` and prevents the button
+                 * from growing to match a wrapped Tenderly box.
+                 */}
+                <Flex alignSelf="stretch" flexShrink={0}>
+                  <Button
+                    variant="highlight"
+                    onClick={handleAddToBatch}
+                    isDisabled={!!addToBatchDisabledReason}
+                    fontWeight="800"
+                    textTransform="uppercase"
+                    letterSpacing="wide"
+                    fontSize="2xs"
+                    px={2.5}
+                    h="full"
+                    minH={8}
+                  >
+                    {batchedCount > 0 ? `+ Batch (${batchedCount})` : "+ Batch"}
+                  </Button>
+                </Flex>
+              </Tooltip>
+            </HStack>
+          );
         })()}
 
         {/* Error Display */}
         {error && state === "error" && (
           <Box
-            bg="bauhaus.red"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="4px 4px 0px 0px #121212"
+            bg="status.error.bg"
+            border={tokens.borders.medium}
+            borderColor="status.error.border"
+            borderRadius="lg"
+            boxShadow="card"
             p={3}
           >
-            <Text color="white" fontSize="sm" fontWeight="700">
+            <Text color="status.error.fg" fontSize="sm" fontWeight="700">
               {error}
             </Text>
           </Box>
@@ -942,14 +1439,15 @@ function TransactionConfirmation({
           <HStack
             justify="center"
             py={3}
-            bg="bauhaus.blue"
-            border="3px solid"
-            borderColor="bauhaus.black"
+            bg="accent.secondary"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
           >
-            <Spinner size="sm" color="white" />
+            <Spinner size="sm" color="accentFg.secondary" />
             <Text
               fontSize="sm"
-              color="white"
+              color="accentFg.secondary"
               fontWeight="700"
               textTransform="uppercase"
             >
@@ -961,16 +1459,47 @@ function TransactionConfirmation({
         {/* Impersonator Info Box */}
         {accountType === "impersonator" && (
           <Box
-            bg="bauhaus.yellow"
-            border="3px solid"
-            borderColor="bauhaus.black"
-            boxShadow="3px 3px 0px 0px #121212"
+            bg="accent.highlight"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
             p={3}
           >
-            <Text fontSize="sm" color="bauhaus.black" fontWeight="700">
+            <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
               Connected via Impersonated account — signing is disabled.
             </Text>
           </Box>
+        )}
+
+        {/* Split-mode status banner. Shown when this confirmation is part of
+            a user-split bundle and we're either waiting for the prior call
+            to confirm onchain or re-estimating gas against the new state. */}
+        {(!splitState.ready ||
+          (txRequest.parentBundleId && txRequest.bundleIndex !== undefined &&
+           txRequest.bundleIndex > 0 && !gasValid)) && state !== "submitting" && (
+          <HStack
+            justify="center"
+            py={3}
+            bg="bg.muted"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+          >
+            {splitState.ready ? null : (
+              <Spinner size="sm" color="text.secondary" />
+            )}
+            <Text
+              fontSize="sm"
+              color="text.secondary"
+              fontWeight="700"
+              textTransform="uppercase"
+            >
+              {!splitState.ready
+                ? splitState.label
+                : "Estimating gas with new chain state…"}
+            </Text>
+          </HStack>
         )}
 
         {/* Action Buttons */}
@@ -981,10 +1510,15 @@ function TransactionConfirmation({
             </Button>
             {accountType !== "impersonator" && (
               <Button
-                variant="yellow"
+                variant="highlight"
                 flex={1}
                 onClick={handleConfirm}
-                isDisabled={state === "error"}
+                isDisabled={
+                  state === "error" ||
+                  !gasValid ||
+                  !splitState.ready ||
+                  isCalldataMalformed
+                }
               >
                 Confirm
               </Button>

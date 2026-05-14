@@ -30,13 +30,14 @@ const BASENAME_L2_RESOLVER_ADDRESS =
 // Public Clients (use user-configured RPCs from storage)
 // ============================================================================
 
+// Resolves via chainRegistry → user override > registry default. Throws if the
+// chain isn't registered; only call with chain IDs known to be in CHAIN_REGISTRY.
 async function getUserRpcUrl(chainId: number): Promise<string> {
   const rpcUrl = await getStoredRpcUrl(chainId).catch(() => undefined);
-  if (rpcUrl) return rpcUrl;
-  // Hardcoded last resort
-  return chainId === base.id
-    ? "https://mainnet.base.org"
-    : "https://eth.llamarpc.com";
+  if (!rpcUrl) {
+    throw new Error(`No RPC URL configured for chain ${chainId}`);
+  }
+  return rpcUrl;
 }
 
 async function getMainnetClient() {
@@ -76,6 +77,67 @@ export const isResolvableName = (value: string): boolean => {
   if (!value || value.length === 0) return false;
   return value.includes(".") && !value.toLowerCase().startsWith("0x");
 };
+
+/**
+ * Unicode characters that must NEVER appear in a name we render to the user:
+ *  - C0/C1 control chars (break rendering)
+ *  - Zero-width / invisible marks (hide content inside a name)
+ *  - BiDi overrides + isolates (reverse displayed text — U+202E "Trojan Source")
+ *  - Line/paragraph separators (split the rendered name across lines)
+ *  - Object Replacement Character (placeholder for missing glyphs)
+ *
+ * Any resolved name (ENS / Basename / Mega / Wei) containing one of these is
+ * treated as hostile and discarded. We do NOT try to clean / repair the name —
+ * showing a partial name is worse than showing the raw address.
+ */
+// Written with \u escape sequences only — the literal characters would
+// themselves render the source file dangerously (U+202E reverses surrounding
+// text; U+2028 terminates lines from a JS lexer's perspective). Do not edit
+// this regex by pasting the raw characters.
+const HAZARDOUS_NAME_CHARS_RE =
+// eslint-disable-next-line no-control-regex
+  /[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2028\u2029\u2066-\u2069\uFEFF\uFFFC]/;
+
+const PRINTABLE_ASCII_RE = /^[\x21-\x7e]+$/;
+
+/**
+ * Sanitize an address-to-name resolution result for display.
+ *
+ * Returns:
+ *  - `null` if the name is empty, exceeds DNS length (253), or contains
+ *    hazardous Unicode. Callers fall back to showing the raw address.
+ *  - the ASCII / IDN-encoded ("xn--…") form if the name contained non-ASCII
+ *    characters. This forces visually-confusable Unicode (Cyrillic 'а' that
+ *    looks like Latin 'a', etc.) to render as its unambiguous punycode label
+ *    so users can tell at a glance that the name is not pure-ASCII.
+ *  - the name unchanged when it's already pure printable ASCII.
+ *
+ * Defense against reverse-resolution spoofing. An attacker who owns
+ * `apple‐.eth` (with a combining mark) or a Cyrillic-Latin homoglyph name
+ * can register it cheaply on ENS/Basenames/Mega and dangle it on a vanity
+ * address; if a victim ever transacts with that address, the reverse lookup
+ * decorates every future confirmation surface with a trusted-looking name.
+ * Hard-rejecting hazardous chars and forcing punycode for non-ASCII names
+ * closes both vectors without engineering full Unicode-confusable detection.
+ */
+export function sanitizeResolvedName(name: string | null | undefined): string | null {
+  if (!name || typeof name !== "string") return null;
+  if (name.length === 0 || name.length > 253) return null;
+  if (HAZARDOUS_NAME_CHARS_RE.test(name)) return null;
+  // Pure printable-ASCII fast path — the common case for ENS/Basenames.
+  if (PRINTABLE_ASCII_RE.test(name)) return name;
+  // Any non-ASCII name is forced through the URL parser's IDN encoder; the
+  // resulting hostname is the canonical punycode form. If encoding fails or
+  // the result is itself non-ASCII (shouldn't happen with a conforming URL
+  // parser), refuse to display.
+  try {
+    const ascii = new URL(`http://${name}/`).hostname;
+    if (ascii && PRINTABLE_ASCII_RE.test(ascii)) return ascii;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 const isBasename = (name: string): boolean => {
   return name.toLowerCase().endsWith(".base.eth");
@@ -154,7 +216,7 @@ const getMegaName = async (
       args: [address as Address],
     });
     if (!name || name.length === 0) return null;
-    return name as string;
+    return sanitizeResolvedName(name as string);
   } catch {
     return null;
   }
@@ -206,7 +268,7 @@ const getBasename = async (address: Address): Promise<string | null> => {
     });
 
     if (basename && basename.length > 0) {
-      return basename as string;
+      return sanitizeResolvedName(basename as string);
     }
     return null;
   } catch {
@@ -220,7 +282,7 @@ const getEnsName = async (address: string): Promise<string | null> => {
     const name = await client.getEnsName({
       address: address as Hex,
     });
-    return name;
+    return sanitizeResolvedName(name);
   } catch {
     return null;
   }
@@ -231,7 +293,7 @@ const getWeiName = async (address: string): Promise<string | null> => {
     // Configure Wei SDK to use user's Ethereum RPC instead of hardcoded defaults
     const rpcUrl = await getUserRpcUrl(mainnet.id);
     wei.config({ rpc: rpcUrl });
-    return await wei.reverseResolve(address);
+    return sanitizeResolvedName(await wei.reverseResolve(address));
   } catch {
     return null;
   }

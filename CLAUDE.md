@@ -10,20 +10,49 @@ Browser wallet extension + landing page website in a pnpm workspace monorepo.
 
 ## Critical: Test ALL Wallet Types
 
-**IMPORTANT**: WalletChan supports THREE wallet types:
+**Supported wallet types**:
 
-1. **Bankr API accounts** (`type: "impersonator"`) - API-based impersonation, transactions via Bankr API
-2. **Private Key accounts** (`type: "privateKey"`) - Local signing with imported private keys
-3. **Seed Phrase accounts** (`type: "seedPhrase"`) - Local signing with HD wallet derivation
+1. **Bankr API accounts** (`type: "bankr"`) — API-based signing, per-account API key
+2. **Private Key accounts** (`type: "privateKey"`) — local signing
+3. **Seed Phrase accounts** (`type: "seedPhrase"`) — local HD-wallet signing
+4. **Impersonator accounts** (`type: "impersonator"`) — **view-only**, address-only metadata, cannot execute transactions or sign messages
 
 **When implementing ANY feature that touches transactions, signatures, or authentication:**
 
-- **Test with ALL THREE wallet types** before considering it done
+- **Test with all four wallet types** before considering it done
 - Different wallet types use different code paths (e.g., `confirmTransactionAsync` vs `confirmTransactionAsyncPK`)
-- Agent password must work for signing transactions/messages for ALL types (not just Bankr API accounts)
+- Agent password must work for signing transactions/messages for ALL signing types (not just Bankr API accounts)
 - Private key reveal is blocked for agent password regardless of wallet type
+- Execution features must reject impersonator accounts (they're view-only)
 
-**Common mistake**: Fixing something only for Bankr API accounts and forgetting that private key/seed phrase accounts have separate handlers.
+**Common mistake**: Fixing something only for Bankr API accounts and forgetting that private key/seed phrase accounts have separate handlers, or forgetting that impersonator accounts must be blocked from any execution path.
+
+## Critical: Tx-Confirmation UI Consistency
+
+**ALL transaction confirmation screens must offer the same gas-fee UX.** The wallet has multiple confirmation surfaces and they must stay in lockstep — when one ships a new gas feature, the others have to ship it too, or users get inconsistent behavior depending on how they triggered the tx.
+
+**Confirmation surfaces today:**
+
+| Surface | File | Underlying gas component |
+|---|---|---|
+| Single-tx confirmation (dapp-initiated) | `apps/extension/src/components/TransactionConfirmation.tsx` | `GasEstimateDisplay.tsx` |
+| Batch tx confirmation (ERC-5792, dapp-initiated) | `apps/extension/src/components/BatchTransactionConfirmation.tsx` | `MultiTxGasEstimateDisplay.tsx` |
+| Cross-dapp batch confirmation (user-assembled) | `apps/extension/src/components/CrossDappBatchConfirmation.tsx` | `MultiTxGasEstimateDisplay.tsx` (wraps BatchTransactionConfirmation) |
+| **Swap confirmation (internal)** | `apps/extension/src/components/Swap/SwapConfirmation.tsx` | `MultiTxGasEstimateDisplay.tsx` |
+
+**When you change anything about gas params, the tier picker, validity, or override plumbing in ANY of these screens, audit the others.** The swap path in particular is easy to miss — it's its own confirmation UI separate from the dapp-initiated batch flow but uses the same underlying `MultiTxGasEstimateDisplay`.
+
+**Required wiring for any tx-confirmation surface (PK / Seed accounts)**:
+
+1. Pass `isNonAtomic={true}` to `MultiTxGasEstimateDisplay` (or use `GasEstimateDisplay` for single tx) so the tier picker actually renders.
+2. Wire `onGasEstimates` (or `onGasOverrides` for single tx) to a parent state.
+3. Wire `onValidityChange` to a `gasValid` state and disable the Confirm button on `!gasValid`.
+4. Send the gas estimates / overrides through to the background handler that signs the tx.
+5. Make sure the background handler actually applies them at sign time (clears legacy `gasPrice`, sets `maxFeePerGas` / `maxPriorityFeePerGas` / `gas` from the override).
+
+**Bankr / impersonator paths are exempt:** Bankr handles gas server-side; impersonator can't broadcast. The gas component handles these gracefully (picker auto-hides), but the parent should still set `isNonAtomic` correctly so the picker only fires its callbacks for PK / Seed.
+
+**When adding a NEW tx-confirmation surface**: list it in the table above and make sure every gas feature here works on it before merging.
 
 ## AI Session Workflow
 
@@ -88,7 +117,7 @@ walletchan/
 | Arb Bot         | Node.js + viem          | —          | tsc        |
 | Contracts       | Solidity                | —          | Foundry    |
 
-**Design System**: Bauhaus - geometric, primary colors (Red #D02020, Blue #1040C0, Yellow #F0C020), hard shadows, thick borders. See `_docs/STYLING.md`.
+**Design System**: Token-driven theme engine. Two themes ship today — **Bauhaus** (light, geometric, primary colors, hard shadows, thick borders) and **Midnight** (dark, modern, soft luminous shadows, rounded corners). User picks one in Settings → Appearance. Components consume *intent* tokens (`accent.primary`, `surface.raised`, `chart.numeric`, etc.) — never theme-color literals. See `_docs/THEME.md` for the engine handbook (architecture, public API, authoring rules, recipes, how to add a new theme), `_docs/STYLING.md` for the full token vocabulary, and `_docs/THEMING_PRD.md` for the phased rollout history.
 
 ## Commands
 
@@ -97,7 +126,7 @@ walletchan/
 pnpm install
 
 # Development
-pnpm dev:extension         # Build extension in dev mode
+pnpm dev:extension         # Build extension in DEVELOPMENT mode (vite build --mode development)
 pnpm dev:website           # Start website dev server at localhost:3000
 pnpm dev:staking-indexer   # Start staking indexer at localhost:42070
 pnpm dev:tg-bot            # Start TG bot + API at localhost:3001
@@ -105,12 +134,12 @@ pnpm dev:arb-bot           # Start arb bot (requires .env with PRIVATE_KEY + BAS
 
 # Build
 pnpm build              # Build both extension and website
-pnpm build:extension    # Build extension only (output: apps/extension/build/)
+pnpm build:extension    # Build extension in PRODUCTION mode (output: apps/extension/build/)
 pnpm build:website      # Build website only
 
 # Extension-specific
-pnpm zip                # Build + zip (keeps all manifest fields, for GitHub Releases)
-pnpm zip:cws            # Build + zip (strips key + update_url, for CWS upload)
+pnpm zip                # Build + zip (for GitHub Releases)
+pnpm zip:cws            # Build + zip (strips `key` defensively, for CWS upload)
 pnpm lint               # Lint extension code
 
 # Contracts
@@ -161,19 +190,43 @@ apps/extension/src/
 │   ├── gasEstimation.ts     # Gas estimation + native token price
 │   ├── batchTxHandlers.ts   # ERC-5792 batch tx handlers + ERC-7821 encoding
 │   ├── erc5792Types.ts      # ERC-5792 type definitions
-│   ├── pendingBatchTxStorage.ts  # Pending batch request persistence
+│   ├── pendingBatchTxStorage.ts  # Pending dapp-initiated batch request persistence
+│   ├── crossDappBatchStorage.ts  # User-assembled cross-dapp batch (single batch, Bankr only)
+│   ├── crossDappBatchHandlers.ts # Add/remove/reject/confirm handlers for the cross-dapp batch
 │   ├── bundleStatusStorage.ts    # Bundle status for getCallsStatus
+│   ├── forceInclusion.ts     # OP Stack L1 deposit for force inclusion
+│   ├── batchForceInclusion.ts # Force inclusion for ERC-5792 batch txs
 │   ├── impersonator.ts      # Inpage provider (EIP-6963 + ERC-5792)
 │   └── inject.ts            # Content script bridge
 ├── components/
-│   ├── TransactionConfirmation.tsx
+│   ├── TransactionConfirmation.tsx     # Single tx confirmation (incl. + Add to Batch button)
 │   ├── BatchTransactionConfirmation.tsx  # Batch tx confirmation UI (ERC-5792)
+│   ├── CrossDappBatchConfirmation.tsx  # Thin wrapper around BatchTransactionConfirmation for user-assembled batches
 │   ├── AssetChangesDisplay.tsx    # Simulated token flow display
 │   ├── SignatureRequestConfirmation.tsx
 │   ├── UnlockScreen.tsx
 │   └── Settings/
 ├── pages/
 │   └── Onboarding.tsx
+├── theme/                       # Theme engine (see _docs/THEME.md)
+│   ├── tokens.ts                # ThemeTokens interface — contract every theme satisfies
+│   ├── createTheme.ts           # Factory: tokens → Chakra theme (Button/Input/Modal/Menu/Popover/Slider configs)
+│   ├── ThemeProvider.tsx        # React context + ChakraProvider wrapper
+│   ├── useThemeSelection.ts     # Read/write selectedThemeId from chrome.storage.local
+│   ├── useStripTokens.ts        # Shared dark CTA strip color pair (used by tx/sig confirmations, chat header, etc.)
+│   ├── bootstrap.ts             # Pre-React paint sync to avoid theme flash
+│   ├── index.ts                 # Public API barrel (incl. primitives + useStripTokens re-exports)
+│   ├── themes/
+│   │   ├── bauhaus.ts           # Default theme (light, geometric)
+│   │   └── midnight.ts          # Dark theme
+│   └── primitives/              # Theme-aware atoms consumed by migrated screens
+│       ├── ThemedCard.tsx       # Surface card (default/raised/sunken + interactive)
+│       ├── ThemedPanel.tsx      # Larger-padding section container
+│       ├── ThemedField.tsx      # FormControl + Label + Input + helper/error
+│       ├── IconBox.tsx          # Bordered+shadowed icon square
+│       └── Decorator.tsx        # Theme-aware corner ornament (Bauhaus only)
+├── hooks/
+│   └── useThemedToast.tsx       # Theme-aware toast (replaces useBauhausToast — uses status accent tokens)
 └── App.tsx                   # Main popup app
 ```
 
@@ -201,6 +254,8 @@ When working on features, refer to these docs:
 | `_docs/SECURITY.md`                                      | Threat model, access control, pre-commit checklists       |
 | `_docs/CHAT.md`                                          | Chat interface to directly chat & prompt to bankr api     |
 | `_docs/STYLING.md`                                       | UI components, design tokens, Bauhaus system              |
+| `_docs/THEME.md`                                         | Theme engine handbook: architecture, public API, authoring rules, recipes, adding a new theme |
+| `_docs/THEMING_PRD.md`                                   | Theme engine PRD: ADR, design briefs, phased rollout history |
 | `_docs/WEBSITE.md`                                       | Website sections, layout specs, animations                |
 | `_docs/APPS.md`                                          | Apps page data source, fetch script, adding chains        |
 | `_docs/SWAP.md`                                          | Swap page: 0x API integration, fees, slippage, UI         |
@@ -208,6 +263,8 @@ When working on features, refer to these docs:
 | `_docs/CALLDATA.md`                                      | Calldata decoder UI, param components, type routing       |
 | `_docs/ASSET_CHANGES_SIMULATION.md`                      | Tx simulation: state override injection, metadata retry   |
 | `_docs/ERC5792.md`                                       | ERC-5792 batch txs: message flow, ERC-7821 encoding, 7702 plan |
+| `_docs/ERC5792-DAPP-SUPPORT.md`                          | Dapp-side guide: upgrade any dapp from multi-popup → single-popup batched txs via wagmi (`useCapabilities`/`useSendCalls`/`useCallsStatus`) with graceful fallback |
+| `_docs/L2_FORCE_INCLUSION.md`                            | OP Stack force inclusion: L1 deposit flow, portal encoding, 2-step status |
 | `apps/staking-indexer/STAKING_INDEXER_IMPLEMENTATION.md` | Staking indexer: sBNKRW vault events, balance tracking (legacy) |
 | `apps/wchan-vault-indexer/IMPLEMENTATION.md`             | WCHAN vault indexer: sWCHAN balance tracking, APY, snapshots    |
 | `_docs/DEVELOPMENT.md`                                   | Build process, dev environment setup                      |
@@ -218,6 +275,7 @@ When working on features, refer to these docs:
 | `apps/arb-bot/IMPLEMENTATION.md`                         | Arb bot: cross-pool arb strategy, batched RPC, encoding   |
 | `_docs/TOKEN_GATED_TG.md`                                | Token-gated TG system: architecture, DB schema, security  |
 | `openclaw-skills/bankr/SKILL.md`                         | Bankr API interactions, workflows, error handling         |
+| [github.com/apoorvlathey/walletchan-skill](https://github.com/apoorvlathey/walletchan-skill) | Public agent skill for driving the WalletChan extension via CDP. Canonical source lives in this separate repo; the website links directly to its raw `SKILL.md` (`https://raw.githubusercontent.com/apoorvlathey/walletchan-skill/main/skills/walletchan/SKILL.md`) and does not host its own copy. |
 
 ## Important Patterns
 
@@ -228,7 +286,14 @@ When working on features, refer to these docs:
 - **EIP-6963**: Modern wallet discovery alongside legacy window.ethereum
 - **Shared contract constants**: `packages/shared/src/contracts.ts` is the single source of truth for `BASE_CHAIN_ID`, `BNKRW_TOKEN_ADDRESS`, `SBNKRW_VAULT_ADDRESS`, `BNKRW_POOL_ADDRESS`. Import via `@walletchan/shared/contracts`.
 - **Address display standard**: Whenever a `0x` address is shown in the UI, always include a **copy button** (CopyIcon/CheckIcon toggle) and a **view on explorer** link (ExternalLinkIcon, opens `${chainConfig.explorer}/address/${addr}`). See `TypedDataDisplay.tsx` `AddressValue` component for the reference pattern.
-- **Copy button feedback**: NEVER use toast notifications for copy actions — toasts block nearby buttons (e.g., Reject/Confirm on tx confirmation, Chat button on homepage). Instead, toggle the icon from `CopyIcon` → `CheckIcon` (with `bauhaus.yellow` color) for 2 seconds. Use the shared `CopyButton` component from `components/CopyButton.tsx` when possible. For inline copy buttons, follow the same pattern: `setCopied(true)` + `setTimeout(() => setCopied(false), 2000)`.
+- **Copy button feedback**: NEVER use toast notifications for copy actions — toasts block nearby buttons (e.g., Reject/Confirm on tx confirmation, Chat button on homepage). Instead, toggle the icon from `CopyIcon` → `CheckIcon` (with `accent.highlight` color) for 2 seconds. Use the shared `CopyButton` component from `components/CopyButton.tsx` when possible. For inline copy buttons, follow the same pattern: `setCopied(true)` + `setTimeout(() => setCopied(false), 2000)`.
+- **Token-driven theming**: Components must consume *intent* tokens (`accent.primary/secondary/highlight`, `surface.base/raised/sunken`, `fg.primary/secondary/muted/inverse`, `border.default/focus`, `status.success/warning/error/info.{bg,fg,border,tint}`, `chart.positive/negative/neutral/numeric`) — NEVER hardcoded hex literals or theme-specific names like `bauhaus.red`. The factory in `theme/createTheme.ts` translates intent tokens to a Chakra theme per the active `ThemeTokens` shape. To add a new theme: write `theme/themes/{name}.ts` satisfying the `ThemeTokens` interface, register it in `theme/ThemeProvider.tsx`. Zero component edits required. See `_docs/THEMING_PRD.md` for the full architecture.
+- **Reject All button color**: Use `chart.negative` (NOT `status.error.fg`) for any "destructive ghost button" text. `status.error.fg` is WHITE in Bauhaus (it pairs with the RED bg) and would render invisibly. `chart.negative` is RED in both themes.
+- **Dark CTA strip pattern**: For inverted bars (tx confirmation count badges, chat headers, "Add Token" CTAs, etc.), use `useStripTokens()` from `@/theme` which returns `{ bg, fg }` — Bauhaus paints a literal black bar with white text; Midnight uses recessed `surface.sunken` with primary fg text on top. Don't duplicate the `themeId === "midnight" ? ... : ...` ternary inline.
+
+## Writing Conventions
+
+- **Use "onchain", not "on-chain".** Project-wide spelling — applies to user-facing strings (notifications, UI copy), code comments, doc files, and identifiers. Same for derived forms: "onchain balance", "confirmed onchain", etc. Don't reintroduce the hyphenated form.
 
 ## Code Quality Guidelines
 
@@ -431,9 +496,28 @@ Railway's default Nixpacks builder does NOT work for this pnpm monorepo with `wo
 - Do NOT set Root Directory, Build Command, or Start Command in Railway UI — `railway.toml` handles it
 - For Ponder indexers: start command uses `--schema $RAILWAY_DEPLOYMENT_ID` for zero-downtime deploys
 
+## Extension Build Modes: Development vs Production
+
+The extension has two build modes, selected via Vite's `--mode` flag. They produce the same output directory (`apps/extension/build/`), but some code paths gate behavior on `import.meta.env.MODE`.
+
+| Command               | Vite mode    | `import.meta.env.MODE` | Use when                                 |
+| --------------------- | ------------ | ---------------------- | ---------------------------------------- |
+| `pnpm dev:extension`  | `development`| `"development"`        | Testing changes locally against `pnpm dev:website` |
+| `pnpm build:extension`| `production` | `"production"`         | Releases, CWS uploads, GitHub Releases (anything users install) |
+
+**What flips between modes** (grep for `import.meta.env.MODE` to find current usages):
+
+- **Clear-signing descriptor API** (`apps/extension/src/constants/externalUrls.ts`) — development hits `http://localhost:3000/api/clearsigning/descriptor` (your local Next.js dev server), production hits `https://walletchan.com/api/clearsigning/descriptor`.
+
+**Rule of thumb:**
+- Building to test a change end-to-end against the local website dev server → `pnpm dev:extension`.
+- Building anything that will ship to users (zip, release, CWS) → `pnpm build:extension` (or `pnpm zip` / `pnpm zip:cws`, which call it internally).
+
+Note: `import.meta.env.DEV` is **not** the right toggle — it's only true under the `vite` dev-server, not under `vite build`, so a `dev:extension` build would otherwise look like prod. Always gate on `MODE === "development"`.
+
 ## Testing Extension Changes
 
-1. `pnpm build:extension`
+1. `pnpm dev:extension` (for local testing against `pnpm dev:website`) or `pnpm build:extension` (production-mode build)
 2. Go to `chrome://extensions`
 3. Click refresh icon on WalletChan card
 4. Test in a dapp (e.g., app.aave.com)

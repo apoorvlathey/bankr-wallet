@@ -13,9 +13,18 @@ import {
   type Chain,
   type Transport,
   type LocalAccount,
+  type TransactionReceipt,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { VIEM_CHAINS, RPC_URLS, buildCustomViemChain } from "@/constants/chainRegistry";
+import {
+  VIEM_CHAINS,
+  RPC_URLS,
+  buildCustomViemChain,
+  CHAIN_REGISTRY,
+} from "@/constants/chainRegistry";
+
+const SYNC_SEND_TIMEOUT_MS = 5_000;
+const CHAIN_BY_ID_LOCAL = new Map(CHAIN_REGISTRY.map((c) => [c.chainId, c]));
 
 export interface CustomChainMeta {
   name: string;
@@ -38,6 +47,18 @@ export interface TransactionRequest {
 
 export interface SignedTransaction {
   txHash: string;
+  /**
+   * Present only when the chain has `supportsSyncSend: true` and the sync
+   * send call succeeded. Callers should write the receipt directly to tx
+   * history (via `applyReceiptToHistory`) and skip the receipt poller.
+   */
+  receipt?: TransactionReceipt;
+  /**
+   * The gas limit we signed the tx with. Passed alongside `receipt` so the
+   * sync-send finalization path doesn't need an extra eth_getTransactionByHash
+   * RPC call to populate gasData.gasLimit.
+   */
+  signedGasLimit?: bigint;
 }
 
 /**
@@ -121,7 +142,47 @@ export async function signAndBroadcastTransaction(
     txParams.nonce = tx.nonce;
   }
 
-  // Send the transaction
+  // Sync-send path: chains that support EIP-7966 (e.g., MegaETH) return the
+  // full receipt in one round trip (~100ms). Sign locally, then post via
+  // sendRawTransactionSync. On any failure or timeout, fall through to the
+  // standard async send so the user always gets some outcome.
+  const chainEntry = CHAIN_BY_ID_LOCAL.get(tx.chainId);
+  if (chainEntry?.supportsSyncSend) {
+    try {
+      // signTransaction needs explicit gas + fee fields, so let viem fill in
+      // anything missing first by going through prepareTransactionRequest.
+      const prepared = await client.prepareTransactionRequest(txParams);
+      const serializedTransaction = await client.signTransaction(prepared);
+      // We call the RPC method directly instead of going through viem's
+      // sendRawTransactionSync wrapper because viem hex-encodes the timeout
+      // (`numberToHex(timeout)` → `"0x1388"`) per EIP-7966, but MegaETH's
+      // implementation rejects that with `Invalid params: timeout must be a
+      // positive number` and only accepts a plain integer. The receipt comes
+      // back in raw RPC shape (status as `0x1`/`0x0`, hex bigints) which
+      // applyReceiptToHistory already normalizes.
+      const rawReceipt = await client.request({
+        method: "eth_sendRawTransactionSync" as any,
+        params: [serializedTransaction, SYNC_SEND_TIMEOUT_MS] as any,
+      } as any, { retryCount: 0 });
+      const receipt = rawReceipt as TransactionReceipt & {
+        transactionHash: `0x${string}`;
+        status: any;
+      };
+      return {
+        txHash: receipt.transactionHash,
+        receipt,
+        signedGasLimit: prepared.gas,
+      };
+    } catch (err) {
+      console.warn(
+        `[WalletChan] sync send failed on chain ${tx.chainId}, falling back to async:`,
+        err,
+      );
+      // Fall through to standard async path
+    }
+  }
+
+  // Send the transaction (standard async path)
   const txHash = await client.sendTransaction(txParams);
 
   return { txHash };
@@ -174,6 +235,17 @@ export async function signTypedData(
   // Parse typed data if it's a string
   const data = typeof typedData === "string" ? JSON.parse(typedData) : typedData;
 
+  // Bind to request chain: reject mismatched domain.chainId to prevent
+  // cross-chain replay/confusion attacks. Absent chainId is permitted.
+  if (data?.domain && data.domain.chainId !== undefined && data.domain.chainId !== null) {
+    const domainChainId = Number(data.domain.chainId);
+    if (Number.isFinite(domainChainId) && domainChainId !== chainId) {
+      throw new Error(
+        `Provided chainId "${domainChainId}" must match the active chainId "${chainId}"`,
+      );
+    }
+  }
+
   const signature = await account.signTypedData({
     domain: data.domain,
     types: data.types,
@@ -194,6 +266,26 @@ export async function handleSignatureRequest(
   params: any[],
   chainId: number
 ): Promise<string> {
+  // Defense in depth: derive the address from the private key and verify
+  // it matches the signer address provided in the dapp request.
+  const derivedAddress = privateKeyToAccount(privateKey).address.toLowerCase();
+  let signerParam: string | undefined;
+  if (method === "personal_sign") signerParam = params[1];
+  else if (
+    method === "eth_sign" ||
+    method === "eth_signTypedData" ||
+    method === "eth_signTypedData_v3" ||
+    method === "eth_signTypedData_v4"
+  )
+    signerParam = params[0];
+
+  if (
+    typeof signerParam === "string" &&
+    signerParam.toLowerCase() !== derivedAddress
+  ) {
+    throw new Error("Signer address does not match active account");
+  }
+
   switch (method) {
     case "personal_sign": {
       // params[0] is the message (hex), params[1] is the address

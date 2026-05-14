@@ -18,6 +18,8 @@ const envSchema = z.object({
   PINATA_GATEWAY_URL: z.string().url().optional(),
   PINATA_GATEWAY_TOKEN: z.string().optional(),
   BASE_RPC_URL: z.string().url().optional(),
+  GENERAL_CHAT_ID: z.coerce.number().int().optional(),
+  GENERAL_THREAD_ID: z.coerce.number().int().optional(),
 });
 
 export const config = envSchema.parse(process.env);

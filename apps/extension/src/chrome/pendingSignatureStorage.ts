@@ -23,7 +23,25 @@ export interface PendingSignatureRequest {
   favicon: string | null;
   chainName: string;
   timestamp: number;
+  // SECURITY: trusted context captured at request arrival. Optional on the
+  // STORED shape for backward compat with entries written by older builds —
+  // new requests must use `PinnedSignatureRequest` (see below) so the
+  // compiler forces these to be set at creation time.
+  accountId?: string;
+  accountAddress?: string;
+  accountType?: "bankr" | "privateKey" | "seedPhrase";
+  tabId?: number;
+  frameId?: number;
+  senderOrigin?: string;
+  requestChainId?: number;
 }
+
+/**
+ * Creation-time shape: pinning fields are REQUIRED. Construct via
+ * `pinnedSignatureRequest(account, base)` in `./pinnedRequest`.
+ */
+export type PinnedSignatureRequest = PendingSignatureRequest &
+  Required<Pick<PendingSignatureRequest, "accountId" | "accountAddress" | "accountType">>;
 
 const STORAGE_KEY = "pendingSignatureRequests";
 const SIGNATURE_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
@@ -42,7 +60,7 @@ export async function getPendingSignatureRequests(): Promise<PendingSignatureReq
  * Save a new pending signature request
  */
 export async function savePendingSignatureRequest(
-  request: PendingSignatureRequest
+  request: PinnedSignatureRequest
 ): Promise<void> {
   const requests = await getPendingSignatureRequests();
   requests.push(request);

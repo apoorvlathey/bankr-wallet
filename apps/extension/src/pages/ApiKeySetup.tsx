@@ -17,7 +17,7 @@ import {
   AlertIcon,
   Spacer,
 } from "@chakra-ui/react";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
 import { ViewIcon, ViewOffIcon, ArrowBackIcon } from "@chakra-ui/icons";
 import { saveEncryptedApiKey } from "@/chrome/crypto";
 import { resolveNameToAddress, isResolvableName } from "@/lib/ensUtils";
@@ -50,7 +50,7 @@ function ApiKeySetup({
     confirmPassword?: string;
   }>({});
 
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
 
   // Check if password is cached and load existing data when changing key
   useEffect(() => {
@@ -236,6 +236,8 @@ function ApiKeySetup({
           : "Your API key and wallet address are linked. Both will be used when signing transactions."}
       </Text>
 
+      {/* Inputs intentionally use the Input baseStyle from createTheme.ts —
+          surface tokens, focus ring, and invalid state are handled there. */}
       <FormControl isInvalid={!!errors.apiKey}>
         <FormLabel color="text.secondary">Bankr API Key</FormLabel>
         <InputGroup>
@@ -245,13 +247,6 @@ function ApiKeySetup({
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             pr="3rem"
-            bg="bg.subtle"
-            borderColor="border.default"
-            _hover={{ borderColor: "border.strong" }}
-            _focus={{
-              borderColor: "primary.500",
-              boxShadow: "0 0 0 1px var(--chakra-colors-primary-500)",
-            }}
           />
           <InputRightElement>
             <IconButton
@@ -264,7 +259,7 @@ function ApiKeySetup({
             />
           </InputRightElement>
         </InputGroup>
-        <FormErrorMessage color="error.solid">{errors.apiKey}</FormErrorMessage>
+        <FormErrorMessage color="chart.negative">{errors.apiKey}</FormErrorMessage>
       </FormControl>
 
       <FormControl isInvalid={!!errors.walletAddress}>
@@ -273,15 +268,8 @@ function ApiKeySetup({
           placeholder="0x... or name (e.g., vitalik.eth, name.mega)"
           value={walletAddress}
           onChange={(e) => setWalletAddress(e.target.value)}
-          bg="bg.subtle"
-          borderColor="border.default"
-          _hover={{ borderColor: "border.strong" }}
-          _focus={{
-            borderColor: "primary.500",
-            boxShadow: "0 0 0 1px var(--chakra-colors-primary-500)",
-          }}
         />
-        <FormErrorMessage color="error.solid">
+        <FormErrorMessage color="chart.negative">
           {errors.walletAddress}
         </FormErrorMessage>
       </FormControl>
@@ -302,13 +290,6 @@ function ApiKeySetup({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 pr="3rem"
-                bg="bg.subtle"
-                borderColor="border.default"
-                _hover={{ borderColor: "border.strong" }}
-                _focus={{
-                  borderColor: "primary.500",
-                  boxShadow: "0 0 0 1px var(--chakra-colors-primary-500)",
-                }}
               />
               <InputRightElement>
                 <IconButton
@@ -321,7 +302,7 @@ function ApiKeySetup({
                 />
               </InputRightElement>
             </InputGroup>
-            <FormErrorMessage color="error.solid">
+            <FormErrorMessage color="chart.negative">
               {errors.password}
             </FormErrorMessage>
           </FormControl>
@@ -335,15 +316,8 @@ function ApiKeySetup({
                 placeholder="Confirm your password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                bg="bg.subtle"
-                borderColor="border.default"
-                _hover={{ borderColor: "border.strong" }}
-                _focus={{
-                  borderColor: "primary.500",
-                  boxShadow: "0 0 0 1px var(--chakra-colors-primary-500)",
-                }}
               />
-              <FormErrorMessage color="error.solid">
+              <FormErrorMessage color="chart.negative">
                 {errors.confirmPassword}
               </FormErrorMessage>
             </FormControl>
@@ -353,12 +327,12 @@ function ApiKeySetup({
             status="warning"
             borderRadius="md"
             fontSize="sm"
-            bg="warning.bg"
+            bg="status.warning.bg"
             borderWidth="1px"
-            borderColor="warning.border"
+            borderColor="status.warning.border"
           >
-            <AlertIcon color="warning.solid" />
-            <Text color="text.primary">
+            <AlertIcon color="status.warning.fg" />
+            <Text color="status.warning.fg">
               {isChangingKey
                 ? "Enter your password to save changes. Session expired."
                 : "Keep your password safe. If you forget it, you will need to reconfigure your API key."}

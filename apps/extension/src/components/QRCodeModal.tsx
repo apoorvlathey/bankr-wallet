@@ -32,35 +32,33 @@ export function QRCodeModal({ isOpen, onClose, address }: QRCodeModalProps) {
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="sm">
-      <ModalOverlay bg="blackAlpha.700" />
-      <ModalContent
-        bg="bauhaus.white"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="6px 6px 0px 0px #121212"
-        borderRadius="none"
-        mx={4}
-      >
+      <ModalOverlay bg="surface.overlay" />
+      <ModalContent mx={4}>
+        {/* Header + body are intentionally dark in BOTH themes. The QR tile is a
+            "physical viewing surface" — Bauhaus puts a stark black panel under it
+            for high contrast; Midnight wants the same on-its-own-island feel.
+            Using literals here (vs an intent token) keeps both themes consistent. */}
         <ModalHeader
-          bg="bauhaus.black"
-          color="bauhaus.white"
+          bg="black"
+          color="white"
           fontWeight="900"
           fontSize="md"
           textTransform="uppercase"
           letterSpacing="wider"
           py={2}
           borderBottom="3px solid"
-          borderColor="bauhaus.black"
+          borderColor="border.default"
         >
           Receive
         </ModalHeader>
-        <ModalCloseButton color="bauhaus.white" top={1} />
-        <ModalBody bg="bauhaus.black" py={5} px={4}>
+        <ModalCloseButton color="white" top={1} />
+        <ModalBody bg="black" py={5} px={4}>
           <VStack spacing={4}>
-            {/* QR Code with logo overlay */}
+            {/* QR Code with logo overlay — kept on a literal white tile so the
+                code stays scannable regardless of theme. */}
             <Box
               border="3px solid"
-              borderColor="bauhaus.black"
+              borderColor="border.default"
               p={3}
               bg="white"
             >
@@ -87,11 +85,11 @@ export function QRCodeModal({ isOpen, onClose, address }: QRCodeModalProps) {
               textAlign="center"
               lineHeight="tall"
             >
-              <Text as="span" color="bauhaus.white">
+              <Text as="span" color="white">
                 {address.slice(0, 6)}
               </Text>
               {address.slice(6, -4)}
-              <Text as="span" color="bauhaus.white">
+              <Text as="span" color="white">
                 {address.slice(-4)}
               </Text>
             </Text>
@@ -101,7 +99,7 @@ export function QRCodeModal({ isOpen, onClose, address }: QRCodeModalProps) {
               as="button"
               spacing={1}
               onClick={handleCopy}
-              color={copied ? "bauhaus.yellow" : "bauhaus.blue"}
+              color={copied ? "accent.highlight" : "accent.secondary"}
               cursor="pointer"
               _hover={{ opacity: 0.8 }}
             >

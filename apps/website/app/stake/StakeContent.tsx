@@ -31,8 +31,11 @@ import {
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
+  useCapabilities,
+  useSendCalls,
+  useCallsStatus,
 } from "wagmi";
-import { formatUnits, parseUnits } from "viem";
+import { formatUnits, parseUnits, encodeFunctionData, maxUint256 } from "viem";
 import { Navigation } from "../components/Navigation";
 import { TokenBanner } from "../components/TokenBanner";
 import { Footer } from "../components/Footer";
@@ -135,8 +138,48 @@ function MigrationBanner({
   const { isLoading: isMigrateConfirming, isSuccess: isMigrateConfirmed } =
     useWaitForTransactionReceipt({ hash: migrateTxHash });
 
+  // ERC-5792 capability check — bundle approve+migrate into a single popup when supported
+  const { data: walletCapabilities } = useCapabilities({
+    account: address,
+    chainId: STAKE_CHAIN_ID,
+    query: { enabled: !!address },
+  });
+  const atomicStatus = walletCapabilities?.atomic?.status;
+  const supportsAtomicBatch =
+    atomicStatus === "supported" || atomicStatus === "ready";
+
+  const {
+    sendCalls: sendMigrateCalls,
+    data: migrateBatchData,
+    isPending: isMigrateBatchSending,
+    reset: resetMigrateBatch,
+  } = useSendCalls();
+  const migrateBundleId = migrateBatchData?.id;
+  const { data: migrateBatchStatus } = useCallsStatus({
+    id: migrateBundleId ?? "",
+    query: {
+      enabled: !!migrateBundleId,
+      refetchInterval: ({ state }) =>
+        state.data?.status === "pending" || state.data?.status === undefined
+          ? 1500
+          : false,
+    },
+  });
+  const isMigrateBatchConfirming =
+    !!migrateBundleId &&
+    (migrateBatchStatus?.status === "pending" ||
+      migrateBatchStatus?.status === undefined);
+  const isMigrateBatchConfirmed = migrateBatchStatus?.status === "success";
+  const migrateBatchTxHash =
+    migrateBatchStatus?.receipts?.[0]?.transactionHash;
+
   const isBusy =
-    isApproving || isApproveConfirming || isMigrating || isMigrateConfirming;
+    isApproving ||
+    isApproveConfirming ||
+    isMigrating ||
+    isMigrateConfirming ||
+    isMigrateBatchSending ||
+    isMigrateBatchConfirming;
 
   useEffect(() => {
     if (isApproveConfirmed) {
@@ -240,13 +283,114 @@ function MigrationBanner({
     );
   }, [balance, writeMigrate, toast]);
 
+  const handleBatchedMigrate = useCallback(() => {
+    if (!balance) return;
+
+    const calls: { to: `0x${string}`; value: bigint; data: `0x${string}` }[] =
+      [];
+
+    if (needsApproval) {
+      calls.push({
+        to: OLD_VAULT_ADDR,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [MIGRATE_ZAP_ADDR, balance],
+        }),
+      });
+    }
+
+    calls.push({
+      to: MIGRATE_ZAP_ADDR,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: migrateZapAbi,
+        functionName: "migrate",
+        args: [balance],
+      }),
+    });
+
+    sendMigrateCalls(
+      {
+        calls,
+        chainId: STAKE_CHAIN_ID,
+        forceAtomic: true,
+      },
+      {
+        onError: (err) => {
+          toast({
+            title: "Migration failed",
+            description: err.message.split("\n")[0],
+            status: "error",
+            duration: 5000,
+            isClosable: true,
+            position: "bottom-right",
+          });
+        },
+      },
+    );
+  }, [balance, needsApproval, sendMigrateCalls, toast]);
+
+  // After batched migrate confirms
+  const migrateBatchToastedRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (
+      isMigrateBatchConfirmed &&
+      migrateBundleId &&
+      migrateBatchToastedRef.current !== migrateBundleId
+    ) {
+      migrateBatchToastedRef.current = migrateBundleId;
+      refetchOldBalance();
+      onMigrated();
+      const txUrl = migrateBatchTxHash
+        ? `https://basescan.org/tx/${migrateBatchTxHash}`
+        : undefined;
+      toast({
+        title: "Migration successful",
+        description: (
+          <>
+            Your sBNKRW has been migrated to sWCHAN.
+            {txUrl && (
+              <>
+                {" "}
+                <a
+                  href={txUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ textDecoration: "underline" }}
+                >
+                  View on BaseScan
+                </a>
+              </>
+            )}
+          </>
+        ),
+        status: "success",
+        duration: 10000,
+        isClosable: true,
+        position: "bottom-right",
+      });
+      resetMigrateBatch();
+    }
+  }, [
+    isMigrateBatchConfirmed,
+    migrateBundleId,
+    migrateBatchTxHash,
+    refetchOldBalance,
+    onMigrated,
+    toast,
+    resetMigrateBatch,
+  ]);
+
   // Don't show if no balance
   if (!balance || balance === 0n) return null;
 
   const buttonLabel = (() => {
+    if (isMigrateBatchSending || isMigrateBatchConfirming) return "Migrating...";
     if (isApproving || isApproveConfirming) return "Approving...";
     if (isMigrating || isMigrateConfirming) return "Migrating...";
-    if (needsApproval) return "Approve sBNKRW";
+    if (needsApproval && !supportsAtomicBatch) return "Approve sBNKRW";
     return "Migrate All to sWCHAN";
   })();
 
@@ -297,16 +441,27 @@ function MigrationBanner({
           isDisabled={isBusy}
           isLoading={isBusy}
           loadingText={buttonLabel}
-          onClick={needsApproval ? handleApprove : handleMigrate}
+          onClick={
+            supportsAtomicBatch
+              ? handleBatchedMigrate
+              : needsApproval
+                ? handleApprove
+                : handleMigrate
+          }
         >
           {buttonLabel}
         </Button>
       </Flex>
 
       {/* Tx status */}
-      {(approveTxHash || migrateTxHash) && (
+      {(approveTxHash ||
+        migrateTxHash ||
+        migrateBatchTxHash ||
+        isMigrateBatchConfirming) && (
         <HStack justify="center" mt={2} spacing={2}>
-          {(isApproveConfirming || isMigrateConfirming) && (
+          {(isApproveConfirming ||
+            isMigrateConfirming ||
+            isMigrateBatchConfirming) && (
             <>
               <Spinner size="xs" />
               <Text fontSize="xs" fontWeight="700" textTransform="uppercase">
@@ -314,19 +469,21 @@ function MigrationBanner({
               </Text>
             </>
           )}
-          <Link
-            href={`https://basescan.org/tx/${approveTxHash || migrateTxHash}`}
-            isExternal
-            fontSize="xs"
-            fontWeight="700"
-            textTransform="uppercase"
-            display="inline-flex"
-            alignItems="center"
-            gap={1}
-          >
-            View on BaseScan
-            <ExternalLink size={10} />
-          </Link>
+          {(approveTxHash || migrateTxHash || migrateBatchTxHash) && (
+            <Link
+              href={`https://basescan.org/tx/${migrateBatchTxHash || approveTxHash || migrateTxHash}`}
+              isExternal
+              fontSize="xs"
+              fontWeight="700"
+              textTransform="uppercase"
+              display="inline-flex"
+              alignItems="center"
+              gap={1}
+            >
+              View on BaseScan
+              <ExternalLink size={10} />
+            </Link>
+          )}
         </HStack>
       )}
     </Box>
@@ -510,6 +667,43 @@ export default function StakeContent() {
   const { isLoading: isRedeemConfirming, isSuccess: isRedeemConfirmed } =
     useWaitForTransactionReceipt({ hash: redeemTxHash });
 
+  // ERC-5792 capability check: does the connected wallet support atomic batching?
+  // When supported, deposit bundles approve+deposit into a single popup.
+  const { data: walletCapabilities } = useCapabilities({
+    account: address,
+    chainId: STAKE_CHAIN_ID,
+    query: { enabled: !!address },
+  });
+  const atomicStatus = walletCapabilities?.atomic?.status;
+  const supportsAtomicBatch =
+    atomicStatus === "supported" || atomicStatus === "ready";
+
+  // Batched deposit (ERC-5792)
+  const {
+    sendCalls: sendDepositCalls,
+    data: depositBatchData,
+    isPending: isDepositBatchSending,
+    reset: resetDepositBatch,
+  } = useSendCalls();
+  const depositBundleId = depositBatchData?.id;
+  const { data: depositBatchStatus } = useCallsStatus({
+    id: depositBundleId ?? "",
+    query: {
+      enabled: !!depositBundleId,
+      refetchInterval: ({ state }) =>
+        state.data?.status === "pending" || state.data?.status === undefined
+          ? 1500
+          : false,
+    },
+  });
+  const isDepositBatchConfirming =
+    !!depositBundleId &&
+    (depositBatchStatus?.status === "pending" ||
+      depositBatchStatus?.status === undefined);
+  const isDepositBatchConfirmed = depositBatchStatus?.status === "success";
+  const depositBatchTxHash =
+    depositBatchStatus?.receipts?.[0]?.transactionHash;
+
   // Derived state
   const currentBalance = activeTab === "deposit" ? wchanBalance : stakedBalance;
   const currentSymbol = activeTab === "deposit" ? "WCHAN" : "sWCHAN";
@@ -531,7 +725,9 @@ export default function StakeContent() {
     isDepositing ||
     isDepositConfirming ||
     isRedeeming ||
-    isRedeemConfirming;
+    isRedeemConfirming ||
+    isDepositBatchSending ||
+    isDepositBatchConfirming;
 
   const penaltyPct =
     penaltyBps !== undefined ? Number(penaltyBps as bigint) / 100 : 0;
@@ -790,9 +986,116 @@ export default function StakeContent() {
     );
   }, [writeClaim, toast]);
 
+  const handleBatchedDeposit = useCallback(() => {
+    if (!parsedAmount || !address) return;
+
+    const calls: { to: `0x${string}`; value: bigint; data: `0x${string}` }[] =
+      [];
+
+    if (needsApproval) {
+      calls.push({
+        to: WCHAN_TOKEN_ADDR,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [WCHAN_VAULT_ADDR, maxUint256],
+        }),
+      });
+    }
+
+    calls.push({
+      to: WCHAN_VAULT_ADDR,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: wchanVaultAbi,
+        functionName: "deposit",
+        args: [parsedAmount, address],
+      }),
+    });
+
+    sendDepositCalls(
+      {
+        calls,
+        chainId: STAKE_CHAIN_ID,
+        forceAtomic: true,
+      },
+      {
+        onError: (err) => {
+          toast({
+            title: "Deposit failed",
+            description: err.message.split("\n")[0],
+            status: "error",
+            duration: 5000,
+            isClosable: true,
+            position: "bottom-right",
+          });
+        },
+      },
+    );
+  }, [parsedAmount, address, needsApproval, sendDepositCalls, toast]);
+
+  // After batched deposit confirms
+  const depositBatchToastedRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (
+      isDepositBatchConfirmed &&
+      depositBundleId &&
+      depositBatchToastedRef.current !== depositBundleId
+    ) {
+      depositBatchToastedRef.current = depositBundleId;
+      refetchWchan();
+      refetchStaked();
+      refetchAllowance();
+      refetchVaultData();
+      setAmount("");
+      const txUrl = depositBatchTxHash
+        ? `https://basescan.org/tx/${depositBatchTxHash}`
+        : undefined;
+      toast({
+        title: "Deposit successful",
+        description: (
+          <>
+            Your WCHAN has been staked.
+            {txUrl && (
+              <>
+                {" "}
+                <a
+                  href={txUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ textDecoration: "underline" }}
+                >
+                  View on BaseScan
+                </a>
+              </>
+            )}
+          </>
+        ),
+        status: "success",
+        duration: 10000,
+        isClosable: true,
+        position: "bottom-right",
+      });
+      resetDepositBatch();
+    }
+  }, [
+    isDepositBatchConfirmed,
+    depositBundleId,
+    depositBatchTxHash,
+    refetchWchan,
+    refetchStaked,
+    refetchAllowance,
+    refetchVaultData,
+    toast,
+    resetDepositBatch,
+  ]);
+
   const handleAction = () => {
     if (activeTab === "deposit") {
-      if (needsApproval) {
+      if (supportsAtomicBatch) {
+        handleBatchedDeposit();
+      } else if (needsApproval) {
         handleApprove();
       } else {
         handleDeposit();
@@ -804,9 +1107,11 @@ export default function StakeContent() {
 
   const getButtonLabel = (): string => {
     if (activeTab === "deposit") {
+      if (isDepositBatchSending || isDepositBatchConfirming)
+        return "Depositing...";
       if (isApproving || isApproveConfirming) return "Approving...";
       if (isDepositing || isDepositConfirming) return "Depositing...";
-      if (needsApproval) return "Approve WCHAN";
+      if (needsApproval && !supportsAtomicBatch) return "Approve WCHAN";
       return "Deposit";
     }
     if (isRedeeming || isRedeemConfirming) return "Withdrawing...";
@@ -1558,7 +1863,11 @@ export default function StakeContent() {
                   )}
 
                 {/* Tx status indicator */}
-                {(approveTxHash || depositTxHash || redeemTxHash) && (
+                {(approveTxHash ||
+                  depositTxHash ||
+                  redeemTxHash ||
+                  depositBatchTxHash ||
+                  isDepositBatchConfirming) && (
                   <HStack
                     w="full"
                     justify="center"
@@ -1571,7 +1880,8 @@ export default function StakeContent() {
                   >
                     {(isApproveConfirming ||
                       isDepositConfirming ||
-                      isRedeemConfirming) && (
+                      isRedeemConfirming ||
+                      isDepositBatchConfirming) && (
                       <>
                         <Spinner size="xs" color="bauhaus.blue" />
                         <Text
@@ -1584,20 +1894,25 @@ export default function StakeContent() {
                         </Text>
                       </>
                     )}
-                    <Link
-                      href={`https://basescan.org/tx/${approveTxHash || depositTxHash || redeemTxHash}`}
-                      isExternal
-                      fontSize="xs"
-                      fontWeight="700"
-                      color="bauhaus.blue"
-                      textTransform="uppercase"
-                      display="inline-flex"
-                      alignItems="center"
-                      gap={1}
-                    >
-                      View on BaseScan
-                      <ExternalLink size={10} />
-                    </Link>
+                    {(approveTxHash ||
+                      depositTxHash ||
+                      redeemTxHash ||
+                      depositBatchTxHash) && (
+                      <Link
+                        href={`https://basescan.org/tx/${depositBatchTxHash || approveTxHash || depositTxHash || redeemTxHash}`}
+                        isExternal
+                        fontSize="xs"
+                        fontWeight="700"
+                        color="bauhaus.blue"
+                        textTransform="uppercase"
+                        display="inline-flex"
+                        alignItems="center"
+                        gap={1}
+                      >
+                        View on BaseScan
+                        <ExternalLink size={10} />
+                      </Link>
+                    )}
                   </HStack>
                 )}
 
@@ -1654,7 +1969,7 @@ export default function StakeContent() {
                     w="full"
                     variant={
                       activeTab === "deposit"
-                        ? needsApproval
+                        ? needsApproval && !supportsAtomicBatch
                           ? "yellow"
                           : "secondary"
                         : "primary"

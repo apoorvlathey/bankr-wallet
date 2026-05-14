@@ -21,12 +21,14 @@ import { getResolvedChainById } from "@/lib/chains";
 import TxDetailModal from "@/components/TxDetailModal";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import ChainIcon from "@/components/ChainIcon";
+import { useIconChipBg, useTheme } from "@/theme";
 
 interface TxStatusListProps {
   maxItems?: number;
   address?: string;
   hideHeader?: boolean;
   hideCard?: boolean;
+  filterChainId?: number | null;
 }
 
 /** Group transactions by date label */
@@ -65,6 +67,7 @@ function TxStatusList({
   address,
   hideHeader,
   hideCard,
+  filterChainId,
 }: TxStatusListProps) {
   const [allHistory, setAllHistory] = useState<CompletedTransaction[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -117,11 +120,15 @@ function TxStatusList({
     return () => clearInterval(interval);
   }, [hasPending]);
 
-  const history = address
+  const addressFiltered = address
     ? allHistory.filter(
         (tx) => tx.tx.from.toLowerCase() === address.toLowerCase(),
       )
     : allHistory;
+
+  const history = filterChainId != null
+    ? addressFiltered.filter((tx) => tx.chainId === filterChainId)
+    : addressFiltered;
 
   const displayItems = isExpanded ? history : history.slice(0, maxItems);
   const hasMore = history.length > maxItems;
@@ -242,7 +249,9 @@ function ActivityIcon({
   const internalSendSymbol = getInternalSendSymbol(tx);
   const fallbackLabel = (internalSendSymbol || tx.origin || "?").slice(0, 3).toUpperCase();
   const imageSrc =
-    tx.origin === "WalletChan" || tx.origin === "BankrWallet"
+    tx.origin === "WalletChan" ||
+    tx.origin === "BankrWallet" ||
+    tx.origin === "Cross-Dapp Batch"
       ? "/walletchan-icon.png"
       : tx.favicon || (originHostname ? googleFaviconUrl(originHostname) : undefined);
 
@@ -285,16 +294,59 @@ function TxStatusItem({
   onClick: () => void;
 }) {
   const { networksInfo } = useNetworks();
+  const iconChipBg = useIconChipBg();
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const config = getChainConfig(tx.chainId);
   const explorerBase =
     getResolvedChainById(tx.chainId, networksInfo)?.explorer ||
     config.explorer ||
     "";
   const originHostname = getOriginHostname(tx.origin);
-  const hasSecondaryLabel = !!tx.functionName;
+
+  const isForceInclusion = !!tx.forceInclusionMeta;
+  const isForcePendingL2 = tx.status === "pending" && isForceInclusion && !tx.forceInclusionMeta!.l2Confirmed;
+  const isForcePendingL1 = tx.status === "processing" && isForceInclusion;
+
+  // For force inclusion: link to L1 explorer until the L2 sequencer has
+  // actually included the tx. L2 explorers don't index force-inclusion txs
+  // until they appear onchain — linking to L2 in the "L1 Confirmed / L2
+  // Pending" window leads to a "tx not found" page, which is confusing.
+  const l1ExplorerBase = isForceInclusion
+    ? getChainConfig(tx.forceInclusionMeta!.l1ChainId).explorer || ""
+    : "";
+  const hasViewableTx = isForceInclusion
+    ? !!(tx.forceInclusionMeta!.l1TxHash || tx.txHash)
+    : !!(tx.txHash && explorerBase);
 
   const handleViewTx = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isForceInclusion) {
+      const l1Hash = tx.forceInclusionMeta!.l1TxHash;
+      const txHashIsL2 = tx.txHash && tx.txHash !== l1Hash;
+      // Link to L2 once the L2 tx has actually resolved onchain. That means
+      // either status === "success" (the L2 receipt poller confirmed) or
+      // status === "failed" with a distinct L2 hash (the L2 tx executed and
+      // reverted — the explorer DOES know about it). The only case where the
+      // L2 explorer wouldn't have the tx is during the L1-Confirmed/L2-Pending
+      // window (status === "pending"), where we still link to L1.
+      // The txHashIsL2 guard also covers the extractL2Hash-failed fallback
+      // where tx.txHash === l1Hash — no real L2 hash to link to.
+      const l2Resolved = tx.status === "success" || tx.status === "failed";
+      if (l2Resolved && txHashIsL2 && explorerBase) {
+        const hash = tx.txHash!.match(/0x[a-fA-F0-9]{64}/)?.[0];
+        if (hash) {
+          chrome.tabs.create({ url: `${explorerBase}/tx/${hash}` });
+          return;
+        }
+      }
+      // Otherwise link to L1 — covers L1 Pending, L1 Confirmed/L2 Pending,
+      // L1 reverted, and the L2-hash-extraction-failed fallback.
+      if (l1Hash && l1ExplorerBase) {
+        chrome.tabs.create({ url: `${l1ExplorerBase}/tx/${l1Hash}` });
+        return;
+      }
+    }
     if (tx.txHash && explorerBase) {
       const hash = tx.txHash.match(/0x[a-fA-F0-9]{64}/)?.[0];
       if (hash) {
@@ -304,12 +356,41 @@ function TxStatusItem({
   };
 
   const statusElement = (() => {
+    // Force inclusion: L1 still processing/pending
+    if (isForcePendingL1) {
+      return (
+        <HStack spacing={1}>
+          <Spinner size="xs" color="accent.secondary" boxSize="10px" />
+          <Text fontSize="2xs" color="accent.secondary" fontWeight="600">
+            L1 Pending
+          </Text>
+        </HStack>
+      );
+    }
+
+    // Force inclusion: L1 confirmed, awaiting L2 sequencer
+    if (isForcePendingL2) {
+      return (
+        <VStack spacing={0} align="flex-end">
+          <Text fontSize="2xs" color="chart.positive" fontWeight="600">
+            L1 Confirmed
+          </Text>
+          <HStack spacing={1}>
+            <Spinner size="xs" color="accent.secondary" boxSize="10px" />
+            <Text fontSize="2xs" color="accent.secondary" fontWeight="600">
+              L2 Pending
+            </Text>
+          </HStack>
+        </VStack>
+      );
+    }
+
     switch (tx.status) {
       case "processing":
         return (
           <HStack spacing={1}>
-            <Spinner size="xs" color="bauhaus.blue" />
-            <Text fontSize="xs" color="bauhaus.blue" fontWeight="600">
+            <Spinner size="xs" color="accent.secondary" />
+            <Text fontSize="xs" color="accent.secondary" fontWeight="600">
               Processing
             </Text>
           </HStack>
@@ -317,27 +398,38 @@ function TxStatusItem({
       case "pending":
         return (
           <HStack spacing={1}>
-            <Spinner size="xs" color="bauhaus.blue" />
-            <Text fontSize="xs" color="bauhaus.blue" fontWeight="600">
+            <Spinner size="xs" color="accent.secondary" />
+            <Text fontSize="xs" color="accent.secondary" fontWeight="600">
               Pending...
             </Text>
           </HStack>
         );
       case "success":
         return (
-          <Text fontSize="2xs" color="green.500" fontWeight="600">
-            Confirmed
+          <Text fontSize="2xs" color="chart.positive" fontWeight="600">
+            {tx.forceInclusionMeta ? "L1 + L2 Confirmed" : "Confirmed"}
           </Text>
         );
-      case "failed":
+      case "failed": {
+        // For force inclusion, distinguish L1 vs L2 failure. The L2 receipt
+        // poller preserves tx.txHash (set when L1 was confirmed) when it marks
+        // the tx as failed, so a distinct L2 hash means L1 succeeded but L2
+        // reverted. Same discriminator the modal uses.
+        let label = "Failed";
+        if (isForceInclusion) {
+          const l1Hash = tx.forceInclusionMeta!.l1TxHash;
+          const hasDistinctL2Hash = !!(tx.txHash && tx.txHash !== l1Hash);
+          label = hasDistinctL2Hash ? "L2 Failed" : "L1 Failed";
+        }
         return (
           <HStack spacing={1}>
-            <WarningIcon boxSize={2.5} color="bauhaus.red" />
-            <Text fontSize="xs" color="bauhaus.red" fontWeight="600">
-              Failed
+            <WarningIcon boxSize={2.5} color="chart.negative" />
+            <Text fontSize="xs" color="chart.negative" fontWeight="600">
+              {label}
             </Text>
           </HStack>
         );
+      }
     }
   })();
 
@@ -347,9 +439,9 @@ function TxStatusItem({
       px={1}
       cursor="pointer"
       onClick={onClick}
-      _hover={{ bg: "blackAlpha.50" }}
+      _hover={{ bg: "bg.muted" }}
       borderBottom="1px solid"
-      borderColor="gray.100"
+      borderColor="border.subtle"
       transition="background 0.15s"
     >
       <HStack spacing={3} align="center">
@@ -362,7 +454,7 @@ function TxStatusItem({
               position="absolute"
               left={0}
               top={0}
-              bg="gray.100"
+              bg="bg.muted"
               borderRadius="full"
               w="28px"
               h="28px"
@@ -370,7 +462,8 @@ function TxStatusItem({
               alignItems="center"
               justifyContent="center"
               overflow="hidden"
-              border="2px solid white"
+              border="2px solid"
+              borderColor="surface.raised"
               zIndex={1}
             >
               {tx.swapMeta.sellTokenLogo ? (
@@ -384,7 +477,7 @@ function TxStatusItem({
               position="absolute"
               left="14px"
               top={0}
-              bg="gray.100"
+              bg="bg.muted"
               borderRadius="full"
               w="28px"
               h="28px"
@@ -392,7 +485,8 @@ function TxStatusItem({
               alignItems="center"
               justifyContent="center"
               overflow="hidden"
-              border="2px solid white"
+              border="2px solid"
+              borderColor="surface.raised"
               zIndex={2}
             >
               {tx.swapMeta.buyTokenLogo ? (
@@ -408,9 +502,9 @@ function TxStatusItem({
               w="16px"
               h="16px"
               borderRadius="full"
-              bg="white"
+              bg={iconChipBg}
               border="1.5px solid"
-              borderColor="gray.200"
+              borderColor="border.subtle"
               display="flex"
               alignItems="center"
               justifyContent="center"
@@ -423,7 +517,7 @@ function TxStatusItem({
           /* Standard: single favicon with chain icon overlay */
           <Box position="relative" flexShrink={0} w="36px" h="36px">
             <Box
-              bg="gray.100"
+              bg={isDarkTheme ? "whiteAlpha.800" : iconChipBg}
               borderRadius="full"
               w="36px"
               h="36px"
@@ -431,6 +525,8 @@ function TxStatusItem({
               alignItems="center"
               justifyContent="center"
               overflow="hidden"
+              border={isDarkTheme ? "1px solid" : undefined}
+              borderColor={isDarkTheme ? "border.default" : undefined}
             >
               <ActivityIcon tx={tx} originHostname={originHostname} />
             </Box>
@@ -441,9 +537,9 @@ function TxStatusItem({
               w="16px"
               h="16px"
               borderRadius="full"
-              bg="white"
+              bg={iconChipBg}
               border="1.5px solid"
-              borderColor="gray.200"
+              borderColor="border.subtle"
               display="flex"
               alignItems="center"
               justifyContent="center"
@@ -455,8 +551,8 @@ function TxStatusItem({
 
         {/* Content */}
         <Box flex={1} minW={0}>
-          {/* Row 1: hostname + time */}
-          <HStack justify="space-between" spacing={2} minH={hasSecondaryLabel ? undefined : "36px"} align="center">
+          {/* Row 1: hostname + time (+ status when no functionName) */}
+          <HStack justify="space-between" spacing={2} minH={tx.functionName ? undefined : "36px"} align="center">
             <Text
               fontSize="sm"
               fontWeight="600"
@@ -465,19 +561,36 @@ function TxStatusItem({
             >
               {originHostname || tx.origin}
             </Text>
-            <Text
-              fontSize="2xs"
-              color="text.tertiary"
-              fontWeight="500"
-              flexShrink={0}
-            >
-              {formatTimeAgo(tx.createdAt)}
-            </Text>
+            <HStack spacing={1} flexShrink={0}>
+              <Text
+                fontSize="2xs"
+                color="text.tertiary"
+                fontWeight="500"
+                flexShrink={0}
+              >
+                {formatTimeAgo(tx.createdAt)}
+              </Text>
+              {!tx.functionName && (
+                <>
+                  <Text fontSize="2xs" color="text.tertiary" fontWeight="500">|</Text>
+                  {statusElement}
+                  {hasViewableTx && (
+                    <ExternalLinkIcon
+                      boxSize={2.5}
+                      color="text.tertiary"
+                      cursor="pointer"
+                      onClick={handleViewTx}
+                      _hover={{ color: "accent.secondary" }}
+                    />
+                  )}
+                </>
+              )}
+            </HStack>
           </HStack>
 
-          {/* Row 2: function + status + explorer */}
-          <HStack justify="space-between" spacing={2} mt={0.5} display={hasSecondaryLabel ? "flex" : "none"}>
-            {tx.functionName ? (
+          {/* Row 2: function + status + explorer (only when functionName exists) */}
+          {tx.functionName && (
+            <HStack justify="space-between" spacing={2} mt={0.5}>
               <Text
                 fontSize="xs"
                 color="text.tertiary"
@@ -486,23 +599,20 @@ function TxStatusItem({
               >
                 {tx.functionName}
               </Text>
-            ) : (
-              <Box />
-            )}
-            <HStack spacing={1} flexShrink={0}>
-              {statusElement}
-              {tx.txHash &&
-                explorerBase && (
-                  <ExternalLinkIcon
-                    boxSize={2.5}
-                    color="text.tertiary"
-                    cursor="pointer"
-                    onClick={handleViewTx}
-                    _hover={{ color: "bauhaus.blue" }}
-                  />
-                )}
+              <HStack spacing={1} flexShrink={0}>
+                {statusElement}
+                {hasViewableTx && (
+                    <ExternalLinkIcon
+                      boxSize={2.5}
+                      color="text.tertiary"
+                      cursor="pointer"
+                      onClick={handleViewTx}
+                      _hover={{ color: "accent.secondary" }}
+                    />
+                  )}
+              </HStack>
             </HStack>
-          </HStack>
+          )}
         </Box>
       </HStack>
 

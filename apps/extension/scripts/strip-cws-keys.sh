@@ -1,6 +1,6 @@
 #!/bin/bash
-# Strip `key` and `update_url` from build/manifest.json for Chrome Web Store upload.
-# These fields are needed for self-hosted distribution but CWS rejects them.
+# Strip `key` from build/manifest.json for Chrome Web Store upload.
+# CWS assigns its own extension ID, so `key` must be removed.
 
 MANIFEST="build/manifest.json"
 
@@ -13,7 +13,6 @@ node -e "
 const fs = require('fs');
 const m = JSON.parse(fs.readFileSync('$MANIFEST', 'utf8'));
 delete m.key;
-delete m.update_url;
 fs.writeFileSync('$MANIFEST', JSON.stringify(m, null, 2) + '\n');
-console.log('Stripped key and update_url from $MANIFEST for CWS upload');
+console.log('Stripped key from $MANIFEST for CWS upload');
 "

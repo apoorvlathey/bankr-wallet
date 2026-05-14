@@ -16,7 +16,7 @@ import {
   deriveKey,
 } from "./cryptoUtils";
 
-const VAULT_STORAGE_KEY = "pkVault";
+export const VAULT_STORAGE_KEY = "pkVault";
 
 interface EncryptedKeystore {
   ciphertext: string; // base64

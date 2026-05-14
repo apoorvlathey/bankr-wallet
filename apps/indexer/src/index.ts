@@ -60,7 +60,7 @@ async function handleLockEvent({
     );
   }
 
-  // Read on-chain metadata (single multicall RPC request)
+  // Read onchain metadata (single multicall RPC request)
   let name: string | null = null;
   let symbol: string | null = null;
   let tokenURI: string | null = null;

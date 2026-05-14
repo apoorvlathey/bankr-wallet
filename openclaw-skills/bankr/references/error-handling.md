@@ -61,7 +61,7 @@ Test with a simple command:
 
 **Transaction Reverted**
 - **Error**: "Transaction reverted"
-- **Cause**: On-chain failure (various reasons)
+- **Cause**: Onchain failure (various reasons)
 - **Fix**: Check transaction details, verify parameters
 
 **Network Congestion**

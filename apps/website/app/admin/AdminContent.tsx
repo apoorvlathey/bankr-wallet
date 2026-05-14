@@ -25,6 +25,9 @@ import {
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
+  useCapabilities,
+  useSendCalls,
+  useCallsStatus,
 } from "wagmi";
 import { formatUnits, encodeFunctionData, encodeAbiParameters } from "viem";
 import { Navigation } from "../components/Navigation";
@@ -314,6 +317,42 @@ export default function AdminContent() {
   const { isLoading: isBatchConfirming, isSuccess: isBatchConfirmed } =
     useWaitForTransactionReceipt({ hash: batchClaimTxHash });
 
+  // ERC-5792 capability check: does the connected wallet support atomic batching?
+  // We only enable "Claim All" when atomic.status is "supported" or "ready" so
+  // the entire claim succeeds-or-fails together (no partial claims).
+  const { data: walletCapabilities } = useCapabilities({
+    account: address,
+    chainId: BASE_CHAIN_ID,
+    query: { enabled: !!address },
+  });
+  const atomicStatus = walletCapabilities?.atomic?.status;
+  const supportsAtomicBatch =
+    atomicStatus === "supported" || atomicStatus === "ready";
+
+  // Claim All — single ERC-5792 sendCalls bundling hook + clanker + v4
+  const {
+    sendCalls: sendClaimAllCalls,
+    data: claimAllSendData,
+    isPending: isClaimAllSending,
+    reset: resetClaimAll,
+  } = useSendCalls();
+  const claimAllBundleId = claimAllSendData?.id;
+  const { data: claimAllStatusData } = useCallsStatus({
+    id: claimAllBundleId ?? "",
+    query: {
+      enabled: !!claimAllBundleId,
+      // Poll while the bundle is still confirming
+      refetchInterval: ({ state }) =>
+        state.data?.status === "pending" || state.data?.status === undefined
+          ? 1500
+          : false,
+    },
+  });
+  const claimAllStatus = claimAllStatusData?.status;
+  const isClaimAllConfirming =
+    !!claimAllBundleId && (claimAllStatus === "pending" || claimAllStatus === undefined);
+  const isClaimAllConfirmed = claimAllStatus === "success";
+
   // Refetch after Clanker claims confirm
   useEffect(() => {
     if (isClankerWethConfirmed && clankerWethTxHash) {
@@ -448,6 +487,12 @@ export default function AdminContent() {
   // Batch claim: only enabled for the fee owner address
   const isOwner = address?.toLowerCase() === CLANKER_FEE_OWNER.toLowerCase();
 
+  // V4 LP claim: only the position owner (walletchan.eth) can call
+  // modifyLiquidities, so the "Claim Fees" button on the V4 card is gated
+  // to that address.
+  const isV4PositionOwner =
+    address?.toLowerCase() === DESTINATION_ADDRESS.toLowerCase();
+
   // Batch claim handler — builds a single ERC-7821 batched tx that:
   //   1. Claims WETH fees from Clanker fee locker
   //   2. Claims BNKRW fees from Clanker fee locker
@@ -557,6 +602,166 @@ export default function AdminContent() {
       chainId: BASE_CHAIN_ID,
     });
   };
+
+  // Claim All — bundles fee sources #1 (hook) + #2 (clanker batch) into a
+  // single ERC-5792 sendCalls. Source #3 (Uniswap V4 LP) is intentionally
+  // EXCLUDED because the V4 PositionManager only allows the position owner
+  // (walletchan.eth) to call modifyLiquidities, and the fee owner — who
+  // signs this bundle — isn't the position owner.
+  const handleClaimAll = () => {
+    if (!address) return;
+
+    const wethAmount = clankerWethFees ?? 0n;
+    const bnkrwAmount = clankerBnkrwFees ?? 0n;
+    const hookHasFees = (pendingFees?.[0] ?? 0n) > 0n;
+    const hasWeth = wethAmount > 0n;
+    const hasBnkrw = bnkrwAmount > 0n;
+
+    const calls: { to: `0x${string}`; value: bigint; data: `0x${string}` }[] = [];
+
+    // 1. Hook pending fees — claimFees() transfers WETH directly to the
+    //    hook's `dev` address (walletchan.eth), so no forwarding needed.
+    if (hookHasFees) {
+      calls.push({
+        to: HOOK_ADDRESS,
+        value: 0n,
+        data: encodeFunctionData({ abi: HOOK_ABI, functionName: "claimFees" }),
+      });
+    }
+
+    // 2-3. Clanker fee locker claims (WETH + BNKRW) — leave them as WETH/BNKRW
+    //      in our wallet for now; we wrap/unwrap below.
+    if (hasWeth) {
+      calls.push({
+        to: CLANKER_FEE_LOCKER,
+        value: 0n,
+        data: encodeFunctionData({ abi: CLANKER_FEE_ABI, functionName: "claim", args: [CLANKER_FEE_OWNER, WETH_ADDRESS] }),
+      });
+    }
+    if (hasBnkrw) {
+      calls.push({
+        to: CLANKER_FEE_LOCKER,
+        value: 0n,
+        data: encodeFunctionData({ abi: CLANKER_FEE_ABI, functionName: "claim", args: [CLANKER_FEE_OWNER, BNKRW_ADDRESS] }),
+      });
+      // 4. Approve BNKRW → WCHAN contract if existing allowance is insufficient
+      const currentAllowance = (bnkrwAllowanceForWchan as bigint) ?? 0n;
+      if (currentAllowance < bnkrwAmount) {
+        calls.push({
+          to: BNKRW_ADDRESS,
+          value: 0n,
+          data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [WCHAN_ADDR, MAX_UINT256] }),
+        });
+      }
+      // 5. Wrap BNKRW → WCHAN (1:1)
+      calls.push({
+        to: WCHAN_ADDR,
+        value: 0n,
+        data: encodeFunctionData({ abi: wchanWrapAbi, functionName: "wrap", args: [bnkrwAmount] }),
+      });
+    }
+    // 6. Unwrap WETH → native ETH
+    if (hasWeth) {
+      calls.push({
+        to: WETH_ADDRESS,
+        value: 0n,
+        data: encodeFunctionData({ abi: weth9Abi, functionName: "withdraw", args: [wethAmount] }),
+      });
+    }
+    // 7. Forward wrapped WCHAN to walletchan.eth
+    if (hasBnkrw) {
+      calls.push({
+        to: WCHAN_ADDR,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "transfer",
+          args: [DESTINATION_ADDRESS, bnkrwAmount],
+        }),
+      });
+    }
+    // 8. Forward unwrapped ETH to walletchan.eth
+    if (hasWeth) {
+      calls.push({
+        to: DESTINATION_ADDRESS,
+        value: wethAmount,
+        data: "0x" as `0x${string}`,
+      });
+    }
+
+    if (calls.length === 0) return;
+
+    sendClaimAllCalls({
+      calls,
+      chainId: BASE_CHAIN_ID,
+      // Require atomic execution — we already gate the button on this
+      // capability, but pass it explicitly so an unexpected wallet falls
+      // back to a clean error rather than a silent partial claim.
+      forceAtomic: true,
+    });
+  };
+
+  // Refetch after Claim All confirms
+  const claimAllToastedRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (
+      isClaimAllConfirmed &&
+      claimAllBundleId &&
+      claimAllToastedRef.current !== claimAllBundleId
+    ) {
+      claimAllToastedRef.current = claimAllBundleId;
+      // The first receipt's tx hash is the most useful link for an atomic bundle.
+      const firstReceipt = claimAllStatusData?.receipts?.[0];
+      const txHash = firstReceipt?.transactionHash;
+      const txUrl = txHash ? `https://basescan.org/tx/${txHash}` : undefined;
+      toast({
+        title: "Claim All complete",
+        description: (
+          <>
+            Hook, Clanker, and V4 LP fees have been claimed in one transaction.
+            {txUrl && (
+              <>
+                {" "}
+                <a
+                  href={txUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ textDecoration: "underline" }}
+                >
+                  View on BaseScan
+                </a>
+              </>
+            )}
+          </>
+        ),
+        status: "success",
+        duration: 10000,
+        isClosable: true,
+        position: "bottom-right",
+      });
+      const timeout = setTimeout(() => {
+        refetchFees();
+        refetchClankerWeth();
+        refetchClankerBnkrw();
+        refetchV4();
+        fetchEthPrice();
+        setHistoryRefreshKey((k) => k + 1);
+        resetClaimAll();
+      }, 2000);
+      return () => clearTimeout(timeout);
+    }
+  }, [
+    isClaimAllConfirmed,
+    claimAllBundleId,
+    claimAllStatusData,
+    refetchFees,
+    refetchClankerWeth,
+    refetchClankerBnkrw,
+    refetchV4,
+    fetchEthPrice,
+    resetClaimAll,
+    toast,
+  ]);
 
   // Refetch after batch claim confirms
   const batchToastedTxRef = useRef<string | undefined>(undefined);
@@ -1153,22 +1358,119 @@ export default function AdminContent() {
                         </>
                       )}
 
-                      <Button
-                        variant="primary"
-                        size="md"
-                        onClick={handleClaimV4}
-                        isLoading={isV4Claiming || isV4Confirming}
-                        loadingText={isV4Confirming ? "Confirming..." : "Claiming..."}
-                        isDisabled={!isWalletConnected || isWrongChain || !hasV4Claimable}
-                        mt={2}
-                        w="full"
-                      >
-                        Claim Fees
-                      </Button>
+                      <Flex mt={2} align="center" gap={2}>
+                        <Button
+                          variant="primary"
+                          size="md"
+                          onClick={handleClaimV4}
+                          isLoading={isV4Claiming || isV4Confirming}
+                          loadingText={isV4Confirming ? "Confirming..." : "Claiming..."}
+                          isDisabled={
+                            !isWalletConnected ||
+                            isWrongChain ||
+                            !isV4PositionOwner ||
+                            !hasV4Claimable
+                          }
+                          flex={1}
+                        >
+                          Claim Fees
+                        </Button>
+                        {isWalletConnected && !isWrongChain && !isV4PositionOwner && (
+                          <Tooltip
+                            label={`Only the position owner (${DESTINATION_ADDRESS.slice(0, 6)}...${DESTINATION_ADDRESS.slice(-4)}) can claim V4 LP fees`}
+                            fontSize="xs"
+                            hasArrow
+                          >
+                            <Box as="span" cursor="help" color="gray.400">
+                              <Info size={14} />
+                            </Box>
+                          </Tooltip>
+                        )}
+                      </Flex>
                     </VStack>
                   </Box>
                 </Box>
               </Flex>
+
+              {/* Claim All — single ERC-5792 batch covering fee sources #1
+                  (hook) + #2 (clanker). Source #3 (V4 LP) is excluded
+                  because only walletchan.eth (the position owner) can call
+                  modifyLiquidities. Width matches the combined width of the
+                  first two boxes above (2/3 of the row on desktop). */}
+              {(() => {
+                const hasHookOrClanker =
+                  hasClaimable || hasClankerWeth || hasClankerBnkrw;
+                const claimAllDisabled =
+                  !isWalletConnected ||
+                  isWrongChain ||
+                  !isOwner ||
+                  !supportsAtomicBatch ||
+                  !hasHookOrClanker;
+
+                let unsupportedReason: string | null = null;
+                if (isWalletConnected && !isWrongChain) {
+                  if (!isOwner) {
+                    unsupportedReason = `Only the fee owner (${CLANKER_FEE_OWNER.slice(0, 6)}...${CLANKER_FEE_OWNER.slice(-4)}) can claim hook + clanker fees`;
+                  } else if (!supportsAtomicBatch) {
+                    unsupportedReason =
+                      "Your connected wallet doesn't support atomic batched txs (ERC-5792). Use the individual Claim buttons above.";
+                  } else if (!hasHookOrClanker) {
+                    unsupportedReason = "No hook/clanker fees to claim right now";
+                  }
+                }
+
+                // Total USD for sources #1 + #2 only (V4 excluded)
+                const hookClankerUsd =
+                  usdValue !== null ||
+                  clankerWethUsd !== null ||
+                  clankerBnkrwUsd !== null
+                    ? (usdValue ?? 0) +
+                      (clankerWethUsd ?? 0) +
+                      (clankerBnkrwUsd ?? 0)
+                    : null;
+
+                return (
+                  <Flex
+                    mt={{ base: 4, lg: 6 }}
+                    gap={{ base: 4, lg: 6 }}
+                    direction={{ base: "column", lg: "row" }}
+                    align="stretch"
+                  >
+                    <Flex flex={2} align="center" gap={2}>
+                      <Button
+                        variant="primary"
+                        size="md"
+                        onClick={handleClaimAll}
+                        isLoading={isClaimAllSending || isClaimAllConfirming}
+                        loadingText={
+                          isClaimAllConfirming ? "Confirming..." : "Claiming..."
+                        }
+                        isDisabled={claimAllDisabled}
+                        flex={1}
+                      >
+                        Claim All Hook + Clanker Fees
+                        {hookClankerUsd !== null && hookClankerUsd > 0
+                          ? ` (${formatUsd(hookClankerUsd)})`
+                          : ""}
+                      </Button>
+                      {unsupportedReason && (
+                        <Tooltip
+                          label={unsupportedReason}
+                          fontSize="xs"
+                          hasArrow
+                          placement="top"
+                        >
+                          <Box as="span" cursor="help" color="gray.400">
+                            <Info size={16} />
+                          </Box>
+                        </Tooltip>
+                      )}
+                    </Flex>
+                    {/* Spacer occupying source #3's column on desktop only */}
+                    <Box flex={1} display={{ base: "none", lg: "block" }} />
+                  </Flex>
+                );
+              })()}
 
               {/* Price references */}
               <HStack mt={5} spacing={4} opacity={0.6}>
@@ -1235,17 +1537,14 @@ export default function AdminContent() {
           {/* Internal Pages */}
           <HStack justify="center" pt={4} spacing={4} flexWrap="wrap" opacity={0.6}>
             {[
-              { href: "/swap", label: "Swap" },
-              { href: "/swap-wchan", label: "Swap WCHAN" },
-              { href: "/verify", label: "Verify" },
-              { href: "/os", label: "OS" },
-              { href: "/migrate", label: "Migrate" },
-              { href: "/mainnet", label: "Bridge to Mainnet" },
-              { href: "/l1-base-deploy", label: "L1 Base Token Deploy" },
-              {
-                href: resolveHref("/compare"),
-                label: "Compare",
-              },
+              { href: resolveHref("/swap"), label: "Swap" },
+              { href: resolveHref("/swap-wchan"), label: "Swap WCHAN" },
+              { href: resolveHref("/verify"), label: "Verify" },
+              { href: resolveHref("/os"), label: "OS" },
+              { href: resolveHref("/migrate"), label: "Migrate" },
+              { href: resolveHref("/mainnet"), label: "Bridge to Mainnet" },
+              { href: resolveHref("/l1-base-deploy"), label: "L1 Base Token Deploy" },
+              { href: resolveHref("/compare"), label: "Compare" },
             ].map(({ href, label }) => (
               <Link
                 key={href}

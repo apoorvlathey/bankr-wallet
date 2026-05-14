@@ -11,7 +11,25 @@
  */
 
 import { type Chain } from "viem";
-import { arbitrum, mainnet, polygon, base, bsc } from "viem/chains";
+import {
+  arbitrum,
+  mainnet,
+  megaeth,
+  polygon,
+  base,
+  bsc,
+  // OP Stack chains for force inclusion support
+  baseSepolia,
+  optimism,
+  optimismSepolia,
+  unichain,
+  unichainSepolia,
+  blast,
+  zora,
+  zoraSepolia,
+  worldchain,
+  worldchainSepolia,
+} from "viem/chains";
 import { type NetworksInfo } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -32,6 +50,43 @@ export interface ChainEntry {
   nativeCurrency: { name: string; symbol: string; decimals: number };
   /** Whether this chain uses OP Stack (for L1 fee breakdown in gas display) */
   isOpStack: boolean;
+  /**
+   * Whether this chain supports Flashblocks (~200ms preconfirmations exposed via
+   * standard eth_getTransactionReceipt on Flashblocks-aware RPC endpoints).
+   * Triggers a fast-poll phase in the receipt poller. Harmless on RPCs that
+   * don't support Flashblocks — they just respond with normal-block-time
+   * receipts and the poller transitions to standard backoff.
+   */
+  supportsFlashblocks?: boolean;
+  /**
+   * Whether this chain supports EIP-7966 eth_sendRawTransactionSync — submit
+   * a signed tx and the RPC returns the full receipt in one round trip
+   * (MegaETH ~100ms). Local-signing only (PK/Seed); Bankr accounts ignore.
+   * On failure or timeout the broadcaster falls back to standard send +
+   * receipt polling.
+   */
+  supportsSyncSend?: boolean;
+  /**
+   * Multiplier applied to the eth_estimateGas result to allow headroom for
+   * state changes between estimate and inclusion. Default 20 (= 1.2×).
+   */
+  gasBufferPct?: number;
+  /**
+   * Whether this chain uses a gas model that differs from standard EVM
+   * (e.g., MegaETH's dual compute + storage gas accounting with SSTORE
+   * bucket multipliers). When true:
+   *
+   *   1. Dapp-provided `tx.gas` values are stripped at intake — wagmi/ethers
+   *      compute against standard EVM rules and produce wrong values.
+   *   2. Batch gas estimation skips the GAS-opcode-based bytecode injection
+   *      trick — it counts only compute gas, missing the storage dimension.
+   *   3. We always defer to the chain's own `eth_estimateGas`, which knows
+   *      its gas model and returns accurate values.
+   *
+   * Fee fields (maxFeePerGas etc.) are still honored — under-priced fees
+   * only delay inclusion, they don't cause reverts.
+   */
+  usesNonStandardGasModel?: boolean;
   /** Whether the Bankr API supports this chain */
   isBankrSupported: boolean;
   /** Whether 0x Swap API supports this chain */
@@ -40,6 +95,14 @@ export interface ChainEntry {
   coingeckoTokenId?: string;
   /** CoinGecko platform ID for token list lookups (e.g. "base", "ethereum") */
   coingeckoPlatformId?: string;
+  /**
+   * GeckoTerminal network slug (e.g. "eth", "base", "polygon_pos"). Used as
+   * a fallback price source for tokens CoinGecko doesn't index. GeckoTerminal
+   * derives prices from onchain DEX liquidity so it covers exotic / new
+   * tokens that the CoinGecko `/simple/token_price` endpoint misses.
+   * undefined = no GeckoTerminal coverage for this chain.
+   */
+  geckoTerminalNetworkId?: string;
   /** Pre-built viem Chain object (for chains in viem/chains). Omit for custom chains. */
   viemChain?: Chain;
 }
@@ -65,7 +128,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   {
     chainId: 1,
     name: "Ethereum",
-    rpcUrl: "https://eth.llamarpc.com",
+    rpcUrl: "https://eth.drpc.org",
     explorer: "https://etherscan.io",
     icon: "/chainIcons/ethereum.svg",
     bg: "rgba(98, 126, 234, 0.15)",
@@ -77,6 +140,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isSwapSupported: true,
     coingeckoTokenId: "ethereum",
     coingeckoPlatformId: "ethereum",
+    geckoTerminalNetworkId: "eth",
     viemChain: mainnet,
   },
   {
@@ -94,12 +158,13 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isSwapSupported: true,
     coingeckoTokenId: "ethereum",
     coingeckoPlatformId: "arbitrum-one",
+    geckoTerminalNetworkId: "arbitrum",
     viemChain: arbitrum,
   },
   {
     chainId: 8453,
     name: "Base",
-    rpcUrl: "https://mainnet.base.org",
+    rpcUrl: "https://base.drpc.org",
     explorer: "https://basescan.org",
     icon: "/chainIcons/base.svg",
     bg: "rgba(0, 82, 255, 0.15)",
@@ -107,10 +172,12 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     text: "#0052FF",
     nativeCurrency: ETH_CURRENCY,
     isOpStack: true,
+    supportsFlashblocks: true,
     isBankrSupported: true,
     isSwapSupported: true,
     coingeckoTokenId: "ethereum",
     coingeckoPlatformId: "base",
+    geckoTerminalNetworkId: "base",
     viemChain: base,
   },
   {
@@ -128,7 +195,27 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isSwapSupported: true,
     coingeckoTokenId: "binancecoin",
     coingeckoPlatformId: "binance-smart-chain",
+    geckoTerminalNetworkId: "bsc",
     viemChain: bsc,
+  },
+  {
+    chainId: 10,
+    name: "Optimism",
+    rpcUrl: "https://mainnet.optimism.io",
+    explorer: "https://optimistic.etherscan.io",
+    icon: "/chainIcons/optimism.svg",
+    bg: "rgba(255, 4, 32, 0.15)",
+    border: "rgba(255, 4, 32, 0.4)",
+    text: "#FF0420",
+    nativeCurrency: ETH_CURRENCY,
+    isOpStack: true,
+    supportsFlashblocks: true,
+    isBankrSupported: false,
+    isSwapSupported: true,
+    coingeckoTokenId: "ethereum",
+    coingeckoPlatformId: "optimistic-ethereum",
+    geckoTerminalNetworkId: "optimism",
+    viemChain: optimism,
   },
   {
     chainId: 4326,
@@ -141,14 +228,22 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     text: "#19191A",
     nativeCurrency: ETH_CURRENCY,
     isOpStack: true,
+    supportsSyncSend: true,
+    // MegaETH's dual gas model (compute + storage with SSTORE bucket
+    // multipliers) differs from standard EVM. Locally-computed gas values
+    // (dapp-provided, GAS-opcode-based simulation) are systematically wrong;
+    // we must defer to the chain's own eth_estimateGas which is accurate.
+    usesNonStandardGasModel: true,
     isBankrSupported: false,
     isSwapSupported: false,
-    coingeckoTokenId: undefined,
+    coingeckoTokenId: "ethereum",
+    geckoTerminalNetworkId: "megaeth",
+    viemChain: megaeth,
   },
   {
     chainId: 137,
     name: "Polygon",
-    rpcUrl: "https://polygon-rpc.com",
+    rpcUrl: "https://polygon.drpc.org",
     explorer: "https://polygonscan.com",
     icon: "/chainIcons/polygon.svg",
     bg: "rgba(130, 71, 229, 0.15)",
@@ -160,6 +255,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isSwapSupported: true,
     coingeckoTokenId: "matic-network",
     coingeckoPlatformId: "polygon-pos",
+    geckoTerminalNetworkId: "polygon_pos",
     viemChain: polygon,
   },
   {
@@ -173,10 +269,12 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     text: "#FF007A",
     nativeCurrency: ETH_CURRENCY,
     isOpStack: true,
+    supportsFlashblocks: true,
     isBankrSupported: true,
     isSwapSupported: true,
     coingeckoTokenId: "ethereum",
     coingeckoPlatformId: "unichain",
+    geckoTerminalNetworkId: "unichain",
   },
 ] as const;
 
@@ -224,9 +322,33 @@ export const BANKR_SUPPORTED_CHAIN_IDS = new Set(
   CHAIN_REGISTRY.filter((c) => c.isBankrSupported).map((c) => c.chainId)
 );
 
-export const SWAP_SUPPORTED_CHAIN_IDS = new Set(
-  CHAIN_REGISTRY.filter((c) => c.isSwapSupported).map((c) => c.chainId)
-);
+// https://docs.0x.org/docs/introduction/supported-chains
+export const ZEROX_SUPPORTED_CHAIN_IDS = new Set([
+  1,      // Ethereum
+  10,     // Optimism
+  56,     // BSC
+  130,    // Unichain
+  137,    // Polygon
+  143,    // Monad
+  146,    // Sonic
+  480,    // World Chain
+  999,    // HyperEVM
+  2741,   // Abstract
+  4217,   // Tempo
+  5000,   // Mantle
+  8453,   // Base
+  9745,   // Plasma
+  34443,  // Mode
+  42161,  // Arbitrum
+  43114,  // Avalanche
+  57073,  // Ink
+  59144,  // Linea
+  80094,  // Berachain
+  81457,  // Blast
+  534352, // Scroll
+]);
+
+export const SWAP_SUPPORTED_CHAIN_IDS = ZEROX_SUPPORTED_CHAIN_IDS;
 
 export const COINGECKO_PLATFORM_IDS: Record<number, string> = {};
 for (const c of CHAIN_REGISTRY) {
@@ -235,8 +357,30 @@ for (const c of CHAIN_REGISTRY) {
   }
 }
 
+export const GECKOTERMINAL_NETWORK_IDS: Record<number, string> = {};
+for (const c of CHAIN_REGISTRY) {
+  if (c.geckoTerminalNetworkId) {
+    GECKOTERMINAL_NETWORK_IDS[c.chainId] = c.geckoTerminalNetworkId;
+  }
+}
+
 export const OP_STACK_CHAIN_IDS = new Set(
   CHAIN_REGISTRY.filter((c) => c.isOpStack).map((c) => c.chainId)
+);
+
+export const FLASHBLOCKS_CHAIN_IDS = new Set(
+  CHAIN_REGISTRY.filter((c) => c.supportsFlashblocks).map((c) => c.chainId)
+);
+
+/**
+ * Chains whose gas model differs enough from standard EVM that batched
+ * gas estimation is unreliable (MegaETH's compute+storage dual gas, etc.).
+ * The wallet hides ERC-5792 batch capability for these so dapps fall back
+ * to individual eth_sendTransaction, where the chain's own RPC produces
+ * accurate per-tx estimates.
+ */
+export const NON_STANDARD_GAS_CHAIN_IDS = new Set(
+  CHAIN_REGISTRY.filter((c) => c.usesNonStandardGasModel).map((c) => c.chainId)
 );
 
 export const CHAIN_NAMES: Record<number, string> = {};
@@ -382,4 +526,72 @@ export function getExplorerUrlSync(chainId: number, networksInfo?: Record<string
     }
   }
   return "";
+}
+
+// ---------------------------------------------------------------------------
+// Derived: Force Inclusion (OP Stack L1 deposit) support
+// ---------------------------------------------------------------------------
+
+export interface ForceInclusionChainInfo {
+  viemChain: Chain;
+  l1ChainId: number;
+  l1ChainName: string;
+}
+
+/**
+ * OP Stack chains that support force inclusion via L1 deposit.
+ * Each chain must have a sourceId (L1 chain) and portal contract in its viem
+ * definition. Covers major OP Stack chains + their testnets.
+ * Custom chains added by the user are also supported if their chainId matches.
+ */
+export const FORCE_INCLUSION_CHAINS: Map<number, ForceInclusionChainInfo> = new Map();
+
+const OP_STACK_VIEM_CHAINS = [
+  base, baseSepolia,
+  optimism, optimismSepolia,
+  unichain, unichainSepolia,
+  blast,
+  zora, zoraSepolia,
+  worldchain, worldchainSepolia,
+];
+
+for (const chain of OP_STACK_VIEM_CHAINS) {
+  if (chain.sourceId && (chain.contracts as any)?.portal) {
+    FORCE_INCLUSION_CHAINS.set(chain.id, {
+      viemChain: chain as Chain,
+      l1ChainId: chain.sourceId,
+      l1ChainName:
+        chain.sourceId === 1
+          ? "Ethereum"
+          : chain.sourceId === 11155111
+            ? "Sepolia"
+            : `Chain ${chain.sourceId}`,
+    });
+  }
+}
+
+export function isForceInclusionSupported(chainId: number): boolean {
+  return FORCE_INCLUSION_CHAINS.has(chainId);
+}
+
+/**
+ * Force inclusion is gated per account type because Bankr accounts submit the
+ * L1 deposit through the Bankr API, which only supports chains in
+ * BANKR_SUPPORTED_CHAIN_IDS. Currently that's mainnet (Ethereum, etc.) only —
+ * Sepolia is not supported. PK/Seed accounts broadcast L1 directly and work on
+ * any L1 with an RPC endpoint.
+ */
+export function isForceInclusionSupportedForAccount(
+  l2ChainId: number,
+  accountType: "bankr" | "privateKey" | "seedPhrase" | "impersonator" | undefined,
+): boolean {
+  if (!accountType || accountType === "impersonator") return false;
+  const info = FORCE_INCLUSION_CHAINS.get(l2ChainId);
+  if (!info) return false;
+  // Bankr accounts can only force-include when the L1 chain is supported by Bankr
+  if (accountType === "bankr") {
+    return BANKR_SUPPORTED_CHAIN_IDS.has(info.l1ChainId);
+  }
+  // PK/Seed broadcast L1 directly — no Bankr dependency
+  return true;
 }

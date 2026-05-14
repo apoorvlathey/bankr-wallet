@@ -3,7 +3,7 @@
  * Mirrors pendingTxStorage.ts pattern
  */
 
-import type { PendingBatchTxRequest } from "./erc5792Types";
+import type { PendingBatchTxRequest, PinnedBatchTxRequest } from "./erc5792Types";
 
 const STORAGE_KEY = "pendingBatchTxRequests";
 const TX_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
@@ -14,7 +14,7 @@ export async function getPendingBatchTxRequests(): Promise<PendingBatchTxRequest
 }
 
 export async function savePendingBatchTxRequest(
-  request: PendingBatchTxRequest,
+  request: PinnedBatchTxRequest,
 ): Promise<void> {
   const requests = await getPendingBatchTxRequests();
   requests.push(request);
@@ -36,6 +36,36 @@ export async function getPendingBatchTxRequestById(
 ): Promise<PendingBatchTxRequest | null> {
   const requests = await getPendingBatchTxRequests();
   return requests.find((r) => r.id === bundleId) || null;
+}
+
+/**
+ * Remove a single call from a pending batch request's `params.calls` array.
+ * Returns the remaining call count (0 means the caller should drop the bundle
+ * entirely — an empty batch is meaningless and we never want to ship one).
+ */
+export async function removeCallFromPendingBatchTxRequest(
+  bundleId: string,
+  callIndex: number,
+): Promise<{ found: boolean; remainingCalls: number }> {
+  const requests = await getPendingBatchTxRequests();
+  const idx = requests.findIndex((r) => r.id === bundleId);
+  if (idx === -1) return { found: false, remainingCalls: 0 };
+
+  const target = requests[idx];
+  const calls = target.params.calls ?? [];
+  if (callIndex < 0 || callIndex >= calls.length) {
+    return { found: true, remainingCalls: calls.length };
+  }
+
+  const nextCalls = calls.filter((_, i) => i !== callIndex);
+  const updated: PendingBatchTxRequest = {
+    ...target,
+    params: { ...target.params, calls: nextCalls },
+  };
+  const next = [...requests];
+  next[idx] = updated;
+  await chrome.storage.local.set({ [STORAGE_KEY]: next });
+  return { found: true, remainingCalls: nextCalls.length };
 }
 
 export async function clearExpiredBatchTxRequests(): Promise<void> {

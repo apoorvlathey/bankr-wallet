@@ -83,7 +83,7 @@
     "id": 74,
     "name": "CoW Swap",
     "description": "CoW Swap finds the lowest prices from all decentralized exchanges and DEX aggregators & saves you more with p2p trading and protection from MEV",
-    "url": "https://swap.cow.fi",
+    "url": "https://swap.cow.fi?ref=COW-WALLETCHAN",
     "iconUrl": "/images/dapp-icons/74.png",
     "chains": [
       1,
@@ -436,7 +436,7 @@
   {
     "id": 36,
     "name": "DODO",
-    "description": "DODO - Your on-chain liquidity provider.",
+    "description": "DODO - Your onchain liquidity provider.",
     "url": "https://app.dodoex.io",
     "iconUrl": "/images/dapp-icons/36.png",
     "chains": [

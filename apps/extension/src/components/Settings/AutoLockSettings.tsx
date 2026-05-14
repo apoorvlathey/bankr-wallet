@@ -8,8 +8,9 @@ import {
   IconButton,
   Spacer,
 } from "@chakra-ui/react";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
 import { ArrowBackIcon, TimeIcon } from "@chakra-ui/icons";
+import { ThemedCard } from "@/theme";
 
 interface AutoLockSettingsProps {
   onComplete: () => void;
@@ -32,7 +33,7 @@ const DEFAULT_TIMEOUT = 0; // Never (infinite) by default
 function AutoLockSettings({ onComplete, onCancel }: AutoLockSettingsProps) {
   const [timeout, setTimeout] = useState<number>(DEFAULT_TIMEOUT);
   const [isLoading, setIsLoading] = useState(true);
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
 
   useEffect(() => {
     // Load current timeout setting
@@ -82,17 +83,11 @@ function AutoLockSettings({ onComplete, onCancel }: AutoLockSettingsProps) {
         Choose how long the wallet stays unlocked after entering your password.
       </Text>
 
-      <Box
-        bg="bauhaus.white"
-        border="3px solid"
-        borderColor="bauhaus.black"
-        boxShadow="4px 4px 0px 0px #121212"
-        p={4}
-      >
+      <ThemedCard weight="medium" p={4}>
         <VStack spacing={3} align="stretch">
           <HStack spacing={3}>
-            <Box p={2} bg="bauhaus.blue">
-              <TimeIcon boxSize={4} color="white" />
+            <Box p={2} bg="accent.secondary" color="accentFg.secondary">
+              <TimeIcon boxSize={4} />
             </Box>
             <Box>
               <Text fontWeight="700" color="text.primary">
@@ -108,12 +103,13 @@ function AutoLockSettings({ onComplete, onCancel }: AutoLockSettingsProps) {
             value={timeout}
             onChange={(e) => handleTimeoutChange(Number(e.target.value))}
             isDisabled={isLoading}
-            bg="bauhaus.white"
+            bg="surface.raised"
             border="3px solid"
-            borderColor="bauhaus.black"
+            borderColor="border.default"
+            color="fg.primary"
             fontWeight="700"
-            _hover={{ borderColor: "bauhaus.black" }}
-            _focus={{ borderColor: "bauhaus.blue", boxShadow: "none" }}
+            _hover={{ borderColor: "border.default" }}
+            _focus={{ borderColor: "border.focus", boxShadow: "none" }}
           >
             {TIMEOUT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -122,20 +118,19 @@ function AutoLockSettings({ onComplete, onCancel }: AutoLockSettingsProps) {
             ))}
           </Select>
         </VStack>
-      </Box>
+      </ThemedCard>
 
       {timeout === 0 && (
-        <Box
-          bg="bauhaus.yellow"
-          border="3px solid"
-          borderColor="bauhaus.black"
-          boxShadow="4px 4px 0px 0px #121212"
+        <ThemedCard
+          weight="medium"
           p={3}
+          bg="accent.highlight"
+          borderColor="border.default"
         >
-          <Text color="bauhaus.black" fontSize="sm" fontWeight="700">
+          <Text color="accentFg.highlight" fontSize="sm" fontWeight="700">
             ⚠️ Your wallet will stay unlocked until you manually lock it or close the browser.
           </Text>
-        </Box>
+        </ThemedCard>
       )}
     </VStack>
   );

@@ -25,14 +25,32 @@ import {
   rainbowWallet,
   coinbaseWallet,
 } from "@rainbow-me/rainbowkit/wallets";
+import { impersonatorWallet } from "./utils/impersonatorConnector";
 
 const projectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID ?? "";
+
+// Create a global variable to store the modal opener function
+let globalOpenImpersonatorModal: (() => Promise<any>) | null = null;
+
+export const setGlobalOpenImpersonatorModal = (
+  fn: (() => Promise<any>) | null
+) => {
+  globalOpenImpersonatorModal = fn;
+};
 
 const connectors = connectorsForWallets(
   [
     {
       groupName: "Popular",
       wallets: [
+        impersonatorWallet({
+          openModal: () => {
+            if (!globalOpenImpersonatorModal) {
+              throw new Error("Impersonator modal not initialized");
+            }
+            return globalOpenImpersonatorModal();
+          },
+        }),
         metaMaskWallet,
         coinbaseWallet,
         walletConnectWallet,

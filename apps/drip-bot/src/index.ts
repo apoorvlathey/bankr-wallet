@@ -25,7 +25,7 @@ const MAX_CONSECUTIVE_ERRORS = 10;
 // has the block — not that every subsequent eth_call hits that same node.
 //
 // Fix: Track last successful drip time locally and enforce minDripInterval as
-// a sleep floor, ignoring potentially stale on-chain reads.
+// a sleep floor, ignoring potentially stale onchain reads.
 let lastDripSuccessAt = 0n; // unix seconds
 
 interface StreamState {
@@ -118,7 +118,7 @@ async function main(): Promise<void> {
       }
 
       // 3. Enforce local cooldown to prevent stale-read duplicates.
-      //    On-chain reads above may return stale lastDripTimestamp (from a
+      //    Onchain reads above may return stale lastDripTimestamp (from a
       //    load-balanced RPC node that's a block behind), computing sleepUntil
       //    in the past and skipping sleep. This local floor overrides that.
       if (lastDripSuccessAt > 0n) {
@@ -167,7 +167,7 @@ async function main(): Promise<void> {
       // 7. Estimate gas (also acts as simulation).
       //    NOTE: This does NOT fully protect against stale reads — if the RPC
       //    node behind eth_estimateGas is also on a stale block, the simulation
-      //    passes even though the tx will revert on-chain. The local cooldown
+      //    passes even though the tx will revert onchain. The local cooldown
       //    above (step 3) is the primary guard; this is defense-in-depth.
       let gasLimit: bigint;
       try {

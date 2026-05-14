@@ -177,7 +177,7 @@ export function ChatView({ onBack, startWithNewChat = false, returnToConversatio
 
   // Chat view
   return (
-    <Box h="100%" display="flex" flexDirection="column" bg="bg.base">
+    <Box h="100%" display="flex" flexDirection="column" bg="surface.base">
       <ChatHeader
         title={currentConversation?.title || "New Chat"}
         onBack={handleBackFromChat}
@@ -197,7 +197,7 @@ export function ChatView({ onBack, startWithNewChat = false, returnToConversatio
           onResend={sendMessage}
         />
 
-        <Box w="100%" p={2} borderTop="2px solid" borderColor="bauhaus.black">
+        <Box w="100%" p={2} borderTop="2px solid" borderColor="border.default">
           <ChatInput onSend={sendMessage} isLoading={isLoading} />
         </Box>
       </VStack>

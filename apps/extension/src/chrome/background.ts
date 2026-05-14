@@ -58,10 +58,20 @@ import {
   handleWalletGetCapabilities,
   handleWalletSendCalls,
   handleConfirmBatchTransaction,
+  handleConfirmBatchTransactionPK,
   handleRejectBatchTransaction,
+  handleRemoveCallFromPendingBatch,
   handleWalletGetCallsStatus,
   handleWalletShowCallsStatus,
 } from "./batchTxHandlers";
+import { handleSplitBatchIntoIndividualTxs } from "./splitBatchSequencer";
+import {
+  handleAddToCrossDappBatch,
+  handleAddCallsToCrossDappBatch,
+  handleRemoveFromCrossDappBatch,
+  handleRejectCrossDappBatch,
+  handleConfirmCrossDappBatch,
+} from "./crossDappBatchHandlers";
 import {
   getTxHistory,
   getProcessingTxs,
@@ -76,6 +86,12 @@ import {
   addMessageToConversation,
   updateMessageInConversation,
 } from "./chatStorage";
+import {
+  handleGetClearSigningDescriptor,
+  handleInvalidateClearSigningCache,
+  getClearSigningEnabled,
+  setClearSigningEnabled,
+} from "./clearSigningHandlers";
 
 // Session & cache management
 import {
@@ -89,6 +105,7 @@ import {
   clearCachedVault,
   getCachedVaultKey,
   getPasswordType,
+  resolvePasswordType,
   getAutoLockTimeout,
   setAutoLockTimeout,
   isApiKeyCached,
@@ -99,6 +116,7 @@ import {
   tryRestoreSession,
   incrementUIConnections,
   decrementUIConnections,
+  clearAllAuthState,
 } from "./sessionCache";
 
 // Auth handlers
@@ -137,9 +155,10 @@ import {
 
 // Gas estimation
 import { estimateGas } from "./gasEstimation";
+import { estimateBatchGasSequential } from "./batchGasEstimation";
 
 // Transaction simulation (asset change detection)
-import { simulateAssetChanges, simulateBatchAssetChanges, retryTokenMetadata } from "./txSimulation";
+import { simulateAssetChanges, simulateBatchAssetChanges, simulateBatchAssetChangesNonAtomic, retryTokenMetadata } from "./txSimulation";
 
 // Chat handlers
 import { handleSubmitChatPrompt } from "./chatHandlers";
@@ -177,7 +196,7 @@ import {
   getPendingAddChainRequests,
   PendingAddChainRequest,
 } from "./pendingAddChainStorage";
-import { addCustomToken } from "./customTokenStorage";
+import { addCustomToken, getCustomTokens } from "./customTokenStorage";
 import { getResolvedChainById } from "@/lib/chains";
 
 import {
@@ -188,22 +207,23 @@ import {
   initSidePanel,
 } from "./sidepanelManager";
 
+import { fetchAndCacheAvatarImage } from "./avatarImageCache";
+
 // Handles RPC requests proxied from inpage script (to bypass page CSP)
 async function handleRpcRequest(
   rpcUrl: string,
   method: string,
   params: any[],
 ): Promise<any> {
-  // Validate URL protocol to prevent SSRF
-  try {
-    const url = new URL(rpcUrl);
-    if (url.protocol !== "https:" && url.protocol !== "http:") {
-      throw new Error("Only HTTP(S) RPC URLs allowed");
-    }
-  } catch (e) {
-    if (e instanceof Error && e.message === "Only HTTP(S) RPC URLs allowed")
-      throw e;
-    throw new Error("Invalid RPC URL");
+  // Validate URL is a known RPC endpoint from networksInfo (defense-in-depth)
+  const { networksInfo } = (await chrome.storage.sync.get("networksInfo")) as {
+    networksInfo: Record<string, { rpcUrl: string }> | undefined;
+  };
+  const allowedUrls = networksInfo
+    ? new Set(Object.values(networksInfo).map((n) => n.rpcUrl))
+    : new Set<string>();
+  if (!allowedUrls.has(rpcUrl)) {
+    throw new Error("RPC URL not in allowed list");
   }
 
   const response = await fetch(rpcUrl, {
@@ -379,6 +399,58 @@ async function migrateFromLegacyStorage(): Promise<boolean> {
   }
 }
 
+/**
+ * Migrates a user's custom OP Mainnet (chainId 10) entry to the built-in
+ * "Optimism" chain. If a user manually added chainId 10 under any name before
+ * it became built-in, this rekeys their networksInfo entry to "Optimism"
+ * (preserving the custom RPC URL and hidden flag) and rewrites the global
+ * `chainName` selection if it pointed at the old custom name. Without this,
+ * the user's selected chain would silently fall back to the default after
+ * the update because chainName is keyed by name, not id.
+ *
+ * Idempotent: short-circuits if no chainId-10 entry exists under a non-
+ * canonical key.
+ */
+async function migrateCustomOptimismChain(): Promise<void> {
+  try {
+    const { networksInfo, chainName } = await chrome.storage.sync.get([
+      "networksInfo",
+      "chainName",
+    ]);
+    if (!networksInfo || typeof networksInfo !== "object") return;
+
+    let oldName: string | null = null;
+    for (const [name, entry] of Object.entries(
+      networksInfo as Record<string, { chainId?: number }>,
+    )) {
+      if (entry?.chainId === 10 && name !== "Optimism") {
+        oldName = name;
+        break;
+      }
+    }
+    if (!oldName) return;
+
+    const oldEntry = (networksInfo as Record<string, any>)[oldName];
+    const next = { ...(networksInfo as Record<string, any>) };
+    delete next[oldName];
+    next["Optimism"] = {
+      chainId: 10,
+      rpcUrl: oldEntry.rpcUrl,
+      hidden: oldEntry.hidden,
+    };
+
+    const updates: Record<string, unknown> = { networksInfo: next };
+    if (chainName === oldName) updates.chainName = "Optimism";
+
+    await chrome.storage.sync.set(updates);
+    console.log(
+      `[WalletChan] Migrated custom chain "${oldName}" (chainId 10) → built-in "Optimism"`,
+    );
+  } catch (error) {
+    console.error("[WalletChan] OP Mainnet migration failed:", error);
+  }
+}
+
 // Handle extension install/update
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === "install") {
@@ -388,6 +460,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   } else if (details.reason === "update") {
     // Migrate from v0.1.1/v0.2.0 legacy storage to multi-account system
     await migrateFromLegacyStorage();
+    // v3.5.0: rekey custom OP entries now that Optimism is built-in
+    await migrateCustomOptimismChain();
   }
 });
 
@@ -401,6 +475,10 @@ cleanupStaleProcessingTxs();
 import { resumePendingPollers, checkPendingTxReceipt as checkPendingTxReceiptFn } from "./txReceiptPoller";
 import { clearAllNonces } from "./nonceManager";
 resumePendingPollers();
+
+// Recover stuck force inclusion txs (L1 reverted, or L2 hash extraction failed but L1 succeeded)
+import { recoverStuckForceInclusionTxs } from "./forceInclusion";
+recoverStuckForceInclusionTxs();
 
 // Handle extension icon click when popup is cleared (sidepanel mode)
 // When sidepanel mode is active, setPopup('') causes onClicked to fire instead of opening a popup.
@@ -458,17 +536,123 @@ chrome.runtime.onConnect.addListener((port) => {
 
 // ─── Message Router ──────────────────────────────────────────────────────────
 
+// Message types that MUST originate from extension pages (popup/sidepanel/onboarding).
+// Content scripts (web pages) are never allowed to send these.
+const EXTENSION_ONLY_MESSAGES = new Set([
+  // Transaction/signature confirmations
+  "confirmTransaction",
+  "confirmTransactionAsync",
+  "confirmTransactionAsyncPK",
+  "confirmBatchTransactionAsync",
+  "confirmBatchTransactionAsyncPK",
+  "confirmSignatureRequest",
+  "confirmAddChain",
+  "confirmWatchAsset",
+  // Rejections (prevent malicious page from rejecting user's pending requests)
+  "rejectTransaction",
+  "rejectBatchTransaction",
+  "removeCallFromPendingBatch",
+  "rejectSignatureRequest",
+  "rejectAddChain",
+  "rejectWatchAsset",
+  "cancelTransaction",
+  // Cross-dapp batch (popup-only assembly + ship)
+  "addToCrossDappBatch",
+  "addCallsToCrossDappBatch",
+  "removeFromCrossDappBatch",
+  "rejectCrossDappBatch",
+  "confirmCrossDappBatch",
+  // Account management
+  "addBankrAccount",
+  "addImpersonatorAccount",
+  "addSeedPhraseGroup",
+  "deriveSeedAccount",
+  "addPrivateKeyAccount",
+  "removeAccount",
+  "setActiveAccount",
+  "renameSeedGroup",
+  "updateAccountDisplayName",
+  // Credential / session management
+  "unlockWallet",
+  "lockWallet",
+  "clearApiKeyCache",
+  "saveApiKeyWithCachedPassword",
+  "getCachedPassword",
+  "changePasswordWithCachedPassword",
+  "setAgentPassword",
+  "removeAgentPassword",
+  // Sensitive reads (pending request details)
+  "getPendingTxRequests",
+  "getPendingBatchTxRequests",
+  "getPendingTransaction",
+  "getPendingSignatureRequests",
+  "getPendingWatchAssetRequests",
+  "getPendingAddChainRequests",
+  // Key reveal (already had isExtensionPage but included for completeness)
+  "migrateFromLegacy",
+  "generateMnemonic",
+  "revealSeedPhrase",
+  "revealPrivateKey",
+  // Destructive operations
+  "resetExtension",
+  "onboardingComplete",
+  "clearTxHistory",
+  "clearNonceCache",
+  "clearFailedTxResult",
+  // Settings that affect security
+  "setSidePanelMode",
+  "setAutoLockTimeout",
+  // Direct-execution / UI-only handlers (defense in depth)
+  "executeSwapDirect",
+  "executeSwapBatch",
+  "sponsoredTransfer",
+]);
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Centralized auth gate: reject extension-only messages from content scripts
+  if (EXTENSION_ONLY_MESSAGES.has(message.type) && !isExtensionPage(sender)) {
+    sendResponse({ success: false, error: "Unauthorized" });
+    return false;
+  }
+
   switch (message.type) {
     case "sendTransaction": {
       const senderWindowId = sender.tab?.windowId;
-      handleTransactionRequest(message, message.txId, senderWindowId);
+      handleTransactionRequest(
+        message,
+        message.txId,
+        senderWindowId,
+        sender.origin ?? undefined,
+        sender.tab?.id,
+        sender.frameId,
+      );
       return false;
     }
 
     case "signatureRequest": {
       // Validate EIP-712 schema — write error to storage so content script picks it up
       const { signature } = message;
+      // SECURITY: reject eth_sign — signs a raw 32-byte digest with no prefix
+      // or semantic context. Attackers can pre-compute the hash of a transaction
+      // or EIP-712 payload and trick users into producing valid signatures over
+      // them while seeing only opaque hex. No legitimate dapp use remains.
+      if (signature.method === "eth_sign") {
+        writeResultToStorage(`sigResult:${message.sigId}`, {
+          success: false,
+          error:
+            "eth_sign is deprecated and unsafe; use personal_sign or eth_signTypedData_v4",
+        });
+        return false;
+      }
+      // Reject deprecated v1 typed data (no domain separator → no chain binding)
+      if (signature.method === "eth_signTypedData") {
+        writeResultToStorage(`sigResult:${message.sigId}`, {
+          success: false,
+          error:
+            "eth_signTypedData (v1) is deprecated; please use eth_signTypedData_v4",
+        });
+        return false;
+      }
       if (
         signature.method === "eth_signTypedData_v3" ||
         signature.method === "eth_signTypedData_v4"
@@ -489,10 +673,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           });
           return false;
         }
+
+        // Use sanitized typed data (extra properties stripped from type fields)
+        if (validationResult.sanitized) {
+          message.signature.params[1] = validationResult.sanitized;
+        }
       }
 
       const senderWindowId = sender.tab?.windowId;
-      handleSignatureRequest(message, message.sigId, senderWindowId);
+      handleSignatureRequest(
+        message,
+        message.sigId,
+        senderWindowId,
+        sender.origin ?? undefined,
+        sender.tab?.id,
+        sender.frameId,
+      );
       return false;
     }
 
@@ -548,7 +744,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const requests = await getPendingWatchAssetRequests();
         const pending = requests.find((r) => r.id === message.watchAssetId);
         if (pending) {
-          // Try to fetch the real token name from on-chain
+          // Try to fetch the real token name from onchain
           let tokenName = pending.asset.symbol;
           try {
             const info = await fetchTokenInfo(pending.asset.address, pending.chainId);
@@ -561,6 +757,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             symbol: pending.asset.symbol,
             name: tokenName,
             decimals: pending.asset.decimals,
+            image: pending.asset.image,
           });
           await removePendingWatchAssetRequest(message.watchAssetId);
           await writeResultToStorage(`watchAssetResult:${message.watchAssetId}`, {
@@ -715,22 +912,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message.origin,
         message.favicon,
         senderWindowId,
+        sender.origin ?? undefined,
+        sender.tab?.id,
+        sender.frameId,
       );
       return false;
     }
 
     case "walletGetCallsStatus": {
-      handleWalletGetCallsStatus(message.bundleId).then(async (result) => {
-        await writeResultToStorage(
-          `callsStatusResult:${message.requestId}`,
-          result,
-        );
-      });
+      // Use sender-derived origin (trusted) to scope the lookup to the dapp
+      // that originally created the bundle.
+      const requestOrigin = sender.origin ?? undefined;
+      handleWalletGetCallsStatus(message.bundleId, requestOrigin).then(
+        async (result) => {
+          await writeResultToStorage(
+            `callsStatusResult:${message.requestId}`,
+            result,
+          );
+        },
+      );
       return false;
     }
 
     case "walletShowCallsStatus": {
-      handleWalletShowCallsStatus(message.bundleId);
+      const requestOrigin = sender.origin ?? undefined;
+      handleWalletShowCallsStatus(message.bundleId, requestOrigin);
       return false;
     }
 
@@ -746,6 +952,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message.bundleId,
         message.password,
         message.functionNames,
+        message.forceInclusion,
+      ).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "confirmBatchTransactionAsyncPK": {
+      handleConfirmBatchTransactionPK(
+        message.bundleId,
+        message.password,
+        message.tabId,
+        message.functionNames,
+        message.gasEstimates,
+        message.forceInclusion,
       ).then((result) => {
         sendResponse(result);
       });
@@ -754,6 +975,62 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "rejectBatchTransaction": {
       handleRejectBatchTransaction(message.bundleId).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "splitBatchIntoIndividualTxs": {
+      const senderWindowId = sender.tab?.windowId;
+      handleSplitBatchIntoIndividualTxs(
+        message.bundleId,
+        senderWindowId,
+      ).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "removeCallFromPendingBatch": {
+      handleRemoveCallFromPendingBatch(
+        message.bundleId,
+        message.callIndex,
+      ).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "addToCrossDappBatch": {
+      handleAddToCrossDappBatch(message.txId).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "addCallsToCrossDappBatch": {
+      handleAddCallsToCrossDappBatch(message.bundleId).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "removeFromCrossDappBatch": {
+      handleRemoveFromCrossDappBatch(message.txId).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "rejectCrossDappBatch": {
+      handleRejectCrossDappBatch().then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "confirmCrossDappBatch": {
+      handleConfirmCrossDappBatch(message.password).then((result) => {
         sendResponse(result);
       });
       return true;
@@ -801,9 +1078,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "rejectTransaction": {
-      const result = handleRejectTransaction(message.txId);
-      removePendingTxRequest(message.txId).then(async () => {
-        await writeResultToStorage(`txResult:${message.txId}`, result);
+      handleRejectTransaction(message.txId).then((result) => {
         sendResponse(result);
       });
       return true;
@@ -824,17 +1099,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "unlockWallet": {
       handleUnlockWallet(message.password).then((result) => {
+        if (result.success) {
+          // Broadcast so any other open UI surface (sidepanel + full-screen
+          // tab simultaneously) auto-unlocks. The message carries no secrets;
+          // each surface re-queries its own state from the SW cache.
+          chrome.runtime.sendMessage({ type: "walletUnlockedExternal" }).catch(() => {});
+        }
         sendResponse(result);
       });
       return true;
     }
 
     case "lockWallet": {
-      clearCachedApiKey();
-      clearCachedVault();
-      clearSessionStorage();
-      sendResponse({ success: true });
-      return false;
+      (async () => {
+        await clearAllAuthState();
+        chrome.runtime.sendMessage({ type: "walletLockedExternal" }).catch(() => {});
+        sendResponse({ success: true });
+      })();
+      return true; // async response
     }
 
     // Account management handlers
@@ -909,13 +1191,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "addBankrAccount": {
       (async () => {
         try {
-          // SECURITY: Block API key changes when unlocked with agent password
-          if (message.apiKey && getPasswordType() === "agent") {
-            sendResponse({
-              success: false,
-              error: "Adding accounts with API keys requires master password",
-            });
-            return;
+          // SECURITY: Block API key changes when unlocked with agent password.
+          // Resolve via session restore so post-SW-restart agent sessions are caught.
+          if (message.apiKey) {
+            const passwordType = await resolvePasswordType(handleUnlockWallet);
+            if (passwordType === "agent") {
+              sendResponse({
+                success: false,
+                error: "Adding accounts with API keys requires master password",
+              });
+              return;
+            }
           }
 
           // If apiKey is provided and wallet is unlocked, save it first
@@ -971,16 +1257,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "addImpersonatorAccount": {
-      // SECURITY: Block when unlocked with agent password
-      if (getPasswordType() === "agent") {
-        sendResponse({
-          success: false,
-          error: "Adding accounts requires master password",
-        });
-        return false;
-      }
       (async () => {
         try {
+          // SECURITY: Block when unlocked with agent password.
+          // Resolve via session restore so post-SW-restart agent sessions are caught.
+          const passwordType = await resolvePasswordType(handleUnlockWallet);
+          if (passwordType === "agent") {
+            sendResponse({
+              success: false,
+              error: "Adding accounts requires master password",
+            });
+            return;
+          }
           const account = await addImpersonatorAccount(
             message.address,
             message.displayName,
@@ -1012,16 +1300,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "addSeedPhraseGroup": {
-      // SECURITY: Block when unlocked with agent password
-      if (getPasswordType() === "agent") {
-        sendResponse({
-          success: false,
-          error: "Adding seed phrases requires master password",
-        });
-        return false;
-      }
       (async () => {
         try {
+          // SECURITY: Block when unlocked with agent password.
+          // Resolve via session restore so post-SW-restart agent sessions are caught.
+          const passwordType = await resolvePasswordType(handleUnlockWallet);
+          if (passwordType === "agent") {
+            sendResponse({
+              success: false,
+              error: "Adding seed phrases requires master password",
+            });
+            return;
+          }
           let password = getCachedPassword();
 
           // If no cached password, try session restoration (for "Never" auto-lock mode)
@@ -1123,16 +1413,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "deriveSeedAccount": {
-      // SECURITY: Block when unlocked with agent password
-      if (getPasswordType() === "agent") {
-        sendResponse({
-          success: false,
-          error: "Deriving accounts requires master password",
-        });
-        return false;
-      }
       (async () => {
         try {
+          // SECURITY: Block when unlocked with agent password.
+          // Resolve via session restore so post-SW-restart agent sessions are caught.
+          const passwordType = await resolvePasswordType(handleUnlockWallet);
+          if (passwordType === "agent") {
+            sendResponse({
+              success: false,
+              error: "Deriving accounts requires master password",
+            });
+            return;
+          }
           let password = getCachedPassword();
 
           // If no cached password, try session restoration (for "Never" auto-lock mode)
@@ -1253,8 +1545,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return;
           }
 
-          // SECURITY: Block when unlocked with agent password
-          if (getPasswordType() === "agent") {
+          // SECURITY: Block when unlocked with agent password.
+          // Session was already restored above, so resolvePasswordType reads the cached value.
+          const seedRevealPasswordType = await resolvePasswordType(handleUnlockWallet);
+          if (seedRevealPasswordType === "agent") {
             sendResponse({
               success: false,
               error: "Seed phrase reveal requires master password",
@@ -1342,8 +1636,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "addPrivateKeyAccount": {
       (async () => {
-        // SECURITY: Block adding accounts when unlocked with agent password
-        if (getPasswordType() === "agent") {
+        // SECURITY: Block adding accounts when unlocked with agent password.
+        // Resolve via session restore so post-SW-restart agent sessions are caught.
+        const passwordType = await resolvePasswordType(handleUnlockWallet);
+        if (passwordType === "agent") {
           sendResponse({
             success: false,
             error: "Adding accounts requires master password",
@@ -1379,17 +1675,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "removeAccount": {
-      // SECURITY: Block account removal when unlocked with agent password
-      if (getPasswordType() === "agent") {
-        sendResponse({
-          success: false,
-          error: "Account removal requires master password",
-        });
-        return false;
-      }
-      handleRemoveAccount(message.accountId).then((result) => {
+      (async () => {
+        // SECURITY: Block account removal when unlocked with agent password.
+        // Resolve via session restore so post-SW-restart agent sessions are caught.
+        const passwordType = await resolvePasswordType(handleUnlockWallet);
+        if (passwordType === "agent") {
+          sendResponse({
+            success: false,
+            error: "Account removal requires master password",
+          });
+          return;
+        }
+        const result = await handleRemoveAccount(message.accountId);
         sendResponse(result);
-      });
+      })();
       return true;
     }
 
@@ -1416,8 +1715,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return;
           }
 
-          // SECURITY: Block private key reveal when unlocked with agent password
-          if (getPasswordType() === "agent") {
+          // SECURITY: Block private key reveal when unlocked with agent password.
+          // Session was already restored above, so resolvePasswordType reads the cached value.
+          const pkRevealPasswordType = await resolvePasswordType(handleUnlockWallet);
+          if (pkRevealPasswordType === "agent") {
             sendResponse({
               success: false,
               error: "Private key reveal requires master password",
@@ -1469,22 +1770,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "confirmSignatureRequest": {
       const tabId = message.tabId || sender.tab?.id;
       (async () => {
-        // Determine account type to route to correct handler
-        const account = tabId
-          ? await getTabAccount(tabId)
-          : await getActiveAccount();
         let result: SignatureResult;
-        if (account?.type === "bankr") {
+        // SECURITY: route by the pinned account type (captured at arrival),
+        // not by whatever is active right now.
+        const { getPendingSignatureRequestById } = await import(
+          "./pendingSignatureStorage"
+        );
+        const pending = await getPendingSignatureRequestById(message.sigId);
+        let pinnedType = pending?.accountType;
+        if (!pinnedType && pending?.accountId) {
+          const pinnedAcc = await getAccountById(pending.accountId);
+          pinnedType = pinnedAcc?.type as typeof pinnedType;
+        }
+        if (pinnedType === "bankr") {
           result = await handleConfirmSignatureRequestBankr(
             message.sigId,
             message.password,
           );
-        } else {
+        } else if (
+          pinnedType === "privateKey" ||
+          pinnedType === "seedPhrase"
+        ) {
           result = await handleConfirmSignatureRequest(
             message.sigId,
             message.password,
             tabId,
           );
+        } else {
+          result = {
+            success: false,
+            error: "Pending request is no longer valid",
+          };
         }
         await writeResultToStorage(`sigResult:${message.sigId}`, result);
         sendResponse(result);
@@ -1497,6 +1813,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "estimateForceInclusionGas": {
+      import("./forceInclusion").then(({ estimateForceInclusionGas }) => {
+        estimateForceInclusionGas(message.tx, message.accountAddress).then(sendResponse);
+      });
+      return true;
+    }
+
+    case "estimateBatchGasSequential": {
+      estimateBatchGasSequential(message.calls, message.fromAddress, message.chainId).then(sendResponse);
+      return true;
+    }
+
     case "simulateAssetChanges": {
       simulateAssetChanges(message.tx, message.accountAddress).then(sendResponse);
       return true;
@@ -1504,6 +1832,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "simulateBatchAssetChanges": {
       simulateBatchAssetChanges(message.calls, message.fromAddress, message.chainId).then(sendResponse);
+      return true;
+    }
+
+    case "simulateBatchAssetChangesNonAtomic": {
+      simulateBatchAssetChangesNonAtomic(message.calls, message.fromAddress, message.chainId).then(sendResponse);
       return true;
     }
 
@@ -1520,6 +1853,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         tabId,
         message.functionName,
         message.gasOverrides,
+        message.forceInclusion,
       ).then((result) => {
         sendResponse(result);
       });
@@ -1610,6 +1944,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               apiKey = getCachedApiKey();
             }
           }
+        }
+        // SECURITY: Agent sessions cannot read the long-term Bankr API key.
+        if (getPasswordType() !== "master") {
+          sendResponse({ apiKey: null });
+          return;
         }
         sendResponse({ apiKey: apiKey || null });
       })();
@@ -1713,6 +2052,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message.txId,
         message.password,
         message.functionName,
+        message.forceInclusion,
       ).then((result) => {
         sendResponse(result);
       });
@@ -1767,6 +2107,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "lookupCustomToken": {
+      // Read-only lookup against the user's customTokens storage.
+      // Used by inline token-amount views as a logo fallback when the swap
+      // list / KNOWN_TOKEN_LOGOS don't have the address.
+      (async () => {
+        try {
+          const tokens = await getCustomTokens();
+          const addr = String(message.tokenAddress || "").toLowerCase();
+          const match = tokens.find(
+            (t) =>
+              t.chainId === Number(message.chainId) &&
+              t.contractAddress === addr,
+          );
+          sendResponse({ success: true, data: match || null });
+        } catch (err) {
+          sendResponse({
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })();
+      return true;
+    }
+
     case "fetchTokenPrice": {
       fetchTokenPrice(message.chainId, message.address)
         .then((priceUsd) =>
@@ -1775,6 +2139,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch((err) =>
           sendResponse({ success: false, error: err.message }),
         );
+      return true;
+    }
+
+    case "cacheAvatarImage": {
+      // SECURITY: Only extension pages can trigger avatar fetches. Content
+      // scripts could otherwise enumerate any URL via this proxy.
+      if (!isExtensionPage(sender)) {
+        sendResponse({ dataUrl: null });
+        return false;
+      }
+      const url = typeof message.url === "string" ? message.url : "";
+      if (!url) {
+        sendResponse({ dataUrl: null });
+        return false;
+      }
+      fetchAndCacheAvatarImage(url)
+        .then((dataUrl) => sendResponse({ dataUrl }))
+        .catch(() => sendResponse({ dataUrl: null }));
       return true;
     }
 
@@ -1851,6 +2233,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleExecuteSwapDirect(
         message.transactions,
         message.chainName,
+        message.gasEstimates,
       ).then((result) => {
         sendResponse(result);
       });
@@ -1952,20 +2335,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "resetExtension": {
-      // SECURITY: Block extension reset when unlocked with agent password
-      if (getPasswordType() === "agent") {
-        sendResponse({
-          success: false,
-          error: "Extension reset requires master password",
-        });
-        return false;
-      }
-
-      // SECURITY: Perform full memory cleanup first (before async operations)
-      clearCachedApiKey();
-      clearCachedVault();
-
       (async () => {
+        // SECURITY: Block extension reset when unlocked with agent password.
+        // Resolve via session restore so post-SW-restart agent sessions are caught.
+        const passwordType = await resolvePasswordType(handleUnlockWallet);
+        if (passwordType === "agent") {
+          sendResponse({
+            success: false,
+            error: "Extension reset requires master password",
+          });
+          return;
+        }
+
+        // SECURITY: Perform full memory cleanup first (before async storage operations)
+        clearCachedApiKey();
+        clearCachedVault();
+
         await performSecurityReset();
         try {
           const allLocalStorage = await chrome.storage.local.get(null);
@@ -1990,6 +2375,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               "accounts",
               "portfolioSnapshots",
               "ensIdentityCache",
+              "ensAvatarImageCache",
               ...notificationKeys,
             ]),
             chrome.storage.sync.remove([
@@ -2081,6 +2467,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       ).then((conversation) => {
         sendResponse(conversation);
       });
+      return true;
+    }
+
+    case "GET_CLEAR_SIGNING_DESCRIPTOR": {
+      handleGetClearSigningDescriptor(message)
+        .then((response) => sendResponse(response))
+        .catch((err) =>
+          sendResponse({
+            descriptor: null,
+            enabled: true,
+            error: err?.message,
+          }),
+        );
+      return true;
+    }
+
+    case "INVALIDATE_CLEAR_SIGNING_CACHE": {
+      handleInvalidateClearSigningCache()
+        .then((r) => sendResponse({ success: true, ...r }))
+        .catch((err) => sendResponse({ success: false, error: err?.message }));
+      return true;
+    }
+
+    case "getClearSigningEnabled": {
+      getClearSigningEnabled()
+        .then((enabled) => sendResponse({ enabled }))
+        .catch((err) => sendResponse({ enabled: true, error: err?.message }));
+      return true;
+    }
+
+    case "setClearSigningEnabled": {
+      setClearSigningEnabled(!!message.value)
+        .then(() => sendResponse({ success: true }))
+        .catch((err) => sendResponse({ success: false, error: err?.message }));
       return true;
     }
 

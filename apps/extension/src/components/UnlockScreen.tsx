@@ -21,7 +21,7 @@ import {
   ModalFooter,
   useDisclosure,
 } from "@chakra-ui/react";
-import { useBauhausToast } from "@/hooks/useBauhausToast";
+import { useThemedToast } from "@/hooks/useThemedToast";
 import {
   ViewIcon,
   ViewOffIcon,
@@ -30,6 +30,7 @@ import {
   BellIcon,
 } from "@chakra-ui/icons";
 import { TWITTER_URL } from "@/constants/externalUrls";
+import { Decorator, useTheme } from "@/theme";
 
 // Sidepanel icon
 const SidePanelIcon = (props: any) => (
@@ -64,7 +65,8 @@ function UnlockScreen({
   pendingSignatureCount,
   pendingBatchCount = 0,
 }: UnlockScreenProps) {
-  const toast = useBauhausToast();
+  const toast = useThemedToast();
+  const { tokens } = useTheme();
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
@@ -130,6 +132,53 @@ function UnlockScreen({
     };
 
     init();
+  }, []);
+
+  // Chrome sidepanels don't receive keyboard focus on open — any focus()
+  // call before the user clicks into the panel results in a brief cursor
+  // flash that's immediately lost to the main page (documented Chromium
+  // limitation — https://groups.google.com/a/chromium.org/g/chromium-extensions/c/nb058-YrrWc).
+  // Workaround: when the user clicks on a non-interactive area of the
+  // panel (i.e. the background), the sidepanel's document gains focus;
+  // hand it to the password input so they can start typing immediately.
+  //
+  // Timing gotchas we work around:
+  // 1. On mousedown, Chrome transfers focus to the sidepanel document AFTER
+  //    our listener runs — so focus() called synchronously gets overwritten.
+  //    Defer via rAF + setTimeout(0) so focus() runs after the transfer.
+  // 2. preventDefault() on mousedown stops the browser from auto-focusing
+  //    the clicked non-interactive element (which otherwise lands on body).
+  useEffect(() => {
+    const INTERACTIVE_SELECTOR =
+      "input, textarea, select, button, a, [role='button'], [contenteditable='true']";
+
+    const focusPasswordInput = () => {
+      passwordInputRef.current?.focus({ preventScroll: true });
+    };
+
+    const handleBackgroundMousedown = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      if (!target) return;
+      // Clicked an interactive element — let browser default focus behavior
+      // handle it.
+      if (target.closest(INTERACTIVE_SELECTOR)) return;
+
+      // Stop the browser from shifting focus to the non-interactive target
+      // (which would override our focus() call below).
+      e.preventDefault();
+
+      // Focus now (for popup, where the document is already focused) and
+      // also schedule a deferred focus after Chrome finishes any focus
+      // transfer for sidepanel.
+      focusPasswordInput();
+      requestAnimationFrame(focusPasswordInput);
+      setTimeout(focusPasswordInput, 0);
+    };
+
+    document.addEventListener("mousedown", handleBackgroundMousedown);
+    return () => {
+      document.removeEventListener("mousedown", handleBackgroundMousedown);
+    };
   }, []);
 
   const toggleSidePanelMode = async () => {
@@ -212,7 +261,7 @@ function UnlockScreen({
   return (
     <Box
       h="100%"
-      bg="bg.base"
+      bg="surface.base"
       display="flex"
       flexDirection="column"
       alignItems="center"
@@ -264,28 +313,30 @@ function UnlockScreen({
           top={12}
           left={3}
           right={3}
-          bg="bauhaus.yellow"
-          border="2px solid"
-          borderColor="bauhaus.black"
-          boxShadow="3px 3px 0px 0px #121212"
+          bg="accent.highlight"
+          border={tokens.borders.thin}
+          borderColor="border.default"
+          borderRadius={tokens.radii.card}
+          boxShadow="card"
           px={3}
           py={1.5}
         >
           <HStack spacing={2} justifyContent="center">
             <Box
               p={1}
-              bg="bauhaus.black"
+              bg="border.default"
+              borderRadius={tokens.radii.badge}
               display="flex"
               alignItems="center"
               justifyContent="center"
               flexShrink={0}
             >
-              <BellIcon boxSize={3} color="bauhaus.yellow" sx={{ animation: "bell-ring 1.5s ease-in-out infinite", transformOrigin: "top center" }} />
+              <BellIcon boxSize={3} color="accent.highlight" sx={{ animation: "bell-ring 1.5s ease-in-out infinite", transformOrigin: "top center" }} />
             </Box>
             <Text
               fontSize="xs"
               fontWeight="700"
-              color="bauhaus.black"
+              color="accentFg.highlight"
               textTransform="uppercase"
             >
               {(() => {
@@ -307,10 +358,10 @@ function UnlockScreen({
         {/* Logo in geometric container */}
         <Box
           p={4}
-          bg="bauhaus.white"
+          bg="surface.raised"
           border="4px solid"
-          borderColor="bauhaus.black"
-          boxShadow="6px 6px 0px 0px #121212"
+          borderColor="border.default"
+          boxShadow="cardHover"
           transform="rotate(-3deg)"
           position="relative"
         >
@@ -321,12 +372,12 @@ function UnlockScreen({
             bottom="-14px"
             right="-14px"
             p={1.5}
-            bg="bauhaus.blue"
+            bg="accent.secondary"
             border="2px solid"
-            borderColor="bauhaus.black"
-            boxShadow="2px 2px 0px 0px #121212"
+            borderColor="border.default"
+            boxShadow="card"
           >
-            <LockIcon boxSize={3.5} color="bauhaus.white" />
+            <LockIcon boxSize={3.5} color="accentFg.secondary" />
           </Box>
         </Box>
 
@@ -354,23 +405,15 @@ function UnlockScreen({
         <Box
           w="full"
           p={4}
-          bg="bauhaus.white"
+          bg="surface.raised"
           border="4px solid"
-          borderColor="bauhaus.black"
-          boxShadow="6px 6px 0px 0px #121212"
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="cardHover"
           position="relative"
         >
-          {/* Corner decoration */}
-          <Box
-            position="absolute"
-            top="-2px"
-            right="-2px"
-            w="10px"
-            h="10px"
-            bg="bauhaus.yellow"
-            border="2px solid"
-            borderColor="bauhaus.black"
-          />
+          {/* Corner decoration — Bauhaus only; Decorator renders nothing in Midnight */}
+          <Decorator corner="top-right" accent="highlight" />
 
           <VStack spacing={3} w="full">
             <InputGroup>
@@ -379,7 +422,6 @@ function UnlockScreen({
                 type={showPassword ? "text" : "password"}
                 placeholder="Password"
                 value={password}
-                autoFocus
                 onChange={(e) => {
                   setPassword(e.target.value);
                   if (error) setError("");
@@ -388,19 +430,7 @@ function UnlockScreen({
                   if (e.key === "Enter") handleUnlock();
                 }}
                 isDisabled={isUnlocking}
-                bg="bauhaus.white"
-                border="2px solid"
-                borderColor={error ? "bauhaus.red" : "bauhaus.black"}
-                borderRadius="0"
-                _hover={{
-                  borderColor: error ? "bauhaus.red" : "bauhaus.black",
-                }}
-                _focus={{
-                  borderColor: error ? "bauhaus.red" : "bauhaus.blue",
-                  boxShadow: error
-                    ? "3px 3px 0px 0px #D02020"
-                    : "3px 3px 0px 0px #1040C0",
-                }}
+                isInvalid={!!error}
               />
               <InputRightElement>
                 <IconButton
@@ -418,14 +448,14 @@ function UnlockScreen({
               <VStack spacing={2} w="full">
                 <Box
                   w="full"
-                  bg="bauhaus.red"
+                  bg="accent.primary"
                   border="2px solid"
-                  borderColor="bauhaus.black"
+                  borderColor="border.default"
                   p={2}
                 >
                   <HStack>
-                    <WarningTwoIcon color="white" boxSize={4} />
-                    <Text color="white" fontSize="sm" fontWeight="700">
+                    <WarningTwoIcon color="accentFg.primary" boxSize={4} />
+                    <Text color="accentFg.primary" fontSize="sm" fontWeight="700">
                       {error}
                     </Text>
                   </HStack>
@@ -435,7 +465,7 @@ function UnlockScreen({
                   color="text.secondary"
                   fontWeight="500"
                   _hover={{
-                    color: "bauhaus.blue",
+                    color: "accent.secondary",
                     textDecoration: "underline",
                   }}
                   onClick={onResetModalOpen}
@@ -472,15 +502,8 @@ function UnlockScreen({
 
       {/* Reset Extension Modal */}
       <Modal isOpen={isResetModalOpen} onClose={onResetModalClose} isCentered>
-        <ModalOverlay bg="blackAlpha.700" />
-        <ModalContent
-          bg="bauhaus.white"
-          border="4px solid"
-          borderColor="bauhaus.black"
-          borderRadius="0"
-          boxShadow="8px 8px 0px 0px #121212"
-          mx={4}
-        >
+        <ModalOverlay bg="surface.overlay" />
+        <ModalContent mx={4}>
           <ModalHeader
             color="text.primary"
             fontSize="md"
@@ -491,11 +514,11 @@ function UnlockScreen({
             <Box display="flex" alignItems="center" gap={2}>
               <Box
                 p={1}
-                bg="bauhaus.yellow"
+                bg="accent.highlight"
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
               >
-                <WarningTwoIcon color="bauhaus.black" />
+                <WarningTwoIcon color="accentFg.highlight" />
               </Box>
               Reset Extension?
             </Box>
@@ -505,7 +528,7 @@ function UnlockScreen({
               <Text color="text.secondary" fontSize="sm" fontWeight="500">
                 This will clear all your stored data including:
               </Text>
-              <Box pl={4} borderLeft="4px solid" borderColor="bauhaus.red">
+              <Box pl={4} borderLeft="4px solid" borderColor="accent.primary">
                 <Text color="text.secondary" fontSize="sm">
                   Your encrypted API key
                 </Text>
@@ -519,11 +542,11 @@ function UnlockScreen({
               <Box
                 w="full"
                 p={3}
-                bg="bauhaus.yellow"
+                bg="accent.highlight"
                 border="2px solid"
-                borderColor="bauhaus.black"
+                borderColor="border.default"
               >
-                <Text color="bauhaus.black" fontSize="sm" fontWeight="700">
+                <Text color="accentFg.highlight" fontSize="sm" fontWeight="700">
                   You will need to enter your Bankr API key and set up a new
                   password again.
                 </Text>
@@ -568,9 +591,9 @@ function UnlockScreen({
           display="flex"
           alignItems="center"
           gap={1}
-          color="bauhaus.blue"
+          color="accent.secondary"
           fontWeight="700"
-          _hover={{ color: "bauhaus.red" }}
+          _hover={{ color: "accent.primary" }}
           onClick={() => {
             chrome.tabs.create({ url: TWITTER_URL });
           }}
