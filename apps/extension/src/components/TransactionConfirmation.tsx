@@ -28,6 +28,7 @@ import {
   SettingsIcon,
 } from "@chakra-ui/icons";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
+import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
 import { GasOverrides } from "@/chrome/txHandlers";
 import { getChainConfig } from "@/constants/chainConfig";
@@ -1323,6 +1324,10 @@ function TransactionConfirmation({
           zIndex={1}
         >
         <VStack spacing={2} align="stretch">
+        {/* ERC-8213: Calldata Digest */}
+        {tx.data && tx.data !== "0x" && (
+          <CalldataDigestDisplay calldata={tx.data} />
+        )}
         {/* Simulate on Tenderly + (single-pending) Add-to-Batch pill */}
         {(() => {
           const tenderlyUrl = (() => {

@@ -39,6 +39,7 @@ import type { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import CalldataDecoder from "@/components/CalldataDecoder";
+import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
 import AssetChangesDisplay, { SimulationRevertedBanner } from "@/components/AssetChangesDisplay";
 import { detectAbiEncodingError } from "@/lib/calldataValidation";
@@ -1760,6 +1761,12 @@ function CallCard({
                 chainId={chainId}
                 onFunctionName={onFunctionName}
               />
+            </Box>
+          )}
+          {/* ERC-8213: Calldata Digest */}
+          {hasCalldata && (
+            <Box w="full" px={2} pb={1.5}>
+              <CalldataDigestDisplay calldata={call.data!} />
             </Box>
           )}
         </VStack>
