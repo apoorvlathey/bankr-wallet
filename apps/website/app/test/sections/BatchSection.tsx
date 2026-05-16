@@ -4,12 +4,16 @@ import { Input, Text } from "@chakra-ui/react";
 import { useState } from "react";
 import { useAccount, useChainId } from "wagmi";
 import {
+  createPublicClient,
   encodeFunctionData,
   erc20Abi,
+  http,
   maxUint256,
   toHex,
   type Address,
 } from "viem";
+import { mainnet } from "viem/chains";
+import { normalize } from "viem/ens";
 import { useEip1193 } from "../hooks/useEip1193";
 import { TEST_CHAINS } from "../constants";
 import { TestButton } from "./TestButton";
@@ -17,6 +21,21 @@ import { TestButton } from "./TestButton";
 const BASE_CHAIN_ID = 8453;
 const WCHAN_BASE: Address = "0xBa5ED0000e1CA9136a695f0a848012A16008B032";
 const ONE_USDC = 1_000_000n; // 6 decimals
+
+const ENS_RECIPIENTS = [
+  "apoorv.eth",
+  "vitalik.eth",
+  "jesse.base.eth",
+  "kieran.base.eth",
+];
+
+const ETH_RPC_URL =
+  process.env.NEXT_PUBLIC_ETH_RPC_URL || "https://eth.llamarpc.com";
+
+const mainnetClient = createPublicClient({
+  chain: mainnet,
+  transport: http(ETH_RPC_URL),
+});
 
 export function BatchSection() {
   const request = useEip1193();
@@ -103,6 +122,46 @@ export function BatchSection() {
             usdcTransferCall(maxUint256),
             usdcTransferCall(0n),
           ],
+        },
+      ],
+    });
+  };
+
+  const sendEnsUsdcBatch = async () => {
+    if (chainId !== BASE_CHAIN_ID) {
+      throw new Error("Switch to Base — this test sends USDC on Base");
+    }
+    if (!usdc) throw new Error("No USDC config for Base");
+
+    const resolved = await Promise.all(
+      ENS_RECIPIENTS.map(async (name) => {
+        const addr = await mainnetClient.getEnsAddress({
+          name: normalize(name),
+        });
+        if (!addr) throw new Error(`Failed to resolve ${name}`);
+        return { name, address: addr };
+      }),
+    );
+
+    const calls = resolved.map(({ address: to }) => ({
+      to: usdc.address,
+      value: "0x0",
+      data: encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "transfer",
+        args: [to, ONE_USDC],
+      }),
+    }));
+
+    return request({
+      method: "wallet_sendCalls",
+      params: [
+        {
+          version: "2.0.0",
+          from: address,
+          chainId: chainIdHex,
+          atomicRequired: false,
+          calls,
         },
       ],
     });
@@ -206,6 +265,12 @@ export function BatchSection() {
         description="atomicRequired=false, 2 USDC transfers + 1 native. Exercises mixed calls."
         onRun={sendNonAtomicBatch}
         isDisabled={!usdc}
+      />
+      <TestButton
+        label="Send 1 USDC to 4 ENS names (Base)"
+        description="Resolves apoorv.eth, vitalik.eth, jesse.base.eth, kieran.base.eth and batches 4× USDC.transfer(recipient, 1 USDC). Base only."
+        onRun={sendEnsUsdcBatch}
+        isDisabled={chainId !== BASE_CHAIN_ID || !usdc}
       />
       <TestButton
         label="USDC → WCHAN swap (3-call batch)"
