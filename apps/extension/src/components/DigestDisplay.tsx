@@ -11,6 +11,7 @@ import {
 } from "@chakra-ui/react";
 import { ChevronDownIcon } from "@chakra-ui/icons";
 import { CopyButton } from "@/components/CopyButton";
+import { useTheme } from "@/theme";
 import {
   computeCalldataDigest,
   computeEip712Digest,
@@ -74,15 +75,36 @@ function DigestBox({
   labelColor,
   hash,
   defaultOpen = false,
+  defaultTab = "hex",
 }: {
   label: string;
   labelBg: string;
   labelColor: string;
   hash: string;
   defaultOpen?: boolean;
+  defaultTab?: DigestTab;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const [tab, setTab] = useState<DigestTab>("emoji");
+  const [tab, setTab] = useState<DigestTab>(defaultTab);
+  const tabOrder: readonly DigestTab[] = ["hex", "emoji"];
+  const { tokens, themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
+  // Alternating hex-chunk colors — Bauhaus uses primary red/green, Midnight
+  // swaps to amber/blue so the chunks pop against the dark surface (red/green
+  // both render muddy on `bg.muted` in Midnight).
+  const hexChunkColors = isDarkTheme
+    ? ["#F5B544", "#3B82F6"]
+    : ["#C03030", "#208040"];
+  // Emoji-grid surface: paper-white in Bauhaus matches the print aesthetic;
+  // Midnight uses the raised surface so the grid sits on the panel naturally
+  // and the emojis don't float in a white box on a dark page.
+  const gridBg = isDarkTheme ? "surface.raised" : "white";
+  const gridDivider = isDarkTheme ? "whiteAlpha.200" : "gray.200";
+  // Highlighted cells use an amber wash in both themes — same intent, but
+  // Bauhaus tints toward warm-light, Midnight toward warm-glow on dark.
+  const highlightBg = isDarkTheme
+    ? "rgba(245, 181, 68, 0.18)"
+    : "rgba(240, 192, 32, 0.25)";
   const emojiArray = useMemo(() => hexToEmojiArray(hash), [hash]);
   // Random spot-check cells — new selection each time the component mounts
   const [highlightedCells] = useState(() => generateHighlightedCells(emojiArray.length));
@@ -103,8 +125,9 @@ function DigestBox({
             bg={labelBg}
             color={labelColor}
             fontWeight="800"
-            border="2px solid"
-            borderColor="bauhaus.black"
+            border={tokens.borders.thin}
+            borderColor="border.default"
+            borderRadius="sm"
             textTransform="uppercase"
             flexShrink={0}
           >
@@ -120,27 +143,37 @@ function DigestBox({
         {open && (
           <>
             {/* Tabs */}
-            <HStack spacing={0} border="2px solid" borderColor="bauhaus.black" h="20px">
-              {(["emoji", "hex"] as const).map((t, idx) => (
-                <Box
-                  key={t}
-                  as="button"
-                  px={1.5}
-                  h="full"
-                  fontSize="10px"
-                  fontWeight="800"
-                  textTransform="uppercase"
-                  bg={tab === t ? "bauhaus.black" : "transparent"}
-                  color={tab === t ? "white" : "text.secondary"}
-                  borderRight={idx === 0 ? "2px solid" : undefined}
-                  borderColor="bauhaus.black"
-                  onClick={() => setTab(t)}
-                  cursor="pointer"
-                  _hover={{ opacity: 0.8 }}
-                >
-                  {t}
-                </Box>
-              ))}
+            <HStack
+              spacing={0}
+              border={tokens.borders.thin}
+              borderColor="border.default"
+              borderRadius="sm"
+              overflow="hidden"
+              h="20px"
+            >
+              {tabOrder.map((t, idx) => {
+                const active = tab === t;
+                return (
+                  <Box
+                    key={t}
+                    as="button"
+                    px={2}
+                    h="full"
+                    fontSize="10px"
+                    fontWeight="800"
+                    textTransform="uppercase"
+                    bg={active ? "accent.primary" : "transparent"}
+                    color={active ? "accentFg.primary" : "text.secondary"}
+                    borderRight={idx === 0 ? tokens.borders.thin : undefined}
+                    borderColor="border.default"
+                    onClick={() => setTab(t)}
+                    cursor="pointer"
+                    _hover={active ? {} : { bg: "bg.muted" }}
+                  >
+                    {t}
+                  </Box>
+                );
+              })}
             </HStack>
             <Spacer />
             <CopyButton value={tab === "hex" ? hash : emojiArray.join("")} />
@@ -154,8 +187,9 @@ function DigestBox({
             <Box
               p={2}
               bg="bg.muted"
-              border="2px solid"
-              borderColor="bauhaus.black"
+              border={tokens.borders.thin}
+              borderColor="border.default"
+              borderRadius="sm"
             >
               <Text
                 fontSize="xs"
@@ -171,7 +205,7 @@ function DigestBox({
                   <Text
                     key={i}
                     as="span"
-                    color={i % 2 === 0 ? "#C03030" : "#208040"}
+                    color={hexChunkColors[i % 2]}
                   >
                     {chunk}
                   </Text>
@@ -180,7 +214,13 @@ function DigestBox({
             </Box>
           ) : (
             <Box>
-              <Box border="2px solid" borderColor="bauhaus.black" bg="white">
+              <Box
+                border={tokens.borders.thin}
+                borderColor="border.default"
+                borderRadius="sm"
+                overflow="hidden"
+                bg={gridBg}
+              >
                 <SimpleGrid columns={8} spacing={0}>
                   {emojiArray.map((emoji, i) => {
                     const isHighlighted = highlightedCells.has(i);
@@ -190,12 +230,12 @@ function DigestBox({
                         position="relative"
                         borderRight={i % 8 !== 7 ? "1px solid" : undefined}
                         borderBottom={i < emojiArray.length - 8 ? "1px solid" : undefined}
-                        borderColor="gray.200"
+                        borderColor={gridDivider}
                         display="flex"
                         alignItems="center"
                         justifyContent="center"
                         py={1.5}
-                        bg={isHighlighted ? "rgba(240, 192, 32, 0.25)" : undefined}
+                        bg={isHighlighted ? highlightBg : undefined}
                       >
                         <Text
                           position="absolute"
@@ -203,7 +243,7 @@ function DigestBox({
                           left="2px"
                           fontSize="7px"
                           fontFamily="mono"
-                          color={isHighlighted ? "bauhaus.black" : "gray.400"}
+                          color={isHighlighted ? "fg.primary" : "text.tertiary"}
                           fontWeight="700"
                           lineHeight="1"
                         >
