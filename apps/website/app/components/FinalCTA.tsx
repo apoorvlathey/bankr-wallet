@@ -6,9 +6,10 @@ import {
   Heading,
   Button,
   VStack,
+  HStack,
 } from "@chakra-ui/react";
 import { motion } from "framer-motion";
-import { CHROME_STORE_URL } from "../constants";
+import { CHROME_STORE_URL, FIREFOX_STORE_URL } from "../constants";
 
 const MotionBox = motion(Box);
 
@@ -103,18 +104,32 @@ export function FinalCTA() {
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.4 }}
           >
-            <Button
-              variant="yellow"
-              size="xl"
-              as="a"
-              href={CHROME_STORE_URL}
-              target="_blank"
-              px={{ base: 8, md: 12 }}
-              py={{ base: 4, md: 6 }}
-              fontSize={{ base: "lg", md: "xl" }}
-            >
-              ADD TO CHROME - IT&apos;S FREE!
-            </Button>
+            <HStack spacing={4} flexWrap="wrap" justify="center">
+              <Button
+                variant="yellow"
+                size="xl"
+                as="a"
+                href={CHROME_STORE_URL}
+                target="_blank"
+                px={{ base: 6, md: 10 }}
+                py={{ base: 4, md: 6 }}
+                fontSize={{ base: "md", md: "lg" }}
+              >
+                ADD TO CHROME
+              </Button>
+              <Button
+                variant="yellow"
+                size="xl"
+                as="a"
+                href={FIREFOX_STORE_URL}
+                target="_blank"
+                px={{ base: 6, md: 10 }}
+                py={{ base: 4, md: 6 }}
+                fontSize={{ base: "md", md: "lg" }}
+              >
+                ADD TO FIREFOX
+              </Button>
+            </HStack>
           </motion.div>
         </VStack>
       </Container>

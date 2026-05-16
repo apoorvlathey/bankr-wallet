@@ -21,7 +21,7 @@ import {
 import { keyframes } from "@emotion/react";
 import { Menu } from "lucide-react";
 import { LogoShapes } from "./ui/GeometricShape";
-import { CHROME_STORE_URL, TELEGRAM_URL } from "../constants";
+import { TELEGRAM_URL } from "../constants";
 import { useVaultData } from "../contexts/VaultDataContext";
 import { useSiteNav } from "../lib/useSiteNav";
 
@@ -184,11 +184,10 @@ export function Navigation() {
               variant="primary"
               size="md"
               as="a"
-              href={CHROME_STORE_URL}
-              target="_blank"
+              href={resolveHref("#install")}
               display={{ base: "none", md: "flex" }}
             >
-              Add to Chrome
+              Install
             </Button>
             <IconButton
               as="a"
@@ -352,12 +351,11 @@ export function Navigation() {
                 variant="primary"
                 size="lg"
                 as="a"
-                href={CHROME_STORE_URL}
-                target="_blank"
+                href={resolveHref("#install")}
                 mt={4}
                 onClick={onClose}
               >
-                Add to Chrome
+                Install
               </Button>
             </VStack>
           </DrawerBody>

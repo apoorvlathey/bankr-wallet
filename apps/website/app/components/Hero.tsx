@@ -22,7 +22,12 @@ import {
 } from "@chakra-ui/react";
 import { motion } from "framer-motion";
 import { ExternalLink, Copy, Check } from "lucide-react";
-import { COINGECKO_URL, CHROME_STORE_URL, GITHUB_URL } from "../constants";
+import {
+  COINGECKO_URL,
+  CHROME_STORE_URL,
+  FIREFOX_STORE_URL,
+  GITHUB_URL,
+} from "../constants";
 
 const MotionBox = motion(Box);
 
@@ -218,6 +223,15 @@ export function Hero() {
                     Add to Chrome
                   </Button>
                   <Button
+                    variant="secondary"
+                    size={{ base: "md", md: "lg" }}
+                    as="a"
+                    href={FIREFOX_STORE_URL}
+                    target="_blank"
+                  >
+                    Add to Firefox
+                  </Button>
+                  <Button
                     variant="outline"
                     size={{ base: "md", md: "lg" }}
                     as="a"
@@ -241,7 +255,7 @@ export function Hero() {
                   textTransform="uppercase"
                   letterSpacing="wider"
                 >
-                  Works on: Chrome · Brave · Arc
+                  Works on: Chrome · Brave · Arc · Firefox
                 </Text>
               </motion.div>
             </VStack>

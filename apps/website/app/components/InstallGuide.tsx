@@ -6,6 +6,7 @@ import {
   Heading,
   Text,
   VStack,
+  HStack,
   Button,
   Flex,
   OrderedList,
@@ -16,7 +17,12 @@ import {
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import { Chrome, ExternalLink } from "lucide-react";
-import { CHROME_STORE_URL, BANKR_API_URL } from "../constants";
+import {
+  CHROME_STORE_URL,
+  FIREFOX_STORE_URL,
+  BANKR_API_URL,
+} from "../constants";
+
 
 const MotionBox = motion(Box);
 
@@ -99,7 +105,7 @@ const steps = [
   {
     number: 1,
     title: "Install",
-    description: "Add WalletChan to Chrome from the Chrome Web Store.",
+    description: "Add WalletChan from the Chrome Web Store or Firefox add-ons.",
     color: "red" as const,
     shape: "circle" as const,
   },
@@ -273,39 +279,47 @@ export function InstallGuide() {
               gap={6}
               w="full"
             >
-              {/* Step 1: Install from Chrome Web Store */}
+              {/* Step 1: Install from your browser's add-on store */}
               <InstallStepCard
                 stepNumber={1}
-                title="Install from Chrome Web Store"
+                title="Install the Extension"
                 color="red"
                 delay={0}
               >
                 <OrderedList spacing={2} fontWeight="medium" pl={2}>
                   <ListItem>
-                    Click the button below to open the Chrome Web Store
+                    Click your browser&apos;s button below to open the add-on
+                    store
                   </ListItem>
                   <ListItem>
-                    Click{" "}
-                    <Text as="span" fontWeight="black">
-                      Add to Chrome
-                    </Text>{" "}
-                    to install the extension
+                    Confirm the install when prompted
                   </ListItem>
                   <ListItem>
-                    Works on Chrome, Brave, Arc, and other Chromium browsers
+                    Works on Chrome, Brave, Arc, other Chromium browsers, and
+                    Firefox
                   </ListItem>
                 </OrderedList>
-                <Button
-                  as="a"
-                  href={CHROME_STORE_URL}
-                  target="_blank"
-                  variant="primary"
-                  size="md"
-                  mt={2}
-                  leftIcon={<Chrome size={18} />}
-                >
-                  Add to Chrome
-                </Button>
+                <HStack spacing={3} mt={2} flexWrap="wrap">
+                  <Button
+                    as="a"
+                    href={CHROME_STORE_URL}
+                    target="_blank"
+                    variant="primary"
+                    size="md"
+                    leftIcon={<Chrome size={18} />}
+                  >
+                    Add to Chrome
+                  </Button>
+                  <Button
+                    as="a"
+                    href={FIREFOX_STORE_URL}
+                    target="_blank"
+                    variant="secondary"
+                    size="md"
+                  >
+                    Add to Firefox
+                  </Button>
+                </HStack>
               </InstallStepCard>
 
               {/* Step 2: Get API Key */}
