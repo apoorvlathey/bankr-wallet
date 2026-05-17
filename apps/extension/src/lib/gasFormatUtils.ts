@@ -20,3 +20,19 @@ export function formatGwei(wei: string): string {
 export function formatNumber(value: string): string {
   return Number(value).toLocaleString();
 }
+
+/**
+ * Format a wei-cost + native-token USD price as `~$X.XX`. Returns null when
+ * the price isn't available so callers can omit the slot entirely. Used by
+ * both single-tx and batch-tx gas displays.
+ */
+export function formatWeiToUsd(
+  weiStr: string,
+  priceUsd: number | null,
+): string | null {
+  if (priceUsd === null) return null;
+  const eth = Number(BigInt(weiStr)) / 1e18;
+  const usd = eth * priceUsd;
+  if (usd < 0.01 && usd > 0) return "<$0.01";
+  return `~$${usd.toFixed(2)}`;
+}

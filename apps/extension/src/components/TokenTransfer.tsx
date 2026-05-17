@@ -44,6 +44,8 @@ import { WALLETCHAN_STAKE_URL } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import ChainIcon from "@/components/ChainIcon";
 import { getChainEnvironmentLabel } from "@/lib/chainIcons";
+import { truncateAddress } from "@/lib/addressUtils";
+import { formatUsd } from "@/lib/currencyFormatUtils";
 import {
   getResolvedChainById,
   getStoredRpcUrl,
@@ -53,20 +55,10 @@ import {
 /** USDC on Base (ERC-3009 transferWithAuthorization) */
 const BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
-function formatUsd(value: number): string {
-  if (value < 0.01 && value > 0) return "<$0.01";
-  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 function formatTokenAmount(value: number): string {
   if (value === 0) return "0";
   if (value < 0.000001) return "<0.000001";
   return parseFloat(value.toPrecision(6)).toString();
-}
-
-function truncateAddress(address: string): string {
-  if (!address) return "";
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 function getAccountTypePillStyles(account: Account) {

@@ -21,7 +21,7 @@ import {
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { GasEstimate, GasEstimateTier } from "@/chrome/gasEstimation";
 import { GasOverrides } from "@/chrome/txHandlers";
-import { formatEth, formatGwei } from "@/lib/gasFormatUtils";
+import { formatEth, formatGwei, formatWeiToUsd } from "@/lib/gasFormatUtils";
 import { useTheme } from "@/theme";
 import GasTierPicker from "./GasTierPicker";
 import {
@@ -119,14 +119,6 @@ function EditableGasRow({
 }
 
 /** Format USD price for display */
-function formatUsd(weiStr: string, priceUsd: number | null): string | null {
-  if (priceUsd === null) return null;
-  const eth = Number(BigInt(weiStr)) / 1e18;
-  const usd = eth * priceUsd;
-  if (usd < 0.01 && usd > 0) return "<$0.01";
-  return `~$${usd.toFixed(2)}`;
-}
-
 /** Convert wei string to gwei display string */
 function weiToGweiStr(wei: string): string {
   const gwei = Number(BigInt(wei)) / 1e9;
@@ -534,7 +526,7 @@ function GasEstimateDisplay({
 
   if (!estimate) return null;
 
-  const usdDisplay = formatUsd(displayCostWei, estimate.nativePriceUsd);
+  const usdDisplay = formatWeiToUsd(displayCostWei, estimate.nativePriceUsd);
   const sym = estimate.nativeCurrencySymbol || "ETH";
 
   return (

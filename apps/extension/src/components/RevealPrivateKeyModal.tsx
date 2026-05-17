@@ -20,6 +20,7 @@ import {
 import { ViewIcon, ViewOffIcon, WarningTwoIcon, CopyIcon, CheckIcon, LockIcon } from "@chakra-ui/icons";
 import { useTheme, IconBox } from "@/theme";
 import type { Account, PasswordType } from "@/chrome/types";
+import { truncateAddress } from "@/lib/addressUtils";
 
 interface RevealPrivateKeyModalProps {
   isOpen: boolean;
@@ -325,11 +326,6 @@ function RevealPrivateKeyModal({ isOpen, onClose, account }: RevealPrivateKeyMod
       </ModalContent>
     </Modal>
   );
-}
-
-function truncateAddress(address: string): string {
-  if (!address) return "";
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 export default memo(RevealPrivateKeyModal);

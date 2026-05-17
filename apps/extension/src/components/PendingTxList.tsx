@@ -20,6 +20,7 @@ import { googleFaviconUrl } from "@/constants/externalUrls";
 import { getCombinedRequests, CombinedRequest } from "@/App";
 import ChainIcon from "@/components/ChainIcon";
 import { useStripTokens, useTheme, resolveChainBadgeStyle } from "@/theme";
+import { formatRelativeTime } from "@/lib/timeFormatUtils";
 
 function getOriginHostname(origin: string): string | null {
   try {
@@ -83,19 +84,7 @@ function PendingTxList({
   );
   const totalCount = combinedRequests.length;
 
-  const formatTimestamp = (timestamp: number): string => {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / 60000);
-
-    if (minutes < 1) return "Just now";
-    if (minutes === 1) return "1 min ago";
-    if (minutes < 60) return `${minutes} mins ago`;
-
-    const hours = Math.floor(minutes / 60);
-    if (hours === 1) return "1 hour ago";
-    return `${hours} hours ago`;
-  };
+  const formatTimestamp = formatRelativeTime;
 
   const getMethodDisplayName = (method: string): string => {
     switch (method) {

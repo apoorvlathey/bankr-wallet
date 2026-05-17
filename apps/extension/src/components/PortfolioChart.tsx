@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Box, HStack, Text, Skeleton } from "@chakra-ui/react";
 import { getSnapshots } from "@/chrome/portfolioSnapshotStorage";
 import { useTheme } from "@/theme";
+import { formatAbsoluteTimestamp } from "@/lib/timeFormatUtils";
 
 interface PortfolioChartProps {
   address: string;
@@ -54,15 +55,7 @@ function hexToRgba(input: string, alpha: number): string {
   return input;
 }
 
-function formatTimestamp(ts: number): string {
-  const d = new Date(ts);
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
+const formatTimestamp = (ts: number): string => formatAbsoluteTimestamp(ts);
 
 export default function PortfolioChart({
   address,

@@ -34,6 +34,7 @@ import type {
 import { getChainConfig } from "@/constants/chainConfig";
 import { ShapesLoader } from "@/components/Chat/ShapesLoader";
 import { useTheme } from "@/theme";
+import { formatUsd } from "@/lib/currencyFormatUtils";
 
 interface AssetChangesDisplayProps {
   txRequest: PendingTxRequest;
@@ -85,12 +86,6 @@ export function SimulationRevertedBanner({
       </HStack>
     </Box>
   );
-}
-
-/** Format USD value for display */
-function formatUsd(value: number): string {
-  if (value < 0.01 && value > 0) return "<$0.01";
-  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function TokenIcon({ change }: { change: AssetChange }) {

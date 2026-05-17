@@ -4,11 +4,7 @@ import { blo } from "blo";
 import type { Account } from "@/chrome/types";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
-
-function truncateAddress(address: string): string {
-  if (!address) return "";
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
+import { truncateAddress } from "@/lib/addressUtils";
 
 interface FromAccountDisplayProps {
   address: string;

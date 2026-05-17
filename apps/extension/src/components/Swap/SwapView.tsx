@@ -28,6 +28,8 @@ import { parseEther, parseUnits, formatUnits } from "viem";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { useChainBadgeStyle, useTheme } from "@/theme";
 import { type PortfolioToken } from "@/chrome/portfolioApi";
+import { formatUsd } from "@/lib/currencyFormatUtils";
+import { formatTokenAmountFromBase } from "@/lib/tokenFormatUtils";
 import { fetchOnchainBalances } from "@/chrome/onchainBalances";
 import { loadPortfolioTokenCatalog } from "@/chrome/portfolioTokens";
 import {
@@ -67,21 +69,8 @@ const SwapArrowIcon = (props: React.ComponentProps<typeof Icon>) => (
   </Icon>
 );
 
-function formatUsd(value: number): string {
-  if (value < 0.01 && value > 0) return "<$0.01";
-  return `$${value.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
-function formatOutputAmount(amount: string, decimals: number): string {
-  const formatted = formatUnits(BigInt(amount), decimals);
-  const num = parseFloat(formatted);
-  if (num === 0) return "0";
-  if (num < 0.000001) return "< 0.000001";
-  return num.toFixed(6).replace(/\.?0+$/, "");
-}
+const formatOutputAmount = (amount: string, decimals: number): string =>
+  formatTokenAmountFromBase(amount, decimals);
 
 /** Map PortfolioToken.contractAddress to 0x API token address */
 function to0xToken(token: PortfolioToken): string {

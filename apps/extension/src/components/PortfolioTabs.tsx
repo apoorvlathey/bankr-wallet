@@ -28,6 +28,7 @@ import AddTokenModal from "@/components/AddTokenModal";
 import PortfolioChart from "@/components/PortfolioChart";
 import ChainIcon from "@/components/ChainIcon";
 import { useNetworks } from "@/contexts/NetworksContext";
+import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
 import { getVisibleChains } from "@/lib/chains";
 import { Decorator, useTheme } from "@/theme";
 
@@ -134,12 +135,8 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
     setHoldingsState(state);
   }, []);
 
-  const formatUsd = (value: number): string => {
-    if (holdingsState?.hideValue) return "****";
-    if (value === 0) return "$0.00";
-    if (value < 0.01) return "<$0.01";
-    return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
+  const formatUsd = (value: number): string =>
+    formatUsdShared(value, { hide: holdingsState?.hideValue });
 
   return (
     <Box

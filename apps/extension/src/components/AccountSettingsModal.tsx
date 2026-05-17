@@ -49,6 +49,7 @@ import {
 } from "@/lib/ensIdentityCache";
 import { CopyButton } from "./CopyButton";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
+import { truncateAddress } from "@/lib/addressUtils";
 
 interface AccountSettingsModalProps {
   isOpen: boolean;
@@ -1157,10 +1158,6 @@ function AccountSettingsModal({
   );
 }
 
-function truncateAddress(address: string): string {
-  if (!address) return "";
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
 
 // Small identity avatar for the settings header — prefers a resolved ENS
 // avatar, then the Bankr mark for Bankr accounts, then a deterministic

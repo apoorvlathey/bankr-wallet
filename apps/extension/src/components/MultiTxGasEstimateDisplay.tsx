@@ -18,7 +18,7 @@ import {
   ExternalLinkIcon,
 } from "@chakra-ui/icons";
 import { GasEstimate } from "@/chrome/gasEstimation";
-import { formatEth, formatGwei } from "@/lib/gasFormatUtils";
+import { formatEth, formatGwei, formatWeiToUsd } from "@/lib/gasFormatUtils";
 import { getChainConfig } from "@/constants/chainConfig";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
@@ -130,14 +130,6 @@ function deriveBatchMaxFee(
 }
 
 /** Format USD from wei + price */
-function formatUsd(weiStr: string, priceUsd: number | null): string | null {
-  if (priceUsd === null) return null;
-  const eth = Number(BigInt(weiStr)) / 1e18;
-  const usd = eth * priceUsd;
-  if (usd < 0.01 && usd > 0) return "<$0.01";
-  return `~$${usd.toFixed(2)}`;
-}
-
 function EditableGasLimitInput({
   value,
   onChange,
@@ -738,7 +730,7 @@ function MultiTxGasEstimateDisplay({
 
   if (validEstimates.length === 0) return null;
 
-  const usdDisplay = formatUsd(totalCostWei, nativePriceUsd);
+  const usdDisplay = formatWeiToUsd(totalCostWei, nativePriceUsd);
 
   return (
     <VStack spacing={2} align="stretch">
@@ -1031,7 +1023,7 @@ function MultiTxGasEstimateDisplay({
               if (!est) return null;
 
               const callCost = perCallDisplayCostWei[i] || est.estimatedCostWei;
-              const costUsd = formatUsd(callCost, est.nativePriceUsd);
+              const costUsd = formatWeiToUsd(callCost, est.nativePriceUsd);
 
               return (
                 // align="flex-start" so a wrapped label keeps the cost

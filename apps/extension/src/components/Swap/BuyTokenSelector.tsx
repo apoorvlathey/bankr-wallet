@@ -17,6 +17,8 @@ import { getChainConfig } from "@/constants/chainConfig";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import { WALLETCHAN_ICON_URL } from "@/constants/externalUrls";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
+import { truncateAddress } from "@/lib/addressUtils";
+import { formatTokenBalance } from "@/lib/tokenFormatUtils";
 
 /** Canonical WCHAN entry on Base. Injected into the popular-tokens list so
  *  WCHAN reliably appears as a quick-select even if the swap API's token list
@@ -53,17 +55,6 @@ const POPULAR_PER_CHAIN: Record<number, string[]> = {
   137: ["POL", "USDC", "WETH"],
   130: ["ETH", "USDC", "WBTC", "WETH"],
 };
-
-function truncateAddress(addr: string): string {
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-}
-
-function formatBalance(balance: string): string {
-  const num = parseFloat(balance);
-  if (num === 0) return "0";
-  if (num < 0.0001) return "<0.0001";
-  return parseFloat(num.toPrecision(6)).toString();
-}
 
 function holdingToEntry(h: PortfolioToken): TokenListEntry {
   return {
@@ -519,7 +510,7 @@ export default function BuyTokenSelector({
                           fontWeight="600"
                           lineHeight="short"
                         >
-                          {formatBalance(h.balance)}
+                          {formatTokenBalance(h.balance)}
                         </Text>
                         {h.valueUsd > 0 && (
                           <Text

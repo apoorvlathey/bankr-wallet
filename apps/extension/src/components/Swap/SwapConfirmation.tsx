@@ -18,7 +18,6 @@ import {
   ChevronUpIcon,
   ExternalLinkIcon,
 } from "@chakra-ui/icons";
-import { formatUnits } from "viem";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import type { TokenInfo } from "@/chrome/swapApi";
 import type { SwapTxEntry } from "@/chrome/txHandlers";
@@ -28,6 +27,8 @@ import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
+import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
+import { formatTokenAmount, formatTokenAmountFromBase } from "@/lib/tokenFormatUtils";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { useTheme } from "@/theme";
 
@@ -71,23 +72,11 @@ interface SwapConfirmationProps {
   isConfirmDisabled?: boolean;
 }
 
-function formatTokenDisplay(amount: string): string {
-  const num = parseFloat(amount);
-  if (isNaN(num) || num === 0) return "0";
-  if (num < 0.000001) return "< 0.000001";
-  return Number(num.toPrecision(6)).toLocaleString("en-US", { maximumFractionDigits: 6 });
-}
+const formatOutputAmount = (amount: string, decimals: number): string =>
+  formatTokenAmountFromBase(amount, decimals, { thousandsSeparator: true });
 
-function formatOutputAmount(amount: string, decimals: number): string {
-  const formatted = formatUnits(BigInt(amount), decimals);
-  return formatTokenDisplay(formatted);
-}
-
-function formatUsd(value: number): string {
-  if (value <= 0) return "";
-  if (value < 0.01) return "<$0.01";
-  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+const formatUsd = (value: number): string =>
+  formatUsdShared(value, { zeroAsEmpty: true });
 
 function formatValue(value: string): string {
   const wei = BigInt(value);
@@ -271,7 +260,7 @@ function SwapConfirmation({
                 You sell
               </Text>
               <Text fontSize="md" fontWeight="900" color="text.primary" noOfLines={1}>
-                {formatTokenDisplay(sellAmount)} {sellToken.symbol.toUpperCase()}
+                {formatTokenAmount(sellAmount, { thousandsSeparator: true })} {sellToken.symbol.toUpperCase()}
               </Text>
             </VStack>
             {sellUsd > 0 && (

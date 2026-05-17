@@ -11,6 +11,7 @@ import {
 import { ArrowBackIcon, AddIcon, ChatIcon, DeleteIcon, StarIcon } from "@chakra-ui/icons";
 import { Conversation } from "@/chrome/chatStorage";
 import { useStripTokens } from "@/theme";
+import { formatRelativeTime } from "@/lib/timeFormatUtils";
 
 interface ChatListProps {
   conversations: Conversation[];
@@ -21,28 +22,7 @@ interface ChatListProps {
   onToggleFavorite: (id: string) => void;
 }
 
-function formatTimestamp(timestamp: number): string {
-  const now = Date.now();
-  const diff = now - timestamp;
-
-  const minute = 60 * 1000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-
-  if (diff < minute) {
-    return "Just now";
-  } else if (diff < hour) {
-    const mins = Math.floor(diff / minute);
-    return `${mins} min${mins > 1 ? "s" : ""} ago`;
-  } else if (diff < day) {
-    const hours = Math.floor(diff / hour);
-    return `${hours} hour${hours > 1 ? "s" : ""} ago`;
-  } else if (diff < 2 * day) {
-    return "Yesterday";
-  } else {
-    return new Date(timestamp).toLocaleDateString();
-  }
-}
+const formatTimestamp = formatRelativeTime;
 
 export function ChatList({
   conversations,

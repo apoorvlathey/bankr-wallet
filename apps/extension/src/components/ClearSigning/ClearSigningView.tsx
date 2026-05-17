@@ -26,6 +26,9 @@ import { blo } from "blo";
 
 import { ThemedCard } from "@/theme/primitives/ThemedCard";
 import { getChainConfig } from "@/constants/chainConfig";
+import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import { formatUsd } from "@/lib/currencyFormatUtils";
+import { formatAbsoluteTimestamp } from "@/lib/timeFormatUtils";
 import { ethShLabelsUrl } from "@/constants/externalUrls";
 import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 import type { Account } from "@/chrome/types";
@@ -598,6 +601,29 @@ interface TokenInfo {
   logoUrl?: string;
 }
 
+function formatUsdValue(amountRaw: string, decimals: number, priceUsd: number): string | null {
+  if (!priceUsd || priceUsd <= 0) return null;
+  let big: bigint;
+  try {
+    big = BigInt(amountRaw);
+  } catch {
+    return null;
+  }
+  // Skip "unlimited" approvals — a USD value on max-uint is meaningless.
+  const MAX_UINT = (1n << 256n) - 1n;
+  if (big === MAX_UINT) return null;
+  const neg = big < 0n;
+  if (neg) big = -big;
+  // Compute amount * price using JS number after scaling decimals; tokens here
+  // have realistic magnitudes so precision loss is acceptable for display.
+  const divisor = 10n ** BigInt(decimals);
+  const whole = Number(big / divisor);
+  const frac = Number(big % divisor) / Number(divisor);
+  const value = (neg ? -1 : 1) * (whole + frac) * priceUsd;
+  if (value === 0) return null;
+  return formatUsd(value);
+}
+
 function TokenLogo({ src, alt }: { src?: string; alt: string }) {
   if (!src) return null;
   return (
@@ -623,6 +649,7 @@ function TokenAmountInline({
   chainId: number;
 }) {
   const [info, setInfo] = useState<TokenInfo | null>(null);
+  const [priceUsd, setPriceUsd] = useState<number>(0);
 
   useEffect(() => {
     if (native || !tokenAddress) return;
@@ -694,23 +721,81 @@ function TokenAmountInline({
     };
   }, [tokenAddress, chainId, native]);
 
+  // USD price resolution — uses the same cached CoinGecko handlers that power
+  // the portfolio (5-min storage cache), so when a token is already in the
+  // user's portfolio this is a free read.
+  useEffect(() => {
+    let cancelled = false;
+    if (native) {
+      const entry = CHAIN_REGISTRY.find((c) => c.chainId === chainId);
+      if (!entry) return;
+      chrome.runtime.sendMessage(
+        {
+          type: "resolveCoinGeckoNativeAssets",
+          requests: [
+            {
+              chainId,
+              chainName: entry.name,
+              nativeCurrencyName: entry.nativeCurrency.name,
+              symbol: entry.nativeCurrency.symbol,
+            },
+          ],
+        },
+        (res: { success: boolean; data?: Array<{ priceUsd: number }> }) => {
+          if (cancelled) return;
+          const p = res?.data?.[0]?.priceUsd;
+          if (p && p > 0) setPriceUsd(p);
+        },
+      );
+    } else if (tokenAddress && /^0x[a-fA-F0-9]{40}$/.test(tokenAddress)) {
+      chrome.runtime.sendMessage(
+        {
+          type: "resolveCoinGeckoErc20Prices",
+          requests: [{ chainId, contractAddress: tokenAddress.toLowerCase() }],
+        },
+        (res: { success: boolean; data?: Array<{ priceUsd: number }> }) => {
+          if (cancelled) return;
+          const p = res?.data?.[0]?.priceUsd;
+          if (p && p > 0) setPriceUsd(p);
+        },
+      );
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [tokenAddress, chainId, native]);
+
   // Friendly amount color: `fg.primary` (white in Midnight, black in Bauhaus).
   // Bumped to `lg` size — token amounts are the headline value the user needs
   // to see at a glance. Logo and symbol scale up alongside so the trio reads
   // as a single confident unit instead of three timid tokens.
   if (native) {
-    const config = getChainConfig(chainId);
-    const symbol = config?.nativeCurrency?.symbol || "ETH";
-    const decimals = config?.nativeCurrency?.decimals ?? 18;
+    const entry = CHAIN_REGISTRY.find((c) => c.chainId === chainId);
+    const symbol = entry?.nativeCurrency.symbol || "ETH";
+    const decimals = entry?.nativeCurrency.decimals ?? 18;
+    const usd = formatUsdValue(amountRaw, decimals, priceUsd);
     return (
-      <HStack spacing={2} justify="flex-end" align="center">
-        <Text fontSize="lg" color="fg.primary" fontWeight="700" lineHeight="1.1">
-          {formatUnit(amountRaw, decimals)}
-        </Text>
-        <Text fontSize="sm" color="fg.secondary" fontWeight="600">
-          {symbol}
-        </Text>
-      </HStack>
+      <VStack spacing={0} align="flex-end">
+        <HStack spacing={2} justify="flex-end" align="center">
+          <Text fontSize="lg" color="fg.primary" fontWeight="700" lineHeight="1.1">
+            {formatUnit(amountRaw, decimals)}
+          </Text>
+          <Text fontSize="sm" color="fg.secondary" fontWeight="600">
+            {symbol}
+          </Text>
+        </HStack>
+        {usd && (
+          <Text
+            fontSize="sm"
+            color="fg.secondary"
+            fontWeight="700"
+            lineHeight="1.2"
+            mt={0.5}
+          >
+            {usd}
+          </Text>
+        )}
+      </VStack>
     );
   }
 
@@ -722,16 +807,24 @@ function TokenAmountInline({
     );
   }
 
+  const usd = formatUsdValue(amountRaw, info.decimals, priceUsd);
   return (
-    <HStack spacing={2} justify="flex-end" align="center">
-      <Text fontSize="lg" color="fg.primary" fontWeight="700" lineHeight="1.1">
-        {formatUnit(amountRaw, info.decimals)}
-      </Text>
-      <TokenLogo src={info.logoUrl} alt={info.symbol} />
-      <Text fontSize="sm" color="fg.secondary" fontWeight="600">
-        {info.symbol}
-      </Text>
-    </HStack>
+    <VStack spacing={0} align="flex-end">
+      <HStack spacing={2} justify="flex-end" align="center">
+        <Text fontSize="lg" color="fg.primary" fontWeight="700" lineHeight="1.1">
+          {formatUnit(amountRaw, info.decimals)}
+        </Text>
+        <TokenLogo src={info.logoUrl} alt={info.symbol} />
+        <Text fontSize="sm" color="fg.secondary" fontWeight="600">
+          {info.symbol}
+        </Text>
+      </HStack>
+      {usd && (
+        <Text fontSize="xs" color="fg.muted" fontWeight="500">
+          {usd}
+        </Text>
+      )}
+    </VStack>
   );
 }
 
@@ -758,24 +851,5 @@ function formatUnit(raw: string, decimals: number): string {
   return `${neg ? "-" : ""}${whole.toString()}.${fracStr}`;
 }
 
-function formatTimestamp(ts: number): string {
-  if (!Number.isFinite(ts) || ts <= 0) return "—";
-  // Heuristic: values > 1e12 are already milliseconds.
-  const ms = ts > 1e12 ? ts : ts * 1000;
-  try {
-    const date = new Date(ms);
-    // "Jun 12, 2026 · 5:26 AM" — compact, scannable, no seconds noise.
-    const datePart = date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    const timePart = date.toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-    });
-    return `${datePart} · ${timePart}`;
-  } catch {
-    return String(ts);
-  }
-}
+const formatTimestamp = (ts: number): string =>
+  formatAbsoluteTimestamp(ts, { includeYear: true, separator: " · " });

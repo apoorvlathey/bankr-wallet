@@ -19,6 +19,7 @@ import {
 } from "@chakra-ui/react";
 import { ViewIcon, ViewOffIcon, WarningTwoIcon, CopyIcon, CheckIcon, LockIcon } from "@chakra-ui/icons";
 import type { Account, PasswordType } from "@/chrome/types";
+import { truncateAddress } from "@/lib/addressUtils";
 
 interface RevealSeedPhraseModalProps {
   isOpen: boolean;
@@ -311,11 +312,6 @@ function RevealSeedPhraseModal({ isOpen, onClose, account }: RevealSeedPhraseMod
       </ModalContent>
     </Modal>
   );
-}
-
-function truncateAddress(address: string): string {
-  if (!address) return "";
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 export default memo(RevealSeedPhraseModal);

@@ -21,6 +21,7 @@ import type { Account, SeedGroup } from "@/chrome/types";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { useTheme } from "@/theme";
+import { truncateAddress } from "@/lib/addressUtils";
 
 // Blockies avatar for PK accounts using blo
 function BlockieAvatar({
@@ -99,11 +100,6 @@ interface AccountSwitcherProps {
   onAccountSelect: (account: Account) => void;
   onAddAccount: () => void;
   onAccountSettings: (account: Account) => void;
-}
-
-function truncateAddress(address: string): string {
-  if (!address) return "";
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 function getSeedLabel(

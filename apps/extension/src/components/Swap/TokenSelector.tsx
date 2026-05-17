@@ -16,6 +16,8 @@ import type { TokenListEntry } from "@/chrome/swapApi";
 import { getChainConfig } from "@/constants/chainConfig";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
+import { truncateAddress } from "@/lib/addressUtils";
+import { formatTokenBalance } from "@/lib/tokenFormatUtils";
 
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
@@ -29,17 +31,6 @@ const POPULAR_PER_CHAIN: Record<number, string[]> = {
   137: ["POL", "USDC", "WETH"],
   130: ["ETH", "USDC", "WBTC", "WETH"],
 };
-
-function formatBalance(balance: string): string {
-  const num = parseFloat(balance);
-  if (num === 0) return "0";
-  if (num < 0.0001) return "<0.0001";
-  return parseFloat(num.toPrecision(6)).toString();
-}
-
-function truncateAddress(addr: string): string {
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-}
 
 function nativeLogoForChain(chainId: number, nativeSymbol: string): string {
   if (nativeSymbol.toUpperCase() === "ETH") return "/chainIcons/ethereum.svg";
@@ -578,7 +569,7 @@ export default function TokenSelector({
                         isTruncated
                         lineHeight="short"
                       >
-                        {formatBalance(resolvedCustomToken.balance)}
+                        {formatTokenBalance(resolvedCustomToken.balance)}
                       </Text>
                     </Box>
                     <Text
@@ -672,7 +663,7 @@ export default function TokenSelector({
                             fontWeight="600"
                             lineHeight="short"
                           >
-                            {formatBalance(h.balance)}
+                            {formatTokenBalance(h.balance)}
                           </Text>
                           {h.valueUsd > 0 && (
                             <Text

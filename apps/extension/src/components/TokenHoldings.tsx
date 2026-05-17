@@ -22,6 +22,7 @@ import ChainIcon from "@/components/ChainIcon";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById, getVisibleChains } from "@/lib/chains";
 import { Decorator } from "@/theme";
+import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
 
 // Module-level cache so navigating away and back to the homepage doesn't flash
 // a skeleton. We seed state from here on mount and refetch in the background.
@@ -262,12 +263,8 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
     });
   }, [totalValueUsd, loading, hideValue, onStateChange, tokenKeys, apiUnavailable]);
 
-  const formatUsd = (value: number): string => {
-    if (hideValue) return "****";
-    if (value === 0) return "$0.00";
-    if (value < 0.01) return "<$0.01";
-    return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
+  const formatUsd = (value: number): string =>
+    formatUsdShared(value, { hide: hideValue });
 
   if (error && tokens.length === 0) {
     const errorContent = (
