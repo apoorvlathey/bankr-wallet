@@ -63,13 +63,17 @@ const TIER_ICON: Record<GasTierSelection, (props: any) => JSX.Element> = {
 
 // Per-tier accent color used for the inactive icon + tier name. Gives the
 // picker a clear visual hierarchy at a glance: green = cheap, blue = default,
-// amber = urgent, purple-ish = advanced. Resolves to the right hue in both
+// amber = urgent, neutral = advanced. Resolves to the right hue in both
 // Bauhaus and Midnight via theme tokens.
+//
+// NOTE: `status.info.fg` is NOT safe here — in Bauhaus it's WHITE (it pairs
+// with the BLUE `status.info.bg`), so it'd render invisibly on the picker's
+// light surface. Use `accent.secondary` for the standalone blue accent.
 const TIER_ACCENT: Record<GasTierSelection, string> = {
   slow: "chart.positive",
-  standard: "status.info.fg",
+  standard: "accent.secondary",
   fast: "chart.numeric",
-  custom: "accent.secondary",
+  custom: "fg.secondary",
 };
 
 /**
