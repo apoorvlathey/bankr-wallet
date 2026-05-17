@@ -10,6 +10,10 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.8.0] - 2026-05-17
+
 ### Added
 
 - Clear-signed summaries in the Activity tab and Transaction Details modal — approves, transfers, native sends, and ERC-7730 descriptors render with token logos and recipient labels instead of raw `approve` / `exec` text.
@@ -28,6 +32,7 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 - Permit2 `uint160` max approvals now collapse to "unlimited" with the precise raw amount on hover, matching how `uint256` max was already handled.
 - EIP-712 typed-data address labels and explorer links are scoped to the dapp's actual connected chain instead of falling back to mainnet (fixes mislabeled Permit2 sigs on Base and other non-mainnet dapps).
 - Standard gas tier icon and label are now visible in the Bauhaus theme.
+
 
 ## [3.7.0] - 2026-05-16
 
@@ -370,7 +375,8 @@ This release is a full rebuild of the wallet — multiple account types, a real 
 - View address on Debank from the homepage.
 - Lock-wallet button and footer attribution.
 
-[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.7.0...HEAD
+[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.8.0...HEAD
+[3.8.0]: https://github.com/apoorvlathey/walletchan/compare/v3.7.0...v3.8.0
 [3.7.0]: https://github.com/apoorvlathey/walletchan/compare/v3.6.0...v3.7.0
 [3.6.0]: https://github.com/apoorvlathey/walletchan/compare/v3.5.0...v3.6.0
 [3.5.0]: https://github.com/apoorvlathey/walletchan/compare/v3.4.0...v3.5.0
