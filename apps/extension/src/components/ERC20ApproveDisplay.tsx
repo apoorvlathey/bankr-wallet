@@ -29,10 +29,11 @@ import {
 } from "@/lib/erc20Approve";
 import { updatePendingTxRequestData } from "@/chrome/pendingTxStorage";
 import { resolveAddressToName } from "@/lib/ensUtils";
-import { ethShLabelsUrl } from "@/constants/externalUrls";
+import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { useTheme } from "@/theme";
 import { getChainConfig } from "@/constants/chainConfig";
 import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
+import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 
 interface TokenMeta {
   name: string;
@@ -48,8 +49,22 @@ interface ERC20ApproveDisplayProps {
   approval: ParsedApproval;
   /** Chain ID for explorer links and RPC calls */
   chainId: number;
-  /** Pending tx ID — used to persist calldata changes */
-  txId: string;
+  /**
+   * Pending tx ID — used to persist calldata changes for single-tx
+   * confirmations. Optional when `onSaveCalldata` is provided (batch flows
+   * persist via their own storage, not `pendingTxRequests`).
+   */
+  txId?: string;
+  /**
+   * Optional override for persisting the edited calldata. When provided,
+   * called with the freshly encoded `approve(spender, newAmount)` bytes
+   * instead of writing to `pendingTxRequests`. Used by the batch
+   * confirmation surface (which owns its own per-call storage) and by the
+   * cross-dapp batch wrapper.
+   */
+  onSaveCalldata?: (
+    newData: string,
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 /**
@@ -121,6 +136,7 @@ export default function ERC20ApproveDisplay({
   approval,
   chainId,
   txId,
+  onSaveCalldata,
 }: ERC20ApproveDisplayProps) {
   const { tokens, themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
@@ -205,16 +221,14 @@ export default function ERC20ApproveDisplay({
 
   // Fetch spender labels
   useEffect(() => {
-    fetch(
-      ethShLabelsUrl(approval.spender, chainId),
-    )
-      .then((res) => (res.ok ? res.json() : []))
-      .then((labels) => {
-        if (Array.isArray(labels) && labels.length > 0) {
-          setSpenderLabels(labels);
-        }
-      })
-      .catch(() => {});
+    let cancelled = false;
+    getEthShLabels(approval.spender, chainId).then((labels) => {
+      if (cancelled) return;
+      if (labels.length > 0) setSpenderLabels(labels);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [approval.spender, chainId]);
 
   // Reverse resolve the spender address to ENS/Basename/WNS. Shown as a
@@ -253,20 +267,37 @@ export default function ERC20ApproveDisplay({
   const handleSaveEdit = useCallback(async () => {
     if (!token) return;
 
+    let newAmount: bigint;
     try {
-      const newAmount = parseUnits(editValue, token.decimals);
-      setCurrentAmount(newAmount);
-      setIsInfinite(newAmount >= INFINITE_THRESHOLD);
-
-      // Persist to storage so confirm uses updated calldata
-      const newData = encodeApproveCalldata(approval.spender, newAmount);
-      await updatePendingTxRequestData(txId, newData);
-
-      setEditing(false);
+      newAmount = parseUnits(editValue, token.decimals);
     } catch {
       // Invalid input — don't save
+      return;
     }
-  }, [token, editValue, approval.spender, txId]);
+
+    const newData = encodeApproveCalldata(approval.spender, newAmount);
+
+    // Persist via the caller-supplied override (batch flows) or the default
+    // single-tx storage path. Only commit local state on success so a failing
+    // save doesn't desync the displayed amount from what's on storage.
+    if (onSaveCalldata) {
+      const result = await onSaveCalldata(newData);
+      if (!result.success) return;
+    } else if (txId) {
+      await updatePendingTxRequestData(txId, newData);
+    } else {
+      return;
+    }
+
+    setCurrentAmount(newAmount);
+    setIsInfinite(newAmount >= INFINITE_THRESHOLD);
+    setEditing(false);
+  }, [token, editValue, approval.spender, txId, onSaveCalldata]);
+
+  // Cached logo data URL — shares the avatar/token-logo image cache so the
+  // approve card paints synchronously on reopen. Must run before any
+  // conditional returns (hook order).
+  const cachedTokenLogo = useCachedAvatarSrc(token?.logoUrl);
 
   const handleCopySpender = async () => {
     try {
@@ -306,9 +337,10 @@ export default function ERC20ApproveDisplay({
 
   if (!token) return null;
 
-  const tokenLogo = token.logoUrl ? (
+  const tokenLogoSrc = cachedTokenLogo || token.logoUrl;
+  const tokenLogo = tokenLogoSrc ? (
     <Image
-      src={token.logoUrl}
+      src={tokenLogoSrc}
       alt={token.symbol}
       boxSize="20px"
       borderRadius="full"

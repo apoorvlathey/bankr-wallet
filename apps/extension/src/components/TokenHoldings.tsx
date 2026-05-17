@@ -23,6 +23,7 @@ import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById, getVisibleChains } from "@/lib/chains";
 import { Decorator } from "@/theme";
 import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
+import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 
 // Module-level cache so navigating away and back to the homepage doesn't flash
 // a skeleton. We seed state from here on mount and refetch in the background.
@@ -242,6 +243,28 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
     () => filterChainId != null ? tokens.filter((t) => t.chainId === filterChainId) : tokens,
     [tokens, filterChainId]
   );
+
+  // Batch the logo-cache lookup across every token + nested staking position
+  // so all rows benefit from the same `ensAvatarImageCache` data-URL cache
+  // ENS avatars use. Renders synchronously on reopen for everything cached.
+  const cachedLogoMap = useCachedAvatarMap(
+    useMemo(() => {
+      const urls: Array<string | null | undefined> = [];
+      for (const t of tokens) {
+        urls.push(t.logoUrl);
+        for (const pos of t.defiPositions ?? []) {
+          for (const a of pos.assets ?? []) urls.push(a.logoUrl);
+          for (const a of pos.rewardAssets ?? []) urls.push(a.logoUrl);
+        }
+      }
+      return urls;
+    }, [tokens]),
+  );
+  const resolveLogo = useCallback(
+    (url: string | undefined): string | undefined =>
+      (url && cachedLogoMap.get(url)) || url,
+    [cachedLogoMap],
+  );
   const filteredDefiPositions = useMemo(
     () => filterChainId != null ? defiPositions.filter((p) => p.chainId === filterChainId) : defiPositions,
     [defiPositions, filterChainId]
@@ -426,7 +449,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                 >
                   {token.logoUrl ? (
                     <Image
-                      src={token.logoUrl}
+                      src={resolveLogo(token.logoUrl)}
                       alt={token.symbol}
                       boxSize="28px"
                       borderRadius="full"
@@ -655,7 +678,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                               flexShrink={0}
                             >
                               {asset.logoUrl ? (
-                                <Image src={asset.logoUrl} alt={asset.symbol} boxSize="13px" fallback={
+                                <Image src={resolveLogo(asset.logoUrl)} alt={asset.symbol} boxSize="13px" fallback={
                                   <Text fontSize="7px" fontWeight="800" color="text.tertiary">{asset.symbol.slice(0, 2).toUpperCase()}</Text>
                                 } />
                               ) : (
@@ -693,7 +716,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                                   flexShrink={0}
                                 >
                                   {asset.logoUrl ? (
-                                    <Image src={asset.logoUrl} alt={asset.symbol} boxSize="13px" fallback={
+                                    <Image src={resolveLogo(asset.logoUrl)} alt={asset.symbol} boxSize="13px" fallback={
                                       <Text fontSize="7px" fontWeight="800" color="text.tertiary">{asset.symbol.slice(0, 2).toUpperCase()}</Text>
                                     } />
                                   ) : (

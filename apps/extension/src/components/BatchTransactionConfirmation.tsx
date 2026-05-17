@@ -34,6 +34,8 @@ import {
   ExternalLinkIcon,
   SettingsIcon,
 } from "@chakra-ui/icons";
+import { parseApproveCalldata } from "@/lib/erc20Approve";
+import ERC20ApproveDisplay from "@/components/ERC20ApproveDisplay";
 import type { PendingBatchTxRequest, ERC5792Call } from "@/chrome/erc5792Types";
 import type { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
@@ -41,6 +43,8 @@ import { getChainConfig } from "@/constants/chainConfig";
 import CalldataDecoder from "@/components/CalldataDecoder";
 import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
+import { isBuiltinCalldataSelector } from "@/lib/clearSigning/builtinDescriptors";
+import { useErc20InlineSummary } from "@/hooks/useErc20InlineSummary";
 import AssetChangesDisplay, { SimulationRevertedBanner } from "@/components/AssetChangesDisplay";
 import { detectAbiEncodingError } from "@/lib/calldataValidation";
 import { MalformedCalldataBanner } from "@/components/MalformedCalldataBanner";
@@ -111,6 +115,17 @@ interface BatchTransactionConfirmationProps {
    */
   onRemoveCall?: (callIndex: number) => void;
   /**
+   * Override for persisting an edited call's calldata. Defaults to sending
+   * `updateCallInPendingBatch` with the current `batchRequest.id`, which is
+   * correct for dapp-initiated batches. The cross-dapp wrapper supplies its
+   * own to route through `updateCallInCrossDappBatch` since cross-dapp entries
+   * live in a different storage key.
+   */
+  onEditCallData?: (
+    callIndex: number,
+    newData: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  /**
    * Cross-dapp batch only: per-call origin/favicon (one entry per call). When
    * set, the call header shows a small favicon + hostname chip so the user
    * knows which dapp each call came from.
@@ -169,6 +184,7 @@ function BatchTransactionConfirmation({
   onBeforeReject,
   onNavigate,
   onRemoveCall,
+  onEditCallData,
   originPerCall,
   titleOverride,
   customConfirmHandler,
@@ -1010,6 +1026,32 @@ function BatchTransactionConfirmation({
           </HStack>
           {calls.map((call, index) => {
             const callOrigin = originPerCall?.[index];
+            // Edit handler for this call slot. The cross-dapp wrapper overrides
+            // via onEditCallData (writes to crossDappBatch storage). Default
+            // path writes to pendingBatchTxRequests; both downstream sign paths
+            // (Bankr ERC-7821 + future EIP-7702, PK/Seed auto-sequential) read
+            // the latest calls[] from storage at sign time, so simulation, gas
+            // estimation, and signing all pick up the edited calldata with no
+            // per-handler plumbing.
+            const editCallData = (newData: string) =>
+              onEditCallData
+                ? onEditCallData(index, newData)
+                : new Promise<{ success: boolean; error?: string }>(
+                    (resolve) => {
+                      chrome.runtime.sendMessage(
+                        {
+                          type: "updateCallInPendingBatch",
+                          bundleId: batchRequest.id,
+                          callIndex: index,
+                          newData,
+                        },
+                        (r) =>
+                          resolve(
+                            r || { success: false, error: "No response" },
+                          ),
+                      );
+                    },
+                  );
             const card = (
               <CallCard
                 call={call}
@@ -1021,6 +1063,7 @@ function BatchTransactionConfirmation({
                 decodedName={decodedFunctionNames[index]}
                 origin={callOrigin?.origin}
                 favicon={callOrigin?.favicon ?? null}
+                onEditCallData={editCallData}
               />
             );
 
@@ -1463,8 +1506,15 @@ function BatchClearSigningSummary({
 }) {
   return (
     <VStack spacing={3} align="stretch">
-      {calls.map((call, i) =>
-        call.data && call.data !== "0x" && call.to ? (
+      {calls.map((call, i) => {
+        if (!call.data || call.data === "0x" || !call.to) return null;
+        // Built-in selectors (ERC-20 transfer, …) are summarized inline on the
+        // CallCard header below. Rendering the full descriptor card here too
+        // would duplicate the same recipient + amount info on every transfer
+        // row. Remote-registry descriptors (Permit2, Uniswap router, etc.) and
+        // anything we don't have a built-in for still render here.
+        if (isBuiltinCalldataSelector(call.data)) return null;
+        return (
           <PerCallClearSigning
             key={i}
             index={i}
@@ -1473,8 +1523,8 @@ function BatchClearSigningSummary({
             data={call.data}
             chainId={chainId}
           />
-        ) : null,
-      )}
+        );
+      })}
     </VStack>
   );
 }
@@ -1539,6 +1589,7 @@ function CallCard({
   decodedName,
   origin,
   favicon,
+  onEditCallData,
 }: {
   call: ERC5792Call;
   index: number;
@@ -1549,6 +1600,9 @@ function CallCard({
   decodedName?: string;
   origin?: string;
   favicon?: string | null;
+  onEditCallData?: (
+    newData: string,
+  ) => Promise<{ success: boolean; error?: string }>;
 }) {
   const originHostname = origin
     ? (() => {
@@ -1576,14 +1630,23 @@ function CallCard({
     return `${eth.toFixed(6)} ${sym}`;
   };
 
-  // Display name: decoded function name, or "Native Transfer" for value-only, or "Call"
-  const displayName = decodedName
-    ? decodedName
-    : !hasCalldata && hasValue
-      ? "Native Transfer"
-      : hasCalldata
-        ? "Contract Call"
-        : "Call";
+  // ERC-20 inline summary — covers transfer ("Send 100 USDC to vitalik.eth")
+  // and approve ("Approve unlimited USDC to uniswap-router"). Hook returns
+  // null for any other calldata, so the existing fallback chain handles
+  // everything else unchanged.
+  const inlineSummary = useErc20InlineSummary(call.to, call.data, chainId);
+
+  // Display name: clear-signing inline summary, then decoded function name,
+  // then "Native Transfer" for value-only, then "Contract Call" / "Call".
+  const displayName = inlineSummary?.text
+    ? inlineSummary.text
+    : decodedName
+      ? decodedName
+      : !hasCalldata && hasValue
+        ? "Native Transfer"
+        : hasCalldata
+          ? "Contract Call"
+          : "Call";
 
   return (
     <Box
@@ -1625,9 +1688,67 @@ function CallCard({
           {index + 1}
         </Badge>
         <VStack spacing={0} align="start" flex={1} minW={0}>
-          <Text fontSize="xs" fontWeight="700" color="text.primary" isTruncated maxW="100%">
-            {displayName}
-          </Text>
+          {/* When we have a full ERC-20 inline summary (amount + symbol)
+              we render an inline row with the token logo dropped between
+              the amount and the symbol — "Send 5 [icon] USDC to abc.eth"
+              or "Approve unlimited [icon] USDC to uniswap-router".
+              Anything else (plain decoded function name, native transfer
+              fallback, summary still loading) renders as a single Text. */}
+          {inlineSummary?.amount && inlineSummary?.symbol ? (
+            <HStack
+              spacing={1}
+              maxW="100%"
+              minW={0}
+              align="center"
+              overflow="hidden"
+            >
+              <Text fontSize="xs" fontWeight="700" color="text.primary" whiteSpace="nowrap">
+                {inlineSummary.prefix}
+                {inlineSummary.amount}
+              </Text>
+              {inlineSummary.logoUrl && (
+                <Image
+                  src={inlineSummary.logoUrl}
+                  alt={inlineSummary.symbol}
+                  boxSize="14px"
+                  borderRadius="full"
+                  flexShrink={0}
+                  fallback={<Box boxSize="14px" borderRadius="full" bg="bg.muted" />}
+                />
+              )}
+              <Text fontSize="xs" fontWeight="700" color="text.primary" whiteSpace="nowrap">
+                {inlineSummary.symbol}
+                {inlineSummary.middle}
+              </Text>
+              {inlineSummary.recipientAvatarSrc && (
+                <Image
+                  src={inlineSummary.recipientAvatarSrc}
+                  alt={inlineSummary.recipient}
+                  boxSize="14px"
+                  // ENS avatars are user-chosen art (often portraits) and read
+                  // best in a circle; Bankr/blockie use a rounded square so
+                  // they stay visually distinct from the round ENS pool.
+                  borderRadius={inlineSummary.recipientAvatarKind === "ens" ? "full" : "sm"}
+                  flexShrink={0}
+                  objectFit="cover"
+                  fallback={
+                    <Box
+                      boxSize="14px"
+                      borderRadius={inlineSummary.recipientAvatarKind === "ens" ? "full" : "sm"}
+                      bg="bg.muted"
+                    />
+                  }
+                />
+              )}
+              <Text fontSize="xs" fontWeight="700" color="text.primary" isTruncated>
+                {inlineSummary.recipient}
+              </Text>
+            </HStack>
+          ) : (
+            <Text fontSize="xs" fontWeight="700" color="text.primary" isTruncated maxW="100%">
+              {displayName}
+            </Text>
+          )}
           {originHostname && (
             <HStack spacing={1} maxW="100%">
               <Image
@@ -1645,7 +1766,12 @@ function CallCard({
             </HStack>
           )}
         </VStack>
-        {call.to && (
+        {/* Right-side contract address is hidden once the inline summary
+            has fully resolved — the row already says e.g. "Send 5 USDC to
+            abc.eth" or "Approve 100 USDC to uniswap-router", so trailing
+            "0x83…2913" of the token contract becomes redundant noise. The
+            address remains visible in the expanded view's `To` row. */}
+        {call.to && !(inlineSummary?.amount && inlineSummary?.symbol) && (
           <Text fontSize="2xs" fontFamily="mono" color="text.tertiary">
             {call.to.slice(0, 6)}...{call.to.slice(-4)}
           </Text>
@@ -1661,117 +1787,387 @@ function CallCard({
 
       {/* Expanded content — explicit borderTop per row (see info card
           rationale). The outer `borderTop` closes the line between the
-          collapsed header and the first expanded row. */}
+          collapsed header and the first expanded row.
+
+          Layout switches based on whether this call has a built-in
+          clear-signing match:
+
+          • Built-in match (ERC-20 transfer, etc.) — the friendly descriptor
+            card IS the primary content. TO + raw decoder + digest get
+            tucked into a single "Calldata" disclosure below, mirroring the
+            single-tx confirmation's collapsed-calldata UX so there's no
+            information overload.
+
+          • No built-in match (Permit2, Uniswap, arbitrary contract calls) —
+            keep the original layout: TO + Value rows always visible, raw
+            decoder + digest expanded. The top BatchClearSigningSummary card
+            already explains intent for remote-registry matches. */}
       <Collapse in={isExpanded} animateOpacity>
-        <VStack
-          spacing={0}
-          align="stretch"
-          borderTop="1px solid"
-          borderColor="border.subtle"
-        >
-          {/* To */}
-          {call.to && (
-            <HStack w="full" py={1.5} px={3} justify="space-between">
-              <Text
-                fontSize="xs"
-                color="text.secondary"
-                fontWeight="700"
-                textTransform="uppercase"
-              >
-                To
-              </Text>
+        {hasCalldata && call.to && isBuiltinCalldataSelector(call.data) ? (
+          <BuiltinExpandedContent
+            call={call}
+            chainId={chainId}
+            config={config}
+            hasValue={!!hasValue}
+            formatValue={formatValue}
+            onFunctionName={onFunctionName}
+            onEditCallData={onEditCallData}
+          />
+        ) : (
+          <VStack
+            spacing={0}
+            align="stretch"
+            borderTop="1px solid"
+            borderColor="border.subtle"
+          >
+            {/* To */}
+            {call.to && (
+              <HStack w="full" py={1.5} px={3} justify="space-between">
+                <Text
+                  fontSize="xs"
+                  color="text.secondary"
+                  fontWeight="700"
+                  textTransform="uppercase"
+                >
+                  To
+                </Text>
+                <HStack
+                  spacing={0.5}
+                  px={1.5}
+                  py={0.5}
+                  bg="surface.raised"
+                  border="1.5px solid"
+                  borderColor="border.default"
+                  borderRadius="md"
+                >
+                  <Text
+                    fontSize="xs"
+                    color="text.primary"
+                    fontFamily="mono"
+                    fontWeight="700"
+                  >
+                    {call.to.slice(0, 6)}...{call.to.slice(-4)}
+                  </Text>
+                  <CopyButton value={call.to} />
+                  {config.explorer && (
+                    <IconButton
+                      aria-label="View on explorer"
+                      icon={<ExternalLinkIcon boxSize="10px" />}
+                      size="xs"
+                      variant="ghost"
+                      minW="18px"
+                      h="18px"
+                      color="text.tertiary"
+                      onClick={() =>
+                        window.open(
+                          `${config.explorer}/address/${call.to}`,
+                          "_blank",
+                        )
+                      }
+                      _hover={{ color: "accent.secondary", bg: "bg.muted" }}
+                    />
+                  )}
+                </HStack>
+              </HStack>
+            )}
+
+            {/* Value */}
+            {hasValue && (
               <HStack
-                spacing={0.5}
-                px={1.5}
-                py={0.5}
-                bg="surface.raised"
-                border="1.5px solid"
-                borderColor="border.default"
-                borderRadius="md"
+                w="full"
+                py={1.5}
+                px={3}
+                justify="space-between"
+                borderTop={call.to ? "1px solid" : undefined}
+                borderColor={call.to ? "border.subtle" : undefined}
               >
                 <Text
                   fontSize="xs"
-                  color="text.primary"
-                  fontFamily="mono"
+                  color="text.secondary"
                   fontWeight="700"
+                  textTransform="uppercase"
                 >
-                  {call.to.slice(0, 6)}...{call.to.slice(-4)}
+                  Value
                 </Text>
-                <CopyButton value={call.to} />
-                {config.explorer && (
-                  <IconButton
-                    aria-label="View on explorer"
-                    icon={<ExternalLinkIcon boxSize="10px" />}
-                    size="xs"
-                    variant="ghost"
-                    minW="18px"
-                    h="18px"
-                    color="text.tertiary"
-                    onClick={() =>
-                      window.open(
-                        `${config.explorer}/address/${call.to}`,
-                        "_blank",
-                      )
-                    }
-                    _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-                  />
-                )}
+                <Text fontSize="xs" fontWeight="700" color="text.primary">
+                  {formatValue(call.value!)}
+                </Text>
               </HStack>
-            </HStack>
-          )}
+            )}
 
-          {/* Value */}
-          {hasValue && (
-            <HStack
-              w="full"
-              py={1.5}
-              px={3}
-              justify="space-between"
-              borderTop={call.to ? "1px solid" : undefined}
-              borderColor={call.to ? "border.subtle" : undefined}
-            >
-              <Text
-                fontSize="xs"
-                color="text.secondary"
-                fontWeight="700"
-                textTransform="uppercase"
+            {/* Calldata — raw decoder. Always rendered when we have calldata
+                so the user can drop down to bytes-level inspection. */}
+            {hasCalldata && call.to && (
+              <Box
+                w="full"
+                px={2}
+                py={1.5}
+                borderTop={call.to || hasValue ? "1px solid" : undefined}
+                borderColor={call.to || hasValue ? "border.subtle" : undefined}
               >
-                Value
-              </Text>
-              <Text fontSize="xs" fontWeight="700" color="text.primary">
-                {formatValue(call.value!)}
-              </Text>
-            </HStack>
-          )}
-
-          {/* Calldata — per-call clear-signing lives at the top of the batch
-              confirmation now (rendered by BatchClearSigningSummary), not
-              inline here. Each collapsed call only shows its raw decoder. */}
-          {hasCalldata && call.to && (
-            <Box
-              w="full"
-              px={2}
-              py={1.5}
-              borderTop={call.to || hasValue ? "1px solid" : undefined}
-              borderColor={call.to || hasValue ? "border.subtle" : undefined}
-            >
-              <CalldataDecoder
-                calldata={call.data!}
-                to={call.to}
-                chainId={chainId}
-                onFunctionName={onFunctionName}
-              />
-            </Box>
-          )}
-          {/* ERC-8213: Calldata Digest */}
-          {hasCalldata && (
-            <Box w="full" px={2} pb={1.5}>
-              <CalldataDigestDisplay calldata={call.data!} />
-            </Box>
-          )}
-        </VStack>
+                <CalldataDecoder
+                  calldata={call.data!}
+                  to={call.to}
+                  chainId={chainId}
+                  onFunctionName={onFunctionName}
+                />
+              </Box>
+            )}
+            {/* ERC-8213: Calldata Digest */}
+            {hasCalldata && (
+              <Box w="full" px={2} pb={1.5}>
+                <CalldataDigestDisplay calldata={call.data!} />
+              </Box>
+            )}
+          </VStack>
+        )}
       </Collapse>
     </Box>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// BuiltinExpandedContent — expanded layout for CallCards whose calldata
+// matches a built-in selector (ERC-20 transfer today; future: approve, swap
+// routers, …). The friendly ClearSigningView card is the headline; TO +
+// Value + raw decoder + digest collapse behind a single "Calldata" disclosure
+// styled exactly like CalldataDecoder.defaultCollapsed so the UX stays
+// consistent with the single-tx confirmation.
+//
+// Modular by selector: anything that satisfies `isBuiltinCalldataSelector`
+// gets this layout for free — no per-selector branching here.
+// ---------------------------------------------------------------------------
+function BuiltinExpandedContent({
+  call,
+  chainId,
+  config,
+  hasValue,
+  formatValue,
+  onFunctionName,
+  onEditCallData,
+}: {
+  call: ERC5792Call;
+  chainId: number;
+  config: ReturnType<typeof getChainConfig>;
+  hasValue: boolean;
+  formatValue: (value: string) => string;
+  onFunctionName: (name: string) => void;
+  onEditCallData?: (
+    newData: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+}) {
+  const { tokens } = useTheme();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  // Built-in editable affordances. Today: ERC-20 approve amount. Add more
+  // selectors (transfer recipient, etc.) by detecting the selector here and
+  // rendering a sibling editor — the edited calldata always flows through the
+  // same onEditCallData → storage mutation → re-simulate/re-estimate path.
+  const approve = useMemo(
+    () => (call.data ? parseApproveCalldata(call.data) : null),
+    [call.data],
+  );
+
+  return (
+    <VStack
+      spacing={0}
+      align="stretch"
+      borderTop="1px solid"
+      borderColor="border.subtle"
+    >
+      {/* Headline — for approve calls reuse the single-tx ERC20ApproveDisplay
+          so the inline pencil-icon editor sits next to the amount (parity
+          with single-tx UX) and we get the same token-header + spender row
+          styling for free. For other built-in selectors (e.g. ERC-20
+          transfer) fall back to the generic descriptor card. */}
+      {call.to && call.data && approve ? (
+        <Box w="full" px={2} py={1.5}>
+          <ERC20ApproveDisplay
+            tokenAddress={call.to}
+            approval={approve}
+            chainId={chainId}
+            onSaveCalldata={onEditCallData}
+          />
+        </Box>
+      ) : call.to && call.data ? (
+        <Box w="full" px={2} py={1.5}>
+          <ClearSigningView
+            kind="calldata"
+            chainId={chainId}
+            to={call.to}
+            calldata={call.data}
+            hideLoadingSkeleton
+          />
+        </Box>
+      ) : null}
+
+      {/* Single disclosure — mirrors CalldataDecoder's collapsed-state look
+          so this row reads as "the same kind of thing you'd expand to see
+          raw bytes" rather than a new component. Toggles TO + Value + raw
+          decoder + digest together. */}
+      <Box w="full" px={2} pb={1.5}>
+        <Box
+          w="full"
+          maxW="100%"
+          bg="surface.raised"
+          border={tokens.borders.thin}
+          borderColor="border.default"
+          borderRadius="lg"
+          boxShadow="card"
+          overflow="hidden"
+        >
+          <HStack
+            as="button"
+            w="full"
+            py={2}
+            px={3}
+            spacing={2}
+            onClick={() => setDetailsOpen((v) => !v)}
+            _hover={{ bg: "bg.muted" }}
+            cursor="pointer"
+            role="button"
+            aria-label={detailsOpen ? "Hide calldata" : "Show calldata"}
+          >
+            <Text
+              fontSize="xs"
+              fontWeight="800"
+              textTransform="uppercase"
+              letterSpacing="wide"
+              color="text.secondary"
+            >
+              Calldata
+            </Text>
+            <Spacer />
+            <Text
+              fontSize="2xs"
+              fontWeight="700"
+              color="text.tertiary"
+              textTransform="uppercase"
+            >
+              {detailsOpen ? "Hide" : "Show"}
+            </Text>
+            <Icon
+              as={detailsOpen ? ChevronUpIcon : ChevronDownIcon}
+              boxSize={3}
+              color="text.tertiary"
+            />
+          </HStack>
+
+          <Collapse in={detailsOpen} animateOpacity>
+            <VStack
+              spacing={0}
+              align="stretch"
+              borderTop={tokens.borders.thin}
+              borderColor="border.default"
+            >
+              {/* To */}
+              {call.to && (
+                <HStack w="full" py={1.5} px={3} justify="space-between">
+                  <Text
+                    fontSize="xs"
+                    color="text.secondary"
+                    fontWeight="700"
+                    textTransform="uppercase"
+                  >
+                    To
+                  </Text>
+                  <HStack
+                    spacing={0.5}
+                    px={1.5}
+                    py={0.5}
+                    bg="surface.raised"
+                    border="1.5px solid"
+                    borderColor="border.default"
+                    borderRadius="md"
+                  >
+                    <Text
+                      fontSize="xs"
+                      color="text.primary"
+                      fontFamily="mono"
+                      fontWeight="700"
+                    >
+                      {call.to.slice(0, 6)}...{call.to.slice(-4)}
+                    </Text>
+                    <CopyButton value={call.to} />
+                    {config.explorer && (
+                      <IconButton
+                        aria-label="View on explorer"
+                        icon={<ExternalLinkIcon boxSize="10px" />}
+                        size="xs"
+                        variant="ghost"
+                        minW="18px"
+                        h="18px"
+                        color="text.tertiary"
+                        onClick={() =>
+                          window.open(
+                            `${config.explorer}/address/${call.to}`,
+                            "_blank",
+                          )
+                        }
+                        _hover={{ color: "accent.secondary", bg: "bg.muted" }}
+                      />
+                    )}
+                  </HStack>
+                </HStack>
+              )}
+
+              {/* Value — only when non-zero. Built-in selectors are calldata-
+                  driven so this is uncommon (transfer never carries ETH),
+                  but kept for completeness when future selectors do. */}
+              {hasValue && (
+                <HStack
+                  w="full"
+                  py={1.5}
+                  px={3}
+                  justify="space-between"
+                  borderTop={call.to ? "1px solid" : undefined}
+                  borderColor={call.to ? "border.subtle" : undefined}
+                >
+                  <Text
+                    fontSize="xs"
+                    color="text.secondary"
+                    fontWeight="700"
+                    textTransform="uppercase"
+                  >
+                    Value
+                  </Text>
+                  <Text fontSize="xs" fontWeight="700" color="text.primary">
+                    {formatValue(call.value!)}
+                  </Text>
+                </HStack>
+              )}
+
+              {/* Raw decoder — DECODED / RAW tabs, always open inside this
+                  parent disclosure (we own the show/hide here, so passing
+                  defaultCollapsed would create a redundant double-toggle). */}
+              {call.to && call.data && (
+                <Box
+                  w="full"
+                  px={2}
+                  py={1.5}
+                  borderTop="1px solid"
+                  borderColor="border.subtle"
+                >
+                  <CalldataDecoder
+                    calldata={call.data}
+                    to={call.to}
+                    chainId={chainId}
+                    onFunctionName={onFunctionName}
+                  />
+                </Box>
+              )}
+
+              {/* ERC-8213 calldata digest. */}
+              {call.data && (
+                <Box w="full" px={2} pb={1.5}>
+                  <CalldataDigestDisplay calldata={call.data} />
+                </Box>
+              )}
+            </VStack>
+          </Collapse>
+        </Box>
+      </Box>
+    </VStack>
   );
 }
 

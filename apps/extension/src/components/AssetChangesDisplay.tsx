@@ -25,6 +25,7 @@ import {
   WarningTwoIcon,
 } from "@chakra-ui/icons";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
+import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import type {
   SimulationResult,
   AssetChange,
@@ -89,6 +90,13 @@ export function SimulationRevertedBanner({
 }
 
 function TokenIcon({ change }: { change: AssetChange }) {
+  // Pipe the logo URL through the OffscreenCanvas-re-encoded data-URL cache
+  // shared with ENS avatars (`ensAvatarImageCache`). After first paint
+  // anywhere in the UI, subsequent opens render the icon synchronously
+  // from chrome.storage — no network roundtrip, no flash of fallback text.
+  // Same mechanism the batch inline summary uses for token logos.
+  const cachedLogo = useCachedAvatarSrc(change.logoUrl);
+  const src = cachedLogo || change.logoUrl;
   return (
     <Box
       bg="bg.muted"
@@ -101,9 +109,9 @@ function TokenIcon({ change }: { change: AssetChange }) {
       justifyContent="center"
       overflow="hidden"
     >
-      {change.logoUrl ? (
+      {src ? (
         <Image
-          src={change.logoUrl}
+          src={src}
           alt={change.symbol}
           boxSize="24px"
           borderRadius="full"

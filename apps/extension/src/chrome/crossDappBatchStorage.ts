@@ -86,6 +86,34 @@ export async function setCrossDappBatch(batch: CrossDappBatch): Promise<void> {
   await updateBadge();
 }
 
+/**
+ * Replace one entry's `tx.data` field in the cross-dapp batch. Mirrors
+ * `updateCallInPendingBatchTxRequest` for dapp-initiated batches — used by the
+ * batch confirmation UI when the user edits a built-in field (e.g. ERC-20
+ * approve amount). The cross-dapp confirm handler reads `batch.entries[i].tx`
+ * at sign time, so persisting here is enough; the wrapper's storage listener
+ * re-renders with fresh entries and simulation/gas re-run automatically.
+ */
+export async function updateEntryDataInCrossDappBatch(
+  txId: string,
+  newData: string,
+): Promise<{ success: boolean; error?: string }> {
+  const batch = await getCrossDappBatch();
+  if (!batch) return { success: false, error: "No active batch" };
+
+  const idx = batch.entries.findIndex((e) => e.txId === txId);
+  if (idx === -1) return { success: false, error: "Entry not found in batch" };
+  if (!/^0x[0-9a-fA-F]*$/.test(newData)) {
+    return { success: false, error: "Invalid calldata hex" };
+  }
+
+  const nextEntries = batch.entries.map((e, i) =>
+    i === idx ? { ...e, tx: { ...e.tx, data: newData } } : e,
+  );
+  await setCrossDappBatch({ ...batch, entries: nextEntries });
+  return { success: true };
+}
+
 export async function clearCrossDappBatch(): Promise<void> {
   await chrome.storage.local.remove(STORAGE_KEY);
   const { updateBadge } = await import("./pendingTxStorage");

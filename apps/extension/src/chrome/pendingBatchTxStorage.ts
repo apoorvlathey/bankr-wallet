@@ -39,6 +39,48 @@ export async function getPendingBatchTxRequestById(
 }
 
 /**
+ * Replace one call's `data` field in a pending batch request. Used by the
+ * batch confirmation UI when the user edits a built-in field (e.g. an ERC-20
+ * approve amount) — we re-encode that call's calldata and persist it back so
+ * the downstream sign paths (Bankr ERC-7821, PK/Seed auto-sequential, and any
+ * future EIP-7702 atomic path) read the edited value at sign time without any
+ * per-handler plumbing. Simulation + gas re-run automatically because the
+ * popup's storage listener re-pushes the updated PendingBatchTxRequest into
+ * BatchTransactionConfirmation, whose synthetic batch tx is memoized on
+ * `params.calls`.
+ */
+export async function updateCallInPendingBatchTxRequest(
+  bundleId: string,
+  callIndex: number,
+  newData: string,
+): Promise<{ success: boolean; error?: string }> {
+  const requests = await getPendingBatchTxRequests();
+  const idx = requests.findIndex((r) => r.id === bundleId);
+  if (idx === -1) return { success: false, error: "Batch not found" };
+
+  const target = requests[idx];
+  const calls = target.params.calls ?? [];
+  if (callIndex < 0 || callIndex >= calls.length) {
+    return { success: false, error: "Call index out of range" };
+  }
+  if (!/^0x[0-9a-fA-F]*$/.test(newData)) {
+    return { success: false, error: "Invalid calldata hex" };
+  }
+
+  const nextCalls = calls.map((c, i) =>
+    i === callIndex ? { ...c, data: newData as `0x${string}` } : c,
+  );
+  const updated: PendingBatchTxRequest = {
+    ...target,
+    params: { ...target.params, calls: nextCalls },
+  };
+  const next = [...requests];
+  next[idx] = updated;
+  await chrome.storage.local.set({ [STORAGE_KEY]: next });
+  return { success: true };
+}
+
+/**
  * Remove a single call from a pending batch request's `params.calls` array.
  * Returns the remaining call count (0 means the caller should drop the bundle
  * entirely — an empty batch is meaningless and we never want to ship one).

@@ -39,6 +39,7 @@ import {
   getCrossDappBatch,
   setCrossDappBatch,
   clearCrossDappBatch,
+  updateEntryDataInCrossDappBatch,
   type CrossDappBatch,
   type CrossDappBatchEntry,
 } from "./crossDappBatchStorage";
@@ -269,6 +270,25 @@ export async function handleAddCallsToCrossDappBatch(
     .catch(() => {});
 
   return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Edit a single entry's calldata in the cross-dapp batch
+// ---------------------------------------------------------------------------
+
+export async function handleUpdateCallInCrossDappBatch(
+  txId: string,
+  newData: string,
+): Promise<{ success: boolean; error?: string }> {
+  const result = await updateEntryDataInCrossDappBatch(txId, newData);
+  if (result.success) {
+    // Wake any other popup/sidepanel context listening on this batch so they
+    // re-render with the edited entry (mirrors the remove/confirm fan-out).
+    chrome.runtime
+      .sendMessage({ type: "crossDappBatchUpdated" })
+      .catch(() => {});
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------

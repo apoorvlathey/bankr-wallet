@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, memo } from "react";
+import { useState, useEffect, useMemo, useRef, memo } from "react";
 import {
   Box,
   VStack,
@@ -22,6 +22,7 @@ import TxDetailModal from "@/components/TxDetailModal";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import ChainIcon from "@/components/ChainIcon";
 import { useIconChipBg, useTheme } from "@/theme";
+import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 
 interface TxStatusListProps {
   maxItems?: number;
@@ -133,6 +134,22 @@ function TxStatusList({
   const displayItems = isExpanded ? history : history.slice(0, maxItems);
   const hasMore = history.length > maxItems;
   const dateGroups = groupByDate(displayItems);
+
+  // Batched logo cache for swap-history rows. Pre-warms the shared
+  // ENS/token-logo data-URL cache so every row's pair of icons paints
+  // synchronously from chrome.storage on reopen.
+  const cachedLogoMap = useCachedAvatarMap(
+    useMemo(() => {
+      const urls: Array<string | null | undefined> = [];
+      for (const tx of displayItems) {
+        if (tx.swapMeta?.sellTokenLogo) urls.push(tx.swapMeta.sellTokenLogo);
+        if (tx.swapMeta?.buyTokenLogo) urls.push(tx.swapMeta.buyTokenLogo);
+      }
+      return urls;
+    }, [displayItems]),
+  );
+  const resolveLogo = (url: string | undefined): string | undefined =>
+    (url && cachedLogoMap.get(url)) || url;
 
   const modal = selectedTx && (
     <TxDetailModal
@@ -467,7 +484,7 @@ function TxStatusItem({
               zIndex={1}
             >
               {tx.swapMeta.sellTokenLogo ? (
-                <Image src={tx.swapMeta.sellTokenLogo} alt={tx.swapMeta.sellTokenSymbol} boxSize="20px" />
+                <Image src={resolveLogo(tx.swapMeta.sellTokenLogo)} alt={tx.swapMeta.sellTokenSymbol} boxSize="20px" />
               ) : (
                 <Text fontSize="2xs" fontWeight="700">{tx.swapMeta.sellTokenSymbol.slice(0, 2)}</Text>
               )}
@@ -490,7 +507,7 @@ function TxStatusItem({
               zIndex={2}
             >
               {tx.swapMeta.buyTokenLogo ? (
-                <Image src={tx.swapMeta.buyTokenLogo} alt={tx.swapMeta.buyTokenSymbol} boxSize="20px" />
+                <Image src={resolveLogo(tx.swapMeta.buyTokenLogo)} alt={tx.swapMeta.buyTokenSymbol} boxSize="20px" />
               ) : (
                 <Text fontSize="2xs" fontWeight="700">{tx.swapMeta.buyTokenSymbol.slice(0, 2)}</Text>
               )}

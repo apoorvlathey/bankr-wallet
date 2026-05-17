@@ -333,9 +333,15 @@ When working on features, refer to these docs:
 
 ### Reuse Over Duplication
 
+**Default to reusing existing code over writing parallel implementations.** Before building a new component, hook, utility, storage helper, or handler, search the codebase for something that already does ~80% of what's needed. If you find a near-match, prefer making it slightly more flexible (add an optional override prop, accept a callback, extract a sub-component) over duplicating its logic in a sibling.
+
+- **Search first, build second.** Use `Grep` / `find` for keywords (component names, hook prefixes, function names) before writing anything new. Check `components/`, `hooks/`, `lib/`, `chrome/`. If you're unsure whether a thing exists, spend the 30 seconds to look.
+- **Extend existing components via optional override props instead of forking them.** When an existing component does what you need but writes to the wrong storage / fires the wrong action, add an optional callback prop (e.g., `onSaveCalldata?: (data) => Promise<...>`) that — when set — replaces the default behavior. Callers that don't supply it get the legacy behavior unchanged. Reference: `ERC20ApproveDisplay` accepts an `onSaveCalldata` override so the same component renders the single-tx approve UI AND the per-call approve editor inside batches.
+- **Reuse existing React components** before creating new ones. Check `components/` for existing UI patterns. If you catch yourself reimplementing token-info fetching, an edit/save toggle, a "copy + explorer" address pill, an avatar resolver, etc., stop — those primitives already exist (`CopyButton`, `useCachedAvatarSrc`, `useCachedAvatarMap`, `ERC20ApproveDisplay`, `TokenAmount`, `AddressValue`, `useThemedToast`, `useStripTokens`, etc.).
 - **Extract shared utilities** when the same logic appears in 2+ files. See `cryptoUtils.ts` for the pattern (shared constants + functions used by both `crypto.ts` and `vaultCrypto.ts`).
-- **Reuse existing React components** before creating new ones. Check `components/` for existing UI patterns.
+- **Centralize external lookups behind a single cached helper.** When more than one surface fetches the same external resource, build a shared cache helper rather than letting each surface fire its own request. Reference: `getEthShLabels()` (`lib/ethShLabelsCache.ts`) wraps eth.sh label fetches with memory + in-flight dedup + chrome.storage TTL. Same pattern for token metadata (`fetchTokenInfo`) and token logos (`getCachedTokenLogo`).
 - **Use dependency injection** to avoid circular imports (e.g., `tryRestoreSession(unlockFn)` in `sessionCache.ts` takes a callback instead of importing `authHandlers.ts` directly).
+- **Smell check before merging:** if the new code reads two `useState`s + a `useEffect` that already appear verbatim in a sibling file, you're forking instead of reusing. Refactor the sibling to be more general and consume it.
 
 ### Naming & Organization
 

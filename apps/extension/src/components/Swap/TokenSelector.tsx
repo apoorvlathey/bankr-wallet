@@ -18,6 +18,7 @@ import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { truncateAddress } from "@/lib/addressUtils";
 import { formatTokenBalance } from "@/lib/tokenFormatUtils";
+import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
@@ -249,6 +250,22 @@ export default function TokenSelector({
 
   const visibleRest = filteredRest.slice(0, visibleCount);
 
+  // Batched logo cache — drops a single hook call instead of one per row, and
+  // gives every list row (selected token chip, holdings, popular, full list,
+  // resolved custom token) the same data-URL cache used by the rest of the UI.
+  const cachedLogoMap = useCachedAvatarMap(
+    useMemo(() => {
+      const urls: Array<string | null | undefined> = [];
+      if (selectedToken?.logoUrl) urls.push(selectedToken.logoUrl);
+      for (const h of holdings) urls.push(h.logoUrl);
+      for (const t of filteredRest) urls.push(t.logoURI);
+      if (resolvedCustomToken?.logoUrl) urls.push(resolvedCustomToken.logoUrl);
+      return urls;
+    }, [selectedToken, holdings, filteredRest, resolvedCustomToken]),
+  );
+  const resolveLogo = (url: string | undefined): string | undefined =>
+    (url && cachedLogoMap.get(url)) || url;
+
   // Popular tokens: ordered per-chain list, matched against holdings + token
   // list, with native token pinned to our canonical icon.
   const popularTokens = useMemo(() => {
@@ -361,7 +378,7 @@ export default function TokenSelector({
           {selectedToken &&
             (selectedToken.logoUrl ? (
               <Image
-                src={selectedToken.logoUrl}
+                src={resolveLogo(selectedToken.logoUrl)}
                 alt={selectedToken.symbol}
                 boxSize="20px"
                 borderRadius="full"
@@ -454,7 +471,7 @@ export default function TokenSelector({
                       >
                         {t.logoUrl ? (
                           <Image
-                            src={t.logoUrl}
+                            src={resolveLogo(t.logoUrl)}
                             alt={t.symbol}
                             boxSize="16px"
                             borderRadius="full"
@@ -534,7 +551,7 @@ export default function TokenSelector({
                   >
                     {resolvedCustomToken.logoUrl ? (
                       <Image
-                        src={resolvedCustomToken.logoUrl}
+                        src={resolveLogo(resolvedCustomToken.logoUrl)}
                         alt={resolvedCustomToken.symbol}
                         boxSize="20px"
                         borderRadius="full"
@@ -618,7 +635,7 @@ export default function TokenSelector({
                       >
                         {h.logoUrl ? (
                           <Image
-                            src={h.logoUrl}
+                            src={resolveLogo(h.logoUrl)}
                             alt={h.symbol}
                             boxSize="20px"
                             borderRadius="full"
@@ -707,7 +724,7 @@ export default function TokenSelector({
                 >
                   {token.logoURI ? (
                     <Image
-                      src={token.logoURI}
+                      src={resolveLogo(token.logoURI)}
                       alt={token.symbol}
                       boxSize="20px"
                       borderRadius="full"

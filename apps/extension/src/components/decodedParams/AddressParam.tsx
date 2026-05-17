@@ -4,7 +4,7 @@ import { ExternalLinkIcon } from "@chakra-ui/icons";
 import { CopyButton } from "@/components/CopyButton";
 import { resolveAddressToName, getNameAvatar } from "@/lib/ensUtils";
 import { getChainConfig } from "@/constants/chainConfig";
-import { ethShLabelsUrl } from "@/constants/externalUrls";
+import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 
 interface AddressParamProps {
@@ -35,13 +35,10 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
       }
     });
 
-    // eth.sh labels
-    fetch(ethShLabelsUrl(address, chainId))
-      .then((r) => (r.ok ? r.json() : []))
-      .then((l) => {
-        if (Array.isArray(l) && l.length > 0) setLabels(l);
-      })
-      .catch(() => {});
+    // eth.sh labels (shared cache + in-flight dedup across all surfaces)
+    getEthShLabels(address, chainId).then((l) => {
+      if (l.length > 0) setLabels(l);
+    });
   }, [address, chainId]);
 
   const truncatedAddr = `${address.slice(0, 8)}...${address.slice(-6)}`;

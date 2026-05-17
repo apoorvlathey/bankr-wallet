@@ -12,7 +12,7 @@ import {
 import { CopyIcon, CheckIcon, ExternalLinkIcon, ChevronDownIcon } from "@chakra-ui/icons";
 
 import { getChainConfig } from "@/constants/chainConfig";
-import { ethShLabelsUrl } from "@/constants/externalUrls";
+import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { useStripTokens, useTheme } from "@/theme";
 
 interface TypedDataDisplayProps {
@@ -75,12 +75,14 @@ function AddressValue({ address, chainId }: { address: string; chainId?: number 
     // chain-scoped and defaulting to mainnet would mislabel addresses on
     // other chains (e.g. Permit2 typed-data signed on Base).
     if (!chainId) return;
-    fetch(ethShLabelsUrl(address, chainId))
-      .then((r) => (r.ok ? r.json() : []))
-      .then((l) => {
-        if (Array.isArray(l) && l.length > 0) setLabel(l[0]);
-      })
-      .catch(() => {});
+    let cancelled = false;
+    getEthShLabels(address, chainId).then((labels) => {
+      if (cancelled) return;
+      if (labels.length > 0) setLabel(labels[0]);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [address, chainId]);
 
   return (

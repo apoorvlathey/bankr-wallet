@@ -1100,6 +1100,26 @@ export async function handleRemoveCallFromPendingBatch(
   return { success: true };
 }
 
+/**
+ * Replace a single call's calldata in a pending batch. Used by the
+ * confirmation UI when the user edits an ERC-20 approve amount (and any
+ * future built-in editable field). The signing handlers
+ * (`handleConfirmBatchTransaction` for Bankr ERC-7821 + future EIP-7702,
+ * `handleConfirmBatchTransactionPK` for PK/Seed auto-sequential) re-fetch the
+ * pending batch from storage at sign time, so the edited calldata is picked
+ * up without any per-handler plumbing.
+ */
+export async function handleUpdateCallInPendingBatch(
+  bundleId: string,
+  callIndex: number,
+  newData: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { updateCallInPendingBatchTxRequest } = await import(
+    "./pendingBatchTxStorage"
+  );
+  return updateCallInPendingBatchTxRequest(bundleId, callIndex, newData);
+}
+
 // ---------------------------------------------------------------------------
 // wallet_getCallsStatus
 // ---------------------------------------------------------------------------

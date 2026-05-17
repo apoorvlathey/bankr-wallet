@@ -144,6 +144,34 @@ function CrossDappBatchConfirmation({
     );
   };
 
+  // Edit a single entry's calldata (e.g. user updates an approve amount on a
+  // built-in approve CallCard). Routes through a dedicated bg handler since
+  // cross-dapp entries live in their own storage key, not pendingBatchTxRequests.
+  // On success, the storage listener re-renders this wrapper with fresh entries
+  // and the inner BatchTransactionConfirmation re-derives its synthetic batch
+  // so simulation + gas + descriptor card all reflect the edit.
+  const handleEditCallData = (
+    callIndex: number,
+    newData: string,
+  ): Promise<{ success: boolean; error?: string }> =>
+    new Promise((resolve) => {
+      const entry = batch.entries[callIndex];
+      if (!entry) {
+        resolve({ success: false, error: "Entry not found" });
+        return;
+      }
+      chrome.runtime.sendMessage(
+        {
+          type: "updateCallInCrossDappBatch",
+          txId: entry.txId,
+          newData,
+        },
+        (result: { success: boolean; error?: string } | undefined) => {
+          resolve(result || { success: false, error: "No response" });
+        },
+      );
+    });
+
   return (
     <BatchTransactionConfirmation
       batchRequest={syntheticBatchRequest}
@@ -159,6 +187,7 @@ function CrossDappBatchConfirmation({
       onBeforeReject={onBeforeReject}
       onNavigate={onNavigate}
       onRemoveCall={handleRemoveCall}
+      onEditCallData={handleEditCallData}
       originPerCall={originPerCall}
       titleOverride={`Cross-Dapp Batch (${batch.entries.length} call${batch.entries.length === 1 ? "" : "s"})`}
       customConfirmHandler={handleCustomConfirm}

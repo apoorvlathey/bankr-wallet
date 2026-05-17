@@ -30,7 +30,7 @@ import { getChainConfig } from "@/constants/chainConfig";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import { formatAbsoluteTimestamp } from "@/lib/timeFormatUtils";
-import { ethShLabelsUrl } from "@/constants/externalUrls";
+import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 import type { Account } from "@/chrome/types";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
@@ -39,6 +39,7 @@ import { matchCalldataFormat, matchEip712Format, verifyDeployment } from "@/lib/
 import { applyFormat, type RenderedField, type RenderedValue } from "@/lib/clearSigning/applyFormat";
 import { decodeCalldataForDescriptor } from "@/lib/clearSigning/decodeForDescriptor";
 import { resolveDescriptor } from "@/lib/clearSigning/resolver";
+import { getBuiltinCalldataDescriptor } from "@/lib/clearSigning/builtinDescriptors";
 import type { Erc7730Descriptor } from "@/lib/clearSigning/types";
 
 interface CalldataProps {
@@ -106,7 +107,7 @@ export function ClearSigningView(props: ClearSigningViewProps) {
 
     (async () => {
       console.log(`${tag} → resolving descriptor…`);
-      const { descriptor, enabled } = await resolveDescriptor({
+      const { descriptor: remoteDescriptor, enabled } = await resolveDescriptor({
         chainId,
         address: lookupAddress,
         kind,
@@ -119,47 +120,45 @@ export function ClearSigningView(props: ClearSigningViewProps) {
         onResolved?.(false);
         return;
       }
-      if (!descriptor) {
-        console.log(`${tag} ✗ no descriptor returned (404 / not in registry)`);
-        setLoading(false);
-        onResolved?.(false);
-        return;
-      }
-      console.log(`${tag} ✓ descriptor loaded`, descriptor);
 
-      // Validate the deployment context actually covers this (chainId, address).
-      if (!verifyDeployment(descriptor, kind, chainId, lookupAddress)) {
-        const deployments =
-          kind === "calldata"
-            ? descriptor.context?.contract?.deployments
-            : descriptor.context?.eip712?.deployments;
-        console.log(
-          `${tag} ✗ deployment mismatch — descriptor lists`,
-          deployments,
-          `but we asked for chain ${chainId} / ${lookupAddress}`,
-        );
-        setLoading(false);
-        onResolved?.(false);
-        return;
+      // Try the remote descriptor first; fall back to a built-in generic
+      // descriptor (ERC-20 transfer, etc.) when there's no remote entry or
+      // the remote entry doesn't cover this selector. Built-ins are only
+      // available for calldata, not eip712.
+      let descriptor: Erc7730Descriptor | null = remoteDescriptor;
+      let matched =
+        descriptor &&
+        verifyDeployment(descriptor, kind, chainId, lookupAddress)
+          ? kind === "calldata"
+            ? matchCalldataFormat(descriptor, props.calldata)
+            : matchEip712Format(descriptor, props.typedData)
+          : null;
+
+      if (descriptor) {
+        console.log(`${tag} ✓ remote descriptor loaded`, descriptor);
+      } else {
+        console.log(`${tag} ✗ no remote descriptor (404 / not in registry)`);
       }
 
-      const matched =
-        kind === "calldata"
-          ? matchCalldataFormat(descriptor, props.calldata)
-          : matchEip712Format(descriptor, props.typedData);
+      if (!matched && kind === "calldata") {
+        const builtin = getBuiltinCalldataDescriptor(chainId, lookupAddress, props.calldata);
+        if (builtin) {
+          const builtinMatch = matchCalldataFormat(builtin, props.calldata);
+          if (builtinMatch) {
+            console.log(`${tag} ✓ matched built-in descriptor`, builtinMatch.formatKey);
+            descriptor = builtin;
+            matched = builtinMatch;
+          }
+        }
+      }
 
-      if (!matched) {
-        const formatKeys = Object.keys(descriptor.display?.formats || {});
+      if (!descriptor || !matched) {
         if (kind === "calldata") {
           const selector = props.calldata.slice(0, 10).toLowerCase();
-          console.log(
-            `${tag} ✗ no format matches selector ${selector}. Descriptor has formats:`,
-            formatKeys,
-          );
+          console.log(`${tag} ✗ no descriptor matches selector ${selector}`);
         } else {
           console.log(
-            `${tag} ✗ no format matches primaryType "${props.typedData.primaryType}". Descriptor has formats:`,
-            formatKeys,
+            `${tag} ✗ no descriptor matches primaryType "${props.typedData.primaryType}"`,
           );
         }
         setLoading(false);
@@ -456,13 +455,10 @@ function AddressInline({ address, chainId }: { address: string; chainId: number 
     if (!address?.startsWith("0x")) return;
     if (account) return;
     let cancelled = false;
-    fetch(ethShLabelsUrl(address, chainId))
-      .then((r) => (r.ok ? r.json() : []))
-      .then((l) => {
-        if (cancelled) return;
-        if (Array.isArray(l) && l.length > 0) setExternalLabel(l[0]);
-      })
-      .catch(() => {});
+    getEthShLabels(address, chainId).then((labels) => {
+      if (cancelled) return;
+      if (labels.length > 0) setExternalLabel(labels[0]);
+    });
     return () => {
       cancelled = true;
     };
@@ -670,10 +666,15 @@ function AmountText({
 }
 
 function TokenLogo({ src, alt }: { src?: string; alt: string }) {
-  if (!src) return null;
+  // Same data-URL cache used by ENS avatars + batch inline summary. After
+  // first paint the logo renders synchronously from chrome.storage on every
+  // reopen — no network roundtrip.
+  const cached = useCachedAvatarSrc(src);
+  const resolved = cached || src;
+  if (!resolved) return null;
   return (
     <Image
-      src={src}
+      src={resolved}
       alt={alt}
       boxSize="20px"
       borderRadius="full"

@@ -19,6 +19,7 @@ import { WALLETCHAN_ICON_URL } from "@/constants/externalUrls";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { truncateAddress } from "@/lib/addressUtils";
 import { formatTokenBalance } from "@/lib/tokenFormatUtils";
+import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 
 /** Canonical WCHAN entry on Base. Injected into the popular-tokens list so
  *  WCHAN reliably appears as a quick-select even if the swap API's token list
@@ -194,6 +195,20 @@ export default function BuyTokenSelector({
 
   const visibleRest = filteredRest.slice(0, visibleCount);
 
+  // Batched logo cache — shares the avatar/token-logo data-URL cache so every
+  // row paints synchronously from chrome.storage on reopen.
+  const cachedLogoMap = useCachedAvatarMap(
+    useMemo(() => {
+      const urls: Array<string | null | undefined> = [];
+      if (selectedToken?.logoURI) urls.push(selectedToken.logoURI);
+      for (const h of holdings) urls.push(h.logoUrl);
+      for (const t of filteredRest) urls.push(t.logoURI);
+      return urls;
+    }, [selectedToken, holdings, filteredRest]),
+  );
+  const resolveLogo = (url: string | undefined): string | undefined =>
+    (url && cachedLogoMap.get(url)) || url;
+
   // Popular tokens: ordered per-chain list, matched against holdings + token list
   const popularTokens = useMemo(() => {
     if (searchTerm) return [];
@@ -304,7 +319,7 @@ export default function BuyTokenSelector({
           {selectedToken &&
             (selectedToken.logoURI ? (
               <Image
-                src={selectedToken.logoURI}
+                src={resolveLogo(selectedToken.logoURI)}
                 alt={selectedToken.symbol}
                 boxSize="20px"
                 borderRadius="full"
@@ -397,7 +412,7 @@ export default function BuyTokenSelector({
                     >
                       {t.logoURI ? (
                         <Image
-                          src={t.logoURI}
+                          src={resolveLogo(t.logoURI)}
                           alt={t.symbol}
                           boxSize="16px"
                           borderRadius="full"
@@ -468,7 +483,7 @@ export default function BuyTokenSelector({
                     >
                       {h.logoUrl ? (
                         <Image
-                          src={h.logoUrl}
+                          src={resolveLogo(h.logoUrl)}
                           alt={h.symbol}
                           boxSize="20px"
                           borderRadius="full"
@@ -553,7 +568,7 @@ export default function BuyTokenSelector({
                 >
                   {token.logoURI ? (
                     <Image
-                      src={token.logoURI}
+                      src={resolveLogo(token.logoURI)}
                       alt={token.symbol}
                       boxSize="20px"
                       borderRadius="full"

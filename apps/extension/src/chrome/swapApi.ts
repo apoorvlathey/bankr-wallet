@@ -183,8 +183,35 @@ export async function fetchSwapQuote(
 }
 
 // ---------------------------------------------------------------------------
-// Token Info (onchain multicall)
+// Token Info (onchain multicall + persistent cache)
+//
+// Symbol/decimals/name are part of an ERC-20's deployed code — they never
+// change for a given contract. We cache aggressively in chrome.storage.local
+// so the second time the user sees the same token (anywhere in the UI) we
+// skip 3 RPC roundtrips and render the logo instantly.
+//
+// In-memory dedup handles the burst case: when a batch tx mounts 5 calls
+// against the same token, all 5 `useErc20TransferSummary` hooks fire
+// `fetchTokenInfo` concurrently — without dedup we'd make 15 RPC reads on a
+// cold cache. With dedup it's exactly one.
 // ---------------------------------------------------------------------------
+
+const TOKEN_INFO_CACHE_PREFIX = "tokenInfo:";
+// 30 days — pure safety net. Symbol/decimals don't change; the TTL exists
+// only so we eventually re-fetch the `name` field which dapps very
+// occasionally update via proxy upgrades.
+const TOKEN_INFO_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
+
+interface CachedTokenInfo {
+  data: TokenInfo;
+  fetchedAt: number;
+}
+
+function tokenInfoCacheKey(chainId: number, address: string): string {
+  return `${TOKEN_INFO_CACHE_PREFIX}${chainId}:${address.toLowerCase()}`;
+}
+
+const inflightTokenInfo = new Map<string, Promise<TokenInfo | null>>();
 
 export async function fetchTokenInfo(
   tokenAddress: string,
@@ -201,6 +228,39 @@ export async function fetchTokenInfo(
     return { name: "Ether", symbol: "ETH", decimals: 18 };
   }
 
+  const cacheKey = tokenInfoCacheKey(chainId, tokenAddress);
+
+  // chrome.storage cache hit — this is the hot path we're optimizing for.
+  const stored = await chrome.storage.local.get(cacheKey);
+  const cached = stored[cacheKey] as CachedTokenInfo | undefined;
+  if (cached && Date.now() - cached.fetchedAt < TOKEN_INFO_CACHE_TTL) {
+    return cached.data;
+  }
+
+  // In-flight dedup — coalesce concurrent misses for the same token.
+  const inflight = inflightTokenInfo.get(cacheKey);
+  if (inflight) return inflight;
+
+  const promise = fetchTokenInfoOnchain(tokenAddress, chainId)
+    .then(async (data) => {
+      if (data) {
+        await chrome.storage.local.set({
+          [cacheKey]: { data, fetchedAt: Date.now() } satisfies CachedTokenInfo,
+        });
+      }
+      return data;
+    })
+    .finally(() => {
+      inflightTokenInfo.delete(cacheKey);
+    });
+  inflightTokenInfo.set(cacheKey, promise);
+  return promise;
+}
+
+async function fetchTokenInfoOnchain(
+  tokenAddress: string,
+  chainId: number,
+): Promise<TokenInfo | null> {
   const rpcUrl = await getRpcUrl(chainId);
   if (!rpcUrl) return null;
 
@@ -337,6 +397,75 @@ function mergePinnedTokens(
     merged.push(t);
   }
   return merged;
+}
+
+// ---------------------------------------------------------------------------
+// Per-token logo URL cache.
+//
+// Most renders only need the logo URL for one specific token, not the whole
+// list. Shipping the full 200KB+ swap-list payload over chrome.runtime per
+// render (×5 for a batch) was the dominant cold-start cost — even though the
+// list itself is cached, the IPC payload isn't free. This cache resolves a
+// single (chainId, address) → logoUrl in a single small message.
+//
+// Token contracts don't change their canonical logo, so we hold the URL
+// indefinitely (30-day TTL is a courtesy refresh for occasional brand updates).
+// Populated lazily on miss from the swap list; the cache itself is what
+// makes `useErc20TransferSummary` paint instantly on every reopen.
+// ---------------------------------------------------------------------------
+
+const TOKEN_LOGO_CACHE_PREFIX = "tokenLogo:";
+const TOKEN_LOGO_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
+
+interface CachedTokenLogo {
+  /** Empty string = known-no-logo (treat as miss for fallbacks). */
+  logoUrl: string;
+  fetchedAt: number;
+}
+
+function tokenLogoCacheKey(chainId: number, address: string): string {
+  return `${TOKEN_LOGO_CACHE_PREFIX}${chainId}:${address.toLowerCase()}`;
+}
+
+const inflightTokenLogo = new Map<string, Promise<string | null>>();
+
+/**
+ * Resolve a single token's logo URL using the cache → swap-list lookup chain.
+ * Returns null when neither source knows about the token. Concurrent lookups
+ * for the same (chainId, address) are deduped to a single inflight promise.
+ */
+export async function getCachedTokenLogo(
+  chainId: number,
+  address: string,
+): Promise<string | null> {
+  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return null;
+  const cacheKey = tokenLogoCacheKey(chainId, address);
+
+  const stored = await chrome.storage.local.get(cacheKey);
+  const cached = stored[cacheKey] as CachedTokenLogo | undefined;
+  if (cached && Date.now() - cached.fetchedAt < TOKEN_LOGO_CACHE_TTL) {
+    return cached.logoUrl || null;
+  }
+
+  const inflight = inflightTokenLogo.get(cacheKey);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    try {
+      const list = await getCachedTokenList(chainId);
+      const addrLower = address.toLowerCase();
+      const entry = list.find((t) => t.address.toLowerCase() === addrLower);
+      const logoUrl = entry?.logoURI || "";
+      await chrome.storage.local.set({
+        [cacheKey]: { logoUrl, fetchedAt: Date.now() } satisfies CachedTokenLogo,
+      });
+      return logoUrl || null;
+    } finally {
+      inflightTokenLogo.delete(cacheKey);
+    }
+  })();
+  inflightTokenLogo.set(cacheKey, promise);
+  return promise;
 }
 
 export async function getCachedTokenList(

@@ -61,6 +61,7 @@ import {
   handleConfirmBatchTransactionPK,
   handleRejectBatchTransaction,
   handleRemoveCallFromPendingBatch,
+  handleUpdateCallInPendingBatch,
   handleWalletGetCallsStatus,
   handleWalletShowCallsStatus,
 } from "./batchTxHandlers";
@@ -69,6 +70,7 @@ import {
   handleAddToCrossDappBatch,
   handleAddCallsToCrossDappBatch,
   handleRemoveFromCrossDappBatch,
+  handleUpdateCallInCrossDappBatch,
   handleRejectCrossDappBatch,
   handleConfirmCrossDappBatch,
 } from "./crossDappBatchHandlers";
@@ -176,6 +178,7 @@ import {
   fetchTokenInfo,
   fetchTokenPrice,
   getCachedTokenList,
+  getCachedTokenLogo,
   checkTokenAllowance,
   checkPermit2Allowance,
   getTokenBalanceWei,
@@ -568,6 +571,7 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "rejectTransaction",
   "rejectBatchTransaction",
   "removeCallFromPendingBatch",
+  "updateCallInPendingBatch",
   "rejectSignatureRequest",
   "rejectAddChain",
   "rejectWatchAsset",
@@ -576,6 +580,7 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "addToCrossDappBatch",
   "addCallsToCrossDappBatch",
   "removeFromCrossDappBatch",
+  "updateCallInCrossDappBatch",
   "rejectCrossDappBatch",
   "confirmCrossDappBatch",
   // Account management
@@ -1017,6 +1022,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "updateCallInPendingBatch": {
+      handleUpdateCallInPendingBatch(
+        message.bundleId,
+        message.callIndex,
+        message.newData,
+      ).then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
     case "addToCrossDappBatch": {
       handleAddToCrossDappBatch(message.txId).then((result) => {
         sendResponse(result);
@@ -1035,6 +1051,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleRemoveFromCrossDappBatch(message.txId).then((result) => {
         sendResponse(result);
       });
+      return true;
+    }
+
+    case "updateCallInCrossDappBatch": {
+      handleUpdateCallInCrossDappBatch(message.txId, message.newData).then(
+        (result) => {
+          sendResponse(result);
+        },
+      );
       return true;
     }
 
@@ -2197,6 +2222,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "fetchSwapTokenList": {
       getCachedTokenList(message.chainId)
         .then((data) => sendResponse({ success: true, data }))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "fetchTokenLogo": {
+      // Lightweight per-token logo lookup. Returns just `{ logoUrl }` so the
+      // message payload stays under a kilobyte — avoids shipping the entire
+      // swap token list across the popup ↔ background channel on every
+      // render. Backed by `tokenLogo:{chainId}:{addr}` cache in storage.
+      getCachedTokenLogo(message.chainId, String(message.tokenAddress || ""))
+        .then((logoUrl) => sendResponse({ success: true, logoUrl }))
         .catch((err) =>
           sendResponse({ success: false, error: err.message }),
         );

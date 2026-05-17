@@ -203,6 +203,7 @@ These mutate `pendingBatchTxRequests` (dapp `wallet_sendCalls`) before the user 
 | Handler                        | Effect                                                                                                                                                 |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `removeCallFromPendingBatch`   | Drops a single call from the pending bundle's `params.calls`. If the last call is removed, falls through to a full reject (writes `batchTxResult` + sets `bundleStatuses` to OFFCHAIN_FAILURE). The user is the only party who can prune calls — a dapp must not be able to silently shrink its own (or another dapp's) bundle. |
+| `updateCallInPendingBatch`     | Replaces one call's `data` field in the pending bundle (e.g. user edits an ERC-20 approve amount on a built-in CallCard). Validates hex format only — the user is responsible for the resulting calldata being semantically valid; the downstream confirmation re-simulates and re-estimates from the new bytes. Must stay extension-only so a content script cannot silently mutate another bundle's calls (e.g. swap a benign approve amount for `MAX_UINT256`) between display and signing. |
 
 ### Cross-Dapp Batch Handlers (`crossDappBatchHandlers.ts`)
 
@@ -213,6 +214,7 @@ These move pending tx requests in/out of a user-assembled batch and ship the bat
 | `addToCrossDappBatch`         | Removes a `pendingTxRequest` and appends it to `crossDappBatch`. Dapp promise stays open.        |
 | `addCallsToCrossDappBatch`    | Removes a `pendingBatchTxRequest` (dapp `wallet_sendCalls`), appends every call as a sibling entry sharing one `bundleId`. The dapp's `bundleStatuses` entry stays at PENDING. |
 | `removeFromCrossDappBatch`    | For `eth_sendTransaction` entries: writes rejection to `txResult:{txId}`. For `wallet_sendCalls` entries: removes ALL siblings from the same bundle and updates `bundleStatuses` to OFFCHAIN_FAILURE once. Clears the batch if empty. |
+| `updateCallInCrossDappBatch`  | Replaces one entry's `tx.data` in the cross-dapp batch (e.g. user edits an ERC-20 approve amount on a built-in CallCard). Validates hex only; the originating dapp's promise stays open until the batch ships, so the dapp never sees the edited bytes until on-chain confirmation. Must stay extension-only for the same reason as the dapp-initiated variant. |
 | `rejectCrossDappBatch`        | Writes rejection to every entry — `txResult:{txId}` for plain entries, deduped `bundleStatuses` updates for bundle entries. Clears the batch. |
 | `confirmCrossDappBatch`       | Encodes via ERC-7821, ships via Bankr API, fans the resulting tx hash out — `txResult:{txId}` writes for plain entries, `bundleStatuses` CONFIRMED updates for bundle entries (deduped). |
 

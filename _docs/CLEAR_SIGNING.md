@@ -21,7 +21,12 @@ Confirmation surface
                       ├─ chrome.storage.local cache  cs:desc:<chainId>:<address>
                       │    (TTL 7d hits, 1d misses)
                       └─ walletchan.com/api/clearsigning/descriptor
+                           ⤷ on miss/disabled:
+                              builtinDescriptors.ts (client-side fallback)
+                                ↳ ERC-20 transfer / approve only
 ```
+
+**Remote always wins.** A built-in is only consulted after the remote registry returns nothing (or the user has clear-signing disabled). This means a contract with a curated registry descriptor renders that descriptor, not the generic ERC-20 one.
 
 Two lookup keys, same descriptor file:
 
@@ -60,13 +65,46 @@ Paths inside `fields[].path` use dot notation, array indexing, and byte slicing:
 | `params.path.[0:20]`   | Slice the first 20 bytes of a `bytes` value (token-in address).  |
 | `params.path.[-20:]`   | Slice the last 20 bytes (token-out address).                     |
 
+## Built-in client-side descriptors (`lib/clearSigning/builtinDescriptors.ts`)
+
+The remote registry is keyed on `(chainId, contract address)` — fine for per-app contracts (Permit2, Uniswap router, etc.) but useless for "every ERC-20 ever deployed." Rather than seeding the registry with thousands of identical entries, we synthesize a generic ERC-7730 descriptor on demand for well-known function selectors.
+
+Today's built-in selectors:
+
+| Selector     | Function                                | Synthesized fields           |
+| ------------ | --------------------------------------- | ---------------------------- |
+| `0xa9059cbb` | `transfer(address to, uint256 amount)`  | Amount (tokenAmount), Recipient (addressName) |
+| `0x095ea7b3` | `approve(address spender, uint256 amount)` | Amount (tokenAmount), Spender (addressName)   |
+
+Adding a new selector is two lines: add it to `BUILTIN_SELECTORS` and add a `case` in `getBuiltinCalldataDescriptor`. Inline summaries (below) and the batch CallCard's built-in expanded layout key off the same `isBuiltinCalldataSelector(call.data)` predicate, so they activate automatically.
+
+The synthesized `tokenAmount` field uses `params.tokenAddress` (hardcoded to the call target — the token IS the contract being called) so `applyFormat.ts` resolves symbol / decimals / logo / price exactly like an app-specific descriptor.
+
+## Inline batch summary (`hooks/useErc20InlineSummary.ts`)
+
+For ERC-5792 batches, every per-call `CallCard` header runs `useErc20InlineSummary(to, data, chainId)`. When the calldata matches a built-in selector, it returns a structured `{ mode, prefix, amount, symbol, logoUrl, middle, recipient, recipientAvatarSrc, recipientAvatarKind }` summary that `BatchTransactionConfirmation` renders as e.g. **"Send 100 [USDC icon] USDC to vitalik.eth [avatar]"** or **"Approve unlimited [USDC icon] USDC to AugustusV6"**.
+
+Recipient resolution priority: own account label → ENS/Basename/WNS/Mega → eth.sh contract label → truncated `0xabcd…1234`. `MAX_UINT256` / `MAX_UINT160` (Permit2) approvals render as **"unlimited"** with a hover tooltip.
+
+When the inline summary fully resolves on a CallCard, the duplicated descriptor card is suppressed in the top-of-screen `BatchClearSigningSummary` (no point rendering the same recipient + amount twice) and the trailing contract-address chip on the collapsed header is hidden as redundant.
+
+## Editable approve amounts on batch CallCards
+
+Approve CallCards reuse the single-tx `ERC20ApproveDisplay` component (pencil icon next to the amount, same edit/save UX). The component takes an optional `onSaveCalldata?(data) => Promise<{success, error?}>` prop:
+
+- **Single-tx** (default): writes via `updatePendingTxRequestData(txId, newData)` to `pendingTxRequests`.
+- **Dapp-initiated batch**: `BatchTransactionConfirmation` supplies a handler that sends `updateCallInPendingBatch` (mutates `params.calls[i].data` in `pendingBatchTxRequests`).
+- **Cross-dapp batch**: `CrossDappBatchConfirmation` supplies a handler that sends `updateCallInCrossDappBatch` (mutates `entries[i].tx.data` in `crossDappBatch`).
+
+Downstream propagation comes for free: sign-time handlers (`handleConfirmBatchTransaction` for Bankr ERC-7821, `handleConfirmBatchTransactionPK` for PK/Seed auto-sequential, `handleConfirmCrossDappBatch`, and any future EIP-7702 atomic path) all re-fetch the latest storage snapshot at sign time. The popup's storage listener pushes the fresh request into the confirmation; `AssetChangesDisplay` re-fires on its data-keyed effect (`batchCallsKey = to|data|value` per call), `MultiTxGasEstimateDisplay` re-fires on `to + data` per tx. No per-handler plumbing required.
+
 ## Tx-confirmation surfaces wired
 
 | Surface                                                | Insertion                                                   |
 | ------------------------------------------------------ | ----------------------------------------------------------- |
 | `TransactionConfirmation.tsx` (single dapp tx)         | Above `CalldataDecoder`, passes `defaultCollapsed` down.    |
-| `BatchTransactionConfirmation.tsx` (ERC-5792 batch)    | One `ClearSigningView` per call inside the per-call card.   |
-| `CrossDappBatchConfirmation.tsx` (user-assembled)      | Inherits via the wrapped `BatchTransactionConfirmation`.    |
+| `BatchTransactionConfirmation.tsx` (ERC-5792 batch)    | Inline summary on every CallCard header; `BuiltinExpandedContent` swaps in `ERC20ApproveDisplay` for approves (full editor) and `ClearSigningView` for other built-ins, with TO + raw decoder + digest collapsed behind a single "Calldata" disclosure. Non-built-in calls render a top-of-screen `BatchClearSigningSummary` card per call. |
+| `CrossDappBatchConfirmation.tsx` (user-assembled)      | Inherits via the wrapped `BatchTransactionConfirmation`; provides its own `onEditCallData` override to route through `updateCallInCrossDappBatch`. |
 | `SignatureRequestConfirmation.tsx` (EIP-712 typed)     | Above `TypedDataDisplay`; raw struct collapses on hit.      |
 
 `personal_sign` / `eth_sign` are intentionally out of scope — they have no contract context, so clear signing doesn't apply.
@@ -83,12 +121,27 @@ We don't host our own registry. To get a new contract covered:
 2. Submit a PR to [`ethereum/clear-signing-erc7730-registry`](https://github.com/ethereum/clear-signing-erc7730-registry).
 3. Once merged, regenerate our snapshot (`pnpm tsx apps/website/scripts/snapshot-clearsigning-index.ts`) and ship a website redeploy. No extension release required.
 
+## Shared address-label cache (`lib/ethShLabelsCache.ts`)
+
+Clear-signing surfaces resolve contract labels via [eth.sh](https://eth.sh). Six different surfaces consult labels (single-tx info card, single-tx approve spender row, batch CallCard inline summary, expanded descriptor card, EIP-712 address fields, calldata-decoder address params) — calling the API directly from each would multiply requests for the same address.
+
+`getEthShLabels(address, chainId)` is the single entry point. Three layers:
+
+1. **In-memory `Map`** — instant repeat lookups inside one popup mount.
+2. **In-flight promise dedup** — concurrent sibling fetches share one network round-trip.
+3. **`chrome.storage.local` cache** at `ethShLabels:{chainId}:{address}` with a 7-day TTL. Empty arrays cache too (a known-no-label address doesn't re-hit the API on every reopen).
+
+Token metadata (`fetchTokenInfo`) and per-token logos (`getCachedTokenLogo`) follow the same in-flight + chrome.storage TTL pattern, with token data cached for 30 days (immutable on-chain). Image bytes resolved by either are funneled into the shared `ensAvatarImageCache` (OffscreenCanvas → data URL) so cold reopen paints synchronously.
+
 ## Storage keys
 
 Documented in `_docs/STORAGE.md`:
 
 - `cs:desc:<chainId>:<address>` — descriptor cache entry (hit or miss).
 - `cs:enabled` — boolean opt-out flag (default `true`).
+- `ethShLabels:<chainId>:<address>` — eth.sh contract labels (7d TTL, empties cached).
+- `tokenInfo:<chainId>:<address>` — ERC-20 name/symbol/decimals (30d TTL).
+- `tokenLogo:<chainId>:<address>` — token logoURI (30d TTL).
 
 ## Threat model
 

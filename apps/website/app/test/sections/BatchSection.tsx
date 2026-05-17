@@ -22,11 +22,15 @@ const BASE_CHAIN_ID = 8453;
 const WCHAN_BASE: Address = "0xBa5ED0000e1CA9136a695f0a848012A16008B032";
 const ONE_USDC = 1_000_000n; // 6 decimals
 
-const ENS_RECIPIENTS = [
+// Mix of ENS names and a raw 0x address — the raw entry exercises the
+// "no ENS, fall back to short 0xabcd…0123 form" branch in the batch
+// confirmation UI so we can eyeball both display modes side by side.
+const RECIPIENTS: Array<string> = [
   "apoorv.eth",
   "vitalik.eth",
   "jesse.base.eth",
   "kieran.base.eth",
+  "0xb06a64615842cba9b3bdb7e6f726f3a5bd20dac2",
 ];
 
 const ETH_RPC_URL =
@@ -134,12 +138,16 @@ export function BatchSection() {
     if (!usdc) throw new Error("No USDC config for Base");
 
     const resolved = await Promise.all(
-      ENS_RECIPIENTS.map(async (name) => {
+      RECIPIENTS.map(async (entry) => {
+        // Raw 0x address — pass straight through.
+        if (/^0x[0-9a-fA-F]{40}$/.test(entry)) {
+          return { name: entry, address: entry as Address };
+        }
         const addr = await mainnetClient.getEnsAddress({
-          name: normalize(name),
+          name: normalize(entry),
         });
-        if (!addr) throw new Error(`Failed to resolve ${name}`);
-        return { name, address: addr };
+        if (!addr) throw new Error(`Failed to resolve ${entry}`);
+        return { name: entry, address: addr };
       }),
     );
 
@@ -167,14 +175,9 @@ export function BatchSection() {
     });
   };
 
-  const sendUsdcSwapBatch = async () => {
-    if (chainId !== BASE_CHAIN_ID) {
-      throw new Error("Switch to Base — this test uses USDC + WCHAN on Base");
-    }
-    if (!usdc) throw new Error("No USDC config for Base");
-
+  const fetchWchanSwapQuote = async () => {
     const params = new URLSearchParams({
-      sellToken: usdc.address,
+      sellToken: usdc!.address,
       buyToken: WCHAN_BASE,
       sellAmount: ONE_USDC.toString(),
       taker: address,
@@ -198,6 +201,16 @@ export function BatchSection() {
     const spender = (quote.issues?.allowance?.spender ??
       quote.allowanceTarget) as Address | undefined;
     if (!spender) throw new Error("Quote missing allowance spender");
+    return { quote, spender };
+  };
+
+  const sendUsdcSwapBatch = async () => {
+    if (chainId !== BASE_CHAIN_ID) {
+      throw new Error("Switch to Base — this test uses USDC + WCHAN on Base");
+    }
+    if (!usdc) throw new Error("No USDC config for Base");
+
+    const { quote, spender } = await fetchWchanSwapQuote();
 
     const approve = (amount: bigint) => ({
       to: usdc.address,
@@ -220,11 +233,48 @@ export function BatchSection() {
           calls: [
             approve(ONE_USDC),
             {
-              to: quote.transaction.to,
-              value: toHex(BigInt(quote.transaction.value || "0")),
-              data: quote.transaction.data,
+              to: quote.transaction!.to,
+              value: toHex(BigInt(quote.transaction!.value || "0")),
+              data: quote.transaction!.data,
             },
             approve(0n),
+          ],
+        },
+      ],
+    });
+  };
+
+  const sendUsdcSwapBatchUnlimited = async () => {
+    if (chainId !== BASE_CHAIN_ID) {
+      throw new Error("Switch to Base — this test uses USDC + WCHAN on Base");
+    }
+    if (!usdc) throw new Error("No USDC config for Base");
+
+    const { quote, spender } = await fetchWchanSwapQuote();
+
+    return request({
+      method: "wallet_sendCalls",
+      params: [
+        {
+          version: "2.0.0",
+          from: address,
+          chainId: chainIdHex,
+          atomicRequired: true,
+          calls: [
+            {
+              to: usdc.address,
+              value: "0x0",
+              data: encodeFunctionData({
+                abi: erc20Abi,
+                functionName: "approve",
+                args: [spender, maxUint256],
+              }),
+            },
+            {
+              to: quote.transaction!.to,
+              value: toHex(BigInt(quote.transaction!.value || "0")),
+              data: quote.transaction!.data,
+            },
           ],
         },
       ],
@@ -267,8 +317,8 @@ export function BatchSection() {
         isDisabled={!usdc}
       />
       <TestButton
-        label="Send 1 USDC to 4 ENS names (Base)"
-        description="Resolves apoorv.eth, vitalik.eth, jesse.base.eth, kieran.base.eth and batches 4× USDC.transfer(recipient, 1 USDC). Base only."
+        label="Send 1 USDC to 5 recipients (Base)"
+        description="Resolves apoorv.eth, vitalik.eth, jesse.base.eth, kieran.base.eth + one raw 0xb06a…dac2 address, and batches 5× USDC.transfer(recipient, 1 USDC). Exercises both ENS-resolved and bare-address display in the batch UI. Base only."
         onRun={sendEnsUsdcBatch}
         isDisabled={chainId !== BASE_CHAIN_ID || !usdc}
       />
@@ -276,6 +326,12 @@ export function BatchSection() {
         label="USDC → WCHAN swap (3-call batch)"
         description="approve(spender, 1 USDC) → swap 1 USDC → WCHAN via 0x → approve(spender, 0). Base only."
         onRun={sendUsdcSwapBatch}
+        isDisabled={chainId !== BASE_CHAIN_ID || !usdc}
+      />
+      <TestButton
+        label="USDC → WCHAN swap, unlimited approval (2-call batch)"
+        description="approve(spender, MAX_UINT256) → swap 1 USDC → WCHAN via 0x. Exercises the 'unlimited' approval label in the batch UI. Base only."
+        onRun={sendUsdcSwapBatchUnlimited}
         isDisabled={chainId !== BASE_CHAIN_ID || !usdc}
       />
       <TestButton

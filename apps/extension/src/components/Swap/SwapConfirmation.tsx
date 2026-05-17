@@ -30,6 +30,7 @@ import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
 import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
 import { formatTokenAmount, formatTokenAmountFromBase } from "@/lib/tokenFormatUtils";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
+import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { useTheme } from "@/theme";
 
 // Theme-aware accent stripes for the per-call cards. Mirrors the cycle used
@@ -115,6 +116,13 @@ function SwapConfirmation({
   isConfirmDisabled,
 }: SwapConfirmationProps) {
   const config = getChainConfig(chainId);
+
+  // Shared data-URL cache used by ENS avatars + batch summary + portfolio.
+  // Paints sell/buy icons synchronously from chrome.storage on reopen.
+  const cachedSellLogo = useCachedAvatarSrc(sellToken.logoUrl);
+  const cachedBuyLogo = useCachedAvatarSrc(buyTokenLogoURI);
+  const sellLogoSrc = cachedSellLogo || sellToken.logoUrl;
+  const buyLogoSrc = cachedBuyLogo || buyTokenLogoURI;
   const { themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
   const [expandedCalls, setExpandedCalls] = useState<Set<number>>(new Set());
@@ -243,9 +251,9 @@ function SwapConfirmation({
         >
           {/* Sell row */}
           <HStack px={3} py={2.5} spacing={3}>
-            {sellToken.logoUrl ? (
+            {sellLogoSrc ? (
               <Image
-                src={sellToken.logoUrl}
+                src={sellLogoSrc}
                 alt={sellToken.symbol}
                 boxSize="32px"
                 borderRadius="full"
@@ -304,9 +312,9 @@ function SwapConfirmation({
 
           {/* Buy row */}
           <HStack px={3} py={2.5} spacing={3}>
-            {buyTokenLogoURI ? (
+            {buyLogoSrc ? (
               <Image
-                src={buyTokenLogoURI}
+                src={buyLogoSrc}
                 alt={buyTokenInfo.symbol}
                 boxSize="32px"
                 borderRadius="full"

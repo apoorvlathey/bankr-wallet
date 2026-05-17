@@ -131,8 +131,20 @@ function toRenderedValue(
     case "tokenamount":
     case "tokenAmount".toLowerCase(): {
       const amountRaw = stringifyAmount(raw);
+      // Token address resolution order:
+      //   1. tokenAddrFromOuter — passed in from an array-iterating parent
+      //   2. params.tokenAddress — literal 0x address baked into the descriptor
+      //      (used by built-in ERC-20 transfer descriptors where the token IS
+      //       the contract being called)
+      //   3. params.tokenPath — resolve from somewhere in the decoded args
+      // No source → render as native chain currency.
+      const literal =
+        typeof params.tokenAddress === "string" && /^0x[a-fA-F0-9]{40}$/.test(params.tokenAddress)
+          ? params.tokenAddress
+          : undefined;
       const localTokenAddr =
         tokenAddrFromOuter ||
+        literal ||
         (typeof params.tokenPath === "string"
           ? (resolvePath(input.data, params.tokenPath) as string | undefined)
           : undefined);

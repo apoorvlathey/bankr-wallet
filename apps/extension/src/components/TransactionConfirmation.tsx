@@ -44,7 +44,8 @@ import ChainIcon from "@/components/ChainIcon";
 import { parseApproveCalldata } from "@/lib/erc20Approve";
 import { detectAbiEncodingError } from "@/lib/calldataValidation";
 import { MalformedCalldataBanner } from "@/components/MalformedCalldataBanner";
-import { ethShLabelsUrl, googleFaviconUrl } from "@/constants/externalUrls";
+import { googleFaviconUrl } from "@/constants/externalUrls";
+import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { useTheme, useStripTokens, useChainBadgeStyle, useIconChipBg } from "@/theme";
 import {
   getResolvedChainById,
@@ -433,25 +434,14 @@ function TransactionConfirmation({
   // Fetch labels for the "to" address
   useEffect(() => {
     if (!tx.to) return;
-
-    const fetchLabels = async () => {
-      try {
-        const response = await fetch(
-          ethShLabelsUrl(tx.to, tx.chainId),
-        );
-        if (response.ok) {
-          const labels = await response.json();
-          if (Array.isArray(labels) && labels.length > 0) {
-            setToLabels(labels);
-          }
-        }
-      } catch (err) {
-        // Silently fail - labels are optional
-        console.error("Failed to fetch labels:", err);
-      }
+    let cancelled = false;
+    getEthShLabels(tx.to, tx.chainId).then((labels) => {
+      if (cancelled) return;
+      if (labels.length > 0) setToLabels(labels);
+    });
+    return () => {
+      cancelled = true;
     };
-
-    fetchLabels();
   }, [tx.to, tx.chainId]);
 
   // Reverse resolve the "to" address to get ENS/Basename/WNS name
