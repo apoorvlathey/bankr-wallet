@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo, useCallback, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, memo, useCallback, useRef } from "react";
 import {
   Box,
   VStack,
@@ -22,12 +22,15 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
+  Checkbox,
+  Tooltip,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon } from "@chakra-ui/icons";
+import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon, WarningTwoIcon } from "@chakra-ui/icons";
 import { blo } from "blo";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { useTheme } from "@/theme";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
+import { useRecipientAddressKind } from "@/hooks/useRecipientAddressKind";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { useCachedAvatarSrc, useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import { isResolvableName } from "@/lib/ensUtils";
@@ -46,6 +49,7 @@ import ChainIcon from "@/components/ChainIcon";
 import { getChainEnvironmentLabel } from "@/lib/chainIcons";
 import { truncateAddress } from "@/lib/addressUtils";
 import { formatUsd } from "@/lib/currencyFormatUtils";
+import { formatCompact, formatWithCommas } from "@/lib/convertUtils";
 import {
   getResolvedChainById,
   getStoredRpcUrl,
@@ -72,6 +76,115 @@ function getAccountTypePillStyles(account: Account) {
     return { label: "Seed Phrase", bg: "accent.primary", color: "accentFg.primary" };
   }
   return { label: "View Only", bg: "status.success.fg", color: "status.success.bg" };
+}
+
+/**
+ * Balance display that adapts to available row width. Mirrors the full
+ * comma-separated number off-screen to measure its natural width; if it
+ * exceeds the visible container we switch to a compact form (e.g. "2.61B")
+ * prefixed with `~` so the user knows it's abbreviated. Hovering shows the
+ * full value via tooltip.
+ */
+function AdaptiveBalance({
+  balanceStr,
+  balanceFormatted,
+  priceUsd,
+}: {
+  balanceStr: string;
+  balanceFormatted: string;
+  priceUsd: number | null;
+}) {
+  const balanceNum = parseFloat(balanceStr);
+  const fullBalance = !isNaN(balanceNum)
+    ? formatWithCommas(balanceNum.toString())
+    : balanceFormatted;
+  const compactBalance = !isNaN(balanceNum)
+    ? formatCompact(balanceStr)
+    : balanceFormatted;
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
+  const [showCompact, setShowCompact] = useState(false);
+
+  useLayoutEffect(() => {
+    const check = () => {
+      const c = containerRef.current;
+      const m = measureRef.current;
+      if (!c || !m) return;
+      // The hidden mirror always renders the full balance — its scrollWidth
+      // is the width the visible text would need. If that exceeds the slot
+      // flex assigned us, fall back to compact.
+      setShowCompact(m.scrollWidth > c.clientWidth + 0.5);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, [fullBalance]);
+
+  const displayedBalance = showCompact ? `~${compactBalance}` : fullBalance;
+
+  return (
+    <VStack
+      align="end"
+      spacing={0}
+      ml="auto"
+      flex="1 1 0"
+      minW={0}
+      overflow="hidden"
+    >
+      <Text
+        fontSize="2xs"
+        fontWeight="800"
+        color="text.tertiary"
+        textTransform="uppercase"
+        letterSpacing="0.06em"
+        lineHeight="1"
+      >
+        Balance
+      </Text>
+      <Box ref={containerRef} w="full" position="relative" overflow="hidden" textAlign="right">
+        {/* Off-screen mirror of the full text used only for width measurement. */}
+        <Text
+          ref={measureRef}
+          position="absolute"
+          top={0}
+          right={0}
+          visibility="hidden"
+          pointerEvents="none"
+          whiteSpace="nowrap"
+          fontSize="sm"
+          fontWeight="800"
+          aria-hidden="true"
+        >
+          {fullBalance}
+        </Text>
+        <Tooltip
+          label={fullBalance}
+          placement="top"
+          hasArrow
+          openDelay={200}
+          isDisabled={!showCompact}
+        >
+          <Text
+            fontSize="sm"
+            fontWeight="800"
+            color="text.primary"
+            whiteSpace="nowrap"
+            overflow="hidden"
+            textOverflow="ellipsis"
+          >
+            {displayedBalance}
+          </Text>
+        </Tooltip>
+      </Box>
+      {priceUsd !== null && !isNaN(balanceNum) && (
+        <Text fontSize="xs" fontWeight="700" color="text.tertiary" lineHeight="1.2">
+          {formatUsd(balanceNum * priceUsd)}
+        </Text>
+      )}
+    </VStack>
+  );
 }
 
 interface TokenTransferProps {
@@ -433,6 +546,20 @@ function TokenTransfer({
     useAddressResolver(recipient);
   const cachedRecipientAvatar = useCachedAvatarSrc(avatar);
 
+  // Contract-recipient detection. Tokens sent to a generic contract can be
+  // stuck; 7702-delegated EOAs are safe. Block submit on `contract` until the
+  // user acknowledges via the checkbox below.
+  const { kind: recipientKind, isChecking: isCheckingRecipientKind } =
+    useRecipientAddressKind(
+      isRecipientValid && !isResolving ? resolvedAddress : null,
+      selectedChainId,
+    );
+  const isRecipientContract = recipientKind === "contract";
+  const [acknowledgeContract, setAcknowledgeContract] = useState(false);
+  useEffect(() => {
+    setAcknowledgeContract(false);
+  }, [resolvedAddress, selectedChainId]);
+
   const chainName = getChainName(selectedChainId);
   const chainEnvironmentLabel = getChainEnvironmentLabel(selectedChainId, chainName);
   const explorerUrl = getResolvedChainById(selectedChainId, networksInfo)?.explorer ?? "";
@@ -595,7 +722,14 @@ function TokenTransfer({
     return num <= balance;
   };
 
-  const canSubmit = !!token && isRecipientValid && !isResolving && isAmountValid() && !isSubmitting;
+  const canSubmit =
+    !!token &&
+    isRecipientValid &&
+    !isResolving &&
+    isAmountValid() &&
+    !isSubmitting &&
+    !isCheckingRecipientKind &&
+    (!isRecipientContract || acknowledgeContract);
 
   const handleSubmit = async () => {
     if (!canSubmit || !token) return;
@@ -1010,28 +1144,17 @@ function TokenTransfer({
                 dropdownAlign="right"
               />
 
-              {/* Balance */}
+              {/* Balance — adaptive width. Shows the full comma-separated
+                  number when the row has room, falls back to compact (e.g.
+                  "~2.61B" with a `~` prefix as a hint that the value is
+                  abbreviated) when the full form would overflow. The full
+                  value is always available on the tooltip. */}
               {token && (
-                <VStack align="end" spacing={0} flexShrink={0} ml="auto">
-                  <Text
-                    fontSize="2xs"
-                    fontWeight="800"
-                    color="text.tertiary"
-                    textTransform="uppercase"
-                    letterSpacing="0.06em"
-                    lineHeight="1"
-                  >
-                    Balance
-                  </Text>
-                  <Text fontSize="sm" fontWeight="800" color="text.primary" noOfLines={1}>
-                    {token.balanceFormatted}
-                  </Text>
-                  {hasPrice && (
-                    <Text fontSize="xs" fontWeight="700" color="text.tertiary" lineHeight="1.2">
-                      {formatUsd(parseFloat(token.balance) * token.priceUsd)}
-                    </Text>
-                  )}
-                </VStack>
+                <AdaptiveBalance
+                  balanceStr={token.balance}
+                  balanceFormatted={token.balanceFormatted}
+                  priceUsd={hasPrice ? token.priceUsd : null}
+                />
               )}
             </HStack>
           </Box>
@@ -1212,6 +1335,62 @@ function TokenTransfer({
             <Text fontSize="xs" color="status.error.fg" fontWeight="700" mt={1}>
               {resolverError || "Invalid address or name"}
             </Text>
+          )}
+          {/* Contract recipient warning. EIP-7702 delegated EOAs are excluded —
+              they still control their own private key, so sending to them is
+              equivalent to sending to a regular EOA. */}
+          {isRecipientContract && (
+            <Box
+              mt={2}
+              border={tokens.borders.medium}
+              borderColor="status.warning.border"
+              borderRadius="lg"
+              bg="status.warning.bg"
+              boxShadow="card"
+              px={3}
+              py={2.5}
+            >
+              <HStack spacing={2} align="flex-start">
+                <WarningTwoIcon
+                  boxSize="14px"
+                  color="status.warning.fg"
+                  mt="2px"
+                  flexShrink={0}
+                />
+                <VStack align="stretch" spacing={2} flex={1}>
+                  <Text fontSize="xs" fontWeight="800" color="status.warning.fg" lineHeight="short">
+                    Recipient is a smart contract.
+                  </Text>
+                  <Text fontSize="xs" fontWeight="600" color="status.warning.fg" lineHeight="short">
+                    Tokens sent directly to a contract may be permanently stuck.
+                  </Text>
+                  <Box
+                    bg="surface.raised"
+                    border={tokens.borders.thin}
+                    borderColor="border.default"
+                    borderRadius="md"
+                    px={2}
+                    py={1.5}
+                  >
+                    <Checkbox
+                      isChecked={acknowledgeContract}
+                      onChange={(e) => setAcknowledgeContract(e.target.checked)}
+                      size="sm"
+                      colorScheme="orange"
+                      sx={{
+                        "& .chakra-checkbox__label": {
+                          fontSize: "xs",
+                          fontWeight: 800,
+                          color: "text.primary",
+                        },
+                      }}
+                    >
+                      I understand and want to continue
+                    </Checkbox>
+                  </Box>
+                </VStack>
+              </HStack>
+            </Box>
           )}
         </Box>
 
