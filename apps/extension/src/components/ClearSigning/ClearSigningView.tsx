@@ -20,6 +20,7 @@ import {
   IconButton,
   Skeleton,
   Divider,
+  Tooltip,
 } from "@chakra-ui/react";
 import { CopyIcon, CheckIcon, ExternalLinkIcon } from "@chakra-ui/icons";
 import { blo } from "blo";
@@ -595,6 +596,12 @@ function AddressInline({ address, chainId }: { address: string; chainId: number 
   );
 }
 
+// Sentinels treated as "unlimited" approvals. uint256 is the standard ERC-20
+// approve max; uint160 is Permit2's AllowanceTransfer max (its amount field is
+// uint160, not uint256).
+const MAX_UINT256 = (1n << 256n) - 1n;
+const MAX_UINT160 = (1n << 160n) - 1n;
+
 interface TokenInfo {
   symbol: string;
   decimals: number;
@@ -610,8 +617,9 @@ function formatUsdValue(amountRaw: string, decimals: number, priceUsd: number): 
     return null;
   }
   // Skip "unlimited" approvals — a USD value on max-uint is meaningless.
-  const MAX_UINT = (1n << 256n) - 1n;
-  if (big === MAX_UINT) return null;
+  // Permit2's AllowanceTransfer uses uint160, so its sentinel is 2^160-1, not
+  // 2^256-1; treat both as unlimited.
+  if (big === MAX_UINT256 || big === MAX_UINT160) return null;
   const neg = big < 0n;
   if (neg) big = -big;
   // Compute amount * price using JS number after scaling decimals; tokens here
@@ -622,6 +630,43 @@ function formatUsdValue(amountRaw: string, decimals: number, priceUsd: number): 
   const value = (neg ? -1 : 1) * (whole + frac) * priceUsd;
   if (value === 0) return null;
   return formatUsd(value);
+}
+
+/**
+ * Headline amount text. When the raw value is a max-uint sentinel
+ * (uint256 or Permit2's uint160), shows "unlimited" but lets the user
+ * hover to see the precise amount the contract is actually approved for.
+ */
+function AmountText({
+  amountRaw,
+  decimals,
+  symbol,
+}: {
+  amountRaw: string;
+  decimals: number;
+  symbol: string;
+}) {
+  const unlimited = isUnlimitedAmount(amountRaw);
+  const text = (
+    <Text fontSize="lg" color="fg.primary" fontWeight="700" lineHeight="1.1">
+      {formatUnit(amountRaw, decimals)}
+    </Text>
+  );
+  if (!unlimited) return text;
+  return (
+    <Tooltip
+      label={`${formatUnitFull(amountRaw, decimals)} ${symbol}`}
+      placement="top"
+      hasArrow
+      openDelay={150}
+    >
+      {/* Box wrapper so the tooltip can fire on touch / focus without
+          requiring the Text itself to forward refs. */}
+      <Box as="span" cursor="help" borderBottom="1px dotted" borderColor="fg.muted">
+        {text}
+      </Box>
+    </Tooltip>
+  );
 }
 
 function TokenLogo({ src, alt }: { src?: string; alt: string }) {
@@ -777,9 +822,11 @@ function TokenAmountInline({
     return (
       <VStack spacing={0} align="flex-end">
         <HStack spacing={2} justify="flex-end" align="center">
-          <Text fontSize="lg" color="fg.primary" fontWeight="700" lineHeight="1.1">
-            {formatUnit(amountRaw, decimals)}
-          </Text>
+          <AmountText
+            amountRaw={amountRaw}
+            decimals={decimals}
+            symbol={symbol}
+          />
           <Text fontSize="sm" color="fg.secondary" fontWeight="600">
             {symbol}
           </Text>
@@ -811,9 +858,11 @@ function TokenAmountInline({
   return (
     <VStack spacing={0} align="flex-end">
       <HStack spacing={2} justify="flex-end" align="center">
-        <Text fontSize="lg" color="fg.primary" fontWeight="700" lineHeight="1.1">
-          {formatUnit(amountRaw, info.decimals)}
-        </Text>
+        <AmountText
+          amountRaw={amountRaw}
+          decimals={info.decimals}
+          symbol={info.symbol}
+        />
         <TokenLogo src={info.logoUrl} alt={info.symbol} />
         <Text fontSize="sm" color="fg.secondary" fontWeight="600">
           {info.symbol}
@@ -828,6 +877,15 @@ function TokenAmountInline({
   );
 }
 
+function isUnlimitedAmount(raw: string): boolean {
+  try {
+    const big = BigInt(raw);
+    return big === MAX_UINT256 || big === MAX_UINT160;
+  } catch {
+    return false;
+  }
+}
+
 function formatUnit(raw: string, decimals: number): string {
   if (decimals <= 0) return raw;
   let big: bigint;
@@ -836,9 +894,7 @@ function formatUnit(raw: string, decimals: number): string {
   } catch {
     return raw;
   }
-  // Special-case max uint as "unlimited".
-  const MAX_UINT = (1n << 256n) - 1n;
-  if (big === MAX_UINT) return "unlimited";
+  if (big === MAX_UINT256 || big === MAX_UINT160) return "unlimited";
   const neg = big < 0n;
   if (neg) big = -big;
   const divisor = 10n ** BigInt(decimals);
@@ -849,6 +905,32 @@ function formatUnit(raw: string, decimals: number): string {
   // Cap to 8 fractional digits for display sanity.
   if (fracStr.length > 8) fracStr = fracStr.slice(0, 8);
   return `${neg ? "-" : ""}${whole.toString()}.${fracStr}`;
+}
+
+// Full-precision rendering used in the tooltip when we collapse a max-uint
+// sentinel to "unlimited" — the user can still inspect what the contract will
+// actually receive. Adds thousand separators to the whole part and keeps every
+// fractional digit (no 8-digit cap).
+function formatUnitFull(raw: string, decimals: number): string {
+  let big: bigint;
+  try {
+    big = BigInt(raw);
+  } catch {
+    return raw;
+  }
+  const neg = big < 0n;
+  if (neg) big = -big;
+  if (decimals <= 0) {
+    const s = big.toString();
+    return `${neg ? "-" : ""}${s.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+  }
+  const divisor = 10n ** BigInt(decimals);
+  const whole = big / divisor;
+  const frac = big % divisor;
+  const wholeStr = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  if (frac === 0n) return `${neg ? "-" : ""}${wholeStr}`;
+  const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
+  return `${neg ? "-" : ""}${wholeStr}.${fracStr}`;
 }
 
 const formatTimestamp = (ts: number): string =>
