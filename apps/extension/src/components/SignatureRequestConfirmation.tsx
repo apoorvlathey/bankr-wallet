@@ -639,6 +639,7 @@ function SignatureRequestConfirmation({
               typedData={typedData}
               rawData={rawData}
               defaultCollapsed={clearSigningStatus === "matched"}
+              connectedChainId={signature.chainId}
             />
           ) : (
             <MessageDataDisplay message={message} rawData={rawData} />

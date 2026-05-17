@@ -23,6 +23,13 @@ interface TypedDataDisplayProps {
    * clear-signing descriptor above already conveys the essential info.
    */
   defaultCollapsed?: boolean;
+  /**
+   * Chain the dapp is connected on (per-tab selected chain). Used as a
+   * fallback for chain-scoped lookups (eth.sh labels, explorer links) when
+   * `typedData.domain.chainId` is absent — EIP-712 makes domain.chainId
+   * optional, but the wallet still knows which chain the dapp is on.
+   */
+  connectedChainId?: number;
 }
 
 function CopyBtn({ value }: { value: string }) {
@@ -55,14 +62,20 @@ function AddressValue({ address, chainId }: { address: string; chainId?: number 
   const [copied, setCopied] = useState(false);
 
   const explorerUrl = (() => {
-    const config = getChainConfig(chainId || 1);
+    // Drop the explorer link when chainId is unknown — defaulting to mainnet
+    // would point at the wrong chain's explorer for a non-mainnet address.
+    if (!chainId) return null;
+    const config = getChainConfig(chainId);
     return config.explorer ? `${config.explorer}/address/${address}` : null;
   })();
 
   useEffect(() => {
     if (!address || !address.startsWith("0x")) return;
-    const cid = chainId || 1;
-    fetch(ethShLabelsUrl(address, cid))
+    // Skip the label fetch when chainId is unknown — eth.sh labels are
+    // chain-scoped and defaulting to mainnet would mislabel addresses on
+    // other chains (e.g. Permit2 typed-data signed on Base).
+    if (!chainId) return;
+    fetch(ethShLabelsUrl(address, chainId))
       .then((r) => (r.ok ? r.json() : []))
       .then((l) => {
         if (Array.isArray(l) && l.length > 0) setLabel(l[0]);
@@ -218,7 +231,7 @@ const scrollStyles = {
   "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-default)" },
 };
 
-function TypedDataDisplay({ typedData, rawData, defaultCollapsed = false }: TypedDataDisplayProps) {
+function TypedDataDisplay({ typedData, rawData, defaultCollapsed = false, connectedChainId }: TypedDataDisplayProps) {
   const { tokens } = useTheme();
   // Same theme-aware tab strip pair as MessageDataDisplay / CalldataDecoder.
   const { bg: tabActiveBg, fg: tabActiveFg } = useStripTokens();
@@ -232,7 +245,14 @@ function TypedDataDisplay({ typedData, rawData, defaultCollapsed = false }: Type
   const message = typedData?.message;
   const primaryType = typedData?.primaryType;
   const types = typedData?.types;
-  const chainId = domain?.chainId ? Number(domain.chainId) : undefined;
+  // Prefer the chainId the dapp baked into the typed-data domain; if absent
+  // (EIP-712 allows it), fall back to the chain the dapp is connected on so
+  // chain-scoped lookups (eth.sh labels, explorer links) target the right
+  // chain. We only use the fallback when domain.chainId is *missing*, never
+  // when it disagrees — a mismatch is itself signal worth preserving.
+  const chainId = domain?.chainId
+    ? Number(domain.chainId)
+    : connectedChainId;
 
   if (!expanded) {
     return (
