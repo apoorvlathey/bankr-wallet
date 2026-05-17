@@ -17,12 +17,31 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 EXT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$EXT_DIR/../.." && pwd)"
+CHANGELOG="$REPO_ROOT/CHANGELOG.md"
 
 # Ensure working tree is clean
 if ! git -C "$REPO_ROOT" diff --quiet || ! git -C "$REPO_ROOT" diff --cached --quiet; then
   echo "Error: working tree is not clean. Commit or stash changes first."
   exit 1
 fi
+
+# Ensure CHANGELOG exists and has a non-empty [Unreleased] section.
+# Run /changelog in Claude Code to populate it from the diff since the last tag.
+if [[ ! -f "$CHANGELOG" ]]; then
+  echo "Error: CHANGELOG.md not found at repo root."
+  exit 1
+fi
+node -e "
+const fs = require('fs');
+const md = fs.readFileSync('$CHANGELOG', 'utf8');
+const m = md.match(/## \[Unreleased\]\s*\n([\s\S]*?)(?=\n## \[)/);
+if (!m) { console.error('Error: missing ## [Unreleased] section in CHANGELOG.md'); process.exit(1); }
+const body = m[1].trim();
+if (!body || /^_Nothing yet\._$/i.test(body)) {
+  console.error('Error: ## [Unreleased] is empty. Run /changelog in Claude Code to populate it before releasing.');
+  process.exit(1);
+}
+"
 
 # Read current version
 CURRENT_VERSION=$(node -p "require('$EXT_DIR/package.json').version")
@@ -58,12 +77,43 @@ for (const path of ['$EXT_DIR/public/manifest.json', '$EXT_DIR/manifest.firefox.
 
 echo "Synced version $NEW_VERSION to manifest.json (Chrome) and manifest.firefox.json (Firefox)"
 
-# 3. Commit from repo root (so git paths resolve correctly)
+# 3. Promote [Unreleased] → [NEW_VERSION] in CHANGELOG.md, refresh compare links.
+TODAY=$(date -u +%Y-%m-%d)
+node -e "
+const fs = require('fs');
+const path = '$CHANGELOG';
+const current = '$CURRENT_VERSION';
+const next = '$NEW_VERSION';
+const today = '$TODAY';
+const repo = 'https://github.com/apoorvlathey/walletchan';
+let md = fs.readFileSync(path, 'utf8');
+
+// Promote Unreleased section
+md = md.replace(
+  /## \[Unreleased\]\s*\n([\s\S]*?)(?=\n## \[)/,
+  (_, body) => \`## [Unreleased]\n\n_Nothing yet._\n\n## [\${next}] - \${today}\n\n\${body.trim()}\n\n\`
+);
+
+// Refresh compare links at bottom: replace Unreleased link target + insert new version line.
+md = md.replace(
+  /^\[Unreleased\]:.*$/m,
+  \`[Unreleased]: \${repo}/compare/v\${next}...HEAD\`
+);
+md = md.replace(
+  /^\[Unreleased\]:.*$/m,
+  match => \`\${match}\n[\${next}]: \${repo}/compare/v\${current}...v\${next}\`
+);
+
+fs.writeFileSync(path, md);
+"
+echo "Promoted [Unreleased] → [$NEW_VERSION] in CHANGELOG.md"
+
+# 4. Commit from repo root (so git paths resolve correctly)
 cd "$REPO_ROOT"
-git add apps/extension/package.json apps/extension/public/manifest.json apps/extension/manifest.firefox.json
+git add apps/extension/package.json apps/extension/public/manifest.json apps/extension/manifest.firefox.json CHANGELOG.md
 git commit --no-gpg-sign -m "chore: release v$NEW_VERSION"
 
-# 4. Tag and push
+# 5. Tag and push
 git tag "v$NEW_VERSION"
 git push origin master --tags
 
