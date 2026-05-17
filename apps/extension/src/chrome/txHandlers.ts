@@ -63,6 +63,7 @@ import {
   getTxById,
   type SwapMeta,
 } from "./txHistoryStorage";
+import { attachClearSignedMetaToHistory } from "./clearSignedMetaSnapshot";
 import {
   getCachedApiKey,
   setCachedApiKey,
@@ -962,6 +963,11 @@ async function processTransactionInBackground(
     });
   }
 
+  // Snapshot clear-signed summary so the Activity tab can render
+  // "Approved 100 USDC to Uniswap V3 Router" without re-fetching at render
+  // time. Fire-and-forget so a slow eth.sh / ENS lookup doesn't delay submit.
+  attachClearSignedMetaToHistory(txId, pending.tx, pending.tx.chainId);
+
   try {
     const result = await submitTransactionDirect(
       apiKey,
@@ -1147,6 +1153,9 @@ async function processLocalTransactionInBackground(
       if (name) updateTxInHistory(txId, { functionName: name });
     });
   }
+
+  // Snapshot clear-signed summary. See processTransactionInBackground for rationale.
+  attachClearSignedMetaToHistory(txId, pending.tx, pending.tx.chainId);
 
   try {
     const resolvedChain = await getStoredResolvedChainById(pending.tx.chainId);

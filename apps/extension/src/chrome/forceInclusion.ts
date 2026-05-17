@@ -35,6 +35,7 @@ import {
   addTxToHistory,
   updateTxInHistory,
 } from "./txHistoryStorage";
+import { attachClearSignedMetaToHistory } from "./clearSignedMetaSnapshot";
 import { type PendingTxRequest } from "./pendingTxStorage";
 import { fetchNativeCoinGeckoPrice } from "./coingeckoService";
 import { getNativeCurrencySymbol } from "@/constants/chainRegistry";
@@ -282,6 +283,10 @@ export async function processForceInclusionBankr(
     },
   });
 
+  // Snapshot the original L2 intent (pending.tx) so the force-inclusion row
+  // shows what the user actually meant to do, not just "Force Inclusion".
+  attachClearSignedMetaToHistory(txId, pending.tx, pending.tx.chainId);
+
   try {
     // Stage 1: Build deposit tx
     await progress("building");
@@ -396,6 +401,10 @@ export async function processForceInclusionLocal(
       l2Confirmed: false,
     },
   });
+
+  // Snapshot the original L2 intent (pending.tx) so the force-inclusion row
+  // shows what the user actually meant to do, not just "Force Inclusion".
+  attachClearSignedMetaToHistory(txId, pending.tx, pending.tx.chainId);
 
   try {
     // Stage 1: Build deposit tx

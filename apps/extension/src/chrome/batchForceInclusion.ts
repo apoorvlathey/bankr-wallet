@@ -20,6 +20,7 @@ import {
   addTxToHistory,
   updateTxInHistory,
 } from "./txHistoryStorage";
+import { attachClearSignedMetaToHistory } from "./clearSignedMetaSnapshot";
 import {
   buildL1DepositTxParams,
   extractL2Hash,
@@ -357,6 +358,13 @@ export async function processForceInclusionBatchLocal(
         l2Confirmed: false,
       },
     });
+
+    // Snapshot clear-signed summary for the per-call activity row.
+    attachClearSignedMetaToHistory(
+      txId,
+      { to: call.to, data: call.data, value: call.value },
+      pending.chainId,
+    );
 
     prepared.push({
       txId,

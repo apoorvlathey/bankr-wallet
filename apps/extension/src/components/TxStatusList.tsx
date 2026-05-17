@@ -14,7 +14,10 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from "@chakra-ui/icons";
-import { CompletedTransaction } from "@/chrome/txHistoryStorage";
+import {
+  CompletedTransaction,
+  type ClearSignedMeta,
+} from "@/chrome/txHistoryStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
@@ -144,6 +147,7 @@ function TxStatusList({
       for (const tx of displayItems) {
         if (tx.swapMeta?.sellTokenLogo) urls.push(tx.swapMeta.sellTokenLogo);
         if (tx.swapMeta?.buyTokenLogo) urls.push(tx.swapMeta.buyTokenLogo);
+        if (tx.clearSignedMeta?.tokenLogo) urls.push(tx.clearSignedMeta.tokenLogo);
       }
       return urls;
     }, [displayItems]),
@@ -219,6 +223,7 @@ function TxStatusList({
                 key={tx.id}
                 tx={tx}
                 onClick={() => setSelectedTx(tx)}
+                resolveLogo={resolveLogo}
               />
             ))}
           </Box>
@@ -246,6 +251,121 @@ function formatTimeAgo(timestamp: number): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
+}
+
+/**
+ * Format a decimal amount string for the compact activity row.
+ *
+ * Mirrors the rules from `ERC20ApproveDisplay.formatApprovalAmount` so the
+ * Activity row reads the same way the confirmation card did — but collapsed
+ * to a single string (no separate suffix span needed at this density).
+ *
+ *   ≤ 9 integer digits  → commas + up to 6 dp ("1,234.56")
+ *   10–12 digits        → "1.23B"
+ *   > 12 digits         → scientific ("1.23e20")
+ *
+ * BigInt math keeps us accurate against arbitrary uint256 amounts; Number()
+ * would silently lose precision past 2^53.
+ */
+function formatActivityAmount(value: string): string {
+  const [integer = "0", decimal = ""] = value.split(".");
+  const digits = integer.length;
+  if (digits <= 9) {
+    const formatted = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    const trimmed = decimal.replace(/0+$/, "").slice(0, 6);
+    return trimmed ? `${formatted}.${trimmed}` : formatted;
+  }
+  if (digits <= 12) {
+    const intBig = BigInt(integer);
+    const scaled = (intBig * 100n) / 1_000_000_000n;
+    const whole = scaled / 100n;
+    const frac = scaled % 100n;
+    return `${whole}.${frac.toString().padStart(2, "0")}B`;
+  }
+  const first = integer[0];
+  const next = integer.slice(1, 3).padEnd(2, "0");
+  return `${first}.${next}e${digits - 1}`;
+}
+
+/**
+ * Resolve the best human-readable name for the counterparty (spender /
+ * recipient / contract). Priority: eth.sh label > ENS > short address.
+ */
+function getCounterpartyDisplay(meta: ClearSignedMeta): string {
+  if (meta.counterpartyLabel) return meta.counterpartyLabel;
+  if (meta.counterpartyEns) return meta.counterpartyEns;
+  const addr = meta.counterparty;
+  if (!addr) return "";
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+
+/**
+ * Render the Activity row's clear-signed summary line. Reads only from the
+ * snapshot taken at submission time — no RPC, eth.sh, or ENS calls happen
+ * here. When fields are missing the row gracefully degrades (no token logo,
+ * shortened address as counterparty, etc.).
+ */
+function ClearSignedSummary({
+  meta,
+  resolveLogo,
+}: {
+  meta: ClearSignedMeta;
+  resolveLogo: (url: string | undefined) => string | undefined;
+}) {
+  const counterparty = getCounterpartyDisplay(meta);
+  const logoSrc = meta.tokenLogo ? resolveLogo(meta.tokenLogo) : undefined;
+
+  // Compose the verb+amount+symbol fragment per kind. Approve with isInfinite
+  // collapses the amount slot to the "Unlimited" word so the row reads
+  // "Approve Unlimited USDC → ..." rather than the raw 2^256-1.
+  let action: string;
+  if (meta.kind === "approve") {
+    const amountWord = meta.isInfinite
+      ? "Unlimited"
+      : meta.amount
+        ? formatActivityAmount(meta.amount)
+        : "";
+    action = ["Approve", amountWord, meta.tokenSymbol]
+      .filter(Boolean)
+      .join(" ");
+  } else if (meta.kind === "transfer" || meta.kind === "nativeSend") {
+    const amountWord = meta.amount ? formatActivityAmount(meta.amount) : "";
+    action = ["Send", amountWord, meta.tokenSymbol].filter(Boolean).join(" ");
+  } else {
+    // erc7730 — the descriptor's intent string already reads as a verb.
+    action = meta.intent || meta.contractName || "";
+  }
+
+  return (
+    <HStack spacing={1.5} minW={0} align="center">
+      {logoSrc && (
+        <Image
+          src={logoSrc}
+          alt={meta.tokenSymbol || ""}
+          boxSize="14px"
+          borderRadius="full"
+          flexShrink={0}
+        />
+      )}
+      <Text
+        fontSize="xs"
+        color="text.secondary"
+        fontWeight="600"
+        noOfLines={1}
+        minW={0}
+      >
+        {action}
+        {counterparty && (
+          <>
+            <Text as="span" color="text.tertiary" fontWeight="500">
+              {" → "}
+            </Text>
+            {counterparty}
+          </>
+        )}
+      </Text>
+    </HStack>
+  );
 }
 
 function getInternalSendSymbol(tx: CompletedTransaction): string | null {
@@ -306,9 +426,11 @@ function ActivityIcon({
 function TxStatusItem({
   tx,
   onClick,
+  resolveLogo,
 }: {
   tx: CompletedTransaction;
   onClick: () => void;
+  resolveLogo: (url: string | undefined) => string | undefined;
 }) {
   const { networksInfo } = useNetworks();
   const iconChipBg = useIconChipBg();
@@ -320,6 +442,11 @@ function TxStatusItem({
     config.explorer ||
     "";
   const originHostname = getOriginHostname(tx.origin);
+
+  // Whether Row 2 will render. Both functionName and clearSignedMeta drive the
+  // detail row; when either is present we hide the inline status on Row 1 so
+  // status only renders once.
+  const hasDetailRow = !!tx.functionName || !!tx.clearSignedMeta;
 
   const isForceInclusion = !!tx.forceInclusionMeta;
   const isForcePendingL2 = tx.status === "pending" && isForceInclusion && !tx.forceInclusionMeta!.l2Confirmed;
@@ -568,8 +695,8 @@ function TxStatusItem({
 
         {/* Content */}
         <Box flex={1} minW={0}>
-          {/* Row 1: hostname + time (+ status when no functionName) */}
-          <HStack justify="space-between" spacing={2} minH={tx.functionName ? undefined : "36px"} align="center">
+          {/* Row 1: hostname + time (+ status when there's no detail row) */}
+          <HStack justify="space-between" spacing={2} minH={hasDetailRow ? undefined : "36px"} align="center">
             <Text
               fontSize="sm"
               fontWeight="600"
@@ -587,7 +714,7 @@ function TxStatusItem({
               >
                 {formatTimeAgo(tx.createdAt)}
               </Text>
-              {!tx.functionName && (
+              {!hasDetailRow && (
                 <>
                   <Text fontSize="2xs" color="text.tertiary" fontWeight="500">|</Text>
                   {statusElement}
@@ -605,17 +732,26 @@ function TxStatusItem({
             </HStack>
           </HStack>
 
-          {/* Row 2: function + status + explorer (only when functionName exists) */}
-          {tx.functionName && (
+          {/* Row 2: prefer the clear-signed summary; fall back to raw functionName. */}
+          {hasDetailRow && (
             <HStack justify="space-between" spacing={2} mt={0.5}>
-              <Text
-                fontSize="xs"
-                color="text.tertiary"
-                fontFamily="mono"
-                noOfLines={1}
-              >
-                {tx.functionName}
-              </Text>
+              <Box flex={1} minW={0}>
+                {tx.clearSignedMeta ? (
+                  <ClearSignedSummary
+                    meta={tx.clearSignedMeta}
+                    resolveLogo={resolveLogo}
+                  />
+                ) : (
+                  <Text
+                    fontSize="xs"
+                    color="text.tertiary"
+                    fontFamily="mono"
+                    noOfLines={1}
+                  >
+                    {tx.functionName}
+                  </Text>
+                )}
+              </Box>
               <HStack spacing={1} flexShrink={0}>
                 {statusElement}
                 {hasViewableTx && (

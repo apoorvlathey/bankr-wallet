@@ -45,6 +45,7 @@ import {
 } from "@/lib/chains";
 import { useTheme, useChainBadgeStyle } from "@/theme";
 import { useThemedToast } from "@/hooks/useThemedToast";
+import ClearSignedSummaryCard from "@/components/ClearSignedSummaryCard";
 
 interface TxDetailModalProps {
   isOpen: boolean;
@@ -228,7 +229,17 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
   const hasCalldata = tx.tx.data && tx.tx.data !== "0x";
   const isContractDeploy = !tx.tx.to;
   const isL2 = OP_STACK_CHAIN_IDS.has(tx.chainId);
+  // When a clear-signed snapshot exists, the hero card already answers
+  // "what did this tx do?" — the raw From/To/Value/Calldata rows are
+  // power-user details, so default them collapsed (mirrors how the
+  // confirmation screen collapses the raw CalldataDecoder below the
+  // ERC20ApproveDisplay / ClearSigningView card).
+  const hasClearSignedHero = !!tx.clearSignedMeta;
+  const [rawDetailsExpanded, setRawDetailsExpanded] = useState(
+    !hasClearSignedHero,
+  );
   const [gasExpanded, setGasExpanded] = useState(false);
+  const [errorExpanded, setErrorExpanded] = useState(false);
   const [isRebroadcasting, setIsRebroadcasting] = useState(false);
   const toast = useThemedToast();
   const { themeId } = useTheme();
@@ -599,6 +610,38 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
               </Text>
             </HStack>
 
+            {/* Human-readable clear-signed hero. Snapshot-driven, so it
+                paints synchronously on every reopen — no RPC / eth.sh / ENS
+                calls. Hidden when no snapshot was captured (older entries,
+                contract deploys, opaque calldata). */}
+            {tx.clearSignedMeta && (
+              <ClearSignedSummaryCard meta={tx.clearSignedMeta} chainId={tx.chainId} />
+            )}
+
+            {/* Toggle for the raw tx details. Default collapsed when the
+                hero card is showing (the hero already answers "what did this
+                do?"); default expanded for everything else so non-clear-
+                signed txs render the same shape they did before. */}
+            <HStack
+              cursor="pointer"
+              onClick={() => setRawDetailsExpanded(!rawDetailsExpanded)}
+              _hover={{ bg: "bg.muted" }}
+              borderRadius="md"
+              px={1}
+              py={1}
+              justify="space-between"
+            >
+              <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
+                Transaction Details
+              </Text>
+              {rawDetailsExpanded
+                ? <ChevronUpIcon boxSize={4} color="text.tertiary" />
+                : <ChevronDownIcon boxSize={4} color="text.tertiary" />
+              }
+            </HStack>
+
+            <Collapse in={rawDetailsExpanded} animateOpacity>
+              <VStack spacing={3} align="stretch">
             {/* Function name */}
             {tx.functionName && (
               <Box>
@@ -737,6 +780,55 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
               </>
             )}
 
+            {/* Calldata. Lives inside the collapse alongside From/To/Value
+                since it answers the same "what is the raw payload?" question.
+                The hero card above already provides the human-readable view
+                for clear-signed txs. */}
+            {hasCalldata && !isContractDeploy && tx.tx.to && (
+              <Box>
+                <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
+                  Calldata
+                </Text>
+                <CalldataDecoder calldata={tx.tx.data!} to={tx.tx.to} chainId={tx.chainId} />
+              </Box>
+            )}
+
+            {/* Deploy data for contract deployments */}
+            {hasCalldata && isContractDeploy && (
+              <Box>
+                <HStack mb={1}>
+                  <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
+                    Deploy Data
+                  </Text>
+                  <Spacer />
+                  <CopyButton value={tx.tx.data!} />
+                </HStack>
+                <Box
+                  p={3}
+                  bg="bg.muted"
+                  border="2px solid"
+                  borderColor="border.default"
+                  maxH="100px"
+                  overflowY="auto"
+                  css={{
+                    "&::-webkit-scrollbar": { width: "6px" },
+                    "&::-webkit-scrollbar-track": {
+                      background: "var(--chakra-colors-bg-muted)",
+                    },
+                    "&::-webkit-scrollbar-thumb": {
+                      background: "var(--chakra-colors-border-strong)",
+                    },
+                  }}
+                >
+                  <Text fontSize="xs" fontFamily="mono" color="text.tertiary" wordBreak="break-all" whiteSpace="pre-wrap">
+                    {tx.tx.data}
+                  </Text>
+                </Box>
+              </Box>
+            )}
+              </VStack>
+            </Collapse>
+
             {/* Gas — collapsible. Shows the receipt-side effective fee once
                 gasData lands, and falls back to the gas params we signed
                 with (gas limit, max fee, priority fee) so pending txs aren't
@@ -849,83 +941,146 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
               );
             })()}
 
-            {/* Calldata */}
-            {hasCalldata && !isContractDeploy && tx.tx.to && (
-              <Box>
-                <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
-                  Calldata
-                </Text>
-                <CalldataDecoder calldata={tx.tx.data!} to={tx.tx.to} chainId={tx.chainId} />
-              </Box>
-            )}
+            {/* Error for failed txs. viem errors (e.g. HttpRequestError) render
+                as "shortMessage\n\nStatus: …\nURL: …\nRequest body: {giant
+                hex…}" — when that lands here verbatim it pushes the modal
+                into a wall of unreadable hex. We split on the first newline:
+                the line above it is the human-readable summary (viem's
+                shortMessage), everything below goes behind a "Show details"
+                collapse. Single-line errors render inline as before. */}
+            {tx.status === "failed" && tx.error && (() => {
+              const errorText = tx.error;
+              const newlineIdx = errorText.indexOf("\n");
+              const hasDetail = newlineIdx !== -1;
+              const errorShort = hasDetail
+                ? errorText.slice(0, newlineIdx).trim()
+                : errorText;
+              const errorDetail = hasDetail
+                ? errorText.slice(newlineIdx + 1).trim()
+                : "";
 
-            {/* Deploy data for contract deployments */}
-            {hasCalldata && isContractDeploy && (
-              <Box>
-                <HStack mb={1}>
-                  <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-                    Deploy Data
-                  </Text>
-                  <Spacer />
-                  <CopyButton value={tx.tx.data!} />
-                </HStack>
+              return (
                 <Box
                   p={3}
-                  bg="bg.muted"
+                  bg="status.error.bg"
                   border="2px solid"
                   borderColor="border.default"
-                  maxH="100px"
-                  overflowY="auto"
-                  css={{
-                    "&::-webkit-scrollbar": { width: "6px" },
-                    "&::-webkit-scrollbar-track": {
-                      background: "var(--chakra-colors-bg-muted)",
-                    },
-                    "&::-webkit-scrollbar-thumb": {
-                      background: "var(--chakra-colors-border-strong)",
-                    },
-                  }}
+                  borderRadius="md"
                 >
-                  <Text fontSize="xs" fontFamily="mono" color="text.tertiary" wordBreak="break-all" whiteSpace="pre-wrap">
-                    {tx.tx.data}
+                  <Text fontSize="xs" color="status.error.fg" fontWeight="700" mb={0.5} textTransform="uppercase">
+                    Error
                   </Text>
-                </Box>
-              </Box>
-            )}
+                  <Text fontSize="xs" color="status.error.fg" fontWeight="500">
+                    {errorShort}
+                  </Text>
 
-            {/* Error for failed txs */}
-            {tx.status === "failed" && tx.error && (
-              <Box
-                p={3}
-                bg="status.error.bg"
-                border="2px solid"
-                borderColor="border.default"
-                borderRadius="md"
-              >
-                <Text fontSize="xs" color="status.error.fg" fontWeight="700" mb={0.5} textTransform="uppercase">
-                  Error
-                </Text>
-                <Text fontSize="xs" color="status.error.fg" fontWeight="500">
-                  {tx.error}
-                </Text>
-                {canRebroadcast && (
-                  <Button
-                    size="xs"
-                    leftIcon={<RepeatIcon />}
-                    onClick={handleRebroadcast}
-                    isLoading={isRebroadcasting}
-                    mt={2}
-                    bg={rebroadcastBg}
-                    color={rebroadcastFg}
-                    borderColor={rebroadcastBg}
-                    _hover={{ bg: rebroadcastBg, opacity: 0.85 }}
-                    _active={{ bg: rebroadcastBg, opacity: 0.75 }}
-                  >
-                    Rebroadcast
-                  </Button>
-                )}
-              </Box>
-            )}
+                  {hasDetail && (
+                    <>
+                      <HStack
+                        mt={2}
+                        spacing={1}
+                        cursor="pointer"
+                        onClick={() => setErrorExpanded(!errorExpanded)}
+                        w="fit-content"
+                        _hover={{ opacity: 0.8 }}
+                      >
+                        <Text
+                          fontSize="2xs"
+                          color="status.error.fg"
+                          fontWeight="700"
+                          textTransform="uppercase"
+                          letterSpacing="wider"
+                        >
+                          {errorExpanded ? "Hide details" : "Show details"}
+                        </Text>
+                        {errorExpanded
+                          ? <ChevronUpIcon boxSize={3} color="status.error.fg" />
+                          : <ChevronDownIcon boxSize={3} color="status.error.fg" />
+                        }
+                      </HStack>
+                      <Collapse in={errorExpanded} animateOpacity>
+                        <Box
+                          mt={2}
+                          bg="bg.muted"
+                          border="1px solid"
+                          borderColor="border.subtle"
+                          borderRadius="md"
+                          overflow="hidden"
+                        >
+                          {/* Header strip — "FULL ERROR" label on the left,
+                              copy button on the right. Sits OUTSIDE the
+                              scrollable area so it stays visible while
+                              scrolling through long viem payloads. */}
+                          <HStack
+                            justify="space-between"
+                            align="center"
+                            px={2}
+                            py={1.5}
+                            borderBottom="1px solid"
+                            borderColor="border.subtle"
+                            bg="surface.sunken"
+                          >
+                            <Text
+                              fontSize="2xs"
+                              fontWeight="700"
+                              color="text.secondary"
+                              textTransform="uppercase"
+                              letterSpacing="wider"
+                            >
+                              Full Error
+                            </Text>
+                            <CopyButton value={errorText} />
+                          </HStack>
+                          <Box
+                            maxH="200px"
+                            overflowY="auto"
+                            px={2.5}
+                            py={2}
+                            css={{
+                              "&::-webkit-scrollbar": { width: "6px" },
+                              "&::-webkit-scrollbar-track": {
+                                background: "var(--chakra-colors-bg-muted)",
+                              },
+                              "&::-webkit-scrollbar-thumb": {
+                                background: "var(--chakra-colors-border-strong)",
+                              },
+                            }}
+                          >
+                            <Text
+                              fontSize="xs"
+                              fontFamily="mono"
+                              color="text.secondary"
+                              lineHeight="1.55"
+                              wordBreak="break-all"
+                              whiteSpace="pre-wrap"
+                            >
+                              {errorDetail}
+                            </Text>
+                          </Box>
+                        </Box>
+                      </Collapse>
+                    </>
+                  )}
+
+                  {canRebroadcast && (
+                    <Button
+                      size="xs"
+                      leftIcon={<RepeatIcon />}
+                      onClick={handleRebroadcast}
+                      isLoading={isRebroadcasting}
+                      mt={2}
+                      bg={rebroadcastBg}
+                      color={rebroadcastFg}
+                      borderColor={rebroadcastBg}
+                      _hover={{ bg: rebroadcastBg, opacity: 0.85 }}
+                      _active={{ bg: rebroadcastBg, opacity: 0.75 }}
+                    >
+                      Rebroadcast
+                    </Button>
+                  )}
+                </Box>
+              );
+            })()}
 
           </VStack>
         </ModalBody>

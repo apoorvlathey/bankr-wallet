@@ -42,6 +42,7 @@ import {
 import { loadDecryptedApiKey } from "./crypto";
 import { handleUnlockWallet } from "./authHandlers";
 import { addTxToHistory, updateTxInHistory, getTxById } from "./txHistoryStorage";
+import { attachClearSignedMetaToHistory } from "./clearSignedMetaSnapshot";
 import { startReceiptPolling, applyReceiptToHistory } from "./txReceiptPoller";
 import { openExtensionPopup, writeResultToStorage, showNotification, getRpcUrl } from "./txHandlers";
 import { signAndBroadcastTransaction } from "./localSigner";
@@ -791,6 +792,13 @@ async function processBatchTransactionNonAtomicInBackground(
         accountType: account.type as "privateKey" | "seedPhrase",
         functionName: fnName,
       });
+
+      // Snapshot clear-signed summary for the per-call activity row.
+      attachClearSignedMetaToHistory(
+        txId,
+        { to: call.to, data: call.data, value: call.value },
+        chainId,
+      );
 
       prepared.push({ txId, call, nonce, functionName: fnName });
     }

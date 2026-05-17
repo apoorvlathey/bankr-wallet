@@ -21,6 +21,43 @@ export interface TransferMeta {
   tokenLogo: string | null;
 }
 
+/**
+ * Snapshot of clear-signed decoded data captured at submission time so the
+ * Activity tab can render "Approved 100 USDC to Uniswap V3 Router" without
+ * re-running the decoders, RPC reads, or eth.sh / ENS lookups on every
+ * render. Optional — when missing the row falls back to the raw functionName.
+ *
+ * Kinds:
+ *   "approve"    — ERC-20 approve(spender, amount). spender = counterparty.
+ *   "transfer"   — ERC-20 transfer(recipient, amount). recipient = counterparty.
+ *   "nativeSend" — empty calldata + value > 0. tx.to = counterparty.
+ *   "erc7730"    — an ERC-7730 descriptor matched the call; intent +
+ *                  contractName captured. tx.to = counterparty (the contract).
+ */
+export interface ClearSignedMeta {
+  kind: "approve" | "transfer" | "nativeSend" | "erc7730";
+  /** Formatted decimal string (post-formatUnits). Omitted for erc7730. */
+  amount?: string;
+  /** Token / native symbol (e.g., "USDC", "ETH"). Omitted for erc7730. */
+  tokenSymbol?: string;
+  /** Token logo URL (token list or KNOWN_TOKEN_LOGOS). Omitted for native sends. */
+  tokenLogo?: string | null;
+  /** ERC-20 token contract address (approve/transfer only). */
+  tokenAddress?: string;
+  /** Approve only — true when amount >= 2^128 (treated as unlimited). */
+  isInfinite?: boolean;
+  /** Spender / recipient / contract address (the thing the user is "sending to"). */
+  counterparty?: string;
+  /** First eth.sh label for counterparty, if any (e.g., "Uniswap V3 Router"). */
+  counterpartyLabel?: string;
+  /** Reverse-resolved ENS / Basename / WNS for counterparty, if any. */
+  counterpartyEns?: string;
+  /** ERC-7730 only — descriptor's `display.formats[x].intent`. */
+  intent?: string;
+  /** ERC-7730 only — descriptor's `metadata.contractName`. */
+  contractName?: string;
+}
+
 /** Metadata for force-inclusion (OP Stack L1 deposit) transactions */
 export interface ForceInclusionMeta {
   /** L1 transaction hash (the deposit tx on Ethereum/Sepolia) */
@@ -51,6 +88,7 @@ export interface CompletedTransaction {
   gasData?: GasData;
   swapMeta?: SwapMeta;
   transferMeta?: TransferMeta;
+  clearSignedMeta?: ClearSignedMeta;
   forceInclusionMeta?: ForceInclusionMeta;
   // Set on tx-history entries that are one slice of a user-split
   // wallet_sendCalls bundle. Used by the receipt poller and rejection
