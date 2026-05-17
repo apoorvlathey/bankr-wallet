@@ -10,7 +10,24 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- Clear-signed summaries in the Activity tab and Transaction Details modal — approves, transfers, native sends, and ERC-7730 descriptors render with token logos and recipient labels instead of raw `approve` / `exec` text.
+- Clear-signed ERC-20 rows on every batch confirmation card (single-tx, dapp-initiated batch, and cross-dapp batch), with the pencil-icon edit affordance on approve amounts now working inside batches.
+- Warning banner with acknowledgement checkbox when sending tokens to a recipient address that resolves to a contract (EIP-7702 delegated EOAs are recognized as safe).
+- USD value shown alongside token amounts in the clear-signing view for single transactions and EIP-712 signatures.
+- Custom / user-added ERC-20 tokens now resolve real USD prices via CoinGecko (with GeckoTerminal fallback) instead of showing $0.
+
+### Changed
+
+- Send screen's balance display is now adaptive — full comma-separated value when the row has room, abbreviated form with a tooltip when it would overflow.
+- Holdings "All Networks" filter menu renders in a portal so it floats above the card and no longer pushes layout when only a few tokens are held.
+
+### Fixed
+
+- Permit2 `uint160` max approvals now collapse to "unlimited" with the precise raw amount on hover, matching how `uint256` max was already handled.
+- EIP-712 typed-data address labels and explorer links are scoped to the dapp's actual connected chain instead of falling back to mainnet (fixes mislabeled Permit2 sigs on Base and other non-mainnet dapps).
+- Standard gas tier icon and label are now visible in the Bauhaus theme.
 
 ## [3.7.0] - 2026-05-16
 
