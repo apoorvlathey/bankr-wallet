@@ -13,12 +13,15 @@ import {
 const MARKET_CACHE_STORAGE_KEY = "coingeckoMarketCache";
 const SEARCH_CACHE_STORAGE_KEY = "coingeckoSearchCache";
 const RESOLUTION_CACHE_STORAGE_KEY = "coingeckoNativeResolutionCache";
+const ERC20_PRICE_CACHE_STORAGE_KEY = "coingeckoErc20PriceCache";
 
 const MARKET_CACHE_TTL = 5 * 60_000;
 const SEARCH_CACHE_TTL = 24 * 60 * 60_000;
 const RESOLUTION_CACHE_TTL = 7 * 24 * 60 * 60_000;
+const ERC20_PRICE_CACHE_TTL = 5 * 60_000;
 const MARKET_BATCH_DELAY_MS = 150;
 const RATE_LIMIT_BACKOFF_MS = 60_000;
+const ERC20_PRICE_BATCH_SIZE = 30;
 
 const DIRECT_NATIVE_COINGECKO_IDS: Record<string, string> = {
   ether: "ethereum",
@@ -64,6 +67,22 @@ interface CachedResolutionEntry {
   fetchedAt: number;
 }
 
+interface CachedErc20PriceEntry {
+  priceUsd: number;
+  fetchedAt: number;
+}
+
+export interface Erc20PriceRequest {
+  chainId: number;
+  contractAddress: string;
+}
+
+export interface Erc20PriceResult {
+  chainId: number;
+  contractAddress: string;
+  priceUsd: number;
+}
+
 export interface NativeAssetLookupRequest {
   chainId?: number;
   chainName: string;
@@ -82,6 +101,7 @@ class CoinGeckoService {
   private marketCache = new Map<string, CachedMarketEntry>();
   private searchCache = new Map<string, CachedSearchEntry>();
   private resolutionCache = new Map<string, CachedResolutionEntry>();
+  private erc20PriceCache = new Map<string, CachedErc20PriceEntry>();
   private pendingMarketRequests = new Map<
     string,
     { resolve: (value: CachedMarketEntry | undefined) => void; reject: (reason?: unknown) => void }[]
@@ -96,6 +116,7 @@ class CoinGeckoService {
       MARKET_CACHE_STORAGE_KEY,
       SEARCH_CACHE_STORAGE_KEY,
       RESOLUTION_CACHE_STORAGE_KEY,
+      ERC20_PRICE_CACHE_STORAGE_KEY,
     ]);
 
     Object.entries(stored[MARKET_CACHE_STORAGE_KEY] || {}).forEach(([id, entry]) => {
@@ -106,6 +127,9 @@ class CoinGeckoService {
     });
     Object.entries(stored[RESOLUTION_CACHE_STORAGE_KEY] || {}).forEach(([key, entry]) => {
       this.resolutionCache.set(key, entry as CachedResolutionEntry);
+    });
+    Object.entries(stored[ERC20_PRICE_CACHE_STORAGE_KEY] || {}).forEach(([key, entry]) => {
+      this.erc20PriceCache.set(key, entry as CachedErc20PriceEntry);
     });
 
     this.loaded = true;
@@ -180,6 +204,117 @@ class CoinGeckoService {
     requests: NativeAssetLookupRequest[],
   ): Promise<NativeAssetLookupResult[]> {
     return Promise.all(requests.map((request) => this.resolveNativeAsset(request)));
+  }
+
+  async resolveErc20PricesBatch(
+    requests: Erc20PriceRequest[],
+  ): Promise<Erc20PriceResult[]> {
+    await this.ensureLoaded();
+
+    const now = Date.now();
+    const toFetchByChain = new Map<number, Set<string>>();
+
+    for (const req of requests) {
+      const addr = req.contractAddress.toLowerCase();
+      if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) continue;
+      const cached = this.erc20PriceCache.get(this.erc20Key(req.chainId, addr));
+      if (cached && now - cached.fetchedAt < ERC20_PRICE_CACHE_TTL) continue;
+      const set = toFetchByChain.get(req.chainId) ?? new Set<string>();
+      set.add(addr);
+      toFetchByChain.set(req.chainId, set);
+    }
+
+    if (toFetchByChain.size > 0 && now >= this.marketBackoffUntil) {
+      await Promise.all(
+        Array.from(toFetchByChain.entries()).map(([chainId, addrs]) =>
+          this.fetchErc20PricesForChain(chainId, Array.from(addrs)),
+        ),
+      );
+    }
+
+    return requests.map((req) => {
+      const addr = req.contractAddress.toLowerCase();
+      const cached = this.erc20PriceCache.get(this.erc20Key(req.chainId, addr));
+      return {
+        chainId: req.chainId,
+        contractAddress: addr,
+        priceUsd: cached?.priceUsd ?? 0,
+      };
+    });
+  }
+
+  private erc20Key(chainId: number, address: string): string {
+    return `${chainId}-${address.toLowerCase()}`;
+  }
+
+  private async fetchErc20PricesForChain(
+    chainId: number,
+    addresses: string[],
+  ): Promise<void> {
+    if (addresses.length === 0) return;
+
+    const platformId = COINGECKO_PLATFORM_IDS[chainId];
+    const gtNetwork = GECKOTERMINAL_NETWORK_IDS[chainId];
+    const fetchedAt = Date.now();
+    const priceByAddr = new Map<string, number>();
+
+    if (platformId) {
+      for (let i = 0; i < addresses.length; i += ERC20_PRICE_BATCH_SIZE) {
+        const chunk = addresses.slice(i, i + ERC20_PRICE_BATCH_SIZE);
+        try {
+          const url = `${COINGECKO_TOKEN_PRICE_API}/${platformId}?contract_addresses=${chunk.join(",")}&vs_currencies=usd`;
+          const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+          if (res.status === 429) {
+            this.marketBackoffUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
+            break;
+          }
+          if (!res.ok) continue;
+          const data = (await res.json()) as Record<string, { usd?: number }>;
+          for (const addr of chunk) {
+            const price = Number(data[addr.toLowerCase()]?.usd ?? 0);
+            if (price > 0) priceByAddr.set(addr.toLowerCase(), price);
+          }
+        } catch {
+          // Try next chunk; GeckoTerminal fallback below covers misses.
+        }
+      }
+    }
+
+    const unresolved = addresses.filter(
+      (a) => !priceByAddr.has(a.toLowerCase()),
+    );
+
+    if (gtNetwork && unresolved.length > 0) {
+      for (let i = 0; i < unresolved.length; i += ERC20_PRICE_BATCH_SIZE) {
+        const chunk = unresolved.slice(i, i + ERC20_PRICE_BATCH_SIZE);
+        try {
+          const url = `${GECKOTERMINAL_TOKEN_PRICE_API}/${gtNetwork}/token_price/${chunk.join(",")}`;
+          const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+          if (!res.ok) continue;
+          const data = (await res.json()) as {
+            data?: { attributes?: { token_prices?: Record<string, string> } };
+          };
+          const prices = data?.data?.attributes?.token_prices ?? {};
+          for (const addr of chunk) {
+            const raw = prices[addr.toLowerCase()];
+            const price = raw ? Number(raw) : 0;
+            if (price > 0) priceByAddr.set(addr.toLowerCase(), price);
+          }
+        } catch {
+          // Final fallback exhausted; remaining tokens stay at 0.
+        }
+      }
+    }
+
+    for (const addr of addresses) {
+      const lower = addr.toLowerCase();
+      this.erc20PriceCache.set(this.erc20Key(chainId, lower), {
+        priceUsd: priceByAddr.get(lower) ?? 0,
+        fetchedAt,
+      });
+    }
+
+    await this.persistErc20PriceCache();
   }
 
   private getDirectCoinId(request: NativeAssetLookupRequest): string | undefined {
@@ -411,6 +546,12 @@ class CoinGeckoService {
       [RESOLUTION_CACHE_STORAGE_KEY]: Object.fromEntries(this.resolutionCache),
     });
   }
+
+  private async persistErc20PriceCache() {
+    await chrome.storage.local.set({
+      [ERC20_PRICE_CACHE_STORAGE_KEY]: Object.fromEntries(this.erc20PriceCache),
+    });
+  }
 }
 
 const service = new CoinGeckoService();
@@ -426,6 +567,12 @@ export async function resolveCoinGeckoNativeAssetsBatch(
   requests: NativeAssetLookupRequest[],
 ): Promise<NativeAssetLookupResult[]> {
   return service.resolveNativeAssetsBatch(requests);
+}
+
+export async function resolveCoinGeckoErc20PricesBatch(
+  requests: Erc20PriceRequest[],
+): Promise<Erc20PriceResult[]> {
+  return service.resolveErc20PricesBatch(requests);
 }
 
 /**

@@ -19,6 +19,7 @@ import {
   Input,
   InputGroup,
   InputLeftElement,
+  Portal,
 } from "@chakra-ui/react";
 import { AddIcon, ChevronDownIcon, RepeatIcon, Search2Icon, ViewIcon, ViewOffIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import TxStatusList from "@/components/TxStatusList";
@@ -283,13 +284,14 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
                 <ChevronDownIcon boxSize="12px" color="text.tertiary" />
               </HStack>
             </MenuButton>
+            <Portal>
             <MenuList
               bg="surface.raised"
               border="3px solid"
               borderColor="border.default"
               boxShadow="card"
               p={0}
-              zIndex={10}
+              zIndex="popover"
               minW="180px"
             >
               <Box p={2} borderBottom="2px solid" borderColor="border.default">
@@ -394,6 +396,7 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
                 )}
               </Box>
             </MenuList>
+            </Portal>
           </Menu>
 
           {/* Action buttons (only on Holdings tab) */}

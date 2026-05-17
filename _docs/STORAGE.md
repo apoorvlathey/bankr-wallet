@@ -48,6 +48,7 @@ Persists across extension restarts. Cleared only on manual reset or uninstall.
 | `coingeckoMarketCache` | `Record<coinId, { priceUsd, logoUrl?, fetchedAt }>`             | Shared CoinGecko market cache for native asset price + image lookups. Used by gas estimation and custom-chain native token resolution. | v2.3.0 |
 | `coingeckoSearchCache` | `Record<query, { coins, fetchedAt }>`                            | Cached CoinGecko search responses for resolving unknown custom native assets to a coin ID. | v2.3.0 |
 | `coingeckoNativeResolutionCache` | `Record<lookupKey, { coinId, fetchedAt }>`             | Maps custom native asset descriptors (`chainName/native name/symbol`) to a resolved CoinGecko coin ID to avoid repeated searches. | v2.3.0 |
+| `coingeckoErc20PriceCache` | `Record<"chainId-address", { priceUsd, fetchedAt }>`         | Cached ERC-20 USD prices for custom tokens (CoinGecko `simple/token_price` first, GeckoTerminal fallback). Populates portfolio prices that the upstream portfolio API didn't return. 5-min TTL. | next     |
 
 ### Transient (dynamic keys)
 

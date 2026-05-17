@@ -64,6 +64,35 @@ async function resolveCustomNativePricesBatch(
   }
 }
 
+async function resolveErc20PricesBatch(
+  requests: { chainId: number; contractAddress: string }[],
+): Promise<Map<string, number>> {
+  if (requests.length === 0) return new Map();
+
+  try {
+    const response = await new Promise<{
+      success: boolean;
+      data?: { chainId: number; contractAddress: string; priceUsd: number }[];
+    }>((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: "resolveCoinGeckoErc20Prices", requests },
+        resolve,
+      );
+    });
+
+    if (!response?.success || !response.data) return new Map();
+
+    return new Map(
+      response.data.map((entry) => [
+        `${entry.chainId}-${entry.contractAddress.toLowerCase()}`,
+        entry.priceUsd,
+      ]),
+    );
+  } catch {
+    return new Map();
+  }
+}
+
 /**
  * Shared portfolio token catalog used by Holdings, Send, and Swap.
  *
@@ -202,7 +231,44 @@ export async function loadPortfolioTokenCatalog(
     }),
   );
 
-  const finalTokens = tokensWithCustomNativePrices.map((token) => {
+  const erc20PriceRequests = Array.from(
+    new Map(
+      tokensWithCustomNativePrices
+        .filter(
+          (token) =>
+            !isNativeToken(token) &&
+            token.priceUsd <= 0 &&
+            visibleChainsById.has(token.chainId) &&
+            !isTestnetChain(token.chainId, networksInfo) &&
+            /^0x[a-fA-F0-9]{40}$/.test(token.contractAddress),
+        )
+        .map((token) => {
+          const addr = token.contractAddress.toLowerCase();
+          return [
+            `${token.chainId}-${addr}`,
+            { chainId: token.chainId, contractAddress: addr },
+          ] as const;
+        }),
+    ).values(),
+  );
+
+  const resolvedErc20Prices = await resolveErc20PricesBatch(erc20PriceRequests);
+
+  const tokensWithErc20Prices = tokensWithCustomNativePrices.map((token) => {
+    if (isNativeToken(token) || token.priceUsd > 0) return token;
+    const price = resolvedErc20Prices.get(
+      `${token.chainId}-${token.contractAddress.toLowerCase()}`,
+    );
+    if (!price || price <= 0) return token;
+    const balanceNum = parseFloat(token.balance || "0");
+    return {
+      ...token,
+      priceUsd: price,
+      valueUsd: balanceNum > 0 ? balanceNum * price : 0,
+    };
+  });
+
+  const finalTokens = tokensWithErc20Prices.map((token) => {
     if (isNativeToken(token) && isTestnetChain(token.chainId, networksInfo)) {
       return { ...token, priceUsd: 0, valueUsd: 0 };
     }

@@ -180,7 +180,10 @@ import {
   checkPermit2Allowance,
   getTokenBalanceWei,
 } from "./swapApi";
-import { resolveCoinGeckoNativeAssetsBatch } from "./coingeckoService";
+import {
+  resolveCoinGeckoNativeAssetsBatch,
+  resolveCoinGeckoErc20PricesBatch,
+} from "./coingeckoService";
 
 // Sidepanel management
 // Watch asset (wallet_watchAsset / EIP-747)
@@ -2175,6 +2178,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "resolveCoinGeckoNativeAssets": {
       resolveCoinGeckoNativeAssetsBatch(message.requests)
+        .then((data) => sendResponse({ success: true, data }))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "resolveCoinGeckoErc20Prices": {
+      resolveCoinGeckoErc20PricesBatch(message.requests)
         .then((data) => sendResponse({ success: true, data }))
         .catch((err) =>
           sendResponse({ success: false, error: err.message }),
