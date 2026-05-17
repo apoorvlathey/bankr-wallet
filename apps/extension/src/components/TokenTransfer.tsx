@@ -1378,6 +1378,11 @@ function TokenTransfer({
                       size="sm"
                       colorScheme="orange"
                       sx={{
+                        "& .chakra-checkbox__control": {
+                          borderWidth: "2px",
+                          borderColor: "border.default",
+                          bg: "surface.base",
+                        },
                         "& .chakra-checkbox__label": {
                           fontSize: "xs",
                           fontWeight: 800,
