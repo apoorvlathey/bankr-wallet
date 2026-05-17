@@ -23,7 +23,7 @@
     "dev:firefox": "BROWSER=firefox pnpm dev:web && node scripts/swap-manifest.mjs build-firefox && BROWSER=firefox concurrently 'pnpm dev:inpage' 'pnpm dev:inject' 'pnpm dev:background'",
     "icons": "bash scripts/generate-icons.sh",
     "zip": "pnpm build && mkdir -p zip && cd build && zip -r ../zip/walletchan-v$(node -p \"require('../package.json').version\").zip .",
-    "zip:cws": "pnpm build && bash scripts/strip-cws-keys.sh && mkdir -p cws-zip && cd build && zip -r ../cws-zip/walletchan-v$(node -p \"require('../package.json').version\").zip .",
+    "zip:cws": "pnpm build && bash scripts/strip-cws-keys.sh && mkdir -p cws-zip && (cd build && zip -r ../cws-zip/walletchan-v$(node -p \"require('../package.json').version\").zip .) && pnpm zip:firefox",
     "zip:firefox": "pnpm build:firefox && mkdir -p zip && cd build-firefox && zip -r ../zip/walletchan-firefox-v$(node -p \"require('../package.json').version\").zip .",
     "sign:firefox": "pnpm build:firefox && web-ext sign --source-dir build-firefox --artifacts-dir build-firefox/signed --api-key $WEB_EXT_API_KEY --api-secret $WEB_EXT_API_SECRET --channel listed",
     "release:patch": "bash scripts/release.sh patch",
