@@ -2776,7 +2776,11 @@ function App() {
               overflow="visible"
               position="relative"
             >
-              <Image src="walletchan-icon-white-bg.png" h="1.75rem" />
+              <Image
+                src="walletchan-icon-white-bg.png"
+                h="1.75rem"
+                borderRadius={isDarkTheme ? "md" : undefined}
+              />
               {passwordType === "agent" && (
                 <Tooltip
                   label="Agent session — limited permissions. Master-only actions (reveal keys, rotate API key, add/remove accounts) are blocked."
