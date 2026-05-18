@@ -32,6 +32,7 @@ import AutoLockSettings from "./AutoLockSettings";
 import AgentPasswordSettings from "./AgentPasswordSettings";
 import AppearanceSettings from "./AppearanceSettings";
 import ClearSigningSettings from "./ClearSigningSettings";
+import EnsBrowsingSettings from "./EnsBrowsingSettings";
 import SecuritySettings from "./SecuritySettings";
 import DataSettings from "./DataSettings";
 import { SettingsRow } from "./SettingsRow";
@@ -57,6 +58,7 @@ type SettingsTab =
   | "autoLock"
   | "agentPassword"
   | "appearance"
+  | "ensBrowsing"
   | "clearSigning";
 
 interface SettingsProps {
@@ -229,6 +231,10 @@ function Settings({
 
   if (tab === "clearSigning") {
     return <ClearSigningSettings onBack={() => setTab("main")} />;
+  }
+
+  if (tab === "ensBrowsing") {
+    return <EnsBrowsingSettings onBack={() => setTab("main")} />;
   }
 
   if (tab === "security") {

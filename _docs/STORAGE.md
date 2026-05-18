@@ -67,7 +67,15 @@ Persists across extension restarts. Cleared only on manual reset or uninstall.
 | Key Pattern                              | Shape                                                  | Description                                                                                                          |
 | ---------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | `cs:enabled`                             | `boolean`                                              | Master toggle for clear-signing descriptor fetching. Absent or `true` = enabled; `false` = opt-out, no network calls. |
-| `cs:desc:{chainId}:{address}:{kind}`     | `{ updatedAt: number; descriptor: Descriptor \| null }` | Per-contract descriptor cache. Hits TTL 7d, misses TTL 1d. `kind` is `"calldata"` or `"eip712"`. See `_docs/CLEAR_SIGNING.md`. |
+| `cs:desc:{chainId}:{address}:{kind}`     | `{ updatedAt: number; descriptor: Descriptor \| null }` | Per-contract descriptor cache. Hits TTL 7d, misses TTL 1d. `kind` is `"calldata"` or `"eip712"`. See `_docs/ENS_BROWSING.md`. |
+
+### ENS Browsing (`.eth` address-bar resolution)
+
+| Key                | Shape                                                                                                                            | Description                                                                                                                                                                                                                                                                                              | Introduced |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `ensBrowsing`      | `{ tier1?: boolean; tier2aLocalIpfs?: boolean; tier2bKubo?: boolean }`                                                            | ENS browsing toggle bundle. Absent OR `tier1` undefined → Tier 1 (hosted-gateway routing via eth.limo / w3eth.io) is ON. Tier 2a (local Kubo gateway) and Tier 2b (onchain HTML via Kubo) default OFF.                                                                                                  | next       |
+| `ensResolveCache`  | `Record<lowerEnsName, { ensName: string; kind: "ipfs" \| "ipns" \| "web3"; value: string; resolvedAt: number; contractAddress?: \`0x${string}\` }>` | ENS-keyed resolution cache. 1-hour TTL, 500-entry LRU on insert. Written by the SW resolver after a successful resolution; read on the interstitial cache-check fast-path so repeat visits redirect synchronously.                                                                                       | next       |
+| `ensWeb3UrlCache`  | `Record<lowerContractAddress, { contractAddress: string; contentHash: string; cid: string; bodyLen: number; lastAccess: number; ensName?: string }>` | Per-contract sha256 fingerprint + Kubo CID cache for ERC-4804 onchain HTML. Only written when Tier 2b is ON. LRU-evicted to a configurable budget (default 50 MB / 200 entries). Entries also have a mirrored MFS pin at `/dapp3/web3/{address}/{contentHash}` in Kubo for direct enumeration.            | next       |
 
 ---
 
@@ -111,6 +119,7 @@ Cleared when browser closes. NOT synced. Used only for session restoration when 
 | `autoLockNever`            | `boolean`                    | Flag indicating this session uses "Never" auto-lock.                                                                                 | v1.0.0     |
 | `encryptedSessionPassword` | `{ data, key, iv }` (base64) | Password encrypted with random AES-GCM key for session restoration after service worker restart. Only set when auto-lock is "Never". | v1.0.0     |
 | `passwordType`             | `"master" \| "agent"`        | Which password was used to unlock. Restored to maintain agent password access control guards after service worker restart.           | v1.3.0     |
+| `tab:{tabId}`              | `TabContext` — `{ ensName, kind, value, path, search, hash, contractAddress?, resolvedAt }` | Per-tab ENS resolution context. Written by the SW after a successful `.eth` redirect, read by the banner content script via `chrome.runtime.sendMessage({ type: "get-tab-ctx" })` so it can render the original ENS identity on top of the gateway-served page. Cleaned up on `chrome.tabs.onRemoved`. | next       |
 
 ---
 

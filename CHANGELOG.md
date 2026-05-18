@@ -10,7 +10,9 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **ENS Browsing.** Type `vitalik.eth` (or any `*.eth` subdomain) in the address bar and WalletChan resolves it through your configured Ethereum mainnet RPC and forwards you to the right gateway — `eth.limo` for IPFS/IPNS content, `w3eth.io` for ERC-4804 onchain HTML dapps. Default ON; toggle in Settings → ENS Browsing. Opt-in tiers for local Kubo gateway and onchain HTML pinning land alongside.
 
 ## [3.8.0] - 2026-05-17
 

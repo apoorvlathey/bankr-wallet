@@ -215,6 +215,7 @@ import {
 } from "./sidepanelManager";
 
 import { fetchAndCacheAvatarImage } from "./avatarImageCache";
+import { initEnsBrowsing, handleEnsBrowsingMessage } from "./ensBrowsing";
 
 // Handles RPC requests proxied from inpage script (to bypass page CSP)
 async function handleRpcRequest(
@@ -494,6 +495,12 @@ resumePendingPollers();
 import { recoverStuckForceInclusionTxs } from "./forceInclusion";
 recoverStuckForceInclusionTxs();
 
+// Initialize ENS browsing (Tier 1 by default — installs the DNR rule that
+// intercepts `*.eth` navigations and routes them through the interstitial).
+initEnsBrowsing().catch((e) =>
+  console.warn("[ens] init failed", e),
+);
+
 // Handle extension icon click when popup is cleared (sidepanel mode)
 // When sidepanel mode is active, setPopup('') causes onClicked to fire instead of opening a popup.
 // We try sidePanel.open() and verify it actually opened. Some browsers (Arc) resolve the promise
@@ -630,6 +637,12 @@ const EXTENSION_ONLY_MESSAGES = new Set([
 ]);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // ENS browsing handlers (interstitial / banner / settings). Returns true
+  // only for messages it handles, so the rest of the router falls through.
+  if (handleEnsBrowsingMessage(message, sender, sendResponse)) {
+    return true;
+  }
+
   // Centralized auth gate: reject extension-only messages from content scripts
   if (EXTENSION_ONLY_MESSAGES.has(message.type) && !isExtensionPage(sender)) {
     sendResponse({ success: false, error: "Unauthorized" });

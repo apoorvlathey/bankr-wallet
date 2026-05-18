@@ -47,12 +47,22 @@
     "storage",
     "sidePanel",
     "notifications",
-    "tabs"
+    "tabs",
+    "declarativeNetRequest"
   ],
   "host_permissions": [
     "https://*/*",
     "http://*/*"
   ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ens_no_https_upgrade",
+        "enabled": true,
+        "path": "rules/ens_no_https_upgrade.json"
+      }
+    ]
+  },
   "web_accessible_resources": [
     {
       "resources": [
@@ -63,6 +73,17 @@
         "file://*/*",
         "http://*/*",
         "https://*/*"
+      ]
+    },
+    {
+      "resources": [
+        "interstitial.html",
+        "ens-error.html",
+        "static/js/interstitial.js",
+        "static/js/ens-error.js"
+      ],
+      "matches": [
+        "<all_urls>"
       ]
     }
   ]

@@ -18,6 +18,7 @@ export type LeafId =
   | "agentPassword"
   | "autoLock"
   | "chains"
+  | "ensBrowsing"
   | "clearSigning"
   | "clearTxHistory"
   | "resetNonce"
@@ -70,6 +71,13 @@ export const LEAF_ENTRIES: readonly LeafEntry[] = [
     group: null,
   },
   {
+    id: "ensBrowsing",
+    title: "ENS Browsing",
+    subtitle: "Visit .eth sites directly from the address bar",
+    keywords: ["ens", "eth", "ipfs", "ipns", "browse", "domain", "name", "eth.limo", "w3eth"],
+    group: null,
+  },
+  {
     id: "clearSigning",
     title: "Clear Signing",
     subtitle: "Show human-readable summaries for known contracts",
@@ -115,6 +123,7 @@ export type NavigableLeafId =
   | "agentPassword"
   | "autoLock"
   | "chains"
+  | "ensBrowsing"
   | "clearSigning";
 
 export type ActionLeafId = "clearTxHistory" | "resetNonce" | "clearChatHistory";
@@ -236,6 +245,26 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
           iconBg={ctx.isDarkTheme ? "border.strong" : ctx.chainStripBg}
           iconColor={ctx.isDarkTheme ? "fg.primary" : ctx.chainStripFg}
           cornerBg="border.default"
+          showChevron
+          onClick={() => ctx.onNavigate(id)}
+        />
+      );
+
+    case "ensBrowsing":
+      // Hidden on Firefox (DNR dynamic rules + the interstitial flow are
+      // Chrome-only this iteration; see plan + _docs/FIREFOX.md).
+      if (typeof navigator !== "undefined" && /Firefox/.test(navigator.userAgent)) {
+        return null;
+      }
+      return (
+        <SettingsRow
+          key={id}
+          title="ENS Browsing"
+          subtitle="Visit .eth sites directly from the address bar"
+          icon={<LinkChainIcon boxSize={5} />}
+          iconBg="accent.primary"
+          iconColor="accentFg.primary"
+          cornerAccent="primary"
           showChevron
           onClick={() => ctx.onNavigate(id)}
         />
