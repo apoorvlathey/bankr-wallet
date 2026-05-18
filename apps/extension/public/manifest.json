@@ -59,7 +59,7 @@
     "sidePanel",
     "notifications",
     "tabs",
-    "declarativeNetRequest"
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
     "https://*/*",
