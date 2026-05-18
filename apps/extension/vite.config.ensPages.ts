@@ -16,6 +16,7 @@ export default defineConfig({
       input: {
         interstitial: path.resolve(__dirname, "interstitial.html"),
         "ens-error": path.resolve(__dirname, "ens-error.html"),
+        "setup-kubo": path.resolve(__dirname, "setup-kubo.html"),
       },
       output: {
         entryFileNames: "static/js/[name].js",

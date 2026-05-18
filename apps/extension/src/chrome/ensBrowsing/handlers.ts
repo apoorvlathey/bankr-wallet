@@ -25,7 +25,17 @@ import {
   getCached,
   setCached,
 } from "./cache";
-import { probeKuboGateway } from "./kubo";
+import {
+  probeKuboGateway,
+  probeKuboApi,
+  removeMfsPath,
+  unpinFromKubo,
+} from "./kubo";
+import {
+  listWeb3Entries,
+  mfsPathFor,
+  removeWeb3CacheEntry,
+} from "./web3UrlCache";
 import type { ResolveKind, TabContext } from "./types";
 
 const ERROR_PAGE = "ens-error.html";
@@ -68,15 +78,19 @@ async function chooseGatewayUrl(
   return buildHostedGatewayUrl(kind, ensName, path || "/", search, hash);
 }
 
-// Tier 2a: serve IPFS / IPNS locally when the user opted in AND Kubo's
-// subdomain gateway is up. Probe is memoized for 30s to keep navigation
-// snappy on multi-tab browsing sessions; falls back to the hosted gateway
-// (eth.limo) silently if Kubo is unreachable.
-//
-// web3 contenthashes only go local when Tier 2b is enabled (handled
-// alongside the per-contract pin flow in the Tier 2b task).
+// Decide whether to use the local Kubo subdomain gateway vs the hosted one.
+//   - ipfs / ipns: needs Tier 2a + Kubo gateway reachable.
+//   - web3 (ERC-4804): the resolver only produces an IPFS CID when Tier 2b
+//     is ON (otherwise it returns the raw contract address for w3eth.io
+//     routing), so seeing a `kind: "web3"` resolution here means Tier 2b is
+//     already enabled — we just need the Kubo gateway to also be reachable.
 async function shouldServeLocally(kind: ResolveKind): Promise<boolean> {
-  if (kind === "web3") return false;
+  const settings = await getEnsBrowsingSettings();
+  if (kind === "web3") {
+    if (!settings.tier2bKubo) return false;
+    return probeKuboGateway();
+  }
+  if (!settings.tier2aLocalIpfs) return false;
   return probeKuboGateway();
 }
 
@@ -351,7 +365,36 @@ export function handleEnsBrowsingMessage(
     return true;
   }
 
-  // Tier 2b handlers (ens-probe-kubo-api, ens-get-theme-tokens, web3-list,
-  // web3-evict) wire in alongside their tier implementation.
+  if (m.type === "ens-probe-kubo-api") {
+    probeKuboApi().then(
+      (probe) => sendResponse({ ok: true, probe }),
+      (e) => sendResponse({ ok: false, error: e?.message ?? String(e) }),
+    );
+    return true;
+  }
+
+  if (m.type === "ens-web3-list") {
+    listWeb3Entries().then(
+      (entries) => sendResponse({ ok: true, entries }),
+      (e) => sendResponse({ ok: false, error: e?.message ?? String(e) }),
+    );
+    return true;
+  }
+
+  if (m.type === "ens-web3-evict" && typeof m.contractAddress === "string") {
+    const addr = m.contractAddress;
+    (async () => {
+      const entry = await removeWeb3CacheEntry(addr).catch(() => null);
+      if (entry) {
+        await Promise.allSettled([
+          unpinFromKubo(entry.cid),
+          removeMfsPath(mfsPathFor(entry.contractAddress, entry.contentHash)),
+        ]);
+      }
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
+
   return false;
 }

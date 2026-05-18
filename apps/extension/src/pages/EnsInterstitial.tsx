@@ -105,6 +105,14 @@ export default function EnsInterstitial() {
         })) as ResolveResult | undefined;
         if (cancelled) return;
         if (resp && !resp.ok) {
+          // Tier 2b: Kubo is up but its CORS allowlist hasn't been updated.
+          // Bounce to the setup screen with a `return` param so the user can
+          // come back to this navigation after fixing it.
+          if (resp.code === "kubo-cors-blocked") {
+            const setup = new URL(chrome.runtime.getURL("setup-kubo.html"));
+            location.replace(setup.toString());
+            return;
+          }
           setError(resp.error || "Resolution failed.");
         }
       } catch (e) {

@@ -150,24 +150,70 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
         </HStack>
       </ThemedCard>
 
-      <ThemedCard p={3} opacity={0.55}>
-        <HStack align="start">
-          <VStack align="start" spacing={0.5} flex={1}>
-            <Text fontSize="sm" fontWeight="700" color="fg.primary">
-              Pin onchain HTML to local Kubo
-            </Text>
-            <Text fontSize="xs" color="fg.secondary">
-              Fetch ERC-4804 dapp bodies via your RPC, pin to Kubo, serve at{" "}
-              <Text as="span" fontFamily="mono">
-                &lt;cid&gt;.ipfs.localhost
-              </Text>{" "}
-              for end-to-end-local trust. Requires Kubo CORS allowlist (one-time
-              setup). <em>Coming soon.</em>
-            </Text>
-          </VStack>
-          <Spacer />
-          <Switch isChecked={false} isDisabled />
-        </HStack>
+      <ThemedCard p={3}>
+        <VStack align="stretch" spacing={2}>
+          <HStack align="start">
+            <VStack align="start" spacing={0.5} flex={1}>
+              <Text fontSize="sm" fontWeight="700" color="fg.primary">
+                Pin onchain HTML to local Kubo
+              </Text>
+              <Text fontSize="xs" color="fg.secondary">
+                Fetch ERC-4804 dapp bodies via your RPC, pin to Kubo, serve at{" "}
+                <Text as="span" fontFamily="mono">
+                  &lt;cid&gt;.ipfs.localhost
+                </Text>
+                . Requires a one-time Kubo CORS allowlist update.
+              </Text>
+            </VStack>
+            <Spacer />
+            {settings === null ? (
+              <Spinner size="sm" />
+            ) : (
+              <Switch
+                isChecked={settings.tier2bKubo}
+                onChange={async (e) => {
+                  if (!settings || pending) return;
+                  const next = e.target.checked;
+                  setPending("tier2bKubo");
+                  setSettings({ ...settings, tier2bKubo: next });
+                  try {
+                    await writeSetting("tier2bKubo", next);
+                    // First-enable: open the setup page so users discover
+                    // the CORS commands without having to dig.
+                    if (next) {
+                      chrome.tabs.create({
+                        url: chrome.runtime.getURL("setup-kubo.html"),
+                      });
+                    }
+                  } finally {
+                    setPending(null);
+                  }
+                }}
+                isDisabled={
+                  pending !== null || !settings.tier1 || !settings.tier2aLocalIpfs
+                }
+              />
+            )}
+          </HStack>
+          {settings && settings.tier2bKubo && (
+            <Box pt={1}>
+              <Text
+                as="a"
+                fontSize="xs"
+                color="accent.primary"
+                cursor="pointer"
+                textDecoration="underline"
+                onClick={() => {
+                  chrome.tabs.create({
+                    url: chrome.runtime.getURL("setup-kubo.html"),
+                  });
+                }}
+              >
+                Open Kubo setup screen →
+              </Text>
+            </Box>
+          )}
+        </VStack>
       </ThemedCard>
 
       <Box>

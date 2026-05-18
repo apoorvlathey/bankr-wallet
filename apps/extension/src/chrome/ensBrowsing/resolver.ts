@@ -23,6 +23,23 @@ import { decode as decodeContentHash, getCodec } from "@ensdomains/content-hash"
 import { getStoredRpcUrl } from "@/lib/chains";
 import type { ResolveResponse } from "./types";
 import { fetchErc4804, Web3FetchError } from "./web3url";
+import {
+  addToKubo,
+  KuboPinError,
+  removeMfsPath,
+  unpinFromKubo,
+} from "./kubo";
+import {
+  bumpWeb3LastAccess,
+  getWeb3Budgets,
+  getWeb3CacheEntry,
+  mfsPathFor,
+  planEviction,
+  removeWeb3CacheEntry,
+  setWeb3CacheEntry,
+  sha256Hex,
+} from "./web3UrlCache";
+import { getEnsBrowsingSettings } from "./settingsStorage";
 
 const RESOLVER_ABI = parseAbi([
   "function contenthash(bytes32 node) view returns (bytes)",
@@ -165,9 +182,19 @@ export async function resolveEns(
     };
   }
 
-  // Tier 1: lightweight probe — we only want to confirm the contract
-  // implements ERC-4804 so we can hand off to w3eth.io. The hosted gateway
-  // does the heavy lifting (request() call, body serving) itself.
+  // Tier 2b ON → fetch-pin-cache flow returns an IPFS CID (served via local
+  // Kubo subdomain). Tier 2b OFF → lightweight probe only; the `value` is
+  // the contract address and the caller routes to w3eth.io.
+  const settings = await getEnsBrowsingSettings();
+  if (settings.tier2bKubo) {
+    return await fetchPinAndCacheErc4804(
+      client,
+      address.toLowerCase() as `0x${string}`,
+      stripped,
+      trustedDirectly,
+    );
+  }
+
   try {
     await fetchErc4804(client, address, { probeOnly: true });
   } catch (e) {
@@ -176,11 +203,6 @@ export async function resolveEns(
     }
     return { ok: false, error: `ERC-4804 probe failed: ${describe(e)}` };
   }
-
-  // Routing-only result for Tier 1. The `value` here is the contract address
-  // — Tier 2b will overwrite this with the IPFS CID once it pins the bytes
-  // locally. The caller (gateway.ts → buildHostedGatewayUrl) only uses the
-  // `kind` field for the w3eth.io routing decision.
   return {
     ok: true,
     kind: "web3",
@@ -189,6 +211,121 @@ export async function resolveEns(
     trustedDirectly,
     contractAddress: address.toLowerCase() as `0x${string}`,
   };
+}
+
+// Tier 2b: fetch the contract HTML via viem, sha256-dedupe against the
+// per-contract cache, pin to local Kubo if changed, evict LRU entries to
+// fit budget. The returned `value` is the CID (served from
+// <cid>.ipfs.localhost:8080 alongside ordinary IPFS contenthashes).
+//
+// Ported from dapp3 `src/lib/resolver.ts` `fetchPinAndCacheErc4804`.
+async function fetchPinAndCacheErc4804(
+  client: PublicClient,
+  address: `0x${string}`,
+  ensName: string,
+  trustedDirectly: boolean,
+): Promise<ResolveResponse> {
+  let body: Uint8Array;
+  let contentType: string | null;
+  try {
+    const fetched = await fetchErc4804(client, address);
+    body = fetched.body;
+    contentType = fetched.contentType;
+  } catch (e) {
+    if (e instanceof Web3FetchError) {
+      return { ok: false, error: `web3-${e.detail.kind}: ${e.message}` };
+    }
+    return { ok: false, error: `ERC-4804 probe failed: ${describe(e)}` };
+  }
+
+  if (contentType && !/^\s*text\/html(?:\s*;|\s*$)/i.test(contentType)) {
+    return {
+      ok: false,
+      error: `web3-non-html: contract returned content-type "${contentType}" (only text/html supported).`,
+    };
+  }
+
+  let contentHash: string;
+  try {
+    contentHash = await sha256Hex(body);
+  } catch (e) {
+    return { ok: false, error: `sha256 failed: ${describe(e)}` };
+  }
+
+  const existing = await getWeb3CacheEntry(address).catch(() => null);
+  if (existing && existing.contentHash === contentHash) {
+    bumpWeb3LastAccess(address).catch(() => undefined);
+    return {
+      ok: true,
+      kind: "web3",
+      value: existing.cid,
+      ensName,
+      trustedDirectly,
+      contractAddress: address,
+    };
+  }
+
+  let cid: string;
+  try {
+    const budgets = await getWeb3Budgets();
+    const plan = await planEviction(body.byteLength, budgets);
+    for (const stale of plan.toEvict) {
+      await evictWeb3(stale).catch((e) =>
+        console.warn(`[ens] eviction failed for ${stale.contractAddress}`, e),
+      );
+    }
+    if (existing && existing.cid !== "") {
+      await evictWeb3(existing).catch((e) =>
+        console.warn("[ens] swap eviction failed", e),
+      );
+    }
+    const pinned = await addToKubo(body, {
+      mfsPath: mfsPathFor(address, contentHash),
+    });
+    cid = pinned.cid;
+  } catch (e) {
+    if (e instanceof KuboPinError) {
+      if (e.detail.kind === "cors") {
+        return {
+          ok: false,
+          error: `web3-pin-failed: ${e.message}`,
+          code: "kubo-cors-blocked",
+        };
+      }
+      return { ok: false, error: `web3-pin-failed: ${e.message}` };
+    }
+    return { ok: false, error: `web3-pin-failed: ${describe(e)}` };
+  }
+
+  await setWeb3CacheEntry({
+    contractAddress: address,
+    contentHash,
+    cid,
+    bodyLen: body.byteLength,
+    lastAccess: Date.now(),
+    ensName,
+  }).catch((e) => console.warn("[ens] web3 cache write failed", e));
+
+  return {
+    ok: true,
+    kind: "web3",
+    value: cid,
+    ensName,
+    trustedDirectly,
+    contractAddress: address,
+  };
+}
+
+async function evictWeb3(entry: {
+  contractAddress: `0x${string}`;
+  contentHash: string;
+  cid: string;
+}) {
+  await Promise.allSettled([
+    unpinFromKubo(entry.cid),
+    removeMfsPath(mfsPathFor(entry.contractAddress, entry.contentHash)),
+  ]);
+  await removeWeb3CacheEntry(entry.contractAddress).catch(() => undefined);
 }
 
 function describe(e: unknown): string {

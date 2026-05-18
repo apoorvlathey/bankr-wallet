@@ -14,6 +14,7 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 - **ENS Browsing.** Type `vitalik.eth` (or any `*.eth` subdomain) in the address bar and WalletChan resolves it through your configured Ethereum mainnet RPC and forwards you to the right gateway — `eth.limo` for IPFS/IPNS content, `w3eth.io` for ERC-4804 onchain HTML dapps. Default ON; toggle in Settings → ENS Browsing.
 - **ENS Browsing — local Kubo gateway (opt-in).** Power-user mode: when you have IPFS Desktop (or a local Kubo node) running, IPFS / IPNS sites stream straight from `127.0.0.1:8080` with a themed identity banner showing the original ENS name. Falls back to `eth.limo` silently when Kubo isn't reachable.
+- **ENS Browsing — onchain HTML via local Kubo (opt-in).** Pin ERC-4804 dapps (e.g. `zrouter.eth`) to your local Kubo node and serve them from `<cid>.ipfs.localhost` for fully local trust. Requires a one-time Kubo CORS allowlist update; WalletChan opens a guided setup screen on first enable.
 
 ## [3.8.0] - 2026-05-17
 

@@ -90,8 +90,10 @@
       "resources": [
         "interstitial.html",
         "ens-error.html",
+        "setup-kubo.html",
         "static/js/interstitial.js",
-        "static/js/ens-error.js"
+        "static/js/ens-error.js",
+        "static/js/setup-kubo.js"
       ],
       "matches": [
         "<all_urls>"
