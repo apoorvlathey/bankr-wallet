@@ -40,6 +40,17 @@
       ],
       "run_at": "document_start",
       "all_frames": true
+    },
+    {
+      "matches": [
+        "http://*.ipfs.localhost/*",
+        "http://*.ipns.localhost/*"
+      ],
+      "js": [
+        "static/js/ens-banner.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
     }
   ],
   "permissions": [

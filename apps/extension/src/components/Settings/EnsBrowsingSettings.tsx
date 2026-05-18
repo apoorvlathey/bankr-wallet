@@ -117,7 +117,7 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
         </HStack>
       </ThemedCard>
 
-      <ThemedCard p={3} opacity={0.55}>
+      <ThemedCard p={3}>
         <HStack align="start">
           <VStack align="start" spacing={0.5} flex={1}>
             <Text fontSize="sm" fontWeight="700" color="fg.primary">
@@ -133,11 +133,20 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
               <Text as="span" fontFamily="mono">
                 127.0.0.1:8080
               </Text>{" "}
-              with a themed identity banner. <em>Coming soon.</em>
+              with a themed identity banner. Falls back to eth.limo silently
+              when Kubo isn't running.
             </Text>
           </VStack>
           <Spacer />
-          <Switch isChecked={false} isDisabled />
+          {settings === null ? (
+            <Spinner size="sm" />
+          ) : (
+            <Switch
+              isChecked={settings.tier2aLocalIpfs}
+              onChange={toggle("tier2aLocalIpfs")}
+              isDisabled={pending !== null || !settings.tier1}
+            />
+          )}
         </HStack>
       </ThemedCard>
 

@@ -25,6 +25,7 @@ import {
   getCached,
   setCached,
 } from "./cache";
+import { probeKuboGateway } from "./kubo";
 import type { ResolveKind, TabContext } from "./types";
 
 const ERROR_PAGE = "ens-error.html";
@@ -67,10 +68,16 @@ async function chooseGatewayUrl(
   return buildHostedGatewayUrl(kind, ensName, path || "/", search, hash);
 }
 
-// Tier 2a probe stub — flipped on in task 12 with the Kubo gateway probe.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function shouldServeLocally(_kind: ResolveKind): Promise<boolean> {
-  return false;
+// Tier 2a: serve IPFS / IPNS locally when the user opted in AND Kubo's
+// subdomain gateway is up. Probe is memoized for 30s to keep navigation
+// snappy on multi-tab browsing sessions; falls back to the hosted gateway
+// (eth.limo) silently if Kubo is unreachable.
+//
+// web3 contenthashes only go local when Tier 2b is enabled (handled
+// alongside the per-contract pin flow in the Tier 2b task).
+async function shouldServeLocally(kind: ResolveKind): Promise<boolean> {
+  if (kind === "web3") return false;
+  return probeKuboGateway();
 }
 
 async function resolveAndRedirect(
@@ -302,8 +309,49 @@ export function handleEnsBrowsingMessage(
     return true;
   }
 
-  // Tier 2a / 2b handlers (ens-get-theme-tokens, ens-probe-kubo, etc.) wire in
-  // alongside their tier implementation. This router falls through for them
-  // until added.
+  if (m.type === "ens-probe-kubo") {
+    probeKuboGateway({ force: true }).then(
+      (reachable) => sendResponse({ ok: true, reachable }),
+      (e) => sendResponse({ ok: false, error: e?.message ?? String(e) }),
+    );
+    return true;
+  }
+
+  if (m.type === "ens-get-theme-tokens") {
+    // Banner content script asks for the active theme's colors so it can
+    // paint without loading Chakra. We hand it a flat token set; the banner
+    // re-renders on `chrome.storage.onChanged` when the user switches theme.
+    (async () => {
+      const stored = (await chrome.storage.local.get("selectedThemeId")) as {
+        selectedThemeId?: "bauhaus" | "midnight";
+      };
+      const themeId = stored.selectedThemeId === "midnight" ? "midnight" : "bauhaus";
+      const theme =
+        themeId === "midnight"
+          ? {
+              themeId,
+              bg: "#0F1320",
+              fg: "#E6E8EF",
+              fgMuted: "#8C92A8",
+              border: "#202637",
+              shadow: "0 4px 14px 0 rgba(0,0,0,0.45)",
+              accent: "#F0C020",
+            }
+          : {
+              themeId,
+              bg: "#121212",
+              fg: "#FFFFFF",
+              fgMuted: "#A8A8A8",
+              border: "#000000",
+              shadow: "0 2px 0 0 #000000",
+              accent: "#F0C020",
+            };
+      sendResponse({ ok: true, theme });
+    })();
+    return true;
+  }
+
+  // Tier 2b handlers (ens-probe-kubo-api, ens-get-theme-tokens, web3-list,
+  // web3-evict) wire in alongside their tier implementation.
   return false;
 }
