@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, memo, useMemo } from "react";
 import {
   Box,
   VStack,
@@ -21,6 +21,7 @@ import {
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import SeedPhraseSetup from "@/components/SeedPhraseSetup";
+import SeedAddressPicker from "@/components/SeedAddressPicker";
 import {
   ViewIcon,
   ViewOffIcon,
@@ -47,9 +48,11 @@ type AccountType = "bankr" | "privateKey" | "seedPhrase" | "impersonator";
 
 interface Account {
   id: string;
-  type: "bankr" | "privateKey";
+  type: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
   address: string;
   displayName?: string;
+  seedGroupId?: string;
+  derivationIndex?: number;
 }
 
 interface SeedGroup {
@@ -76,12 +79,10 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
   const [impersonatorAddress, setImpersonatorAddress] = useState("");
   const [hasBankrAccount, setHasBankrAccount] = useState(false);
   const [seedGroups, setSeedGroups] = useState<SeedGroup[]>([]);
+  const [allAccounts, setAllAccounts] = useState<Account[]>([]);
   const [showSeedSetup, setShowSeedSetup] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [derivingGroupId, setDerivingGroupId] = useState<string | null>(null);
-  const [deriveDisplayNames, setDeriveDisplayNames] = useState<
-    Record<string, string>
-  >({});
+  const [pickingGroupId, setPickingGroupId] = useState<string | null>(null);
   const [impersonatorCopied, setImpersonatorCopied] = useState(false);
   const [errors, setErrors] = useState<{
     privateKey?: string;
@@ -107,8 +108,9 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
     chrome.runtime.sendMessage(
       { type: "getAccounts" },
       (accounts: Account[]) => {
-        const bankrExists = accounts?.some((a) => a.type === "bankr");
-        setHasBankrAccount(bankrExists);
+        const list = accounts || [];
+        setAllAccounts(list);
+        setHasBankrAccount(list.some((a) => a.type === "bankr"));
       },
     );
     chrome.runtime.sendMessage(
@@ -118,6 +120,18 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
       },
     );
   }, []);
+
+  const existingIndicesByGroup = useMemo(() => {
+    const map = new Map<string, number[]>();
+    for (const a of allAccounts) {
+      if (a.type !== "seedPhrase" || !a.seedGroupId) continue;
+      if (a.derivationIndex == null) continue;
+      const list = map.get(a.seedGroupId) || [];
+      list.push(a.derivationIndex);
+      map.set(a.seedGroupId, list);
+    }
+    return map;
+  }, [allAccounts]);
 
   // Derive address when private key changes
   useEffect(() => {
@@ -335,46 +349,45 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
     }
   };
 
-  const handleDeriveNext = async (seedGroupId: string) => {
-    setDerivingGroupId(seedGroupId);
+  const handlePickerDerive = async (indices: number[]) => {
+    if (!pickingGroupId) return;
+    setIsSubmitting(true);
     try {
-      const name = deriveDisplayNames[seedGroupId]?.trim() || undefined;
-      const response = await new Promise<{ success: boolean; error?: string }>(
-        (resolve) => {
-          chrome.runtime.sendMessage(
-            { type: "deriveSeedAccount", seedGroupId, displayName: name },
-            resolve,
-          );
-        },
-      );
+      const response = await new Promise<{
+        success: boolean;
+        error?: string;
+        accounts?: Account[];
+      }>((resolve) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "deriveSeedAccount",
+            seedGroupId: pickingGroupId,
+            indices,
+          },
+          resolve,
+        );
+      });
 
       if (!response.success) {
-        toast({
-          title: "Error",
-          description: response.error || "Failed to derive account",
-          status: "error",
-          duration: 3000,
-        });
-        return;
+        setIsSubmitting(false);
+        throw new Error(response.error || "Failed to derive accounts");
       }
 
+      const count = response.accounts?.length ?? indices.length;
       toast({
-        title: "Account derived",
-        description: "New address added from seed phrase",
+        title: count === 1 ? "Account derived" : "Accounts derived",
+        description:
+          count === 1
+            ? "New address added from seed phrase"
+            : `${count} addresses added from seed phrase`,
         status: "success",
         duration: 2000,
       });
+      setIsSubmitting(false);
       onAccountAdded();
     } catch (error) {
-      toast({
-        title: "Error",
-        description:
-          error instanceof Error ? error.message : "Failed to derive account",
-        status: "error",
-        duration: 3000,
-      });
-    } finally {
-      setDerivingGroupId(null);
+      setIsSubmitting(false);
+      throw error;
     }
   };
 
@@ -384,6 +397,45 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
       <SeedPhraseSetup
         onBack={() => setShowSeedSetup(false)}
         onComplete={onAccountAdded}
+      />
+    );
+  }
+
+  // Render the multi-select picker when the user opens an existing seed
+  // group to derive more addresses.
+  if (pickingGroupId) {
+    const group = seedGroups.find((g) => g.id === pickingGroupId);
+    const groupTitle = group?.name || "Seed Phrase";
+    return (
+      <SeedAddressPicker
+        title={`Derive · ${groupTitle}`}
+        source={{
+          kind: "existingGroup",
+          seedGroupId: pickingGroupId,
+          existingIndices: existingIndicesByGroup.get(pickingGroupId) || [],
+        }}
+        variant="panel"
+        isSubmitting={isSubmitting}
+        onBack={() => setPickingGroupId(null)}
+        onSubmit={handlePickerDerive}
+        submitLabel={(count) =>
+          count === 1 ? "Derive 1 Address" : `Derive ${count} Addresses`
+        }
+        intro={
+          <Box
+            bg="surface.raised"
+            border="2px solid"
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
+            p={3}
+          >
+            <Text fontSize="xs" color="text.secondary" fontWeight="500">
+              Existing accounts from this seed are shown for context. Tick the
+              new addresses you want to derive.
+            </Text>
+          </Box>
+        }
       />
     );
   }
@@ -445,7 +497,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                 _hover={{ bg: "surface.raisedHover" }}
               >
                 <HStack spacing={3}>
-                  <Radio value="privateKey" colorScheme="yellow" />
+                  <Radio value="privateKey" />
                   <Box
                     bg="accent.highlight"
                     border="2px solid"
@@ -477,7 +529,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                 _hover={{ bg: "surface.raisedHover" }}
               >
                 <HStack spacing={3}>
-                  <Radio value="seedPhrase" colorScheme="red" />
+                  <Radio value="seedPhrase" />
                   <Box
                     bg="accent.primary"
                     border="2px solid"
@@ -518,7 +570,6 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                 <HStack spacing={3}>
                   <Radio
                     value="bankr"
-                    colorScheme="blue"
                     isDisabled={hasBankrAccount}
                   />
                   <Box
@@ -556,15 +607,15 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                 _hover={{ bg: "surface.raisedHover" }}
               >
                 <HStack spacing={3}>
-                  <Radio value="impersonator" colorScheme="green" />
+                  <Radio value="impersonator" />
                   <Box
-                    bg="status.success.fg"
+                    bg="chart.positive"
                     border="2px solid"
                     borderColor="border.default"
                     borderRadius="sm"
                     p={1}
                   >
-                    <EyeIcon boxSize="16px" color="status.success.bg" />
+                    <EyeIcon boxSize="16px" color="fg.inverse" />
                   </Box>
                   <VStack align="start" spacing={0}>
                     <Text fontSize="sm" fontWeight="700" color="text.primary">
@@ -657,30 +708,15 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                       </Badge>
                     </HStack>
                   </HStack>
-                  <Input
-                    mt={2}
-                    size="sm"
-                    placeholder={`Display Name for Account #${group.accountCount} (Optional)`}
-                    value={deriveDisplayNames[group.id] || ""}
-                    onChange={(e) =>
-                      setDeriveDisplayNames((prev) => ({
-                        ...prev,
-                        [group.id]: e.target.value,
-                      }))
-                    }
-                  />
                   <Button
                     size="sm"
                     variant="primary"
                     mt={2}
                     w="full"
                     leftIcon={<AddIcon boxSize="10px" />}
-                    onClick={() => handleDeriveNext(group.id)}
-                    isLoading={derivingGroupId === group.id}
-                    loadingText="Deriving..."
-                    isDisabled={derivingGroupId !== null}
+                    onClick={() => setPickingGroupId(group.id)}
                   >
-                    Derive Next Address
+                    Derive Addresses
                   </Button>
                 </Box>
               ))}

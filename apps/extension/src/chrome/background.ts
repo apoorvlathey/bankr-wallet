@@ -594,6 +594,7 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "addBankrAccount",
   "addImpersonatorAccount",
   "addSeedPhraseGroup",
+  "previewSeedAddresses",
   "deriveSeedAccount",
   "addPrivateKeyAccount",
   "removeAccount",
@@ -1353,6 +1354,108 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false;
     }
 
+    case "previewSeedAddresses": {
+      (async () => {
+        try {
+          const {
+            mnemonic: rawMnemonic,
+            seedGroupId,
+            start,
+            count,
+          } = message as {
+            mnemonic?: string;
+            seedGroupId?: string;
+            start?: number;
+            count?: number;
+          };
+
+          let mnemonic: string | null = null;
+          if (rawMnemonic) {
+            if (!isValidMnemonic(rawMnemonic)) {
+              sendResponse({
+                success: false,
+                error: "Invalid seed phrase (must be 12 words)",
+              });
+              return;
+            }
+            mnemonic = rawMnemonic.trim();
+          } else if (seedGroupId) {
+            // Existing-group preview: decrypt the stored mnemonic. Requires
+            // unlocked wallet (master, not agent — same gate as deriveSeedAccount).
+            const passwordType = await resolvePasswordType(handleUnlockWallet);
+            if (passwordType === "agent") {
+              sendResponse({
+                success: false,
+                error: "Deriving accounts requires master password",
+              });
+              return;
+            }
+            let password = getCachedPassword();
+            if (!password) {
+              const autoLockTimeout = await getAutoLockTimeout();
+              if (autoLockTimeout === 0) {
+                const restored = await tryRestoreSession(handleUnlockWallet);
+                if (restored) password = getCachedPassword();
+              }
+            }
+            if (!password) {
+              sendResponse({
+                success: false,
+                error: "Wallet must be unlocked",
+              });
+              return;
+            }
+            const stored = await getMnemonic(seedGroupId, password);
+            if (!stored) {
+              sendResponse({
+                success: false,
+                error: "Seed phrase not found",
+              });
+              return;
+            }
+            mnemonic = stored;
+          } else {
+            sendResponse({
+              success: false,
+              error: "Either mnemonic or seedGroupId is required",
+            });
+            return;
+          }
+
+          const startIdx = Math.max(0, Math.floor(start ?? 0));
+          const total = Math.max(1, Math.min(20, Math.floor(count ?? 5)));
+          const existingAddresses = new Set(
+            (await getAccounts()).map((a) => a.address.toLowerCase()),
+          );
+          const items = [] as Array<{
+            index: number;
+            address: string;
+            exists: boolean;
+          }>;
+          for (let i = 0; i < total; i++) {
+            const idx = startIdx + i;
+            const pk = deriveSeedPrivateKey(mnemonic, idx);
+            const address = deriveAddress(pk);
+            items.push({
+              index: idx,
+              address,
+              exists: existingAddresses.has(address.toLowerCase()),
+            });
+          }
+          sendResponse({ success: true, items });
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to preview seed phrase addresses",
+          });
+        }
+      })();
+      return true;
+    }
+
     case "addSeedPhraseGroup": {
       (async () => {
         try {
@@ -1399,46 +1502,81 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             mnemonic = generateNewMnemonic();
           }
 
+          // Normalize indices: caller can pass a sorted+deduped list, or omit
+          // for the legacy "import index 0 only" behavior.
+          const rawIndices = Array.isArray(message.indices)
+            ? (message.indices as unknown[])
+            : [0];
+          const indices = Array.from(
+            new Set(
+              rawIndices
+                .map((n) => Math.floor(Number(n)))
+                .filter((n) => Number.isFinite(n) && n >= 0),
+            ),
+          ).sort((a, b) => a - b);
+          if (indices.length === 0) {
+            sendResponse({
+              success: false,
+              error: "At least one derivation index is required",
+            });
+            return;
+          }
+
           // Create seed group
           const group = await addSeedGroup(message.name);
 
           // Encrypt and store mnemonic
           await storeMnemonic(group.id, mnemonic, password);
 
-          // Derive first account (index 0)
-          const privateKey = deriveSeedPrivateKey(mnemonic, 0);
-          const address = deriveAddress(privateKey);
+          const importedAccounts: SeedPhraseAccount[] = [];
+          for (const idx of indices) {
+            const privateKey = deriveSeedPrivateKey(mnemonic, idx);
+            const address = deriveAddress(privateKey);
 
-          // Check if address already exists (PK → seed phrase conversion)
-          const existingAccount = await findAccountByAddress(address);
-          let account: SeedPhraseAccount;
+            // Check if address already exists (PK → seed phrase conversion)
+            const existingAccount = await findAccountByAddress(address);
+            let account: SeedPhraseAccount;
 
-          if (existingAccount) {
-            if (existingAccount.type === "privateKey") {
-              // Convert PK account to seed phrase in-place (preserves ID, display name, vault entry)
-              const converted = await convertToSeedPhraseAccount(
-                existingAccount.id,
-                group.id,
-                0,
-              );
-              if (!converted) throw new Error("Failed to convert account");
-              account = converted;
-              // Skip addKeyToVault — vault already has the key under this account ID
+            if (existingAccount) {
+              if (existingAccount.type === "privateKey") {
+                const converted = await convertToSeedPhraseAccount(
+                  existingAccount.id,
+                  group.id,
+                  idx,
+                );
+                if (!converted) throw new Error("Failed to convert account");
+                account = converted;
+              } else {
+                // Skip duplicates that are already seed/bankr/impersonator.
+                // We don't want to fail the whole import for one collision.
+                continue;
+              }
             } else {
-              throw new Error("An account with this address already exists");
+              account = await addSeedPhraseAccount(
+                address,
+                group.id,
+                idx,
+                // Only apply the user-supplied display name to the first
+                // imported account so multi-imports don't collide on name.
+                importedAccounts.length === 0
+                  ? message.accountDisplayName || undefined
+                  : undefined,
+              );
+              await addKeyToVault(account.id, privateKey, password);
             }
-          } else {
-            account = await addSeedPhraseAccount(
-              address,
-              group.id,
-              0,
-              message.accountDisplayName || undefined,
-            );
-            // Store derived PK in vault using account UUID (matches vault lookup)
-            await addKeyToVault(account.id, privateKey, password);
+            importedAccounts.push(account);
           }
 
-          await updateSeedGroupCount(group.id, 1);
+          if (importedAccounts.length === 0) {
+            // Every selected index already mapped to a non-PK account
+            sendResponse({
+              success: false,
+              error: "All selected addresses already exist in this wallet",
+            });
+            return;
+          }
+
+          await updateSeedGroupCount(group.id, importedAccounts.length);
 
           // Update cached vault
           const vault = await decryptAllKeys(password);
@@ -1449,7 +1587,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             .catch(() => {});
           sendResponse({
             success: true,
-            account,
+            account: importedAccounts[0],
+            accounts: importedAccounts,
             group,
             mnemonic: message.mnemonic ? undefined : mnemonic, // Only return if generated
           });
@@ -1507,53 +1646,90 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return;
           }
 
-          // Find next index
           const accounts = await getAccounts();
           const groupAccounts = accounts.filter(
             (a) =>
               a.type === "seedPhrase" && (a as any).seedGroupId === seedGroupId,
           );
-          const nextIndex =
-            groupAccounts.length > 0
-              ? Math.max(
-                  ...groupAccounts.map((a) => (a as any).derivationIndex),
-                ) + 1
-              : 0;
 
-          // Derive key
-          const privateKey = deriveSeedPrivateKey(mnemonic, nextIndex);
-          const address = deriveAddress(privateKey);
-
-          // Check if address already exists (PK → seed phrase conversion)
-          const existingAccount = await findAccountByAddress(address);
-          let account: SeedPhraseAccount;
-
-          if (existingAccount) {
-            if (existingAccount.type === "privateKey") {
-              // Convert PK account to seed phrase in-place (preserves ID, display name, vault entry)
-              const converted = await convertToSeedPhraseAccount(
-                existingAccount.id,
-                seedGroupId,
-                nextIndex,
-              );
-              if (!converted) throw new Error("Failed to convert account");
-              account = converted;
-              // Skip addKeyToVault — vault already has the key under this account ID
-            } else {
-              throw new Error("An account with this address already exists");
-            }
+          // Caller may pass `indices: number[]` to derive multiple at once.
+          // Legacy callers pass nothing → derive the next (max+1) index.
+          let indices: number[];
+          if (Array.isArray(message.indices)) {
+            indices = Array.from(
+              new Set(
+                (message.indices as unknown[])
+                  .map((n) => Math.floor(Number(n)))
+                  .filter((n) => Number.isFinite(n) && n >= 0),
+              ),
+            ).sort((a, b) => a - b);
           } else {
-            account = await addSeedPhraseAccount(
-              address,
-              seedGroupId,
-              nextIndex,
-              message.displayName || undefined,
-            );
-            // Store in vault using account UUID (matches vault lookup)
-            await addKeyToVault(account.id, privateKey, password);
+            const nextIndex =
+              groupAccounts.length > 0
+                ? Math.max(
+                    ...groupAccounts.map((a) => (a as any).derivationIndex),
+                  ) + 1
+                : 0;
+            indices = [nextIndex];
           }
 
-          await updateSeedGroupCount(seedGroupId, groupAccounts.length + 1);
+          if (indices.length === 0) {
+            sendResponse({
+              success: false,
+              error: "At least one derivation index is required",
+            });
+            return;
+          }
+
+          const newAccounts: SeedPhraseAccount[] = [];
+          for (const idx of indices) {
+            const privateKey = deriveSeedPrivateKey(mnemonic, idx);
+            const address = deriveAddress(privateKey);
+
+            const existingAccount = await findAccountByAddress(address);
+            let account: SeedPhraseAccount;
+
+            if (existingAccount) {
+              if (existingAccount.type === "privateKey") {
+                const converted = await convertToSeedPhraseAccount(
+                  existingAccount.id,
+                  seedGroupId,
+                  idx,
+                );
+                if (!converted) throw new Error("Failed to convert account");
+                account = converted;
+              } else {
+                // Already a seed-phrase / bankr / impersonator account.
+                // Skip silently so a multi-derive doesn't fail on one collision.
+                continue;
+              }
+            } else {
+              account = await addSeedPhraseAccount(
+                address,
+                seedGroupId,
+                idx,
+                // Only apply the display name to the first new account.
+                newAccounts.length === 0
+                  ? message.displayName || undefined
+                  : undefined,
+              );
+              await addKeyToVault(account.id, privateKey, password);
+            }
+            newAccounts.push(account);
+          }
+
+          if (newAccounts.length === 0) {
+            sendResponse({
+              success: false,
+              error: "All selected addresses already exist in this wallet",
+            });
+            return;
+          }
+
+          await updateSeedGroupCount(
+            seedGroupId,
+            groupAccounts.length + newAccounts.length,
+          );
 
           // Update cached vault
           const vault = await decryptAllKeys(password);
@@ -1562,7 +1738,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           chrome.runtime
             .sendMessage({ type: "accountsUpdated" })
             .catch(() => {});
-          sendResponse({ success: true, account });
+          sendResponse({
+            success: true,
+            account: newAccounts[0],
+            accounts: newAccounts,
+          });
         } catch (error) {
           sendResponse({
             success: false,

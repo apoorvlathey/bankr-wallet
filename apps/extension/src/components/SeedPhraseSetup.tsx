@@ -15,15 +15,30 @@ import {
   Textarea,
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { ArrowBackIcon, CopyIcon, CheckIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import {
+  ArrowBackIcon,
+  CopyIcon,
+  CheckIcon,
+  ViewIcon,
+  ViewOffIcon,
+  AddIcon,
+  DownloadIcon,
+} from "@chakra-ui/icons";
+import { IconBox } from "@/theme";
+import SeedAddressPicker from "./SeedAddressPicker";
 
-type Mode = "choose" | "generate" | "import";
+type Mode = "choose" | "generate" | "import" | "pick";
 
 interface SeedPhraseSetupProps {
   onBack: () => void;
   onComplete: () => void;
-  /** When provided, collect mnemonic without saving (for onboarding flow where wallet isn't unlocked yet) */
-  onCollect?: (mnemonic: string, groupName?: string, accountDisplayName?: string) => void;
+  /** When provided, collect mnemonic + selected derivation indices without saving (for onboarding flow where wallet isn't unlocked yet). */
+  onCollect?: (
+    mnemonic: string,
+    indices: number[],
+    groupName?: string,
+    accountDisplayName?: string,
+  ) => void;
 }
 
 function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps) {
@@ -112,6 +127,9 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   const [confirmed, setConfirmed] = useState(false);
   const [mnemonicCopied, setMnemonicCopied] = useState(false);
 
+  // Set after the import mnemonic validates — drives the picker step.
+  const [pickerMnemonic, setPickerMnemonic] = useState<string | null>(null);
+
   // When switching to generate mode, request a new mnemonic from background
   useEffect(() => {
     if (mode === "generate" && !generatedMnemonic) {
@@ -178,64 +196,66 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   };
 
   const handleImport = async () => {
-    setIsSubmitting(true);
     setError(null);
-
     const trimmed = importedMnemonic.trim().toLowerCase().replace(/\s+/g, " ");
     const words = trimmed.split(" ");
 
     if (words.length !== 12) {
       setError("Seed phrase must be exactly 12 words");
-      setIsSubmitting(false);
       return;
     }
+    // Picker handles validation + initial fetch + loading state itself.
+    setPickerMnemonic(trimmed);
+    setMode("pick");
+  };
 
+  const handlePickerSubmit = async (indices: number[]) => {
+    if (!pickerMnemonic) return;
+    setIsSubmitting(true);
     try {
       if (onCollect) {
-        // collectOnly mode: validate locally, don't save yet
         onCollect(
-          trimmed,
+          pickerMnemonic,
+          indices,
           displayName.trim() || undefined,
-          accountDisplayName.trim() || undefined
+          accountDisplayName.trim() || undefined,
         );
         setIsSubmitting(false);
-      } else {
-        // Normal mode: save via addSeedPhraseGroup
-        const response = await new Promise<{
-          success: boolean;
-          error?: string;
-          account?: any;
-          group?: any;
-        }>((resolve) => {
-          chrome.runtime.sendMessage(
-            {
-              type: "addSeedPhraseGroup",
-              mnemonic: trimmed,
-              name: displayName.trim() || undefined,
-              accountDisplayName: accountDisplayName.trim() || undefined,
-            },
-            resolve
-          );
-        });
-
-        if (!response.success) {
-          setError(response.error || "Failed to import seed phrase");
-          setIsSubmitting(false);
-          return;
-        }
-
-        toast({
-          title: "Seed phrase imported",
-          description: "First account has been derived",
-          status: "success",
-          duration: 2000,
-        });
-
-        onComplete();
+        return;
       }
+      const response = await new Promise<{
+        success: boolean;
+        error?: string;
+        accounts?: any[];
+      }>((resolve) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "addSeedPhraseGroup",
+            mnemonic: pickerMnemonic,
+            indices,
+            name: displayName.trim() || undefined,
+            accountDisplayName: accountDisplayName.trim() || undefined,
+          },
+          resolve,
+        );
+      });
+
+      if (!response.success) {
+        setIsSubmitting(false);
+        throw new Error(response.error || "Failed to import seed phrase");
+      }
+
+      const count = response.accounts?.length ?? indices.length;
+      toast({
+        title: "Seed phrase imported",
+        description: count === 1 ? "1 account derived" : `${count} accounts derived`,
+        status: "success",
+        duration: 2000,
+      });
+      onComplete();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to import seed phrase");
       setIsSubmitting(false);
+      throw err;
     }
   };
 
@@ -328,9 +348,12 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
             onClick={() => {
               setConfirmed(true);
               if (onCollect) {
-                // collectOnly mode: pass mnemonic back without saving
+                // collectOnly mode: pass mnemonic back without saving.
+                // Generate flow only ever creates index 0 — picker is
+                // import-only since fresh mnemonics have nothing to discover.
                 onCollect(
                   generatedMnemonic,
+                  [0],
                   displayName.trim() || undefined,
                   accountDisplayName.trim() || undefined
                 );
@@ -384,6 +407,9 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               _hover={isSubmitting ? {} : { bg: "surface.raisedHover" }}
             >
               <HStack spacing={3} align="center">
+                <IconBox size="32px" bg="accent.primary" noShadow>
+                  <AddIcon color="accentFg.primary" boxSize="14px" />
+                </IconBox>
                 <VStack align="start" spacing={1} flex={1}>
                   <Text fontSize="sm" fontWeight="900" color="text.primary" textTransform="uppercase">
                     Generate New
@@ -412,14 +438,19 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               onClick={() => setMode("import")}
               _hover={isSubmitting ? {} : { bg: "surface.raisedHover" }}
             >
-              <VStack align="start" spacing={1}>
-                <Text fontSize="sm" fontWeight="900" color="text.primary" textTransform="uppercase">
-                  Import Existing
-                </Text>
-                <Text fontSize="xs" color="text.secondary" fontWeight="500">
-                  Import a 12-word seed phrase from another wallet
-                </Text>
-              </VStack>
+              <HStack spacing={3} align="center">
+                <IconBox size="32px" bg="accent.secondary" noShadow>
+                  <DownloadIcon color="accentFg.secondary" boxSize="14px" />
+                </IconBox>
+                <VStack align="start" spacing={1} flex={1}>
+                  <Text fontSize="sm" fontWeight="900" color="text.primary" textTransform="uppercase">
+                    Import Existing
+                  </Text>
+                  <Text fontSize="xs" color="text.secondary" fontWeight="500">
+                    Import a 12-word seed phrase from another wallet
+                  </Text>
+                </VStack>
+              </HStack>
             </Box>
           </VStack>
       </Wrapper>
@@ -498,6 +529,40 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
             Generate Seed Phrase
           </Button>
       </Wrapper>
+    );
+  }
+
+  // Address picker (shown after validating an imported mnemonic).
+  // Lets the user select one or more addresses to import — covers wallets that
+  // shifted the user's "first" address to a non-zero BIP44 index, and matches
+  // MetaMask/Rabby's standard import UX.
+  if (mode === "pick" && pickerMnemonic) {
+    return (
+      <SeedAddressPicker
+        title="Select Addresses"
+        source={{ kind: "mnemonic", mnemonic: pickerMnemonic }}
+        variant={isOnboarding ? "onboarding" : "panel"}
+        isSubmitting={isSubmitting}
+        onBack={() => {
+          setMode("import");
+          setPickerMnemonic(null);
+        }}
+        onSubmit={handlePickerSubmit}
+        intro={
+          <Box
+            bg="surface.raised"
+            border="2px solid"
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
+            p={3}
+          >
+            <Text fontSize="xs" color="text.secondary" fontWeight="500">
+              Pick which addresses from this seed phrase to add.
+            </Text>
+          </Box>
+        }
+      />
     );
   }
 
@@ -582,10 +647,10 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
           w="full"
           onClick={handleImport}
           isLoading={isSubmitting}
-          loadingText="Importing..."
+          loadingText="Deriving..."
           isDisabled={!importedMnemonic.trim()}
         >
-          Import & Derive Account
+          Continue
         </Button>
     </Wrapper>
   );

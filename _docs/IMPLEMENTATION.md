@@ -80,6 +80,7 @@ The extension supports four distinct account types that can be used simultaneous
 - **Byte conversion**: Uses native `bytesToHex()` from `cryptoUtils.ts` instead of Node.js `Buffer` (not available in browser service worker)
 - **Files**: `seedPhraseUtils.ts` (BIP39/44), `mnemonicStorage.ts` (encrypted CRUD + `reEncryptMnemonicVault` for password changes), `SeedPhraseSetup.tsx` (UI), `RevealSeedPhraseModal.tsx` (reveal with password)
 - **Display**: Account dropdown shows seed group name + derivation index (e.g., "Seed #1 · #0"). Account settings shows derivation index in type label.
+- **Address picker (shared)**: `components/SeedAddressPicker.tsx` is the single picker UI used by both flows: (1) new-import in `SeedPhraseSetup`, and (2) "Derive Addresses" on an existing seed group in `AddAccount`. Each row renders avatar (ENS or blockie), ENS name, BIP44 index, truncated address, portfolio USD total (`fetchPortfolio`, aborted on unmount), a copy button, and an Etherscan-mainnet link. The picker calls the background `previewSeedAddresses` handler, which accepts EITHER a raw `mnemonic` (import flow, no auth) OR a `seedGroupId` (existing-group flow, decrypts the stored mnemonic — requires unlocked wallet with master password). Paginates 5 at a time. Existing-group mode initial-fetches `0..maxExistingIndex + 5` so users see their already-added accounts in context (locked as "added"). `addSeedPhraseGroup` and `deriveSeedAccount` both accept `indices: number[]` — non-PK collisions are silently skipped, PK collisions still convert in place. Generate flow is unchanged (always derives index 0; nothing to discover on a fresh mnemonic).
 
 #### PK → Seed Phrase Account Conversion
 
@@ -1904,7 +1905,8 @@ Build command: `pnpm build`
 | `updateAccountDisplayName`         | Update account display name                                                                     |
 | `addImpersonatorAccount`           | Add view-only impersonator account (address only)                                               |
 | `generateMnemonic`                 | Generate fresh BIP39 mnemonic (no storage). **Sender-verified**                                 |
-| `addSeedPhraseGroup`               | Generate/import mnemonic, create seed group, derive first account (handles PK collision)        |
+| `addSeedPhraseGroup`               | Generate/import mnemonic, create seed group, derive the requested set of indices (defaults to `[0]`; handles PK collision, silently skips already-imported non-PK addresses) |
+| `previewSeedAddresses`             | Derive a paginated range of addresses from a candidate mnemonic without persisting anything (used by the import picker). **Sender-verified** |
 | `deriveSeedAccount`                | Derive next account from existing seed group (handles PK collision)                             |
 | `revealSeedPhrase`                 | Reveal mnemonic (requires master password verification). **Sender-verified**                    |
 | `getSeedGroups`                    | Get all seed group metadata                                                                     |

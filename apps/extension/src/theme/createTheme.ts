@@ -54,6 +54,7 @@ export function createChakraTheme(tokens: ThemeTokens) {
       Heading: buildHeading(tokens),
       FormLabel: buildFormLabel(tokens),
       Switch: buildSwitch(tokens),
+      Radio: buildRadio(tokens),
       Spinner: buildSpinner(),
       Modal: buildModal(tokens),
       Menu: buildMenu(tokens),
@@ -461,6 +462,30 @@ function buildSwitch(t: ThemeTokens) {
         bg: "surface.raised",
         border: t.borders.thin,
         borderColor: "border.default",
+      },
+    },
+  };
+}
+
+function buildRadio(t: ThemeTokens) {
+  // Force the radio control to read on stark light backgrounds (Bauhaus) by
+  // giving it a thick `border.default` outline + matching dot color. Without
+  // this, Chakra's default thin gray ring disappears against WHITE cards.
+  return {
+    baseStyle: {
+      control: {
+        bg: "surface.raised",
+        border: t.borders.thin,
+        borderColor: "border.default",
+        _checked: {
+          bg: "surface.raised",
+          borderColor: "border.default",
+          color: "fg.primary",
+          _hover: {
+            bg: "surface.raised",
+            borderColor: "border.default",
+          },
+        },
       },
     },
   };

@@ -1,38 +1,44 @@
 import { Icon } from "@chakra-ui/react";
 
-// Robot icon for Bankr accounts
+// Robot icon for Bankr accounts — Material Design "android" silhouette
+// (rounded head + two stubby antennae + symmetric eye dots). Reads cleanly
+// at small sizes and unambiguously says "bot" without the busy AI-image vibe.
 export const RobotIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" {...props}>
+  <Icon viewBox="0 0 24 24" display="block" {...props}>
     <path
       fill="currentColor"
-      d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5A2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5a2.5 2.5 0 0 0 2.5 2.5a2.5 2.5 0 0 0 2.5-2.5a2.5 2.5 0 0 0-2.5-2.5Z"
+      d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24c-2.86-1.21-6.08-1.21-8.94 0L5.65 5.67c-.19-.29-.58-.38-.87-.2-.28.18-.37.54-.22.83L6.4 9.48C3.3 11.25 1.28 14.44 1 18h22c-.28-3.56-2.3-6.75-5.4-8.52zM7 15.25c-.69 0-1.25-.56-1.25-1.25s.56-1.25 1.25-1.25 1.25.56 1.25 1.25-.56 1.25-1.25 1.25zm10 0c-.69 0-1.25-.56-1.25-1.25s.56-1.25 1.25-1.25 1.25.56 1.25 1.25-.56 1.25-1.25 1.25z"
     />
   </Icon>
 );
 
-// Key icon for Private Key accounts
+// Key icon for Private Key accounts — Material Design horizontal key
+// (round bow on the right with a teardrop hole + flat shaft + teeth on the
+// left). Single recognizable silhouette, no extraneous detail.
 export const KeyIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" {...props}>
+  <Icon viewBox="0 0 24 24" display="block" {...props}>
     <path
       fill="currentColor"
-      d="M7 14c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm0-4c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1zm14 8.5l-5.5-5.5.71-.71L17.5 11l-.71-.71-2.5 2.5-2.29-2.29-.71.71.71.71-2 2V14H9v1H8v1H7v1H4v-1l7-7c-.55-.89-.95-1.89-1-3H7c0-2.76 2.24-5 5-5 2.21 0 4.05 1.43 4.71 3.42l.79.79 1.79-1.79.71.71-.71.71 1.79 1.79.71-.71-.71-.71 1.71-1.71 1.5 1.5-8 8-1.29-1.29z"
+      d="M7 14c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm5.65-4A5.99 5.99 0 0 0 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6a5.99 5.99 0 0 0 5.65-4H17v4h4v-4h2v-4H12.65z"
     />
   </Icon>
 );
 
-// Seed icon for Seed Phrase accounts
+// Wallet icon for Seed Phrase accounts — Material Design
+// "account-balance-wallet" (billfold with a coin slot). Replaces the old
+// sprout/leaf icon, which didn't read as "wallet seed" at a glance.
 export const SeedIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" {...props}>
+  <Icon viewBox="0 0 24 24" display="block" {...props}>
     <path
       fill="currentColor"
-      d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66.95-2.7c.28.33.6.62.94.88A6.003 6.003 0 0 0 17 20a6 6 0 0 0 0-12zm0 10c-1.4 0-2.6-.77-3.26-1.9l3.86-1.42-.66-1.79-3.86 1.42c-.14-.46-.2-.94-.14-1.42A8.55 8.55 0 0 1 17 10a4 4 0 0 1 0 8zM2 4.27l3.11 3.11A20.7 20.7 0 0 0 2.77 12l1.9.66c.38-1.07.86-2.22 1.47-3.38l1.37 1.37c-.5.98-.89 1.94-1.18 2.83l1.89.66c.2-.6.46-1.22.77-1.87l7.44 7.44 1.41-1.41L3.41 2.86 2 4.27z"
+      d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"
     />
   </Icon>
 );
 
 // Eye icon for Impersonator (view-only) accounts
 export const EyeIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" {...props}>
+  <Icon viewBox="0 0 24 24" display="block" {...props}>
     <path
       fill="currentColor"
       d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"

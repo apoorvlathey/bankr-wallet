@@ -141,6 +141,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResolvingAddress, setIsResolvingAddress] = useState(false);
   const [collectedMnemonic, setCollectedMnemonic] = useState("");
+  const [collectedSeedIndices, setCollectedSeedIndices] = useState<number[]>([0]);
   const [seedGroupName, setSeedGroupName] = useState("");
   const [seedAccountDisplayName, setSeedAccountDisplayName] = useState("");
   const [errors, setErrors] = useState<{
@@ -353,6 +354,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
             {
               type: "addSeedPhraseGroup",
               mnemonic: collectedMnemonic,
+              indices: collectedSeedIndices,
               name: seedGroupName || undefined,
               accountDisplayName: seedAccountDisplayName || undefined,
             },
@@ -511,6 +513,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
       setPassword("");
       setConfirmPassword("");
       setCollectedMnemonic("");
+      setCollectedSeedIndices([0]);
 
       // Show success step
       setStep("success");
@@ -883,8 +886,9 @@ function Onboarding({ onComplete }: OnboardingProps) {
         <SeedPhraseSetup
           onBack={() => setStep("accountType")}
           onComplete={() => {}}
-          onCollect={(mnemonic, groupName, accountDisplayName) => {
+          onCollect={(mnemonic, indices, groupName, accountDisplayName) => {
             setCollectedMnemonic(mnemonic);
+            setCollectedSeedIndices(indices.length > 0 ? indices : [0]);
             setSeedGroupName(groupName || "");
             setSeedAccountDisplayName(accountDisplayName || "");
             setStep("password");
