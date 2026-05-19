@@ -10,6 +10,10 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.9.0] - 2026-05-19
+
 ### Added
 
 - **ENS Browsing.** Type `vitalik.eth` (or any `*.eth` subdomain) in the address bar and WalletChan resolves it through your configured Ethereum mainnet RPC and forwards you to the right gateway — `eth.limo` for IPFS/IPNS content, `w3eth.io` for ERC-4804 onchain HTML dapps. Default ON; toggle in Settings → ENS Browsing.
@@ -28,6 +32,7 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 - ENS gateway routing uses `declarativeNetRequestWithHostAccess` so future updates apply silently instead of triggering a Chrome permission re-prompt that would disable the extension.
 - Logo image corners now match rounded surfaces in the Midnight theme.
 - Unchecked contract-recipient warning checkbox is now visible in the Bauhaus theme.
+
 
 ## [3.8.0] - 2026-05-17
 
@@ -392,7 +397,8 @@ This release is a full rebuild of the wallet — multiple account types, a real 
 - View address on Debank from the homepage.
 - Lock-wallet button and footer attribution.
 
-[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.8.0...HEAD
+[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.9.0...HEAD
+[3.9.0]: https://github.com/apoorvlathey/walletchan/compare/v3.8.0...v3.9.0
 [3.8.0]: https://github.com/apoorvlathey/walletchan/compare/v3.7.0...v3.8.0
 [3.7.0]: https://github.com/apoorvlathey/walletchan/compare/v3.6.0...v3.7.0
 [3.6.0]: https://github.com/apoorvlathey/walletchan/compare/v3.5.0...v3.6.0
