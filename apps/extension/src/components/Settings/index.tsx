@@ -325,6 +325,9 @@ function Settings({
           {/* Chain RPCs — top-level single entry */}
           {renderLeafRow("chains", rowCtx)}
 
+          {/* ENS Browsing — top-level single entry */}
+          {renderLeafRow("ensBrowsing", rowCtx)}
+
           {/* Data group */}
           <SettingsRow
             title="Data"
