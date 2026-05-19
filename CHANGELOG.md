@@ -15,6 +15,19 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 - **ENS Browsing.** Type `vitalik.eth` (or any `*.eth` subdomain) in the address bar and WalletChan resolves it through your configured Ethereum mainnet RPC and forwards you to the right gateway — `eth.limo` for IPFS/IPNS content, `w3eth.io` for ERC-4804 onchain HTML dapps. Default ON; toggle in Settings → ENS Browsing.
 - **ENS Browsing — local Kubo gateway (opt-in).** Power-user mode: when you have IPFS Desktop (or a local Kubo node) running, IPFS / IPNS sites stream straight from `127.0.0.1:8080` with a themed identity banner showing the original ENS name. Falls back to `eth.limo` silently when Kubo isn't reachable.
 - **ENS Browsing — onchain HTML via local Kubo (opt-in).** Pin ERC-4804 dapps (e.g. `zrouter.eth`) to your local Kubo node and serve them from `<cid>.ipfs.localhost` for fully local trust. Requires a one-time Kubo CORS allowlist update; WalletChan opens a guided setup screen on first enable.
+- Direct gateway URLs (`*.eth.limo`, `*.eth.link`, and raw `0x<addr>.w3eth.io`) are also intercepted and routed through ENS Browsing, so deep-links into IPFS and ERC-4804 dapps get the same local-gateway treatment as `*.eth` names.
+- Identity banner on local-Kubo dapps now has an editable address bar that mirrors pathname / search / hash, auto-syncs on SPA navigation, plus a 3-dot menu with Copy URL and Open on gateway.
+
+### Changed
+
+- ENS Browsing settings reworked: master Enable toggle with a dynamic subtitle reflecting the active resolution path (disabled / hosted / local), inline gateway URL editor, and a Kubo API status pill that opens the CORS setup screen when local pinning is blocked.
+
+### Fixed
+
+- ENS Browsing card now appears on the Settings main page.
+- ENS gateway routing uses `declarativeNetRequestWithHostAccess` so future updates apply silently instead of triggering a Chrome permission re-prompt that would disable the extension.
+- Logo image corners now match rounded surfaces in the Midnight theme.
+- Unchecked contract-recipient warning checkbox is now visible in the Bauhaus theme.
 
 ## [3.8.0] - 2026-05-17
 
