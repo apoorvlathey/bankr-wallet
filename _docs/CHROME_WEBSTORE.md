@@ -129,6 +129,20 @@ None of these requests involve downloading or executing code. They are purely da
 
 ---
 
+### 8. declarativeNetRequestWithHostAccess
+
+**Justification:**
+
+Used solely to power the ENS Browsing feature (the `*.eth` address-bar feature added in v3.9.0). Two rule types are registered:
+
+1. HTTPS-upgrade exemption for `*.ipfs.localhost`: Chrome auto-rewrites http:// to https://, which breaks local IPFS / Kubo gateways running on 127.0.0.1. A static rule disables the upgrade only for that hostname.
+
+2. ENS gateway interception: `*.eth.limo`, `*.eth.link`, and (in local-pin mode) `*.w3eth.io` requests are redirected through the extension's resolver so users land on the correct gateway — public eth.limo / w3eth.io, or a local Kubo node if configured. A per-tab session-scoped ALLOW rule lets the in-page banner's "Open on gateway" action bypass the redirect on one click.
+
+The extension does NOT block ads, modify third-party headers, or read response bodies. All rules are scoped to ENS Browsing and are removed when the user disables it in Settings.
+
+---
+
 ## Privacy Policy URL
 
 https://github.com/apoorvlathey/walletchan/blob/master/PRIVACY_POLICY.md
