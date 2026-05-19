@@ -495,7 +495,7 @@ resumePendingPollers();
 import { recoverStuckForceInclusionTxs } from "./forceInclusion";
 recoverStuckForceInclusionTxs();
 
-// Initialize ENS browsing (Tier 1 by default — installs the DNR rule that
+// Initialize ENS browsing (enabled by default — installs the DNR rule that
 // intercepts `*.eth` navigations and routes them through the interstitial).
 initEnsBrowsing().catch((e) =>
   console.warn("[ens] init failed", e),

@@ -1,21 +1,30 @@
 // URL builders for ENS-resolved navigations.
 //
 // Two flavors:
-//   - `buildHostedGatewayUrl()` — Tier 1 path. Returns the canonical hosted
-//     gateway URL for the kind: <name>.eth.limo for ipfs/ipns,
+//   - `buildHostedGatewayUrl()` — hosted-gateway path. Returns the canonical
+//     hosted gateway URL for the kind: <name>.eth.limo for ipfs/ipns,
 //     <name>.w3eth.io for web3 (ERC-4804).
-//   - `buildSubdomainUrl()` — Tier 2a/2b path. Returns the local Kubo
-//     subdomain gateway URL (<cid>.ipfs.localhost:8080).
+//   - `buildSubdomainUrl()` — local-gateway path. Returns the local Kubo
+//     subdomain gateway URL (<cid>.ipfs.<host>:<port>). Defaults to
+//     localhost:8080 but the caller can pass a user-configured host/port.
 //
 // Ported from dapp3 `src/lib/gateway.ts`; the hosted-gateway builder is new.
 
 import type { ResolveKind } from "./types";
-
-const KUBO_GATEWAY_HOST = "localhost";
-const KUBO_GATEWAY_PORT = 8080;
+import {
+  DEFAULT_GATEWAY_HOST,
+  DEFAULT_GATEWAY_PORT,
+} from "./settingsStorage";
 
 const ETH_LIMO_HOST = "eth.limo";
 const W3ETH_IO_HOST = "w3eth.io";
+
+export type GatewayLocation = { host: string; port: number };
+
+export const DEFAULT_GATEWAY_LOCATION: GatewayLocation = {
+  host: DEFAULT_GATEWAY_HOST,
+  port: DEFAULT_GATEWAY_PORT,
+};
 
 export function buildSubdomainUrl(
   kind: ResolveKind,
@@ -23,18 +32,19 @@ export function buildSubdomainUrl(
   path = "/",
   search = "",
   hash = "",
+  gateway: GatewayLocation = DEFAULT_GATEWAY_LOCATION,
 ): string {
   // ERC-4804 (web3) content is pinned to local Kubo and served at the same
-  // <cid>.ipfs.localhost subdomain as a normal IPFS contenthash — `value`
-  // here is already the resulting IPFS CID. Map web3 to ipfs for URL shape.
+  // <cid>.ipfs.<host> subdomain as a normal IPFS contenthash — `value` here
+  // is already the resulting IPFS CID. Map web3 to ipfs for URL shape.
   const subdomain = kind === "web3" ? "ipfs" : kind;
   const label = subdomain === "ipns" ? encodeIpnsLabel(value) : value;
-  const base = `http://${label}.${subdomain}.${KUBO_GATEWAY_HOST}:${KUBO_GATEWAY_PORT}`;
+  const base = `http://${label}.${subdomain}.${gateway.host}:${gateway.port}`;
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   return `${base}${normalizedPath}${search}${hash}`;
 }
 
-// Tier 1: route through the user's choice of hosted gateway. eth.limo for
+// Route through the user's choice of hosted gateway. eth.limo for
 // IPFS/IPNS-served ENS sites; w3eth.io for ERC-4804 onchain HTML dapps. Both
 // gateways follow the `<name>.<gateway>` naming convention so the ENS name
 // remains visible in the address bar.
@@ -60,14 +70,22 @@ export function encodeIpnsLabel(label: string): string {
   return label.replace(/-/g, "--").replace(/\./g, "-");
 }
 
-export function isGatewayHost(host: string): boolean {
-  return /\.(ipfs|ipns)\.localhost(:\d+)?$/i.test(host);
+export function isGatewayHost(
+  host: string,
+  gatewayHost: string = DEFAULT_GATEWAY_HOST,
+): boolean {
+  const escaped = gatewayHost.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\.(ipfs|ipns)\\.${escaped}(:\\d+)?$`, "i").test(host);
 }
 
 export function parseGatewayHost(
   host: string,
+  gatewayHost: string = DEFAULT_GATEWAY_HOST,
 ): { kind: "ipfs" | "ipns"; label: string } | null {
-  const m = host.match(/^(.+)\.(ipfs|ipns)\.localhost(?::\d+)?$/i);
+  const escaped = gatewayHost.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = host.match(
+    new RegExp(`^(.+)\\.(ipfs|ipns)\\.${escaped}(?::\\d+)?$`, "i"),
+  );
   if (!m || !m[1] || !m[2]) return null;
   return { kind: m[2] as "ipfs" | "ipns", label: m[1] };
 }

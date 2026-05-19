@@ -1,11 +1,11 @@
 // ERC-4804 / ERC-5219 fallback probe.
 //
 // Ported from dapp3 `src/lib/web3url.ts`. Two callers:
-//   - Tier 1 routing (`resolver.ts`) — uses `probeOnly: true` to confirm the
-//     contract implements ERC-4804 (so we can route to w3eth.io) without
-//     paying the cost of the full `request()` call.
-//   - Tier 2b serving (future fetchPinAndCacheErc4804) — uses the default
-//     mode to fetch the full HTML body for pinning to local Kubo.
+//   - Hosted-gateway routing (`resolver.ts`) — uses `probeOnly: true` to
+//     confirm the contract implements ERC-4804 (so we can route to w3eth.io)
+//     without paying the cost of the full `request()` call.
+//   - Pin-onchain-HTML serving (`fetchPinAndCacheErc4804`) — uses the
+//     default mode to fetch the full HTML body for pinning to local Kubo.
 //
 // v1 scope: manual / 5219 mode only, index route only, HTML responses only.
 // Auto mode + path routing + non-HTML are deferred.
@@ -74,9 +74,10 @@ function bytes32ToString(value: `0x${string}`): string {
 }
 
 export type FetchErc4804Options = {
-  // Tier 1 only needs to confirm the contract implements ERC-4804 so it can
-  // route to w3eth.io. probeOnly=true skips the (potentially expensive)
-  // request() call and returns immediately after the resolveMode() check.
+  // Hosted-gateway routing only needs to confirm the contract implements
+  // ERC-4804 so it can route to w3eth.io. probeOnly=true skips the
+  // (potentially expensive) request() call and returns immediately after the
+  // resolveMode() check.
   probeOnly?: boolean;
 };
 

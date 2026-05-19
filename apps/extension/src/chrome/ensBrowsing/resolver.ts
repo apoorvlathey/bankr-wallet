@@ -1,4 +1,4 @@
-// ENS resolver — the core of Tier 1.
+// ENS resolver — the core of the hosted-gateway routing path.
 //
 // Ported from dapp3's `src/lib/resolver.ts` with the Helios verified-state
 // transport stripped out. Every read currently goes through a direct HTTP
@@ -6,10 +6,11 @@
 // Helios-verified transport would slot in, a `// TODO(helios)` marker
 // documents the call site.
 //
-// For Tier 1 (hosted-gateway routing) we resolve the contenthash and, if
-// missing, probe the resolved address for ERC-4804 support so we can route
-// onchain HTML to w3eth.io. The full fetch-pin-cache flow is implemented in
-// Tier 2b; this module only needs to differentiate the routing kind.
+// We resolve the contenthash and, if missing, probe the resolved address for
+// ERC-4804 support so we can route onchain HTML to w3eth.io. The full
+// fetch-pin-cache flow (only used when `pinOnchainHtml` is ON) extends this
+// with a Kubo write step; the rest of this module only needs to differentiate
+// the routing kind.
 
 import {
   createPublicClient,
@@ -83,6 +84,14 @@ export async function resolveEns(
   }
   const stripped = lower.endsWith(".") ? lower.slice(0, -1) : lower;
 
+  // Raw-address mode: the W3ETH_REGEX DNR rule rewrites
+  // `0x<addr>.w3eth.io` → `http://0x<addr>.eth`, which arrives here as
+  // `0x<addr>.eth`. Skip ENS lookup and resolve as an ERC-4804 contract.
+  const labelOnly = stripped.slice(0, -4);
+  if (/^0x[a-f0-9]{40}$/.test(labelOnly)) {
+    return resolveContractAddress(labelOnly);
+  }
+
   const rpcUrl = await getStoredRpcUrl(1);
   if (!rpcUrl) {
     return {
@@ -153,8 +162,9 @@ export async function resolveEns(
   }
 
   // ERC-4804 fallback: read addr() and probe for ERC-5219 / manual support.
-  // In Tier 1 we only need to *detect* it so we can route to w3eth.io; the
-  // full fetch-pin-cache flow lives in Tier 2b's extended branch.
+  // The hosted-gateway path only needs to *detect* support so it can route
+  // to w3eth.io; the full fetch-pin-cache flow lives in the branch below
+  // gated on `pinOnchainHtml`.
   let address: `0x${string}`;
   try {
     address = (await client.readContract({
@@ -182,11 +192,11 @@ export async function resolveEns(
     };
   }
 
-  // Tier 2b ON → fetch-pin-cache flow returns an IPFS CID (served via local
-  // Kubo subdomain). Tier 2b OFF → lightweight probe only; the `value` is
-  // the contract address and the caller routes to w3eth.io.
+  // pinOnchainHtml ON → fetch-pin-cache flow returns an IPFS CID (served via
+  // local Kubo subdomain). OFF → lightweight probe only; the `value` is the
+  // contract address and the caller routes to w3eth.io.
   const settings = await getEnsBrowsingSettings();
-  if (settings.tier2bKubo) {
+  if (settings.pinOnchainHtml) {
     return await fetchPinAndCacheErc4804(
       client,
       address.toLowerCase() as `0x${string}`,
@@ -213,7 +223,45 @@ export async function resolveEns(
   };
 }
 
-// Tier 2b: fetch the contract HTML via viem, sha256-dedupe against the
+// Resolve a raw 0x contract address as an ERC-4804 dapp, skipping ENS lookup.
+// Reached via the `0x<addr>.w3eth.io` interception path — the W3ETH_REGEX
+// rewrites those URLs to `http://0x<addr>.eth` and `resolveEns` detects the
+// shape and dispatches here. The `ensName` field on the response is the
+// lowercased address itself, since there is no associated ENS name.
+//
+// The w3eth.io DNR rule is only installed when pinOnchainHtml is ON, so we
+// can assume the local-pin path is the right destination. If Kubo is up but
+// not CORS-allowed, the returned `kubo-cors-blocked` code bounces the user
+// through setup-kubo.html.
+export async function resolveContractAddress(
+  address: string,
+): Promise<ResolveResponse> {
+  const lower = address.toLowerCase();
+  if (!/^0x[a-f0-9]{40}$/.test(lower)) {
+    return { ok: false, error: `Not a contract address: ${address}` };
+  }
+
+  const rpcUrl = await getStoredRpcUrl(1);
+  if (!rpcUrl) {
+    return {
+      ok: false,
+      error:
+        "No Ethereum mainnet RPC configured. Open WalletChan → Settings → Chain RPCs to add one.",
+      code: "no-mainnet-rpc",
+    };
+  }
+
+  // TODO(helios): wrap in Helios verified transport when available.
+  const client = getDirectClient(rpcUrl);
+  return await fetchPinAndCacheErc4804(
+    client,
+    lower as `0x${string}`,
+    lower,
+    true,
+  );
+}
+
+// pinOnchainHtml path: fetch the contract HTML via viem, sha256-dedupe against the
 // per-contract cache, pin to local Kubo if changed, evict LRU entries to
 // fit budget. The returned `value` is the CID (served from
 // <cid>.ipfs.localhost:8080 alongside ordinary IPFS contenthashes).

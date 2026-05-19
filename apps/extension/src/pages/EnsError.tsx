@@ -17,7 +17,6 @@ import {
   Button,
   Center,
   HStack,
-  Link,
   Text,
   VStack,
 } from "@chakra-ui/react";
@@ -35,21 +34,50 @@ function parseParams() {
   };
 }
 
-function ethLimoFallback(name: string, path: string, search: string, hash: string): string | null {
+// Raw-address w3eth.io URLs arrive here as `0x<addr>.eth` because the
+// W3ETH_REGEX rewrite adds `.eth` so the existing routing catches them. For
+// display we strip it back to the bare address.
+function displayName(name: string): string {
   const lower = name.toLowerCase();
+  if (/^0x[a-f0-9]{40}\.eth$/.test(lower)) return lower.slice(0, -4);
+  return name;
+}
+
+type Fallback = { url: string; label: string; gateway: "eth.limo" | "w3eth.io" };
+
+function hostedFallback(
+  name: string,
+  path: string,
+  search: string,
+  hash: string,
+): Fallback | null {
+  const lower = name.toLowerCase();
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  if (/^0x[a-f0-9]{40}\.eth$/.test(lower)) {
+    const addr = lower.slice(0, -4);
+    return {
+      url: `https://${addr}.w3eth.io${normalizedPath}${search}${hash}`,
+      label: "Try on w3eth.io",
+      gateway: "w3eth.io",
+    };
+  }
   if (!/^(?:[a-z0-9-]+\.)+eth$/.test(lower)) return null;
   const trimmed = lower.slice(0, -4);
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `https://${trimmed}.eth.limo${normalizedPath}${search}${hash}`;
+  return {
+    url: `https://${trimmed}.eth.limo${normalizedPath}${search}${hash}`,
+    label: "Try on eth.limo",
+    gateway: "eth.limo",
+  };
 }
 
 export default function EnsError() {
   const { tokens } = useTheme();
   const params = useMemo(() => parseParams(), []);
-  const fallbackUrl = useMemo(
-    () => ethLimoFallback(params.ensName, params.path, params.search, params.hash),
+  const fallback = useMemo(
+    () => hostedFallback(params.ensName, params.path, params.search, params.hash),
     [params],
   );
+  const displayedName = useMemo(() => displayName(params.ensName), [params]);
 
   return (
     <Center minH="100vh" p={6}>
@@ -67,10 +95,10 @@ export default function EnsError() {
               </IconBox>
               <VStack align="start" spacing={0}>
                 <Text fontSize="xs" color="fg.muted" letterSpacing="0.08em">
-                  WALLETCHAN · ENS BROWSING
+                  WALLETCHAN · DAPP3 · ENS BROWSING
                 </Text>
                 <Text fontWeight={700} fontSize="md">
-                  Couldn't resolve {params.ensName || "this name"}
+                  Couldn't resolve {displayedName || "this name"}
                 </Text>
               </VStack>
             </HStack>
@@ -93,15 +121,28 @@ export default function EnsError() {
                 You can try the hosted gateway directly, or open WalletChan to
                 pick a different mainnet RPC.
               </Text>
-              {fallbackUrl && (
+              {fallback && (
                 <Button
-                  as={Link}
-                  href={fallbackUrl}
                   variant="solid"
                   size="md"
                   rightIcon={<ExternalLinkIcon />}
+                  onClick={() => {
+                    // Route through the SW so it can install the per-tab
+                    // ALLOW bypass first — both gateways are intercepted by
+                    // our DNR rules in the relevant configurations and a
+                    // direct `location.assign` would just bounce back here.
+                    chrome.runtime
+                      .sendMessage({
+                        type: "ens-open-on-gateway",
+                        url: fallback.url,
+                      })
+                      .then((resp) => {
+                        if (!resp?.ok) location.assign(fallback.url);
+                      })
+                      .catch(() => location.assign(fallback.url));
+                  }}
                 >
-                  Try on eth.limo
+                  {fallback.label}
                 </Button>
               )}
             </VStack>

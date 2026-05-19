@@ -9,9 +9,9 @@
 //   - ens-get-tab-ctx          : banner content script asks for its identity
 //   - ens-get-theme-tokens     : banner content script asks for theme colors
 //
-// All redirect targets are computed from the current settings: Tier 2a ON +
-// Kubo reachable → local subdomain gateway; otherwise → hosted gateway
-// (eth.limo / w3eth.io).
+// All redirect targets are computed from the current settings:
+// useLocalGateway ON + Kubo reachable → local subdomain gateway; otherwise →
+// hosted gateway (eth.limo / w3eth.io).
 
 import { getEnsBrowsingSettings } from "./settingsStorage";
 import { resolveEns } from "./resolver";
@@ -20,6 +20,7 @@ import {
   buildSubdomainUrl,
   parseGatewayHost,
 } from "./gateway";
+import { addEthGatewayBypassForTab, addW3ethBypassForTab } from "./dnrRules";
 import {
   findCachedByGatewayLabel,
   getCached,
@@ -56,13 +57,10 @@ function errorPageUrl(
   return u.toString();
 }
 
-// Pick the right gateway URL given current settings. Tier 2a (when ON and
-// Kubo reachable, checked elsewhere) uses local subdomain serving so the
-// content-script banner can render. Tier 1 routes to the hosted gateway.
-//
-// In this initial Tier-1-only build the local-IPFS branch is wired through a
-// stub `shouldServeLocally` that always returns false; Tier 2a tasks (11-13)
-// flip the actual probe logic on.
+// Pick the right gateway URL given current settings. When `useLocalGateway`
+// is ON and Kubo is reachable (checked elsewhere), serve from the local
+// subdomain gateway so the content-script banner can render. Otherwise route
+// to the hosted gateway.
 async function chooseGatewayUrl(
   kind: ResolveKind,
   value: string,
@@ -72,25 +70,28 @@ async function chooseGatewayUrl(
   hash: string,
 ): Promise<string> {
   const settings = await getEnsBrowsingSettings();
-  if (settings.tier2aLocalIpfs && (await shouldServeLocally(kind))) {
-    return buildSubdomainUrl(kind, value, path || "/", search, hash);
+  if (settings.useLocalGateway && (await shouldServeLocally(kind))) {
+    return buildSubdomainUrl(kind, value, path || "/", search, hash, {
+      host: settings.gatewayHost,
+      port: settings.gatewayPort,
+    });
   }
   return buildHostedGatewayUrl(kind, ensName, path || "/", search, hash);
 }
 
 // Decide whether to use the local Kubo subdomain gateway vs the hosted one.
-//   - ipfs / ipns: needs Tier 2a + Kubo gateway reachable.
-//   - web3 (ERC-4804): the resolver only produces an IPFS CID when Tier 2b
-//     is ON (otherwise it returns the raw contract address for w3eth.io
-//     routing), so seeing a `kind: "web3"` resolution here means Tier 2b is
-//     already enabled — we just need the Kubo gateway to also be reachable.
+//   - ipfs / ipns: needs `useLocalGateway` + Kubo gateway reachable.
+//   - web3 (ERC-4804): the resolver only produces an IPFS CID when
+//     `pinOnchainHtml` is ON (otherwise it returns the raw contract address
+//     for w3eth.io routing), so seeing a `kind: "web3"` resolution here means
+//     pinning is already enabled — we just need the Kubo gateway reachable.
 async function shouldServeLocally(kind: ResolveKind): Promise<boolean> {
   const settings = await getEnsBrowsingSettings();
   if (kind === "web3") {
-    if (!settings.tier2bKubo) return false;
+    if (!settings.pinOnchainHtml) return false;
     return probeKuboGateway();
   }
-  if (!settings.tier2aLocalIpfs) return false;
+  if (!settings.useLocalGateway) return false;
   return probeKuboGateway();
 }
 
@@ -131,13 +132,18 @@ async function resolveAndRedirect(
   };
   await chrome.storage.session.set({ [`tab:${tabId}`]: ctx });
 
-  await setCached({
-    ensName: result.ensName,
-    kind: result.kind,
-    value: result.value,
-    resolvedAt: Date.now(),
-    contractAddress: result.contractAddress,
-  }).catch((e) => console.warn("[ens] cache write failed", e));
+  // Skip the ENS-resolve cache for raw-address resolutions: there's no ENS
+  // lookup to cache, and `fetchPinAndCacheErc4804` has its own sha256-based
+  // per-contract dedup that handles unchanged re-resolves cheaply.
+  if (!/^0x[a-f0-9]{40}$/i.test(result.ensName)) {
+    await setCached({
+      ensName: result.ensName,
+      kind: result.kind,
+      value: result.value,
+      resolvedAt: Date.now(),
+      contractAddress: result.contractAddress,
+    }).catch((e) => console.warn("[ens] cache write failed", e));
+  }
 
   await chrome.tabs.update(tabId, { url: target });
   return { ok: true };
@@ -145,7 +151,7 @@ async function resolveAndRedirect(
 
 // Stale-while-revalidate. On a cache-hit redirect we kick this off; if the
 // fresh value differs from the cached one, we update the cache + session ctx
-// and notify the banner (Tier 2a/2b only) so it can offer the user a reload.
+// and notify the banner (local-gateway path only) so it can offer a reload.
 async function refreshFromCache(
   tabId: number,
   ensName: string,
@@ -196,8 +202,8 @@ async function refreshFromCache(
       gatewayUrl: newGateway,
     })
     .catch(() => {
-      // Banner content script may not be listening (Tier 2a off or page
-      // still loading); the next hydrate will see the fresh ctx anyway.
+      // Banner content script may not be listening (hosted-gateway route or
+      // page still loading); the next hydrate will see the fresh ctx anyway.
     });
 }
 
@@ -237,7 +243,8 @@ export function handleEnsBrowsingMessage(
         sendResponse({ ctx: null });
         return;
       }
-      const parsed = parseGatewayHost(u.hostname);
+      const settings = await getEnsBrowsingSettings();
+      const parsed = parseGatewayHost(u.hostname, settings.gatewayHost);
       if (!parsed) {
         sendResponse({ ctx: null });
         return;
@@ -320,6 +327,38 @@ export function handleEnsBrowsingMessage(
       (result) => sendResponse(result),
       (e) => sendResponse({ ok: false, error: e?.message ?? String(e) }),
     );
+    return true;
+  }
+
+  if (m.type === "ens-open-on-gateway" && typeof m.url === "string") {
+    // User clicked "Open on eth.limo" / "Open on w3eth.io gateway" from the
+    // banner menu. Install per-tab ALLOW rule(s) so our gateway-redirect rules
+    // don't rewrite the navigation straight back to local, then navigate.
+    const tabId = sender.tab?.id ?? (m.tabId as number | undefined);
+    const url = m.url;
+    if (tabId == null) {
+      sendResponse({ ok: false, error: "no tabId" });
+      return true;
+    }
+    (async () => {
+      try {
+        let host = "";
+        try {
+          host = new URL(url).hostname.toLowerCase();
+        } catch {
+          /* keep host empty — fall through with no bypass */
+        }
+        if (/\.eth\.(?:limo|link)\.?$/.test(host)) {
+          await addEthGatewayBypassForTab(tabId);
+        } else if (/\.w3eth\.io\.?$/.test(host)) {
+          await addW3ethBypassForTab(tabId);
+        }
+        await chrome.tabs.update(tabId, { url });
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+      }
+    })();
     return true;
   }
 

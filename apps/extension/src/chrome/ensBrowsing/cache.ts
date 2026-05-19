@@ -2,14 +2,14 @@
 // ENS name. On cache hit the interstitial redirects immediately; the SW
 // then re-resolves in the background and, if the fresh value differs,
 // updates the cache + pushes a `ens-content-updated` message to the
-// banner (Tier 2a/2b only).
+// banner (local-gateway path only).
 //
 // Two cache flavours coexist:
 //   - ipfs / ipns: `value` is the contenthash itself (CID or IPNS name).
-//   - web3 (ERC-4804): `value` is either the canonical w3eth.io routing
-//     hint (Tier 1) or the IPFS CID produced after pinning the onchain
-//     HTML to Kubo (Tier 2b). `contractAddress` is also stored so a
-//     refresh can re-fetch from the same contract.
+//   - web3 (ERC-4804): `value` is either the contract address (when routing
+//     via w3eth.io) or the IPFS CID produced after pinning the onchain HTML
+//     to Kubo (when `pinOnchainHtml` is ON). `contractAddress` is also
+//     stored so a refresh can re-fetch from the same contract.
 //
 // Ported from dapp3 `src/lib/cache.ts`. TTL adjusted from 7d → 1h per the
 // WalletChan spec; storage key renamed from `resolveCache` →

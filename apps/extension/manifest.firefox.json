@@ -59,7 +59,9 @@
     {
       "resources": [
         "static/js/inpage.js",
-        "walletchan-animated.gif"
+        "walletchan-animated.gif",
+        "walletchan-icon.png",
+        "walletchan-icon-white-bg.png"
       ],
       "matches": [
         "file://*/*",

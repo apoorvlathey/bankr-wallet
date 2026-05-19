@@ -1,36 +1,53 @@
-// Kubo (IPFS) probes and (Tier 2b) HTTP API client.
+// Kubo (IPFS) gateway probe + HTTP API client.
 //
-// Tier 2a only needs the gateway probe — uses the no-CORS subdomain trick:
-// fetching `http://bafkqaaa.ipfs.localhost:8080/` (an empty UnixFS CID) with
-// `mode: "no-cors"` resolves successfully iff Kubo's subdomain gateway is
-// running on 8080. It proves both that Kubo is reachable AND that the
-// subdomain gateway is enabled — the two things we actually need.
+// The local-gateway path only needs the gateway probe — uses the no-CORS
+// subdomain trick: fetching `http://bafkqaaa.ipfs.localhost:8080/` (an empty
+// UnixFS CID) with `mode: "no-cors"` resolves successfully iff Kubo's
+// subdomain gateway is running on 8080. It proves both that Kubo is reachable
+// AND that the subdomain gateway is enabled — the two things we actually need.
 //
-// We don't probe the API on :5001 in Tier 2a because the API requires a
-// per-Origin CORS allowlist (Kubo's CSRF defense) that ordinary users won't
-// have configured. Tier 2b adds the API probe + the setup-kubo screen.
+// We don't probe the API on :5001 for the local-gateway path because the API
+// requires a per-Origin CORS allowlist (Kubo's CSRF defense) that ordinary
+// users won't have configured. The pin-onchain-HTML path adds the API probe
+// + the setup-kubo screen for that.
 
-const KUBO_GATEWAY_PROBE_URL = "http://bafkqaaa.ipfs.localhost:8080/";
+import { getEnsBrowsingSettings } from "./settingsStorage";
+
 const PROBE_TIMEOUT_MS = 1_000;
 const MEMO_DURATION_MS = 30_000;
 
 type Probe = {
   reachable: boolean;
   checkedAt: number;
+  // Probe URL the cached result was taken against; if the user changes their
+  // gateway host/port, the memo is invalidated automatically.
+  probeUrl: string;
 };
 
 let memoizedProbe: Probe | null = null;
 
+async function buildProbeUrl(): Promise<string> {
+  const { gatewayHost, gatewayPort } = await getEnsBrowsingSettings();
+  // bafkqaaa = the empty UnixFS CID — small + universally available.
+  return `http://bafkqaaa.ipfs.${gatewayHost}:${gatewayPort}/`;
+}
+
 export async function probeKuboGateway(opts: { force?: boolean } = {}): Promise<boolean> {
-  if (!opts.force && memoizedProbe && Date.now() - memoizedProbe.checkedAt < MEMO_DURATION_MS) {
+  const probeUrl = await buildProbeUrl();
+  if (
+    !opts.force &&
+    memoizedProbe &&
+    memoizedProbe.probeUrl === probeUrl &&
+    Date.now() - memoizedProbe.checkedAt < MEMO_DURATION_MS
+  ) {
     return memoizedProbe.reachable;
   }
-  const reachable = await runProbe();
-  memoizedProbe = { reachable, checkedAt: Date.now() };
+  const reachable = await runProbe(probeUrl);
+  memoizedProbe = { reachable, checkedAt: Date.now(), probeUrl };
   return reachable;
 }
 
-async function runProbe(): Promise<boolean> {
+async function runProbe(probeUrl: string): Promise<boolean> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
@@ -38,7 +55,7 @@ async function runProbe(): Promise<boolean> {
     // network connection lands. Any non-network-error resolution counts as
     // "Kubo is up". An aborted/timed-out/network-refused fetch counts as
     // not-reachable.
-    await fetch(KUBO_GATEWAY_PROBE_URL, {
+    await fetch(probeUrl, {
       method: "GET",
       mode: "no-cors",
       cache: "no-store",
@@ -60,13 +77,13 @@ export function invalidateKuboGatewayProbe(): void {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Tier 2b: full Kubo HTTP API client.
+// Full Kubo HTTP API client (used when `pinOnchainHtml` is ON).
 //
 // The API on :5001 lets us *write* content (pinning ERC-4804 bodies). Kubo
 // rejects browser-originated requests whose Origin isn't on its allowlist
-// (CSRF / DNS-rebinding defense). Users who want Tier 2b need to allow the
-// extension origin in Kubo's config — `setup-kubo.html` walks them through
-// it with the exact command pre-filled with `chrome.runtime.id`.
+// (CSRF / DNS-rebinding defense). Users who want onchain-HTML pinning need
+// to allow the extension origin in Kubo's config — `setup-kubo.html` walks
+// them through it with the exact command pre-filled with `chrome.runtime.id`.
 // ────────────────────────────────────────────────────────────────────────────
 
 const KUBO_API_BASE = "http://127.0.0.1:5001";

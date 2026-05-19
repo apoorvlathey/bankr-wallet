@@ -10,6 +10,7 @@ import {
   ResetIcon,
   ChatBubbleIcon,
   ShieldIcon,
+  GlobeIcon,
 } from "./icons";
 
 export type LeafId =
@@ -72,9 +73,9 @@ export const LEAF_ENTRIES: readonly LeafEntry[] = [
   },
   {
     id: "ensBrowsing",
-    title: "ENS Browsing",
+    title: "dapp3 - ENS Browsing",
     subtitle: "Visit .eth sites directly from the address bar",
-    keywords: ["ens", "eth", "ipfs", "ipns", "browse", "domain", "name", "eth.limo", "w3eth"],
+    keywords: ["dapp3", "ens", "eth", "ipfs", "ipns", "browse", "domain", "name", "eth.limo", "w3eth"],
     group: null,
   },
   {
@@ -259,11 +260,11 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
       return (
         <SettingsRow
           key={id}
-          title="ENS Browsing"
+          title="dapp3 - ENS Browsing"
           subtitle="Visit .eth sites directly from the address bar"
-          icon={<LinkChainIcon boxSize={5} />}
-          iconBg="accent.primary"
-          iconColor="accentFg.primary"
+          icon={<GlobeIcon boxSize={5} />}
+          iconBg="chart.positive"
+          iconColor="surface.base"
           cornerAccent="primary"
           showChevron
           onClick={() => ctx.onNavigate(id)}

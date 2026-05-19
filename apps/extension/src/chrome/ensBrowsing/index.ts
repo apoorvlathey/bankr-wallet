@@ -1,9 +1,9 @@
 // ENS browsing entry point — called once at SW boot from background.ts.
 //
 // Responsibilities:
-//   - Sync the dynamic DNR rule against the current Tier 1 toggle state.
-//   - Subscribe to settings changes so toggling Tier 1 add/removes the rule
-//     without a SW reload.
+//   - Sync the dynamic DNR rule against the master `enabled` toggle.
+//   - Subscribe to settings changes so toggling `enabled` add/removes the
+//     rule without a SW reload.
 //   - Clean up per-tab session storage on `chrome.tabs.onRemoved`.
 
 import {
@@ -11,13 +11,46 @@ import {
   onEnsBrowsingSettingsChanged,
 } from "./settingsStorage";
 import {
+  installEthGatewayRedirectRule,
   installEthRedirectRule,
+  installW3ethRedirectRule,
+  removeEthGatewayBypassForTab,
+  removeEthGatewayRedirectRule,
   removeEthRedirectRule,
+  removeW3ethBypassForTab,
+  removeW3ethRedirectRule,
 } from "./dnrRules";
+import type { EnsBrowsingSettings } from "./settingsStorage";
 
 export { handleEnsBrowsingMessage } from "./handlers";
 
 let initialized = false;
+
+// w3eth.io interception only makes sense when the resolver can actually serve
+// it from local Kubo — i.e. both local-gateway and pin-onchain-html are on.
+// Otherwise we'd redirect w3eth.io → interstitial → w3eth.io in a loop.
+function shouldInterceptW3eth(s: EnsBrowsingSettings): boolean {
+  return s.enabled && s.useLocalGateway && s.pinOnchainHtml;
+}
+
+async function syncRules(settings: EnsBrowsingSettings): Promise<void> {
+  if (settings.enabled) {
+    await Promise.all([
+      installEthRedirectRule(),
+      installEthGatewayRedirectRule(),
+    ]);
+  } else {
+    await Promise.all([
+      removeEthRedirectRule(),
+      removeEthGatewayRedirectRule(),
+    ]);
+  }
+  if (shouldInterceptW3eth(settings)) {
+    await installW3ethRedirectRule();
+  } else {
+    await removeW3ethRedirectRule();
+  }
+}
 
 export async function initEnsBrowsing(): Promise<void> {
   if (initialized) return;
@@ -28,25 +61,21 @@ export async function initEnsBrowsing(): Promise<void> {
   // and the extension ID can change between unpacked reloads. Idempotent
   // upsert (removeRuleIds + addRules) handles both first-install and refresh.
   const settings = await getEnsBrowsingSettings();
-  if (settings.tier1) {
-    await installEthRedirectRule().catch((e) =>
-      console.warn("[ens] failed to install DNR rule on boot", e),
-    );
-  }
+  await syncRules(settings).catch((e) =>
+    console.warn("[ens] failed to install DNR rules on boot", e),
+  );
 
   onEnsBrowsingSettingsChanged(async (next) => {
     try {
-      if (next.tier1) {
-        await installEthRedirectRule();
-      } else {
-        await removeEthRedirectRule();
-      }
+      await syncRules(next);
     } catch (e) {
-      console.warn("[ens] failed to sync DNR rule on settings change", e);
+      console.warn("[ens] failed to sync DNR rules on settings change", e);
     }
   });
 
   chrome.tabs.onRemoved.addListener((tabId) => {
     chrome.storage.session.remove(`tab:${tabId}`).catch(() => undefined);
+    removeEthGatewayBypassForTab(tabId).catch(() => undefined);
+    removeW3ethBypassForTab(tabId).catch(() => undefined);
   });
 }

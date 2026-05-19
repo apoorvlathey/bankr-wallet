@@ -23,11 +23,12 @@ import {
   Box,
   Center,
   HStack,
+  Image,
   Spinner,
   Text,
   VStack,
 } from "@chakra-ui/react";
-import { Decorator, IconBox, ThemedPanel, useTheme } from "@/theme";
+import { Decorator, ThemedPanel, useTheme } from "@/theme";
 
 type ParsedTarget = {
   ensName: string;
@@ -62,9 +63,26 @@ type ResolveResult =
   | { ok: true }
   | { ok: false; error: string; code?: string };
 
+// Raw-address w3eth.io URLs arrive here as `0x<addr>.eth` because the
+// W3ETH_REGEX rewrite tacks `.eth` on so the existing ENS_REGEX rule routes
+// it to the interstitial. For display we want the bare address back — the
+// `.eth` is plumbing, not part of the user-visible identity.
+function displayName(ensName: string): string {
+  const lower = ensName.toLowerCase();
+  if (lower.endsWith(".eth") && /^0x[a-f0-9]{40}\.eth$/.test(lower)) {
+    return lower.slice(0, -4);
+  }
+  return ensName;
+}
+
 export default function EnsInterstitial() {
-  const { tokens } = useTheme();
+  const { tokens, themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
   const target = useMemo(() => parseTarget(), []);
+  const displayedName = useMemo(
+    () => (target ? displayName(target.ensName) : ""),
+    [target],
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,7 +90,7 @@ export default function EnsInterstitial() {
       setError("Couldn't parse the .eth URL from this navigation.");
       return;
     }
-    document.title = `Resolving ${target.ensName}…`;
+    document.title = `Resolving ${displayName(target.ensName)}…`;
 
     let cancelled = false;
     const run = async () => {
@@ -105,7 +123,7 @@ export default function EnsInterstitial() {
         })) as ResolveResult | undefined;
         if (cancelled) return;
         if (resp && !resp.ok) {
-          // Tier 2b: Kubo is up but its CORS allowlist hasn't been updated.
+          // Pin-onchain-HTML path: Kubo is up but its CORS allowlist hasn't been updated.
           // Bounce to the setup screen with a `return` param so the user can
           // come back to this navigation after fixing it.
           if (resp.code === "kubo-cors-blocked") {
@@ -147,32 +165,42 @@ export default function EnsInterstitial() {
 
   return (
     <Center minH="100vh" p={6}>
-      <Box position="relative" w="100%" maxW="480px">
-        <Decorator corner="top-left" accent="primary" />
-        <Decorator corner="top-right" accent="secondary" />
-        <ThemedPanel variant="raised" weight="medium" p={8}>
-          <VStack align="start" spacing={5}>
-            <HStack spacing={3}>
-              <IconBox bg="accent.primary" color="accentFg.primary">
-                <Text fontSize="lg" fontWeight={900}>
-                  .eth
-                </Text>
-              </IconBox>
-              <VStack align="start" spacing={0}>
-                <Text fontSize="xs" color="fg.muted" letterSpacing="0.08em">
-                  WALLETCHAN · ENS BROWSING
-                </Text>
-                <Text fontWeight={700} fontSize="md">
-                  Resolving {target.ensName}
-                </Text>
-              </VStack>
+      <Box position="relative" maxW="100%" w="fit-content">
+        <Decorator corner="top-right" accent="highlight" />
+        <ThemedPanel variant="raised" weight="medium" p={6}>
+          <VStack align="stretch" spacing={5}>
+            {/* Header — WalletChan logo + breadcrumb on one line */}
+            <HStack spacing={3} align="center">
+              <Box
+                p={1.5}
+                bg="surface.raised"
+                border={tokens.borders.thin}
+                borderColor="border.default"
+                borderRadius={tokens.radii.card}
+                flexShrink={0}
+              >
+                <Image
+                  src="walletchan-animated.gif"
+                  w="32px"
+                  h="32px"
+                  display="block"
+                  borderRadius={isDarkTheme ? "md" : undefined}
+                />
+              </Box>
+              <Text
+                fontSize="xs"
+                color="fg.muted"
+                letterSpacing="0.08em"
+                fontWeight={700}
+              >
+                WALLETCHAN · DAPP3 - ENS BROWSING
+              </Text>
             </HStack>
 
             {error ? (
               <VStack
                 align="start"
-                spacing={3}
-                w="100%"
+                spacing={2}
                 bg="status.error.bg"
                 color="status.error.fg"
                 border={tokens.borders.thin}
@@ -180,24 +208,47 @@ export default function EnsInterstitial() {
                 borderRadius={tokens.radii.card}
                 p={4}
               >
-                <Text fontWeight={700}>Couldn't resolve {target.ensName}</Text>
-                <Text fontSize="sm" fontFamily="mono">
+                <Text fontWeight={700} fontSize="sm">
+                  Couldn't resolve {displayedName}
+                </Text>
+                <Text fontSize="xs" fontFamily="mono" wordBreak="break-all">
                   {error}
                 </Text>
               </VStack>
             ) : (
-              <HStack spacing={3} color="fg.muted">
-                <Spinner size="sm" speed="0.6s" />
-                <Text fontSize="sm">
-                  Looking up the ENS contenthash via your mainnet RPC…
+              <VStack align="start" spacing={2}>
+                <HStack spacing={2} color="fg.muted">
+                  <Spinner size="xs" speed="0.6s" />
+                  <Text
+                    fontSize="xs"
+                    fontWeight={700}
+                    letterSpacing="0.08em"
+                    textTransform="uppercase"
+                  >
+                    Resolving
+                  </Text>
+                </HStack>
+                <Text
+                  fontFamily="mono"
+                  fontWeight={800}
+                  fontSize="2xl"
+                  color="fg.primary"
+                  lineHeight="1.1"
+                  wordBreak="break-all"
+                >
+                  {displayedName}
                 </Text>
-              </HStack>
+              </VStack>
             )}
 
-            <Text fontSize="xs" color="fg.muted">
-              You can disable this anytime in WalletChan → Settings → ENS
-              Browsing.
-            </Text>
+            <Box borderTop={tokens.borders.thin} borderColor="border.subtle" pt={3}>
+              <Text fontSize="xs" color="fg.muted">
+                Manage in{" "}
+                <Text as="span" fontWeight={700} color="fg.secondary">
+                  Settings → dapp3 - ENS Browsing
+                </Text>
+              </Text>
+            </Box>
           </VStack>
         </ThemedPanel>
       </Box>

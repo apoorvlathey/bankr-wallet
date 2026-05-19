@@ -2,18 +2,17 @@
 // (`*.ipfs.localhost` / `*.ipns.localhost`) so the user keeps seeing the
 // original ENS name even though the URL bar shows the CID-subdomain target.
 //
-// Slim adaptation of dapp3's `src/content/banner.ts`: shadow-DOM, body
-// margin offset (with MutationObserver wait for early-paint), SPA-nav
-// monkey-patch. We drop the address-bar editor, bookmarks, menus, fixed-nav
-// shifter, and Helios polling — those re-land if/when Helios ships.
+// Shadow-DOM strip pinned to the viewport top, with an editable address-bar
+// field in the center that mirrors `<ensName><pathname+search+hash>` and
+// auto-updates on SPA navigation. Enter submits to `http://<host>.eth/...`
+// which goes through the DNR → interstitial → resolver flow.
 //
 // Theme tokens are fetched once from the SW via `ens-get-theme-tokens`;
 // Chakra isn't available in content-script land, so colors are applied as
 // inline CSS variables on the shadow root.
 
 const BANNER_ID = "walletchan-ens-banner";
-const HEIGHT_PX = 40;
-const DISMISS_KEY_PREFIX = "walletchan-ens-banner-dismiss:";
+const HEIGHT_PX = 44;
 
 type ResolveKind = "ipfs" | "ipns" | "web3";
 
@@ -68,26 +67,187 @@ async function getTheme(): Promise<Theme> {
   return FALLBACK_THEME;
 }
 
-function shortValue(kind: ResolveKind, value: string): string {
-  if (kind === "ipns") return value;
-  if (value.length <= 16) return value;
-  return `${value.slice(0, 8)}…${value.slice(-6)}`;
+function currentPath(): string {
+  const p = location.pathname + location.search + location.hash;
+  return p === "/" ? "" : p;
 }
 
-function isDismissedThisSession(ensName: string): boolean {
-  try {
-    return sessionStorage.getItem(DISMISS_KEY_PREFIX + ensName) === "1";
-  } catch {
-    return false;
+// Parse an address-bar input into a navigable URL.
+//   - `<name>.eth[/path]` (incl. subdomains) → `http://<name>.eth/path`
+//     (caught by the ETH_REGEX DNR rule → interstitial → ENS resolve).
+//   - `0x<40hex>[/path]` (raw ERC-4804 contract) → `https://<addr>.w3eth.io/path`
+//     (caught by W3ETH_REGEX when local pinning is on; otherwise goes straight
+//     to the public w3eth.io gateway).
+// Anything else is rejected.
+function parseEthInput(raw: string): string | null {
+  const trimmed = raw.trim().replace(/^https?:\/\//i, "");
+  if (!trimmed) return null;
+  const m = trimmed.match(/^([^/?#]+)(.*)$/);
+  if (!m || !m[1]) return null;
+  const host = m[1].toLowerCase();
+  const rest = m[2] || "/";
+  const path =
+    rest.startsWith("/") || rest.startsWith("?") || rest.startsWith("#")
+      ? rest
+      : `/${rest}`;
+  if (/^0x[a-f0-9]{40}$/.test(host)) {
+    return `https://${host}.w3eth.io${path}`;
+  }
+  if (!/^(?:[a-z0-9-]+\.)+eth$/.test(host)) return null;
+  return `http://${host}${path}`;
+}
+
+// Split `<name>.eth/path` into host + path so the field can paint the host
+// bright and dim the path — mirrors how Chrome renders its omnibox.
+function splitUrl(text: string): { host: string; path: string } {
+  const m = text.match(/^(.+?\.eth)(.*)$/i);
+  if (!m) return { host: text, path: "" };
+  return { host: m[1]!, path: m[2]! };
+}
+
+function colorize(el: HTMLElement, text: string): void {
+  el.textContent = "";
+  if (!text) return;
+  const { host, path } = splitUrl(text);
+  const h = document.createElement("span");
+  h.className = "u-host";
+  h.textContent = host;
+  el.appendChild(h);
+  if (path) {
+    const p = document.createElement("span");
+    p.className = "u-path";
+    p.textContent = path;
+    el.appendChild(p);
   }
 }
 
-function markDismissed(ensName: string) {
-  try {
-    sessionStorage.setItem(DISMISS_KEY_PREFIX + ensName, "1");
-  } catch {
-    /* ignore */
-  }
+interface AddressField {
+  setValue(text: string): void;
+  getValue(): string;
+  selectAll(): void;
+  shake(): void;
+}
+
+// Wire a contenteditable element into an address-bar-style input: mixed
+// coloring (host bright, path dim), Enter-to-submit, Escape-to-reset,
+// focus-to-select-all, paste-as-plain-text.
+function setupAddressField(
+  el: HTMLElement,
+  opts: {
+    shadowRoot: ShadowRoot;
+    placeholder?: string;
+    onSubmit: (text: string) => void;
+    onEscape?: () => void;
+  },
+): AddressField {
+  el.setAttribute("contenteditable", "plaintext-only");
+  el.setAttribute("spellcheck", "false");
+  el.setAttribute("role", "textbox");
+  el.setAttribute("aria-label", "ENS address");
+  if (opts.placeholder) el.setAttribute("data-placeholder", opts.placeholder);
+
+  // ShadowRoot.getSelection is Chromium-only; required to read caret position
+  // inside a closed shadow root.
+  const getSelectionObj = (): Selection | null => {
+    const sr = opts.shadowRoot as unknown as {
+      getSelection?: () => Selection | null;
+    };
+    if (sr?.getSelection) return sr.getSelection() ?? null;
+    return window.getSelection();
+  };
+
+  const getText = () => el.textContent ?? "";
+
+  const getCaretOffset = (): number | null => {
+    const sel = getSelectionObj();
+    if (!sel || sel.rangeCount === 0) return null;
+    const range = sel.getRangeAt(0);
+    if (!el.contains(range.endContainer)) return null;
+    const pre = range.cloneRange();
+    pre.selectNodeContents(el);
+    pre.setEnd(range.endContainer, range.endOffset);
+    return pre.toString().length;
+  };
+
+  const setCaretOffset = (offset: number): void => {
+    const sel = getSelectionObj();
+    if (!sel) return;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    let remaining = offset;
+    let targetNode: Text | null = null;
+    let at = 0;
+    let node: Text | null;
+    while ((node = walker.nextNode() as Text | null)) {
+      const len = node.length;
+      if (remaining <= len) {
+        targetNode = node;
+        at = remaining;
+        break;
+      }
+      remaining -= len;
+    }
+    const range = document.createRange();
+    if (targetNode) range.setStart(targetNode, at);
+    else {
+      range.selectNodeContents(el);
+      range.collapse(false);
+    }
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  };
+
+  const rerender = () => {
+    const offset = getCaretOffset();
+    colorize(el, getText());
+    if (offset != null) setCaretOffset(offset);
+  };
+
+  el.addEventListener("input", rerender);
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      opts.onSubmit(getText());
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      opts.onEscape?.();
+    }
+  });
+  el.addEventListener("paste", (e) => {
+    const text = e.clipboardData?.getData("text/plain");
+    if (text == null) return;
+    e.preventDefault();
+    document.execCommand("insertText", false, text);
+  });
+
+  const api: AddressField = {
+    setValue(text: string) {
+      colorize(el, text);
+    },
+    getValue() {
+      return getText();
+    },
+    selectAll() {
+      const sel = getSelectionObj();
+      if (!sel) return;
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    },
+    shake() {
+      el.classList.remove("shake");
+      void el.offsetWidth;
+      el.classList.add("shake");
+      setTimeout(() => el.classList.remove("shake"), 450);
+    },
+  };
+
+  el.addEventListener("focus", () => {
+    setTimeout(() => api.selectAll(), 0);
+  });
+
+  return api;
 }
 
 function applyBodyOffset(target = HEIGHT_PX) {
@@ -98,210 +258,520 @@ function applyBodyOffset(target = HEIGHT_PX) {
     return true;
   };
   if (apply()) return;
-  // Body not parsed yet — wait for it so the first paint already accounts for
-  // the banner height instead of briefly rendering under it.
+  // Body not parsed yet — wait so the first paint already accounts for the
+  // banner height instead of briefly rendering under it.
   const obs = new MutationObserver(() => {
     if (apply()) obs.disconnect();
   });
   obs.observe(document.documentElement, { childList: true });
 }
 
-function renderBanner(ctx: TabContext, theme: Theme) {
-  let host = document.getElementById(BANNER_ID) as HTMLDivElement | null;
-  if (!host) {
-    host = document.createElement("div");
-    host.id = BANNER_ID;
-    // Pin above all page content. position:fixed survives the body margin
-    // offset and leaves room for the page beneath without overlap.
-    host.style.cssText = [
-      "all: initial",
-      "position: fixed",
-      "top: 0",
-      "left: 0",
-      "right: 0",
-      `height: ${HEIGHT_PX}px`,
-      "z-index: 2147483647",
-      "pointer-events: auto",
-    ].join("; ");
-    document.documentElement.appendChild(host);
-  }
-  const shadow = host.shadowRoot ?? host.attachShadow({ mode: "closed" });
-  shadow.innerHTML = "";
+type Refs = {
+  host: HTMLDivElement;
+  shadow: ShadowRoot;
+  bar: HTMLDivElement;
+  urlInput: HTMLDivElement;
+  brandImg: HTMLImageElement;
+  right: HTMLSpanElement;
+  historyLink: HTMLAnchorElement;
+  menuBtn: HTMLButtonElement;
+  menu: HTMLDivElement;
+  copyItem: HTMLButtonElement;
+  openGatewayItem: HTMLButtonElement;
+  copyToast: HTMLSpanElement;
+};
+
+function buildBanner(theme: Theme): Refs {
+  const host = document.createElement("div");
+  host.id = BANNER_ID;
+  host.style.cssText = [
+    "all: initial",
+    "position: fixed",
+    "top: 0",
+    "left: 0",
+    "right: 0",
+    `height: ${HEIGHT_PX}px`,
+    "z-index: 2147483647",
+    "pointer-events: auto",
+    "margin: 0",
+    "padding: 0",
+    "border: 0",
+    "display: block",
+  ].join("; ");
+
+  const shadow = host.attachShadow({ mode: "closed" });
+  const isMidnight = theme.themeId === "midnight";
+  const logoRadius = isMidnight ? "4px" : "0";
+
+  // Strip uses the Bauhaus color palette in BOTH themes — the dark
+  // `#121212` bar reads as a chrome surface on top of any page content.
+  // Only the corner radii (logo, identity pill, menu, etc.) change for
+  // Midnight, since soft corners are the actual theme identity.
+  const stripBg = "#121212";
+  const stripBorder = "#000000";
+  const stripFg = "#FFFFFF";
+  const stripFgMuted = "#A8A8A8";
+  const stripShadow = "0 2px 0 0 #000000";
 
   const style = document.createElement("style");
   style.textContent = `
     :host { all: initial; }
-    .strip {
+    * { box-sizing: border-box; }
+    .bar {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 0 14px;
       height: ${HEIGHT_PX}px;
+      padding: 0 14px;
       box-sizing: border-box;
-      background: ${theme.bg};
-      color: ${theme.fg};
-      border-bottom: 2px solid ${theme.border};
-      box-shadow: ${theme.shadow};
-      font-family: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 12px;
+      background: ${stripBg};
+      color: ${stripFg};
+      border-bottom: 2px solid ${stripBorder};
+      box-shadow: ${stripShadow};
+      font: 500 12px/1 "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
       letter-spacing: 0.02em;
     }
+    .left, .right {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1 1 0;
+      min-width: 0;
+    }
+    .right { justify-content: flex-end; }
     .brand {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      width: 22px;
-      height: 22px;
-      background: ${theme.accent};
-      color: #121212;
-      border: 2px solid ${theme.border};
-      font-weight: 900;
-      font-size: 9px;
-      letter-spacing: 0;
-      flex-shrink: 0;
+      gap: 8px;
+      flex: none;
+    }
+    .brand img {
+      width: 26px;
+      height: 26px;
+      display: block;
+      border-radius: ${logoRadius};
+      flex: none;
     }
     .label {
       font-weight: 700;
-      color: ${theme.fgMuted};
+      color: ${stripFgMuted};
       text-transform: uppercase;
       letter-spacing: 0.08em;
       font-size: 10px;
+      white-space: nowrap;
     }
-    .name {
-      font-weight: 700;
-      color: ${theme.fg};
+    .identity {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 1 520px;
+      min-width: 0;
+      height: 26px;
+      padding: 0 12px;
+      background: rgba(0,0,0,0.25);
+      border: 1px solid ${stripBorder};
+      border-radius: ${isMidnight ? "13px" : "0"};
+      transition: border-color 150ms, background-color 150ms;
     }
-    .arrow { color: ${theme.fgMuted}; }
-    .value {
-      font-family: "JetBrains Mono", Consolas, monospace;
-      font-size: 11px;
-      color: ${theme.fgMuted};
+    .identity:hover { background: rgba(0,0,0,0.35); }
+    .identity:focus-within {
+      background: rgba(0,0,0,0.5);
+      border-color: ${theme.accent};
     }
-    .spacer { flex: 1; }
+    .magnifier {
+      width: 12px;
+      height: 12px;
+      color: ${stripFgMuted};
+      flex: none;
+      display: block;
+    }
+    .urlfield {
+      flex: 1 1 auto;
+      min-width: 0;
+      font: 500 12px/1 "JetBrains Mono", "SF Mono", Menlo, Consolas, ui-monospace, monospace;
+      color: ${stripFg};
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      outline: none;
+      cursor: text;
+    }
+    .urlfield:empty::before {
+      content: attr(data-placeholder);
+      color: ${stripFgMuted};
+    }
+    .urlfield .u-host { color: ${stripFg}; font-weight: 700; }
+    .urlfield .u-path { color: ${stripFgMuted}; }
+    .urlfield::selection,
+    .urlfield *::selection {
+      background: ${theme.accent};
+      color: #121212;
+    }
+    .identity:has(.urlfield.shake) { border-color: #f43f5e; }
+    .urlfield.shake { animation: shake 0.4s ease; }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25%      { transform: translateX(-3px); }
+      75%      { transform: translateX(3px); }
+    }
     .updated {
       background: ${theme.accent};
       color: #121212;
       font-weight: 700;
-      padding: 2px 8px;
+      padding: 4px 10px;
       cursor: pointer;
-      border: 2px solid ${theme.border};
+      border: 2px solid ${stripBorder};
       font-size: 11px;
+      border-radius: ${isMidnight ? "4px" : "0"};
     }
-    .dismiss {
-      background: transparent;
-      color: ${theme.fgMuted};
-      border: 0;
+    .ens-history-link {
+      all: unset;
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 10px;
+      border-radius: ${isMidnight ? "4px" : "0"};
+      color: ${stripFgMuted};
       cursor: pointer;
-      font-size: 16px;
-      padding: 0 4px;
-      line-height: 1;
+      font: 500 11px/1 inherit;
+      text-decoration: none;
+      transition: background-color 150ms, color 150ms;
     }
-    .dismiss:hover { color: ${theme.fg}; }
+    .ens-history-link:hover {
+      background: rgba(255,255,255,0.08);
+      color: ${stripFg};
+    }
+    .menu-wrap { position: relative; flex: none; }
+    .menu-btn {
+      all: unset;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: ${isMidnight ? "4px" : "0"};
+      color: ${stripFgMuted};
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      transition: background-color 150ms, color 150ms;
+    }
+    .menu-btn:hover {
+      background: rgba(255,255,255,0.08);
+      color: ${stripFg};
+    }
+    .menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      display: none;
+      min-width: 230px;
+      background: ${stripBg};
+      color: ${stripFg};
+      border: 2px solid ${stripBorder};
+      border-radius: ${isMidnight ? "6px" : "0"};
+      padding: 4px;
+      box-shadow: ${stripShadow};
+      z-index: 1;
+    }
+    .menu.open { display: block; }
+    .menu button {
+      all: unset;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      border-radius: ${isMidnight ? "4px" : "0"};
+      font: 500 12px/1.3 inherit;
+      color: ${stripFg};
+      cursor: pointer;
+      text-align: left;
+      transition: background-color 150ms;
+    }
+    .menu button:hover { background: rgba(255,255,255,0.08); }
+    .menu button svg {
+      width: 14px;
+      height: 14px;
+      flex: none;
+      display: block;
+      color: ${stripFgMuted};
+    }
+    .copy-toast {
+      display: none;
+      color: ${theme.accent};
+      font-weight: 700;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .copy-toast.show { display: inline; }
   `;
   shadow.appendChild(style);
 
-  const strip = document.createElement("div");
-  strip.className = "strip";
+  const bar = document.createElement("div");
+  bar.className = "bar";
 
+  const left = document.createElement("span");
+  left.className = "left";
   const brand = document.createElement("span");
   brand.className = "brand";
-  brand.textContent = "WC";
-  strip.appendChild(brand);
-
+  const brandImg = document.createElement("img");
+  brandImg.src = chrome.runtime.getURL("walletchan-icon-white-bg.png");
+  brandImg.alt = "WalletChan";
+  brand.appendChild(brandImg);
   const label = document.createElement("span");
   label.className = "label";
-  label.textContent = "WALLETCHAN · ENS";
-  strip.appendChild(label);
+  label.textContent = "WALLETCHAN · DAPP3";
+  left.appendChild(brand);
+  left.appendChild(label);
+  bar.appendChild(left);
 
-  const name = document.createElement("span");
-  name.className = "name";
-  name.textContent = ctx.ensName;
-  strip.appendChild(name);
+  const identity = document.createElement("div");
+  identity.className = "identity";
+  identity.setAttribute("role", "search");
+  const magnifier = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "svg",
+  );
+  magnifier.setAttribute("class", "magnifier");
+  magnifier.setAttribute("viewBox", "0 0 16 16");
+  magnifier.setAttribute("fill", "none");
+  magnifier.setAttribute("stroke", "currentColor");
+  magnifier.setAttribute("stroke-width", "1.6");
+  magnifier.setAttribute("stroke-linecap", "round");
+  magnifier.setAttribute("stroke-linejoin", "round");
+  magnifier.setAttribute("aria-hidden", "true");
+  magnifier.innerHTML =
+    '<circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/>';
+  identity.appendChild(magnifier);
+  const urlInput = document.createElement("div");
+  urlInput.className = "urlfield";
+  identity.appendChild(urlInput);
+  bar.appendChild(identity);
 
-  const arrow = document.createElement("span");
-  arrow.className = "arrow";
-  arrow.textContent = "→";
-  strip.appendChild(arrow);
+  const right = document.createElement("span");
+  right.className = "right";
+  right.innerHTML = `
+    <span class="copy-toast">copied</span>
+    <a class="ens-history-link" target="_blank" rel="noopener noreferrer" title="View ENS History">View ENS History</a>
+    <span class="menu-wrap">
+      <button class="menu-btn" type="button" aria-label="banner menu" title="More options">⋯</button>
+      <div class="menu" role="menu">
+        <button data-act="copy" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <span>Copy underlying URL</span>
+        </button>
+        <button data-act="open-gateway" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+            <polyline points="15 3 21 3 21 9"/>
+            <line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+          <span>Open on eth.limo gateway</span>
+        </button>
+      </div>
+    </span>
+  `;
+  bar.appendChild(right);
 
-  const value = document.createElement("span");
-  value.className = "value";
-  value.textContent = `${ctx.kind}:${shortValue(ctx.kind, ctx.value)}`;
-  strip.appendChild(value);
+  shadow.appendChild(bar);
 
-  const spacer = document.createElement("span");
-  spacer.className = "spacer";
-  strip.appendChild(spacer);
+  const q = <T extends Element>(sel: string) =>
+    shadow.querySelector(sel) as T;
 
-  const dismiss = document.createElement("button");
-  dismiss.className = "dismiss";
-  dismiss.textContent = "×";
-  dismiss.title = "Hide for this session";
-  dismiss.addEventListener("click", () => {
-    markDismissed(ctx.ensName);
-    teardown();
-  });
-  strip.appendChild(dismiss);
-
-  shadow.appendChild(strip);
-}
-
-function teardown() {
-  const host = document.getElementById(BANNER_ID);
-  if (host) host.remove();
-  if (document.body) document.body.style.marginTop = "";
+  return {
+    host,
+    shadow,
+    bar,
+    urlInput,
+    brandImg,
+    right,
+    historyLink: q<HTMLAnchorElement>(".ens-history-link"),
+    menuBtn: q<HTMLButtonElement>(".menu-btn"),
+    menu: q<HTMLDivElement>(".menu"),
+    copyItem: q<HTMLButtonElement>('button[data-act="copy"]'),
+    openGatewayItem: q<HTMLButtonElement>('button[data-act="open-gateway"]'),
+    copyToast: q<HTMLSpanElement>(".copy-toast"),
+  };
 }
 
 let currentCtx: TabContext | null = null;
+let currentField: AddressField | null = null;
+let inputFocused = false;
+
+function mountedHost(): HTMLDivElement | null {
+  return document.getElementById(BANNER_ID) as HTMLDivElement | null;
+}
+
+function buildCurrentValue(ctx: TabContext): string {
+  return `${ctx.ensName}${currentPath()}`;
+}
 
 async function mount() {
   const ctx = await getTabCtx();
   if (!ctx) return;
-  if (isDismissedThisSession(ctx.ensName)) return;
   currentCtx = ctx;
+  if (mountedHost()) return;
+
   const theme = await getTheme();
+  const refs = buildBanner(theme);
+  (document.documentElement || document.body).appendChild(refs.host);
   applyBodyOffset();
-  renderBanner(ctx, theme);
+
+  refs.urlInput.addEventListener("focus", () => (inputFocused = true));
+  refs.urlInput.addEventListener("blur", () => (inputFocused = false));
+
+  const field = setupAddressField(refs.urlInput, {
+    shadowRoot: refs.shadow,
+    placeholder: "name.eth",
+    onSubmit: (text) => {
+      const url = parseEthInput(text);
+      if (!url) {
+        field.shake();
+        return;
+      }
+      // DNR catches *.eth main_frame → interstitial → SW resolve. Same path
+      // as typing into Chrome's own address bar.
+      location.assign(url);
+    },
+    onEscape: () => {
+      if (!currentCtx) return;
+      field.setValue(buildCurrentValue(currentCtx));
+      refs.urlInput.blur();
+    },
+  });
+  field.setValue(buildCurrentValue(ctx));
+  currentField = field;
+
+  wireRightSection(refs, ctx);
 }
 
-// Re-render on SPA navigations. Identity is per-ENS-name so for client-side
-// route changes inside the same dapp we don't actually re-render — only
-// re-mount if the banner got torn off by the page.
+function wireRightSection(refs: Refs, ctx: TabContext) {
+  // ENS History link — external. Hidden for address-mode (0x... ERC-4804)
+  // navigations since there's no ENS name to link to.
+  const isAddressNav = /^0x[a-f0-9]{40}$/i.test(ctx.ensName);
+  if (isAddressNav) {
+    refs.historyLink.style.display = "none";
+  } else {
+    refs.historyLink.href = `https://ens.eth.sh/history/${ctx.ensName.toLowerCase()}`;
+  }
+
+  // Web3 (ERC-4804) dapps have no eth.limo equivalent — point at w3eth.io.
+  const isWeb3 = ctx.kind === "web3" && !!ctx.contractAddress;
+  if (isWeb3) {
+    const label = refs.openGatewayItem.querySelector("span");
+    if (label) label.textContent = "Open on w3eth.io gateway";
+  }
+
+  const closeMenu = () => refs.menu.classList.remove("open");
+  refs.menuBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    refs.menu.classList.toggle("open");
+  });
+  document.addEventListener("click", closeMenu);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMenu();
+  });
+
+  refs.copyItem.addEventListener("click", async () => {
+    closeMenu();
+    const url = location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      refs.copyToast.classList.add("show");
+      setTimeout(() => refs.copyToast.classList.remove("show"), 1200);
+    } catch {
+      // Fallback for non-secure contexts.
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body?.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        refs.copyToast.classList.add("show");
+        setTimeout(() => refs.copyToast.classList.remove("show"), 1200);
+      } finally {
+        ta.remove();
+      }
+    }
+  });
+
+  refs.openGatewayItem.addEventListener("click", () => {
+    closeMenu();
+    const p = currentPath() || "/";
+    const path = p.startsWith("/") ? p : `/${p}`;
+    // Both gateways are intercepted by our DNR rules whenever this banner is
+    // mounted (banner only shows on *.ipfs.localhost, which means the local-
+    // pinning combo is on — and that's exactly the combo that installs the
+    // w3eth.io rule). Route through the SW so it can punch a per-tab ALLOW
+    // bypass before the navigation fires; otherwise the gateway redirect would
+    // bounce us right back to local.
+    const url =
+      isWeb3 && ctx.contractAddress
+        ? `https://${ctx.contractAddress}.w3eth.io${path}`
+        : `https://${ctx.ensName}.limo${path}`;
+    chrome.runtime
+      .sendMessage({ type: "ens-open-on-gateway", url })
+      .then((resp) => {
+        if (!resp?.ok) location.assign(url);
+      })
+      .catch(() => location.assign(url));
+  });
+}
+
+function syncFieldFromLocation() {
+  if (!currentCtx || !currentField || inputFocused) return;
+  currentField.setValue(buildCurrentValue(currentCtx));
+}
+
+// Re-render on SPA navigations so the path-on-the-right portion stays current
+// as the user clicks around inside the dapp.
 function wireSpaNav() {
   const patch = (key: "pushState" | "replaceState") => {
     const orig = history[key];
-    history[key] = function (...args) {
+    history[key] = function (
+      this: History,
+      ...args: Parameters<typeof orig>
+    ) {
       const r = orig.apply(this, args as never);
-      queueMicrotask(checkPersisted);
+      queueMicrotask(onChange);
       return r;
     } as typeof orig;
   };
+  const onChange = () => {
+    if (!mountedHost()) {
+      // Page replaced the DOM (rare but happens).
+      mount().catch(() => undefined);
+      return;
+    }
+    syncFieldFromLocation();
+  };
   patch("pushState");
   patch("replaceState");
-  window.addEventListener("popstate", checkPersisted);
-  window.addEventListener("hashchange", checkPersisted);
+  window.addEventListener("popstate", onChange);
+  window.addEventListener("hashchange", onChange);
 }
 
-function checkPersisted() {
-  if (!currentCtx) return;
-  if (!document.getElementById(BANNER_ID)) {
-    // Page replaced the DOM (rare but happens). Re-mount.
-    mount().catch(() => undefined);
-  }
-}
-
-// Listen for content-updated push from SW (Tier 2a/2b: background re-resolve
-// detected a contenthash change). We just swap in a yellow "Updated" pill
-// the user can click to reload.
+// Listen for content-updated push from SW (background re-resolve detected
+// a contenthash change). Show a yellow "Updated — reload" pill on the right.
 chrome.runtime.onMessage.addListener((msg) => {
   if (!msg || typeof msg !== "object") return;
   const m = msg as Record<string, unknown>;
   if (m.type !== "ens-content-updated") return;
-  const host = document.getElementById(BANNER_ID);
+  const host = mountedHost();
   if (!host || !host.shadowRoot) return;
-  const strip = host.shadowRoot.querySelector(".strip");
-  const spacer = host.shadowRoot.querySelector(".spacer");
-  if (!strip || !spacer) return;
-  if (host.shadowRoot.querySelector(".updated")) return;
+  const right = host.shadowRoot.querySelector(".right");
+  if (!right) return;
+  if (right.querySelector(".updated")) return;
   const btn = document.createElement("button");
   btn.className = "updated";
   btn.textContent = "Updated — reload";
@@ -310,7 +780,7 @@ chrome.runtime.onMessage.addListener((msg) => {
     if (url) location.replace(url);
     else location.reload();
   });
-  strip.insertBefore(btn, spacer);
+  right.appendChild(btn);
 });
 
 wireSpaNav();

@@ -1,4 +1,4 @@
-// Per-contract cache for ERC-4804 (Tier 2b) resolutions. Lets us skip the
+// Per-contract cache for ERC-4804 pin-onchain-HTML resolutions. Lets us skip the
 // Kubo `add` round-trip when the onchain HTML body hasn't changed since the
 // last visit. Keyed by contract address; stores the sha256 of the response
 // body and the resulting CID.
