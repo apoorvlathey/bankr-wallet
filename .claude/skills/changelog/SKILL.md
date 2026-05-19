@@ -67,13 +67,32 @@ You are populating the `## [Unreleased]` section of `/CHANGELOG.md` with notes d
    - No emoji. No PR numbers, commit hashes, or `@author` attribution — those live in the GitHub release. The changelog is the human story.
    - If a commit is purely internal (build pipeline, lint config, type cleanup with no behavior change, doc-only) **skip it**. Don't pad.
 
-6. **Read the existing `## [Unreleased]` block** in `CHANGELOG.md` and merge:
+6. **Anchor Fixed / Changed against the *previous release*, not against the last commit.** A bug fix or behavior change only belongs in **Fixed** / **Changed** if the thing being fixed or changed actually shipped to users in the previous tag. Mid-development iteration on a brand-new feature is *part of that feature*, not a separate fix.
+
+   Before you write a Fixed/Changed bullet, ask: **"Did this surface exist in `<last-tag>`?"** Use the tools to check:
+
+   ```bash
+   # Does the file the bug lives in exist at the last tag?
+   git ls-tree -r <last-tag> --name-only -- apps/extension | grep <file>
+
+   # Was the user-visible feature already there?
+   git show <last-tag>:apps/extension/<path> | head
+   ```
+
+   Decision tree for each candidate bullet:
+   - Feature existed at `<last-tag>` and got polished/fixed/changed → **Fixed** or **Changed**, as appropriate.
+   - Feature is brand new in this release (no equivalent surface at `<last-tag>`) → **fold into the Added bullet** for that feature, or drop if it's purely internal iteration. Don't list polish-on-new-feature commits under Fixed/Changed — they confuse users ("fixed *what*? I never saw it broken").
+   - Cross-cutting infra change (e.g. a new permission flag, manifest tweak) that exists only because of a new feature → fold into the Added bullet, or drop. It's not a standalone story.
+
+   Example of the trap to avoid: shipping a new "ENS Browsing" feature across 6 commits where one commit was `fix(extension): surface ENS Browsing on Settings main page` — that "fix" is invisible to users because ENS Browsing itself is new in the same release. It belongs in the ENS Browsing Added bullet (or nowhere), not in Fixed.
+
+7. **Read the existing `## [Unreleased]` block** in `CHANGELOG.md` and merge:
    - If it has `_Nothing yet._`, replace that line entirely with your grouped entries.
    - If it already has entries (from a prior `/changelog` run earlier in the same release cycle), insert your new entries into the correct groups, de-duplicating against what's already there. Same-day re-runs are normal — assume the user has been iterating.
 
-7. **Edit only `CHANGELOG.md`** with the result. Use the `Edit` tool with the existing `## [Unreleased]` block as `old_string`. Do not touch any other section, the comparison-link footer, or any other file.
+8. **Edit only `CHANGELOG.md`** with the result. Use the `Edit` tool with the existing `## [Unreleased]` block as `old_string`. Do not touch any other section, the comparison-link footer, or any other file.
 
-8. **Report briefly** to the user: how many commits you reviewed, how many bullets you wrote, and any commits you intentionally skipped (one-liner per skip with the reason). Offer to also dump a GitHub-release-flavored version (the same bullets, plus `**Full Changelog**:` compare link) if they want one for the release body.
+9. **Report briefly** to the user: how many commits you reviewed, how many bullets you wrote, and any commits you intentionally skipped (one-liner per skip with the reason — include polish-on-new-feature folds, so the user can sanity-check the grouping). Offer to also dump a GitHub-release-flavored version (the same bullets, plus `**Full Changelog**:` compare link) if they want one for the release body.
 
 ## Output shape
 
@@ -103,3 +122,4 @@ Groups in Keep a Changelog order. No version header. No date. No compare-link li
 - ❌ Mentioning Bankr vs PK vs Seed vs Impersonator when the change applies to all.
 - ❌ Listing every commit when several collapse into one feature.
 - ❌ Editing released version sections to "fix" or "improve" past entries. History is immutable.
+- ❌ Listing a polish/fix commit under Fixed/Changed when the surface it touches is brand new in this release — those folds into the feature's Added bullet (see step 6).
