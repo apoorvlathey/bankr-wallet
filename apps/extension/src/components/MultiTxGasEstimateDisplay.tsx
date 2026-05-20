@@ -374,12 +374,12 @@ function MultiTxGasEstimateDisplay({
             return;
           }
           // Apply dapp-provided gas as a floor on each estimate. Without this,
-          // a low local simulation (eth_simulateV1 has been observed ~25%
-          // under real need on Base for V4-with-hooks calls — likely a
-          // gas-accounting quirk in the simulator's handling of dynamic
-          // hook gas) would silently downgrade a correct dapp/API gas value
-          // at signing time. Taking the max is safe: unused gas refunds on
-          // Base, and the user can still edit downward in the picker.
+          // a low local simulation (eth_simulateV1.gasUsed is raw consumed gas
+          // with zero EIP-150 padding — see batchGasEstimation.ts for why
+          // we apply a 2× buffer on top, not 20%) could still silently
+          // downgrade a correct dapp/API gas value at signing time. Taking
+          // the max is safe: unused gas refunds on Base, and the user can
+          // still edit downward in the picker.
           const floored = results.map((r, i) => {
             const dappGasStr = transactions[i]?.tx.gas;
             if (!dappGasStr) return r;

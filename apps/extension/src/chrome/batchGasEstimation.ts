@@ -264,8 +264,25 @@ async function tryEthSimulateV1(
         return { gasLimit: 200_000n, fallbackUsed: true };
       }
       const gasUsed = BigInt(cr.gasUsed);
-      // Add 20% buffer
-      return { gasLimit: (gasUsed * 120n) / 100n, fallbackUsed: false };
+      // 2× buffer (NOT 20% like the single-tx path) — `eth_simulateV1.gasUsed`
+      // is the raw gas the simulation consumed, with zero headroom. The chain's
+      // own `eth_estimateGas` binary-searches a limit that survives EIP-150's
+      // recursive 63/64 dilution through every nested CALL, which on deep call
+      // trees (0x AllowanceHolder → Settler → V4 PoolManager → hooks ≈ 4+
+      // levels) inflates the necessary outer limit ~25-30% over raw consumption
+      // — so any modest multiplier on raw `gasUsed` runs out of forwardable gas
+      // at the innermost frame even when total consumption stays well under the
+      // limit. State drift between Phase 1 estimate and Phase 2 broadcast
+      // (concurrent broadcast = several blocks can pass; volatile pools can
+      // cross more ticks than simulated) eats further into the margin. We
+      // deliberately can't re-estimate at broadcast time (Phase 2 makes zero
+      // RPC calls to dodge 429s on cheap RPCs), and we can't take max with
+      // per-call `eth_estimateGas` either — dependent calls like swap-after-
+      // approve always revert standalone, so the chain's number isn't available
+      // for the call that actually needs the bigger limit. Hence a generous
+      // flat 2× — unused gas refunds, and the user can edit down via the gas
+      // picker.
+      return { gasLimit: gasUsed * 2n, fallbackUsed: false };
     });
   } catch (err: any) {
     console.log("[batchGas] eth_simulateV1 fetch error:", err.message);
@@ -374,10 +391,16 @@ async function tryBatchGasInjection(
       `[batchGas] tier-2 injection ok (allSuccess=${allSuccess}): [${gasUsedPerCall.map(String).join(", ")}]`,
     );
 
-    // Apply 20% buffer (same as the other paths). gasUsedPerCall already
-    // includes intrinsic (21000) + calldata cost from the contract side.
+    // 2× buffer — same rationale as the eth_simulateV1 path above:
+    // `gasUsedPerCall` is measured via `gasleft()` diff in the simulator
+    // contract, which captures raw consumed gas (intrinsic + calldata + exec)
+    // but NOT the EIP-150 64/63 dilution that the actual tx hits at broadcast
+    // time as the chain forwards gas through nested CALLs. Modest multipliers
+    // are too tight for deep call trees (V4-with-hooks, 0x Settler, etc.);
+    // 2× gives reliable headroom for recursive dilution + cross-block state
+    // drift. Unused gas refunds, and the user can edit down via the picker.
     return gasUsedPerCall.map((gas) => ({
-      gasLimit: (gas * 120n) / 100n,
+      gasLimit: gas * 2n,
       fallbackUsed: false,
     }));
   } catch (err: any) {
@@ -408,7 +431,9 @@ async function estimateIndividualWithFallback(
 
       try {
         const gas = await client.estimateGas({ account: from, to, value, data });
-        // Add 20% buffer
+        // 20% buffer (NOT 50% like Tiers 1/2) — `eth_estimateGas` binary-searches
+        // a value that already includes EIP-150 64/63 padding through the call
+        // tree, so we don't need to re-pad for that here.
         return { gasLimit: (gas * 120n) / 100n, fallbackUsed: false };
       } catch {
         // Estimation failed (likely a dependent call) — use generous buffer.
