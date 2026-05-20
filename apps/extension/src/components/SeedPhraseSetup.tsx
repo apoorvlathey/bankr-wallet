@@ -41,6 +41,82 @@ interface SeedPhraseSetupProps {
   ) => void;
 }
 
+// Lifted to module scope so identity is stable across renders — otherwise
+// re-defining these on every render remounts the entire subtree on each
+// keystroke and kills focus on the name inputs.
+const Wrapper = ({
+  isOnboarding,
+  children,
+}: {
+  isOnboarding: boolean;
+  children: React.ReactNode;
+}) =>
+  isOnboarding ? (
+    <VStack spacing={6} w="full" maxW="400px" align="stretch">
+      {children}
+    </VStack>
+  ) : (
+    <Box p={4} h="100%" overflowY="auto" bg="surface.base">
+      <VStack spacing={4} align="stretch">
+        {children}
+      </VStack>
+    </Box>
+  );
+
+const Header = ({
+  isOnboarding,
+  title,
+  onBackClick,
+}: {
+  isOnboarding: boolean;
+  title: string;
+  onBackClick: () => void;
+}) =>
+  isOnboarding ? (
+    <HStack w="full" justify="space-between" align="center">
+      <IconButton
+        aria-label="Back"
+        icon={<ArrowBackIcon />}
+        variant="ghost"
+        size="sm"
+        onClick={onBackClick}
+      />
+      <Text
+        fontWeight="900"
+        fontSize="md"
+        color="text.primary"
+        textTransform="uppercase"
+        letterSpacing="wide"
+        noOfLines={1}
+        flex={1}
+        textAlign="center"
+        mx={2}
+      >
+        {title}
+      </Text>
+      <Box w="32px" flexShrink={0} />
+    </HStack>
+  ) : (
+    <HStack spacing={3}>
+      <IconButton
+        aria-label="Back"
+        icon={<ArrowBackIcon />}
+        variant="ghost"
+        size="sm"
+        onClick={onBackClick}
+      />
+      <Text
+        fontWeight="900"
+        fontSize="lg"
+        color="text.primary"
+        textTransform="uppercase"
+        letterSpacing="wide"
+      >
+        {title}
+      </Text>
+    </HStack>
+  );
+
 function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps) {
   const toast = useThemedToast();
 
@@ -50,71 +126,6 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   // mnemonic display, import). Outside onboarding (Settings → AddAccount),
   // keep the existing scrollable full-height panel.
   const isOnboarding = !!onCollect;
-
-  const Wrapper = ({ children }: { children: React.ReactNode }) =>
-    isOnboarding ? (
-      <VStack spacing={6} w="full" maxW="400px" align="stretch">
-        {children}
-      </VStack>
-    ) : (
-      <Box p={4} h="100%" overflowY="auto" bg="surface.base">
-        <VStack spacing={4} align="stretch">
-          {children}
-        </VStack>
-      </Box>
-    );
-
-  const Header = ({
-    title,
-    onBackClick,
-  }: {
-    title: string;
-    onBackClick: () => void;
-  }) =>
-    isOnboarding ? (
-      <HStack w="full" justify="space-between" align="center">
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          variant="ghost"
-          size="sm"
-          onClick={onBackClick}
-        />
-        <Text
-          fontWeight="900"
-          fontSize="md"
-          color="text.primary"
-          textTransform="uppercase"
-          letterSpacing="wide"
-          noOfLines={1}
-          flex={1}
-          textAlign="center"
-          mx={2}
-        >
-          {title}
-        </Text>
-        <Box w="32px" flexShrink={0} />
-      </HStack>
-    ) : (
-      <HStack spacing={3}>
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          variant="ghost"
-          size="sm"
-          onClick={onBackClick}
-        />
-        <Text
-          fontWeight="900"
-          fontSize="lg"
-          color="text.primary"
-          textTransform="uppercase"
-          letterSpacing="wide"
-        >
-          {title}
-        </Text>
-      </HStack>
-    );
 
   const [mode, setMode] = useState<Mode>("choose");
   const [generatedMnemonic, setGeneratedMnemonic] = useState<string | null>(null);
@@ -263,8 +274,9 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   if (generatedMnemonic) {
     const words = generatedMnemonic.split(" ");
     return (
-      <Wrapper>
+      <Wrapper isOnboarding={isOnboarding}>
           <Header
+            isOnboarding={isOnboarding}
             title="Save Your Seed Phrase"
             onBackClick={() => {
               if (!confirmed) {
@@ -377,8 +389,8 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   // Choose mode: generate or import
   if (mode === "choose") {
     return (
-      <Wrapper>
-          <Header title="Seed Phrase" onBackClick={onBack} />
+      <Wrapper isOnboarding={isOnboarding}>
+          <Header isOnboarding={isOnboarding} title="Seed Phrase" onBackClick={onBack} />
 
           <VStack spacing={3} align="stretch">
             <Box
@@ -460,8 +472,8 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   // Generate mode form (display name + generate button)
   if (mode === "generate") {
     return (
-      <Wrapper>
-          <Header title="Generate Seed Phrase" onBackClick={() => setMode("choose")} />
+      <Wrapper isOnboarding={isOnboarding}>
+          <Header isOnboarding={isOnboarding} title="Generate Seed Phrase" onBackClick={() => setMode("choose")} />
 
           {onCollect ? (
             <Box
@@ -568,8 +580,8 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
 
   // Import mode form
   return (
-    <Wrapper>
-        <Header title="Import Seed Phrase" onBackClick={() => setMode("choose")} />
+    <Wrapper isOnboarding={isOnboarding}>
+        <Header isOnboarding={isOnboarding} title="Import Seed Phrase" onBackClick={() => setMode("choose")} />
 
         <Box
           bg="surface.raised"
