@@ -273,3 +273,33 @@ export async function clearTxHistory(): Promise<void> {
     // Ignore errors if no listeners
   });
 }
+
+/**
+ * Clear transaction history for a specific set of sender addresses.
+ * Matches `tx.from` case-insensitively. Empty input is a no-op (the caller
+ * should fall back to clearTxHistory() for a full wipe so orphaned entries
+ * — txs whose sender no longer maps to any account — are also removed).
+ */
+export async function clearTxHistoryForAddresses(
+  addresses: string[],
+): Promise<void> {
+  if (addresses.length === 0) return;
+  return withTxHistoryLock(async () => {
+    const history = await getTxHistory();
+    const removeSet = new Set(addresses.map((a) => a.toLowerCase()));
+    const remaining = history.filter(
+      (tx) => !removeSet.has(tx.tx.from.toLowerCase()),
+    );
+    if (remaining.length === history.length) return; // nothing matched
+
+    if (remaining.length === 0) {
+      await chrome.storage.local.remove(TX_HISTORY_KEY);
+    } else {
+      await chrome.storage.local.set({ [TX_HISTORY_KEY]: remaining });
+    }
+
+    chrome.runtime.sendMessage({ type: "txHistoryUpdated" }).catch(() => {
+      // Ignore errors if no listeners
+    });
+  });
+}

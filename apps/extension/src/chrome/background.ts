@@ -78,6 +78,7 @@ import {
   getTxHistory,
   getProcessingTxs,
   clearTxHistory,
+  clearTxHistoryForAddresses,
   cleanupStaleProcessingTxs,
 } from "./txHistoryStorage";
 import {
@@ -626,6 +627,7 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "resetExtension",
   "onboardingComplete",
   "clearTxHistory",
+  "clearTxHistoryForAddresses",
   "clearNonceCache",
   "clearFailedTxResult",
   // Settings that affect security
@@ -2568,6 +2570,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "clearTxHistory": {
       clearTxHistory().then(() => {
+        sendResponse({ success: true });
+      });
+      return true;
+    }
+
+    case "clearTxHistoryForAddresses": {
+      const addresses = Array.isArray(message.addresses)
+        ? (message.addresses as unknown[]).filter(
+            (a): a is string => typeof a === "string",
+          )
+        : [];
+      clearTxHistoryForAddresses(addresses).then(() => {
         sendResponse({ success: true });
       });
       return true;

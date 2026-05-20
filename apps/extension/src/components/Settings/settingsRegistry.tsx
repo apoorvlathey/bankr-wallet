@@ -125,9 +125,10 @@ export type NavigableLeafId =
   | "autoLock"
   | "chains"
   | "ensBrowsing"
-  | "clearSigning";
+  | "clearSigning"
+  | "clearTxHistory";
 
-export type ActionLeafId = "clearTxHistory" | "resetNonce" | "clearChatHistory";
+export type ActionLeafId = "resetNonce" | "clearChatHistory";
 
 export interface RowContext {
   isDarkTheme: boolean;
@@ -291,12 +292,13 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
         <SettingsRow
           key={id}
           title="Clear Transaction History"
-          subtitle="Remove all transaction records"
+          subtitle="Choose accounts to clear"
           icon={<TrashIcon boxSize={5} />}
           iconBg="accent.primary"
           iconColor="accentFg.primary"
           cornerAccent="primary"
-          onClick={() => ctx.onAction(id)}
+          showChevron
+          onClick={() => ctx.onNavigate(id)}
         />
       );
 

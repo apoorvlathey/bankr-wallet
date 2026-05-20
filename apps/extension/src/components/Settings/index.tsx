@@ -35,6 +35,7 @@ import ClearSigningSettings from "./ClearSigningSettings";
 import EnsBrowsingSettings from "./EnsBrowsingSettings";
 import SecuritySettings from "./SecuritySettings";
 import DataSettings from "./DataSettings";
+import ClearTxHistoryScreen from "./ClearTxHistoryScreen";
 import { SettingsRow } from "./SettingsRow";
 import {
   LEAF_ENTRIES,
@@ -59,7 +60,8 @@ type SettingsTab =
   | "agentPassword"
   | "appearance"
   | "ensBrowsing"
-  | "clearSigning";
+  | "clearSigning"
+  | "clearTxHistory";
 
 interface SettingsProps {
   close: () => void;
@@ -91,20 +93,7 @@ function Settings({
   // Reused for the Chain RPCs chip — same recessed strip pattern as the
   // chevron, so the row reads as a "system" tile in both themes.
   const chainStrip = useStripTokens();
-  const { isOpen: isDeleteModalOpen, onOpen: onDeleteModalOpen, onClose: onDeleteModalClose } = useDisclosure();
   const { isOpen: isChatDeleteModalOpen, onOpen: onChatDeleteModalOpen, onClose: onChatDeleteModalClose } = useDisclosure();
-
-  const handleClearHistory = () => {
-    chrome.runtime.sendMessage({ type: "clearTxHistory" }, () => {
-      toast({
-        title: "Transaction history cleared",
-        status: "success",
-        duration: 2000,
-        isClosable: true,
-      });
-      onDeleteModalClose();
-    });
-  };
 
   const handleResetNonce = () => {
     chrome.runtime.sendMessage({ type: "clearNonceCache" }, () => {
@@ -167,8 +156,7 @@ function Settings({
     // After firing, drop the search query so the user lands back on the
     // default main list (clean state) once any modal closes / toast fires.
     setQuery("");
-    if (id === "clearTxHistory") onDeleteModalOpen();
-    else if (id === "clearChatHistory") onChatDeleteModalOpen();
+    if (id === "clearChatHistory") onChatDeleteModalOpen();
     else if (id === "resetNonce") handleResetNonce();
   };
 
@@ -182,8 +170,14 @@ function Settings({
     onAction: fireAction,
   };
 
+  // Confirmation modals are owned by the parent so DataSettings (and any future
+  // sub-tab) can trigger them via `fireAction`. They MUST stay mounted across
+  // tab transitions — early-returning the sub-tab would unmount this JSX and
+  // the modal would silently fail to render even though its open-state flipped.
+  let body: JSX.Element;
+
   if (tab === "chains") {
-    return (
+    body = (
       <Chains
         close={() => setTab("main")}
         initialTab={initialChainsTab}
@@ -191,29 +185,23 @@ function Settings({
         onChainSaved={onChainSaved}
       />
     );
-  }
-
-  if (tab === "changePassword") {
-    return (
+  } else if (tab === "changePassword") {
+    body = (
       <ChangePassword
         onComplete={() => setTab("main")}
         onCancel={() => setTab("main")}
         onSessionExpired={onSessionExpired || (() => setTab("main"))}
       />
     );
-  }
-
-  if (tab === "autoLock") {
-    return (
+  } else if (tab === "autoLock") {
+    body = (
       <AutoLockSettings
         onComplete={() => setTab("main")}
         onCancel={() => setTab("main")}
       />
     );
-  }
-
-  if (tab === "agentPassword") {
-    return (
+  } else if (tab === "agentPassword") {
+    body = (
       <AgentPasswordSettings
         onComplete={() => {
           checkAgentPassword();
@@ -223,157 +211,157 @@ function Settings({
         onSessionExpired={onSessionExpired || (() => setTab("main"))}
       />
     );
-  }
+  } else if (tab === "appearance") {
+    body = <AppearanceSettings onCancel={() => setTab("main")} />;
+  } else if (tab === "clearSigning") {
+    body = <ClearSigningSettings onBack={() => setTab("main")} />;
+  } else if (tab === "ensBrowsing") {
+    body = <EnsBrowsingSettings onBack={() => setTab("main")} />;
+  } else if (tab === "security") {
+    body = <SecuritySettings onBack={() => setTab("main")} ctx={rowCtx} />;
+  } else if (tab === "data") {
+    body = <DataSettings onBack={() => setTab("main")} ctx={rowCtx} />;
+  } else if (tab === "clearTxHistory") {
+    body = <ClearTxHistoryScreen onBack={() => setTab("main")} />;
+  } else {
+    const trimmedQuery = query.trim();
+    const matches = trimmedQuery ? filterLeaves(trimmedQuery) : [];
 
-  if (tab === "appearance") {
-    return <AppearanceSettings onCancel={() => setTab("main")} />;
-  }
+    body = (
+      <VStack spacing={4} align="stretch" flex="1">
+        {/* Header */}
+        <HStack>
+          {showBackButton && (
+            <IconButton
+              aria-label="Back"
+              icon={<ArrowBackIcon />}
+              variant="ghost"
+              size="sm"
+              onClick={close}
+            />
+          )}
+          <Text fontSize="lg" fontWeight="900" color="text.primary" textTransform="uppercase" letterSpacing="tight">
+            Settings
+          </Text>
+          <Spacer />
+        </HStack>
 
-  if (tab === "clearSigning") {
-    return <ClearSigningSettings onBack={() => setTab("main")} />;
-  }
+        {/* Search */}
+        <InputGroup>
+          <InputLeftElement pointerEvents="none">
+            <Search2Icon color="fg.muted" />
+          </InputLeftElement>
+          <Input
+            ref={searchInputRef}
+            placeholder="Search settings..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+          />
+          {query && (
+            <InputRightElement>
+              <IconButton
+                aria-label="Clear search"
+                icon={<SmallCloseIcon />}
+                size="xs"
+                variant="ghost"
+                onClick={() => {
+                  setQuery("");
+                  searchInputRef.current?.focus();
+                }}
+              />
+            </InputRightElement>
+          )}
+        </InputGroup>
 
-  if (tab === "ensBrowsing") {
-    return <EnsBrowsingSettings onBack={() => setTab("main")} />;
-  }
+        {trimmedQuery ? (
+          matches.length > 0 ? (
+            <>{matches.map((e) => renderLeafRow(e.id, rowCtx))}</>
+          ) : (
+            <Box py={6} textAlign="center">
+              <Text fontSize="sm" color="text.secondary" fontWeight="500">
+                No settings match &ldquo;{trimmedQuery}&rdquo;
+              </Text>
+            </Box>
+          )
+        ) : (
+          <>
+            {/* Appearance — first row, themed picker entry */}
+            {renderLeafRow("appearance", rowCtx)}
 
-  if (tab === "security") {
-    return <SecuritySettings onBack={() => setTab("main")} ctx={rowCtx} />;
-  }
+            {/* Security group */}
+            <SettingsRow
+              title="Security"
+              subtitle="Password, agent access, auto-lock"
+              icon={<ShieldIcon boxSize={5} />}
+              iconBg="accent.highlight"
+              iconColor="accentFg.highlight"
+              cornerAccent="highlight"
+              showChevron
+              onClick={() => setTab("security")}
+            />
 
-  if (tab === "data") {
-    return <DataSettings onBack={() => setTab("main")} ctx={rowCtx} />;
-  }
+            {/* Chain RPCs — top-level single entry */}
+            {renderLeafRow("chains", rowCtx)}
 
-  const trimmedQuery = query.trim();
-  const matches = trimmedQuery ? filterLeaves(trimmedQuery) : [];
+            {/* ENS Browsing — top-level single entry */}
+            {renderLeafRow("ensBrowsing", rowCtx)}
+
+            {/* Data group */}
+            <SettingsRow
+              title="Data"
+              subtitle="Clear history, reset nonce cache"
+              icon={<DatabaseIcon boxSize={5} />}
+              iconBg="accent.primary"
+              iconColor="accentFg.primary"
+              cornerAccent="primary"
+              showChevron
+              onClick={() => setTab("data")}
+            />
+          </>
+        )}
+
+        {/* Spacer to push footer to bottom */}
+        <Box flex="1" />
+
+        <Box h="3px" bg="border.default" w="full" />
+
+        <HStack spacing={1} justify="center">
+          <Text fontSize="sm" color="text.tertiary" fontWeight="500">
+            Built by
+          </Text>
+          <Link
+            display="flex"
+            alignItems="center"
+            gap={1}
+            color="accent.secondary"
+            fontWeight="700"
+            _hover={{ color: "accent.primary" }}
+            onClick={() => {
+              chrome.tabs.create({ url: TWITTER_URL });
+            }}
+          >
+            <Box
+              as="svg"
+              viewBox="0 0 24 24"
+              w="14px"
+              h="14px"
+              fill="currentColor"
+            >
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </Box>
+            <Text fontSize="sm" textDecor="underline">
+              @apoorveth
+            </Text>
+          </Link>
+        </HStack>
+      </VStack>
+    );
+  }
 
   return (
-    <VStack spacing={4} align="stretch" flex="1">
-      {/* Header */}
-      <HStack>
-        {showBackButton && (
-          <IconButton
-            aria-label="Back"
-            icon={<ArrowBackIcon />}
-            variant="ghost"
-            size="sm"
-            onClick={close}
-          />
-        )}
-        <Text fontSize="lg" fontWeight="900" color="text.primary" textTransform="uppercase" letterSpacing="tight">
-          Settings
-        </Text>
-        <Spacer />
-      </HStack>
-
-      {/* Search */}
-      <InputGroup>
-        <InputLeftElement pointerEvents="none">
-          <Search2Icon color="fg.muted" />
-        </InputLeftElement>
-        <Input
-          ref={searchInputRef}
-          placeholder="Search settings..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          autoFocus
-        />
-        {query && (
-          <InputRightElement>
-            <IconButton
-              aria-label="Clear search"
-              icon={<SmallCloseIcon />}
-              size="xs"
-              variant="ghost"
-              onClick={() => {
-                setQuery("");
-                searchInputRef.current?.focus();
-              }}
-            />
-          </InputRightElement>
-        )}
-      </InputGroup>
-
-      {trimmedQuery ? (
-        matches.length > 0 ? (
-          <>{matches.map((e) => renderLeafRow(e.id, rowCtx))}</>
-        ) : (
-          <Box py={6} textAlign="center">
-            <Text fontSize="sm" color="text.secondary" fontWeight="500">
-              No settings match &ldquo;{trimmedQuery}&rdquo;
-            </Text>
-          </Box>
-        )
-      ) : (
-        <>
-          {/* Appearance — first row, themed picker entry */}
-          {renderLeafRow("appearance", rowCtx)}
-
-          {/* Security group */}
-          <SettingsRow
-            title="Security"
-            subtitle="Password, agent access, auto-lock"
-            icon={<ShieldIcon boxSize={5} />}
-            iconBg="accent.highlight"
-            iconColor="accentFg.highlight"
-            cornerAccent="highlight"
-            showChevron
-            onClick={() => setTab("security")}
-          />
-
-          {/* Chain RPCs — top-level single entry */}
-          {renderLeafRow("chains", rowCtx)}
-
-          {/* ENS Browsing — top-level single entry */}
-          {renderLeafRow("ensBrowsing", rowCtx)}
-
-          {/* Data group */}
-          <SettingsRow
-            title="Data"
-            subtitle="Clear history, reset nonce cache"
-            icon={<DatabaseIcon boxSize={5} />}
-            iconBg="accent.primary"
-            iconColor="accentFg.primary"
-            cornerAccent="primary"
-            showChevron
-            onClick={() => setTab("data")}
-          />
-        </>
-      )}
-
-      {/* Delete Transaction History Confirmation Modal */}
-      <Modal isOpen={isDeleteModalOpen} onClose={onDeleteModalClose} isCentered>
-        <ModalOverlay bg="surface.overlay" />
-        <ModalContent mx={4}>
-          <ModalHeader
-            color="fg.primary"
-            fontWeight="900"
-            fontSize="md"
-            borderBottomWidth="1px"
-            borderColor="border.subtle"
-          >
-            Clear Transaction History?
-          </ModalHeader>
-          <ModalBody py={4}>
-            <Text color="text.secondary" fontSize="sm" fontWeight="500">
-              This will permanently delete all transaction records. This action cannot be undone.
-            </Text>
-          </ModalBody>
-          <ModalFooter gap={2} borderTopWidth="1px" borderColor="border.subtle">
-            <Button variant="secondary" size="sm" onClick={onDeleteModalClose}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={handleClearHistory}
-            >
-              Delete
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+    <>
+      {body}
 
       {/* Delete Chat History Confirmation Modal */}
       <Modal isOpen={isChatDeleteModalOpen} onClose={onChatDeleteModalClose} isCentered>
@@ -407,42 +395,7 @@ function Settings({
           </ModalFooter>
         </ModalContent>
       </Modal>
-
-      {/* Spacer to push footer to bottom */}
-      <Box flex="1" />
-
-      <Box h="3px" bg="border.default" w="full" />
-
-      <HStack spacing={1} justify="center">
-        <Text fontSize="sm" color="text.tertiary" fontWeight="500">
-          Built by
-        </Text>
-        <Link
-          display="flex"
-          alignItems="center"
-          gap={1}
-          color="accent.secondary"
-          fontWeight="700"
-          _hover={{ color: "accent.primary" }}
-          onClick={() => {
-            chrome.tabs.create({ url: TWITTER_URL });
-          }}
-        >
-          <Box
-            as="svg"
-            viewBox="0 0 24 24"
-            w="14px"
-            h="14px"
-            fill="currentColor"
-          >
-            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-          </Box>
-          <Text fontSize="sm" textDecor="underline">
-            @apoorveth
-          </Text>
-        </Link>
-      </HStack>
-    </VStack>
+    </>
   );
 }
 
