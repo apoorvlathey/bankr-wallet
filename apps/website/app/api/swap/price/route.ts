@@ -62,6 +62,7 @@ async function fetch0xPrice(
   feeToken: string,
   taker?: string,
   slippageBps?: string,
+  recipient?: string,
 ): Promise<{ ok: boolean; data: Record<string, unknown> }> {
   const params = new URLSearchParams({ chainId, sellToken, buyToken, sellAmount });
 
@@ -72,6 +73,9 @@ async function fetch0xPrice(
   }
   if (taker) params.set("taker", taker);
   if (slippageBps) params.set("slippageBps", slippageBps);
+  // Optional alternate recipient — see quote/route.ts for the rationale and
+  // the wrap/unwrap caveat.
+  if (recipient) params.set("recipient", recipient);
 
   const response = await fetch(
     `${ZEROX_BASE_URL}/swap/allowance-holder/price?${params.toString()}`,
@@ -149,16 +153,29 @@ export async function GET(request: NextRequest) {
   const slippageBps = searchParams.get("slippageBps") ?? undefined;
   const slippageBpsNum = slippageBps && /^\d+$/.test(slippageBps) ? Number(slippageBps) : 100;
 
+  // Optional explicit recipient for the bought tokens. Validated here so an
+  // invalid value fails fast (vs surfacing as a 0x 400 downstream).
+  const recipientRaw = searchParams.get("recipient");
+  const recipient = recipientRaw ?? undefined;
+  if (recipient && !isAddress(recipient)) {
+    return NextResponse.json(
+      { error: "Invalid recipient address" },
+      { status: 400 },
+    );
+  }
+
   // Resolve fee tier and preferred fee token
   const { feeBps, isPremiumFee } = await resolveFeeBps(taker ?? undefined);
   const feeToken = resolveSwapFeeToken(chainIdParam, sellToken, buyToken);
 
   // -----------------------------------------------------------------------
-  // WCHAN custom routing: compare 0x vs Uniswap V4
+  // WCHAN custom routing: compare 0x vs Uniswap V4.
+  // Same recipient-aware skip as quote/route.ts — the V4 fallback can't
+  // direct tokens to a non-taker address.
   // -----------------------------------------------------------------------
   const wchanCheck = detectWchanSwap(chainIdParam, sellToken, buyToken);
 
-  if (wchanCheck.isWchan) {
+  if (wchanCheck.isWchan && !recipient) {
     try {
       const [zeroXResult, wchanResult] = await Promise.allSettled([
         fetch0xPrice(chainIdParam, sellToken, buyToken, sellAmount, feeBps, feeToken, taker ?? undefined, slippageBps),
@@ -217,6 +234,7 @@ export async function GET(request: NextRequest) {
       feeToken,
       taker ?? undefined,
       slippageBps,
+      recipient,
     );
 
     if (!result.ok) {
