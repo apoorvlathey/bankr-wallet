@@ -2151,8 +2151,9 @@ async function simulateViaEthSimulateV1(
  *    hooks, which is the only way to capture NFT tokenId, tokenURI (post-tx
  *    state), and ERC-1155 amounts.
  *
- * Result: ERC-20 + native from eth_simulateV1 (when available), NFTs from the
- * bytecode-injection sim. Falls back gracefully if either path fails.
+ * Result: ERC-20 + native from eth_simulateV1 (when available), NFTs and the
+ * revert verdict from the bytecode-injection sim. Falls back gracefully if
+ * either path fails.
  */
 export async function simulateBatchAssetChangesNonAtomic(
   calls: { to?: string; data?: string; value?: string }[],
@@ -2194,8 +2195,11 @@ export async function simulateBatchAssetChangesNonAtomic(
   }
 
   // Both succeeded → merge
-  // - ERC-20 + native: prefer eth_simulateV1 (sees real execution flow)
+  // - ERC-20 + native: prefer eth_simulateV1 deltas (transfer logs)
   // - NFTs: take from bytecode-injection (tokenId + tokenUri + metadata)
+  // - txSuccess: trust bytecode-injection. eth_simulateV1 can false-positive
+  //   revert on valid EOA approve + 0x AllowanceHolder swap batches while the
+  //   bytecode path matches real broadcasts.
   const v1Erc20s = v1Result.tokenChanges.filter((tc) => !tc.nft);
   const v1Addrs = new Set(v1Erc20s.map((tc) => tc.address.toLowerCase()));
 
@@ -2212,10 +2216,13 @@ export async function simulateBatchAssetChangesNonAtomic(
     byteOnlyErc20s: byteOnlyErc20s.length,
     byteNfts: byteNfts.length,
     nativeFrom: v1Result.nativeChange ? "v1" : byteResult.nativeChange ? "byte" : "none",
+    txSuccessFrom: "bytecode",
+    v1TxSuccess: v1Result.txSuccess,
+    byteTxSuccess: byteResult.txSuccess,
   });
 
   return {
-    txSuccess: v1Result.txSuccess && byteResult.txSuccess,
+    txSuccess: byteResult.txSuccess,
     nativeChange: v1Result.nativeChange ?? byteResult.nativeChange,
     tokenChanges: merged,
     simulationFailed: false,

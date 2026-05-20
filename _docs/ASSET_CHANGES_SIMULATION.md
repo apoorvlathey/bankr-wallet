@@ -207,6 +207,8 @@ ERC-5792 batch transactions are self-calls (`from === to = wallet address`), whi
 
 **Flow**: `AssetChangesDisplay` passes `batchCalls` prop → sends `simulateBatchAssetChanges` message → background merges access lists from all calls → encodes `simulateBatch` → single `eth_call` with state override → returns cumulative deltas.
 
+For non-atomic PK/Seed Phrase batches, `simulateBatchAssetChangesNonAtomic()` runs both `eth_simulateV1` and the bytecode-injection batch simulator. The merged result prefers `eth_simulateV1` transfer-log deltas for ERC-20/native changes when available, but the final `txSuccess` verdict comes from the bytecode simulator. This avoids false-positive revert banners from provider-specific `eth_simulateV1` behavior on valid approve + 0x AllowanceHolder swap batches.
+
 See `_docs/ERC5792.md` → "Simulation & Tenderly" for the full flow.
 
 ## Updating the Simulator Contract
