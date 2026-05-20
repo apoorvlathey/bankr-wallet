@@ -98,10 +98,14 @@ async function buildApproveMeta(
 
   return {
     kind: "approve",
-    amount: parsed.isInfinite
-      ? undefined
-      : formatUnits(parsed.amount, info.decimals),
+    // Revoke (amount === 0) skips the amount slot — the activity row reads
+    // "Revoke USDC approval from X" with no numeric to display.
+    amount:
+      parsed.isInfinite || parsed.isRevoke
+        ? undefined
+        : formatUnits(parsed.amount, info.decimals),
     isInfinite: parsed.isInfinite,
+    isRevoke: parsed.isRevoke,
     tokenSymbol: info.symbol,
     tokenLogo: logo,
     tokenAddress,

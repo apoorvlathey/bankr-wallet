@@ -140,26 +140,35 @@ export default function ERC20ApproveDisplay({
 }: ERC20ApproveDisplayProps) {
   const { tokens, themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
-  // Approval card bg.
-  //   Bauhaus: cornsilk `status.warning.tint` (#FFF8DC) — a warm pale
-  //     yellow that (a) reads "caution / approve with care", (b) ties in
-  //     with the amber header pill without competing (much paler than the
-  //     amber), and (c) keeps dark text comfortably legible. Plain greys
-  //     were too close to the app bg (#F0F0F0) to actually differentiate
-  //     the card.
-  //   Midnight: `surface.raisedHover` (#1A2033) — a clearly lifted navy
-  //     against the darker surface.raised (#131826) info card below,
-  //     without introducing any saturated color that would fight the
-  //     amber header pill.
-  const approvalCardBg = isDarkTheme
-    ? "surface.raisedHover"
-    : "status.warning.tint";
   const [token, setToken] = useState<TokenMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [currentAmount, setCurrentAmount] = useState(approval.amount);
   const [isInfinite, setIsInfinite] = useState(approval.isInfinite);
+  const [isRevoke, setIsRevoke] = useState(approval.isRevoke);
+  // Approval card bg. MUST be declared after `isRevoke` — referencing the
+  // state in initializer order earlier hit the TDZ once Vite minified the
+  // identifier.
+  //   Approve (any amount > 0):
+  //     Bauhaus uses cornsilk `status.warning.tint` (#FFF8DC) — a warm pale
+  //       yellow that reads "caution / approve with care", ties in with the
+  //       amber header pill without competing, and keeps dark text legible.
+  //     Midnight uses `surface.raisedHover` (#1A2033) — a clearly lifted navy
+  //       against the darker surface.raised info card below.
+  //   Revoke (amount === 0):
+  //     Bauhaus swaps to `status.success.tint` because revoking is a
+  //       protective action — the warning yellow would lie about the risk.
+  //     Midnight keeps the same lifted navy so the card still reads as a
+  //       distinct surface against the modal's other rows. The green REVOKE
+  //       chip below carries the "this is safe" semantic on its own.
+  const approvalCardBg = isRevoke
+    ? isDarkTheme
+      ? "surface.raisedHover"
+      : "status.success.tint"
+    : isDarkTheme
+      ? "surface.raisedHover"
+      : "status.warning.tint";
   const [spenderLabels, setSpenderLabels] = useState<string[]>([]);
   const [resolvedSpenderName, setResolvedSpenderName] = useState<string | null>(null);
   const [copiedSpender, setCopiedSpender] = useState(false);
@@ -291,6 +300,7 @@ export default function ERC20ApproveDisplay({
 
     setCurrentAmount(newAmount);
     setIsInfinite(newAmount >= INFINITE_THRESHOLD);
+    setIsRevoke(newAmount === 0n);
     setEditing(false);
   }, [token, editValue, approval.spender, txId, onSaveCalldata]);
 
@@ -457,7 +467,9 @@ export default function ERC20ApproveDisplay({
             letterSpacing="wider"
             mb={1}
           >
-            Approve Amount
+            {/* Neutral "Approval" label when revoking — the prominent green
+                REVOKE chip immediately below already carries the verb. */}
+            {isRevoke ? "Approval" : "Approve Amount"}
           </Text>
           {editing ? (
             <HStack spacing={1} w="full">
@@ -497,7 +509,46 @@ export default function ERC20ApproveDisplay({
             </HStack>
           ) : (
             <HStack justify="space-between" align="center" spacing={2}>
-              {isInfinite ? (
+              {isRevoke ? (
+                <Tooltip
+                  label="This sets the spender's allowance to 0 — they will no longer be able to move your tokens. Safe to confirm."
+                  fontSize="xs"
+                  hasArrow
+                  bg="fg.primary"
+                  color="fg.inverse"
+                  maxW="260px"
+                >
+                  {/* Revoke chip — mirrors the Unlimited chip's silhouette
+                      (Bauhaus: sharp rectangle with thick stroke; Midnight:
+                      soft chip with no stroke) but flips the palette to
+                      `status.success.*` so the user reads "protective
+                      action" instead of "warning". The check glyph
+                      reinforces "this clears something" over a generic
+                      shield. */}
+                  <HStack
+                    spacing={1.5}
+                    bg="status.success.bg"
+                    px={2}
+                    py={1}
+                    border={isDarkTheme ? "none" : "1.5px solid"}
+                    borderColor={
+                      isDarkTheme ? undefined : "status.success.border"
+                    }
+                    borderRadius={isDarkTheme ? "md" : "none"}
+                  >
+                    <CheckIcon boxSize={3} color="status.success.fg" />
+                    <Text
+                      fontSize="md"
+                      fontWeight="900"
+                      color="status.success.fg"
+                      textTransform="uppercase"
+                      letterSpacing="wide"
+                    >
+                      Revoke
+                    </Text>
+                  </HStack>
+                </Tooltip>
+              ) : isInfinite ? (
                 <Tooltip
                   label="This grants unlimited spending of your tokens. Consider setting a specific amount."
                   fontSize="xs"
@@ -638,6 +689,9 @@ export default function ERC20ApproveDisplay({
               letterSpacing="wider"
               pt={0.5}
             >
+              {/* "Spender" stays regardless of direction — the chip above
+                  already says revoke vs approve, so a "Revoke From" label
+                  here would just stack a third "REVOKE …". */}
               Spender
             </Text>
             <VStack spacing={1} align="flex-end" minW={0}>

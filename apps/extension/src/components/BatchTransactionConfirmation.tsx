@@ -1688,13 +1688,17 @@ function CallCard({
           {index + 1}
         </Badge>
         <VStack spacing={0} align="start" flex={1} minW={0}>
-          {/* When we have a full ERC-20 inline summary (amount + symbol)
-              we render an inline row with the token logo dropped between
-              the amount and the symbol — "Send 5 [icon] USDC to abc.eth"
-              or "Approve unlimited [icon] USDC to uniswap-router".
+          {/* When we have a full ERC-20 inline summary (amount + symbol, or
+              the amountless revoke case where the token is enough) we render
+              an inline row with the token logo dropped between the prefix
+              and the symbol —
+                  "Send 5 [icon] USDC to abc.eth"
+                  "Approve unlimited [icon] USDC to uniswap-router"
+                  "Revoke [icon] USDC approval from uniswap-router"
               Anything else (plain decoded function name, native transfer
               fallback, summary still loading) renders as a single Text. */}
-          {inlineSummary?.amount && inlineSummary?.symbol ? (
+          {inlineSummary?.symbol &&
+          (inlineSummary.amount || inlineSummary.mode === "revoke") ? (
             <HStack
               spacing={1}
               maxW="100%"
@@ -1768,14 +1772,19 @@ function CallCard({
         </VStack>
         {/* Right-side contract address is hidden once the inline summary
             has fully resolved — the row already says e.g. "Send 5 USDC to
-            abc.eth" or "Approve 100 USDC to uniswap-router", so trailing
-            "0x83…2913" of the token contract becomes redundant noise. The
-            address remains visible in the expanded view's `To` row. */}
-        {call.to && !(inlineSummary?.amount && inlineSummary?.symbol) && (
-          <Text fontSize="2xs" fontFamily="mono" color="text.tertiary">
-            {call.to.slice(0, 6)}...{call.to.slice(-4)}
-          </Text>
-        )}
+            abc.eth", "Approve 100 USDC to uniswap-router", or "Revoke USDC
+            approval from uniswap-router" — so trailing "0x83…2913" of the
+            token contract becomes redundant noise. The address remains
+            visible in the expanded view's `To` row. */}
+        {call.to &&
+          !(
+            inlineSummary?.symbol &&
+            (inlineSummary.amount || inlineSummary.mode === "revoke")
+          ) && (
+            <Text fontSize="2xs" fontFamily="mono" color="text.tertiary">
+              {call.to.slice(0, 6)}...{call.to.slice(-4)}
+            </Text>
+          )}
         <Icon
           className="call-chevron"
           as={isExpanded ? ChevronUpIcon : ChevronDownIcon}

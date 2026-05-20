@@ -317,17 +317,28 @@ function ClearSignedSummary({
 
   // Compose the verb+amount+symbol fragment per kind. Approve with isInfinite
   // collapses the amount slot to the "Unlimited" word so the row reads
-  // "Approve Unlimited USDC → ..." rather than the raw 2^256-1.
+  // "Approve Unlimited USDC → ..." rather than the raw 2^256-1. Revoke
+  // (approve with amount === 0) collapses the amount slot entirely and
+  // re-words the connector from "→" to "from" so the row reads
+  // "Revoke USDC approval from ...".
   let action: string;
+  let connector = " → ";
   if (meta.kind === "approve") {
-    const amountWord = meta.isInfinite
-      ? "Unlimited"
-      : meta.amount
-        ? formatActivityAmount(meta.amount)
-        : "";
-    action = ["Approve", amountWord, meta.tokenSymbol]
-      .filter(Boolean)
-      .join(" ");
+    if (meta.isRevoke) {
+      action = ["Revoke", meta.tokenSymbol, "approval"]
+        .filter(Boolean)
+        .join(" ");
+      connector = " from ";
+    } else {
+      const amountWord = meta.isInfinite
+        ? "Unlimited"
+        : meta.amount
+          ? formatActivityAmount(meta.amount)
+          : "";
+      action = ["Approve", amountWord, meta.tokenSymbol]
+        .filter(Boolean)
+        .join(" ");
+    }
   } else if (meta.kind === "transfer" || meta.kind === "nativeSend") {
     const amountWord = meta.amount ? formatActivityAmount(meta.amount) : "";
     action = ["Send", amountWord, meta.tokenSymbol].filter(Boolean).join(" ");
@@ -358,7 +369,7 @@ function ClearSignedSummary({
         {counterparty && (
           <>
             <Text as="span" color="text.tertiary" fontWeight="500">
-              {" → "}
+              {connector}
             </Text>
             {counterparty}
           </>

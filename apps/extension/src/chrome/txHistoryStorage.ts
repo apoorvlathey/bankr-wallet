@@ -46,6 +46,8 @@ export interface ClearSignedMeta {
   tokenAddress?: string;
   /** Approve only — true when amount >= 2^128 (treated as unlimited). */
   isInfinite?: boolean;
+  /** Approve only — true when amount === 0 (revoking an existing allowance). */
+  isRevoke?: boolean;
   /** Spender / recipient / contract address (the thing the user is "sending to"). */
   counterparty?: string;
   /** First eth.sh label for counterparty, if any (e.g., "Uniswap V3 Router"). */

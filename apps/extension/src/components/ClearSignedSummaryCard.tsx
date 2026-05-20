@@ -44,21 +44,30 @@ interface Props {
 //     Midnight — same colors `ERC20ApproveDisplay` uses, so the user
 //     recognizes the "approve, with care" visual across confirmation and
 //     activity-detail surfaces.
+//   revoke (approve with amount === 0): success tint in Bauhaus (the
+//     protective action shouldn't wear a caution color), lifted navy in
+//     Midnight (REVOKE chip below carries the green semantic on its own).
 //   everything else: surface.sunken to integrate with the modal's other
 //     section cards (transferMeta, From→To, gas).
-function useCardBg(kind: ClearSignedMeta["kind"]) {
+function useCardBg(meta: ClearSignedMeta) {
   const { themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
-  if (kind === "approve") {
+  if (meta.kind === "approve") {
+    if (meta.isRevoke) {
+      return isDarkTheme ? "surface.raisedHover" : "status.success.tint";
+    }
     return isDarkTheme ? "surface.raisedHover" : "status.warning.tint";
   }
   return "surface.sunken";
 }
 
-function actionLabel(kind: ClearSignedMeta["kind"]): string {
-  switch (kind) {
+function actionLabel(meta: ClearSignedMeta): string {
+  switch (meta.kind) {
     case "approve":
-      return "Approve Amount";
+      // The green REVOKE chip below already carries the verb. Pair it with a
+      // neutral "Approval" label so the section doesn't read "REVOKE … REVOKE
+      // …" stacked vertically.
+      return meta.isRevoke ? "Approval" : "Approve Amount";
     case "transfer":
     case "nativeSend":
       return "Send Amount";
@@ -104,7 +113,7 @@ function CopyIconButton({
 export default function ClearSignedSummaryCard({ meta, chainId }: Props) {
   const { tokens, themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
-  const cardBg = useCardBg(meta.kind);
+  const cardBg = useCardBg(meta);
   const chainConfig = getChainConfig(chainId);
 
   // Token logo: prewarm via the shared avatar cache so reopens are
@@ -141,6 +150,9 @@ export default function ClearSignedSummaryCard({ meta, chainId }: Props) {
   const counterpartySectionLabel = (() => {
     switch (meta.kind) {
       case "approve":
+        // "Spender" stays the same whether granting or revoking — the chip
+        // above already says which direction we're going, so re-labeling
+        // this row "Revoke From" just adds a third stacked "REVOKE …".
         return "Spender";
       case "transfer":
       case "nativeSend":
@@ -261,9 +273,46 @@ export default function ClearSignedSummaryCard({ meta, chainId }: Props) {
             letterSpacing="wider"
             mb={1}
           >
-            {actionLabel(meta.kind)}
+            {actionLabel(meta)}
           </Text>
-          {meta.kind === "approve" && meta.isInfinite ? (
+          {meta.kind === "approve" && meta.isRevoke ? (
+            <Tooltip
+              label="The spender's allowance was set to 0 — they can no longer move your tokens."
+              fontSize="xs"
+              hasArrow
+              bg="fg.primary"
+              color="fg.inverse"
+              maxW="260px"
+            >
+              <HStack
+                spacing={1.5}
+                bg="status.success.bg"
+                px={2}
+                py={1}
+                border={isDarkTheme ? "none" : "1.5px solid"}
+                borderColor={
+                  isDarkTheme ? undefined : "status.success.border"
+                }
+                borderRadius={isDarkTheme ? "md" : "none"}
+                display="inline-flex"
+                w="fit-content"
+              >
+                <CheckIcon boxSize={3} color="status.success.fg" />
+                <Text
+                  fontSize="md"
+                  fontWeight="900"
+                  color="status.success.fg"
+                  textTransform="uppercase"
+                  letterSpacing="wide"
+                >
+                  {/* Token symbol intentionally omitted — already shown in
+                      the header strip above, and pairing them stacks the
+                      symbol on three lines ("McCAT … REVOKE McCAT …"). */}
+                  Revoke
+                </Text>
+              </HStack>
+            </Tooltip>
+          ) : meta.kind === "approve" && meta.isInfinite ? (
             <Tooltip
               label="This grants unlimited spending of your tokens."
               fontSize="xs"

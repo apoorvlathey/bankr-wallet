@@ -3,6 +3,7 @@
  * `CallCard` headers so each row reads
  *   "Send 100 USDC to vitalik.eth"
  *   "Approve unlimited USDC to uniswap-router"
+ *   "Revoke USDC approval from uniswap-router"   (approve(spender, 0))
  * instead of just "transfer" / "approve".
  *
  * Handles two selectors today; extend the switch in `decodeErc20Call` to add
@@ -43,7 +44,7 @@ const APPROVE_ABI = parseAbiItem("function approve(address spender, uint256 amou
 const MAX_UINT256 = (1n << 256n) - 1n;
 const MAX_UINT160 = (1n << 160n) - 1n;
 
-export type Erc20SummaryMode = "send" | "approve";
+export type Erc20SummaryMode = "send" | "approve" | "revoke";
 
 interface Erc20DecodedCall {
   mode: Erc20SummaryMode;
@@ -74,10 +75,14 @@ function decodeErc20Call(data: string | undefined | null): Erc20DecodedCall | nu
         data: data as `0x${string}`,
       });
       if (!args || args.length < 2) return null;
+      const amount = BigInt(args[1] as bigint | string | number);
       return {
-        mode: "approve",
+        // approve(spender, 0) strips an existing allowance — read as "Revoke"
+        // so the summary reads "Revoke USDC approval from X" instead of
+        // "Approve 0 USDC to X".
+        mode: amount === 0n ? "revoke" : "approve",
         counterparty: String(args[0]),
-        amount: BigInt(args[1] as bigint | string | number),
+        amount,
       };
     }
   } catch {
@@ -100,17 +105,19 @@ interface TokenInfo {
 export type Erc20CounterpartyAvatarKind = "ens" | "bankr" | "blockie";
 
 export interface Erc20InlineSummary {
-  /** "send" → transfer call; "approve" → allowance grant. */
+  /** "send" → transfer call; "approve" → allowance grant; "revoke" → approve(spender, 0). */
   mode: Erc20SummaryMode;
   /** Plain-text fallback ("Send 100 USDC to vitalik.eth") for tooltips. */
   text: string;
-  /** "Send " or "Approve ". */
+  /** "Send ", "Approve ", or "Revoke ". */
   prefix: string;
-  amount?: string; // "100" or "unlimited"
+  /** "100" / "unlimited". Omitted in revoke mode (no amount to display). */
+  amount?: string;
   symbol?: string; // "USDC"
   logoUrl?: string; // CDN url or cached data URL
-  middle: string; // " to "
-  /** Recipient (transfer) or spender (approve) display label. */
+  /** " to " for send/approve, " approval from " for revoke. */
+  middle: string;
+  /** Recipient (transfer) or spender (approve / revoke) display label. */
   recipient: string;
   recipientAvatarSrc?: string;
   recipientAvatarKind?: Erc20CounterpartyAvatarKind;
@@ -258,18 +265,37 @@ export function useErc20InlineSummary(
     recipientAvatarKind = "blockie";
   }
 
-  const amount = tokenInfo
-    ? formatAmount(decoded.amount, tokenInfo.decimals)
-    : undefined;
+  // Revoke is intentionally amountless — "Revoke 0 USDC" reads as noise; the
+  // important bits are the token + the spender losing access.
+  const amount =
+    decoded.mode === "revoke"
+      ? undefined
+      : tokenInfo
+        ? formatAmount(decoded.amount, tokenInfo.decimals)
+        : undefined;
   const symbol = tokenInfo?.symbol;
   const logoUrl = cachedLogoUrl || tokenInfo?.logoUrl;
 
-  const prefix = decoded.mode === "approve" ? "Approve " : "Send ";
-  const fallbackNoun = decoded.mode === "approve" ? "approval" : "tokens";
-  const text =
-    amount && symbol
+  const prefix =
+    decoded.mode === "approve"
+      ? "Approve "
+      : decoded.mode === "revoke"
+        ? "Revoke "
+        : "Send ";
+  // Revoke shifts the connecting phrase from "to" to "approval from" so the
+  // sentence reads "Revoke USDC approval from uniswap-router".
+  const middle = decoded.mode === "revoke" ? " approval from " : " to ";
+  const text = (() => {
+    if (decoded.mode === "revoke") {
+      return symbol
+        ? `Revoke ${symbol} approval from ${recipientDisplay}`
+        : `Revoke approval from ${recipientDisplay}`;
+    }
+    const fallbackNoun = decoded.mode === "approve" ? "approval" : "tokens";
+    return amount && symbol
       ? `${prefix}${amount} ${symbol} to ${recipientDisplay}`
       : `${prefix}${fallbackNoun} to ${recipientDisplay}`;
+  })();
 
   return {
     mode: decoded.mode,
@@ -278,7 +304,7 @@ export function useErc20InlineSummary(
     amount,
     symbol,
     logoUrl,
-    middle: " to ",
+    middle,
     recipient: recipientDisplay,
     recipientAvatarSrc,
     recipientAvatarKind,

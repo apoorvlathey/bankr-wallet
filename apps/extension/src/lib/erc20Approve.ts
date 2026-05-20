@@ -18,6 +18,8 @@ export interface ParsedApproval {
   amount: bigint;
   /** Whether the amount is considered "infinite" (>= 2^128) */
   isInfinite: boolean;
+  /** approve(spender, 0) — strips an existing allowance instead of granting one */
+  isRevoke: boolean;
 }
 
 /**
@@ -59,6 +61,7 @@ export function parseApproveCalldata(
       spender,
       amount,
       isInfinite: amount >= INFINITE_THRESHOLD,
+      isRevoke: amount === 0n,
     };
   } catch {
     return null;
