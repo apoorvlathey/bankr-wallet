@@ -1543,8 +1543,14 @@ function PerCallClearSigning({
   chainId: number;
 }) {
   const [matched, setMatched] = useState(false);
+  // When `matched` is false, `ClearSigningView` returns null but the wrapping
+  // <Box> was still a flex item — N unmatched calls would each contribute a
+  // `VStack spacing={3}` gap, leaking ~24px of phantom whitespace below the
+  // header. `display="none"` removes the Box from layout entirely while keeping
+  // `ClearSigningView` mounted so its descriptor lookup effect still runs and
+  // can flip `matched` on a hit.
   return (
-    <Box>
+    <Box display={matched ? "block" : "none"}>
       {/* Caption only appears once a descriptor actually matches — keeps the
           layout silent for calls that have no friendly view. */}
       {matched && (
