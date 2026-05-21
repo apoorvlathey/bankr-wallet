@@ -254,6 +254,25 @@ async function tryEthSimulateV1(
     const callResults = blockResults[0].calls;
     console.log(`[batchGas] eth_simulateV1: ${callResults.length} results`);
 
+    // If any call reported a revert, the `gasUsed` is the partial gas consumed
+    // up to the revert point — NOT what a successful broadcast would use.
+    // Alchemy's eth_simulateV1 has been observed to false-positive-revert
+    // approve + 0x AllowanceHolder swap batches that land cleanly onchain (see
+    // simulateBatchAssetChangesNonAtomic which now trusts the bytecode sim's
+    // verdict for the same reason). Trusting v1's `gasUsed` here on a reverted
+    // call gives an under-buffered gas limit that OOGs in nested frames
+    // (EIP-150 64/63) when the real call succeeds. Fall through to tier 2
+    // (bytecode injection) which measures gas of the actual successful path.
+    const anyReverted = callResults.some(
+      (cr: any) => cr.status !== undefined && cr.status !== "0x1",
+    );
+    if (anyReverted) {
+      console.log(
+        "[batchGas] eth_simulateV1 reported a call revert — falling through to tier 2 (bytecode injection) for accurate successful-path gas",
+      );
+      return null;
+    }
+
     return callResults.map((cr: any) => {
       // If gasUsed is missing on a call result (shouldn't normally happen),
       // fall back to 200k and surface the uncertainty via fallbackUsed so the
