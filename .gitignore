@@ -3,6 +3,7 @@
 TODO.md
 walletchan.pem
 temp.crx
+_temp/
 
 # dependencies
 node_modules
