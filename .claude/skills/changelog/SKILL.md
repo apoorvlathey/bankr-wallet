@@ -92,7 +92,15 @@ You are populating the `## [Unreleased]` section of `/CHANGELOG.md` with notes d
 
 8. **Edit only `CHANGELOG.md`** with the result. Use the `Edit` tool with the existing `## [Unreleased]` block as `old_string`. Do not touch any other section, the comparison-link footer, or any other file.
 
-9. **Report briefly** to the user: how many commits you reviewed, how many bullets you wrote, and any commits you intentionally skipped (one-liner per skip with the reason — include polish-on-new-feature folds, so the user can sanity-check the grouping). Offer to also dump a GitHub-release-flavored version (the same bullets, plus `**Full Changelog**:` compare link) if they want one for the release body.
+9. **Commit `CHANGELOG.md` on its own.** `release.sh` aborts if the working tree isn't clean, so the changelog edit needs its own commit before the release script runs.
+
+   - Stage only `CHANGELOG.md` — never `git add -A` here; the user may have unrelated work in progress.
+   - Commit message: `docs(changelog): populate [Unreleased] for v<NEXT_VERSION>` where `<NEXT_VERSION>` is the version `[Unreleased]` will eventually become. Infer it by bumping the current `apps/extension/package.json` version against the bump type passed as an argument (`patch` / `minor` / `major`). If no bump type was passed, default to `minor` and call it out in the report so the user can amend the message if they intended a different bump.
+   - If `git diff --quiet -- CHANGELOG.md` succeeds (no changes to commit), skip this step — the file was already up to date.
+   - If the working tree has unrelated dirty paths, the staging step still only adds `CHANGELOG.md`. Mention the other dirty paths in the report so the user knows the release script will still refuse to run.
+   - This runs whether or not the user is about to release immediately — committing a draft changelog is fine, the next `/changelog` run will simply amend with new entries.
+
+10. **Report briefly** to the user: how many commits you reviewed, how many bullets you wrote, any commits you intentionally skipped (one-liner per skip with the reason — include polish-on-new-feature folds, so the user can sanity-check the grouping), what version the commit message anchored to, and any unrelated dirty paths blocking a release. Offer to also dump a GitHub-release-flavored version (the same bullets, plus `**Full Changelog**:` compare link) if they want one for the release body.
 
 ## Output shape
 

@@ -10,7 +10,19 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **Multi-address seed picker.** Importing or deriving from a seed phrase now opens a shared chooser that shows ENS, avatars, portfolio USD, and copy / explorer affordances per derived address, with a sticky bottom CTA so 10+ rows stay actionable without scrolling. Account-type glyphs refreshed (BankrAPI / Private Key / Seed Phrase / Impersonator) and the Radio control gets a themed outline + filled dot that's legible on both Bauhaus and Midnight.
+- **Per-account transaction history clearing.** Settings → Clear Transaction History lists each account separately so you can wipe one wallet's history without touching the others.
+- **Revoke UI for `approve(spender, 0)`.** Single-tx and batch confirmation cards, the Activity row, and the Transaction Details modal now recognize the zero-amount approval pattern and render it as "Revoke USDC approval from …" with a green REVOKE chip instead of "Approve 0 USDC".
+- **Native sends render like ERC-20 transfers across every tx surface.** Batch confirmation rows, the Activity tab, and the Transaction Details modal show the native token logo (ETH, BNB, POL, etc.), formatted amount, and recipient avatar / ENS / saved-account label — replacing the previous "Native Transfer" plain text with no logo.
+
+### Fixed
+
+- Gas-fee row hover background now respects the card's rounded corners on both the single-tx and batch confirmation screens (was leaking a sharp rectangle inside the rounded card).
+- Seed-phrase account-name inputs no longer lose focus after every keystroke during setup.
+- Non-atomic batch revert verdict now trusts the bytecode-injection simulation result, so the confirmation correctly surfaces a "this will revert" warning when one of the constituent calls would fail onchain.
+- Non-atomic batch gas buffer widened to 2× per call to survive EIP-150 gas dilution, eliminating spurious out-of-gas reverts on multi-call batches.
 
 ## [3.9.0] - 2026-05-19
 
