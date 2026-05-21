@@ -1,16 +1,18 @@
 /**
- * Inline one-liner summary for ERC-20 calldata — used in batch confirmation
+ * Inline one-liner summary for a transaction call — used in batch confirmation
  * `CallCard` headers so each row reads
- *   "Send 100 USDC to vitalik.eth"
+ *   "Send 100 USDC to vitalik.eth"            (ERC-20 transfer)
+ *   "Send 0.1 ETH to vitalik.eth"             (native transfer)
  *   "Approve unlimited USDC to uniswap-router"
  *   "Revoke USDC approval from uniswap-router"   (approve(spender, 0))
- * instead of just "transfer" / "approve".
+ * instead of just "transfer" / "approve" / "Native Transfer".
  *
- * Handles two selectors today; extend the switch in `decodeErc20Call` to add
- * more (`transferFrom`, etc.). The renderer in `BatchTransactionConfirmation`
- * consumes a single shape regardless of mode — only `prefix` differs.
+ * Handles two ERC-20 selectors today plus the empty-calldata + value > 0
+ * native-send shape. Extend `decodeCall` to add more selectors. The renderer
+ * in `BatchTransactionConfirmation` consumes a single shape regardless of
+ * mode — only `prefix` and `logoUrl` differ.
  *
- * Returns `null` when the calldata isn't a recognized ERC-20 selector.
+ * Returns `null` when the call isn't a recognized send/approve/revoke.
  * Otherwise the result progressively enhances as token metadata and the
  * counterparty name resolve:
  *
@@ -30,8 +32,11 @@ import { blo } from "blo";
 import type { Account } from "@/chrome/types";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
-import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
+import { KNOWN_TOKEN_LOGOS, getNativeCurrency } from "@/chrome/txSimulation";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
+import { useNetworks } from "@/contexts/NetworksContext";
+import { getResolvedChainById } from "@/lib/chains";
+import { getChainConfig } from "@/constants/chainConfig";
 
 const TRANSFER_SELECTOR = "0xa9059cbb";
 const APPROVE_SELECTOR = "0x095ea7b3";
@@ -46,48 +51,94 @@ const MAX_UINT160 = (1n << 160n) - 1n;
 
 export type Erc20SummaryMode = "send" | "approve" | "revoke";
 
-interface Erc20DecodedCall {
+interface DecodedCall {
   mode: Erc20SummaryMode;
   /** Either the transfer recipient or the approval spender. */
   counterparty: string;
   amount: bigint;
+  /** True when the call is a native-coin transfer (empty data + value > 0). */
+  isNative: boolean;
 }
 
-function decodeErc20Call(data: string | undefined | null): Erc20DecodedCall | null {
-  if (!data || !data.startsWith("0x") || data.length < 10) return null;
-  const selector = data.slice(0, 10).toLowerCase();
-  try {
-    if (selector === TRANSFER_SELECTOR) {
-      const { args } = decodeFunctionData({
-        abi: [TRANSFER_ABI],
-        data: data as `0x${string}`,
-      });
-      if (!args || args.length < 2) return null;
-      return {
-        mode: "send",
-        counterparty: String(args[0]),
-        amount: BigInt(args[1] as bigint | string | number),
-      };
+function isEmptyCalldata(data: string | undefined | null): boolean {
+  return !data || data === "0x" || data === "0x0";
+}
+
+/**
+ * Decode the call into a unified shape: ERC-20 transfer/approve, or — when
+ * calldata is empty and value > 0 — a native-coin send. Returns null when the
+ * call isn't a recognized shape (anything else falls back to the existing
+ * `decodedName` / generic "Contract Call" path in the renderer).
+ */
+function decodeCall(
+  to: string | undefined,
+  data: string | undefined | null,
+  value: string | undefined | null,
+): DecodedCall | null {
+  // ERC-20 selectors take precedence — `to` is the token contract; the
+  // recipient/spender lives inside the calldata. value is irrelevant.
+  if (data && data.startsWith("0x") && data.length >= 10) {
+    const selector = data.slice(0, 10).toLowerCase();
+    try {
+      if (selector === TRANSFER_SELECTOR) {
+        const { args } = decodeFunctionData({
+          abi: [TRANSFER_ABI],
+          data: data as `0x${string}`,
+        });
+        if (!args || args.length < 2) return null;
+        return {
+          mode: "send",
+          counterparty: String(args[0]),
+          amount: BigInt(args[1] as bigint | string | number),
+          isNative: false,
+        };
+      }
+      if (selector === APPROVE_SELECTOR) {
+        const { args } = decodeFunctionData({
+          abi: [APPROVE_ABI],
+          data: data as `0x${string}`,
+        });
+        if (!args || args.length < 2) return null;
+        const amount = BigInt(args[1] as bigint | string | number);
+        return {
+          // approve(spender, 0) strips an existing allowance — read as
+          // "Revoke" so the summary reads "Revoke USDC approval from X"
+          // instead of "Approve 0 USDC to X".
+          mode: amount === 0n ? "revoke" : "approve",
+          counterparty: String(args[0]),
+          amount,
+          isNative: false,
+        };
+      }
+    } catch {
+      return null;
     }
-    if (selector === APPROVE_SELECTOR) {
-      const { args } = decodeFunctionData({
-        abi: [APPROVE_ABI],
-        data: data as `0x${string}`,
-      });
-      if (!args || args.length < 2) return null;
-      const amount = BigInt(args[1] as bigint | string | number);
-      return {
-        // approve(spender, 0) strips an existing allowance — read as "Revoke"
-        // so the summary reads "Revoke USDC approval from X" instead of
-        // "Approve 0 USDC to X".
-        mode: amount === 0n ? "revoke" : "approve",
-        counterparty: String(args[0]),
-        amount,
-      };
-    }
-  } catch {
-    return null;
   }
+
+  // Native send: no calldata, value > 0, and a valid `to`. The recipient is
+  // tx.to itself, the amount is tx.value, and the token metadata comes from
+  // the chain registry (resolved in the hook, not here, so this stays pure).
+  if (
+    to &&
+    /^0x[a-fA-F0-9]{40}$/.test(to) &&
+    isEmptyCalldata(data) &&
+    value != null
+  ) {
+    try {
+      const amount = BigInt(value);
+      if (amount > 0n) {
+        return {
+          mode: "send",
+          counterparty: to,
+          amount,
+          isNative: true,
+        };
+      }
+    } catch {
+      return null;
+    }
+  }
+
   return null;
 }
 
@@ -127,16 +178,67 @@ export function useErc20InlineSummary(
   to: string | undefined,
   data: string | undefined,
   chainId: number,
+  /**
+   * tx.value — required to detect native-coin sends (empty calldata + value).
+   * Accepts the hex string the message bus already passes around; pass
+   * undefined for surfaces that don't have a value (ERC-20-only legacy
+   * callers) and the hook falls back to ERC-20 decoding alone.
+   */
+  value?: string,
 ): Erc20InlineSummary | null {
-  const decoded = useMemo(() => decodeErc20Call(data), [data]);
+  const decoded = useMemo(
+    () => decodeCall(to, data, value),
+    [to, data, value],
+  );
+
+  // Native symbol/decimals come from the resolved chain registry (handles
+  // user-added custom networks too). Skipping the chrome.runtime hop avoids
+  // a pointless background round-trip — there's no ERC-20 contract to fetch
+  // info from on a plain ETH send.
+  const { networksInfo } = useNetworks();
+  const resolvedChain = useMemo(
+    () => getResolvedChainById(chainId, networksInfo),
+    [chainId, networksInfo],
+  );
+  const fallbackConfig = useMemo(() => getChainConfig(chainId), [chainId]);
 
   // Token metadata + logo — mirrors TokenAmountInline's resolution order:
   //   symbol/decimals: onchain ERC-20 (canonical) → custom-token fallback
   //   logo: per-token cache (swap-list backed) → custom-token image →
   //         KNOWN_TOKEN_LOGOS hardcoded fallback
+  // Native sends short-circuit the whole fetch and read symbol/decimals out
+  // of the chain registry instead; no token logo (parity with the activity
+  // tab's native-send rendering — chain icon already lives on the row's
+  // outer container).
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
   useEffect(() => {
-    if (!decoded || !to || !/^0x[a-fA-F0-9]{40}$/.test(to)) {
+    if (!decoded) {
+      setTokenInfo(null);
+      return;
+    }
+
+    if (decoded.isNative) {
+      // Symbol/decimals: prefer the React-resolved network (handles user-added
+      //   custom networks), fall back to the built-in registry, and finally
+      //   to the canonical ETH defaults from txSimulation.
+      // Logo: reuse the same lookup `AssetChangesDisplay` consumes (built off
+      //   CHAIN_REGISTRY) so the inline batch row's icon matches the
+      //   simulation panel on the same screen — ETH → ethereum.svg on all
+      //   ETH-native chains, otherwise the chain's own icon (Polygon → POL,
+      //   BNB Chain → BNB, etc.).
+      const native =
+        resolvedChain?.nativeCurrency ?? fallbackConfig?.nativeCurrency;
+      const builtin = getNativeCurrency(chainId);
+      const symbol = native?.symbol || builtin.symbol;
+      const decimals =
+        typeof native?.decimals === "number"
+          ? native.decimals
+          : builtin.decimals;
+      setTokenInfo({ symbol, decimals, logoUrl: builtin.icon || undefined });
+      return;
+    }
+
+    if (!to || !/^0x[a-fA-F0-9]{40}$/.test(to)) {
       setTokenInfo(null);
       return;
     }
@@ -182,7 +284,7 @@ export function useErc20InlineSummary(
     return () => {
       cancelled = true;
     };
-  }, [decoded, to, chainId]);
+  }, [decoded, to, chainId, resolvedChain, fallbackConfig]);
 
   // Image-bytes cache for the token logo — same chrome.storage data-URL cache
   // used by ENS avatars and every other token icon in the UI.

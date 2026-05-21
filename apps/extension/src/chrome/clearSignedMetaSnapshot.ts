@@ -34,7 +34,7 @@ import {
   getCachedTokenLogo,
   NATIVE_TOKEN_ADDRESS,
 } from "./swapApi";
-import { KNOWN_TOKEN_LOGOS } from "./txSimulation";
+import { KNOWN_TOKEN_LOGOS, getNativeCurrency } from "./txSimulation";
 import { handleGetClearSigningDescriptor } from "./clearSigningHandlers";
 import {
   updateTxInHistory,
@@ -161,11 +161,18 @@ async function buildNativeSendMeta(
   ]);
   if (!native) return null;
 
+  // Native logo: reuse the same lookup the simulation panel + batch inline
+  // summary already share (built off CHAIN_REGISTRY). ETH-native chains map
+  // to /chainIcons/ethereum.svg; everything else uses the chain's own icon
+  // (Polygon → POL, BNB Chain → BNB, etc.). Falsy values are normalized to
+  // null so the storage shape stays consistent with the rest of the snapshot.
+  const nativeLogo = getNativeCurrency(chainId).icon || null;
+
   return {
     kind: "nativeSend",
     amount: formatUnits(amountWei, native.decimals),
     tokenSymbol: native.symbol,
-    tokenLogo: null,
+    tokenLogo: nativeLogo,
     counterparty: to,
     counterpartyLabel: counterparty.label,
     counterpartyEns: counterparty.ens,

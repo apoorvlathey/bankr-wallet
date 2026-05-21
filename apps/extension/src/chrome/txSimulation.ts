@@ -294,7 +294,19 @@ for (const c of CHAIN_REGISTRY) {
   };
 }
 
-function getNativeCurrency(chainId: number) {
+/**
+ * Sync lookup for a chain's native currency metadata (symbol, name, decimals,
+ * icon). Source of truth for the native-token logo across the extension —
+ * `AssetChangesDisplay` consumes it via `simulationResult.nativeChange.logoUrl`,
+ * and the batch-confirmation inline summary (`useErc20InlineSummary`) reads
+ * it directly so the row reads "Send 0.1 [ETH icon] ETH to vitalik.eth".
+ *
+ * For unknown chainIds, falls back to a generic ETH entry. The async
+ * `resolveNativeCurrency` (above) layers a chrome.storage lookup on top for
+ * user-added custom networks; UI surfaces that don't have access to async
+ * storage use this sync getter instead.
+ */
+export function getNativeCurrency(chainId: number) {
   return (
     NATIVE_CURRENCY[chainId] ?? {
       symbol: "ETH",

@@ -1630,20 +1630,31 @@ function CallCard({
     return `${eth.toFixed(6)} ${sym}`;
   };
 
-  // ERC-20 inline summary — covers transfer ("Send 100 USDC to vitalik.eth")
-  // and approve ("Approve unlimited USDC to uniswap-router"). Hook returns
-  // null for any other calldata, so the existing fallback chain handles
-  // everything else unchanged.
-  const inlineSummary = useErc20InlineSummary(call.to, call.data, chainId);
+  // Unified inline summary — covers ERC-20 transfer ("Send 100 USDC to
+  // vitalik.eth"), approve ("Approve unlimited USDC to uniswap-router"),
+  // revoke, and native-coin sends ("Send 0.1 ETH to vitalik.eth"). Hook
+  // returns null for anything else, so the existing fallback chain handles
+  // contract calls unchanged. Passing `call.value` lets the hook detect the
+  // empty-data + value > 0 native-send shape.
+  const inlineSummary = useErc20InlineSummary(
+    call.to,
+    call.data,
+    chainId,
+    call.value,
+  );
 
   // Display name: clear-signing inline summary, then decoded function name,
-  // then "Native Transfer" for value-only, then "Contract Call" / "Call".
+  // then "Contract Call" / "Call". Native sends used to fall through to a
+  // plain "Native Transfer" string; the inline summary now catches them so
+  // they read like ERC-20 sends ("Send 0.1 ETH to vitalik.eth"). The
+  // hard-coded fallback only fires when the hook itself returned null
+  // (e.g. chain registry didn't resolve a symbol yet).
   const displayName = inlineSummary?.text
     ? inlineSummary.text
     : decodedName
       ? decodedName
       : !hasCalldata && hasValue
-        ? "Native Transfer"
+        ? `Send ${sym}`
         : hasCalldata
           ? "Contract Call"
           : "Call";
