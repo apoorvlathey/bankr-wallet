@@ -579,6 +579,11 @@ function GasEstimateDisplay({
         border={tokens.borders.medium}
         borderColor="border.default"
         borderRadius="lg"
+        // overflow:hidden clips the header's hover bg to the card's rounded
+        // corners. Without it, the inner HStack hover fill renders as a sharp
+        // rectangle inside the rounded outer Box and leaks square corners
+        // (most visible on Midnight, where the hover tint is most saturated).
+        overflow="hidden"
         bg="surface.raised"
         boxShadow="card"
         position="relative"

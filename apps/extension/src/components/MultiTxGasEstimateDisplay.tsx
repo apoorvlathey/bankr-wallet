@@ -825,6 +825,10 @@ function MultiTxGasEstimateDisplay({
         border={tokens.borders.medium}
         borderColor="border.default"
         borderRadius="lg"
+        // overflow:hidden clips the header's hover bg to the card's rounded
+        // corners — matches GasEstimateDisplay (single-tx surface). Without
+        // it, the hover fill renders as a square inside the rounded card.
+        overflow="hidden"
         bg="surface.raised"
         boxShadow="card"
         position="relative"
