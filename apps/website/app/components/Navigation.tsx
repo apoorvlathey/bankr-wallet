@@ -34,6 +34,7 @@ const navLinks = [
   { label: "Token", href: "#token" },
   { label: "OS", href: "/os" },
   { label: "Stake", href: "/stake" },
+  { label: "Bridge", href: "/bridge" },
   { label: "Install", href: "#install" },
   { label: "Roadmap", href: "/roadmap" },
 ];

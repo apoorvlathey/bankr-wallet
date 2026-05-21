@@ -286,6 +286,7 @@ When working on features, refer to these docs:
 | `_docs/WEBSITE.md`                                       | Website sections, layout specs, animations                |
 | `_docs/APPS.md`                                          | Apps page data source, fetch script, adding chains        |
 | `_docs/SWAP.md`                                          | Swap page: 0x API integration, fees, slippage, UI         |
+| `_docs/BRIDGE.md`                                        | Bridge page: Bungee API, cross-chain quote/build/submit/status, atomic-batch vs Permit2 paths |
 | `_docs/COINS.md`                                         | Coins page: SSE streaming, indexer API, pagination        |
 | `_docs/CALLDATA.md`                                      | Calldata decoder UI, param components, type routing       |
 | `_docs/ASSET_CHANGES_SIMULATION.md`                      | Tx simulation: state override injection, metadata retry   |
