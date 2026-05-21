@@ -498,6 +498,12 @@ export async function fetchFunctionInterface({
 }: {
   selector: string;
 }): Promise<string | null> {
+  // Skip lookup for empty / non-4-byte selectors — the sourcify endpoint
+  // 500s on `function=0x` (raw native transfers or other empty-calldata
+  // params hit this when the decoder recurses into bytes fields).
+  if (!selector || selector === "0x" || selector.length !== 10) {
+    return null;
+  }
   const sourcifyData = await fetchFunctionFromSourcify({ selector });
   let result: string | null = null;
   if (sourcifyData) {
