@@ -61,6 +61,39 @@ export class BankrApiError extends Error {
   }
 }
 
+// Bankr failure bodies are sometimes a plain string and sometimes a JSON
+// envelope where the user-facing reason is buried in a nested, JSON-encoded
+// `.error` field, e.g.
+//   {"success":false,"signer":"0x...","error":"{\"error\":\"Invalid app ID or app secret.\"}"}
+// Recursively unwrap `.error` / `.message` so callers get the deepest plain
+// string ("Invalid app ID or app secret.") instead of the raw blob.
+function extractBankrErrorMessage(text: string): string {
+  const unwrap = (value: unknown, depth: number): string => {
+    if (depth > 5) {
+      return typeof value === "string" ? value : JSON.stringify(value);
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        try {
+          return unwrap(JSON.parse(trimmed), depth + 1);
+        } catch {
+          return value;
+        }
+      }
+      return value;
+    }
+    if (value && typeof value === "object") {
+      const obj = value as Record<string, unknown>;
+      if (obj.error !== undefined) return unwrap(obj.error, depth + 1);
+      if (typeof obj.message === "string") return obj.message;
+      return JSON.stringify(value);
+    }
+    return String(value);
+  };
+  return unwrap(text, 0);
+}
+
 /**
  * Submits a transaction directly via /agent/submit (synchronous, no polling)
  */
@@ -166,7 +199,7 @@ export async function signMessageViaApi(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new BankrApiError(`Signing failed: ${text}`, response.status);
+    throw new BankrApiError(extractBankrErrorMessage(text), response.status);
   }
 
   return response.json();

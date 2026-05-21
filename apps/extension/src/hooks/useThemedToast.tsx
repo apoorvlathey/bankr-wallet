@@ -132,7 +132,7 @@ export function useThemedToast() {
               <StatusIcon status={status} />
             </Box>
 
-            <Box flex={1}>
+            <Box flex={1} minW={0}>
               {options.title && (
                 <Text
                   fontWeight={tokens.headingStyle.weight}
@@ -140,12 +140,21 @@ export function useThemedToast() {
                   textTransform={tokens.headingStyle.transform}
                   letterSpacing={tokens.headingStyle.transform === "uppercase" ? "wider" : "normal"}
                   mb={options.description ? 0.5 : 0}
+                  wordBreak="break-word"
                 >
                   {options.title}
                 </Text>
               )}
               {options.description && (
-                <Text fontWeight="500" fontSize="sm" opacity={0.9}>
+                <Text
+                  fontWeight="500"
+                  fontSize="sm"
+                  opacity={0.9}
+                  wordBreak="break-word"
+                  whiteSpace="pre-wrap"
+                  maxH="240px"
+                  overflowY="auto"
+                >
                   {options.description}
                 </Text>
               )}
