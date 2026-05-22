@@ -10,7 +10,30 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **Cross-chain bridging from the Swap surface** via Bungee — per-side chain + token pickers, source / destination cards in the tx-details modal, formatted route summary with protocol fee, and a destination-chain notification when the bridge fulfills. Same-chain picks still route through the existing 0x swap path; cross-chain picks build a Bungee route, broadcast on the source chain, and poll status in the background.
+- **Post-confirm asset changes in activity.** The tx-details modal now decodes ERC-20 `Transfer` events and native value flow from each successful receipt and renders USD-valued deltas with sign-colored amounts. Bridges get a custom source / destination layout; the destination-chain extraction fires automatically when the bridge fulfills. Newly received tokens also show up on the portfolio within 5 minutes via a local cache instead of waiting for the upstream API to reindex.
+- **Nested clear-signing for ERC-7730 descriptors with embedded calldata fields.** Safe BatchExecutor, SafeProxyFactory → Safe `setup`, 1inch / Morpho / Aave batch routers, and similar now render each inner call as its own recursively clear-signed card (depth-capped at three). When an inner contract has no registry descriptor, the row stack falls through to a flat To / Value / Calldata layout with the function name decoded inline and a click-to-expand decoded-params view.
+- **Proxy resolution for clear-signing.** On a descriptor miss, the wallet reads Safe slot 0 / EIP-1967 logic / EIP-1967 beacon in parallel via RPC and refetches the implementation's descriptor — every user's Safe and any OZ Transparent / UUPS / beacon proxy now inherits its singleton's clear-signing automatically.
+- **Safe MultiSend / MultiSendCallOnly built-in clear-signing.** Selector `0x8d80ff0a` unpacks the custom packed `(operation, to, value, data)[]` payload and recursively clear-signs each inner call.
+- **Loading spinner on Reject buttons** across single-tx, batch, cross-dapp batch, and signature-request confirmation screens, with a double-click guard and a disabled sibling Confirm while in flight.
+- **USD chip on popular-token pills** in the Send and Swap token dropdowns when the user holds the token.
+
+### Changed
+
+- Activity tx-details modal renders the full clear-signing view for ERC-7730 entries (per-field rows like "Amount to supply: 2 USDC", "Collateral recipient: walletchan.eth") instead of the collapsed `intent + contractName + counterparty` snapshot.
+- Heavy data fetches (asset-change simulation, gas estimation, clear-signing descriptor) on tx and signature confirmation screens now wait for the slide-in animation to settle before kicking off, eliminating mid-animation jitter.
+- Long external-contract labels (eth.sh) inside clear-signed cards stack below the short `0x…` form so names like "Uniswap V3 SwapRouter02" wrap freely without pushing copy and explorer icons off the row.
+- Bridge route's "Submitting swap…" CTA flips to "Bridging…", the sWCHAN fee discount label reads "discount applied", and native-token rows in the token dropdowns now show the chain logo instead of an empty initials circle.
+
+### Fixed
+
+- Bankr signing error toasts now show the actual failure reason ("Invalid app ID or app secret.", etc.) instead of a raw JSON blob, and long error text wraps inside the popup instead of pushing the toast off-screen.
+- Raw calldata decoder now unpacks Safe `MultiSend(bytes)` payloads at any depth, including the inner packed bytes param of an outer `multiSend` call.
+- Decoder no longer pollutes the console with sourcify 500s when it recurses into a `bytes` param with no calldata payload (empty-selector lookups are now skipped).
+- Unmatched clear-signing rows in batch confirmations no longer leak roughly 24 px of phantom whitespace per call below the batch header.
+- Tier-1 batch gas estimation now falls through to bytecode-injection simulation whenever Alchemy's `eth_simulateV1` reports a call revert, preventing out-of-gas broadcasts on approve + 0x AllowanceHolder swap batches that actually succeed onchain.
 
 ## [3.10.0] - 2026-05-21
 
