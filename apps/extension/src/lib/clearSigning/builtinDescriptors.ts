@@ -19,7 +19,11 @@ import type { Erc7730Descriptor } from "./types";
 const BUILTIN_SELECTORS = new Set<string>([
   "0xa9059cbb", // transfer(address,uint256)
   "0x095ea7b3", // approve(address,uint256)
+  "0x8d80ff0a", // multiSend(bytes) — Safe MultiSend / MultiSendCallOnly
 ]);
+
+export const MULTISEND_SELECTOR = "0x8d80ff0a";
+export const MULTISEND_FORMAT_KEY = "multiSend(bytes transactions)";
 
 export function isBuiltinCalldataSelector(calldata: string | undefined | null): boolean {
   if (!calldata || !calldata.startsWith("0x") || calldata.length < 10) return false;
@@ -41,6 +45,8 @@ export function getBuiltinCalldataDescriptor(
       return erc20TransferDescriptor(chainId, contractAddress);
     case "0x095ea7b3":
       return erc20ApproveDescriptor(chainId, contractAddress);
+    case MULTISEND_SELECTOR:
+      return multiSendDescriptor(chainId, contractAddress);
     default:
       return null;
   }
@@ -81,6 +87,50 @@ function erc20TransferDescriptor(chainId: number, contractAddress: string): Erc7
               params: { tokenAddress: contractAddress.toLowerCase() },
             },
             { path: "#.to", label: "Recipient", format: "addressName" },
+          ],
+        },
+      },
+    },
+  };
+}
+
+/**
+ * `multiSend(bytes transactions)` — Safe `MultiSend` / `MultiSendCallOnly`.
+ *
+ * The `transactions` param is a packed concatenation of `(op:1, to:20,
+ * value:32, dataLen:32, data:dataLen)` tuples — NOT standard ABI. The
+ * matching custom decoder in `decodeForDescriptor.ts` unpacks the bytes
+ * into a normalized `transactions: [{operation, to, value, data}, …]`
+ * array, which this descriptor's `transactions.[].data` calldata field
+ * then feeds to the recursive nested-calldata pipeline. Result: each
+ * inner call lights up as its own clear-signed card (or falls through to
+ * the InlineCalldataRow when its target has no descriptor).
+ *
+ * Built-in (not registry-keyed) because every Safe deploys a unique
+ * `MultiSendCallOnly` instance and the format is identical across them.
+ */
+function multiSendDescriptor(chainId: number, contractAddress: string): Erc7730Descriptor {
+  return {
+    context: {
+      contract: {
+        deployments: [{ chainId, address: contractAddress.toLowerCase() }],
+      },
+    },
+    metadata: { owner: "Safe MultiSend" },
+    display: {
+      formats: {
+        [MULTISEND_FORMAT_KEY]: {
+          intent: "Batched calls",
+          fields: [
+            {
+              path: "transactions.[].data",
+              label: "Call",
+              format: "calldata",
+              params: {
+                calleePath: "transactions.[].to",
+                amountPath: "transactions.[].value",
+              },
+            },
           ],
         },
       },

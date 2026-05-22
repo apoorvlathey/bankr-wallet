@@ -22,10 +22,11 @@ import {
   Divider,
   Tooltip,
 } from "@chakra-ui/react";
-import { CopyIcon, CheckIcon, ExternalLinkIcon } from "@chakra-ui/icons";
+import { CopyIcon, CheckIcon, ExternalLinkIcon, ChevronRightIcon, ChevronDownIcon } from "@chakra-ui/icons";
 import { blo } from "blo";
 
 import { ThemedCard } from "@/theme/primitives/ThemedCard";
+import { useTheme } from "@/theme";
 import { getChainConfig } from "@/constants/chainConfig";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import { formatUsd } from "@/lib/currencyFormatUtils";
@@ -42,6 +43,9 @@ import { resolveDescriptor } from "@/lib/clearSigning/resolver";
 import { getBuiltinCalldataDescriptor } from "@/lib/clearSigning/builtinDescriptors";
 import type { Erc7730Descriptor } from "@/lib/clearSigning/types";
 import { useScreenEntered } from "@/components/ScreenTransition";
+import { decodeRecursive } from "@/lib/decoder";
+import { renderParams } from "@/components/renderParams";
+import type { DecodeRecursiveResult } from "@/lib/decoder/types";
 
 interface CalldataProps {
   kind: "calldata";
@@ -102,6 +106,15 @@ export function ClearSigningView(props: ClearSigningViewProps) {
   const { kind, chainId, hideLoadingSkeleton } = props;
   const depth = props.depth ?? 0;
   const lookupAddress = kind === "calldata" ? props.to : props.verifyingContract;
+  // Midnight's luminous card shadows stack visibly when 2+ clear-signing
+  // cards nest (outer → "Batched calls" → inner "Approve token"). At depth
+  // > 0 we drop the shadow so the border + accentTint bg do the lifting
+  // alone — keeps deeply-nested confirmations from looking like a glow
+  // tower. Bauhaus's hard shadows are part of the aesthetic so we leave
+  // them alone there.
+  const { themeId } = useTheme();
+  const cardShadow =
+    depth > 0 && themeId === "midnight" ? "none" : undefined;
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<MatchedState | null>(null);
   const { onResolved } = props;
@@ -233,7 +246,13 @@ export function ClearSigningView(props: ClearSigningViewProps) {
   if (loading) {
     if (hideLoadingSkeleton) return null;
     return (
-      <ThemedCard variant="default" weight="thin" p={4} bg="surface.accentTint">
+      <ThemedCard
+        variant="default"
+        weight="thin"
+        p={4}
+        bg="surface.accentTint"
+        boxShadow={cardShadow}
+      >
         <Skeleton height="10px" width="35%" mb={2} />
         <Skeleton height="18px" width="70%" mb={3} />
         <VStack align="stretch" spacing={2}>
@@ -252,7 +271,13 @@ export function ClearSigningView(props: ClearSigningViewProps) {
   // draws the eye to the human-readable intent without a colored wash — neutral
   // whitish lift in Midnight, soft warm cream in Bauhaus.
   return (
-    <ThemedCard variant="default" weight="thin" p={3} bg="surface.accentTint">
+    <ThemedCard
+      variant="default"
+      weight="thin"
+      p={3}
+      bg="surface.accentTint"
+      boxShadow={cardShadow}
+    >
       {/* Header — title + small "via Owner" attribution sitting tight on the
           same row. Owner name is the source of the human-readable copy, not a
           safety claim, so it stays muted. */}
@@ -587,14 +612,9 @@ function RawNestedCalldataFallback({
   value: Extract<RenderedValue, { kind: "calldata" }>;
   chainId: number;
 }) {
-  const selector =
-    value.data && value.data.length >= 10
-      ? value.data.slice(0, 10).toLowerCase()
-      : null;
-  const body = value.data && value.data.length > 10 ? value.data.slice(10) : "";
-  const preview = body.length > 80 ? `${body.slice(0, 80)}…` : body;
   const showValue =
     value.amount !== undefined && value.amount !== null && value.amount !== "0";
+  const hasCalldata = value.data && value.data.length >= 10;
   return (
     <Box
       pl={3}
@@ -612,31 +632,18 @@ function RawNestedCalldataFallback({
             <TokenAmountInline amountRaw={value.amount} native chainId={chainId} />
           </NestedFallbackRow>
         )}
-        {selector && (
-          <NestedFallbackRow label="Selector">
-            <Text
-              fontSize="xs"
-              fontFamily="mono"
-              color="chart.numeric"
-              fontWeight="600"
-              textAlign="right"
-            >
-              {selector}
-            </Text>
-          </NestedFallbackRow>
-        )}
-        {preview && (
-          <NestedFallbackRow label="Data" alignTop>
-            <Text
-              fontSize="2xs"
-              fontFamily="mono"
-              color="fg.muted"
-              textAlign="right"
-              wordBreak="break-all"
-            >
-              0x{preview}
-            </Text>
-          </NestedFallbackRow>
+        {/* Inline calldata row — keeps the label-left / value-right rhythm
+            of "To" / "Value" above. Left: literal "Calldata". Right: the
+            decoded function name as a pill + expand chevron. Expanding
+            unfurls a quiet param list below the row. Function-name lookup
+            uses `decodeRecursive`, so Safe MultiSend / 4byte / on-chain ABI
+            all just work. */}
+        {hasCalldata && (
+          <InlineCalldataRow
+            calldata={value.data}
+            to={value.callee}
+            chainId={chainId}
+          />
         )}
       </VStack>
     </Box>
@@ -667,6 +674,130 @@ function NestedFallbackRow({
         {children}
       </Box>
     </HStack>
+  );
+}
+
+/**
+ * Compact inline calldata viewer used inside the nested-call fallback. Mimics
+ * the parent's label-left / value-right row when collapsed (label "Calldata",
+ * right side = function-name pill + chevron). Click expands a quiet param
+ * list directly below the row — no card chrome, no tabs, no copy button (the
+ * outer "Show raw details" already covers those). Phase 1 / 2 decode mirrors
+ * `CalldataDecoder`: instant local decode by selector, then upgrade with
+ * ABI-lookup if it yields better param names.
+ */
+function InlineCalldataRow({
+  calldata,
+  to,
+  chainId,
+}: {
+  calldata: string;
+  to: string;
+  chainId: number;
+}) {
+  const [result, setResult] = useState<DecodeRecursiveResult>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!calldata || calldata === "0x") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const local = await decodeRecursive({ calldata });
+        if (cancelled) return;
+        if (local?.functionName) setResult(local);
+        // Background ABI upgrade for better param names. We don't gate the
+        // collapsed pill on this — the local decode is enough for the
+        // function name; ABI just enriches the expanded params.
+        try {
+          const withAbi = await decodeRecursive({ calldata, address: to, chainId });
+          if (!cancelled && withAbi?.functionName) {
+            setResult((prev) => {
+              if (!prev) return withAbi;
+              const localBetter = prev.args.some(
+                (a) => a.name && !/^arg\d+$/.test(a.name),
+              );
+              return localBetter ? prev : withAbi;
+            });
+          }
+        } catch {
+          // keep local result
+        }
+      } catch {
+        // selector unknown — fall back to "Unknown" pill below
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [calldata, to, chainId]);
+
+  const fnName = result?.functionName;
+  const selector = calldata.slice(0, 10).toLowerCase();
+  const canExpand = !!result?.args?.length;
+
+  return (
+    <Box>
+      <HStack align="center" spacing={3} justify="space-between" w="full">
+        <Text fontSize="xs" color="fg.secondary" fontWeight="600" flexShrink={0}>
+          Calldata
+        </Text>
+        <HStack spacing={1} flex="1" minW={0} justify="flex-end">
+          {fnName ? (
+            <Box
+              as={canExpand ? "button" : "div"}
+              onClick={canExpand ? () => setExpanded((v) => !v) : undefined}
+              cursor={canExpand ? "pointer" : "default"}
+              px={2}
+              py="2px"
+              borderRadius="md"
+              bg="accent.secondary"
+              _hover={canExpand ? { opacity: 0.85 } : undefined}
+            >
+              <Text
+                fontSize="2xs"
+                fontFamily="mono"
+                color="accentFg.secondary"
+                fontWeight="800"
+                lineHeight="1.4"
+                noOfLines={1}
+              >
+                {fnName}
+              </Text>
+            </Box>
+          ) : (
+            <Text fontSize="xs" fontFamily="mono" color="chart.numeric" fontWeight="600">
+              {selector}
+            </Text>
+          )}
+          {canExpand && (
+            <IconButton
+              aria-label={expanded ? "Hide params" : "Show params"}
+              icon={
+                expanded ? (
+                  <ChevronDownIcon boxSize="14px" />
+                ) : (
+                  <ChevronRightIcon boxSize="14px" />
+                )
+              }
+              size="xs"
+              variant="ghost"
+              minW="18px"
+              h="18px"
+              color="fg.muted"
+              onClick={() => setExpanded((v) => !v)}
+            />
+          )}
+        </HStack>
+      </HStack>
+      {expanded && result?.args && (
+        <Box mt={2} pl={2} borderLeft="1px solid" borderLeftColor="border.subtle">
+          <VStack align="stretch" spacing={1.5}>
+            {result.args.map((arg, i) => renderParams(i, arg, chainId))}
+          </VStack>
+        </Box>
+      )}
+    </Box>
   );
 }
 

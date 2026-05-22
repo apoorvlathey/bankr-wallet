@@ -11,6 +11,8 @@
 
 import { decodeFunctionData, parseAbiItem, type AbiParameter } from "viem";
 
+import { MULTISEND_FORMAT_KEY } from "./builtinDescriptors";
+
 export function decodeCalldataForDescriptor(
   formatKey: string,
   calldata: string,
@@ -36,7 +38,71 @@ export function decodeCalldataForDescriptor(
     return null;
   }
 
-  return zipInputs(abiItem.inputs, decoded.args || []);
+  const result = zipInputs(abiItem.inputs, decoded.args || []);
+
+  // MultiSend's `transactions` param is custom packed bytes, NOT standard
+  // ABI. Override the raw hex with the unpacked tuple array so the
+  // descriptor's `transactions.[].data` path resolves to real inner
+  // calldata. See `unpackMultiSendTransactions` for the layout.
+  if (formatKey === MULTISEND_FORMAT_KEY && typeof result.transactions === "string") {
+    const unpacked = unpackMultiSendTransactions(result.transactions);
+    if (unpacked) result.transactions = unpacked;
+  }
+
+  return result;
+}
+
+/**
+ * Unpack a Safe `MultiSend.multiSend(bytes transactions)` payload into a
+ * normalized array. The packed layout per inner call (from the contract):
+ *   operation : uint8   (1 byte)   — must be 0 for MultiSendCallOnly
+ *   to        : address (20 bytes)
+ *   value     : uint256 (32 bytes)
+ *   dataLen   : uint256 (32 bytes)
+ *   data      : bytes   (dataLen bytes)
+ * …concatenated until the bytes run out. Returns null on any structural
+ * inconsistency so the caller can leave the raw hex in place.
+ */
+interface MultiSendInnerCall {
+  operation: number;
+  to: string;
+  value: string;
+  data: string;
+}
+
+function unpackMultiSendTransactions(hex: string): MultiSendInnerCall[] | null {
+  if (typeof hex !== "string" || !hex.startsWith("0x")) return null;
+  const body = hex.slice(2);
+  if (body.length === 0) return [];
+
+  const out: MultiSendInnerCall[] = [];
+  let i = 0;
+  while (i < body.length) {
+    if (i + 2 > body.length) return null;
+    const operation = parseInt(body.slice(i, i + 2), 16);
+    i += 2;
+
+    if (i + 40 > body.length) return null;
+    const to = `0x${body.slice(i, i + 40).toLowerCase()}`;
+    i += 40;
+
+    if (i + 64 > body.length) return null;
+    const value = BigInt(`0x${body.slice(i, i + 64)}`).toString();
+    i += 64;
+
+    if (i + 64 > body.length) return null;
+    const dataLen = Number(BigInt(`0x${body.slice(i, i + 64)}`));
+    i += 64;
+
+    const dataHexLen = dataLen * 2;
+    if (i + dataHexLen > body.length) return null;
+    const data = `0x${body.slice(i, i + dataHexLen)}`;
+    i += dataHexLen;
+
+    out.push({ operation, to, value, data });
+  }
+
+  return i === body.length ? out : null;
 }
 
 function zipInputs(

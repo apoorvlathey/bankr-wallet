@@ -69,7 +69,7 @@ Persists across extension restarts. Cleared only on manual reset or uninstall.
 | Key Pattern                              | Shape                                                  | Description                                                                                                          |
 | ---------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | `cs:enabled`                             | `boolean`                                              | Master toggle for clear-signing descriptor fetching. Absent or `true` = enabled; `false` = opt-out, no network calls. |
-| `cs:desc:{chainId}:{address}:{kind}`     | `{ updatedAt: number; descriptor: Descriptor \| null }` | Per-contract descriptor cache. Hits TTL 7d, misses TTL 1d. `kind` is `"calldata"` or `"eip712"`. See `_docs/ENS_BROWSING.md`. |
+| `cs:desc:{chainId}:{address}:{kind}`     | `{ schemaVersion?: number; updatedAt: number; descriptor: Descriptor \| null }` | Per-contract descriptor cache. Hits TTL 7d, misses TTL 1d. `kind` is `"calldata"` or `"eip712"`. `schemaVersion` (current: 2) auto-invalidates entries when the resolution pipeline changes — v2 added proxy fallback (Safe / EIP-1967 / beacon), so pre-v2 misses for proxy addresses would otherwise mask the new path. Descriptors reached via proxy resolution have the proxy address appended to their `context.contract.deployments` (or `context.eip712.deployments`) before caching, so `verifyDeployment` keeps working. See `_docs/CLEAR_SIGNING.md`. |
 
 ### ENS Browsing (`.eth` address-bar resolution)
 

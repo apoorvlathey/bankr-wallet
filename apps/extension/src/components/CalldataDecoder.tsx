@@ -29,6 +29,14 @@ interface CalldataDecoderProps {
    * card above already conveys the essential info.
    */
   defaultCollapsed?: boolean;
+  /**
+   * Drop the card drop-shadow. The default `boxShadow="card"` is calibrated
+   * to lift the decoder off a flat page background; when the decoder is
+   * embedded inside another raised card (e.g. as the nested-calldata
+   * fallback inside `ClearSigningView`), the shadow stacks visibly and the
+   * decoder reads as floating mid-card. Set this in those nested contexts.
+   */
+  flat?: boolean;
 }
 
 /**
@@ -120,7 +128,7 @@ function isAbiDecodeBetter(
   return false;
 }
 
-function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollapsed = false }: CalldataDecoderProps) {
+function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollapsed = false, flat = false }: CalldataDecoderProps) {
   const { themeId, tokens } = useTheme();
   const isDarkTheme = themeId === "midnight";
   // Selected tab strip uses an inverted contrast (Bauhaus paints it black with
@@ -244,7 +252,7 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollaps
         border={tokens.borders.thin}
         borderColor="border.default"
         borderRadius="lg"
-        boxShadow="card"
+        boxShadow={flat ? "none" : "card"}
         overflow="hidden"
       >
         <HStack
@@ -302,7 +310,7 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollaps
       border={tokens.borders.medium}
       borderColor="border.default"
       borderRadius="lg"
-      boxShadow="card"
+      boxShadow={flat ? "none" : "card"}
       overflow="hidden"
     >
       {/* Tab header */}

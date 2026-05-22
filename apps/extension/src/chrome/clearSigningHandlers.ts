@@ -15,6 +15,7 @@ import type {
   DescriptorKind,
   Erc7730Descriptor,
 } from "@/lib/clearSigning/types";
+import { resolveProxyImplementation } from "@/chrome/proxyResolver";
 
 const ENABLED_KEY = "cs:enabled";
 const CACHE_PREFIX = "cs:desc:";
@@ -22,7 +23,21 @@ const CACHE_PREFIX = "cs:desc:";
 const HIT_TTL_MS = 7 * 24 * 3600 * 1000;
 const MISS_TTL_MS = 1 * 24 * 3600 * 1000;
 
+/**
+ * Cache schema version. Bump whenever the descriptor pipeline changes in a way
+ * that makes pre-existing cache entries wrong (added proxy fallback,
+ * added a new built-in, etc.). Entries without a matching version are treated
+ * as misses and re-resolved, so users see new features immediately rather than
+ * waiting up to 7 days for a stale hit to expire.
+ *
+ *   v1: initial (descriptor only)
+ *   v2: proxy fallback added (Safe / EIP-1967 / beacon) — pre-v2 misses for
+ *       proxy addresses would otherwise mask the new resolution path.
+ */
+const CACHE_SCHEMA_VERSION = 2;
+
 interface CacheEntry {
+  schemaVersion?: number;
   updatedAt: number;
   descriptor: Erc7730Descriptor | null;
 }
@@ -46,6 +61,9 @@ async function readCache(
   const result = await chrome.storage.local.get([key]);
   const entry = result[key] as CacheEntry | undefined;
   if (!entry) return null;
+  // Schema-bump invalidation: pre-proxy-fallback misses (which never even
+  // tried proxy resolution) shouldn't suppress the new pipeline.
+  if ((entry.schemaVersion || 1) < CACHE_SCHEMA_VERSION) return null;
   const age = Date.now() - entry.updatedAt;
   const ttl = entry.descriptor ? HIT_TTL_MS : MISS_TTL_MS;
   if (age > ttl) return null;
@@ -59,7 +77,11 @@ async function writeCache(
   descriptor: Erc7730Descriptor | null,
 ): Promise<void> {
   const key = cacheKey(chainId, address, kind);
-  const entry: CacheEntry = { updatedAt: Date.now(), descriptor };
+  const entry: CacheEntry = {
+    schemaVersion: CACHE_SCHEMA_VERSION,
+    updatedAt: Date.now(),
+    descriptor,
+  };
   await chrome.storage.local.set({ [key]: entry });
 }
 
@@ -121,14 +143,95 @@ export async function handleGetClearSigningDescriptor(
     return { descriptor: null, enabled };
   }
 
+  const tag = `[clear-signing/bg] ${kind} ${chainId}:${address}`;
+
   const cached = await readCache(chainId, address, kind);
   if (cached) {
+    console.log(
+      `${tag} cache ${cached.descriptor ? "HIT" : "MISS"} (age=${Math.round(
+        (Date.now() - cached.updatedAt) / 1000,
+      )}s)`,
+    );
     return { descriptor: cached.descriptor, enabled };
   }
+  console.log(`${tag} cache empty → fetching from proxy`);
 
-  const fetched = await fetchDescriptor(chainId, address, kind);
+  let fetched = await fetchDescriptor(chainId, address, kind);
+  console.log(`${tag} direct fetch: ${fetched ? "matched" : "404"}`);
+
+  // Proxy fallback: when the queried address has no descriptor of its own,
+  // try resolving it as a Safe / EIP-1967 / beacon proxy and look up the
+  // implementation's descriptor instead. The deployment list gets extended
+  // to include the proxy so client-side verifyDeployment still passes; we
+  // cache the *extended* descriptor under the proxy address so future
+  // confirmations skip the RPC entirely.
+  if (!fetched) {
+    try {
+      console.log(`${tag} attempting proxy resolution…`);
+      const proxy = await resolveProxyImplementation(chainId, address);
+      if (proxy) {
+        console.log(`${tag} ✓ ${proxy.kind} proxy → impl ${proxy.implementation}`);
+        const implDesc = await fetchDescriptor(chainId, proxy.implementation, kind);
+        if (implDesc) {
+          console.log(`${tag} ✓ impl descriptor fetched — extending deployments`);
+          fetched = extendDeployments(implDesc, kind, chainId, address);
+        } else {
+          console.log(`${tag} ✗ impl ${proxy.implementation} has no descriptor either`);
+        }
+      } else {
+        console.log(`${tag} ✗ not a recognized proxy`);
+      }
+    } catch (err) {
+      console.warn(`${tag} proxy fallback failed:`, err);
+    }
+  }
+
   await writeCache(chainId, address, kind, fetched);
+  console.log(`${tag} cached ${fetched ? "hit" : "miss"} (schema v${CACHE_SCHEMA_VERSION})`);
   return { descriptor: fetched, enabled };
+}
+
+/**
+ * Clone the descriptor and append `(chainId, proxyAddress)` to the matching
+ * deployment list (`context.contract.deployments` for calldata,
+ * `context.eip712.deployments` for eip712). Lets the client's
+ * `verifyDeployment` check pass against the proxy address even though the
+ * registry only knows about the implementation.
+ */
+function extendDeployments(
+  descriptor: Erc7730Descriptor,
+  kind: DescriptorKind,
+  chainId: number,
+  proxyAddress: string,
+): Erc7730Descriptor {
+  const cloned = JSON.parse(JSON.stringify(descriptor)) as Erc7730Descriptor;
+  cloned.context = cloned.context || {};
+  if (kind === "calldata") {
+    const ctx = (cloned.context.contract = cloned.context.contract || {});
+    const deployments = (ctx.deployments = ctx.deployments || []);
+    if (
+      !deployments.some(
+        (d) =>
+          d.chainId === chainId &&
+          d.address?.toLowerCase() === proxyAddress.toLowerCase(),
+      )
+    ) {
+      deployments.push({ chainId, address: proxyAddress });
+    }
+  } else {
+    const ctx = (cloned.context.eip712 = cloned.context.eip712 || {});
+    const deployments = (ctx.deployments = ctx.deployments || []);
+    if (
+      !deployments.some(
+        (d) =>
+          d.chainId === chainId &&
+          d.address?.toLowerCase() === proxyAddress.toLowerCase(),
+      )
+    ) {
+      deployments.push({ chainId, address: proxyAddress });
+    }
+  }
+  return cloned;
 }
 
 export async function handleInvalidateClearSigningCache(): Promise<{ cleared: number }> {

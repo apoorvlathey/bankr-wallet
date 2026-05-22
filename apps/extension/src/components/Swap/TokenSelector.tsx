@@ -18,6 +18,7 @@ import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { truncateAddress } from "@/lib/addressUtils";
 import { formatTokenBalance } from "@/lib/tokenFormatUtils";
+import { formatUsd } from "@/lib/currencyFormatUtils";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
@@ -495,6 +496,20 @@ export default function TokenSelector({
                         >
                           {t.symbol}
                         </Text>
+                        {/* USD value chip — only when the user actually
+                            holds the token. Mirrors the holdings-row USD
+                            line so users can spot "I have $X of this"
+                            from the popular pills without scrolling. */}
+                        {t.valueUsd > 0 && (
+                          <Text
+                            fontSize="2xs"
+                            fontWeight="700"
+                            color="text.tertiary"
+                            lineHeight="short"
+                          >
+                            {formatUsd(t.valueUsd)}
+                          </Text>
+                        )}
                       </HStack>
                     </WrapItem>
                   );

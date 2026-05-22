@@ -90,36 +90,48 @@ export async function decodeWithSelector({
     try {
       return await _decodeWithSelector(calldata);
     } catch {
+      // Strategy 3: Safe MultiSend packed format. Runs BEFORE the
+      // `isNestedDecode` early-return because the decoder strictly
+      // validates the layout (operation/to/value/dataLen/data tuples must
+      // consume every byte exactly) — false positives are vanishingly
+      // rare, so it's safe at any depth. CRITICAL for the common case
+      // where the outer call is e.g. `multiSend(bytes transactions)` and
+      // the inner `bytes` param recurses: without this, the nested bytes
+      // (whose first byte is a random `0x00` operation, not a real
+      // selector) hits Strategy 2's lookup, fails, then hits the nested
+      // early-return below and never gets unpacked. Matches swiss-knife's
+      // ordering for the same reason.
+      try {
+        return decodeSafeMultiSendTransactionsParam(calldata);
+      } catch {
+        // fall through to nested-gate + aggressive fallbacks
+      }
+
       if (isNestedDecode) {
         return null;
       }
 
-      // Strategy 3: Safe MultiSend
+      // Strategy 4: Uniswap path
       try {
-        return decodeSafeMultiSendTransactionsParam(calldata);
+        return decodeUniversalRouterPath(calldata);
       } catch {
-        // Strategy 4: Uniswap path
+        // Strategy 5: ABI-encoded data guessing
         try {
-          return decodeUniversalRouterPath(calldata);
+          return decodeABIEncodedData(calldata);
         } catch {
-          // Strategy 5: ABI-encoded data guessing
+          // Strategy 6: Universal Router commands
           try {
-            return decodeABIEncodedData(calldata);
+            return decodeUniversalRouterCommands(calldata);
           } catch {
-            // Strategy 6: Universal Router commands
+            // Strategy 7: Function fragment guessing
             try {
-              return decodeUniversalRouterCommands(calldata);
+              return decodeByGuessingFunctionFragment(calldata);
             } catch {
-              // Strategy 7: Function fragment guessing
+              // Strategy 8: UTF-8 text
               try {
-                return decodeByGuessingFunctionFragment(calldata);
+                return decodeAsUtf8Text(calldata);
               } catch {
-                // Strategy 8: UTF-8 text
-                try {
-                  return decodeAsUtf8Text(calldata);
-                } catch {
-                  return null;
-                }
+                return null;
               }
             }
           }

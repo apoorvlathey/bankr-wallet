@@ -18,15 +18,26 @@ Confirmation surface
        └─ useClearSigningDescriptor(chainId, address)
             └─ message: GET_CLEAR_SIGNING_DESCRIPTOR
                  └─ clearSigningHandlers.ts (background)
-                      ├─ chrome.storage.local cache  cs:desc:<chainId>:<address>
-                      │    (TTL 7d hits, 1d misses)
-                      └─ walletchan.com/api/clearsigning/descriptor
-                           ⤷ on miss/disabled:
-                              builtinDescriptors.ts (client-side fallback)
-                                ↳ ERC-20 transfer / approve only
+                      ├─ chrome.storage.local cache  cs:desc:<chainId>:<address>:<kind>
+                      │    (TTL 7d hits, 1d misses; schema v2)
+                      ├─ walletchan.com/api/clearsigning/descriptor (direct)
+                      ├─ ON MISS → proxyResolver.ts (Safe / EIP-1967 / beacon)
+                      │    └─ re-fetch descriptor for impl address
+                      │    └─ extend descriptor.deployments to include the proxy
+                      └─ builtinDescriptors.ts (client-side fallback)
+                           ↳ ERC-20 transfer / approve only
 ```
 
 **Remote always wins.** A built-in is only consulted after the remote registry returns nothing (or the user has clear-signing disabled). This means a contract with a curated registry descriptor renders that descriptor, not the generic ERC-20 one.
+
+### Cache schema versioning
+
+Cache entries are stamped with `schemaVersion`. On read, entries with a version older than `CACHE_SCHEMA_VERSION` (in `clearSigningHandlers.ts`) are treated as misses and re-resolved. Bump the constant whenever the resolution pipeline changes in a way that would make pre-existing cache entries wrong — users see new behavior immediately instead of waiting 1–7 days for a stale entry to expire.
+
+| Version | Change |
+|---|---|
+| 1 | Initial. |
+| 2 | Proxy fallback added — pre-v2 misses cached for proxy addresses would otherwise suppress the new resolution path. |
 
 Two lookup keys, same descriptor file:
 
@@ -65,7 +76,29 @@ Some contracts pass another contract's calldata as a parameter — Safe's `Batch
 - Recursion is depth-capped at `MAX_NESTED_DEPTH = 3` (Safe → Multicall → ERC-20 covers realistic stacks); anything deeper short-circuits to the raw fallback.
 - The recursive lookup re-enters `resolveDescriptor(chainId, inner-to)` and re-runs the full match → decode → render pipeline, so every clear-signing capability available at top level (address labels, token amounts, eth.sh, etc.) automatically works inside nested calls.
 
+**No-descriptor fallback (`RawNestedCalldataFallback` + `InlineCalldataRow`):** when the inner call's contract has no descriptor (and isn't a proxy that resolves to one), the renderer falls through to a flat row stack — To, Value (when non-zero), and a `Calldata · [functionName] ›` row that uses the local `decodeRecursive` for the function-name pill and reveals the decoded params inline on click. Mimics the parent card's label-left / value-right rhythm with a thin left-border accent instead of card chrome, so it reads as a continuation rather than a card-in-card. The function-name lookup runs Phase-1 local decode then Phase-2 ABI upgrade in the background.
+
+**Midnight shadow tone-down:** in Midnight theme, nested `ClearSigningView` cards (depth > 0) render with `boxShadow="none"`. Stacking luminous shadows 2–3 levels deep otherwise glows like a tower. Bauhaus keeps its hard shadows at every depth — they're part of the aesthetic and don't accumulate the same way.
+
 Reference descriptor: [`registry/safe/calldata-BatchExecutor.json`](https://github.com/ethereum/clear-signing-erc7730-registry/blob/master/registry/safe/calldata-BatchExecutor.json).
+
+## Proxy fallback (`chrome/proxyResolver.ts`)
+
+The registry indexes contracts by their *deployed* address. For directly-deployed contracts (Uniswap router, Permit2, the Safe singleton itself) that's exact. For **proxies**, it's not — every Safe is a unique `SafeProxy` at a unique address, every OZ Transparent / UUPS upgradeable contract is a per-instance proxy. The registry can't enumerate millions of them.
+
+`resolveProxyImplementation(chainId, address)` runs whenever a direct descriptor fetch returns 404. It reads three storage slots in parallel via `eth_getStorageAt` on the user's configured RPC and returns the first matching implementation:
+
+| Pattern | Detection | Source |
+|---|---|---|
+| **EIP-1967 logic** | `keccak256("eip1967.proxy.implementation") - 1` slot, last 20 bytes | OZ Transparent, UUPS, most modern upgradeable proxies |
+| **EIP-1967 beacon** | beacon slot → one follow-up `implementation()` call on the beacon contract | OZ beacon proxies |
+| **Safe** | literal slot 0 (Safe `Proxy` stores its singleton there) | every Safe deployed via `SafeProxyFactory` |
+
+EIP-1967 / beacon take priority over Safe slot 0 — slot 0 is the first declared storage variable on many non-Safe contracts (ERC-20s, LP pairs, etc.) and would otherwise yield a garbage "implementation" address. A `looksLikeRealAddress` heuristic on slot 0 (require ≥5 non-zero nibbles in the leading 20) further rejects values that look like packed booleans or small integers.
+
+When the resolver returns an implementation, the handler refetches the descriptor for `(chainId, impl)`, then `extendDeployments` appends `(chainId, proxy)` to the descriptor's deployment list before caching it under the proxy's cache key. This means client-side `verifyDeployment` keeps working untouched, and every subsequent confirmation on the same proxy address skips the RPC + the extra fetch entirely.
+
+Patterns NOT covered yet: ERC-1167 minimal proxies (bytecode pattern, would need `eth_getCode` + regex), EIP-2535 Diamond (per-selector facets, would need a `facetAddress(selector)` lookup per inner call). Add when a real registry entry needs them.
 
 ## Path resolution
 
@@ -90,10 +123,20 @@ Today's built-in selectors:
 | ------------ | --------------------------------------- | ---------------------------- |
 | `0xa9059cbb` | `transfer(address to, uint256 amount)`  | Amount (tokenAmount), Recipient (addressName) |
 | `0x095ea7b3` | `approve(address spender, uint256 amount)` | Amount (tokenAmount), Spender (addressName)   |
+| `0x8d80ff0a` | `multiSend(bytes transactions)`         | Per-inner-call (calldata) — see "MultiSend custom unpacking" below |
 
 Adding a new selector is two lines: add it to `BUILTIN_SELECTORS` and add a `case` in `getBuiltinCalldataDescriptor`. Inline summaries (below) and the batch CallCard's built-in expanded layout key off the same `isBuiltinCalldataSelector(call.data)` predicate, so they activate automatically.
 
 The synthesized `tokenAmount` field uses `params.tokenAddress` (hardcoded to the call target — the token IS the contract being called) so `applyFormat.ts` resolves symbol / decimals / logo / price exactly like an app-specific descriptor.
+
+### MultiSend custom unpacking
+
+Safe's `MultiSend` / `MultiSendCallOnly` takes a single `bytes transactions` argument that's a custom **packed** concatenation of `(operation:1, to:20, value:32, dataLen:32, data:dataLen)` tuples — not standard ABI. Two hooks make it work end-to-end:
+
+1. `multiSendDescriptor()` in `builtinDescriptors.ts` synthesizes a descriptor with one `calldata` field at `transactions.[].data` (zipped with `transactions.[].to` callee + `transactions.[].value` amount).
+2. `decodeForDescriptor.ts` post-processes viem's standard decode: when the format key matches `MULTISEND_FORMAT_KEY` and `transactions` is still a raw hex string, `unpackMultiSendTransactions()` walks the packed bytes into `[{operation, to, value, data}, …]` and overwrites the field. Returns null on any structural mismatch — caller silently falls through to "no match" rather than rendering garbage.
+
+From there the existing recursive nested-calldata pipeline takes over: each inner call mounts its own `ClearSigningView`, runs the full descriptor lookup (registry → proxy fallback → built-in → InlineCalldataRow fallback), and renders as a numbered "1 / N — Call" nested card. The same selector also lets the raw `decodeRecursive` Strategy 3 fire (since it's structurally valid at any depth — see `lib/decoder/index.ts`), so even outside clear-signing the inner txs unpack in the raw decoder view.
 
 ## Inline batch summary (`hooks/useErc20InlineSummary.ts`)
 
@@ -152,7 +195,7 @@ Token metadata (`fetchTokenInfo`) and per-token logos (`getCachedTokenLogo`) fol
 
 Documented in `_docs/STORAGE.md`:
 
-- `cs:desc:<chainId>:<address>` — descriptor cache entry (hit or miss).
+- `cs:desc:<chainId>:<address>:<kind>` — descriptor cache entry (hit or miss). Includes `schemaVersion` for forward-compatible invalidation.
 - `cs:enabled` — boolean opt-out flag (default `true`).
 - `ethShLabels:<chainId>:<address>` — eth.sh contract labels (7d TTL, empties cached).
 - `tokenInfo:<chainId>:<address>` — ERC-20 name/symbol/decimals (30d TTL).
