@@ -51,6 +51,7 @@ import {
 import { useTheme, useChainBadgeStyle } from "@/theme";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import ClearSignedSummaryCard from "@/components/ClearSignedSummaryCard";
+import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
 import LoadingDots from "@/components/LoadingDots";
 
 interface TxDetailModalProps {
@@ -1417,10 +1418,24 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
             {/* Human-readable clear-signed hero. Snapshot-driven, so it
                 paints synchronously on every reopen — no RPC / eth.sh / ENS
                 calls. Hidden when no snapshot was captured (older entries,
-                contract deploys, opaque calldata). */}
-            {tx.clearSignedMeta && (
+                contract deploys, opaque calldata).
+
+                For erc7730 kinds the snapshot only stores intent +
+                contractName + counterparty (no parameter values), so we
+                render the full ClearSigningView instead — same component the
+                tx-confirmation surface uses. It re-decodes the calldata
+                against the descriptor to produce per-field rows (e.g.
+                "Amount to supply: 2 USDC", "Collateral recipient: …"). */}
+            {tx.clearSignedMeta && tx.clearSignedMeta.kind === "erc7730" && tx.tx.to && tx.tx.data ? (
+              <ClearSigningView
+                kind="calldata"
+                chainId={tx.chainId}
+                to={tx.tx.to}
+                calldata={tx.tx.data}
+              />
+            ) : tx.clearSignedMeta ? (
               <ClearSignedSummaryCard meta={tx.clearSignedMeta} chainId={tx.chainId} />
-            )}
+            ) : null}
 
             {/* Toggle for the raw tx details. Default collapsed when the
                 hero card is showing (the hero already answers "what did this
