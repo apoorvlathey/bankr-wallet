@@ -48,9 +48,24 @@ The registry uses **full canonical signatures** (e.g. `"exactInput((bytes path, 
 | `nftName`      | _Out of scope for v1, falls back to `raw`._                                                |
 | `duration`     | _Out of scope for v1, falls back to `raw`._                                                |
 | `enum`         | _Out of scope for v1, falls back to `raw`._                                                |
-| `calldata`     | _Out of scope for v1, falls back to `raw`._                                                |
+| `calldata`     | Embedded inner call — recursively renders the inner contract's descriptor as a nested `ClearSigningView`. Falls back to a "no descriptor" card (callee + value + selector + truncated bytes) when the inner contract isn't in the registry. |
 
 Unknown / unsupported formats fall through to `raw`, which always renders something safe.
+
+## Nested calldata (`calldata` format)
+
+Some contracts pass another contract's calldata as a parameter — Safe's `BatchExecutor.batchExecute(calls[])` is the canonical example. ERC-7730 covers this with the `calldata` field format, and `applyFormat.ts` + `ClearSigningView.tsx` handle it natively:
+
+- The value at `field.path` is interpreted as the embedded calldata bytes.
+- `params.callee` (literal) or `params.calleePath` (resolved against the same decoded args) tells the renderer the inner contract address.
+- `params.amount` / `params.amountPath` is an optional native-value attached to the inner call. Renders as a native-coin row in the fallback card.
+- `params.selector` / `params.selectorPath` covers descriptors whose embedded bytes lack their own 4-byte function selector — the supplied selector is prepended to `data` before the nested view runs its signature match. Validates to exactly 4 bytes (8 hex chars); malformed values are ignored, leaving the data untouched.
+- When `field.path` iterates (contains `[]`, e.g. `calls.[].data`), the renderer **zips** path / calleePath / amountPath / selectorPath by index — each inner call gets paired with its own callee + value + (optional) selector.
+- Each inner call renders as a full-width nested card with a numbered header (`1 / 3 — Transaction`) when there's more than one.
+- Recursion is depth-capped at `MAX_NESTED_DEPTH = 3` (Safe → Multicall → ERC-20 covers realistic stacks); anything deeper short-circuits to the raw fallback.
+- The recursive lookup re-enters `resolveDescriptor(chainId, inner-to)` and re-runs the full match → decode → render pipeline, so every clear-signing capability available at top level (address labels, token amounts, eth.sh, etc.) automatically works inside nested calls.
+
+Reference descriptor: [`registry/safe/calldata-BatchExecutor.json`](https://github.com/ethereum/clear-signing-erc7730-registry/blob/master/registry/safe/calldata-BatchExecutor.json).
 
 ## Path resolution
 

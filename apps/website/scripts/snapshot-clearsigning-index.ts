@@ -104,6 +104,15 @@ interface ResolvedContext {
   eip712: Deployment[];
   hasContractContext: boolean;
   hasEip712Context: boolean;
+  /**
+   * Format keys merged across the descriptor and its `includes` chain. We
+   * don't need the format bodies for indexing — just the count, so the
+   * "skip if no formats" guard below counts include-inherited formats too.
+   * Without this, files like `calldata-Safe-1.4.1.json` (deployments only,
+   * formats live in `common-Safe.json` via `includes`) were dropped before
+   * indexing, so the Safe singleton ended up indexed for `eip712` only.
+   */
+  formatCount: number;
 }
 
 async function resolveContext(
@@ -116,6 +125,7 @@ async function resolveContext(
     eip712: [],
     hasContractContext: false,
     hasEip712Context: false,
+    formatCount: 0,
   };
   if (desc.context?.contract) {
     out.hasContractContext = true;
@@ -129,6 +139,9 @@ async function resolveContext(
       out.eip712.push(...desc.context.eip712.deployments);
     }
   }
+  if (desc.display?.formats) {
+    out.formatCount += Object.keys(desc.display.formats).length;
+  }
 
   if (desc.includes && depth < 3) {
     try {
@@ -139,6 +152,7 @@ async function resolveContext(
       out.eip712.push(...inner.eip712);
       out.hasContractContext ||= inner.hasContractContext;
       out.hasEip712Context ||= inner.hasEip712Context;
+      out.formatCount += inner.formatCount;
     } catch (err) {
       console.warn(`  include resolve failed for ${originPath}: ${(err as Error).message}`);
     }
@@ -172,14 +186,17 @@ async function main() {
       const p = paths[i];
       try {
         const desc = await fetchJson(p);
-        const formats = desc.display?.formats;
-        if (!formats || Object.keys(formats).length === 0) {
+        const ctx = await resolveContext(desc, p);
+        // Skip files that contribute no formats AFTER include-resolution. Doing
+        // this before include-resolution would drop deployment-only descriptors
+        // like `calldata-Safe-1.4.1.json` whose formats live in an included
+        // `common-Safe.json`, leaving the Safe singleton un-indexed for
+        // calldata lookups.
+        if (ctx.formatCount === 0) {
           processed++;
           continue;
         }
         withFormats++;
-
-        const ctx = await resolveContext(desc, p);
 
         // Decide which kind this file's formats apply to.
         // A file with eip712 context covers eip712; with contract context covers calldata.

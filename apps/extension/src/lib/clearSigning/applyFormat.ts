@@ -26,6 +26,7 @@ export type RenderedValue =
   | { kind: "amount"; amountRaw: string }
   | { kind: "date"; timestamp: number }
   | { kind: "unit"; raw: string; decimals: number; base?: string; prefix: boolean }
+  | { kind: "calldata"; callee: string; data: string; amount?: string }
   | { kind: "missing" };
 
 export interface RenderInput {
@@ -51,6 +52,15 @@ function renderField(
 ): RenderedField | null {
   // Hidden by descriptor → drop entirely.
   if (field.visible === "never") return null;
+
+  // Embedded calldata (ERC-7730 `calldata` format): the value at `field.path` is
+  // bytes that themselves encode a call to another contract. Needs zipped
+  // iteration with `params.calleePath` (callee per inner call) and optionally
+  // `params.amountPath` / `params.selectorPath` — the generic array branch below
+  // would only iterate one side, so handle it first.
+  if ((field.format || "").toLowerCase() === "calldata" && field.path) {
+    return renderCalldataField(field, input);
+  }
 
   // Nested fields: iterate elements at `field.path` and apply child fields per element.
   if (field.fields && field.fields.length > 0) {
@@ -106,6 +116,130 @@ function renderField(
     label: field.label || "",
     values: [toRenderedValue(field, raw, input, tokenAddr)],
     visible: true,
+  };
+}
+
+/**
+ * Render a `calldata`-format field. The path resolves to either a single hex
+ * bytes value OR an array of hex bytes (when the path contains `[]`, e.g. Safe
+ * BatchExecutor's `calls.[].data`). The callee/amount/selector params can each
+ * be supplied as literals or as paths; when supplied as paths and the data side
+ * iterates, the callee/amount/selector sides MUST iterate in lockstep — we zip
+ * by index and drop the field if no callee can be paired with a data element.
+ */
+function renderCalldataField(
+  field: Erc7730Field,
+  input: RenderInput,
+): RenderedField | null {
+  if (!field.path) return null;
+  const params = (field.params || {}) as Record<string, unknown>;
+
+  const dataAt = resolvePath(input.data, field.path);
+  if (dataAt === undefined) return null;
+
+  const calleeLit = typeof params.callee === "string" ? params.callee : undefined;
+  const calleeAt =
+    typeof params.calleePath === "string"
+      ? resolvePath(input.data, params.calleePath)
+      : undefined;
+  const amountLit =
+    params.amount === undefined
+      ? undefined
+      : typeof params.amount === "bigint"
+        ? (params.amount as bigint).toString()
+        : String(params.amount);
+  const amountAt =
+    typeof params.amountPath === "string"
+      ? resolvePath(input.data, params.amountPath)
+      : undefined;
+  // selector / selectorPath cover the case where the embedded bytes lack
+  // their own 4-byte function selector (the caller supplies it separately).
+  // We prepend it to `data` in `buildCalldataValue` so the nested
+  // ClearSigningView's signature match has something to compute against.
+  const selectorLit =
+    typeof params.selector === "string" ? params.selector : undefined;
+  const selectorAt =
+    typeof params.selectorPath === "string"
+      ? resolvePath(input.data, params.selectorPath)
+      : undefined;
+
+  const dataIsArray = Array.isArray(dataAt);
+  const calleeIsArray = Array.isArray(calleeAt);
+  const amountIsArray = Array.isArray(amountAt);
+  const selectorIsArray = Array.isArray(selectorAt);
+
+  if (!dataIsArray && !calleeIsArray && !amountIsArray && !selectorIsArray) {
+    const value = buildCalldataValue(
+      dataAt,
+      calleeAt ?? calleeLit,
+      amountAt ?? amountLit,
+      selectorAt ?? selectorLit,
+    );
+    if (!value) return null;
+    return { label: field.label || "", values: [value], visible: true };
+  }
+
+  // Zipped iteration. Use the data array's length as the source of truth;
+  // pair each index with calleeAt[i] / amountAt[i] / selectorAt[i] when those
+  // are arrays, or with the literal / single resolved value when they aren't.
+  const dataArr = dataIsArray ? (dataAt as unknown[]) : [dataAt];
+  const values: RenderedValue[] = [];
+  for (let i = 0; i < dataArr.length; i++) {
+    const data = dataArr[i];
+    const callee = calleeIsArray
+      ? (calleeAt as unknown[])[i]
+      : (calleeAt ?? calleeLit);
+    const amount = amountIsArray
+      ? (amountAt as unknown[])[i]
+      : (amountAt ?? amountLit);
+    const selector = selectorIsArray
+      ? (selectorAt as unknown[])[i]
+      : (selectorAt ?? selectorLit);
+    const v = buildCalldataValue(data, callee, amount, selector);
+    if (v) values.push(v);
+  }
+  if (values.length === 0) return null;
+  return { label: field.label || "", values, visible: true };
+}
+
+function buildCalldataValue(
+  data: unknown,
+  callee: unknown,
+  amount: unknown,
+  selector: unknown,
+): RenderedValue | null {
+  if (typeof data !== "string") return null;
+  if (typeof callee !== "string" || !/^0x[a-fA-F0-9]{40}$/.test(callee)) {
+    return null;
+  }
+  const dataHex = data.startsWith("0x") ? data : `0x${data}`;
+  // When the descriptor supplies a separate selector, the spec says the
+  // embedded bytes don't include it — prepend so the nested view can match
+  // against `data[0..10]`. Accept both `0x12345678` and `12345678` forms;
+  // reject anything that isn't exactly 4 bytes (would silently corrupt the
+  // calldata if we didn't validate).
+  let finalData = dataHex;
+  if (typeof selector === "string" && selector.length > 0) {
+    const sel = selector.startsWith("0x") ? selector.slice(2) : selector;
+    if (/^[0-9a-fA-F]{8}$/.test(sel)) {
+      finalData = `0x${sel.toLowerCase()}${dataHex.slice(2)}`;
+    }
+  }
+  const amountStr =
+    amount === undefined || amount === null
+      ? undefined
+      : typeof amount === "bigint"
+        ? amount.toString()
+        : typeof amount === "number"
+          ? String(amount)
+          : typeof amount === "string"
+            ? amount
+            : undefined;
+  return {
+    kind: "calldata",
+    callee,
+    data: finalData,
+    amount: amountStr,
   };
 }
 

@@ -10,7 +10,7 @@
  * pass an `onResolved` callback so they can collapse the raw decoder beneath.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Box,
   HStack,
@@ -75,7 +75,21 @@ export type ClearSigningViewProps = (CalldataProps | Eip712Props) & {
    * to keep their layout stable until something is actually known.
    */
   hideLoadingSkeleton?: boolean;
+  /**
+   * Recursion depth — incremented each time a `calldata`-format field renders
+   * a nested ClearSigningView for an embedded inner call. Capped at
+   * MAX_NESTED_DEPTH to prevent runaway descriptors from melting the wallet.
+   * Top-level callers leave this undefined (treated as 0).
+   */
+  depth?: number;
 };
+
+/**
+ * Maximum nesting for embedded `calldata` fields. 3 covers realistic patterns
+ * (Safe → Multicall → ERC-20) without letting a pathological descriptor recurse
+ * indefinitely. Anything deeper falls back to the raw-bytes card.
+ */
+const MAX_NESTED_DEPTH = 3;
 
 interface MatchedState {
   descriptor: Erc7730Descriptor;
@@ -86,6 +100,7 @@ interface MatchedState {
 
 export function ClearSigningView(props: ClearSigningViewProps) {
   const { kind, chainId, hideLoadingSkeleton } = props;
+  const depth = props.depth ?? 0;
   const lookupAddress = kind === "calldata" ? props.to : props.verifyingContract;
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<MatchedState | null>(null);
@@ -269,7 +284,12 @@ export function ClearSigningView(props: ClearSigningViewProps) {
 
       <VStack align="stretch" spacing={2}>
         {state.fields.map((field, idx) => (
-          <FieldRow key={`${field.label}-${idx}`} field={field} chainId={chainId} />
+          <FieldRow
+            key={`${field.label}-${idx}`}
+            field={field}
+            chainId={chainId}
+            depth={depth}
+          />
         ))}
       </VStack>
     </ThemedCard>
@@ -279,9 +299,29 @@ export function ClearSigningView(props: ClearSigningViewProps) {
 interface FieldRowProps {
   field: RenderedField;
   chainId: number;
+  /** Current ClearSigningView nesting depth, threaded down for calldata fields. */
+  depth: number;
 }
 
-function FieldRow({ field, chainId }: FieldRowProps) {
+function FieldRow({ field, chainId, depth }: FieldRowProps) {
+  // Embedded calldata values can't share the label-left / value-right row —
+  // each one is a substantial nested card. When this field's values are
+  // calldata, render them as a full-width stack with a numbered header per
+  // inner call (Safe BatchExecutor-style "1 / 3 — Transaction").
+  const calldataValues = field.values.filter(
+    (v): v is Extract<RenderedValue, { kind: "calldata" }> => v.kind === "calldata",
+  );
+  if (calldataValues.length > 0 && calldataValues.length === field.values.length) {
+    return (
+      <NestedCalldataField
+        label={field.label}
+        values={calldataValues}
+        chainId={chainId}
+        depth={depth}
+      />
+    );
+  }
+
   // Grouped fields (e.g. Permit2 `details.[]` iteration) — each item gets a
   // numbered pill chip + a full-width rule so batched permits read as distinct
   // sections without a nested card-in-card. Single-group case skips the header.
@@ -335,7 +375,12 @@ function FieldRow({ field, chainId }: FieldRowProps) {
             )}
             <VStack align="stretch" spacing={2}>
               {group.map((sub, si) => (
-                <FieldRow key={`${sub.label}-${si}`} field={sub} chainId={chainId} />
+                <FieldRow
+                  key={`${sub.label}-${si}`}
+                  field={sub}
+                  chainId={chainId}
+                  depth={depth}
+                />
               ))}
             </VStack>
           </Box>
@@ -416,7 +461,213 @@ function RenderedValueView({ value, chainId }: { value: RenderedValue; chainId: 
           (missing)
         </Text>
       );
+    case "calldata":
+      // Calldata values are full-width nested cards handled in FieldRow before
+      // reaching this switch (`NestedCalldataField`). Reaching here would mean
+      // a stray mixed-kind values array — render nothing to stay safe.
+      return null;
   }
+}
+
+/**
+ * Full-width container for one or more embedded calldata calls. Renders each
+ * inner call as a recursive ClearSigningView; when the inner contract has no
+ * matching descriptor (or we've hit the depth cap), falls back to a raw card
+ * showing callee + value + selector + truncated data so the user still has
+ * something legible.
+ */
+function NestedCalldataField({
+  label,
+  values,
+  chainId,
+  depth,
+}: {
+  label: string;
+  values: Array<Extract<RenderedValue, { kind: "calldata" }>>;
+  chainId: number;
+  depth: number;
+}) {
+  const total = values.length;
+  const headerLabel = label || "Transaction";
+  return (
+    <VStack align="stretch" spacing={3} w="full">
+      {values.map((value, idx) => (
+        <Box key={idx}>
+          {total > 1 && (
+            <HStack mb={2} spacing={2} align="center">
+              <HStack
+                spacing={1}
+                px={2}
+                py="2px"
+                borderRadius="full"
+                bg="accent.secondary"
+                flexShrink={0}
+              >
+                <Text fontSize="10px" color="accentFg.secondary" fontWeight="800" lineHeight="1.2">
+                  {idx + 1}
+                </Text>
+                <Text
+                  fontSize="10px"
+                  color="accentFg.secondary"
+                  fontWeight="700"
+                  opacity={0.75}
+                  lineHeight="1.2"
+                >
+                  / {total}
+                </Text>
+              </HStack>
+              <Text
+                fontSize="10px"
+                color="fg.secondary"
+                fontWeight="700"
+                textTransform="uppercase"
+                letterSpacing="0.08em"
+                flexShrink={0}
+              >
+                {headerLabel}
+              </Text>
+              <Box flex={1} h="1px" bg="border.default" />
+            </HStack>
+          )}
+          <NestedCalldataCard value={value} chainId={chainId} depth={depth} />
+        </Box>
+      ))}
+    </VStack>
+  );
+}
+
+function NestedCalldataCard({
+  value,
+  chainId,
+  depth,
+}: {
+  value: Extract<RenderedValue, { kind: "calldata" }>;
+  chainId: number;
+  depth: number;
+}) {
+  // `null` = inner ClearSigningView is still resolving. `true` = matched (the
+  // inner card paints itself); `false` = no descriptor matched (we show the
+  // raw fallback below). Depth-capped branches skip the recursive mount and
+  // jump straight to the fallback so we don't burn lookups on a tree that's
+  // already too deep to be useful.
+  const [matched, setMatched] = useState<boolean | null>(null);
+  const canRecurse = depth < MAX_NESTED_DEPTH;
+
+  if (!canRecurse) {
+    return <RawNestedCalldataFallback value={value} chainId={chainId} />;
+  }
+
+  return (
+    <>
+      <ClearSigningView
+        kind="calldata"
+        chainId={chainId}
+        to={value.callee}
+        calldata={value.data}
+        depth={depth + 1}
+        onResolved={setMatched}
+        hideLoadingSkeleton
+      />
+      {matched === false && <RawNestedCalldataFallback value={value} chainId={chainId} />}
+    </>
+  );
+}
+
+/**
+ * Shown when an inner embedded call has no descriptor (or we've hit the
+ * recursion cap). Renders as flat field rows (To / Value / Selector / Data)
+ * with a thin left-border accent so it reads as a continuation of the parent
+ * card rather than its own mini-card. No header, no "no descriptor" badge —
+ * the rows speak for themselves; jargon noise just makes the parent louder.
+ */
+function RawNestedCalldataFallback({
+  value,
+  chainId,
+}: {
+  value: Extract<RenderedValue, { kind: "calldata" }>;
+  chainId: number;
+}) {
+  const selector =
+    value.data && value.data.length >= 10
+      ? value.data.slice(0, 10).toLowerCase()
+      : null;
+  const body = value.data && value.data.length > 10 ? value.data.slice(10) : "";
+  const preview = body.length > 80 ? `${body.slice(0, 80)}…` : body;
+  const showValue =
+    value.amount !== undefined && value.amount !== null && value.amount !== "0";
+  return (
+    <Box
+      pl={3}
+      borderLeft="2px solid"
+      borderLeftColor="border.default"
+      // No right/bottom padding — left rail is the only visual treatment, so
+      // the rows align flush with the rest of the parent's column.
+    >
+      <VStack align="stretch" spacing={2}>
+        <NestedFallbackRow label="To">
+          <AddressInline address={value.callee} chainId={chainId} />
+        </NestedFallbackRow>
+        {showValue && value.amount && (
+          <NestedFallbackRow label="Value">
+            <TokenAmountInline amountRaw={value.amount} native chainId={chainId} />
+          </NestedFallbackRow>
+        )}
+        {selector && (
+          <NestedFallbackRow label="Selector">
+            <Text
+              fontSize="xs"
+              fontFamily="mono"
+              color="chart.numeric"
+              fontWeight="600"
+              textAlign="right"
+            >
+              {selector}
+            </Text>
+          </NestedFallbackRow>
+        )}
+        {preview && (
+          <NestedFallbackRow label="Data" alignTop>
+            <Text
+              fontSize="2xs"
+              fontFamily="mono"
+              color="fg.muted"
+              textAlign="right"
+              wordBreak="break-all"
+            >
+              0x{preview}
+            </Text>
+          </NestedFallbackRow>
+        )}
+      </VStack>
+    </Box>
+  );
+}
+
+function NestedFallbackRow({
+  label,
+  children,
+  alignTop,
+}: {
+  label: string;
+  children: ReactNode;
+  alignTop?: boolean;
+}) {
+  return (
+    <HStack align={alignTop ? "start" : "center"} spacing={3} justify="space-between" w="full">
+      <Text
+        fontSize="xs"
+        color="fg.secondary"
+        fontWeight="600"
+        flexShrink={0}
+        pt={alignTop ? "1px" : 0}
+      >
+        {label}
+      </Text>
+      <Box flex="1" minW={0} textAlign="right">
+        {children}
+      </Box>
+    </HStack>
+  );
 }
 
 function AddressInline({ address, chainId }: { address: string; chainId: number }) {
@@ -580,18 +831,43 @@ function AddressInline({ address, chainId }: { address: string; chainId: number 
     );
   }
 
-  // External address — single inline row with the short 0x… form, an
-  // optional eth.sh label, and the action icons.
+  // External address. When there's no eth.sh label, render a single inline
+  // row (short 0x… + actions). When a label is present, stack it BELOW the
+  // address so long contract names (e.g. "Uniswap V3 SwapRouter02") wrap
+  // freely without pushing the action icons off the row.
+  if (externalLabel) {
+    return (
+      <VStack align="end" spacing={0.5}>
+        <HStack spacing={1} align="center" justify="flex-end">
+          <Text fontSize="xs" fontFamily="mono" color="accent.secondary" fontWeight="600">
+            {short}
+          </Text>
+          <HStack spacing={0} align="center">
+            {copyButton}
+            {explorerButton}
+          </HStack>
+        </HStack>
+        <Text
+          fontSize="10px"
+          color="fg.secondary"
+          fontWeight="700"
+          textAlign="right"
+          // Hard-wrap on word boundary; long labels span up to two lines and
+          // then truncate. Keeps the field row from ballooning vertically.
+          noOfLines={2}
+          wordBreak="break-word"
+        >
+          {externalLabel}
+        </Text>
+      </VStack>
+    );
+  }
+
   return (
     <HStack spacing={1} align="center" justify="flex-end">
       <Text fontSize="xs" fontFamily="mono" color="accent.secondary" fontWeight="600">
         {short}
       </Text>
-      {externalLabel && (
-        <Text fontSize="10px" color="fg.secondary" fontWeight="700">
-          ({externalLabel})
-        </Text>
-      )}
       <HStack spacing={0} align="center">
         {copyButton}
         {explorerButton}
