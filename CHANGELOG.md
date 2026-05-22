@@ -10,6 +10,10 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.11.0] - 2026-05-22
+
 ### Added
 
 - **Cross-chain bridging from the Swap surface** via Bungee — per-side chain + token pickers, source / destination cards in the tx-details modal, formatted route summary with protocol fee, and a destination-chain notification when the bridge fulfills. Same-chain picks still route through the existing 0x swap path; cross-chain picks build a Bungee route, broadcast on the source chain, and poll status in the background.
@@ -34,6 +38,7 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 - Decoder no longer pollutes the console with sourcify 500s when it recurses into a `bytes` param with no calldata payload (empty-selector lookups are now skipped).
 - Unmatched clear-signing rows in batch confirmations no longer leak roughly 24 px of phantom whitespace per call below the batch header.
 - Tier-1 batch gas estimation now falls through to bytecode-injection simulation whenever Alchemy's `eth_simulateV1` reports a call revert, preventing out-of-gas broadcasts on approve + 0x AllowanceHolder swap batches that actually succeed onchain.
+
 
 ## [3.10.0] - 2026-05-21
 
@@ -429,7 +434,8 @@ This release is a full rebuild of the wallet — multiple account types, a real 
 - View address on Debank from the homepage.
 - Lock-wallet button and footer attribution.
 
-[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.10.0...HEAD
+[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.11.0...HEAD
+[3.11.0]: https://github.com/apoorvlathey/walletchan/compare/v3.10.0...v3.11.0
 [3.10.0]: https://github.com/apoorvlathey/walletchan/compare/v3.9.0...v3.10.0
 [3.9.0]: https://github.com/apoorvlathey/walletchan/compare/v3.8.0...v3.9.0
 [3.8.0]: https://github.com/apoorvlathey/walletchan/compare/v3.7.0...v3.8.0
