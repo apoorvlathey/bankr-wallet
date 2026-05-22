@@ -73,6 +73,49 @@ export interface ForceInclusionMeta {
 }
 
 /**
+ * One ERC-20 transfer log involving the user, decoded from the confirmed
+ * tx receipt. We only retain transfers where the user wallet is `from` or
+ * `to` (logs that are pure internal routing through DEX pools are dropped),
+ * so the modal can render a clean "what flowed in / out of my wallet" view.
+ *
+ * Fields are optional where metadata may arrive after the first write —
+ * `symbol/decimals/logoUrl` are filled in by `fetchTokenInfo` (which itself
+ * caches), and may be undefined until that resolves.
+ */
+export interface AssetTransferRecord {
+  /** Token contract address (lowercased). */
+  token: string;
+  direction: "in" | "out";
+  /** The other side of the transfer (lowercased). */
+  counterparty: string;
+  /** Raw amount in base units (decimal string). */
+  amountWei: string;
+  symbol?: string;
+  decimals?: number;
+  logoUrl?: string;
+}
+
+/**
+ * Snapshot of the asset changes a confirmed tx produced for the sender.
+ * Populated by `assetChangesExtractor` immediately after `applyReceiptToHistory`
+ * lands a success. Optional — only present on confirmed txs; failed and
+ * pre-existing entries simply lack it and the modal renders without the
+ * "Token Changes" section.
+ */
+export interface AssetChangeRecord {
+  /** Block number the tx mined into (decimal string). */
+  blockNumber: string;
+  /**
+   * Signed pure native value flow in wei (`balance(N) - balance(N-1) + gasCost`).
+   * Positive = net received, negative = net sent. Undefined when the RPC
+   * couldn't resolve `balance(N-1)` after retries — the modal then hides the
+   * native row but still renders the ERC-20 rows.
+   */
+  nativeDelta?: string;
+  erc20Transfers: AssetTransferRecord[];
+}
+
+/**
  * Metadata for cross-chain bridge txs. Present on the **source-chain** tx-
  * history entry. The source tx itself confirms via the normal receipt poller;
  * once it does, `bridgeStatusPoller` polls Bungee's /status endpoint and
@@ -123,6 +166,19 @@ export interface CompletedTransaction {
   forceInclusionMeta?: ForceInclusionMeta;
   /** Cross-chain bridge metadata. Present only on bridge txs. */
   bridge?: BridgeMeta;
+  /**
+   * Post-confirm snapshot of ERC-20 + native flows for the sender. Written by
+   * `assetChangesExtractor` once the receipt lands. The activity-tab modal
+   * renders it as the "Token Changes" section. Absent on failed / pre-existing
+   * entries — consumers must render conditionally.
+   */
+  assetChanges?: AssetChangeRecord;
+  /**
+   * Bridge destination leg: same shape, computed against the destination
+   * chain RPC after Bungee writes `bridge.destinationTxHash`. Receiver is
+   * the bridge's `receiverAddress` (defaults to source `from`).
+   */
+  destAssetChanges?: AssetChangeRecord;
   // Set on tx-history entries that are one slice of a user-split
   // wallet_sendCalls bundle. Used by the receipt poller and rejection
   // paths to advance the parent bundle's split sequencer.

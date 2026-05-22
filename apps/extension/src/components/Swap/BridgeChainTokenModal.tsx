@@ -946,10 +946,22 @@ export default function BridgeChainTokenModal({
                               alt={t.symbol}
                               boxSize="16px"
                               borderRadius="full"
-                              fallback={<TokenSymbolFallback symbol={t.symbol} size="16px" />}
+                              fallback={
+                                <TokenSymbolFallback
+                                  symbol={t.symbol}
+                                  size="16px"
+                                  nativeChainId={t.contractAddress === "native" ? t.chainId : undefined}
+                                  nativeChainName={currentChainName}
+                                />
+                              }
                             />
                           ) : (
-                            <TokenSymbolFallback symbol={t.symbol} size="16px" />
+                            <TokenSymbolFallback
+                              symbol={t.symbol}
+                              size="16px"
+                              nativeChainId={t.contractAddress === "native" ? t.chainId : undefined}
+                              nativeChainName={currentChainName}
+                            />
                           )}
                           <Text fontSize="xs" fontWeight="700" textTransform="uppercase">
                             {t.symbol}
@@ -1069,10 +1081,22 @@ export default function BridgeChainTokenModal({
                           alt={h.symbol}
                           boxSize="22px"
                           borderRadius="full"
-                          fallback={<TokenSymbolFallback symbol={h.symbol} size="22px" />}
+                          fallback={
+                            <TokenSymbolFallback
+                              symbol={h.symbol}
+                              size="22px"
+                              nativeChainId={h.contractAddress === "native" ? h.chainId : undefined}
+                              nativeChainName={currentChainName}
+                            />
+                          }
                         />
                       ) : (
-                        <TokenSymbolFallback symbol={h.symbol} size="22px" />
+                        <TokenSymbolFallback
+                          symbol={h.symbol}
+                          size="22px"
+                          nativeChainId={h.contractAddress === "native" ? h.chainId : undefined}
+                          nativeChainName={currentChainName}
+                        />
                       )}
                       <Box flex={1} minW={0}>
                         <Text
@@ -1221,10 +1245,22 @@ export default function BridgeChainTokenModal({
                         alt={t.symbol}
                         boxSize="22px"
                         borderRadius="full"
-                        fallback={<TokenSymbolFallback symbol={t.symbol} size="22px" />}
+                        fallback={
+                          <TokenSymbolFallback
+                            symbol={t.symbol}
+                            size="22px"
+                            nativeChainId={t.contractAddress === "native" ? t.chainId : undefined}
+                            nativeChainName={currentChainName}
+                          />
+                        }
                       />
                     ) : (
-                      <TokenSymbolFallback symbol={t.symbol} size="22px" />
+                      <TokenSymbolFallback
+                        symbol={t.symbol}
+                        size="22px"
+                        nativeChainId={t.contractAddress === "native" ? t.chainId : undefined}
+                        nativeChainName={currentChainName}
+                      />
                     )}
                     <Box flex={1} minW={0}>
                       <Text

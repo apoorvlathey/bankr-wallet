@@ -136,6 +136,33 @@ export async function applyReceiptToHistory(
       completedAt: Date.now(),
       gasData,
     });
+
+    // Post-confirm asset-changes extraction — decode ERC-20 Transfer logs
+    // involving the sender + compute native value flow, store onto the tx
+    // entry so the activity modal can render "Token Changes". Fire-and-
+    // forget; failure must not block the notification path or the bridge
+    // status handoff below.
+    void (async () => {
+      try {
+        const rpcUrl = options.rpcUrl ?? (await getRpcUrl(chainId));
+        if (!rpcUrl) return;
+        const tx = await getTxById(txId);
+        const sender = tx?.tx?.from;
+        if (!sender) return;
+        const { extractAndStoreAssetChanges } = await import(
+          "./assetChangesExtractor"
+        );
+        await extractAndStoreAssetChanges({
+          txId,
+          chainId,
+          userAddress: sender,
+          receipt,
+          rpcUrl,
+        });
+      } catch (err) {
+        console.warn("[receipt] asset-changes extraction failed", err);
+      }
+    })();
   } else {
     await updateTxInHistory(txId, {
       status: "failed",

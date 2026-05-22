@@ -83,6 +83,9 @@ interface SwapConfirmationProps {
     destinationChainName: string;
     routeName?: string;
     estimatedTime?: number;
+    /** Source chain native USD price — when provided, the Bridge Fee row
+     *  appends a dollar equivalent so users can size the protocol cost. */
+    sourceNativePriceUsd?: number;
   };
 }
 
@@ -178,6 +181,53 @@ function SwapConfirmation({
         label: `Batched (${transactions.length} calls)`,
       }
     : undefined;
+
+  // Bridge fee = msg.value attached to the source tx(s). For LayerZero /
+  // Stargate routes this funds destination-chain message delivery and is
+  // paid in the source chain's native token (Bungee returns it inside
+  // `txData.value`). When the user is bridging native ETH itself, the
+  // value also includes the input amount — subtract it to isolate the
+  // protocol fee so the row reflects only the cost of bridging.
+  const bridgeFeeDisplay = (() => {
+    if (!isBridge) return null;
+    let totalValueWei = 0n;
+    for (const entry of transactions) {
+      const raw = entry.tx.value;
+      if (!raw) continue;
+      try {
+        totalValueWei += BigInt(raw);
+      } catch {
+        // skip malformed hex
+      }
+    }
+    if (totalValueWei === 0n) return null;
+
+    let feeWei = totalValueWei;
+    if (sellToken.contractAddress === "native") {
+      try {
+        const decimals = 18;
+        const [whole, frac = ""] = sellAmount.split(".");
+        const fracPadded = (frac + "0".repeat(decimals)).slice(0, decimals);
+        const sellWei = BigInt(whole || "0") * 10n ** BigInt(decimals) + BigInt(fracPadded || "0");
+        feeWei = totalValueWei > sellWei ? totalValueWei - sellWei : 0n;
+      } catch {
+        // fall back to raw total
+      }
+    }
+    if (feeWei === 0n) return null;
+
+    const nativeSymbol = config.nativeCurrency?.symbol ?? "ETH";
+    const nativeAmount = Number(feeWei) / 1e18;
+    const trimmed = nativeAmount.toFixed(6).replace(/\.?0+$/, "");
+    const amountLabel = `${trimmed} ${nativeSymbol}`;
+    const usdPrice = bridgeMeta?.sourceNativePriceUsd;
+    let usdLabel: string | null = null;
+    if (usdPrice && usdPrice > 0) {
+      const usd = nativeAmount * usdPrice;
+      if (usd > 0) usdLabel = usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`;
+    }
+    return { amountLabel, usdLabel };
+  })();
 
   return (
     <Box
@@ -449,6 +499,39 @@ function SwapConfirmation({
               </HStack>
             </HStack>
           )}
+
+          {/* Bridge fee row — surfaces the msg.value the source tx attaches
+              (LayerZero / Stargate destination-chain delivery cost). Shown
+              outside the expandable per-call section so users see the cost
+              before confirming. */}
+          {isBridge && bridgeFeeDisplay && (
+            <HStack
+              px={3}
+              py={2}
+              justify="space-between"
+              borderTop="1px solid"
+              borderColor="border.subtle"
+            >
+              <Text
+                fontSize="xs"
+                color="text.secondary"
+                fontWeight="700"
+                textTransform="uppercase"
+              >
+                Bridge Fee
+              </Text>
+              <VStack spacing={0} align="flex-end">
+                <Text fontSize="xs" fontWeight="700" color="text.primary">
+                  {bridgeFeeDisplay.amountLabel}
+                </Text>
+                {bridgeFeeDisplay.usdLabel && (
+                  <Text fontSize="2xs" color="text.tertiary" fontWeight="600">
+                    {bridgeFeeDisplay.usdLabel}
+                  </Text>
+                )}
+              </VStack>
+            </HStack>
+          )}
         </Box>
 
         {/* Transaction list — expandable cards with calldata */}
@@ -650,7 +733,7 @@ function SwapConfirmation({
             >
               <Spinner size="sm" color="accentFg.secondary" />
               <Text fontSize="sm" color="accentFg.secondary" fontWeight="700" textTransform="uppercase">
-                Submitting swap...
+                {isBridge ? "Bridging..." : "Submitting swap..."}
               </Text>
             </HStack>
           ) : (

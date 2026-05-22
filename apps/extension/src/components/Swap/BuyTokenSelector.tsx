@@ -491,11 +491,16 @@ export default function BuyTokenSelector({
                             <TokenSymbolFallback
                               symbol={h.symbol}
                               size="20px"
+                              nativeChainId={h.contractAddress === "native" ? h.chainId : undefined}
                             />
                           }
                         />
                       ) : (
-                        <TokenSymbolFallback symbol={h.symbol} size="20px" />
+                        <TokenSymbolFallback
+                          symbol={h.symbol}
+                          size="20px"
+                          nativeChainId={h.contractAddress === "native" ? h.chainId : undefined}
+                        />
                       )}
                       <Box flex={1} minW={0}>
                         <Text

@@ -98,6 +98,20 @@ function TxStatusList({
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
   }, []);
 
+  // Keep the detail-modal's tx prop in sync with the latest history entry —
+  // otherwise opening the modal during a bridge "pending dest" state would
+  // freeze on that snapshot and miss the destination tx hash + asset changes
+  // landing later. We diff by reference so an unchanged entry doesn't churn
+  // the modal.
+  useEffect(() => {
+    setSelectedTx((current) => {
+      if (!current) return current;
+      const fresh = allHistory.find((tx) => tx.id === current.id);
+      if (!fresh || fresh === current) return current;
+      return fresh;
+    });
+  }, [allHistory]);
+
   // Poll for pending tx receipts while UI is open
   const allHistoryRef = useRef(allHistory);
   allHistoryRef.current = allHistory;
@@ -1027,19 +1041,40 @@ function TxStatusItem({
                 )}
               </Box>
               <VStack spacing={1} flexShrink={0} align="flex-end">
-                <HStack spacing={1}>
-                  <Text
-                    fontSize="2xs"
-                    color="text.tertiary"
-                    fontWeight="500"
-                    flexShrink={0}
-                  >
-                    {formatTimeAgo(tx.createdAt)}
-                  </Text>
-                  <Text fontSize="2xs" color="text.tertiary" fontWeight="500">|</Text>
-                  {statusElement}
-                  {!moveLinksBelow && linkIcons}
-                </HStack>
+                {isBridgePendingDest ? (
+                  <>
+                    {/* Bridge pending status spans two lines on its own; stack
+                        the timestamp above so it lines up with the top row
+                        instead of floating vertically centered against the
+                        two-line label. */}
+                    <HStack spacing={1}>
+                      <Text
+                        fontSize="2xs"
+                        color="text.tertiary"
+                        fontWeight="500"
+                        flexShrink={0}
+                      >
+                        {formatTimeAgo(tx.createdAt)}
+                      </Text>
+                      {!moveLinksBelow && linkIcons}
+                    </HStack>
+                    {statusElement}
+                  </>
+                ) : (
+                  <HStack spacing={1}>
+                    <Text
+                      fontSize="2xs"
+                      color="text.tertiary"
+                      fontWeight="500"
+                      flexShrink={0}
+                    >
+                      {formatTimeAgo(tx.createdAt)}
+                    </Text>
+                    <Text fontSize="2xs" color="text.tertiary" fontWeight="500">|</Text>
+                    {statusElement}
+                    {!moveLinksBelow && linkIcons}
+                  </HStack>
+                )}
                 {moveLinksBelow && (
                   <HStack spacing={2}>{linkIcons}</HStack>
                 )}

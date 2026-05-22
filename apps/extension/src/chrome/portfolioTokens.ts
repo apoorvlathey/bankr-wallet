@@ -1,5 +1,6 @@
 import { fetchPortfolio, type DefiPosition, type PortfolioToken } from "@/chrome/portfolioApi";
 import { getCustomTokens } from "@/chrome/customTokenStorage";
+import { getRecentReceivedTokens } from "@/chrome/recentlyReceivedTokens";
 import { getStoredNetworksInfo, getVisibleChains, getResolvedChainById } from "@/lib/chains";
 import { getChainEnvironmentLabel } from "@/lib/chainIcons";
 import type { NetworksInfo } from "@/types";
@@ -104,14 +105,16 @@ async function resolveErc20PricesBatch(
 export async function loadPortfolioTokenCatalog(
   address: string,
 ): Promise<PortfolioTokenCatalog> {
-  const [portfolioResult, customTokens, networksInfo] = await Promise.all([
-    fetchPortfolio(address).then(
-      (data) => ({ ok: true as const, data }),
-      (err) => ({ ok: false as const, err }),
-    ),
-    getCustomTokens(),
-    getStoredNetworksInfo(),
-  ]);
+  const [portfolioResult, customTokens, networksInfo, recentReceived] =
+    await Promise.all([
+      fetchPortfolio(address).then(
+        (data) => ({ ok: true as const, data }),
+        (err) => ({ ok: false as const, err }),
+      ),
+      getCustomTokens(),
+      getStoredNetworksInfo(),
+      getRecentReceivedTokens(),
+    ]);
 
   const apiUnavailable = !portfolioResult.ok;
   if (apiUnavailable) {
@@ -140,7 +143,35 @@ export async function loadPortfolioTokenCatalog(
       logoUrl: undefined,
     }));
 
-  const mergedTokens = [...data.tokens, ...customAsPortfolio];
+  // Tokens the user just received in a recently-confirmed tx but the
+  // upstream portfolio API hasn't re-indexed yet. Stubbed with whatever
+  // metadata the extractor cached at receipt time — the on-chain balance
+  // pass writes the live balance and Coingecko fills in price + logo on
+  // the next render. Auto-expires after 5 min (see `recentlyReceivedTokens.ts`).
+  const customKeys = new Set(
+    customAsPortfolio.map(
+      (ct) => `${ct.chainId}-${ct.contractAddress.toLowerCase()}`,
+    ),
+  );
+  const recentAsPortfolio: PortfolioToken[] = recentReceived
+    .filter((rt) => {
+      const key = `${rt.chainId}-${rt.contractAddress.toLowerCase()}`;
+      return !apiTokenKeys.has(key) && !customKeys.has(key);
+    })
+    .map((rt) => ({
+      symbol: rt.symbol ?? "",
+      name: rt.name ?? rt.symbol ?? "",
+      contractAddress: rt.contractAddress,
+      chainId: rt.chainId,
+      decimals: rt.decimals ?? 18,
+      balance: "0",
+      balanceFormatted: "0",
+      priceUsd: 0,
+      valueUsd: 0,
+      logoUrl: rt.logoUrl,
+    }));
+
+  const mergedTokens = [...data.tokens, ...customAsPortfolio, ...recentAsPortfolio];
   const existingNativeChainIds = new Set(
     mergedTokens
       .filter(

@@ -916,6 +916,22 @@ If the sync call throws or times out (5s), the broadcaster transparently falls t
 
 The same path covers ERC-5792 batched txs because the ERC-7821 wrapper is itself a single signed tx. Bankr-API accounts are unaffected (MegaETH is `isBankrSupported: false`).
 
+### Post-confirm Asset Changes Extraction
+
+After a tx confirms successfully, `applyReceiptToHistory` (in `txReceiptPoller.ts`) fires-and-forgets `extractAndStoreAssetChanges` from `chrome/assetChangesExtractor.ts`. The extractor:
+
+1. Decodes the receipt's `logs[]` for ERC-20 `Transfer(from, to, amount)` events (topic0 = `0xddf252ad…`, exactly 3 topics — ERC-721 logs have 4 and are skipped naturally) where the lowercased `from` OR `to` matches the sender. Internal pool routing is filtered out.
+2. Resolves `symbol/decimals/logoUrl` per unique token via the existing `fetchTokenInfo` + `getCachedTokenLogo` (both cached in `chrome.storage.local`).
+3. Computes the sender's pure native-value flow as `balance(blockNumber) - balance(blockNumber-1) + gasCost`, where `gasCost = gasUsed * effectiveGasPrice + (l1Fee || 0)`. The historical-balance call retries up to 3× with 2s backoff to absorb load-balanced RPCs that briefly don't yet know about `blockNumber-1`; if it never resolves, `nativeDelta` is left undefined and the modal silently hides the row.
+4. Writes the resulting `AssetChangeRecord` onto the existing tx-history entry via `updateTxInHistory({ assetChanges })` — purely additive, no migration required.
+5. Seeds `recentlyReceivedTokens` (5-minute TTL cache) for every inbound ERC-20 so `loadPortfolioTokenCatalog` (`chrome/portfolioTokens.ts`) can inject a synthetic stub into the portfolio before the upstream portfolio API has re-indexed. The on-chain balance multicall in `TokenHoldings` overwrites balance with the live value; Coingecko backfills price/logo.
+
+**Bridge destination leg.** When `bridgeStatusPoller.checkAndApplyStatus` sees a destination `txHash` arrive for the first time (`!priorEntry?.bridge?.destinationTxHash`), it fires `extractAndStoreDestinationAssetChanges` against the destination chain's RPC (resolved via `getRpcUrl`). Same decoder, `payerForGas: false` (the receiver didn't pay gas on the dest chain), written to `destAssetChanges`. The modal renders a second `AssetChangesCard` titled "On {destChainName}".
+
+**Refresh wiring.** `TokenHoldings.tsx` listens for `chrome.runtime.onMessage` events of type `txHistoryUpdated`. When the updated entry's `from` or `bridge.receiverAddress` matches the displayed wallet AND it carries `assetChanges` or `destAssetChanges`, the portfolio is force-reloaded so the freshly cached `recentlyReceivedTokens` are merged immediately.
+
+**Failure surface.** Both extraction paths are wrapped in try/catch + `console.warn`. A failing RPC, malformed receipt, or transient storage error must never block the confirmation notification (source path) or the bridge state machine (destination path).
+
 ### Per-chain gas buffer
 
 All chains add a 20% buffer on top of `eth_estimateGas` to absorb state changes between estimate and inclusion. The buffer can be overridden per-chain via `gasBufferPct` on the registry entry (default 20). No chain currently overrides it.

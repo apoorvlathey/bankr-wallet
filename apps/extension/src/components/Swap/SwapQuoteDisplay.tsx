@@ -152,7 +152,7 @@ export default function SwapQuoteDisplay({
                     color="chart.numeric"
                     letterSpacing="0.5px"
                   >
-                    ✨ sWCHAN Staker discount
+                    ✨ sWCHAN Staker discount applied
                   </Text>
                 )}
               </VStack>

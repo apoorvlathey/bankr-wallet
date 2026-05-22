@@ -232,6 +232,29 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
     loadPortfolio(true);
   }, [address, chainReloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Hot-refresh portfolio whenever a confirmed tx writes asset changes —
+  // the receipt poller fires `txHistoryUpdated` with the updated entry, and
+  // any inbound ERC-20 has already been added to `recentlyReceivedTokens`,
+  // so a forced reload picks it up before the upstream portfolio API
+  // catches up.
+  useEffect(() => {
+    if (!address) return;
+    const listener = (message: any) => {
+      if (message?.type !== "txHistoryUpdated") return;
+      const updated = message.updatedTx;
+      if (!updated) return;
+      if (
+        updated.tx?.from?.toLowerCase?.() !== address.toLowerCase() &&
+        updated.bridge?.receiverAddress?.toLowerCase?.() !== address.toLowerCase()
+      )
+        return;
+      if (!updated.assetChanges && !updated.destAssetChanges) return;
+      loadPortfolio(true);
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
+  }, [address, loadPortfolio]);
+
   // Set of "chainId-address" keys for dedup in AddTokenModal
   const tokenKeys = useMemo(
     () => new Set(tokens.map((t) => `${t.chainId}-${t.contractAddress.toLowerCase()}`)),

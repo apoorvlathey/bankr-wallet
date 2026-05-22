@@ -101,7 +101,9 @@ export default function BridgeQuoteDisplay({
   // Bridge protocol fee = msg.value on the source tx. For LayerZero / Stargate
   // routes this funds destination-chain message delivery and is paid in the
   // source chain's native token. Bungee returns it under `txData.value` (in
-  // wei); some quotes omit it until build-tx, so guard against 0/missing.
+  // wei); some quotes omit it until build-tx, in which case the row stays
+  // hidden here — the confirm screen always surfaces it from the firm
+  // build-tx response.
   const protocolFeeWei = (() => {
     const raw = route.txData?.value;
     if (!raw) return 0n;
@@ -200,7 +202,7 @@ export default function BridgeQuoteDisplay({
                     color="chart.numeric"
                     letterSpacing="0.5px"
                   >
-                    ✨ sWCHAN Staker discount
+                    ✨ sWCHAN Staker discount applied
                   </Text>
                 )}
               </VStack>

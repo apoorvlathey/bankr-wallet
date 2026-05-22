@@ -1,4 +1,5 @@
 import { Box, Text } from "@chakra-ui/react";
+import ChainIcon from "@/components/ChainIcon";
 
 interface TokenSymbolFallbackProps {
   symbol: string;
@@ -6,6 +7,15 @@ interface TokenSymbolFallbackProps {
   size: string;
   /** Override font size; defaults scale with the box */
   fontSize?: string;
+  /**
+   * When set, the placeholder upgrades to the chain's logo via `<ChainIcon>`.
+   * Pass this for native-token rows where the upstream portfolio API didn't
+   * supply a `logoUrl` (e.g. MON on Monad) so users see "this is the chain's
+   * native asset" instead of an empty initials circle.
+   */
+  nativeChainId?: number;
+  /** Chain name used by `<ChainIcon>` for alt text + custom-chain initials. */
+  nativeChainName?: string;
 }
 
 /**
@@ -22,7 +32,21 @@ export function TokenSymbolFallback({
   symbol,
   size,
   fontSize,
+  nativeChainId,
+  nativeChainName,
 }: TokenSymbolFallbackProps) {
+  if (nativeChainId !== undefined) {
+    return (
+      <Box boxSize={size} minW={size} flexShrink={0}>
+        <ChainIcon
+          chainId={nativeChainId}
+          chainName={nativeChainName}
+          size={size}
+          withChip
+        />
+      </Box>
+    );
+  }
   const initials = (symbol || "?").slice(0, 3).toUpperCase();
   // Reasonable default font size for the common dropdown sizes (16/20/32px).
   const defaultFont =

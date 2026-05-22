@@ -785,10 +785,14 @@ function SwapView({
     const addr = buyTokenAddress.trim();
     const addrLower = addr.toLowerCase();
     const isNative = addrLower === NATIVE_TOKEN_ADDRESS.toLowerCase();
-    const buyInHoldings = holdings.find(
+    // The buy token lives on `buyChainId`, NOT the (sell) `chainId` — search
+    // the cross-chain catalog so bridge flips can still locate a held buy
+    // token instead of falling through to a zero-balance stub.
+    const buyInHoldings = holdingsAllChains.find(
       (t) =>
-        t.contractAddress.toLowerCase() === addrLower ||
-        (isNative && t.contractAddress === "native"),
+        t.chainId === buyChainId &&
+        (t.contractAddress.toLowerCase() === addrLower ||
+          (isNative && t.contractAddress === "native")),
     );
 
     // If the buy token isn't in the user's holdings, build a stub PortfolioToken
@@ -799,7 +803,7 @@ function SwapView({
         symbol: buyTokenInfo.symbol,
         name: buyTokenInfo.name,
         contractAddress: isNative ? "native" : addr,
-        chainId,
+        chainId: buyChainId,
         decimals: buyTokenInfo.decimals,
         balance: "0",
         balanceFormatted: "0",
@@ -809,6 +813,12 @@ function SwapView({
       };
 
     const prevSellToken = sellToken;
+    const prevSellChainId = sellChainId;
+    const prevBuyChainId = buyChainId;
+    // Flip both sides of the chain pair so a bridge stays a bridge (and a
+    // same-chain swap stays same-chain) after the toggle.
+    setSellChainId(prevBuyChainId);
+    setBuyChainId(prevSellChainId);
     setSellToken(nextSellToken);
     if (prevSellToken) {
       // Skip the buyTokenAddress useEffect that would otherwise refetch and
@@ -829,6 +839,7 @@ function SwapView({
     setSellAmount("");
     setSliderValue(0);
     setQuote(null);
+    setBridgeQuote(null);
   };
 
   // -----------------------------------------------------------------------
@@ -1867,6 +1878,11 @@ function SwapView({
                 destinationChainName: getChainConfig(buyChainId).name,
                 routeName: bridgeRoute?.routeDetails?.name,
                 estimatedTime: bridgeRoute?.estimatedTime,
+                sourceNativePriceUsd: holdingsAllChains.find(
+                  (h) =>
+                    h.chainId === sellChainId &&
+                    h.contractAddress === "native",
+                )?.priceUsd,
               }
             : undefined
         }

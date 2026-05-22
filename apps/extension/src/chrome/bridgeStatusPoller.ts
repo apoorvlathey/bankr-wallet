@@ -101,6 +101,13 @@ async function checkAndApplyStatus(sourceTxHash: string): Promise<boolean> {
   const requestHash = statusEntry.hash;
   const routeName = statusEntry.routeDetails?.name;
 
+  // Detect first-time arrival of the destination tx-hash so we can kick
+  // off the destination-leg asset-changes extraction below (fire once per
+  // bridge — re-polls return the same hash and we'd otherwise re-decode).
+  const priorEntry = await getTxById(entry.txId);
+  const destTxHashNewlyArrived =
+    !!destTxHash && !priorEntry?.bridge?.destinationTxHash;
+
   // Always reflect the latest status into the tx-history entry so the
   // UI can render "Bridging…", "Extracted on source", etc. without
   // waiting for terminal state.
@@ -118,6 +125,27 @@ async function checkAndApplyStatus(sourceTxHash: string): Promise<boolean> {
       refundTxHash,
     },
   });
+
+  // Once the destination tx lands, fetch its receipt off the dest-chain RPC
+  // and extract the receiver's ERC-20 inflows + native delta. Fire-and-
+  // forget so a flaky destination RPC can't stall the bridge state machine.
+  if (destTxHashNewlyArrived && destTxHash) {
+    void (async () => {
+      try {
+        const { extractAndStoreDestinationAssetChanges } = await import(
+          "./assetChangesExtractor"
+        );
+        await extractAndStoreDestinationAssetChanges({
+          txId: entry.txId,
+          destChainId: entry.destinationChainId,
+          destTxHash,
+          receiverAddress: entry.receiverAddress,
+        });
+      } catch (err) {
+        console.warn("[bridge] destination asset-changes failed", err);
+      }
+    })();
+  }
 
   await updatePendingBridge(sourceTxHash, {
     requestHash: requestHash ?? entry.requestHash,

@@ -28,7 +28,12 @@ import {
   ChevronUpIcon,
   RepeatIcon,
 } from "@chakra-ui/icons";
-import { CompletedTransaction, GasData, type ForceInclusionMeta } from "@/chrome/txHistoryStorage";
+import {
+  CompletedTransaction,
+  GasData,
+  type AssetChangeRecord,
+  type ForceInclusionMeta,
+} from "@/chrome/txHistoryStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import { OP_STACK_CHAIN_IDS } from "@/constants/networks";
 import { useNetworks } from "@/contexts/NetworksContext";
@@ -63,6 +68,93 @@ function formatValue(value: string | undefined, symbol = "ETH"): string {
   return `${eth.toFixed(6)} ${symbol}`;
 }
 
+/**
+ * Format a positive wei amount to a token-friendly decimal string.
+ * `decimals` defaults to 18 (native). Returns null when the amount rounds
+ * to zero at our display precision — callers use this to hide rows whose
+ * display would otherwise read "0".
+ */
+function formatTokenAmountWei(amountWei: string, decimals: number): string | null {
+  let bi: bigint;
+  try {
+    bi = BigInt(amountWei);
+  } catch {
+    return null;
+  }
+  if (bi < 0n) bi = -bi;
+  if (bi === 0n) return null;
+  const divisor = 10n ** BigInt(decimals);
+  const whole = bi / divisor;
+  const frac = bi % divisor;
+  let fracStr = frac.toString().padStart(decimals, "0").slice(0, 6);
+  fracStr = fracStr.replace(/0+$/, "");
+  const numStr = fracStr.length > 0 ? `${whole}.${fracStr}` : `${whole}`;
+  // Anything that rounded to a literal "0" string at our precision is
+  // sub-display dust — suppress the row entirely.
+  if (numStr === "0") return null;
+  return numStr;
+}
+
+/**
+ * Sign-prefixed display ("+1.23" / "−1.23"). Returns null when the rounded
+ * magnitude would display as zero.
+ */
+function formatSignedTokenAmount(amountWei: string, decimals: number, isNegative: boolean): string | null {
+  const mag = formatTokenAmountWei(amountWei, decimals);
+  if (mag === null) return null;
+  return `${isNegative ? "−" : "+"}${mag}`;
+}
+
+/**
+ * Pick the swap-relevant transfer for a wallet-initiated swap/bridge: prefer
+ * an ERC-20 row whose symbol matches `symbolHint` (case-insensitive); fall
+ * back to the first transfer in the given direction; finally fall back to
+ * the native delta if `nativeFallbackIsNative` is true (sell/buy is native).
+ */
+function pickSwapAmount(
+  record: AssetChangeRecord | undefined,
+  direction: "in" | "out",
+  symbolHint: string | undefined,
+  nativeFallbackIsNative: boolean,
+  nativeDecimals: number,
+): {
+  amountLabel: string;
+  amountWei: string;
+  decimals: number;
+  /** Token contract address (lowercase) or "native". */
+  source: string | "native";
+} | null {
+  if (!record) return null;
+  const hint = symbolHint?.toLowerCase();
+  const directionMatch = record.erc20Transfers.filter((t) => t.direction === direction);
+  const symMatch = hint
+    ? directionMatch.find((t) => t.symbol?.toLowerCase() === hint)
+    : undefined;
+  const picked = symMatch ?? directionMatch[0];
+  if (picked) {
+    const decimals = picked.decimals ?? 18;
+    const label = formatTokenAmountWei(picked.amountWei, decimals);
+    if (label !== null)
+      return {
+        amountLabel: label,
+        amountWei: picked.amountWei,
+        decimals,
+        source: picked.token,
+      };
+  }
+  if (nativeFallbackIsNative && record.nativeDelta) {
+    const label = formatTokenAmountWei(record.nativeDelta, nativeDecimals);
+    if (label !== null)
+      return {
+        amountLabel: label,
+        amountWei: record.nativeDelta,
+        decimals: nativeDecimals,
+        source: "native",
+      };
+  }
+  return null;
+}
+
 function formatLocalTimestamp(timestamp: number): string {
   return new Date(timestamp).toLocaleString(undefined, {
     year: "numeric",
@@ -84,6 +176,230 @@ function GasRow({ label, value }: { label: string; value: string }) {
         {value}
       </Text>
     </HStack>
+  );
+}
+
+/**
+ * Token logo that falls back to a tinted placeholder showing the first letter
+ * of the symbol — so an unknown / not-yet-cached logo still reads visually
+ * instead of an empty circle. Symbol-less tokens render a plain circle.
+ */
+function TokenLogoOrPlaceholder({
+  logoUrl,
+  symbol,
+  alt,
+  size = "16px",
+}: {
+  logoUrl?: string | null;
+  symbol?: string;
+  alt: string;
+  size?: string;
+}) {
+  const initial = symbol ? symbol.trim().charAt(0).toUpperCase() : "";
+  const placeholder = (
+    <Box
+      boxSize={size}
+      borderRadius="full"
+      bg="surface.raised"
+      border="1px solid"
+      borderColor="border.default"
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      flexShrink={0}
+    >
+      {initial && (
+        <Text
+          fontSize="9px"
+          fontWeight="800"
+          color="text.secondary"
+          lineHeight="1"
+        >
+          {initial}
+        </Text>
+      )}
+    </Box>
+  );
+  if (!logoUrl) return placeholder;
+  return (
+    <Image
+      src={logoUrl}
+      alt={alt}
+      boxSize={size}
+      borderRadius="full"
+      fallback={placeholder}
+    />
+  );
+}
+
+/**
+ * Renders the "Token Changes" card for one leg of a tx (source-chain by
+ * default; bridges also render a second card for the destination leg with
+ * `label="On <destChain>"`). Native-row hidden when the extractor couldn't
+ * resolve `balance(N-1)`; per-token rows render even without symbol/decimals
+ * (the placeholder paints with a short address).
+ */
+function AssetChangesCard({
+  record,
+  chainId,
+  chainName,
+  nativeSym,
+  label,
+  formatUsd,
+}: {
+  record: AssetChangeRecord;
+  chainId: number;
+  chainName: string;
+  nativeSym: string;
+  label: string;
+  /** Resolves a (chainId, address-or-"native") amount to its USD subtitle. */
+  formatUsd: (amountWei: string, decimals: number, chainId: number, addressOrNative: string | "native") => string | null;
+}) {
+  const explorer = getChainConfig(chainId).explorer;
+  const nativeRow = (() => {
+    if (!record.nativeDelta) return null;
+    let bi: bigint;
+    try {
+      bi = BigInt(record.nativeDelta);
+    } catch {
+      return null;
+    }
+    if (bi === 0n) return null;
+    const isNegative = bi < 0n;
+    const formatted = formatSignedTokenAmount(record.nativeDelta, 18, isNegative);
+    if (formatted === null) return null; // rounds to zero — sub-display dust
+    const usd = formatUsd(record.nativeDelta, 18, chainId, "native");
+    return (
+      <HStack justify="space-between" align="flex-start">
+        <HStack spacing={2}>
+          <ChainIcon chainId={chainId} chainName={chainName} size="14px" withChip />
+          <Text fontSize="xs" fontWeight="700" color="text.secondary">
+            {nativeSym}
+          </Text>
+        </HStack>
+        <VStack spacing={0} align="flex-end">
+          <Text
+            fontSize="xs"
+            fontWeight="800"
+            color={isNegative ? "chart.negative" : "chart.positive"}
+            fontFamily="mono"
+          >
+            {formatted} {nativeSym}
+          </Text>
+          {usd && (
+            <Text fontSize="2xs" color="text.tertiary" fontWeight="600">
+              {usd}
+            </Text>
+          )}
+        </VStack>
+      </HStack>
+    );
+  })();
+
+  const renderableErc20Transfers = record.erc20Transfers
+    .map((t) => {
+      const formatted = formatSignedTokenAmount(
+        t.amountWei,
+        t.decimals ?? 18,
+        t.direction === "out",
+      );
+      return formatted ? { t, formatted } : null;
+    })
+    .filter((x): x is { t: typeof record.erc20Transfers[number]; formatted: string } => x !== null);
+
+  if (!nativeRow && renderableErc20Transfers.length === 0) return null;
+
+  return (
+    <Box
+      bg="surface.sunken"
+      border="2px solid"
+      borderColor="border.default"
+      borderRadius="lg"
+      p={2.5}
+    >
+      <Text
+        fontSize="2xs"
+        fontWeight="800"
+        textTransform="uppercase"
+        color="text.tertiary"
+        letterSpacing="wide"
+        mb={2}
+      >
+        {label}
+      </Text>
+      <VStack spacing={1.5} align="stretch">
+        {nativeRow}
+        {renderableErc20Transfers.map(({ t, formatted }, i) => {
+          const isNegative = t.direction === "out";
+          const sym = t.symbol || `${t.token.slice(0, 6)}…${t.token.slice(-4)}`;
+          const cpShort = `${t.counterparty.slice(0, 6)}…${t.counterparty.slice(-4)}`;
+          const cpLink = explorer ? `${explorer}/address/${t.counterparty}` : null;
+          return (
+            <HStack
+              key={`${t.token}-${i}`}
+              justify="space-between"
+              align="flex-start"
+              spacing={2}
+            >
+              <HStack spacing={2} minW={0} flex="1">
+                <TokenLogoOrPlaceholder logoUrl={t.logoUrl} symbol={t.symbol} alt={sym} />
+                <VStack spacing={0} align="flex-start" minW={0}>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="800"
+                    color="text.primary"
+                    isTruncated
+                    maxW="120px"
+                  >
+                    {sym}
+                  </Text>
+                  {cpLink ? (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      fontWeight="600"
+                      fontSize="2xs"
+                      fontFamily="mono"
+                      color="text.tertiary"
+                      onClick={() => chrome.tabs.create({ url: cpLink })}
+                      rightIcon={<ExternalLinkIcon boxSize={2.5} />}
+                      _hover={{ bg: "bg.muted", color: "text.secondary" }}
+                      px={1}
+                      h="14px"
+                      minH="14px"
+                    >
+                      {isNegative ? "to" : "from"} {cpShort}
+                    </Button>
+                  ) : (
+                    <Text fontSize="2xs" fontFamily="mono" color="text.tertiary">
+                      {isNegative ? "to" : "from"} {cpShort}
+                    </Text>
+                  )}
+                </VStack>
+              </HStack>
+              <VStack spacing={0} align="flex-end">
+                <Text
+                  fontSize="xs"
+                  fontWeight="800"
+                  color={isNegative ? "chart.negative" : "chart.positive"}
+                  fontFamily="mono"
+                >
+                  {formatted} {t.symbol ?? ""}
+                </Text>
+                {(() => {
+                  const usd = formatUsd(t.amountWei, t.decimals ?? 18, chainId, t.token);
+                  return usd ? (
+                    <Text fontSize="2xs" color="text.tertiary" fontWeight="600">
+                      {usd}
+                    </Text>
+                  ) : null;
+                })()}
+              </VStack>
+            </HStack>
+          );
+        })}
+      </VStack>
+    </Box>
   );
 }
 
@@ -260,6 +576,105 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
       },
     );
   }, [isOpen, tx.chainId]);
+
+  // USD prices keyed by `${chainId}-${address-lowercase}` for ERC-20s and
+  // `${chainId}-native` for native deltas. Populated lazily from assetChanges
+  // + destAssetChanges + bridge dest chain native so the Token Changes rows
+  // and Source / Destination cards can show a USD subtitle. Uses the same
+  // backend chain as the rest of the wallet — proxy `fetchTokenPrice` (which
+  // already short-circuits via portfolio API + CoinGecko fallback) for ERC-20s
+  // and `fetchNativePrice` for native; results are cached at the background
+  // layer so re-opens are free.
+  const [tokenPricesUsd, setTokenPricesUsd] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!isOpen) return;
+    const requests: Array<{ key: string; chainId: number; address: string | "native" }> = [];
+    const seen = new Set<string>();
+    const addReq = (chainId: number, address: string | "native") => {
+      const addrLower = address === "native" ? "native" : address.toLowerCase();
+      const key = `${chainId}-${addrLower}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      requests.push({ key, chainId, address: addrLower });
+    };
+    const collect = (record: AssetChangeRecord | undefined, chainId: number) => {
+      if (!record) return;
+      if (record.nativeDelta) addReq(chainId, "native");
+      for (const t of record.erc20Transfers) addReq(chainId, t.token);
+    };
+    collect(tx.assetChanges, tx.chainId);
+    if (tx.bridge && tx.destAssetChanges) {
+      collect(tx.destAssetChanges, tx.bridge.destinationChainId);
+    }
+    if (requests.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      requests.map(
+        (req) =>
+          new Promise<{ key: string; priceUsd: number }>((resolve) => {
+            const msg =
+              req.address === "native"
+                ? { type: "fetchNativePrice", chainId: req.chainId }
+                : { type: "fetchTokenPrice", chainId: req.chainId, address: req.address };
+            chrome.runtime.sendMessage(msg, (res) => {
+              const price = res?.success ? Number(res.priceUsd ?? 0) : 0;
+              resolve({ key: req.key, priceUsd: price > 0 ? price : 0 });
+            });
+          }),
+      ),
+    ).then((results) => {
+      if (cancelled) return;
+      setTokenPricesUsd((prev) => {
+        const next = { ...prev };
+        for (const { key, priceUsd } of results) {
+          if (priceUsd > 0) next[key] = priceUsd;
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isOpen,
+    tx.chainId,
+    tx.assetChanges,
+    tx.destAssetChanges,
+    tx.bridge?.destinationChainId,
+  ]);
+
+  /**
+   * Format a (possibly signed) base-units token amount as `$N.NN` using the
+   * price map. Returns null when the price is unknown or the USD result
+   * rounds to zero.
+   */
+  const formatTokenAmountUsd = useCallback(
+    (
+      amountWei: string,
+      decimals: number,
+      chainId: number,
+      addressOrNative: string | "native",
+    ): string | null => {
+      const key = `${chainId}-${addressOrNative === "native" ? "native" : addressOrNative.toLowerCase()}`;
+      const price = tokenPricesUsd[key];
+      if (!price || price <= 0) return null;
+      let bi: bigint;
+      try {
+        bi = BigInt(amountWei);
+      } catch {
+        return null;
+      }
+      if (bi < 0n) bi = -bi;
+      if (bi === 0n) return null;
+      const divisor = 10n ** BigInt(decimals);
+      const whole = Number(bi / divisor);
+      const frac = Number(bi % divisor) / Number(divisor);
+      const usd = (whole + frac) * price;
+      if (usd <= 0) return null;
+      return usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`;
+    },
+    [tokenPricesUsd],
+  );
 
   // Format a wei-amount as `$N.NN`, returning null when the price is missing
   // or the wei amount is zero. Used by both the Value and Transaction Fee
@@ -578,12 +993,22 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 counterpart. */}
             {tx.bridge && tx.swapMeta && (() => {
               // Source block: mirror the destination card's visual hierarchy
-              // (chain icon + 2-line label, "You Send" token row) so the
+              // (chain icon + 2-line label, "You Sent" token row) so the
               // user sees the bridge route at a glance — source chain +
               // sell token at top, destination chain + buy token below.
               const sellLogo = tx.swapMeta.sellTokenLogo;
               const sellSymbol = tx.swapMeta.sellTokenSymbol;
               const srcChainName = resolvedChain?.name ?? tx.chainName;
+              // Match the actual on-chain outflow to the swap's sell token
+              // so the row reads "1.234 USDC" once assetChanges lands. Native
+              // sells fall back to abs(nativeDelta).
+              const sellAmount = pickSwapAmount(
+                tx.assetChanges,
+                "out",
+                sellSymbol,
+                sellSymbol?.toLowerCase() === nativeSym.toLowerCase(),
+                18,
+              );
               return (
                 <Box
                   bg="surface.sunken"
@@ -621,24 +1046,66 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                         </Text>
                       </VStack>
                     </HStack>
+                    {tx.txHash && explorerBase && (
+                      <IconButton
+                        aria-label="View source tx on explorer"
+                        icon={<ExternalLinkIcon boxSize={3} />}
+                        size="xs"
+                        variant="ghost"
+                        h="20px"
+                        minW="20px"
+                        color="text.tertiary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const hash = tx.txHash!.match(/0x[a-fA-F0-9]{64}/)?.[0];
+                          if (hash) chrome.tabs.create({ url: `${explorerBase}/tx/${hash}` });
+                        }}
+                        _hover={{ bg: "bg.muted", color: "text.primary" }}
+                      />
+                    )}
                   </HStack>
                   {sellSymbol && (
                     <VStack spacing={1.5} align="stretch" fontSize="xs">
-                      <HStack justify="space-between" align="center">
+                      <HStack justify="space-between" align="flex-start">
                         <Text fontWeight="700" color="text.secondary">
-                          You Send
+                          You Sent
                         </Text>
-                        <HStack spacing={1.5}>
-                          {sellLogo && (
-                            <Image
-                              src={sellLogo}
-                              alt={sellSymbol}
-                              boxSize="16px"
-                              borderRadius="full"
-                            />
-                          )}
-                          <Text fontWeight="800">{sellSymbol}</Text>
-                        </HStack>
+                        <VStack spacing={0} align="flex-end">
+                          <HStack spacing={1.5}>
+                            {sellAmount && (
+                              <Text
+                                fontWeight="800"
+                                color="chart.negative"
+                                fontFamily="mono"
+                              >
+                                −{sellAmount.amountLabel}
+                              </Text>
+                            )}
+                            {sellLogo && (
+                              <Image
+                                src={sellLogo}
+                                alt={sellSymbol}
+                                boxSize="16px"
+                                borderRadius="full"
+                              />
+                            )}
+                            <Text fontWeight="800">{sellSymbol}</Text>
+                          </HStack>
+                          {sellAmount &&
+                            (() => {
+                              const usd = formatTokenAmountUsd(
+                                sellAmount.amountWei,
+                                sellAmount.decimals,
+                                tx.chainId,
+                                sellAmount.source,
+                              );
+                              return usd ? (
+                                <Text fontSize="2xs" color="text.tertiary" fontWeight="600">
+                                  {usd}
+                                </Text>
+                              ) : null;
+                            })()}
+                        </VStack>
                       </HStack>
                     </VStack>
                   )}
@@ -647,20 +1114,6 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
             })()}
 
             {tx.bridge && (() => {
-              // Pretty-format Bungee's lowercase-hyphenated route name
-              // ("stargate-v2" → "Stargate V2"). Falls back to the raw
-              // string if it doesn't match our convention.
-              const formatRouteName = (raw: string) =>
-                raw
-                  .split(/[-_]/)
-                  .map((part) =>
-                    part.length === 0
-                      ? part
-                      : /^v\d+$/i.test(part)
-                        ? part.toUpperCase()
-                        : part[0].toUpperCase() + part.slice(1),
-                  )
-                  .join(" ");
               const statusLabels = [
                 "Pending",
                 "Assigned",
@@ -701,9 +1154,6 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 tx.bridge.destinationTxHash && destExplorer
                   ? `${destExplorer}/tx/${tx.bridge.destinationTxHash}`
                   : null;
-              const destShort = tx.bridge.destinationTxHash
-                ? `${tx.bridge.destinationTxHash.slice(0, 10)}…${tx.bridge.destinationTxHash.slice(-6)}`
-                : null;
               const buyLogo = tx.swapMeta?.buyTokenLogo;
               const buySymbol = tx.swapMeta?.buyTokenSymbol;
               return (
@@ -744,79 +1194,105 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                         </Text>
                       </VStack>
                     </HStack>
-                    {statusLabel && (
-                      <Box
-                        bg={statusBg}
-                        color={statusFg}
-                        px={2}
-                        py={0.5}
-                        borderRadius="md"
-                        fontSize="2xs"
-                        fontWeight="800"
-                        textTransform="uppercase"
-                        letterSpacing="wide"
-                      >
-                        {statusLabel}
-                      </Box>
-                    )}
+                    <HStack spacing={1.5} flexShrink={0}>
+                      {statusLabel && (
+                        <Box
+                          bg={statusBg}
+                          color={statusFg}
+                          px={2}
+                          py={0.5}
+                          borderRadius="md"
+                          fontSize="2xs"
+                          fontWeight="800"
+                          textTransform="uppercase"
+                          letterSpacing="wide"
+                        >
+                          {statusLabel}
+                        </Box>
+                      )}
+                      {destLink ? (
+                        <IconButton
+                          aria-label="View destination tx on explorer"
+                          icon={<ExternalLinkIcon boxSize={3} />}
+                          size="xs"
+                          variant="ghost"
+                          h="20px"
+                          minW="20px"
+                          color="text.tertiary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            chrome.tabs.create({ url: destLink });
+                          }}
+                          _hover={{ bg: "bg.muted", color: "text.primary" }}
+                        />
+                      ) : (
+                        // Still waiting on Bungee — show a spinner so the
+                        // user knows the dest hash is in-flight.
+                        !tx.bridge.destinationTxHash && <LoadingDots />
+                      )}
+                    </HStack>
                   </HStack>
 
                   <VStack spacing={1.5} align="stretch" fontSize="xs">
-                    {/* You receive — token logo + symbol when available */}
-                    {buySymbol && (
-                      <HStack justify="space-between" align="center">
-                        <Text fontWeight="700" color="text.secondary">
-                          You Receive
-                        </Text>
-                        <HStack spacing={1.5}>
-                          {buyLogo && (
-                            <Image
-                              src={buyLogo}
-                              alt={buySymbol}
-                              boxSize="16px"
-                              borderRadius="full"
-                            />
-                          )}
-                          <Text fontWeight="800">{buySymbol}</Text>
-                        </HStack>
-                      </HStack>
-                    )}
-                    {/* Tx hash row */}
-                    <HStack justify="space-between" align="center">
-                      <Text fontWeight="700" color="text.secondary">
-                        Tx Hash
-                      </Text>
-                      {destShort ? (
-                        destLink ? (
-                          <Button
-                            size="xs"
-                            variant="ghost"
-                            fontWeight="700"
-                            fontSize="2xs"
-                            fontFamily="mono"
-                            onClick={() => chrome.tabs.create({ url: destLink })}
-                            rightIcon={<ExternalLinkIcon boxSize={2.5} />}
-                            _hover={{ bg: "bg.muted" }}
-                            px={1}
-                            h="20px"
-                          >
-                            {destShort}
-                          </Button>
-                        ) : (
-                          <Text fontFamily="mono" fontSize="2xs" color="text.tertiary">
-                            {destShort}
+                    {/* You received — token logo + symbol + on-chain amount
+                        once destAssetChanges lands. The dest-chain receiver
+                        didn't pay gas, so abs(nativeDelta) is a clean fallback
+                        when the buy token is the destination chain's native. */}
+                    {buySymbol && (() => {
+                      const destNativeSym =
+                        getChainConfig(tx.bridge!.destinationChainId)
+                          .nativeCurrency?.symbol ?? "ETH";
+                      const buyAmount = pickSwapAmount(
+                        tx.destAssetChanges,
+                        "in",
+                        buySymbol,
+                        buySymbol.toLowerCase() === destNativeSym.toLowerCase(),
+                        18,
+                      );
+                      return (
+                        <HStack justify="space-between" align="flex-start">
+                          <Text fontWeight="700" color="text.secondary">
+                            You Received
                           </Text>
-                        )
-                      ) : (
-                        <LoadingDots />
-                      )}
-                    </HStack>
-                    {tx.bridge.routeName && (
-                      <HStack justify="space-between" align="center">
-                        <Text fontWeight="700" color="text.secondary">Route</Text>
-                        <Text fontWeight="700">{formatRouteName(tx.bridge.routeName)}</Text>
-                      </HStack>
-                    )}
+                          <VStack spacing={0} align="flex-end">
+                            <HStack spacing={1.5}>
+                              {buyAmount && (
+                                <Text
+                                  fontWeight="800"
+                                  color="chart.positive"
+                                  fontFamily="mono"
+                                >
+                                  +{buyAmount.amountLabel}
+                                </Text>
+                              )}
+                              {buyLogo && (
+                                <Image
+                                  src={buyLogo}
+                                  alt={buySymbol}
+                                  boxSize="16px"
+                                  borderRadius="full"
+                                />
+                              )}
+                              <Text fontWeight="800">{buySymbol}</Text>
+                            </HStack>
+                            {buyAmount &&
+                              (() => {
+                                const usd = formatTokenAmountUsd(
+                                  buyAmount.amountWei,
+                                  buyAmount.decimals,
+                                  tx.bridge!.destinationChainId,
+                                  buyAmount.source,
+                                );
+                                return usd ? (
+                                  <Text fontSize="2xs" color="text.tertiary" fontWeight="600">
+                                    {usd}
+                                  </Text>
+                                ) : null;
+                              })()}
+                          </VStack>
+                        </HStack>
+                      );
+                    })()}
                     {tx.bridge.refundTxHash && (
                       <HStack justify="space-between">
                         <Text fontWeight="700" color="text.secondary">Refund</Text>
@@ -829,6 +1305,36 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 </Box>
               );
             })()}
+
+            {/* Post-confirm asset changes — what *actually* flowed in/out of
+                the user's wallet on chain (decoded from the receipt's
+                Transfer logs + native balance diff). For wallet-initiated
+                bridges (`swapMeta + bridge`) the sell/buy rows are already
+                shown inline in the Source / Destination blocks above, so we
+                suppress these cards to avoid duplication. */}
+            {tx.assetChanges && !(tx.bridge && tx.swapMeta) && (
+              <AssetChangesCard
+                record={tx.assetChanges}
+                chainId={tx.chainId}
+                chainName={tx.chainName}
+                nativeSym={nativeSym}
+                label="Token Changes"
+                formatUsd={formatTokenAmountUsd}
+              />
+            )}
+            {tx.destAssetChanges && tx.bridge && !tx.swapMeta && (
+              <AssetChangesCard
+                record={tx.destAssetChanges}
+                chainId={tx.bridge.destinationChainId}
+                chainName={tx.bridge.destinationChainName}
+                nativeSym={
+                  getChainConfig(tx.bridge.destinationChainId).nativeCurrency
+                    ?.symbol ?? "ETH"
+                }
+                label={`On ${tx.bridge.destinationChainName}`}
+                formatUsd={formatTokenAmountUsd}
+              />
+            )}
 
             <HStack justify="space-between" align="center" spacing={3}>
               {tx.forceInclusionMeta ? (
@@ -1060,29 +1566,38 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   </HStack>
                 </Box>
 
-                {/* Value card */}
+                {/* Value card — single-line layout: label on the left, amount
+                    + optional USD on the right so the card stays compact. */}
                 <Box
                   bg="surface.sunken"
                   border="1px solid"
                   borderColor="border.subtle"
                   borderRadius="md"
-                  p={3}
+                  px={3}
+                  py={2}
                 >
-                  <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
-                    Value
-                  </Text>
-                  <HStack justify="space-between" align="baseline" spacing={2}>
-                    <Text fontSize="sm" fontWeight="700" color="text.primary">
-                      {formatValue(tx.tx.value, nativeSym)}
+                  <HStack justify="space-between" align="center" spacing={2}>
+                    <Text
+                      fontSize="xs"
+                      color="text.secondary"
+                      fontWeight="700"
+                      textTransform="uppercase"
+                    >
+                      Value
                     </Text>
-                    {(() => {
-                      const usd = formatWeiUsd(tx.tx.value);
-                      return usd ? (
-                        <Text fontSize="xs" color="text.tertiary" fontWeight="600">
-                          {usd}
-                        </Text>
-                      ) : null;
-                    })()}
+                    <HStack spacing={2} align="baseline">
+                      <Text fontSize="sm" fontWeight="700" color="text.primary">
+                        {formatValue(tx.tx.value, nativeSym)}
+                      </Text>
+                      {(() => {
+                        const usd = formatWeiUsd(tx.tx.value);
+                        return usd ? (
+                          <Text fontSize="xs" color="text.tertiary" fontWeight="600">
+                            {usd}
+                          </Text>
+                        ) : null;
+                      })()}
+                    </HStack>
                   </HStack>
                 </Box>
               </>
