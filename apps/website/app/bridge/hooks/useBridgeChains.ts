@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { BungeeChain, BungeeChainsResponse } from "../types";
+import type { BungeeChain, BungeeChainsResponse } from "@walletchan/shared/bungee";
 
 let cachedChains: BungeeChain[] | null = null;
 let inFlight: Promise<BungeeChain[]> | null = null;

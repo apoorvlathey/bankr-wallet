@@ -72,6 +72,35 @@ export interface ForceInclusionMeta {
   l2Confirmed?: boolean;
 }
 
+/**
+ * Metadata for cross-chain bridge txs. Present on the **source-chain** tx-
+ * history entry. The source tx itself confirms via the normal receipt poller;
+ * once it does, `bridgeStatusPoller` polls Bungee's /status endpoint and
+ * updates `destinationTxHash` + `bungeeStatusCode` here when the destination
+ * leg lands. Optional — only present on bridge entries.
+ */
+export interface BridgeMeta {
+  /** Bungee request hash. May arrive after the source tx is mined. */
+  requestHash?: string;
+  /** Source chain (same as the parent CompletedTransaction.chainId). */
+  sourceChainId: number;
+  /** Source tx hash (same as the parent CompletedTransaction.txHash). */
+  sourceTxHash?: string;
+  /** Destination chain the user is bridging to. */
+  destinationChainId: number;
+  destinationChainName: string;
+  /** Destination tx hash, populated once Bungee fulfills the request. */
+  destinationTxHash?: string;
+  /** Latest Bungee status code seen for this request. */
+  bungeeStatusCode?: number;
+  /** Bungee route name (e.g. "stargate-v2"). Cosmetic. */
+  routeName?: string;
+  /** Destination receiver address. Defaults to source `from` when omitted. */
+  receiverAddress?: string;
+  /** Refund tx hash if Bungee REFUNDED the request on the source chain. */
+  refundTxHash?: string;
+}
+
 export interface CompletedTransaction {
   id: string;
   status: TxStatus;
@@ -92,6 +121,8 @@ export interface CompletedTransaction {
   transferMeta?: TransferMeta;
   clearSignedMeta?: ClearSignedMeta;
   forceInclusionMeta?: ForceInclusionMeta;
+  /** Cross-chain bridge metadata. Present only on bridge txs. */
+  bridge?: BridgeMeta;
   // Set on tx-history entries that are one slice of a user-split
   // wallet_sendCalls bundle. Used by the receipt poller and rejection
   // paths to advance the parent bundle's split sequencer.

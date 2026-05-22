@@ -32,6 +32,7 @@ import { useTheme } from "@/theme";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
 import { useRecipientAddressKind } from "@/hooks/useRecipientAddressKind";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
+import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { useCachedAvatarSrc, useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import { isResolvableName } from "@/lib/ensUtils";
 import { PortfolioToken } from "@/chrome/portfolioApi";
@@ -885,7 +886,7 @@ function TokenTransfer({
     <Box p={4} minH="100%" bg="surface.base">
       <VStack spacing={3} align="stretch">
         {/* Header */}
-        <HStack spacing={2} justify="space-between">
+        <HStack spacing={2} justify="space-between" align="flex-start">
           <HStack spacing={2}>
             <IconButton
               aria-label="Back"
@@ -898,18 +899,24 @@ function TokenTransfer({
               Send
             </Text>
           </HStack>
-          {onSwapInstead && selectedToken && SWAP_SUPPORTED_CHAIN_IDS.has(selectedChainId) && (
-            <Text
-              fontSize="xs"
-              fontWeight="700"
-              color="accent.secondary"
-              cursor="pointer"
-              onClick={() => onSwapInstead(selectedToken)}
-              _hover={{ textDecoration: "underline" }}
-            >
-              Swap instead?
-            </Text>
-          )}
+          {/* Right side — active account chip on top, "Swap instead?" below
+              when applicable. Matches the Swap/Bridge header treatment so
+              the user always sees which account will sign. */}
+          <VStack align="flex-end" spacing={1} minW={0}>
+            {fromAddress && <FromAccountDisplay address={fromAddress} />}
+            {onSwapInstead && selectedToken && SWAP_SUPPORTED_CHAIN_IDS.has(selectedChainId) && (
+              <Text
+                fontSize="xs"
+                fontWeight="700"
+                color="accent.secondary"
+                cursor="pointer"
+                onClick={() => onSwapInstead(selectedToken)}
+                _hover={{ textDecoration: "underline" }}
+              >
+                Swap instead?
+              </Text>
+            )}
+          </VStack>
         </HStack>
 
         {/* Non-premium upsell (compact, top of page) */}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { BungeeToken, BungeeTokenListResponse } from "../types";
+import type { BungeeToken, BungeeTokenListResponse } from "@walletchan/shared/bungee";
 
 const cache = new Map<number, BungeeToken[]>();
 const inFlight = new Map<number, Promise<BungeeToken[]>>();

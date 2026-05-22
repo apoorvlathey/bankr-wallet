@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { BungeeQuoteResponse } from "../types";
+import type { BungeeQuoteResponse } from "@walletchan/shared/bungee";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 

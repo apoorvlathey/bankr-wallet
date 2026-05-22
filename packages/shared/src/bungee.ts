@@ -1,6 +1,9 @@
 /**
  * Bungee API types — covers /quote, /build-tx, /submit, /status, /supported-chains, /tokens/list.
  * Reference: https://docs.bungee.exchange
+ *
+ * Shared across the website (`apps/website/app/bridge/**`) and the extension
+ * (`apps/extension/src/chrome/bridgeApi.ts`).
  */
 
 /** Bungee uses an all-lowercase native sentinel; the universal address is mixed-case. */
@@ -178,6 +181,12 @@ export interface BungeeChain {
   /** Some chains may be disabled at the routing layer. */
   sendingEnabled?: boolean;
   receivingEnabled?: boolean;
+  /** Optional brand background color for the chain logo chip. Set by our
+   *  `/api/bridge/chains` proxy when a chain's icon needs a specific
+   *  backdrop (e.g., dark-glyph-on-transparent SVGs need a light fill).
+   *  Free-form CSS color string ("white", "#000", etc.). When unset, the
+   *  UI renders the icon as-is. */
+  bgColor?: string;
 }
 
 export interface BungeeChainsResponse {

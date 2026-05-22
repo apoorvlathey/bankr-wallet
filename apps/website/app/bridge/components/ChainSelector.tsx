@@ -12,7 +12,7 @@ import {
   Spinner,
 } from "@chakra-ui/react";
 import { ChevronDown } from "lucide-react";
-import type { BungeeChain } from "../types";
+import type { BungeeChain } from "@walletchan/shared/bungee";
 
 interface ChainSelectorProps {
   chains: BungeeChain[];

@@ -151,6 +151,18 @@ export async function applyReceiptToHistory(
   // the sequencer (queues next call or finalizes the bundle).
   await maybeAdvanceSplitBundle(txId, txHash, succeeded ? "success" : "reverted", receipt);
 
+  // Cross-chain bridge txs: when the source tx confirms, hand off to the
+  // Bungee status poller for the destination leg. The helper is a no-op
+  // when the entry has no `bridge` meta or has already settled.
+  if (succeeded) {
+    try {
+      const { maybeStartBridgePolling } = await import("./bridgeStatusPoller");
+      await maybeStartBridgePolling(txId);
+    } catch (err) {
+      console.warn("[bridge] failed to start status polling", err);
+    }
+  }
+
   return succeeded;
 }
 

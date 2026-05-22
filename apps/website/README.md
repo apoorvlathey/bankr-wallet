@@ -20,7 +20,7 @@ pnpm dev:website
 pnpm dev
 ```
 
-The dev server runs at `http://localhost:3000`.
+The dev server runs at `http://localhost:3030`. The port is intentionally non-default — the extension's `pnpm dev:extension` build expects it (see `apps/extension/src/constants/externalUrls.ts` → `WALLETCHAN_DEV_PORT`).
 
 ## Building
 

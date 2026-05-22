@@ -1779,6 +1779,17 @@ export interface SwapTxEntry {
   favicon: string | null;
   functionName?: string;
   swapMeta?: SwapMeta;
+  /**
+   * Cross-chain bridge metadata. When present, this entry represents the
+   * bridge call itself (not an approval) and the post-success path will
+   * start polling Bungee's `/status` for destination-leg completion.
+   *
+   * For PK/Seed sequential broadcasts of `[approve, bridge]`, set `bridge`
+   * only on the LAST entry. For Bankr atomic batches, set it once on the
+   * combined batch tx (the handler collects it from the matching original
+   * entry).
+   */
+  bridge?: import("./txHistoryStorage").BridgeMeta;
 }
 
 /**
@@ -1850,7 +1861,7 @@ export async function handleExecuteSwapDirect(
         timestamp: Date.now(),
       });
       // Await each TX so approval is broadcast before swap starts
-      await processSwapTxBankr(txId, pending, apiKey, entry.functionName, entry.swapMeta);
+      await processSwapTxBankr(txId, pending, apiKey, entry.functionName, entry.swapMeta, entry.bridge);
     }
     return { success: true, txIds };
   }
@@ -1950,7 +1961,15 @@ export async function handleExecuteSwapDirect(
       accountType: account.type as "privateKey" | "seedPhrase",
       functionName: entry.functionName,
       swapMeta: entry.swapMeta,
+      bridge: entry.bridge,
     });
+
+    // Snapshot the clear-signed summary ("Approved 500 USDC to SocketGateway")
+    // for internal swap / bridge approve+swap txs too, so the Activity tab
+    // and detail modal render the human-readable line instead of falling
+    // back to the bare functionName. Fire-and-forget — slow eth.sh / ENS
+    // lookups must not block the broadcast loop.
+    attachClearSignedMetaToHistory(txId, entry.tx, chainId);
 
     prepared.push({ txId, pending, nonce, functionName: entry.functionName, swapMeta: entry.swapMeta });
   }
@@ -1989,6 +2008,7 @@ async function processSwapTxBankr(
   apiKey: string,
   functionName?: string,
   swapMeta?: SwapMeta,
+  bridge?: import("./txHistoryStorage").BridgeMeta,
 ): Promise<void> {
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
@@ -2005,7 +2025,13 @@ async function processSwapTxBankr(
     accountType: "bankr",
     functionName,
     swapMeta,
+    bridge,
   });
+
+  // Snapshot the clear-signed summary so internal swap/bridge approve calls
+  // ("Approved 500 USDC to SocketGateway") render the same human-readable
+  // line as dapp-initiated approves. Fire-and-forget.
+  attachClearSignedMetaToHistory(txId, pending.tx, pending.tx.chainId);
 
   try {
     const result = await submitTransactionDirect(
@@ -2036,6 +2062,17 @@ async function processSwapTxBankr(
         chrome.storage.local.set({
           [`notification-${notificationId}`]: explorerUrl,
         });
+      }
+
+      // Cross-chain bridge: kick off destination polling for entries that
+      // carry bridge meta. No-op for plain swaps.
+      if (bridge) {
+        try {
+          const { maybeStartBridgePolling } = await import("./bridgeStatusPoller");
+          await maybeStartBridgePolling(txId);
+        } catch (err) {
+          console.warn("[bridge] failed to start status polling", err);
+        }
       }
     } else {
       await updateTxInHistory(txId, { status: "pending", txHash });
@@ -2171,6 +2208,10 @@ export async function handleExecuteSwapBatch(
     .map((t) => t.functionName || t.origin)
     .join(", ");
   const swapMeta = originalTransactions.find((t) => t.swapMeta)?.swapMeta;
+  // For cross-chain batches, the bridge meta is attached to the bridge call
+  // (typically the last entry). Carry it onto the wrapping ERC-7821 tx so
+  // status polling kicks off when the batch tx confirms onchain.
+  const bridge = originalTransactions.find((t) => t.bridge)?.bridge;
 
   // Pre-estimate gas for the outer ERC-7821 batch tx and forward it to Bankr.
   // Bankr's server-side estimator underestimates Universal Router / V4-hook
@@ -2208,7 +2249,7 @@ export async function handleExecuteSwapBatch(
   });
 
   // Fire-and-forget: process in background
-  processSwapTxBankr(txId, pending, apiKey, `Batch: ${functionNames}`, swapMeta);
+  processSwapTxBankr(txId, pending, apiKey, `Batch: ${functionNames}`, swapMeta, bridge);
 
   return { success: true, txIds: [txId] };
 }

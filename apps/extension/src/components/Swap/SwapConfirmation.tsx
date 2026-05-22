@@ -71,6 +71,19 @@ interface SwapConfirmationProps {
   onValidityChange?: (valid: boolean) => void;
   /** Disables Confirm Swap when the gas editor is in an inconsistent state. */
   isConfirmDisabled?: boolean;
+  /**
+   * Bridge-mode metadata. When set, this screen renders the cross-chain
+   * variant: title flips to "Confirm Bridge", buy row shows the destination
+   * chain badge alongside the buy token, and the receipt includes the
+   * Bungee route name + estimated time. Gas plumbing is unchanged — the
+   * underlying source tx still uses MultiTxGasEstimateDisplay's tier picker.
+   */
+  bridgeMeta?: {
+    destinationChainId: number;
+    destinationChainName: string;
+    routeName?: string;
+    estimatedTime?: number;
+  };
 }
 
 const formatOutputAmount = (amount: string, decimals: number): string =>
@@ -114,8 +127,14 @@ function SwapConfirmation({
   onGasEstimates,
   onValidityChange,
   isConfirmDisabled,
+  bridgeMeta,
 }: SwapConfirmationProps) {
   const config = getChainConfig(chainId);
+  const isBridge = !!bridgeMeta;
+  const destChainConfig = bridgeMeta
+    ? getChainConfig(bridgeMeta.destinationChainId)
+    : null;
+  const titleLabel = isBridge ? "Confirm Bridge" : "Confirm Swap";
 
   // Shared data-URL cache used by ENS avatars + batch summary + portfolio.
   // Paints sell/buy icons synchronously from chrome.storage on reopen.
@@ -222,7 +241,7 @@ function SwapConfirmation({
               textTransform="uppercase"
               letterSpacing="wider"
             >
-              Confirm Swap
+              {titleLabel}
             </Text>
             {isBatched && (
               <Badge
@@ -339,7 +358,8 @@ function SwapConfirmation({
             )}
           </HStack>
 
-          {/* Network */}
+          {/* Network — for bridge we render source → destination so the user
+              clearly sees both chains involved. */}
           <HStack
             px={3}
             py={2}
@@ -348,25 +368,87 @@ function SwapConfirmation({
             borderColor="border.subtle"
           >
             <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-              Network
+              {isBridge ? "Route" : "Network"}
             </Text>
-            <Badge
-              fontSize="xs"
-              bg={config.bg}
-              color={config.text}
-              border="1.5px solid"
-              borderColor="border.default"
-              fontWeight="700"
-              px={2}
-              py={0.5}
-              display="flex"
-              alignItems="center"
-              gap={1}
-            >
-              <ChainIcon chainId={chainId} chainName={chainName} size="12px" withChip />
-              {chainName}
-            </Badge>
+            <HStack spacing={1.5}>
+              <Badge
+                fontSize="xs"
+                bg="whiteAlpha.900"
+                color="accent.secondary"
+                border="1.5px solid"
+                borderColor="accent.secondary"
+                fontWeight="700"
+                px={2}
+                py={0.5}
+                display="flex"
+                alignItems="center"
+                gap={1}
+              >
+                <ChainIcon chainId={chainId} chainName={chainName} size="12px" withChip />
+                {chainName}
+              </Badge>
+              {isBridge && destChainConfig && (
+                <>
+                  <Text fontSize="xs" fontWeight="900" color="text.secondary">
+                    →
+                  </Text>
+                  <Badge
+                    fontSize="xs"
+                    bg="whiteAlpha.900"
+                    color="accent.secondary"
+                    border="1.5px solid"
+                    borderColor="accent.secondary"
+                    fontWeight="700"
+                    px={2}
+                    py={0.5}
+                    display="flex"
+                    alignItems="center"
+                    gap={1}
+                  >
+                    <ChainIcon
+                      chainId={bridgeMeta!.destinationChainId}
+                      chainName={bridgeMeta!.destinationChainName}
+                      size="12px"
+                      withChip
+                    />
+                    {bridgeMeta!.destinationChainName}
+                  </Badge>
+                </>
+              )}
+            </HStack>
           </HStack>
+
+          {/* Bridge route / est. time row (only in bridge mode) */}
+          {isBridge && (bridgeMeta!.routeName || bridgeMeta!.estimatedTime) && (
+            <HStack
+              px={3}
+              py={2}
+              justify="space-between"
+              borderTop="1px solid"
+              borderColor="border.subtle"
+            >
+              <Text
+                fontSize="xs"
+                color="text.secondary"
+                fontWeight="700"
+                textTransform="uppercase"
+              >
+                Bridge
+              </Text>
+              <HStack spacing={2}>
+                {bridgeMeta!.routeName && (
+                  <Text fontSize="xs" fontWeight="700" color="text.primary">
+                    {bridgeMeta!.routeName}
+                  </Text>
+                )}
+                {bridgeMeta!.estimatedTime !== undefined && (
+                  <Text fontSize="xs" fontWeight="700" color="text.secondary">
+                    ~{Math.max(1, Math.round(bridgeMeta!.estimatedTime / 60))}m
+                  </Text>
+                )}
+              </HStack>
+            </HStack>
+          )}
         </Box>
 
         {/* Transaction list — expandable cards with calldata */}
@@ -582,7 +664,7 @@ function SwapConfirmation({
                 onClick={onConfirm}
                 isDisabled={isConfirmDisabled}
               >
-                Confirm Swap
+                {titleLabel}
               </Button>
             </HStack>
           )}

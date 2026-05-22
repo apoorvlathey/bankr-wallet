@@ -7,6 +7,7 @@ import {
   Spinner,
   Image,
   IconButton,
+  Tooltip,
 } from "@chakra-ui/react";
 import {
   WarningIcon,
@@ -463,6 +464,23 @@ function TxStatusItem({
   const isForcePendingL2 = tx.status === "pending" && isForceInclusion && !tx.forceInclusionMeta!.l2Confirmed;
   const isForcePendingL1 = tx.status === "processing" && isForceInclusion;
 
+  // Cross-chain bridge: source tx confirmed but destination leg still polling.
+  // We piggyback on the existing "L1 Confirmed / L2 Pending" visual language —
+  // users already understand "source done, destination in flight" from force
+  // inclusion. Bungee terminal codes: 3 FULFILLED, 4 SETTLED, 5 EXPIRED,
+  // 6 CANCELLED, 7 REFUNDED.
+  const isBridge = !!tx.bridge;
+  const bridgeCode = tx.bridge?.bungeeStatusCode;
+  const bridgeFulfilled = bridgeCode === 3 || bridgeCode === 4;
+  const bridgeRefunded = bridgeCode === 7;
+  const bridgeFailedTerminal = bridgeCode === 5 || bridgeCode === 6;
+  const isBridgePendingDest =
+    isBridge &&
+    tx.status === "success" &&
+    !bridgeFulfilled &&
+    !bridgeRefunded &&
+    !bridgeFailedTerminal;
+
   // For force inclusion: link to L1 explorer until the L2 sequencer has
   // actually included the tx. L2 explorers don't index force-inclusion txs
   // until they appear onchain — linking to L2 in the "L1 Confirmed / L2
@@ -473,6 +491,25 @@ function TxStatusItem({
   const hasViewableTx = isForceInclusion
     ? !!(tx.forceInclusionMeta!.l1TxHash || tx.txHash)
     : !!(tx.txHash && explorerBase);
+
+  // Bridge destination link. The destination chain may not be in the user's
+  // chain registry — in that case getChainConfig returns a fallback with an
+  // empty explorer string, so we simply omit the icon (no broken link).
+  const destExplorerBase = isBridge && tx.bridge?.destinationChainId
+    ? getChainConfig(tx.bridge.destinationChainId).explorer || ""
+    : "";
+  const hasBridgeDestLink = !!(
+    isBridge && tx.bridge?.destinationTxHash && destExplorerBase
+  );
+  const handleViewBridgeDest = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const hash = tx.bridge?.destinationTxHash;
+    if (!hash || !destExplorerBase) return;
+    const clean = hash.match(/0x[a-fA-F0-9]{64}/)?.[0];
+    if (clean) {
+      chrome.tabs.create({ url: `${destExplorerBase}/tx/${clean}` });
+    }
+  };
 
   const handleViewTx = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -511,6 +548,51 @@ function TxStatusItem({
   };
 
   const statusElement = (() => {
+    // Cross-chain bridge: source confirmed, destination polling. Mirrors
+    // the "L1 Confirmed / L2 Pending" layout we use for force-inclusion.
+    if (isBridgePendingDest) {
+      return (
+        <VStack spacing={0} align="flex-end">
+          <Text fontSize="2xs" color="chart.positive" fontWeight="600">
+            Source Confirmed
+          </Text>
+          <HStack spacing={1}>
+            <Spinner size="xs" color="accent.secondary" boxSize="10px" />
+            <Text fontSize="2xs" color="accent.secondary" fontWeight="600">
+              Bridging to {tx.bridge!.destinationChainName}
+            </Text>
+          </HStack>
+        </VStack>
+      );
+    }
+    if (isBridge && bridgeFulfilled) {
+      return (
+        <Text fontSize="2xs" color="chart.positive" fontWeight="600">
+          Bridge Complete
+        </Text>
+      );
+    }
+    if (isBridge && bridgeRefunded) {
+      return (
+        <HStack spacing={1}>
+          <WarningIcon boxSize={2.5} color="chart.negative" />
+          <Text fontSize="2xs" color="chart.negative" fontWeight="600">
+            Refunded
+          </Text>
+        </HStack>
+      );
+    }
+    if (isBridge && bridgeFailedTerminal) {
+      return (
+        <HStack spacing={1}>
+          <WarningIcon boxSize={2.5} color="chart.negative" />
+          <Text fontSize="2xs" color="chart.negative" fontWeight="600">
+            {bridgeCode === 5 ? "Bridge Expired" : "Bridge Cancelled"}
+          </Text>
+        </HStack>
+      );
+    }
+
     // Force inclusion: L1 still processing/pending
     if (isForcePendingL1) {
       return (
@@ -587,6 +669,120 @@ function TxStatusItem({
       }
     }
   })();
+
+  // Bridge origins ship as `Bridge USDC → Arbitrum`, which truncates to
+  // "Bridge USDC →..." in the narrow Activity row. Split on the arrow and
+  // stack the destination on its own line so both the bridged token and
+  // the destination chain stay readable.
+  const bridgeOriginParts = (() => {
+    if (!isBridge) return null;
+    const ARROW = " → ";
+    const idx = tx.origin.indexOf(ARROW);
+    if (idx === -1) return null;
+    return {
+      head: tx.origin.slice(0, idx),
+      tail: `→ ${tx.origin.slice(idx + ARROW.length)}`,
+    };
+  })();
+  const originDisplay = bridgeOriginParts ? (
+    <VStack spacing={0} align="flex-start" minW={0}>
+      <Text
+        fontSize="sm"
+        fontWeight="600"
+        color="text.primary"
+        noOfLines={1}
+      >
+        {bridgeOriginParts.head}
+      </Text>
+      <Text
+        fontSize="sm"
+        fontWeight="600"
+        color="text.primary"
+        noOfLines={1}
+      >
+        {bridgeOriginParts.tail}
+      </Text>
+    </VStack>
+  ) : (
+    <Text
+      fontSize="sm"
+      fontWeight="600"
+      color="text.primary"
+      noOfLines={1}
+    >
+      {tx.origin}
+    </Text>
+  );
+
+  // For bridges with BOTH a source link and a destination link, the two
+  // [ChainIcon + ExternalLinkIcon] chips crowd the inline status row and
+  // start to truncate the origin / status text. Push them to their own row
+  // below the status when both exist; keep the single source-only icon
+  // inline for non-bridges and bridges whose destination chain isn't in
+  // the user's explorer registry.
+  const moveLinksBelow = isBridge && hasBridgeDestLink;
+
+  // Explorer links rendered next to statusElement. Bridges get TWO icons —
+  // source chain + destination chain — each with a tiny chain icon prefix so
+  // it's obvious which click goes where. The destination icon is only
+  // rendered once we have both a destination tx hash and a known explorer
+  // for that chain (most exotic destinations the user hasn't added to
+  // their wallet won't satisfy that — we silently degrade to source-only).
+  // Tooltip on each so it's accessible.
+  const linkIcons = (
+    <>
+      {hasViewableTx && (
+        <Tooltip
+          label={
+            isBridge && hasBridgeDestLink
+              ? `View on ${tx.chainName || "source chain"} explorer`
+              : "View on explorer"
+          }
+          fontSize="2xs"
+          openDelay={300}
+          hasArrow
+        >
+          <HStack
+            as="button"
+            spacing="2px"
+            onClick={handleViewTx}
+            cursor="pointer"
+            _hover={{ color: "accent.secondary" }}
+            color="text.tertiary"
+          >
+            {isBridge && hasBridgeDestLink && (
+              <ChainIcon chainId={tx.chainId} chainName={tx.chainName} size="10px" />
+            )}
+            <ExternalLinkIcon boxSize={2.5} />
+          </HStack>
+        </Tooltip>
+      )}
+      {hasBridgeDestLink && (
+        <Tooltip
+          label={`View on ${tx.bridge!.destinationChainName} explorer`}
+          fontSize="2xs"
+          openDelay={300}
+          hasArrow
+        >
+          <HStack
+            as="button"
+            spacing="2px"
+            onClick={handleViewBridgeDest}
+            cursor="pointer"
+            _hover={{ color: "accent.secondary" }}
+            color="text.tertiary"
+          >
+            <ChainIcon
+              chainId={tx.bridge!.destinationChainId}
+              chainName={tx.bridge!.destinationChainName}
+              size="10px"
+            />
+            <ExternalLinkIcon boxSize={2.5} />
+          </HStack>
+        </Tooltip>
+      )}
+    </>
+  );
 
   return (
     <Box
@@ -704,77 +900,150 @@ function TxStatusItem({
           </Box>
         )}
 
-        {/* Content */}
+        {/* Content. When a detail row exists, surface whichever line is
+            the most informative as the prominent (top) line and demote the
+            other to a smaller line underneath:
+            - Dapp-initiated txs (origin is a parsable URL → `originHostname`
+              is non-null): the tx detail wins ("Approve 2 USDC →…" beats
+              "localhost" for at-a-glance scanning).
+            - Wallet-initiated txs (origin is a hand-crafted description
+              like "Approve USDC for bridge" or "Send USDC"): the origin
+              description IS the most informative line, so it goes on top
+              and the raw function name is demoted below.
+            When no detail row exists, the domain/origin stays as the only
+            line. */}
         <Box flex={1} minW={0}>
-          {/* Row 1: hostname + time (+ status when there's no detail row) */}
-          <HStack justify="space-between" spacing={2} minH={hasDetailRow ? undefined : "36px"} align="center">
-            <Text
-              fontSize="sm"
-              fontWeight="600"
-              color="text.primary"
-              noOfLines={1}
-            >
-              {originHostname || tx.origin}
-            </Text>
-            <HStack spacing={1} flexShrink={0}>
-              <Text
-                fontSize="2xs"
-                color="text.tertiary"
-                fontWeight="500"
-                flexShrink={0}
-              >
-                {formatTimeAgo(tx.createdAt)}
-              </Text>
-              {!hasDetailRow && (
-                <>
-                  <Text fontSize="2xs" color="text.tertiary" fontWeight="500">|</Text>
-                  {statusElement}
-                  {hasViewableTx && (
-                    <ExternalLinkIcon
-                      boxSize={2.5}
-                      color="text.tertiary"
-                      cursor="pointer"
-                      onClick={handleViewTx}
-                      _hover={{ color: "accent.secondary" }}
-                    />
-                  )}
-                </>
-              )}
-            </HStack>
-          </HStack>
-
-          {/* Row 2: prefer the clear-signed summary; fall back to raw functionName. */}
-          {hasDetailRow && (
-            <HStack justify="space-between" spacing={2} mt={0.5}>
-              <Box flex={1} minW={0}>
-                {tx.clearSignedMeta ? (
-                  <ClearSignedSummary
-                    meta={tx.clearSignedMeta}
-                    resolveLogo={resolveLogo}
-                  />
-                ) : (
+          {hasDetailRow ? (
+            originHostname ? (
+              <>
+                {/* Dapp-initiated: detail on top, domain demoted */}
+                <HStack justify="space-between" spacing={2} align="center">
+                  <Box flex={1} minW={0}>
+                    {tx.clearSignedMeta ? (
+                      <ClearSignedSummary
+                        meta={tx.clearSignedMeta}
+                        resolveLogo={resolveLogo}
+                      />
+                    ) : (
+                      <Text
+                        fontSize="sm"
+                        fontWeight="600"
+                        color="text.primary"
+                        noOfLines={1}
+                      >
+                        {tx.functionName}
+                      </Text>
+                    )}
+                  </Box>
+                  <HStack spacing={1} flexShrink={0}>
+                    {statusElement}
+                    {!moveLinksBelow && linkIcons}
+                  </HStack>
+                </HStack>
+                <HStack justify="space-between" spacing={2} mt={0.5} align="center">
                   <Text
                     fontSize="xs"
                     color="text.tertiary"
-                    fontFamily="mono"
+                    fontWeight="500"
                     noOfLines={1}
                   >
-                    {tx.functionName}
+                    {originHostname}
+                  </Text>
+                  <Text
+                    fontSize="2xs"
+                    color="text.tertiary"
+                    fontWeight="500"
+                    flexShrink={0}
+                  >
+                    {formatTimeAgo(tx.createdAt)}
+                  </Text>
+                </HStack>
+              </>
+            ) : (
+              <>
+                {/* Wallet-initiated: origin description on top, detail demoted */}
+                <HStack justify="space-between" spacing={2} align="flex-start">
+                  <Box flex={1} minW={0}>
+                    {originDisplay}
+                  </Box>
+                  <VStack spacing={1} flexShrink={0} align="flex-end">
+                    <HStack spacing={1}>
+                      {statusElement}
+                      {!moveLinksBelow && linkIcons}
+                    </HStack>
+                    {moveLinksBelow && (
+                      <HStack spacing={2}>{linkIcons}</HStack>
+                    )}
+                  </VStack>
+                </HStack>
+                <HStack justify="space-between" spacing={2} mt={0.5} align="center">
+                  <Box flex={1} minW={0}>
+                    {tx.clearSignedMeta ? (
+                      <ClearSignedSummary
+                        meta={tx.clearSignedMeta}
+                        resolveLogo={resolveLogo}
+                      />
+                    ) : (
+                      <Text
+                        fontSize="xs"
+                        color="text.tertiary"
+                        fontFamily="mono"
+                        noOfLines={1}
+                      >
+                        {tx.functionName}
+                      </Text>
+                    )}
+                  </Box>
+                  <Text
+                    fontSize="2xs"
+                    color="text.tertiary"
+                    fontWeight="500"
+                    flexShrink={0}
+                  >
+                    {formatTimeAgo(tx.createdAt)}
+                  </Text>
+                </HStack>
+              </>
+            )
+          ) : (
+            <HStack
+              justify="space-between"
+              spacing={2}
+              minH={bridgeOriginParts ? undefined : "36px"}
+              align={bridgeOriginParts ? "flex-start" : "center"}
+            >
+              <Box flex={1} minW={0}>
+                {bridgeOriginParts ? (
+                  originDisplay
+                ) : (
+                  <Text
+                    fontSize="sm"
+                    fontWeight="600"
+                    color="text.primary"
+                    noOfLines={1}
+                  >
+                    {originHostname || tx.origin}
                   </Text>
                 )}
               </Box>
-              <HStack spacing={1} flexShrink={0}>
-                {statusElement}
-                {hasViewableTx && (
-                    <ExternalLinkIcon
-                      boxSize={2.5}
-                      color="text.tertiary"
-                      cursor="pointer"
-                      onClick={handleViewTx}
-                      _hover={{ color: "accent.secondary" }}
-                    />
-                  )}
-              </HStack>
+              <VStack spacing={1} flexShrink={0} align="flex-end">
+                <HStack spacing={1}>
+                  <Text
+                    fontSize="2xs"
+                    color="text.tertiary"
+                    fontWeight="500"
+                    flexShrink={0}
+                  >
+                    {formatTimeAgo(tx.createdAt)}
+                  </Text>
+                  <Text fontSize="2xs" color="text.tertiary" fontWeight="500">|</Text>
+                  {statusElement}
+                  {!moveLinksBelow && linkIcons}
+                </HStack>
+                {moveLinksBelow && (
+                  <HStack spacing={2}>{linkIcons}</HStack>
+                )}
+              </VStack>
             </HStack>
           )}
         </Box>

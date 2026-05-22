@@ -21,7 +21,7 @@ import {
   BUNGEE_NATIVE_TOKEN,
   type BungeeApprovalData,
   type BungeeQuoteResponse,
-} from "../types";
+} from "@walletchan/shared/bungee";
 
 type Step =
   | "idle"

@@ -222,6 +222,32 @@ All defined in `apps/website/.env.local` (see `.env.local.example`).
 - `apps/website/app/api/portfolio/*` — the existing portfolio route serves holdings for the From selector.
 - `useCapabilities` pattern from `apps/website/app/stake/StakeContent.tsx` — same atomic-status check.
 
+## Extension support
+
+The wallet extension's Swap surface (`apps/extension/src/components/Swap/SwapView.tsx`) accepts a different chain on the buy side via the `BuyChainMenu` picker. When `sellChainId !== buyChainId`, the surface flips to **bridge mode**:
+
+- **Quote**: extension calls the same proxy via a new `fetchBridgeQuote` background message → `https://walletchan.com/api/bridge/quote`. Same response shape, same `isPremiumFee` tier — no separate sWCHAN logic lives in the extension.
+- **Build**: at confirm time, the extension re-quotes (Bungee quoteIds expire ~60s) and then calls `fetchBridgeBuildTx` for the firm `{ approvalData?, txData }`.
+- **Execute**: bridge txs flow through the existing swap handlers — `executeSwapDirect` (PK / Seed, per-call gas tier override) or `executeSwapBatch` (Bankr atomic ERC-7821). The bridge call entry carries a `bridge` field on `SwapTxEntry`, which is persisted onto the `CompletedTransaction.bridge` shape.
+- **Source-tx confirmation**: standard `txReceiptPoller` (no change). Bridge metadata is set on the tx-history entry at submission time and updated by the status poller as Bungee progresses.
+- **Destination polling**: `bridgeStatusPoller` polls `/api/bridge/status?txHash=<sourceTxHash>` every 5s → 30s (15-min cap). Pending bridges persist in `chrome.storage.local` under `pendingBridges`; `runtime.onStartup` resumes interrupted polls.
+- **Notification**: on `FULFILLED` / `SETTLED` / `REFUNDED` / `EXPIRED` / `CANCELLED`, `chrome.notifications.create` fires with the destination explorer URL stored under `notification-<id>` so clicking the toast jumps to the destination tx.
+- **UI**: `SwapConfirmation.tsx` accepts an optional `bridgeMeta` prop — title flips to "Confirm Bridge", network row shows source → destination chains, route + ETA row appears. Gas plumbing is unchanged. `TxStatusList.tsx` renders a "Source Confirmed / Bridging to X" status until terminal, then "Bridge Complete" or "Refunded". `TxDetailModal.tsx` adds a "Destination" block with the destination tx-hash link, Bungee route name, and current status code.
+
+**Wallet-type coverage**: Bankr (ERC-7821 atomic batch), PrivateKey (sequential broadcast with gas tier override), SeedPhrase (sequential broadcast). Impersonator is blocked at entry, same as same-chain swaps.
+
+**Auto / Permit2 path is intentionally not implemented in the extension.** The existing handlers already cover atomic batching (Bankr) and sequential broadcast (PK / Seed) — Permit2 adds an EIP-712 signing surface none of those exercise.
+
+**Key files**:
+
+| File | Purpose |
+|---|---|
+| `apps/extension/src/chrome/bridgeApi.ts` | `fetchBridgeQuote`, `fetchBridgeBuildTx`, `fetchBridgeStatus`, 24h-cached chains + tokens helpers |
+| `apps/extension/src/chrome/bridgeChainsResolver.ts` | `getBridgeSourceChains()` / `getBridgeDestinationChains()` (CHAIN_REGISTRY ∩ Bungee EVM split) |
+| `apps/extension/src/chrome/bridgeStatusPoller.ts` | In-memory poller + `maybeStartBridgePolling` hook + `resumePendingBridgePollers` |
+| `apps/extension/src/chrome/pendingBridgeStorage.ts` | `pendingBridges` chrome.storage.local key with mutex-locked writes |
+| `apps/extension/src/components/Swap/BuyChainMenu.tsx` | Compact destination-chain dropdown rendered above the buy-token selector |
+
 ## Common Errors
 
 | Error | Cause | Fix |

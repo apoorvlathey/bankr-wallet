@@ -12,7 +12,7 @@ import {
 } from "@chakra-ui/react";
 import { ArrowRight } from "lucide-react";
 import { useBridgeStatus } from "../hooks/useBridgeStatus";
-import { BungeeStatusCode, type BungeeChain } from "../types";
+import { BungeeStatusCode, type BungeeChain } from "@walletchan/shared/bungee";
 
 interface BridgeStatusProps {
   requestHash?: string;

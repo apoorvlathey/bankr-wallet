@@ -9,6 +9,7 @@
     ".": "./index.ts",
     "./theme": "./theme/tokens.ts",
     "./contracts": "./src/contracts.ts",
+    "./bungee": "./src/bungee.ts",
     "./assets/*": "./assets/*"
   }
 }

@@ -3,7 +3,7 @@ import {
   TERMINAL_STATUS_CODES,
   type BungeeStatusEntry,
   type BungeeStatusResponse,
-} from "../types";
+} from "@walletchan/shared/bungee";
 
 interface UseBridgeStatusParams {
   requestHash?: string;

@@ -73,6 +73,13 @@ interface MultiTxGasEstimateDisplayProps {
    * Custom-tier editor is in an inconsistent state.
    */
   onValidityChange?: (valid: boolean) => void;
+  /**
+   * Fires whenever the resolved source-chain native USD price changes
+   * (including the initial null → number transition). Lets parents reuse the
+   * same fetched price for their own native-value USD displays without
+   * issuing duplicate CoinGecko lookups.
+   */
+  onNativePriceUsd?: (priceUsd: number | null) => void;
   /** When true, estimate gas for L1 deposit transactions (force inclusion) */
   forceInclusion?: boolean;
 }
@@ -191,6 +198,7 @@ function MultiTxGasEstimateDisplay({
   onInsufficientBalance,
   onGasEstimates,
   onValidityChange,
+  onNativePriceUsd,
   forceInclusion,
 }: MultiTxGasEstimateDisplayProps) {
   const { tokens } = useTheme();
@@ -635,6 +643,17 @@ function MultiTxGasEstimateDisplay({
   // Compute totals
   const validEstimates = estimates.filter((e): e is GasEstimate => e !== null);
   const nativePriceUsd = validEstimates[0]?.nativePriceUsd ?? null;
+
+  // Bubble the resolved source-chain native USD price to parents that want to
+  // render their own native-value USD displays (e.g. the Value row in the
+  // batch summary box) without firing duplicate CoinGecko lookups.
+  useEffect(() => {
+    if (!onNativePriceUsd) return;
+    onNativePriceUsd(nativePriceUsd);
+    // onNativePriceUsd intentionally excluded — parents stash the latest in
+    // a useState setter, so identity changes shouldn't re-trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nativePriceUsd]);
   const sym = validEstimates[0]?.nativeCurrencySymbol || "ETH";
   const anyFailed = validEstimates.some((e) => e.estimationFailed);
   const anyInsufficient = validEstimates.some((e) => e.insufficientBalance);

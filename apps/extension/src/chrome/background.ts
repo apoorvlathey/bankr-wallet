@@ -157,7 +157,7 @@ import {
 } from "./txHandlers";
 
 // Gas estimation
-import { estimateGas } from "./gasEstimation";
+import { estimateGas, fetchNativePrice } from "./gasEstimation";
 import { estimateBatchGasSequential } from "./batchGasEstimation";
 
 // Transaction simulation (asset change detection)
@@ -184,6 +184,21 @@ import {
   checkPermit2Allowance,
   getTokenBalanceWei,
 } from "./swapApi";
+import {
+  fetchBridgeQuote,
+  fetchBridgeBuildTx,
+  fetchBridgeStatus,
+  getCachedBungeeChains,
+  getCachedBungeeTokens,
+} from "./bridgeApi";
+import {
+  getBridgeSourceChains,
+  getBridgeDestinationChains,
+} from "./bridgeChainsResolver";
+import {
+  resumePendingBridgePollers,
+} from "./bridgeStatusPoller";
+import { prunePendingBridges } from "./pendingBridgeStorage";
 import {
   resolveCoinGeckoNativeAssetsBatch,
   resolveCoinGeckoErc20PricesBatch,
@@ -491,6 +506,12 @@ cleanupStaleProcessingTxs();
 import { resumePendingPollers, checkPendingTxReceipt as checkPendingTxReceiptFn } from "./txReceiptPoller";
 import { clearAllNonces } from "./nonceManager";
 resumePendingPollers();
+
+// Resume cross-chain bridge status polling. Prune stale entries first so we
+// don't keep hammering Bungee for bridges that have been abandoned for hours.
+prunePendingBridges()
+  .then(() => resumePendingBridgePollers())
+  .catch((err) => console.warn("[bridge] resume failed", err));
 
 // Recover stuck force inclusion txs (L1 reverted, or L2 hash extraction failed but L1 succeeded)
 import { recoverStuckForceInclusionTxs } from "./forceInclusion";
@@ -2334,6 +2355,76 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "fetchBridgeQuote": {
+      fetchBridgeQuote({
+        userAddress: message.userAddress,
+        receiverAddress: message.receiverAddress,
+        originChainId: message.originChainId,
+        destinationChainId: message.destinationChainId,
+        inputToken: message.inputToken,
+        outputToken: message.outputToken,
+        inputAmount: message.inputAmount,
+        slippage: message.slippage,
+      })
+        .then((data) => sendResponse({ success: true, data }))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "fetchBridgeBuildTx": {
+      fetchBridgeBuildTx(message.quoteId)
+        .then((data) => sendResponse({ success: true, data }))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "fetchBridgeStatus": {
+      fetchBridgeStatus({
+        requestHash: message.requestHash,
+        txHash: message.txHash,
+      })
+        .then((data) => sendResponse({ success: true, data }))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "fetchBridgeChains": {
+      // Two variants: source-only (filtered to signable chains) and the
+      // full destination list. UI picks per side.
+      const which = message.side === "destination" ? getBridgeDestinationChains : getBridgeSourceChains;
+      which()
+        .then((data) => sendResponse({ success: true, data }))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "fetchBridgeChainsRaw": {
+      // Raw cached Bungee chain list (used when UI wants the unfiltered set).
+      getCachedBungeeChains()
+        .then((data) => sendResponse({ success: true, data }))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "fetchBridgeTokens": {
+      getCachedBungeeTokens(message.chainId)
+        .then((data) => sendResponse({ success: true, data }))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
     case "fetchTokenInfo": {
       fetchTokenInfo(message.tokenAddress, message.chainId)
         .then((data) => sendResponse({ success: true, data }))
@@ -2371,6 +2462,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       fetchTokenPrice(message.chainId, message.address)
         .then((priceUsd) =>
           sendResponse({ success: true, priceUsd }),
+        )
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "fetchNativePrice": {
+      fetchNativePrice(message.chainId)
+        .then((priceUsd) =>
+          sendResponse({ success: true, priceUsd: priceUsd ?? 0 }),
         )
         .catch((err) =>
           sendResponse({ success: false, error: err.message }),

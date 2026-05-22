@@ -1,4 +1,5 @@
 import { CHAIN_REGISTRY, DEFAULT_CHAIN_CONFIG } from "@/constants/chainRegistry";
+import { getBungeeChain } from "@/lib/bungeeChainCache";
 
 export interface ResolvedChainIconMeta {
   iconSrc?: string;
@@ -239,11 +240,20 @@ export function resolveChainIconMeta(
     };
   }
 
+  // Last resort before the deterministic-initials placeholder: consult the
+  // cached Bungee chains list. Covers Abstract, Plume, Sonic, Tempo,
+  // Plasma, World Chain, etc. — chains we don't have a registry entry or
+  // hand-curated alias for but Bungee ships a canonical icon URL for.
+  // Sync lookup against an in-memory cache populated from chrome.storage
+  // (see `bungeeChainCache.ts`).
+  const bungee = getBungeeChain(chainId);
+  const bungeeIcon = bungee?.icon || bungee?.logoURI || undefined;
+
   const fallback = FALLBACK_PALETTE[hashString(`${chainId}:${chainName ?? ""}`) % FALLBACK_PALETTE.length];
   return {
-    iconSrc: DEFAULT_CHAIN_CONFIG.icon || undefined,
+    iconSrc: bungeeIcon ?? DEFAULT_CHAIN_CONFIG.icon ?? undefined,
     overlayLabel: inferOverlayLabel(chainName),
-    fallbackText: getChainInitials(chainName),
+    fallbackText: getChainInitials(chainName || bungee?.name),
     bg: fallback.bg,
     border: fallback.border,
     text: fallback.text,

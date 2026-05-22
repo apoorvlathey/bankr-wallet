@@ -27,7 +27,7 @@ import { useBridgeTokens } from "./hooks/useBridgeTokens";
 import { useBridgeQuote } from "./hooks/useBridgeQuote";
 import { usePortfolio } from "./hooks/usePortfolio";
 import { POPULAR_PER_CHAIN } from "./constants";
-import { BUNGEE_NATIVE_TOKEN, type BungeeToken } from "./types";
+import { BUNGEE_NATIVE_TOKEN, type BungeeToken } from "@walletchan/shared/bungee";
 
 /** Map chainId → block-explorer URL for tx links. */
 const EXPLORERS: Record<number, string> = {

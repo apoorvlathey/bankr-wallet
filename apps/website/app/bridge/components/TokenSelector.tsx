@@ -24,7 +24,7 @@ import {
   formatBalance,
   type PortfolioToken,
 } from "../../api/portfolio/providers/types";
-import { BUNGEE_NATIVE_TOKEN, type BungeeToken } from "../types";
+import { BUNGEE_NATIVE_TOKEN, type BungeeToken } from "@walletchan/shared/bungee";
 
 interface TokenSelectorProps {
   tokens: BungeeToken[];

@@ -1,5 +1,6 @@
 import { Box, Image, Text } from "@chakra-ui/react";
 import { resolveChainIconMeta } from "@/lib/chainIcons";
+import { useBungeeChainsVersion } from "@/lib/useBungeeChainsVersion";
 import { useTheme } from "@/theme";
 
 /**
@@ -25,6 +26,10 @@ export default function ChainIcon({
   size?: string;
   withChip?: boolean;
 }) {
+  // Subscribe to the Bungee-chains cache version so chains resolved via
+  // that fallback path (Abstract, Plume, Sonic, Tempo, …) re-render when
+  // the cache populates on cold boot.
+  useBungeeChainsVersion();
   const meta = resolveChainIconMeta(chainId, chainName);
   const altText = chainName || `Chain ${chainId}`;
   const { themeId } = useTheme();

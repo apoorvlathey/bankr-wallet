@@ -23,7 +23,8 @@ import {
   SliderThumb,
   SliderMark,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon } from "@chakra-ui/icons";
+import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon, TimeIcon } from "@chakra-ui/icons";
+import LoadingDots from "@/components/LoadingDots";
 import { parseEther, parseUnits, formatUnits } from "viem";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { useChainBadgeStyle, useTheme } from "@/theme";
@@ -52,12 +53,20 @@ import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
 import type { ERC5792Call } from "@/chrome/erc5792Types";
 import type { SwapTxEntry } from "@/chrome/txHandlers";
-import TokenSelector from "./TokenSelector";
-import BuyTokenSelector from "./BuyTokenSelector";
+import BridgeChainTokenModal from "./BridgeChainTokenModal";
+import { TokenSymbolFallback } from "./TokenSymbolFallback";
 import SwapQuoteDisplay from "./SwapQuoteDisplay";
+import BridgeQuoteDisplay from "./BridgeQuoteDisplay";
 import SlippageSettings from "./SlippageSettings";
 import SwapConfirmation from "./SwapConfirmation";
 import ChainIcon from "@/components/ChainIcon";
+import { FromAccountDisplay } from "@/components/FromAccountDisplay";
+import {
+  BUNGEE_NATIVE_TOKEN,
+  type BungeeQuoteResponse,
+} from "@walletchan/shared/bungee";
+import { getCachedBungeeTokens } from "@/chrome/bridgeApi";
+import { getBungeeChain } from "@/lib/bungeeChainCache";
 
 // Swap direction arrow icon
 const SwapArrowIcon = (props: React.ComponentProps<typeof Icon>) => (
@@ -94,14 +103,32 @@ interface SwapViewProps {
 function SwapView({
   fromAddress,
   accountType,
-  chainId,
-  chainName,
+  chainId: initialChainId,
+  chainName: initialChainName,
   onBack,
   onSwapInitiated,
-  onChainChange,
+  // The top-level chain selector outside the Swap surface still owns the
+  // global / per-tab chain (dapps reference it). We deliberately do NOT call
+  // onChainChange from any picker inside this surface — the swap/bridge tx
+  // is decided by sellChainId/buyChainId here, independent of dapps. Prop
+  // is kept in the signature for shape stability.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onChainChange: _onChainChange,
   initialBuyToken,
   initialSellToken,
 }: SwapViewProps) {
+  // Internal per-side chain state. Buy defaults to sell so a same-chain swap
+  // is one click away; the user changes buyChainId only when they want to
+  // bridge. Neither writes back to the global chain.
+  const [sellChainId, setSellChainId] = useState<number>(initialChainId);
+  const [buyChainId, setBuyChainId] = useState<number>(initialChainId);
+  // Shadow the prop with the internal sell-side chain. Existing references
+  // throughout the file (token list, allowance checks, portfolio loads…)
+  // continue to read `chainId` and naturally retarget to the source chain.
+  const chainId = sellChainId;
+  const sellChainConfig = getChainConfig(sellChainId);
+  const chainName = sellChainConfig.name || initialChainName;
+  const isBridge = sellChainId !== buyChainId;
   const toast = useThemedToast();
   const { themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
@@ -134,9 +161,13 @@ function SwapView({
     setHighlightedChainIndex(0);
   }, [chainSearch, isChainMenuOpen]);
 
-  // Holdings
+  // Holdings (filtered to the current sell chain)
   const [holdings, setHoldings] = useState<PortfolioToken[]>([]);
   const [holdingsLoading, setHoldingsLoading] = useState(true);
+  // Cross-chain catalog — drives chain portfolio totals + Your Tokens in the
+  // chain+token modal (BridgeChainTokenModal). Filled by the same effect that
+  // populates `holdings`, so it's free.
+  const [holdingsAllChains, setHoldingsAllChains] = useState<PortfolioToken[]>([]);
 
   // Token list
   const [tokenList, setTokenList] = useState<TokenListEntry[]>([]);
@@ -165,10 +196,33 @@ function SwapView({
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
   const [isMaxMode, setIsMaxMode] = useState(false);
 
-  // Quote
+  // BridgeChainTokenModal — single dropdown opened by either the sell or the
+  // buy trigger. Mode tracks which side is being edited so the dropdown can
+  // pick source vs destination chains + commit the result to the right piece
+  // of state. `chainTokenTriggerEl` anchors the dropdown directly below
+  // whichever trigger was clicked.
+  const [chainTokenModalSide, setChainTokenModalSide] = useState<"sell" | "buy" | null>(null);
+  const [chainTokenTriggerEl, setChainTokenTriggerEl] = useState<HTMLElement | null>(null);
+
+  // Quote (same-chain via 0x)
   const [quote, setQuote] = useState<SwapQuoteResponse | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
+  // Cross-chain quote (via Bungee).
+  const [bridgeQuote, setBridgeQuote] = useState<BungeeQuoteResponse | null>(null);
+
+  // Powers the "Swap to NATIVE on CHAIN instead?" recovery affordance shown
+  // under a failed bridge quote. Resolved from the local CHAIN_REGISTRY when
+  // available, otherwise from the Bungee tokens cache (covers RWA / non-EVM-
+  // mainnet destinations like Plume / Tempo that we don't carry registry
+  // entries for).
+  const [destNativeInfo, setDestNativeInfo] = useState<{
+    symbol: string;
+    name: string;
+    decimals: number;
+    logoUrl: string;
+    chainName: string;
+  } | null>(null);
 
   // Settings
   const [slippageBps, setSlippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
@@ -293,6 +347,7 @@ function SwapView({
 
         const chainTokens = tokens.filter((t) => t.chainId === chainId);
         setHoldings(chainTokens);
+        setHoldingsAllChains(tokens);
         // If initialSellToken provided, find the matching token from portfolio.
         // Otherwise leave the sell token unselected — the user picks one explicitly.
         if (initialSellToken) {
@@ -510,28 +565,34 @@ function SwapView({
     const addr = buyTokenAddress.trim();
     if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) return;
 
-    // Check if user holds this token — use portfolio price
+    // Check if user holds this token on the BUY chain (not the global per-
+    // tab chain — for bridges those diverge). `holdingsAllChains` is the
+    // multi-chain catalog populated alongside `holdings` for exactly this
+    // case; filtering it to `buyChainId` covers same-chain swaps too since
+    // `buyChainId` defaults to the current chain.
     const isNative = addr.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
-    const held = holdings.find(
+    const held = holdingsAllChains.find(
       (h) =>
-        h.contractAddress.toLowerCase() === addr.toLowerCase() ||
-        (isNative && h.contractAddress === "native"),
+        h.chainId === buyChainId &&
+        (h.contractAddress.toLowerCase() === addr.toLowerCase() ||
+          (isNative && h.contractAddress === "native")),
     );
     if (held && held.priceUsd > 0) {
       setBuyTokenPriceUsd(held.priceUsd);
       return;
     }
 
-    // Fetch from CoinGecko via walletchan proxy
+    // Fetch from CoinGecko via walletchan proxy — scoped to the BUY chain
+    // so ETH-on-Ethereum vs ETH-on-Base etc. resolve to the right pool.
     chrome.runtime.sendMessage(
-      { type: "fetchTokenPrice", chainId, address: addr },
+      { type: "fetchTokenPrice", chainId: buyChainId, address: addr },
       (res) => {
         if (res?.success && res.priceUsd > 0) {
           setBuyTokenPriceUsd(res.priceUsd);
         }
       },
     );
-  }, [buyTokenAddress, chainId, holdings]);
+  }, [buyTokenAddress, buyChainId, holdingsAllChains]);
 
   // -----------------------------------------------------------------------
   // Auto-fetch quote (debounced)
@@ -547,7 +608,9 @@ function SwapView({
       !sellTokenAmount
     ) {
       setQuote(null);
+      setBridgeQuote(null);
       setQuoteError(null);
+      setQuoteLoading(false);
       return;
     }
 
@@ -558,18 +621,70 @@ function SwapView({
         ? parseEther(sellTokenAmount)
         : parseUnits(sellTokenAmount, sellToken.decimals);
       if (parsed <= 0n) {
+        // Slider dragged back to 0 — kill any in-flight loader so the
+        // YOU RECEIVE field doesn't stay stuck on bouncing dots.
         setQuote(null);
+        setBridgeQuote(null);
+        setQuoteError(null);
+        setQuoteLoading(false);
         return;
       }
       sellAmountWei = parsed.toString();
     } catch {
+      setQuoteLoading(false);
       return;
     }
 
     setQuoteLoading(true);
     setQuoteError(null);
+    // Clear the previous quote immediately so its stale `output.amount`
+    // (still encoded in the OLD buy token's decimals) doesn't get re-rendered
+    // through the NEW buyTokenInfo.decimals during the 500ms debounce — that
+    // produced bogus "<0.000001" min-received flashes on output-token swaps.
+    setQuote(null);
+    setBridgeQuote(null);
 
     quoteTimerRef.current = setTimeout(() => {
+      if (isBridge) {
+        // Cross-chain → Bungee. Map our native sentinel to Bungee's
+        // universal sentinel; the server proxy normalizes the casing.
+        const sellAddr =
+          sellToken.contractAddress === "native"
+            ? BUNGEE_NATIVE_TOKEN
+            : sellToken.contractAddress;
+        const buyAddrForBungee =
+          addr.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase()
+            ? BUNGEE_NATIVE_TOKEN
+            : addr;
+        // Bungee's `slippage` is in percent (e.g. 1 = 1%); our internal
+        // representation is bps (100 = 1%). Divide before sending.
+        const slippagePct = slippageBps / 100;
+        chrome.runtime.sendMessage(
+          {
+            type: "fetchBridgeQuote",
+            userAddress: fromAddress,
+            receiverAddress: fromAddress,
+            originChainId: sellChainId,
+            destinationChainId: buyChainId,
+            inputToken: sellAddr,
+            outputToken: buyAddrForBungee,
+            inputAmount: sellAmountWei,
+            slippage: slippagePct,
+          },
+          (res) => {
+            setQuoteLoading(false);
+            setQuote(null);
+            if (res?.success && res.data?.result?.manualRoutes?.length > 0) {
+              setBridgeQuote(res.data);
+              setQuoteError(null);
+            } else {
+              setBridgeQuote(null);
+              setQuoteError(res?.error || "No bridge route available");
+            }
+          },
+        );
+        return;
+      }
       chrome.runtime.sendMessage(
         {
           type: "fetchSwapPrice",
@@ -582,6 +697,7 @@ function SwapView({
         },
         (res) => {
           setQuoteLoading(false);
+          setBridgeQuote(null);
           if (res?.success && res.data) {
             if (!res.data.liquidityAvailable) {
               setQuoteError("No liquidity available for this pair");
@@ -597,7 +713,7 @@ function SwapView({
         },
       );
     }, 500);
-  }, [sellToken, buyTokenAddress, sellTokenAmount, fromAddress, slippageBps, chainId]);
+  }, [sellToken, buyTokenAddress, sellTokenAmount, fromAddress, slippageBps, chainId, isBridge, sellChainId, buyChainId]);
 
   useEffect(() => {
     fetchQuote();
@@ -605,6 +721,61 @@ function SwapView({
       if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
     };
   }, [fetchQuote]);
+
+  // Resolve the destination chain's native token for the bridge-failure
+  // recovery affordance. Local registry first; falls back to the Bungee
+  // tokens list so chains we don't carry registry entries for (Plume / Tempo
+  // / Plasma / Sonic / Abstract / HyperEVM / …) still get a working
+  // suggestion.
+  useEffect(() => {
+    if (!isBridge || !quoteError || quoteLoading) {
+      setDestNativeInfo(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const cfg = getChainConfig(buyChainId);
+      if (cfg.nativeCurrency) {
+        const native = cfg.nativeCurrency;
+        const logo =
+          native.symbol.toUpperCase() === "ETH"
+            ? "/chainIcons/ethereum.svg"
+            : cfg.icon || "";
+        if (!cancelled) {
+          setDestNativeInfo({
+            symbol: native.symbol,
+            name: native.name,
+            decimals: native.decimals,
+            logoUrl: logo,
+            chainName: cfg.name,
+          });
+        }
+        return;
+      }
+      try {
+        const tokens = await getCachedBungeeTokens(buyChainId);
+        const native = tokens.find(
+          (t) =>
+            (t.address ?? "").toLowerCase() ===
+            BUNGEE_NATIVE_TOKEN.toLowerCase(),
+        );
+        if (cancelled || !native) return;
+        const bChain = getBungeeChain(buyChainId);
+        setDestNativeInfo({
+          symbol: native.symbol || "",
+          name: native.name || native.symbol || "",
+          decimals: native.decimals ?? 18,
+          logoUrl: native.logoURI || native.icon || "",
+          chainName: bChain?.name ?? cfg.name,
+        });
+      } catch {
+        // Cache miss / proxy error — silently skip the suggestion.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isBridge, quoteError, quoteLoading, buyChainId]);
 
   // -----------------------------------------------------------------------
   // Swap direction toggle
@@ -789,11 +960,286 @@ function SwapView({
     setPendingBuyToken(null);
   };
 
+  /** BridgeChainTokenModal commit. Routes (chainId, token) to either the sell
+   *  or buy side depending on which trigger opened the modal. */
+  const handleChainTokenModalSelect = (
+    pickedChainId: number,
+    picked: PortfolioToken,
+  ) => {
+    const side = chainTokenModalSide;
+    if (side === "sell") {
+      const oldSellChainId = sellChainId;
+      setSellChainId(pickedChainId);
+      // Same-chain swap default: only auto-sync the buy chain to the new
+      // sell chain when the buy was *implicitly* tracking the old sell
+      // chain (no explicit buy token picked AND buyChainId still mirrors
+      // the old sell). If the user has already picked a buy token — even
+      // on the same chain as the old sell — they've made an explicit
+      // choice and we leave it alone. Picking a brand-new sell chain
+      // while a buy token exists therefore enters bridge mode rather than
+      // wiping the receive side.
+      const buyWasImplicit =
+        buyChainId === oldSellChainId && !buyTokenAddress;
+      if (buyWasImplicit && pickedChainId !== oldSellChainId) {
+        setBuyChainId(pickedChainId);
+        // No buy token was set in this branch — the wipe block from the
+        // old logic was redundant. Leave buyToken* alone.
+      }
+      setSellToken(picked);
+      setSellAmount("");
+      setIsUsdMode(false);
+      setSliderValue(0);
+      setIsMaxMode(false);
+      setQuote(null);
+      setResolvedSellToken(null);
+      setSellCustomError(null);
+    } else if (side === "buy") {
+      if (pickedChainId !== buyChainId) {
+        setBuyChainId(pickedChainId);
+      }
+      buyInfoSetBySelectRef.current = true;
+      const addr =
+        picked.contractAddress === "native"
+          ? NATIVE_TOKEN_ADDRESS
+          : picked.contractAddress;
+      setBuyTokenAddress(addr);
+      setBuyTokenInfo({
+        name: picked.name,
+        symbol: picked.symbol,
+        decimals: picked.decimals,
+      });
+      setBuyTokenLogoURI(picked.logoUrl);
+      setBuyTokenLoading(false);
+      setBuyTokenPriceUsd(0);
+      setPendingBuyToken(null);
+      setQuote(null);
+    }
+  };
+
+  // -----------------------------------------------------------------------
+  // Submit (cross-chain): refresh the Bungee quote at confirm time
+  // (quoteIds expire ~60s), call /bridge/build-tx for the firm calldata,
+  // and stage [approve?, bridge] for the existing SwapConfirmation surface.
+  // -----------------------------------------------------------------------
+  const handlePrepareBridge = async () => {
+    if (!sellToken || !buyTokenInfo || !bridgeRoute) return;
+    setIsSubmitting(true);
+
+    try {
+      // 1. Compute sell amount in wei
+      let sellAmountWei: string;
+      try {
+        const isNative = sellToken.contractAddress === "native";
+        sellAmountWei = isNative
+          ? parseEther(sellTokenAmount).toString()
+          : parseUnits(sellTokenAmount, sellToken.decimals).toString();
+      } catch {
+        toast({ title: "Invalid amount", status: "error", duration: 3000 });
+        return;
+      }
+      // Cap at onchain balance (same safety as same-chain).
+      if (sellToken.contractAddress !== "native") {
+        const balRes = await new Promise<{ success: boolean; balance?: string }>((resolve) => {
+          chrome.runtime.sendMessage(
+            {
+              type: "getTokenBalanceWei",
+              tokenAddress: sellToken.contractAddress,
+              owner: fromAddress,
+              chainId: sellChainId,
+            },
+            resolve,
+          );
+        });
+        if (balRes.success && balRes.balance) {
+          const onChainBalance = BigInt(balRes.balance);
+          const parsed = BigInt(sellAmountWei);
+          if (parsed > onChainBalance) {
+            sellAmountWei = onChainBalance.toString();
+          }
+        }
+      }
+
+      // 2. Refresh quote — Bungee quote IDs expire ~60s, so re-fetch
+      // before building tx data.
+      const sellAddrForBungee =
+        sellToken.contractAddress === "native"
+          ? BUNGEE_NATIVE_TOKEN
+          : sellToken.contractAddress;
+      const buyAddrForBungee =
+        buyTokenAddress.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase()
+          ? BUNGEE_NATIVE_TOKEN
+          : buyTokenAddress;
+      const slippagePct = slippageBps / 100;
+      const fresh = await new Promise<{ success: boolean; data?: BungeeQuoteResponse; error?: string }>((resolve) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "fetchBridgeQuote",
+            userAddress: fromAddress,
+            receiverAddress: fromAddress,
+            originChainId: sellChainId,
+            destinationChainId: buyChainId,
+            inputToken: sellAddrForBungee,
+            outputToken: buyAddrForBungee,
+            inputAmount: sellAmountWei,
+            slippage: slippagePct,
+          },
+          resolve,
+        );
+      });
+      const route = fresh?.data?.result?.manualRoutes?.[0];
+      if (!fresh?.success || !route?.quoteId) {
+        toast({
+          title: "Bridge quote failed",
+          description: fresh?.error || "Could not refresh bridge quote",
+          status: "error",
+          duration: 3000,
+        });
+        return;
+      }
+
+      // 3. Resolve firm tx data via /bridge/build-tx. Bungee's quote
+      // sometimes includes txData inline, but the dedicated build endpoint
+      // is the authoritative source per the integration docs.
+      const built = await new Promise<{ success: boolean; data?: import("@walletchan/shared/bungee").BungeeBuildTxResponse; error?: string }>((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: "fetchBridgeBuildTx", quoteId: route.quoteId },
+          resolve,
+        );
+      });
+      const built_txData = built?.data?.result?.txData;
+      const built_approval = built?.data?.result?.approvalData;
+      if (!built?.success || !built_txData) {
+        toast({
+          title: "Bridge build failed",
+          description: built?.error || "Could not build bridge transaction",
+          status: "error",
+          duration: 3000,
+        });
+        return;
+      }
+
+      const swapMeta = {
+        sellTokenSymbol: sellToken.symbol,
+        sellTokenLogo: sellToken.logoUrl || null,
+        buyTokenSymbol: buyTokenInfo.symbol,
+        buyTokenLogo: buyTokenLogoURI || null,
+      };
+
+      const transactions: SwapTxEntry[] = [];
+
+      // 4a. Approval (if Bungee says we need one and current allowance < amount)
+      if (built_approval && sellToken.contractAddress !== "native") {
+        const allowanceRes = await new Promise<{ success: boolean; allowance?: string }>(
+          (resolve) => {
+            chrome.runtime.sendMessage(
+              {
+                type: "checkTokenAllowance",
+                tokenAddress: built_approval.tokenAddress,
+                owner: fromAddress,
+                spender: built_approval.spenderAddress,
+                chainId: sellChainId,
+              },
+              resolve,
+            );
+          },
+        );
+        const currentAllowance = BigInt(allowanceRes.allowance || "0");
+        const neededAllowance = BigInt(built_approval.amount);
+        if (currentAllowance < neededAllowance) {
+          const { data: approvalData } = buildApprovalTx(
+            built_approval.tokenAddress,
+            built_approval.spenderAddress,
+            neededAllowance,
+          );
+          transactions.push({
+            tx: {
+              from: fromAddress,
+              to: built_approval.tokenAddress,
+              data: approvalData,
+              value: "0x0",
+              chainId: sellChainId,
+            },
+            origin: `Approve ${sellToken.symbol.toUpperCase()} for bridge`,
+            favicon: sellToken.logoUrl || null,
+            functionName: "approve",
+          });
+        }
+      }
+
+      // 4b. The bridge call itself. Bridge meta rides on this entry so the
+      // post-success hookup in txHandlers / txReceiptPoller picks it up.
+      transactions.push({
+        tx: {
+          from: fromAddress,
+          to: built_txData.to,
+          data: built_txData.data,
+          value: `0x${BigInt(built_txData.value || "0").toString(16)}`,
+          chainId: sellChainId,
+        },
+        origin: `Bridge ${sellToken.symbol.toUpperCase()} → ${getChainConfig(buyChainId).name}`,
+        favicon: sellToken.logoUrl || null,
+        swapMeta,
+        bridge: {
+          sourceChainId: sellChainId,
+          destinationChainId: buyChainId,
+          destinationChainName: getChainConfig(buyChainId).name,
+          routeName: route.routeDetails?.name,
+          receiverAddress: fromAddress,
+        },
+      });
+
+      // 5. Build atomic ERC-7821 batch for Bankr.
+      const isBatchSupported =
+        accountType === "bankr" && BANKR_SUPPORTED_CHAIN_IDS.has(sellChainId);
+      let batchTx: { to: string; data: string; value: string } | null = null;
+      if (isBatchSupported && transactions.length > 1) {
+        const calls: ERC5792Call[] = transactions.map((t) => ({
+          to: t.tx.to as `0x${string}`,
+          data: (t.tx.data || "0x") as `0x${string}`,
+          value: (t.tx.value || "0x0") as `0x${string}`,
+        }));
+        batchTx = encodeBatchCalls(calls, fromAddress);
+      }
+
+      setPreparedTransactions(transactions);
+      setPreparedBatchTx(batchTx);
+      // Reuse the same `preparedQuote` slot so SwapConfirmation's
+      // existing buy-amount renderer works. We synthesize a 0x-shaped
+      // payload from the bridge route so the existing fields the
+      // confirmation reads (`buyAmount`) point at the right thing.
+      setPreparedQuote({
+        buyAmount: route.output.amount,
+        sellAmount: sellAmountWei,
+        buyToken: built_txData.to,
+        sellToken: sellToken.contractAddress,
+        gas: "0",
+        gasPrice: "0",
+        totalNetworkFee: "0",
+        liquidityAvailable: true,
+        minBuyAmount: route.output.minAmountOut ?? route.output.amount,
+        allowanceTarget: built_approval?.spenderAddress ?? "",
+        issues: {},
+        fees: {},
+        route: { fills: [] },
+      } as SwapQuoteResponse);
+      setShowConfirmation(true);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Bridge prep failed",
+        status: "error",
+        duration: 3000,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // -----------------------------------------------------------------------
   // Submit: Prepare transactions, then show confirmation screen
   // -----------------------------------------------------------------------
   const handlePrepareSwap = async () => {
-    if (!sellToken || !quote || !buyTokenInfo) return;
+    if (!sellToken || !buyTokenInfo) return;
     if (accountType === "impersonator") {
       toast({
         title: "View-only account",
@@ -803,6 +1249,11 @@ function SwapView({
       });
       return;
     }
+    if (isBridge) {
+      await handlePrepareBridge();
+      return;
+    }
+    if (!quote) return;
 
     setIsSubmitting(true);
 
@@ -1133,13 +1584,22 @@ function SwapView({
     buyTokenAddress.trim(),
   );
 
+  // Bridge route → first manual route. Auto-mode is intentionally unused on
+  // the extension side for v1 (see plan: PK/Seed + Bankr already handle
+  // multi-call without Permit2).
+  const bridgeRoute = bridgeQuote?.result?.manualRoutes?.[0];
+  /** Output amount in wei for either same-chain (0x) or cross-chain (Bungee). */
+  const unifiedBuyAmount = isBridge
+    ? bridgeRoute?.output?.amount
+    : quote?.buyAmount;
+
   const canSwap =
     sellToken &&
     isValidBuyAddress &&
     buyTokenInfo &&
     sellAmountNum > 0 &&
     !insufficientBalance &&
-    quote &&
+    (isBridge ? !!bridgeRoute : !!quote) &&
     !quoteLoading &&
     !isSubmitting &&
     accountType !== "impersonator";
@@ -1150,15 +1610,27 @@ function SwapView({
       ? sellAmountNum * sellToken.priceUsd
       : 0;
   const outputUsd = useMemo(() => {
-    if (!quote || !buyTokenInfo || buyTokenPriceUsd <= 0) return 0;
+    if (!buyTokenInfo || buyTokenPriceUsd <= 0) return 0;
+    if (isBridge) {
+      if (!bridgeRoute?.output?.amount) return 0;
+      const buyAmountNum = parseFloat(
+        formatUnits(BigInt(bridgeRoute.output.amount), buyTokenInfo.decimals),
+      );
+      return buyAmountNum * buyTokenPriceUsd;
+    }
+    if (!quote) return 0;
     const buyAmountNum = parseFloat(
       formatUnits(BigInt(quote.buyAmount), buyTokenInfo.decimals),
     );
     return buyAmountNum * buyTokenPriceUsd;
-  }, [quote, buyTokenInfo, buyTokenPriceUsd]);
+  }, [quote, bridgeRoute, buyTokenInfo, buyTokenPriceUsd, isBridge]);
 
+  // Suppress price impact while a fresh quote is in flight — otherwise the
+  // OLD quote's outputUsd is compared against the NEW inputUsd (or vice versa)
+  // for the brief window between user-action and fetch-resolve, which flashes a
+  // bogus "high price impact" warning on token/chain/amount switches.
   const priceImpact =
-    inputUsd > 0 && outputUsd > 0
+    !quoteLoading && inputUsd > 0 && outputUsd > 0
       ? ((inputUsd - outputUsd) / inputUsd) * 100
       : null;
 
@@ -1185,10 +1657,12 @@ function SwapView({
                 textTransform="uppercase"
                 letterSpacing="wider"
               >
-                Swap
+                Swap / Bridge
               </Text>
             </HStack>
-            {/* Chain selector */}
+            {/* Chain selector — kept on the unsupported-chain screen only,
+                so the user has a way out when they land here with the wrong
+                global chain. The main surface uses per-side pickers. */}
             <Menu
               isOpen={isChainMenuOpen}
               initialFocusRef={chainSearchInputRef}
@@ -1272,7 +1746,11 @@ function SwapView({
                           e.stopPropagation();
                           const highlighted = filteredSwapChains[highlightedChainIndex];
                           if (highlighted) {
-                            onChainChange(highlighted.name);
+                            // Source-chain change. Reset buyChainId to match
+                          // (default same-chain swap). User flips to bridge
+                          // by changing only buyChainId afterwards.
+                          setSellChainId(highlighted.chainId);
+                          setBuyChainId(highlighted.chainId);
                             setIsChainMenuOpen(false);
                             setChainSearch("");
                           }
@@ -1297,7 +1775,8 @@ function SwapView({
                         py={2.5}
                         onMouseEnter={() => setHighlightedChainIndex(i)}
                         onClick={() => {
-                          onChainChange(c.name);
+                          setSellChainId(c.chainId);
+                        setBuyChainId(c.chainId);
                           setIsChainMenuOpen(false);
                           setChainSearch("");
                         }}
@@ -1381,6 +1860,16 @@ function SwapView({
         onGasEstimates={setSwapGasEstimates}
         onValidityChange={setSwapGasValid}
         isConfirmDisabled={!swapGasValid}
+        bridgeMeta={
+          isBridge
+            ? {
+                destinationChainId: buyChainId,
+                destinationChainName: getChainConfig(buyChainId).name,
+                routeName: bridgeRoute?.routeDetails?.name,
+                estimatedTime: bridgeRoute?.estimatedTime,
+              }
+            : undefined
+        }
       />
     );
   }
@@ -1391,9 +1880,11 @@ function SwapView({
   return (
     <Box p={4} minH="100%" bg="surface.base">
       <VStack spacing={3} align="stretch">
-        {/* Header */}
+        {/* Header — no top-right chain selector; chain is picked per side
+            (sell + receive) below. The global chain that dapps reference is
+            unaffected by selections made here. */}
         <HStack spacing={2} justify="space-between">
-          <HStack spacing={2}>
+          <HStack spacing={2} minW={0} flex={1}>
             <IconButton
               aria-label="Back"
               icon={<ArrowBackIcon />}
@@ -1407,148 +1898,14 @@ function SwapView({
               color="text.primary"
               textTransform="uppercase"
               letterSpacing="wider"
+              noOfLines={1}
             >
-              Swap
+              Swap / Bridge
             </Text>
           </HStack>
-          {/* Chain selector */}
-          <Menu
-            isOpen={isChainMenuOpen}
-            initialFocusRef={chainSearchInputRef}
-            onOpen={() => {
-              setIsChainMenuOpen(true);
-              setHighlightedChainIndex(0);
-            }}
-            onClose={() => {
-              setIsChainMenuOpen(false);
-              setChainSearch("");
-              setHighlightedChainIndex(0);
-            }}
-          >
-            <MenuButton
-              as={Box}
-              cursor="pointer"
-              bg={chainBadgeStyle.bg}
-              border="2px solid"
-              borderColor={chainBadgeStyle.border}
-              borderRadius="md"
-              px={2}
-              py={1}
-              _hover={{ opacity: 0.8 }}
-            >
-              <HStack spacing={1.5}>
-                <ChainIcon chainId={chainId} chainName={chainName} size="16px" withChip />
-                <Text
-                  fontSize="xs"
-                  fontWeight="700"
-                  color={chainBadgeStyle.fg}
-                  textTransform="uppercase"
-                >
-                  {chainName}
-                </Text>
-                <ChevronDownIcon color={chainBadgeStyle.fg} boxSize={3} />
-              </HStack>
-            </MenuButton>
-            <MenuList
-              // Menu baseStyle paints surface tokens — keep only sizing.
-              py={0}
-              minW="160px"
-              zIndex={30}
-            >
-              <Box p={2} borderBottom="2px solid" borderColor="border.default">
-                <InputGroup size="sm">
-                  <InputLeftElement pointerEvents="none">
-                    <Search2Icon color="text.tertiary" boxSize={3} />
-                  </InputLeftElement>
-                  <Input
-                    ref={chainSearchInputRef}
-                    value={chainSearch}
-                    onChange={(e) => setChainSearch(e.target.value)}
-                    placeholder="Search chains"
-                    border="2px solid"
-                    borderColor="border.default"
-                    fontWeight="600"
-                    pl={9}
-                    _hover={{ borderColor: "border.default" }}
-                    _focus={{ borderColor: "accent.secondary", boxShadow: "none" }}
-                    onKeyDown={(e) => {
-                      if (e.key === "ArrowDown") {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (filteredSwapChains.length > 0) {
-                          setHighlightedChainIndex((prev) =>
-                            Math.min(prev + 1, filteredSwapChains.length - 1),
-                          );
-                        }
-                        return;
-                      }
-                      if (e.key === "ArrowUp") {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (filteredSwapChains.length > 0) {
-                          setHighlightedChainIndex((prev) => Math.max(prev - 1, 0));
-                        }
-                        return;
-                      }
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const highlighted = filteredSwapChains[highlightedChainIndex];
-                        if (highlighted) {
-                          onChainChange(highlighted.name);
-                          setIsChainMenuOpen(false);
-                          setChainSearch("");
-                        }
-                        return;
-                      }
-                      e.stopPropagation();
-                    }}
-                  />
-                </InputGroup>
-              </Box>
-              <Box maxH="220px" overflowY="auto">
-              {filteredSwapChains.map(
-                (c, i, arr) => {
-                  return (
-                    <MenuItem
-                      key={c.chainId}
-                      bg={
-                        i === highlightedChainIndex || c.chainId === chainId
-                          ? "surface.sunken"
-                          : "transparent"
-                      }
-                      borderBottom={
-                        i < arr.length - 1 ? "2px solid" : "none"
-                      }
-                      borderColor="border.default"
-                      py={2.5}
-                      onMouseEnter={() => setHighlightedChainIndex(i)}
-                      onClick={() => {
-                        onChainChange(c.name);
-                        setIsChainMenuOpen(false);
-                        setChainSearch("");
-                      }}
-                    >
-                      <HStack spacing={2}>
-                        <ChainIcon chainId={c.chainId} chainName={c.name} size="18px" withChip />
-                        <Text fontWeight="700" fontSize="sm">
-                          {c.name}
-                        </Text>
-                      </HStack>
-                    </MenuItem>
-                  );
-                },
-              )}
-              {filteredSwapChains.length === 0 && (
-                <Box px={3} py={3}>
-                  <Text fontSize="sm" fontWeight="700" color="text.secondary">
-                    No chains match "{chainSearch.trim()}".
-                  </Text>
-                </Box>
-              )}
-              </Box>
-            </MenuList>
-          </Menu>
+          {/* Active account on the right — same avatar + display-name rules
+              as the rest of the wallet (ENS avatar → Bankr icon → blockie). */}
+          {fromAddress && <FromAccountDisplay address={fromAddress} />}
         </HStack>
 
         {/* You Sell */}
@@ -1560,30 +1917,28 @@ function SwapView({
           boxShadow="card"
           p={3}
         >
-          <Text
-            fontSize="xs"
-            fontWeight="700"
-            color="text.secondary"
-            textTransform="uppercase"
-            mb={1}
-          >
-            You Sell
-          </Text>
-          {/* Balance + USD value | USD toggle */}
-          {sellToken && (
-            <HStack justify="space-between" mb={2}>
-              <HStack spacing={2} align="baseline">
-                <Text fontSize="xs" color="text.tertiary" fontWeight="500" textTransform="uppercase">
-                  Balance: {Number(parseFloat(sellToken.balance).toPrecision(6)).toLocaleString("en-US", { maximumFractionDigits: 6 })}{" "}
-                  {sellToken.symbol}
-                </Text>
-                {hasPrice && (
-                  <Text fontSize="2xs" color="text.tertiary" fontWeight="500">
-                    ({formatUsd(sellBalance * sellToken.priceUsd)})
+          {/* Label + USD/token conversion + mode toggle. Balance lives below
+              the input now (right-aligned under it) to declutter this top row
+              — the section header + an actionable conversion are enough up
+              here. */}
+          <HStack justify="space-between" mb={2} align="center">
+            <Text
+              fontSize="xs"
+              fontWeight="700"
+              color="text.secondary"
+              textTransform="uppercase"
+            >
+              You Sell
+            </Text>
+            {sellToken && hasPrice && (
+              <HStack spacing={1}>
+                {sellAmount && parseFloat(sellAmount) > 0 && (
+                  <Text fontSize="xs" color="text.tertiary" fontWeight="700">
+                    {isUsdMode
+                      ? `${Number(parseFloat(sellTokenAmount).toPrecision(6)).toLocaleString("en-US", { maximumFractionDigits: 6 })}`
+                      : formatUsd(parseFloat(sellAmount) * sellToken.priceUsd)}
                   </Text>
                 )}
-              </HStack>
-              {hasPrice && (
                 <Button
                   size="xs"
                   variant="ghost"
@@ -1593,33 +1948,31 @@ function SwapView({
                   h="20px"
                   px={1}
                   onClick={handleToggleMode}
+                  rightIcon={<SwapArrowIcon boxSize={3} />}
                   _hover={{ bg: "surface.sunken" }}
+                  sx={{ "& .chakra-button__icon": { marginInlineStart: "2px" } }}
                 >
                   {isUsdMode ? sellToken.symbol.toUpperCase() : "USD"}
                 </Button>
-              )}
-            </HStack>
-          )}
+              </HStack>
+            )}
+          </HStack>
           <HStack spacing={2}>
-            <TokenSelector
-              holdings={holdings}
-              tokenList={tokenList}
-              selectedToken={sellToken}
-              excludeAddress={buyTokenAddress || undefined}
-              chainId={chainId}
-              onSelect={(t) => {
-                setSellToken(t);
-                setSellAmount("");
-                setIsUsdMode(false);
-                setSliderValue(0);
-                setQuote(null);
+            <TokenChainTrigger
+              token={sellToken}
+              chainId={sellChainId}
+              onClick={(e) => {
+                // Toggle: clicking again on the same trigger closes the open
+                // dropdown. Capturing currentTarget anchors positioning below
+                // this specific trigger.
+                if (chainTokenModalSide === "sell") {
+                  setChainTokenModalSide(null);
+                  setChainTokenTriggerEl(null);
+                } else {
+                  setChainTokenTriggerEl(e.currentTarget);
+                  setChainTokenModalSide("sell");
+                }
               }}
-              onCustomAddress={resolveSellCustomAddress}
-              onSelectCustomToken={handleSelectCustomSellToken}
-              resolvedCustomToken={resolvedSellToken}
-              customTokenLoading={sellCustomLoading}
-              customTokenError={sellCustomError}
-              chainName={chainName}
             />
             <InputGroup flex={1} isolation="isolate">
               {isUsdMode && (
@@ -1674,26 +2027,41 @@ function SwapView({
               </InputRightElement>
             </InputGroup>
           </HStack>
-          {/* Conversion display — right-aligned */}
-          {sellToken && sellAmount && parseFloat(sellAmount) > 0 && hasPrice && (
-            <Text fontSize="xs" color="text.tertiary" fontWeight="700" mt={1} textAlign="right">
-              {isUsdMode
-                ? `${Number(parseFloat(sellTokenAmount).toPrecision(6)).toLocaleString("en-US", { maximumFractionDigits: 6 })} ${sellToken.symbol.toUpperCase()}`
-                : formatUsd(parseFloat(sellAmount) * sellToken.priceUsd)}
-            </Text>
-          )}
-          {/* Sell token address */}
-          {sellToken && sellToken.contractAddress !== "native" && (
-            <TokenAddressRow
-              address={sellToken.contractAddress}
-              explorer={chainConfig.explorer}
-              copied={copiedAddr === sellToken.contractAddress}
-              onCopy={async () => {
-                await navigator.clipboard.writeText(sellToken.contractAddress);
-                setCopiedAddr(sellToken.contractAddress);
-                setTimeout(() => setCopiedAddr(null), 2000);
-              }}
-            />
+          {/* Address (left, under dropdown) + balance (right, under input)
+              live on the same row directly beneath the input pair so neither
+              piece of metadata floats alone. Hide the whole row only if we
+              have nothing to show on either side. */}
+          {sellToken && (
+            <HStack align="center" spacing={2} mt={1}>
+              {sellToken.contractAddress !== "native" && (
+                <TokenAddressRow
+                  address={sellToken.contractAddress}
+                  explorer={sellChainConfig.explorer}
+                  copied={copiedAddr === sellToken.contractAddress}
+                  onCopy={async () => {
+                    await navigator.clipboard.writeText(sellToken.contractAddress);
+                    setCopiedAddr(sellToken.contractAddress);
+                    setTimeout(() => setCopiedAddr(null), 2000);
+                  }}
+                />
+              )}
+              <HStack ml="auto" spacing={1} align="baseline" whiteSpace="nowrap">
+                <Text
+                  fontSize="xs"
+                  color="text.tertiary"
+                  fontWeight="500"
+                  textTransform="uppercase"
+                >
+                  Bal:{" "}
+                  {Number(parseFloat(sellToken.balance).toPrecision(6)).toLocaleString("en-US", { maximumFractionDigits: 6 })}
+                </Text>
+                {hasPrice && (
+                  <Text fontSize="2xs" color="text.tertiary" fontWeight="500">
+                    ({formatUsd(sellBalance * sellToken.priceUsd)})
+                  </Text>
+                )}
+              </HStack>
+            </HStack>
           )}
           {/* Percentage slider */}
           {sellToken && sellBalance > 0 && (
@@ -1787,37 +2155,57 @@ function SwapView({
           >
             You Receive
           </Text>
+          {/* Token+chain pick — same two-pane modal as the sell trigger, in
+              "buy" mode (destination chains, including Bungee-only chains the
+              extension can't sign on). */}
           <HStack spacing={2} position="relative">
-            <BuyTokenSelector
-              tokenList={tokenList}
-              holdings={holdings}
-              selectedToken={
+            <TokenChainTrigger
+              token={
                 buyTokenInfo
                   ? {
-                      address: buyTokenAddress,
+                      contractAddress:
+                        buyTokenAddress &&
+                        buyTokenAddress.toLowerCase() ===
+                          NATIVE_TOKEN_ADDRESS.toLowerCase()
+                          ? "native"
+                          : buyTokenAddress,
                       symbol: buyTokenInfo.symbol,
                       name: buyTokenInfo.name,
                       decimals: buyTokenInfo.decimals,
-                      logoURI: buyTokenLogoURI,
+                      logoUrl: buyTokenLogoURI,
+                      balance: "0",
+                      balanceFormatted: "0",
+                      valueUsd: 0,
+                      priceUsd: 0,
+                      chainId: buyChainId,
                     }
                   : null
               }
-              excludeAddress={sellToken ? to0xToken(sellToken) : undefined}
-              chainId={chainId}
-              onTokenSelect={handleBuyTokenSelect}
-              onAddressSubmit={handleBuyAddressSubmit}
-              buyTokenLoading={pendingBuyLoading}
-              pendingToken={pendingBuyToken}
-              onConfirmPending={handleConfirmPendingBuy}
+              chainId={buyChainId}
+              onClick={(e) => {
+                if (chainTokenModalSide === "buy") {
+                  setChainTokenModalSide(null);
+                  setChainTokenTriggerEl(null);
+                } else {
+                  setChainTokenTriggerEl(e.currentTarget);
+                  setChainTokenModalSide("buy");
+                }
+              }}
             />
-            {/* Output amount — read-only, mirrors the sell amount input */}
-            <InputGroup flex={1}>
+            {/* Output amount — read-only, mirrors the sell amount input.
+                When a quote is being fetched and there's nothing to render
+                yet, an absolute-positioned `LoadingDots` paints a 3-dot
+                bouncing animation over the empty field. The output USD
+                value and price-impact percent sit inline on the right edge
+                of the field so the read-only amount + its market context
+                share one row instead of stacking. */}
+            <InputGroup flex={1} position="relative">
               <Input
-                placeholder={quoteLoading ? "..." : "0.0"}
+                placeholder={quoteLoading ? "" : "0.0"}
                 value={
-                  quote && buyTokenInfo
+                  unifiedBuyAmount && buyTokenInfo
                     ? formatOutputAmount(
-                        quote.buyAmount,
+                        unifiedBuyAmount,
                         buyTokenInfo.decimals,
                       )
                     : ""
@@ -1832,49 +2220,69 @@ function SwapView({
                 _focus={{ boxShadow: "none" }}
                 cursor="default"
               />
+              {quoteLoading && !unifiedBuyAmount && (
+                <Box
+                  position="absolute"
+                  left="14px"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  pointerEvents="none"
+                  zIndex={1}
+                >
+                  <LoadingDots />
+                </Box>
+              )}
             </InputGroup>
           </HStack>
-          {/* Token address (hide for native token) */}
-          {buyTokenAddress &&
-            buyTokenInfo &&
-            buyTokenAddress.toLowerCase() !==
-              NATIVE_TOKEN_ADDRESS.toLowerCase() && (
-            <TokenAddressRow
-              address={buyTokenAddress}
-              explorer={chainConfig.explorer}
-              copied={copiedAddr === buyTokenAddress}
-              onCopy={async () => {
-                await navigator.clipboard.writeText(buyTokenAddress);
-                setCopiedAddr(buyTokenAddress);
-                setTimeout(() => setCopiedAddr(null), 2000);
-              }}
-            />
-          )}
-          {/* Output USD value + price impact */}
-          {quote && buyTokenInfo && (
-            <HStack justify="flex-end" mt={1} spacing={1}>
-              {outputUsd > 0 && (
-                <Text fontSize="xs" color="text.tertiary" fontWeight="500">
-                  ~{formatUsd(outputUsd)}
-                </Text>
-              )}
-              {priceImpact !== null && (
-                <Text
-                  fontSize="xs"
-                  fontWeight="700"
-                  color={
-                    priceImpact > 10
-                      ? "chart.negative"
-                      : priceImpact > 3
-                        ? "orange.500"
-                        : "text.tertiary"
-                  }
-                >
-                  {priceImpact > 0
-                    ? `(-${priceImpact.toFixed(2)}%)`
-                    : `(+${Math.abs(priceImpact).toFixed(2)}%)`}
-                </Text>
-              )}
+          {/* Address (left, under dropdown) + USD value / price-impact
+              (right, under the read-only amount). Mirrors the YOU SELL
+              metadata row so both sides feel symmetric and the receive
+              amount itself can use the full input width. */}
+          {(buyTokenInfo ||
+            ((quote || bridgeQuote) && (outputUsd > 0 || priceImpact !== null))) && (
+            <HStack align="center" spacing={2} mt={1}>
+              {buyTokenAddress &&
+                buyTokenInfo &&
+                buyTokenAddress.toLowerCase() !==
+                  NATIVE_TOKEN_ADDRESS.toLowerCase() && (
+                  <TokenAddressRow
+                    address={buyTokenAddress}
+                    explorer={getChainConfig(buyChainId)?.explorer ?? ""}
+                    copied={copiedAddr === buyTokenAddress}
+                    onCopy={async () => {
+                      await navigator.clipboard.writeText(buyTokenAddress);
+                      setCopiedAddr(buyTokenAddress);
+                      setTimeout(() => setCopiedAddr(null), 2000);
+                    }}
+                  />
+                )}
+              {(quote || bridgeQuote) && buyTokenInfo &&
+                (outputUsd > 0 || priceImpact !== null) && (
+                  <HStack ml="auto" spacing={1} align="baseline" whiteSpace="nowrap">
+                    {outputUsd > 0 && (
+                      <Text fontSize="xs" color="text.tertiary" fontWeight="500">
+                        ~{formatUsd(outputUsd)}
+                      </Text>
+                    )}
+                    {priceImpact !== null && (
+                      <Text
+                        fontSize="xs"
+                        fontWeight="700"
+                        color={
+                          priceImpact > 10
+                            ? "chart.negative"
+                            : priceImpact > 3
+                              ? "orange.500"
+                              : "text.tertiary"
+                        }
+                      >
+                        {priceImpact > 0
+                          ? `(-${priceImpact.toFixed(2)}%)`
+                          : `(+${Math.abs(priceImpact).toFixed(2)}%)`}
+                      </Text>
+                    )}
+                  </HStack>
+                )}
             </HStack>
           )}
         </Box>
@@ -1886,8 +2294,92 @@ function SwapView({
           </Text>
         )}
 
-        {/* Slippage settings */}
-        <HStack justify="flex-end">
+        {/* Bridge-route-not-available recovery affordance. When Bungee can't
+            route the chosen sell→buy pair, suggest swapping the receive side
+            to the DESTINATION chain's native — exotic destination tokens
+            frequently lack routes while the destination chain's native almost
+            always does. Keeps the bridge intent; only the destination token
+            flips. Hidden when destination is already its chain's native or
+            when we don't know the destination chain's native currency. */}
+        {isBridge &&
+          quoteError &&
+          !quoteLoading &&
+          sellToken &&
+          destNativeInfo &&
+          destNativeInfo.symbol &&
+          buyTokenAddress.toLowerCase() !== NATIVE_TOKEN_ADDRESS.toLowerCase() && (
+            <HStack
+              as="button"
+              onClick={() => {
+                setBuyTokenAddress(NATIVE_TOKEN_ADDRESS);
+                setBuyTokenInfo({
+                  name: destNativeInfo.name,
+                  symbol: destNativeInfo.symbol,
+                  decimals: destNativeInfo.decimals,
+                });
+                setBuyTokenLogoURI(destNativeInfo.logoUrl);
+                setBuyTokenLoading(false);
+                setBuyTokenPriceUsd(0);
+                setPendingBuyToken(null);
+                setQuote(null);
+                setBridgeQuote(null);
+                setQuoteError(null);
+              }}
+              px={3}
+              py={2}
+              border="2px solid"
+              borderColor="border.default"
+              borderRadius="md"
+              bg="surface.raised"
+              spacing={2}
+              cursor="pointer"
+              _hover={{ borderColor: "accent.secondary" }}
+            >
+              <Box position="relative" boxSize="20px" flexShrink={0}>
+                {destNativeInfo.logoUrl ? (
+                  <Image
+                    src={destNativeInfo.logoUrl}
+                    alt={destNativeInfo.symbol}
+                    boxSize="20px"
+                    borderRadius="full"
+                  />
+                ) : (
+                  <Box
+                    boxSize="20px"
+                    borderRadius="full"
+                    bg="surface.sunken"
+                  />
+                )}
+                <Box position="absolute" right="-3px" bottom="-3px">
+                  <ChainIcon
+                    chainId={buyChainId}
+                    chainName={destNativeInfo.chainName}
+                    size="10px"
+                    withChip
+                  />
+                </Box>
+              </Box>
+              <Text fontSize="xs" fontWeight="700" textTransform="uppercase">
+                Swap to {destNativeInfo.symbol.toUpperCase()} on {destNativeInfo.chainName} instead?
+              </Text>
+            </HStack>
+          )}
+
+        {/* Bridge ETA (left) + slippage settings (right) */}
+        <HStack justify="space-between">
+          {isBridge && bridgeRoute?.estimatedTime ? (
+            <HStack spacing={1} color="text.tertiary">
+              <TimeIcon boxSize={3} />
+              <Text fontSize="xs" fontWeight="700">
+                Est. time:{" "}
+                {bridgeRoute.estimatedTime < 60
+                  ? `${bridgeRoute.estimatedTime}s`
+                  : `${Math.round(bridgeRoute.estimatedTime / 60)} min`}
+              </Text>
+            </HStack>
+          ) : (
+            <Box />
+          )}
           <SlippageSettings
             slippageBps={slippageBps}
             onSlippageChange={setSlippageBps}
@@ -1895,7 +2387,7 @@ function SwapView({
         </HStack>
 
         {/* Quote details */}
-        {quote && buyTokenInfo && sellToken && (
+        {quote && buyTokenInfo && sellToken && !isBridge && (
           <SwapQuoteDisplay
             quote={quote}
             buyTokenSymbol={buyTokenInfo.symbol}
@@ -1909,6 +2401,24 @@ function SwapView({
             buyTokenPriceUsd={buyTokenPriceUsd}
           />
         )}
+        {bridgeQuote && buyTokenInfo && isBridge && (
+          <BridgeQuoteDisplay
+            quote={bridgeQuote}
+            buyTokenSymbol={buyTokenInfo.symbol}
+            buyTokenDecimals={buyTokenInfo.decimals}
+            buyTokenPriceUsd={buyTokenPriceUsd}
+            slippageBps={slippageBps}
+            sourceNativeSymbol={
+              sellChainConfig.nativeCurrency?.symbol ?? "ETH"
+            }
+            sourceNativePriceUsd={
+              holdingsAllChains.find(
+                (h) =>
+                  h.chainId === sellChainId && h.contractAddress === "native",
+              )?.priceUsd
+            }
+          />
+        )}
 
         {/* Price impact warning — high impact uses semantic error surface,
             medium impact uses warning. Both intent tokens flip cleanly between
@@ -1918,7 +2428,10 @@ function SwapView({
             bg={priceImpact > 10 ? "status.error.bg" : "status.warning.bg"}
             color={priceImpact > 10 ? "status.error.fg" : "status.warning.fg"}
             border="2px solid"
-            borderColor="border.default"
+            borderColor={
+              priceImpact > 10 ? "status.error.border" : "status.warning.border"
+            }
+            borderRadius="lg"
             boxShadow="card"
             p={3}
           >
@@ -1936,7 +2449,8 @@ function SwapView({
             bg="status.warning.bg"
             color="status.warning.fg"
             border="2px solid"
-            borderColor="border.default"
+            borderColor="status.warning.border"
+            borderRadius="lg"
             boxShadow="card"
             p={3}
           >
@@ -1979,11 +2493,129 @@ function SwapView({
               boxShadow: "none",
             }}
           >
-            Swap
+            {sellAmountNum <= 0
+              ? "Enter Amount"
+              : isBridge
+                ? "Bridge"
+                : "Swap"}
           </Button>
         </Box>
       </VStack>
+
+      {/* Unified chain+token picker. Renders as a dropdown anchored to
+          whichever trigger was clicked (sell or buy). Mode decides which
+          chain set to surface and where the picked (chain, token) lands. */}
+      <BridgeChainTokenModal
+        isOpen={chainTokenModalSide !== null}
+        onClose={() => {
+          setChainTokenModalSide(null);
+          setChainTokenTriggerEl(null);
+        }}
+        triggerEl={chainTokenTriggerEl}
+        mode={chainTokenModalSide ?? "sell"}
+        initialChainId={chainTokenModalSide === "buy" ? buyChainId : sellChainId}
+        selectedTokenAddress={
+          chainTokenModalSide === "buy"
+            ? buyTokenAddress || undefined
+            : sellToken
+              ? sellToken.contractAddress === "native"
+                ? NATIVE_TOKEN_ADDRESS
+                : sellToken.contractAddress
+              : undefined
+        }
+        selectedTokenChainId={
+          chainTokenModalSide === "buy" ? buyChainId : sellChainId
+        }
+        excludeAddress={
+          chainTokenModalSide === "buy"
+            ? sellToken
+              ? sellToken.contractAddress === "native"
+                ? NATIVE_TOKEN_ADDRESS
+                : sellToken.contractAddress
+              : undefined
+            : buyTokenAddress || undefined
+        }
+        onSelect={handleChainTokenModalSelect}
+        fromAddress={fromAddress}
+        holdingsAllChains={holdingsAllChains}
+      />
     </Box>
+  );
+}
+
+/**
+ * Compact "select token" pill rendered in the YOU SELL / YOU RECEIVE rows.
+ * Click opens the BridgeChainTokenModal (chains on the left, tokens on the
+ * right). When a token is selected, the pill shows the token logo + symbol;
+ * an unselected pill reads "SELECT".
+ *
+ * A small chain badge in the corner of the token logo lets the user see at a
+ * glance which chain the token is on — important once cross-chain bridge mode
+ * is engaged and the two sides can live on different chains.
+ */
+/**
+ * Three-dot bouncing indicator used in the YOU RECEIVE field while a swap
+ * or bridge quote is being fetched. Replaces the previous static "..."
+ * placeholder so the user sees an active signal that work is in flight.
+ *
+ * Each dot reuses one keyframe and offsets via `animation-delay` so the
+ * wave reads as continuous motion rather than three independent loops.
+ */
+function TokenChainTrigger({
+  token,
+  chainId,
+  onClick,
+}: {
+  token: PortfolioToken | null;
+  chainId: number;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <HStack
+      as="button"
+      cursor="pointer"
+      border="2px solid"
+      borderColor="border.default"
+      borderRadius="md"
+      bg="surface.base"
+      px={2}
+      py={1.5}
+      spacing={2}
+      _hover={{ borderColor: "accent.secondary" }}
+      onClick={onClick}
+      minW="100px"
+    >
+      {token && (
+        <Box position="relative" boxSize="22px" flexShrink={0}>
+          {token.logoUrl ? (
+            <Image
+              src={token.logoUrl}
+              alt={token.symbol}
+              boxSize="22px"
+              borderRadius="full"
+              fallback={<TokenSymbolFallback symbol={token.symbol} size="22px" />}
+            />
+          ) : (
+            <TokenSymbolFallback symbol={token.symbol} size="22px" />
+          )}
+          {/* Small chain badge bottom-right of the token logo. */}
+          <Box
+            position="absolute"
+            right="-3px"
+            bottom="-3px"
+            bg="surface.base"
+            borderRadius="full"
+            p="1px"
+          >
+            <ChainIcon chainId={chainId} size="10px" withChip />
+          </Box>
+        </Box>
+      )}
+      <Text fontWeight="700" fontSize="sm" textTransform="uppercase">
+        {token?.symbol || "Select"}
+      </Text>
+      <ChevronDownIcon />
+    </HStack>
   );
 }
 
@@ -1999,7 +2631,7 @@ function TokenAddressRow({
   onCopy: () => void;
 }) {
   return (
-    <HStack mt={1} spacing={1}>
+    <HStack spacing={1}>
       <Text fontSize="2xs" color="text.tertiary" fontFamily="mono">
         {address.slice(0, 6)}...{address.slice(-4)}
       </Text>

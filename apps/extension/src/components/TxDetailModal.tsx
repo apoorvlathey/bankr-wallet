@@ -1,4 +1,4 @@
-import { memo, useState, useEffect } from "react";
+import { memo, useState, useEffect, useCallback } from "react";
 import {
   Box,
   VStack,
@@ -46,6 +46,7 @@ import {
 import { useTheme, useChainBadgeStyle } from "@/theme";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import ClearSignedSummaryCard from "@/components/ClearSignedSummaryCard";
+import LoadingDots from "@/components/LoadingDots";
 
 interface TxDetailModalProps {
   isOpen: boolean;
@@ -229,18 +230,55 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
   const hasCalldata = tx.tx.data && tx.tx.data !== "0x";
   const isContractDeploy = !tx.tx.to;
   const isL2 = OP_STACK_CHAIN_IDS.has(tx.chainId);
-  // When a clear-signed snapshot exists, the hero card already answers
-  // "what did this tx do?" — the raw From/To/Value/Calldata rows are
-  // power-user details, so default them collapsed (mirrors how the
-  // confirmation screen collapses the raw CalldataDecoder below the
-  // ERC20ApproveDisplay / ClearSigningView card).
-  const hasClearSignedHero = !!tx.clearSignedMeta;
-  const [rawDetailsExpanded, setRawDetailsExpanded] = useState(
-    !hasClearSignedHero,
-  );
+  // When the modal already has a hero summary that answers "what did this
+  // tx do?", the raw From/To/Value/Calldata rows are power-user details so
+  // we default them collapsed. Hero sources, in priority order:
+  //   - clear-signed snapshot (Approved/Transferred/Native-send/ERC-7730)
+  //   - swap meta (sell→buy tokens; rendered by SwapSummaryCard above)
+  //   - bridge meta (destination chain block also above)
+  // Bridge / swap txs are virtually always wallet-initiated, so this is
+  // also the place to honor "collapse for wallet-initiated swap txs".
+  const hasHero =
+    !!tx.clearSignedMeta || !!tx.swapMeta || !!tx.bridge;
+  const [rawDetailsExpanded, setRawDetailsExpanded] = useState(!hasHero);
   const [gasExpanded, setGasExpanded] = useState(false);
   const [errorExpanded, setErrorExpanded] = useState(false);
   const [isRebroadcasting, setIsRebroadcasting] = useState(false);
+  // Source-chain native USD price for the Value + Transaction Fee rows.
+  // Fetched lazily once the modal opens. Almost every recorded tx has a
+  // non-zero gas fee, so we don't bother gating on value/fee here — the
+  // single CoinGecko call covers both rows.
+  const [nativePriceUsd, setNativePriceUsd] = useState<number | null>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    chrome.runtime.sendMessage(
+      { type: "fetchNativePrice", chainId: tx.chainId },
+      (res) => {
+        if (res?.success && typeof res.priceUsd === "number" && res.priceUsd > 0) {
+          setNativePriceUsd(res.priceUsd);
+        }
+      },
+    );
+  }, [isOpen, tx.chainId]);
+
+  // Format a wei-amount as `$N.NN`, returning null when the price is missing
+  // or the wei amount is zero. Used by both the Value and Transaction Fee
+  // rows to render the inline USD equivalent.
+  const formatWeiUsd = useCallback(
+    (raw: string | undefined | null): string | null => {
+      if (!raw || !nativePriceUsd || nativePriceUsd <= 0) return null;
+      try {
+        const wei = BigInt(raw);
+        if (wei === 0n) return null;
+        const usd = (Number(wei) / 1e18) * nativePriceUsd;
+        if (usd <= 0) return null;
+        return usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`;
+      } catch {
+        return null;
+      }
+    },
+    [nativePriceUsd],
+  );
   const toast = useThemedToast();
   const { themeId } = useTheme();
   // On midnight, the error.fg coral reads as another "error" cue on top of the
@@ -532,6 +570,266 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
               />
             )}
 
+            {/* Cross-chain destination block. Appears once the user has
+                bridged: shows the destination chain + (if known) the
+                destination tx hash, route name, and current Bungee status
+                code label. Source explorer link is the regular "View on
+                explorer" button below; this block adds the destination
+                counterpart. */}
+            {tx.bridge && tx.swapMeta && (() => {
+              // Source block: mirror the destination card's visual hierarchy
+              // (chain icon + 2-line label, "You Send" token row) so the
+              // user sees the bridge route at a glance — source chain +
+              // sell token at top, destination chain + buy token below.
+              const sellLogo = tx.swapMeta.sellTokenLogo;
+              const sellSymbol = tx.swapMeta.sellTokenSymbol;
+              const srcChainName = resolvedChain?.name ?? tx.chainName;
+              return (
+                <Box
+                  bg="surface.sunken"
+                  border="2px solid"
+                  borderColor="border.default"
+                  borderRadius="lg"
+                  p={2.5}
+                >
+                  <HStack justify="space-between" align="center" mb={sellSymbol ? 2.5 : 0}>
+                    <HStack spacing={2} flexShrink={0}>
+                      <ChainIcon
+                        chainId={tx.chainId}
+                        chainName={srcChainName}
+                        size="16px"
+                        withChip
+                      />
+                      <VStack spacing={0} align="flex-start">
+                        <Text
+                          fontSize="2xs"
+                          fontWeight="800"
+                          textTransform="uppercase"
+                          color="text.tertiary"
+                          letterSpacing="wide"
+                          lineHeight="1"
+                        >
+                          Source
+                        </Text>
+                        <Text
+                          fontSize="sm"
+                          fontWeight="800"
+                          color="text.primary"
+                          lineHeight="1.2"
+                        >
+                          {srcChainName}
+                        </Text>
+                      </VStack>
+                    </HStack>
+                  </HStack>
+                  {sellSymbol && (
+                    <VStack spacing={1.5} align="stretch" fontSize="xs">
+                      <HStack justify="space-between" align="center">
+                        <Text fontWeight="700" color="text.secondary">
+                          You Send
+                        </Text>
+                        <HStack spacing={1.5}>
+                          {sellLogo && (
+                            <Image
+                              src={sellLogo}
+                              alt={sellSymbol}
+                              boxSize="16px"
+                              borderRadius="full"
+                            />
+                          )}
+                          <Text fontWeight="800">{sellSymbol}</Text>
+                        </HStack>
+                      </HStack>
+                    </VStack>
+                  )}
+                </Box>
+              );
+            })()}
+
+            {tx.bridge && (() => {
+              // Pretty-format Bungee's lowercase-hyphenated route name
+              // ("stargate-v2" → "Stargate V2"). Falls back to the raw
+              // string if it doesn't match our convention.
+              const formatRouteName = (raw: string) =>
+                raw
+                  .split(/[-_]/)
+                  .map((part) =>
+                    part.length === 0
+                      ? part
+                      : /^v\d+$/i.test(part)
+                        ? part.toUpperCase()
+                        : part[0].toUpperCase() + part.slice(1),
+                  )
+                  .join(" ");
+              const statusLabels = [
+                "Pending",
+                "Assigned",
+                "Extracted",
+                "Fulfilled",
+                "Settled",
+                "Expired",
+                "Cancelled",
+                "Refunded",
+              ] as const;
+              const statusCode = tx.bridge.bungeeStatusCode;
+              const statusLabel =
+                statusCode !== undefined
+                  ? statusLabels[statusCode] ?? `Code ${statusCode}`
+                  : null;
+              // Color-code: green for settled-good (3/4), red for bad terminal
+              // (5/6/7), accent (in-flight blue) for everything else.
+              const statusTone: "good" | "bad" | "pending" =
+                statusCode === 3 || statusCode === 4
+                  ? "good"
+                  : statusCode === 5 || statusCode === 6 || statusCode === 7
+                    ? "bad"
+                    : "pending";
+              const statusBg =
+                statusTone === "good"
+                  ? "status.success.bg"
+                  : statusTone === "bad"
+                    ? "status.error.bg"
+                    : "status.info.bg";
+              const statusFg =
+                statusTone === "good"
+                  ? "status.success.fg"
+                  : statusTone === "bad"
+                    ? "status.error.fg"
+                    : "status.info.fg";
+              const destExplorer = getChainConfig(tx.bridge.destinationChainId).explorer;
+              const destLink =
+                tx.bridge.destinationTxHash && destExplorer
+                  ? `${destExplorer}/tx/${tx.bridge.destinationTxHash}`
+                  : null;
+              const destShort = tx.bridge.destinationTxHash
+                ? `${tx.bridge.destinationTxHash.slice(0, 10)}…${tx.bridge.destinationTxHash.slice(-6)}`
+                : null;
+              const buyLogo = tx.swapMeta?.buyTokenLogo;
+              const buySymbol = tx.swapMeta?.buyTokenSymbol;
+              return (
+                <Box
+                  bg="surface.sunken"
+                  border="2px solid"
+                  borderColor="border.default"
+                  borderRadius="lg"
+                  p={2.5}
+                >
+                  {/* Header: chain logo + destination chain name + status pill */}
+                  <HStack justify="space-between" align="center" mb={2.5}>
+                    <HStack spacing={2} flexShrink={0}>
+                      <ChainIcon
+                        chainId={tx.bridge.destinationChainId}
+                        chainName={tx.bridge.destinationChainName}
+                        size="16px"
+                        withChip
+                      />
+                      <VStack spacing={0} align="flex-start">
+                        <Text
+                          fontSize="2xs"
+                          fontWeight="800"
+                          textTransform="uppercase"
+                          color="text.tertiary"
+                          letterSpacing="wide"
+                          lineHeight="1"
+                        >
+                          Destination
+                        </Text>
+                        <Text
+                          fontSize="sm"
+                          fontWeight="800"
+                          color="text.primary"
+                          lineHeight="1.2"
+                        >
+                          {tx.bridge.destinationChainName}
+                        </Text>
+                      </VStack>
+                    </HStack>
+                    {statusLabel && (
+                      <Box
+                        bg={statusBg}
+                        color={statusFg}
+                        px={2}
+                        py={0.5}
+                        borderRadius="md"
+                        fontSize="2xs"
+                        fontWeight="800"
+                        textTransform="uppercase"
+                        letterSpacing="wide"
+                      >
+                        {statusLabel}
+                      </Box>
+                    )}
+                  </HStack>
+
+                  <VStack spacing={1.5} align="stretch" fontSize="xs">
+                    {/* You receive — token logo + symbol when available */}
+                    {buySymbol && (
+                      <HStack justify="space-between" align="center">
+                        <Text fontWeight="700" color="text.secondary">
+                          You Receive
+                        </Text>
+                        <HStack spacing={1.5}>
+                          {buyLogo && (
+                            <Image
+                              src={buyLogo}
+                              alt={buySymbol}
+                              boxSize="16px"
+                              borderRadius="full"
+                            />
+                          )}
+                          <Text fontWeight="800">{buySymbol}</Text>
+                        </HStack>
+                      </HStack>
+                    )}
+                    {/* Tx hash row */}
+                    <HStack justify="space-between" align="center">
+                      <Text fontWeight="700" color="text.secondary">
+                        Tx Hash
+                      </Text>
+                      {destShort ? (
+                        destLink ? (
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            fontWeight="700"
+                            fontSize="2xs"
+                            fontFamily="mono"
+                            onClick={() => chrome.tabs.create({ url: destLink })}
+                            rightIcon={<ExternalLinkIcon boxSize={2.5} />}
+                            _hover={{ bg: "bg.muted" }}
+                            px={1}
+                            h="20px"
+                          >
+                            {destShort}
+                          </Button>
+                        ) : (
+                          <Text fontFamily="mono" fontSize="2xs" color="text.tertiary">
+                            {destShort}
+                          </Text>
+                        )
+                      ) : (
+                        <LoadingDots />
+                      )}
+                    </HStack>
+                    {tx.bridge.routeName && (
+                      <HStack justify="space-between" align="center">
+                        <Text fontWeight="700" color="text.secondary">Route</Text>
+                        <Text fontWeight="700">{formatRouteName(tx.bridge.routeName)}</Text>
+                      </HStack>
+                    )}
+                    {tx.bridge.refundTxHash && (
+                      <HStack justify="space-between">
+                        <Text fontWeight="700" color="text.secondary">Refund</Text>
+                        <Text fontFamily="mono" fontSize="2xs" color="chart.negative">
+                          {`${tx.bridge.refundTxHash.slice(0, 8)}…${tx.bridge.refundTxHash.slice(-4)}`}
+                        </Text>
+                      </HStack>
+                    )}
+                  </VStack>
+                </Box>
+              );
+            })()}
+
             <HStack justify="space-between" align="center" spacing={3}>
               {tx.forceInclusionMeta ? (
                 <HStack spacing={2}>
@@ -773,9 +1071,19 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" mb={1}>
                     Value
                   </Text>
-                  <Text fontSize="sm" fontWeight="700" color="text.primary">
-                    {formatValue(tx.tx.value, nativeSym)}
-                  </Text>
+                  <HStack justify="space-between" align="baseline" spacing={2}>
+                    <Text fontSize="sm" fontWeight="700" color="text.primary">
+                      {formatValue(tx.tx.value, nativeSym)}
+                    </Text>
+                    {(() => {
+                      const usd = formatWeiUsd(tx.tx.value);
+                      return usd ? (
+                        <Text fontSize="xs" color="text.tertiary" fontWeight="600">
+                          {usd}
+                        </Text>
+                      ) : null;
+                    })()}
+                  </HStack>
                 </Box>
               </>
             )}
@@ -844,6 +1152,9 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 : estimatedMaxCost
                   ? formatEth(estimatedMaxCost, nativeSym)
                   : null;
+              const headerCostUsd = formatWeiUsd(
+                showConfirmedFee ? txFee : estimatedMaxCost,
+              );
 
               return (
                 <Box
@@ -865,10 +1176,15 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                         {headerLabel}
                       </Text>
                     </HStack>
-                    <HStack spacing={1}>
+                    <HStack spacing={2}>
                       {headerCost && (
                         <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono">
                           {headerCost}
+                        </Text>
+                      )}
+                      {headerCostUsd && (
+                        <Text fontSize="xs" fontWeight="600" color="text.tertiary">
+                          {headerCostUsd}
                         </Text>
                       )}
                       {gasExpanded

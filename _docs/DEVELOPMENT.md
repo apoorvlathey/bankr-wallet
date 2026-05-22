@@ -41,7 +41,7 @@ walletchan/
 pnpm dev:website
 ```
 
-This starts the Next.js dev server at `http://localhost:3000`.
+This starts the Next.js dev server at `http://localhost:3030`. The port is intentionally non-default — it must match `WALLETCHAN_DEV_PORT` in `apps/extension/src/constants/externalUrls.ts` so `pnpm dev:extension` can round-trip API calls against your local dev server.
 
 ## Workspace Commands
 

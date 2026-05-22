@@ -3664,19 +3664,30 @@ function App() {
 
             {/* Swap + Send + Stake Buttons */}
             {address && activeAccount?.type !== "impersonator" && (
-              <HStack spacing={2}>
+              <Box
+                display="grid"
+                gridTemplateColumns={
+                  "minmax(0, 1.55fr) minmax(0, 1fr) minmax(0, 1fr)"
+                }
+                columnGap={2}
+                alignItems="stretch"
+              >
                 <Button
-                  flex={1}
+                  w="100%"
+                  minW={0}
                   bg="accent.secondary"
                   color="accentFg.secondary"
                   border="3px solid"
                   borderColor="border.default"
                   boxShadow="card"
                   fontWeight="800"
-                  fontSize="sm"
+                  fontSize="xs"
                   textTransform="uppercase"
-                  letterSpacing="wider"
-                  leftIcon={<SwapIcon boxSize={5} />}
+                  letterSpacing="normal"
+                  iconSpacing={1.5}
+                  px={1.5}
+                  whiteSpace="nowrap"
+                  leftIcon={<SwapIcon boxSize={4} />}
                   onClick={() => {
                     setSwapInitialBuyToken(undefined);
                     setView("swap");
@@ -3691,10 +3702,11 @@ function App() {
                     boxShadow: "none",
                   }}
                 >
-                  Swap
+                  Swap / Bridge
                 </Button>
                 <Button
-                  flex={1}
+                  w="100%"
+                  minW={0}
                   bg={isDarkTheme ? "accent.primary" : "accent.highlight"}
                   color={
                     isDarkTheme ? "accentFg.primary" : "accentFg.highlight"
@@ -3703,11 +3715,14 @@ function App() {
                   borderColor="border.default"
                   boxShadow="card"
                   fontWeight="800"
-                  fontSize="sm"
+                  fontSize="xs"
                   textTransform="uppercase"
-                  letterSpacing="wider"
+                  letterSpacing="normal"
+                  iconSpacing={1.5}
+                  px={1.5}
+                  whiteSpace="nowrap"
                   leftIcon={
-                    <Icon viewBox="0 0 24 24" boxSize={5}>
+                    <Icon viewBox="0 0 24 24" boxSize={4}>
                       <path
                         fill="currentColor"
                         d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"
@@ -3731,7 +3746,7 @@ function App() {
                 >
                   Send
                 </Button>
-                <Box flex={1} position="relative">
+                <Box minW={0} position="relative">
                   {stakeApy !== null && (
                     <Box
                       position="absolute"
@@ -3762,11 +3777,23 @@ function App() {
                     borderColor="border.default"
                     boxShadow="card"
                     fontWeight="800"
-                    fontSize="sm"
+                    fontSize="xs"
                     textTransform="uppercase"
-                    letterSpacing="wider"
+                    letterSpacing="normal"
+                    iconSpacing={1.5}
+                    px={1.5}
+                    minW={0}
+                    whiteSpace="nowrap"
                     leftIcon={
-                      <Icon viewBox="0 0 24 24" boxSize={5} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <Icon
+                        viewBox="0 0 24 24"
+                        boxSize={4}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <path d="M12 3v12m0 0l-4-4m4 4l4-4" />
                         <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
                       </Icon>
@@ -3787,7 +3814,7 @@ function App() {
                     Stake
                   </Button>
                 </Box>
-              </HStack>
+              </Box>
             )}
 
             {/* Portfolio Tabs (Holdings + Activity) */}

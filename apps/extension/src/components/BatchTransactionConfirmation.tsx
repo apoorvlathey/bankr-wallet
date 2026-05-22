@@ -216,6 +216,10 @@ function BatchTransactionConfirmation({
     Record<number, string>
   >({});
   const [cachedGasEstimates, setCachedGasEstimates] = useState<any[] | null>(null);
+  // Source-chain native USD price piggybacked off the gas estimator's
+  // CoinGecko lookup — reused for the Value row USD display so we don't
+  // double-fetch.
+  const [nativePriceUsd, setNativePriceUsd] = useState<number | null>(null);
   // Bubbled from MultiTxGasEstimateDisplay — false while the user has the
   // Custom-tier shared editor in an inconsistent state.
   const [gasValid, setGasValid] = useState(true);
@@ -234,6 +238,23 @@ function BatchTransactionConfirmation({
 
   const { params, origin, chainName, favicon, chainId } = batchRequest;
   const calls = params.calls;
+
+  // Sum of msg.value across all calls. Surfaced in the top summary box so a
+  // user reviewing a multi-call batch (e.g. a bridge whose second call carries
+  // a LayerZero relayer fee paid as native) sees the total native outlay at a
+  // glance, instead of having to expand each call to find a Value row.
+  const totalValueWei = useMemo(() => {
+    let total = 0n;
+    for (const c of calls) {
+      if (!c.value || c.value === "0x" || c.value === "0x0") continue;
+      try {
+        total += BigInt(c.value);
+      } catch {
+        /* malformed value — handled elsewhere */
+      }
+    }
+    return total;
+  }, [calls]);
 
   // Strict ABI validation across every call in the batch. If any single call's
   // calldata is malformed (non-zero address padding on a known ERC20 selector,
@@ -964,6 +985,61 @@ function BatchTransactionConfirmation({
               </HStack>
             </HStack>
 
+            {/* Total native value (sum across calls) — only shown when any
+                call carries a non-zero msg.value. Surfaces relayer fees
+                buried in bridges / vault deposits so the user sees their
+                full native outlay before signing. */}
+            {totalValueWei > 0n && (
+              <HStack
+                w="full"
+                py={1.5}
+                px={3}
+                justify="space-between"
+                borderTop="1px solid"
+                borderColor="border.subtle"
+              >
+                <Text
+                  fontSize="xs"
+                  color="text.secondary"
+                  fontWeight="700"
+                  textTransform="uppercase"
+                >
+                  Value
+                </Text>
+                {(() => {
+                  const sym = resolvedChain?.nativeCurrency.symbol || "ETH";
+                  const eth = Number(totalValueWei) / 1e18;
+                  const trimmed = eth.toFixed(6).replace(/\.?0+$/, "");
+                  const usdValue =
+                    nativePriceUsd && nativePriceUsd > 0
+                      ? eth * nativePriceUsd
+                      : null;
+                  const usdLabel =
+                    usdValue === null
+                      ? null
+                      : usdValue < 0.01 && usdValue > 0
+                        ? "<$0.01"
+                        : `$${usdValue.toFixed(2)}`;
+                  return (
+                    <VStack spacing={0} align="flex-end">
+                      <Text fontSize="sm" fontWeight="700" fontFamily="mono">
+                        {trimmed} {sym}
+                      </Text>
+                      {usdLabel && (
+                        <Text
+                          fontSize="2xs"
+                          color="text.tertiary"
+                          fontWeight="600"
+                        >
+                          {usdLabel}
+                        </Text>
+                      )}
+                    </VStack>
+                  );
+                })()}
+              </HStack>
+            )}
+
             {/* Force Inclusion Toggle (advanced options) */}
             {forceInclusionInfo && (
               <Collapse in={showAdvanced} animateOpacity>
@@ -1165,6 +1241,7 @@ function BatchTransactionConfirmation({
           // edited L2 gas limits get passed through to the background.
           onGasEstimates={isNonAtomic ? setCachedGasEstimates : undefined}
           onValidityChange={setGasValid}
+          onNativePriceUsd={setNativePriceUsd}
           forceInclusion={forceInclusion}
           // Atomic (Bankr): estimate gas for the single ERC-7821 encoded batch tx
           // When force inclusion is on, estimate L1 gas for the encoded batch

@@ -100,6 +100,7 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
           bg="accent.secondary"
           border="1.5px solid"
           borderColor="border.default"
+          borderRadius="md"
         >
           <Text
             fontSize="9px"

@@ -38,9 +38,11 @@ Browser wallet extension + landing page website in a pnpm workspace monorepo.
 | Single-tx confirmation (dapp-initiated) | `apps/extension/src/components/TransactionConfirmation.tsx` | `GasEstimateDisplay.tsx` |
 | Batch tx confirmation (ERC-5792, dapp-initiated) | `apps/extension/src/components/BatchTransactionConfirmation.tsx` | `MultiTxGasEstimateDisplay.tsx` |
 | Cross-dapp batch confirmation (user-assembled) | `apps/extension/src/components/CrossDappBatchConfirmation.tsx` | `MultiTxGasEstimateDisplay.tsx` (wraps BatchTransactionConfirmation) |
-| **Swap confirmation (internal)** | `apps/extension/src/components/Swap/SwapConfirmation.tsx` | `MultiTxGasEstimateDisplay.tsx` |
+| **Swap / Bridge confirmation (internal)** | `apps/extension/src/components/Swap/SwapConfirmation.tsx` | `MultiTxGasEstimateDisplay.tsx` |
 
 **When you change anything about gas params, the tier picker, validity, or override plumbing in ANY of these screens, audit the others.** The swap path in particular is easy to miss — it's its own confirmation UI separate from the dapp-initiated batch flow but uses the same underlying `MultiTxGasEstimateDisplay`.
+
+**Cross-chain bridges ride inside the same `SwapConfirmation.tsx`** via the optional `bridgeMeta` prop (no new surface). When set, the title flips to "Confirm Bridge", the network row shows source → destination chains, and a Bungee route / ETA row appears. Gas plumbing is unchanged. After the source-tx confirms, `bridgeStatusPoller` watches `/api/bridge/status` and fires a destination notification — see `_docs/BRIDGE.md` "Extension support".
 
 **Required wiring for any tx-confirmation surface (PK / Seed accounts)**:
 
@@ -127,7 +129,7 @@ pnpm install
 
 # Development
 pnpm dev:extension         # Build extension in DEVELOPMENT mode (vite build --mode development)
-pnpm dev:website           # Start website dev server at localhost:3000
+pnpm dev:website           # Start website dev server at localhost:3030
 pnpm dev:staking-indexer   # Start staking indexer at localhost:42070
 pnpm dev:tg-bot            # Start TG bot + API at localhost:3001
 pnpm dev:arb-bot           # Start arb bot (requires .env with PRIVATE_KEY + BASE_RPC_URL)
@@ -540,9 +542,9 @@ The extension has two build modes, selected via Vite's `--mode` flag. They produ
 | `pnpm dev:extension`  | `development`| `"development"`        | Testing changes locally against `pnpm dev:website` |
 | `pnpm build:extension`| `production` | `"production"`         | Releases, CWS uploads, GitHub Releases (anything users install) |
 
-**What flips between modes** (grep for `import.meta.env.MODE` to find current usages):
+**What flips between modes**:
 
-- **Clear-signing descriptor API** (`apps/extension/src/constants/externalUrls.ts`) — development hits `http://localhost:3000/api/clearsigning/descriptor` (your local Next.js dev server), production hits `https://walletchan.com/api/clearsigning/descriptor`.
+The entire `WALLETCHAN_API_BASE` constant in `apps/extension/src/constants/externalUrls.ts` flips when `import.meta.env.MODE === "development"`. Every derived endpoint (portfolio, swap, bridge, sponsored-transfer, premium-status, vault-data, clear-signing) follows it. Development → `http://localhost:3030/api`; production → `https://walletchan.com/api`. The dev port lives in `WALLETCHAN_DEV_PORT` and matches `apps/website/package.json`'s `dev` script (`next dev -p 3030`) — change both together if you ever need to move it.
 
 **Rule of thumb:**
 - Building to test a change end-to-end against the local website dev server → `pnpm dev:extension`.
@@ -556,3 +558,5 @@ Note: `import.meta.env.DEV` is **not** the right toggle — it's only true under
 2. Go to `chrome://extensions`
 3. Click refresh icon on WalletChan card
 4. Test in a dapp (e.g., app.aave.com)
+
+**Never use `pnpm build:web` to verify changes.** It only rebuilds the popup/sidepanel bundle (`main.js`) and leaves `inject.js` / `inpage.js` / `background.js` / `ens-banner.js` orphaned — Chrome then refuses to load the extension with `Could not load javascript 'static/js/inject.js' for script. Could not load manifest.` Always run `pnpm dev:extension` (dev mode) or `pnpm build:extension` (prod mode) so every script the manifest references is present in `apps/extension/build/`.

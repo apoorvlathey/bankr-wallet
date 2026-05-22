@@ -2,7 +2,7 @@
 
 import { Box, HStack, Text, VStack } from "@chakra-ui/react";
 import { formatUnits } from "viem";
-import type { BungeeQuoteResponse, BungeeToken } from "../types";
+import type { BungeeQuoteResponse, BungeeToken } from "@walletchan/shared/bungee";
 
 interface BridgeQuoteDisplayProps {
   quote: BungeeQuoteResponse;
