@@ -211,6 +211,9 @@ function BatchTransactionConfirmation({
   );
   const [state, setState] = useState<ConfirmationState>("ready");
   const [error, setError] = useState<string>("");
+  // Tracks the in-flight reject for immediate spinner feedback while the
+  // background tears down the bundle and the parent navigates away.
+  const [isRejecting, setIsRejecting] = useState(false);
   const [expandedCalls, setExpandedCalls] = useState<Set<number>>(new Set());
   const [decodedFunctionNames, setDecodedFunctionNames] = useState<
     Record<number, string>
@@ -447,6 +450,8 @@ function BatchTransactionConfirmation({
   };
 
   const handleReject = () => {
+    if (isRejecting) return;
+    setIsRejecting(true);
     onBeforeReject?.();
     if (customRejectHandler) {
       customRejectHandler().then(() => {
@@ -1428,7 +1433,18 @@ function BatchTransactionConfirmation({
                 {/* Action Buttons */}
                 {state !== "submitting" && (
                   <HStack spacing={3} pb={1}>
-                    <Button variant="secondary" flex={1} onClick={handleReject}>
+                    <Button
+                      variant="secondary"
+                      flex={1}
+                      onClick={handleReject}
+                      isLoading={isRejecting}
+                      spinner={
+                        <Spinner
+                          size="sm"
+                          sx={{ animationDirection: "reverse" }}
+                        />
+                      }
+                    >
                       Reject
                     </Button>
                     {/*
@@ -1443,7 +1459,10 @@ function BatchTransactionConfirmation({
                         flex={1}
                         onClick={handleConfirm}
                         isDisabled={
-                          state === "error" || !gasValid || isCalldataMalformed
+                          state === "error" ||
+                          !gasValid ||
+                          isCalldataMalformed ||
+                          isRejecting
                         }
                         // "Confirm Batch" is longer than the default "Confirm"
                         // — shrink the font so it sits comfortably next to the

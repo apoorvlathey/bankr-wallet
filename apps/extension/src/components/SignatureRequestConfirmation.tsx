@@ -11,6 +11,7 @@ import {
   Flex,
   Spacer,
   Image,
+  Spinner,
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { ArrowBackIcon, ChevronLeftIcon, ChevronRightIcon } from "@chakra-ui/icons";
@@ -269,6 +270,9 @@ function SignatureRequestConfirmation({
   const { message, rawData, typedData } = formatSignatureData(signature.method, signature.params);
   const signerAddress = getSignerAddress(signature.method, signature.params);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Tracks the in-flight reject for immediate spinner feedback during the
+  // ~100–300 ms gap between the click and the parent navigating away.
+  const [isRejecting, setIsRejecting] = useState(false);
   // Clear-signing resolution lifecycle. Eligible = there's a verifyingContract
   // to look up; once eligible, we hold off rendering the raw structured/raw
   // tabs until resolution settles so we don't get a flash-then-collapse.
@@ -278,6 +282,8 @@ function SignatureRequestConfirmation({
   >(clearSigningEligible ? "loading" : "absent");
 
   const handleCancel = () => {
+    if (isRejecting) return;
+    setIsRejecting(true);
     onBeforeCancel?.();
     chrome.runtime.sendMessage(
       { type: "rejectSignatureRequest", sigId: sigRequest.id },
@@ -690,6 +696,10 @@ function SignatureRequestConfirmation({
                 flex={1}
                 onClick={handleCancel}
                 isDisabled={isSubmitting}
+                isLoading={isRejecting}
+                spinner={
+                  <Spinner size="sm" sx={{ animationDirection: "reverse" }} />
+                }
               >
                 Reject
               </Button>
@@ -699,6 +709,7 @@ function SignatureRequestConfirmation({
                 onClick={handleConfirm}
                 isLoading={isSubmitting}
                 loadingText="Signing..."
+                isDisabled={isRejecting}
               >
                 Sign
               </Button>
@@ -708,6 +719,10 @@ function SignatureRequestConfirmation({
               variant="danger"
               w="full"
               onClick={handleCancel}
+              isLoading={isRejecting}
+              spinner={
+                <Spinner size="sm" sx={{ animationDirection: "reverse" }} />
+              }
             >
               Reject
             </Button>

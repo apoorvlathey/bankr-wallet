@@ -266,6 +266,10 @@ function TransactionConfirmation({
   );
   const [state, setState] = useState<ConfirmationState>("ready");
   const [error, setError] = useState<string>("");
+  // Tracks the in-flight reject. The background message + parent navigation
+  // take ~100–300 ms; the spinner gives the user immediate feedback so the
+  // click doesn't feel unresponsive.
+  const [isRejecting, setIsRejecting] = useState(false);
   const [toLabels, setToLabels] = useState<string[]>([]);
   const [resolvedToName, setResolvedToName] = useState<string | null>(null);
   const [decodedFunctionName, setDecodedFunctionName] = useState<
@@ -501,6 +505,8 @@ function TransactionConfirmation({
   };
 
   const handleReject = () => {
+    if (isRejecting) return;
+    setIsRejecting(true);
     onBeforeReject?.();
     chrome.runtime.sendMessage(
       { type: "rejectTransaction", txId: txRequest.id },
@@ -1495,7 +1501,15 @@ function TransactionConfirmation({
         {/* Action Buttons */}
         {state !== "submitting" && (
           <HStack spacing={3} pb={1}>
-            <Button variant="secondary" flex={1} onClick={handleReject}>
+            <Button
+              variant="secondary"
+              flex={1}
+              onClick={handleReject}
+              isLoading={isRejecting}
+              spinner={
+                <Spinner size="sm" sx={{ animationDirection: "reverse" }} />
+              }
+            >
               Reject
             </Button>
             {accountType !== "impersonator" && (
@@ -1507,7 +1521,8 @@ function TransactionConfirmation({
                   state === "error" ||
                   !gasValid ||
                   !splitState.ready ||
-                  isCalldataMalformed
+                  isCalldataMalformed ||
+                  isRejecting
                 }
               >
                 Confirm
