@@ -36,6 +36,7 @@ import { getChainConfig } from "@/constants/chainConfig";
 import { ShapesLoader } from "@/components/Chat/ShapesLoader";
 import { useTheme } from "@/theme";
 import { formatUsd } from "@/lib/currencyFormatUtils";
+import { useScreenEntered } from "@/components/ScreenTransition";
 
 interface AssetChangesDisplayProps {
   txRequest: PendingTxRequest;
@@ -548,8 +549,16 @@ function AssetChangesDisplay({
         .join(";")
     : null;
 
+  // Defer simulation until the screen's entry animation has settled.
+  // Simulation is heavy (eth_simulateV1 / batch injection + token metadata
+  // parsing → setState → full re-render) and running it concurrently with
+  // the slide-in causes the animation to jitter. The screen renders its
+  // loading state during the slide; the actual fetch fires the frame after.
+  const screenEntered = useScreenEntered();
+
   // Initial simulation fetch
   useEffect(() => {
+    if (!screenEntered) return;
     let cancelled = false;
     // Reset to a fresh loading state so re-simulations (e.g. after a call
     // is removed from the batch) show the spinner instead of stale results.
@@ -590,7 +599,7 @@ function AssetChangesDisplay({
     return () => {
       cancelled = true;
     };
-  }, [txRequest.id, batchCallsKey]);
+  }, [txRequest.id, batchCallsKey, screenEntered]);
 
   // Surface the simulated-revert flag to the parent so it can render the
   // banner at the very top of the confirmation surface. Fires on each

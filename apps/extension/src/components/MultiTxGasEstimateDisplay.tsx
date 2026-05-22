@@ -30,6 +30,7 @@ import {
   setStoredGasTier,
   type GasTierSelection,
 } from "@/lib/gasTiers";
+import { useScreenEntered } from "@/components/ScreenTransition";
 
 // Inline icons for the Auto / Edited badge — kept in sync with
 // GasEstimateDisplay.tsx so single-tx and batch UX read identically.
@@ -274,7 +275,14 @@ function MultiTxGasEstimateDisplay({
     [toEstimate.map((t) => t.tx.to + t.tx.data).join(","), isNonAtomic, forceInclusion],
   );
 
+  // Defer the batch gas estimate RPCs until the screen has settled. These
+  // can be several parallel RPCs (per-call estimates + sequential batch
+  // estimation) and their result triggers a tier-picker + fee-rows render
+  // that visibly jitters the slide-in if it lands mid-animation.
+  const screenEntered = useScreenEntered();
+
   useEffect(() => {
+    if (!screenEntered) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -472,7 +480,7 @@ function MultiTxGasEstimateDisplay({
     // variables individually would re-fire on every parent render because
     // arrays/callbacks change identity each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [estimateKey]);
+  }, [estimateKey, screenEntered]);
 
   // Picker is shown only for non-atomic PK/SP batches with tier data and
   // not in force-inclusion mode (force inclusion uses L1 fees recomputed at

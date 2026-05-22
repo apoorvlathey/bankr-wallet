@@ -41,6 +41,7 @@ import { decodeCalldataForDescriptor } from "@/lib/clearSigning/decodeForDescrip
 import { resolveDescriptor } from "@/lib/clearSigning/resolver";
 import { getBuiltinCalldataDescriptor } from "@/lib/clearSigning/builtinDescriptors";
 import type { Erc7730Descriptor } from "@/lib/clearSigning/types";
+import { useScreenEntered } from "@/components/ScreenTransition";
 
 interface CalldataProps {
   kind: "calldata";
@@ -98,7 +99,14 @@ export function ClearSigningView(props: ClearSigningViewProps) {
       ? `${props.typedData?.primaryType || ""}:${JSON.stringify(props.typedData?.message || {})}`
       : "";
 
+  // Defer the descriptor fetch + ABI decode until the surrounding screen
+  // has finished animating in. The resolved match flips a sibling raw
+  // CalldataDecoder collapse/expand, so running it mid-animation visibly
+  // jitters the slide.
+  const screenEntered = useScreenEntered();
+
   useEffect(() => {
+    if (!screenEntered) return;
     let cancelled = false;
     setLoading(true);
     setState(null);
@@ -205,7 +213,7 @@ export function ClearSigningView(props: ClearSigningViewProps) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, chainId, lookupAddress, calldataValue, typedDataKey, onResolved]);
+  }, [kind, chainId, lookupAddress, calldataValue, typedDataKey, onResolved, screenEntered]);
 
   if (loading) {
     if (hideLoadingSkeleton) return null;

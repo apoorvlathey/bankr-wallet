@@ -30,6 +30,7 @@ import {
   setStoredGasTier,
   type GasTierSelection,
 } from "@/lib/gasTiers";
+import { useScreenEntered } from "@/components/ScreenTransition";
 
 // Small chain-link icon — used as the visual cue for "Max Fee follows
 // Priority Fee" auto-derivation. Inline SVG so we can size it tightly next
@@ -247,8 +248,15 @@ function GasEstimateDisplay({
     isLocalAccount && !forceInclusion && !!estimate?.tiers;
   const showCustomEditor = isLocalAccount && (tier === "custom" || !showPicker);
 
+  // Defer the gas estimate RPC until the screen has finished animating in.
+  // Fetching mid-animation triggers a re-render with new layout (tier picker,
+  // fee rows) that stutters the slide. Skeleton stays put during the slide,
+  // estimate arrives the frame after entry settles.
+  const screenEntered = useScreenEntered();
+
   // Fetch gas estimate on mount and when forceInclusion toggles
   useEffect(() => {
+    if (!screenEntered) return;
     let cancelled = false;
     setLoading(true);
     setEstimate(null);
@@ -320,7 +328,7 @@ function GasEstimateDisplay({
     // changed would be wasteful. The tier-change effect below repopulates the
     // editable fields from cached `estimate.tiers`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [txRequest.id, forceInclusion]);
+  }, [txRequest.id, forceInclusion, screenEntered]);
 
   // When the user picks a preset tier, repopulate the editable fields from
   // the cached tiers and clear the sticky-manual flag so Custom starts linked

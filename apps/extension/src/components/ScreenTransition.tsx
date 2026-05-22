@@ -1,4 +1,6 @@
 import {
+  createContext,
+  useContext,
   useEffect,
   useRef,
   useState,
@@ -7,6 +9,17 @@ import {
 import { Box } from "@chakra-ui/react";
 import { motion, useReducedMotion, type Transition } from "framer-motion";
 import { useTheme } from "@/theme";
+
+// True once the surrounding screen's entry animation has settled.
+// Stable / exit layers always read `true`. Entering layers start at `false`
+// and flip when the slide/fade completes. Heavy data-bound subtrees gate
+// their first fetch on this so the slide-in stays smooth (no React work +
+// layout shift competing with the running animation).
+const ScreenEnteredContext = createContext<boolean>(true);
+
+export function useScreenEntered(): boolean {
+  return useContext(ScreenEnteredContext);
+}
 
 export type AppView =
   | "main"
@@ -115,6 +128,12 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
   }));
   const lastViewRef = useRef(view);
   const keyCounter = useRef(1);
+  // Set of layer keys whose entry animation has already settled. Layers
+  // listed here read `true` from ScreenEnteredContext; layers absent read
+  // `false`. The first/initial layer (key=0) is considered entered.
+  const [enteredKeys, setEnteredKeys] = useState<Set<number>>(
+    () => new Set([0]),
+  );
 
   useEffect(() => {
     const prevView = lastViewRef.current;
@@ -186,8 +205,16 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
 
       // Back: current layer stays on top and animates out; destination is
       // mounted beneath (no entry animation; it's revealed as the old one
-      // slides away).
+      // slides away). Mark the destination key as entered immediately —
+      // there's no slide-in for the beneath layer, so its data-bound
+      // children should fetch right away.
       const newKey = keyCounter.current++;
+      setEnteredKeys((prev) => {
+        if (prev.has(newKey)) return prev;
+        const next = new Set(prev);
+        next.add(newKey);
+        return next;
+      });
       return {
         phase: "transitioning",
         beneath: { view, children },
@@ -220,7 +247,34 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
         activeKey: s.beneathKey,
       };
     });
+    // Mark the now-settled layer as entered. Children of that layer will
+    // re-render with `useScreenEntered() === true` and can kick off their
+    // deferred data fetches.
+    setEnteredKeys((prev) => {
+      if (prev.has(completedKey)) return prev;
+      const next = new Set(prev);
+      next.add(completedKey);
+      return next;
+    });
   };
+
+  // Prune entered keys that no longer correspond to a live layer so the set
+  // doesn't grow forever across hundreds of navigations.
+  useEffect(() => {
+    setEnteredKeys((prev) => {
+      const liveKeys =
+        state.phase === "idle"
+          ? [state.activeKey]
+          : [state.beneathKey, state.above.key];
+      let changed = false;
+      const next = new Set<number>();
+      for (const k of prev) {
+        if (liveKeys.includes(k)) next.add(k);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [state]);
 
   const duration = prefersReduced ? 0 : tokens.motion.screenDuration;
   const transition: Transition = {
@@ -313,6 +367,8 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
             break;
         }
 
+        const layerEntered = enteredKeys.has(layer.key);
+
         return (
           <motion.div
             key={layer.key}
@@ -331,7 +387,9 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
               willChange,
             }}
           >
-            {layer.children}
+            <ScreenEnteredContext.Provider value={layerEntered}>
+              {layer.children}
+            </ScreenEnteredContext.Provider>
           </motion.div>
         );
       })}
