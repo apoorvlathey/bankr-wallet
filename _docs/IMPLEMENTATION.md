@@ -226,7 +226,7 @@ Native asset price/logo resolution is centralized in `src/chrome/coingeckoServic
 
 ### Per-Account-Type Chain Restrictions
 
-Not all chains are supported by all account types. The Bankr API only supports the original 4 chains (Base, Ethereum, Polygon, Unichain). Newer chains like MegaETH are available for PK, Seed Phrase, and Impersonator accounts only.
+Not all chains are supported by all account types. The Bankr API only supports a subset of built-in chains (currently Ethereum, Arbitrum, Base, BNB Chain, Polygon, Unichain — see `isBankrSupported: true` in `chainRegistry.ts`). Newer chains like Optimism and MegaETH are available for PK, Seed Phrase, and Impersonator accounts only. PK / Seed / Impersonator accounts can additionally add arbitrary custom EVM chains via Settings → Chains; Bankr accounts cannot use custom chains.
 
 **Constants** (derived from `src/constants/chainRegistry.ts`, re-exported via `src/constants/networks.ts`):
 

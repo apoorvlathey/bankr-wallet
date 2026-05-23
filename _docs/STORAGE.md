@@ -2,6 +2,35 @@
 
 Complete reference of every `chrome.storage` key used by WalletChan. Consult this before any release that touches storage — see [PUBLISHING.md](./PUBLISHING.md) for the migration rules and pre-release checklist.
 
+## Modifying Storage Safely
+
+**CRITICAL**: Chrome extensions auto-update silently — users on ANY previous version will receive new code. Before adding, removing, renaming, or changing the shape of ANY `chrome.storage` key, you **MUST**:
+
+1. Read this file in full — know every key, its shape, and which version introduced it.
+2. Read [`PUBLISHING.md`](./PUBLISHING.md) — migration rules, how to write an idempotent migration, and the pre-release storage checklist.
+3. Write a migration in `background.ts` (called from the `onInstalled` `"update"` handler) if old users would break without one.
+4. Update this file with any new/changed keys and their version.
+
+Failure to do this **will brick the extension** for existing users (they get stuck in an onboarding loop or lose data).
+
+### Audit checklist for any storage change
+
+1. **Audit ALL read AND write paths** — grep for the storage key name (e.g. `encryptedApiKey`, `encryptedApiKeyVault`).
+2. **Check every file** that touches the data — `background.ts` has multiple handlers, `AccountSettingsModal.tsx` can save directly. Common mistake: updating read paths but forgetting write paths in different files/handlers.
+3. **Trace user-reported anomalies** all the way to a write path — don't dismiss them; a weird value usually points at a storage/migration bug.
+
+### Key Storage Locations (API key encryption)
+
+| Key                       | Purpose                                           |
+| ------------------------- | ------------------------------------------------- |
+| `encryptedApiKeyVault`    | API key encrypted with vault key (current format) |
+| `encryptedApiKey`         | API key encrypted with password (legacy format)   |
+| `encryptedVaultKeyMaster` | Vault key encrypted with master password          |
+
+Rule: check `cachedVaultKey` to determine which system is active before saving API keys.
+
+---
+
 ## chrome.storage.local
 
 Persists across extension restarts. Cleared only on manual reset or uninstall.

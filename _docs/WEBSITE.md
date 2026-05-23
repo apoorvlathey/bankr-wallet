@@ -784,3 +784,91 @@ website/
 - README.md - Feature list and installation
 - IMPLEMENTATION.md - Technical architecture
 - TODO.md - Roadmap and marketing ideas
+
+---
+
+## Development Conventions
+
+### Key files
+
+```
+apps/website/
+├── app/
+│   ├── layout.tsx
+│   ├── page.tsx
+│   ├── components/        # Hero, Features, TokenSection, etc.
+│   └── lib/
+│       ├── siteRouting.ts # Subdomain registry + pure URL resolution functions
+│       ├── useSiteNav.ts  # React hook wrapping siteRouting for client components
+│       └── theme.ts       # Chakra UI Bauhaus theme
+```
+
+### Pages that use wagmi / RainbowKit hooks
+
+**CRITICAL**: Any website page (`page.tsx`) that uses wagmi hooks (`useAccount`, `useChainId`, `useReadContract`, etc.) or RainbowKit components (`ConnectButton`) will **fail on Vercel** during `next build` static prerendering with `WagmiProviderNotFoundError`.
+
+**Required pattern** for new pages that use wagmi:
+
+1. Put all page content in a separate `"use client"` file (e.g., `MyPageContent.tsx`)
+2. Make `page.tsx` a **Server Component** that imports the content and exports `force-dynamic`:
+
+```tsx
+// page.tsx (Server Component — no "use client")
+import MyPageContent from "./MyPageContent";
+
+export const dynamic = "force-dynamic";
+
+export default function MyPage() {
+  return <MyPageContent />;
+}
+```
+
+**Why**: `next build` statically prerenders pages at build time. Even though `WagmiProvider` is in the layout, wagmi's config initialization can fail during Node.js prerendering. `force-dynamic` skips prerendering entirely. These pages are inherently dynamic (wallet state) so there's no benefit to static generation.
+
+**Existing pages using this pattern**: `migrate`, `admin`, `coins`, `stake`, `verify`.
+
+**Note**: Pages that only import child components using wagmi (like `swap/page.tsx` importing `SwapCard`) don't need this — only pages that directly use wagmi hooks in the page file itself.
+
+### Adding a new subdomain
+
+When adding a new page that should be accessible via a subdomain (e.g., `foo.walletchan.com`), update **four things**:
+
+1. **Add a `beforeFiles` rewrite** in `apps/website/next.config.js` to map the subdomain to the route:
+   ```js
+   { source: "/:path((?!_next|api|images|og|screenshots).*)", has: [{ type: "host", value: "foo.walletchan.com" }], destination: "/foo/:path*" }
+   ```
+2. **Add a redirect** in `apps/website/next.config.js` from the old `bankrwallet.app` subdomain:
+   ```js
+   { source: "/:path*", has: [{ type: "host", value: "foo.bankrwallet.app" }], destination: "https://foo.walletchan.com/:path*", permanent: true }
+   ```
+3. **Add the route to the subdomain registry** in `apps/website/app/lib/siteRouting.ts`:
+   ```ts
+   { path: "/foo", subdomain: "foo.walletchan.com" }
+   ```
+   This is the single source of truth for client-side subdomain routing. All navigation helpers (`resolveHref`, `useSiteNav` hook, `getBasePath`) derive from this array.
+4. **Add the subdomain in Vercel** project domain settings.
+
+**Existing subdomains**: `os`, `stake`, `migrate`, `compare`, `mainnet`, `admin`.
+
+### Cross-subdomain URL routing
+
+**CRITICAL**: Never construct subdomain URLs manually or use raw `window.location.hostname` checks for routing. Always use the centralized routing helpers:
+
+- **`useSiteNav()` hook** (`apps/website/app/lib/useSiteNav.ts`) — for React components. Provides:
+  - `href(path)` — resolves any internal path to the correct URL (handles localhost vs subdomain vs main site)
+  - `homeHref` — logo/home link (`"/"` on localhost, `"https://walletchan.com"` on subdomains)
+  - `isOnPage(route)` — checks if on a specific page (works with both pathname and subdomain)
+  - `getRouteBasePath(route)` — returns `""` on own subdomain, `"/os"` etc. elsewhere
+  - `isLocalhost`, `isOnSubdomain`, `currentRoute`
+- **`siteRouting.ts`** (`apps/website/app/lib/siteRouting.ts`) — pure functions for non-React code. Same logic, takes `hostname` as parameter.
+
+**Examples:**
+
+```tsx
+// In a component on any page/subdomain:
+const { href, homeHref, isOnPage } = useSiteNav();
+<Link href={href("/stake")}>Stake</Link>         // → "/stake" on localhost, "https://stake.walletchan.com" on prod
+<Link href={href("#install")}>Install</Link>     // → "#install" on homepage, "https://walletchan.com/#install" on subdomains
+<Link href={homeHref}>Home</Link>                // → "/" on localhost, "https://walletchan.com" on subdomains
+const isOnStake = isOnPage("/stake");            // → true on /stake path OR stake.walletchan.com
+```
