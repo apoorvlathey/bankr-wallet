@@ -76,10 +76,6 @@ const init = async () => {
     let script = document.createElement("script");
     script.setAttribute("type", "text/javascript");
     script.src = chrome.runtime.getURL("/static/js/inpage.js");
-    // Pass the wallet icon URL through to the inpage script. It reads this
-    // from document.currentScript at module init to avoid inlining a multi-MB
-    // base64 GIF into the inpage bundle (AMO rejects files >5MB).
-    script.dataset.walletIcon = chrome.runtime.getURL("walletchan-animated.gif");
     script.onload = async function () {
       // @ts-ignore
       this.remove();
