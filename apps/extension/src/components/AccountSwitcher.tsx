@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { memo, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import { layout, prepare } from "@chenglou/pretext";
 import {
   Menu,
@@ -201,35 +201,106 @@ function AccountSwitcher({
     return identities.get(account.address.toLowerCase())?.avatar ?? null;
   }
 
-  // Scroll the active MenuItem into view *once per open*. Menu's onOpen arms
-  // the flag; the callback ref (which also fires on unrelated re-renders like
-  // ENS resolution) only scrolls when armed, then disarms — so manual scrolls
-  // aren't fought by subsequent re-renders.
-  const shouldScrollActiveRef = useRef(false);
-  const activeItemRef = useCallback((node: HTMLElement | null) => {
-    if (!node || !shouldScrollActiveRef.current) return;
-    shouldScrollActiveRef.current = false;
-    // Defer to the next frame: when this ref fires during React commit, later
-    // sibling MenuItems may not be appended yet, so parent.scrollHeight is
-    // short and parent.scrollTop gets clamped to 0. rAF waits until layout is
-    // finalized with all siblings and Chakra's popper positioning applied.
-    requestAnimationFrame(() => {
-      let parent: HTMLElement | null = node.parentElement;
-      while (parent) {
-        const overflowY = window.getComputedStyle(parent).overflowY;
-        if (overflowY === "auto" || overflowY === "scroll") break;
-        parent = parent.parentElement;
-      }
-      if (!parent) return;
-      const parentRect = parent.getBoundingClientRect();
-      const nodeRect = node.getBoundingClientRect();
-      const relativeTop = nodeRect.top - parentRect.top + parent.scrollTop;
-      parent.scrollTop = Math.max(
-        0,
-        relativeTop - (parent.clientHeight - node.offsetHeight) / 2,
-      );
-    });
+  // Center the active MenuItem on open AND every time async data (ENS
+  // identities, seed group names) settles while the menu is open. A one-shot
+  // scroll on open misses the late layout shift when identities resolve after
+  // the menu has already mounted — items grow taller (extra ENS line, more
+  // badges) and the active row slides out of view.
+  //
+  // lastAutoScrollTopRef preserves manual scrolling: we only re-center if the
+  // scrollable parent is still at the position we last set it to. The moment
+  // the user scrolls, the values diverge and async data updates stop yanking.
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const activeItemRef = useRef<HTMLElement | null>(null);
+  const menuListRef = useRef<HTMLDivElement | null>(null);
+  const lastAutoScrollTopRef = useRef<number | null>(null);
+  const userScrolledMenuRef = useRef(false);
+
+  const getScrollableMenu = useCallback((node: HTMLElement) => {
+    if (menuListRef.current) return menuListRef.current;
+
+    let parent: HTMLElement | null = node.parentElement;
+    while (parent) {
+      const overflowY = window.getComputedStyle(parent).overflowY;
+      if (overflowY === "auto" || overflowY === "scroll") return parent;
+      parent = parent.parentElement;
+    }
+    return null;
   }, []);
+
+  const scrollActiveItemIntoView = useCallback(() => {
+    const node = activeItemRef.current;
+    if (!node) return;
+
+    const parent = getScrollableMenu(node);
+    if (!parent || parent.clientHeight === 0) return;
+    if (userScrolledMenuRef.current) return;
+
+    // If the user has manually scrolled since our last auto-scroll, stop
+    // overriding them.
+    if (
+      lastAutoScrollTopRef.current !== null &&
+      Math.abs(parent.scrollTop - lastAutoScrollTopRef.current) > 1
+    ) {
+      return;
+    }
+
+    const parentRect = parent.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
+    if (parentRect.height === 0 || nodeRect.height === 0) return;
+
+    const relativeTop = nodeRect.top - parentRect.top + parent.scrollTop;
+    const maxScrollTop = Math.max(0, parent.scrollHeight - parent.clientHeight);
+    const target = Math.min(
+      maxScrollTop,
+      Math.max(0, relativeTop - (parent.clientHeight - node.offsetHeight) / 2),
+    );
+
+    parent.scrollTop = target;
+    lastAutoScrollTopRef.current = parent.scrollTop;
+  }, [getScrollableMenu]);
+
+  useLayoutEffect(() => {
+    if (!isMenuOpen) {
+      lastAutoScrollTopRef.current = null;
+      userScrolledMenuRef.current = false;
+      return;
+    }
+
+    // Chakra animates and positions MenuList after mount. Run across the first
+    // few frames and once after the transition so the initial open uses final
+    // dimensions, including avatar/image and ENS line layout shifts.
+    let cancelled = false;
+    const rafIds: number[] = [];
+    const timeoutIds: number[] = [];
+    const run = () => {
+      if (!cancelled) scrollActiveItemIntoView();
+    };
+    const queueFrame = (remaining: number) => {
+      const raf = requestAnimationFrame(() => {
+        run();
+        if (remaining > 1) queueFrame(remaining - 1);
+      });
+      rafIds.push(raf);
+    };
+
+    queueFrame(3);
+    timeoutIds.push(window.setTimeout(run, 80));
+    timeoutIds.push(window.setTimeout(run, 220));
+
+    return () => {
+      cancelled = true;
+      rafIds.forEach(cancelAnimationFrame);
+      timeoutIds.forEach(clearTimeout);
+    };
+  }, [
+    isMenuOpen,
+    accounts.length,
+    activeAccount?.id,
+    identities,
+    scrollActiveItemIntoView,
+    seedGroupMap,
+  ]);
 
   // Check if the display name would overflow when rendered next to the avatar
   // Avatar (20px) + gap (6px) + padding-right for chevron (20px) + container padding (12+20=32px)
@@ -249,8 +320,16 @@ function AccountSwitcher({
       matchWidth
       isLazy
       lazyBehavior="unmount"
+      autoSelect={false}
+      isOpen={isMenuOpen}
       onOpen={() => {
-        shouldScrollActiveRef.current = true;
+        userScrolledMenuRef.current = false;
+        setIsMenuOpen(true);
+      }}
+      onClose={() => {
+        lastAutoScrollTopRef.current = null;
+        userScrolledMenuRef.current = false;
+        setIsMenuOpen(false);
       }}
     >
       <MenuButton
@@ -434,6 +513,7 @@ function AccountSwitcher({
         </Box>
       </MenuButton>
       <MenuList
+        ref={menuListRef}
         bg="surface.raised"
         border="3px solid"
         borderColor="border.default"
@@ -441,11 +521,27 @@ function AccountSwitcher({
         py={0}
         maxH="300px"
         overflowY="auto"
+        onScroll={(event) => {
+          const { scrollTop } = event.currentTarget;
+          if (lastAutoScrollTopRef.current === null) {
+            if (scrollTop > 0) userScrolledMenuRef.current = true;
+            return;
+          }
+          if (Math.abs(scrollTop - lastAutoScrollTopRef.current) > 1) {
+            userScrolledMenuRef.current = true;
+          }
+        }}
       >
         {accounts.map((account, i) => (
           <MenuItem
             key={account.id}
-            ref={account.id === activeAccount?.id ? activeItemRef : undefined}
+            ref={
+              account.id === activeAccount?.id
+                ? (node: HTMLElement | null) => {
+                    activeItemRef.current = node;
+                  }
+                : undefined
+            }
             bg={account.id === activeAccount?.id ? "surface.raisedHover" : "surface.raised"}
             _hover={{ bg: "bg.muted" }}
             borderBottom={i < accounts.length - 1 ? "2px solid" : "none"}
