@@ -24,8 +24,17 @@ import {
   MenuItem,
   Checkbox,
   Tooltip,
+  Textarea,
+  Collapse,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverBody,
+  PopoverArrow,
+  Portal,
+  useDisclosure,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon, WarningTwoIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon, ChevronDownIcon, ChevronRightIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon, SettingsIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import { blo } from "blo";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { useTheme } from "@/theme";
@@ -80,11 +89,15 @@ function getAccountTypePillStyles(account: Account) {
 }
 
 /**
- * Balance display that adapts to available row width. Mirrors the full
- * comma-separated number off-screen to measure its natural width; if it
- * exceeds the visible container we switch to a compact form (e.g. "2.61B")
- * prefixed with `~` so the user knows it's abbreviated. Hovering shows the
- * full value via tooltip.
+ * Balance row shown on its own line beneath the chain/token selectors so it
+ * has the full card width to play with and never gets crowded by long chain
+ * names. Layout: "BALANCE" label flush left, value + USD flush right.
+ *
+ * The value still adapts to available width — it mirrors the full
+ * comma-separated number off-screen to measure its natural width and falls
+ * back to a compact form (e.g. "~2.61B") if the slot is too narrow. Compact
+ * mode is rare here (full card width) but kept for truly huge balances.
+ * Hovering on the compact form shows the exact value.
  */
 function AdaptiveBalance({
   balanceStr,
@@ -102,6 +115,10 @@ function AdaptiveBalance({
   const compactBalance = !isNaN(balanceNum)
     ? formatCompact(balanceStr)
     : balanceFormatted;
+  const usdLabel =
+    priceUsd !== null && !isNaN(balanceNum)
+      ? formatUsd(balanceNum * priceUsd)
+      : null;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
@@ -126,14 +143,7 @@ function AdaptiveBalance({
   const displayedBalance = showCompact ? `~${compactBalance}` : fullBalance;
 
   return (
-    <VStack
-      align="end"
-      spacing={0}
-      ml="auto"
-      flex="1 1 0"
-      minW={0}
-      overflow="hidden"
-    >
+    <HStack spacing={2} align="center" w="full" minW={0}>
       <Text
         fontSize="2xs"
         fontWeight="800"
@@ -141,10 +151,19 @@ function AdaptiveBalance({
         textTransform="uppercase"
         letterSpacing="0.06em"
         lineHeight="1"
+        flexShrink={0}
       >
         Balance
       </Text>
-      <Box ref={containerRef} w="full" position="relative" overflow="hidden" textAlign="right">
+      <Box
+        ref={containerRef}
+        ml="auto"
+        position="relative"
+        overflow="hidden"
+        textAlign="right"
+        flex="1 1 0"
+        minW={0}
+      >
         {/* Off-screen mirror of the full text used only for width measurement. */}
         <Text
           ref={measureRef}
@@ -179,12 +198,18 @@ function AdaptiveBalance({
           </Text>
         </Tooltip>
       </Box>
-      {priceUsd !== null && !isNaN(balanceNum) && (
-        <Text fontSize="xs" fontWeight="700" color="text.tertiary" lineHeight="1.2">
-          {formatUsd(balanceNum * priceUsd)}
+      {usdLabel && (
+        <Text
+          fontSize="xs"
+          fontWeight="700"
+          color="text.tertiary"
+          lineHeight="1"
+          flexShrink={0}
+        >
+          {usdLabel}
         </Text>
       )}
-    </VStack>
+    </HStack>
   );
 }
 
@@ -225,6 +250,16 @@ function TokenTransfer({
   const [sponsoredFailed, setSponsoredFailed] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [customTokenLoading, setCustomTokenLoading] = useState(false);
+  // Optional hex calldata appended to a native-token send. Collapsed by
+  // default — power-user feature for calling payable contracts directly from
+  // the Send page without dapp involvement.
+  const [hexData, setHexData] = useState("");
+  const [isHexDataExpanded, setIsHexDataExpanded] = useState(false);
+  // Advanced setting: treat the hex data as deployment bytecode and send the
+  // tx with `to: null`. Only meaningful for native + valid non-empty hex
+  // data; auto-clears whenever that precondition no longer holds.
+  const [isContractDeployment, setIsContractDeployment] = useState(false);
+  const deployToggle = useDisclosure();
 
   // Fetch all holdings once
   useEffect(() => {
@@ -431,6 +466,8 @@ function TokenTransfer({
     setAmount("");
     setIsUsdMode(false);
     setSliderValue(0);
+    setHexData("");
+    setIsHexDataExpanded(false);
   };
 
   // Resolved custom token shown in dropdown for user to click
@@ -509,9 +546,38 @@ function TokenTransfer({
     setAmount("");
     setIsUsdMode(false);
     setSliderValue(0);
+    setHexData("");
+    setIsHexDataExpanded(false);
   };
 
   const token = selectedToken;
+
+  // Native + optional hex calldata. When the user attaches calldata to a
+  // native send (e.g. calling a payable contract), a 0-value tx is legitimate
+  // — the amount field can be empty. These derivations need to sit ABOVE
+  // `tokenAmount` / `isAmountValid` so those can relax their checks.
+  const isNativeToken = token?.contractAddress === "native";
+  const trimmedHexData = hexData.trim();
+  const hexDataIsEmpty =
+    trimmedHexData === "" || trimmedHexData === "0x" || trimmedHexData === "0X";
+  const isHexDataValid =
+    !isNativeToken ||
+    hexDataIsEmpty ||
+    /^0x([0-9a-fA-F]{2})+$/.test(trimmedHexData);
+  const hasNativeCalldata = isNativeToken && !hexDataIsEmpty && isHexDataValid;
+  // Contract deployment is only meaningful when hex data (the deployment
+  // bytecode) is valid and present. Auto-clear it whenever the precondition
+  // disappears so a stale `to: null` can't slip into a normal transfer.
+  useEffect(() => {
+    if (isContractDeployment && !hasNativeCalldata) {
+      setIsContractDeployment(false);
+    }
+  }, [isContractDeployment, hasNativeCalldata]);
+  // Gear visibility — native token + no recipient entered. When deploy is
+  // already on the recipient input is hidden, so OR with `isContractDeployment`
+  // guarantees the user always has a way to toggle it back off.
+  const canShowDeployToggle =
+    isNativeToken && (isContractDeployment || !recipient.trim());
 
   // Sponsored USDC transfer detection
   const isUsdcOnBase = !!(
@@ -563,6 +629,12 @@ function TokenTransfer({
 
   const chainName = getChainName(selectedChainId);
   const chainEnvironmentLabel = getChainEnvironmentLabel(selectedChainId, chainName);
+  // Trigger label mirrors the dropdown rows: full chain name beside the
+  // icon, with a trailing "Testnet" word stripped when the testnet pill
+  // already conveys it (avoids "RISE Testnet [TESTNET]" piling up).
+  const triggerChainLabel = chainEnvironmentLabel
+    ? chainName.replace(/\s+testnet$/i, "").trim() || chainName
+    : chainName;
   const explorerUrl = getResolvedChainById(selectedChainId, networksInfo)?.explorer ?? "";
   const [chainSearch, setChainSearch] = useState("");
   const chainSearchInputRef = useRef<HTMLInputElement>(null);
@@ -631,11 +703,16 @@ function TokenTransfer({
     return blo(account.address as `0x${string}`);
   }, [otherAccountIdentities, cachedOtherAccountAvatars]);
 
-  // Compute the token amount that will actually be sent
+  // Compute the token amount that will actually be sent. When the user has
+  // attached valid hex calldata to a native send, a 0-value tx is a real use
+  // case (calling a non-payable contract), so empty / "0" amount is allowed
+  // and normalized to "0".
   const tokenAmount = useMemo(() => {
-    if (!token || !amount) return "";
+    if (!token) return "";
+    if (!amount) return hasNativeCalldata ? "0" : "";
     const num = parseFloat(amount);
-    if (isNaN(num) || num <= 0) return "";
+    if (isNaN(num) || num < 0) return "";
+    if (num === 0) return hasNativeCalldata ? "0" : "";
     if (isUsdMode && hasPrice) {
       const converted = num / token.priceUsd;
       const balance = parseFloat(token.balance);
@@ -643,7 +720,7 @@ function TokenTransfer({
       return converted.toFixed(token.decimals);
     }
     return amount;
-  }, [amount, isUsdMode, hasPrice, token]);
+  }, [amount, isUsdMode, hasPrice, token, hasNativeCalldata]);
 
   const balanceNum = token ? parseFloat(token.balance) : 0;
 
@@ -652,6 +729,10 @@ function TokenTransfer({
     setAmount("");
     setIsUsdMode(false);
     setSliderValue(0);
+    // Hex calldata is only meaningful for native sends — clear it whenever
+    // the token changes so a stale value can't leak into the next tx.
+    setHexData("");
+    setIsHexDataExpanded(false);
   };
 
   const setAmountFromSlider = (pct: number) => {
@@ -716,21 +797,31 @@ function TokenTransfer({
   };
 
   const isAmountValid = (): boolean => {
-    if (!token || !tokenAmount) return false;
+    if (!token || tokenAmount === "") return false;
     const num = parseFloat(tokenAmount);
-    if (isNaN(num) || num <= 0) return false;
+    if (isNaN(num) || num < 0) return false;
+    // Native + calldata: 0-value is allowed (e.g. invoking a non-payable
+    // contract function). Without calldata, require a positive amount.
+    if (num === 0) return hasNativeCalldata;
     const balance = parseFloat(token.balance);
     return num <= balance;
   };
 
+  // Contract deployments don't have a recipient at all — `to` is null. Skip
+  // the recipient validation/contract-warning gates in that case.
+  const recipientGatesPass = isContractDeployment
+    ? true
+    : isRecipientValid &&
+      !isResolving &&
+      !isCheckingRecipientKind &&
+      (!isRecipientContract || acknowledgeContract);
+
   const canSubmit =
     !!token &&
-    isRecipientValid &&
-    !isResolving &&
+    recipientGatesPass &&
     isAmountValid() &&
     !isSubmitting &&
-    !isCheckingRecipientKind &&
-    (!isRecipientContract || acknowledgeContract);
+    isHexDataValid;
 
   const handleSubmit = async () => {
     if (!canSubmit || !token) return;
@@ -772,13 +863,16 @@ function TokenTransfer({
         return;
       }
 
-      // Normal transfer flow
+      // Normal transfer flow (or contract deployment when toggled). For a
+      // deployment, hex data IS the bytecode and `to` must be null — the tx
+      // confirmation modal already handles the "no recipient" case as a deploy.
       const txParts = buildTransferTx({
-        to: resolvedAddress!,
+        to: isContractDeployment ? "0x" : resolvedAddress!,
         amount: tokenAmount,
         contractAddress: token.contractAddress,
         decimals: token.decimals,
         chainId: token.chainId,
+        data: isNativeToken ? trimmedHexData : undefined,
       });
 
       const result = await new Promise<{ success: boolean; txId?: string; error?: string }>(
@@ -788,13 +882,15 @@ function TokenTransfer({
               type: "initiateTransfer",
               tx: {
                 from: fromAddress,
-                to: txParts.to,
+                to: isContractDeployment ? null : txParts.to,
                 data: txParts.data,
                 value: txParts.value,
                 chainId: token.chainId,
               },
               chainName: chainName,
-              tokenName: token.symbol.toUpperCase(),
+              tokenName: isContractDeployment
+                ? "Contract Deployment"
+                : token.symbol.toUpperCase(),
               tokenLogo: token.logoUrl || null,
             },
             resolve
@@ -837,6 +933,7 @@ function TokenTransfer({
         contractAddress: token.contractAddress,
         decimals: token.decimals,
         chainId: token.chainId,
+        data: isNativeToken ? trimmedHexData : undefined,
       });
 
       const result = await new Promise<{ success: boolean; txId?: string; error?: string }>(
@@ -963,7 +1060,11 @@ function TokenTransfer({
             p={3}
           >
             <HStack spacing={3} align="center">
-              {/* Chain selector */}
+              {/* Chain selector + (optional) testnet pill stacked below it.
+                  Stacking instead of inlining the pill gives the chain name
+                  more horizontal room on custom chains without sacrificing
+                  the row-level "this is a testnet" safety signal. */}
+              <VStack align="flex-start" spacing={1} flexShrink={0} minW={0}>
               <Menu
                 isOpen={isChainMenuOpen}
                 initialFocusRef={chainSearchInputRef}
@@ -981,11 +1082,32 @@ function TokenTransfer({
                   as={Box}
                   cursor="pointer"
                   flexShrink={0}
+                  minW={0}
                   _hover={{ opacity: 0.7 }}
                   transition="opacity 0.15s"
                 >
-                  <HStack spacing={1.5}>
-                    <ChainIcon chainId={selectedChainId} chainName={chainName} size="36px" withChip />
+                  <HStack spacing={1.5} minW={0}>
+                    <ChainIcon
+                      chainId={selectedChainId}
+                      chainName={chainName}
+                      size="24px"
+                      withChip
+                    />
+                    {/* Chain name shown beside the icon for every chain so
+                        the user can read it at a glance — not just custom
+                        chains. Truncated with a tooltip so a name longer
+                        than the available space doesn't push the SELECT
+                        button off-screen. */}
+                    <Text
+                      fontSize="sm"
+                      fontWeight="800"
+                      color="text.primary"
+                      maxW="180px"
+                      noOfLines={1}
+                      title={chainName}
+                    >
+                      {triggerChainLabel}
+                    </Text>
                     <Box
                       bg="surface.raised"
                       border="1.5px solid"
@@ -997,6 +1119,7 @@ function TokenTransfer({
                       alignItems="center"
                       justifyContent="center"
                       boxShadow="card"
+                      flexShrink={0}
                     >
                       <ChevronDownIcon boxSize="12px" />
                     </Box>
@@ -1093,6 +1216,7 @@ function TokenTransfer({
                                 color="accentFg.highlight"
                                 border="1px solid"
                                 borderColor="border.default"
+                                borderRadius={tokens.radii.badge}
                                 lineHeight="1"
                               >
                                 Testnet
@@ -1113,10 +1237,15 @@ function TokenTransfer({
                 </MenuList>
               </Menu>
 
-              {/* Testnet pill — only on non-mainnet chains. Inline with the
-                  chain selector so it reads as a row-level safety signal. */}
+              {/* Testnet pill — only on non-mainnet chains. Sits directly
+                  beneath the chain selector and is centered against the
+                  selector column (alignSelf overrides VStack's flex-start so
+                  the icon/name row above stays left-aligned). Radius is
+                  driven by the theme badge token — square on Bauhaus,
+                  rounded on Midnight. */}
               {chainEnvironmentLabel && (
                 <Text
+                  alignSelf="center"
                   fontSize="8px"
                   fontWeight="900"
                   letterSpacing="0.08em"
@@ -1127,46 +1256,87 @@ function TokenTransfer({
                   color="accentFg.highlight"
                   border="1px solid"
                   borderColor="border.default"
+                  borderRadius={tokens.radii.badge}
                   lineHeight="1"
                   flexShrink={0}
                 >
                   {chainEnvironmentLabel}
                 </Text>
               )}
+              </VStack>
 
-              {/* Token selector — content-sized; balance sits flush right
-                  via ml="auto" so the trigger button stays compact. */}
-              <TokenSelector
-                holdings={holdings}
-                tokenList={tokenList}
-                chainId={selectedChainId}
-                selectedToken={token}
-                onSelect={handleTokenSelect}
-                onCustomAddress={resolveCustomAddress}
-                onSelectCustomToken={handleSelectCustomToken}
-                resolvedCustomToken={resolvedCustomToken}
-                customTokenLoading={customTokenLoading}
-                customTokenError={customTokenError}
-                chainName={chainName}
-                dropdownAlign="right"
-              />
-
-              {/* Balance — adaptive width. Shows the full comma-separated
-                  number when the row has room, falls back to compact (e.g.
-                  "~2.61B" with a `~` prefix as a hint that the value is
-                  abbreviated) when the full form would overflow. The full
-                  value is always available on the tooltip. */}
-              {token && (
-                <AdaptiveBalance
-                  balanceStr={token.balance}
-                  balanceFormatted={token.balanceFormatted}
-                  priceUsd={hasPrice ? token.priceUsd : null}
+              {/* Token selector — sits flush right via ml="auto" so long
+                  chain names on the left can grow up to the SELECT trigger
+                  without fighting the balance row (now a row of its own
+                  below). */}
+              <Box ml="auto" flexShrink={0}>
+                <TokenSelector
+                  holdings={holdings}
+                  tokenList={tokenList}
+                  chainId={selectedChainId}
+                  selectedToken={token}
+                  onSelect={handleTokenSelect}
+                  onCustomAddress={resolveCustomAddress}
+                  onSelectCustomToken={handleSelectCustomToken}
+                  resolvedCustomToken={resolvedCustomToken}
+                  customTokenLoading={customTokenLoading}
+                  customTokenError={customTokenError}
+                  chainName={chainName}
+                  dropdownAlign="right"
+                  isLoadingHoldings={holdingsLoading}
                 />
-              )}
+              </Box>
             </HStack>
+
+            {/* Balance row — full card width so big numbers + USD always
+                fit. Adaptive compact still kicks in for truly huge balances;
+                hovering the compact form reveals the exact value. */}
+            {token && (
+              <>
+                <Box
+                  mt={2.5}
+                  pt={2.5}
+                  borderTop={tokens.borders.thin}
+                  borderColor="border.subtle"
+                >
+                  <AdaptiveBalance
+                    balanceStr={token.balance}
+                    balanceFormatted={token.balanceFormatted}
+                    priceUsd={hasPrice ? token.priceUsd : null}
+                  />
+                </Box>
+              </>
+            )}
           </Box>
 
-        {/* Recipient input */}
+        {/* Contract deployment banner. Replaces the recipient input when the
+            "Deploy contract" toggle inside the Hex Data section is on, so the
+            "no recipient" semantics are visible at a glance. */}
+        {isContractDeployment && (
+          <Box
+            border={tokens.borders.medium}
+            borderColor="accent.secondary"
+            borderRadius="lg"
+            bg="surface.raised"
+            boxShadow="card"
+            px={3}
+            py={2.5}
+          >
+            <VStack align="stretch" spacing={0.5}>
+              <Text fontSize="xs" fontWeight="800" color="text.primary">
+                Contract deployment
+              </Text>
+              <Text fontSize="2xs" fontWeight="600" color="text.tertiary" lineHeight="short">
+                No recipient. The hex data below is sent as the deployment
+                bytecode. Use the gear in the Hex Data section to switch
+                back to a normal send.
+              </Text>
+            </VStack>
+          </Box>
+        )}
+
+        {/* Recipient input. Hidden during contract deployment since `to` is null. */}
+        {!isContractDeployment && (
         <Box>
           <HStack justify="space-between" align="center" mb={1}>
             <HStack spacing={1}>
@@ -1405,6 +1575,7 @@ function TokenTransfer({
             </Box>
           )}
         </Box>
+        )}
 
         {/* Amount input */}
         <Box>
@@ -1524,6 +1695,215 @@ function TokenTransfer({
             </Text>
           )}
         </Box>
+
+        {/* Optional hex calldata for native sends. Native-only because the
+            ERC20 transfer path synthesizes its own calldata — letting the user
+            override it there would just produce a broken tx. */}
+        {isNativeToken && (
+          <Box>
+            <HStack
+              as="button"
+              type="button"
+              w="full"
+              spacing={1}
+              align="center"
+              onClick={() => setIsHexDataExpanded((v) => !v)}
+              cursor="pointer"
+              _hover={{ opacity: 0.8 }}
+              transition="opacity 0.15s"
+            >
+              {isHexDataExpanded ? (
+                <ChevronDownIcon boxSize="14px" color="text.secondary" />
+              ) : (
+                <ChevronRightIcon boxSize="14px" color="text.secondary" />
+              )}
+              <Text
+                fontSize="sm"
+                fontWeight="700"
+                color="text.secondary"
+                textTransform="uppercase"
+              >
+                Hex Data
+              </Text>
+              <Text
+                fontSize="2xs"
+                fontWeight="700"
+                color="text.tertiary"
+                textTransform="uppercase"
+                letterSpacing="wide"
+              >
+                (optional)
+              </Text>
+              {/* Only surface the invalid state when collapsed so the user
+                  isn't told "hey, you typed something" for the happy path —
+                  but is still warned about a broken value they can't see. */}
+              {!isHexDataExpanded && !hexDataIsEmpty && !isHexDataValid && (
+                <Text
+                  ml="auto"
+                  fontSize="2xs"
+                  fontWeight="800"
+                  color="status.error.fg"
+                  textTransform="uppercase"
+                  letterSpacing="wide"
+                >
+                  Invalid
+                </Text>
+              )}
+            </HStack>
+            <Collapse in={isHexDataExpanded} animateOpacity>
+              <Box mt={1.5}>
+                {/* Advanced-settings gear sits in its own row above the
+                    textarea (right-aligned), so it doesn't overlap the
+                    input. Gear only renders for native sends with no
+                    recipient entered, or when deploy is already on so the
+                    user can toggle it back off. Popover renders via Portal
+                    so it escapes the textarea's stacking context. */}
+                {canShowDeployToggle && (
+                  <HStack justify="flex-end" spacing={1.5} mb={1}>
+                    <Popover
+                      isOpen={deployToggle.isOpen}
+                      onOpen={deployToggle.onOpen}
+                      onClose={deployToggle.onClose}
+                      placement="bottom-end"
+                    >
+                      <PopoverTrigger>
+                        {/* When deploy is active, the trigger expands to
+                            include the "Deploy Contract" label so the whole
+                            group (gear + text) is one tap target. Otherwise
+                            it stays a compact icon-only button. */}
+                        {isContractDeployment ? (
+                          <Button
+                            aria-label="Advanced hex data settings"
+                            size="xs"
+                            variant="ghost"
+                            h="22px"
+                            px={1.5}
+                            leftIcon={<SettingsIcon boxSize="12px" />}
+                            iconSpacing={1.5}
+                            color="accent.secondary"
+                            fontSize="2xs"
+                            fontWeight="800"
+                            textTransform="uppercase"
+                            letterSpacing="0.06em"
+                            _hover={{ bg: "bg.muted" }}
+                          >
+                            Deploy Contract
+                          </Button>
+                        ) : (
+                          <IconButton
+                            aria-label="Advanced hex data settings"
+                            icon={<SettingsIcon boxSize="12px" />}
+                            size="xs"
+                            variant="ghost"
+                            minW="22px"
+                            h="22px"
+                            color="text.tertiary"
+                            _hover={{ bg: "bg.muted" }}
+                          />
+                        )}
+                      </PopoverTrigger>
+                      <Portal>
+                        <PopoverContent
+                          bg="surface.raised"
+                          border={tokens.borders.medium}
+                          borderColor="border.default"
+                          borderRadius="lg"
+                          boxShadow="card"
+                          w="240px"
+                          zIndex="popover"
+                          _focus={{ outline: "none", boxShadow: "card" }}
+                        >
+                          <PopoverArrow bg="surface.raised" />
+                          <PopoverBody p={3}>
+                            <VStack align="stretch" spacing={2}>
+                              <Text
+                                fontSize="2xs"
+                                fontWeight="800"
+                                color="text.tertiary"
+                                textTransform="uppercase"
+                                letterSpacing="0.06em"
+                              >
+                                Advanced
+                              </Text>
+                              {/* Whole card is the tap target so users can
+                                  click anywhere — checkbox, heading, or
+                                  description — to toggle. The Checkbox below
+                                  is pointer-event-disabled so it never fights
+                                  the Box's onClick; the Box owns toggling. */}
+                              <Box
+                                bg="surface.base"
+                                border={tokens.borders.thin}
+                                borderColor="border.default"
+                                borderRadius="md"
+                                px={2.5}
+                                py={2}
+                                opacity={hasNativeCalldata ? 1 : 0.55}
+                                cursor={hasNativeCalldata ? "pointer" : "not-allowed"}
+                                role={hasNativeCalldata ? "button" : undefined}
+                                aria-pressed={isContractDeployment}
+                                onClick={() => {
+                                  if (!hasNativeCalldata) return;
+                                  setIsContractDeployment((prev) => !prev);
+                                  deployToggle.onClose();
+                                }}
+                                _hover={hasNativeCalldata ? { bg: "bg.muted" } : undefined}
+                                transition="background 0.15s"
+                              >
+                                <Checkbox
+                                  isChecked={isContractDeployment}
+                                  isDisabled={!hasNativeCalldata}
+                                  pointerEvents="none"
+                                  size="sm"
+                                  sx={{
+                                    "& .chakra-checkbox__control": {
+                                      borderWidth: "2px",
+                                      borderColor: "border.default",
+                                      bg: "surface.base",
+                                    },
+                                    "& .chakra-checkbox__label": {
+                                      fontSize: "xs",
+                                      fontWeight: 800,
+                                      color: "text.primary",
+                                    },
+                                  }}
+                                >
+                                  Deploy contract
+                                </Checkbox>
+                                <Text fontSize="2xs" color="text.tertiary" fontWeight="600" mt={1}>
+                                  {hasNativeCalldata
+                                    ? "Send as a contract deployment. Recipient is set to null and the bytes below are treated as the deployment bytecode."
+                                    : "Add valid hex data to enable. The bytes below will be the deployment bytecode."}
+                                </Text>
+                              </Box>
+                            </VStack>
+                          </PopoverBody>
+                        </PopoverContent>
+                      </Portal>
+                    </Popover>
+                  </HStack>
+                )}
+                <Textarea
+                  placeholder="0x..."
+                  value={hexData}
+                  onChange={(e) => setHexData(e.target.value)}
+                  fontFamily="mono"
+                  fontSize="xs"
+                  rows={3}
+                  resize="vertical"
+                  isInvalid={!isHexDataValid}
+                />
+                <Text fontSize="2xs" color="text.tertiary" fontWeight="600" mt={1}>
+                  Bytes appended as tx calldata. Leave blank for a plain transfer.
+                </Text>
+                {!isHexDataValid && (
+                  <Text fontSize="xs" color="status.error.fg" fontWeight="700" mt={1}>
+                    Must be a 0x-prefixed hex string with an even number of hex chars.
+                  </Text>
+                )}
+              </Box>
+            </Collapse>
+          </Box>
+        )}
 
         {/* Sponsored USDC banner */}
         {isUsdcOnBase && !premiumLoading && premiumStatus?.isPremium && accountType !== "impersonator" && (

@@ -89,6 +89,12 @@ interface TokenSelectorProps {
    *  (swap UI). Send UI passes "right" so the dropdown opens leftward into
    *  the available popup space. */
   dropdownAlign?: "left" | "right";
+  /** Holdings are still being fetched (portfolio API + onchain balances).
+   *  When true and no holdings are present yet, the dropdown shows a spinner
+   *  instead of the "No tokens" empty state — important for custom chains
+   *  where the portfolio API returns nothing and the native balance only
+   *  appears once the onchain RPC call resolves. */
+  isLoadingHoldings?: boolean;
 }
 
 export default function TokenSelector({
@@ -105,6 +111,7 @@ export default function TokenSelector({
   customTokenError,
   chainName,
   dropdownAlign = "left",
+  isLoadingHoldings = false,
 }: TokenSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -786,8 +793,28 @@ export default function TokenSelector({
                 </HStack>
               ))}
 
+              {/* Loading holdings — shown instead of the empty state while
+                  the portfolio API + onchain balance fetch are in flight.
+                  Searching by address still takes the custom-token branch
+                  above, so suppress this when the user is searching to avoid
+                  competing with that loader. */}
+              {!hasResults &&
+                isLoadingHoldings &&
+                !customTokenLoading &&
+                !resolvedCustomToken &&
+                !customTokenError &&
+                !searchTerm && (
+                  <HStack px={3} py={4} spacing={2} justify="center">
+                    <Spinner size="xs" color="accent.secondary" />
+                    <Text fontSize="xs" fontWeight="700" color="text.tertiary">
+                      Loading balances...
+                    </Text>
+                  </HStack>
+                )}
+
               {/* Empty state */}
               {!hasResults &&
+                !isLoadingHoldings &&
                 !customTokenLoading &&
                 !resolvedCustomToken &&
                 !customTokenError && (

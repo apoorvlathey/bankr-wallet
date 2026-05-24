@@ -22,6 +22,11 @@ export interface TransferParams {
   contractAddress: string; // "native" for native token
   decimals: number;
   chainId: number;
+  /**
+   * Optional hex calldata appended to a NATIVE transfer. Ignored for ERC20
+   * transfers (the ERC20 `transfer(...)` calldata is always synthesized).
+   */
+  data?: string;
 }
 
 export function buildTransferTx(params: TransferParams): {
@@ -29,13 +34,18 @@ export function buildTransferTx(params: TransferParams): {
   data: string;
   value: string;
 } {
-  const { to, amount, contractAddress, decimals } = params;
+  const { to, amount, contractAddress, decimals, data: nativeData } = params;
 
   if (contractAddress === "native") {
-    // Native token transfer (ETH, MATIC, etc.)
+    // Native token transfer (ETH, MATIC, etc.) — `nativeData` is included as
+    // tx calldata when provided so users can call payable contracts or attach
+    // arbitrary bytes to a value transfer.
+    const trimmed = (nativeData || "").trim();
+    const finalData =
+      trimmed && trimmed !== "0x" && trimmed !== "0X" ? trimmed : "0x";
     return {
       to,
-      data: "0x",
+      data: finalData,
       value: `0x${parseEther(amount).toString(16)}`,
     };
   }
