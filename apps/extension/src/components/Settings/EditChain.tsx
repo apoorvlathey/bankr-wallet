@@ -10,7 +10,6 @@ import {
   Spacer,
   FormControl,
   FormLabel,
-  Alert,
   Spinner,
 } from "@chakra-ui/react";
 import { ArrowBackIcon, WarningTwoIcon } from "@chakra-ui/icons";
@@ -275,17 +274,21 @@ function EditChain({
       )}
 
       {rpcWarning && (
-        <Alert
-          status="warning"
-          borderRadius="0"
+        <HStack
+          align="flex-start"
+          spacing={2}
+          bg="status.warning.bg"
           border="2px solid"
-          borderColor="border.default"
+          borderColor="status.warning.border"
+          borderRadius="md"
           py={2}
           px={3}
         >
-          <WarningTwoIcon mr={2} flexShrink={0} />
-          <Text fontSize="xs" fontWeight="600">{rpcWarning}</Text>
-        </Alert>
+          <WarningTwoIcon color="status.warning.fg" mt="2px" flexShrink={0} />
+          <Text fontSize="xs" fontWeight="600" color="status.warning.fg">
+            {rpcWarning}
+          </Text>
+        </HStack>
       )}
 
       <Box display="flex" gap={2} pt={2}>
