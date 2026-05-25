@@ -1437,7 +1437,7 @@ function TokenTransfer({
                 </Text>
               </HStack>
             )}
-            {recipient && !isResolving && isRecipientValid && isResolvableName(recipient) && resolvedAddress && (
+            {recipient && !isResolving && isRecipientValid && resolvedAddress && (
               <HStack spacing={0.5}>
                 {avatar && (
                   <Image
@@ -1449,9 +1449,15 @@ function TokenTransfer({
                     borderColor="border.default"
                   />
                 )}
-                <Text fontSize="xs" color="text.tertiary" fontFamily="mono" fontWeight="700">
-                  {resolvedAddress.slice(0, 6)}...{resolvedAddress.slice(-4)}
-                </Text>
+                {isResolvableName(recipient) ? (
+                  <Text fontSize="xs" color="text.tertiary" fontFamily="mono" fontWeight="700">
+                    {resolvedAddress.slice(0, 6)}...{resolvedAddress.slice(-4)}
+                  </Text>
+                ) : resolvedName ? (
+                  <Text fontSize="xs" color="text.tertiary" fontWeight="700">
+                    {resolvedName}
+                  </Text>
+                ) : null}
                 <IconButton
                   aria-label="Copy address"
                   icon={copied ? <CheckIcon boxSize="10px" /> : <CopyIcon boxSize="10px" />}
@@ -1480,23 +1486,6 @@ function TokenTransfer({
                     _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                   />
                 )}
-              </HStack>
-            )}
-            {recipient && !isResolving && isRecipientValid && !isResolvableName(recipient) && resolvedName && (
-              <HStack spacing={0.5}>
-                {avatar && (
-                  <Image
-                    src={cachedRecipientAvatar || avatar}
-                    alt="avatar"
-                    boxSize="14px"
-                    borderRadius="full"
-                    border="1px solid"
-                    borderColor="border.default"
-                  />
-                )}
-                <Text fontSize="xs" color="text.tertiary" fontWeight="700">
-                  {resolvedName}
-                </Text>
               </HStack>
             )}
           </HStack>
