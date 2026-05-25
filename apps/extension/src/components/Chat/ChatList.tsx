@@ -85,7 +85,7 @@ export function ChatList({
           color="accentFg.highlight"
           border="2px solid"
           borderColor="border.default"
-          borderRadius="0"
+          borderRadius="md"
           _hover={{
             bg: "accent.highlight",
             transform: "translateY(-1px)",
@@ -131,7 +131,7 @@ export function ChatList({
               border="3px solid"
               borderColor="border.default"
               boxShadow="card"
-              borderRadius="0"
+              borderRadius="md"
               fontWeight="700"
               textTransform="uppercase"
               letterSpacing="wide"
@@ -156,6 +156,7 @@ export function ChatList({
                 bg="surface.raised"
                 border="3px solid"
                 borderColor="border.default"
+                borderRadius="md"
                 boxShadow="card"
                 position="relative"
                 transition="all 0.2s ease-out"
@@ -183,7 +184,7 @@ export function ChatList({
                     color={conv.favorite ? "accentFg.highlight" : "text.tertiary"}
                     border="2px solid"
                     borderColor="border.default"
-                    borderRadius="0"
+                    borderRadius="sm"
                     zIndex={1}
                     _hover={{
                       bg: "accent.highlight",
@@ -235,7 +236,7 @@ export function ChatList({
                   size="sm"
                   variant="ghost"
                   color="text.tertiary"
-                  borderRadius="0"
+                  borderRadius="md"
                   h="full"
                   minW="36px"
                   _hover={{

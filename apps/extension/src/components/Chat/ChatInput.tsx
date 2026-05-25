@@ -47,7 +47,7 @@ export function ChatInput({
           disabled={isLoading}
           border="2px solid"
           borderColor="border.default"
-          borderRadius="0"
+          borderRadius="md"
           bg="surface.base"
           _hover={{ borderColor: "accent.secondary" }}
           _focus={{
@@ -70,7 +70,7 @@ export function ChatInput({
           color="accentFg.secondary"
           border="2px solid"
           borderColor="border.default"
-          borderRadius="0"
+          borderRadius="md"
           _hover={{
             // Bauhaus shifts blue → red on hover (accent.secondary →
             // accent.primary). In Midnight that becomes cyan → indigo, which

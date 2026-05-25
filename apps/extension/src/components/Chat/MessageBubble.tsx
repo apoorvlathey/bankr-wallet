@@ -96,6 +96,7 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
           bg="accent.highlight"
           border="2px solid"
           borderColor="border.default"
+          borderRadius="md"
           boxShadow="card"
           px={3}
           py={2}
@@ -131,6 +132,7 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
           bg="accent.highlight"
           border="2px solid"
           borderColor="border.default"
+          borderRadius="md"
           boxShadow="card"
           p={3}
           position="relative"
@@ -156,7 +158,7 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
             border="2px solid"
             borderColor="border.default"
             boxShadow="card"
-            borderRadius="0"
+            borderRadius="md"
             fontWeight="700"
             textTransform="uppercase"
             letterSpacing="wider"
@@ -199,6 +201,7 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
         color={styles.color}
         border="2px solid"
         borderColor="border.default"
+        borderRadius="md"
         boxShadow="card"
         p={2}
         position="relative"
@@ -302,7 +305,7 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
                 color="fg.primary"
                 border="2px solid"
                 borderColor="border.default"
-                borderRadius="0"
+                borderRadius="md"
                 fontWeight="700"
                 textTransform="uppercase"
                 fontSize="xs"
@@ -322,7 +325,7 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
                 color="fg.primary"
                 border="2px solid"
                 borderColor="border.default"
-                borderRadius="0"
+                borderRadius="md"
                 fontWeight="700"
                 textTransform="uppercase"
                 fontSize="xs"
