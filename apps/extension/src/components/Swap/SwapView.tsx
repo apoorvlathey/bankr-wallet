@@ -224,8 +224,22 @@ function SwapView({
     chainName: string;
   } | null>(null);
 
-  // Settings
-  const [slippageBps, setSlippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
+  // Settings — slippage persists in chrome.storage.sync so a user who
+  // explicitly tunes it once (e.g. down from the 5% default) doesn't have it
+  // reset on the next session / popup reopen.
+  const [slippageBps, setSlippageBpsState] = useState(DEFAULT_SLIPPAGE_BPS);
+  useEffect(() => {
+    chrome.storage.sync.get("swapSlippageBps", (result) => {
+      const stored = result.swapSlippageBps;
+      if (typeof stored === "number" && stored > 0 && stored <= 10_000) {
+        setSlippageBpsState(stored);
+      }
+    });
+  }, []);
+  const setSlippageBps = useCallback((bps: number) => {
+    setSlippageBpsState(bps);
+    chrome.storage.sync.set({ swapSlippageBps: bps });
+  }, []);
 
   // Submit
   const [isSubmitting, setIsSubmitting] = useState(false);
