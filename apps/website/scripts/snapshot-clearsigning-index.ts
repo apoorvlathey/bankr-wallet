@@ -4,7 +4,8 @@
  * Run:  pnpm tsx apps/website/scripts/snapshot-clearsigning-index.ts
  *
  * The output is a map (chainId, lowercased contract address) -> { calldata?, eip712? }
- * where each value points at the registry file holding the matching `display.formats`.
+ * where each value is a list of registry files that may hold matching
+ * `display.formats`.
  *
  * The website's /api/clearsigning/descriptor route uses this snapshot to resolve
  * (chainId, address) -> registry file path before fetching the JSON from GitHub raw.
@@ -36,8 +37,8 @@ interface RawDescriptor {
 type Kind = "calldata" | "eip712";
 
 interface IndexEntry {
-  calldata?: string;
-  eip712?: string;
+  calldata?: string[];
+  eip712?: string[];
 }
 
 interface Snapshot {
@@ -218,8 +219,9 @@ async function main() {
           if (!entries[d.chainId]) entries[d.chainId] = {};
           const slot = (entries[d.chainId][addr] ??= {});
           for (const k of kinds) {
-            if (!slot[k]) {
-              slot[k] = p;
+            const pathsForKind = (slot[k] ??= []);
+            if (!pathsForKind.includes(p)) {
+              pathsForKind.push(p);
               written++;
             }
           }
@@ -240,12 +242,29 @@ async function main() {
   const chainCount = Object.keys(entries).length;
   const addrCount = Object.values(entries).reduce((a, b) => a + Object.keys(b).length, 0);
 
+  const sortedEntries = Object.fromEntries(
+    Object.entries(entries)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([chainId, byAddress]) => [
+        chainId,
+        Object.fromEntries(
+          Object.entries(byAddress)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([address, entry]) => [
+              address,
+              {
+                ...(entry.calldata ? { calldata: [...entry.calldata].sort() } : {}),
+                ...(entry.eip712 ? { eip712: [...entry.eip712].sort() } : {}),
+              },
+            ]),
+        ),
+      ]),
+  );
+
   const snapshot: Snapshot = {
     updatedAt: new Date().toISOString(),
     source: `https://github.com/${REPO}@${BRANCH}`,
-    entries: Object.fromEntries(
-      Object.entries(entries).sort(([a], [b]) => Number(a) - Number(b)),
-    ),
+    entries: sortedEntries,
   };
 
   const outPath = path.resolve(__dirname, "../data/clearsigning-index.json");
