@@ -10,6 +10,10 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.12.0] - 2026-05-26
+
 ### Added
 
 - **EIP-7702 smart-account support for Private Key and Seed Phrase accounts.** Account Settings now has a Smart Account section where users can review per-chain delegation status, authorize the WalletChan default delegate, set a custom ERC-7821 delegate, or revoke an existing delegation.
@@ -31,6 +35,7 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 - The account switcher now keeps the active account in view without fighting manual scrolling.
 - Chat surfaces and the custom-chain RPC warning banner now follow the active theme's radius and color tokens more consistently.
 - Dapp wallet discovery now serves a properly sized embedded PNG icon for EIP-6963 wallet pickers.
+
 
 ## [3.11.0] - 2026-05-22
 
@@ -454,7 +459,8 @@ This release is a full rebuild of the wallet — multiple account types, a real 
 - View address on Debank from the homepage.
 - Lock-wallet button and footer attribution.
 
-[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.11.0...HEAD
+[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.12.0...HEAD
+[3.12.0]: https://github.com/apoorvlathey/walletchan/compare/v3.11.0...v3.12.0
 [3.11.0]: https://github.com/apoorvlathey/walletchan/compare/v3.10.0...v3.11.0
 [3.10.0]: https://github.com/apoorvlathey/walletchan/compare/v3.9.0...v3.10.0
 [3.9.0]: https://github.com/apoorvlathey/walletchan/compare/v3.8.0...v3.9.0
