@@ -10,7 +10,27 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **EIP-7702 smart-account support for Private Key and Seed Phrase accounts.** Account Settings now has a Smart Account section where users can review per-chain delegation status, authorize the WalletChan default delegate, set a custom ERC-7821 delegate, or revoke an existing delegation.
+- **Atomic local batching for dapp and cross-dapp requests.** Private Key and Seed Phrase accounts can now execute ERC-5792 batches, cross-dapp batches, and multi-transaction swaps as one ERC-7821 transaction via EIP-7702 on supported chains, with a one-time setup banner when a delegation authorization is needed.
+- **Batch calldata visibility in confirmations and activity.** Atomic batch and cross-dapp batch confirmations now show the outer calldata digest, and transaction details decode ERC-7821 self-calls back into per-call cards with the original dapp origins where available.
+- **Native sends with advanced calldata.** The Send surface can now attach custom hex calldata to native-token transactions and can submit contract deployments by sending bytecode with no recipient.
+- **Explorer affordances for resolved Send recipients.** Resolved ENS and address-book recipients now include an explorer shortcut alongside the existing copy affordance.
+
+### Changed
+
+- Swap slippage settings now persist in `chrome.storage.sync`, so the selected tolerance survives popup reloads and browser restarts.
+- Custom chains with known MetaMask delegation deployments can use the default 7702 delegate path without manually pasting a delegate address.
+
+### Fixed
+
+- Cross-dapp batch notifications now count each batch as one pending request instead of counting every call inside the batch.
+- Cross-dapp batches, swaps, and prepared transaction requests stay pinned to the account that created them, so switching the current account mid-flow no longer rebinds the signer.
+- Batch calls can include the zero address when a protocol uses it as a sentinel or no-op call target.
+- The account switcher now keeps the active account in view without fighting manual scrolling.
+- Chat surfaces and the custom-chain RPC warning banner now follow the active theme's radius and color tokens more consistently.
+- Dapp wallet discovery now serves a properly sized embedded PNG icon for EIP-6963 wallet pickers.
 
 ## [3.11.0] - 2026-05-22
 
