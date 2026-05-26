@@ -162,7 +162,9 @@ function RevertWarning({ shortError, fullError }: { shortError: string; fullErro
       await navigator.clipboard.writeText(fullError);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {}
+    } catch {
+      // Clipboard writes can fail when the extension view is not focused.
+    }
   };
 
   return (

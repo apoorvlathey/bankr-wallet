@@ -24,11 +24,7 @@ bootstrapThemeAttribute();
 
 ReactDOM.render(
   <ThemeProvider>
-    <Onboarding
-      onComplete={() => {
-        // Tab will be closed when user opens the extension popup
-      }}
-    />
+    <Onboarding />
   </ThemeProvider>,
   document.getElementById("onboarding-root"),
 );

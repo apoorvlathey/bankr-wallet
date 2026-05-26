@@ -194,6 +194,7 @@ export type CombinedRequest =
 // Helper to combine and sort requests by timestamp.
 // The cross-dapp batch (when present) is always prepended as the FIRST element
 // so it has a dedicated, prominent slot in the carousel.
+// eslint-disable-next-line react-refresh/only-export-components
 export function getCombinedRequests(
   txRequests: PendingTxRequest[],
   sigRequests: PendingSignatureRequest[],
@@ -399,7 +400,7 @@ function App() {
     setChainName(nextChainName);
     setIsChainMenuOpen(false);
     setChainSearch("");
-  }, [chainName, setChainName]);
+  }, [chainName, setChainName, setReloadRequired]);
   const {
     isOpen: isQROpen,
     onOpen: onQROpen,
@@ -805,6 +806,8 @@ function App() {
 
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+    // The viewport mode listener is registered once for this popup instance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Check URL params for error display (from notification click)
@@ -1043,6 +1046,8 @@ function App() {
     };
 
     init();
+    // Startup bootstrap intentionally runs once for the active popup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fetch staking APY from website API
@@ -1173,6 +1178,8 @@ function App() {
 
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
+    // Cross-surface sync listener is registered once per popup instance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Listen for storage changes (e.g., when dapp switches chain or address changes in settings)
@@ -1506,6 +1513,8 @@ function App() {
     } else {
       setView("main");
     }
+    // Routing uses fresh loads from the current popup session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [returnToChatAfterUnlock]);
 
   // Cross-surface lock/unlock sync. The originating surface also receives
@@ -1636,6 +1645,8 @@ function App() {
       setActivityTabTrigger((k) => k + 1);
       setView("main");
     }
+  // Follow-up routing reads the current pending-request helpers.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTxRequest?.id]);
 
   const handleTxRejected = useCallback(async () => {
@@ -1667,6 +1678,8 @@ function App() {
         window.close();
       }
     }
+  // Rejection fallback routing reads the current pending-request helpers.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTxRequest?.id, isInSidePanel, isFullscreenTab]);
 
   const handleRejectAll = useCallback(async () => {
@@ -1763,6 +1776,8 @@ function App() {
         window.close();
       }
     }
+  // Signature completion fallback routing reads the current pending-request helpers.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSignatureRequest?.id, isInSidePanel, isFullscreenTab]);
 
   const handleCancelAllSignatures = useCallback(async () => {
@@ -1797,6 +1812,8 @@ function App() {
         window.close();
       }
     }
+  // Bulk cancellation fallback routing reads the current pending-request helpers.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingSignatureRequests, isInSidePanel, isFullscreenTab]);
 
   const handleRpcIssuesChange = useCallback((chainIds: number[]) => {

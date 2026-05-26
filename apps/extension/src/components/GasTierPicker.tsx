@@ -135,7 +135,6 @@ export default function GasTierPicker({
   tiers,
   gasLimit,
   nativePriceUsd,
-  nativeCurrencySymbol: _nativeCurrencySymbol,
   selected,
   onChange,
 }: GasTierPickerProps) {

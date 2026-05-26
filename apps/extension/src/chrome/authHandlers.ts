@@ -22,20 +22,17 @@ import {
   isVaultKeyEncrypted,
   VAULT_STORAGE_KEY,
 } from "./vaultCrypto";
-import { reEncryptMnemonicVault, computeReEncryptedMnemonicVault, hasMnemonics } from "./mnemonicStorage";
+import { computeReEncryptedMnemonicVault, hasMnemonics } from "./mnemonicStorage";
 import type { PasswordType } from "./types";
 import {
   setCachedApiKey,
   setCachedApiKeyDirect,
   setCachedPasswordDirect,
-  clearCachedApiKey,
   getCachedPassword,
   setCachedVault,
-  clearCachedVault,
   getCachedVaultKey,
   setCachedVaultKey,
   setCachedPasswordType,
-  getPasswordType,
   resolvePasswordType,
   setCurrentSessionId,
   getAutoLockTimeout,

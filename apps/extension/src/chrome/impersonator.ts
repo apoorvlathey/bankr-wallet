@@ -1,8 +1,5 @@
 import { EventEmitter } from "events";
 import { hexValue } from "@ethersproject/bytes";
-import { Logger } from "@ethersproject/logger";
-
-const logger = new Logger("ethers/5.7.0");
 
 type Window = Record<string, any>;
 
@@ -180,15 +177,6 @@ class ImpersonatorProvider extends EventEmitter {
   }
 
   async send(method: string, params?: Array<any>): Promise<any> {
-    const throwUnsupported = (message: string): never => {
-      return logger.throwError(message, Logger.errors.UNSUPPORTED_OPERATION, {
-        method: method,
-        params: params,
-      });
-    };
-
-    let coerce = (value: any) => value;
-
     switch (method) {
       // modified methods
       case "eth_requestAccounts": {
@@ -210,7 +198,6 @@ class ImpersonatorProvider extends EventEmitter {
         // @ts-ignore
         const addParams = params[0];
         const addChainId = Number(addParams.chainId as string);
-        const self_add = this;
 
         const addChainPromise = new Promise<null>((resolve, reject) => {
           // Forward full params to content script for add-or-switch logic
@@ -238,7 +225,7 @@ class ImpersonatorProvider extends EventEmitter {
                 const msg = e.data.msg;
                 controller.abort();
                 if (msg.success) {
-                  self_add.setChainId(msg.chainId, msg.rpcUrl);
+                  this.setChainId(msg.chainId, msg.rpcUrl);
                   resolve(null);
                 } else {
                   reject(makeProviderError(msg.error || `Failed to add chain ${addChainId}`));
@@ -255,9 +242,6 @@ class ImpersonatorProvider extends EventEmitter {
       case "wallet_switchEthereumChain": {
         // @ts-ignore
         const chainId = Number(params[0].chainId as string);
-
-        // Capture reference to this provider instance for use in event listener
-        const self = this;
 
         const setChainIdPromise = new Promise<null>((resolve, reject) => {
           // send message to content_script (inject.ts) to fetch corresponding RPC
@@ -289,9 +273,7 @@ class ImpersonatorProvider extends EventEmitter {
                 case "switchEthereumChain": {
                   const chainId = e.data.msg.chainId as number;
                   const rpcUrl = e.data.msg.rpcUrl as string;
-                  // Use the captured reference instead of window.ethereum
-                  // to avoid issues with other wallets claiming window.ethereum
-                  self.setChainId(chainId, rpcUrl);
+                  this.setChainId(chainId, rpcUrl);
                   // remove this listener as we already have a listener for "message" and don't want duplicates
                   controller.abort();
 

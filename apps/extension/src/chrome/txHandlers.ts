@@ -54,7 +54,6 @@ import {
   savePendingSignatureRequest,
   removePendingSignatureRequest,
   getPendingSignatureRequestById,
-  PendingSignatureRequest,
   SignatureParams,
 } from "./pendingSignatureStorage";
 import { pinnedTxRequest, pinnedSignatureRequest } from "./pinnedRequest";

@@ -17,7 +17,7 @@ import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import { googleFaviconUrl } from "@/constants/externalUrls";
-import { getCombinedRequests, CombinedRequest } from "@/App";
+import { getCombinedRequests } from "@/App";
 import ChainIcon from "@/components/ChainIcon";
 import { useStripTokens, useTheme, resolveChainBadgeStyle } from "@/theme";
 import { formatRelativeTime } from "@/lib/timeFormatUtils";

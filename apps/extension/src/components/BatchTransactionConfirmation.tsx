@@ -14,7 +14,6 @@ import {
   Collapse,
   Switch,
   Tooltip,
-  Link,
   Modal,
   ModalOverlay,
   ModalContent,
@@ -28,8 +27,6 @@ import {
   ArrowBackIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
   DeleteIcon,
   ExternalLinkIcon,
   SettingsIcon,
@@ -58,7 +55,7 @@ import {
   CALL_ACCENT_FGS,
 } from "@/components/BatchCallsList";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
-import { isForceInclusionSupportedForAccount, FORCE_INCLUSION_CHAINS, getKnownDelegateName } from "@/constants/chainRegistry";
+import { isForceInclusionSupportedForAccount, FORCE_INCLUSION_CHAINS } from "@/constants/chainRegistry";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";

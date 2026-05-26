@@ -1,4 +1,4 @@
-import { Box, HStack, VStack, Text, Code, Collapse, useDisclosure } from "@chakra-ui/react";
+import { Box, HStack, VStack, Code, Collapse, useDisclosure } from "@chakra-ui/react";
 import { ChevronDownIcon, ChevronRightIcon } from "@chakra-ui/icons";
 import type { DecodeArrayParamResult } from "@/lib/decoder/types";
 import { renderParams } from "@/components/renderParams";
@@ -9,7 +9,7 @@ interface ArrayParamProps {
   chainId: number;
 }
 
-export function ArrayParam({ value, type, chainId }: ArrayParamProps) {
+export function ArrayParam({ value, chainId }: ArrayParamProps) {
   const { isOpen, onToggle } = useDisclosure();
 
   if (!Array.isArray(value) || value.length === 0) {

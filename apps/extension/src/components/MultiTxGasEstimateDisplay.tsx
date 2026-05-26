@@ -292,16 +292,17 @@ function MultiTxGasEstimateDisplay({
 
   // Determine what to estimate for display
   const toEstimate: TxGasInput[] = batchedTx ? [batchedTx] : transactions;
+  const estimateTxKey = toEstimate.map((t) => t.tx.to + t.tx.data).join(",");
 
   // Stable key for dependency — only re-run when actual tx data changes
   const estimateKey = useMemo(
     () =>
-      toEstimate.map((t) => t.tx.to + t.tx.data).join(",") +
+      estimateTxKey +
       (isNonAtomic ? ":na" : "") +
       (forceInclusion ? ":fi" : "") +
       (eip7702Delegate ? `:7702:${eip7702Delegate.toLowerCase()}` : ""),
     [
-      toEstimate.map((t) => t.tx.to + t.tx.data).join(","),
+      estimateTxKey,
       isNonAtomic,
       forceInclusion,
       eip7702Delegate,

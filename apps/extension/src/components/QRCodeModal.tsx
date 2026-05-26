@@ -9,7 +9,6 @@ import {
   VStack,
   HStack,
   Text,
-  IconButton,
   Box,
 } from "@chakra-ui/react";
 import { CopyIcon, CheckIcon } from "@chakra-ui/icons";

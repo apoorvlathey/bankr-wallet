@@ -13,6 +13,7 @@ type NetworkContextType = {
   setReloadRequired: React.Dispatch<React.SetStateAction<boolean>>;
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const NetworksContext = createContext<NetworkContextType>({
   networksInfo: undefined,
   setNetworksInfo: () => {},
@@ -74,4 +75,5 @@ export const NetworksProvider: React.FunctionComponent<{
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useNetworks = () => useContext(NetworksContext);

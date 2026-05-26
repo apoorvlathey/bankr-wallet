@@ -203,7 +203,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         setLoading(false);
       }
     },
-    [address, chainReloadKey, lastFetched, tokens.length]
+    [address, chainReloadKey, lastFetched, onRpcIssuesChange, tokens.length]
   );
 
   // Reload when address or the set of visible chains changes. Seed from the

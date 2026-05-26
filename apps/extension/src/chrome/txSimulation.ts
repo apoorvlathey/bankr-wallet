@@ -850,12 +850,12 @@ export async function simulateAssetChanges(
       const retryResult = await runSimulation(client, from, to, value, data, candidates, retryOverrides);
       if (retryResult.tokens.length > 0 || retryResult.ethDelta !== 0n) {
         console.log("[TxSim] Retry succeeded! tokens:", retryResult.tokens.length, "ethDelta:", retryResult.ethDelta.toString());
-        return await buildSimulationResult(client, tx.chainId, accountAddress, retryResult, EMPTY);
+        return await buildSimulationResult(client, tx.chainId, accountAddress, retryResult);
       }
       console.log("[TxSim] Retry also produced no changes");
     }
 
-    return await buildSimulationResult(client, tx.chainId, accountAddress, simResult, EMPTY);
+    return await buildSimulationResult(client, tx.chainId, accountAddress, simResult);
   } catch (err: any) {
     console.warn("[TxSim] Simulation error:", err.shortMessage || err.message || err);
     return {
@@ -967,7 +967,6 @@ async function buildSimulationResult(
   chainId: number,
   accountAddress: string,
   raw: RawSimResult,
-  empty: SimulationResult,
 ): Promise<SimulationResult> {
   const { changes: tokenChanges, metadataComplete } = await enrichTokenChanges(
     client,
@@ -989,7 +988,9 @@ async function buildSimulationResult(
     try {
       const { fetchNativePrice } = await import("./gasEstimation");
       nativePriceUsd = await fetchNativePrice(chainId);
-    } catch {}
+    } catch {
+      // Fall back to the portfolio price cache below.
+    }
     if (nativePriceUsd === null) {
       const portfolioPrices = await getPortfolioPriceMap(accountAddress);
       nativePriceUsd = portfolioPrices.get(`${chainId}:native`) ?? null;
@@ -1843,7 +1844,9 @@ export async function simulateBatchAssetChanges(
       try {
         const { fetchNativePrice } = await import("./gasEstimation");
         nativePriceUsd = await fetchNativePrice(chainId);
-      } catch {}
+      } catch {
+        // Fall back to the portfolio price cache below.
+      }
       if (nativePriceUsd === null) {
         const portfolioPrices = await getPortfolioPriceMap(fromAddress);
         const key = `${chainId}:native`;
@@ -2116,7 +2119,9 @@ async function simulateViaEthSimulateV1(
       try {
         const { fetchNativePrice } = await import("./gasEstimation");
         nativePriceUsd = await fetchNativePrice(chainId);
-      } catch {}
+      } catch {
+        // Fall back to the portfolio price cache below.
+      }
       if (nativePriceUsd === null) {
         const portfolioPrices = await getPortfolioPriceMap(fromAddress);
         const key = `${chainId}:native`;

@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from "react";
+import { useState, memo } from "react";
 import {
   Box,
   VStack,
@@ -140,14 +140,6 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
 
   // Set after the import mnemonic validates — drives the picker step.
   const [pickerMnemonic, setPickerMnemonic] = useState<string | null>(null);
-
-  // When switching to generate mode, request a new mnemonic from background
-  useEffect(() => {
-    if (mode === "generate" && !generatedMnemonic) {
-      // We'll generate when we submit - background handler does it
-      // For now, just show the UI
-    }
-  }, [mode]);
 
   const handleGenerate = async () => {
     setIsSubmitting(true);

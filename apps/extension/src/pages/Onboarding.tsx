@@ -47,10 +47,6 @@ type OnboardingStep =
   | "success";
 type AccountTypeChoice = "bankr" | "privateKey" | "seedPhrase";
 
-interface OnboardingProps {
-  onComplete: () => void;
-}
-
 /**
  * Detects if we're running in Arc browser using CSS variable
  * Arc browser injects --arc-palette-title CSS variable
@@ -121,7 +117,7 @@ const bounceArrow = keyframes`
   50% { transform: translateY(-10px); }
 `;
 
-function Onboarding({ onComplete }: OnboardingProps) {
+function Onboarding() {
   const { themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
   const [step, setStep] = useState<OnboardingStep>("welcome");
@@ -286,7 +282,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
           setStep("password");
         }
         break;
-      case "privateKey":
+      case "privateKey": {
         const pkResult = validateAndDeriveAddress(privateKey);
         if (!pkResult.valid) {
           setErrors({ privateKey: pkResult.error || "Invalid private key" });
@@ -294,6 +290,7 @@ function Onboarding({ onComplete }: OnboardingProps) {
           setStep("password");
         }
         break;
+      }
       case "password":
         if (validatePassword()) {
           await handleSubmit();

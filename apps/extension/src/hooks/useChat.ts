@@ -37,10 +37,15 @@ export function useChat(): UseChatReturn {
   // Track if current conversation is unsaved (only in memory)
   const [isUnsavedChat, setIsUnsavedChat] = useState(false);
 
+  const refreshConversations = useCallback(async () => {
+    const convs = await getConversations();
+    setConversations(convs);
+  }, []);
+
   // Load conversations on mount
   useEffect(() => {
     refreshConversations();
-  }, []);
+  }, [refreshConversations]);
 
   // Listen for chat updates from background
   useEffect(() => {
@@ -53,8 +58,6 @@ export function useChat(): UseChatReturn {
         error?: string;
         statusUpdates?: Array<{ message: string; timestamp: string }>;
       },
-      _sender: chrome.runtime.MessageSender,
-      sendResponse: (response?: any) => void
     ) => {
       if (message.type === "chatJobComplete" && message.conversationId) {
         // Clear status update text on completion
@@ -93,12 +96,7 @@ export function useChat(): UseChatReturn {
 
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
-  }, [currentConversation?.id]);
-
-  const refreshConversations = useCallback(async () => {
-    const convs = await getConversations();
-    setConversations(convs);
-  }, []);
+  }, [currentConversation?.id, refreshConversations]);
 
   const loadConversation = useCallback(async (id: string) => {
     const conv = await getConversation(id);

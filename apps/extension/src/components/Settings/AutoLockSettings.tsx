@@ -30,7 +30,7 @@ const TIMEOUT_OPTIONS = [
 
 const DEFAULT_TIMEOUT = 0; // Never (infinite) by default
 
-function AutoLockSettings({ onComplete, onCancel }: AutoLockSettingsProps) {
+function AutoLockSettings({ onCancel }: AutoLockSettingsProps) {
   const [timeout, setTimeout] = useState<number>(DEFAULT_TIMEOUT);
   const [isLoading, setIsLoading] = useState(true);
   const toast = useThemedToast();

@@ -67,7 +67,7 @@ function CopyButton({ text }: { text: string }) {
 // placeholder rendered in distinct theme tokens.
 function JsonBlock({ src }: { src: string }) {
   const tokens: { text: string; kind: "key" | "str" | "dots" | "punct" | "plain" }[] = [];
-  const re = /("(?:[^"\\]|\\.)*")(\s*:)|("(?:[^"\\]|\\.)*")|(\.\.\.)|([{}\[\],])/g;
+  const re = /("(?:[^"\\]|\\.)*")(\s*:)|("(?:[^"\\]|\\.)*")|(\.\.\.)|([{}[\],])/g;
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(src)) !== null) {

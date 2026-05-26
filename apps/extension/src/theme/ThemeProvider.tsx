@@ -23,12 +23,14 @@ import { useThemeSelection } from "./useThemeSelection";
 // Theme registry
 // ─────────────────────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const themes: Record<ThemeId, ThemeTokens> = {
   bauhaus: bauhausTokens,
   midnight: midnightTokens,
 };
 
 /** Ordered list for theme picker UIs */
+// eslint-disable-next-line react-refresh/only-export-components
 export const themeList: ThemeTokens[] = [bauhausTokens, midnightTokens];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -51,6 +53,7 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
  * over reading tokens directly. Use this only when you need a value Chakra
  * can't express (e.g., a hex passed to a third-party chart lib).
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext);
   if (!ctx) {

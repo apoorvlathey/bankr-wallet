@@ -121,7 +121,7 @@ export async function submitTransactionDirect(
 
   // Remove undefined fields from transaction
   body.transaction = Object.fromEntries(
-    Object.entries(body.transaction).filter(([_, v]) => v !== undefined)
+    Object.entries(body.transaction).filter(([, v]) => v !== undefined)
   );
 
   const response = await fetch(`${API_BASE_URL}/agent/submit`, {

@@ -277,8 +277,7 @@ export async function signEip7702Authorization(
  */
 export async function signMessage(
   privateKey: `0x${string}`,
-  message: string | Uint8Array,
-  chainId: number
+  message: string | Uint8Array
 ): Promise<string> {
   const account = privateKeyToAccount(privateKey);
 
@@ -374,14 +373,14 @@ export async function handleSignatureRequest(
     case "personal_sign": {
       // params[0] is the message (hex), params[1] is the address
       const message = params[0];
-      return signMessage(privateKey, message, chainId);
+      return signMessage(privateKey, message);
     }
 
     case "eth_sign": {
       // params[0] is the address, params[1] is the data hash
       // eth_sign is dangerous and often disabled, but we'll support it
       const dataHash = params[1];
-      return signMessage(privateKey, dataHash, chainId);
+      return signMessage(privateKey, dataHash);
     }
 
     case "eth_signTypedData":

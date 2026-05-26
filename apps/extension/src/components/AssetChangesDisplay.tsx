@@ -394,7 +394,9 @@ function AssetRow({ change, chainId }: { change: AssetChange; chainId: number })
       await navigator.clipboard.writeText(change.address);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {}
+    } catch {
+      // Clipboard writes can fail when the extension view is not focused.
+    }
   };
 
   // Out = negative chart color (red), in = positive chart color (green) so the
@@ -599,6 +601,8 @@ function AssetChangesDisplay({
     return () => {
       cancelled = true;
     };
+    // Simulate from the stable request id plus batch-call signature, not array identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [txRequest.id, batchCallsKey, screenEntered]);
 
   // Surface the simulated-revert flag to the parent so it can render the
@@ -667,6 +671,8 @@ function AssetChangesDisplay({
     return () => {
       cancelled = true;
     };
+    // Retry scheduling is keyed to result status and request id to avoid duplicate timers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result?.metadataComplete, result?.simulationFailed, txRequest.id]);
 
   // Loading state

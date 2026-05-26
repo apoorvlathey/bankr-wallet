@@ -238,7 +238,6 @@ function SignatureRequestConfirmation({
   sigRequest,
   currentIndex,
   totalCount,
-  isInSidePanel,
   accountType = "bankr",
   onBack,
   onCancelled,

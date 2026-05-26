@@ -7,7 +7,7 @@ import ShapesLoader from "./ShapesLoader";
 
 
 // URL regex pattern
-const URL_REGEX = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/g;
+const URL_REGEX = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g;
 
 /**
  * Parse text and convert URLs to clickable links

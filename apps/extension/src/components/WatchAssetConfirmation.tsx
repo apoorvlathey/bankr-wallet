@@ -6,7 +6,6 @@ import {
   Text,
   Button,
   Image,
-  Spacer,
 } from "@chakra-ui/react";
 import { getChainConfig } from "@/constants/chainConfig";
 import type { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";

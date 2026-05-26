@@ -285,7 +285,7 @@ export default function BuyTokenSelector({
       lastSubmittedRef.current = val;
       onAddressSubmit(val);
     }
-  }, [search]);
+  }, [search, onAddressSubmit]);
 
   const isSelectedAddr = (addr: string) =>
     selectedToken?.address.toLowerCase() === addr.toLowerCase();

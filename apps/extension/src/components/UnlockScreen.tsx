@@ -73,7 +73,7 @@ function UnlockScreen({
   const [error, setError] = useState("");
   const [sidePanelSupported, setSidePanelSupported] = useState(false);
   const [sidePanelMode, setSidePanelMode] = useState(false);
-  const [isInSidePanel, setIsInSidePanel] = useState(false);
+  const [, setIsInSidePanel] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isAgentPasswordEnabled, setIsAgentPasswordEnabled] = useState(false);
   const passwordInputRef = useRef<HTMLInputElement>(null);

@@ -55,7 +55,7 @@ interface AgentPasswordSettingsProps {
 
 type ViewMode = "status" | "set" | "remove";
 
-function AgentPasswordSettings({ onComplete, onCancel, onSessionExpired }: AgentPasswordSettingsProps) {
+function AgentPasswordSettings({ onComplete, onCancel }: AgentPasswordSettingsProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("status");
   const [isAgentEnabled, setIsAgentEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);

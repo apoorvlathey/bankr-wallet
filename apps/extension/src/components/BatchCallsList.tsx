@@ -50,11 +50,13 @@ import { useTheme } from "@/theme";
 // Per-call accent rotation. The three intent slots (primary/secondary/highlight)
 // map to RED/BLUE/YELLOW in Bauhaus and to indigo/cyan/amber in Midnight, so each
 // call still gets a distinct identity stripe in either theme.
+// eslint-disable-next-line react-refresh/only-export-components
 export const CALL_ACCENTS = [
   "accent.primary",
   "accent.secondary",
   "accent.highlight",
 ];
+// eslint-disable-next-line react-refresh/only-export-components
 export const CALL_ACCENT_FGS = [
   "accentFg.primary",
   "accentFg.secondary",

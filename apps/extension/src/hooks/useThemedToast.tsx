@@ -46,6 +46,7 @@ const statusToCorner: Record<ToastStatus, AccentIntent> = {
   error: "highlight",
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 const StatusIcon = ({ status }: { status: ToastStatus }) => {
   switch (status) {
     case "success":

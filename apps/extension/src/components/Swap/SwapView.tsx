@@ -11,7 +11,6 @@ import {
   Input,
   InputLeftElement,
   InputRightElement,
-  Spinner,
   Icon,
   Slider,
   SliderTrack,
@@ -35,7 +34,6 @@ import {
   buildPermit2ApproveTx,
   type SwapQuoteResponse,
   type TokenInfo,
-  type TokenListEntry,
 } from "@/chrome/swapApi";
 import {
   SWAP_SUPPORTED_CHAIN_IDS,
@@ -49,7 +47,6 @@ import {
   getNativeAssetMeta,
 } from "@/lib/chains";
 import { useNetworks } from "@/contexts/NetworksContext";
-import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
 import type { ERC5792Call } from "@/chrome/erc5792Types";
 import type { SwapTxEntry } from "@/chrome/txHandlers";
@@ -193,15 +190,12 @@ function SwapView({
   const toast = useThemedToast();
 
   // Holdings (filtered to the current sell chain)
-  const [holdings, setHoldings] = useState<PortfolioToken[]>([]);
-  const [holdingsLoading, setHoldingsLoading] = useState(true);
+  const [, setHoldings] = useState<PortfolioToken[]>([]);
+  const [, setHoldingsLoading] = useState(true);
   // Cross-chain catalog — drives chain portfolio totals + Your Tokens in the
   // chain+token modal (BridgeChainTokenModal). Filled by the same effect that
   // populates `holdings`, so it's free.
   const [holdingsAllChains, setHoldingsAllChains] = useState<PortfolioToken[]>([]);
-
-  // Token list
-  const [tokenList, setTokenList] = useState<TokenListEntry[]>([]);
 
   // Sell side
   const [sellToken, setSellToken] = useState<PortfolioToken | null>(null);
@@ -215,15 +209,8 @@ function SwapView({
     initialBuyToken ? { name: initialBuyToken.name, symbol: initialBuyToken.symbol, decimals: initialBuyToken.decimals } : null,
   );
   const [buyTokenLogoURI, setBuyTokenLogoURI] = useState<string | undefined>(initialBuyToken?.logoURI);
-  const [buyTokenLoading, setBuyTokenLoading] = useState(false);
+  const [, setBuyTokenLoading] = useState(false);
   const [buyTokenPriceUsd, setBuyTokenPriceUsd] = useState<number>(0);
-  // Pending custom token (resolved but not yet selected by user)
-  const [pendingBuyToken, setPendingBuyToken] = useState<TokenListEntry | null>(null);
-  const [pendingBuyLoading, setPendingBuyLoading] = useState(false);
-  // Pending custom sell token (resolved but not yet selected by user)
-  const [resolvedSellToken, setResolvedSellToken] = useState<PortfolioToken | null>(null);
-  const [sellCustomLoading, setSellCustomLoading] = useState(false);
-  const [sellCustomError, setSellCustomError] = useState<string | null>(null);
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
   const [isMaxMode, setIsMaxMode] = useState(false);
 
@@ -308,7 +295,7 @@ function SwapView({
 
   const quoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenInfoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** Set true when handleBuyTokenSelect already provides token info — skips useEffect re-fetch */
+  /** Set true when token picker selection already provides token info — skips useEffect re-fetch */
   const buyInfoSetBySelectRef = useRef(false);
 
   const isSwapSupported = SWAP_SUPPORTED_CHAIN_IDS.has(chainId);
@@ -430,6 +417,8 @@ function SwapView({
     return () => {
       cancelled = true;
     };
+    // Initial sell token is applied only while loading the holdings snapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromAddress, chainId, isSwapSupported]);
 
   // -----------------------------------------------------------------------
@@ -571,28 +560,13 @@ function SwapView({
   }, [sellToken]);
 
   // -----------------------------------------------------------------------
-  // Load token list for current chain
-  // -----------------------------------------------------------------------
-  useEffect(() => {
-    if (!isSwapSupported) return;
-    chrome.runtime.sendMessage(
-      { type: "fetchSwapTokenList", chainId },
-      (res) => {
-        if (res?.success && res.data) {
-          setTokenList(res.data);
-        }
-      },
-    );
-  }, [chainId, isSwapSupported]);
-
-  // -----------------------------------------------------------------------
   // Resolve buy token info on the receive chain. In bridge mode, native-token
   // sentinel metadata must come from `buyChainId`, not the source `chainId`.
   // -----------------------------------------------------------------------
   useEffect(() => {
     if (tokenInfoTimerRef.current) clearTimeout(tokenInfoTimerRef.current);
 
-    // Skip re-fetch if handleBuyTokenSelect already provided the info
+    // Skip re-fetch if the token picker already provided the info
     if (buyInfoSetBySelectRef.current) {
       buyInfoSetBySelectRef.current = false;
       setBuyTokenLoading(false);
@@ -909,133 +883,6 @@ function SwapView({
     setBridgeQuote(null);
   };
 
-  // -----------------------------------------------------------------------
-  // -----------------------------------------------------------------------
-  // Custom sell token resolution (paste address in sell dropdown)
-  // -----------------------------------------------------------------------
-  const resolveSellCustomAddress = async (tokenAddress: string) => {
-    setSellCustomLoading(true);
-    setResolvedSellToken(null);
-    setSellCustomError(null);
-    try {
-      const infoResult = await new Promise<{ success: boolean; data?: { name: string; symbol: string; decimals: number } }>((resolve) => {
-        chrome.runtime.sendMessage({ type: "fetchTokenInfo", tokenAddress, chainId }, resolve);
-      });
-      if (!infoResult.success || !infoResult.data) {
-        setSellCustomError("Not a valid ERC20 contract");
-        return;
-      }
-      const { name, symbol, decimals } = infoResult.data;
-
-      const addrLower = tokenAddress.toLowerCase();
-      const isNative =
-        addrLower === "0x0000000000000000000000000000000000000000" ||
-        addrLower === NATIVE_TOKEN_ADDRESS.toLowerCase();
-
-      const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
-      const rpcUrl = await getStoredRpcUrl(chainId);
-      if (!rpcUrl) {
-        setSellCustomError("No RPC for this chain");
-        return;
-      }
-      const client = createPublicClient({ transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }) });
-      const rawBalance = isNative
-        ? await client.getBalance({ address: fromAddress as `0x${string}` })
-        : await client.readContract({
-            address: tokenAddress as `0x${string}`,
-            abi: erc20Abi,
-            functionName: "balanceOf",
-            args: [fromAddress as `0x${string}`],
-          });
-      const balance = formatUnits(rawBalance, decimals);
-      const balanceNum = parseFloat(balance);
-
-      const listMatch = tokenList.find((t) => t.address.toLowerCase() === addrLower);
-      const logoUrl = isNative
-        ? getNativeAssetMeta(chainId, networksInfo)?.logoUrl ?? ""
-        : listMatch?.logoURI || KNOWN_TOKEN_LOGOS[addrLower] || "";
-
-      setResolvedSellToken({
-        contractAddress: isNative ? "native" : tokenAddress,
-        name,
-        symbol,
-        decimals,
-        balance,
-        balanceFormatted: balanceNum < 0.0001 && balanceNum > 0 ? "<0.0001" : parseFloat(balanceNum.toPrecision(6)).toString(),
-        logoUrl,
-        valueUsd: 0,
-        priceUsd: 0,
-        chainId,
-      });
-    } catch {
-      setSellCustomError("Failed to fetch token info");
-    } finally {
-      setSellCustomLoading(false);
-    }
-  };
-
-  const handleSelectCustomSellToken = (customToken: PortfolioToken) => {
-    setSellToken(customToken);
-    setResolvedSellToken(null);
-    setSellCustomError(null);
-    setSellAmount("");
-    setIsUsdMode(false);
-    setSliderValue(0);
-    setQuote(null);
-  };
-
-  // Handle token list selection
-  // -----------------------------------------------------------------------
-  const handleBuyTokenSelect = (token: TokenListEntry) => {
-    buyInfoSetBySelectRef.current = true;
-    setBuyTokenAddress(token.address);
-    setBuyTokenInfo({
-      name: token.name,
-      symbol: token.symbol,
-      decimals: token.decimals,
-    });
-    setBuyTokenLogoURI(token.logoURI);
-    setBuyTokenLoading(false);
-    setQuote(null);
-  };
-
-  /** Handle raw address entered in the buy dropdown — resolve without selecting */
-  const handleBuyAddressSubmit = (address: string) => {
-    // Check if it's already in the token list
-    const found = tokenList.find(
-      (t) => t.address.toLowerCase() === address.toLowerCase(),
-    );
-    if (found) {
-      setPendingBuyToken(found);
-      setPendingBuyLoading(false);
-      return;
-    }
-    // Resolve onchain
-    setPendingBuyToken(null);
-    setPendingBuyLoading(true);
-    chrome.runtime.sendMessage(
-      { type: "fetchTokenInfo", tokenAddress: address, chainId },
-      (res) => {
-        setPendingBuyLoading(false);
-        if (res?.success && res.data) {
-          setPendingBuyToken({
-            address,
-            name: res.data.name,
-            symbol: res.data.symbol,
-            decimals: res.data.decimals,
-            logoURI: KNOWN_TOKEN_LOGOS[address.toLowerCase()] || "",
-          });
-        }
-      },
-    );
-  };
-
-  /** User clicked "Choose" on the pending token */
-  const handleConfirmPendingBuy = (token: TokenListEntry) => {
-    handleBuyTokenSelect(token);
-    setPendingBuyToken(null);
-  };
-
   /** BridgeChainTokenModal commit. Routes (chainId, token) to either the sell
    *  or buy side depending on which trigger opened the modal. */
   const handleChainTokenModalSelect = (
@@ -1067,8 +914,6 @@ function SwapView({
       setSliderValue(0);
       setIsMaxMode(false);
       setQuote(null);
-      setResolvedSellToken(null);
-      setSellCustomError(null);
     } else if (side === "buy") {
       if (pickedChainId !== buyChainId) {
         setBuyChainId(pickedChainId);
@@ -1087,7 +932,6 @@ function SwapView({
       setBuyTokenLogoURI(picked.logoUrl);
       setBuyTokenLoading(false);
       setBuyTokenPriceUsd(0);
-      setPendingBuyToken(null);
       setQuote(null);
     }
   };
@@ -2350,7 +2194,6 @@ function SwapView({
                 setBuyTokenLogoURI(destNativeInfo.logoUrl);
                 setBuyTokenLoading(false);
                 setBuyTokenPriceUsd(0);
-                setPendingBuyToken(null);
                 setQuote(null);
                 setBridgeQuote(null);
                 setQuoteError(null);

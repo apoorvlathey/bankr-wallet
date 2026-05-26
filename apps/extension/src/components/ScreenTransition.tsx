@@ -17,6 +17,7 @@ import { useTheme } from "@/theme";
 // layout shift competing with the running animation).
 const ScreenEnteredContext = createContext<boolean>(true);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useScreenEntered(): boolean {
   return useContext(ScreenEnteredContext);
 }
@@ -49,6 +50,7 @@ interface ScreenMeta {
 
 // Depth drives slide direction. Anything deeper than `main` slides up when
 // entering and down when exiting back.
+// eslint-disable-next-line react-refresh/only-export-components
 export const SCREEN_META: Record<AppView, ScreenMeta> = {
   main: { kind: "slide", depth: 0 },
   settings: { kind: "slide", depth: 1 },
