@@ -266,11 +266,18 @@ function GasEstimateDisplay({
 
     const messageType = forceInclusion ? "estimateForceInclusionGas" : "estimateGas";
 
+    // EIP-7702 set/revoke txs broadcast with an authorization tuple attached.
+    // Tell the background estimator how many we'll attach so it adds the
+    // intrinsic-gas overhead `eth_estimateGas` can't see (mainline EVM ~12.5k
+    // per auth, multiples higher on non-standard-gas chains like MegaETH).
+    const eip7702AuthCount = txRequest.delegation7702Meta ? 1 : undefined;
+
     chrome.runtime.sendMessage(
       {
         type: messageType,
         tx: txRequest.tx,
         accountAddress: txRequest.tx.from,
+        ...(eip7702AuthCount ? { eip7702AuthCount } : {}),
       },
       (result: GasEstimate) => {
         if (cancelled) return;

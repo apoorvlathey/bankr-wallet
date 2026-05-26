@@ -3,8 +3,9 @@
  * function selectors.
  *
  * The remote registry at walletchan.com/api/clearsigning/descriptor is keyed
- * by (chainId, contract address) — fine for per-app contracts (Permit2,
- * Uniswap router, etc.), but useless for "every ERC-20 ever deployed".
+ * by (chainId, contract address, selector/EIP-712 type) — fine for per-app
+ * contracts (Permit2, Uniswap router, etc.), but useless for "every ERC-20
+ * ever deployed".
  * Rather than seeding the registry with thousands of duplicate entries we
  * synthesize a descriptor here on demand.
  *

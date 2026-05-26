@@ -91,6 +91,15 @@ export interface ChainEntry {
   isBankrSupported: boolean;
   /** Whether 0x Swap API supports this chain */
   isSwapSupported: boolean;
+  /**
+   * Whether this chain supports EIP-7702 (Pectra activation live). When true,
+   * PK/SP accounts can authorize a smart-contract delegate (the MM
+   * EIP7702StatelessDeleGator by default) and execute atomic batches as a
+   * single tx. When false, PK/SP batches fall back to auto-sequential.
+   * Custom chains can opt in by configuring a delegate in Account Settings,
+   * regardless of this flag.
+   */
+  isEip7702Supported?: boolean;
   /** CoinGecko token ID for native token price lookups (undefined = no price) */
   coingeckoTokenId?: string;
   /** CoinGecko platform ID for token list lookups (e.g. "base", "ethereum") */
@@ -138,6 +147,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isOpStack: false,
     isBankrSupported: true,
     isSwapSupported: true,
+    isEip7702Supported: true,
     coingeckoTokenId: "ethereum",
     coingeckoPlatformId: "ethereum",
     geckoTerminalNetworkId: "eth",
@@ -156,6 +166,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isOpStack: false,
     isBankrSupported: true,
     isSwapSupported: true,
+    isEip7702Supported: true,
     coingeckoTokenId: "ethereum",
     coingeckoPlatformId: "arbitrum-one",
     geckoTerminalNetworkId: "arbitrum",
@@ -175,6 +186,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     supportsFlashblocks: true,
     isBankrSupported: true,
     isSwapSupported: true,
+    isEip7702Supported: true,
     coingeckoTokenId: "ethereum",
     coingeckoPlatformId: "base",
     geckoTerminalNetworkId: "base",
@@ -193,6 +205,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isOpStack: false,
     isBankrSupported: true,
     isSwapSupported: true,
+    isEip7702Supported: true,
     coingeckoTokenId: "binancecoin",
     coingeckoPlatformId: "binance-smart-chain",
     geckoTerminalNetworkId: "bsc",
@@ -212,6 +225,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     supportsFlashblocks: true,
     isBankrSupported: false,
     isSwapSupported: true,
+    isEip7702Supported: true,
     coingeckoTokenId: "ethereum",
     coingeckoPlatformId: "optimistic-ethereum",
     geckoTerminalNetworkId: "optimism",
@@ -236,6 +250,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     usesNonStandardGasModel: true,
     isBankrSupported: false,
     isSwapSupported: false,
+    isEip7702Supported: true,
     coingeckoTokenId: "ethereum",
     geckoTerminalNetworkId: "megaeth",
     viemChain: megaeth,
@@ -253,6 +268,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     isOpStack: false,
     isBankrSupported: true,
     isSwapSupported: true,
+    isEip7702Supported: true,
     coingeckoTokenId: "matic-network",
     coingeckoPlatformId: "polygon-pos",
     geckoTerminalNetworkId: "polygon_pos",
@@ -272,6 +288,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     supportsFlashblocks: true,
     isBankrSupported: true,
     isSwapSupported: true,
+    isEip7702Supported: true,
     coingeckoTokenId: "ethereum",
     coingeckoPlatformId: "unichain",
     geckoTerminalNetworkId: "unichain",
@@ -356,6 +373,10 @@ for (const c of CHAIN_REGISTRY) {
     COINGECKO_PLATFORM_IDS[c.chainId] = c.coingeckoPlatformId;
   }
 }
+// Extra 0x-supported chains that users may add as custom networks. They are
+// not built-ins, but token prices/logos should still resolve when swaps are
+// enabled for them.
+COINGECKO_PLATFORM_IDS[43114] = "avalanche";
 
 export const GECKOTERMINAL_NETWORK_IDS: Record<number, string> = {};
 for (const c of CHAIN_REGISTRY) {
@@ -363,6 +384,7 @@ for (const c of CHAIN_REGISTRY) {
     GECKOTERMINAL_NETWORK_IDS[c.chainId] = c.geckoTerminalNetworkId;
   }
 }
+GECKOTERMINAL_NETWORK_IDS[43114] = "avax";
 
 export const OP_STACK_CHAIN_IDS = new Set(
   CHAIN_REGISTRY.filter((c) => c.isOpStack).map((c) => c.chainId)
@@ -371,6 +393,60 @@ export const OP_STACK_CHAIN_IDS = new Set(
 export const FLASHBLOCKS_CHAIN_IDS = new Set(
   CHAIN_REGISTRY.filter((c) => c.supportsFlashblocks).map((c) => c.chainId)
 );
+
+/**
+ * Chains where EIP-7702 (Pectra) is active, so PK/SP accounts can authorize
+ * a smart-contract delegate and execute atomic batches as a single tx. PK/SP
+ * batches on these chains use the 7702 path; on other chains they fall back
+ * to auto-sequential.
+ *
+ * Custom (user-added) chains whose chainId exists in KNOWN_CHAINS also use
+ * the default delegate path. Other custom chains can opt into atomic batching
+ * by setting a delegate explicitly in Account Settings — see
+ * delegationResolution.ts.
+ */
+export const EIP7702_SUPPORTED_CHAIN_IDS = new Set(
+  CHAIN_REGISTRY.filter((c) => c.isEip7702Supported).map((c) => c.chainId)
+);
+
+/**
+ * MetaMask EIP7702StatelessDeleGator v1.3 — the default delegate WalletChan
+ * authorizes for PK/SP accounts. CREATE2-deployed at the same address on
+ * every chain via the canonical factory; verified on every WalletChan
+ * built-in chain. Non-upgradeable, no admin, no owner. Audited by Cyfrin
+ * (Apr 2025). Source: https://github.com/MetaMask/delegation-framework.
+ *
+ * Implements ERC-7821 `execute(bytes32 mode, bytes executionData)`, which is
+ * exactly the format `encodeBatchCalls()` already produces for Bankr atomic
+ * batches — same encoding works for 7702-delegated EOAs.
+ *
+ * Users can override this per-account×per-chain via the Smart Account section
+ * in Account Settings (any ERC-7821-compatible contract).
+ */
+export const EIP_7702_DEFAULT_DELEGATE =
+  "0x63c0c19a282a1B52b07dD5a65b58948A07DAE32B" as `0x${string}`;
+
+/**
+ * EIP-7702 set-code prefix. The 23-byte sequence written into an EOA's `code`
+ * field when it delegates: `0xef0100 || <20-byte delegate address>`. Used to
+ * detect whether an EOA currently has an active delegation, and to extract
+ * the delegate address from `eth_getCode`.
+ */
+export const EIP_7702_CODE_PREFIX = "0xef0100" as const;
+
+/**
+ * Friendly name for the default delegate we authorize. Used as a pill next
+ * to the raw address on the confirm screen so users see a recognizable label
+ * rather than a hex blob. Custom delegates the user pastes in Account
+ * Settings intentionally have no entry — they fall back to the bare address.
+ */
+const KNOWN_DELEGATE_NAMES: Record<string, string> = {
+  [EIP_7702_DEFAULT_DELEGATE.toLowerCase()]: "MetaMask DeleGator",
+};
+
+export function getKnownDelegateName(address: string): string | null {
+  return KNOWN_DELEGATE_NAMES[address.toLowerCase()] ?? null;
+}
 
 /**
  * Chains whose gas model differs enough from standard EVM that batched

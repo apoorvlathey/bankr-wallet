@@ -224,6 +224,19 @@ export async function removeAccount(accountId: string): Promise<void> {
   if (changed) {
     await chrome.storage.sync.set({ [TAB_ACCOUNTS_KEY]: tabAccounts });
   }
+
+  // Drop any EIP-7702 custom-delegate overrides the user configured for this
+  // account. The onchain delegation (if any) remains — that's a property of
+  // the EOA address itself, not of our storage. If the user re-imports the
+  // same EOA, the onchain probe will still detect it.
+  try {
+    const { removeAllDelegatesForAccount } = await import(
+      "./delegationStorage"
+    );
+    await removeAllDelegatesForAccount(accountId);
+  } catch {
+    /* ignore */
+  }
 }
 
 /**

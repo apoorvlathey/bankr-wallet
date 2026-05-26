@@ -43,6 +43,16 @@ export interface BungeeToken {
   logoURI?: string;
 }
 
+export interface BungeeNativeCurrency {
+  address?: string;
+  icon?: string;
+  logoURI?: string;
+  name?: string;
+  symbol?: string;
+  decimals?: number;
+  minNativeCurrencyForGas?: string;
+}
+
 export interface BungeeAmountAndUsd {
   token: BungeeToken;
   amount: string;
@@ -84,6 +94,8 @@ export interface BungeeManualRoute {
 
 /** Auto-mode route: user signs the Permit2 EIP-712 payload and we POST it to /submit. */
 export interface BungeeAutoRoute {
+  userOp?: string;
+  requestHash?: string;
   output: BungeeAmountAndUsd;
   quoteId: string;
   quoteExpiry?: number;
@@ -97,9 +109,18 @@ export interface BungeeAutoRoute {
   approvalData?: BungeeApprovalData | null;
   requestType?: string;
   request?: Record<string, unknown>;
+  gasFee?: {
+    gasToken?: BungeeToken;
+    gasLimit?: string;
+    gasPrice?: string;
+    estimatedFee?: string;
+    feeInUsd?: number;
+  };
   routeDetails?: {
     name?: string;
+    logoURI?: string;
   };
+  txData?: BungeeTxData;
   estimatedTime?: number;
 }
 
@@ -178,6 +199,8 @@ export interface BungeeChain {
   name: string;
   icon?: string;
   logoURI?: string;
+  currency?: BungeeNativeCurrency;
+  explorers?: string[];
   /** Some chains may be disabled at the routing layer. */
   sendingEnabled?: boolean;
   receivingEnabled?: boolean;

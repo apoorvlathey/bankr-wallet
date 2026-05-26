@@ -18,6 +18,7 @@ import { ArrowBackIcon, ExternalLinkIcon, WarningTwoIcon } from "@chakra-ui/icon
 import { useNetworks } from "@/contexts/NetworksContext";
 import { useTheme } from "@/theme";
 import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
+import { KNOWN_CHAINS } from "@/constants/knownChains.generated";
 
 interface AddChainProps {
   back: () => void;
@@ -84,6 +85,11 @@ function AddChain({
       return initialRequest.origin;
     }
   }, [initialRequest?.origin]);
+  const knownChainForHint = useMemo(() => {
+    const parsed = parseInt(chainId, 10);
+    if (!Number.isFinite(parsed)) return null;
+    return KNOWN_CHAINS[parsed] ?? null;
+  }, [chainId]);
 
   const checkChainIdConflict = (id: string) => {
     if (!id || !networksInfo) {
@@ -98,6 +104,25 @@ function AddChain({
       }
     }
     setChainIdConflict("");
+  };
+
+  /**
+   * Apply canonical metadata for a known chain into empty form fields.
+   * Deliberately non-destructive: anything the user has already typed is
+   * preserved (they may be customising). Called both when chainId is
+   * detected from an RPC and when the user types the chainId directly.
+   */
+  const applyKnownChainPrefill = (id: number) => {
+    const known = KNOWN_CHAINS[id];
+    if (!known) return;
+    setChainName((current) => (current.trim() ? current : known.name));
+    setExplorer((current) => (current.trim() ? current : known.explorer));
+    setCurrencySymbol((current) =>
+      current.trim() ? current : known.nativeCurrency.symbol,
+    );
+    setCurrencyDecimals((current) =>
+      current.trim() ? current : String(known.nativeCurrency.decimals),
+    );
   };
 
   const buildEntry = () => ({
@@ -127,6 +152,7 @@ function AddChain({
       if (detectedId !== null) {
         setChainId(detectedId.toString());
         checkChainIdConflict(detectedId.toString());
+        applyKnownChainPrefill(detectedId);
         setRpcError("");
       } else {
         setRpcError("Could not fetch chain ID from this RPC. It may be down or invalid.");
@@ -335,20 +361,43 @@ function AddChain({
           onChange={(e) => {
             setChainId(e.target.value);
             checkChainIdConflict(e.target.value);
+            const parsed = parseInt(e.target.value, 10);
+            if (parsed && !Number.isNaN(parsed)) {
+              applyKnownChainPrefill(parsed);
+            }
           }}
         />
         {chainIdConflict && (
           <Alert
             status="warning"
             mt={2}
-            borderRadius="0"
-            border="2px solid"
-            borderColor="border.default"
+            color="status.warning.fg"
             py={2}
             px={3}
           >
             <AlertIcon />
-            <Text fontSize="xs" fontWeight="600">{chainIdConflict}</Text>
+            <Text fontSize="xs" fontWeight="600" color="status.warning.fg">
+              {chainIdConflict}
+            </Text>
+          </Alert>
+        )}
+        {knownChainForHint && !chainIdConflict && (
+          <Alert
+            status="info"
+            mt={2}
+            bg="status.info.bg"
+            color="status.info.fg"
+            border="1.5px solid"
+            borderColor="status.info.border"
+            borderRadius={isDarkTheme ? "md" : "0"}
+            py={2}
+            px={3}
+          >
+            <AlertIcon color="status.info.fg" />
+            <Text fontSize="xs" fontWeight="700" color="status.info.fg">
+              EIP-7702 atomic batching is enabled by default for{" "}
+              {knownChainForHint.name}; no manual delegate setup needed.
+            </Text>
           </Alert>
         )}
       </FormControl>
@@ -438,14 +487,14 @@ function AddChain({
       {rpcWarning && (
         <Alert
           status="warning"
-          borderRadius="0"
-          border="2px solid"
-          borderColor="border.default"
+          color="status.warning.fg"
           py={2}
           px={3}
         >
-          <WarningTwoIcon mr={2} />
-          <Text fontSize="xs" fontWeight="600">{rpcWarning}</Text>
+          <WarningTwoIcon mr={2} color="status.warning.fg" />
+          <Text fontSize="xs" fontWeight="600" color="status.warning.fg">
+            {rpcWarning}
+          </Text>
         </Alert>
       )}
 

@@ -12,10 +12,14 @@ import {
   BANKR_SUPPORTED_CHAIN_IDS,
   CHAIN_NAMES,
 } from "../constants/networks";
+import { ALLOWED_CHAIN_IDS } from "../constants/chainRegistry";
 import {
-  ALLOWED_CHAIN_IDS,
-  NON_STANDARD_GAS_CHAIN_IDS,
-} from "../constants/chainRegistry";
+  resolveActiveDelegate,
+  getOnchainDelegate,
+  hasDefaultDelegateForChain,
+} from "../utils/delegationResolution";
+import { getAllDelegatesForAccount } from "./delegationStorage";
+import { bumpGasForEip7702Auth } from "./gasEstimation";
 import { CHAIN_CONFIG } from "../constants/chainConfig";
 import { getActiveAccount, getAccountById } from "./accountStorage";
 import {
@@ -41,15 +45,27 @@ import {
 } from "./sessionCache";
 import { loadDecryptedApiKey } from "./crypto";
 import { handleUnlockWallet } from "./authHandlers";
-import { addTxToHistory, updateTxInHistory, getTxById } from "./txHistoryStorage";
+import {
+  addTxToHistory,
+  updateTxInHistory,
+  getTxById,
+  type CompletedTransaction,
+} from "./txHistoryStorage";
 import { attachClearSignedMetaToHistory } from "./clearSignedMetaSnapshot";
 import { startReceiptPolling, applyReceiptToHistory } from "./txReceiptPoller";
 import { openExtensionPopup, writeResultToStorage, showNotification, getRpcUrl } from "./txHandlers";
-import { signAndBroadcastTransaction } from "./localSigner";
+import {
+  signAndBroadcastTransaction,
+  signEip7702Authorization,
+} from "./localSigner";
 import { getNextNonce, resetNonce } from "./nonceManager";
 import { decryptAllKeys } from "./vaultCrypto";
 import { hasEncryptedApiKey } from "./crypto";
-import { getStoredResolvedChainById } from "../lib/chains";
+import {
+  getStoredResolvedChainById,
+  getStoredNetworksInfo,
+  getResolvedChains,
+} from "../lib/chains";
 import type {
   WalletSendCallsParams,
   ERC5792Call,
@@ -78,8 +94,23 @@ const ERC7821_ABI = [
   },
 ] as const;
 
+// ERC-7821 plain single-batch mode (no opData). Spec quote:
+//   "If `opData` is empty, `executionData` is simply `abi.encode(calls)`."
+//   "0x010000000000000000…: Single batch. Does not support optional `opData`."
+//
+// We always send executionData = abi.encode(Call[]) (no opData), so the
+// matching mode is the plain variant. The previous magic-bit variant
+// (`0x01…7821_0001…`) advertised opData support but we never appended any
+// opData bytes — Solady's ERC7821 was permissive enough to accept that, but
+// stricter implementers (Uniswap Calibur) reject it via strict-equality
+// checks on the mode bytes. Plain mode is the universal subset accepted by
+// every conforming implementation including MetaMask's EIP7702StatelessDeleGator
+// and Calibur. Auth model: with opData empty, the spec mandates "the
+// implementation SHOULD require that `msg.sender == address(this)`" — our
+// EIP-7702 self-call (tx.to = EOA, msg.sender inside execute = EOA = self)
+// satisfies that for every conforming delegator.
 const ERC7821_BATCH_MODE =
-  "0x0100000000007821000100000000000000000000000000000000000000000000" as `0x${string}`;
+  "0x0100000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
 
 /**
  * Encode an array of ERC-5792 calls into a single ERC-7821 batch transaction.
@@ -89,6 +120,48 @@ export function encodeBatchCalls(
   calls: ERC5792Call[],
   walletAddress: string,
 ): { to: string; data: string; value: string } {
+  // Defense-in-depth against ERC-7821 self-recursion through self-calls.
+  //
+  // The exploit: an outer batch contains `{ to: EOA, data: <encoded
+  // execute(mode, hostileBatch)> }`. Because the EOA is delegated, that
+  // self-call dispatches to the delegate's execute() with msg.sender == EOA
+  // == address(this), which passes the spec-mandated auth check, and the
+  // hostile inner batch runs. The smuggle needs *payload*: a no-op
+  // self-call (empty data, zero value) just hits the delegate's fallback,
+  // which on conforming implementations does nothing — and wagmi-driven
+  // 7702 onboarding flows (7702beat's "Upgrade Account") rely on that
+  // pattern to nudge the wallet into the authorization path.
+  //
+  // We deliberately do NOT reject calls to address(0). The ERC-7821 spec
+  // permits ("MAY") executors to substitute `Call.to == 0x0` with
+  // `address(this)`, but the MM EIP7702StatelessDeleGator we ship as our
+  // default — and most other audited 7821 impls — do NOT substitute.
+  // A call to 0x0 onchain is a no-op (no code at the zero address).
+  // Rejecting it preemptively broke legitimate flows (counterfactual
+  // transfers, 7702-nudge patterns that use 0x0 instead of self) while
+  // protecting against a class of attack that's only theoretical on the
+  // delegates we actually use. Users see the full call list in the
+  // confirmation UI; an inner call to 0x0 with hostile-looking data is as
+  // visible as any other call.
+  //
+  // handleWalletSendCalls applies the same self-call guard upstream; this
+  // is the last-line check so it can't be bypassed through any other call
+  // site (cross-dapp batches, internal flows, etc.).
+  const eoaLower = walletAddress.toLowerCase();
+  for (let i = 0; i < calls.length; i++) {
+    const to = (calls[i].to ?? "").toLowerCase();
+    if (to !== eoaLower) continue;
+    const data = calls[i].data ?? "0x";
+    const valueHex = calls[i].value ?? "0x0";
+    const hasData = data !== "0x" && data !== "0x0" && data.length > 2;
+    const hasValue = valueHex !== "0x" && valueHex !== "0x0" && BigInt(valueHex) > 0n;
+    if (hasData || hasValue) {
+      throw new Error(
+        `Call ${i + 1} targets your own account with payload — rejected to prevent ERC-7821 self-recursion (an inner execute() call would re-enter with auth bypassed)`,
+      );
+    }
+  }
+
   const encodedCalls = calls.map((call) => ({
     to: call.to as `0x${string}`,
     value: call.value ? BigInt(call.value) : 0n,
@@ -142,6 +215,17 @@ export async function handleWalletGetCapabilities(
 ): Promise<Record<string, any>> {
   const account = await getActiveAccount();
 
+  // Per ERC-5792, capabilities are scoped to the *connected* address. We have
+  // a single active account at a time, so a dapp asking about any other
+  // address must get back an empty response — otherwise the dapp would think
+  // we can sign atomic batches for arbitrary EOAs (e.g. someone else's
+  // address pasted as a probe).
+  if (address && account?.address) {
+    if (address.toLowerCase() !== account.address.toLowerCase()) {
+      return {};
+    }
+  }
+
   const isBankrAccount = account?.type === "bankr";
   const isPKOrSP =
     account?.type === "privateKey" || account?.type === "seedPhrase";
@@ -153,39 +237,118 @@ export async function handleWalletGetCapabilities(
 
   const capabilities: Record<string, any> = {};
 
+  // The current ERC-5792 spec exposes batch support via
+  // `atomic: { status: "supported" | "ready" | "unsupported" }`. The legacy
+  // shape was `atomicBatch: { supported: boolean }` — some dapps and the
+  // older wagmi / @wagmi/connectors versions still look for that, so we
+  // advertise both. Keeping them in lockstep here (single helper) ensures
+  // every emit site stays consistent if either spec moves.
+  const ATOMIC_SUPPORTED_CAP = {
+    atomic: { status: "supported" },
+    atomicBatch: { supported: true },
+  } as const;
+
+  // Build a hidden-chain filter from the user's networks store. Honoring
+  // `hidden` here keeps the dapp-visible support set in lockstep with what
+  // shows up in the in-wallet UI — if the user hid a chain in Networks,
+  // dapps shouldn't see capabilities for it either.
+  const networksInfo = await getStoredNetworksInfo();
+  const hiddenChainIds = new Set<number>();
+  for (const c of getResolvedChains(networksInfo)) {
+    if (c.hidden) hiddenChainIds.add(c.chainId);
+  }
+  const shouldEmit = (chainId: number, hexChainId: `0x${string}`) => {
+    if (hiddenChainIds.has(chainId)) return false;
+    if (chainIds && chainIds.length > 0 && !chainIds.includes(hexChainId)) {
+      return false;
+    }
+    return true;
+  };
+
   // Bankr accounts: atomic batching on Bankr-supported chains
   if (isBankrAccount) {
     for (const chainId of BANKR_SUPPORTED_CHAIN_IDS) {
       const hexChainId = `0x${chainId.toString(16)}` as `0x${string}`;
-      if (chainIds && chainIds.length > 0 && !chainIds.includes(hexChainId)) {
-        continue;
-      }
-      capabilities[hexChainId] = {
-        atomic: { status: "supported" },
-      };
+      if (!shouldEmit(chainId, hexChainId)) continue;
+      capabilities[hexChainId] = { ...ATOMIC_SUPPORTED_CAP };
     }
   }
 
-  // PK/SP accounts: report "supported" so dapps show the batching option.
-  // Actual execution is non-atomic (sequential txs), but if a dapp explicitly
-  // requires atomicity via atomicRequired: true, we reject in handleWalletSendCalls.
+  // PK/SP accounts: only advertise `atomic` for chains where the same resolver
+  // used at confirm time can find a usable delegate. This keeps capabilities
+  // honest for edge cases such as an EOA already delegated to a non-ERC-7821
+  // contract. Built-in Pectra chains, including non-standard-gas chains like
+  // MegaETH, qualify through the default delegate when no conflicting onchain
+  // delegation exists. Custom chains whose chainId is in KNOWN_CHAINS also
+  // qualify through the default delegate once the user has added the chain.
   //
-  // Chains with a non-standard gas model (MegaETH) are excluded — batched gas
-  // estimation can't reliably account for state-dependent calls there
-  // (eth_simulateV1 unsupported; bytecode injection only counts compute gas,
-  // missing the storage gas dimension). Without batch capability advertised,
-  // dapps fall back to individual eth_sendTransaction where each tx hits the
-  // chain's own RPC for an accurate per-tx estimate.
-  if (isPKOrSP || isImpersonator) {
-    for (const chainId of ALLOWED_CHAIN_IDS) {
-      if (NON_STANDARD_GAS_CHAIN_IDS.has(chainId)) continue;
-      const hexChainId = `0x${chainId.toString(16)}` as `0x${string}`;
-      if (chainIds && chainIds.length > 0 && !chainIds.includes(hexChainId)) {
-        continue;
+  // Candidate set = built-ins ∪ visible custom chains with a known default
+  // delegate deployment ∪ chains where this account has a stored custom
+  // delegate. We deliberately do NOT include every chain in `networksInfo` —
+  // a user with 20 random custom chains would otherwise trigger 20 RPC probes
+  // per `wallet_getCapabilities` call, and dead RPCs would stall the response.
+  // KNOWN_CHAINS custom networks are the safe exception because the resolver
+  // can authorize WalletChan's default delegate without manual setup.
+  if (isPKOrSP && account) {
+    const candidateSet = new Set<number>(ALLOWED_CHAIN_IDS);
+    for (const c of getResolvedChains(networksInfo)) {
+      if (!c.hidden && hasDefaultDelegateForChain(c.chainId)) {
+        candidateSet.add(c.chainId);
       }
-      capabilities[hexChainId] = {
-        atomic: { status: "supported" },
-      };
+    }
+    const optedInDelegates = await getAllDelegatesForAccount(account.id);
+    for (const chainIdStr of Object.keys(optedInDelegates)) {
+      const chainId = Number(chainIdStr);
+      if (Number.isFinite(chainId)) candidateSet.add(chainId);
+    }
+
+    const candidateChainIds: number[] = [];
+    for (const chainId of candidateSet) {
+      const hexChainId = `0x${chainId.toString(16)}` as `0x${string}`;
+      if (!shouldEmit(chainId, hexChainId)) continue;
+      candidateChainIds.push(chainId);
+    }
+
+    // Parallel resolver probes. Each call hits chrome.storage and at most two RPCs
+    // (eth_getCode + supportsExecutionMode), so a small fan-out is fine —
+    // dapps frequently call wallet_getCapabilities without a chainIds filter.
+    const probeResults = await Promise.all(
+      candidateChainIds.map(async (chainId) => {
+        const resolved = await getStoredResolvedChainById(chainId);
+        if (!resolved?.rpcUrl) return { chainId, atomic: false };
+        try {
+          const result = await resolveActiveDelegate({
+            accountId: account.id,
+            accountAddress: account.address as `0x${string}`,
+            chainId,
+            rpcUrl: resolved.rpcUrl,
+          });
+          return { chainId, atomic: !!result.delegate };
+        } catch {
+          return { chainId, atomic: false };
+        }
+      }),
+    );
+
+    for (const { chainId, atomic } of probeResults) {
+      if (!atomic) continue;
+      const hexChainId = `0x${chainId.toString(16)}` as `0x${string}`;
+      capabilities[hexChainId] = { ...ATOMIC_SUPPORTED_CAP };
+    }
+  }
+
+  // Impersonator accounts advertise on every allowed chain so dapps surface
+  // their batched flow — the popup will show the calls in view-only mode
+  // (banner + disabled Confirm in BatchTransactionConfirmation.tsx). No
+  // signing happens, so the "atomic" claim is moot; the goal is to let the
+  // user inspect what a dapp tried to send. Non-standard-gas chains like
+  // MegaETH stay included here — the gas-estimation caveat that gates real
+  // signing paths doesn't apply when nothing is ever signed.
+  if (isImpersonator) {
+    for (const chainId of ALLOWED_CHAIN_IDS) {
+      const hexChainId = `0x${chainId.toString(16)}` as `0x${string}`;
+      if (!shouldEmit(chainId, hexChainId)) continue;
+      capabilities[hexChainId] = { ...ATOMIC_SUPPORTED_CAP };
     }
   }
 
@@ -273,6 +436,46 @@ export function handleWalletSendCalls(
       return;
     }
 
+    // ERC-7821 self-recursion guard.
+    //
+    // The exploit: a batched inner call `{ to: EOA, data: execute(mode,
+    // hostileBatch) }` dispatches to the EOA's delegated code with
+    // msg.sender == EOA == address(this), which passes the spec-mandated
+    // auth check, letting an attacker-controlled inner batch run past the
+    // user's outer intent. We reject self-calls that carry *payload*
+    // (calldata or value); a no-op self-call (the 7702beat "Upgrade
+    // Account" pattern) is allowed through to nudge the EIP-7702 auth
+    // path.
+    //
+    // Zero-address calls are NOT rejected. The ERC-7821 spec permits but
+    // doesn't require executors to substitute `Call.to == 0x0` with
+    // `address(this)`; the MM DeleGator we ship as default — and most
+    // audited 7821 impls — don't substitute, so calls to 0x0 are plain
+    // no-ops onchain (no code at the zero address). A blanket rejection
+    // here broke legitimate flows (7702-nudge patterns, counterfactual
+    // sends) for a threat that's only theoretical on the delegates we use.
+    {
+      const eoa = account.address.toLowerCase();
+      const offending = params.calls.findIndex((call) => {
+        const to = (call.to ?? "").toLowerCase();
+        if (to !== eoa) return false;
+        const data = call.data ?? "0x";
+        const valueHex = call.value ?? "0x0";
+        const hasData = data !== "0x" && data !== "0x0" && data.length > 2;
+        const hasValue =
+          valueHex !== "0x" && valueHex !== "0x0" && BigInt(valueHex) > 0n;
+        return hasData || hasValue;
+      });
+      if (offending !== -1) {
+        await writeResultToStorage(`batchTxAck:${bundleId}`, {
+          success: false,
+          error: `Call ${offending + 1} targets your own account with payload — rejected to prevent ERC-7821 self-recursion (an inner execute() call would re-enter with auth bypassed)`,
+          code: -32602,
+        });
+        return;
+      }
+    }
+
     // Validate from matches if provided
     if (params.from && params.from.toLowerCase() !== account.address.toLowerCase()) {
       await writeResultToStorage(`batchTxAck:${bundleId}`, {
@@ -295,6 +498,43 @@ export function handleWalletSendCalls(
           success: false,
           error: "Call 'from' does not match active account",
           code: ERC5792_ERRORS.UNAUTHORIZED,
+        });
+        return;
+      }
+    }
+
+    // ERC-5792 `atomicRequired: true` honesty check — for PK/SP, the dapp's
+    // request only holds if we can actually deliver atomic on this chain.
+    // Mirrors the capability-advertisement gate in handleWalletGetCapabilities:
+    // the same delegate resolver used at confirm time must resolve a real 7702
+    // path. If a dapp set atomicRequired despite our capabilities saying "no
+    // atomic here", reject before the popup opens. Single-call batches bypass
+    // the check — we send them as a normal tx (which is trivially atomic).
+    if (
+      isPKOrSP &&
+      params.atomicRequired === true &&
+      params.calls.length > 1
+    ) {
+      const resolved = await getStoredResolvedChainById(chainId);
+      let canBeAtomic = false;
+      if (resolved?.rpcUrl) {
+        try {
+          const result = await resolveActiveDelegate({
+            accountId: account.id,
+            accountAddress: account.address as `0x${string}`,
+            chainId,
+            rpcUrl: resolved.rpcUrl,
+          });
+          canBeAtomic = !!result.delegate;
+        } catch {
+          canBeAtomic = false;
+        }
+      }
+      if (!canBeAtomic) {
+        await writeResultToStorage(`batchTxAck:${bundleId}`, {
+          success: false,
+          error: `Atomic execution is not available for chain ${chainId} on this account. Configure a 7702 delegate in Account Settings → Smart Account, or retry without atomicRequired.`,
+          code: ERC5792_ERRORS.ATOMIC_NOT_SUPPORTED,
         });
         return;
       }
@@ -617,8 +857,7 @@ async function handleBatchFailure(
 export async function handleConfirmBatchTransactionPK(
   bundleId: string,
   password: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  tabId?: number,
+  _tabId?: number,
   functionNames?: string[],
   precomputedGasEstimates?: import("./gasEstimation").GasEstimate[],
   forceInclusion?: boolean,
@@ -724,7 +963,67 @@ export async function handleConfirmBatchTransactionPK(
     return { success: true };
   }
 
-  // Process in background (non-atomic: sequential nonces, individual broadcasts)
+  // EIP-7702 atomic / single-call shortcut / auto-sequential branching.
+  //
+  // Resolution order:
+  //  - calls.length === 1 → send the inner call as a normal tx (no ERC-7821
+  //    wrap, no 7702 overhead). The ERC-7821 self-call adds cost without
+  //    benefit when there's nothing to batch.
+  //  - calls.length > 1 AND a usable delegate resolves (onchain reuse OR
+  //    custom override OR Pectra-supported chain default) → atomic via 7702.
+  //  - else → existing auto-sequential path (preserves behavior on chains
+  //    without 7702 support and on EOAs delegated to a non-ERC-7821 contract).
+  //
+  // Flip the bundle's `atomic` flag the moment we commit to a path. The
+  // status was created with `atomic: isBankrAccount` (so PK/SP starts at
+  // false), but the truth only becomes known at confirm-time: single-tx
+  // and 7702 paths both ship as one onchain tx (trivially atomic by
+  // EIP-5792), while the sequential fallback genuinely isn't. We update
+  // here once and let the merge semantics of `updateBundleStatus` carry
+  // it forward through every subsequent status transition (PENDING →
+  // CONFIRMED / REVERTED). Without this the dapp's `wallet_getCallsStatus`
+  // response keeps reporting `atomic: false` even after we delivered a
+  // single atomic tx — caught by walletbeat's EIP-5792 conformance test.
+  const calls = pending.params.calls;
+  if (calls.length === 1) {
+    await updateBundleStatus(bundleId, { atomic: true });
+    processBatchAsSingleTxInBackground(
+      bundleId,
+      pending,
+      account,
+      privateKey,
+      functionNames,
+      precomputedGasEstimates,
+    );
+    return { success: true };
+  }
+
+  const resolution = await resolveActiveDelegate({
+    accountId: account.id,
+    accountAddress: account.address as `0x${string}`,
+    chainId: pending.chainId,
+    rpcUrl:
+      (await getStoredResolvedChainById(pending.chainId))?.rpcUrl ?? "",
+  });
+
+  if (resolution.delegate) {
+    await updateBundleStatus(bundleId, { atomic: true });
+    processBatchTransactionAtomic7702InBackground(
+      bundleId,
+      pending,
+      account,
+      privateKey,
+      resolution.delegate,
+      resolution.needsAuthorization,
+      functionNames,
+      precomputedGasEstimates,
+    );
+    return { success: true };
+  }
+
+  // Process in background (non-atomic: sequential nonces, individual
+  // broadcasts). `atomic` stays at its initial `false` — that's the
+  // correct EIP-5792 value here.
   processBatchTransactionNonAtomicInBackground(
     bundleId,
     pending,
@@ -1056,6 +1355,452 @@ async function trackNonAtomicBundleCompletion(
       "Batch Transaction Reverted",
       `All calls on ${pending.chainName} reverted.`,
     );
+  }
+}
+
+/**
+ * Track the receipt for a PK/SP atomic (or single-call) bundle and update the
+ * bundle status when terminal so the dapp's `wallet_getCallsStatus` polling
+ * sees CONFIRMED / REVERTED. `applyReceiptToHistory` only updates the tx
+ * history row; the bundle status is a separate storage key the dapp reads.
+ *
+ * For Bankr atomic batches the Bankr API returns the receipt synchronously,
+ * so the bundle status is set inline. PK/SP atomic broadcasts return only a
+ * tx hash, so we poll local tx history (no RPC) waiting for the receipt
+ * poller (`startReceiptPolling`) to land a terminal status, then mirror that
+ * to the bundle status.
+ */
+async function trackAtomicBundleCompletion(
+  bundleId: string,
+  txHash: string,
+  pending: PendingBatchTxRequest,
+): Promise<void> {
+  const MAX_WAIT_MS = 10 * 60 * 1000;
+  const POLL_INTERVAL_MS = 5_000;
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < MAX_WAIT_MS) {
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+
+    const tx = await getTxById(bundleId);
+    if (!tx || tx.status === "processing" || tx.status === "pending") continue;
+
+    if (tx.status === "success") {
+      const receipt = await fetchReceipt(txHash, pending.chainId);
+      await updateBundleStatus(bundleId, {
+        status: BUNDLE_STATUS.CONFIRMED,
+        txHash,
+        receipts: receipt ? [receipt] : undefined,
+        completedAt: Date.now(),
+      });
+
+      const chainConfig = CHAIN_CONFIG[pending.chainId];
+      const notificationId = `tx-success-${bundleId}`;
+      const explorerUrl = chainConfig?.explorer
+        ? `${chainConfig.explorer}/tx/${txHash}`
+        : null;
+      if (explorerUrl) {
+        chrome.storage.local.set({
+          [`notification-${notificationId}`]: explorerUrl,
+        });
+      }
+      await showNotification(
+        notificationId,
+        "Batch Transaction Confirmed",
+        `Batch (${pending.params.calls.length} call${pending.params.calls.length === 1 ? "" : "s"}) on ${pending.chainName} was successful.`,
+      );
+    } else {
+      await updateBundleStatus(bundleId, {
+        status: BUNDLE_STATUS.REVERTED,
+        txHash,
+        error: tx.error || "Transaction reverted",
+        completedAt: Date.now(),
+      });
+
+      await showNotification(
+        `tx-failed-${bundleId}`,
+        "Batch Transaction Reverted",
+        `Batch on ${pending.chainName} reverted onchain.`,
+      );
+    }
+    return;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PK/SP single-call shortcut: a batch with calls.length === 1 ships as a
+// plain EIP-1559 tx, no ERC-7821 self-call wrapping, no 7702 overhead. The
+// dapp gets the same wallet_sendCalls success ack with a single tx hash.
+// ---------------------------------------------------------------------------
+
+async function processBatchAsSingleTxInBackground(
+  bundleId: string,
+  pending: PendingBatchTxRequest,
+  account: { id: string; address: string; type: string },
+  privateKey: `0x${string}`,
+  functionNames?: string[],
+  precomputedGasEstimates?: import("./gasEstimation").GasEstimate[],
+): Promise<void> {
+  const { calls } = pending.params;
+  const call = calls[0];
+  const chainId = pending.chainId;
+  const fromAddr = account.address;
+  const displayName =
+    functionNames?.[0] || `Batch (${pending.params.calls.length} call)`;
+
+  const resolvedChain = await getStoredResolvedChainById(chainId);
+  const rpcUrl = resolvedChain?.rpcUrl;
+  const customChainMeta = resolvedChain?.isCustom
+    ? {
+        name: resolvedChain.name,
+        nativeCurrency: resolvedChain.nativeCurrency,
+        explorer: resolvedChain.explorer || undefined,
+      }
+    : undefined;
+
+  await addTxToHistory({
+    id: bundleId,
+    status: "processing",
+    tx: {
+      from: fromAddr,
+      to: call.to || "0x0000000000000000000000000000000000000000",
+      data: call.data || "0x",
+      value: call.value || "0x0",
+      chainId,
+    },
+    origin: pending.origin,
+    favicon: pending.favicon,
+    chainName: pending.chainName,
+    chainId,
+    createdAt: pending.timestamp,
+    accountType: account.type as "privateKey" | "seedPhrase",
+    functionName: displayName,
+  });
+  attachClearSignedMetaToHistory(
+    bundleId,
+    { to: call.to, data: call.data, value: call.value },
+    chainId,
+  );
+
+  try {
+    const nonce = await getNextNonce(fromAddr, chainId);
+    const est = precomputedGasEstimates?.[0];
+    const result = await signAndBroadcastTransaction(
+      privateKey,
+      {
+        from: fromAddr,
+        to: call.to || "0x0000000000000000000000000000000000000000",
+        data: call.data || "0x",
+        value: call.value || "0x0",
+        chainId,
+        nonce,
+        gas: est?.gasLimit || "500000",
+        maxFeePerGas: est?.maxFeePerGas || undefined,
+        maxPriorityFeePerGas: est?.maxPriorityFeePerGas || undefined,
+      },
+      rpcUrl,
+      customChainMeta,
+    );
+
+    if (result.receipt) {
+      await applyReceiptToHistory(
+        bundleId,
+        result.txHash,
+        chainId,
+        result.receipt,
+        { rpcUrl, signedGasLimit: result.signedGasLimit },
+      );
+      await updateBundleStatus(bundleId, {
+        status:
+          result.receipt.status === "success" ||
+          (result.receipt.status as unknown) === "0x1"
+            ? BUNDLE_STATUS.CONFIRMED
+            : BUNDLE_STATUS.REVERTED,
+        txHash: result.txHash,
+        completedAt: Date.now(),
+      });
+    } else {
+      await updateTxInHistory(bundleId, {
+        status: "pending",
+        txHash: result.txHash,
+      });
+      await updateBundleStatus(bundleId, {
+        status: BUNDLE_STATUS.PENDING,
+        txHash: result.txHash,
+      });
+      startReceiptPolling(bundleId, result.txHash, chainId);
+      // The receipt poller updates tx history but not bundle status. Watch
+      // history until terminal and mirror to the bundle status so the dapp's
+      // wallet_getCallsStatus polling resolves.
+      void trackAtomicBundleCompletion(bundleId, result.txHash, pending);
+    }
+
+    fetchAndStoreBatchGasData(bundleId, result.txHash, chainId);
+
+    await writeResultToStorage(`batchTxResult:${bundleId}`, {
+      success: true,
+      txHash: result.txHash,
+    });
+  } catch (error) {
+    resetNonce(fromAddr, chainId);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    await handleBatchFailure(bundleId, pending, message);
+  } finally {
+    processingBundleIds.delete(bundleId);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EIP-7702 atomic batch (PK/SP, calls.length > 1).
+//
+// Uses ERC-7821 batch encoding against the EOA itself. If the EOA isn't
+// already delegated to a 7821-compatible contract, an authorization tuple
+// is bundled into the tx (type-4 / EIP-7702) so the EOA's `code` is set
+// to point at `delegate` for this execution. After inclusion, subsequent
+// batches reuse the same delegation onchain (no further auth needed).
+// ---------------------------------------------------------------------------
+
+/**
+ * Optional metadata for callers that re-use the atomic-7702 broadcast path
+ * for non-dapp flows (e.g., the swap surface — see `handleExecuteSwapAtomicPK`
+ * in `txHandlers.ts`). When set, these get attached to the bundle's tx-history
+ * row so the activity modal, asset-changes extractor, and bridge-status poller
+ * all recognise the entry the same way they do for Bankr-atomic swap/bridge
+ * txs. Pure pass-through — no behaviour change for dapp-initiated batches
+ * (their callers leave this undefined).
+ */
+export interface AtomicBatchHistoryMeta {
+  swapMeta?: import("./txHistoryStorage").SwapMeta;
+  bridge?: import("./txHistoryStorage").BridgeMeta;
+}
+
+export async function processBatchTransactionAtomic7702InBackground(
+  bundleId: string,
+  pending: PendingBatchTxRequest,
+  account: { id: string; address: string; type: string },
+  privateKey: `0x${string}`,
+  delegate: `0x${string}`,
+  needsAuthorization: boolean,
+  functionNames?: string[],
+  precomputedGasEstimates?: import("./gasEstimation").GasEstimate[],
+  historyMeta?: AtomicBatchHistoryMeta,
+): Promise<void> {
+  const { calls } = pending.params;
+  const chainId = pending.chainId;
+  const fromAddr = account.address;
+
+  const resolvedChain = await getStoredResolvedChainById(chainId);
+  const rpcUrl = resolvedChain?.rpcUrl;
+  const customChainMeta = resolvedChain?.isCustom
+    ? {
+        name: resolvedChain.name,
+        nativeCurrency: resolvedChain.nativeCurrency,
+        explorer: resolvedChain.explorer || undefined,
+      }
+    : undefined;
+
+  // ERC-7821 calldata, target = the EOA itself (which becomes a smart account
+  // for the duration of this tx via the 7702 delegation designator).
+  const batchTx = encodeBatchCalls(calls, fromAddr);
+
+  const displayName = functionNames?.length
+    ? `Batch: ${functionNames.join(", ")}`
+    : `Batch (${calls.length} calls)`;
+
+  // Single bundle-level tx history entry — atomic means one onchain tx, one
+  // hash, one explorer link, just like Bankr atomic batches.
+  //
+  // Keep metadata in the initial object literal. The service-worker production
+  // build minifies with Terser; it folded the previous conditional spreads to
+  // `...{}` and also removed late property assignment before this object
+  // escaped to chrome.storage, dropping bridge/swap metadata before storage.
+  const historyEntry: CompletedTransaction = {
+    id: bundleId,
+    status: "processing",
+    tx: {
+      from: fromAddr,
+      to: batchTx.to,
+      data: batchTx.data,
+      value: batchTx.value,
+      chainId,
+    },
+    origin: pending.origin,
+    favicon: pending.favicon,
+    chainName: pending.chainName,
+    chainId,
+    createdAt: pending.timestamp,
+    accountType: account.type as "privateKey" | "seedPhrase",
+    functionName: displayName,
+    accountId: pending.accountId,
+    swapMeta: historyMeta?.swapMeta,
+    bridge: historyMeta?.bridge,
+  };
+  await addTxToHistory(historyEntry);
+
+  try {
+    // Reserve the nonce for our tx. If we also need to bundle an authorization,
+    // that auth must reference EOA.nonce AFTER this tx is included — which is
+    // txNonce + 1 (the EOA's nonce is bumped by inclusion before the auth list
+    // is processed; see EIP-7702 "authorization processing" section).
+    const txNonce = await getNextNonce(fromAddr, chainId);
+
+    // Race-window defense: `needsAuthorization` was decided at confirm-click
+    // time. Between then and now (~100-500ms typically, longer if multiple
+    // RPCs ran in parallel) the user could have revoked the delegation via
+    // Settings, or a concurrent flow could have changed onchain state. If
+    // the EOA is no longer onchain-delegated to a usable contract, force
+    // re-authorization so the batch tx self-call still dispatches through
+    // the delegate's code. Without this guard a `needsAuthorization=false`
+    // decision could ride into a broadcast against a code-less EOA where
+    // the ERC-7821 calldata is silently no-op'd by the chain.
+    //
+    // Only re-checks the onchain delegate; the custom/default fallback was
+    // already resolved at confirm-click and shouldn't flip mid-broadcast
+    // (those are storage/registry reads, not chain state).
+    if (!needsAuthorization && rpcUrl) {
+      try {
+        const onchain = await getOnchainDelegate(rpcUrl, chainId, fromAddr as `0x${string}`);
+        if (!onchain || onchain.toLowerCase() !== delegate.toLowerCase()) {
+          console.warn(
+            "[atomic-7702] onchain delegate changed between resolve and broadcast — re-authorizing",
+            { expected: delegate, actual: onchain },
+          );
+          needsAuthorization = true;
+        }
+      } catch (err) {
+        // RPC blip during re-check — bundle an auth tuple defensively. The
+        // overhead is ~25k gas; the alternative is a silent no-op tx.
+        console.warn(
+          "[atomic-7702] onchain delegate re-check failed — re-authorizing defensively",
+          err,
+        );
+        needsAuthorization = true;
+      }
+    }
+
+    let authorizationList:
+      | readonly import("viem").SignedAuthorization[]
+      | undefined;
+    if (needsAuthorization) {
+      const auth = await signEip7702Authorization(privateKey, {
+        contractAddress: delegate,
+        chainId,
+        nonce: txNonce + 1,
+        rpcUrl,
+        customChainMeta,
+      });
+      authorizationList = [auth];
+    }
+
+    // Use the UI's wrapped atomic estimate exactly when present. That is the
+    // value the user reviewed, and it already includes ERC-7821 wrapper cost
+    // plus any 7702 state-override behavior. If an older caller passes per-call
+    // estimates, sum them without an extra hidden multiplier so signed gas still
+    // matches the values shown to the user as closely as that legacy shape allows.
+    const summedFromEstimates = precomputedGasEstimates?.reduce(
+      (acc, e) => acc + (Number(e?.gasLimit) || 0),
+      0,
+    );
+    // Conservative fallback when the UI didn't precompute. eth_estimateGas can
+    // fail on a not-yet-delegated EOA (no code to execute) and the authorization
+    // adds ~25k gas of its own, so be generous.
+    const fallbackGas = 120_000 * calls.length + 80_000;
+    let gasHex =
+      summedFromEstimates && summedFromEstimates > 0
+        ? `0x${Math.ceil(summedFromEstimates).toString(16)}`
+        : `0x${fallbackGas.toString(16)}`;
+    // When we're bundling an authorization tuple, neither the UI's
+    // state-override simulation nor the fallback above sees the auth's
+    // intrinsic cost — it gets added at chain-side intake. Bump with the
+    // shared helper so non-standard-gas chains (MegaETH) don't trip
+    // "intrinsic gas too low" the way the single Set/Revoke path did.
+    if (needsAuthorization) {
+      gasHex = `0x${bumpGasForEip7702Auth(
+        chainId,
+        BigInt(gasHex),
+        1,
+      ).toString(16)}`;
+    }
+
+    // Pick max(maxFeePerGas) and max(maxPriorityFeePerGas) across the
+    // per-call estimates as a single combined fee — the atomic path runs
+    // every call in one tx, so we use the most aggressive fee.
+    let maxFeePerGas: string | undefined;
+    let maxPriorityFeePerGas: string | undefined;
+    for (const est of precomputedGasEstimates ?? []) {
+      if (est?.maxFeePerGas) {
+        if (!maxFeePerGas || BigInt(est.maxFeePerGas) > BigInt(maxFeePerGas)) {
+          maxFeePerGas = est.maxFeePerGas;
+        }
+      }
+      if (est?.maxPriorityFeePerGas) {
+        if (
+          !maxPriorityFeePerGas ||
+          BigInt(est.maxPriorityFeePerGas) > BigInt(maxPriorityFeePerGas)
+        ) {
+          maxPriorityFeePerGas = est.maxPriorityFeePerGas;
+        }
+      }
+    }
+
+    const result = await signAndBroadcastTransaction(
+      privateKey,
+      {
+        from: fromAddr,
+        to: batchTx.to,
+        data: batchTx.data,
+        value: batchTx.value,
+        chainId,
+        nonce: txNonce,
+        gas: gasHex,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+        ...(authorizationList ? { type: "eip7702", authorizationList } : {}),
+      },
+      rpcUrl,
+      customChainMeta,
+    );
+
+    const txHash = result.txHash;
+
+    if (result.receipt) {
+      const success =
+        result.receipt.status === "success" ||
+        (result.receipt.status as unknown) === "0x1";
+      await applyReceiptToHistory(bundleId, txHash, chainId, result.receipt, {
+        rpcUrl,
+        signedGasLimit: result.signedGasLimit,
+      });
+      await updateBundleStatus(bundleId, {
+        status: success ? BUNDLE_STATUS.CONFIRMED : BUNDLE_STATUS.REVERTED,
+        txHash,
+        completedAt: Date.now(),
+      });
+    } else {
+      await updateTxInHistory(bundleId, { status: "pending", txHash });
+      await updateBundleStatus(bundleId, {
+        status: BUNDLE_STATUS.PENDING,
+        txHash,
+      });
+      startReceiptPolling(bundleId, txHash, chainId);
+      // applyReceiptToHistory (called by the poller) only updates tx history.
+      // Mirror its terminal status onto the bundle status so the dapp's
+      // wallet_getCallsStatus polling sees CONFIRMED / REVERTED.
+      void trackAtomicBundleCompletion(bundleId, txHash, pending);
+    }
+
+    fetchAndStoreBatchGasData(bundleId, txHash, chainId);
+
+    await writeResultToStorage(`batchTxResult:${bundleId}`, {
+      success: true,
+      txHash,
+    });
+  } catch (error) {
+    resetNonce(fromAddr, chainId);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    await handleBatchFailure(bundleId, pending, message);
+  } finally {
+    processingBundleIds.delete(bundleId);
   }
 }
 

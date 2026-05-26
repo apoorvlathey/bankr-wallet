@@ -27,18 +27,16 @@ import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
+import SmartAccountSetupBanner from "@/components/SmartAccountSetupBanner";
 import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
 import { formatTokenAmount, formatTokenAmountFromBase } from "@/lib/tokenFormatUtils";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { useTheme } from "@/theme";
-
-// Theme-aware accent stripes for the per-call cards. Mirrors the cycle used
-// by BatchTransactionConfirmation so a multi-step swap reads as the same kind
-// of "stack of independent calls" in either palette (Bauhaus red/blue/yellow,
-// Midnight indigo/cyan/amber).
-const CALL_ACCENTS = ["accent.primary", "accent.secondary", "accent.highlight"];
-const CALL_ACCENT_FGS = ["accentFg.primary", "accentFg.secondary", "accentFg.highlight"];
+// Theme-aware accent stripes shared with the batch confirmation surfaces, so a
+// multi-step swap reads as the same kind of "stack of independent calls" in
+// either palette (Bauhaus red/blue/yellow, Midnight indigo/cyan/amber).
+import { CALL_ACCENTS, CALL_ACCENT_FGS } from "@/components/BatchCallsList";
 
 interface SwapConfirmationProps {
   transactions: SwapTxEntry[];
@@ -49,6 +47,13 @@ interface SwapConfirmationProps {
   buyAmount: string;
   buyTokenDecimals: number;
   buyTokenLogoURI?: string;
+  /**
+   * True when the buy token is the destination chain's native asset. Lets
+   * the receive-row icon fall back through the native-asset logo resolver when
+   * no per-token logo is available. ETH-native chains still render ETH, not
+   * the chain badge.
+   */
+  isBuyNative?: boolean;
   buyUsd: number;
   chainId: number;
   chainName: string;
@@ -56,6 +61,25 @@ interface SwapConfirmationProps {
   accountType: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
   isBatched: boolean;
   batchedTx?: { to: string; data: string; value: string };
+  /**
+   * For PK/Seed atomic-7702 swaps: the delegate the EOA will authorize this
+   * batch under, but ONLY when the EOA isn't already onchain-delegated to it
+   * (i.e., `batchPlan.needsAuthorization === true`). Forwarded to
+   * `MultiTxGasEstimateDisplay` so the gas estimator can apply the same
+   * `stateOverride` trick used by `BatchTransactionConfirmation`. Leave
+   * undefined for Bankr atomic (server-side gas) and for PK/SP atomic where
+   * the EOA is already delegated — plain `estimateGas` is more RPC-robust
+   * there.
+   */
+  eip7702Delegate?: `0x${string}`;
+  /**
+   * When the EOA is already delegated to a non-7821 contract on this chain
+   * (e.g. another wallet's delegate), the resolver returns the WalletChan
+   * default for `eip7702Delegate` AND populates this field with the current
+   * onchain delegation so the banner can render the "Replacing existing
+   * delegation" variant. Undefined / null = fresh setup.
+   */
+  eip7702OnchainDelegate?: `0x${string}` | null;
   onConfirm: () => void;
   onCancel: () => void;
   isSubmitting: boolean;
@@ -117,6 +141,7 @@ function SwapConfirmation({
   buyAmount,
   buyTokenDecimals,
   buyTokenLogoURI,
+  isBuyNative = false,
   buyUsd,
   chainId,
   chainName,
@@ -124,6 +149,8 @@ function SwapConfirmation({
   accountType,
   isBatched,
   batchedTx,
+  eip7702Delegate,
+  eip7702OnchainDelegate,
   onConfirm,
   onCancel,
   isSubmitting,
@@ -137,6 +164,10 @@ function SwapConfirmation({
   const destChainConfig = bridgeMeta
     ? getChainConfig(bridgeMeta.destinationChainId)
     : null;
+  const isSellNative =
+    sellToken.contractAddress === "native" ||
+    sellToken.contractAddress === "0x0000000000000000000000000000000000000000";
+  const buyChainId = bridgeMeta?.destinationChainId ?? chainId;
   const titleLabel = isBridge ? "Confirm Bridge" : "Confirm Swap";
 
   // Shared data-URL cache used by ENS avatars + batch summary + portfolio.
@@ -327,10 +358,22 @@ function SwapConfirmation({
                 boxSize="32px"
                 borderRadius="full"
                 flexShrink={0}
-                fallback={<TokenSymbolFallback symbol={sellToken.symbol} size="32px" />}
+                fallback={
+                  <TokenSymbolFallback
+                    symbol={sellToken.symbol}
+                    size="32px"
+                    nativeChainId={isSellNative ? sellToken.chainId : undefined}
+                    nativeChainName={isSellNative ? chainName : undefined}
+                  />
+                }
               />
             ) : (
-              <TokenSymbolFallback symbol={sellToken.symbol} size="32px" />
+              <TokenSymbolFallback
+                symbol={sellToken.symbol}
+                size="32px"
+                nativeChainId={isSellNative ? sellToken.chainId : undefined}
+                nativeChainName={isSellNative ? chainName : undefined}
+              />
             )}
             <VStack spacing={0} align="flex-start" flex={1} minW={0}>
               <Text fontSize="xs" color="text.tertiary" fontWeight="700" textTransform="uppercase">
@@ -388,10 +431,30 @@ function SwapConfirmation({
                 boxSize="32px"
                 borderRadius="full"
                 flexShrink={0}
-                fallback={<TokenSymbolFallback symbol={buyTokenInfo.symbol} size="32px" />}
+                fallback={
+                  <TokenSymbolFallback
+                    symbol={buyTokenInfo.symbol}
+                    size="32px"
+                    nativeChainId={isBuyNative ? buyChainId : undefined}
+                    nativeChainName={
+                      isBuyNative
+                        ? bridgeMeta?.destinationChainName ?? chainName
+                        : undefined
+                    }
+                  />
+                }
               />
             ) : (
-              <TokenSymbolFallback symbol={buyTokenInfo.symbol} size="32px" />
+              <TokenSymbolFallback
+                symbol={buyTokenInfo.symbol}
+                size="32px"
+                nativeChainId={isBuyNative ? buyChainId : undefined}
+                nativeChainName={
+                  isBuyNative
+                    ? bridgeMeta?.destinationChainName ?? chainName
+                    : undefined
+                }
+              />
             )}
             <VStack spacing={0} align="flex-start" flex={1} minW={0}>
               <Text fontSize="xs" color="text.tertiary" fontWeight="700" textTransform="uppercase">
@@ -533,6 +596,18 @@ function SwapConfirmation({
             </HStack>
           )}
         </Box>
+
+        {/* EIP-7702 smart-account setup / replacement banner — shown only when
+            the swap will bundle an authorization tuple (PK/SP atomic-7702 path
+            where the EOA isn't already correctly delegated). Same component
+            as BatchTransactionConfirmation so the UX is consistent. */}
+        {eip7702Delegate && (
+          <SmartAccountSetupBanner
+            delegate={eip7702Delegate}
+            onchainDelegate={eip7702OnchainDelegate ?? null}
+            explorerUrl={config.explorer}
+          />
+        )}
 
         {/* Transaction list — expandable cards with calldata */}
         <VStack spacing={1.5} align="stretch">
@@ -705,10 +780,21 @@ function SwapConfirmation({
           // swap (PK / Seed signing each tx separately), use sequential
           // estimation so the picker has tier data to render. Atomic Bankr
           // swaps keep server-managed gas (the picker stays hidden inside
-          // MultiTxGasEstimateDisplay because batchedTx is set).
+          // MultiTxGasEstimateDisplay because batchedTx is set). For atomic
+          // PK/SP via 7702, the picker IS used (gas comes from local
+          // estimation), so plumb onGasEstimates + onValidityChange through.
           isNonAtomic={!isBatched}
-          onGasEstimates={!isBatched ? onGasEstimates : undefined}
-          onValidityChange={!isBatched ? onValidityChange : undefined}
+          eip7702Delegate={eip7702Delegate}
+          onGasEstimates={
+            !isBatched || eip7702Delegate || accountType === "privateKey" || accountType === "seedPhrase"
+              ? onGasEstimates
+              : undefined
+          }
+          onValidityChange={
+            !isBatched || eip7702Delegate || accountType === "privateKey" || accountType === "seedPhrase"
+              ? onValidityChange
+              : undefined
+          }
         />
 
         {/* Action buttons */}

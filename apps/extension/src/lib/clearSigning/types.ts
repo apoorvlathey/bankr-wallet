@@ -32,6 +32,7 @@ export interface Erc7730Metadata {
 export type Erc7730FieldVisible = "always" | "never" | undefined;
 
 export interface Erc7730Field {
+  $ref?: string;
   path?: string;
   label?: string;
   format?: string;
@@ -53,6 +54,7 @@ export interface Erc7730Descriptor {
   context?: Erc7730Context;
   metadata?: Erc7730Metadata;
   display?: {
+    definitions?: Record<string, Erc7730Field>;
     formats?: Record<string, Erc7730Format>;
   };
 }

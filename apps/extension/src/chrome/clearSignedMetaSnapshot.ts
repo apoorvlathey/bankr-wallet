@@ -5,8 +5,8 @@
  * on every render.
  *
  * Mirrors what the tx-confirmation surfaces compute live:
- *   - parseApproveCalldata + fetchTokenInfo + token-logo lookup    (approves)
- *   - parseTransferCalldata + fetchTokenInfo + token-logo lookup   (transfers)
+ *   - parseApproveCalldata + token metadata lookup                 (approves)
+ *   - parseTransferCalldata + token metadata lookup                (transfers)
  *   - chain native currency + recipient address                     (native sends)
  *   - ERC-7730 descriptor match for everything else                 (fallback)
  *
@@ -29,12 +29,7 @@ import {
 } from "@/lib/clearSigning/matchDescriptor";
 import type { Erc7730Descriptor } from "@/lib/clearSigning/types";
 
-import {
-  fetchTokenInfo,
-  getCachedTokenLogo,
-  NATIVE_TOKEN_ADDRESS,
-} from "./swapApi";
-import { KNOWN_TOKEN_LOGOS, getNativeCurrency } from "./txSimulation";
+import { resolveTokenMetadata } from "./tokenMetadata";
 import { handleGetClearSigningDescriptor } from "./clearSigningHandlers";
 import {
   updateTxInHistory,
@@ -65,22 +60,6 @@ async function resolveCounterpartyLabels(
   };
 }
 
-/**
- * Resolve a token logo from the swap-list cache, falling back to the
- * extension's hardcoded KNOWN_TOKEN_LOGOS map (covers WCHAN etc. that the
- * external list doesn't carry).
- */
-async function resolveTokenLogo(
-  tokenAddress: string,
-  chainId: number,
-): Promise<string | null> {
-  const listLogo = await getCachedTokenLogo(chainId, tokenAddress).catch(
-    () => null,
-  );
-  if (listLogo) return listLogo;
-  return KNOWN_TOKEN_LOGOS[tokenAddress.toLowerCase()] || null;
-}
-
 async function buildApproveMeta(
   tokenAddress: string,
   data: string,
@@ -89,12 +68,11 @@ async function buildApproveMeta(
   const parsed = parseApproveCalldata(data);
   if (!parsed) return null;
 
-  const [info, logo, counterparty] = await Promise.all([
-    fetchTokenInfo(tokenAddress, chainId).catch(() => null),
-    resolveTokenLogo(tokenAddress, chainId),
+  const [token, counterparty] = await Promise.all([
+    resolveTokenMetadata(chainId, tokenAddress).catch(() => null),
     resolveCounterpartyLabels(parsed.spender, chainId),
   ]);
-  if (!info) return null;
+  if (!token?.symbol || token.decimals === undefined) return null;
 
   return {
     kind: "approve",
@@ -103,11 +81,11 @@ async function buildApproveMeta(
     amount:
       parsed.isInfinite || parsed.isRevoke
         ? undefined
-        : formatUnits(parsed.amount, info.decimals),
+        : formatUnits(parsed.amount, token.decimals),
     isInfinite: parsed.isInfinite,
     isRevoke: parsed.isRevoke,
-    tokenSymbol: info.symbol,
-    tokenLogo: logo,
+    tokenSymbol: token.symbol,
+    tokenLogo: token.logoUrl ?? null,
     tokenAddress,
     counterparty: parsed.spender,
     counterpartyLabel: counterparty.label,
@@ -123,18 +101,17 @@ async function buildTransferMeta(
   const parsed = parseTransferCalldata(data);
   if (!parsed) return null;
 
-  const [info, logo, counterparty] = await Promise.all([
-    fetchTokenInfo(tokenAddress, chainId).catch(() => null),
-    resolveTokenLogo(tokenAddress, chainId),
+  const [token, counterparty] = await Promise.all([
+    resolveTokenMetadata(chainId, tokenAddress).catch(() => null),
     resolveCounterpartyLabels(parsed.recipient, chainId),
   ]);
-  if (!info) return null;
+  if (!token?.symbol || token.decimals === undefined) return null;
 
   return {
     kind: "transfer",
-    amount: formatUnits(parsed.amount, info.decimals),
-    tokenSymbol: info.symbol,
-    tokenLogo: logo,
+    amount: formatUnits(parsed.amount, token.decimals),
+    tokenSymbol: token.symbol,
+    tokenLogo: token.logoUrl ?? null,
     tokenAddress,
     counterparty: parsed.recipient,
     counterpartyLabel: counterparty.label,
@@ -156,23 +133,16 @@ async function buildNativeSendMeta(
   if (amountWei === 0n) return null;
 
   const [native, counterparty] = await Promise.all([
-    fetchTokenInfo(NATIVE_TOKEN_ADDRESS, chainId).catch(() => null),
+    resolveTokenMetadata(chainId, "native").catch(() => null),
     resolveCounterpartyLabels(to, chainId),
   ]);
-  if (!native) return null;
-
-  // Native logo: reuse the same lookup the simulation panel + batch inline
-  // summary already share (built off CHAIN_REGISTRY). ETH-native chains map
-  // to /chainIcons/ethereum.svg; everything else uses the chain's own icon
-  // (Polygon → POL, BNB Chain → BNB, etc.). Falsy values are normalized to
-  // null so the storage shape stays consistent with the rest of the snapshot.
-  const nativeLogo = getNativeCurrency(chainId).icon || null;
+  if (!native?.symbol || native.decimals === undefined) return null;
 
   return {
     kind: "nativeSend",
     amount: formatUnits(amountWei, native.decimals),
     tokenSymbol: native.symbol,
-    tokenLogo: nativeLogo,
+    tokenLogo: native.logoUrl ?? null,
     counterparty: to,
     counterpartyLabel: counterparty.label,
     counterpartyEns: counterparty.ens,
@@ -189,6 +159,10 @@ async function buildErc7730Meta(
     chainId,
     address: to,
     kind: "calldata",
+    selector:
+      data?.startsWith("0x") && data.length >= 10
+        ? data.slice(0, 10).toLowerCase()
+        : undefined,
   }).catch(() => null);
   if (!resp || !resp.enabled || !resp.descriptor) return null;
 

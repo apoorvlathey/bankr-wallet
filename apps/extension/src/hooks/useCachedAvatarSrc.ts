@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  getCachedAvatarDataUrlSync,
   getCachedAvatarDataUrl,
   requestAvatarImageFetch,
+  subscribeAvatarCache,
 } from "@/lib/avatarCacheClient";
 
 function isHttpUrl(s: string): boolean {
@@ -21,7 +23,10 @@ function isHttpUrl(s: string): boolean {
 export function useCachedAvatarSrc(
   url: string | null | undefined,
 ): string | null | undefined {
-  const [resolved, setResolved] = useState<string | null | undefined>(url);
+  const [resolved, setResolved] = useState<string | null | undefined>(() => {
+    if (!url || !isHttpUrl(url)) return url;
+    return getCachedAvatarDataUrlSync(url) || url;
+  });
 
   useEffect(() => {
     if (!url) {
@@ -35,8 +40,18 @@ export function useCachedAvatarSrc(
     }
 
     let cancelled = false;
-    // Start with the raw URL so <img> has something to render immediately.
-    setResolved(url);
+    const applyCached = () => {
+      const cached = getCachedAvatarDataUrlSync(url);
+      if (cached) setResolved(cached);
+      return cached;
+    };
+    const unsubscribe = subscribeAvatarCache(() => {
+      if (!cancelled) applyCached();
+    });
+
+    // Start with cached bytes when available; otherwise use the raw URL so
+    // <img> has something to render while the background cache warms.
+    setResolved(applyCached() || url);
 
     (async () => {
       const cached = await getCachedAvatarDataUrl(url);
@@ -52,6 +67,7 @@ export function useCachedAvatarSrc(
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [url]);
 
@@ -79,12 +95,26 @@ export function useCachedAvatarMap(
 
   const urlsKey = uniqueUrls.join("|");
 
+  const buildSyncMap = () => {
+    const next = new Map<string, string>();
+    for (const u of uniqueUrls) {
+      const cached = getCachedAvatarDataUrlSync(u);
+      if (cached) next.set(u, cached);
+    }
+    return next;
+  };
+
   useEffect(() => {
     if (uniqueUrls.length === 0) {
       setResolved(new Map());
       return;
     }
     let cancelled = false;
+    const unsubscribe = subscribeAvatarCache(() => {
+      if (!cancelled) setResolved(buildSyncMap());
+    });
+
+    setResolved(buildSyncMap());
 
     (async () => {
       const next = new Map<string, string>();
@@ -112,8 +142,13 @@ export function useCachedAvatarMap(
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [urlsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return resolved;
+  return useMemo(() => {
+    const merged = buildSyncMap();
+    for (const [url, src] of resolved) merged.set(url, src);
+    return merged;
+  }, [resolved, urlsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 }

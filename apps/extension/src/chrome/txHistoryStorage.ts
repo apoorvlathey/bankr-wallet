@@ -40,7 +40,7 @@ export interface ClearSignedMeta {
   amount?: string;
   /** Token / native symbol (e.g., "USDC", "ETH"). Omitted for erc7730. */
   tokenSymbol?: string;
-  /** Token logo URL (token list or KNOWN_TOKEN_LOGOS). Omitted for native sends. */
+  /** Token logo URL from the centralized token metadata resolver. */
   tokenLogo?: string | null;
   /** ERC-20 token contract address (approve/transfer only). */
   tokenAddress?: string;
@@ -79,8 +79,8 @@ export interface ForceInclusionMeta {
  * so the modal can render a clean "what flowed in / out of my wallet" view.
  *
  * Fields are optional where metadata may arrive after the first write —
- * `symbol/decimals/logoUrl` are filled in by `fetchTokenInfo` (which itself
- * caches), and may be undefined until that resolves.
+ * `symbol/decimals/logoUrl` are filled in by the token metadata resolver,
+ * and may be undefined until that resolves.
  */
 export interface AssetTransferRecord {
   /** Token contract address (lowercased). */
@@ -144,6 +144,11 @@ export interface BridgeMeta {
   refundTxHash?: string;
 }
 
+export interface TxCallOrigin {
+  origin: string;
+  favicon: string | null;
+}
+
 export interface CompletedTransaction {
   id: string;
   status: TxStatus;
@@ -163,6 +168,13 @@ export interface CompletedTransaction {
   swapMeta?: SwapMeta;
   transferMeta?: TransferMeta;
   clearSignedMeta?: ClearSignedMeta;
+  /**
+   * Per-call dapp identity for decoded ERC-7821 batch history entries.
+   * Cross-dapp batches populate one item per encoded call so the Activity
+   * details modal can show each contributing dapp instead of the synthetic
+   * batch-level origin. Optional; old entries fall back to `origin/favicon`.
+   */
+  batchCallOrigins?: TxCallOrigin[];
   forceInclusionMeta?: ForceInclusionMeta;
   /** Cross-chain bridge metadata. Present only on bridge txs. */
   bridge?: BridgeMeta;
@@ -184,6 +196,28 @@ export interface CompletedTransaction {
   // paths to advance the parent bundle's split sequencer.
   parentBundleId?: string;
   bundleIndex?: number;
+  /**
+   * EIP-7702 delegation metadata, captured at confirm-click time. Present on
+   * standalone Set / Revoke txs (the self-call where the actual effect lives
+   * in the authorization tuple, not in `tx.data`). Lets `TxDetailModal` show
+   * the target contract — without it the activity entry looks like a no-op
+   * self-call and the user can't tell what they delegated to.
+   */
+  delegation7702Meta?: {
+    targetDelegate: `0x${string}`;
+    kind: "revoke" | "setDelegate";
+  };
+  /**
+   * Account ID this tx was signed by. Captured at addTxToHistory time so
+   * post-confirm hooks (e.g., the `customDelegates` mirror in
+   * `applyReceiptToHistory`) can resolve the right account without falling
+   * back to address-based lookups that could collide if the same EOA is
+   * imported under multiple account entries.
+   *
+   * Optional and additive — pre-existing entries lack it; consumers must
+   * gate on its presence.
+   */
+  accountId?: string;
 }
 
 export interface GasData {
@@ -279,7 +313,11 @@ export async function updateTxInHistory(
 
       // Notify open views
       chrome.runtime
-        .sendMessage({ type: "txHistoryUpdated", updatedTx: history[index] })
+        .sendMessage({
+          type: "txHistoryUpdated",
+          updatedTx: history[index],
+          changedKeys: Object.keys(updates),
+        })
         .catch(() => {
           // Ignore errors if no listeners
         });

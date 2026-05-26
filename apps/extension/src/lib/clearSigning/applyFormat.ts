@@ -1,5 +1,5 @@
 import { resolvePath, type PathValue } from "./resolvePath";
-import type { Erc7730Field, Erc7730Format } from "./types";
+import type { Erc7730Descriptor, Erc7730Field, Erc7730Format } from "./types";
 
 /**
  * Apply a descriptor `display.formats[…]` to a normalized data root (calldata
@@ -36,20 +36,29 @@ export interface RenderInput {
   chainId: number;
 }
 
+interface RenderContext {
+  descriptor?: Erc7730Descriptor;
+}
+
 export function applyFormat(
   format: Erc7730Format,
   input: RenderInput,
+  descriptor?: Erc7730Descriptor,
 ): RenderedField[] {
   const fields = format.fields || [];
+  const context: RenderContext = { descriptor };
   return fields
-    .map((f) => renderField(f, input))
+    .map((f) => renderField(f, input, context))
     .filter((f): f is RenderedField => f !== null);
 }
 
 function renderField(
-  field: Erc7730Field,
+  rawField: Erc7730Field,
   input: RenderInput,
+  context: RenderContext,
 ): RenderedField | null {
+  const field = resolveFieldReference(rawField, context);
+
   // Hidden by descriptor → drop entirely.
   if (field.visible === "never") return null;
 
@@ -70,7 +79,7 @@ function renderField(
     const groups: Array<RenderedField[]> = resolved.map((element) => {
       const childInput: RenderInput = { data: element, chainId: input.chainId };
       return (field.fields || [])
-        .map((sub) => renderField(sub, childInput))
+        .map((sub) => renderField(sub, childInput, context))
         .filter((r): r is RenderedField => r !== null);
     });
     return {
@@ -90,12 +99,18 @@ function renderField(
   // Iteration over an array (e.g. path ends in `[]`) — render one value per item.
   if (Array.isArray(raw)) {
     const values: RenderedValue[] = [];
+    const tokenAddrRaw =
+      field.params && (field.params as Record<string, unknown>).tokenPath;
+    const tokenAddrAt =
+      typeof tokenAddrRaw === "string"
+        ? resolvePath(input.data, tokenAddrRaw)
+        : undefined;
     for (const item of raw) {
-      const tokenAddrRaw = field.params && (field.params as Record<string, unknown>).tokenPath;
+      const tokenAddrCandidate = Array.isArray(tokenAddrAt)
+        ? tokenAddrAt[values.length]
+        : tokenAddrAt;
       const tokenAddr =
-        typeof tokenAddrRaw === "string"
-          ? (resolvePath(input.data, tokenAddrRaw) as string | undefined)
-          : undefined;
+        typeof tokenAddrCandidate === "string" ? tokenAddrCandidate : undefined;
       values.push(toRenderedValue(field, item, input, tokenAddr));
     }
     return {
@@ -282,11 +297,11 @@ function toRenderedValue(
         (typeof params.tokenPath === "string"
           ? (resolvePath(input.data, params.tokenPath) as string | undefined)
           : undefined);
-      const native = !localTokenAddr;
+      const native = isNativeCurrencyToken(localTokenAddr, params);
       return {
         kind: "tokenAmount",
         amountRaw,
-        tokenAddress: localTokenAddr,
+        tokenAddress: native ? undefined : localTokenAddr,
         native,
       };
     }
@@ -323,6 +338,153 @@ function toRenderedValue(
       return { kind: "raw", text };
     }
   }
+}
+
+function resolveFieldReference(
+  field: Erc7730Field,
+  context: RenderContext,
+  seen = new Set<string>(),
+): Erc7730Field {
+  if (!field.$ref) return resolveFieldParamReferences(field, context);
+
+  const ref = field.$ref;
+  if (seen.has(ref)) return resolveFieldParamReferences(stripRef(field), context);
+  seen.add(ref);
+
+  const referenced = resolveDescriptorPath(context.descriptor, ref);
+  if (!isRecord(referenced)) {
+    return resolveFieldParamReferences(stripRef(field), context);
+  }
+
+  const base = resolveFieldReference(referenced as Erc7730Field, context, seen);
+  return resolveFieldParamReferences(mergeReferencedField(base, field), context);
+}
+
+function mergeReferencedField(
+  base: Erc7730Field,
+  override: Erc7730Field,
+): Erc7730Field {
+  const baseRest = { ...base };
+  const baseParams = baseRest.params;
+  const baseFields = baseRest.fields;
+  delete baseRest.$ref;
+  delete baseRest.params;
+  delete baseRest.fields;
+
+  const overrideRest = { ...override };
+  const overrideParams = overrideRest.params;
+  const overrideFields = overrideRest.fields;
+  delete overrideRest.$ref;
+  delete overrideRest.params;
+  delete overrideRest.fields;
+
+  const merged: Erc7730Field = {
+    ...baseRest,
+    ...overrideRest,
+  };
+
+  if (baseParams || overrideParams) {
+    merged.params = {
+      ...(baseParams || {}),
+      ...(overrideParams || {}),
+    };
+  }
+
+  const fields = overrideFields ?? baseFields;
+  if (fields) merged.fields = fields;
+
+  return merged;
+}
+
+function stripRef(field: Erc7730Field): Erc7730Field {
+  const copy = { ...field };
+  delete copy.$ref;
+  return copy;
+}
+
+function resolveFieldParamReferences(
+  field: Erc7730Field,
+  context: RenderContext,
+): Erc7730Field {
+  if (!field.params) return field;
+  return {
+    ...field,
+    params: resolveDescriptorReferences(field.params, context.descriptor) as Record<
+      string,
+      unknown
+    >,
+  };
+}
+
+function resolveDescriptorReferences(
+  value: unknown,
+  descriptor: Erc7730Descriptor | undefined,
+): unknown {
+  if (typeof value === "string" && value.startsWith("$.")) {
+    const resolved = resolveDescriptorPath(descriptor, value);
+    return resolved === undefined
+      ? value
+      : resolveDescriptorReferences(resolved, descriptor);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => resolveDescriptorReferences(item, descriptor));
+  }
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        resolveDescriptorReferences(item, descriptor),
+      ]),
+    );
+  }
+  return value;
+}
+
+function resolveDescriptorPath(
+  descriptor: Erc7730Descriptor | undefined,
+  path: string,
+): unknown {
+  if (!descriptor || !path.startsWith("$.")) return undefined;
+  let node: unknown = descriptor;
+  for (const part of path.slice(2).split(".")) {
+    if (!part) continue;
+    if (!isRecord(node)) return undefined;
+    node = node[part];
+  }
+  return node;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function isNativeCurrencyToken(
+  tokenAddress: string | undefined,
+  params: Record<string, unknown>,
+): boolean {
+  if (!tokenAddress) return true;
+  const normalized = normalizeAddress(tokenAddress);
+  if (!normalized) return false;
+
+  const configured = collectNativeCurrencyAddresses(params.nativeCurrencyAddress);
+  if (configured.includes(normalized)) return true;
+
+  // Common sentinel addresses used by swap aggregators for native currency.
+  return (
+    normalized === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" ||
+    normalized === "0x0000000000000000000000000000000000000000"
+  );
+}
+
+function collectNativeCurrencyAddresses(value: unknown): string[] {
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .map((item) => (typeof item === "string" ? normalizeAddress(item) : null))
+    .filter((item): item is string => !!item);
+}
+
+function normalizeAddress(value: string): string | null {
+  return /^0x[0-9a-fA-F]{40}$/.test(value) ? value.toLowerCase() : null;
 }
 
 function stringifyAmount(v: unknown): string {

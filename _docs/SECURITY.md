@@ -207,7 +207,7 @@ These mutate `pendingBatchTxRequests` (dapp `wallet_sendCalls`) before the user 
 
 ### Cross-Dapp Batch Handlers (`crossDappBatchHandlers.ts`)
 
-These move pending tx requests in/out of a user-assembled batch and ship the batch via the Bankr API. All five are gated by `EXTENSION_ONLY_MESSAGES` in `background.ts` so a malicious dapp cannot reach into the user's pending tx queue:
+These move pending tx requests in/out of a user-assembled batch and ship the batch via Bankr API or PK/SP EIP-7702 local signing. All are gated by `EXTENSION_ONLY_MESSAGES` in `background.ts` so a malicious dapp cannot reach into the user's pending tx queue:
 
 | Handler                       | Effect                                                                                           |
 | ----------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -216,11 +216,29 @@ These move pending tx requests in/out of a user-assembled batch and ship the bat
 | `removeFromCrossDappBatch`    | For `eth_sendTransaction` entries: writes rejection to `txResult:{txId}`. For `wallet_sendCalls` entries: removes ALL siblings from the same bundle and updates `bundleStatuses` to OFFCHAIN_FAILURE once. Clears the batch if empty. |
 | `updateCallInCrossDappBatch`  | Replaces one entry's `tx.data` in the cross-dapp batch (e.g. user edits an ERC-20 approve amount on a built-in CallCard). Validates hex only; the originating dapp's promise stays open until the batch ships, so the dapp never sees the edited bytes until on-chain confirmation. Must stay extension-only for the same reason as the dapp-initiated variant. |
 | `rejectCrossDappBatch`        | Writes rejection to every entry — `txResult:{txId}` for plain entries, deduped `bundleStatuses` updates for bundle entries. Clears the batch. |
-| `confirmCrossDappBatch`       | Encodes via ERC-7821, ships via Bankr API, fans the resulting tx hash out — `txResult:{txId}` writes for plain entries, `bundleStatuses` CONFIRMED updates for bundle entries (deduped). |
+| `confirmCrossDappBatch`       | Encodes via ERC-7821, ships via Bankr API or EIP-7702 local signing. Plain `eth_sendTransaction` entries receive the shared tx hash immediately; `wallet_sendCalls` bundle entries stay PENDING until the shared receipt is terminal, then transition to CONFIRMED/REVERTED once per bundle. Accepts UI-provided gas estimates and must stay extension-only so a content script cannot choose gas or fake source-bundle completion. |
+
+`addToCrossDappBatch`, `addCallsToCrossDappBatch`, and `confirmCrossDappBatch` must resolve the original pinned account (`accountId` / `accountAddress` / `accountType`) directly. Never bind a pending request to the current active account, especially when `wallet_sendCalls.params.from` is omitted or the user switches accounts while the request is open.
 
 **Why these MUST stay extension-only**: a content script that could call any of these would be able to (a) silently move a user's pending requests into a batch they cannot easily inspect, (b) reject other dapps' pending requests by spelling out the right `txId`s or `bundleId`s, or (c) flip a victim dapp's bundle status to CONFIRMED without an actual onchain transaction, tricking the dapp into believing a payment landed. The `txId`s and `bundleId`s are not secret, but the right to act on them belongs to the popup only.
 
 `handleConfirmCrossDappBatch` follows the **session restoration pattern** for `getCachedApiKey()` (see "Handlers with Session Restoration" in `_docs/IMPLEMENTATION.md`), so it works under the "Never" auto-lock setting after a service worker restart.
+
+### EIP-7702 Delegation Handlers (`delegationHandlers.ts`)
+
+These are UI-only Smart Account management messages and are gated by `EXTENSION_ONLY_MESSAGES`:
+
+| Handler | Effect |
+| --- | --- |
+| `getDelegationStatus` / `probeDelegateContract` | Reads onchain delegation and probes ERC-7821 support. Kept extension-only to avoid leaking account delegation state and custom-chain probing to webpages. |
+| `setCustomDelegate` / `removeCustomDelegate` | Internal storage-mirror helpers for `customDelegates`. Must not be callable by content scripts because stale writes could mislead the Smart Account UI. Runtime signing still verifies onchain state. |
+| `initiateSetDelegation` / `initiateRevokeDelegation` | Enqueues a type-4 pending tx request that the user confirms through the normal transaction confirmation flow. Must stay extension-only so a webpage cannot queue smart-account Set/Revoke prompts. |
+
+Set/Revoke storage reconciliation must read `eth_getCode(EOA)` after any terminal receipt. Do not infer delegation state only from `receipt.status`: EIP-7702 authorization processing occurs before normal execution, so execution can revert while the EOA delegation still changed. If the `eth_getCode` read itself fails, leave the mirror unchanged; an RPC failure is not evidence that the EOA is undelegated.
+
+### Token Metadata Handlers
+
+`resolveTokenMetadata` is gated by `EXTENSION_ONLY_MESSAGES` because it can include user-added custom-token metadata from `customTokens`. Content scripts may still call the narrower `fetchTokenInfo` / `fetchTokenLogo` helpers; those return public chain/token-list metadata only and do not expose watched-asset custom-token records.
 
 ---
 
@@ -335,12 +353,14 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 | `accounts`                 | No               | Account metadata (addresses, names, types)              |
 | `pendingTxRequests`        | No               | Pending transaction queue                               |
 | `pendingSignatureRequests` | No               | Pending signature queue                                 |
-| `crossDappBatch`           | No               | User-assembled cross-dapp batch (Bankr only). Single batch, locked to first entry's `from` + `chainId`. The original `pendingTxRequests` entries are removed when added; the dapp promises stay open until ship/reject and are resolved via `txResult:{txId}` fan-out. |
+| `crossDappBatch`           | No               | User-assembled cross-dapp batch (Bankr or PK/SP EIP-7702). Single batch, locked to first entry's pinned account, `from`, and `chainId`. The original pending entries are removed when added; the dapp promises stay open until ship/reject and are resolved via `txResult:{txId}` or `bundleStatuses` fan-out. |
 | `txResult:{txId}`          | No               | Transient tx result (written on confirm/reject, read+deleted by content script) |
 | `sigResult:{sigId}`        | No               | Transient sig result (written on confirm/reject, read+deleted by content script) |
 | `rpcResult:{id}`           | No               | Transient RPC result (written after RPC call, read+deleted by content script)    |
-| `txHistory`                | No               | Completed transaction log                               |
+| `txHistory`                | No               | Completed transaction log. Cross-dapp batch entries may include per-call `{ origin, favicon }` display metadata; no secrets. |
 | `chatHistory`              | No               | Chat conversation history                               |
+| `cs:enabled`               | No               | Clear-signing descriptor fetch opt-out flag             |
+| `cs:desc:{chainId}:{address}:{kind}:{selector\|format}` | No | Clear-signing descriptor cache; public metadata only, schema-versioned |
 
 ### chrome.storage.session (session-scoped, cleared on browser close)
 

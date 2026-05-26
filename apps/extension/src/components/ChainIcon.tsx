@@ -8,12 +8,13 @@ import { useTheme } from "@/theme";
  * testnets with a small overlay label, and falls back to deterministic initials
  * for custom chains we do not recognize yet.
  *
- * `withChip`: opt-in light circular fill painted behind the icon. Several chain
- * SVGs (MegaETH, Mantle, HyperEVM, Linea, Ink, ApeChain, Monad) ship as a dark
- * glyph on a transparent canvas — they vanish on Midnight's dark surfaces. Pass
- * `withChip` from chain dropdowns / selected-chain badges so the glyph stays
- * legible in dark themes. The chip is layout-neutral (sits inside the existing
- * boxSize) and is a no-op in light themes.
+ * `withChip`: opt-in light circular fill painted behind image icons. Several
+ * chain SVGs (MegaETH, Mantle, HyperEVM, Linea, Ink, ApeChain, Monad) ship as a
+ * dark glyph on a transparent canvas — they vanish on Midnight's dark surfaces.
+ * Pass `withChip` from chain dropdowns / selected-chain badges so the glyph
+ * stays legible in dark themes. Initials fallbacks get their own readable
+ * Midnight fill automatically because they may render anywhere a custom chain
+ * appears, including compact selected-chain buttons.
  */
 export default function ChainIcon({
   chainId,
@@ -33,7 +34,11 @@ export default function ChainIcon({
   const meta = resolveChainIconMeta(chainId, chainName);
   const altText = chainName || `Chain ${chainId}`;
   const { themeId } = useTheme();
-  const showChip = withChip && themeId === "midnight" && Boolean(meta.iconSrc);
+  const isDarkTheme = themeId === "midnight";
+  const showChip = withChip && isDarkTheme && Boolean(meta.iconSrc);
+  const fallbackBg = isDarkTheme ? "whiteAlpha.900" : meta.bg;
+  const fallbackText = isDarkTheme ? "fg.inverse" : meta.text;
+  const fallbackBorder = isDarkTheme ? "border.default" : meta.border;
   return (
     <Box position="relative" boxSize={size} flexShrink={0}>
       {showChip && (
@@ -48,8 +53,8 @@ export default function ChainIcon({
         <Image src={meta.iconSrc} alt={altText} boxSize={size} position="relative" />
       ) : (
         <Box
-          bg={meta.bg}
-          color={meta.text}
+          bg={fallbackBg}
+          color={fallbackText}
           boxSize={size}
           display="flex"
           alignItems="center"
@@ -58,7 +63,7 @@ export default function ChainIcon({
           fontWeight="900"
           letterSpacing="-0.5px"
           border="1px solid"
-          borderColor={meta.border}
+          borderColor={fallbackBorder}
           borderRadius="full"
         >
           {meta.fallbackText}

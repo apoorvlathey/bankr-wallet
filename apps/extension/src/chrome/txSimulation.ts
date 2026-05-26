@@ -27,10 +27,16 @@ import {
 } from "viem";
 import { getRpcUrl } from "./txHandlers";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
-import { WALLETCHAN_ICON_URL } from "@/constants/externalUrls";
 import { getCachedTokenList, fetchTokenPrice } from "./swapApi";
 import { fetchPortfolio, type PortfolioToken } from "./portfolioApi";
-import { getStoredResolvedChainById } from "@/lib/chains";
+import {
+  ETH_NATIVE_ASSET_LOGO_URL,
+  getNativeAssetLogoUrl,
+  getStoredResolvedChainById,
+} from "@/lib/chains";
+import { KNOWN_TOKEN_LOGOS } from "./tokenLogoConstants";
+
+export { KNOWN_TOKEN_LOGOS } from "./tokenLogoConstants";
 
 /** Multicall3 is deployed at the same address on all supported chains */
 const MULTICALL3_ADDRESS: Address =
@@ -288,9 +294,9 @@ for (const c of CHAIN_REGISTRY) {
     symbol: c.nativeCurrency.symbol,
     name: c.nativeCurrency.name,
     decimals: c.nativeCurrency.decimals,
-    // Use ETH icon for chains whose native currency is ETH (e.g. Base, Arbitrum),
-    // otherwise use the chain icon (e.g. Polygon → POL, BNB Chain → BNB)
-    icon: c.nativeCurrency.symbol === "ETH" ? "/chainIcons/ethereum.svg" : c.icon,
+    // Use the shared native-asset logo rule so ETH-native chains show ETH,
+    // not the chain badge (Base, Arbitrum, Unichain, etc.).
+    icon: getNativeAssetLogoUrl(c.nativeCurrency.symbol, c.icon),
   };
 }
 
@@ -312,7 +318,7 @@ export function getNativeCurrency(chainId: number) {
       symbol: "ETH",
       name: "Ether",
       decimals: 18,
-      icon: "/chainIcons/ethereum.svg",
+      icon: ETH_NATIVE_ASSET_LOGO_URL,
     }
   );
 }
@@ -331,22 +337,15 @@ async function resolveNativeCurrency(
       symbol: resolvedChain.nativeCurrency.symbol,
       name: resolvedChain.nativeCurrency.name,
       decimals: resolvedChain.nativeCurrency.decimals,
-      icon:
-        resolvedChain.nativeCurrency.symbol === "ETH"
-          ? "/chainIcons/ethereum.svg"
-          : resolvedChain.icon || "",
+      icon: getNativeAssetLogoUrl(
+        resolvedChain.nativeCurrency.symbol,
+        resolvedChain.icon,
+      ),
     };
   }
 
   return getNativeCurrency(chainId);
 }
-
-/** Hardcoded logos for tokens not in the swap token list */
-export const KNOWN_TOKEN_LOGOS: Record<string, string> = {
-  // WCHAN on Base
-  "0xba5ed0000e1ca9136a695f0a848012a16008b032":
-    WALLETCHAN_ICON_URL,
-};
 
 // ---------------------------------------------------------------------------
 // NFT metadata resolution (tokenURI / uri → JSON → image)

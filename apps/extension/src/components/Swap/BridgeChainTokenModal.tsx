@@ -21,10 +21,15 @@ import {
 } from "@/chrome/bridgeChainsResolver";
 import { getCachedBungeeTokens } from "@/chrome/bridgeApi";
 import type { BungeeToken } from "@walletchan/shared/bungee";
-import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
-import { getChainConfig } from "@/constants/chainConfig";
-import { WALLETCHAN_ICON_URL } from "@/constants/externalUrls";
-import { getStoredRpcUrl } from "@/lib/chains";
+import {
+  getStoredRpcUrl,
+  getNativeAssetLogoUrl,
+  getNativeAssetMeta,
+  getResolvedChainById,
+  type ChainAccountType,
+  type NativeAssetMeta,
+} from "@/lib/chains";
+import { useNetworks } from "@/contexts/NetworksContext";
 import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 import ChainIcon from "@/components/ChainIcon";
 import { useTheme } from "@/theme";
@@ -34,6 +39,7 @@ import { formatTokenBalance } from "@/lib/tokenFormatUtils";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 /** Popular token symbols per chain — shown as trending chips above the list. */
 const POPULAR_PER_CHAIN: Record<number, string[]> = {
@@ -45,21 +51,10 @@ const POPULAR_PER_CHAIN: Record<number, string[]> = {
   130: ["ETH", "USDC", "WBTC", "WETH"],
 };
 
-function nativeLogoForChain(chainId: number, nativeSymbol: string): string {
-  if (nativeSymbol.toUpperCase() === "ETH") return "/chainIcons/ethereum.svg";
-  return getChainConfig(chainId)?.icon || "";
-}
-
-function nativeCurrencyForChain(chainId: number) {
-  return CHAIN_REGISTRY.find((c) => c.chainId === chainId)?.nativeCurrency;
-}
-
 /** Adapt a Bungee token (chain-agnostic shape) into the parent's PortfolioToken. */
 function bungeeToPortfolio(t: BungeeToken, chainId: number): PortfolioToken {
   const addr = t.address ?? "";
-  const isNative =
-    addr.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase() ||
-    addr === "0x0000000000000000000000000000000000000000";
+  const isNative = isNativeAddress(addr);
   return {
     contractAddress: isNative ? "native" : addr,
     name: t.name ?? "",
@@ -74,11 +69,57 @@ function bungeeToPortfolio(t: BungeeToken, chainId: number): PortfolioToken {
   };
 }
 
+function isNativeAddress(addr: string): boolean {
+  const lower = addr.toLowerCase();
+  return (
+    lower === NATIVE_TOKEN_ADDRESS.toLowerCase() ||
+    lower === ZERO_ADDRESS
+  );
+}
+
+function nativeMetaFromBungeeChain(
+  chain: EnrichedBridgeChain | undefined,
+): NativeAssetMeta | null {
+  const currency = chain?.currency;
+  if (!currency?.symbol) return null;
+  const symbol = currency.symbol;
+  const fallbackLogo =
+    currency.logoURI || currency.icon || chain?.icon || chain?.logoURI;
+  return {
+    name: currency.name || symbol,
+    symbol,
+    decimals: currency.decimals ?? 18,
+    logoUrl: getNativeAssetLogoUrl(symbol, fallbackLogo),
+    chainName: chain?.name || "this chain",
+  };
+}
+
+function buildNativePortfolioToken(
+  native: NativeAssetMeta,
+  chainId: number,
+  existing?: PortfolioToken,
+): PortfolioToken {
+  return {
+    contractAddress: "native",
+    name: native.name,
+    symbol: native.symbol,
+    decimals: native.decimals,
+    balance: existing?.balance ?? "0",
+    balanceFormatted: existing?.balanceFormatted ?? "0",
+    logoUrl: native.logoUrl || existing?.logoUrl || "",
+    valueUsd: existing?.valueUsd ?? 0,
+    priceUsd: existing?.priceUsd ?? 0,
+    chainId: existing?.chainId ?? chainId,
+  };
+}
+
 interface BridgeChainTokenModalProps {
   isOpen: boolean;
   onClose: () => void;
   /** "sell" picks source chains; "buy" picks destination chains. */
   mode: "sell" | "buy";
+  /** Active account type. Sell-side chains are filtered to what can sign. */
+  accountType: ChainAccountType;
   /** Chain shown selected when the dropdown opens. */
   initialChainId: number;
   /** Already-selected token on this side, used to highlight + as exclude. */
@@ -88,8 +129,10 @@ interface BridgeChainTokenModalProps {
    *  shares the same sentinel address on every chain, so without this the
    *  ETH pill would falsely highlight on every chain in the strip. */
   selectedTokenChainId?: number;
-  /** Exclude this token from the list (the OTHER side's selection, on same chain). */
+  /** Exclude this token from the list (the OTHER side's selection). */
   excludeAddress?: string;
+  /** Chain for `excludeAddress`; exclusion only applies when it matches the viewed chain. */
+  excludeChainId?: number;
   /** Fires when the user picks a token. Carries the chain they navigated to. */
   onSelect: (chainId: number, token: PortfolioToken) => void;
   /** Wallet address — for onchain balance lookup of pasted custom tokens. */
@@ -111,16 +154,19 @@ export default function BridgeChainTokenModal({
   isOpen,
   onClose,
   mode,
+  accountType,
   initialChainId,
   selectedTokenAddress,
   selectedTokenChainId,
   excludeAddress,
+  excludeChainId,
   onSelect,
   fromAddress,
   holdingsAllChains,
   triggerEl,
 }: BridgeChainTokenModalProps) {
   const { themeId } = useTheme();
+  const { networksInfo } = useNetworks();
   const [currentChainId, setCurrentChainId] = useState(initialChainId);
   const [chains, setChains] = useState<EnrichedBridgeChain[]>([]);
   const [chainsLoading, setChainsLoading] = useState(true);
@@ -300,7 +346,7 @@ export default function BridgeChainTokenModal({
     (async () => {
       try {
         const list = mode === "sell"
-          ? await getBridgeSourceChains()
+          ? await getBridgeSourceChains(accountType)
           : await getBridgeDestinationChains();
         if (cancelled) return;
         setChains(list);
@@ -311,7 +357,7 @@ export default function BridgeChainTokenModal({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, mode]);
+  }, [isOpen, mode, accountType]);
 
   // Load tokens whenever the in-modal chain changes.
   useEffect(() => {
@@ -401,16 +447,22 @@ export default function BridgeChainTokenModal({
   // Display name for the selected chain. Bungee's list is authoritative
   // here (covers every chain in the picker, including those missing from
   // our local CHAIN_REGISTRY — Abstract, Plume, Sonic, etc.). Fall back to
-  // getChainConfig for registry-only chains we might surface in sell mode,
-  // then to a neutral "this chain" so we never paint "Unknown" in a label.
+  // getResolvedChainById for registry + user-added custom chains we surface
+  // in sell mode, then to a neutral "this chain" so we never paint
+  // "Unknown" in a label.
   const currentChainName = useMemo(() => {
     if (currentChain?.name) return currentChain.name;
-    const fromRegistry = getChainConfig(currentChainId)?.name;
-    if (fromRegistry && fromRegistry.toLowerCase() !== "unknown") {
-      return fromRegistry;
-    }
+    const resolved = getResolvedChainById(currentChainId, networksInfo)?.name;
+    if (resolved && resolved.toLowerCase() !== "unknown") return resolved;
     return "this chain";
-  }, [currentChain, currentChainId]);
+  }, [currentChain, currentChainId, networksInfo]);
+
+  const nativeAsset = useMemo(
+    () =>
+      nativeMetaFromBungeeChain(currentChain) ??
+      getNativeAssetMeta(currentChainId, networksInfo),
+    [currentChain, currentChainId, networksInfo],
+  );
 
   // ---- Tokens for the right pane ----
   const holdingsOnChain = useMemo(
@@ -433,13 +485,35 @@ export default function BridgeChainTokenModal({
   // chains, the in-memory `tokens` array still holds the previous chain's
   // data. Treat it as empty until `tokensChainId` catches up so derived
   // sections (popular, "Tokens on X") don't flash old rows.
-  const tokensAsPortfolio = useMemo(
-    () =>
-      tokensStale ? [] : tokens.map((t) => bungeeToPortfolio(t, currentChainId)),
-    [tokens, currentChainId, tokensStale],
-  );
+  const tokensAsPortfolio = useMemo(() => {
+    if (tokensStale) return [];
+    const mapped = tokens.map((t) => bungeeToPortfolio(t, currentChainId));
+    if (!nativeAsset) return mapped;
 
-  const excludeLower = excludeAddress?.toLowerCase();
+    const nativeIndex = mapped.findIndex((t) => t.contractAddress === "native");
+    if (nativeIndex >= 0) {
+      const next = [...mapped];
+      next[nativeIndex] = buildNativePortfolioToken(
+        nativeAsset,
+        currentChainId,
+        mapped[nativeIndex],
+      );
+      return next;
+    }
+
+    return [buildNativePortfolioToken(nativeAsset, currentChainId), ...mapped];
+  }, [tokens, currentChainId, tokensStale, nativeAsset]);
+
+  const activeExcludeAddress =
+    excludeChainId === undefined || excludeChainId === currentChainId
+      ? excludeAddress
+      : undefined;
+
+  const excludeLower = activeExcludeAddress
+    ? isNativeAddress(activeExcludeAddress) || activeExcludeAddress === "native"
+      ? NATIVE_TOKEN_ADDRESS.toLowerCase()
+      : activeExcludeAddress.toLowerCase()
+    : undefined;
 
   const restTokens = useMemo(() => {
     return tokensAsPortfolio
@@ -467,7 +541,10 @@ export default function BridgeChainTokenModal({
           (h) =>
             h.symbol.toLowerCase().includes(term) ||
             h.name.toLowerCase().includes(term) ||
-            h.contractAddress.toLowerCase().includes(term),
+            (h.contractAddress === "native"
+              ? NATIVE_TOKEN_ADDRESS.toLowerCase()
+              : h.contractAddress.toLowerCase()
+            ).includes(term),
         )
       : base;
     // Sort by USD value desc so funded tokens dominate the visible region;
@@ -503,8 +580,10 @@ export default function BridgeChainTokenModal({
       (t) =>
         t.symbol.toLowerCase().includes(term) ||
         t.name.toLowerCase().includes(term) ||
-        (t.contractAddress !== "native" &&
-          t.contractAddress.toLowerCase().includes(term)),
+        (t.contractAddress === "native"
+          ? NATIVE_TOKEN_ADDRESS.toLowerCase()
+          : t.contractAddress.toLowerCase()
+        ).includes(term),
     );
   }, [restTokens, term]);
 
@@ -514,9 +593,6 @@ export default function BridgeChainTokenModal({
   // the row stays a single line in the narrow popup.
   const popularTokens = useMemo(() => {
     if (term) return [];
-    const fullList = POPULAR_PER_CHAIN[currentChainId];
-    if (!fullList) return [];
-    const symbols = fullList.slice(0, -1).slice(0, 4);
     const bySymbol = new Map<string, PortfolioToken>();
     for (const h of holdingsOnChain) {
       const sym = h.symbol.toUpperCase();
@@ -526,10 +602,11 @@ export default function BridgeChainTokenModal({
       const sym = (t.symbol || "").toUpperCase();
       if (sym && !bySymbol.has(sym)) bySymbol.set(sym, t);
     }
-    const native = nativeCurrencyForChain(currentChainId);
+    // Native token — always present, using Bungee currency metadata first so
+    // user-added custom chains like Plasma still get a usable token row/chip.
+    const native = nativeAsset;
     if (native) {
       const nativeSym = native.symbol.toUpperCase();
-      const canonicalLogo = nativeLogoForChain(currentChainId, native.symbol);
       const existing = bySymbol.get(nativeSym);
       bySymbol.set(nativeSym, {
         contractAddress: existing?.contractAddress ?? "native",
@@ -538,12 +615,18 @@ export default function BridgeChainTokenModal({
         decimals: existing?.decimals ?? native.decimals,
         balance: existing?.balance ?? "0",
         balanceFormatted: existing?.balanceFormatted ?? "0",
-        logoUrl: canonicalLogo,
+        logoUrl: native.logoUrl,
         valueUsd: existing?.valueUsd ?? 0,
         priceUsd: existing?.priceUsd ?? 0,
         chainId: existing?.chainId ?? currentChainId,
       });
     }
+    const fullList = POPULAR_PER_CHAIN[currentChainId];
+    const symbols = fullList
+      ? fullList.slice(0, -1).slice(0, 4)
+      : native
+        ? [native.symbol.toUpperCase()]
+        : [];
     const out: PortfolioToken[] = [];
     for (const sym of symbols) {
       const entry = bySymbol.get(sym);
@@ -556,7 +639,14 @@ export default function BridgeChainTokenModal({
       out.push(entry);
     }
     return out;
-  }, [tokensAsPortfolio, holdingsOnChain, term, currentChainId, excludeLower]);
+  }, [
+    tokensAsPortfolio,
+    holdingsOnChain,
+    term,
+    currentChainId,
+    excludeLower,
+    nativeAsset,
+  ]);
 
   // ---- Custom address resolution (paste 0x in token search) ----
   useEffect(() => {
@@ -615,9 +705,7 @@ export default function BridgeChainTokenModal({
           (t) => (t.address ?? "").toLowerCase() === addrLower,
         );
         const logo = isNative
-          ? (info.data.symbol.toUpperCase() === "ETH"
-              ? "/chainIcons/ethereum.svg"
-              : getChainConfig(currentChainId)?.icon || "")
+          ? nativeAsset?.logoUrl ?? ""
           : (listMatch?.logoURI || listMatch?.icon || KNOWN_TOKEN_LOGOS[addrLower] || "");
 
         const balanceNum = parseFloat(balance);
@@ -647,7 +735,7 @@ export default function BridgeChainTokenModal({
     return () => {
       cancelled = true;
     };
-  }, [tokenSearch, currentChainId, fromAddress, tokens]);
+  }, [tokenSearch, currentChainId, fromAddress, tokens, nativeAsset]);
 
   // ---- Logo cache (chain icons + token logos) ----
   const tokenLogoUrls = useMemo(() => {

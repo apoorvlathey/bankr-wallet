@@ -172,6 +172,13 @@ export async function applyReceiptToHistory(
     });
   }
 
+  // EIP-7702 delegation mirror: authorization-list side effects are applied
+  // before normal tx execution and are not rolled back if execution reverts.
+  // Receipt status alone is therefore not enough for Set/Revoke flows. After
+  // any terminal receipt, re-read the EOA code and mirror the actual onchain
+  // delegation into `customDelegates`.
+  await syncDelegationMirrorFromChain(txId, chainId, options.rpcUrl);
+
   await showConfirmationNotification(txId, txHash, chainId, succeeded);
 
   // If this tx is a slice of a user-split wallet_sendCalls bundle, advance
@@ -191,6 +198,53 @@ export async function applyReceiptToHistory(
   }
 
   return succeeded;
+}
+
+async function syncDelegationMirrorFromChain(
+  txId: string,
+  chainId: number,
+  rpcUrlOverride?: string,
+): Promise<void> {
+  try {
+    const tx = await getTxById(txId);
+    const meta = tx?.delegation7702Meta;
+    const accountId = tx?.accountId;
+    const accountAddress = tx?.tx?.from;
+    if (!meta || !accountId || !accountAddress) return;
+
+    const rpcUrl = rpcUrlOverride ?? (await getRpcUrl(chainId));
+    if (!rpcUrl) return;
+
+    const [
+      { readOnchainDelegate },
+      { removeCustomDelegate, setCustomDelegate },
+      { EIP_7702_DEFAULT_DELEGATE },
+    ] = await Promise.all([
+      import("../utils/delegationResolution"),
+      import("./delegationStorage"),
+      import("../constants/chainRegistry"),
+    ]);
+
+    const onchainRead = await readOnchainDelegate(
+      rpcUrl,
+      chainId,
+      accountAddress as `0x${string}`,
+    );
+    if (!onchainRead.ok) return;
+    const onchainDelegate = onchainRead.delegate;
+
+    if (
+      !onchainDelegate ||
+      onchainDelegate.toLowerCase() === EIP_7702_DEFAULT_DELEGATE.toLowerCase()
+    ) {
+      await removeCustomDelegate(accountId, chainId);
+      return;
+    }
+
+    await setCustomDelegate(accountId, chainId, onchainDelegate);
+  } catch (err) {
+    console.warn("[receipt] 7702 delegation mirror sync failed", err);
+  }
 }
 
 /**

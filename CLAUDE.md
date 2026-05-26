@@ -95,6 +95,7 @@ When working on features, refer to these docs.
 | [`_docs/ASSET_CHANGES_SIMULATION.md`](./_docs/ASSET_CHANGES_SIMULATION.md) | Tx simulation: state-override injection, metadata retry |
 | [`_docs/ERC5792.md`](./_docs/ERC5792.md) | ERC-5792 batch txs: message flow, ERC-7821 encoding, 7702 plan |
 | [`_docs/ERC5792-DAPP-SUPPORT.md`](./_docs/ERC5792-DAPP-SUPPORT.md) | Dapp-side wagmi upgrade guide for batched txs |
+| [`_docs/7702.md`](./_docs/7702.md) | EIP-7702 atomic batching for PK/SP: default delegate, resolution, custom override, revoke |
 | [`_docs/L2_FORCE_INCLUSION.md`](./_docs/L2_FORCE_INCLUSION.md) | OP Stack force inclusion: L1 deposit flow |
 | [`_docs/FIREFOX.md`](./_docs/FIREFOX.md) | Firefox port: pipeline, manifest divergence, storage.session shim, AMO release |
 | [`_docs/PK_ACCOUNTS.md`](./_docs/PK_ACCOUNTS.md) | Private-key / Seed phrase account architecture & flows |
@@ -123,6 +124,8 @@ When working on features, refer to these docs.
 - **Reject All button color**: use `chart.negative` (not `status.error.fg` — that's WHITE in Bauhaus and renders invisibly).
 - **Dark CTA strip**: use `useStripTokens()` from `@/theme` for inverted bars (tx count badges, chat headers, "Add Token" CTAs). Don't inline `themeId === "midnight" ? ... : ...` ternaries.
 - **External lookups go through a single cached helper** (e.g., `getEthShLabels`, `fetchTokenInfo`, `getCachedTokenLogo`) — never let multiple surfaces fire their own request for the same resource.
+- **Chain meta resolution**: anywhere code needs a chain name / icon / explorer / native-asset metadata for an *arbitrary* chain ID (i.e., one that could be a user-added custom chain — bridge destinations, tx history, swap selectors, …), use `getResolvedChainById(chainId, networksInfo)` from `@/lib/chains` — **not** `getChainConfig(chainId)`. `getChainConfig` only knows the built-in registry and returns `"Unknown"` / empty icon for custom chains.
+- **Native asset metadata**: when computing a native token's symbol / name / decimals / logo, use the centralized `getNativeAssetMeta(chainId, networksInfo)` from `@/lib/chains`. It resolves through `getResolvedChainById` (custom-chain-aware) and ensures the logo falls back to the chain icon for non-ETH natives (AVAX on Avalanche, BNB on BNB Chain, …). Never inline `symbol === "ETH" ? "/chainIcons/ethereum.svg" : getChainConfig(chainId)?.icon`.
 
 ## Writing Conventions
 

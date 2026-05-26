@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, HStack, Text, VStack, Icon, Collapse } from "@chakra-ui/react";
 import { formatUnits } from "viem";
 import type { BungeeQuoteResponse } from "@walletchan/shared/bungee";
+import { getExecutableBridgeRoute } from "./bridgeRouteUtils";
 
 function ChevronIcon({
   isOpen,
@@ -61,7 +62,7 @@ export default function BridgeQuoteDisplay({
 }: BridgeQuoteDisplayProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const route = quote.result?.manualRoutes?.[0];
+  const route = getExecutableBridgeRoute(quote);
   if (!route) return null;
 
   // Trust Bungee's `output.minAmountOut` when present. Only when it's truly
@@ -93,7 +94,11 @@ export default function BridgeQuoteDisplay({
   })();
 
   const routeName = route.routeDetails?.name ?? "Bungee";
-  const gasUsd = route.gasFee?.feesInUsd;
+  const gasUsd = route.gasFee
+    ? "feesInUsd" in route.gasFee
+      ? route.gasFee.feesInUsd
+      : route.gasFee.feeInUsd
+    : undefined;
   const walletFeePercent = quote.feeBps
     ? (parseInt(quote.feeBps, 10) / 100).toFixed(2)
     : null;

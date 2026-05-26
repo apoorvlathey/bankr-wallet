@@ -1,7 +1,12 @@
 import { fetchPortfolio, type DefiPosition, type PortfolioToken } from "@/chrome/portfolioApi";
 import { getCustomTokens } from "@/chrome/customTokenStorage";
 import { getRecentReceivedTokens } from "@/chrome/recentlyReceivedTokens";
-import { getStoredNetworksInfo, getVisibleChains, getResolvedChainById } from "@/lib/chains";
+import {
+  getStoredNetworksInfo,
+  getVisibleChains,
+  getResolvedChainById,
+  getNativeAssetMeta,
+} from "@/lib/chains";
 import { getChainEnvironmentLabel } from "@/lib/chainIcons";
 import type { NetworksInfo } from "@/types";
 
@@ -15,6 +20,13 @@ function isNativeToken(token: PortfolioToken): boolean {
     token.contractAddress === "native" ||
     token.contractAddress === "0x0000000000000000000000000000000000000000"
   );
+}
+
+interface TokenMetadata {
+  name?: string;
+  symbol?: string;
+  decimals?: number;
+  logoUrl?: string;
 }
 
 export interface PortfolioTokenCatalog {
@@ -94,6 +106,63 @@ async function resolveErc20PricesBatch(
   }
 }
 
+async function resolveTokenMetadataBatch(
+  requests: { chainId: number; contractAddress: string }[],
+): Promise<Map<string, TokenMetadata>> {
+  if (requests.length === 0) return new Map();
+
+  const entries = await Promise.all(
+    requests.map(
+      (request) =>
+        new Promise<[
+          string,
+          TokenMetadata | null,
+        ]>((resolve) => {
+          const address = request.contractAddress.toLowerCase();
+          chrome.runtime.sendMessage(
+            {
+              type: "resolveTokenMetadata",
+              chainId: request.chainId,
+              tokenAddress: address,
+            },
+            (response) => {
+              resolve([
+                `${request.chainId}-${address}`,
+                response?.success ? response.data ?? null : null,
+              ]);
+            },
+          );
+        }),
+    ),
+  );
+
+  return new Map(
+    entries.filter(
+      (entry): entry is [string, TokenMetadata] => entry[1] !== null,
+    ),
+  );
+}
+
+function applyTokenMetadata(
+  token: PortfolioToken,
+  metadata: TokenMetadata | undefined,
+): PortfolioToken {
+  if (!metadata) return token;
+  const logoUrl = token.logoUrl || metadata.logoUrl;
+  const symbol = token.symbol || metadata.symbol || token.symbol;
+  const name = token.name || metadata.name || metadata.symbol || token.name;
+  const decimals = token.decimals ?? metadata.decimals ?? 18;
+  if (
+    logoUrl === token.logoUrl &&
+    symbol === token.symbol &&
+    name === token.name &&
+    decimals === token.decimals
+  ) {
+    return token;
+  }
+  return { ...token, logoUrl, symbol, name, decimals };
+}
+
 /**
  * Shared portfolio token catalog used by Holdings, Send, and Swap.
  *
@@ -171,7 +240,39 @@ export async function loadPortfolioTokenCatalog(
       logoUrl: rt.logoUrl,
     }));
 
-  const mergedTokens = [...data.tokens, ...customAsPortfolio, ...recentAsPortfolio];
+  const metadataRequests = Array.from(
+    new Map(
+      [...data.tokens, ...customAsPortfolio, ...recentAsPortfolio]
+        .filter(
+          (token) =>
+            !isNativeToken(token) &&
+            (!token.logoUrl || !token.symbol || !token.name) &&
+            /^0x[a-fA-F0-9]{40}$/.test(token.contractAddress),
+        )
+        .map((token) => {
+          const addr = token.contractAddress.toLowerCase();
+          return [
+            `${token.chainId}-${addr}`,
+            { chainId: token.chainId, contractAddress: addr },
+          ] as const;
+        }),
+    ).values(),
+  );
+  const resolvedTokenMetadata =
+    await resolveTokenMetadataBatch(metadataRequests);
+
+  const mergedTokens = [
+    ...data.tokens,
+    ...customAsPortfolio,
+    ...recentAsPortfolio,
+  ].map((token) =>
+    applyTokenMetadata(
+      token,
+      resolvedTokenMetadata.get(
+        `${token.chainId}-${token.contractAddress.toLowerCase()}`,
+      ),
+    ),
+  );
   const existingNativeChainIds = new Set(
     mergedTokens
       .filter(
@@ -300,10 +401,18 @@ export async function loadPortfolioTokenCatalog(
   });
 
   const finalTokens = tokensWithErc20Prices.map((token) => {
-    if (isNativeToken(token) && isTestnetChain(token.chainId, networksInfo)) {
-      return { ...token, priceUsd: 0, valueUsd: 0 };
+    let next = token;
+    // Native tokens without a logo fall back to the chain icon so non-ETH
+    // natives on custom chains (AVAX on Avalanche, BNB on non-registry BNB
+    // chains, …) render the correct asset image instead of an initials chip.
+    if (isNativeToken(next) && !next.logoUrl) {
+      const meta = getNativeAssetMeta(next.chainId, networksInfo);
+      if (meta?.logoUrl) next = { ...next, logoUrl: meta.logoUrl };
     }
-    return token;
+    if (isNativeToken(next) && isTestnetChain(next.chainId, networksInfo)) {
+      next = { ...next, priceUsd: 0, valueUsd: 0 };
+    }
+    return next;
   });
 
   const totalValueUsd = finalTokens.reduce((sum, t) => sum + t.valueUsd, 0) +

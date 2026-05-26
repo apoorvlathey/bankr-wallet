@@ -13,8 +13,8 @@ import {
 import { ChevronDownIcon } from "@chakra-ui/icons";
 import type { TokenListEntry } from "@/chrome/swapApi";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
-import { getChainConfig } from "@/constants/chainConfig";
-import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import { getNativeAssetMeta } from "@/lib/chains";
+import { useNetworks } from "@/contexts/NetworksContext";
 import { WALLETCHAN_ICON_URL } from "@/constants/externalUrls";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { truncateAddress } from "@/lib/addressUtils";
@@ -31,19 +31,6 @@ const WCHAN_BASE_ENTRY: TokenListEntry = {
   decimals: 18,
   logoURI: WALLETCHAN_ICON_URL,
 };
-
-/** Canonical native-token icon. ETH-based chains share one diamond logo;
- *  for non-ETH natives (BNB, POL) the chain icon doubles as the token icon. */
-function nativeLogoForChain(chainId: number, nativeSymbol: string): string {
-  if (nativeSymbol.toUpperCase() === "ETH") return "/chainIcons/ethereum.svg";
-  return getChainConfig(chainId)?.icon || "";
-}
-
-function getNativeCurrencyForChain(
-  chainId: number,
-): { name: string; symbol: string; decimals: number } | undefined {
-  return CHAIN_REGISTRY.find((c) => c.chainId === chainId)?.nativeCurrency;
-}
 
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
@@ -104,6 +91,7 @@ export default function BuyTokenSelector({
   pendingToken,
   onConfirmPending,
 }: BuyTokenSelectorProps) {
+  const { networksInfo } = useNetworks();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(60);
@@ -212,8 +200,6 @@ export default function BuyTokenSelector({
   // Popular tokens: ordered per-chain list, matched against holdings + token list
   const popularTokens = useMemo(() => {
     if (searchTerm) return [];
-    const symbols = POPULAR_PER_CHAIN[chainId];
-    if (!symbols) return [];
 
     // Build lookup maps: symbol → entry (first match wins).
     const bySymbol = new Map<string, TokenListEntry>();
@@ -226,22 +212,27 @@ export default function BuyTokenSelector({
       if (!bySymbol.has(sym)) bySymbol.set(sym, t);
     }
 
-    // Native token: ensure the symbol exists (token list is ERC-20-only) and
-    // pin its logo to our canonical icon — portfolio-API logos for native ETH
-    // can come back wrong/missing on L2s like Base.
-    const native = getNativeCurrencyForChain(chainId);
+    // Native token: ensure presence (token list is ERC-20-only) and pin its
+    // logo to the chain's canonical icon via getNativeAssetMeta — covers
+    // built-in chains AND user-added custom chains. Portfolio-API logos for
+    // native assets can come back wrong/missing, so we always override.
+    const native = getNativeAssetMeta(chainId, networksInfo);
     if (native) {
       const nativeSym = native.symbol.toUpperCase();
-      const canonicalLogo = nativeLogoForChain(chainId, native.symbol);
       const existing = bySymbol.get(nativeSym);
       bySymbol.set(nativeSym, {
         address: existing?.address ?? NATIVE_TOKEN_ADDRESS,
         name: existing?.name ?? native.name,
         symbol: existing?.symbol ?? native.symbol,
         decimals: existing?.decimals ?? native.decimals,
-        logoURI: canonicalLogo,
+        logoURI: native.logoUrl,
       });
     }
+
+    // Chain-specific popular list, or just the native symbol for chains we
+    // don't curate (custom chains, etc.). Native must always be selectable.
+    const symbols =
+      POPULAR_PER_CHAIN[chainId] ?? (native ? [native.symbol.toUpperCase()] : []);
 
     // WCHAN on Base: ensure our token always shows in the popular chips
     // regardless of whether the swap API's token list includes it. Pin the
@@ -265,7 +256,7 @@ export default function BuyTokenSelector({
       }
     }
     return result;
-  }, [tokenList, holdings, excludeLower, searchTerm, chainId]);
+  }, [tokenList, holdings, excludeLower, searchTerm, chainId, networksInfo]);
 
   const handleScroll = () => {
     const el = scrollRef.current;

@@ -159,8 +159,11 @@ export interface EstimatedFees {
 // ---------------------------------------------------------------------------
 
 /**
- * Compute Slow/Standard/Fast tiers in a single pass. Returns null if the
- * chain is pre-EIP-1559 or the RPC is unreachable.
+ * Compute Slow/Standard/Fast tiers in a single pass. Returns null only when
+ * we can't reach the chain at all — chains without EIP-1559 baseFee in their
+ * block format (Monad and some sidechain testnets) fall through to a legacy
+ * `eth_gasPrice`-derived tier set so the UI still gets a usable estimate
+ * instead of showing zeros.
  */
 export async function estimateFeeTiers(
   client: PublicClient,
@@ -170,15 +173,20 @@ export async function estimateFeeTiers(
     PRIORITY_FEE_FLOOR_WEI[chainId] ?? DEFAULT_PRIORITY_FEE_FLOOR_WEI;
 
   // Latest block gives us baseFee + utilization for the next-block predictor.
-  let baseFee: bigint;
-  let nextBaseFee: bigint;
+  let baseFee: bigint | null = null;
+  let nextBaseFee: bigint | null = null;
   try {
     const block = await client.getBlock({ blockTag: "latest" });
-    if (typeof block.baseFeePerGas !== "bigint") return null;
-    baseFee = block.baseFeePerGas;
-    nextBaseFee = predictNextBaseFee(block);
+    if (typeof block.baseFeePerGas === "bigint") {
+      baseFee = block.baseFeePerGas;
+      nextBaseFee = predictNextBaseFee(block);
+    }
   } catch {
-    return null;
+    // Block fetch itself failed — try the legacy path before giving up.
+  }
+
+  if (baseFee === null || nextBaseFee === null) {
+    return legacyGasPriceTiers(client, floor);
   }
 
   // Pull priority fee samples from feeHistory; fall through to maxPriorityFeePerGas
@@ -217,6 +225,51 @@ export async function estimateFeeTiers(
     },
     baseFee,
     predictedNextBaseFee: nextBaseFee,
+  };
+}
+
+/**
+ * Legacy fallback for chains where the block doesn't carry a baseFeePerGas
+ * field (Monad testnet, some non-Ethereum L1 forks). Pulls `eth_gasPrice` and
+ * derives three tiers from it. Both maxFee and priority are set to the same
+ * value per tier — viem signs this as an EIP-1559 tx with effectively no base
+ * fee headroom, which the chain interprets as a flat gasPrice. baseFee is 0
+ * so the Custom-tier validity check (`maxFee >= base + priority`) reduces to
+ * `maxFee >= priority`, which holds by construction.
+ *
+ * Per-tier multipliers mirror the EIP-1559 path's intent: ~1× / ~1.10× / ~1.25×
+ * giving the user a clear cheap/standard/fast ladder even on quiet chains.
+ */
+async function legacyGasPriceTiers(
+  client: PublicClient,
+  floor: bigint,
+): Promise<EstimatedFeeTiers | null> {
+  let gasPrice: bigint;
+  try {
+    const hex = await client.request({
+      method: "eth_gasPrice" as any,
+    } as any);
+    if (typeof hex !== "string") return null;
+    gasPrice = BigInt(hex);
+  } catch {
+    return null;
+  }
+
+  // Some chains return 0 when the mempool is empty. Apply the per-chain floor
+  // so the user doesn't sign a tx that gets dropped for zero tip.
+  const base = applyFloor(gasPrice, floor);
+  const slow = base;
+  const standard = (base * 110n) / 100n;
+  const fast = (base * 125n) / 100n;
+
+  return {
+    tiers: {
+      slow: { maxFeePerGas: slow, maxPriorityFeePerGas: slow },
+      standard: { maxFeePerGas: standard, maxPriorityFeePerGas: standard },
+      fast: { maxFeePerGas: fast, maxPriorityFeePerGas: fast },
+    },
+    baseFee: 0n,
+    predictedNextBaseFee: 0n,
   };
 }
 

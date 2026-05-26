@@ -103,21 +103,14 @@ export async function clearExpiredSignatureRequests(): Promise<void> {
 }
 
 /**
- * Update the extension badge with pending counts (combines tx and signature requests)
+ * Update the extension badge with pending counts.
+ *
+ * Keep this as a compatibility wrapper so signature storage uses the same
+ * central count as tx, ERC-5792 batch, and cross-dapp batch storage.
  */
 export async function updateSignatureBadge(): Promise<void> {
-  // Import getPendingTxRequests to combine counts
-  const { getPendingTxRequests } = await import("./pendingTxStorage");
-  const txRequests = await getPendingTxRequests();
-  const sigRequests = await getPendingSignatureRequests();
-  const count = txRequests.length + sigRequests.length;
-
-  if (count > 0) {
-    await chrome.action.setBadgeText({ text: count.toString() });
-    await chrome.action.setBadgeBackgroundColor({ color: "#3B82F6" });
-  } else {
-    await chrome.action.setBadgeText({ text: "" });
-  }
+  const { updateBadge } = await import("./pendingTxStorage");
+  await updateBadge();
 }
 
 /**

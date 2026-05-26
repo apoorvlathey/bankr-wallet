@@ -2,6 +2,8 @@
 
 All chain data lives in a single file: `src/constants/chainRegistry.ts`. Adding a new chain means adding **one entry** to the `CHAIN_REGISTRY` array.
 
+> **Before adding a built-in entry:** if the only reason you're adding the chain is so that custom-chain users get its metadata + 7702 atomic batching out of the box, you might not need a registry entry at all. Every chain where MM has deployed `EIP7702StatelessDeleGator` is already covered by the auto-generated `KNOWN_CHAINS` map (see [§ Auto-prefill from KNOWN_CHAINS](#auto-prefill-from-known_chains)). The default chain dropdown should stay lean — only promote a chain to `CHAIN_REGISTRY` when WalletChan's own surfaces (chain switcher, swap, bridge, etc.) need first-class support.
+
 ## Step 1: Add a chain icon
 
 Place an SVG icon at `public/chainIcons/<chain-name>.svg`.
@@ -85,3 +87,13 @@ The old pattern required touching 4+ files. With the registry, these are now thi
 - `chrome/localSigner.ts` — imports `VIEM_CHAINS` and `RPC_URLS` from registry
 - `chrome/gasEstimation.ts` — imports `CHAIN_TOKEN_IDS` from registry
 - `chrome/onchainBalances.ts` — imports `RPC_URLS` from registry
+
+## Auto-prefill from KNOWN_CHAINS
+
+The custom-chain add form (`Settings/AddChain.tsx`) consults `apps/extension/src/constants/knownChains.generated.ts` whenever the user enters or auto-detects a chainId. If the chainId matches an entry, the form prefills name, explorer, native currency, decimals — and an inline hint notes that EIP-7702 atomic batching is enabled by default for the chain.
+
+`KNOWN_CHAINS` is auto-generated from MetaMask's `@metamask/delegation-deployments` package — every chainId in the map has the same `EIP_7702_DEFAULT_DELEGATE` address deployed (CREATE2 → identical addresses on every chain MM supports). Currently covers 38 chains (15 mainnet, 23 testnet) — see [`_docs/7702.md` § Known chains](./7702.md#known-chains) for the regeneration workflow.
+
+Practical effect: a user who adds Linea or Monad or Sonic as a custom chain skips the manual delegate-setup step entirely. The resolver's `hasDefaultDelegateForChain()` automatically extends 7702 eligibility to anything in `KNOWN_CHAINS`, so the first batch on the chain atomically bundles a delegation to the WalletChan default without the user touching Settings.
+
+To add a chain to `KNOWN_CHAINS` outside of the auto-regen path (e.g., MM hasn't deployed there yet but you've verified the delegator manually), add a `MANUAL_OVERRIDES` entry in `apps/extension/scripts/generate-known-chains.ts` and re-run `pnpm regen-chains`.

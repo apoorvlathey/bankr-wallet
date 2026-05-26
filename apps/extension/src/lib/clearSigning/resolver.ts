@@ -12,6 +12,8 @@ export interface ResolveRequest {
   chainId: number;
   address: string;
   kind: DescriptorKind;
+  selector?: string;
+  formatKey?: string;
 }
 
 export interface ResolveResult {
@@ -31,6 +33,8 @@ export async function resolveDescriptor(req: ResolveRequest): Promise<ResolveRes
       chainId: req.chainId,
       address: req.address.toLowerCase(),
       kind: req.kind,
+      selector: req.selector,
+      formatKey: req.formatKey,
     });
 
     if (!response || typeof response !== "object") {

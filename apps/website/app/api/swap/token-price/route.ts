@@ -8,6 +8,7 @@ const COINGECKO_PLATFORM_IDS: Record<string, string> = {
   "56": "binance-smart-chain",
   "137": "polygon-pos",
   "130": "unichain",
+  "43114": "avalanche",
 };
 
 /**
@@ -25,6 +26,7 @@ const GECKOTERMINAL_NETWORK_IDS: Record<string, string> = {
   "137": "polygon_pos",
   "130": "unichain",
   "4326": "megaeth",
+  "43114": "avax",
 };
 
 /** In-memory cache: "chainId:address" → { priceUsd, fetchedAt } */

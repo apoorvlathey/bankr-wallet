@@ -14,8 +14,10 @@ import {
   type Transport,
   type LocalAccount,
   type TransactionReceipt,
+  type SignedAuthorization,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { signAuthorization } from "viem/actions";
 import {
   VIEM_CHAINS,
   RPC_URLS,
@@ -43,6 +45,17 @@ export interface TransactionRequest {
   maxFeePerGas?: string;
   maxPriorityFeePerGas?: string;
   nonce?: number;
+  /**
+   * EIP-7702 type-4 tx fields. When `authorizationList` is set, viem
+   * automatically serializes the tx as type 4. The list may be empty when
+   * the EOA is already delegated to a 7821-compatible contract — in that
+   * case we just send the ERC-7821 calldata against the EOA itself with a
+   * standard EIP-1559 tx, no authorization needed.
+   *
+   * Use signEip7702Authorization() below to build entries.
+   */
+  type?: "eip7702";
+  authorizationList?: readonly SignedAuthorization[];
 }
 
 export interface SignedTransaction {
@@ -142,12 +155,23 @@ export async function signAndBroadcastTransaction(
     txParams.nonce = tx.nonce;
   }
 
+  // EIP-7702: when an authorization list is attached, viem serializes the tx
+  // as type 4. Sync-send is skipped in this case — sync-send chains (MegaETH
+  // today) need conservative tx shapes and EIP-7702 hasn't been validated
+  // against the sync RPC method yet.
+  if (tx.authorizationList && tx.authorizationList.length > 0) {
+    (txParams as any).authorizationList = tx.authorizationList;
+  }
+
   // Sync-send path: chains that support EIP-7966 (e.g., MegaETH) return the
   // full receipt in one round trip (~100ms). Sign locally, then post via
   // sendRawTransactionSync. On any failure or timeout, fall through to the
   // standard async send so the user always gets some outcome.
+  // Skipped for EIP-7702 type-4 txs — sync-send hasn't been validated against
+  // type 4 yet, and the auth-bundle path needs a confirmed inclusion path.
   const chainEntry = CHAIN_BY_ID_LOCAL.get(tx.chainId);
-  if (chainEntry?.supportsSyncSend) {
+  const isEip7702Tx = !!(tx.authorizationList && tx.authorizationList.length > 0);
+  if (chainEntry?.supportsSyncSend && !isEip7702Tx) {
     try {
       // signTransaction needs explicit gas + fee fields, so let viem fill in
       // anything missing first by going through prepareTransactionRequest.
@@ -186,6 +210,66 @@ export async function signAndBroadcastTransaction(
   const txHash = await client.sendTransaction(txParams);
 
   return { txHash };
+}
+
+/**
+ * Sign an EIP-7702 authorization tuple.
+ *
+ * The signed authorization tells the network "the EOA at signer.address
+ * authorizes its `code` to be set to the delegation designator pointing at
+ * contractAddress on chainId, valid only while the EOA's nonce equals
+ * `nonce`."
+ *
+ * When the EOA both signs the auth AND broadcasts the bundling tx (the
+ * common case for our batch flow), the auth's nonce must be `txNonce + 1`
+ * because the tx's own inclusion increments the EOA nonce before the
+ * auth list is processed. Pass `executor: "self"` to let viem handle that
+ * +1 automatically, OR pass an explicit nonce.
+ */
+export async function signEip7702Authorization(
+  privateKey: `0x${string}`,
+  params: {
+    contractAddress: `0x${string}`;
+    chainId: number;
+    /**
+     * Explicit auth nonce. When the same EOA submits the tx, pass
+     * `txNonce + 1`. Omit + set `selfExecuted: true` to let viem derive
+     * it from `eth_getTransactionCount(pending)`.
+     */
+    nonce?: number;
+    selfExecuted?: boolean;
+    rpcUrl?: string;
+    customChainMeta?: CustomChainMeta;
+  },
+): Promise<SignedAuthorization> {
+  if (params.chainId === 0) {
+    throw new Error("EIP-7702 authorization chainId must be chain-specific");
+  }
+
+  const { client } = createClient(
+    params.chainId,
+    privateKey,
+    params.rpcUrl,
+    params.customChainMeta,
+  );
+  const account = privateKeyToAccount(privateKey);
+  const baseParams: {
+    account: typeof account;
+    contractAddress: `0x${string}`;
+    chainId: number;
+    nonce?: number;
+    executor?: "self";
+  } = {
+    account,
+    contractAddress: params.contractAddress,
+    chainId: params.chainId,
+  };
+  if (params.nonce !== undefined) {
+    baseParams.nonce = params.nonce;
+  } else if (params.selfExecuted) {
+    baseParams.executor = "self";
+  }
+  return signAuthorization(client, baseParams as any);
 }
 
 /**
@@ -334,4 +418,3 @@ export function isValidPrivateKey(key: string): boolean {
   // Check if all characters after 0x are valid hex
   return /^0x[0-9a-fA-F]{64}$/.test(key);
 }
-

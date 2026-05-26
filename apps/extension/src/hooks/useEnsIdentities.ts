@@ -29,7 +29,7 @@ export function useEnsIdentities(addresses: string[]): UseEnsIdentitiesReturn {
     .join(",");
 
   // Listen for storage changes so refreshes from other UI surfaces
-  // (e.g. AccountSettingsModal's "Refresh ENS Data") propagate immediately.
+  // (e.g. AccountSettings' "Refresh ENS Data") propagate immediately.
   useEffect(() => {
     const lowerAddresses = addresses.map((a) => a.toLowerCase());
     if (lowerAddresses.length === 0) return;

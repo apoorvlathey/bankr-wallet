@@ -1,4 +1,5 @@
 import { CHAIN_REGISTRY, DEFAULT_CHAIN_CONFIG } from "@/constants/chainRegistry";
+import { KNOWN_CHAINS } from "@/constants/knownChains.generated";
 import { getBungeeChain } from "@/lib/bungeeChainCache";
 
 export interface ResolvedChainIconMeta {
@@ -240,20 +241,42 @@ export function resolveChainIconMeta(
     };
   }
 
+  // KNOWN_CHAINS — auto-generated mirror of MM's delegator deployments.
+  // Provides a chainId-keyed icon (local SVG or defillama URL) and a
+  // precise testnet flag for the overlay label. Sits between the
+  // alias lookup (curated, narrow) and the Bungee cache (lazy, broad)
+  // because KNOWN_CHAINS metadata is built-in to the bundle and doesn't
+  // depend on a network round-trip to populate.
+  const known = KNOWN_CHAINS[chainId];
+  if (known?.icon) {
+    const palette =
+      FALLBACK_PALETTE[
+        hashString(`${chainId}:${known.name}`) % FALLBACK_PALETTE.length
+      ];
+    return {
+      iconSrc: known.icon,
+      overlayLabel: known.isTestnet ? "T" : inferOverlayLabel(chainName),
+      fallbackText: getChainInitials(chainName || known.name),
+      bg: palette.bg,
+      border: palette.border,
+      text: palette.text,
+    };
+  }
+
   // Last resort before the deterministic-initials placeholder: consult the
-  // cached Bungee chains list. Covers Abstract, Plume, Sonic, Tempo,
-  // Plasma, World Chain, etc. — chains we don't have a registry entry or
-  // hand-curated alias for but Bungee ships a canonical icon URL for.
-  // Sync lookup against an in-memory cache populated from chrome.storage
-  // (see `bungeeChainCache.ts`).
+  // cached Bungee chains list. Covers Abstract, Plume, Plasma, World Chain,
+  // etc. — chains we don't have a registry entry, hand-curated alias, or
+  // KNOWN_CHAINS entry for but Bungee ships a canonical icon URL for. Sync
+  // lookup against an in-memory cache populated from chrome.storage (see
+  // `bungeeChainCache.ts`).
   const bungee = getBungeeChain(chainId);
   const bungeeIcon = bungee?.icon || bungee?.logoURI || undefined;
 
   const fallback = FALLBACK_PALETTE[hashString(`${chainId}:${chainName ?? ""}`) % FALLBACK_PALETTE.length];
   return {
     iconSrc: bungeeIcon ?? DEFAULT_CHAIN_CONFIG.icon ?? undefined,
-    overlayLabel: inferOverlayLabel(chainName),
-    fallbackText: getChainInitials(chainName || bungee?.name),
+    overlayLabel: known?.isTestnet ? "T" : inferOverlayLabel(chainName),
+    fallbackText: getChainInitials(chainName || bungee?.name || known?.name),
     bg: fallback.bg,
     border: fallback.border,
     text: fallback.text,
@@ -264,6 +287,13 @@ export function getChainEnvironmentLabel(
   chainId: number,
   chainName?: string,
 ): "TESTNET" | undefined {
+  // KNOWN_CHAINS is the most precise testnet signal — it's keyed by chainId
+  // and pulled from MM's deployment registry where testnet/mainnet status
+  // is curated. Consult it before the brittle name-based heuristics so
+  // user-renamed chains still get labeled correctly.
+  const known = KNOWN_CHAINS[chainId];
+  if (known) return known.isTestnet ? "TESTNET" : undefined;
+
   const alias = findAlias(chainId, chainName);
   const normalizedName = normalizeChainName(chainName);
 

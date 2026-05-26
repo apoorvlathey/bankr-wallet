@@ -67,6 +67,14 @@ import {
 } from "./batchTxHandlers";
 import { handleSplitBatchIntoIndividualTxs } from "./splitBatchSequencer";
 import {
+  handleGetDelegationStatus,
+  handleProbeDelegateContract,
+  handleSetCustomDelegate,
+  handleRemoveCustomDelegate,
+  handleInitiateRevokeDelegation,
+  handleInitiateSetDelegation,
+} from "./delegationHandlers";
+import {
   handleAddToCrossDappBatch,
   handleAddCallsToCrossDappBatch,
   handleRemoveFromCrossDappBatch,
@@ -151,6 +159,7 @@ import {
   handleInitiateTransfer,
   handleExecuteSwapDirect,
   handleExecuteSwapBatch,
+  handleExecuteSwapAtomicPK,
   handleCancelProcessingTx,
   writeResultToStorage,
   SignatureResult,
@@ -179,11 +188,11 @@ import {
   fetchTokenInfo,
   fetchTokenPrice,
   getCachedTokenList,
-  getCachedTokenLogo,
   checkTokenAllowance,
   checkPermit2Allowance,
   getTokenBalanceWei,
 } from "./swapApi";
+import { resolveTokenLogoUrl, resolveTokenMetadata } from "./tokenMetadata";
 import {
   fetchBridgeQuote,
   fetchBridgeBuildTx,
@@ -654,9 +663,19 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   // Settings that affect security
   "setSidePanelMode",
   "setAutoLockTimeout",
+  // Full token metadata may include watched/custom-token metadata.
+  "resolveTokenMetadata",
+  // EIP-7702 delegation management
+  "getDelegationStatus",
+  "probeDelegateContract",
+  "setCustomDelegate",
+  "removeCustomDelegate",
+  "initiateSetDelegation",
+  "initiateRevokeDelegation",
   // Direct-execution / UI-only handlers (defense in depth)
   "executeSwapDirect",
   "executeSwapBatch",
+  "executeSwapAtomicPK",
   "sponsoredTransfer",
 ]);
 
@@ -1038,6 +1057,53 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "getDelegationStatus": {
+      handleGetDelegationStatus(message.accountId, message.chainId).then(
+        (result) => sendResponse(result),
+      );
+      return true;
+    }
+
+    case "probeDelegateContract": {
+      handleProbeDelegateContract(message.chainId, message.address).then(
+        (result) => sendResponse(result),
+      );
+      return true;
+    }
+
+    case "setCustomDelegate": {
+      handleSetCustomDelegate(
+        message.accountId,
+        message.chainId,
+        message.delegate,
+      ).then((result) => sendResponse(result));
+      return true;
+    }
+
+    case "removeCustomDelegate": {
+      handleRemoveCustomDelegate(message.accountId, message.chainId).then(
+        (result) => sendResponse(result),
+      );
+      return true;
+    }
+
+    case "initiateRevokeDelegation": {
+      handleInitiateRevokeDelegation(
+        message.accountId,
+        message.chainId,
+      ).then((result) => sendResponse(result));
+      return true;
+    }
+
+    case "initiateSetDelegation": {
+      handleInitiateSetDelegation(
+        message.accountId,
+        message.chainId,
+        message.targetDelegate,
+      ).then((result) => sendResponse(result));
+      return true;
+    }
+
     case "splitBatchIntoIndividualTxs": {
       const senderWindowId = sender.tab?.windowId;
       handleSplitBatchIntoIndividualTxs(
@@ -1108,7 +1174,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "confirmCrossDappBatch": {
-      handleConfirmCrossDappBatch(message.password).then((result) => {
+      handleConfirmCrossDappBatch(
+        message.password,
+        message.gasEstimates,
+      ).then((result) => {
         sendResponse(result);
       });
       return true;
@@ -2066,7 +2135,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "estimateGas": {
-      estimateGas(message.tx, message.accountAddress).then(sendResponse);
+      estimateGas(message.tx, message.accountAddress, {
+        eip7702Delegate: message.eip7702Delegate,
+        eip7702AuthCount: message.eip7702AuthCount,
+      }).then(sendResponse);
       return true;
     }
 
@@ -2397,8 +2469,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "fetchBridgeChains": {
       // Two variants: source-only (filtered to signable chains) and the
       // full destination list. UI picks per side.
-      const which = message.side === "destination" ? getBridgeDestinationChains : getBridgeSourceChains;
-      which()
+      const chainPromise =
+        message.side === "destination"
+          ? getBridgeDestinationChains()
+          : getBridgeSourceChains(message.accountType);
+      chainPromise
         .then((data) => sendResponse({ success: true, data }))
         .catch((err) =>
           sendResponse({ success: false, error: err.message }),
@@ -2434,10 +2509,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "resolveTokenMetadata": {
+      resolveTokenMetadata(message.chainId, String(message.tokenAddress || ""))
+        .then((data) => sendResponse({ success: true, data }))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
     case "lookupCustomToken": {
       // Read-only lookup against the user's customTokens storage.
       // Used by inline token-amount views as a logo fallback when the swap
-      // list / KNOWN_TOKEN_LOGOS don't have the address.
+      // list / centralized metadata resolver doesn't have the address.
       (async () => {
         try {
           const tokens = await getCustomTokens();
@@ -2529,8 +2613,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Lightweight per-token logo lookup. Returns just `{ logoUrl }` so the
       // message payload stays under a kilobyte — avoids shipping the entire
       // swap token list across the popup ↔ background channel on every
-      // render. Backed by `tokenLogo:{chainId}:{addr}` cache in storage.
-      getCachedTokenLogo(message.chainId, String(message.tokenAddress || ""))
+      // render. The resolver shares swap-list, bridge-list, watched-asset,
+      // and hardcoded-logo fallbacks.
+      resolveTokenLogoUrl(message.chainId, String(message.tokenAddress || ""))
         .then((logoUrl) => sendResponse({ success: true, logoUrl }))
         .catch((err) =>
           sendResponse({ success: false, error: err.message }),
@@ -2594,6 +2679,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message.transactions,
         message.chainName,
         message.gasEstimates,
+        {
+          accountId: message.accountId,
+          fromAddress: message.fromAddress,
+        },
       ).then((result) => {
         sendResponse(result);
       });
@@ -2606,7 +2695,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message.originalTransactions,
         message.chainId,
         message.chainName,
+        {
+          accountId: message.accountId,
+          fromAddress: message.fromAddress,
+        },
       ).then(sendResponse);
+      return true;
+    }
+
+    case "executeSwapAtomicPK": {
+      handleExecuteSwapAtomicPK({
+        originalTransactions: message.originalTransactions,
+        chainId: message.chainId,
+        chainName: message.chainName,
+        accountLock: {
+          accountId: message.accountId,
+          fromAddress: message.fromAddress,
+        },
+        gasOverrides: message.gasOverrides,
+      }).then(sendResponse);
       return true;
     }
 
@@ -2748,6 +2855,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               "portfolioSnapshots",
               "ensIdentityCache",
               "ensAvatarImageCache",
+              "customDelegates",
               ...notificationKeys,
             ]),
             chrome.storage.sync.remove([

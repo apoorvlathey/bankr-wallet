@@ -174,6 +174,50 @@ export function getResolvedChainById(
   return getResolvedChains(networksInfo).find((chain) => chain.chainId === chainId);
 }
 
+export interface NativeAssetMeta {
+  name: string;
+  symbol: string;
+  decimals: number;
+  logoUrl: string;
+  chainName: string;
+}
+
+export const ETH_NATIVE_ASSET_LOGO_URL = "/chainIcons/ethereum.svg";
+
+export function getNativeAssetLogoUrl(
+  symbol: string | undefined,
+  chainIcon: string | null | undefined,
+): string {
+  return symbol?.toUpperCase() === "ETH"
+    ? ETH_NATIVE_ASSET_LOGO_URL
+    : chainIcon || "";
+}
+
+/**
+ * Centralized native-asset resolver. Use this anywhere code needs a native
+ * token's symbol / name / decimals / logo (Send page, Swap/Bridge selectors,
+ * confirmation surfaces, tx history, etc.) so custom-added chains stay
+ * consistent with built-ins and the logo always falls back to the chain icon
+ * for non-ETH natives (AVAX, BNB, POL, …).
+ *
+ * Returns null only when the chain itself can't be resolved.
+ */
+export function getNativeAssetMeta(
+  chainId: number,
+  networksInfo: NetworksInfo | undefined,
+): NativeAssetMeta | null {
+  const chain = getResolvedChainById(chainId, networksInfo);
+  if (!chain) return null;
+  const symbol = chain.nativeCurrency.symbol;
+  return {
+    name: chain.nativeCurrency.name,
+    symbol,
+    decimals: chain.nativeCurrency.decimals,
+    logoUrl: getNativeAssetLogoUrl(symbol, chain.icon),
+    chainName: chain.name,
+  };
+}
+
 export function getDefaultChainName(
   networksInfo: NetworksInfo | undefined,
   accountType?: ChainAccountType | null,

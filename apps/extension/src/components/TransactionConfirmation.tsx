@@ -32,6 +32,7 @@ import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
 import { GasOverrides } from "@/chrome/txHandlers";
 import { getChainConfig } from "@/constants/chainConfig";
+import { useBatchPlan } from "@/hooks/useBatchPlan";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { resolveAddressToName } from "@/lib/ensUtils";
 import CalldataDecoder from "@/components/CalldataDecoder";
@@ -270,22 +271,46 @@ function TransactionConfirmation({
   // take ~100–300 ms; the spinner gives the user immediate feedback so the
   // click doesn't feel unresponsive.
   const [isRejecting, setIsRejecting] = useState(false);
+  const [isAddingToBatch, setIsAddingToBatch] = useState(false);
   const [toLabels, setToLabels] = useState<string[]>([]);
+  // eth.sh labels for the EIP-7702 delegation target (Set / Revoke txs). For
+  // non-delegation txs this stays empty and the lookup never fires.
+  const [delegateLabels, setDelegateLabels] = useState<string[]>([]);
   const [resolvedToName, setResolvedToName] = useState<string | null>(null);
   const [decodedFunctionName, setDecodedFunctionName] = useState<
     string | undefined
   >();
+  // EIP-7702 set-delegate / revoke marker. Carries the target delegate (0x0
+  // for revoke). Used to swap the title, show a human-readable banner, and
+  // pass a stable function name to the background.
+  const delegation7702 = txRequest.delegation7702Meta;
+  const is7702Revoke = delegation7702?.kind === "revoke";
+  const is7702SetDelegate = delegation7702?.kind === "setDelegate";
+  // Detect ERC20 approve calls. The dedicated approval surface is clearer
+  // than the generic ERC-7730 card, so valid approvals skip ClearSigningView
+  // below and keep the raw calldata panel collapsed for inspection.
+  const parsedApproval = useMemo(
+    () =>
+      txRequest.tx.to && txRequest.tx.data
+        ? parseApproveCalldata(txRequest.tx.data)
+        : null,
+    [txRequest.tx.to, txRequest.tx.data],
+  );
   // Clear-signing resolution lifecycle — "loading" until the descriptor
   // fetch settles. Holding off the raw CalldataDecoder until then prevents a
   // flash-open / collapse glitch when a descriptor matches.
   const clearSigningEligible = !!(
     txRequest.tx.data &&
     txRequest.tx.data !== "0x" &&
-    txRequest.tx.to
+    txRequest.tx.to &&
+    !parsedApproval
   );
   const [clearSigningStatus, setClearSigningStatus] = useState<
     "loading" | "matched" | "absent"
   >(clearSigningEligible ? "loading" : "absent");
+  useEffect(() => {
+    setClearSigningStatus(clearSigningEligible ? "loading" : "absent");
+  }, [clearSigningEligible, txRequest.id]);
   const clearSigningMatched = clearSigningStatus === "matched";
   // Surfaced from AssetChangesDisplay's simulation result. Drives the
   // top-of-screen "simulated transaction reverted" banner so the warning
@@ -323,11 +348,19 @@ function TransactionConfirmation({
   // Force inclusion info — non-null when the chain supports it and account can submit.
   // For Bankr accounts this also requires the L1 chain (e.g. Ethereum mainnet) to be
   // in BANKR_SUPPORTED_CHAIN_IDS, since Bankr API submits the L1 deposit on their end.
+  //
+  // Disabled for EIP-7702 (type-4) txs: OP Stack's L1 deposit path encodes only
+  // {to, value, gasLimit, isCreation, data} via `OptimismPortal.depositTransaction`
+  // — there is no slot for an `authorizationList`. The deposit also lands on L2
+  // as a deposit-source tx (type 0x7E) where `tx.origin` is the aliased L1
+  // sender, not the EOA, so even an already-delegated account wouldn't execute
+  // correctly. We hide the option to prevent silently dropping the auth tuple.
   const forceInclusionInfo = useMemo(() => {
+    if (delegation7702) return null;
     if (!isForceInclusionSupportedForAccount(txRequest.tx.chainId, accountType)) return null;
     const entry = FORCE_INCLUSION_CHAINS.get(txRequest.tx.chainId)!;
     return { l1ChainId: entry.l1ChainId, l1ChainName: entry.l1ChainName };
-  }, [txRequest.tx.chainId, accountType]);
+  }, [txRequest.tx.chainId, accountType, delegation7702]);
 
   const { tx, origin, chainName, favicon } = txRequest;
   const isInternalWalletChan = origin === "WalletChan";
@@ -336,12 +369,23 @@ function TransactionConfirmation({
     : null;
 
   // ─── Cross-Dapp Batch Eligibility ──────────────────────────────────────
-  // The "Add to Batch" action is only meaningful for Bankr accounts
-  // (atomic ship via Bankr API). PK / SP accounts are intentionally excluded:
-  // for them every call still requires its own signature, so combining them
-  // adds friction without benefit. A future 7702 path will lift this.
+  // Bankr accounts always qualify (atomic ship via Bankr API on Bankr-supported
+  // chains). PK / Seed Phrase accounts qualify only when the same resolver used
+  // by the ship path finds a usable 7702 delegate, including externally-set
+  // custom-chain delegations and excluding stale/incompatible ones.
   // SECURITY: impersonator (view-only) accounts cannot ship batches.
-  const canBatchAccount = accountType === "bankr";
+  const txBatchPlan = useBatchPlan({
+    accountId: txRequest.accountId ?? null,
+    accountType: accountType ?? null,
+    chainId: tx.chainId,
+  });
+  const canBatchAccount = useMemo(() => {
+    if (accountType === "bankr") return true;
+    if (accountType === "privateKey" || accountType === "seedPhrase") {
+      return txBatchPlan.strategy === "atomic-7702";
+    }
+    return false;
+  }, [accountType, txBatchPlan.strategy]);
 
   // Reason the button is disabled, or null if it's enabled. Used for the
   // tooltip popover. The button is rendered ONLY when canBatchAccount is true.
@@ -359,17 +403,24 @@ function TransactionConfirmation({
   }, [crossDappBatch, tx.from, tx.chainId]);
 
   const handleAddToBatch = () => {
+    if (isAddingToBatch) return;
+    setIsAddingToBatch(true);
     chrome.runtime.sendMessage(
       { type: "addToCrossDappBatch", txId: txRequest.id },
       (result: { success: boolean; error?: string } | undefined) => {
         if (!result?.success) {
+          setIsAddingToBatch(false);
           setError(result?.error || "Failed to add to batch");
           setState("error");
           return;
         }
         // Success: jump straight to the cross-dapp batch confirmation
         // screen so the user sees the assembled batch they just added to.
-        onAddedToBatch?.();
+        if (onAddedToBatch) {
+          onAddedToBatch();
+        } else {
+          setIsAddingToBatch(false);
+        }
       },
     );
   };
@@ -448,6 +499,24 @@ function TransactionConfirmation({
     };
   }, [tx.to, tx.chainId]);
 
+  // Fetch labels for the EIP-7702 delegation target. Skips revokes (target
+  // is 0x0). Hits the same shared eth.sh cache used by every other surface,
+  // so repeat opens of this screen + the activity modal share one fetch.
+  useEffect(() => {
+    if (!is7702SetDelegate || !delegation7702) {
+      setDelegateLabels([]);
+      return;
+    }
+    let cancelled = false;
+    getEthShLabels(delegation7702.targetDelegate, tx.chainId).then((labels) => {
+      if (cancelled) return;
+      if (labels.length > 0) setDelegateLabels(labels);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [is7702SetDelegate, delegation7702, tx.chainId]);
+
   // Reverse resolve the "to" address to get ENS/Basename/WNS name
   useEffect(() => {
     if (!tx.to) return;
@@ -468,9 +537,13 @@ function TransactionConfirmation({
         : "confirmTransactionAsync";
 
     // Determine function name: use decoded name, or "Contract Deployment" for deploys
-    const functionName = !tx.to
-      ? "Contract Deployment"
-      : decodedFunctionName || undefined;
+    const functionName = is7702Revoke
+      ? "Revoke smart-account delegation"
+      : is7702SetDelegate
+        ? "Set smart-account delegation"
+        : !tx.to
+          ? "Contract Deployment"
+          : decodedFunctionName || undefined;
 
     chrome.runtime.sendMessage(
       {
@@ -515,12 +588,6 @@ function TransactionConfirmation({
       },
     );
   };
-
-  // Detect ERC20 approve calls
-  const parsedApproval = useMemo(
-    () => (tx.to && tx.data ? parseApproveCalldata(tx.data) : null),
-    [tx.to, tx.data],
-  );
 
   // Strict ABI validation for known ERC20 selectors. When this fires we block
   // signing and show a red banner — the structured approval card is also
@@ -788,7 +855,13 @@ function TransactionConfirmation({
               letterSpacing="wider"
               noOfLines={1}
             >
-              {parsedApproval ? "Token Approval Request" : "Transaction Request"}
+              {is7702Revoke
+                ? "Revoke Smart Account"
+                : is7702SetDelegate
+                  ? "Set Smart Account"
+                  : parsedApproval
+                    ? "Token Approval Request"
+                    : "Transaction Request"}
             </Text>
           </Box>
 
@@ -879,6 +952,245 @@ function TransactionConfirmation({
             AssetChangesDisplay simulation result further down. */}
         {simulationReverted && (
           <SimulationRevertedBanner borders={tokens.borders} />
+        )}
+
+        {/* EIP-7702 revoke explainer — the raw tx is a self-call with empty
+            data; without context it'd look like a no-op. This banner spells
+            out what the user is actually about to do. */}
+        {is7702Revoke && (
+          <Box
+            p={3}
+            bg="status.warning.bg"
+            border={tokens.borders.medium}
+            borderColor="status.warning.border"
+            borderRadius="lg"
+            boxShadow="card"
+          >
+            <VStack spacing={2.5} align="stretch">
+              <Text
+                fontSize="xs"
+                color="status.warning.fg"
+                fontWeight="600"
+                lineHeight="short"
+              >
+                Sends an EIP-7702 transaction that removes your account's
+                onchain delegation on{" "}
+                <Text as="span" fontWeight="900">
+                  {txRequest.chainName}
+                </Text>
+                .
+              </Text>
+
+              <Box h="1px" bg="status.warning.border" opacity={0.5} />
+
+              <Text
+                fontSize="2xs"
+                color="status.warning.fg"
+                fontWeight="700"
+                textTransform="uppercase"
+                letterSpacing="wider"
+              >
+                After confirmation
+              </Text>
+
+              <VStack spacing={1.5} align="stretch">
+                <HStack spacing={2} align="flex-start">
+                  <Text
+                    fontSize="xs"
+                    color="status.warning.fg"
+                    fontWeight="900"
+                    lineHeight="short"
+                  >
+                    •
+                  </Text>
+                  <Text
+                    fontSize="xs"
+                    color="status.warning.fg"
+                    fontWeight="600"
+                    lineHeight="short"
+                  >
+                    Account stops behaving as a smart account.
+                  </Text>
+                </HStack>
+              </VStack>
+            </VStack>
+          </Box>
+        )}
+
+        {/* EIP-7702 set-delegation explainer — like the revoke banner, the
+            raw tx is a self-call so we need to spell out what's happening.
+            The target delegate address is the actual onchain effect. */}
+        {is7702SetDelegate && delegation7702 && (
+          <Box
+            p={3}
+            bg="status.warning.bg"
+            border={tokens.borders.medium}
+            borderColor="status.warning.border"
+            borderRadius="lg"
+            boxShadow="card"
+          >
+            <VStack spacing={2.5} align="stretch">
+              <Text
+                fontSize="xs"
+                color="status.warning.fg"
+                fontWeight="600"
+                lineHeight="short"
+              >
+                Sends an EIP-7702 transaction that delegates your account on{" "}
+                <Text as="span" fontWeight="900">
+                  {txRequest.chainName}
+                </Text>{" "}
+                to the contract below.
+              </Text>
+
+              <Box
+                p={2}
+                bg="surface.raised"
+                border="1.5px solid"
+                borderColor="status.warning.border"
+                borderRadius="md"
+              >
+                <Text
+                  fontSize="2xs"
+                  color="status.warning.fg"
+                  fontWeight="700"
+                  textTransform="uppercase"
+                  letterSpacing="wider"
+                  mb={1}
+                >
+                  Delegating to
+                </Text>
+                <HStack spacing={1.5} align="center">
+                  <Text
+                    fontSize="xs"
+                    color="text.primary"
+                    fontFamily="mono"
+                    fontWeight="700"
+                    isTruncated
+                  >
+                    {delegation7702.targetDelegate.slice(0, 10)}…
+                    {delegation7702.targetDelegate.slice(-8)}
+                  </Text>
+                  <CopyButton value={delegation7702.targetDelegate} />
+                  {(() => {
+                    const explorer =
+                      resolvedChain?.explorer ||
+                      getChainConfig(txRequest.tx.chainId).explorer;
+                    return explorer ? (
+                      <IconButton
+                        aria-label="View on explorer"
+                        icon={<ExternalLinkIcon boxSize="10px" />}
+                        size="xs"
+                        variant="ghost"
+                        minW="18px"
+                        h="18px"
+                        color="text.tertiary"
+                        onClick={() =>
+                          window.open(
+                            `${explorer}/address/${delegation7702.targetDelegate}`,
+                            "_blank",
+                          )
+                        }
+                        _hover={{
+                          color: "accent.secondary",
+                          bg: "bg.muted",
+                        }}
+                      />
+                    ) : null;
+                  })()}
+                </HStack>
+                {/* eth.sh label (e.g. "MetaMask: EIP-7702 Delegator"). Shared
+                    cache + dedup with every other label surface so this is one
+                    fetch ever per address×chain. */}
+                {delegateLabels.length > 0 && (
+                  <HStack spacing={1} mt={1.5}>
+                    <Badge
+                      bg="accent.secondary"
+                      color="accentFg.secondary"
+                      fontSize="2xs"
+                      fontWeight="800"
+                      px={1.5}
+                      py={0}
+                      border="1px solid"
+                      borderColor="border.default"
+                    >
+                      {delegateLabels[0]}
+                    </Badge>
+                  </HStack>
+                )}
+              </Box>
+
+              <Box h="1px" bg="status.warning.border" opacity={0.5} />
+
+              <Text
+                fontSize="2xs"
+                color="status.warning.fg"
+                fontWeight="700"
+                textTransform="uppercase"
+                letterSpacing="wider"
+              >
+                After confirmation
+              </Text>
+
+              <VStack spacing={1.5} align="stretch">
+                <HStack spacing={2} align="flex-start">
+                  <Text
+                    fontSize="xs"
+                    color="status.warning.fg"
+                    fontWeight="900"
+                    lineHeight="short"
+                  >
+                    •
+                  </Text>
+                  <Text
+                    fontSize="xs"
+                    color="status.warning.fg"
+                    fontWeight="600"
+                    lineHeight="short"
+                  >
+                    Your account starts behaving as a smart account on this
+                    chain.
+                  </Text>
+                </HStack>
+                <HStack spacing={2} align="flex-start">
+                  <Text
+                    fontSize="xs"
+                    color="status.warning.fg"
+                    fontWeight="900"
+                    lineHeight="short"
+                  >
+                    •
+                  </Text>
+                  <Text
+                    fontSize="xs"
+                    color="status.warning.fg"
+                    fontWeight="600"
+                    lineHeight="short"
+                  >
+                    Future multi-call batches execute as a single atomic tx.
+                  </Text>
+                </HStack>
+                <HStack spacing={2} align="flex-start">
+                  <Text
+                    fontSize="xs"
+                    color="status.warning.fg"
+                    fontWeight="900"
+                    lineHeight="short"
+                  >
+                    •
+                  </Text>
+                  <Text
+                    fontSize="xs"
+                    color="status.warning.fg"
+                    fontWeight="600"
+                    lineHeight="short"
+                  >
+                    Use Revoke in Account Settings to undo this any time.
+                  </Text>
+                </HStack>
+              </VStack>
+            </VStack>
+          </Box>
         )}
 
         {/* Clear-signing (ERC-7730) view — rendered ABOVE the tx info card,
@@ -1397,7 +1709,9 @@ function TransactionConfirmation({
                   <Button
                     variant="highlight"
                     onClick={handleAddToBatch}
-                    isDisabled={!!addToBatchDisabledReason}
+                    isDisabled={!!addToBatchDisabledReason || isAddingToBatch}
+                    isLoading={isAddingToBatch}
+                    aria-label="Add to batch"
                     fontWeight="800"
                     textTransform="uppercase"
                     letterSpacing="wide"
@@ -1499,37 +1813,68 @@ function TransactionConfirmation({
         )}
 
         {/* Action Buttons */}
-        {state !== "submitting" && (
-          <HStack spacing={3} pb={1}>
-            <Button
-              variant="secondary"
-              flex={1}
-              onClick={handleReject}
-              isLoading={isRejecting}
-              spinner={
-                <Spinner size="sm" sx={{ animationDirection: "reverse" }} />
-              }
-            >
-              Reject
-            </Button>
-            {accountType !== "impersonator" && (
+        {state !== "submitting" && (() => {
+          // Surface why Confirm is disabled so users on chains with broken
+          // RPCs (typical when first delegating on a freshly-added custom
+          // chain — fee estimation fails and validForBroadcast stays false)
+          // know what to act on. Ordered worst-first so the most actionable
+          // reason wins when multiple conditions fire at once.
+          const confirmDisabledReason = isRejecting
+            ? "Reject in progress"
+            : state === "error"
+              ? "Fix the error above before retrying"
+              : isCalldataMalformed
+                ? "Calldata is malformed — signing blocked"
+                : !splitState.ready
+                  ? splitState.label || "Waiting for prior transaction to land"
+                  : !gasValid
+                    ? "Set a valid gas fee — fee fields can't be empty / max fee must cover base + priority"
+                    : null;
+          return (
+            <HStack spacing={3} pb={1}>
               <Button
-                variant="highlight"
+                variant="secondary"
                 flex={1}
-                onClick={handleConfirm}
-                isDisabled={
-                  state === "error" ||
-                  !gasValid ||
-                  !splitState.ready ||
-                  isCalldataMalformed ||
-                  isRejecting
+                onClick={handleReject}
+                isLoading={isRejecting}
+                spinner={
+                  <Spinner size="sm" sx={{ animationDirection: "reverse" }} />
                 }
               >
-                Confirm
+                Reject
               </Button>
-            )}
-          </HStack>
-        )}
+              {accountType !== "impersonator" && (
+                <Box
+                  flex={1}
+                  // Chakra's Tooltip with shouldWrapChildren wraps the
+                  // disabled Button in a <span style="display:inline-block">
+                  // which won't stretch to fill flex={1} on its own — force
+                  // it to block / full-width so the Confirm button sits
+                  // flush with Reject.
+                  sx={{ "& > span": { display: "block", w: "full" } }}
+                >
+                  <Tooltip
+                    label={confirmDisabledReason ?? ""}
+                    isDisabled={!confirmDisabledReason}
+                    hasArrow
+                    fontSize="xs"
+                    placement="top"
+                    shouldWrapChildren
+                  >
+                    <Button
+                      variant="highlight"
+                      w="full"
+                      onClick={handleConfirm}
+                      isDisabled={!!confirmDisabledReason}
+                    >
+                      Confirm
+                    </Button>
+                  </Tooltip>
+                </Box>
+              )}
+            </HStack>
+          );
+        })()}
         </VStack>
         </Box>
       </VStack>

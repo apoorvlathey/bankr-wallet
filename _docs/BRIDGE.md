@@ -229,6 +229,7 @@ The wallet extension's Swap surface (`apps/extension/src/components/Swap/SwapVie
 - **Quote**: extension calls the same proxy via a new `fetchBridgeQuote` background message → `https://walletchan.com/api/bridge/quote`. Same response shape, same `isPremiumFee` tier — no separate sWCHAN logic lives in the extension.
 - **Build**: at confirm time, the extension re-quotes (Bungee quoteIds expire ~60s) and then calls `fetchBridgeBuildTx` for the firm `{ approvalData?, txData }`.
 - **Execute**: bridge txs flow through the existing swap handlers — `executeSwapDirect` (PK / Seed, per-call gas tier override) or `executeSwapBatch` (Bankr atomic ERC-7821). The bridge call entry carries a `bridge` field on `SwapTxEntry`, which is persisted onto the `CompletedTransaction.bridge` shape.
+- **Route selection**: prefer `manualRoutes[0]` because `/build-tx` can refresh firm calldata. If no manual route exists but `autoRoute.txData` is present, the extension treats that auto route as executable tx data and stages it directly. This covers Bungee pairs such as native XPL on Plasma → USDC on Base, where the quote can return `manualRoutes: []` and an `autoRoute` with `userOp: "tx"`.
 - **Source-tx confirmation**: standard `txReceiptPoller` (no change). Bridge metadata is set on the tx-history entry at submission time and updated by the status poller as Bungee progresses.
 - **Destination polling**: `bridgeStatusPoller` polls `/api/bridge/status?txHash=<sourceTxHash>` every 5s → 30s (15-min cap). Pending bridges persist in `chrome.storage.local` under `pendingBridges`; `runtime.onStartup` resumes interrupted polls.
 - **Notification**: on `FULFILLED` / `SETTLED` / `REFUNDED` / `EXPIRED` / `CANCELLED`, `chrome.notifications.create` fires with the destination explorer URL stored under `notification-<id>` so clicking the toast jumps to the destination tx.
@@ -236,17 +237,17 @@ The wallet extension's Swap surface (`apps/extension/src/components/Swap/SwapVie
 
 **Wallet-type coverage**: Bankr (ERC-7821 atomic batch), PrivateKey (sequential broadcast with gas tier override), SeedPhrase (sequential broadcast). Impersonator is blocked at entry, same as same-chain swaps.
 
-**Auto / Permit2 path is intentionally not implemented in the extension.** The existing handlers already cover atomic batching (Bankr) and sequential broadcast (PK / Seed) — Permit2 adds an EIP-712 signing surface none of those exercise.
+**Auto / Permit2 signature path is intentionally not implemented in the extension.** Auto routes that include `txData` are supported because they execute like normal bridge transactions. Auto routes that require `signTypedData` still remain unsupported; Permit2 adds an EIP-712 signing surface none of the existing swap handlers exercise.
 
 **Key files**:
 
 | File | Purpose |
 |---|---|
 | `apps/extension/src/chrome/bridgeApi.ts` | `fetchBridgeQuote`, `fetchBridgeBuildTx`, `fetchBridgeStatus`, 24h-cached chains + tokens helpers |
-| `apps/extension/src/chrome/bridgeChainsResolver.ts` | `getBridgeSourceChains()` / `getBridgeDestinationChains()` (CHAIN_REGISTRY ∩ Bungee EVM split) |
+| `apps/extension/src/chrome/bridgeChainsResolver.ts` | `getBridgeSourceChains(accountType)` / `getBridgeDestinationChains()`; source chains come from the runtime configured chain list (`getVisibleChains`, so user-added custom chains like Avalanche are included for PK/Seed accounts) and are kept when either 0x supports same-chain swaps or Bungee supports bridge origins. Destination chains use Bungee's EVM list. |
 | `apps/extension/src/chrome/bridgeStatusPoller.ts` | In-memory poller + `maybeStartBridgePolling` hook + `resumePendingBridgePollers` |
 | `apps/extension/src/chrome/pendingBridgeStorage.ts` | `pendingBridges` chrome.storage.local key with mutex-locked writes |
-| `apps/extension/src/components/Swap/BuyChainMenu.tsx` | Compact destination-chain dropdown rendered above the buy-token selector |
+| `apps/extension/src/components/Swap/BridgeChainTokenModal.tsx` | Unified sell/buy chain + token dropdown; sell mode uses source chains, buy mode uses destination chains |
 
 ## Common Errors
 

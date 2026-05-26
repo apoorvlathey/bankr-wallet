@@ -506,11 +506,13 @@ function TxStatusItem({
     ? !!(tx.forceInclusionMeta!.l1TxHash || tx.txHash)
     : !!(tx.txHash && explorerBase);
 
-  // Bridge destination link. The destination chain may not be in the user's
-  // chain registry — in that case getChainConfig returns a fallback with an
-  // empty explorer string, so we simply omit the icon (no broken link).
+  // Bridge destination link. Use the same runtime chain resolver as source
+  // links so user-added destination chains (e.g. Avalanche) can surface their
+  // stored explorer even when they are not built into CHAIN_REGISTRY.
   const destExplorerBase = isBridge && tx.bridge?.destinationChainId
-    ? getChainConfig(tx.bridge.destinationChainId).explorer || ""
+    ? getResolvedChainById(tx.bridge.destinationChainId, networksInfo)?.explorer ||
+      getChainConfig(tx.bridge.destinationChainId).explorer ||
+      ""
     : "";
   const hasBridgeDestLink = !!(
     isBridge && tx.bridge?.destinationTxHash && destExplorerBase
@@ -688,15 +690,37 @@ function TxStatusItem({
   // "Bridge USDC →..." in the narrow Activity row. Split on the arrow and
   // stack the destination on its own line so both the bridged token and
   // the destination chain stay readable.
+  //
+  // Fallback path: batched bridges may carry an origin without " → " (e.g.
+  // a legacy "Swap: Approve USDC for bridge" entry, or a Bankr "Batch: …"
+  // prefix). Reconstruct the two-line title from bridge + swap meta so the
+  // activity row matches sequential bridges regardless of how the batch
+  // path assembled its display string.
   const bridgeOriginParts = (() => {
     if (!isBridge) return null;
     const ARROW = " → ";
     const idx = tx.origin.indexOf(ARROW);
-    if (idx === -1) return null;
-    return {
-      head: tx.origin.slice(0, idx),
-      tail: `→ ${tx.origin.slice(idx + ARROW.length)}`,
-    };
+    if (idx !== -1) {
+      return {
+        head: tx.origin.slice(0, idx),
+        tail: `→ ${tx.origin.slice(idx + ARROW.length)}`,
+      };
+    }
+    const sellSymbol = tx.swapMeta?.sellTokenSymbol;
+    const destChain = tx.bridge?.destinationChainName;
+    if (sellSymbol && destChain) {
+      return {
+        head: `Bridge ${sellSymbol.toUpperCase()}`,
+        tail: `→ ${destChain}`,
+      };
+    }
+    if (destChain) {
+      return {
+        head: "Bridge",
+        tail: `→ ${destChain}`,
+      };
+    }
+    return null;
   })();
   const originDisplay = bridgeOriginParts ? (
     <VStack spacing={0} align="flex-start" minW={0}>

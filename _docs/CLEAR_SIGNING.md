@@ -1,13 +1,13 @@
 # Clear Signing (ERC-7730)
 
-The extension renders a human-readable view of transactions and EIP-712 signatures whenever an [ERC-7730](https://eips.ethereum.org/EIPS/eip-7730) descriptor is available for the target contract. The raw decoded view (`CalldataDecoder` / `TypedDataDisplay`) stays in the DOM, collapsed underneath the clear-signed card as **"Show raw details"**, so users can always inspect the underlying calldata.
+The extension renders a human-readable view of transactions and EIP-712 signatures whenever an [ERC-7730](https://eips.ethereum.org/EIPS/eip-7730) descriptor is available for the target contract. The raw decoded view (`CalldataDecoder` / `TypedDataDisplay`) stays in the DOM, collapsed underneath the clear-signed card as **"Show raw details"**, so users can always inspect the underlying calldata. Single ERC-20 approval transactions are the exception: `ERC20ApproveDisplay` is already the purpose-built clear surface, so the generic descriptor card is suppressed there.
 
 ## Source of descriptors
 
 Descriptors come from the public registry at [`ethereum/clear-signing-erc7730-registry`](https://github.com/ethereum/clear-signing-erc7730-registry). **Nothing is bundled** in the extension. The website acts as a thin proxy + cache:
 
-- `walletchan.com/api/clearsigning/descriptor?chainId=…&address=0x…&kind=calldata|eip712` → descriptor JSON, or 404.
-- The proxy maintains an in-memory `(chainId, address) → registry-path` index, rebuilt from the GitHub Trees API every 6 hours. A committed snapshot (`apps/website/data/clearsigning-index.json`) is the fallback when GitHub is unreachable.
+- `walletchan.com/api/clearsigning/descriptor?chainId=…&address=0x…&kind=calldata|eip712&selector=0x…|formatKey=…` → descriptor JSON, or 404.
+- The proxy uses a committed `(chainId, address) → registry path[]` snapshot (`apps/website/data/clearsigning-index.json`). When multiple registry descriptors share the same address, the route fetches candidates and returns the one whose `display.formats` matches the calldata selector or EIP-712 encoded type.
 - Regenerate the snapshot with `pnpm tsx apps/website/scripts/snapshot-clearsigning-index.ts`.
 
 ## Resolution flow
@@ -18,8 +18,8 @@ Confirmation surface
        └─ useClearSigningDescriptor(chainId, address)
             └─ message: GET_CLEAR_SIGNING_DESCRIPTOR
                  └─ clearSigningHandlers.ts (background)
-                      ├─ chrome.storage.local cache  cs:desc:<chainId>:<address>:<kind>
-                      │    (TTL 7d hits, 1d misses; schema v2)
+                      ├─ chrome.storage.local cache  cs:desc:<chainId>:<address>:<kind>:<selector|format>
+                      │    (TTL 7d hits, 1d misses; schema v3)
                       ├─ walletchan.com/api/clearsigning/descriptor (direct)
                       ├─ ON MISS → proxyResolver.ts (Safe / EIP-1967 / beacon)
                       │    └─ re-fetch descriptor for impl address
@@ -38,11 +38,12 @@ Cache entries are stamped with `schemaVersion`. On read, entries with a version 
 |---|---|
 | 1 | Initial. |
 | 2 | Proxy fallback added — pre-v2 misses cached for proxy addresses would otherwise suppress the new resolution path. |
+| 3 | Selector / EIP-712 format-aware lookups — pre-v3 hits may contain the wrong descriptor when one address has multiple registry files. |
 
-Two lookup keys, same descriptor file:
+Lookup disambiguation:
 
-- **Calldata**: `(chainId, to)` → match `display.formats[signature]` whose 4-byte selector equals `calldata[0..4]`.
-- **EIP-712**: `(chainId, domain.verifyingContract)` → match `display.formats[encodedTypeString]` whose encoded type string equals the typed-data's primaryType expansion.
+- **Calldata**: `(chainId, to, selector)` → match `display.formats[signature]` whose 4-byte selector equals `calldata[0..4]`.
+- **EIP-712**: `(chainId, domain.verifyingContract, encodedTypeString)` → match `display.formats[encodedTypeString]` whose encoded type string equals the typed-data's primaryType expansion.
 
 The registry uses **full canonical signatures** (e.g. `"exactInput((bytes path, address recipient, uint256 amountIn, uint256 amountOutMinimum) params)"`) as keys, not 4-byte selectors. The extension computes the selector from the signature at match time.
 
@@ -62,6 +63,20 @@ The registry uses **full canonical signatures** (e.g. `"exactInput((bytes path, 
 | `calldata`     | Embedded inner call — recursively renders the inner contract's descriptor as a nested `ClearSigningView`. Falls back to a "no descriptor" card (callee + value + selector + truncated bytes) when the inner contract isn't in the registry. |
 
 Unknown / unsupported formats fall through to `raw`, which always renders something safe.
+
+## Field references
+
+Registry descriptors often define reusable field templates under
+`display.definitions` and reference them from a format field with `$ref`, e.g.
+`"$.display.definitions.sendAmount"`. `applyFormat.ts` resolves these refs
+before rendering: the referenced field supplies defaults such as `label`,
+`format`, and shared `params`, while the concrete field keeps its own `path`,
+`visible`, and any overriding params.
+
+Params may also reference descriptor constants, such as
+`params.nativeCurrencyAddress: ["$.metadata.constants.addressAsEth"]`. The
+renderer resolves those constants and treats matching token addresses
+(`0xeeee…` / zero address sentinels) as native currency for `tokenAmount`.
 
 ## Nested calldata (`calldata` format)
 
@@ -113,9 +128,13 @@ Paths inside `fields[].path` use dot notation, array indexing, and byte slicing:
 | `params.path.[0:20]`   | Slice the first 20 bytes of a `bytes` value (token-in address).  |
 | `params.path.[-20:]`   | Slice the last 20 bytes (token-out address).                     |
 
+Byte slicing also works on numeric ABI values. This is needed for aggregators
+such as 1inch that pack an address into the low 160 bits of a `uint256` and
+refer to it with paths like `token.[-20:]`.
+
 ## Built-in client-side descriptors (`lib/clearSigning/builtinDescriptors.ts`)
 
-The remote registry is keyed on `(chainId, contract address)` — fine for per-app contracts (Permit2, Uniswap router, etc.) but useless for "every ERC-20 ever deployed." Rather than seeding the registry with thousands of identical entries, we synthesize a generic ERC-7730 descriptor on demand for well-known function selectors.
+The remote registry is keyed on `(chainId, contract address, selector/EIP-712 type)` — fine for per-app contracts (Permit2, Uniswap router, etc.) but useless for "every ERC-20 ever deployed." Rather than seeding the registry with thousands of identical entries, we synthesize a generic ERC-7730 descriptor on demand for well-known calldata function selectors.
 
 Today's built-in selectors:
 
@@ -160,7 +179,7 @@ Downstream propagation comes for free: sign-time handlers (`handleConfirmBatchTr
 
 | Surface                                                | Insertion                                                   |
 | ------------------------------------------------------ | ----------------------------------------------------------- |
-| `TransactionConfirmation.tsx` (single dapp tx)         | Above `CalldataDecoder`, passes `defaultCollapsed` down.    |
+| `TransactionConfirmation.tsx` (single dapp tx)         | Above `CalldataDecoder`, passes `defaultCollapsed` down. Suppressed for single ERC-20 approvals because `ERC20ApproveDisplay` already owns that UI. |
 | `BatchTransactionConfirmation.tsx` (ERC-5792 batch)    | Inline summary on every CallCard header; `BuiltinExpandedContent` swaps in `ERC20ApproveDisplay` for approves (full editor) and `ClearSigningView` for other built-ins, with TO + raw decoder + digest collapsed behind a single "Calldata" disclosure. Non-built-in calls render a top-of-screen `BatchClearSigningSummary` card per call. |
 | `CrossDappBatchConfirmation.tsx` (user-assembled)      | Inherits via the wrapped `BatchTransactionConfirmation`; provides its own `onEditCallData` override to route through `updateCallInCrossDappBatch`. |
 | `SignatureRequestConfirmation.tsx` (EIP-712 typed)     | Above `TypedDataDisplay`; raw struct collapses on hit.      |
@@ -195,7 +214,7 @@ Token metadata (`fetchTokenInfo`) and per-token logos (`getCachedTokenLogo`) fol
 
 Documented in `_docs/STORAGE.md`:
 
-- `cs:desc:<chainId>:<address>:<kind>` — descriptor cache entry (hit or miss). Includes `schemaVersion` for forward-compatible invalidation.
+- `cs:desc:<chainId>:<address>:<kind>:<selector|format>` — descriptor cache entry (hit or miss). Includes `schemaVersion` for forward-compatible invalidation.
 - `cs:enabled` — boolean opt-out flag (default `true`).
 - `ethShLabels:<chainId>:<address>` — eth.sh contract labels (7d TTL, empties cached).
 - `tokenInfo:<chainId>:<address>` — ERC-20 name/symbol/decimals (30d TTL).

@@ -20,7 +20,7 @@ export interface RecentReceivedTokenEntry {
   /** Lowercased contract address. */
   contractAddress: string;
   addedAt: number;
-  /** Metadata snapshot from `fetchTokenInfo` at the time of receipt. */
+  /** Metadata snapshot from the centralized token metadata resolver. */
   name?: string;
   symbol?: string;
   decimals?: number;

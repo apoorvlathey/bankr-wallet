@@ -26,6 +26,7 @@ export type AppView =
   | "unlock"
   | "settings"
   | "settingsAddChain"
+  | "accountSettings"
   | "pendingTxList"
   | "txConfirm"
   | "signatureConfirm"
@@ -52,6 +53,7 @@ export const SCREEN_META: Record<AppView, ScreenMeta> = {
   main: { kind: "slide", depth: 0 },
   settings: { kind: "slide", depth: 1 },
   settingsAddChain: { kind: "slide", depth: 2 },
+  accountSettings: { kind: "slide", depth: 1 },
   swap: { kind: "slide", depth: 1 },
   transfer: { kind: "slide", depth: 1 },
   chat: { kind: "slide", depth: 1 },

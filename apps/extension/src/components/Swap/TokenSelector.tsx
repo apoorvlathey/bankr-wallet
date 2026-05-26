@@ -13,8 +13,8 @@ import {
 import { ChevronDownIcon } from "@chakra-ui/icons";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import type { TokenListEntry } from "@/chrome/swapApi";
-import { getChainConfig } from "@/constants/chainConfig";
-import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import { getNativeAssetMeta } from "@/lib/chains";
+import { useNetworks } from "@/contexts/NetworksContext";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { truncateAddress } from "@/lib/addressUtils";
 import { formatTokenBalance } from "@/lib/tokenFormatUtils";
@@ -33,15 +33,6 @@ const POPULAR_PER_CHAIN: Record<number, string[]> = {
   137: ["POL", "USDC", "WETH"],
   130: ["ETH", "USDC", "WBTC", "WETH"],
 };
-
-function nativeLogoForChain(chainId: number, nativeSymbol: string): string {
-  if (nativeSymbol.toUpperCase() === "ETH") return "/chainIcons/ethereum.svg";
-  return getChainConfig(chainId)?.icon || "";
-}
-
-function getNativeCurrencyForChain(chainId: number) {
-  return CHAIN_REGISTRY.find((c) => c.chainId === chainId)?.nativeCurrency;
-}
 
 /** Convert a static token-list entry into the PortfolioToken shape parents
  *  consume for the sell side. Tokens not in the user's holdings get a zero
@@ -113,6 +104,7 @@ export default function TokenSelector({
   dropdownAlign = "left",
   isLoadingHoldings = false,
 }: TokenSelectorProps) {
+  const { networksInfo } = useNetworks();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(60);
@@ -278,8 +270,6 @@ export default function TokenSelector({
   // list, with native token pinned to our canonical icon.
   const popularTokens = useMemo(() => {
     if (searchTerm) return [];
-    const symbols = POPULAR_PER_CHAIN[chainId];
-    if (!symbols) return [];
 
     const bySymbol = new Map<string, PortfolioToken>();
     for (const h of holdings) {
@@ -291,12 +281,11 @@ export default function TokenSelector({
       if (!bySymbol.has(sym)) bySymbol.set(sym, entryToPortfolioToken(t, chainId));
     }
 
-    // Native token: ensure presence + override its logo with our local asset
-    // (portfolio-API native logos can come back wrong/missing on L2s).
-    const native = getNativeCurrencyForChain(chainId);
+    // Native token: ensure presence + override its logo via getNativeAssetMeta
+    // (custom-chain-aware; portfolio-API native logos can come back missing).
+    const native = getNativeAssetMeta(chainId, networksInfo);
     if (native) {
       const nativeSym = native.symbol.toUpperCase();
-      const canonicalLogo = nativeLogoForChain(chainId, native.symbol);
       const existing = bySymbol.get(nativeSym);
       bySymbol.set(nativeSym, {
         contractAddress: existing?.contractAddress ?? "native",
@@ -305,12 +294,17 @@ export default function TokenSelector({
         decimals: existing?.decimals ?? native.decimals,
         balance: existing?.balance ?? "0",
         balanceFormatted: existing?.balanceFormatted ?? "0",
-        logoUrl: canonicalLogo,
+        logoUrl: native.logoUrl,
         valueUsd: existing?.valueUsd ?? 0,
         priceUsd: existing?.priceUsd ?? 0,
         chainId: existing?.chainId ?? chainId,
       });
     }
+
+    // Curated list for built-in chains; for chains we don't curate (custom
+    // chains, etc.) fall back to showing at least the native token.
+    const symbols =
+      POPULAR_PER_CHAIN[chainId] ?? (native ? [native.symbol.toUpperCase()] : []);
 
     const result: PortfolioToken[] = [];
     for (const sym of symbols) {
@@ -324,7 +318,7 @@ export default function TokenSelector({
       result.push(entry);
     }
     return result;
-  }, [tokenList, holdings, excludeLower, searchTerm, chainId]);
+  }, [tokenList, holdings, excludeLower, searchTerm, chainId, networksInfo]);
 
   const handleScroll = () => {
     const el = scrollRef.current;

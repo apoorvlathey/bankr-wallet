@@ -22,7 +22,14 @@
  *    `bundleId` and are added/removed/resolved together so the dapp's
  *    atomicity expectation is preserved.
  *
- * Bankr-API accounts only (`type: "bankr"`).
+ * Account-type support:
+ *   - Bankr accounts: ship via Bankr API on Bankr-supported chains.
+ *   - PK / Seed Phrase accounts: ship via local signing + EIP-7702 atomic
+ *     batch on chains where a delegate can be resolved (Pectra-supported
+ *     built-in chains, or any chain with a user-configured custom delegate
+ *     in Account Settings). On chains without a usable delegate, "Add to
+ *     Batch" is disabled at the entry point so we never end up with an
+ *     unshippable PK/SP batch.
  */
 
 import type { TransactionParams } from "./bankrApi";
@@ -67,7 +74,13 @@ export interface CrossDappBatch {
   /** Locked at first add */
   chainId: number;
   chainName: string;
-  accountType: "bankr";
+  /**
+   * Pinned at first add so the ship path knows which submission flow to use
+   * (Bankr API for bankr; EIP-7702 atomic via local signing for PK/SP).
+   * If the user switches accounts mid-flow, the confirm handler still resolves
+   * this pinned account directly instead of rebinding to the live active account.
+   */
+  accountType: "bankr" | "privateKey" | "seedPhrase";
   entries: CrossDappBatchEntry[];
   createdAt: number;
   // SECURITY: pinned to the account that created the batch; optional for

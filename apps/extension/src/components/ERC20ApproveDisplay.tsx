@@ -7,7 +7,6 @@ import {
   Image,
   Badge,
   Input,
-  Button,
   IconButton,
   Spinner,
   Tooltip,
@@ -32,14 +31,32 @@ import { resolveAddressToName } from "@/lib/ensUtils";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { useTheme } from "@/theme";
 import { getChainConfig } from "@/constants/chainConfig";
-import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
+import {
+  getCachedTokenMetadataSync,
+  resolveTokenMetadataClient,
+} from "@/lib/tokenMetadataClient";
 
 interface TokenMeta {
   name: string;
   symbol: string;
   decimals: number;
   logoUrl?: string;
+}
+
+function toTokenMeta(
+  metadata:
+    | { name?: string; symbol?: string; decimals?: number; logoUrl?: string }
+    | null
+    | undefined,
+): TokenMeta | null {
+  if (!metadata?.symbol || typeof metadata.decimals !== "number") return null;
+  return {
+    name: metadata.name || metadata.symbol,
+    symbol: metadata.symbol,
+    decimals: metadata.decimals,
+    logoUrl: metadata.logoUrl,
+  };
 }
 
 interface ERC20ApproveDisplayProps {
@@ -140,8 +157,11 @@ export default function ERC20ApproveDisplay({
 }: ERC20ApproveDisplayProps) {
   const { tokens, themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
-  const [token, setToken] = useState<TokenMeta | null>(null);
-  const [loading, setLoading] = useState(true);
+  const initialToken = toTokenMeta(
+    getCachedTokenMetadataSync(chainId, tokenAddress),
+  );
+  const [token, setToken] = useState<TokenMeta | null>(() => initialToken);
+  const [loading, setLoading] = useState(() => !initialToken);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [currentAmount, setCurrentAmount] = useState(approval.amount);
@@ -176,56 +196,41 @@ export default function ERC20ApproveDisplay({
 
   const chainConfig = getChainConfig(chainId);
 
-  // Fetch token metadata
+  // Fetch token metadata through the centralized resolver shared by
+  // clear-signing, tx history, portfolio stubs, and batch inline summaries.
   useEffect(() => {
-    setLoading(true);
+    let cancelled = false;
+    const applyMetadata = (
+      metadata:
+        | { name?: string; symbol?: string; decimals?: number; logoUrl?: string }
+        | null
+        | undefined,
+    ) => {
+      if (cancelled) return false;
+      const next = toTokenMeta(metadata);
+      if (!next) {
+        setToken(null);
+        return false;
+      }
+      setToken(next);
+      return true;
+    };
 
-    // Fetch onchain info via background
-    const infoPromise = new Promise<{
-      success: boolean;
-      data?: { name: string; symbol: string; decimals: number };
-    }>((resolve) => {
-      chrome.runtime.sendMessage(
-        { type: "fetchTokenInfo", tokenAddress, chainId },
-        resolve,
-      );
-    });
+    const cached = getCachedTokenMetadataSync(chainId, tokenAddress);
+    if (cached === undefined) setToken(null);
+    setLoading(cached === undefined || !applyMetadata(cached));
 
-    // Fetch token list for logo
-    const listPromise = new Promise<{
-      success: boolean;
-      data?: Array<{
-        address: string;
-        logoURI: string;
-      }>;
-    }>((resolve) => {
-      chrome.runtime.sendMessage(
-        { type: "fetchSwapTokenList", chainId },
-        resolve,
-      );
-    });
-
-    Promise.all([infoPromise, listPromise])
-      .then(([infoRes, listRes]) => {
-        if (infoRes.success && infoRes.data) {
-          // Find logo from token list
-          const listEntry = listRes?.data?.find(
-            (t) =>
-              t.address.toLowerCase() === tokenAddress.toLowerCase(),
-          );
-
-          setToken({
-            name: infoRes.data.name,
-            symbol: infoRes.data.symbol,
-            decimals: infoRes.data.decimals,
-            logoUrl:
-              listEntry?.logoURI ||
-              KNOWN_TOKEN_LOGOS[tokenAddress.toLowerCase()] ||
-              undefined,
-          });
-        }
+    resolveTokenMetadataClient(chainId, tokenAddress)
+      .then((metadata) => {
+        applyMetadata(metadata);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [tokenAddress, chainId]);
 
   // Fetch spender labels
@@ -314,7 +319,9 @@ export default function ERC20ApproveDisplay({
       await navigator.clipboard.writeText(approval.spender);
       setCopiedSpender(true);
       setTimeout(() => setCopiedSpender(false), 2000);
-    } catch {}
+    } catch {
+      // Clipboard may be unavailable in some extension contexts.
+    }
   };
 
   const handleCopyToken = async () => {
@@ -322,7 +329,9 @@ export default function ERC20ApproveDisplay({
       await navigator.clipboard.writeText(tokenAddress);
       setCopiedToken(true);
       setTimeout(() => setCopiedToken(false), 2000);
-    } catch {}
+    } catch {
+      // Clipboard may be unavailable in some extension contexts.
+    }
   };
 
   if (loading) {

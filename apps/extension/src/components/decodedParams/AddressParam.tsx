@@ -45,52 +45,44 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
   const displayText = !showAddress && ensName ? ensName : truncatedAddr;
 
   return (
-    <HStack spacing={1} flexWrap="wrap" align="center">
-      {/* Name/Address toggle button */}
-      {ensName && (
-        <Button
-          size="xs"
-          h="18px"
-          px={1}
-          fontSize="9px"
-          fontWeight="700"
-          bg={showAddress ? "transparent" : "bg.muted"}
-          color="text.tertiary"
-          border="1px solid"
-          borderColor="border.subtle"
-          borderRadius={0}
-          boxShadow="none"
-          onClick={() => setShowAddress(!showAddress)}
-          _hover={{ borderColor: "border.default", boxShadow: "none" }}
-          _active={{ transform: "translate(1px, 1px)", boxShadow: "none" }}
-          title={showAddress ? "Show name" : "Show address"}
-        >
-          {showAddress ? "name" : "address"}
-        </Button>
-      )}
-
-      {/* Avatar */}
-      {avatar && (
-        <Image
-          src={cachedAvatar || avatar}
-          boxSize="16px"
-          border="1px solid"
-          borderColor="border.default"
-          objectFit="cover"
-        />
-      )}
-
-      {/* Address / ENS display */}
-      <Tooltip label={address} fontSize="xs" openDelay={400}>
-        <Text
-          fontSize="xs"
-          fontFamily="mono"
-          color="accent.secondary"
-          fontWeight="700"
-        >
-          {displayText}
-        </Text>
-      </Tooltip>
+    // Avatar + name lead so the visual identity reads first; actions cluster
+    // tightly to the right and the name/address toggle sits as a subtle
+    // suffix. Outer wrap is still allowed for very narrow widths, but each
+    // semantic group (identity / actions) is now non-wrapping so they don't
+    // split mid-cluster the way the previous layout did when the column
+    // was too narrow for everything to fit on one row.
+    <HStack
+      spacing={1}
+      flexWrap="wrap"
+      align="center"
+      maxW="100%"
+      minW={0}
+      rowGap={1}
+    >
+      <HStack spacing={1} align="center" minW={0} flexShrink={1}>
+        {avatar && (
+          <Image
+            src={cachedAvatar || avatar}
+            boxSize="16px"
+            border="1px solid"
+            borderColor="border.default"
+            objectFit="cover"
+            flexShrink={0}
+          />
+        )}
+        <Tooltip label={address} fontSize="xs" openDelay={400}>
+          <Text
+            fontSize="xs"
+            fontFamily="mono"
+            color="accent.secondary"
+            fontWeight="700"
+            isTruncated
+            maxW="100%"
+          >
+            {displayText}
+          </Text>
+        </Tooltip>
+      </HStack>
 
       {/* Labels */}
       {labels.length > 0 && (
@@ -101,6 +93,7 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
           border="1.5px solid"
           borderColor="border.default"
           borderRadius="md"
+          flexShrink={0}
         >
           <Text
             fontSize="9px"
@@ -114,8 +107,9 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
         </Box>
       )}
 
-      {/* Actions - tight spacing */}
-      <HStack spacing={0} align="center">
+      {/* Actions — copy + explorer + (if ENS resolved) name/address toggle.
+          Kept in one inner HStack so they never split across rows. */}
+      <HStack spacing={0} align="center" flexShrink={0}>
         <CopyButton value={address} />
         {explorer && (
           <Link href={`${explorer}/address/${address}`} isExternal>
@@ -128,6 +122,28 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
               _hover={{ color: "accent.secondary", bg: "bg.muted" }}
             />
           </Link>
+        )}
+        {ensName && (
+          <Button
+            size="xs"
+            h="18px"
+            px={1}
+            ml={0.5}
+            fontSize="9px"
+            fontWeight="700"
+            bg={showAddress ? "transparent" : "bg.muted"}
+            color="text.tertiary"
+            border="1px solid"
+            borderColor="border.subtle"
+            borderRadius={0}
+            boxShadow="none"
+            onClick={() => setShowAddress(!showAddress)}
+            _hover={{ borderColor: "border.default", boxShadow: "none" }}
+            _active={{ transform: "translate(1px, 1px)", boxShadow: "none" }}
+            title={showAddress ? "Show name" : "Show address"}
+          >
+            {showAddress ? "name" : "address"}
+          </Button>
         )}
       </HStack>
     </HStack>

@@ -204,6 +204,22 @@ function buildButton(t: ThemeTokens) {
         _hover: {
           bg: "accent.highlight",
           opacity: 0.9,
+          // Chakra's default `_disabled` drops opacity to 0.4; combined with
+          // our amber bg + dark text in Midnight, the whole button (including
+          // its label) collapses into the background and reads as an empty
+          // void. Pin the disabled bg + color explicitly and use a softer
+          // opacity so the button stays legible while still clearly showing
+          // it's not actionable.
+          _disabled: {
+            bg: "accent.highlight",
+            color: "accentFg.highlight",
+            opacity: 0.65,
+          },
+        },
+        _disabled: {
+          bg: "accent.highlight",
+          color: "accentFg.highlight",
+          opacity: 0.65,
         },
         _active: pressActive,
       },

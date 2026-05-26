@@ -10,6 +10,8 @@ import {
   Spacer,
   FormControl,
   FormLabel,
+  InputGroup,
+  InputRightElement,
   Spinner,
 } from "@chakra-ui/react";
 import { ArrowBackIcon, WarningTwoIcon } from "@chakra-ui/icons";
@@ -139,6 +141,11 @@ function EditChain({
     doSave();
   };
 
+  const numericChainId = chainId ? Number.parseInt(chainId, 10) : NaN;
+  const chainIdHex = Number.isFinite(numericChainId)
+    ? `0x${numericChainId.toString(16)}`
+    : "";
+
   useEffect(() => {
     if (networksInfo) {
       const entry = networksInfo[chainName];
@@ -221,15 +228,43 @@ function EditChain({
         <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
           Chain ID
         </FormLabel>
-        <Input
-          placeholder="Chain ID"
-          value={chainId}
-          isReadOnly
-          bg="surface.sunken"
-          color="text.tertiary"
-          cursor="not-allowed"
-          opacity={0.7}
-        />
+        <InputGroup>
+          <Input
+            placeholder="Chain ID"
+            value={chainId}
+            isReadOnly
+            bg="surface.sunken"
+            color="text.tertiary"
+            cursor="not-allowed"
+            opacity={0.7}
+            pr={chainIdHex ? "5.75rem" : undefined}
+          />
+          {chainIdHex && (
+            <InputRightElement width="5.5rem" pointerEvents="none">
+              <VStack spacing={0} align="flex-end" lineHeight="1">
+                <Text
+                  as="span"
+                  color="text.tertiary"
+                  fontSize="2xs"
+                  fontWeight="700"
+                  textTransform="uppercase"
+                  opacity={0.75}
+                >
+                  hex:
+                </Text>
+                <Text
+                  as="span"
+                  color="text.tertiary"
+                  fontFamily="mono"
+                  fontSize="xs"
+                  fontWeight="700"
+                >
+                  {chainIdHex}
+                </Text>
+              </VStack>
+            </InputRightElement>
+          )}
+        </InputGroup>
         <Text fontSize="xs" color="text.tertiary" mt={1} fontWeight="500">
           Chain ID cannot be changed
         </Text>

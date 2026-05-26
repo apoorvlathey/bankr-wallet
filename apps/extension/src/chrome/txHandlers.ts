@@ -27,7 +27,6 @@ import {
   getAccounts,
   addPrivateKeyAccount as addPKAccountStorage,
   removeAccount,
-  addressExists,
   removeSeedGroup,
   updateSeedGroupCount,
 } from "./accountStorage";
@@ -39,9 +38,11 @@ import {
 } from "./vaultCrypto";
 import {
   signAndBroadcastTransaction,
+  signEip7702Authorization,
   handleSignatureRequest as localSignatureRequest,
   deriveAddress,
 } from "./localSigner";
+import { bumpGasForEip7702Auth } from "./gasEstimation";
 import {
   savePendingTxRequest,
   removePendingTxRequest,
@@ -1145,6 +1146,8 @@ async function processLocalTransactionInBackground(
     functionName,
     parentBundleId: pending.parentBundleId,
     bundleIndex: pending.bundleIndex,
+    delegation7702Meta: pending.delegation7702Meta,
+    accountId: pending.accountId,
   });
 
   // If no function name provided by UI, try background lookup
@@ -1173,7 +1176,7 @@ async function processLocalTransactionInBackground(
 
     // Merge gas overrides if provided
     // When overrides are set, remove legacy gasPrice to avoid conflict with EIP-1559 params
-    const txForSigning = gasOverrides
+    const baseTx = gasOverrides
       ? {
           ...pending.tx,
           nonce,
@@ -1184,6 +1187,40 @@ async function processLocalTransactionInBackground(
         }
       : { ...pending.tx, nonce };
 
+    // EIP-7702 set-delegate / revoke: sign the authorization tuple here (nonce
+    // = txNonce + 1 because this same EOA both broadcasts the tx and bumps its
+    // nonce one slot during processing). Then route through localSigner's
+    // type-4 path.
+    //
+    // Gas: whatever the UI's `eth_estimateGas` returned doesn't include the
+    // intrinsic cost of the authorization tuple (the simulator can't see one
+    // that hasn't been built yet). `bumpGasForEip7702Auth` adds a chain-aware
+    // overhead so we don't trip "intrinsic gas too low" — critical on
+    // non-standard-gas chains like MegaETH where the chain's own intrinsic
+    // formula is multiples higher than mainline EVM.
+    const meta = pending.delegation7702Meta;
+    const bumpedGasHex = `0x${bumpGasForEip7702Auth(
+      pending.tx.chainId,
+      baseTx.gas ? BigInt(baseTx.gas) : 0n,
+      1,
+    ).toString(16)}` as `0x${string}`;
+    const txForSigning = meta
+      ? {
+          ...baseTx,
+          gas: bumpedGasHex,
+          type: "eip7702" as const,
+          authorizationList: [
+            await signEip7702Authorization(privateKey, {
+              contractAddress: meta.targetDelegate,
+              chainId: pending.tx.chainId,
+              nonce: nonce + 1,
+              rpcUrl,
+              customChainMeta,
+            }),
+          ],
+        }
+      : baseTx;
+
     // Sign and broadcast the transaction
     const result = await signAndBroadcastTransaction(
       privateKey,
@@ -1191,6 +1228,14 @@ async function processLocalTransactionInBackground(
       rpcUrl,
       customChainMeta,
     );
+
+    // EIP-7702 storage sync is no longer done here — see
+    // `applyReceiptToHistory` in `txReceiptPoller.ts`. Mirroring at broadcast
+    // time was unsafe: a tx that broadcasts but reverts (or never lands)
+    // would have stripped a still-valid saved override. The receipt path
+    // gates the mirror on a confirmed success and survives sync-send chains
+    // where `result.txHash` may be set but the storage-mirror branch ran
+    // before status was actually known.
     const txHash = result.txHash;
 
     // Sync-send chains (e.g., MegaETH) return the receipt with the broadcast —
@@ -1583,8 +1628,15 @@ export async function handleAddPrivateKeyAccount(
     // Derive address from private key
     const address = deriveAddress(privateKey);
 
-    // Check if address already exists
-    if (await addressExists(address)) {
+    // View-only impersonators are allowed to coexist with a real signing
+    // account for the same EOA. Block only duplicates that would create two
+    // signing/API-backed account records for one address.
+    const duplicateAccount = (await getAccounts()).find(
+      (account) =>
+        account.address.toLowerCase() === address.toLowerCase() &&
+        account.type !== "impersonator",
+    );
+    if (duplicateAccount) {
       return {
         success: false,
         error: "An account with this address already exists",
@@ -1792,6 +1844,64 @@ export interface SwapTxEntry {
   bridge?: import("./txHistoryStorage").BridgeMeta;
 }
 
+export interface SwapAccountLock {
+  accountId?: string;
+  fromAddress?: string;
+}
+
+async function resolveLockedSwapAccount(
+  lock: SwapAccountLock | undefined,
+): Promise<{ ok: true; account: Account } | { ok: false; error: string }> {
+  if (!lock?.accountId || !lock.fromAddress) {
+    return { ok: false, error: "Prepared swap is missing its account lock" };
+  }
+
+  const account = await getAccountById(lock.accountId);
+  if (!account) {
+    return { ok: false, error: "Account no longer exists" };
+  }
+
+  const lockedFrom = lock.fromAddress.toLowerCase();
+  if (account.address.toLowerCase() !== lockedFrom) {
+    return {
+      ok: false,
+      error: "Prepared swap account does not match the locked from address",
+    };
+  }
+
+  if (account.type === "impersonator") {
+    return { ok: false, error: "View-only accounts cannot execute swaps" };
+  }
+
+  return { ok: true, account };
+}
+
+function validateLockedSwapTransactions(
+  transactions: SwapTxEntry[],
+  fromAddress: string,
+  expectedChainId?: number,
+): { ok: true } | { ok: false; error: string } {
+  const lockedFrom = fromAddress.toLowerCase();
+  for (const entry of transactions) {
+    if (entry.tx.from.toLowerCase() !== lockedFrom) {
+      return {
+        ok: false,
+        error: "Prepared swap transaction does not match the locked from account",
+      };
+    }
+    if (
+      expectedChainId !== undefined &&
+      entry.tx.chainId !== expectedChainId
+    ) {
+      return {
+        ok: false,
+        error: "Prepared swap transaction chain does not match the requested chain",
+      };
+    }
+  }
+  return { ok: true };
+}
+
 /**
  * Directly signs and broadcasts swap transactions (approval + swap) without
  * going through the TransactionConfirmation screen. Handles all wallet types.
@@ -1804,12 +1914,25 @@ export async function handleExecuteSwapDirect(
   // entry per `transactions[i]`. Optional for back-compat — Bankr accounts
   // and the legacy code paths still work without this.
   gasEstimates?: { gasLimit: string; maxFeePerGas: string; maxPriorityFeePerGas: string }[],
+  accountLock?: SwapAccountLock,
 ): Promise<{ success: boolean; txIds?: string[]; error?: string }> {
   if (transactions.length === 0) {
     return { success: false, error: "No transactions provided" };
   }
 
   const chainId = transactions[0].tx.chainId;
+  const locked = await resolveLockedSwapAccount(accountLock);
+  if (!locked.ok) {
+    return { success: false, error: locked.error };
+  }
+  const validation = validateLockedSwapTransactions(
+    transactions,
+    locked.account.address,
+    chainId,
+  );
+  if (!validation.ok) {
+    return { success: false, error: validation.error };
+  }
 
   // Validate chain is configured
   const swapRpc = await getRpcUrl(chainId);
@@ -1817,11 +1940,7 @@ export async function handleExecuteSwapDirect(
     return { success: false, error: `Chain ${chainId} not configured` };
   }
 
-  // Resolve account
-  const account = await getActiveAccount();
-  if (!account) {
-    return { success: false, error: "No account found" };
-  }
+  const account = locked.account;
 
   // SECURITY: impersonator accounts are view-only — block all swap execution.
   if (account.type === "impersonator") {
@@ -2167,17 +2286,31 @@ export async function handleExecuteSwapBatch(
   originalTransactions: SwapTxEntry[],
   chainId: number,
   chainName: string,
+  accountLock?: SwapAccountLock,
 ): Promise<{ success: boolean; txIds?: string[]; error?: string }> {
+  if (originalTransactions.length === 0) {
+    return { success: false, error: "No transactions provided" };
+  }
+
   // Validate chain
   if (!BANKR_SUPPORTED_CHAIN_IDS.has(chainId)) {
     return { success: false, error: `Chain not supported for Bankr API accounts` };
   }
 
-  // Resolve account
-  const account = await getActiveAccount();
-  if (!account) {
-    return { success: false, error: "No account found" };
+  const locked = await resolveLockedSwapAccount(accountLock);
+  if (!locked.ok) {
+    return { success: false, error: locked.error };
   }
+  const validation = validateLockedSwapTransactions(
+    originalTransactions,
+    locked.account.address,
+    chainId,
+  );
+  if (!validation.ok) {
+    return { success: false, error: validation.error };
+  }
+
+  const account = locked.account;
   // SECURITY: impersonator accounts are view-only — block all swap execution.
   if (account.type === "impersonator") {
     return { success: false, error: "View-only accounts cannot execute swaps" };
@@ -2212,6 +2345,14 @@ export async function handleExecuteSwapBatch(
   // (typically the last entry). Carry it onto the wrapping ERC-7821 tx so
   // status polling kicks off when the batch tx confirms onchain.
   const bridge = originalTransactions.find((t) => t.bridge)?.bridge;
+  // The activity tab + tx-detail modal both branch on `origin` containing
+  // " → " to render the rich bridge UI. Use the bridge/swap entry's origin
+  // (e.g. "Bridge USDC → Arbitrum") instead of a generic "Batch: …" prefix
+  // so batched bridges render the same as their sequential counterparts.
+  const mainEntry =
+    originalTransactions.find((t) => t.bridge) ??
+    originalTransactions.find((t) => t.swapMeta) ??
+    originalTransactions[0];
 
   // Pre-estimate gas for the outer ERC-7821 batch tx and forward it to Bankr.
   // Bankr's server-side estimator underestimates Universal Router / V4-hook
@@ -2242,8 +2383,8 @@ export async function handleExecuteSwapBatch(
   const pending = pinnedTxRequest(account, {
     id: txId,
     tx: batchTxParams,
-    origin: `Batch: ${functionNames}`,
-    favicon: originalTransactions[0]?.favicon ?? null,
+    origin: mainEntry?.origin ?? `Batch: ${functionNames}`,
+    favicon: mainEntry?.favicon ?? originalTransactions[0]?.favicon ?? null,
     chainName,
     timestamp: Date.now(),
   });
@@ -2252,6 +2393,203 @@ export async function handleExecuteSwapBatch(
   processSwapTxBankr(txId, pending, apiKey, `Batch: ${functionNames}`, swapMeta, bridge);
 
   return { success: true, txIds: [txId] };
+}
+
+/**
+ * PK/Seed atomic swap submission via EIP-7702 + ERC-7821.
+ *
+ * Mirror of `handleExecuteSwapBatch` for self-custody accounts: the same
+ * `[approve, swap]` (or `[approve, bridge]`) sequence ships as a single
+ * onchain tx via the type-4 path used by `wallet_sendCalls`, so the user
+ * gets the same one-hash atomicity Bankr accounts get on supported chains.
+ *
+ * Eligibility is decided on the SwapView side via `getDelegationStatus`;
+ * if the resolver here returns no delegate, we error out so the caller can
+ * fall back to the sequential `executeSwapDirect` path.
+ */
+export async function handleExecuteSwapAtomicPK(args: {
+  originalTransactions: SwapTxEntry[];
+  chainId: number;
+  chainName: string;
+  accountLock?: SwapAccountLock;
+  gasOverrides?: {
+    gasLimit: string;
+    maxFeePerGas: string;
+    maxPriorityFeePerGas: string;
+  };
+}): Promise<{ success: boolean; txIds?: string[]; error?: string }> {
+  const {
+    originalTransactions,
+    chainId,
+    chainName,
+    accountLock,
+    gasOverrides,
+  } = args;
+  if (originalTransactions.length === 0) {
+    return { success: false, error: "No transactions provided" };
+  }
+
+  const locked = await resolveLockedSwapAccount(accountLock);
+  if (!locked.ok) {
+    return { success: false, error: locked.error };
+  }
+  const validation = validateLockedSwapTransactions(
+    originalTransactions,
+    locked.account.address,
+    chainId,
+  );
+  if (!validation.ok) {
+    return { success: false, error: validation.error };
+  }
+
+  const account = locked.account;
+  if (account.type === "impersonator") {
+    return { success: false, error: "View-only accounts cannot execute swaps" };
+  }
+  if (account.type !== "privateKey" && account.type !== "seedPhrase") {
+    return {
+      success: false,
+      error: "Atomic-7702 swap requires a PK or Seed Phrase account",
+    };
+  }
+
+  // Mirror of the PK/SP unlock pattern in handleExecuteSwapDirect — relies on
+  // cached vault / session restoration only. The swap entry points always
+  // operate on a logged-in user; if the cache is empty we surface "Wallet
+  // must be unlocked" so the UI can prompt rather than silently failing.
+  let privateKey = getPrivateKeyFromCache(account.id);
+  if (!privateKey) {
+    const vaultKey = getCachedVaultKey();
+    if (!vaultKey) {
+      const autoLockTimeout = await getAutoLockTimeout();
+      if (autoLockTimeout === 0) {
+        const restored = await tryRestoreSession(handleUnlockWallet);
+        if (restored) privateKey = getPrivateKeyFromCache(account.id);
+      }
+    }
+    if (!privateKey) {
+      const cachedVaultKey = getCachedVaultKey();
+      if (cachedVaultKey) {
+        const { decryptAllKeysWithVaultKey } = await import("./authHandlers");
+        const vault = await decryptAllKeysWithVaultKey(cachedVaultKey);
+        if (vault) setCachedVault(vault);
+      }
+      privateKey = getPrivateKeyFromCache(account.id);
+    }
+    if (!privateKey) {
+      return { success: false, error: "Wallet must be unlocked" };
+    }
+  }
+
+  const resolved = await getStoredResolvedChainById(chainId);
+  if (!resolved?.rpcUrl) {
+    return { success: false, error: "Chain has no RPC URL configured" };
+  }
+
+  // Resolve the active delegate. If nothing usable, refuse — SwapView will
+  // fall back to the sequential `executeSwapDirect` path. Don't silently
+  // downgrade to auto-sequential here; the caller (and the user) already
+  // committed to atomic by reaching this handler.
+  const { resolveActiveDelegate } = await import(
+    "../utils/delegationResolution"
+  );
+  const resolution = await resolveActiveDelegate({
+    accountId: account.id,
+    accountAddress: account.address as `0x${string}`,
+    chainId,
+    rpcUrl: resolved.rpcUrl,
+  });
+  if (!resolution.delegate) {
+    return {
+      success: false,
+      error:
+        "No EIP-7702 delegate available for this account on this chain. Configure a custom delegate in Account Settings or switch chains.",
+    };
+  }
+
+  // Build the synthetic batch: each prepared tx becomes one inner ERC-5792
+  // call. The handler reads `params.calls` and encodes them via
+  // `encodeBatchCalls(calls, EOA)` — same call shape as dapp-initiated
+  // `wallet_sendCalls`.
+  const calls = originalTransactions.map((t) => ({
+    to: (t.tx.to ?? "0x0000000000000000000000000000000000000000") as `0x${string}`,
+    data: (t.tx.data ?? "0x") as `0x${string}`,
+    value: (t.tx.value ?? "0x0") as `0x${string}`,
+  }));
+
+  // History metadata: swapMeta lives on one of the inner txs (typically the
+  // swap, not the approve); bridge lives on the last entry for cross-chain
+  // routes. Same extraction rule as `handleExecuteSwapBatch` so the activity
+  // modal renders consistently regardless of account type.
+  const swapMeta = originalTransactions.find((t) => t.swapMeta)?.swapMeta;
+  const bridge = originalTransactions.find((t) => t.bridge)?.bridge;
+  // Pick the bridge/swap entry's origin (e.g. "Bridge USDC → Arbitrum" or
+  // "Swap USDC to ETH") so the activity row renders the same rich UI as
+  // sequential bridges — two-line "Bridge X / → Chain" title, overlapping
+  // sell/buy token icons, "Bridging to …" status. Falling back to the first
+  // entry would surface the approval's "Approve USDC for bridge" instead.
+  const mainEntry =
+    originalTransactions.find((t) => t.bridge) ??
+    originalTransactions.find((t) => t.swapMeta) ??
+    originalTransactions[0];
+  const functionNames = originalTransactions
+    .map((t) => t.functionName || t.origin)
+    .filter(Boolean) as string[];
+
+  const bundleId = crypto.randomUUID();
+  const { pinnedBatchTxRequest } = await import("./pinnedRequest");
+  const pending = pinnedBatchTxRequest(account, {
+    id: bundleId,
+    params: {
+      version: "1.0",
+      chainId: `0x${chainId.toString(16)}` as `0x${string}`,
+      from: account.address as `0x${string}`,
+      calls,
+    },
+    origin: mainEntry?.origin ?? "swap",
+    favicon: mainEntry?.favicon ?? originalTransactions[0]?.favicon ?? null,
+    chainName,
+    chainId,
+    timestamp: Date.now(),
+  });
+
+  // Synthesize the same single wrapped estimate shape that the atomic-7702
+  // confirmation UI emits for dapp batches. The broadcaster uses this gas
+  // limit exactly, so the values shown/edited by the user are the values signed.
+  const precomputedGasEstimates = gasOverrides
+    ? [
+        {
+          gasLimit: gasOverrides.gasLimit,
+          maxFeePerGas: gasOverrides.maxFeePerGas,
+          maxPriorityFeePerGas: gasOverrides.maxPriorityFeePerGas,
+          baseFee: "0",
+          estimatedCostWei: "0",
+          nativePriceUsd: null,
+          nativeCurrencySymbol: "",
+          accountBalance: "0",
+          insufficientBalance: false,
+          estimationFailed: false,
+          dappProvidedGas: false,
+        },
+      ]
+    : undefined;
+
+  const { processBatchTransactionAtomic7702InBackground } = await import(
+    "./batchTxHandlers"
+  );
+  void processBatchTransactionAtomic7702InBackground(
+    bundleId,
+    pending,
+    { id: account.id, address: account.address, type: account.type },
+    privateKey,
+    resolution.delegate,
+    resolution.needsAuthorization,
+    functionNames.length ? functionNames : undefined,
+    precomputedGasEstimates,
+    { swapMeta, bridge },
+  );
+
+  return { success: true, txIds: [bundleId] };
 }
 
 /**

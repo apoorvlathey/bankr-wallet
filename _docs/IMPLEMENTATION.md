@@ -224,6 +224,13 @@ Native asset price/logo resolution is centralized in `src/chrome/coingeckoServic
 - The service batches CoinGecko `coins/markets` requests across a short buffer window, caches market data in memory + `chrome.storage.local`, and caches search/resolution results for unknown custom assets
 - On CoinGecko `429`, the service falls back to cached/stale data and backs off briefly instead of hammering the API
 
+ERC-20 display metadata is centralized in `src/chrome/tokenMetadata.ts`.
+
+- Resolves name/symbol/decimals via `fetchTokenInfo`
+- Resolves logos through the swap token list, Bungee token list, watched-asset custom tokens, and `tokenLogoConstants.ts`
+- Used by receipt asset-change extraction, tx details backfill, clear-signed snapshots, batch call summaries, approve cards, and portfolio auto-add stubs so custom swap/bridge chains do not diverge by page
+- Logo image bytes are warmed through the shared `ensAvatarImageCache` sanitizer as soon as a metadata lookup finds a URL. Renderer pages read that cache through `src/lib/avatarCacheClient.ts`, which keeps a small `localStorage` mirror for synchronous first-paint reuse while `chrome.storage.local` remains the canonical cache.
+
 ### Per-Account-Type Chain Restrictions
 
 Not all chains are supported by all account types. The Bankr API only supports a subset of built-in chains (currently Ethereum, Arbitrum, Base, BNB Chain, Polygon, Unichain — see `isBankrSupported: true` in `chainRegistry.ts`). Newer chains like Optimism and MegaETH are available for PK, Seed Phrase, and Impersonator accounts only. PK / Seed / Impersonator accounts can additionally add arbitrary custom EVM chains via Settings → Chains; Bankr accounts cannot use custom chains.
@@ -360,13 +367,17 @@ src/
 │   ├── gasEstimation.ts     # Pre-confirmation gas estimation (RPC fees, CoinGecko USD price)
 │   ├── bankrApi.ts          # Bankr API client (submit, sign, job polling)
 │   ├── portfolioApi.ts      # Portfolio API client (fetches token holdings via website)
+│   ├── tokenMetadata.ts     # Shared ERC-20/native metadata resolver (swap list, Bungee list, custom tokens)
+│   ├── tokenLogoConstants.ts # Hardcoded token-logo fallbacks not covered by upstream token lists
 │   ├── onchainBalances.ts   # Onchain balance verification via Multicall3 batching
 │   ├── transferUtils.ts     # ERC20/native token transfer calldata builders
 │   ├── chatApi.ts           # Chat API client for Bankr agent
 │   ├── chatStorage.ts       # Persistent storage for chat conversations
 │   ├── pendingTxStorage.ts  # Persistent storage for pending transactions
 │   ├── pendingSignatureStorage.ts # Persistent storage for pending signature requests
-│   └── txHistoryStorage.ts  # Persistent storage for completed transaction history
+│   ├── txHistoryStorage.ts  # Persistent storage for completed transaction history
+│   ├── delegationHandlers.ts # EIP-7702 delegate management (getStatus / setCustom / removeCustom / probe / revoke)
+│   └── delegationStorage.ts # Per-account × per-chain custom delegate overrides
 ├── constants/
 │   ├── chainRegistry.ts     # Single source of truth for all chain data
 │   ├── networks.ts          # Re-exports network constants from chainRegistry
@@ -921,14 +932,14 @@ The same path covers ERC-5792 batched txs because the ERC-7821 wrapper is itself
 After a tx confirms successfully, `applyReceiptToHistory` (in `txReceiptPoller.ts`) fires-and-forgets `extractAndStoreAssetChanges` from `chrome/assetChangesExtractor.ts`. The extractor:
 
 1. Decodes the receipt's `logs[]` for ERC-20 `Transfer(from, to, amount)` events (topic0 = `0xddf252ad…`, exactly 3 topics — ERC-721 logs have 4 and are skipped naturally) where the lowercased `from` OR `to` matches the sender. Internal pool routing is filtered out.
-2. Resolves `symbol/decimals/logoUrl` per unique token via the existing `fetchTokenInfo` + `getCachedTokenLogo` (both cached in `chrome.storage.local`).
+2. Resolves `symbol/decimals/logoUrl` per unique token via `tokenMetadata.ts`, which shares swap-list, Bungee-list, watched-asset, and hardcoded-logo fallbacks.
 3. Computes the sender's pure native-value flow as `balance(blockNumber) - balance(blockNumber-1) + gasCost`, where `gasCost = gasUsed * effectiveGasPrice + (l1Fee || 0)`. The historical-balance call retries up to 3× with 2s backoff to absorb load-balanced RPCs that briefly don't yet know about `blockNumber-1`; if it never resolves, `nativeDelta` is left undefined and the modal silently hides the row.
 4. Writes the resulting `AssetChangeRecord` onto the existing tx-history entry via `updateTxInHistory({ assetChanges })` — purely additive, no migration required.
-5. Seeds `recentlyReceivedTokens` (5-minute TTL cache) for every inbound ERC-20 so `loadPortfolioTokenCatalog` (`chrome/portfolioTokens.ts`) can inject a synthetic stub into the portfolio before the upstream portfolio API has re-indexed. The on-chain balance multicall in `TokenHoldings` overwrites balance with the live value; Coingecko backfills price/logo.
+5. Seeds `recentlyReceivedTokens` (5-minute TTL cache) for every inbound ERC-20 so `loadPortfolioTokenCatalog` (`chrome/portfolioTokens.ts`) can inject a synthetic stub into the portfolio before the upstream portfolio API has re-indexed. The on-chain balance multicall in `TokenHoldings` overwrites balance with the live value; CoinGecko/GeckoTerminal backfills price while `tokenMetadata.ts` backfills any missing symbol/logo.
 
 **Bridge destination leg.** When `bridgeStatusPoller.checkAndApplyStatus` sees a destination `txHash` arrive for the first time (`!priorEntry?.bridge?.destinationTxHash`), it fires `extractAndStoreDestinationAssetChanges` against the destination chain's RPC (resolved via `getRpcUrl`). Same decoder, `payerForGas: false` (the receiver didn't pay gas on the dest chain), written to `destAssetChanges`. The modal renders a second `AssetChangesCard` titled "On {destChainName}".
 
-**Refresh wiring.** `TokenHoldings.tsx` listens for `chrome.runtime.onMessage` events of type `txHistoryUpdated`. When the updated entry's `from` or `bridge.receiverAddress` matches the displayed wallet AND it carries `assetChanges` or `destAssetChanges`, the portfolio is force-reloaded so the freshly cached `recentlyReceivedTokens` are merged immediately.
+**Refresh wiring.** `updateTxInHistory()` broadcasts `txHistoryUpdated` with `updatedTx` and `changedKeys` (top-level fields from the update object). `TokenHoldings.tsx` listens for entries whose `from` or `bridge.receiverAddress` matches the displayed wallet AND that carry `assetChanges` or `destAssetChanges`, then force-reloads so the freshly cached `recentlyReceivedTokens` are merged immediately. `PortfolioTabs.tsx` also listens, but only refreshes balances for balance-relevant `changedKeys` (`status`, `txHash`, `completedAt`, `assetChanges`, `destAssetChanges`); bridge-only progress updates (`changedKeys: ["bridge"]`) must not trigger portfolio RPC sweeps across every visible chain.
 
 **Failure surface.** Both extraction paths are wrapped in try/catch + `console.warn`. A failing RPC, malformed receipt, or transient storage error must never block the confirmation notification (source path) or the bridge state machine (destination path).
 
@@ -987,6 +998,7 @@ Additional fields populated after transaction submission:
 
 - `accountType` — `"bankr" | "privateKey" | "seedPhrase"` — which account type submitted the tx
 - `functionName` — Human-readable function name extracted from decoded calldata (see Function Name Resolution below)
+- `batchCallOrigins` — optional `{ origin, favicon }[]` captured for cross-dapp batch history entries. It aligns one-to-one with the encoded ERC-7821 calls so TxDetailModal can render each contributing dapp in the decoded call list; old entries fall back to the batch-level `origin/favicon`.
 - `gasData` — Gas fee breakdown fetched asynchronously after tx confirms (see Gas Data Fetching below)
 
 #### GasData Interface
@@ -1092,6 +1104,15 @@ Users can clear transaction history via Settings:
 - Confirmation modal prevents accidental deletion
 - Message: "This will permanently delete all transaction records. This action cannot be undone."
 
+## ERC-5792 Bundle Status Storage
+
+`bundleStatuses` is stored as a single array in `chrome.storage.local` and is
+read by `wallet_getCallsStatus`. `bundleStatusStorage.ts` serializes
+`saveBundleStatus`, `updateBundleStatus`, and cleanup writes with an in-process
+lock so concurrent read-modify-write operations cannot clobber each other. This
+is required for cross-dapp batches where one confirmed onchain transaction fans
+out terminal status updates to multiple source `wallet_sendCalls` bundle IDs.
+
 ## Token Holdings & Transfers
 
 ### Portfolio API
@@ -1121,6 +1142,7 @@ API portfolio data is shown immediately, while onchain balances are verified in 
 - User-added custom ERC-20 tokens from `chrome.storage.local.customTokens`
 - Native token placeholders for visible custom chains
 - CoinGecko USD price fallback for custom-chain native tokens when the portfolio API has no price (for example `MON` on Monad)
+- ERC-20 metadata fallback via `tokenMetadata.ts` so recently received/custom tokens can reuse the same logo/name source as Swap/Bridge selectors
 - The CoinGecko fallback runs through the background `coingeckoService.ts`, which batches lookups and persists market/search caches in `chrome.storage.local` so reopening the popup doesn't cold-start CoinGecko traffic each time
 
 This prevents the send/swap/holdings views from drifting when custom tokens or custom chains are added.
@@ -1654,7 +1676,13 @@ The following message handlers attempt session restoration when auto-lock is "Ne
 | `revealSeedPhrase`                 | Reveal seed phrase (security-sensitive)  |
 | `setAgentPassword`                 | Set agent password (in authHandlers.ts)  |
 | `cancelTransaction`                | Cancel in-progress transaction           |
-| `confirmCrossDappBatch`            | Ship the user-assembled cross-dapp batch via Bankr API |
+| `confirmCrossDappBatch`            | Ship the user-assembled cross-dapp batch via Bankr API or PK/SP EIP-7702 local signing |
+| `initiateSetDelegation` / `initiateRevokeDelegation` | Queue Smart Account Set/Revoke txs; final storage mirror is reconciled from `eth_getCode(EOA)` after receipt |
+
+**Account pinning for prepared work**:
+
+- Dapp-created pending txs and `wallet_sendCalls` batches are pinned at request creation with `accountId`, `accountAddress`, and `accountType`. Cross-dapp batch add/confirm handlers must resolve that pinned account directly; they must never fall back to the current active account when `params.from` is omitted or when the user switches accounts while the request is open.
+- Internal swap/bridge confirmations capture `{ accountId, fromAddress }` when the quote is prepared. `executeSwapDirect`, `executeSwapBatch`, and `executeSwapAtomicPK` must resolve that locked account directly and reject if the stored account address differs from the lock, or if any prepared transaction's `tx.from` / `chainId` differs from the locked values.
 
 **CRITICAL: Adding New Handlers**
 
@@ -1928,12 +1956,13 @@ Build command: `pnpm build`
 | `getSeedGroups`                    | Get all seed group metadata                                                                     |
 | `renameSeedGroup`                  | Rename a seed group (broadcasts accountsUpdated)                                                |
 | `initiateTransfer`                 | Create pending tx for extension-initiated token transfer                                        |
+| `GET_CLEAR_SIGNING_DESCRIPTOR`     | Resolve an ERC-7730 descriptor for `{ chainId, address, kind }`, optionally disambiguated by calldata `selector` or EIP-712 `formatKey`. Public metadata only; no credentials. |
 
 ### Background → Views (chrome.runtime broadcast)
 
 | Type                         | Description                                     |
 | ---------------------------- | ----------------------------------------------- |
-| `txHistoryUpdated`           | Notifies views that transaction history changed |
+| `txHistoryUpdated`           | Notifies views that transaction history changed. `updateTxInHistory()` includes `updatedTx` and `changedKeys`; add/history-clear broadcasts may omit `changedKeys`. |
 | `newPendingTxRequest`        | Notifies views of new pending transaction       |
 | `newPendingSignatureRequest` | Notifies views of new pending signature request |
 | `accountsUpdated`            | Notifies views that accounts list changed       |
@@ -2236,12 +2265,16 @@ SwapView (internal sellChainId, buyChainId — never updates the global chain)
   └─ different chain → bridge mode
        1. fetchBridgeQuote → walletchan.com/api/bridge/quote
           (server applies sWCHAN-tiered fee; same isPremiumFee surfaced)
-       2. handlePrepareBridge → fetchBridgeBuildTx for firm tx data
-       3. SwapTxEntry[]: [approve?, bridge] with bridge meta on the last entry
-       4. SwapConfirmation (same screen) renders with bridgeMeta prop —
+       2. route selection → prefer manualRoutes[0]; fallback to autoRoute.txData
+          when Bungee returns executable tx data without Permit2 typed-data
+       3. handlePrepareBridge → fetchBridgeBuildTx for manual route firm tx data
+          OR use autoRoute.txData directly
+       4. SwapTxEntry[]: [approve?, bridge] with bridge meta on the last entry
+       5. SwapConfirmation (same screen) renders with bridgeMeta prop —
           title flips, dest chain badge appears, gas plumbing unchanged.
-       5. Bankr path: encodeBatchCalls → ERC-7821 atomic via executeSwapBatch.
-          PK / Seed path: sequential via executeSwapDirect (per-call gas tier).
+       6. Bankr path: encodeBatchCalls → ERC-7821 atomic via executeSwapBatch.
+          PK / Seed path: EIP-7702 atomic via executeSwapAtomicPK when a delegate
+          is available; otherwise sequential via executeSwapDirect.
 ```
 
 ### Persisting & polling destination status

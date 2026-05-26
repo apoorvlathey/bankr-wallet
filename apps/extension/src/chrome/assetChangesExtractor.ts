@@ -17,7 +17,7 @@
  * confirmation notification or the bridge state machine.
  */
 
-import { fetchTokenInfo, getCachedTokenLogo } from "./swapApi";
+import { resolveTokenMetadata } from "./tokenMetadata";
 import { getRpcUrl } from "./txHandlers";
 import { updateTxInHistory, type AssetChangeRecord, type AssetTransferRecord } from "./txHistoryStorage";
 import { addReceivedToken } from "./recentlyReceivedTokens";
@@ -246,16 +246,10 @@ async function extractFromReceipt({
   >();
   await Promise.all(
     uniqueTokens.map(async (addr) => {
-      const [info, logo] = await Promise.all([
-        fetchTokenInfo(addr, chainId).catch(() => null),
-        getCachedTokenLogo(chainId, addr).catch(() => null),
-      ]);
-      metaByToken.set(addr, {
-        name: info?.name,
-        symbol: info?.symbol,
-        decimals: info?.decimals,
-        logoUrl: logo ?? undefined,
-      });
+      metaByToken.set(
+        addr,
+        await resolveTokenMetadata(chainId, addr).catch(() => ({})),
+      );
     }),
   );
 
@@ -405,8 +399,8 @@ async function seedRecentlyReceived(
   for (const transfer of record.erc20Transfers) {
     if (transfer.direction !== "in") continue;
     // Pass through the metadata we already resolved during extraction so the
-    // portfolio loader can render the token's symbol immediately without
-    // waiting on another `fetchTokenInfo` round-trip.
+    // portfolio loader can render the token's symbol/logo immediately without
+    // waiting on another token-metadata round-trip.
     await addReceivedToken(chainId, transfer.token, {
       symbol: transfer.symbol,
       decimals: transfer.decimals,

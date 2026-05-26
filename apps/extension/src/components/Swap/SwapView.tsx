@@ -13,21 +13,16 @@ import {
   InputRightElement,
   Spinner,
   Icon,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
   Slider,
   SliderTrack,
   SliderFilledTrack,
   SliderThumb,
   SliderMark,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon, TimeIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, TimeIcon } from "@chakra-ui/icons";
 import LoadingDots from "@/components/LoadingDots";
 import { parseEther, parseUnits, formatUnits } from "viem";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { useChainBadgeStyle, useTheme } from "@/theme";
 import { type PortfolioToken } from "@/chrome/portfolioApi";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import { formatTokenAmountFromBase } from "@/lib/tokenFormatUtils";
@@ -45,10 +40,15 @@ import {
 import {
   SWAP_SUPPORTED_CHAIN_IDS,
   BANKR_SUPPORTED_CHAIN_IDS,
-  CHAIN_REGISTRY,
 } from "@/constants/chainRegistry";
 import { getChainConfig } from "@/constants/chainConfig";
-import { getStoredRpcUrl } from "@/lib/chains";
+import {
+  getStoredRpcUrl,
+  getResolvedChainById,
+  getNativeAssetLogoUrl,
+  getNativeAssetMeta,
+} from "@/lib/chains";
+import { useNetworks } from "@/contexts/NetworksContext";
 import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
 import type { ERC5792Call } from "@/chrome/erc5792Types";
@@ -59,6 +59,10 @@ import SwapQuoteDisplay from "./SwapQuoteDisplay";
 import BridgeQuoteDisplay from "./BridgeQuoteDisplay";
 import SlippageSettings from "./SlippageSettings";
 import SwapConfirmation from "./SwapConfirmation";
+import {
+  getExecutableBridgeRoute,
+  getExecutableBridgeRouteSelection,
+} from "./bridgeRouteUtils";
 import ChainIcon from "@/components/ChainIcon";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import {
@@ -88,8 +92,49 @@ function to0xToken(token: PortfolioToken): string {
     : token.contractAddress;
 }
 
+/**
+ * Resolve the EIP-7702 delegate for a PK/Seed account × chain pair so the
+ * swap path can decide between sequential broadcasts and an atomic 7702 tx.
+ * Returns null when no usable delegate exists (chain not Pectra-supported +
+ * no custom override) — caller falls back to the sequential path.
+ *
+ * Note: capability resolution lives entirely in the background — this is a
+ * thin wrapper over the existing `getDelegationStatus` message so the swap
+ * surface doesn't reach into delegate internals.
+ */
+function resolveSwapDelegate(
+  accountId: string,
+  chainId: number,
+): Promise<{
+  delegate: `0x${string}`;
+  needsAuth: boolean;
+  onchainDelegate: `0x${string}` | null;
+} | null> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      { type: "getDelegationStatus", accountId, chainId },
+      (res: any) => {
+        if (chrome.runtime.lastError || !res?.success || !res?.delegate) {
+          resolve(null);
+          return;
+        }
+        resolve({
+          delegate: res.delegate,
+          needsAuth: Boolean(res.needsAuthorization),
+          // Forwarded so SwapConfirmation can render the "Replacing existing
+          // delegation" variant of the smart-account banner when the EOA is
+          // already delegated to a non-7821 contract.
+          onchainDelegate: res.onchainDelegate ?? null,
+        });
+      },
+    );
+  });
+}
+
 interface SwapViewProps {
   fromAddress: string;
+  /** Active account ID — needed to resolve the EIP-7702 delegate for PK/Seed atomic swaps. Undefined falls back to sequential. */
+  accountId?: string;
   accountType: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
   chainId: number;
   chainName: string;
@@ -102,6 +147,7 @@ interface SwapViewProps {
 
 function SwapView({
   fromAddress,
+  accountId,
   accountType,
   chainId: initialChainId,
   chainName: initialChainName,
@@ -120,46 +166,31 @@ function SwapView({
   // Internal per-side chain state. Buy defaults to sell so a same-chain swap
   // is one click away; the user changes buyChainId only when they want to
   // bridge. Neither writes back to the global chain.
-  const [sellChainId, setSellChainId] = useState<number>(initialChainId);
-  const [buyChainId, setBuyChainId] = useState<number>(initialChainId);
+  //
+  // If the user lands here with an unsupported global chain (e.g. a custom
+  // testnet), fall back to Ethereum so the form is immediately usable. The
+  // per-side chain pickers inside the token selectors then let them retarget
+  // to whichever supported chain they actually want.
+  const initialSwapChainId = SWAP_SUPPORTED_CHAIN_IDS.has(initialChainId)
+    ? initialChainId
+    : 1;
+  const [sellChainId, setSellChainId] = useState<number>(initialSwapChainId);
+  const [buyChainId, setBuyChainId] = useState<number>(initialSwapChainId);
   // Shadow the prop with the internal sell-side chain. Existing references
   // throughout the file (token list, allowance checks, portfolio loads…)
   // continue to read `chainId` and naturally retarget to the source chain.
   const chainId = sellChainId;
+  const { networksInfo } = useNetworks();
   const sellChainConfig = getChainConfig(sellChainId);
-  const chainName = sellChainConfig.name || initialChainName;
+  const resolvedSellChainName =
+    getResolvedChainById(sellChainId, networksInfo)?.name;
+  const chainName =
+    resolvedSellChainName || sellChainConfig.name || initialChainName;
+  const resolvedBuyChainName =
+    getResolvedChainById(buyChainId, networksInfo)?.name ??
+    getChainConfig(buyChainId).name;
   const isBridge = sellChainId !== buyChainId;
   const toast = useThemedToast();
-  const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
-  const [chainSearch, setChainSearch] = useState("");
-  const chainSearchInputRef = useRef<HTMLInputElement>(null);
-  const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
-  const [highlightedChainIndex, setHighlightedChainIndex] = useState(0);
-  const normalizedChainSearch = chainSearch.trim().toLowerCase();
-  const filteredSwapChains = normalizedChainSearch
-    ? CHAIN_REGISTRY.filter(
-        (c) =>
-          c.isSwapSupported &&
-          (c.name.toLowerCase().includes(normalizedChainSearch) ||
-            String(c.chainId).includes(normalizedChainSearch)),
-      )
-    : CHAIN_REGISTRY.filter((c) => c.isSwapSupported);
-  const chainConfig = getChainConfig(chainId);
-  // Chain MenuButton badge colors — all per-theme branching lives in the hook.
-  const chainBadgeStyle = useChainBadgeStyle(chainConfig.bg, chainConfig.text);
-
-  useEffect(() => {
-    if (!isChainMenuOpen) return;
-    const timeoutId = window.setTimeout(() => {
-      chainSearchInputRef.current?.focus();
-      chainSearchInputRef.current?.select();
-    }, 30);
-    return () => window.clearTimeout(timeoutId);
-  }, [isChainMenuOpen]);
-  useEffect(() => {
-    setHighlightedChainIndex(0);
-  }, [chainSearch, isChainMenuOpen]);
 
   // Holdings (filtered to the current sell chain)
   const [holdings, setHoldings] = useState<PortfolioToken[]>([]);
@@ -248,6 +279,22 @@ function SwapView({
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [preparedTransactions, setPreparedTransactions] = useState<SwapTxEntry[] | null>(null);
   const [preparedBatchTx, setPreparedBatchTx] = useState<{ to: string; data: string; value: string } | null>(null);
+  const [preparedAccountLock, setPreparedAccountLock] = useState<{
+    accountId: string;
+    fromAddress: string;
+  } | null>(null);
+  // For PK/SP atomic-7702 swaps: the delegate resolved at prepare time +
+  // whether the EOA needs a fresh authorization tuple bundled into the
+  // broadcast. `delegate` is null on Bankr atomic (server-side) and on
+  // PK/SP flows that fell back to sequential. `needsAuth` matters only for
+  // gas estimation — when true, MultiTxGasEstimateDisplay applies the
+  // delegate's code as a state override so the wrapped tx simulates
+  // correctly pre-authorization.
+  const [prepared7702, setPrepared7702] = useState<{
+    delegate: `0x${string}`;
+    needsAuth: boolean;
+    onchainDelegate: `0x${string}` | null;
+  } | null>(null);
   const [preparedQuote, setPreparedQuote] = useState<SwapQuoteResponse | null>(null);
   // Per-call gas estimates from the SwapConfirmation tier picker. Bubbled
   // up from MultiTxGasEstimateDisplay → SwapConfirmation → here, then
@@ -539,7 +586,8 @@ function SwapView({
   }, [chainId, isSwapSupported]);
 
   // -----------------------------------------------------------------------
-  // Resolve buy token info
+  // Resolve buy token info on the receive chain. In bridge mode, native-token
+  // sentinel metadata must come from `buyChainId`, not the source `chainId`.
   // -----------------------------------------------------------------------
   useEffect(() => {
     if (tokenInfoTimerRef.current) clearTimeout(tokenInfoTimerRef.current);
@@ -547,19 +595,26 @@ function SwapView({
     // Skip re-fetch if handleBuyTokenSelect already provided the info
     if (buyInfoSetBySelectRef.current) {
       buyInfoSetBySelectRef.current = false;
+      setBuyTokenLoading(false);
       return;
     }
 
     setBuyTokenInfo(null);
 
     const addr = buyTokenAddress.trim();
-    if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) return;
+    if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+      setBuyTokenLoading(false);
+      return;
+    }
 
+    let cancelled = false;
+    const lookupChainId = buyChainId;
     setBuyTokenLoading(true);
-    tokenInfoTimerRef.current = setTimeout(() => {
+    const timerId = setTimeout(() => {
       chrome.runtime.sendMessage(
-        { type: "fetchTokenInfo", tokenAddress: addr, chainId },
+        { type: "fetchTokenInfo", tokenAddress: addr, chainId: lookupChainId },
         (res) => {
+          if (cancelled) return;
           setBuyTokenLoading(false);
           if (res?.success && res.data) {
             setBuyTokenInfo(res.data);
@@ -569,7 +624,15 @@ function SwapView({
         },
       );
     }, 300);
-  }, [buyTokenAddress, chainId]);
+    tokenInfoTimerRef.current = timerId;
+    return () => {
+      cancelled = true;
+      clearTimeout(timerId);
+      if (tokenInfoTimerRef.current === timerId) {
+        tokenInfoTimerRef.current = null;
+      }
+    };
+  }, [buyTokenAddress, buyChainId]);
 
   // -----------------------------------------------------------------------
   // Fetch buy token USD price
@@ -688,7 +751,7 @@ function SwapView({
           (res) => {
             setQuoteLoading(false);
             setQuote(null);
-            if (res?.success && res.data?.result?.manualRoutes?.length > 0) {
+            if (res?.success && getExecutableBridgeRoute(res.data)) {
               setBridgeQuote(res.data);
               setQuoteError(null);
             } else {
@@ -748,22 +811,9 @@ function SwapView({
     }
     let cancelled = false;
     (async () => {
-      const cfg = getChainConfig(buyChainId);
-      if (cfg.nativeCurrency) {
-        const native = cfg.nativeCurrency;
-        const logo =
-          native.symbol.toUpperCase() === "ETH"
-            ? "/chainIcons/ethereum.svg"
-            : cfg.icon || "";
-        if (!cancelled) {
-          setDestNativeInfo({
-            symbol: native.symbol,
-            name: native.name,
-            decimals: native.decimals,
-            logoUrl: logo,
-            chainName: cfg.name,
-          });
-        }
+      const meta = getNativeAssetMeta(buyChainId, networksInfo);
+      if (meta) {
+        if (!cancelled) setDestNativeInfo(meta);
         return;
       }
       try {
@@ -779,8 +829,11 @@ function SwapView({
           symbol: native.symbol || "",
           name: native.name || native.symbol || "",
           decimals: native.decimals ?? 18,
-          logoUrl: native.logoURI || native.icon || "",
-          chainName: bChain?.name ?? cfg.name,
+          logoUrl: getNativeAssetLogoUrl(
+            native.symbol,
+            native.logoURI || native.icon,
+          ),
+          chainName: bChain?.name ?? getChainConfig(buyChainId).name,
         });
       } catch {
         // Cache miss / proxy error — silently skip the suggestion.
@@ -789,7 +842,7 @@ function SwapView({
     return () => {
       cancelled = true;
     };
-  }, [isBridge, quoteError, quoteLoading, buyChainId]);
+  }, [isBridge, quoteError, quoteLoading, buyChainId, networksInfo]);
 
   // -----------------------------------------------------------------------
   // Swap direction toggle
@@ -899,9 +952,7 @@ function SwapView({
 
       const listMatch = tokenList.find((t) => t.address.toLowerCase() === addrLower);
       const logoUrl = isNative
-        ? symbol.toUpperCase() === "ETH"
-          ? "/chainIcons/ethereum.svg"
-          : getChainConfig(chainId)?.icon || ""
+        ? getNativeAssetMeta(chainId, networksInfo)?.logoUrl ?? ""
         : listMatch?.logoURI || KNOWN_TOKEN_LOGOS[addrLower] || "";
 
       setResolvedSellToken({
@@ -1111,8 +1162,11 @@ function SwapView({
           resolve,
         );
       });
-      const route = fresh?.data?.result?.manualRoutes?.[0];
-      if (!fresh?.success || !route?.quoteId) {
+      const routeSelection = fresh?.success
+        ? getExecutableBridgeRouteSelection(fresh.data)
+        : null;
+      const route = routeSelection?.route;
+      if (!fresh?.success || !route) {
         toast({
           title: "Bridge quote failed",
           description: fresh?.error || "Could not refresh bridge quote",
@@ -1122,21 +1176,42 @@ function SwapView({
         return;
       }
 
-      // 3. Resolve firm tx data via /bridge/build-tx. Bungee's quote
-      // sometimes includes txData inline, but the dedicated build endpoint
-      // is the authoritative source per the integration docs.
-      const built = await new Promise<{ success: boolean; data?: import("@walletchan/shared/bungee").BungeeBuildTxResponse; error?: string }>((resolve) => {
-        chrome.runtime.sendMessage(
-          { type: "fetchBridgeBuildTx", quoteId: route.quoteId },
-          resolve,
-        );
-      });
-      const built_txData = built?.data?.result?.txData;
-      const built_approval = built?.data?.result?.approvalData;
-      if (!built?.success || !built_txData) {
+      // 3. Resolve executable tx data. Manual routes require build-tx;
+      // auto-tx routes already carry txData and do not need Permit2 signing.
+      let built_txData = route.txData;
+      let built_approval = route.approvalData ?? null;
+      if (routeSelection.source === "manual") {
+        if (!route.quoteId) {
+          toast({
+            title: "Bridge quote failed",
+            description: "Bungee did not return a quote id",
+            status: "error",
+            duration: 3000,
+          });
+          return;
+        }
+        const built = await new Promise<{ success: boolean; data?: import("@walletchan/shared/bungee").BungeeBuildTxResponse; error?: string }>((resolve) => {
+          chrome.runtime.sendMessage(
+            { type: "fetchBridgeBuildTx", quoteId: route.quoteId },
+            resolve,
+          );
+        });
+        built_txData = built?.data?.result?.txData;
+        built_approval = built?.data?.result?.approvalData ?? null;
+        if (!built?.success || !built_txData) {
+          toast({
+            title: "Bridge build failed",
+            description: built?.error || "Could not build bridge transaction",
+            status: "error",
+            duration: 3000,
+          });
+          return;
+        }
+      }
+      if (!built_txData) {
         toast({
           title: "Bridge build failed",
-          description: built?.error || "Could not build bridge transaction",
+          description: "Bungee did not return bridge transaction data",
           status: "error",
           duration: 3000,
         });
@@ -1201,33 +1276,55 @@ function SwapView({
           value: `0x${BigInt(built_txData.value || "0").toString(16)}`,
           chainId: sellChainId,
         },
-        origin: `Bridge ${sellToken.symbol.toUpperCase()} → ${getChainConfig(buyChainId).name}`,
+        origin: `Bridge ${sellToken.symbol.toUpperCase()} → ${resolvedBuyChainName}`,
         favicon: sellToken.logoUrl || null,
         swapMeta,
         bridge: {
           sourceChainId: sellChainId,
           destinationChainId: buyChainId,
-          destinationChainName: getChainConfig(buyChainId).name,
+          destinationChainName: resolvedBuyChainName,
           routeName: route.routeDetails?.name,
           receiverAddress: fromAddress,
         },
       });
 
-      // 5. Build atomic ERC-7821 batch for Bankr.
-      const isBatchSupported =
+      // 5. Decide atomicity path (mirror of the swap-path logic above). For
+      // cross-chain bridges, the inner txs are typically `[approve, bridge]`
+      // and the batch tx carries the bridge meta forward so destination
+      // polling kicks off on confirm.
+      const isBankrBatchSupported =
         accountType === "bankr" && BANKR_SUPPORTED_CHAIN_IDS.has(sellChainId);
       let batchTx: { to: string; data: string; value: string } | null = null;
-      if (isBatchSupported && transactions.length > 1) {
-        const calls: ERC5792Call[] = transactions.map((t) => ({
-          to: t.tx.to as `0x${string}`,
-          data: (t.tx.data || "0x") as `0x${string}`,
-          value: (t.tx.value || "0x0") as `0x${string}`,
-        }));
-        batchTx = encodeBatchCalls(calls, fromAddress);
+      let pkAtomic: { delegate: `0x${string}`; needsAuth: boolean } | null = null;
+      if (transactions.length > 1) {
+        if (isBankrBatchSupported) {
+          const calls: ERC5792Call[] = transactions.map((t) => ({
+            to: t.tx.to as `0x${string}`,
+            data: (t.tx.data || "0x") as `0x${string}`,
+            value: (t.tx.value || "0x0") as `0x${string}`,
+          }));
+          batchTx = encodeBatchCalls(calls, fromAddress);
+        } else if (
+          (accountType === "privateKey" || accountType === "seedPhrase") &&
+          accountId
+        ) {
+          const resolved = await resolveSwapDelegate(accountId, sellChainId);
+          if (resolved) {
+            const calls: ERC5792Call[] = transactions.map((t) => ({
+              to: t.tx.to as `0x${string}`,
+              data: (t.tx.data || "0x") as `0x${string}`,
+              value: (t.tx.value || "0x0") as `0x${string}`,
+            }));
+            batchTx = encodeBatchCalls(calls, fromAddress);
+            pkAtomic = resolved;
+          }
+        }
       }
 
       setPreparedTransactions(transactions);
       setPreparedBatchTx(batchTx);
+      setPreparedAccountLock(accountId ? { accountId, fromAddress } : null);
+      setPrepared7702(pkAtomic);
       // Reuse the same `preparedQuote` slot so SwapConfirmation's
       // existing buy-amount renderer works. We synthesize a 0x-shaped
       // payload from the bridge route so the existing fields the
@@ -1471,24 +1568,51 @@ function SwapView({
         swapMeta,
       });
 
-      // 4. Prepare batch encoding for Bankr accounts with multiple txs
-      const isBatchSupported =
+      // 4. Decide atomicity path.
+      //   - Bankr / impersonator on Bankr-supported chains: batch via Bankr API.
+      //   - PK / Seed where the resolver returns a usable 7702 delegate
+      //     (Pectra-supported chain default OR a user-configured custom
+      //     delegate): batch atomically via EIP-7702 + ERC-7821.
+      //   - Otherwise: fall back to sequential broadcasts (existing behavior).
+      const isBankrBatchSupported =
         (accountType === "bankr" || accountType === "impersonator") &&
         BANKR_SUPPORTED_CHAIN_IDS.has(chainId);
 
       let batchTx: { to: string; data: string; value: string } | null = null;
-      if (isBatchSupported && transactions.length > 1) {
-        const calls: ERC5792Call[] = transactions.map((t) => ({
-          to: t.tx.to as `0x${string}`,
-          data: (t.tx.data || "0x") as `0x${string}`,
-          value: (t.tx.value || "0x0") as `0x${string}`,
-        }));
-        batchTx = encodeBatchCalls(calls, fromAddress);
+      let pkAtomic: { delegate: `0x${string}`; needsAuth: boolean } | null = null;
+
+      if (transactions.length > 1) {
+        if (isBankrBatchSupported) {
+          const calls: ERC5792Call[] = transactions.map((t) => ({
+            to: t.tx.to as `0x${string}`,
+            data: (t.tx.data || "0x") as `0x${string}`,
+            value: (t.tx.value || "0x0") as `0x${string}`,
+          }));
+          batchTx = encodeBatchCalls(calls, fromAddress);
+        } else if (
+          (accountType === "privateKey" || accountType === "seedPhrase") &&
+          accountId
+        ) {
+          const resolved = await resolveSwapDelegate(accountId, chainId);
+          if (resolved) {
+            const calls: ERC5792Call[] = transactions.map((t) => ({
+              to: t.tx.to as `0x${string}`,
+              data: (t.tx.data || "0x") as `0x${string}`,
+              value: (t.tx.value || "0x0") as `0x${string}`,
+            }));
+            batchTx = encodeBatchCalls(calls, fromAddress);
+            pkAtomic = resolved;
+          }
+        }
       }
 
       // 5. Store prepared data and show confirmation
+      setSwapGasEstimates(null);
+      setSwapGasValid(true);
       setPreparedTransactions(transactions);
       setPreparedBatchTx(batchTx);
+      setPreparedAccountLock(accountId ? { accountId, fromAddress } : null);
+      setPrepared7702(pkAtomic);
       setPreparedQuote(firmQuote.data);
       setShowConfirmation(true);
     } catch (error) {
@@ -1513,7 +1637,57 @@ function SwapView({
     setIsSubmitting(true);
 
     try {
-      if (preparedBatchTx) {
+      if (preparedBatchTx && prepared7702) {
+        // PK/Seed atomic via EIP-7702 — same one-hash UX as Bankr, signed
+        // locally. The handler resolves the password from cached session
+        // (or falls back to the standard unlock prompt); the tier-picker
+        // gas overrides flow through `gasOverrides`.
+        const overrides =
+          swapGasEstimates && swapGasEstimates.length > 0
+            ? {
+                // For atomic-7702 the gas component emits one wrapped ERC-7821
+                // tx estimate; for sequential swaps it emits per-call estimates.
+                // Sum keeps both shapes compatible with the handler contract.
+                gasLimit: String(
+                  swapGasEstimates.reduce(
+                    (acc, e) => acc + (Number(e?.gasLimit) || 0),
+                    0,
+                  ),
+                ),
+                maxFeePerGas: swapGasEstimates[0].maxFeePerGas,
+                maxPriorityFeePerGas: swapGasEstimates[0].maxPriorityFeePerGas,
+              }
+            : undefined;
+        const result = await new Promise<{
+          success: boolean;
+          txIds?: string[];
+          error?: string;
+        }>((resolve) => {
+          chrome.runtime.sendMessage(
+            {
+              type: "executeSwapAtomicPK",
+              originalTransactions: preparedTransactions,
+              chainId,
+              chainName,
+              accountId: preparedAccountLock?.accountId,
+              fromAddress: preparedAccountLock?.fromAddress,
+              gasOverrides: overrides,
+            },
+            resolve,
+          );
+        });
+
+        if (result.success) {
+          onSwapInitiated();
+        } else {
+          toast({
+            title: "Swap failed",
+            description: result.error || "Could not execute swap",
+            status: "error",
+            duration: 3000,
+          });
+        }
+      } else if (preparedBatchTx) {
         // Batch path: single atomic tx via Bankr API
         const result = await new Promise<{
           success: boolean;
@@ -1527,6 +1701,8 @@ function SwapView({
               originalTransactions: preparedTransactions,
               chainId,
               chainName,
+              accountId: preparedAccountLock?.accountId,
+              fromAddress: preparedAccountLock?.fromAddress,
             },
             resolve,
           );
@@ -1554,6 +1730,8 @@ function SwapView({
               type: "executeSwapDirect",
               transactions: preparedTransactions,
               chainName,
+              accountId: preparedAccountLock?.accountId,
+              fromAddress: preparedAccountLock?.fromAddress,
               // Forward the tier-picker selections so each tx gets the
               // user's chosen Priority / Max Fee. Falls back to viem's
               // built-in estimate when null.
@@ -1597,7 +1775,11 @@ function SwapView({
     setShowConfirmation(false);
     setPreparedTransactions(null);
     setPreparedBatchTx(null);
+    setPreparedAccountLock(null);
+    setPrepared7702(null);
     setPreparedQuote(null);
+    setSwapGasEstimates(null);
+    setSwapGasValid(true);
   };
 
   // -----------------------------------------------------------------------
@@ -1609,10 +1791,10 @@ function SwapView({
     buyTokenAddress.trim(),
   );
 
-  // Bridge route → first manual route. Auto-mode is intentionally unused on
-  // the extension side for v1 (see plan: PK/Seed + Bankr already handle
-  // multi-call without Permit2).
-  const bridgeRoute = bridgeQuote?.result?.manualRoutes?.[0];
+  // Bridge route: prefer manual build-tx routes, but accept Bungee auto routes
+  // that already include executable txData. Auto Permit2 signature routes
+  // remain unsupported in the extension.
+  const bridgeRoute = getExecutableBridgeRoute(bridgeQuote);
   /** Output amount in wei for either same-chain (0x) or cross-chain (Bungee). */
   const unifiedBuyAmount = isBridge
     ? bridgeRoute?.output?.amount
@@ -1660,205 +1842,6 @@ function SwapView({
       : null;
 
   // -----------------------------------------------------------------------
-  // Unsupported chain
-  // -----------------------------------------------------------------------
-  if (!isSwapSupported) {
-    return (
-      <Box p={4} minH="100%" bg="surface.base">
-        <VStack spacing={4} align="stretch">
-          <HStack spacing={2} justify="space-between">
-            <HStack spacing={2}>
-              <IconButton
-                aria-label="Back"
-                icon={<ArrowBackIcon />}
-                variant="ghost"
-                size="sm"
-                onClick={onBack}
-              />
-              <Text
-                fontWeight="900"
-                fontSize="lg"
-                color="text.primary"
-                textTransform="uppercase"
-                letterSpacing="wider"
-              >
-                Swap / Bridge
-              </Text>
-            </HStack>
-            {/* Chain selector — kept on the unsupported-chain screen only,
-                so the user has a way out when they land here with the wrong
-                global chain. The main surface uses per-side pickers. */}
-            <Menu
-              isOpen={isChainMenuOpen}
-              initialFocusRef={chainSearchInputRef}
-              onOpen={() => {
-                setIsChainMenuOpen(true);
-                setHighlightedChainIndex(0);
-              }}
-              onClose={() => {
-                setIsChainMenuOpen(false);
-                setChainSearch("");
-                setHighlightedChainIndex(0);
-              }}
-            >
-              <MenuButton
-                as={Box}
-                cursor="pointer"
-                bg={chainBadgeStyle.bg}
-                border="2px solid"
-                borderColor={chainBadgeStyle.border}
-                borderRadius="md"
-                px={2}
-                py={1}
-                _hover={{ opacity: 0.8 }}
-              >
-                <HStack spacing={1.5}>
-                  <ChainIcon chainId={chainId} chainName={chainName} size="16px" withChip />
-                  <Text
-                    fontSize="xs"
-                    fontWeight="700"
-                    color={chainBadgeStyle.fg}
-                    textTransform="uppercase"
-                  >
-                    {chainName}
-                  </Text>
-                  <ChevronDownIcon color={chainBadgeStyle.fg} boxSize={3} />
-                </HStack>
-              </MenuButton>
-              <MenuList
-                // Menu baseStyle paints surface tokens — keep only sizing.
-                py={0}
-                minW="160px"
-                zIndex={30}
-              >
-                <Box p={2} borderBottom="2px solid" borderColor="border.default">
-                  <InputGroup size="sm">
-                    <InputLeftElement pointerEvents="none">
-                      <Search2Icon color="text.tertiary" boxSize={3} />
-                    </InputLeftElement>
-                    <Input
-                      ref={chainSearchInputRef}
-                      value={chainSearch}
-                      onChange={(e) => setChainSearch(e.target.value)}
-                      placeholder="Search chains"
-                      border="2px solid"
-                      borderColor="border.default"
-                      fontWeight="600"
-                      pl={9}
-                      _hover={{ borderColor: "border.default" }}
-                      _focus={{ borderColor: "accent.secondary", boxShadow: "none" }}
-                      onKeyDown={(e) => {
-                        if (e.key === "ArrowDown") {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          if (filteredSwapChains.length > 0) {
-                            setHighlightedChainIndex((prev) =>
-                              Math.min(prev + 1, filteredSwapChains.length - 1),
-                            );
-                          }
-                          return;
-                        }
-                        if (e.key === "ArrowUp") {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          if (filteredSwapChains.length > 0) {
-                            setHighlightedChainIndex((prev) => Math.max(prev - 1, 0));
-                          }
-                          return;
-                        }
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const highlighted = filteredSwapChains[highlightedChainIndex];
-                          if (highlighted) {
-                            // Source-chain change. Reset buyChainId to match
-                          // (default same-chain swap). User flips to bridge
-                          // by changing only buyChainId afterwards.
-                          setSellChainId(highlighted.chainId);
-                          setBuyChainId(highlighted.chainId);
-                            setIsChainMenuOpen(false);
-                            setChainSearch("");
-                          }
-                          return;
-                        }
-                        e.stopPropagation();
-                      }}
-                    />
-                  </InputGroup>
-                </Box>
-                <Box maxH="220px" overflowY="auto">
-                {filteredSwapChains.map(
-                  (c, i, arr) => {
-                    return (
-                      <MenuItem
-                        key={c.chainId}
-                        bg={i === highlightedChainIndex ? "surface.sunken" : "transparent"}
-                        borderBottom={
-                          i < arr.length - 1 ? "2px solid" : "none"
-                        }
-                        borderColor="border.default"
-                        py={2.5}
-                        onMouseEnter={() => setHighlightedChainIndex(i)}
-                        onClick={() => {
-                          setSellChainId(c.chainId);
-                        setBuyChainId(c.chainId);
-                          setIsChainMenuOpen(false);
-                          setChainSearch("");
-                        }}
-                      >
-                        <HStack spacing={2}>
-                          <ChainIcon chainId={c.chainId} chainName={c.name} size="18px" withChip />
-                          <Text fontWeight="700" fontSize="sm">
-                            {c.name}
-                          </Text>
-                        </HStack>
-                      </MenuItem>
-                    );
-                  },
-                )}
-                {filteredSwapChains.length === 0 && (
-                  <Box px={3} py={3}>
-                    <Text fontSize="sm" fontWeight="700" color="text.secondary">
-                      No chains match "{chainSearch.trim()}".
-                    </Text>
-                  </Box>
-                )}
-                </Box>
-              </MenuList>
-            </Menu>
-          </HStack>
-          <Box
-            // Warning surface — Bauhaus yellow / Midnight recessed warning tint.
-            bg="status.warning.bg"
-            color="status.warning.fg"
-            border={isDarkTheme ? "1px solid" : "2px solid"}
-            borderColor={isDarkTheme ? "status.warning.border" : "border.default"}
-            borderRadius={isDarkTheme ? "md" : undefined}
-            boxShadow={isDarkTheme ? undefined : "card"}
-            p={4}
-          >
-            <Text
-              fontSize="sm"
-              fontWeight="700"
-              textAlign="center"
-            >
-              Swap is not available on {chainName}.
-            </Text>
-            <Text
-              fontSize="xs"
-              fontWeight="500"
-              textAlign="center"
-              mt={1}
-            >
-              Select a supported chain above.
-            </Text>
-          </Box>
-        </VStack>
-      </Box>
-    );
-  }
-
-  // -----------------------------------------------------------------------
   // Confirmation screen
   // -----------------------------------------------------------------------
   if (showConfirmation && preparedTransactions && sellToken && buyTokenInfo && preparedQuote) {
@@ -1871,7 +1854,17 @@ function SwapView({
         buyTokenInfo={buyTokenInfo}
         buyAmount={preparedQuote.buyAmount}
         buyTokenDecimals={buyTokenInfo.decimals}
-        buyTokenLogoURI={buyTokenLogoURI}
+        buyTokenLogoURI={
+          buyTokenLogoURI ||
+          (buyTokenAddress.toLowerCase() ===
+          NATIVE_TOKEN_ADDRESS.toLowerCase()
+            ? getNativeAssetMeta(buyChainId, networksInfo)?.logoUrl
+            : undefined)
+        }
+        isBuyNative={
+          buyTokenAddress.toLowerCase() ===
+          NATIVE_TOKEN_ADDRESS.toLowerCase()
+        }
         buyUsd={outputUsd}
         chainId={chainId}
         chainName={chainName}
@@ -1879,6 +1872,12 @@ function SwapView({
         accountType={accountType}
         isBatched={!!preparedBatchTx}
         batchedTx={preparedBatchTx ?? undefined}
+        eip7702Delegate={
+          prepared7702?.needsAuth ? prepared7702.delegate : undefined
+        }
+        eip7702OnchainDelegate={
+          prepared7702?.needsAuth ? prepared7702.onchainDelegate : undefined
+        }
         onConfirm={handleConfirmSwap}
         onCancel={handleCancelConfirmation}
         isSubmitting={isSubmitting}
@@ -1889,7 +1888,7 @@ function SwapView({
           isBridge
             ? {
                 destinationChainId: buyChainId,
-                destinationChainName: getChainConfig(buyChainId).name,
+                destinationChainName: resolvedBuyChainName,
                 routeName: bridgeRoute?.routeDetails?.name,
                 estimatedTime: bridgeRoute?.estimatedTime,
                 sourceNativePriceUsd: holdingsAllChains.find(
@@ -2341,6 +2340,7 @@ function SwapView({
             <HStack
               as="button"
               onClick={() => {
+                buyInfoSetBySelectRef.current = true;
                 setBuyTokenAddress(NATIVE_TOKEN_ADDRESS);
                 setBuyTokenInfo({
                   name: destNativeInfo.name,
@@ -2543,6 +2543,7 @@ function SwapView({
         }}
         triggerEl={chainTokenTriggerEl}
         mode={chainTokenModalSide ?? "sell"}
+        accountType={accountType}
         initialChainId={chainTokenModalSide === "buy" ? buyChainId : sellChainId}
         selectedTokenAddress={
           chainTokenModalSide === "buy"
@@ -2564,6 +2565,9 @@ function SwapView({
                 : sellToken.contractAddress
               : undefined
             : buyTokenAddress || undefined
+        }
+        excludeChainId={
+          chainTokenModalSide === "buy" ? sellChainId : buyChainId
         }
         onSelect={handleChainTokenModalSelect}
         fromAddress={fromAddress}

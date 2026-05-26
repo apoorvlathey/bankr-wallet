@@ -32,11 +32,15 @@ import { blo } from "blo";
 import type { Account } from "@/chrome/types";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
-import { KNOWN_TOKEN_LOGOS, getNativeCurrency } from "@/chrome/txSimulation";
+import { getNativeCurrency } from "@/chrome/txSimulation";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
 import { getChainConfig } from "@/constants/chainConfig";
+import {
+  getCachedTokenMetadataSync,
+  resolveTokenMetadataClient,
+} from "@/lib/tokenMetadataClient";
 
 const TRANSFER_SELECTOR = "0xa9059cbb";
 const APPROVE_SELECTOR = "0x095ea7b3";
@@ -148,6 +152,22 @@ interface TokenInfo {
   logoUrl?: string;
 }
 
+function toTokenInfo(
+  metadata:
+    | { symbol?: string; decimals?: number; logoUrl?: string }
+    | null
+    | undefined,
+): TokenInfo | null {
+  if (typeof metadata?.symbol !== "string" || typeof metadata.decimals !== "number") {
+    return null;
+  }
+  return {
+    symbol: metadata.symbol,
+    decimals: metadata.decimals,
+    logoUrl: metadata.logoUrl,
+  };
+}
+
 /**
  * What kind of avatar art we have for the counterparty. Controls border-radius
  * (ENS = circle, account/blockie = rounded square) so the same renderer
@@ -202,15 +222,32 @@ export function useErc20InlineSummary(
   );
   const fallbackConfig = useMemo(() => getChainConfig(chainId), [chainId]);
 
-  // Token metadata + logo — mirrors TokenAmountInline's resolution order:
-  //   symbol/decimals: onchain ERC-20 (canonical) → custom-token fallback
-  //   logo: per-token cache (swap-list backed) → custom-token image →
-  //         KNOWN_TOKEN_LOGOS hardcoded fallback
+  // Token metadata + logo goes through the same resolver as tx history,
+  // clear-signing, portfolio stubs, and swap surfaces. That resolver fans in
+  // onchain ERC-20 metadata, swap/Bungee token lists, watched custom tokens,
+  // and hardcoded logo fallbacks, then warms the shared image-byte cache.
   // Native sends short-circuit the whole fetch and read symbol/decimals out
   // of the chain registry instead; no token logo (parity with the activity
   // tab's native-send rendering — chain icon already lives on the row's
   // outer container).
-  const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
+  const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(() => {
+    if (!decoded) return null;
+    if (decoded.isNative) {
+      const native =
+        resolvedChain?.nativeCurrency ?? fallbackConfig?.nativeCurrency;
+      const builtin = getNativeCurrency(chainId);
+      return {
+        symbol: native?.symbol || builtin.symbol,
+        decimals:
+          typeof native?.decimals === "number"
+            ? native.decimals
+            : builtin.decimals,
+        logoUrl: builtin.icon || undefined,
+      };
+    }
+    if (!to || !/^0x[a-fA-F0-9]{40}$/.test(to)) return null;
+    return toTokenInfo(getCachedTokenMetadataSync(chainId, to));
+  });
   useEffect(() => {
     if (!decoded) {
       setTokenInfo(null);
@@ -243,44 +280,26 @@ export function useErc20InlineSummary(
       return;
     }
     let cancelled = false;
-    const infoP = new Promise<{ success: boolean; data?: { symbol: string; decimals: number } }>(
-      (res) => {
-        chrome.runtime.sendMessage(
-          { type: "fetchTokenInfo", tokenAddress: to, chainId },
-          res,
-        );
-      },
-    );
-    const logoP = new Promise<{ success: boolean; logoUrl?: string | null }>(
-      (res) => {
-        chrome.runtime.sendMessage(
-          { type: "fetchTokenLogo", tokenAddress: to, chainId },
-          res,
-        );
-      },
-    );
-    const customP = new Promise<{
-      success: boolean;
-      data?: { symbol: string; decimals: number; image?: string } | null;
-    }>((res) => {
-      chrome.runtime.sendMessage(
-        { type: "lookupCustomToken", tokenAddress: to, chainId },
-        res,
-      );
-    });
-    Promise.all([infoP, logoP, customP]).then(([info, logo, custom]) => {
+    const applyMetadata = (
+      metadata:
+        | { symbol?: string; decimals?: number; logoUrl?: string }
+        | null
+        | undefined,
+    ) => {
       if (cancelled) return;
-      const symbol = info?.data?.symbol ?? custom?.data?.symbol;
-      const decimals = info?.data?.decimals ?? custom?.data?.decimals;
-      if (typeof symbol !== "string" || typeof decimals !== "number") return;
-      const addrLower = to.toLowerCase();
-      const logoUrl =
-        logo?.logoUrl ||
-        custom?.data?.image ||
-        KNOWN_TOKEN_LOGOS[addrLower] ||
-        undefined;
-      setTokenInfo({ symbol, decimals, logoUrl });
-    });
+      const next = toTokenInfo(metadata);
+      if (!next) {
+        setTokenInfo(null);
+        return;
+      }
+      setTokenInfo(next);
+    };
+
+    const cached = getCachedTokenMetadataSync(chainId, to);
+    if (cached !== undefined) applyMetadata(cached);
+    else setTokenInfo(null);
+
+    resolveTokenMetadataClient(chainId, to).then(applyMetadata);
     return () => {
       cancelled = true;
     };

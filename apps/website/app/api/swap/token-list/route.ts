@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 /**
  * CoinGecko platform IDs keyed by chainId.
- * Mirrors the extension's chainRegistry coingeckoPlatformId values.
+ * Mirrors the extension's price/logo metadata map, including custom-network
+ * chains that 0x supports even when they are not built-in wallet networks.
  */
 const PLATFORM_IDS: Record<number, string> = {
   1: "ethereum",
@@ -11,6 +12,7 @@ const PLATFORM_IDS: Record<number, string> = {
   56: "binance-smart-chain",
   137: "polygon-pos",
   130: "unichain",
+  43114: "avalanche",
 };
 
 const SUPPORTED_CHAIN_IDS = new Set(Object.keys(PLATFORM_IDS).map(Number));

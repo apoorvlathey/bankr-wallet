@@ -1,6 +1,7 @@
 import {
   useState,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useRef,
   lazy,
@@ -114,14 +115,8 @@ const CrossDappBatchConfirmation = lazy(
 const ChatView = lazy(() => import("@/components/Chat/ChatView"));
 const AccountSwitcher = lazy(() => import("@/components/AccountSwitcher"));
 const AddAccount = lazy(() => import("@/components/AddAccount"));
-const RevealPrivateKeyModal = lazy(
-  () => import("@/components/RevealPrivateKeyModal"),
-);
-const RevealSeedPhraseModal = lazy(
-  () => import("@/components/RevealSeedPhraseModal"),
-);
-const AccountSettingsModal = lazy(
-  () => import("@/components/AccountSettingsModal"),
+const AccountSettings = lazy(
+  () => import("@/components/AccountSettings"),
 );
 const QRCodeModal = lazy(() =>
   import("@/components/QRCodeModal").then((m) => ({ default: m.QRCodeModal })),
@@ -152,9 +147,7 @@ if (typeof window !== "undefined") {
     void import("@/components/Chat/ChatView");
     void import("@/components/AccountSwitcher");
     void import("@/components/AddAccount");
-    void import("@/components/RevealPrivateKeyModal");
-    void import("@/components/RevealSeedPhraseModal");
-    void import("@/components/AccountSettingsModal");
+    void import("@/components/AccountSettings");
     void import("@/components/QRCodeModal");
     void import("@/components/TokenTransfer");
     void import("@/components/Swap/SwapView");
@@ -304,10 +297,6 @@ function App() {
   const [passwordType, setPasswordType] = useState<PasswordType | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
-  const [revealAccount, setRevealAccount] = useState<Account | null>(null);
-  const [revealSeedAccount, setRevealSeedAccount] = useState<Account | null>(
-    null,
-  );
   const [settingsAccount, setSettingsAccount] = useState<Account | null>(null);
   const selectedChain = getResolvedChainByName(chainName, networksInfo);
   const visibleChains = getVisibleChains(networksInfo, activeAccount?.type);
@@ -315,6 +304,10 @@ function App() {
   const chainSearchInputRef = useRef<HTMLInputElement>(null);
   const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
   const [highlightedChainIndex, setHighlightedChainIndex] = useState(0);
+  const selectedChainItemRef = useRef<HTMLElement | null>(null);
+  const chainScrollRef = useRef<HTMLDivElement | null>(null);
+  const lastChainAutoScrollTopRef = useRef<number | null>(null);
+  const userScrolledChainMenuRef = useRef(false);
   const normalizedChainSearch = chainSearch.trim().toLowerCase();
   const filteredVisibleChains = normalizedChainSearch
     ? visibleChains.filter(
@@ -326,6 +319,73 @@ function App() {
   useEffect(() => {
     setHighlightedChainIndex(0);
   }, [chainSearch, isChainMenuOpen]);
+
+  const scrollSelectedChainIntoView = useCallback(() => {
+    const node = selectedChainItemRef.current;
+    const parent = chainScrollRef.current;
+    if (!node || !parent || parent.clientHeight === 0) return;
+    if (userScrolledChainMenuRef.current) return;
+
+    if (
+      lastChainAutoScrollTopRef.current !== null &&
+      Math.abs(parent.scrollTop - lastChainAutoScrollTopRef.current) > 1
+    ) {
+      return;
+    }
+
+    const parentRect = parent.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
+    if (parentRect.height === 0 || nodeRect.height === 0) return;
+
+    const relativeTop = nodeRect.top - parentRect.top + parent.scrollTop;
+    const maxScrollTop = Math.max(0, parent.scrollHeight - parent.clientHeight);
+    const target = Math.min(
+      maxScrollTop,
+      Math.max(0, relativeTop - (parent.clientHeight - node.offsetHeight) / 2),
+    );
+
+    parent.scrollTop = target;
+    lastChainAutoScrollTopRef.current = parent.scrollTop;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isChainMenuOpen || normalizedChainSearch) {
+      lastChainAutoScrollTopRef.current = null;
+      userScrolledChainMenuRef.current = false;
+      return;
+    }
+
+    let cancelled = false;
+    const rafIds: number[] = [];
+    const timeoutIds: number[] = [];
+    const run = () => {
+      if (!cancelled) scrollSelectedChainIntoView();
+    };
+    const queueFrame = (remaining: number) => {
+      const raf = requestAnimationFrame(() => {
+        run();
+        if (remaining > 1) queueFrame(remaining - 1);
+      });
+      rafIds.push(raf);
+    };
+
+    queueFrame(3);
+    timeoutIds.push(window.setTimeout(run, 80));
+    timeoutIds.push(window.setTimeout(run, 220));
+
+    return () => {
+      cancelled = true;
+      rafIds.forEach(cancelAnimationFrame);
+      timeoutIds.forEach(clearTimeout);
+    };
+  }, [
+    filteredVisibleChains.length,
+    isChainMenuOpen,
+    normalizedChainSearch,
+    scrollSelectedChainIntoView,
+    selectedChain?.chainId,
+  ]);
+
   const visibleRpcIssueChainIds = rpcIssueChainIds.filter(
     (chainId) => !dismissedRpcIssueChainIds.includes(chainId),
   );
@@ -340,21 +400,6 @@ function App() {
     setIsChainMenuOpen(false);
     setChainSearch("");
   }, [chainName, setChainName]);
-  const {
-    isOpen: isRevealKeyOpen,
-    onOpen: onRevealKeyOpen,
-    onClose: onRevealKeyClose,
-  } = useDisclosure();
-  const {
-    isOpen: isRevealSeedOpen,
-    onOpen: onRevealSeedOpen,
-    onClose: onRevealSeedClose,
-  } = useDisclosure();
-  const {
-    isOpen: isAccountSettingsOpen,
-    onOpen: onAccountSettingsOpen,
-    onClose: onAccountSettingsClose,
-  } = useDisclosure();
   const {
     isOpen: isQROpen,
     onOpen: onQROpen,
@@ -2082,6 +2127,35 @@ function App() {
     );
   }
 
+  // Account Settings view
+  if (view === "accountSettings") {
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+          minH={0}
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <AccountSettings
+              account={settingsAccount}
+              onClose={() => {
+                setSettingsAccount(null);
+                setView("main");
+              }}
+              onAccountUpdated={loadAccounts}
+              totalAccounts={accounts.length}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
   // Chat view
   if (view === "chat") {
     return (
@@ -2210,6 +2284,7 @@ function App() {
           <Suspense fallback={<LoadingFallback />}>
             <SwapView
               fromAddress={address}
+              accountId={activeAccount?.id}
               accountType={activeAccount?.type || "bankr"}
               chainId={selectedChain?.chainId || 8453}
               chainName={chainName || "Base"}
@@ -3323,7 +3398,7 @@ function App() {
                       onAddAccount={() => setView("addAccount")}
                       onAccountSettings={(account) => {
                         setSettingsAccount(account);
-                        onAccountSettingsOpen();
+                        setView("accountSettings");
                       }}
                     />
                   </Suspense>
@@ -3337,10 +3412,14 @@ function App() {
                 lazyBehavior="unmount"
                 initialFocusRef={chainSearchInputRef}
                 onOpen={() => {
+                  lastChainAutoScrollTopRef.current = null;
+                  userScrolledChainMenuRef.current = false;
                   setIsChainMenuOpen(true);
                   setHighlightedChainIndex(0);
                 }}
                 onClose={() => {
+                  lastChainAutoScrollTopRef.current = null;
+                  userScrolledChainMenuRef.current = false;
                   setIsChainMenuOpen(false);
                   setChainSearch("");
                   setHighlightedChainIndex(0);
@@ -3453,11 +3532,37 @@ function App() {
                       />
                     </InputGroup>
                   </Box>
-                  <Box maxH={activeAccount?.type !== "bankr" ? "219px" : "268px"} overflowY="auto">
+                  <Box
+                    ref={chainScrollRef}
+                    maxH={activeAccount?.type !== "bankr" ? "219px" : "268px"}
+                    overflowY="auto"
+                    onScroll={(event) => {
+                      const { scrollTop } = event.currentTarget;
+                      if (lastChainAutoScrollTopRef.current === null) {
+                        if (scrollTop > 0) userScrolledChainMenuRef.current = true;
+                        return;
+                      }
+                      if (Math.abs(scrollTop - lastChainAutoScrollTopRef.current) > 1) {
+                        userScrolledChainMenuRef.current = true;
+                      }
+                    }}
+                  >
                     {filteredVisibleChains.map((_chain, i, currentChains) => (
                           <MenuItem
                             key={_chain.chainId}
-                            bg={i === highlightedChainIndex ? "surface.raisedHover" : "surface.raised"}
+                            ref={
+                              _chain.chainId === selectedChain?.chainId
+                                ? (node: HTMLElement | null) => {
+                                    selectedChainItemRef.current = node;
+                                  }
+                                : undefined
+                            }
+                            bg={
+                              i === highlightedChainIndex ||
+                              _chain.chainId === selectedChain?.chainId
+                                ? "surface.raisedHover"
+                                : "surface.raised"
+                            }
                             _hover={{ bg: "surface.raisedHover" }}
                             borderBottom={
                               i < currentChains.length - 1
@@ -3997,30 +4102,6 @@ function App() {
     <>
       <ScreenStack view={view}>{screen}</ScreenStack>
 
-      {/* Reveal Private Key Modal */}
-      <Suspense fallback={null}>
-        <RevealPrivateKeyModal
-          isOpen={isRevealKeyOpen}
-          onClose={() => {
-            onRevealKeyClose();
-            setRevealAccount(null);
-          }}
-          account={revealAccount}
-        />
-      </Suspense>
-
-      {/* Reveal Seed Phrase Modal */}
-      <Suspense fallback={null}>
-        <RevealSeedPhraseModal
-          isOpen={isRevealSeedOpen}
-          onClose={() => {
-            onRevealSeedClose();
-            setRevealSeedAccount(null);
-          }}
-          account={revealSeedAccount}
-        />
-      </Suspense>
-
       {/* QR Code Modal */}
       {address && (
         <Suspense fallback={null}>
@@ -4032,27 +4113,6 @@ function App() {
         </Suspense>
       )}
 
-      {/* Account Settings Modal */}
-      <Suspense fallback={null}>
-        <AccountSettingsModal
-          isOpen={isAccountSettingsOpen}
-          onClose={() => {
-            onAccountSettingsClose();
-            setSettingsAccount(null);
-          }}
-          account={settingsAccount}
-          onRevealPrivateKey={(account) => {
-            setRevealAccount(account);
-            onRevealKeyOpen();
-          }}
-          onRevealSeedPhrase={(account) => {
-            setRevealSeedAccount(account);
-            onRevealSeedOpen();
-          }}
-          onAccountUpdated={loadAccounts}
-          totalAccounts={accounts.length}
-        />
-      </Suspense>
     </>
   );
 }

@@ -52,7 +52,6 @@ import { SWAP_SUPPORTED_CHAIN_IDS } from "@/constants/chainRegistry";
 import type { Account } from "@/chrome/types";
 import TokenSelector from "@/components/Swap/TokenSelector";
 import { NATIVE_TOKEN_ADDRESS, type TokenListEntry } from "@/chrome/swapApi";
-import { getChainConfig } from "@/constants/chainConfig";
 import { WALLETCHAN_STAKE_URL } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import ChainIcon from "@/components/ChainIcon";
@@ -64,6 +63,7 @@ import {
   getResolvedChainById,
   getStoredRpcUrl,
   getVisibleChains,
+  getNativeAssetMeta,
 } from "@/lib/chains";
 
 /** USDC on Base (ERC-3009 transferWithAuthorization) */
@@ -514,9 +514,7 @@ function TokenTransfer({
       const balanceNum = parseFloat(balance);
 
       const logoUrl = isNative
-        ? symbol.toUpperCase() === "ETH"
-          ? "/chainIcons/ethereum.svg"
-          : getChainConfig(selectedChainId)?.icon || ""
+        ? getNativeAssetMeta(selectedChainId, networksInfo)?.logoUrl ?? ""
         : "";
 
       setResolvedCustomToken({

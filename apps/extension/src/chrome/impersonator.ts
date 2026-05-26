@@ -30,6 +30,35 @@ import { WALLET_ICON } from "./walletIcon";
 // Session UUID for EIP-6963 (generated once per page load)
 const SESSION_UUID = crypto.randomUUID();
 
+/**
+ * Surface non-user-rejection wallet errors in the dapp's devtools console.
+ * Without this, wagmi / viem capture rejections into their hook state and
+ * dapps that only render a generic "Transaction failed" string (like
+ * 7702beat) leave users with no clue what actually went wrong. User
+ * rejections (code 4001) are skipped — those are expected churn and would
+ * just spam the console.
+ *
+ * `details` is an optional payload (e.g. the request `params`) attached to
+ * the log as a second argument so it shows up expandable in devtools.
+ * Helpful when the error message references an indexed item ("Call 1
+ * targets…") and the user needs to see what was actually in that slot.
+ */
+function logProviderError(
+  method: string,
+  message: string | undefined | null,
+  code?: number,
+  details?: unknown,
+): void {
+  if (code === 4001) return;
+  const suffix = code !== undefined ? ` (code: ${code})` : "";
+  const header = `[WalletChan] ${method} failed: ${message ?? "Unknown error"}${suffix}`;
+  if (details !== undefined) {
+    console.warn(header, details);
+  } else {
+    console.warn(header);
+  }
+}
+
 // Pending transaction callbacks
 const pendingTxCallbacks = new Map<
   string,
@@ -57,7 +86,17 @@ const pendingWatchAssetCallbacks = new Map<
 // Pending ERC-5792 batch call callbacks
 const pendingBatchCallbacks = new Map<
   string,
-  { resolve: (result: any) => void; reject: (error: Error) => void }
+  {
+    resolve: (result: any) => void;
+    reject: (error: Error) => void;
+    /**
+     * The original `wallet_sendCalls` params (sendCallsParams[0]). Stored
+     * here so the rejection handler can attach them to the console log —
+     * error messages like "Call 1 targets the zero address" are useless
+     * without the caller seeing the actual call array.
+     */
+    params: unknown;
+  }
 >();
 
 // Pending ERC-5792 capabilities callbacks
@@ -373,7 +412,11 @@ class ImpersonatorProvider extends EventEmitter {
         const sendCallsParams = params?.[0] || params;
 
         return new Promise<any>((resolve, reject) => {
-          pendingBatchCallbacks.set(sendCallsId, { resolve, reject });
+          pendingBatchCallbacks.set(sendCallsId, {
+            resolve,
+            reject,
+            params: sendCallsParams,
+          });
 
           window.postMessage(
             {
@@ -666,9 +709,9 @@ window.addEventListener("message", (e: any) => {
             errorMessage.toLowerCase().includes("rejected by user") ||
             errorMessage.toLowerCase().includes("user rejected") ||
             errorMessage.toLowerCase().includes("user denied");
-          callbacks.reject(
-            makeProviderError(errorMessage, isUserRejection ? 4001 : undefined),
-          );
+          const code = isUserRejection ? 4001 : undefined;
+          logProviderError("eth_sendTransaction", errorMessage, code);
+          callbacks.reject(makeProviderError(errorMessage, code));
         }
       }
       break;
@@ -693,6 +736,7 @@ window.addEventListener("message", (e: any) => {
           const isSchemaError = errorMessage.includes("EIP-712 schema");
 
           const code = isUserRejection ? 4001 : isSchemaError ? -32603 : undefined;
+          logProviderError("signature request", errorMessage, code);
           callbacks.reject(makeProviderError(errorMessage, code));
         }
       }
@@ -706,6 +750,9 @@ window.addEventListener("message", (e: any) => {
         if (e.data.msg.success) {
           callbacks.resolve(true);
         } else {
+          // watchAsset failures are always user rejections in our impl
+          // (the popup either confirms or the user closes it) — code 4001
+          // suppresses the log.
           callbacks.reject(
             makeProviderError(e.data.msg.error || "User rejected token addition", 4001),
           );
@@ -719,6 +766,7 @@ window.addEventListener("message", (e: any) => {
       if (callbacks) {
         pendingRpcCallbacks.delete(requestId);
         if (e.data.msg.error) {
+          logProviderError("RPC request", e.data.msg.error);
           callbacks.reject(makeProviderError(e.data.msg.error));
         } else {
           callbacks.resolve(e.data.msg.result);
@@ -735,7 +783,9 @@ window.addEventListener("message", (e: any) => {
         if (e.data.msg.success) {
           callbacks.resolve(e.data.msg.result);
         } else {
-          callbacks.reject(makeProviderError(e.data.msg.error || "Failed to get capabilities"));
+          const errorMessage = e.data.msg.error || "Failed to get capabilities";
+          logProviderError("wallet_getCapabilities", errorMessage);
+          callbacks.reject(makeProviderError(errorMessage));
         }
       }
       break;
@@ -748,9 +798,14 @@ window.addEventListener("message", (e: any) => {
         if (e.data.msg.success) {
           callbacks.resolve(e.data.msg.result);
         } else {
-          callbacks.reject(
-            makeProviderError(e.data.msg.error || "wallet_sendCalls failed", e.data.msg.code),
+          const errorMessage = e.data.msg.error || "wallet_sendCalls failed";
+          logProviderError(
+            "wallet_sendCalls",
+            errorMessage,
+            e.data.msg.code,
+            callbacks.params,
           );
+          callbacks.reject(makeProviderError(errorMessage, e.data.msg.code));
         }
       }
       break;
@@ -763,9 +818,9 @@ window.addEventListener("message", (e: any) => {
         if (e.data.msg.success) {
           callbacks.resolve(e.data.msg.result);
         } else {
-          callbacks.reject(
-            makeProviderError(e.data.msg.error || "Failed to get calls status", e.data.msg.code),
-          );
+          const errorMessage = e.data.msg.error || "Failed to get calls status";
+          logProviderError("wallet_getCallsStatus", errorMessage, e.data.msg.code);
+          callbacks.reject(makeProviderError(errorMessage, e.data.msg.code));
         }
       }
       break;

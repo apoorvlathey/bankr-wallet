@@ -27,6 +27,7 @@
     "build:firefox": "BROWSER=firefox pnpm build && node scripts/swap-manifest.mjs build-firefox",
     "dev:firefox": "BROWSER=firefox pnpm dev:web && node scripts/swap-manifest.mjs build-firefox && BROWSER=firefox concurrently 'pnpm dev:inpage' 'pnpm dev:inject' 'pnpm dev:background'",
     "icons": "bash scripts/generate-icons.sh",
+    "regen-chains": "tsx scripts/generate-known-chains.ts",
     "zip": "pnpm build && mkdir -p zip && cd build && zip -r ../zip/walletchan-v$(node -p \"require('../package.json').version\").zip .",
     "zip:cws": "pnpm build && bash scripts/strip-cws-keys.sh && mkdir -p cws-zip && (cd build && zip -r ../cws-zip/walletchan-v$(node -p \"require('../package.json').version\").zip .) && pnpm zip:firefox",
     "zip:firefox": "pnpm build:firefox && mkdir -p zip && cd build-firefox && zip -r ../zip/walletchan-firefox-v$(node -p \"require('../package.json').version\").zip .",
@@ -61,6 +62,7 @@
     "viem": "^2.21.0"
   },
   "devDependencies": {
+    "@metamask/delegation-deployments": "^1.4.0",
     "@types/chrome": "^0.0.276",
     "@types/node": "^20",
     "@types/react": "^18.3",
@@ -74,6 +76,7 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.3",
     "terser": "^5.34",
+    "tsx": "^4.22.3",
     "typescript": "^4.9.5",
     "vite": "^5.4",
     "vite-plugin-node-polyfills": "^0.22",

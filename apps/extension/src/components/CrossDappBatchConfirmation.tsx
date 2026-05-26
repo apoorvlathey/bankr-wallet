@@ -6,6 +6,7 @@ import type {
   ERC5792Call,
 } from "@/chrome/erc5792Types";
 import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
+import type { GasEstimate } from "@/chrome/gasEstimation";
 import BatchTransactionConfirmation from "@/components/BatchTransactionConfirmation";
 
 /**
@@ -80,6 +81,11 @@ function CrossDappBatchConfirmation({
       chainId: batch.chainId,
       timestamp: batch.createdAt,
       accountType: batch.accountType,
+      // Pin the account so useBatchPlan can resolve a 7702 delegate for PK/SP
+      // cross-dapp batches (otherwise the hook treats it as auto-sequential
+      // and the authorization banner never shows).
+      accountId: batch.accountId,
+      accountAddress: batch.fromAddress,
     };
   }, [batch]);
 
@@ -99,10 +105,16 @@ function CrossDappBatchConfirmation({
   // which override the default `confirmBatchTransactionAsync` /
   // `rejectBatchTransaction` calls inside BatchTransactionConfirmation.
 
-  const handleCustomConfirm = (): Promise<{ success: boolean; error?: string }> =>
+  const handleCustomConfirm = (
+    gasEstimates?: GasEstimate[] | null,
+  ): Promise<{ success: boolean; error?: string }> =>
     new Promise((resolve) => {
       chrome.runtime.sendMessage(
-        { type: "confirmCrossDappBatch", password: "" },
+        {
+          type: "confirmCrossDappBatch",
+          password: "",
+          ...(gasEstimates ? { gasEstimates } : {}),
+        },
         (result: { success: boolean; error?: string }) => {
           if (!result?.success) {
             toast({

@@ -57,8 +57,29 @@ function parseSegments(path: string): Segment[] {
   return segments;
 }
 
-function applyByteSlice(hex: string, start: number, end: number | null): string | undefined {
-  if (typeof hex !== "string" || !hex.startsWith("0x")) return undefined;
+function toSliceableHex(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    if (value.startsWith("0x")) return value;
+    if (/^\d+$/.test(value)) {
+      const body = BigInt(value).toString(16).padStart(64, "0");
+      return `0x${body}`;
+    }
+    return undefined;
+  }
+  if (typeof value === "bigint") {
+    if (value < 0n) return undefined;
+    return `0x${value.toString(16).padStart(64, "0")}`;
+  }
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 0) return undefined;
+    return `0x${BigInt(value).toString(16).padStart(64, "0")}`;
+  }
+  return undefined;
+}
+
+function applyByteSlice(value: unknown, start: number, end: number | null): string | undefined {
+  const hex = toSliceableHex(value);
+  if (!hex) return undefined;
   const body = hex.slice(2);
   const totalBytes = body.length / 2;
   let s = start < 0 ? Math.max(0, totalBytes + start) : Math.min(start, totalBytes);
@@ -97,7 +118,7 @@ function walk(node: unknown, segments: Segment[], i: number): PathValue {
       return node.map((item) => walk(item, tail, 0));
     }
     case "slice": {
-      const sliced = applyByteSlice(node as string, seg.sliceStart!, seg.sliceEnd ?? null);
+      const sliced = applyByteSlice(node, seg.sliceStart!, seg.sliceEnd ?? null);
       return walk(sliced, segments, i + 1);
     }
     default:

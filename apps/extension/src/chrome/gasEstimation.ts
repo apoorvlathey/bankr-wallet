@@ -11,12 +11,53 @@ import {
   type Address,
 } from "viem";
 import { getRpcUrl } from "./txHandlers";
-import { getNativeCurrencySymbol, CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import {
+  getNativeCurrencySymbol,
+  CHAIN_REGISTRY,
+  NON_STANDARD_GAS_CHAIN_IDS,
+} from "@/constants/chainRegistry";
 
 const CHAIN_BY_ID_GAS = new Map(CHAIN_REGISTRY.map((c) => [c.chainId, c]));
 const DEFAULT_GAS_BUFFER_PCT = 20;
-import { fetchNativeCoinGeckoPrice } from "./coingeckoService";
+
+/**
+ * Bump a gas limit for a transaction that will carry one or more EIP-7702
+ * authorization tuples.
+ *
+ * `eth_estimateGas` always simulates the tx body without the authorization
+ * list attached — there's no way for the dapp-side / RPC simulator to know
+ * an auth is coming. So the intrinsic cost of each tuple (mainline EVM:
+ * PER_AUTH_BASE_COST 12_500 + PER_EMPTY_ACCOUNT_COST 25_000 = up to 37_500
+ * per auth) is always missing from the estimate.
+ *
+ * Non-standard-gas chains like MegaETH scale intrinsic costs ~3-4× over
+ * mainline; reverse-engineering each chain's formula would be a rabbit hole
+ * and the user-visible cost of overshooting is essentially zero (you only
+ * pay for gas consumed). So we hand those chains a much more generous
+ * per-auth overhead.
+ *
+ * Used by both `estimateGas` (UI accuracy) and the broadcast paths in
+ * `txHandlers` / `batchTxHandlers` (last-line defense against an underflow
+ * that would manifest as "intrinsic gas too low" from the chain).
+ */
+export function bumpGasForEip7702Auth(
+  chainId: number,
+  currentGas: bigint,
+  authCount: number,
+): bigint {
+  if (authCount <= 0) return currentGas;
+  const isNonStandardGas = NON_STANDARD_GAS_CHAIN_IDS.has(chainId);
+  const perAuthOverhead = isNonStandardGas ? 150_000n : 50_000n;
+  const floor = isNonStandardGas ? 300_000n : 80_000n;
+  const bumped = currentGas + perAuthOverhead * BigInt(authCount);
+  return bumped > floor ? bumped : floor;
+}
+import {
+  fetchNativeCoinGeckoPrice,
+  resolveCoinGeckoNativeAssetsBatch,
+} from "./coingeckoService";
 import { estimateFees, type TierName } from "./feeEstimation";
+import { getStoredResolvedChainById } from "@/lib/chains";
 
 /** Per-tier preset fees. Wei strings to keep JSON-safe across chrome.runtime. */
 export interface GasEstimateTier {
@@ -95,7 +136,22 @@ async function getClient(chainId: number): Promise<PublicClient | null> {
 }
 
 export async function fetchNativePrice(chainId: number): Promise<number | null> {
-  return fetchNativeCoinGeckoPrice(chainId);
+  const registryPrice = await fetchNativeCoinGeckoPrice(chainId);
+  if (registryPrice !== null) return registryPrice;
+
+  const chain = await getStoredResolvedChainById(chainId);
+  if (!chain) return null;
+
+  const [resolved] = await resolveCoinGeckoNativeAssetsBatch([
+    {
+      chainId,
+      chainName: chain.name,
+      nativeCurrencyName: chain.nativeCurrency.name,
+      symbol: chain.nativeCurrency.symbol,
+    },
+  ]);
+
+  return resolved?.priceUsd ? resolved.priceUsd : null;
 }
 
 /**
@@ -142,6 +198,16 @@ export async function estimateGasLimitWithBuffer(
  * Estimate gas for a transaction.
  * If the dapp provided gas params, those are used as defaults.
  * Returns gas params, estimated cost, balance, and warnings.
+ *
+ * `eip7702Delegate`, when provided, makes the simulation reflect what will
+ * actually happen onchain after a 7702 authorization is processed: the EOA
+ * gets the delegate's runtime code via state override, so an ERC-7821 self-
+ * call (to == from == EOA, data == execute(mode, calls)) dispatches through
+ * the delegate just like it would after broadcast. Required for atomic-7702
+ * batches where the EOA isn't yet onchain-delegated (needsAuthorization=true)
+ * — without it, eth_estimateGas runs against a code-less EOA, the calldata is
+ * ignored, and any value transfer would be checked against the user's real
+ * balance instead of routing through the delegate's batch executor.
  */
 export async function estimateGas(
   tx: {
@@ -155,7 +221,19 @@ export async function estimateGas(
     maxFeePerGas?: string;
     maxPriorityFeePerGas?: string;
   },
-  accountAddress: string
+  accountAddress: string,
+  options?: {
+    /** Delegate the simulation should treat `accountAddress` as 7702-delegated to. */
+    eip7702Delegate?: `0x${string}`;
+    /**
+     * Number of authorization tuples that will be attached to the broadcast
+     * tx (1 for set-delegate / revoke / dapp batch that toggles delegation).
+     * `eth_estimateGas` doesn't see the auth list and so under-counts intrinsic
+     * gas — this option triggers the same bump used at broadcast time so the
+     * UI's displayed estimate matches what we actually sign.
+     */
+    eip7702AuthCount?: number;
+  },
 ): Promise<GasEstimate> {
   // Resolve native currency symbol (parallel with client creation)
   const [client, nativeCurrencySymbol] = await Promise.all([
@@ -206,47 +284,96 @@ export async function estimateGas(
       (dappPriorityFee !== null && dappPriorityFee === 0n) ||
       (dappGasPrice !== null && dappGasPrice === 0n));
 
-  // Run gas estimation, fee estimation, balance fetch, and price fetch in parallel
+  // For EIP-7702 atomic batches: fetch the delegate's runtime code and apply
+  // it to the EOA via state override. This mirrors onchain semantics (after
+  // the authorization is processed, eth_getCode(EOA) → 0xef0100<delegate> and
+  // any call to EOA dispatches through the delegate's code) — without it, an
+  // EOA self-call to a not-yet-delegated EOA would either no-op (calldata
+  // ignored) or fail the value transfer's balance check. Probed in parallel
+  // with fees / balance / price so it doesn't add a serial roundtrip.
+  const delegateCodePromise: Promise<`0x${string}` | undefined> =
+    options?.eip7702Delegate
+      ? client
+          .getCode({ address: options.eip7702Delegate })
+          .then((code) => (code && code !== "0x" ? code : undefined))
+          .catch(() => undefined)
+      : Promise.resolve(undefined);
+
   let gasLimit = 0n;
   let estimationFailed = false;
   let estimationError: string | undefined;
   let estimationErrorFull: string | undefined;
 
-  const [gasResult, feesResult, balance, nativePriceUsd] = await Promise.all([
-    // 1. Estimate gas limit (skip if dapp provided it)
-    dappGas
-      ? Promise.resolve(dappGas).then((g) => { gasLimit = g; return g; })
-      : client
-          .estimateGas({ account: from, to, value, data })
-          .then((gas) => {
-            // Per-chain buffer (default 20%, override via gasBufferPct).
-            const bufferPct =
-              chainEntry?.gasBufferPct ?? DEFAULT_GAS_BUFFER_PCT;
-            gasLimit =
-              bufferPct === 0 ? gas : (gas * BigInt(100 + bufferPct)) / 100n;
-            return gasLimit;
-          })
-          .catch((err: any) => {
-            estimationFailed = true;
-            const fullMsg = err.message || "Gas estimation failed";
-            estimationError = err.shortMessage || fullMsg;
-            estimationErrorFull = fullMsg;
-            gasLimit = 200_000n;
-            return gasLimit;
-          }),
-
-    // 2. Estimate EIP-1559 fees (still fetch for baseFee even if dapp provided fees).
-    //    Uses our own feeHistory-based estimator with per-chain priority fee
-    //    floors and a 2× base fee multiplier — see feeEstimation.ts for why
-    //    viem's default produced stuck-then-dropped txs on ETH mainnet.
+  // Resolve non-gas-estimate inputs in parallel first so the gas estimation
+  // call can pick up the right stateOverride. eth_estimateGas is the expensive
+  // one anyway; the rest of the calls land well within its latency.
+  const [delegateCode, feesResult, balance, nativePriceUsd] = await Promise.all([
+    delegateCodePromise,
+    // EIP-1559 fees (still fetched for baseFee even if dapp pinned fees) —
+    // uses our own feeHistory-based estimator with per-chain priority floors.
     estimateFees(client, tx.chainId).catch(() => null),
-
-    // 3. Get sender balance
+    // Sender balance for insufficient-balance check.
     client.getBalance({ address: from }).catch(() => 0n),
-
-    // 4. Fetch native token USD price
+    // Native token USD price for cost display.
     fetchNativePrice(tx.chainId),
   ]);
+
+  const stateOverride = delegateCode
+    ? ([{ address: from, code: delegateCode }] as const)
+    : undefined;
+
+  if (dappGas) {
+    gasLimit = dappGas;
+  } else {
+    try {
+      const gas = await client.estimateGas({
+        account: from,
+        to,
+        value,
+        data,
+        ...(stateOverride ? { stateOverride } : {}),
+      });
+      // Per-chain buffer (default 20%, override via gasBufferPct).
+      const bufferPct = chainEntry?.gasBufferPct ?? DEFAULT_GAS_BUFFER_PCT;
+      gasLimit =
+        bufferPct === 0 ? gas : (gas * BigInt(100 + bufferPct)) / 100n;
+    } catch (err: any) {
+      estimationFailed = true;
+      const fullMsg = err.message || "Gas estimation failed";
+      estimationError = err.shortMessage || fullMsg;
+      estimationErrorFull = fullMsg;
+      gasLimit = 200_000n;
+      // Log 7702 sim failures explicitly so the per-call fallback path
+      // can be diagnosed against the actual chain RPC error (some Base
+      // RPCs ignore stateOverride on estimateGas; binary search also
+      // sometimes fails on deeply nested executor calldata).
+      if (options?.eip7702Delegate) {
+        console.warn(
+          "[estimateGas:7702] failed",
+          {
+            from,
+            to,
+            delegate: options.eip7702Delegate,
+            value: value.toString(),
+            dataLen: data?.length ?? 0,
+            err: err?.shortMessage || err?.message,
+          },
+        );
+      }
+    }
+  }
+
+  // EIP-7702 auth-tuple intrinsic cost — `eth_estimateGas` above never sees
+  // the authorizationList that will be attached at broadcast time, so the
+  // returned gas is always short by ~12.5k per auth (more on non-standard-gas
+  // chains). Bump here so the UI's displayed limit matches what we sign.
+  if (options?.eip7702AuthCount && options.eip7702AuthCount > 0 && gasLimit > 0n) {
+    gasLimit = bumpGasForEip7702Auth(
+      tx.chainId,
+      gasLimit,
+      options.eip7702AuthCount,
+    );
+  }
 
   // Use dapp-provided fees if available, otherwise use RPC estimates
   // For legacy gasPrice txs, treat gasPrice as both maxFee and priorityFee

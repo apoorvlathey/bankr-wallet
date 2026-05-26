@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useCallback } from "react";
+import { memo, useState, useEffect, useCallback, useMemo } from "react";
 import {
   Box,
   VStack,
@@ -32,6 +32,7 @@ import {
   CompletedTransaction,
   GasData,
   type AssetChangeRecord,
+  type AssetTransferRecord,
   type ForceInclusionMeta,
 } from "@/chrome/txHistoryStorage";
 import { getChainConfig } from "@/constants/chainConfig";
@@ -43,6 +44,7 @@ import CalldataDecoder from "@/components/CalldataDecoder";
 import { formatEth, formatGwei, formatNumber } from "@/lib/gasFormatUtils";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import ChainIcon from "@/components/ChainIcon";
+import TokenLogo from "@/components/TokenLogo";
 import {
   getResolvedChainById,
   getStoredNativeCurrencySymbol,
@@ -50,8 +52,20 @@ import {
 } from "@/lib/chains";
 import { useTheme, useChainBadgeStyle } from "@/theme";
 import { useThemedToast } from "@/hooks/useThemedToast";
+import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import ClearSignedSummaryCard from "@/components/ClearSignedSummaryCard";
 import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
+import { BatchCallsList } from "@/components/BatchCallsList";
+import {
+  decodeErc7821Batch,
+  looksLikeErc7821SelfBatch,
+} from "@/lib/erc7821Decode";
+import {
+  EIP_7702_DEFAULT_DELEGATE,
+  getKnownDelegateName,
+} from "@/constants/chainRegistry";
+import { hasDefaultDelegateForChain } from "@/utils/delegationResolution";
+import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import LoadingDots from "@/components/LoadingDots";
 
 interface TxDetailModalProps {
@@ -106,15 +120,181 @@ function formatSignedTokenAmount(amountWei: string, decimals: number, isNegative
   return `${isNegative ? "−" : "+"}${mag}`;
 }
 
-/**
- * Pick the swap-relevant transfer for a wallet-initiated swap/bridge: prefer
- * an ERC-20 row whose symbol matches `symbolHint` (case-insensitive); fall
- * back to the first transfer in the given direction; finally fall back to
- * the native delta if `nativeFallbackIsNative` is true (sell/buy is native).
- */
-function pickSwapAmount(
+type TokenChangeDirection = "in" | "out";
+
+type RenderableErc20Transfer = {
+  t: AssetTransferRecord;
+  formatted: string;
+};
+
+type Erc20TransferGroup = {
+  key: string;
+  direction: TokenChangeDirection;
+  token: string;
+  symbol?: string;
+  logoUrl?: string;
+  decimals: number;
+  /** Positive base-unit amount, summed across all transfers in the group. */
+  totalWei: string;
+  totalFormatted: string;
+  transfers: RenderableErc20Transfer[];
+};
+
+type TokenDisplayMetadata = Pick<
+  AssetTransferRecord,
+  "symbol" | "decimals" | "logoUrl"
+>;
+
+function tokenDisplayMetadataKey(chainId: number, token: string): string {
+  return `${chainId}-${token.toLowerCase()}`;
+}
+
+function collectMissingTokenMetadataRequests(
   record: AssetChangeRecord | undefined,
-  direction: "in" | "out",
+  chainId: number,
+  requests: Map<string, { chainId: number; tokenAddress: string }>,
+) {
+  if (!record) return;
+  for (const transfer of record.erc20Transfers) {
+    if (
+      transfer.logoUrl &&
+      transfer.symbol &&
+      transfer.decimals !== undefined
+    ) {
+      continue;
+    }
+    if (!/^0x[a-fA-F0-9]{40}$/.test(transfer.token)) continue;
+    const tokenAddress = transfer.token.toLowerCase();
+    requests.set(tokenDisplayMetadataKey(chainId, tokenAddress), {
+      chainId,
+      tokenAddress,
+    });
+  }
+}
+
+function applyTokenDisplayMetadata(
+  record: AssetChangeRecord | undefined,
+  chainId: number,
+  metadataByKey: Record<string, TokenDisplayMetadata>,
+): AssetChangeRecord | undefined {
+  if (!record) return undefined;
+  let changed = false;
+  const erc20Transfers = record.erc20Transfers.map((transfer) => {
+    const metadata =
+      metadataByKey[tokenDisplayMetadataKey(chainId, transfer.token)];
+    if (!metadata) return transfer;
+
+    const next = {
+      ...transfer,
+      symbol: transfer.symbol || metadata.symbol,
+      decimals:
+        transfer.decimals !== undefined
+          ? transfer.decimals
+          : metadata.decimals,
+      logoUrl: transfer.logoUrl || metadata.logoUrl,
+    };
+    if (
+      next.symbol !== transfer.symbol ||
+      next.decimals !== transfer.decimals ||
+      next.logoUrl !== transfer.logoUrl
+    ) {
+      changed = true;
+    }
+    return next;
+  });
+
+  return changed ? { ...record, erc20Transfers } : record;
+}
+
+function absBigInt(value: string): bigint | null {
+  try {
+    const parsed = BigInt(value);
+    return parsed < 0n ? -parsed : parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Shared tx-detail summarizer for ERC-20 transfer rows. It groups duplicate
+ * token+direction transfers so every tx-details surface reports the same
+ * total amount while preserving the per-counterparty breakdown for expansion.
+ */
+function getErc20TransferGroups(
+  record: AssetChangeRecord | undefined,
+  direction?: TokenChangeDirection,
+): Erc20TransferGroup[] {
+  if (!record) return [];
+
+  const groups = new Map<
+    string,
+    Omit<Erc20TransferGroup, "totalWei" | "totalFormatted"> & {
+      totalWei: bigint;
+    }
+  >();
+
+  for (const t of record.erc20Transfers) {
+    if (direction && t.direction !== direction) continue;
+    const amount = absBigInt(t.amountWei);
+    if (amount === null || amount === 0n) continue;
+
+    const decimals = t.decimals ?? 18;
+    const formatted = formatSignedTokenAmount(
+      amount.toString(),
+      decimals,
+      t.direction === "out",
+    );
+    if (formatted === null) continue;
+
+    const key = `${t.direction}-${t.token.toLowerCase()}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.totalWei += amount;
+      existing.transfers.push({ t, formatted });
+      existing.symbol = existing.symbol ?? t.symbol;
+      existing.logoUrl = existing.logoUrl ?? t.logoUrl;
+      continue;
+    }
+
+    groups.set(key, {
+      key,
+      direction: t.direction,
+      token: t.token,
+      symbol: t.symbol,
+      logoUrl: t.logoUrl,
+      decimals,
+      totalWei: amount,
+      transfers: [{ t, formatted }],
+    });
+  }
+
+  return Array.from(groups.values())
+    .map((group) => {
+      const totalWei = group.totalWei.toString();
+      const totalFormatted = formatSignedTokenAmount(
+        totalWei,
+        group.decimals,
+        group.direction === "out",
+      );
+      if (totalFormatted === null) return null;
+      return {
+        ...group,
+        totalWei,
+        totalFormatted,
+      };
+    })
+    .filter((group): group is Erc20TransferGroup => group !== null);
+}
+
+/**
+ * Pick the swap-relevant summarized amount for a wallet-initiated swap/bridge:
+ * prefer an ERC-20 group whose symbol matches `symbolHint` (case-insensitive);
+ * fall back to the first group in the given direction; finally fall back to the
+ * native delta if `nativeFallbackIsNative` is true (sell/buy is native).
+ */
+function pickAssetChangeAmount(
+  record: AssetChangeRecord | undefined,
+  direction: TokenChangeDirection,
   symbolHint: string | undefined,
   nativeFallbackIsNative: boolean,
   nativeDecimals: number,
@@ -127,18 +307,18 @@ function pickSwapAmount(
 } | null {
   if (!record) return null;
   const hint = symbolHint?.toLowerCase();
-  const directionMatch = record.erc20Transfers.filter((t) => t.direction === direction);
+  const directionGroups = getErc20TransferGroups(record, direction);
   const symMatch = hint
-    ? directionMatch.find((t) => t.symbol?.toLowerCase() === hint)
+    ? directionGroups.find((group) => group.symbol?.toLowerCase() === hint)
     : undefined;
-  const picked = symMatch ?? directionMatch[0];
+  const picked = symMatch ?? directionGroups[0];
   if (picked) {
     const decimals = picked.decimals ?? 18;
-    const label = formatTokenAmountWei(picked.amountWei, decimals);
+    const label = formatTokenAmountWei(picked.totalWei, decimals);
     if (label !== null)
       return {
         amountLabel: label,
-        amountWei: picked.amountWei,
+        amountWei: picked.totalWei,
         decimals,
         source: picked.token,
       };
@@ -181,55 +361,88 @@ function GasRow({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * Token logo that falls back to a tinted placeholder showing the first letter
- * of the symbol — so an unknown / not-yet-cached logo still reads visually
- * instead of an empty circle. Symbol-less tokens render a plain circle.
+ * One ERC-20 row inside `AssetChangesCard`. Extracted so the parent can keep
+ * its render simple: it splits transfers into outflows / inflows and calls
+ * this for each entry, in that order.
  */
-function TokenLogoOrPlaceholder({
-  logoUrl,
-  symbol,
-  alt,
-  size = "16px",
-}: {
-  logoUrl?: string | null;
-  symbol?: string;
-  alt: string;
-  size?: string;
-}) {
-  const initial = symbol ? symbol.trim().charAt(0).toUpperCase() : "";
-  const placeholder = (
-    <Box
-      boxSize={size}
-      borderRadius="full"
-      bg="surface.raised"
-      border="1px solid"
-      borderColor="border.default"
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      flexShrink={0}
-    >
-      {initial && (
-        <Text
-          fontSize="9px"
-          fontWeight="800"
-          color="text.secondary"
-          lineHeight="1"
-        >
-          {initial}
-        </Text>
-      )}
-    </Box>
-  );
-  if (!logoUrl) return placeholder;
+function renderErc20Row(
+  t: AssetTransferRecord,
+  formatted: string,
+  i: number,
+  direction: "in" | "out",
+  chainId: number,
+  explorer: string | undefined,
+  formatUsd: (
+    amountWei: string,
+    decimals: number,
+    chainId: number,
+    addressOrNative: string | "native",
+  ) => string | null,
+) {
+  const isNegative = direction === "out";
+  const sym = t.symbol || `${t.token.slice(0, 6)}…${t.token.slice(-4)}`;
+  const cpShort = `${t.counterparty.slice(0, 6)}…${t.counterparty.slice(-4)}`;
+  const cpLink = explorer ? `${explorer}/address/${t.counterparty}` : null;
+  const usd = formatUsd(t.amountWei, t.decimals ?? 18, chainId, t.token);
   return (
-    <Image
-      src={logoUrl}
-      alt={alt}
-      boxSize={size}
-      borderRadius="full"
-      fallback={placeholder}
-    />
+    <HStack
+      key={`${direction}-${t.token}-${i}`}
+      justify="space-between"
+      align="flex-start"
+      spacing={2}
+    >
+      <HStack spacing={2} minW={0} flex="1">
+        <TokenLogo logoUrl={t.logoUrl} symbol={t.symbol} alt={sym} />
+        <VStack spacing={0} align="flex-start" minW={0}>
+          <Text
+            fontSize="xs"
+            fontWeight="800"
+            color="text.primary"
+            isTruncated
+            maxW="120px"
+          >
+            {sym}
+          </Text>
+          {cpLink ? (
+            <Button
+              size="xs"
+              variant="ghost"
+              fontWeight="600"
+              fontSize="2xs"
+              fontFamily="mono"
+              color="text.tertiary"
+              onClick={() => chrome.tabs.create({ url: cpLink })}
+              rightIcon={<ExternalLinkIcon boxSize={2.5} />}
+              _hover={{ bg: "bg.muted", color: "text.secondary" }}
+              px={1}
+              h="14px"
+              minH="14px"
+            >
+              {isNegative ? "to" : "from"} {cpShort}
+            </Button>
+          ) : (
+            <Text fontSize="2xs" fontFamily="mono" color="text.tertiary">
+              {isNegative ? "to" : "from"} {cpShort}
+            </Text>
+          )}
+        </VStack>
+      </HStack>
+      <VStack spacing={0} align="flex-end">
+        <Text
+          fontSize="xs"
+          fontWeight="800"
+          color={isNegative ? "chart.negative" : "chart.positive"}
+          fontFamily="mono"
+        >
+          {formatted} {t.symbol ?? ""}
+        </Text>
+        {usd && (
+          <Text fontSize="2xs" color="text.tertiary" fontWeight="600">
+            {usd}
+          </Text>
+        )}
+      </VStack>
+    </HStack>
   );
 }
 
@@ -243,21 +456,33 @@ function TokenLogoOrPlaceholder({
 function AssetChangesCard({
   record,
   chainId,
-  chainName,
   nativeSym,
   label,
   formatUsd,
 }: {
   record: AssetChangeRecord;
   chainId: number;
-  chainName: string;
   nativeSym: string;
   label: string;
   /** Resolves a (chainId, address-or-"native") amount to its USD subtitle. */
   formatUsd: (amountWei: string, decimals: number, chainId: number, addressOrNative: string | "native") => string | null;
 }) {
   const explorer = getChainConfig(chainId).explorer;
-  const nativeRow = (() => {
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  // Native delta — compute the row data first so we know its sign, then build
+  // the JSX. Letting `isNegative` escape the IIFE lets us slot the row into
+  // the outflow or inflow bucket below.
+  const nativeData = (() => {
     if (!record.nativeDelta) return null;
     let bi: bigint;
     try {
@@ -270,22 +495,104 @@ function AssetChangesCard({
     const formatted = formatSignedTokenAmount(record.nativeDelta, 18, isNegative);
     if (formatted === null) return null; // rounds to zero — sub-display dust
     const usd = formatUsd(record.nativeDelta, 18, chainId, "native");
-    return (
-      <HStack justify="space-between" align="flex-start">
-        <HStack spacing={2}>
-          <ChainIcon chainId={chainId} chainName={chainName} size="14px" withChip />
-          <Text fontSize="xs" fontWeight="700" color="text.secondary">
-            {nativeSym}
+    return { isNegative, formatted, usd };
+  })();
+
+  const nativeRow = nativeData ? (
+    <HStack justify="space-between" align="flex-start">
+      <HStack spacing={2}>
+        <TokenLogo
+          nativeChainId={chainId}
+          symbol={nativeSym}
+          alt={nativeSym}
+        />
+        <Text fontSize="xs" fontWeight="700" color="text.secondary">
+          {nativeSym}
+        </Text>
+      </HStack>
+      <VStack spacing={0} align="flex-end">
+        <Text
+          fontSize="xs"
+          fontWeight="800"
+          color={nativeData.isNegative ? "chart.negative" : "chart.positive"}
+          fontFamily="mono"
+        >
+          {nativeData.formatted} {nativeSym}
+        </Text>
+        {nativeData.usd && (
+          <Text fontSize="2xs" color="text.tertiary" fontWeight="600">
+            {nativeData.usd}
           </Text>
-        </HStack>
+        )}
+      </VStack>
+    </HStack>
+  ) : null;
+
+  const outErc20Groups = getErc20TransferGroups(record, "out");
+  const inErc20Groups = getErc20TransferGroups(record, "in");
+
+  // Outflows render above inflows so the "what left the wallet" line is the
+  // first thing the user sees — same vertical order the live confirmation
+  // surface (`AssetChangesDisplay`) already enforces with its Send / Receive
+  // headers. Native row slots into the matching bucket based on its sign.
+  const nativeIsOut = !!nativeData?.isNegative;
+  if (
+    !nativeRow &&
+    outErc20Groups.length === 0 &&
+    inErc20Groups.length === 0
+  ) {
+    return null;
+  }
+
+  const renderErc20BreakdownRow = (
+    item: RenderableErc20Transfer,
+    direction: "in" | "out",
+    groupKey: string,
+    i: number,
+  ) => {
+    const { t, formatted } = item;
+    const isNegative = direction === "out";
+    const cpShort = `${t.counterparty.slice(0, 6)}…${t.counterparty.slice(-4)}`;
+    const cpLink = explorer ? `${explorer}/address/${t.counterparty}` : null;
+    const usd = formatUsd(t.amountWei, t.decimals ?? 18, chainId, t.token);
+    return (
+      <HStack
+        key={`${groupKey}-${t.counterparty}-${i}`}
+        justify="space-between"
+        align="flex-start"
+        spacing={2}
+        w="full"
+      >
+        {cpLink ? (
+          <Button
+            size="xs"
+            variant="ghost"
+            fontWeight="600"
+            fontSize="2xs"
+            fontFamily="mono"
+            color="text.tertiary"
+            onClick={() => chrome.tabs.create({ url: cpLink })}
+            rightIcon={<ExternalLinkIcon boxSize={2.5} />}
+            _hover={{ bg: "bg.muted", color: "text.secondary" }}
+            px={1}
+            h="14px"
+            minH="14px"
+          >
+            {isNegative ? "to" : "from"} {cpShort}
+          </Button>
+        ) : (
+          <Text fontSize="2xs" fontFamily="mono" color="text.tertiary">
+            {isNegative ? "to" : "from"} {cpShort}
+          </Text>
+        )}
         <VStack spacing={0} align="flex-end">
           <Text
-            fontSize="xs"
+            fontSize="2xs"
             fontWeight="800"
             color={isNegative ? "chart.negative" : "chart.positive"}
             fontFamily="mono"
           >
-            {formatted} {nativeSym}
+            {formatted} {t.symbol ?? ""}
           </Text>
           {usd && (
             <Text fontSize="2xs" color="text.tertiary" fontWeight="600">
@@ -295,20 +602,136 @@ function AssetChangesCard({
         </VStack>
       </HStack>
     );
-  })();
+  };
 
-  const renderableErc20Transfers = record.erc20Transfers
-    .map((t) => {
-      const formatted = formatSignedTokenAmount(
-        t.amountWei,
-        t.decimals ?? 18,
-        t.direction === "out",
+  const renderErc20Group = (
+    group: Erc20TransferGroup,
+    i: number,
+  ) => {
+    const uniqueCounterparties = new Set(
+      group.transfers.map(({ t }) => t.counterparty.toLowerCase()),
+    );
+
+    if (uniqueCounterparties.size === 1) {
+      const only = group.transfers[0];
+      const aggregateTransfer: AssetTransferRecord = {
+        ...only.t,
+        amountWei: group.totalWei,
+        symbol: group.symbol ?? only.t.symbol,
+        decimals: group.decimals,
+        logoUrl: group.logoUrl ?? only.t.logoUrl,
+      };
+      return renderErc20Row(
+        aggregateTransfer,
+        group.totalFormatted,
+        i,
+        group.direction,
+        chainId,
+        explorer,
+        formatUsd,
       );
-      return formatted ? { t, formatted } : null;
-    })
-    .filter((x): x is { t: typeof record.erc20Transfers[number]; formatted: string } => x !== null);
+    }
 
-  if (!nativeRow && renderableErc20Transfers.length === 0) return null;
+    const sym =
+      group.symbol || `${group.token.slice(0, 6)}…${group.token.slice(-4)}`;
+    const isNegative = group.direction === "out";
+    const totalUsd = formatUsd(
+      group.totalWei,
+      group.decimals,
+      chainId,
+      group.token,
+    );
+    const expanded = expandedGroups.has(group.key);
+    const counterpartyCount = uniqueCounterparties.size;
+    const subtitle =
+      group.direction === "out"
+        ? `${counterpartyCount} recipient${counterpartyCount === 1 ? "" : "s"}`
+        : `${counterpartyCount} source${counterpartyCount === 1 ? "" : "s"}`;
+
+    return (
+      <Box key={group.key}>
+        <Box
+          as="button"
+          type="button"
+          w="full"
+          textAlign="left"
+          onClick={() => toggleGroup(group.key)}
+          aria-expanded={expanded}
+          _hover={{ bg: "surface.raisedHover" }}
+          borderRadius="md"
+        >
+          <HStack justify="space-between" align="flex-start" spacing={2}>
+            <HStack spacing={2} minW={0} flex="1">
+              <TokenLogo
+                logoUrl={group.logoUrl}
+                symbol={group.symbol}
+                alt={sym}
+              />
+              <VStack spacing={0} align="flex-start" minW={0}>
+                <Text
+                  fontSize="xs"
+                  fontWeight="800"
+                  color="text.primary"
+                  isTruncated
+                  maxW="120px"
+                >
+                  {sym}
+                </Text>
+                <HStack spacing={1} align="center">
+                  {expanded ? (
+                    <ChevronUpIcon
+                      boxSize={3}
+                      color="text.tertiary"
+                      flexShrink={0}
+                    />
+                  ) : (
+                    <ChevronDownIcon
+                      boxSize={3}
+                      color="text.tertiary"
+                      flexShrink={0}
+                    />
+                  )}
+                  <Text fontSize="2xs" color="text.tertiary" fontWeight="600">
+                    {subtitle}
+                  </Text>
+                </HStack>
+              </VStack>
+            </HStack>
+            <VStack spacing={0} align="flex-end">
+              <Text
+                fontSize="xs"
+                fontWeight="800"
+                color={isNegative ? "chart.negative" : "chart.positive"}
+                fontFamily="mono"
+              >
+                {group.totalFormatted} {group.symbol ?? ""}
+              </Text>
+              {totalUsd && (
+                <Text fontSize="2xs" color="text.tertiary" fontWeight="600">
+                  {totalUsd}
+                </Text>
+              )}
+            </VStack>
+          </HStack>
+        </Box>
+        <Collapse in={expanded} animateOpacity>
+          <VStack
+            spacing={1}
+            align="stretch"
+            mt={1}
+            ml={5}
+            pl={2}
+            borderLeft="1px solid"
+            borderColor="border.subtle"
+          >
+            {group.transfers.map((item, idx) =>
+              renderErc20BreakdownRow(item, group.direction, group.key, idx),
+            )}
+          </VStack>
+        </Collapse>
+      </Box>
+    );
+  };
 
   return (
     <Box
@@ -329,76 +752,10 @@ function AssetChangesCard({
         {label}
       </Text>
       <VStack spacing={1.5} align="stretch">
-        {nativeRow}
-        {renderableErc20Transfers.map(({ t, formatted }, i) => {
-          const isNegative = t.direction === "out";
-          const sym = t.symbol || `${t.token.slice(0, 6)}…${t.token.slice(-4)}`;
-          const cpShort = `${t.counterparty.slice(0, 6)}…${t.counterparty.slice(-4)}`;
-          const cpLink = explorer ? `${explorer}/address/${t.counterparty}` : null;
-          return (
-            <HStack
-              key={`${t.token}-${i}`}
-              justify="space-between"
-              align="flex-start"
-              spacing={2}
-            >
-              <HStack spacing={2} minW={0} flex="1">
-                <TokenLogoOrPlaceholder logoUrl={t.logoUrl} symbol={t.symbol} alt={sym} />
-                <VStack spacing={0} align="flex-start" minW={0}>
-                  <Text
-                    fontSize="xs"
-                    fontWeight="800"
-                    color="text.primary"
-                    isTruncated
-                    maxW="120px"
-                  >
-                    {sym}
-                  </Text>
-                  {cpLink ? (
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      fontWeight="600"
-                      fontSize="2xs"
-                      fontFamily="mono"
-                      color="text.tertiary"
-                      onClick={() => chrome.tabs.create({ url: cpLink })}
-                      rightIcon={<ExternalLinkIcon boxSize={2.5} />}
-                      _hover={{ bg: "bg.muted", color: "text.secondary" }}
-                      px={1}
-                      h="14px"
-                      minH="14px"
-                    >
-                      {isNegative ? "to" : "from"} {cpShort}
-                    </Button>
-                  ) : (
-                    <Text fontSize="2xs" fontFamily="mono" color="text.tertiary">
-                      {isNegative ? "to" : "from"} {cpShort}
-                    </Text>
-                  )}
-                </VStack>
-              </HStack>
-              <VStack spacing={0} align="flex-end">
-                <Text
-                  fontSize="xs"
-                  fontWeight="800"
-                  color={isNegative ? "chart.negative" : "chart.positive"}
-                  fontFamily="mono"
-                >
-                  {formatted} {t.symbol ?? ""}
-                </Text>
-                {(() => {
-                  const usd = formatUsd(t.amountWei, t.decimals ?? 18, chainId, t.token);
-                  return usd ? (
-                    <Text fontSize="2xs" color="text.tertiary" fontWeight="600">
-                      {usd}
-                    </Text>
-                  ) : null;
-                })()}
-              </VStack>
-            </HStack>
-          );
-        })}
+        {nativeRow && nativeIsOut && nativeRow}
+        {outErc20Groups.map(renderErc20Group)}
+        {nativeRow && !nativeIsOut && nativeRow}
+        {inErc20Groups.map(renderErc20Group)}
       </VStack>
     </Box>
   );
@@ -538,6 +895,25 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
   const { networksInfo } = useNetworks();
   const resolvedChain = getResolvedChainById(tx.chainId, networksInfo);
   const config = getChainConfig(tx.chainId);
+  const cachedLogoMap = useCachedAvatarMap(
+    useMemo(
+      () => [
+        tx.swapMeta?.sellTokenLogo,
+        tx.swapMeta?.buyTokenLogo,
+        tx.transferMeta?.tokenLogo,
+      ],
+      [
+        tx.swapMeta?.sellTokenLogo,
+        tx.swapMeta?.buyTokenLogo,
+        tx.transferMeta?.tokenLogo,
+      ],
+    ),
+  );
+  const resolveLogo = useCallback(
+    (url: string | null | undefined): string | undefined =>
+      (url && cachedLogoMap.get(url)) || url || undefined,
+    [cachedLogoMap],
+  );
   // Chain badge colors — all per-theme branching lives in `useChainBadgeStyle`.
   const chainBadgeStyle = useChainBadgeStyle(
     resolvedChain?.bg ?? config.bg,
@@ -547,16 +923,54 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
   const hasCalldata = tx.tx.data && tx.tx.data !== "0x";
   const isContractDeploy = !tx.tx.to;
   const isL2 = OP_STACK_CHAIN_IDS.has(tx.chainId);
+  // Atomic batches (Bankr ERC-7821, EIP-7702 PK/SP) land on-chain as a self-
+  // call whose data is `execute(mode, encodedCalls)`. Decode it back into the
+  // per-call list so we can render the same clear-signing UI the confirmation
+  // surface uses — instead of FROM=EOA / TO=EOA + an opaque blob. Returns null
+  // for non-batch txs so this is a no-op for the rest of history.
+  const batchCalls = useMemo(() => {
+    if (!looksLikeErc7821SelfBatch(tx.tx)) return null;
+    return decodeErc7821Batch(tx.tx.data);
+  }, [tx.tx]);
+  const hasBatchCalls = !!batchCalls && batchCalls.length > 0;
+  const delegationMeta = tx.delegation7702Meta;
+  const hasDelegation = !!delegationMeta;
+  // eth.sh label for the delegation target — shared cache, so this is free
+  // on reopen and free if any other surface (tx-confirmation screen, etc.)
+  // already fetched it.
+  const [delegateLabels, setDelegateLabels] = useState<string[]>([]);
+  useEffect(() => {
+    if (!isOpen || !delegationMeta || delegationMeta.kind === "revoke") {
+      setDelegateLabels([]);
+      return;
+    }
+    let cancelled = false;
+    getEthShLabels(delegationMeta.targetDelegate, tx.chainId).then((labels) => {
+      if (cancelled) return;
+      setDelegateLabels(labels);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, delegationMeta, tx.chainId]);
   // When the modal already has a hero summary that answers "what did this
   // tx do?", the raw From/To/Value/Calldata rows are power-user details so
   // we default them collapsed. Hero sources, in priority order:
   //   - clear-signed snapshot (Approved/Transferred/Native-send/ERC-7730)
+  //   - batch calls (decoded ERC-7821 self-call from atomic-7702 / Bankr)
+  //   - delegation7702 (Set / Revoke smart-account tx — target lives in the
+  //     authorization list, not in calldata, so the raw FROM/TO/data view
+  //     would otherwise look like a no-op self-call)
   //   - swap meta (sell→buy tokens; rendered by SwapSummaryCard above)
   //   - bridge meta (destination chain block also above)
   // Bridge / swap txs are virtually always wallet-initiated, so this is
   // also the place to honor "collapse for wallet-initiated swap txs".
   const hasHero =
-    !!tx.clearSignedMeta || !!tx.swapMeta || !!tx.bridge;
+    !!tx.clearSignedMeta ||
+    hasBatchCalls ||
+    hasDelegation ||
+    !!tx.swapMeta ||
+    !!tx.bridge;
   const [rawDetailsExpanded, setRawDetailsExpanded] = useState(!hasHero);
   const [gasExpanded, setGasExpanded] = useState(false);
   const [errorExpanded, setErrorExpanded] = useState(false);
@@ -577,6 +991,113 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
       },
     );
   }, [isOpen, tx.chainId]);
+
+  const bridgeDestinationChainId = tx.bridge?.destinationChainId;
+
+  const [assetTokenMetadata, setAssetTokenMetadata] = useState<
+    Record<string, TokenDisplayMetadata>
+  >({});
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const requests = new Map<
+      string,
+      { chainId: number; tokenAddress: string }
+    >();
+    collectMissingTokenMetadataRequests(
+      tx.assetChanges,
+      tx.chainId,
+      requests,
+    );
+    if (bridgeDestinationChainId && tx.destAssetChanges) {
+      collectMissingTokenMetadataRequests(
+        tx.destAssetChanges,
+        bridgeDestinationChainId,
+        requests,
+      );
+    }
+    if (requests.size === 0) return;
+
+    let cancelled = false;
+    Promise.all(
+      Array.from(requests.entries()).map(
+        ([key, req]) =>
+          new Promise<{
+            key: string;
+            metadata: TokenDisplayMetadata | null;
+          }>((resolve) => {
+            chrome.runtime.sendMessage(
+              {
+                type: "resolveTokenMetadata",
+                chainId: req.chainId,
+                tokenAddress: req.tokenAddress,
+              },
+              (response) => {
+                resolve({
+                  key,
+                  metadata: response?.success ? response.data ?? null : null,
+                });
+              },
+            );
+          }),
+      ),
+    ).then((results) => {
+      if (cancelled) return;
+      const found = results.filter(
+        (result): result is {
+          key: string;
+          metadata: TokenDisplayMetadata;
+        } => result.metadata !== null,
+      );
+      if (found.length === 0) return;
+      setAssetTokenMetadata((prev) => {
+        const next = { ...prev };
+        for (const { key, metadata } of found) {
+          const existing = next[key] ?? {};
+          next[key] = {
+            symbol: existing.symbol ?? metadata.symbol,
+            decimals: existing.decimals ?? metadata.decimals,
+            logoUrl: existing.logoUrl ?? metadata.logoUrl,
+          };
+        }
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isOpen,
+    tx.assetChanges,
+    bridgeDestinationChainId,
+    tx.chainId,
+    tx.destAssetChanges,
+  ]);
+
+  const sourceAssetChanges = useMemo(
+    () =>
+      applyTokenDisplayMetadata(
+        tx.assetChanges,
+        tx.chainId,
+        assetTokenMetadata,
+      ),
+    [assetTokenMetadata, tx.assetChanges, tx.chainId],
+  );
+  const destinationAssetChanges = useMemo(
+    () =>
+      applyTokenDisplayMetadata(
+        tx.destAssetChanges,
+        bridgeDestinationChainId ?? tx.chainId,
+        assetTokenMetadata,
+      ),
+    [
+      assetTokenMetadata,
+      bridgeDestinationChainId,
+      tx.chainId,
+      tx.destAssetChanges,
+    ],
+  );
 
   // USD prices keyed by `${chainId}-${address-lowercase}` for ERC-20s and
   // `${chainId}-native` for native deltas. Populated lazily from assetChanges
@@ -603,9 +1124,9 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
       if (record.nativeDelta) addReq(chainId, "native");
       for (const t of record.erc20Transfers) addReq(chainId, t.token);
     };
-    collect(tx.assetChanges, tx.chainId);
-    if (tx.bridge && tx.destAssetChanges) {
-      collect(tx.destAssetChanges, tx.bridge.destinationChainId);
+    collect(sourceAssetChanges, tx.chainId);
+    if (bridgeDestinationChainId && destinationAssetChanges) {
+      collect(destinationAssetChanges, bridgeDestinationChainId);
     }
     if (requests.length === 0) return;
     let cancelled = false;
@@ -639,9 +1160,9 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
   }, [
     isOpen,
     tx.chainId,
-    tx.assetChanges,
-    tx.destAssetChanges,
-    tx.bridge?.destinationChainId,
+    sourceAssetChanges,
+    destinationAssetChanges,
+    bridgeDestinationChainId,
   ]);
 
   /**
@@ -997,14 +1518,14 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
               // (chain icon + 2-line label, "You Sent" token row) so the
               // user sees the bridge route at a glance — source chain +
               // sell token at top, destination chain + buy token below.
-              const sellLogo = tx.swapMeta.sellTokenLogo;
+              const sellLogo = resolveLogo(tx.swapMeta.sellTokenLogo);
               const sellSymbol = tx.swapMeta.sellTokenSymbol;
               const srcChainName = resolvedChain?.name ?? tx.chainName;
               // Match the actual on-chain outflow to the swap's sell token
               // so the row reads "1.234 USDC" once assetChanges lands. Native
               // sells fall back to abs(nativeDelta).
-              const sellAmount = pickSwapAmount(
-                tx.assetChanges,
+              const sellAmount = pickAssetChangeAmount(
+                sourceAssetChanges,
                 "out",
                 sellSymbol,
                 sellSymbol?.toLowerCase() === nativeSym.toLowerCase(),
@@ -1150,12 +1671,16 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                   : statusTone === "bad"
                     ? "status.error.fg"
                     : "status.info.fg";
-              const destExplorer = getChainConfig(tx.bridge.destinationChainId).explorer;
+              const destChain =
+                getResolvedChainById(tx.bridge.destinationChainId, networksInfo);
+              const destExplorer =
+                destChain?.explorer ||
+                getChainConfig(tx.bridge.destinationChainId).explorer;
               const destLink =
                 tx.bridge.destinationTxHash && destExplorer
                   ? `${destExplorer}/tx/${tx.bridge.destinationTxHash}`
                   : null;
-              const buyLogo = tx.swapMeta?.buyTokenLogo;
+              const buyLogo = resolveLogo(tx.swapMeta?.buyTokenLogo);
               const buySymbol = tx.swapMeta?.buyTokenSymbol;
               return (
                 <Box
@@ -1241,10 +1766,12 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                         when the buy token is the destination chain's native. */}
                     {buySymbol && (() => {
                       const destNativeSym =
+                        destChain?.nativeCurrency.symbol ??
                         getChainConfig(tx.bridge!.destinationChainId)
-                          .nativeCurrency?.symbol ?? "ETH";
-                      const buyAmount = pickSwapAmount(
-                        tx.destAssetChanges,
+                          .nativeCurrency?.symbol ??
+                        "ETH";
+                      const buyAmount = pickAssetChangeAmount(
+                        destinationAssetChanges,
                         "in",
                         buySymbol,
                         buySymbol.toLowerCase() === destNativeSym.toLowerCase(),
@@ -1313,21 +1840,19 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 bridges (`swapMeta + bridge`) the sell/buy rows are already
                 shown inline in the Source / Destination blocks above, so we
                 suppress these cards to avoid duplication. */}
-            {tx.assetChanges && !(tx.bridge && tx.swapMeta) && (
+            {sourceAssetChanges && !(tx.bridge && tx.swapMeta) && (
               <AssetChangesCard
-                record={tx.assetChanges}
+                record={sourceAssetChanges}
                 chainId={tx.chainId}
-                chainName={tx.chainName}
                 nativeSym={nativeSym}
                 label="Token Changes"
                 formatUsd={formatTokenAmountUsd}
               />
             )}
-            {tx.destAssetChanges && tx.bridge && !tx.swapMeta && (
+            {destinationAssetChanges && tx.bridge && !tx.swapMeta && (
               <AssetChangesCard
-                record={tx.destAssetChanges}
+                record={destinationAssetChanges}
                 chainId={tx.bridge.destinationChainId}
-                chainName={tx.bridge.destinationChainName}
                 nativeSym={
                   getChainConfig(tx.bridge.destinationChainId).nativeCurrency
                     ?.symbol ?? "ETH"
@@ -1415,6 +1940,195 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
               </Text>
             </HStack>
 
+            {/* Per-call hero for atomic batches. Decoded from the ERC-7821
+                self-call calldata on open (no storage cost). Reuses the same
+                CallCard + clear-signing pipeline the tx-confirmation surface
+                uses, so transfers / approves / Permit2 / etc. read as human
+                actions instead of a blob. The raw FROM=EOA / TO=EOA / opaque
+                calldata stays available inside the collapsed "Transaction
+                Details" section below for power-users. */}
+            {hasBatchCalls && (
+              <VStack spacing={2} align="stretch">
+                <HStack spacing={2}>
+                  <Text
+                    fontSize="xs"
+                    color="text.secondary"
+                    fontWeight="700"
+                    textTransform="uppercase"
+                    letterSpacing="wide"
+                  >
+                    Calls
+                  </Text>
+                  <Badge
+                    bg="accent.secondary"
+                    color="accentFg.secondary"
+                    fontSize="2xs"
+                    fontWeight="800"
+                    px={1.5}
+                    py={0}
+                    border="1px solid"
+                    borderColor="border.default"
+                  >
+                    {batchCalls!.length}
+                  </Badge>
+                </HStack>
+                <BatchCallsList
+                  calls={batchCalls!}
+                  chainId={tx.chainId}
+                  origin={tx.origin}
+                  favicon={tx.favicon}
+                  originPerCall={tx.batchCallOrigins}
+                  originCallIndex={
+                    tx.bridge ? batchCalls!.length - 1 : undefined
+                  }
+                />
+              </VStack>
+            )}
+
+            {/* EIP-7702 delegation hero — Set / Revoke txs whose actual
+                effect lives in the authorization tuple, not the calldata.
+                The raw FROM/TO view shows EOA → EOA so without this card
+                the user can't see which contract they delegated to. The
+                target address gets the standard copy + explorer pattern. */}
+            {hasDelegation && delegationMeta && (() => {
+              const isRevoke = delegationMeta.kind === "revoke";
+              const target = delegationMeta.targetDelegate;
+              const explorer = explorerBase;
+              // Prefer the eth.sh label when it resolves; fall back to the
+              // built-in "MetaMask DeleGator" tag so the WalletChan default
+              // still paints something instantly on first open before the
+              // cache warms.
+              const ethShLabel = !isRevoke ? delegateLabels[0] ?? null : null;
+              const knownName = isRevoke ? null : getKnownDelegateName(target);
+              const badgeLabel = ethShLabel ?? knownName;
+              const hasDefaultDelegate = hasDefaultDelegateForChain(tx.chainId);
+              const isDefault =
+                !isRevoke &&
+                target.toLowerCase() ===
+                  EIP_7702_DEFAULT_DELEGATE.toLowerCase();
+              return (
+                <Box
+                  bg="surface.sunken"
+                  border="2px solid"
+                  borderColor="border.default"
+                  borderRadius="lg"
+                  p={2.5}
+                >
+                  <VStack align="stretch" spacing={2}>
+                    <Text
+                      fontSize="2xs"
+                      fontWeight="800"
+                      textTransform="uppercase"
+                      color="text.tertiary"
+                      letterSpacing="wide"
+                    >
+                      Smart Account
+                    </Text>
+                    <Text
+                      fontSize="sm"
+                      fontWeight="800"
+                      color="text.primary"
+                      lineHeight="short"
+                    >
+                      {isRevoke
+                        ? "Removed onchain delegation"
+                        : isDefault
+                          ? "Delegated to WalletChan default"
+                          : "Delegated to custom contract"}
+                    </Text>
+                    {!isRevoke && (
+                      <Box>
+                        <HStack justify="space-between" align="center" mb={1}>
+                          <Text
+                            fontSize="2xs"
+                            color="text.tertiary"
+                            fontWeight="700"
+                            textTransform="uppercase"
+                          >
+                            Delegate
+                          </Text>
+                          {badgeLabel && (
+                            <Badge
+                              bg="accent.secondary"
+                              color="accentFg.secondary"
+                              fontSize="2xs"
+                              fontWeight="800"
+                              px={1.5}
+                              py={0}
+                              border="1px solid"
+                              borderColor="border.default"
+                              maxW="60%"
+                              overflow="hidden"
+                              textOverflow="ellipsis"
+                              whiteSpace="nowrap"
+                            >
+                              {badgeLabel}
+                            </Badge>
+                          )}
+                        </HStack>
+                        <HStack
+                          spacing={1}
+                          px={1.5}
+                          py={1}
+                          bg="surface.raised"
+                          border="1.5px solid"
+                          borderColor="border.subtle"
+                          borderRadius="md"
+                          align="center"
+                        >
+                          <Text
+                            fontSize="xs"
+                            fontFamily="mono"
+                            fontWeight="700"
+                            color="text.primary"
+                            isTruncated
+                            flex="1"
+                            minW={0}
+                          >
+                            {target.slice(0, 10)}…{target.slice(-8)}
+                          </Text>
+                          <CopyButton value={target} />
+                          {explorer && (
+                            <IconButton
+                              aria-label="View delegate on explorer"
+                              icon={<ExternalLinkIcon boxSize="10px" />}
+                              size="xs"
+                              variant="ghost"
+                              minW="18px"
+                              h="18px"
+                              color="text.tertiary"
+                              onClick={() =>
+                                chrome.tabs.create({
+                                  url: `${explorer}/address/${target}`,
+                                })
+                              }
+                              _hover={{
+                                color: "accent.secondary",
+                                bg: "bg.muted",
+                              }}
+                            />
+                          )}
+                        </HStack>
+                      </Box>
+                    )}
+                    <Text
+                      fontSize="2xs"
+                      color="text.tertiary"
+                      lineHeight="short"
+                    >
+                      {isRevoke
+                        ? `Account is no longer a smart account on this chain.${
+                            hasDefaultDelegate
+                              ? " Future batches fall back to WalletChan default delegation if present."
+                              : ""
+                          }`
+                        : "Future multi-call batches on this chain execute atomically via this contract."}
+                    </Text>
+                  </VStack>
+                </Box>
+              );
+            })()}
+
             {/* Human-readable clear-signed hero. Snapshot-driven, so it
                 paints synchronously on every reopen — no RPC / eth.sh / ENS
                 calls. Hidden when no snapshot was captured (older entries,
@@ -1501,7 +2215,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                     <HStack spacing={2}>
                       {tx.transferMeta.tokenLogo && (
                         <Image
-                          src={tx.transferMeta.tokenLogo}
+                          src={resolveLogo(tx.transferMeta.tokenLogo)}
                           alt={tx.transferMeta.symbol}
                           boxSize="20px"
                           borderRadius="full"

@@ -31,6 +31,19 @@ export interface PendingTxRequest {
   parentBundleId?: string;
   bundleIndex?: number;
   bundleTotalCalls?: number;
+  /**
+   * Marks this tx as an EIP-7702 set-delegate (or revoke when target = 0x0).
+   * The PK confirm path uses this to sign an authorization tuple at broadcast
+   * time and route through the type-4 signer. The confirmation UI uses it to
+   * show a human-readable summary instead of generic "send 0 to self".
+   *
+   * For revokes, also clears the saved custom-delegate storage entry after
+   * the tx is broadcast so the next batch falls back to default.
+   */
+  delegation7702Meta?: {
+    targetDelegate: `0x${string}`;
+    kind: "revoke" | "setDelegate";
+  };
 }
 
 /**
@@ -102,8 +115,10 @@ export async function clearExpiredTxRequests(): Promise<void> {
 }
 
 /**
- * Update the extension badge with pending counts (combines tx, signature, batch
- * requests, and any entries the user has staged in the cross-dapp batch).
+ * Update the extension badge with pending request counts.
+ *
+ * A cross-dapp batch counts as one pending item, even when it contains many
+ * staged calls, because the user will handle it with one confirmation.
  */
 export async function updateBadge(): Promise<void> {
   const txRequests = await getPendingTxRequests();
@@ -113,11 +128,12 @@ export async function updateBadge(): Promise<void> {
   const sigRequests = await getPendingSignatureRequests();
   const batchRequests = await getPendingBatchTxRequests();
   const crossDappBatch = await getCrossDappBatch();
+  const crossDappBatchCount = crossDappBatch?.entries.length ? 1 : 0;
   const count =
     txRequests.length +
     sigRequests.length +
     batchRequests.length +
-    (crossDappBatch?.entries.length ?? 0);
+    crossDappBatchCount;
 
   if (count > 0) {
     await chrome.action.setBadgeText({ text: count.toString() });

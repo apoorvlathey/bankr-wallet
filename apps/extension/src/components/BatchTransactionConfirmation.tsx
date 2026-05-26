@@ -9,12 +9,12 @@ import {
   Spinner,
   IconButton,
   Flex,
-  Spacer,
   Image,
   Icon,
   Collapse,
   Switch,
   Tooltip,
+  Link,
   Modal,
   ModalOverlay,
   ModalContent,
@@ -33,28 +33,32 @@ import {
   DeleteIcon,
   ExternalLinkIcon,
   SettingsIcon,
+  WarningIcon,
 } from "@chakra-ui/icons";
-import { parseApproveCalldata } from "@/lib/erc20Approve";
-import ERC20ApproveDisplay from "@/components/ERC20ApproveDisplay";
-import type { PendingBatchTxRequest, ERC5792Call } from "@/chrome/erc5792Types";
+import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import type { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
+import type { GasEstimate } from "@/chrome/gasEstimation";
 import { getChainConfig } from "@/constants/chainConfig";
-import CalldataDecoder from "@/components/CalldataDecoder";
-import { CalldataDigestDisplay } from "@/components/DigestDisplay";
-import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
-import { isBuiltinCalldataSelector } from "@/lib/clearSigning/builtinDescriptors";
-import { useErc20InlineSummary } from "@/hooks/useErc20InlineSummary";
+import { useBatchPlan } from "@/hooks/useBatchPlan";
 import AssetChangesDisplay, { SimulationRevertedBanner } from "@/components/AssetChangesDisplay";
 import { detectAbiEncodingError } from "@/lib/calldataValidation";
 import { MalformedCalldataBanner } from "@/components/MalformedCalldataBanner";
+import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
 import ForceInclusionProgress from "@/components/ForceInclusionProgress";
+import SmartAccountSetupBanner from "@/components/SmartAccountSetupBanner";
+import {
+  CallCard,
+  BatchClearSigningSummary,
+  CALL_ACCENTS,
+  CALL_ACCENT_FGS,
+} from "@/components/BatchCallsList";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
-import { isForceInclusionSupportedForAccount, FORCE_INCLUSION_CHAINS } from "@/constants/chainRegistry";
+import { isForceInclusionSupportedForAccount, FORCE_INCLUSION_CHAINS, getKnownDelegateName } from "@/constants/chainRegistry";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
@@ -70,12 +74,6 @@ const checkmarkDraw = keyframes`
   0% { stroke-dashoffset: 50; }
   100% { stroke-dashoffset: 0; }
 `;
-
-// Per-call accent rotation. The three intent slots (primary/secondary/highlight)
-// map to RED/BLUE/YELLOW in Bauhaus and to indigo/cyan/amber in Midnight, so each
-// call still gets a distinct identity stripe in either theme.
-const CALL_ACCENTS = ["accent.primary", "accent.secondary", "accent.highlight"];
-const CALL_ACCENT_FGS = ["accentFg.primary", "accentFg.secondary", "accentFg.highlight"];
 
 // Lucide `Unlink` glyph — two open chain-link halves separated by a gap.
 // Used as the affordance for split mode on the CALLS header. Inline because
@@ -140,7 +138,9 @@ interface BatchTransactionConfirmationProps {
    * Cross-dapp batch only: replaces the default `confirmBatchTransactionAsync`
    * chrome.runtime.sendMessage call. Should resolve `{ success, error? }`.
    */
-  customConfirmHandler?: () => Promise<{ success: boolean; error?: string }>;
+  customConfirmHandler?: (
+    gasEstimates?: GasEstimate[] | null,
+  ) => Promise<{ success: boolean; error?: string }>;
   /**
    * Cross-dapp batch only: replaces the default `rejectBatchTransaction`
    * chrome.runtime.sendMessage call.
@@ -214,11 +214,12 @@ function BatchTransactionConfirmation({
   // Tracks the in-flight reject for immediate spinner feedback while the
   // background tears down the bundle and the parent navigates away.
   const [isRejecting, setIsRejecting] = useState(false);
+  const [isAddingToBatch, setIsAddingToBatch] = useState(false);
   const [expandedCalls, setExpandedCalls] = useState<Set<number>>(new Set());
   const [decodedFunctionNames, setDecodedFunctionNames] = useState<
     Record<number, string>
   >({});
-  const [cachedGasEstimates, setCachedGasEstimates] = useState<any[] | null>(null);
+  const [cachedGasEstimates, setCachedGasEstimates] = useState<GasEstimate[] | null>(null);
   // Source-chain native USD price piggybacked off the gas estimator's
   // CoinGecko lookup — reused for the Value row USD display so we don't
   // double-fetch.
@@ -231,6 +232,12 @@ function BatchTransactionConfirmation({
   // Fed by AssetChangesDisplay below. Drives the top-of-screen revert
   // banner so the warning lands above the clear-signing summary.
   const [simulationReverted, setSimulationReverted] = useState(false);
+  // Fed by MultiTxGasEstimateDisplay below. Drives the top-of-screen
+  // "may revert" banner so it lands above asset changes and the call list,
+  // not buried next to the gas row.
+  const [anyTxMayRevert, setAnyTxMayRevert] = useState(false);
+  // EIP-7702 smart-account-setup row stays collapsed by default to keep the
+  // confirm screen calm. Users can tap "Details" if they want the delegate.
   // Split-mode modal: opens when the user clicks the gear next to "Calls".
   const {
     isOpen: isSplitModalOpen,
@@ -290,11 +297,26 @@ function BatchTransactionConfirmation({
 
   const fromAddress = params.from || accountAddress;
 
-  // Encode batch calls for simulation and Tenderly
-  const encodedBatch = useMemo(
-    () => encodeBatchCalls(calls, fromAddress),
-    [calls, fromAddress],
-  );
+  // Encode batch calls for simulation and Tenderly. The encoder throws when
+  // an inner call targets the user's own EOA with payload — catch so React
+  // doesn't crash and we can render a banner instead. Empty placeholder batch
+  // keeps downstream simulators/Tenderly inert; signing is blocked separately
+  // via `encodingError` below.
+  const { encodedBatch, encodingError } = useMemo(() => {
+    try {
+      return { encodedBatch: encodeBatchCalls(calls, fromAddress), encodingError: null };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        encodedBatch: {
+          to: fromAddress,
+          data: "0x" as `0x${string}`,
+          value: "0x0",
+        },
+        encodingError: msg,
+      };
+    }
+  }, [calls, fromAddress]);
 
   // Synthetic PendingTxRequest for AssetChangesDisplay
   const syntheticTxRequest: PendingTxRequest = useMemo(
@@ -331,7 +353,19 @@ function BatchTransactionConfirmation({
     });
   };
 
+  const batchPlan = useBatchPlan({
+    accountId: batchRequest.accountId ?? null,
+    accountType: accountType ?? null,
+    chainId: batchRequest.chainId,
+  });
+  // PK/SP defaults to non-atomic (auto-sequential broadcasts). Once we
+  // resolve a 7702 delegate for the EOA+chain, flip to atomic — the batch
+  // ships as a single type-4 tx that the EOA self-executes via ERC-7821.
+  // During the brief resolve window we hold non-atomic to avoid UI flicker.
   const isNonAtomic =
+    (accountType === "privateKey" || accountType === "seedPhrase") &&
+    batchPlan.strategy !== "atomic-7702";
+  const isLocalSigningAccount =
     accountType === "privateKey" || accountType === "seedPhrase";
 
   // Split mode: only meaningful for PK/Seed accounts. Cross-dapp batches
@@ -376,11 +410,25 @@ function BatchTransactionConfirmation({
   // Force inclusion info — non-null when chain supports it and account can submit.
   // For Bankr accounts this also requires the L1 chain (e.g. Ethereum mainnet) to be
   // in BANKR_SUPPORTED_CHAIN_IDS, since Bankr API submits the L1 deposit on their end.
+  //
+  // Disabled for atomic-7702 batches (PK/SP). Two reasons:
+  //   1. If the batch needs an authorization tuple (first-time delegation),
+  //      `OptimismPortal.depositTransaction` has no slot for `authorizationList`
+  //      — it would get silently dropped and the EOA would execute the ERC-7821
+  //      calldata without any delegation, failing.
+  //   2. Even when the EOA is already delegated onchain (silent reuse), the
+  //      deposit-source tx (type 0x7E) lands on L2 with `tx.origin` set to the
+  //      aliased L1 sender rather than the EOA. Any "only-self" check inside
+  //      the delegate (e.g. MM DeleGator's self-call gate for batch execute)
+  //      would reject.
+  // Hide the option so users don't silently lose atomicity.
+  const isAtomic7702 = batchPlan.strategy === "atomic-7702";
   const forceInclusionInfo = useMemo(() => {
+    if (isAtomic7702) return null;
     if (!isForceInclusionSupportedForAccount(chainId, accountType)) return null;
     const entry = FORCE_INCLUSION_CHAINS.get(chainId)!;
     return { l1ChainId: entry.l1ChainId, l1ChainName: entry.l1ChainName };
-  }, [chainId, accountType]);
+  }, [chainId, accountType, isAtomic7702]);
 
   const handleConfirm = async () => {
     setState("submitting");
@@ -389,7 +437,7 @@ function BatchTransactionConfirmation({
     // Cross-dapp batch path: defer to the wrapper-provided handler. The
     // wrapper owns its own bundle id, message type, and result fan-out.
     if (customConfirmHandler) {
-      const result = await customConfirmHandler();
+      const result = await customConfirmHandler(cachedGasEstimates);
       if (result.success) {
         if (isInSidePanel) {
           onConfirmed();
@@ -410,8 +458,14 @@ function BatchTransactionConfirmation({
       (_, i) => decodedFunctionNames[i] || undefined,
     ).filter(Boolean) as string[];
 
-    // Route to the appropriate handler based on account type
-    const messageType = isNonAtomic
+    // Route to the appropriate handler based on the SIGNING source, not the
+    // execution atomicity:
+    //  - Bankr accounts → Bankr API handler.
+    //  - PK / SP → local-signing handler (handles auto-sequential AND atomic
+    //    via EIP-7702 internally; the atomicity choice happens at confirm
+    //    time in the handler via resolveActiveDelegate).
+    const isLocalSigning = isLocalSigningAccount;
+    const messageType = isLocalSigning
       ? "confirmBatchTransactionAsyncPK"
       : "confirmBatchTransactionAsync";
 
@@ -422,16 +476,19 @@ function BatchTransactionConfirmation({
         password: "",
         functionNames: functionNames.length > 0 ? functionNames : undefined,
         // Pass pre-computed gas estimates so background doesn't re-estimate.
-        // For normal non-atomic batches: used directly as gas + fees for signing.
-        // For force inclusion batches: only the `gasLimit` field is used (as the L2
+        // The PK/SP handler uses them for the auto-sequential path; the atomic
+        // 7702 path sums them as a single combined estimate. For force
+        // inclusion batches: only the `gasLimit` field is used (as the L2
         //   `_gasLimit` override in the portal call); L1 fees are computed onchain.
-        ...(isNonAtomic && cachedGasEstimates ? { gasEstimates: cachedGasEstimates } : {}),
+        ...(isLocalSigning && cachedGasEstimates ? { gasEstimates: cachedGasEstimates } : {}),
         ...(forceInclusion ? { forceInclusion: true } : {}),
       },
       (result: { success: boolean; error?: string }) => {
         if (result.success) {
-          // Atomic batch + force inclusion: stay open to show progress
-          if (forceInclusion && !isNonAtomic) {
+          // Bankr atomic + force inclusion: stay open to show the L1 deposit
+          // progress screen. PK/SP force inclusion runs locally in the
+          // background and just resolves into the standard "sent" state.
+          if (forceInclusion && accountType === "bankr") {
             setState("forceInclusion");
           } else if (isInSidePanel) {
             onConfirmed();
@@ -470,11 +527,13 @@ function BatchTransactionConfirmation({
   // ---------------------------------------------------------------------------
   // Add-to-Batch (dapp-initiated batches only)
   // ---------------------------------------------------------------------------
-  // Cross-dapp batching is only available for Bankr accounts (the ship goes
-  // through the Bankr API). The button is hidden entirely on PK/SP non-atomic
-  // batches, on the cross-dapp batch screen itself (the wrapper doesn't pass
-  // `onAddedToBatch`), and on view-only impersonator accounts.
-  const canBatchAccount = accountType === "bankr";
+  // Cross-dapp batching: Bankr (atomic via API) or PK/SP when useBatchPlan has
+  // resolved a usable 7702 delegate. Hidden on the cross-dapp batch screen
+  // itself (no `onAddedToBatch`) and on view-only impersonator accounts.
+  const canBatchAccount =
+    accountType === "bankr" ||
+    accountType === "privateKey" ||
+    accountType === "seedPhrase";
 
   // If a batch is already pending, the new bundle's from + chain must match.
   // Otherwise show a tooltip explaining why the button is disabled.
@@ -490,17 +549,24 @@ function BatchTransactionConfirmation({
   }, [crossDappBatch, fromAddress, chainId]);
 
   const handleAddBundleToBatch = () => {
+    if (isAddingToBatch) return;
+    setIsAddingToBatch(true);
     chrome.runtime.sendMessage(
       { type: "addCallsToCrossDappBatch", bundleId: batchRequest.id },
       (result: { success: boolean; error?: string } | undefined) => {
         if (!result?.success) {
+          setIsAddingToBatch(false);
           setError(result?.error || "Failed to add to batch");
           setState("error");
           return;
         }
         // Success — jump to the cross-dapp batch screen so the user sees the
         // assembled batch they just merged into.
-        onAddedToBatch?.();
+        if (onAddedToBatch) {
+          onAddedToBatch();
+        } else {
+          setIsAddingToBatch(false);
+        }
       },
     );
   };
@@ -819,6 +885,46 @@ function BatchTransactionConfirmation({
           </Box>
         </HStack>
 
+        {/* Simulated-revert banner — top-of-screen warning so the user
+            sees "this is likely to fail" before any other banner, the
+            clear-signing summary, or the call list. Fed by AssetChangesDisplay
+            below. */}
+        {simulationReverted && (
+          <SimulationRevertedBanner borders={tokens.borders} />
+        )}
+
+        {/* "One or more transactions may revert" — bubbled up from the gas
+            display so the warning lands at the top of the screen instead of
+            being buried next to the gas row. Suppressed if the simulation
+            already reverted (the banner above is louder and covers the same
+            case). */}
+        {anyTxMayRevert && !simulationReverted && (
+          <HStack
+            bg="status.error.bg"
+            border={tokens.borders.medium}
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="card"
+            px={3}
+            py={2}
+            spacing={2}
+          >
+            <WarningIcon
+              color="status.error.fg"
+              boxSize={3.5}
+              flexShrink={0}
+            />
+            <Text
+              fontSize="xs"
+              color="status.error.fg"
+              fontWeight="700"
+              textTransform="uppercase"
+            >
+              One or more transactions may revert
+            </Text>
+          </HStack>
+        )}
+
         {/* Malformed-calldata banner — blocks signing when any call in the
             batch has non-canonical ABI encoding for a known ERC20 selector. */}
         {malformedCallInfo && (
@@ -829,11 +935,26 @@ function BatchTransactionConfirmation({
           />
         )}
 
-        {/* Simulated-revert banner — top-of-screen warning so the user
-            sees "this is likely to fail" before the clear-signing summary
-            or call list. Fed by AssetChangesDisplay below. */}
-        {simulationReverted && (
-          <SimulationRevertedBanner borders={tokens.borders} />
+        {/* ERC-7821 self-recursion guard — blocks signing when an inner call
+            targets the user's own EOA with calldata or value, which could
+            re-enter execute() with auth bypassed. */}
+        {encodingError && (
+          <MalformedCalldataBanner
+            borders={tokens.borders}
+            title="Unsafe batch — signing blocked"
+            reason={encodingError}
+          />
+        )}
+
+        {/* EIP-7702 smart-account setup / replacement banner. Shared with
+            SwapConfirmation via SmartAccountSetupBanner — see that file for
+            the fresh-vs-replace variant rules. */}
+        {batchPlan.needsAuthorization && batchPlan.delegate && (
+          <SmartAccountSetupBanner
+            delegate={batchPlan.delegate}
+            onchainDelegate={batchPlan.onchainDelegate}
+            explorerUrl={chainBadgeConfig?.explorer}
+          />
         )}
 
         {/* Clear-signing summary — one card per call that has a matching
@@ -1242,14 +1363,16 @@ function BatchTransactionConfirmation({
           }))}
           accountType={accountType || "bankr"}
           isNonAtomic={isNonAtomic}
-          // Fire for ANY non-atomic batch (normal or force inclusion) so the user's
-          // edited L2 gas limits get passed through to the background.
-          onGasEstimates={isNonAtomic ? setCachedGasEstimates : undefined}
+          // Fire for any local-signing batch. Non-atomic passes per-call gas;
+          // atomic 7702 passes the single wrapped ERC-7821 tx estimate the user
+          // reviewed, so the background signs with the same values.
+          onGasEstimates={isLocalSigningAccount ? setCachedGasEstimates : undefined}
           onValidityChange={setGasValid}
           onNativePriceUsd={setNativePriceUsd}
+          onAnyFailedChange={setAnyTxMayRevert}
           forceInclusion={forceInclusion}
-          // Atomic (Bankr): estimate gas for the single ERC-7821 encoded batch tx
-          // When force inclusion is on, estimate L1 gas for the encoded batch
+          // Atomic (Bankr or 7702): estimate gas for the single ERC-7821 encoded batch tx.
+          // When force inclusion is on, estimate L1 gas for the encoded batch.
           batchedTx={isNonAtomic ? undefined : {
             tx: {
               from: fromAddress,
@@ -1260,6 +1383,20 @@ function BatchTransactionConfirmation({
             },
             label: `Batch Transaction (${calls.length} calls)`,
           }}
+          // For atomic-7702 batches we only need the state-override path when
+          // the EOA isn't already onchain-delegated. If it is (needsAuthorization
+          // === false), eth_getCode(EOA) already returns 0xef0100<delegate> and
+          // the chain dispatches the self-call through the delegate's code
+          // natively — applying a redundant override only buys us a dependency
+          // on RPC-specific stateOverride support on eth_estimateGas, which is
+          // patchier than its eth_call support on some Base providers.
+          eip7702Delegate={
+            batchPlan.strategy === "atomic-7702" &&
+            batchPlan.delegate &&
+            batchPlan.needsAuthorization
+              ? batchPlan.delegate
+              : undefined
+          }
         />
 
         {/* Tenderly link */}
@@ -1287,6 +1424,15 @@ function BatchTransactionConfirmation({
               zIndex={1}
             >
               <VStack spacing={2} align="stretch">
+                {/* ERC-8213: outer calldata digest for the actual ERC-7821
+                    self-call signed by PK/SP atomic-7702 batches. Per-call
+                    digests still live inside each CallCard. */}
+                {isAtomic7702 &&
+                  encodedBatch.data &&
+                  encodedBatch.data !== "0x" && (
+                    <CalldataDigestDisplay calldata={encodedBatch.data} />
+                  )}
+
                 {/*
                  * Tenderly's dashboard simulator URL only accepts a single tx
                  * (from/to/value/rawFunctionInput/network). For atomic Bankr
@@ -1357,7 +1503,9 @@ function BatchTransactionConfirmation({
                           <Button
                             variant="highlight"
                             onClick={handleAddBundleToBatch}
-                            isDisabled={!!addToBatchDisabledReason}
+                            isDisabled={!!addToBatchDisabledReason || isAddingToBatch}
+                            isLoading={isAddingToBatch}
+                            aria-label="Add to batch"
                             fontWeight="800"
                             textTransform="uppercase"
                             letterSpacing="wide"
@@ -1453,26 +1601,58 @@ function BatchTransactionConfirmation({
                      * the Bankr API). For dapp-initiated batches, read-only
                      * impersonator accounts can't sign, so we hide the button.
                      */}
-                    {(customConfirmHandler || accountType !== "impersonator") && (
-                      <Button
-                        variant="highlight"
-                        flex={1}
-                        onClick={handleConfirm}
-                        isDisabled={
-                          state === "error" ||
-                          !gasValid ||
-                          isCalldataMalformed ||
-                          isRejecting
-                        }
-                        // "Confirm Batch" is longer than the default "Confirm"
-                        // — shrink the font so it sits comfortably next to the
-                        // Reject button without wrapping or clipping.
-                        fontSize={customConfirmHandler ? "sm" : undefined}
-                        px={customConfirmHandler ? 2 : undefined}
-                      >
-                        {customConfirmHandler ? "Confirm Batch" : "Confirm"}
-                      </Button>
-                    )}
+                    {(customConfirmHandler || accountType !== "impersonator") && (() => {
+                      // Surface the actual reason the Confirm button is
+                      // disabled instead of leaving the user staring at a
+                      // greyed-out CTA. Order: most actionable first.
+                      const confirmDisabledReason = isRejecting
+                        ? "Reject in progress"
+                        : state === "error"
+                          ? "Fix the error above before retrying"
+                          : encodingError
+                            ? "Unsafe batch — signing blocked"
+                          : isCalldataMalformed
+                            ? "Calldata is malformed — signing blocked"
+                            : isLocalSigningAccount &&
+                                batchPlan.strategy === "loading"
+                              ? "Checking smart account support"
+                              : !gasValid
+                                ? "Set a valid gas fee — fee fields can't be empty / max fee must cover base + priority"
+                                : null;
+                      return (
+                        <Box
+                          flex={1}
+                          // Force the Tooltip's wrapping <span> (created by
+                          // shouldWrapChildren) to fill flex={1} so the
+                          // Confirm button sits flush with Reject instead of
+                          // shrinking to its content width.
+                          sx={{ "& > span": { display: "block", w: "full" } }}
+                        >
+                          <Tooltip
+                            label={confirmDisabledReason ?? ""}
+                            isDisabled={!confirmDisabledReason}
+                            hasArrow
+                            fontSize="xs"
+                            placement="top"
+                            shouldWrapChildren
+                          >
+                            <Button
+                              variant="highlight"
+                              w="full"
+                              onClick={handleConfirm}
+                              isDisabled={!!confirmDisabledReason}
+                              // "Confirm Batch" is longer than the default
+                              // "Confirm" — shrink the font so it sits
+                              // comfortably next to Reject without wrapping.
+                              fontSize={customConfirmHandler ? "sm" : undefined}
+                              px={customConfirmHandler ? 2 : undefined}
+                            >
+                              {customConfirmHandler ? "Confirm Batch" : "Confirm"}
+                            </Button>
+                          </Tooltip>
+                        </Box>
+                      );
+                    })()}
                   </HStack>
                 )}
               </VStack>
@@ -1575,7 +1755,7 @@ function BatchTransactionConfirmation({
               onClick={handleConfirmSplit}
               isLoading={splitting}
               loadingText="Splitting"
-              isDisabled={isCalldataMalformed}
+              isDisabled={isCalldataMalformed || !!encodingError}
             >
               Split
             </Button>
@@ -1583,713 +1763,6 @@ function BatchTransactionConfirmation({
         </ModalContent>
       </Modal>
     </Box>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// BatchClearSigningSummary — clear-signing cards for the batch, rendered at
-// the very top of the confirmation in call order. Each card carries a small
-// "Call N of M" caption so the user knows which tx the human-readable view
-// describes. Calls without a registry-matched descriptor render nothing.
-// ---------------------------------------------------------------------------
-
-function BatchClearSigningSummary({
-  calls,
-  chainId,
-}: {
-  calls: ERC5792Call[];
-  chainId: number;
-}) {
-  return (
-    <VStack spacing={3} align="stretch">
-      {calls.map((call, i) => {
-        if (!call.data || call.data === "0x" || !call.to) return null;
-        // Built-in selectors (ERC-20 transfer, …) are summarized inline on the
-        // CallCard header below. Rendering the full descriptor card here too
-        // would duplicate the same recipient + amount info on every transfer
-        // row. Remote-registry descriptors (Permit2, Uniswap router, etc.) and
-        // anything we don't have a built-in for still render here.
-        if (isBuiltinCalldataSelector(call.data)) return null;
-        return (
-          <PerCallClearSigning
-            key={i}
-            index={i}
-            total={calls.length}
-            to={call.to}
-            data={call.data}
-            chainId={chainId}
-          />
-        );
-      })}
-    </VStack>
-  );
-}
-
-function PerCallClearSigning({
-  index,
-  total,
-  to,
-  data,
-  chainId,
-}: {
-  index: number;
-  total: number;
-  to: string;
-  data: string;
-  chainId: number;
-}) {
-  const [matched, setMatched] = useState(false);
-  // When `matched` is false, `ClearSigningView` returns null but the wrapping
-  // <Box> was still a flex item — N unmatched calls would each contribute a
-  // `VStack spacing={3}` gap, leaking ~24px of phantom whitespace below the
-  // header. `display="none"` removes the Box from layout entirely while keeping
-  // `ClearSigningView` mounted so its descriptor lookup effect still runs and
-  // can flip `matched` on a hit.
-  return (
-    <Box display={matched ? "block" : "none"}>
-      {/* Caption only appears once a descriptor actually matches — keeps the
-          layout silent for calls that have no friendly view. */}
-      {matched && (
-        <HStack mb={1.5} spacing={2} align="center">
-          <Text
-            fontSize="10px"
-            color="fg.muted"
-            fontWeight="700"
-            textTransform="uppercase"
-            letterSpacing="0.06em"
-            flexShrink={0}
-          >
-            Call {index + 1}
-            {total > 1 ? ` of ${total}` : ""}
-          </Text>
-          <Box flex={1} h="1px" bg="border.subtle" />
-        </HStack>
-      )}
-      <ClearSigningView
-        kind="calldata"
-        chainId={chainId}
-        to={to}
-        calldata={data}
-        onResolved={setMatched}
-        hideLoadingSkeleton
-      />
-    </Box>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// CallCard — individual call in the batch (collapsible)
-// ---------------------------------------------------------------------------
-
-function CallCard({
-  call,
-  index,
-  chainId,
-  isExpanded,
-  onToggle,
-  onFunctionName,
-  decodedName,
-  origin,
-  favicon,
-  onEditCallData,
-}: {
-  call: ERC5792Call;
-  index: number;
-  chainId: number;
-  isExpanded: boolean;
-  onToggle: () => void;
-  onFunctionName: (name: string) => void;
-  decodedName?: string;
-  origin?: string;
-  favicon?: string | null;
-  onEditCallData?: (
-    newData: string,
-  ) => Promise<{ success: boolean; error?: string }>;
-}) {
-  const originHostname = origin
-    ? (() => {
-        try {
-          return new URL(origin).hostname;
-        } catch {
-          return origin;
-        }
-      })()
-    : null;
-  const { networksInfo } = useNetworks();
-  const { tokens } = useTheme();
-  const accent = CALL_ACCENTS[index % CALL_ACCENTS.length];
-  const accentFg = CALL_ACCENT_FGS[index % CALL_ACCENT_FGS.length];
-  const config = getChainConfig(chainId);
-  const resolvedChain = getResolvedChainById(chainId, networksInfo);
-  const hasCalldata = call.data && call.data !== "0x";
-  const hasValue =
-    call.value && call.value !== "0x0" && call.value !== "0x";
-
-  const sym = resolvedChain?.nativeCurrency.symbol || "ETH";
-  const formatValue = (value: string): string => {
-    const wei = BigInt(value);
-    const eth = Number(wei) / 1e18;
-    return `${eth.toFixed(6)} ${sym}`;
-  };
-
-  // Unified inline summary — covers ERC-20 transfer ("Send 100 USDC to
-  // vitalik.eth"), approve ("Approve unlimited USDC to uniswap-router"),
-  // revoke, and native-coin sends ("Send 0.1 ETH to vitalik.eth"). Hook
-  // returns null for anything else, so the existing fallback chain handles
-  // contract calls unchanged. Passing `call.value` lets the hook detect the
-  // empty-data + value > 0 native-send shape.
-  const inlineSummary = useErc20InlineSummary(
-    call.to,
-    call.data,
-    chainId,
-    call.value,
-  );
-
-  // Display name: clear-signing inline summary, then decoded function name,
-  // then "Contract Call" / "Call". Native sends used to fall through to a
-  // plain "Native Transfer" string; the inline summary now catches them so
-  // they read like ERC-20 sends ("Send 0.1 ETH to vitalik.eth"). The
-  // hard-coded fallback only fires when the hook itself returned null
-  // (e.g. chain registry didn't resolve a symbol yet).
-  const displayName = inlineSummary?.text
-    ? inlineSummary.text
-    : decodedName
-      ? decodedName
-      : !hasCalldata && hasValue
-        ? `Send ${sym}`
-        : hasCalldata
-          ? "Contract Call"
-          : "Call";
-
-  return (
-    <Box
-      border={tokens.borders.thin}
-      borderColor="border.default"
-      borderLeftWidth="4px"
-      borderLeftColor={accent}
-      // Left edge is square so the colored accent stripe runs flush
-      // top-to-bottom; only the right side rounds to match the rest of
-      // the card rhythm.
-      borderTopLeftRadius="0"
-      borderBottomLeftRadius="0"
-      borderTopRightRadius="lg"
-      borderBottomRightRadius="lg"
-      bg="surface.raised"
-      overflow="hidden"
-    >
-      {/* Collapsed header */}
-      <HStack
-        px={3}
-        py={2}
-        cursor="pointer"
-        onClick={onToggle}
-        _hover={{ bg: "bg.muted" }}
-        transition="background 0.1s"
-      >
-        <Badge
-          bg={accent}
-          color={accentFg}
-          fontSize="2xs"
-          fontWeight="800"
-          px={1.5}
-          py={0}
-          border="1px solid"
-          borderColor="border.default"
-          minW="20px"
-          textAlign="center"
-        >
-          {index + 1}
-        </Badge>
-        <VStack spacing={0} align="start" flex={1} minW={0}>
-          {/* When we have a full ERC-20 inline summary (amount + symbol, or
-              the amountless revoke case where the token is enough) we render
-              an inline row with the token logo dropped between the prefix
-              and the symbol —
-                  "Send 5 [icon] USDC to abc.eth"
-                  "Approve unlimited [icon] USDC to uniswap-router"
-                  "Revoke [icon] USDC approval from uniswap-router"
-              Anything else (plain decoded function name, native transfer
-              fallback, summary still loading) renders as a single Text. */}
-          {inlineSummary?.symbol &&
-          (inlineSummary.amount || inlineSummary.mode === "revoke") ? (
-            <HStack
-              spacing={1}
-              maxW="100%"
-              minW={0}
-              align="center"
-              overflow="hidden"
-            >
-              <Text fontSize="xs" fontWeight="700" color="text.primary" whiteSpace="nowrap">
-                {inlineSummary.prefix}
-                {inlineSummary.amount}
-              </Text>
-              {inlineSummary.logoUrl && (
-                <Image
-                  src={inlineSummary.logoUrl}
-                  alt={inlineSummary.symbol}
-                  boxSize="14px"
-                  borderRadius="full"
-                  flexShrink={0}
-                  fallback={<Box boxSize="14px" borderRadius="full" bg="bg.muted" />}
-                />
-              )}
-              <Text fontSize="xs" fontWeight="700" color="text.primary" whiteSpace="nowrap">
-                {inlineSummary.symbol}
-                {inlineSummary.middle}
-              </Text>
-              {inlineSummary.recipientAvatarSrc && (
-                <Image
-                  src={inlineSummary.recipientAvatarSrc}
-                  alt={inlineSummary.recipient}
-                  boxSize="14px"
-                  // ENS avatars are user-chosen art (often portraits) and read
-                  // best in a circle; Bankr/blockie use a rounded square so
-                  // they stay visually distinct from the round ENS pool.
-                  borderRadius={inlineSummary.recipientAvatarKind === "ens" ? "full" : "sm"}
-                  flexShrink={0}
-                  objectFit="cover"
-                  fallback={
-                    <Box
-                      boxSize="14px"
-                      borderRadius={inlineSummary.recipientAvatarKind === "ens" ? "full" : "sm"}
-                      bg="bg.muted"
-                    />
-                  }
-                />
-              )}
-              <Text fontSize="xs" fontWeight="700" color="text.primary" isTruncated>
-                {inlineSummary.recipient}
-              </Text>
-            </HStack>
-          ) : (
-            <Text fontSize="xs" fontWeight="700" color="text.primary" isTruncated maxW="100%">
-              {displayName}
-            </Text>
-          )}
-          {originHostname && (
-            <HStack spacing={1} maxW="100%">
-              <Image
-                src={
-                  favicon ||
-                  googleFaviconUrl(originHostname)
-                }
-                alt="favicon"
-                boxSize="10px"
-                fallback={<Box boxSize="10px" bg="bg.muted" borderRadius="sm" />}
-              />
-              <Text fontSize="2xs" fontWeight="600" color="text.tertiary" isTruncated>
-                {originHostname}
-              </Text>
-            </HStack>
-          )}
-        </VStack>
-        {/* Right-side contract address is hidden once the inline summary
-            has fully resolved — the row already says e.g. "Send 5 USDC to
-            abc.eth", "Approve 100 USDC to uniswap-router", or "Revoke USDC
-            approval from uniswap-router" — so trailing "0x83…2913" of the
-            token contract becomes redundant noise. The address remains
-            visible in the expanded view's `To` row. */}
-        {call.to &&
-          !(
-            inlineSummary?.symbol &&
-            (inlineSummary.amount || inlineSummary.mode === "revoke")
-          ) && (
-            <Text fontSize="2xs" fontFamily="mono" color="text.tertiary">
-              {call.to.slice(0, 6)}...{call.to.slice(-4)}
-            </Text>
-          )}
-        <Icon
-          className="call-chevron"
-          as={isExpanded ? ChevronUpIcon : ChevronDownIcon}
-          boxSize={4}
-          color="text.secondary"
-          transition="opacity 0.12s ease-out"
-        />
-      </HStack>
-
-      {/* Expanded content — explicit borderTop per row (see info card
-          rationale). The outer `borderTop` closes the line between the
-          collapsed header and the first expanded row.
-
-          Layout switches based on whether this call has a built-in
-          clear-signing match:
-
-          • Built-in match (ERC-20 transfer, etc.) — the friendly descriptor
-            card IS the primary content. TO + raw decoder + digest get
-            tucked into a single "Calldata" disclosure below, mirroring the
-            single-tx confirmation's collapsed-calldata UX so there's no
-            information overload.
-
-          • No built-in match (Permit2, Uniswap, arbitrary contract calls) —
-            keep the original layout: TO + Value rows always visible, raw
-            decoder + digest expanded. The top BatchClearSigningSummary card
-            already explains intent for remote-registry matches. */}
-      <Collapse in={isExpanded} animateOpacity>
-        {hasCalldata && call.to && isBuiltinCalldataSelector(call.data) ? (
-          <BuiltinExpandedContent
-            call={call}
-            chainId={chainId}
-            config={config}
-            hasValue={!!hasValue}
-            formatValue={formatValue}
-            onFunctionName={onFunctionName}
-            onEditCallData={onEditCallData}
-          />
-        ) : (
-          <VStack
-            spacing={0}
-            align="stretch"
-            borderTop="1px solid"
-            borderColor="border.subtle"
-          >
-            {/* To */}
-            {call.to && (
-              <HStack w="full" py={1.5} px={3} justify="space-between">
-                <Text
-                  fontSize="xs"
-                  color="text.secondary"
-                  fontWeight="700"
-                  textTransform="uppercase"
-                >
-                  To
-                </Text>
-                <HStack
-                  spacing={0.5}
-                  px={1.5}
-                  py={0.5}
-                  bg="surface.raised"
-                  border="1.5px solid"
-                  borderColor="border.default"
-                  borderRadius="md"
-                >
-                  <Text
-                    fontSize="xs"
-                    color="text.primary"
-                    fontFamily="mono"
-                    fontWeight="700"
-                  >
-                    {call.to.slice(0, 6)}...{call.to.slice(-4)}
-                  </Text>
-                  <CopyButton value={call.to} />
-                  {config.explorer && (
-                    <IconButton
-                      aria-label="View on explorer"
-                      icon={<ExternalLinkIcon boxSize="10px" />}
-                      size="xs"
-                      variant="ghost"
-                      minW="18px"
-                      h="18px"
-                      color="text.tertiary"
-                      onClick={() =>
-                        window.open(
-                          `${config.explorer}/address/${call.to}`,
-                          "_blank",
-                        )
-                      }
-                      _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-                    />
-                  )}
-                </HStack>
-              </HStack>
-            )}
-
-            {/* Value */}
-            {hasValue && (
-              <HStack
-                w="full"
-                py={1.5}
-                px={3}
-                justify="space-between"
-                borderTop={call.to ? "1px solid" : undefined}
-                borderColor={call.to ? "border.subtle" : undefined}
-              >
-                <Text
-                  fontSize="xs"
-                  color="text.secondary"
-                  fontWeight="700"
-                  textTransform="uppercase"
-                >
-                  Value
-                </Text>
-                <Text fontSize="xs" fontWeight="700" color="text.primary">
-                  {formatValue(call.value!)}
-                </Text>
-              </HStack>
-            )}
-
-            {/* Calldata — raw decoder. Always rendered when we have calldata
-                so the user can drop down to bytes-level inspection. */}
-            {hasCalldata && call.to && (
-              <Box
-                w="full"
-                px={2}
-                py={1.5}
-                borderTop={call.to || hasValue ? "1px solid" : undefined}
-                borderColor={call.to || hasValue ? "border.subtle" : undefined}
-              >
-                <CalldataDecoder
-                  calldata={call.data!}
-                  to={call.to}
-                  chainId={chainId}
-                  onFunctionName={onFunctionName}
-                />
-              </Box>
-            )}
-            {/* ERC-8213: Calldata Digest */}
-            {hasCalldata && (
-              <Box w="full" px={2} pb={1.5}>
-                <CalldataDigestDisplay calldata={call.data!} />
-              </Box>
-            )}
-          </VStack>
-        )}
-      </Collapse>
-    </Box>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// BuiltinExpandedContent — expanded layout for CallCards whose calldata
-// matches a built-in selector (ERC-20 transfer today; future: approve, swap
-// routers, …). The friendly ClearSigningView card is the headline; TO +
-// Value + raw decoder + digest collapse behind a single "Calldata" disclosure
-// styled exactly like CalldataDecoder.defaultCollapsed so the UX stays
-// consistent with the single-tx confirmation.
-//
-// Modular by selector: anything that satisfies `isBuiltinCalldataSelector`
-// gets this layout for free — no per-selector branching here.
-// ---------------------------------------------------------------------------
-function BuiltinExpandedContent({
-  call,
-  chainId,
-  config,
-  hasValue,
-  formatValue,
-  onFunctionName,
-  onEditCallData,
-}: {
-  call: ERC5792Call;
-  chainId: number;
-  config: ReturnType<typeof getChainConfig>;
-  hasValue: boolean;
-  formatValue: (value: string) => string;
-  onFunctionName: (name: string) => void;
-  onEditCallData?: (
-    newData: string,
-  ) => Promise<{ success: boolean; error?: string }>;
-}) {
-  const { tokens } = useTheme();
-  const [detailsOpen, setDetailsOpen] = useState(false);
-
-  // Built-in editable affordances. Today: ERC-20 approve amount. Add more
-  // selectors (transfer recipient, etc.) by detecting the selector here and
-  // rendering a sibling editor — the edited calldata always flows through the
-  // same onEditCallData → storage mutation → re-simulate/re-estimate path.
-  const approve = useMemo(
-    () => (call.data ? parseApproveCalldata(call.data) : null),
-    [call.data],
-  );
-
-  return (
-    <VStack
-      spacing={0}
-      align="stretch"
-      borderTop="1px solid"
-      borderColor="border.subtle"
-    >
-      {/* Headline — for approve calls reuse the single-tx ERC20ApproveDisplay
-          so the inline pencil-icon editor sits next to the amount (parity
-          with single-tx UX) and we get the same token-header + spender row
-          styling for free. For other built-in selectors (e.g. ERC-20
-          transfer) fall back to the generic descriptor card. */}
-      {call.to && call.data && approve ? (
-        <Box w="full" px={2} py={1.5}>
-          <ERC20ApproveDisplay
-            tokenAddress={call.to}
-            approval={approve}
-            chainId={chainId}
-            onSaveCalldata={onEditCallData}
-          />
-        </Box>
-      ) : call.to && call.data ? (
-        <Box w="full" px={2} py={1.5}>
-          <ClearSigningView
-            kind="calldata"
-            chainId={chainId}
-            to={call.to}
-            calldata={call.data}
-            hideLoadingSkeleton
-          />
-        </Box>
-      ) : null}
-
-      {/* Single disclosure — mirrors CalldataDecoder's collapsed-state look
-          so this row reads as "the same kind of thing you'd expand to see
-          raw bytes" rather than a new component. Toggles TO + Value + raw
-          decoder + digest together. */}
-      <Box w="full" px={2} pb={1.5}>
-        <Box
-          w="full"
-          maxW="100%"
-          bg="surface.raised"
-          border={tokens.borders.thin}
-          borderColor="border.default"
-          borderRadius="lg"
-          boxShadow="card"
-          overflow="hidden"
-        >
-          <HStack
-            as="button"
-            w="full"
-            py={2}
-            px={3}
-            spacing={2}
-            onClick={() => setDetailsOpen((v) => !v)}
-            _hover={{ bg: "bg.muted" }}
-            cursor="pointer"
-            role="button"
-            aria-label={detailsOpen ? "Hide calldata" : "Show calldata"}
-          >
-            <Text
-              fontSize="xs"
-              fontWeight="800"
-              textTransform="uppercase"
-              letterSpacing="wide"
-              color="text.secondary"
-            >
-              Calldata
-            </Text>
-            <Spacer />
-            <Text
-              fontSize="2xs"
-              fontWeight="700"
-              color="text.tertiary"
-              textTransform="uppercase"
-            >
-              {detailsOpen ? "Hide" : "Show"}
-            </Text>
-            <Icon
-              as={detailsOpen ? ChevronUpIcon : ChevronDownIcon}
-              boxSize={3}
-              color="text.tertiary"
-            />
-          </HStack>
-
-          <Collapse in={detailsOpen} animateOpacity>
-            <VStack
-              spacing={0}
-              align="stretch"
-              borderTop={tokens.borders.thin}
-              borderColor="border.default"
-            >
-              {/* To */}
-              {call.to && (
-                <HStack w="full" py={1.5} px={3} justify="space-between">
-                  <Text
-                    fontSize="xs"
-                    color="text.secondary"
-                    fontWeight="700"
-                    textTransform="uppercase"
-                  >
-                    To
-                  </Text>
-                  <HStack
-                    spacing={0.5}
-                    px={1.5}
-                    py={0.5}
-                    bg="surface.raised"
-                    border="1.5px solid"
-                    borderColor="border.default"
-                    borderRadius="md"
-                  >
-                    <Text
-                      fontSize="xs"
-                      color="text.primary"
-                      fontFamily="mono"
-                      fontWeight="700"
-                    >
-                      {call.to.slice(0, 6)}...{call.to.slice(-4)}
-                    </Text>
-                    <CopyButton value={call.to} />
-                    {config.explorer && (
-                      <IconButton
-                        aria-label="View on explorer"
-                        icon={<ExternalLinkIcon boxSize="10px" />}
-                        size="xs"
-                        variant="ghost"
-                        minW="18px"
-                        h="18px"
-                        color="text.tertiary"
-                        onClick={() =>
-                          window.open(
-                            `${config.explorer}/address/${call.to}`,
-                            "_blank",
-                          )
-                        }
-                        _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-                      />
-                    )}
-                  </HStack>
-                </HStack>
-              )}
-
-              {/* Value — only when non-zero. Built-in selectors are calldata-
-                  driven so this is uncommon (transfer never carries ETH),
-                  but kept for completeness when future selectors do. */}
-              {hasValue && (
-                <HStack
-                  w="full"
-                  py={1.5}
-                  px={3}
-                  justify="space-between"
-                  borderTop={call.to ? "1px solid" : undefined}
-                  borderColor={call.to ? "border.subtle" : undefined}
-                >
-                  <Text
-                    fontSize="xs"
-                    color="text.secondary"
-                    fontWeight="700"
-                    textTransform="uppercase"
-                  >
-                    Value
-                  </Text>
-                  <Text fontSize="xs" fontWeight="700" color="text.primary">
-                    {formatValue(call.value!)}
-                  </Text>
-                </HStack>
-              )}
-
-              {/* Raw decoder — DECODED / RAW tabs, always open inside this
-                  parent disclosure (we own the show/hide here, so passing
-                  defaultCollapsed would create a redundant double-toggle). */}
-              {call.to && call.data && (
-                <Box
-                  w="full"
-                  px={2}
-                  py={1.5}
-                  borderTop="1px solid"
-                  borderColor="border.subtle"
-                >
-                  <CalldataDecoder
-                    calldata={call.data}
-                    to={call.to}
-                    chainId={chainId}
-                    onFunctionName={onFunctionName}
-                  />
-                </Box>
-              )}
-
-              {/* ERC-8213 calldata digest. */}
-              {call.data && (
-                <Box w="full" px={2} pb={1.5}>
-                  <CalldataDigestDisplay calldata={call.data} />
-                </Box>
-              )}
-            </VStack>
-          </Collapse>
-        </Box>
-      </Box>
-    </VStack>
   );
 }
 

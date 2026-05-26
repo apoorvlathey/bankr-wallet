@@ -83,6 +83,23 @@ interface MultiTxGasEstimateDisplayProps {
   onNativePriceUsd?: (priceUsd: number | null) => void;
   /** When true, estimate gas for L1 deposit transactions (force inclusion) */
   forceInclusion?: boolean;
+  /**
+   * Fires when any tx in the batch is predicted to revert. When this callback
+   * is provided, the inline "may revert" banner inside this component is
+   * suppressed — the parent owns rendering it (so the warning can land at the
+   * top of the confirmation surface instead of next to the gas row).
+   */
+  onAnyFailedChange?: (anyFailed: boolean) => void;
+  /**
+   * EIP-7702 delegate. When set, the single-tx gas estimate for `batchedTx`
+   * is run with the delegate's runtime code overridden onto the EOA — so the
+   * simulation matches what happens onchain after the 7702 authorization is
+   * processed (chain dispatches the EOA self-call through the delegate's
+   * `execute`). Required for atomic-7702 batches; without it, the EOA looks
+   * code-less to the chain and `eth_estimateGas` either no-ops the calldata
+   * or trips a balance check against the user's real balance.
+   */
+  eip7702Delegate?: `0x${string}`;
 }
 
 /**
@@ -201,6 +218,8 @@ function MultiTxGasEstimateDisplay({
   onValidityChange,
   onNativePriceUsd,
   forceInclusion,
+  onAnyFailedChange,
+  eip7702Delegate,
 }: MultiTxGasEstimateDisplayProps) {
   const { tokens } = useTheme();
   // Display estimates — what the user sees
@@ -248,9 +267,14 @@ function MultiTxGasEstimateDisplay({
     return () => { cancelled = true; };
   }, []);
 
+  const isLocalSigningAccount =
+    accountType === "privateKey" || accountType === "seedPhrase";
+  const requiresGasPassthrough = isLocalSigningAccount && !!onGasEstimates;
   const isEditable =
-    (accountType === "privateKey" || accountType === "seedPhrase") &&
-    // Only per-call batches can be edited — atomic Bankr batches are managed server-side
+    isLocalSigningAccount &&
+    // Only per-call gas limits can be edited here. Atomic 7702 batches still
+    // pass their single wrapped estimate through for signing and fee-tier edits,
+    // but the outer gas limit is displayed read-only.
     !batchedTx;
 
   // Resolve explorer for the chain the batch is on (all calls share the same chainId).
@@ -271,8 +295,17 @@ function MultiTxGasEstimateDisplay({
 
   // Stable key for dependency — only re-run when actual tx data changes
   const estimateKey = useMemo(
-    () => toEstimate.map((t) => t.tx.to + t.tx.data).join(",") + (isNonAtomic ? ":na" : "") + (forceInclusion ? ":fi" : ""),
-    [toEstimate.map((t) => t.tx.to + t.tx.data).join(","), isNonAtomic, forceInclusion],
+    () =>
+      toEstimate.map((t) => t.tx.to + t.tx.data).join(",") +
+      (isNonAtomic ? ":na" : "") +
+      (forceInclusion ? ":fi" : "") +
+      (eip7702Delegate ? `:7702:${eip7702Delegate.toLowerCase()}` : ""),
+    [
+      toEstimate.map((t) => t.tx.to + t.tx.data).join(","),
+      isNonAtomic,
+      forceInclusion,
+      eip7702Delegate,
+    ],
   );
 
   // Defer the batch gas estimate RPCs until the screen has settled. These
@@ -434,7 +467,56 @@ function MultiTxGasEstimateDisplay({
         },
       );
     } else {
-      // Atomic or individual: estimate each tx independently
+      // Atomic or individual: estimate each tx independently.
+      // For atomic-7702 batches the parent passes a single `batchedTx` whose
+      // `to == from == EOA` (ERC-7821 self-call); `eip7702Delegate` lets the
+      // background apply the delegate's runtime code as a state override on
+      // the EOA so the simulation dispatches through `execute()` exactly like
+      // the broadcast tx will, instead of treating the EOA as code-less.
+      //
+      // eth_estimateGas binary search can fail to converge on deeply nested
+      // 7702-delegated calldata (1inch v6 executor, V4-with-hooks) even when
+      // the real broadcast lands fine. Independently, some Base RPCs honour
+      // stateOverride on eth_call but not on eth_estimateGas — so the
+      // needsAuthorization=true wrapped-estimate path is also flaky on a
+      // subset of providers. To stay honest — and avoid false-positive "may
+      // revert" banners on batches that work onchain — we fire a per-call
+      // sequential estimate in parallel (eth_simulateV1 → bytecode injection
+      // → per-call with state persistence) and splice the summed gas in if
+      // the wrapped estimate failed. The asset sim already relies on the
+      // same estimateBatchGasSequential machinery, so this matches its
+      // verdict. Gated on PK/SP + batchedTx + multi-call so it fires for
+      // both atomic-7702 sub-cases (already-delegated and needs-auth) without
+      // catching Bankr-atomic (accountType === "bankr") or non-atomic
+      // (batchedTx undefined) paths.
+      const wantsAtomic7702Fallback =
+        isLocalSigningAccount && !!batchedTx && transactions.length > 1;
+
+      const fallbackPromise: Promise<GasEstimate[] | null> =
+        wantsAtomic7702Fallback
+          ? new Promise((resolve) => {
+              chrome.runtime.sendMessage(
+                {
+                  type: "estimateBatchGasSequential",
+                  calls: transactions.map((t) => ({
+                    to: t.tx.to,
+                    data: t.tx.data,
+                    value: t.tx.value,
+                  })),
+                  fromAddress: transactions[0]?.tx.from,
+                  chainId: transactions[0]?.tx.chainId,
+                },
+                (results: GasEstimate[]) => {
+                  if (chrome.runtime.lastError || !results) {
+                    resolve(null);
+                    return;
+                  }
+                  resolve(results);
+                },
+              );
+            })
+          : Promise.resolve(null);
+
       const promises = toEstimate.map(
         (item) =>
           new Promise<GasEstimate | null>((resolve) => {
@@ -443,6 +525,17 @@ function MultiTxGasEstimateDisplay({
                 type: "estimateGas",
                 tx: item.tx,
                 accountAddress: item.tx.from,
+                // `eip7702Delegate` is only set by the parent when the wrapped
+                // atomic-7702 tx will bundle an authorization tuple — same
+                // condition that drives the broadcast-time auth bump. Pass
+                // `eip7702AuthCount` alongside so the displayed gasLimit
+                // matches the value `signAndBroadcastTransaction` actually
+                // signs (broadcast re-applies the bump as a safety net, but
+                // without this the UI showed a number ~50-150k short of the
+                // real total on non-standard-gas chains like MegaETH).
+                ...(eip7702Delegate
+                  ? { eip7702Delegate, eip7702AuthCount: 1 }
+                  : {}),
               },
               (result: GasEstimate) => {
                 if (chrome.runtime.lastError) {
@@ -455,21 +548,93 @@ function MultiTxGasEstimateDisplay({
           }),
       );
 
-      Promise.all(promises).then((results) => {
-        if (cancelled) return;
-        setEstimates(results);
-        setLoading(false);
+      Promise.all([Promise.all(promises), fallbackPromise]).then(
+        ([results, fallbackResults]) => {
+          if (cancelled) return;
 
-        const hasEstimates = results.some((r) => r !== null);
-        if (!hasEstimates) {
-          setError("Gas estimate unavailable");
-        }
+          let finalResults = results;
+          const wrapped = results[0];
+          if (
+            wantsAtomic7702Fallback &&
+            results.length === 1 &&
+            wrapped?.estimationFailed &&
+            fallbackResults &&
+            fallbackResults.length === transactions.length
+          ) {
+            // Sum per-call gas + 30k ERC-7821 wrapper overhead (function
+            // dispatch + abi.decode + dispatch loop). The wrapper itself is
+            // tiny — most of the cost is the inner calls, which the
+            // sequential sim measures with state persistence.
+            const sumGas = fallbackResults.reduce(
+              (sum, e) => sum + BigInt(e.gasLimit || "0"),
+              0n,
+            );
+            const wrappedGas = sumGas + 30_000n;
+            const maxFeeWei = BigInt(wrapped.maxFeePerGas || "0");
+            const wrappedCost = wrappedGas * maxFeeWei;
+            const valueWei = batchedTx?.tx.value
+              ? (() => {
+                  try {
+                    return BigInt(batchedTx.tx.value);
+                  } catch {
+                    return 0n;
+                  }
+                })()
+              : 0n;
+            const balance = BigInt(wrapped.accountBalance || "0");
+            finalResults = [
+              {
+                ...wrapped,
+                gasLimit: wrappedGas.toString(),
+                estimatedCostWei: wrappedCost.toString(),
+                insufficientBalance: balance < wrappedCost + valueWei,
+                estimationFailed: false,
+                estimationError: undefined,
+                estimationErrorFull: undefined,
+              },
+            ];
+            console.log(
+              "[gas:7702] wrapped-tx estimate failed; using per-call sum fallback",
+              {
+                sumGas: sumGas.toString(),
+                wrappedGas: wrappedGas.toString(),
+              },
+            );
+          }
 
-        if (onInsufficientBalance) {
-          const anyInsufficient = results.some((r) => r?.insufficientBalance);
-          onInsufficientBalance(!!anyInsufficient);
-        }
-      });
+          setEstimates(finalResults);
+          if (isLocalSigningAccount && batchedTx) {
+            const passthrough = finalResults.filter(
+              (r): r is GasEstimate => r !== null,
+            );
+            setPassthroughEstimates(passthrough);
+            setEditedGasLimits(passthrough.map((e) => e.gasLimit));
+            const seed = passthrough[0];
+            if (seed) {
+              const seedFees = seed.tiers?.standard ?? {
+                maxFeePerGas: seed.maxFeePerGas,
+                maxPriorityFeePerGas: seed.maxPriorityFeePerGas,
+              };
+              setEditPriority(weiToGweiStr(seedFees.maxPriorityFeePerGas));
+              setEditMaxFee(weiToGweiStr(seedFees.maxFeePerGas));
+              setMaxFeeManual(false);
+            }
+          }
+          setLoading(false);
+
+          const hasEstimates = finalResults.some((r) => r !== null);
+          if (!hasEstimates) {
+            setError("Gas estimate unavailable");
+          }
+
+          if (onInsufficientBalance) {
+            const anyInsufficient = finalResults.some(
+              (r) => r?.insufficientBalance,
+            );
+            onInsufficientBalance(!!anyInsufficient);
+          }
+        },
+      );
     }
 
     return () => {
@@ -482,11 +647,11 @@ function MultiTxGasEstimateDisplay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estimateKey, screenEntered]);
 
-  // Picker is shown only for non-atomic PK/SP batches with tier data and
-  // not in force-inclusion mode (force inclusion uses L1 fees recomputed at
-  // broadcast). Atomic Bankr batches keep their server-managed gas UX.
+  // Picker is shown for local-signing batches with tier data and not in
+  // force-inclusion mode. For atomic 7702, this edits the fee tier for the
+  // single wrapped tx that will be signed; Bankr atomic remains server-managed.
   const showPicker =
-    isEditable &&
+    requiresGasPassthrough &&
     !forceInclusion &&
     !!passthroughEstimates &&
     !!passthroughEstimates[0]?.tiers;
@@ -571,7 +736,7 @@ function MultiTxGasEstimateDisplay({
   // Non-editable surfaces (Bankr-managed gas) bypass these checks entirely.
   useEffect(() => {
     if (!onValidityChange) return;
-    if (!isEditable) {
+    if (!requiresGasPassthrough) {
       onValidityChange(true);
       return;
     }
@@ -583,7 +748,13 @@ function MultiTxGasEstimateDisplay({
     const allLimitsValid =
       hasEstimates && editedGasLimits.every(isValidGasLimit);
     onValidityChange(allLimitsValid && isCustomFeeValid);
-  }, [editedGasLimits, isCustomFeeValid, isEditable, loading, onValidityChange]);
+  }, [
+    editedGasLimits,
+    isCustomFeeValid,
+    requiresGasPassthrough,
+    loading,
+    onValidityChange,
+  ]);
 
   const handleEditGasLimit = useCallback((index: number, val: string) => {
     setEditedGasLimits((prev) => {
@@ -666,6 +837,13 @@ function MultiTxGasEstimateDisplay({
   const anyFailed = validEstimates.some((e) => e.estimationFailed);
   const anyInsufficient = validEstimates.some((e) => e.insufficientBalance);
   const anyEditInvalid = hasEdited && editedGasLimits.some((g) => !isValidGasLimit(g));
+
+  useEffect(() => {
+    if (!onAnyFailedChange) return;
+    onAnyFailedChange(anyFailed);
+    // onAnyFailedChange identity excluded — parents stash latest in a setter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anyFailed]);
 
   // Per-call display cost. Uses the applied tier's maxFeePerGas × the
   // (possibly edited) gas limit so the breakdown matches the picker choice.
@@ -761,8 +939,10 @@ function MultiTxGasEstimateDisplay({
 
   return (
     <VStack spacing={2} align="stretch">
-      {/* Revert warning */}
-      {anyFailed && (
+      {/* Revert warning — only rendered when the parent isn't already
+          displaying this banner at the top of the surface via onAnyFailedChange.
+          Keeps single-tx + swap surfaces showing it inline as before. */}
+      {anyFailed && !onAnyFailedChange && (
         <HStack
           bg="status.error.bg"
           border={tokens.borders.medium}

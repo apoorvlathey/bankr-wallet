@@ -15,11 +15,17 @@ export function MalformedCalldataBanner({
   borders,
   reason,
   functionName,
+  title,
 }: {
   borders: { medium: string };
   reason: string;
   functionName?: string;
+  /** Override the default "Malformed calldata — signing blocked" header. */
+  title?: string;
 }) {
+  const heading =
+    title ??
+    `Malformed calldata — signing blocked${functionName ? ` (${functionName})` : ""}`;
   return (
     <Box
       border={borders.medium}
@@ -45,8 +51,7 @@ export function MalformedCalldataBanner({
             textTransform="uppercase"
             letterSpacing="wide"
           >
-            Malformed calldata — signing blocked
-            {functionName ? ` (${functionName})` : ""}
+            {heading}
           </Text>
           <Text fontSize="xs" fontWeight="600" color="status.error.fg" lineHeight="short">
             {reason}

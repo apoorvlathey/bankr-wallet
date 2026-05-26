@@ -32,12 +32,27 @@ import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import { formatAbsoluteTimestamp } from "@/lib/timeFormatUtils";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
-import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 import type { Account } from "@/chrome/types";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
-import { matchCalldataFormat, matchEip712Format, verifyDeployment } from "@/lib/clearSigning/matchDescriptor";
-import { applyFormat, type RenderedField, type RenderedValue } from "@/lib/clearSigning/applyFormat";
+import {
+  getCachedTokenMetadataSync,
+  resolveTokenMetadataClient,
+} from "@/lib/tokenMetadataClient";
+import { useNetworks } from "@/contexts/NetworksContext";
+import { getNativeAssetMeta } from "@/lib/chains";
+import TokenLogo from "@/components/TokenLogo";
+import {
+  encodeType,
+  matchCalldataFormat,
+  matchEip712Format,
+  verifyDeployment,
+} from "@/lib/clearSigning/matchDescriptor";
+import {
+  applyFormat,
+  type RenderedField,
+  type RenderedValue,
+} from "@/lib/clearSigning/applyFormat";
 import { decodeCalldataForDescriptor } from "@/lib/clearSigning/decodeForDescriptor";
 import { resolveDescriptor } from "@/lib/clearSigning/resolver";
 import { getBuiltinCalldataDescriptor } from "@/lib/clearSigning/builtinDescriptors";
@@ -124,7 +139,9 @@ export function ClearSigningView(props: ClearSigningViewProps) {
   const calldataValue = kind === "calldata" ? props.calldata : "";
   const typedDataKey =
     kind === "eip712"
-      ? `${props.typedData?.primaryType || ""}:${JSON.stringify(props.typedData?.message || {})}`
+      ? `${props.typedData?.primaryType || ""}:${JSON.stringify(
+          props.typedData?.types || {},
+        )}:${JSON.stringify(props.typedData?.message || {})}`
       : "";
 
   // Defer the descriptor fetch + ABI decode until the surrounding screen
@@ -140,6 +157,16 @@ export function ClearSigningView(props: ClearSigningViewProps) {
     setState(null);
 
     const tag = `[clear-signing] ${kind} ${chainId}:${lookupAddress}`;
+    const selector =
+      kind === "calldata" &&
+      props.calldata?.startsWith("0x") &&
+      props.calldata.length >= 10
+        ? props.calldata.slice(0, 10).toLowerCase()
+        : undefined;
+    const formatKey =
+      kind === "eip712"
+        ? encodeType(props.typedData.primaryType, props.typedData.types) ?? undefined
+        : undefined;
 
     (async () => {
       console.log(`${tag} → resolving descriptor…`);
@@ -147,6 +174,8 @@ export function ClearSigningView(props: ClearSigningViewProps) {
         chainId,
         address: lookupAddress,
         kind,
+        selector,
+        formatKey,
       });
 
       if (cancelled) return;
@@ -158,9 +187,8 @@ export function ClearSigningView(props: ClearSigningViewProps) {
       }
 
       // Try the remote descriptor first; fall back to a built-in generic
-      // descriptor (ERC-20 transfer, etc.) when there's no remote entry or
-      // the remote entry doesn't cover this selector. Built-ins are only
-      // available for calldata, not eip712.
+      // calldata descriptor (ERC-20 transfer, etc.) when there's no remote
+      // entry or the remote entry doesn't cover this selector.
       let descriptor: Erc7730Descriptor | null = remoteDescriptor;
       let matched =
         descriptor &&
@@ -218,7 +246,7 @@ export function ClearSigningView(props: ClearSigningViewProps) {
       }
       console.log(`${tag} ✓ decoded data`, data);
 
-      const fields = applyFormat(matched.format, { data, chainId });
+      const fields = applyFormat(matched.format, { data, chainId }, descriptor);
       if (fields.length === 0) {
         console.log(`${tag} ✗ applyFormat produced 0 fields`);
         setLoading(false);
@@ -1019,6 +1047,22 @@ interface TokenInfo {
   logoUrl?: string;
 }
 
+function toTokenInfo(
+  metadata:
+    | { symbol?: string; decimals?: number; logoUrl?: string }
+    | null
+    | undefined,
+): TokenInfo | null {
+  if (metadata?.symbol === undefined || metadata.decimals === undefined) {
+    return null;
+  }
+  return {
+    symbol: metadata.symbol,
+    decimals: metadata.decimals,
+    logoUrl: metadata.logoUrl,
+  };
+}
+
 function formatUsdValue(amountRaw: string, decimals: number, priceUsd: number): string | null {
   if (!priceUsd || priceUsd <= 0) return null;
   let big: bigint;
@@ -1080,24 +1124,6 @@ function AmountText({
   );
 }
 
-function TokenLogo({ src, alt }: { src?: string; alt: string }) {
-  // Same data-URL cache used by ENS avatars + batch inline summary. After
-  // first paint the logo renders synchronously from chrome.storage on every
-  // reopen — no network roundtrip.
-  const cached = useCachedAvatarSrc(src);
-  const resolved = cached || src;
-  if (!resolved) return null;
-  return (
-    <Image
-      src={resolved}
-      alt={alt}
-      boxSize="20px"
-      borderRadius="full"
-      fallback={<Box boxSize="20px" borderRadius="full" bg="bg.muted" />}
-    />
-  );
-}
-
 function TokenAmountInline({
   amountRaw,
   tokenAddress,
@@ -1109,74 +1135,44 @@ function TokenAmountInline({
   native?: boolean;
   chainId: number;
 }) {
-  const [info, setInfo] = useState<TokenInfo | null>(null);
+  const initialInfo =
+    !native && tokenAddress
+      ? toTokenInfo(getCachedTokenMetadataSync(chainId, tokenAddress))
+      : null;
+  const [info, setInfo] = useState<TokenInfo | null>(() => initialInfo);
   const [priceUsd, setPriceUsd] = useState<number>(0);
+  const { networksInfo } = useNetworks();
+  const nativeInfo = useMemo(
+    () => (native ? getNativeAssetMeta(chainId, networksInfo) : null),
+    [chainId, native, networksInfo],
+  );
 
   useEffect(() => {
-    if (native || !tokenAddress) return;
+    if (native || !tokenAddress) {
+      setInfo(null);
+      return;
+    }
     let cancelled = false;
-    // Resolve metadata + logo from three sources in parallel:
-    //   1. onchain ERC-20 (canonical symbol / decimals — always works)
-    //   2. CoinGecko swap list (best logo source for popular tokens)
-    //   3. user's customTokens storage (logos for watchAsset-added tokens
-    //      that CoinGecko doesn't index)
-    // KNOWN_TOKEN_LOGOS is the final hardcoded fallback.
-    const infoPromise = new Promise<{
-      success: boolean;
-      data?: { symbol: string; decimals: number };
-    }>((resolve) => {
-      chrome.runtime.sendMessage(
-        { type: "fetchTokenInfo", tokenAddress, chainId },
-        resolve,
-      );
-    });
-    const listPromise = new Promise<{
-      success: boolean;
-      data?: Array<{ address: string; logoURI: string }>;
-    }>((resolve) => {
-      chrome.runtime.sendMessage(
-        { type: "fetchSwapTokenList", chainId },
-        resolve,
-      );
-    });
-    const customPromise = new Promise<{
-      success: boolean;
-      data?: { symbol: string; decimals: number; image?: string } | null;
-    }>((resolve) => {
-      chrome.runtime.sendMessage(
-        { type: "lookupCustomToken", tokenAddress, chainId },
-        resolve,
-      );
-    });
+    const applyMetadata = (
+      metadata:
+        | { symbol?: string; decimals?: number; logoUrl?: string }
+        | null
+        | undefined,
+    ) => {
+      if (cancelled) return;
+      const next = toTokenInfo(metadata);
+      if (!next) {
+        setInfo(null);
+        return;
+      }
+      setInfo(next);
+    };
 
-    Promise.all([infoPromise, listPromise, customPromise]).then(
-      ([infoRes, listRes, customRes]) => {
-        if (cancelled) return;
-        const addrLower = tokenAddress.toLowerCase();
-        const listEntry = listRes?.data?.find(
-          (t) => t.address.toLowerCase() === addrLower,
-        );
-        const custom = customRes?.data || null;
+    const cached = getCachedTokenMetadataSync(chainId, tokenAddress);
+    if (cached !== undefined) applyMetadata(cached);
+    else setInfo(null);
 
-        // Symbol/decimals: prefer onchain → fall back to custom-token entry
-        // (works even if the RPC read failed for some reason).
-        const symbol = infoRes?.data?.symbol ?? custom?.symbol;
-        const decimals = infoRes?.data?.decimals ?? custom?.decimals;
-        if (symbol === undefined || decimals === undefined) return;
-
-        setInfo({
-          symbol,
-          decimals,
-          // Logo priority: swap list → custom token's stored image →
-          // hardcoded fallback. Swap list is highest-quality when present.
-          logoUrl:
-            listEntry?.logoURI ||
-            custom?.image ||
-            KNOWN_TOKEN_LOGOS[addrLower] ||
-            undefined,
-        });
-      },
-    );
+    resolveTokenMetadataClient(chainId, tokenAddress).then(applyMetadata);
     return () => {
       cancelled = true;
     };
@@ -1189,16 +1185,20 @@ function TokenAmountInline({
     let cancelled = false;
     if (native) {
       const entry = CHAIN_REGISTRY.find((c) => c.chainId === chainId);
-      if (!entry) return;
+      const chainName = nativeInfo?.chainName ?? entry?.name;
+      const nativeCurrencyName =
+        nativeInfo?.name ?? entry?.nativeCurrency.name;
+      const symbol = nativeInfo?.symbol ?? entry?.nativeCurrency.symbol;
+      if (!chainName || !nativeCurrencyName || !symbol) return;
       chrome.runtime.sendMessage(
         {
           type: "resolveCoinGeckoNativeAssets",
           requests: [
             {
               chainId,
-              chainName: entry.name,
-              nativeCurrencyName: entry.nativeCurrency.name,
-              symbol: entry.nativeCurrency.symbol,
+              chainName,
+              nativeCurrencyName,
+              symbol,
             },
           ],
         },
@@ -1224,7 +1224,7 @@ function TokenAmountInline({
     return () => {
       cancelled = true;
     };
-  }, [tokenAddress, chainId, native]);
+  }, [tokenAddress, chainId, native, nativeInfo]);
 
   // Friendly amount color: `fg.primary` (white in Midnight, black in Bauhaus).
   // Bumped to `lg` size — token amounts are the headline value the user needs
@@ -1232,8 +1232,8 @@ function TokenAmountInline({
   // as a single confident unit instead of three timid tokens.
   if (native) {
     const entry = CHAIN_REGISTRY.find((c) => c.chainId === chainId);
-    const symbol = entry?.nativeCurrency.symbol || "ETH";
-    const decimals = entry?.nativeCurrency.decimals ?? 18;
+    const symbol = nativeInfo?.symbol || entry?.nativeCurrency.symbol || "ETH";
+    const decimals = nativeInfo?.decimals ?? entry?.nativeCurrency.decimals ?? 18;
     const usd = formatUsdValue(amountRaw, decimals, priceUsd);
     return (
       <VStack spacing={0} align="flex-end">
@@ -1242,6 +1242,12 @@ function TokenAmountInline({
             amountRaw={amountRaw}
             decimals={decimals}
             symbol={symbol}
+          />
+          <TokenLogo
+            nativeChainId={chainId}
+            symbol={symbol}
+            alt={symbol}
+            size="20px"
           />
           <Text fontSize="sm" color="fg.secondary" fontWeight="600">
             {symbol}
@@ -1279,7 +1285,12 @@ function TokenAmountInline({
           decimals={info.decimals}
           symbol={info.symbol}
         />
-        <TokenLogo src={info.logoUrl} alt={info.symbol} />
+        <TokenLogo
+          logoUrl={info.logoUrl}
+          symbol={info.symbol}
+          alt={info.symbol}
+          size="20px"
+        />
         <Text fontSize="sm" color="fg.secondary" fontWeight="600">
           {info.symbol}
         </Text>

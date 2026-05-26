@@ -106,22 +106,41 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
     }
   }, [holdingsTabTrigger]);
 
-  // Listen for tx confirmations from background and auto-refresh balances.
+  // Listen for balance-relevant tx updates from background and auto-refresh
+  // balances. Bridge status polling also writes tx history every few seconds;
+  // those updates only change `bridge` progress and should not fan out into
+  // all-chain portfolio RPC refreshes.
   // Debounce so rapid messages (e.g., batch tx with multiple calls) collapse into one refresh.
   useEffect(() => {
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const handleMessage = (message: { type: string }) => {
-      if (message.type === "txHistoryUpdated") {
-        // Clear any pending refresh and schedule a new one.
-        // This ensures only one refresh fires even if multiple txHistoryUpdated
-        // messages arrive in quick succession (e.g., non-atomic batch).
-        if (refreshTimer) clearTimeout(refreshTimer);
-        refreshTimer = setTimeout(() => {
-          refreshTimer = null;
-          holdingsStateRef.current?.refresh();
-        }, POST_CONFIRM_REFRESH_DELAY);
-      }
+    const handleMessage = (message: {
+      type: string;
+      changedKeys?: string[];
+    }) => {
+      if (message.type !== "txHistoryUpdated") return;
+      const changedKeys = message.changedKeys;
+      const shouldRefreshBalances =
+        !changedKeys ||
+        changedKeys.some((key) =>
+          [
+            "status",
+            "txHash",
+            "completedAt",
+            "assetChanges",
+            "destAssetChanges",
+          ].includes(key),
+        );
+      if (!shouldRefreshBalances) return;
+
+      // Clear any pending refresh and schedule a new one.
+      // This ensures only one refresh fires even if multiple txHistoryUpdated
+      // messages arrive in quick succession (e.g., non-atomic batch).
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        holdingsStateRef.current?.refresh();
+      }, POST_CONFIRM_REFRESH_DELAY);
     };
 
     chrome.runtime.onMessage.addListener(handleMessage);

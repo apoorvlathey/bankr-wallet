@@ -6,7 +6,7 @@
  *
  * Cache strategy:
  *   - Hits cached for 7 days, misses for 1 day.
- *   - Keyed by (chainId, lowercased address, kind).
+ *   - Keyed by (chainId, lowercased address, kind, selector/format).
  *   - User opt-out short-circuits before any storage or network access.
  */
 
@@ -33,8 +33,10 @@ const MISS_TTL_MS = 1 * 24 * 3600 * 1000;
  *   v1: initial (descriptor only)
  *   v2: proxy fallback added (Safe / EIP-1967 / beacon) — pre-v2 misses for
  *       proxy addresses would otherwise mask the new resolution path.
+ *   v3: selector / EIP-712 format-aware descriptor lookups — pre-v3 hits may
+ *       hold the wrong descriptor when one address has multiple registry files.
  */
-const CACHE_SCHEMA_VERSION = 2;
+const CACHE_SCHEMA_VERSION = 3;
 
 interface CacheEntry {
   schemaVersion?: number;
@@ -42,8 +44,41 @@ interface CacheEntry {
   descriptor: Erc7730Descriptor | null;
 }
 
-function cacheKey(chainId: number, address: string, kind: DescriptorKind): string {
-  return `${CACHE_PREFIX}${chainId}:${address.toLowerCase()}:${kind}`;
+function cacheKey(
+  chainId: number,
+  address: string,
+  kind: DescriptorKind,
+  selector: string | undefined,
+  formatKey: string | undefined,
+): string {
+  return `${CACHE_PREFIX}${chainId}:${address.toLowerCase()}:${kind}:${cacheHint(
+    kind,
+    selector,
+    formatKey,
+  )}`;
+}
+
+function cacheHint(
+  kind: DescriptorKind,
+  selector: string | undefined,
+  formatKey: string | undefined,
+): string {
+  if (kind === "calldata" && selector && /^0x[0-9a-fA-F]{8}$/.test(selector)) {
+    return selector.toLowerCase();
+  }
+  if (kind === "eip712" && formatKey) {
+    return `fmt:${formatKey.length}:${hashString(formatKey)}`;
+  }
+  return "any";
+}
+
+function hashString(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 async function getEnabled(): Promise<boolean> {
@@ -56,8 +91,10 @@ async function readCache(
   chainId: number,
   address: string,
   kind: DescriptorKind,
+  selector: string | undefined,
+  formatKey: string | undefined,
 ): Promise<CacheEntry | null> {
-  const key = cacheKey(chainId, address, kind);
+  const key = cacheKey(chainId, address, kind, selector, formatKey);
   const result = await chrome.storage.local.get([key]);
   const entry = result[key] as CacheEntry | undefined;
   if (!entry) return null;
@@ -74,9 +111,11 @@ async function writeCache(
   chainId: number,
   address: string,
   kind: DescriptorKind,
+  selector: string | undefined,
+  formatKey: string | undefined,
   descriptor: Erc7730Descriptor | null,
 ): Promise<void> {
-  const key = cacheKey(chainId, address, kind);
+  const key = cacheKey(chainId, address, kind, selector, formatKey);
   const entry: CacheEntry = {
     schemaVersion: CACHE_SCHEMA_VERSION,
     updatedAt: Date.now(),
@@ -89,18 +128,29 @@ async function fetchDescriptor(
   chainId: number,
   address: string,
   kind: DescriptorKind,
+  selector?: string,
+  formatKey?: string,
 ): Promise<Erc7730Descriptor | null> {
-  const url = `${WALLETCHAN_CLEAR_SIGNING_API}?chainId=${chainId}&address=${address}&kind=${kind}`;
+  const url = new URL(WALLETCHAN_CLEAR_SIGNING_API);
+  url.searchParams.set("chainId", String(chainId));
+  url.searchParams.set("address", address);
+  url.searchParams.set("kind", kind);
+  if (selector && /^0x[0-9a-fA-F]{8}$/.test(selector)) {
+    url.searchParams.set("selector", selector.toLowerCase());
+  }
+  if (formatKey) {
+    url.searchParams.set("formatKey", formatKey);
+  }
   let res: Response;
   try {
-    res = await fetch(url, { method: "GET" });
+    res = await fetch(url.toString(), { method: "GET" });
   } catch (err) {
     console.warn("[clear-signing] network error:", err);
     return null;
   }
   if (res.status === 404) return null;
   if (!res.ok) {
-    console.warn(`[clear-signing] fetch ${url} -> ${res.status}`);
+    console.warn(`[clear-signing] fetch ${url.toString()} -> ${res.status}`);
     return null;
   }
   try {
@@ -120,6 +170,8 @@ export interface GetDescriptorMessage {
   chainId: number;
   address: string;
   kind: DescriptorKind;
+  selector?: string;
+  formatKey?: string;
 }
 
 export interface GetDescriptorResponse {
@@ -136,6 +188,14 @@ export async function handleGetClearSigningDescriptor(
   const chainId = Number(message.chainId);
   const address = String(message.address || "").toLowerCase();
   const kind = message.kind;
+  const selector =
+    typeof message.selector === "string" && /^0x[0-9a-fA-F]{8}$/.test(message.selector)
+      ? message.selector.toLowerCase()
+      : undefined;
+  const formatKey =
+    typeof message.formatKey === "string" && message.formatKey.length <= 8192
+      ? message.formatKey
+      : undefined;
   if (!chainId || !/^0x[0-9a-f]{40}$/.test(address)) {
     return { descriptor: null, enabled };
   }
@@ -145,7 +205,7 @@ export async function handleGetClearSigningDescriptor(
 
   const tag = `[clear-signing/bg] ${kind} ${chainId}:${address}`;
 
-  const cached = await readCache(chainId, address, kind);
+  const cached = await readCache(chainId, address, kind, selector, formatKey);
   if (cached) {
     console.log(
       `${tag} cache ${cached.descriptor ? "HIT" : "MISS"} (age=${Math.round(
@@ -156,7 +216,7 @@ export async function handleGetClearSigningDescriptor(
   }
   console.log(`${tag} cache empty → fetching from proxy`);
 
-  let fetched = await fetchDescriptor(chainId, address, kind);
+  let fetched = await fetchDescriptor(chainId, address, kind, selector, formatKey);
   console.log(`${tag} direct fetch: ${fetched ? "matched" : "404"}`);
 
   // Proxy fallback: when the queried address has no descriptor of its own,
@@ -171,7 +231,13 @@ export async function handleGetClearSigningDescriptor(
       const proxy = await resolveProxyImplementation(chainId, address);
       if (proxy) {
         console.log(`${tag} ✓ ${proxy.kind} proxy → impl ${proxy.implementation}`);
-        const implDesc = await fetchDescriptor(chainId, proxy.implementation, kind);
+        const implDesc = await fetchDescriptor(
+          chainId,
+          proxy.implementation,
+          kind,
+          selector,
+          formatKey,
+        );
         if (implDesc) {
           console.log(`${tag} ✓ impl descriptor fetched — extending deployments`);
           fetched = extendDeployments(implDesc, kind, chainId, address);
@@ -186,7 +252,7 @@ export async function handleGetClearSigningDescriptor(
     }
   }
 
-  await writeCache(chainId, address, kind, fetched);
+  await writeCache(chainId, address, kind, selector, formatKey, fetched);
   console.log(`${tag} cached ${fetched ? "hit" : "miss"} (schema v${CACHE_SCHEMA_VERSION})`);
   return { descriptor: fetched, enabled };
 }
