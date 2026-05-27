@@ -10,9 +10,14 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.13.0] - 2026-05-27
+
 ### Fixed
 
 - Bankr API accounts now use Bankr's Wallet API endpoints for direct transaction submission and signature requests (`/wallet/submit` and `/wallet/sign`), restoring dapp transactions and message signing after the legacy `/agent/submit` and `/agent/sign` endpoints were removed.
+
 
 ## [3.12.0] - 2026-05-26
 
@@ -461,7 +466,8 @@ This release is a full rebuild of the wallet — multiple account types, a real 
 - View address on Debank from the homepage.
 - Lock-wallet button and footer attribution.
 
-[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.12.0...HEAD
+[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.13.0...HEAD
+[3.13.0]: https://github.com/apoorvlathey/walletchan/compare/v3.12.0...v3.13.0
 [3.12.0]: https://github.com/apoorvlathey/walletchan/compare/v3.11.0...v3.12.0
 [3.11.0]: https://github.com/apoorvlathey/walletchan/compare/v3.10.0...v3.11.0
 [3.10.0]: https://github.com/apoorvlathey/walletchan/compare/v3.9.0...v3.10.0
