@@ -66,7 +66,7 @@ The extension supports four distinct account types that can be used simultaneous
 | Feature               | Bankr API Account          | Private Key Account                 | Seed Phrase Account                   | Impersonator Account    |
 | --------------------- | -------------------------- | ----------------------------------- | ------------------------------------- | ----------------------- |
 | Transaction Execution | Via Bankr API              | Local signing + RPC broadcast       | Local signing + RPC broadcast         | ❌ Disabled (view-only) |
-| Message Signing       | ✅ Via API (`/agent/sign`) | ✅ Full support                     | ✅ Full support                       | ❌ Disabled (view-only) |
+| Message Signing       | ✅ Via API (`/wallet/sign`) | ✅ Full support                     | ✅ Full support                       | ❌ Disabled (view-only) |
 | Key Storage           | API key encrypted locally  | Private key encrypted locally       | Mnemonic + derived keys encrypted     | No secrets stored       |
 | Setup                 | API key + wallet address   | Private key import or generate      | 12-word BIP39 import or generate      | Address only            |
 | Use Case              | AI-powered transactions    | Agent wallets, bots, standard usage | HD wallets, multiple derived accounts | Viewing portfolio/dApps |
@@ -172,8 +172,8 @@ For detailed implementation of private key accounts, see [PK_ACCOUNTS.md](./PK_A
 ┌──────────────────────────────┐    ┌──────────────────────────────┐
 │    Extension Popup           │    │       Bankr API              │
 │    (index.html)              │    │  api.bankr.bot               │
-│    - Unlock screen           │    │  - POST /agent/submit        │
-│    - Pending tx banner       │    │  - POST /agent/sign          │
+│    - Unlock screen           │    │  - POST /wallet/submit       │
+│    - Pending tx banner       │    │  - POST /wallet/sign         │
 │    - In-popup tx confirm     │    │  - POST /agent/prompt (chat) │
 │    - Settings management     │    │  - GET /agent/job/{id} (chat)│
 └──────────────────────────────┘    └──────────────────────────────┘
@@ -681,14 +681,14 @@ Each transaction maintains its own storage-based result channel (`txResult:{txId
 
 `src/chrome/bankrApi.ts`:
 
-- POST to `https://api.bankr.bot/agent/submit` with transaction object and `waitForConfirmation: true`
+- POST to `https://api.bankr.bot/wallet/submit` with transaction object and `waitForConfirmation: true`
 - Synchronous response — returns tx hash directly (no polling needed)
 - Value converted from hex to decimal string (wei)
-- Forwards dapp-provided gas params (`gas`, `gasPrice`, `maxFeePerGas`, `maxPriorityFeePerGas`) to the API if present
+- Drops dapp-provided gas params on this path because Bankr manages gas server-side; gas overrides apply only to local-signing PK/Seed accounts
 
 ### 8. Result Returned to Dapp
 
-- Transaction hash returned directly from `/agent/submit` response
+- Transaction hash returned directly from `/wallet/submit` response
 - Background writes result to `chrome.storage.local` under key `txResult:{txId}` (via `writeResultToStorage`)
 - Content script's `chrome.storage.onChanged` listener picks up the result and forwards it to the inpage provider
 - Dapp receives the tx hash from `eth_sendTransaction`
@@ -754,12 +754,12 @@ Signature support differs by account type:
 
 | Account Type | Signature Support                        |
 | ------------ | ---------------------------------------- |
-| Bankr API    | ✅ Via `/agent/sign` API                 |
+| Bankr API    | ✅ Via `/wallet/sign` API                |
 | Private Key  | ✅ Full support (sign locally with viem) |
 | Seed Phrase  | ✅ Full support (sign locally with viem) |
 | Impersonator | ❌ Disabled (view-only)                  |
 
-When dapps request signatures, the extension displays the request details. For Bankr accounts, signing is handled via the `/agent/sign` API endpoint. For Private Key and Seed Phrase accounts, signing is done locally with viem. Impersonator accounts can only reject.
+When dapps request signatures, the extension displays the request details. For Bankr accounts, signing is handled via the `/wallet/sign` API endpoint. For Private Key and Seed Phrase accounts, signing is done locally with viem. Impersonator accounts can only reject.
 
 ### Supported Signature Methods
 
@@ -786,7 +786,7 @@ When dapps request signatures, the extension displays the request details. For B
 │     ┌─────────────────────────────────────────────────────────────────┐    │
 │     │  Bankr API Account:                                              │    │
 │     │    - SIGN and REJECT buttons shown                               │    │
-│     │    - Sign: Calls POST /agent/sign with message/typedData         │    │
+│     │    - Sign: Calls POST /wallet/sign with message/typedData        │    │
 │     │    - Signature returned to dapp                                  │    │
 │     ├─────────────────────────────────────────────────────────────────┤    │
 │     │  Private Key / Seed Phrase Account:                              │    │
@@ -809,7 +809,7 @@ The SignatureRequestConfirmation component shows:
 
 **For Bankr API Accounts:**
 
-- Sign button (yellow): Signs via `/agent/sign` API
+- Sign button (yellow): Signs via `/wallet/sign` API
 - Reject button (white/secondary): Cancels the request
 
 **For Private Key / Seed Phrase Accounts:**
@@ -1825,11 +1825,11 @@ Users can cancel in-progress transactions (PK/Seed Phrase accounts only):
 
 1. **Local Abort**: `AbortController` aborts the in-flight RPC broadcast
 
-**Bankr API accounts** cannot be cancelled — `/agent/submit` is synchronous (tx is already broadcast onchain by the time the response returns). The cancel button is hidden in the UI for Bankr account transactions.
+**Bankr API accounts** cannot be cancelled — `/wallet/submit` is synchronous (tx is already broadcast onchain by the time the response returns). The cancel button is hidden in the UI for Bankr account transactions.
 
 ## Response Handling
 
-The `/agent/submit` API returns a structured response:
+The `/wallet/submit` API returns a structured response:
 
 - `status: "success"` — transaction confirmed onchain, `transactionHash` contains the hash
 - `status: "reverted"` — transaction confirmed but reverted, treated as failure

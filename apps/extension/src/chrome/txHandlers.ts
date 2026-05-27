@@ -1529,7 +1529,7 @@ export async function handleConfirmSignatureRequest(
 }
 
 /**
- * Handles signature confirmation for Bankr accounts via /agent/sign API
+ * Handles signature confirmation for Bankr accounts via /wallet/sign API
  */
 export async function handleConfirmSignatureRequestBankr(
   sigId: string,

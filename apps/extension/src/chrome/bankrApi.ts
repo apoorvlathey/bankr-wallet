@@ -95,14 +95,14 @@ function extractBankrErrorMessage(text: string): string {
 }
 
 /**
- * Submits a transaction directly via /agent/submit (synchronous, no polling)
+ * Submits a transaction directly via /wallet/submit (synchronous, no polling)
  */
 export async function submitTransactionDirect(
   apiKey: string,
   tx: TransactionParams,
   signal?: AbortSignal
 ): Promise<SubmitTransactionDirectResponse> {
-  // Bankr's /agent/submit schema rejects any non-whitelisted key in
+  // Bankr's /wallet/submit schema rejects any non-whitelisted key in
   // `params.transaction` (zod `unrecognized_keys`). Bankr handles gas
   // server-side, so we only forward to/value/data/chainId here. Any
   // `tx.gas` / `tx.gasPrice` / `tx.maxFeePerGas` / `tx.maxPriorityFeePerGas`
@@ -124,7 +124,7 @@ export async function submitTransactionDirect(
     Object.entries(body.transaction).filter(([, v]) => v !== undefined)
   );
 
-  const response = await fetch(`${API_BASE_URL}/agent/submit`, {
+  const response = await fetch(`${API_BASE_URL}/wallet/submit`, {
     method: "POST",
     headers: {
       "X-API-Key": apiKey,
@@ -146,7 +146,7 @@ export async function submitTransactionDirect(
 }
 
 /**
- * Signs a message or typed data via /agent/sign (synchronous)
+ * Signs a message or typed data via /wallet/sign (synchronous)
  */
 export async function signMessageViaApi(
   apiKey: string,
@@ -187,7 +187,7 @@ export async function signMessageViaApi(
     throw new BankrApiError(`Unsupported signing method: ${method}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}/agent/sign`, {
+  const response = await fetch(`${API_BASE_URL}/wallet/sign`, {
     method: "POST",
     headers: {
       "X-API-Key": apiKey,

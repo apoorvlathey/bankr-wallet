@@ -10,7 +10,9 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- Bankr API accounts now use Bankr's Wallet API endpoints for direct transaction submission and signature requests (`/wallet/submit` and `/wallet/sign`), restoring dapp transactions and message signing after the legacy `/agent/submit` and `/agent/sign` endpoints were removed.
 
 ## [3.12.0] - 2026-05-26
 
