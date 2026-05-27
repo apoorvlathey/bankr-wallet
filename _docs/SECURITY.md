@@ -307,6 +307,15 @@ Only these message types are forwarded from webpage to background:
 
 **Source validation**: `inject.ts` checks `e.source === window` before forwarding.
 
+**Dapp RPC fast path**: `dappRpcForwarding.ts` runs entirely in the inpage
+script and does not add any new content-script or background message type. It
+observes page `fetch` calls to discover HTTP(S) JSON-RPC URLs, validates them
+with `eth_chainId`, and forwards only a narrow allowlist of dapp-originated
+read methods. Critical wallet data and operations (`wallet_*`, account/chain
+state, signing, transaction submission, raw tx broadcast, gas estimation,
+nonces, `eth_getCode`/delegation reads, stateful filters, and WalletChan's own
+confirmation/simulation flows) must stay on extension-controlled RPC paths.
+
 ### Background-to-Content-Script Messages
 
 Only these types are sent to content scripts (and thus forwarded to the webpage):
@@ -392,7 +401,7 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 | -------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | `manifest_version`         | 3                                                            | MV3 enforces CSP, no `eval()`, no remote code                                  |
 | `permissions`              | `activeTab`, `storage`, `sidePanel`, `notifications`, `tabs` | No `webRequest`, no `debugger`                                                 |
-| `host_permissions`         | `https://*/*`, `http://*/*`                                  | Broad, needed for RPC proxy (protocol-validated, 15s timeout) + content script |
+| `host_permissions`         | `https://*/*`, `http://*/*`                                  | Broad, needed for RPC proxy (extension-configured URL only, 15s timeout) + content script |
 | `content_scripts.matches`  | All URLs                                                     | Wallet must inject on all pages for dapp detection                             |
 | `externally_connectable`   | Not defined                                                  | External websites cannot send messages to background                           |
 | `web_accessible_resources` | `inpage.js` only                                             | Only the provider script is exposed to pages                                   |
@@ -428,7 +437,7 @@ These must always hold true. Violations indicate a security bug.
 
 12. **Transaction double-execution prevention** - A `processingTxIds` Set in `txHandlers.ts` prevents the same transaction from being submitted twice if two confirm messages arrive concurrently.
 
-13. **RPC proxy validates URL protocol** - `handleRpcRequest` only accepts `http:` and `https:` protocols, preventing SSRF via `file://`, `ftp://`, or other schemes. A 15-second timeout prevents resource exhaustion from slow servers.
+13. **RPC proxy restricts URL sources** - `handleRpcRequest` only accepts extension-configured RPC URLs, preventing arbitrary webpage-controlled endpoints. A 15-second timeout prevents resource exhaustion from slow servers. The inpage dapp-RPC fast path only uses HTTP(S) JSON-RPC URLs discovered from the page itself, validates the chain with `eth_chainId`, forwards only allowlisted non-critical read methods, and falls back to the extension RPC on error or timeout.
 
 14. **Input length validation on user-facing strings** - Display names and group names are capped at 100 characters to prevent storage bloat from malformed inputs. Unknown message types are logged with `console.warn` for debuggability.
 
@@ -535,6 +544,6 @@ These are security characteristics that have been reviewed and accepted:
 
 4. **Content script runs on all websites**. Required for wallet provider injection. The content script only bridges specific message types and does not expose any secrets.
 
-5. **RPC proxy in background (`rpcRequest` handler)** accepts URLs from content scripts with protocol validation (HTTP/HTTPS only) and a 15-second timeout. This bypasses page CSP for legitimate RPC calls. The background worker acts as a fetch proxy but does not attach credentials to these requests.
+5. **RPC proxy in background (`rpcRequest` handler)** accepts extension-configured RPC URLs from content scripts with a 15-second timeout. This bypasses page CSP for legitimate RPC calls. The background worker acts as a fetch proxy but does not attach credentials to these requests.
 
 6. **Console logging of migration events and decryption operations** in `authHandlers.ts`, `vaultCrypto.ts`, and `sessionCache.ts`. Logs include timing information ("API key migration completed", "Private key migration completed", "Session restored after service worker restart") but never log the actual secrets (keys, passwords). Acceptable because: (a) Chrome DevTools requires explicit user action to open, (b) logs provide critical debugging info for migration and session restore flows, (c) industry standard practice (MetaMask logs extensively), (d) no secrets are exposed in log messages.

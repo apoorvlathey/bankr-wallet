@@ -23,9 +23,12 @@ interface EIP6963AnnounceProviderEvent extends CustomEvent {
 
 import { makeProviderError } from "./providerErrors";
 import { WALLET_ICON } from "./walletIcon";
+import { DappRpcForwarder, installDappRpcDiscovery } from "./dappRpcForwarding";
 
 // Session UUID for EIP-6963 (generated once per page load)
 const SESSION_UUID = crypto.randomUUID();
+
+installDappRpcDiscovery();
 
 /**
  * Surface non-user-rejection wallet errors in the dapp's devtools console.
@@ -144,6 +147,7 @@ class ImpersonatorProvider extends EventEmitter {
   private address: string;
   private rpcUrl: string;
   private chainId: number;
+  private dappRpcForwarder = new DappRpcForwarder();
 
   constructor(chainId: number, rpcUrl: string, address: string) {
     super();
@@ -169,6 +173,15 @@ class ImpersonatorProvider extends EventEmitter {
 
   // Helper to make RPC calls through the proxy
   private async rpc(method: string, params: any[] = []): Promise<any> {
+    const dappRpcResult = await this.dappRpcForwarder.tryRequest(
+      this.chainId,
+      method,
+      params,
+    );
+    if (dappRpcResult.forwarded) {
+      return dappRpcResult.result;
+    }
+
     return rpcCall(this.rpcUrl, method, params);
   }
 
