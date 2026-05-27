@@ -978,7 +978,14 @@ function TokenTransfer({
   };
 
   return (
-    <Box p={4} minH="100%" bg="surface.base">
+    <Box
+      p={4}
+      h="100%"
+      minH={0}
+      overflowY="auto"
+      overflowX="hidden"
+      bg="surface.base"
+    >
       <VStack spacing={3} align="stretch">
         {/* Header */}
         <HStack spacing={2} justify="space-between" align="flex-start">
@@ -1496,7 +1503,7 @@ function TokenTransfer({
             isInvalid={!!recipient && !isResolving && !isRecipientValid}
           />
           {recipient && !isResolving && !isRecipientValid && (
-            <Text fontSize="xs" color="status.error.fg" fontWeight="700" mt={1}>
+            <Text fontSize="xs" color="chart.negative" fontWeight="700" mt={1}>
               {resolverError || "Invalid address or name"}
             </Text>
           )}
@@ -1677,7 +1684,7 @@ function TokenTransfer({
             </Box>
           )}
           {amount && !isAmountValid() && parseFloat(amount) > 0 && (
-            <Text fontSize="xs" color="status.error.fg" fontWeight="700" mt={1}>
+            <Text fontSize="xs" color="chart.negative" fontWeight="700" mt={1}>
               Insufficient balance
             </Text>
           )}
@@ -1729,7 +1736,7 @@ function TokenTransfer({
                   ml="auto"
                   fontSize="2xs"
                   fontWeight="800"
-                  color="status.error.fg"
+                  color="chart.negative"
                   textTransform="uppercase"
                   letterSpacing="wide"
                 >
@@ -1878,12 +1885,28 @@ function TokenTransfer({
                   rows={3}
                   resize="vertical"
                   isInvalid={!isHexDataValid}
+                  bg="surface.raised"
+                  color="fg.primary"
+                  border={tokens.borders.thin}
+                  borderColor="border.default"
+                  borderRadius={tokens.radii.input}
+                  _placeholder={{ color: "fg.muted" }}
+                  _hover={{ bg: "surface.raised", borderColor: "border.default" }}
+                  _focus={{
+                    bg: "surface.raised",
+                    borderColor: "border.focus",
+                    boxShadow: "focus",
+                  }}
+                  _invalid={{
+                    borderColor: "chart.negative",
+                    boxShadow: "3px 3px 0px 0px var(--chakra-colors-chart-negative)",
+                  }}
                 />
                 <Text fontSize="2xs" color="text.tertiary" fontWeight="600" mt={1}>
                   Bytes appended as tx calldata. Leave blank for a plain transfer.
                 </Text>
                 {!isHexDataValid && (
-                  <Text fontSize="xs" color="status.error.fg" fontWeight="700" mt={1}>
+                  <Text fontSize="xs" color="chart.negative" fontWeight="700" mt={1}>
                     Must be a 0x-prefixed hex string with an even number of hex chars.
                   </Text>
                 )}

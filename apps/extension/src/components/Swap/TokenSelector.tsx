@@ -140,10 +140,10 @@ export default function TokenSelector({
     }
   }, [isOpen]);
 
-  // Fixed-positioned dropdown: anchor to the trigger, but flip horizontally
-  // when the popup viewport is narrower than the dropdown placed at the
-  // trigger's left edge. Keeps Swap (trigger on the left) anchored left and
-  // Send (trigger on the right) anchored right — both fitting the popup.
+  // Fixed-positioned dropdown: anchor to the trigger, but clamp horizontally
+  // when the viewport is narrower than the desired dropdown width. Keeps Swap
+  // anchored left and Send anchored right without drifting across fullscreen
+  // layouts.
   useLayoutEffect(() => {
     if (!isOpen) {
       setDropdownPos(null);
@@ -159,10 +159,7 @@ export default function TokenSelector({
       const width = Math.min(desiredW, viewportW - padding * 2);
       let left: number;
       if (dropdownAlign === "right") {
-        // Pin to the popup viewport's right edge so the dropdown sits in the
-        // empty right-of-trigger space (used by the Send page where the
-        // trigger lives in a narrow left-side column).
-        left = viewportW - padding - width;
+        left = rect.right - width;
       } else {
         // Anchor to trigger's left edge; flip if it would overflow right.
         left = rect.left;
