@@ -162,6 +162,7 @@ import {
   handleExecuteSwapAtomicPK,
   handleCancelProcessingTx,
   writeResultToStorage,
+  showNotification,
   SignatureResult,
 } from "./txHandlers";
 
@@ -229,6 +230,7 @@ import {
 } from "./pendingAddChainStorage";
 import { addCustomToken, getCustomTokens } from "./customTokenStorage";
 import { getResolvedChainById } from "@/lib/chains";
+import type { NetworksInfo } from "@/types";
 
 import {
   isSidePanelSupported,
@@ -284,6 +286,79 @@ async function handleRpcRequest(
   }
 
   return data.result;
+}
+
+const CHAIN_SWITCH_NOTIFICATION_COOLDOWN_MS = 10_000;
+const recentChainSwitchNotifications = new Map<string, number>();
+
+function getSenderUrl(sender: chrome.runtime.MessageSender): string | undefined {
+  return sender.url || sender.tab?.url || sender.origin || undefined;
+}
+
+function getDappLabel(sender: chrome.runtime.MessageSender): string {
+  const source = getSenderUrl(sender);
+  if (!source) return "A dapp";
+
+  try {
+    return new URL(source).hostname || "A dapp";
+  } catch {
+    return "A dapp";
+  }
+}
+
+function getNotificationIconUrl(iconPath: string | undefined): string | undefined {
+  if (!iconPath) return undefined;
+  if (/^https?:\/\//i.test(iconPath)) return undefined;
+  if (iconPath.startsWith("chrome-extension://") || iconPath.startsWith("moz-extension://")) {
+    return iconPath;
+  }
+  return chrome.runtime.getURL(iconPath.replace(/^\/+/, ""));
+}
+
+async function handleDappChainSwitchNotification(
+  message: any,
+  sender: chrome.runtime.MessageSender,
+): Promise<{ success: boolean; skipped?: boolean; error?: string }> {
+  const chainId = Number(message.chainId);
+  if (!Number.isInteger(chainId) || chainId <= 0) {
+    return { success: false, error: "Invalid chain ID" };
+  }
+
+  if (!sender.tab?.id) {
+    return { success: false, error: "Missing tab context" };
+  }
+
+  const { networksInfo } = (await chrome.storage.sync.get("networksInfo")) as {
+    networksInfo?: NetworksInfo;
+  };
+  const chain = getResolvedChainById(chainId, networksInfo);
+  if (!chain) {
+    return { success: false, error: "Unknown chain" };
+  }
+
+  const source = sender.origin || getSenderUrl(sender) || "unknown";
+  const cooldownKey = `${sender.tab.id}:${source}:${chain.chainId}`;
+  const now = Date.now();
+  const previous = recentChainSwitchNotifications.get(cooldownKey);
+  if (previous && now - previous < CHAIN_SWITCH_NOTIFICATION_COOLDOWN_MS) {
+    return { success: true, skipped: true };
+  }
+
+  recentChainSwitchNotifications.set(cooldownKey, now);
+  for (const [key, timestamp] of recentChainSwitchNotifications) {
+    if (now - timestamp > CHAIN_SWITCH_NOTIFICATION_COOLDOWN_MS * 6) {
+      recentChainSwitchNotifications.delete(key);
+    }
+  }
+
+  await showNotification(
+    `chain-switch-${sender.tab.id}-${chain.chainId}-${now}`,
+    `Switched to ${chain.name}`,
+    `${getDappLabel(sender)} switched WalletChan network`,
+    { iconUrl: getNotificationIconUrl(chain.icon) },
+  );
+
+  return { success: true };
 }
 
 // ─── Security Helpers ────────────────────────────────────────────────────────
@@ -965,6 +1040,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         sendResponse({ success: true });
       })();
+      return true;
+    }
+
+    case "dappChainSwitchNotification": {
+      handleDappChainSwitchNotification(message, sender)
+        .then(sendResponse)
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to show notification",
+          }),
+        );
       return true;
     }
 

@@ -691,28 +691,43 @@ export async function handleCancelTransaction(
 /**
  * Shows a browser notification
  */
+interface ShowNotificationOptions {
+  iconUrl?: string;
+}
+
 export async function showNotification(
   notificationId: string,
   title: string,
   message: string,
+  options: ShowNotificationOptions = {},
 ): Promise<string> {
+  const fallbackIconUrl = chrome.runtime.getURL("icons/icon128.png");
+
   return new Promise((resolve) => {
-    chrome.notifications.create(
-      notificationId,
-      {
-        type: "basic",
-        iconUrl: chrome.runtime.getURL("icons/icon128.png"),
-        title,
-        message,
-        priority: 2,
-      },
-      (createdId) => {
-        if (chrome.runtime.lastError) {
-          console.error("Notification error:", chrome.runtime.lastError);
-        }
-        resolve(createdId || notificationId);
-      },
-    );
+    const create = (iconUrl: string, allowFallback: boolean) => {
+      chrome.notifications.create(
+        notificationId,
+        {
+          type: "basic",
+          iconUrl,
+          title,
+          message,
+          priority: 2,
+        },
+        (createdId) => {
+          if (chrome.runtime.lastError) {
+            console.error("Notification error:", chrome.runtime.lastError);
+            if (allowFallback && iconUrl !== fallbackIconUrl) {
+              create(fallbackIconUrl, false);
+              return;
+            }
+          }
+          resolve(createdId || notificationId);
+        },
+      );
+    };
+
+    create(options.iconUrl || fallbackIconUrl, true);
   });
 }
 

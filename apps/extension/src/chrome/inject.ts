@@ -70,6 +70,16 @@ let store = {
   accountType: "",    // "bankr" | "privateKey"
 };
 
+function notifyDappChainSwitch(chainId: number, chainName: string): void {
+  chrome.runtime
+    .sendMessage({
+      type: "dappChainSwitchNotification",
+      chainId,
+      chainName,
+    })
+    .catch(() => {});
+}
+
 const init = async () => {
   // inject inpage.js into webpage
   try {
@@ -257,15 +267,9 @@ window.addEventListener("message", async (e) => {
         break;
       }
 
-      let rpcUrl: string | undefined;
-      let chainName: string | undefined;
-      for (const _chainName of Object.keys(networksInfo)) {
-        if (networksInfo[_chainName].chainId === chainId) {
-          rpcUrl = networksInfo[_chainName].rpcUrl;
-          chainName = _chainName;
-          break;
-        }
-      }
+      const resolvedChain = getResolvedChainById(chainId, networksInfo);
+      const rpcUrl = resolvedChain?.rpcUrl;
+      const chainName = resolvedChain?.name;
 
       if (!rpcUrl || !chainName) {
         // Chain not supported - send error back to impersonator
@@ -282,10 +286,14 @@ window.addEventListener("message", async (e) => {
         break;
       }
 
+      const previousChainName = store.chainName;
       store.chainName = chainName;
 
       // Save chainName to storage so popup/sidepanel reflects the change
       await chrome.storage.sync.set({ chainName });
+      if (previousChainName !== chainName) {
+        notifyDappChainSwitch(chainId, chainName);
+      }
 
       // send message to switchEthereumChain with RPC, in impersonator.ts
       window.postMessage(

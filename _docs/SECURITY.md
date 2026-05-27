@@ -307,6 +307,13 @@ Only these message types are forwarded from webpage to background:
 
 **Source validation**: `inject.ts` checks `e.source === window` before forwarding.
 
+After a supported `i_switchEthereumChain` request actually changes the tab's
+chain, `inject.ts` sends the background-only `dappChainSwitchNotification`
+message. That message carries only `chainId`/`chainName`; the background worker
+resolves chain metadata from trusted storage, derives the dapp label from the
+Chrome sender, rate-limits repeats per tab/origin/chain, and creates a browser
+notification. It does not expose secrets or account data.
+
 **Dapp RPC fast path**: `dappRpcForwarding.ts` runs entirely in the inpage
 script and does not add any new content-script or background message type. It
 observes page `fetch` calls to discover HTTP(S) JSON-RPC URLs, validates them

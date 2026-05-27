@@ -972,8 +972,13 @@ The extension uses Chrome's Notifications API to alert users when transactions c
 | --------------------- | ----------------------- | ------------------------------------------------ |
 | Transaction Confirmed | "Transaction Confirmed" | "Your transaction on {chainName} was successful" |
 | Transaction Failed    | "Transaction Failed"    | "Error: {errorMessage}"                          |
+| Dapp Chain Switch     | "Switched to {chainName}" | "{origin} switched WalletChan network"         |
 
-**See**: `src/chrome/txHandlers.ts` → `showNotification()` for implementation.
+**See**: `src/chrome/txHandlers.ts` -> `showNotification()` for the shared
+helper and `src/chrome/background.ts` -> `dappChainSwitchNotification` for
+dapp-initiated chain switch notifications. Chain switch notifications pass the
+resolved local chain icon as `iconUrl` when one is available, and fall back to
+the WalletChan icon if Chrome rejects the asset.
 
 ### macOS Permissions Note
 
@@ -1358,11 +1363,13 @@ When a dapp calls `wallet_switchEthereumChain`:
 │  3. Content script looks up chainId in networksInfo:                        │
 │     - If FOUND: Save chainName to storage, send switchEthereumChain         │
 │     - If NOT FOUND: Send switchEthereumChainError with error message        │
-│  4. Impersonator receives response:                                         │
+│  4. If the chain actually changed, content script asks background to show   │
+│     a browser notification using the resolved chain icon when available     │
+│  5. Impersonator receives response:                                         │
 │     - Success: Updates provider chainId, emits chainChanged event           │
 │     - Error: Rejects promise with error (dapp can catch and handle)         │
-│  5. Popup/sidepanel storage listener detects chainName change               │
-│  6. Network dropdown updates to reflect new chain                           │
+│  6. Popup/sidepanel storage listener detects chainName change               │
+│  7. Network dropdown updates to reflect new chain                           │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
