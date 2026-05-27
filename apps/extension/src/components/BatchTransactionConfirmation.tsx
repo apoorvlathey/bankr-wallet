@@ -38,7 +38,10 @@ import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
 import type { GasEstimate } from "@/chrome/gasEstimation";
 import { getChainConfig } from "@/constants/chainConfig";
 import { useBatchPlan } from "@/hooks/useBatchPlan";
-import AssetChangesDisplay, { SimulationRevertedBanner } from "@/components/AssetChangesDisplay";
+import AssetChangesDisplay, {
+  SimulationRevertedBanner,
+  SimulationUnavailableBanner,
+} from "@/components/AssetChangesDisplay";
 import { detectAbiEncodingError } from "@/lib/calldataValidation";
 import { MalformedCalldataBanner } from "@/components/MalformedCalldataBanner";
 import { CalldataDigestDisplay } from "@/components/DigestDisplay";
@@ -229,6 +232,7 @@ function BatchTransactionConfirmation({
   // Fed by AssetChangesDisplay below. Drives the top-of-screen revert
   // banner so the warning lands above the clear-signing summary.
   const [simulationReverted, setSimulationReverted] = useState(false);
+  const [simulationUnavailable, setSimulationUnavailable] = useState(false);
   // Fed by MultiTxGasEstimateDisplay below. Drives the top-of-screen
   // "may revert" banner so it lands above asset changes and the call list,
   // not buried next to the gas row.
@@ -889,6 +893,9 @@ function BatchTransactionConfirmation({
         {simulationReverted && (
           <SimulationRevertedBanner borders={tokens.borders} />
         )}
+        {simulationUnavailable && !simulationReverted && (
+          <SimulationUnavailableBanner borders={tokens.borders} />
+        )}
 
         {/* "One or more transactions may revert" — bubbled up from the gas
             display so the warning lands at the top of the screen instead of
@@ -1344,6 +1351,7 @@ function BatchTransactionConfirmation({
           batchCalls={calls.map((c) => ({ to: c.to, data: c.data, value: c.value }))}
           isNonAtomic={isNonAtomic}
           onRevertedChange={setSimulationReverted}
+          onSimulationUnavailableChange={setSimulationUnavailable}
         />
 
         {/* Gas Estimate */}

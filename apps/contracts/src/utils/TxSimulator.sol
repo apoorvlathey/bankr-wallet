@@ -34,6 +34,17 @@ contract TxSimulator {
     ///      colossal balance delta can't make us iterate forever in the
     ///      Enumerable fallback below.
     uint256 private constant MAX_ENUMERATE_PER_COLLECTION = 50;
+    /// @dev Gas cap for best-effort static probes against unknown candidate
+    ///      contracts. A hostile fallback must not be able to burn the entire
+    ///      simulation just because we tried balanceOf()/nextTokenId()/ownerOf().
+    uint256 private constant PROBE_GAS_LIMIT = 100_000;
+    /// @dev Onchain NFT metadata can be much heavier than balance/owner probes
+    ///      (notably fully onchain SVG renderers), but it is still optional
+    ///      display data and must stay bounded.
+    uint256 private constant METADATA_GAS_LIMIT = 5_000_000;
+    /// @dev Keep enough gas after metadata attempts to ABI-encode and return
+    ///      the simulation result even if a metadata call consumes its budget.
+    uint256 private constant METADATA_RETURN_GAS_RESERVE = 500_000;
 
     /// @dev Bundles the pre-call snapshots so simulate*/simulateBatch can
     ///      keep them in a single stack slot instead of two parallel arrays.
@@ -217,7 +228,7 @@ contract TxSimulator {
     /// @dev Try balanceOf(address(this)); returns 0 on revert or bad data.
     function _tryBalanceOf(address token) internal view returns (uint256) {
         // selector: balanceOf(address) = 0x70a08231
-        (bool ok, bytes memory ret) = token.staticcall(
+        (bool ok, bytes memory ret) = token.staticcall{gas: PROBE_GAS_LIMIT}(
             abi.encodeWithSelector(0x70a08231, address(this))
         );
         if (ok && ret.length >= 32) {
@@ -410,7 +421,7 @@ contract TxSimulator {
             // Standard ERC-721 Enumerable appends new tokens to the owner's
             // list, so the new tokenIds live at indices [before, after).
             for (uint256 idx = before_[i]; idx < after_[i]; ++idx) {
-                (bool ok, bytes memory ret) = token.staticcall(
+                (bool ok, bytes memory ret) = token.staticcall{gas: PROBE_GAS_LIMIT}(
                     abi.encodeWithSelector(
                         TOKEN_OF_OWNER_BY_INDEX_SELECTOR,
                         address(this),
@@ -445,7 +456,7 @@ contract TxSimulator {
     /// @dev staticcall nextTokenId(); returns NO_NEXT_TOKEN_ID if the contract
     ///      doesn't expose it (call reverts) or returns malformed data.
     function _tryNextTokenId(address token) internal view returns (uint256) {
-        (bool ok, bytes memory ret) = token.staticcall(
+        (bool ok, bytes memory ret) = token.staticcall{gas: PROBE_GAS_LIMIT}(
             abi.encodeWithSelector(NEXT_TOKEN_ID_SELECTOR)
         );
         if (!ok || ret.length < 32) return NO_NEXT_TOKEN_ID;
@@ -454,7 +465,7 @@ contract TxSimulator {
 
     /// @dev staticcall ownerOf(uint256); returns address(0) on revert / bad data.
     function _tryOwnerOf(address token, uint256 tokenId) internal view returns (address) {
-        (bool ok, bytes memory ret) = token.staticcall(
+        (bool ok, bytes memory ret) = token.staticcall{gas: PROBE_GAS_LIMIT}(
             abi.encodeWithSelector(OWNER_OF_SELECTOR, tokenId)
         );
         if (!ok || ret.length < 32) return address(0);
@@ -514,13 +525,22 @@ contract TxSimulator {
         for (uint256 i; i < len; ++i) {
             NftReceived storage entry = receivedNfts[i];
             bytes4 sel = entry.standard == 1 ? TOKEN_URI_SELECTOR : URI_SELECTOR;
-            (bool ok, bytes memory ret) = entry.token.staticcall(
+            uint256 gasBudget = _metadataGasBudget();
+            if (gasBudget == 0) break;
+            (bool ok, bytes memory ret) = entry.token.staticcall{gas: gasBudget}(
                 abi.encodeWithSelector(sel, entry.tokenId)
             );
             if (ok && ret.length > 0) {
                 entry.tokenUriRaw = ret;
             }
         }
+    }
+
+    function _metadataGasBudget() internal view returns (uint256) {
+        uint256 available = gasleft();
+        if (available <= METADATA_RETURN_GAS_RESERVE) return 0;
+        uint256 budget = available - METADATA_RETURN_GAS_RESERVE;
+        return budget < METADATA_GAS_LIMIT ? budget : METADATA_GAS_LIMIT;
     }
 
     // -----------------------------------------------------------------------

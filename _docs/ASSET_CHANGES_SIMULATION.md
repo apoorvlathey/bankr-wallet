@@ -66,6 +66,15 @@ The `TxSimulator.sol` contract:
 
 Non-token addresses (routers, pools, factories) either revert on `balanceOf` (caught by `_tryBalanceOf`) or return zero delta — both are filtered out automatically.
 
+**Best-effort candidate probes are gas-capped.** The simulator calls
+`balanceOf`, `nextTokenId`, `ownerOf`, Enumerable, and tokenURI/uri on unknown
+contracts while discovering ERC-20/NFT changes. These calls are optional
+metadata/balance probes, not the user's transaction. Balance/owner probes use a
+small cap so a hostile fallback cannot burn the entire `eth_call` and hide the
+native ETH delta. Onchain NFT metadata gets a larger bounded budget plus a
+return-gas reserve so SVG renderers can work without risking the entire
+simulation. The regression test is `apps/contracts/test/TxSimulator.t.sol`.
+
 **Why override balance to 100,000 ETH?** So the call doesn't revert due to insufficient funds. The ETH delta calculation is still correct: `after - before = -(value sent) + (value received back)`. Gas is NOT included (eth_call doesn't consume gas — that's shown separately in the gas estimate).
 
 **Gotcha — checksum the address before passing to viem.** viem's `formatStateOverride` runs `getAddress(...)` on override map keys, while `formatTransactionRequest` leaves the tx `from` field untouched. If `accountAddress` arrives lowercase (typical for impersonator accounts pasted by the user), the JSON-RPC request goes out with mismatched casing — lowercase `from`, EIP-55 mixed-case override key — and some RPCs (Coinbase's `mainnet.base.org` proxy among them) reject it as `-32602 "Missing or invalid parameters"`. PK/Bankr accounts dodge this because their addresses are already stored checksummed. Always run `getAddress(accountAddress)` and `getAddress(tx.to)` at the top of `simulateAssetChanges` so both sides of the request use the same casing.
@@ -153,7 +162,9 @@ Inside `TransactionConfirmation.tsx`, the asset changes card sits between the tr
 - Each row: token icon (20px) + amount + symbol + name, USD value + address with copy/explorer links
 - Collapsible (expanded by default)
 - Skipped for contract deployments (no `to` address)
-- Hidden entirely if simulation fails (best-effort, non-blocking)
+- If simulation fails, the asset-change card is hidden but the confirmation
+  surface shows an informational top banner so the user knows the preview is
+  unavailable (best-effort, non-blocking)
 
 ## NFT Support (ERC-721 + ERC-1155)
 

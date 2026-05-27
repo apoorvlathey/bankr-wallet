@@ -52,6 +52,12 @@ interface AssetChangesDisplayProps {
    * suppressed so the warning lands in front of the user immediately.
    */
   onRevertedChange?: (reverted: boolean) => void;
+  /**
+   * Fired whenever asset-change simulation itself fails or becomes unavailable.
+   * Parents use this to surface an informational top-of-screen banner instead
+   * of silently hiding the asset-change section.
+   */
+  onSimulationUnavailableChange?: (unavailable: boolean) => void;
 }
 
 /**
@@ -88,6 +94,47 @@ export function SimulationRevertedBanner({
       </HStack>
     </Box>
   );
+}
+
+export function SimulationUnavailableBanner({
+  borders,
+}: {
+  borders: { medium: string };
+}) {
+  return (
+    <Box
+      border={borders.medium}
+      borderColor="status.info.border"
+      borderRadius="lg"
+      bg="status.info.bg"
+      boxShadow="card"
+      px={3}
+      py={2.5}
+    >
+      <HStack spacing={2} align="flex-start">
+        <InfoOutlineIcon
+          boxSize="14px"
+          color="status.info.fg"
+          mt="2px"
+          flexShrink={0}
+        />
+        <Text fontSize="xs" fontWeight="700" color="status.info.fg" lineHeight="short">
+          Asset change simulation unavailable. Onchain transfers may still occur.
+        </Text>
+      </HStack>
+    </Box>
+  );
+}
+
+function makeSimulationFailureResult(error: string): SimulationResult {
+  return {
+    txSuccess: true,
+    nativeChange: null,
+    tokenChanges: [],
+    simulationFailed: true,
+    simulationError: error,
+    metadataComplete: true,
+  };
 }
 
 function TokenIcon({ change }: { change: AssetChange }) {
@@ -537,6 +584,7 @@ function AssetChangesDisplay({
   batchCalls,
   isNonAtomic,
   onRevertedChange,
+  onSimulationUnavailableChange,
 }: AssetChangesDisplayProps) {
   const { tokens } = useTheme();
   const [result, setResult] = useState<SimulationResult | null>(null);
@@ -590,6 +638,17 @@ function AssetChangesDisplay({
       if (cancelled) return;
       if (chrome.runtime.lastError) {
         console.error("[AssetChangesUI] chrome.runtime.lastError:", chrome.runtime.lastError);
+        setResult(
+          makeSimulationFailureResult(
+            chrome.runtime.lastError.message || "Asset change simulation unavailable",
+          ),
+        );
+        setLoading(false);
+        return;
+      }
+      if (!response) {
+        console.error("[AssetChangesUI] Empty simulation response");
+        setResult(makeSimulationFailureResult("Asset change simulation unavailable"));
         setLoading(false);
         return;
       }
@@ -618,6 +677,11 @@ function AssetChangesDisplay({
     }
     onRevertedChange(!result.txSuccess);
   }, [result, onRevertedChange]);
+
+  useEffect(() => {
+    if (!onSimulationUnavailableChange) return;
+    onSimulationUnavailableChange(!!result?.simulationFailed);
+  }, [result?.simulationFailed, onSimulationUnavailableChange]);
 
   // Retry metadata fetch if initial attempt was incomplete
   useEffect(() => {

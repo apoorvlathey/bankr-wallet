@@ -38,7 +38,10 @@ import { resolveAddressToName } from "@/lib/ensUtils";
 import CalldataDecoder from "@/components/CalldataDecoder";
 import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
 import GasEstimateDisplay from "@/components/GasEstimateDisplay";
-import AssetChangesDisplay, { SimulationRevertedBanner } from "@/components/AssetChangesDisplay";
+import AssetChangesDisplay, {
+  SimulationRevertedBanner,
+  SimulationUnavailableBanner,
+} from "@/components/AssetChangesDisplay";
 import ERC20ApproveDisplay from "@/components/ERC20ApproveDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import ChainIcon from "@/components/ChainIcon";
@@ -316,6 +319,7 @@ function TransactionConfirmation({
   // top-of-screen "simulated transaction reverted" banner so the warning
   // lands in front of the user before they read clear-signing / origin info.
   const [simulationReverted, setSimulationReverted] = useState(false);
+  const [simulationUnavailable, setSimulationUnavailable] = useState(false);
   const [gasOverrides, setGasOverrides] = useState<GasOverrides | null>(null);
   // Gas-editor validity bubbled up from GasEstimateDisplay. Disables the
   // Confirm button while the user has the Custom-tier editor in an
@@ -953,6 +957,9 @@ function TransactionConfirmation({
         {simulationReverted && (
           <SimulationRevertedBanner borders={tokens.borders} />
         )}
+        {simulationUnavailable && !simulationReverted && (
+          <SimulationUnavailableBanner borders={tokens.borders} />
+        )}
 
         {/* EIP-7702 revoke explainer — the raw tx is a self-call with empty
             data; without context it'd look like a no-op. This banner spells
@@ -1538,6 +1545,7 @@ function TransactionConfirmation({
           <AssetChangesDisplay
             txRequest={txRequest}
             onRevertedChange={setSimulationReverted}
+            onSimulationUnavailableChange={setSimulationUnavailable}
           />
         )}
 
