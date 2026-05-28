@@ -2290,7 +2290,7 @@ All main screens display a centered footer with attribution:
 | Unsupported chain           | Immediate rejection with message |
 | API key not configured      | Redirect to settings             |
 | Wrong password              | Retry prompt in popup            |
-| API error                   | Display error message            |
+| API error                   | Display error message; chat prompt errors surface the Bankr API `message` field in the assistant error bubble |
 | Transaction timeout (5 min) | Auto-fail with timeout message   |
 | Network error               | Display error, allow retry       |
 

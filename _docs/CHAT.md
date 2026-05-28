@@ -173,7 +173,7 @@ async function pollChatJobUntilComplete(
 
 1. **Fetch History**: Get conversation from storage, extract completed messages
 2. **Format Prompt**: Combine history with current message using role tags (User:/Assistant:)
-3. **Submit Prompt**: POST to `/agent/prompt` with formatted prompt (max 10,000 chars)
+3. **Submit Prompt**: POST to `/agent/prompt` with formatted prompt (max 10,000 chars). If the POST fails, parse JSON error bodies and surface the user-facing `message` field in the assistant error bubble.
 4. **Get Job ID**: API returns `{ jobId: string }`
 5. **Poll Status**: GET `/agent/job/{jobId}` every 2 seconds
 6. **Show Status Updates**: Display latest `statusUpdates` message in UI alongside loader
@@ -232,7 +232,7 @@ If the prompt exceeds 10,000 characters, older messages are progressively remove
 | Error           | Handling                                           |
 | --------------- | -------------------------------------------------- |
 | Wallet locked   | Shows "Unlock" button in error message             |
-| API error       | Message status set to "error", content shows error |
+| API error       | Message status set to "error", content shows the API error message. `chatJobComplete` should include error text in both `error` and `content`, and the UI falls back to `error` when `content` is absent. |
 | Network error   | Message status set to "error", content shows error |
 | Timeout (5 min) | Message status set to "error"                      |
 | Abort/Cancel    | Message status set to "error", "Request cancelled" |

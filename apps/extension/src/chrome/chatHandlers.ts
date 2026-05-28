@@ -49,6 +49,7 @@ export async function handleSubmitChatPrompt(
       type: "chatJobComplete",
       conversationId,
       messageId,
+      content: "Wallet is locked. Please unlock first.",
       error: "Wallet is locked. Please unlock first.",
     }).catch(() => {});
     return { success: false, error: "Wallet is locked. Please unlock first." };
@@ -157,6 +158,7 @@ async function processChatPromptInBackground(
       type: "chatJobComplete",
       conversationId,
       messageId,
+      content: errorMessage,
       error: errorMessage,
     }).catch(() => {});
   }

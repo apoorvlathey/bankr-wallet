@@ -19,6 +19,57 @@ export interface ChatMessage {
   content: string;
 }
 
+function parseJsonish(value: string): unknown | null {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return null;
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+}
+
+function extractPromptErrorMessage(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+
+    const parsed = parseJsonish(trimmed);
+    if (parsed !== null) {
+      return extractPromptErrorMessage(parsed) || trimmed;
+    }
+
+    return trimmed;
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const body = value as Record<string, unknown>;
+
+  if (typeof body.message === "string" && body.message.trim()) {
+    return body.message.trim();
+  }
+
+  if (body.error !== undefined) {
+    return extractPromptErrorMessage(body.error);
+  }
+
+  return undefined;
+}
+
+function formatPromptSubmitError(text: string, status: number): string {
+  const message = extractPromptErrorMessage(text);
+  if (message) return message;
+
+  const trimmed = text.trim();
+  if (trimmed) return trimmed;
+
+  return `Failed to submit chat prompt (${status})`;
+}
+
 /**
  * Formats conversation history into a prompt string for the Bankr API
  * Messages are tagged with User: and Assistant: prefixes
@@ -114,7 +165,7 @@ export async function submitChatPrompt(
   if (!response.ok) {
     const text = await response.text();
     throw new BankrApiError(
-      `Failed to submit chat prompt: ${text}`,
+      formatPromptSubmitError(text, response.status),
       response.status
     );
   }

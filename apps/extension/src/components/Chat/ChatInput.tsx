@@ -1,6 +1,7 @@
 import { useState, KeyboardEvent } from "react";
 import { HStack, Input, IconButton, Box } from "@chakra-ui/react";
 import { ArrowForwardIcon } from "@chakra-ui/icons";
+import { useTheme } from "@/theme";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -14,6 +15,8 @@ export function ChatInput({
   placeholder = "Ask Bankr...",
 }: ChatInputProps) {
   const [input, setInput] = useState("");
+  const { themeId } = useTheme();
+  const isDarkTheme = themeId === "midnight";
 
   const handleSend = () => {
     const trimmed = input.trim();
@@ -32,11 +35,11 @@ export function ChatInput({
 
   return (
     <Box
-      bg="surface.raised"
-      border="2px solid"
+      bg={isDarkTheme ? "transparent" : "surface.raised"}
+      border={isDarkTheme ? "none" : "2px solid"}
       borderColor="border.default"
-      boxShadow="card"
-      p={1.5}
+      boxShadow={isDarkTheme ? "none" : "card"}
+      p={isDarkTheme ? 0 : 1.5}
     >
       <HStack spacing={2}>
         <Input

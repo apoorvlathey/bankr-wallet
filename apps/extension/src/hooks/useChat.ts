@@ -64,9 +64,13 @@ export function useChat(): UseChatReturn {
         setStatusUpdateText(null);
         // Update the message with the response
         if (currentConversation?.id === message.conversationId && message.messageId) {
+          const errorContent = message.error || "";
           updateMessageInConversation(message.conversationId, message.messageId, {
-            content: message.content || "",
+            content: message.content || errorContent,
             status: message.error ? "error" : "complete",
+            ...(message.error
+              ? { isWalletLockedError: errorContent.includes("Wallet is locked") }
+              : {}),
           }).then((updated) => {
             if (updated) {
               setCurrentConversation(updated);
