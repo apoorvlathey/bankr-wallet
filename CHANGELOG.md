@@ -10,7 +10,19 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **SIWE review for signature requests.** Sign-In with Ethereum messages now render as a structured review with site, account, chain, URI, nonce, timing, resources, copy/explorer actions, and validation warnings. Blocking SIWE errors such as domain, signer, chain, expiry, or format mismatches require an explicit override before signing.
+- **Dapp RPC read forwarding.** WalletChan can discover page-local JSON-RPC URLs and use them for a narrow allowlist of non-critical read methods after `eth_chainId` validation, with fallback to the extension-controlled RPC path.
+- **Dapp chain-switch notifications.** When a site switches WalletChan to another supported chain, users get a cooldown-protected browser notification with the target chain.
+- **Expanded ERC-7730 clear-signing coverage.** Clear signing now supports more descriptor formats and guards, including domain-bound EIP-712 verification, interpolated intents, descriptor maps, literal values, envelope paths, chain IDs, token tickers, durations, enums, interoperable addresses, native sentinels, and richer nested calldata handling.
+
+### Fixed
+
+- Asset-change simulation failures now show an explicit "simulation unavailable" banner instead of silently hiding potential asset movement.
+- Bankr API batch and cross-dapp batch receipts now feed the shared receipt-enrichment path, restoring post-confirm asset-change backfills in Activity.
+- Chat API errors now extract the useful Bankr error message, wallet-locked chat responses render as error bubbles, and the Midnight chat input no longer gets an extra outer frame.
+- The Send screen and token dropdown now stay within the popup viewport, with corrected overflow behavior and theme-aware validation styling.
 
 ## [3.13.0] - 2026-05-27
 
