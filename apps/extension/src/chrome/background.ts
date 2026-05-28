@@ -244,6 +244,14 @@ import {
 
 import { fetchAndCacheAvatarImage } from "./avatarImageCache";
 import { initEnsBrowsing, handleEnsBrowsingMessage } from "./ensBrowsing";
+import {
+  handleWalletConnectDisconnectSession,
+  handleWalletConnectGetSessions,
+  handleWalletConnectPair,
+  handleWalletConnectSwitchChain,
+  initWalletConnect,
+} from "./walletConnectHandlers";
+import { clearExpiredWalletConnectPendingRequests } from "./walletConnectStorage";
 
 // Handles RPC requests proxied from inpage script (to bypass page CSP)
 async function handleRpcRequest(
@@ -430,6 +438,7 @@ setInterval(() => {
   clearExpiredTxRequests();
   clearExpiredSignatureRequests();
   clearExpiredBatchTxRequests();
+  clearExpiredWalletConnectPendingRequests();
 }, 60000); // Every minute
 
 // Clean up stale result keys from storage (from previous service worker sessions)
@@ -608,6 +617,10 @@ initEnsBrowsing().catch((e) =>
   console.warn("[ens] init failed", e),
 );
 
+initWalletConnect().catch((e) =>
+  console.warn("[WalletConnect] init failed", e),
+);
+
 // Handle extension icon click when popup is cleared (sidepanel mode)
 // When sidepanel mode is active, setPopup('') causes onClicked to fire instead of opening a popup.
 // We try sidePanel.open() and verify it actually opened. Some browsers (Arc) resolve the promise
@@ -749,6 +762,11 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "removeCustomDelegate",
   "initiateSetDelegation",
   "initiateRevokeDelegation",
+  // WalletConnect session management
+  "walletConnectGetSessions",
+  "walletConnectPair",
+  "walletConnectDisconnectSession",
+  "walletConnectSwitchChain",
   // Direct-execution / UI-only handlers (defense in depth)
   "executeSwapDirect",
   "executeSwapBatch",
@@ -770,6 +788,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   switch (message.type) {
+    case "walletConnectGetSessions": {
+      handleWalletConnectGetSessions().then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "walletConnectPair": {
+      handleWalletConnectPair(message.uri || "").then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "walletConnectDisconnectSession": {
+      handleWalletConnectDisconnectSession(message.topic || "").then(
+        (result) => {
+          sendResponse(result);
+        },
+      );
+      return true;
+    }
+
+    case "walletConnectSwitchChain": {
+      handleWalletConnectSwitchChain(message.chainName || "").then((result) => {
+        sendResponse(result);
+      });
+      return true;
+    }
+
     case "sendTransaction": {
       const senderWindowId = sender.tab?.windowId;
       handleTransactionRequest(

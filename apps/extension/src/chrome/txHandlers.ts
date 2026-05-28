@@ -114,6 +114,17 @@ export async function writeResultToStorage(
   result: TransactionResult | SignatureResult | Record<string, unknown>,
 ): Promise<void> {
   await chrome.storage.local.set({ [key]: { result, timestamp: Date.now() } });
+  try {
+    const { completeWalletConnectRequestIfNeeded } = await import(
+      "./walletConnectHandlers"
+    );
+    await completeWalletConnectRequestIfNeeded(
+      key,
+      result as Record<string, unknown>,
+    );
+  } catch (error) {
+    console.warn("[WalletConnect] Result bridge failed", error);
+  }
 }
 
 // Active transaction AbortControllers for cancellation

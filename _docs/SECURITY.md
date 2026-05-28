@@ -230,6 +230,33 @@ These move pending tx requests in/out of a user-assembled batch and ship the bat
 
 `handleConfirmCrossDappBatch` follows the **session restoration pattern** for `getCachedApiKey()` (see "Handlers with Session Restoration" in `_docs/IMPLEMENTATION.md`), so it works under the "Never" auto-lock setting after a service worker restart.
 
+### WalletConnect Handlers
+
+WalletConnect lets dapps that do not discover WalletChan through ERC-6963 send requests through the WalletConnect relay instead of the injected provider. The relay itself is untrusted: every tx/signature request still becomes a normal pending request and must pass the same pinned-account confirmation flow as injected dapp requests.
+
+| Handler | Effect | Guard |
+| --- | --- | --- |
+| `walletConnectGetSessions` | Extension UI reads active WalletConnect session summaries. No secrets; includes dapp metadata, approved chains, and approved accounts. | `EXTENSION_ONLY_MESSAGES` |
+| `walletConnectPair` | Extension UI pairs with a `wc:` URI. The service worker auto-approves only for the current active signing account and visible chains. | `EXTENSION_ONLY_MESSAGES` |
+| `walletConnectDisconnectSession` | Extension UI disconnects an active WalletConnect session by topic. | `EXTENSION_ONLY_MESSAGES` |
+| `walletConnectSwitchChain` | Extension UI updates the shared WalletConnect active chain and emits `chainChanged` to active WC sessions that support that chain. | `EXTENSION_ONLY_MESSAGES` |
+
+WalletConnect event handlers live in `walletConnectHandlers.ts`, `walletConnectRequestHandlers.ts`, `walletConnectBatchRequestHandlers.ts`, and `walletConnectRpcRequestHandlers.ts`, not in `background.ts`. Session proposals are approved only when a non-impersonator account is active. Approved accounts are derived from the active account at pairing time and the visible chain set for that account type; Bankr accounts only expose Bankr-supported chains.
+
+For `eth_sendTransaction`, the WC request is converted to a `PendingTxRequest` with `accountId` / `accountAddress` / `accountType` pinned through `pinnedTxRequest()`. For `personal_sign` / typed-data signatures, the request is converted to a `PendingSignatureRequest` through `pinnedSignatureRequest()`. Confirm-time signing still routes through `txHandlers.ts`, so Bankr, private-key, and seed-phrase accounts keep their existing password/session-restoration behavior. View-only impersonator accounts cannot sign.
+
+For ERC-5792 `wallet_sendCalls`, the WC request reuses `batchTxHandlers.ts` and is converted to a `PendingBatchTxRequest` with the account authorized in the WalletConnect session passed explicitly into the batch handler. The batch bundle status is scoped to the WalletConnect peer metadata, so another WC peer cannot query or open a bundle it did not create.
+
+Security rules:
+
+- `tx.from` and signature signer params must match the account authorized in the WalletConnect session.
+- `wallet_sendCalls.params.from` and per-call `from` fields must match the account authorized in the WalletConnect session.
+- `eth_sign` and deprecated `eth_signTypedData` v1 are rejected, matching the injected-provider path.
+- `eth_signTypedData_v3` / `_v4` run the same EIP-712 validation and sanitization as injected requests.
+- Only a small allowlist of read-only RPC methods is proxied to the user's configured RPC URL. Raw transaction submission and debugging methods are not proxied.
+- `walletConnectPendingRequests` contains only request routing metadata. It is consumed when `writeResultToStorage()` writes `txResult:{id}` / `sigResult:{id}`, then the service worker responds to the dapp over WalletConnect.
+- `walletConnectChainId` contains only non-secret UI/session state. It is scoped to WalletConnect and does not overwrite injected-provider per-tab chain state.
+
 ### EIP-7702 Delegation Handlers (`delegationHandlers.ts`)
 
 These are UI-only Smart Account management messages and are gated by `EXTENSION_ONLY_MESSAGES`:
@@ -426,6 +453,8 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 | `accounts`                 | No               | Account metadata (addresses, names, types)              |
 | `pendingTxRequests`        | No               | Pending transaction queue                               |
 | `pendingSignatureRequests` | No               | Pending signature queue                                 |
+| `walletConnectPendingRequests` | No           | WalletConnect request routing metadata (`txId`/`sigId` → session topic/request id) |
+| `walletConnectChainId`    | No               | WalletConnect-specific active chain ID |
 | `crossDappBatch`           | No               | User-assembled cross-dapp batch (Bankr or PK/SP EIP-7702). Single batch, locked to first entry's pinned account, `from`, and `chainId`. The original pending entries are removed when added; the dapp promises stay open until ship/reject and are resolved via `txResult:{txId}` or `bundleStatuses` fan-out. |
 | `txResult:{txId}`          | No               | Transient tx result (written on confirm/reject, read+deleted by content script) |
 | `sigResult:{sigId}`        | No               | Transient sig result (written on confirm/reject, read+deleted by content script) |
@@ -582,6 +611,7 @@ Quick reference for which files to examine based on what area of security you're
 - `inject.ts` - Content script bridge (message whitelist)
 - `impersonator.ts` - Inpage provider (what the webpage can call)
 - `background.ts` - Message router (what handlers exist)
+- `walletConnectHandlers.ts` / `walletConnectRequestHandlers.ts` / `walletConnectBatchRequestHandlers.ts` / `walletConnectRpcRequestHandlers.ts` - WalletConnect relay session approval and request intake
 
 ### Transaction security
 

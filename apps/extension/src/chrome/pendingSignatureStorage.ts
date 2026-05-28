@@ -34,6 +34,14 @@ export interface PendingSignatureRequest {
   frameId?: number;
   senderOrigin?: string;
   requestChainId?: number;
+  walletConnect?: {
+    topic: string;
+    requestId: number;
+    method: string;
+    peerName: string;
+    peerUrl?: string;
+    peerIcon?: string | null;
+  };
 }
 
 /**

@@ -161,6 +161,12 @@ apps/extension/src/
 │   ├── gasEstimation.ts     # Gas estimation + native token price
 │   ├── batchTxHandlers.ts   # ERC-5792 batch tx handlers + ERC-7821 encoding
 │   ├── erc5792Types.ts      # ERC-5792 type definitions
+│   ├── walletConnectHandlers.ts # WalletConnect init, sessions, result bridge
+│   ├── walletConnectRequestHandlers.ts # WalletConnect request router
+│   ├── walletConnectBatchRequestHandlers.ts # WalletConnect ERC-5792 adapters
+│   ├── walletConnectRpcRequestHandlers.ts # WalletConnect chain/RPC adapters
+│   ├── walletConnectChainState.ts # WalletConnect-specific active chain state
+│   ├── walletConnectStorage.ts # WalletConnect request routing/state storage
 │   ├── pendingBatchTxStorage.ts  # Pending batch request persistence
 │   ├── bundleStatusStorage.ts    # Bundle status for getCallsStatus
 │   ├── impersonator.ts      # Inpage provider (EIP-6963 + ERC-5792)

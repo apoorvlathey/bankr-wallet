@@ -1,7 +1,6 @@
 import {
   useState,
   useEffect,
-  useLayoutEffect,
   useCallback,
   useRef,
   lazy,
@@ -17,11 +16,6 @@ import {
   HStack,
   Box,
   Button,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  MenuDivider,
   Image,
   IconButton,
   VStack,
@@ -30,14 +24,10 @@ import {
   Link,
   Spinner,
   useDisclosure,
-  Input,
-  InputGroup,
-  InputLeftElement,
 } from "@chakra-ui/react";
 
 import {
   SettingsIcon,
-  ChevronDownIcon,
   CopyIcon,
   CheckIcon,
   ExternalLinkIcon,
@@ -45,11 +35,9 @@ import {
   WarningIcon,
   InfoIcon,
   ChatIcon,
-  AddIcon,
-  Search2Icon,
 } from "@chakra-ui/icons";
 
-import { useTheme, useStripTokens, useIconChipBg } from "@/theme";
+import { useTheme, useStripTokens } from "@/theme";
 
 // Sidepanel icon
 const SidePanelIcon = (props: any) => (
@@ -123,7 +111,7 @@ const CrossDappBatchConfirmation = lazy(
   () => import("@/components/CrossDappBatchConfirmation"),
 );
 const ChatView = lazy(() => import("@/components/Chat/ChatView"));
-const AccountSwitcher = lazy(() => import("@/components/AccountSwitcher"));
+const AccountNetworkControls = lazy(() => import("@/components/AccountNetworkControls"));
 const AddAccount = lazy(() => import("@/components/AddAccount"));
 const AccountSettings = lazy(
   () => import("@/components/AccountSettings"),
@@ -134,6 +122,7 @@ const QRCodeModal = lazy(() =>
 const TokenTransfer = lazy(() => import("@/components/TokenTransfer"));
 const SwapView = lazy(() => import("@/components/Swap/SwapView"));
 const MoreActionsView = lazy(() => import("@/components/MoreActionsView"));
+const WalletConnectView = lazy(() => import("@/components/WalletConnectView"));
 const WatchAssetConfirmation = lazy(() => import("@/components/WatchAssetConfirmation"));
 const AddChain = lazy(() => import("@/components/Settings/AddChain"));
 
@@ -156,13 +145,14 @@ if (typeof window !== "undefined") {
     void import("@/components/BatchTransactionConfirmation");
     void import("@/components/CrossDappBatchConfirmation");
     void import("@/components/Chat/ChatView");
-    void import("@/components/AccountSwitcher");
+    void import("@/components/AccountNetworkControls");
     void import("@/components/AddAccount");
     void import("@/components/AccountSettings");
     void import("@/components/QRCodeModal");
     void import("@/components/TokenTransfer");
     void import("@/components/Swap/SwapView");
     void import("@/components/MoreActionsView");
+    void import("@/components/WalletConnectView");
     void import("@/components/WatchAssetConfirmation");
     void import("@/components/Settings/AddChain");
   });
@@ -172,6 +162,7 @@ if (typeof window !== "undefined") {
 import UnlockScreen from "@/components/UnlockScreen";
 import { ScreenStack, type AppView } from "@/components/ScreenTransition";
 import PendingTxBanner from "@/components/PendingTxBanner";
+import WalletConnectBanner from "@/components/WalletConnectBanner";
 import PortfolioTabs from "@/components/PortfolioTabs";
 import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
 import { useNetworks } from "@/contexts/NetworksContext";
@@ -188,6 +179,7 @@ import { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
 import { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import type { Account, PasswordType } from "@/chrome/types";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
+import type { WalletConnectSessionSummary } from "@/types/walletConnect";
 import { TWITTER_URL, WALLETCHAN_ICON_URL, WALLETCHAN_OS_URL, WALLETCHAN_VAULT_DATA_API } from "@/constants/externalUrls";
 import {
   getDefaultChainName,
@@ -245,7 +237,6 @@ function App() {
   const isDarkTheme = themeId === "midnight";
   const stripTokens = useStripTokens();
   const addressPillTokens = useStripTokens("elevated");
-  const iconChipBg = useIconChipBg();
   const { networksInfo, reloadRequired, setReloadRequired } = useNetworks();
   const [view, setView] = useState<AppView>("main");
   const [isLoading, setIsLoading] = useState(true);
@@ -313,91 +304,6 @@ function App() {
   const [settingsAccount, setSettingsAccount] = useState<Account | null>(null);
   const selectedChain = getResolvedChainByName(chainName, networksInfo);
   const visibleChains = getVisibleChains(networksInfo, activeAccount?.type);
-  const [chainSearch, setChainSearch] = useState("");
-  const chainSearchInputRef = useRef<HTMLInputElement>(null);
-  const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
-  const [highlightedChainIndex, setHighlightedChainIndex] = useState(0);
-  const selectedChainItemRef = useRef<HTMLElement | null>(null);
-  const chainScrollRef = useRef<HTMLDivElement | null>(null);
-  const lastChainAutoScrollTopRef = useRef<number | null>(null);
-  const userScrolledChainMenuRef = useRef(false);
-  const normalizedChainSearch = chainSearch.trim().toLowerCase();
-  const filteredVisibleChains = normalizedChainSearch
-    ? visibleChains.filter(
-        (chain) =>
-          chain.name.toLowerCase().includes(normalizedChainSearch) ||
-          String(chain.chainId).includes(normalizedChainSearch),
-      )
-    : visibleChains;
-  useEffect(() => {
-    setHighlightedChainIndex(0);
-  }, [chainSearch, isChainMenuOpen]);
-
-  const scrollSelectedChainIntoView = useCallback(() => {
-    const node = selectedChainItemRef.current;
-    const parent = chainScrollRef.current;
-    if (!node || !parent || parent.clientHeight === 0) return;
-    if (userScrolledChainMenuRef.current) return;
-
-    if (
-      lastChainAutoScrollTopRef.current !== null &&
-      Math.abs(parent.scrollTop - lastChainAutoScrollTopRef.current) > 1
-    ) {
-      return;
-    }
-
-    const parentRect = parent.getBoundingClientRect();
-    const nodeRect = node.getBoundingClientRect();
-    if (parentRect.height === 0 || nodeRect.height === 0) return;
-
-    const relativeTop = nodeRect.top - parentRect.top + parent.scrollTop;
-    const maxScrollTop = Math.max(0, parent.scrollHeight - parent.clientHeight);
-    const target = Math.min(
-      maxScrollTop,
-      Math.max(0, relativeTop - (parent.clientHeight - node.offsetHeight) / 2),
-    );
-
-    parent.scrollTop = target;
-    lastChainAutoScrollTopRef.current = parent.scrollTop;
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!isChainMenuOpen || normalizedChainSearch) {
-      lastChainAutoScrollTopRef.current = null;
-      userScrolledChainMenuRef.current = false;
-      return;
-    }
-
-    let cancelled = false;
-    const rafIds: number[] = [];
-    const timeoutIds: number[] = [];
-    const run = () => {
-      if (!cancelled) scrollSelectedChainIntoView();
-    };
-    const queueFrame = (remaining: number) => {
-      const raf = requestAnimationFrame(() => {
-        run();
-        if (remaining > 1) queueFrame(remaining - 1);
-      });
-      rafIds.push(raf);
-    };
-
-    queueFrame(3);
-    timeoutIds.push(window.setTimeout(run, 80));
-    timeoutIds.push(window.setTimeout(run, 220));
-
-    return () => {
-      cancelled = true;
-      rafIds.forEach(cancelAnimationFrame);
-      timeoutIds.forEach(clearTimeout);
-    };
-  }, [
-    filteredVisibleChains.length,
-    isChainMenuOpen,
-    normalizedChainSearch,
-    scrollSelectedChainIntoView,
-    selectedChain?.chainId,
-  ]);
 
   const visibleRpcIssueChainIds = rpcIssueChainIds.filter(
     (chainId) => !dismissedRpcIssueChainIds.includes(chainId),
@@ -410,8 +316,6 @@ function App() {
       setReloadRequired(true);
     }
     setChainName(nextChainName);
-    setIsChainMenuOpen(false);
-    setChainSearch("");
   }, [chainName, setChainName, setReloadRequired]);
   const {
     isOpen: isQROpen,
@@ -426,9 +330,23 @@ function App() {
   >();
   const [swapInitialSellToken, setSwapInitialSellToken] = useState<PortfolioToken | undefined>();
   const [stakeApy, setStakeApy] = useState<number | null>(null);
+  const [walletConnectSessionCount, setWalletConnectSessionCount] = useState(0);
+  const [walletConnectChainId, setWalletConnectChainId] = useState<number | null>(null);
   const keepAlivePortRef = useRef<chrome.runtime.Port | null>(null);
   const reconnectingRef = useRef(false);
   const isPopupWindowRef = useRef(false);
+
+  const walletConnectStoredChain = walletConnectChainId
+    ? getResolvedChainById(walletConnectChainId, networksInfo)
+    : undefined;
+  const walletConnectSelectedChain =
+    walletConnectStoredChain &&
+    visibleChains.some((chain) => chain.chainId === walletConnectStoredChain.chainId)
+      ? walletConnectStoredChain
+      : selectedChain &&
+          visibleChains.some((chain) => chain.chainId === selectedChain.chainId)
+        ? selectedChain
+        : visibleChains[0];
 
   const currentTab = async () => {
     const [tab] = await chrome.tabs.query({
@@ -579,6 +497,43 @@ function App() {
       type: "getPendingAddChainRequests",
     });
     return requests || [];
+  };
+
+  const loadWalletConnectSessionCount = async () => {
+    const response = await sendMessageWithRetry<{
+      success: boolean;
+      sessions?: WalletConnectSessionSummary[];
+      activeChainId?: number | null;
+    }>({
+      type: "walletConnectGetSessions",
+    });
+    setWalletConnectSessionCount(
+      response?.success ? response.sessions?.length || 0 : 0,
+    );
+    if (response?.success && response.activeChainId) {
+      setWalletConnectChainId(response.activeChainId);
+    }
+    return response?.success ? response.sessions || [] : [];
+  };
+
+  const handleWalletConnectChainSelect = async (nextChainName: string) => {
+    const chain = getResolvedChainByName(nextChainName, networksInfo);
+    if (!chain) return;
+    setWalletConnectChainId(chain.chainId);
+    const response = await sendMessageWithRetry<{
+      success: boolean;
+      chainId?: number;
+      error?: string;
+    }>({
+      type: "walletConnectSwitchChain",
+      chainName: nextChainName,
+    });
+    if (response?.success && response.chainId) {
+      setWalletConnectChainId(response.chainId);
+    } else if (response?.error) {
+      console.warn("[WalletConnect] Failed to switch chain:", response.error);
+      await loadWalletConnectSessionCount();
+    }
   };
 
   const checkLockState = async (): Promise<boolean> => {
@@ -936,6 +891,7 @@ function App() {
       const watchAssetRequests = await loadPendingWatchAssetRequests();
       const addChainRequests = await loadPendingAddChainRequests();
       await loadCrossDappBatch();
+      await loadWalletConnectSessionCount();
 
       // Load accounts
       let { accounts: loadedAccounts, activeAccount: loadedActive } =
@@ -1087,6 +1043,9 @@ function App() {
         txRequest?: PendingTxRequest;
         sigRequest?: PendingSignatureRequest;
         batchRequest?: PendingBatchTxRequest;
+        sessions?: WalletConnectSessionSummary[];
+        activeChainId?: number | null;
+        chainId?: number;
       },
       _sender: chrome.runtime.MessageSender,
       sendResponse: (response?: any) => void,
@@ -1182,6 +1141,19 @@ function App() {
         loadAccounts(true);
         return;
       }
+      if (message.type === "walletConnectSessionsChanged") {
+        setWalletConnectSessionCount(message.sessions?.length || 0);
+        if (message.activeChainId) {
+          setWalletConnectChainId(message.activeChainId);
+        }
+        return;
+      }
+      if (message.type === "walletConnectChainChanged") {
+        if (message.chainId) {
+          setWalletConnectChainId(message.chainId);
+        }
+        return;
+      }
       // Return undefined for unrecognized messages — critical so this listener
       // doesn't intercept messages meant for the background service worker
       // (an async handler always returns a Promise/truthy, which Chrome treats
@@ -1222,6 +1194,12 @@ function App() {
       }
       // Sync pending requests when storage changes (e.g., confirmed/rejected from another context)
       if (areaName === "local") {
+        if (changes.walletConnectChainId) {
+          const nextChainId = Number(changes.walletConnectChainId.newValue);
+          setWalletConnectChainId(
+            Number.isInteger(nextChainId) && nextChainId > 0 ? nextChainId : null,
+          );
+        }
         if (changes.pendingTxRequests) {
           const updated: PendingTxRequest[] =
             changes.pendingTxRequests.newValue || [];
@@ -2359,6 +2337,40 @@ function App() {
               fromAddress={address}
               stakeApy={stakeApy}
               onBack={() => setView("main")}
+              onWalletConnect={() => setView("walletConnect")}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
+  if (view === "walletConnect") {
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <WalletConnectView
+              accounts={accounts}
+              activeAccount={activeAccount}
+              selectedChain={walletConnectSelectedChain}
+              visibleChains={visibleChains}
+              onBack={() => setView("more")}
+              onAccountSelect={handleAccountSwitch}
+              onAddAccount={() => setView("addAccount")}
+              onAccountSettings={(account) => {
+                setSettingsAccount(account);
+                setView("accountSettings");
+              }}
+              onChainSelect={handleWalletConnectChainSelect}
+              onAddChain={() => setView("settingsAddChain")}
             />
           </Suspense>
         </Box>
@@ -3316,6 +3328,11 @@ function App() {
               }}
             />
 
+            <WalletConnectBanner
+              sessionCount={walletConnectSessionCount}
+              onClick={() => setView("walletConnect")}
+            />
+
             {visibleRpcIssueChainIds.length > 0 && (
               <Box
                 bg={isDarkTheme ? "status.warning.bg" : "status.info.bg"}
@@ -3440,254 +3457,22 @@ function App() {
             )}
 
             {/* Account Switcher + Chain Selector Row */}
-            <HStack spacing={3} align="stretch">
-              {accounts.length > 0 && (
-                <Box flex={1} minW={0}>
-                  <Suspense fallback={null}>
-                    <AccountSwitcher
-                      accounts={accounts}
-                      activeAccount={activeAccount}
-                      onAccountSelect={handleAccountSwitch}
-                      onAddAccount={() => setView("addAccount")}
-                      onAccountSettings={(account) => {
-                        setSettingsAccount(account);
-                        setView("accountSettings");
-                      }}
-                    />
-                  </Suspense>
-                </Box>
-              )}
-
-              {/* Chain Selector */}
-              <Menu
-                isLazy
-                isOpen={isChainMenuOpen}
-                lazyBehavior="unmount"
-                initialFocusRef={chainSearchInputRef}
-                onOpen={() => {
-                  lastChainAutoScrollTopRef.current = null;
-                  userScrolledChainMenuRef.current = false;
-                  setIsChainMenuOpen(true);
-                  setHighlightedChainIndex(0);
+            <Suspense fallback={null}>
+              <AccountNetworkControls
+                accounts={accounts}
+                activeAccount={activeAccount}
+                selectedChain={selectedChain}
+                visibleChains={visibleChains}
+                onAccountSelect={handleAccountSwitch}
+                onAddAccount={() => setView("addAccount")}
+                onAccountSettings={(account) => {
+                  setSettingsAccount(account);
+                  setView("accountSettings");
                 }}
-                onClose={() => {
-                  lastChainAutoScrollTopRef.current = null;
-                  userScrolledChainMenuRef.current = false;
-                  setIsChainMenuOpen(false);
-                  setChainSearch("");
-                  setHighlightedChainIndex(0);
-                }}
-              >
-                <MenuButton
-                  as={Button}
-                  variant="ghost"
-                  bg="surface.raised"
-                  border="3px solid"
-                  borderColor="border.default"
-                  boxShadow="card"
-                  _hover={{
-                    transform: "translateY(-2px)",
-                    boxShadow: "cardHover",
-                  }}
-                  _active={{
-                    transform: "translate(2px, 2px)",
-                    boxShadow: "none",
-                  }}
-                  fontWeight="700"
-                  h="full"
-                  py={3}
-                  px={3}
-                  transition="all 0.2s ease-out"
-                  flexShrink={1}
-                  minW={0}
-                  maxW="40%"
-                  overflow="hidden"
-                  position="relative"
-                >
-                  <ChevronDownIcon
-                    position="absolute"
-                    bottom="8px"
-                    right="4px"
-                    boxSize="14px"
-                    color="text.secondary"
-                  />
-                  {selectedChain ? (
-                    <HStack spacing={1.5} minW={0} align="center" pr={3}>
-                      <ChainIcon
-                        chainId={selectedChain.chainId}
-                        chainName={selectedChain.name}
-                        size="18px"
-                        flexShrink={0}
-                        withChip
-                      />
-                      <Text fontSize="2xs" fontWeight="700" whiteSpace="normal" lineHeight="1.2" textAlign="left">
-                        {selectedChain.name}
-                      </Text>
-                    </HStack>
-                  ) : (
-                    <Text color="text.tertiary" fontSize="sm">
-                      Net
-                    </Text>
-                  )}
-                </MenuButton>
-                <MenuList
-                  bg="surface.raised"
-                  border="3px solid"
-                  borderColor="border.default"
-                  boxShadow="card"
-                  py={0}
-                  minW="160px"
-                  maxH="320px"
-                  overflow="hidden"
-                >
-                  <Box p={2} borderBottom="2px solid" borderColor="border.default">
-                    <InputGroup size="sm">
-                      <InputLeftElement pointerEvents="none">
-                        <Search2Icon color="text.tertiary" boxSize={3} />
-                      </InputLeftElement>
-                      <Input
-                        ref={chainSearchInputRef}
-                        value={chainSearch}
-                        onChange={(e) => setChainSearch(e.target.value)}
-                        placeholder="Search chains"
-                        fontWeight="600"
-                        pl={9}
-                        onKeyDown={(e) => {
-                          if (e.key === "ArrowDown") {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (filteredVisibleChains.length > 0) {
-                              setHighlightedChainIndex((prev) =>
-                                Math.min(prev + 1, filteredVisibleChains.length - 1),
-                              );
-                            }
-                            return;
-                          }
-                          if (e.key === "ArrowUp") {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (filteredVisibleChains.length > 0) {
-                              setHighlightedChainIndex((prev) => Math.max(prev - 1, 0));
-                            }
-                            return;
-                          }
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const highlighted = filteredVisibleChains[highlightedChainIndex];
-                            if (highlighted) {
-                              handleHomepageChainSelect(highlighted.name);
-                            }
-                            return;
-                          }
-                          e.stopPropagation();
-                        }}
-                      />
-                    </InputGroup>
-                  </Box>
-                  <Box
-                    ref={chainScrollRef}
-                    maxH={activeAccount?.type !== "bankr" ? "219px" : "268px"}
-                    overflowY="auto"
-                    onScroll={(event) => {
-                      const { scrollTop } = event.currentTarget;
-                      if (lastChainAutoScrollTopRef.current === null) {
-                        if (scrollTop > 0) userScrolledChainMenuRef.current = true;
-                        return;
-                      }
-                      if (Math.abs(scrollTop - lastChainAutoScrollTopRef.current) > 1) {
-                        userScrolledChainMenuRef.current = true;
-                      }
-                    }}
-                  >
-                    {filteredVisibleChains.map((_chain, i, currentChains) => (
-                          <MenuItem
-                            key={_chain.chainId}
-                            ref={
-                              _chain.chainId === selectedChain?.chainId
-                                ? (node: HTMLElement | null) => {
-                                    selectedChainItemRef.current = node;
-                                  }
-                                : undefined
-                            }
-                            bg={
-                              i === highlightedChainIndex ||
-                              _chain.chainId === selectedChain?.chainId
-                                ? "surface.raisedHover"
-                                : "surface.raised"
-                            }
-                            _hover={{ bg: "surface.raisedHover" }}
-                            borderBottom={
-                              i < currentChains.length - 1
-                                ? "2px solid"
-                                : "none"
-                            }
-                            borderColor="border.default"
-                            py={3}
-                            onMouseEnter={() => setHighlightedChainIndex(i)}
-                            onClick={() => handleHomepageChainSelect(_chain.name)}
-                          >
-                            <HStack spacing={2}>
-                              <Box
-                                bg={iconChipBg}
-                                border="2px solid"
-                                borderColor="border.default"
-                                borderRadius="md"
-                                p={0.5}
-                              >
-                                <ChainIcon
-                                  chainId={_chain.chainId}
-                                  chainName={_chain.name}
-                                  size="18px"
-                                />
-                              </Box>
-                              <Text color="text.primary" fontWeight="700">
-                                {_chain.name}
-                              </Text>
-                            </HStack>
-                          </MenuItem>
-                        ))}
-                    {filteredVisibleChains.length === 0 && (
-                      <Box px={3} py={3}>
-                        <Text fontSize="sm" fontWeight="700" color="text.secondary">
-                          No chains match "{chainSearch.trim()}".
-                        </Text>
-                      </Box>
-                    )}
-                  </Box>
-                  {/* Add Chain button — only for non-bankr accounts */}
-                  {activeAccount?.type !== "bankr" && (
-                    <>
-                      <MenuDivider borderColor="border.default" m={0} />
-                      <MenuItem
-                        bg="surface.raised"
-                        _hover={{ bg: "surface.raisedHover" }}
-                        py={3}
-                        onClick={() => setView("settingsAddChain")}
-                      >
-                        <HStack spacing={2}>
-                          <Box
-                            bg="border.default"
-                            p={0.5}
-                            display="flex"
-                            alignItems="center"
-                            justifyContent="center"
-                          >
-                            {/* Tiny add icon on a dark square — kept literal
-                                white in both themes; the dark `border.default`
-                                square provides plenty of contrast. */}
-                            <AddIcon color="white" boxSize="14px" p="2px" />
-                          </Box>
-                          <Text color="text.secondary" fontWeight="700" fontSize="sm">
-                            Add Chain
-                          </Text>
-                        </HStack>
-                      </MenuItem>
-                    </>
-                  )}
-                </MenuList>
-              </Menu>
-            </HStack>
+                onChainSelect={handleHomepageChainSelect}
+                onAddChain={() => setView("settingsAddChain")}
+              />
+            </Suspense>
 
             {/* Address Bar — compact utility row.
                 Uses the `elevated` strip variant so Bauhaus keeps its stark

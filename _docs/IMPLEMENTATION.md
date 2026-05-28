@@ -376,6 +376,14 @@ src/
 │   ├── chatStorage.ts       # Persistent storage for chat conversations
 │   ├── pendingTxStorage.ts  # Persistent storage for pending transactions
 │   ├── pendingSignatureStorage.ts # Persistent storage for pending signature requests
+│   ├── walletConnectHandlers.ts # WalletConnect init, session approval, UI messages
+│   ├── walletConnectRequestHandlers.ts # WalletConnect request intake → pending tx/signature queues
+│   ├── walletConnectBatchRequestHandlers.ts # WalletConnect ERC-5792 request adapters
+│   ├── walletConnectRpcRequestHandlers.ts # WalletConnect chain/RPC request adapters
+│   ├── walletConnectProtocol.ts # WalletConnect JSON-RPC response helpers
+│   ├── walletConnectHelpers.ts # WalletConnect session/method utility helpers
+│   ├── walletConnectChainState.ts # Shared WalletConnect active-chain state + chainChanged events
+│   ├── walletConnectStorage.ts # WalletConnect request-result routing metadata and active WC chain
 │   ├── txHistoryStorage.ts  # Persistent storage for completed transaction history
 │   ├── delegationHandlers.ts # EIP-7702 delegate management (getStatus / setCustom / removeCustom / probe / revoke)
 │   └── delegationStorage.ts # Per-account × per-chain custom delegate overrides
@@ -412,6 +420,8 @@ src/
 │   ├── AddAccount.tsx       # Add new account screen
 │   ├── UnlockScreen.tsx     # Wallet unlock (password entry)
 │   ├── PendingTxBanner.tsx  # Banner showing pending tx/signature count
+│   ├── WalletConnectBanner.tsx # Home banner for active WalletConnect sessions
+│   ├── WalletConnectView.tsx # Pair URI entry + connected dapp session list
 │   ├── PendingTxList.tsx    # List of pending transactions and signature requests
 │   ├── TxStatusList.tsx     # Recent transaction history display (clickable → TxDetailModal)
 │   ├── TxDetailModal.tsx    # Transaction detail modal (gas fees, function name, addresses)
@@ -698,6 +708,41 @@ Each transaction maintains its own storage-based result channel (`txResult:{txId
 - Content script's `chrome.storage.onChanged` listener picks up the result and forwards it to the inpage provider
 - Dapp receives the tx hash from `eth_sendTransaction`
 - Content script removes the `txResult:{txId}` key after reading
+
+## WalletConnect Bridge
+
+WalletConnect support is a parallel dapp transport for sites that do not list WalletChan through ERC-6963. It intentionally reuses the same pending request and confirmation machinery as the injected provider.
+
+**UX flow:**
+
+1. Popup → More → WalletConnect.
+2. User pastes a `wc:` URI from the dapp.
+3. Background `walletConnectPair` pairs through `@reown/walletkit`.
+4. The service worker auto-approves the session for the current active signing account and visible chains.
+5. Active sessions render on `WalletConnectView`. While any session exists, the home screen shows `WalletConnectBanner` below the pending-request banner.
+
+**Background modules:**
+
+- `walletConnectHandlers.ts` initializes WalletKit in the MV3 service worker, approves/rejects session proposals, exposes UI-only pair/list/disconnect handlers, and bridges final `txResult:*` / `sigResult:*` writes back to WalletConnect.
+- `walletConnectRequestHandlers.ts` routes `session_request` events. `eth_sendTransaction` becomes a pinned `PendingTxRequest`; `personal_sign` / typed-data methods become pinned `PendingSignatureRequest`s. The normal popup opens via `openExtensionPopup()`.
+- `walletConnectBatchRequestHandlers.ts` adapts ERC-5792 methods (`wallet_getCapabilities`, `wallet_sendCalls`, `wallet_getCallsStatus`, `wallet_showCallsStatus`) to the existing `batchTxHandlers.ts` implementation.
+- `walletConnectRpcRequestHandlers.ts` handles `wallet_switchEthereumChain`, `wallet_addEthereumChain`, and allowlisted read-only RPC forwarding.
+- `walletConnectProtocol.ts` centralizes WalletConnect JSON-RPC success/error responses; `walletConnectHelpers.ts` holds session/account/method helpers.
+- `walletConnectChainState.ts` maintains a WalletConnect-specific active chain (`walletConnectChainId`) separate from injected per-tab chain state. Explicit `wallet_switchEthereumChain` calls and inferred `args.params.chainId` changes from WC requests update this key and emit `chainChanged` to all active WC sessions that support the chain.
+- `walletConnectStorage.ts` stores `walletConnectPendingRequests`, a transient map from `txId`/`sigId` to `{ topic, requestId, method }` so `writeResultToStorage()` can answer the original WC request after the user confirms/rejects.
+
+**Environment:** WalletConnect uses `VITE_WALLETCONNECT_PROJECT_ID` (or `VITE_WC_PROJECT_ID`) when provided, and otherwise falls back to WalletChan's default public WalletConnect project ID.
+
+**Supported request behavior:**
+
+- `eth_sendTransaction` uses the same confirmation screens and Bankr/PK/Seed signing paths as injected dapp transactions.
+- ERC-5792 batching is supported over WalletConnect through `wallet_getCapabilities`, `wallet_sendCalls`, `wallet_getCallsStatus`, and `wallet_showCallsStatus`. `wallet_sendCalls` responds immediately with the bundle id; the dapp polls `wallet_getCallsStatus` just like the injected-provider route.
+- `personal_sign`, `eth_signTypedData_v3`, and `eth_signTypedData_v4` use the same signature confirmation screens. EIP-712 validation/sanitization is shared with the injected-provider path.
+- `eth_sign` and deprecated `eth_signTypedData` v1 are rejected.
+- `eth_accounts`, `eth_requestAccounts`, `eth_chainId`, `net_version`, `wallet_switchEthereumChain`, and a small read-only RPC allowlist are answered directly in the background.
+- WalletConnect chain selection is shared across all WC sessions, not per browser tab. Injected dapps continue to use their existing per-tab content-script chain state.
+
+**Security model:** WalletConnect is a transport only. Request account binding is still pinned at arrival (`accountId`, `accountAddress`, `accountType`), and confirm-time signing resolves the pinned account rather than the currently active account. View-only impersonator accounts cannot approve sessions or sign requests.
 
 ### Gas Estimation
 

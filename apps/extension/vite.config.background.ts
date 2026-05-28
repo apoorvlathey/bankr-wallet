@@ -1,12 +1,24 @@
 import { defineConfig } from "vite";
 import path from "path";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
+import tsconfigPaths from "vite-tsconfig-paths";
 import { sharedConfig, sharedBuildConfig, buildDir } from "./vite.config";
 
 const isFirefox = process.env.BROWSER === "firefox";
 
 export default defineConfig({
   ...sharedConfig,
-  plugins: [],
+  plugins: [
+    tsconfigPaths(),
+    nodePolyfills({
+      exclude: ["console"],
+      globals: {
+        Buffer: true,
+        global: true,
+        process: true,
+      },
+    }),
+  ],
   build: {
     ...sharedBuildConfig,
     outDir: `${buildDir}/static/js`,

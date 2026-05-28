@@ -22,6 +22,7 @@ import { getAllDelegatesForAccount } from "./delegationStorage";
 import { bumpGasForEip7702Auth } from "./gasEstimation";
 import { CHAIN_CONFIG } from "../constants/chainConfig";
 import { getActiveAccount, getAccountById } from "./accountStorage";
+import type { Account } from "./types";
 import {
   savePendingBatchTxRequest,
   removePendingBatchTxRequest,
@@ -218,8 +219,9 @@ const TX_EXPIRY_MS = 30 * 60 * 1000;
 export async function handleWalletGetCapabilities(
   address: string,
   chainIds?: `0x${string}`[],
+  accountOverride?: Account,
 ): Promise<Record<string, any>> {
-  const account = await getActiveAccount();
+  const account = accountOverride ?? await getActiveAccount();
 
   // Per ERC-5792, capabilities are scoped to the *connected* address. We have
   // a single active account at a time, so a dapp asking about any other
@@ -374,6 +376,7 @@ export function handleWalletSendCalls(
   senderOrigin?: string,
   tabId?: number,
   frameId?: number,
+  accountOverride?: Account,
 ): void {
   (async () => {
     // Validate version
@@ -392,7 +395,7 @@ export function handleWalletSendCalls(
     // user can SEE what the dapp tried to send (banner + disabled Confirm in
     // BatchTransactionConfirmation.tsx); confirm-time signing is still
     // defended in handleConfirmBatchTransaction + resolvePinnedAccount.
-    const account = await getActiveAccount();
+    const account = accountOverride ?? await getActiveAccount();
 
     const isBankrAccount = account?.type === "bankr";
     const isPKOrSP =

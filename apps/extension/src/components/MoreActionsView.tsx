@@ -9,7 +9,11 @@ import {
   Text,
   VStack,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, ExternalLinkIcon } from "@chakra-ui/icons";
+import {
+  ArrowBackIcon,
+  ChevronRightIcon,
+  ExternalLinkIcon,
+} from "@chakra-ui/icons";
 import { ThemedCard, useStripTokens, useTheme } from "@/theme";
 import {
   REVOKE_CASH_URL,
@@ -17,9 +21,11 @@ import {
   WALLETCHAN_STAKE_URL,
 } from "@/constants/externalUrls";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
+import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
 
 interface MoreActionsViewProps {
   onBack: () => void;
+  onWalletConnect: () => void;
   fromAddress: string;
   stakeApy: number | null;
 }
@@ -31,6 +37,7 @@ interface MoreAction {
   iconBg: string;
   iconColor: string;
   badge?: string;
+  external?: boolean;
   onClick?: () => void;
 }
 
@@ -165,6 +172,7 @@ function ActionRow({ action }: { action: MoreAction }) {
   const strip = useStripTokens();
   const { themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
+  const isExternal = action.external !== false;
 
   return (
     <ThemedCard
@@ -214,7 +222,11 @@ function ActionRow({ action }: { action: MoreAction }) {
           p={isDarkTheme ? 0 : 1}
           flexShrink={0}
         >
-          <ExternalLinkIcon boxSize={3} />
+          {isExternal ? (
+            <ExternalLinkIcon boxSize={3} />
+          ) : (
+            <ChevronRightIcon boxSize={4} />
+          )}
         </Box>
       </HStack>
     </ThemedCard>
@@ -223,6 +235,7 @@ function ActionRow({ action }: { action: MoreAction }) {
 
 export default function MoreActionsView({
   onBack,
+  onWalletConnect,
   fromAddress,
   stakeApy,
 }: MoreActionsViewProps) {
@@ -247,6 +260,15 @@ export default function MoreActionsView({
   ];
 
   const secondaryActions: MoreAction[] = [
+    {
+      title: "WalletConnect",
+      detail: "Connect dapps by URI",
+      icon: <WalletConnectLogoIcon />,
+      iconBg: "accent.secondary",
+      iconColor: "accentFg.secondary",
+      external: false,
+      onClick: onWalletConnect,
+    },
     {
       title: "Revoke Approvals",
       detail: "revoke.cash",

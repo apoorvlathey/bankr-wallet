@@ -23,6 +23,14 @@ export interface PendingTxRequest {
   frameId?: number;
   senderOrigin?: string;
   requestChainId?: number;
+  walletConnect?: {
+    topic: string;
+    requestId: number;
+    method: string;
+    peerName: string;
+    peerUrl?: string;
+    peerIcon?: string | null;
+  };
   // Split mode: this request is one slice of a wallet_sendCalls bundle the
   // user manually split into N sequential single-tx confirmations. The
   // confirmation UI uses these to (a) show "Step N of M", (b) gate the
