@@ -2153,8 +2153,10 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
               <ClearSigningView
                 kind="calldata"
                 chainId={tx.chainId}
+                from={tx.tx.from}
                 to={tx.tx.to}
                 calldata={tx.tx.data}
+                value={tx.tx.value}
               />
             ) : tx.clearSignedMeta ? (
               <ClearSignedSummaryCard meta={tx.clearSignedMeta} chainId={tx.chainId} />

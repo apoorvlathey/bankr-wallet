@@ -222,7 +222,7 @@ export async function handleGetClearSigningDescriptor(
   // Proxy fallback: when the queried address has no descriptor of its own,
   // try resolving it as a Safe / EIP-1967 / beacon proxy and look up the
   // implementation's descriptor instead. The deployment list gets extended
-  // to include the proxy so client-side verifyDeployment still passes; we
+  // to include the proxy so client-side context verification still passes; we
   // cache the *extended* descriptor under the proxy address so future
   // confirmations skip the RPC entirely.
   if (!fetched) {
@@ -261,7 +261,7 @@ export async function handleGetClearSigningDescriptor(
  * Clone the descriptor and append `(chainId, proxyAddress)` to the matching
  * deployment list (`context.contract.deployments` for calldata,
  * `context.eip712.deployments` for eip712). Lets the client's
- * `verifyDeployment` check pass against the proxy address even though the
+ * deployment/context check pass against the proxy address even though the
  * registry only knows about the implementation.
  */
 function extendDeployments(

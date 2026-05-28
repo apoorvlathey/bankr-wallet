@@ -46,12 +46,15 @@ import {
   encodeType,
   matchCalldataFormat,
   matchEip712Format,
-  verifyDeployment,
+  verifyDescriptorContext,
 } from "@/lib/clearSigning/matchDescriptor";
 import {
   applyFormat,
+  formatRuntimeGuardsPass,
+  resolveIntentText,
   type RenderedField,
   type RenderedValue,
+  type TokenMetadataHint,
 } from "@/lib/clearSigning/applyFormat";
 import { decodeCalldataForDescriptor } from "@/lib/clearSigning/decodeForDescriptor";
 import { resolveDescriptor } from "@/lib/clearSigning/resolver";
@@ -65,15 +68,19 @@ import type { DecodeRecursiveResult } from "@/lib/decoder/types";
 interface CalldataProps {
   kind: "calldata";
   chainId: number;
+  from?: string;
   to: string;
   calldata: string;
+  value?: string;
 }
 
 interface Eip712Props {
   kind: "eip712";
   chainId: number;
+  from?: string | null;
   verifyingContract: string;
   typedData: {
+    domain?: Record<string, unknown>;
     primaryType: string;
     types: Record<string, Array<{ name: string; type: string }>>;
     message: Record<string, unknown>;
@@ -141,7 +148,9 @@ export function ClearSigningView(props: ClearSigningViewProps) {
     kind === "eip712"
       ? `${props.typedData?.primaryType || ""}:${JSON.stringify(
           props.typedData?.types || {},
-        )}:${JSON.stringify(props.typedData?.message || {})}`
+        )}:${JSON.stringify(props.typedData?.message || {})}:${JSON.stringify(
+          props.typedData?.domain || {},
+        )}`
       : "";
 
   // Defer the descriptor fetch + ABI decode until the surrounding screen
@@ -192,7 +201,13 @@ export function ClearSigningView(props: ClearSigningViewProps) {
       let descriptor: Erc7730Descriptor | null = remoteDescriptor;
       let matched =
         descriptor &&
-        verifyDeployment(descriptor, kind, chainId, lookupAddress)
+        verifyDescriptorContext(
+          descriptor,
+          kind,
+          chainId,
+          lookupAddress,
+          kind === "eip712" ? props.typedData.domain : undefined,
+        )
           ? kind === "calldata"
             ? matchCalldataFormat(descriptor, props.calldata)
             : matchEip712Format(descriptor, props.typedData)
@@ -246,7 +261,29 @@ export function ClearSigningView(props: ClearSigningViewProps) {
       }
       console.log(`${tag} ✓ decoded data`, data);
 
-      const fields = applyFormat(matched.format, { data, chainId }, descriptor);
+      const envelope =
+        kind === "calldata"
+          ? {
+              chainId,
+              from: props.from,
+              to: props.to,
+              value: props.value ?? "0",
+            }
+          : {
+              chainId,
+              from: props.from ?? undefined,
+              to: props.verifyingContract,
+              value: "0",
+              domain: props.typedData.domain,
+            };
+      const renderInput = { data, chainId, envelope };
+      if (!formatRuntimeGuardsPass(matched.format, renderInput, descriptor)) {
+        console.log(`${tag} ✗ runtime field guards did not pass`);
+        setLoading(false);
+        onResolved?.(false);
+        return;
+      }
+      const fields = applyFormat(matched.format, renderInput, descriptor);
       if (fields.length === 0) {
         console.log(`${tag} ✗ applyFormat produced 0 fields`);
         setLoading(false);
@@ -258,7 +295,7 @@ export function ClearSigningView(props: ClearSigningViewProps) {
       setState({
         descriptor,
         fields,
-        intent: matched.format.intent || matched.format.$id || "",
+        intent: resolveIntentText(matched.format, renderInput, descriptor),
         ownerName: descriptor.metadata?.owner,
       });
       setLoading(false);
@@ -488,26 +525,61 @@ function RenderedValueView({ value, chainId }: { value: RenderedValue; chainId: 
           amountRaw={value.amountRaw}
           tokenAddress={value.tokenAddress}
           native={value.native}
-          chainId={chainId}
+          chainId={value.chainId ?? chainId}
+          thresholdRaw={value.thresholdRaw}
+          thresholdMessage={value.thresholdMessage}
+          metadataHint={value.tokenMetadata}
         />
       );
     case "amount":
-      return <TokenAmountInline amountRaw={value.amountRaw} native chainId={chainId} />;
+      return (
+        <TokenAmountInline
+          amountRaw={value.amountRaw}
+          native
+          chainId={value.chainId ?? chainId}
+        />
+      );
     case "date":
       return (
         <Text fontSize="xs" color="fg.primary" fontWeight="600">
           {formatTimestamp(value.timestamp)}
         </Text>
       );
+    case "duration":
+      return (
+        <Text fontSize="xs" color="fg.primary" fontWeight="600">
+          {formatDurationLabel(value.seconds)}
+        </Text>
+      );
     case "unit": {
-      const formatted = formatUnit(value.raw, value.decimals);
-      const base = value.base || "";
       return (
         <Text fontSize="xs" fontFamily="mono" color="chart.numeric" fontWeight="600">
-          {value.prefix ? `${base}${formatted}` : `${formatted}${base}`}
+          {value.text}
         </Text>
       );
     }
+    case "enum":
+      return (
+        <Text fontSize="xs" color="fg.primary" fontWeight="600" wordBreak="break-word">
+          {value.text}
+        </Text>
+      );
+    case "chainId": {
+      const entry = CHAIN_REGISTRY.find((c) => c.chainId === value.chainId);
+      return (
+        <Text fontSize="xs" color="fg.primary" fontWeight="600">
+          {entry?.name || value.text || value.chainId}
+        </Text>
+      );
+    }
+    case "tokenTicker":
+      return (
+        <TokenTickerInline
+          tokenAddress={value.tokenAddress}
+          chainId={value.chainId ?? chainId}
+          metadataHint={value.tokenMetadata}
+        />
+      );
     case "missing":
       return (
         <Text fontSize="xs" color="fg.muted">
@@ -607,21 +679,33 @@ function NestedCalldataCard({
   const canRecurse = depth < MAX_NESTED_DEPTH;
 
   if (!canRecurse) {
-    return <RawNestedCalldataFallback value={value} chainId={chainId} />;
+    return (
+      <RawNestedCalldataFallback
+        value={value}
+        chainId={value.chainId ?? chainId}
+      />
+    );
   }
 
   return (
     <>
       <ClearSigningView
         kind="calldata"
-        chainId={chainId}
+        chainId={value.chainId ?? chainId}
+        from={value.from}
         to={value.callee}
         calldata={value.data}
+        value={value.amount}
         depth={depth + 1}
         onResolved={setMatched}
         hideLoadingSkeleton
       />
-      {matched === false && <RawNestedCalldataFallback value={value} chainId={chainId} />}
+      {matched === false && (
+        <RawNestedCalldataFallback
+          value={value}
+          chainId={value.chainId ?? chainId}
+        />
+      )}
     </>
   );
 }
@@ -1096,18 +1180,29 @@ function AmountText({
   amountRaw,
   decimals,
   symbol,
+  thresholdRaw,
+  thresholdMessage,
 }: {
   amountRaw: string;
   decimals: number;
   symbol: string;
+  thresholdRaw?: string;
+  thresholdMessage?: string;
 }) {
   const unlimited = isUnlimitedAmount(amountRaw);
+  const thresholdHit =
+    thresholdRaw !== undefined &&
+    thresholdMessage &&
+    compareRawAmounts(amountRaw, thresholdRaw) >= 0;
+  const displayText = thresholdHit
+    ? thresholdMessage
+    : formatUnit(amountRaw, decimals);
   const text = (
     <Text fontSize="lg" color="fg.primary" fontWeight="700" lineHeight="1.1">
-      {formatUnit(amountRaw, decimals)}
+      {displayText}
     </Text>
   );
-  if (!unlimited) return text;
+  if (!unlimited && !thresholdHit) return text;
   return (
     <Tooltip
       label={`${formatUnitFull(amountRaw, decimals)} ${symbol}`}
@@ -1129,14 +1224,22 @@ function TokenAmountInline({
   tokenAddress,
   native,
   chainId,
+  thresholdRaw,
+  thresholdMessage,
+  metadataHint,
 }: {
   amountRaw: string;
   tokenAddress?: string;
   native?: boolean;
   chainId: number;
+  thresholdRaw?: string;
+  thresholdMessage?: string;
+  metadataHint?: TokenMetadataHint;
 }) {
   const initialInfo =
-    !native && tokenAddress
+    !native && metadataHint
+      ? toTokenInfo(metadataHint)
+      : !native && tokenAddress
       ? toTokenInfo(getCachedTokenMetadataSync(chainId, tokenAddress))
       : null;
   const [info, setInfo] = useState<TokenInfo | null>(() => initialInfo);
@@ -1149,7 +1252,7 @@ function TokenAmountInline({
 
   useEffect(() => {
     if (native || !tokenAddress) {
-      setInfo(null);
+      setInfo(metadataHint ? toTokenInfo(metadataHint) : null);
       return;
     }
     let cancelled = false;
@@ -1168,7 +1271,7 @@ function TokenAmountInline({
       setInfo(next);
     };
 
-    const cached = getCachedTokenMetadataSync(chainId, tokenAddress);
+    const cached = metadataHint ?? getCachedTokenMetadataSync(chainId, tokenAddress);
     if (cached !== undefined) applyMetadata(cached);
     else setInfo(null);
 
@@ -1176,7 +1279,7 @@ function TokenAmountInline({
     return () => {
       cancelled = true;
     };
-  }, [tokenAddress, chainId, native]);
+  }, [tokenAddress, chainId, native, metadataHint]);
 
   // USD price resolution — uses the same cached CoinGecko handlers that power
   // the portfolio (5-min storage cache), so when a token is already in the
@@ -1242,6 +1345,8 @@ function TokenAmountInline({
             amountRaw={amountRaw}
             decimals={decimals}
             symbol={symbol}
+            thresholdRaw={thresholdRaw}
+            thresholdMessage={thresholdMessage}
           />
           <TokenLogo
             nativeChainId={chainId}
@@ -1284,6 +1389,8 @@ function TokenAmountInline({
           amountRaw={amountRaw}
           decimals={info.decimals}
           symbol={info.symbol}
+          thresholdRaw={thresholdRaw}
+          thresholdMessage={thresholdMessage}
         />
         <TokenLogo
           logoUrl={info.logoUrl}
@@ -1304,12 +1411,67 @@ function TokenAmountInline({
   );
 }
 
+function TokenTickerInline({
+  tokenAddress,
+  chainId,
+  metadataHint,
+}: {
+  tokenAddress: string;
+  chainId: number;
+  metadataHint?: TokenMetadataHint;
+}) {
+  const initialInfo = metadataHint
+    ? toTokenInfo(metadataHint)
+    : toTokenInfo(getCachedTokenMetadataSync(chainId, tokenAddress));
+  const [info, setInfo] = useState<TokenInfo | null>(() => initialInfo);
+
+  useEffect(() => {
+    let cancelled = false;
+    const cached = metadataHint ?? getCachedTokenMetadataSync(chainId, tokenAddress);
+    setInfo(toTokenInfo(cached));
+    resolveTokenMetadataClient(chainId, tokenAddress).then((metadata) => {
+      if (!cancelled) setInfo(toTokenInfo(metadata));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tokenAddress, chainId, metadataHint]);
+
+  if (!info) {
+    return <AddressInline address={tokenAddress} chainId={chainId} />;
+  }
+
+  return (
+    <HStack spacing={1.5} justify="flex-end" align="center">
+      <TokenLogo
+        logoUrl={info.logoUrl}
+        symbol={info.symbol}
+        alt={info.symbol}
+        size="16px"
+      />
+      <Text fontSize="xs" color="fg.primary" fontWeight="700">
+        {info.symbol}
+      </Text>
+    </HStack>
+  );
+}
+
 function isUnlimitedAmount(raw: string): boolean {
   try {
     const big = BigInt(raw);
     return big === MAX_UINT256 || big === MAX_UINT160;
   } catch {
     return false;
+  }
+}
+
+function compareRawAmounts(a: string, b: string): number {
+  try {
+    const aa = BigInt(a);
+    const bb = BigInt(b);
+    return aa === bb ? 0 : aa > bb ? 1 : -1;
+  } catch {
+    return -1;
   }
 }
 
@@ -1358,6 +1520,17 @@ function formatUnitFull(raw: string, decimals: number): string {
   if (frac === 0n) return `${neg ? "-" : ""}${wholeStr}`;
   const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
   return `${neg ? "-" : ""}${wholeStr}.${fracStr}`;
+}
+
+function formatDurationLabel(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return String(seconds);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+    2,
+    "0",
+  )}:${String(secs).padStart(2, "0")}`;
 }
 
 const formatTimestamp = (ts: number): string =>

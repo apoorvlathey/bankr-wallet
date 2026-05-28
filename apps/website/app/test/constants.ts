@@ -1,4 +1,5 @@
 import type { Address } from "viem";
+import { BASE_USDC_ADDRESS } from "@walletchan/shared/contracts";
 
 export type TestChainConfig = {
   chainId: number;
@@ -26,7 +27,7 @@ export const TEST_CHAINS: Record<number, TestChainConfig> = {
     explorer: "https://basescan.org",
     nativeSymbol: "ETH",
     usdc: {
-      address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      address: BASE_USDC_ADDRESS as Address,
       decimals: 6,
       symbol: "USDC",
     },
@@ -115,6 +116,18 @@ export const PERMIT_TYPES = {
     { name: "value", type: "uint256" },
     { name: "nonce", type: "uint256" },
     { name: "deadline", type: "uint256" },
+  ],
+} as const;
+
+/** ERC-3009 authorization type used by Base USDC and the x402 exact payment flow. */
+export const TRANSFER_WITH_AUTHORIZATION_TYPES = {
+  TransferWithAuthorization: [
+    { name: "from", type: "address" },
+    { name: "to", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "validAfter", type: "uint256" },
+    { name: "validBefore", type: "uint256" },
+    { name: "nonce", type: "bytes32" },
   ],
 } as const;
 

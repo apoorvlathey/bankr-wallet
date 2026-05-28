@@ -47,19 +47,33 @@ Lookup disambiguation:
 
 The registry uses **full canonical signatures** (e.g. `"exactInput((bytes path, address recipient, uint256 amountIn, uint256 amountOutMinimum) params)"`) as keys, not 4-byte selectors. The extension computes the selector from the signature at match time.
 
-## Supported field formats (v1)
+Before rendering a remote descriptor, the popup verifies the descriptor context:
+
+- **Calldata** descriptors must contain a deployment for the current `(chainId, to)` address. Proxy-resolved descriptors get the proxy appended to that deployment list by the background resolver.
+- **EIP-712** descriptors must bind to the current typed-data domain. `context.eip712.deployments` is checked against `domain.chainId` + `domain.verifyingContract`; `context.eip712.domain` values are exact-matched; `context.eip712.domainSeparator` is recomputed with viem and compared when present.
+
+After ABI/EIP-712 decode, runtime guards run before rendering. `required` paths
+must resolve. Fields with default/`always` visibility must resolve; `optional`
+fields may be omitted. `excluded` paths are filtered from display when present.
+`visible.mustMatch` fields validate hidden assertions and suppress clear signing
+if the assertion fails.
+
+## Supported field formats
 
 | Format         | Behaviour                                                                                  |
 | -------------- | ------------------------------------------------------------------------------------------ |
 | `raw`          | Render verbatim (address copy / numeric monospace based on type).                          |
-| `addressName`  | Resolve ENS / eth.sh / chain explorer label, fall back to truncated address + copy.        |
-| `tokenAmount`  | Look up token at `params.tokenPath`, format with decimals + symbol from the token list.    |
+| `addressName`  | Resolve ENS / eth.sh / chain explorer label, fall back to truncated address + copy. Supports `params.senderAddress` aliases to display `@.from`. |
+| `interoperableAddressName` | Best-effort ERC-7930/EVM address extraction, then the same address display path as `addressName`. |
+| `tokenAmount`  | Look up token from `params.token`, `params.tokenAddress` (legacy built-in alias), or `params.tokenPath`; supports `params.chainId`, `params.chainIdPath`, `params.threshold`, `params.message`, descriptor `metadata.token`, native sentinels, and descriptor maps. Missing token data renders the raw amount instead of guessing native currency. |
 | `amount`       | Native coin amount with chain symbol.                                                      |
-| `date`         | Convert timestamp / blockheight (per `params.encoding`) to local date string.              |
-| `unit`         | Apply `params.decimals` + `params.base` (`%`, `s`, …) + optional `params.prefix`.          |
-| `nftName`      | _Out of scope for v1, falls back to `raw`._                                                |
-| `duration`     | _Out of scope for v1, falls back to `raw`._                                                |
-| `enum`         | _Out of scope for v1, falls back to `raw`._                                                |
+| `date`         | Convert timestamp values to local date strings. `blockheight` currently falls back to raw because it needs an async chain lookup. |
+| `unit`         | Apply `params.decimals` + `params.base` (`%`, `s`, …); `params.prefix` uses SI prefixes (`k`, `M`, …). |
+| `duration`     | Format a seconds value as `HH:MM:ss`.                                                     |
+| `enum`         | Resolve enum maps from inline params or `$ref` descriptor references.                      |
+| `chainId`      | Show the known chain name when available, otherwise the numeric chain ID.                  |
+| `tokenTicker`  | Resolve an ERC-20 ticker/logo from a token address and optional chain ID.                  |
+| `nftName`      | Partial support: renders collection + token ID when supplied; no NFT metadata fetch yet.   |
 | `calldata`     | Embedded inner call — recursively renders the inner contract's descriptor as a nested `ClearSigningView`. Falls back to a "no descriptor" card (callee + value + selector + truncated bytes) when the inner contract isn't in the registry. |
 
 Unknown / unsupported formats fall through to `raw`, which always renders something safe.
@@ -77,6 +91,27 @@ Params may also reference descriptor constants, such as
 `params.nativeCurrencyAddress: ["$.metadata.constants.addressAsEth"]`. The
 renderer resolves those constants and treats matching token addresses
 (`0xeeee…` / zero address sentinels) as native currency for `tokenAmount`.
+Descriptor maps (`{ "map": "$.metadata.maps.foo", "keyPath": "#.bar" }`) are
+resolved at render time after calldata / EIP-712 fields have been decoded.
+If a map reference cannot resolve for the current payload, the descriptor is
+treated as non-applicable and clear signing is suppressed.
+
+Fields can provide either `path` or literal `value`. Literal values render
+through the same formatter path as decoded values. `display.formats[*].intent`
+and `interpolatedIntent` are both supported; interpolation uses the matching
+field formatter where possible and falls back to raw text for unknown paths.
+
+Field and param paths resolve against two roots:
+
+- `#` / bare paths resolve against decoded calldata args or the EIP-712
+  `message` object.
+- `@` resolves against the transaction/signing envelope. For calldata, `@.to`
+  is the call target, `@.from` is the sender when available, and `@.value` is
+  the native value attached to the call. For EIP-712, `@.to` is
+  `domain.verifyingContract` and `@.from` is the signer address. This matters
+  for descriptors like Circle's `TransferWithAuthorization`, where
+  `params.tokenPath: "@.to"` means "format this amount in the verifying
+  contract token", not the message recipient.
 
 ## Nested calldata (`calldata` format)
 
@@ -84,9 +119,11 @@ Some contracts pass another contract's calldata as a parameter — Safe's `Batch
 
 - The value at `field.path` is interpreted as the embedded calldata bytes.
 - `params.callee` (literal) or `params.calleePath` (resolved against the same decoded args) tells the renderer the inner contract address.
+- `params.chainId` / `params.chainIdPath` can override the chain used for the nested descriptor lookup.
 - `params.amount` / `params.amountPath` is an optional native-value attached to the inner call. Renders as a native-coin row in the fallback card.
+- `params.spender` / `params.spenderPath` is threaded into the nested view as `@.from`, so inner descriptors can display the effective sender/spender correctly.
 - `params.selector` / `params.selectorPath` covers descriptors whose embedded bytes lack their own 4-byte function selector — the supplied selector is prepended to `data` before the nested view runs its signature match. Validates to exactly 4 bytes (8 hex chars); malformed values are ignored, leaving the data untouched.
-- When `field.path` iterates (contains `[]`, e.g. `calls.[].data`), the renderer **zips** path / calleePath / amountPath / selectorPath by index — each inner call gets paired with its own callee + value + (optional) selector.
+- When `field.path` iterates (contains `[]`, e.g. `calls.[].data`), the renderer **zips** path / calleePath / amountPath / spenderPath / selectorPath by index — each inner call gets paired with its own callee + sender + value + (optional) selector.
 - Each inner call renders as a full-width nested card with a numbered header (`1 / 3 — Transaction`) when there's more than one.
 - Recursion is depth-capped at `MAX_NESTED_DEPTH = 3` (Safe → Multicall → ERC-20 covers realistic stacks); anything deeper short-circuits to the raw fallback.
 - The recursive lookup re-enters `resolveDescriptor(chainId, inner-to)` and re-runs the full match → decode → render pipeline, so every clear-signing capability available at top level (address labels, token amounts, eth.sh, etc.) automatically works inside nested calls.
@@ -111,7 +148,7 @@ The registry indexes contracts by their *deployed* address. For directly-deploye
 
 EIP-1967 / beacon take priority over Safe slot 0 — slot 0 is the first declared storage variable on many non-Safe contracts (ERC-20s, LP pairs, etc.) and would otherwise yield a garbage "implementation" address. A `looksLikeRealAddress` heuristic on slot 0 (require ≥5 non-zero nibbles in the leading 20) further rejects values that look like packed booleans or small integers.
 
-When the resolver returns an implementation, the handler refetches the descriptor for `(chainId, impl)`, then `extendDeployments` appends `(chainId, proxy)` to the descriptor's deployment list before caching it under the proxy's cache key. This means client-side `verifyDeployment` keeps working untouched, and every subsequent confirmation on the same proxy address skips the RPC + the extra fetch entirely.
+When the resolver returns an implementation, the handler refetches the descriptor for `(chainId, impl)`, then `extendDeployments` appends `(chainId, proxy)` to the descriptor's deployment list before caching it under the proxy's cache key. This means client-side context verification keeps working untouched, and every subsequent confirmation on the same proxy address skips the RPC + the extra fetch entirely.
 
 Patterns NOT covered yet: ERC-1167 minimal proxies (bytecode pattern, would need `eth_getCode` + regex), EIP-2535 Diamond (per-selector facets, would need a `facetAddress(selector)` lookup per inner call). Add when a real registry entry needs them.
 
@@ -122,11 +159,12 @@ Paths inside `fields[].path` use dot notation, array indexing, and byte slicing:
 | Path syntax            | Meaning                                                          |
 | ---------------------- | ---------------------------------------------------------------- |
 | `params.amountIn`      | `params` field → `amountIn` field                                |
-| `path.[0]`             | First element of an array.                                       |
-| `path.[-1]`            | Last element of an array.                                        |
-| `details.[]`           | Iterate every element; subsequent `fields[]` apply per element.  |
-| `params.path.[0:20]`   | Slice the first 20 bytes of a `bytes` value (token-in address).  |
-| `params.path.[-20:]`   | Slice the last 20 bytes (token-out address).                     |
+| `path[0]` / `path.[0]` | First element of an array.                                       |
+| `path[-1]` / `path.[-1]` | Last element of an array.                                      |
+| `details[]` / `details.[]` | Iterate every element; subsequent `fields[]` apply per element. |
+| `recipients.length`  | Length of an array, useful in `interpolatedIntent`.             |
+| `params.path[0:20]` / `params.path.[0:20]` | Slice the first 20 bytes of a `bytes` value (token-in address). |
+| `params.path[-20:]` / `params.path.[-20:]` | Slice the last 20 bytes (token-out address). |
 
 Byte slicing also works on numeric ABI values. This is needed for aggregators
 such as 1inch that pack an address into the low 160 bits of a `uint256` and
@@ -146,7 +184,7 @@ Today's built-in selectors:
 
 Adding a new selector is two lines: add it to `BUILTIN_SELECTORS` and add a `case` in `getBuiltinCalldataDescriptor`. Inline summaries (below) and the batch CallCard's built-in expanded layout key off the same `isBuiltinCalldataSelector(call.data)` predicate, so they activate automatically.
 
-The synthesized `tokenAmount` field uses `params.tokenAddress` (hardcoded to the call target — the token IS the contract being called) so `applyFormat.ts` resolves symbol / decimals / logo / price exactly like an app-specific descriptor.
+The synthesized `tokenAmount` field uses `params.tokenAddress` (hardcoded to the call target — the token IS the contract being called). `applyFormat.ts` also supports the ERC-7730-native `params.token` spelling, so registry descriptors and WalletChan built-ins both resolve symbol / decimals / logo / price through the same path.
 
 ### MultiSend custom unpacking
 

@@ -8,11 +8,13 @@ import {
   MAIL_TYPED_DATA,
   PERMIT_TYPES,
   TEST_CHAINS,
+  TRANSFER_WITH_AUTHORIZATION_TYPES,
   USDC_PERMIT_DOMAIN,
 } from "../constants";
 import { TestButton } from "./TestButton";
 
 const PERMIT_SPENDER = "0x0000000000000000000000000000000000000001";
+const X402_PAY_TO = "0x0000000000000000000000000000000000000402";
 const SPOOFED_SIGNER = "0x000000000000000000000000000000000000dEaD";
 const OPENSEA_SIWE_MESSAGE = `opensea.io wants you to sign in with your Ethereum account:
 0xab7def16D63C49422Bd8692e118aB780Eb5410E6
@@ -24,6 +26,14 @@ Version: 1
 Chain ID: 8453
 Nonce: tarh0hle7nag2n3gmroja56br5
 Issued At: 2026-05-27T17:26:57.380Z`;
+
+function randomBytes32() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return `0x${Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("")}`;
+}
 
 export function SignatureSection() {
   const request = useEip1193();
@@ -141,6 +151,41 @@ export function SignatureSection() {
     });
   };
 
+  const signTransferWithAuthorization = () => {
+    const baseUsdc = TEST_CHAINS[8453]!.usdc!;
+    if (chainId !== 8453) throw new Error("Switch to Base to sign Base USDC");
+    const validAfter = Math.floor(Date.now() / 1000);
+    const validBefore = validAfter + 300;
+    return request({
+      method: "eth_signTypedData_v4",
+      params: [
+        address,
+        JSON.stringify({
+          domain: USDC_PERMIT_DOMAIN(8453, baseUsdc.address),
+          types: {
+            EIP712Domain: [
+              { name: "name", type: "string" },
+              { name: "version", type: "string" },
+              { name: "chainId", type: "uint256" },
+              { name: "verifyingContract", type: "address" },
+            ],
+            TransferWithAuthorization:
+              TRANSFER_WITH_AUTHORIZATION_TYPES.TransferWithAuthorization,
+          },
+          primaryType: "TransferWithAuthorization",
+          message: {
+            from: address,
+            to: X402_PAY_TO,
+            value: "5000000",
+            validAfter: validAfter.toString(),
+            validBefore: validBefore.toString(),
+            nonce: randomBytes32(),
+          },
+        }),
+      ],
+    });
+  };
+
   const signPermitWrongChain = () => {
     const mainnetUsdc = TEST_CHAINS[1]!.usdc!;
     const deadline = Math.floor(Date.now() / 1000) + 3600;
@@ -218,6 +263,12 @@ export function SignatureSection() {
         description="Realistic EIP-2612 Permit payload. Exercises domain + nonce + deadline UI."
         onRun={signPermit}
         isDisabled={!usdc}
+      />
+      <TestButton
+        label="eth_signTypedData_v4 — Base USDC transferWithAuthorization"
+        description="ERC-3009 authorization used by x402 exact payments. Signs a 5 USDC transfer authorization on Base."
+        onRun={signTransferWithAuthorization}
+        isDisabled={chainId !== 8453}
       />
       <TestButton
         label="eth_signTypedData_v4 — Permit (wrong chain)"

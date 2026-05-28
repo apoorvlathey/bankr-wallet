@@ -94,6 +94,7 @@ export function BatchClearSigningSummary({
             total={calls.length}
             to={call.to}
             data={call.data}
+            value={call.value}
             chainId={chainId}
           />
         );
@@ -107,12 +108,14 @@ function PerCallClearSigning({
   total,
   to,
   data,
+  value,
   chainId,
 }: {
   index: number;
   total: number;
   to: string;
   data: string;
+  value?: string;
   chainId: number;
 }) {
   const [matched, setMatched] = useState(false);
@@ -145,6 +148,7 @@ function PerCallClearSigning({
         chainId={chainId}
         to={to}
         calldata={data}
+        value={value}
         onResolved={setMatched}
         hideLoadingSkeleton
       />
@@ -567,6 +571,7 @@ function BuiltinExpandedContent({
             chainId={chainId}
             to={call.to}
             calldata={call.data}
+            value={call.value}
             hideLoadingSkeleton
           />
         </Box>

@@ -1,4 +1,4 @@
-import { toFunctionSelector } from "viem";
+import { getTypesForEIP712Domain, hashDomain, toFunctionSelector } from "viem";
 
 import type {
   Erc7730Descriptor,
@@ -73,15 +73,147 @@ export function verifyDeployment(
   chainId: number,
   address: string,
 ): boolean {
+  return verifyDescriptorContext(descriptor, kind, chainId, address);
+}
+
+export function verifyDescriptorContext(
+  descriptor: Erc7730Descriptor,
+  kind: DescriptorKind,
+  chainId: number,
+  address: string,
+  typedDataDomain?: Record<string, unknown>,
+): boolean {
+  if (kind === "eip712") {
+    if (!verifyEip712DomainBinding(descriptor, typedDataDomain)) return false;
+    const domainChainId = normalizeChainId(typedDataDomain?.chainId);
+    const domainAddress =
+      typeof typedDataDomain?.verifyingContract === "string"
+        ? typedDataDomain.verifyingContract
+        : undefined;
+    if (domainChainId !== null && domainChainId !== chainId) return false;
+    if (domainAddress && domainAddress.toLowerCase() !== address.toLowerCase()) {
+      return false;
+    }
+  }
+
   const deployments =
     kind === "calldata"
       ? descriptor.context?.contract?.deployments
       : descriptor.context?.eip712?.deployments;
-  if (!deployments?.length) return false;
+  if (!deployments?.length) {
+    // A calldata descriptor without an explicit deployment/factory cannot be
+    // safely bound to the target. EIP-712 descriptors may bind only through
+    // `domain` or `domainSeparator`, which verifyEip712DomainBinding handled.
+    return (
+      kind === "eip712" &&
+      hasStrongEip712DomainBinding(descriptor) &&
+      typeof typedDataDomain?.verifyingContract === "string" &&
+      normalizeChainId(typedDataDomain?.chainId) !== null
+    );
+  }
+
+  if (kind === "eip712") {
+    const domainChainId = normalizeChainId(typedDataDomain?.chainId);
+    const domainAddress =
+      typeof typedDataDomain?.verifyingContract === "string"
+        ? typedDataDomain.verifyingContract
+        : undefined;
+    if (domainChainId === null || !domainAddress) return false;
+    return deploymentMatches(deployments, domainChainId, domainAddress);
+  }
+
+  return deploymentMatches(deployments, chainId, address);
+}
+
+function deploymentMatches(
+  deployments: Array<{ chainId: number; address: string }>,
+  chainId: number,
+  address: string,
+): boolean {
   const want = address.toLowerCase();
   return deployments.some(
     (d) => d.chainId === chainId && d.address?.toLowerCase() === want,
   );
+}
+
+function hasStrongEip712DomainBinding(descriptor: Erc7730Descriptor): boolean {
+  const eip712 = descriptor.context?.eip712;
+  if (eip712?.domainSeparator) return true;
+  return !!(
+    eip712?.domain &&
+    Object.prototype.hasOwnProperty.call(eip712.domain, "chainId") &&
+    Object.prototype.hasOwnProperty.call(eip712.domain, "verifyingContract")
+  );
+}
+
+function verifyEip712DomainBinding(
+  descriptor: Erc7730Descriptor,
+  typedDataDomain: Record<string, unknown> | undefined,
+): boolean {
+  const eip712 = descriptor.context?.eip712;
+  if (!eip712) return false;
+
+  const expectedDomain = eip712.domain;
+  if (expectedDomain && Object.keys(expectedDomain).length > 0) {
+    if (!typedDataDomain) return false;
+    for (const [key, expected] of Object.entries(expectedDomain)) {
+      if (!domainValueMatches(expected, typedDataDomain[key])) return false;
+    }
+  }
+
+  if (eip712.domainSeparator) {
+    if (!typedDataDomain) return false;
+    try {
+      const domain = typedDataDomain as any;
+      const types = { EIP712Domain: getTypesForEIP712Domain({ domain }) };
+      const actual = hashDomain({ domain, types });
+      if (actual.toLowerCase() !== eip712.domainSeparator.toLowerCase()) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function domainValueMatches(expected: unknown, actual: unknown): boolean {
+  if (actual === undefined) return false;
+
+  if (typeof expected === "string" && typeof actual === "string") {
+    if (isAddressLike(expected) && isAddressLike(actual)) {
+      return expected.toLowerCase() === actual.toLowerCase();
+    }
+    return expected === actual;
+  }
+
+  const expectedChain = normalizeChainId(expected);
+  const actualChain = normalizeChainId(actual);
+  if (expectedChain !== null || actualChain !== null) {
+    return expectedChain !== null && actualChain !== null && expectedChain === actualChain;
+  }
+
+  return expected === actual;
+}
+
+function normalizeChainId(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? value : null;
+  }
+  if (typeof value === "bigint") {
+    if (value < 0n || value > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+    return Number(value);
+  }
+  if (typeof value === "string") {
+    if (/^\d+$/.test(value)) return Number(value);
+    if (/^0x[0-9a-fA-F]+$/.test(value)) return Number(BigInt(value));
+  }
+  return null;
+}
+
+function isAddressLike(value: string): boolean {
+  return /^0x[0-9a-fA-F]{40}$/.test(value);
 }
 
 /**

@@ -1209,8 +1209,10 @@ function TransactionConfirmation({
           <ClearSigningView
             kind="calldata"
             chainId={tx.chainId}
+            from={tx.from}
             to={tx.to!}
             calldata={tx.data!}
+            value={tx.value}
             onResolved={(matched) =>
               setClearSigningStatus(matched ? "matched" : "absent")
             }

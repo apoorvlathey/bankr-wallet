@@ -504,6 +504,7 @@ function SignatureRequestConfirmation({
           <ClearSigningView
             kind="eip712"
             chainId={signature.chainId}
+            from={signerAddress}
             verifyingContract={typedData.domain.verifyingContract}
             typedData={typedData}
             onResolved={(matched) =>
