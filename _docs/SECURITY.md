@@ -292,6 +292,57 @@ This helps developers identify malicious sites attempting attacks.
 
 ---
 
+## SIWE Signature Request Validation
+
+**Files**:
+
+- `apps/extension/src/lib/siwe/*`
+- `apps/extension/src/components/SiweMessageDisplay.tsx`
+- `apps/extension/src/components/SiweValidationIssues.tsx`
+- `apps/extension/src/chrome/txHandlers.ts`
+
+All `personal_sign` messages that match the EIP-4361 SIWE header are parsed and
+validated before signing. The popup shows a human-readable auth review, while
+`txHandlers.ts` repeats the same validation at confirm time for Bankr, private
+key, and seed phrase accounts.
+
+### Blocking Checks
+
+| Check | Purpose |
+| --- | --- |
+| Required SIWE fields and field order | Prevent malformed auth messages from being presented as valid logins |
+| Account address matches pinned signing account | Prevent signing a login for a different address |
+| SIWE chain ID matches connected chain ID | Prevent chain-confusion login messages |
+| SIWE domain matches the connected site origin | Prevent a site from requesting login to another domain |
+| Expiration / not-before validity | Prevent expired or not-yet-valid login messages |
+
+Warnings such as missing expiration, weak nonce, old issued-at time, insecure
+HTTP URI, or non-checksummed address remain visible in the UI but do not block
+signing unless they become validation errors.
+
+Users can bypass SIWE validation errors only from the extension UI by typing the
+exact phrase `I understand`. This sends `allowUnsafeSiwe` on the extension-only
+`confirmSignatureRequest` message and skips only the SIWE validation pass. The
+stored pending request, pinned account binding, request expiry, account type,
+and dapp-supplied signer parameter checks still run and are not bypassable by
+the SIWE override.
+
+### Validation Flow
+
+```
+SignatureRequestConfirmation → analyzeSiweMessage()
+  ├─ Display human-readable auth summary
+  ├─ Show validation issues
+  └─ Require "I understand" before signing through validation errors
+
+handleConfirmSignatureRequest*() → validateSiwePersonalSignRequest()
+  ├─ Re-parse raw personal_sign message
+  ├─ Bind to pinned account address, request origin, and request chain ID
+  └─ Reject signing on validation errors unless extension UI override is set
+```
+
+---
+
 ## Content Script Message Filtering
 
 ### Inpage-to-Background Messages (via inject.ts)

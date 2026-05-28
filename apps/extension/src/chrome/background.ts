@@ -2202,6 +2202,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           result = await handleConfirmSignatureRequestBankr(
             message.sigId,
             message.password,
+            message.allowUnsafeSiwe === true,
           );
         } else if (
           pinnedType === "privateKey" ||
@@ -2211,6 +2212,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             message.sigId,
             message.password,
             tabId,
+            message.allowUnsafeSiwe === true,
           );
         } else {
           result = {

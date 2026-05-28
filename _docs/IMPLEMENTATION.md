@@ -383,6 +383,8 @@ src/
 │   ├── chainRegistry.ts     # Single source of truth for all chain data
 │   ├── networks.ts          # Re-exports network constants from chainRegistry
 │   └── chainConfig.ts       # Re-exports chain UI config from chainRegistry
+├── lib/
+│   └── siwe/                # EIP-4361 parser + validation shared by UI and signing handlers
 ├── pages/
 │   ├── Onboarding.tsx       # Full-page onboarding wizard for first-time setup
 │   └── ApiKeySetup.tsx      # API key + wallet address configuration
@@ -415,7 +417,9 @@ src/
 │   ├── TxDetailModal.tsx    # Transaction detail modal (gas fees, function name, addresses)
 │   ├── GasEstimateDisplay.tsx # Collapsible gas fee display with editable params (PK/Seed)
 │   ├── TransactionConfirmation.tsx # In-popup tx confirmation with success animation
-│   ├── SignatureRequestConfirmation.tsx # Signature request display (confirm for PK, reject for Bankr)
+│   ├── SignatureRequestConfirmation.tsx # Signature request display for Bankr/PK/Seed signing
+│   ├── SiweMessageDisplay.tsx # Human-readable SIWE auth review + raw message disclosure
+│   ├── SiweValidationIssues.tsx # SIWE validation issue list
 │   ├── TokenHoldings.tsx    # Portfolio token list with USD values
 │   ├── TokenTransfer.tsx    # Token transfer form (recipient, amount, send)
 │   ├── SeedPhraseSetup.tsx  # Seed phrase generate/import flow (12-word grid)
@@ -806,6 +810,7 @@ The SignatureRequestConfirmation component shows:
 - Network badge
 - Method name (e.g., "Personal Sign", "Sign Typed Data v4")
 - Decoded message content (for personal_sign)
+- Human-readable SIWE auth review for EIP-4361 messages
 - Raw data with copy button
 
 **For Bankr API Accounts:**
@@ -817,6 +822,36 @@ The SignatureRequestConfirmation component shows:
 
 - Sign button (yellow): Signs the message locally
 - Reject button (white/secondary): Cancels the request
+
+### SIWE Validation and Display
+
+`personal_sign` messages that match EIP-4361 ("Sign-In With Ethereum") are parsed
+with `src/lib/siwe` and rendered by `SiweMessageDisplay` instead of the generic
+raw-message block.
+
+**Human-readable display:**
+
+- "Sign in to {domain}" summary with the SIWE statement
+- Site, account, chain, URI, issued/expiration times, request ID, nonce, and resources
+- Copy + explorer actions for the SIWE account address
+- Validation status and issue list
+- Raw SIWE message behind a collapsed disclosure
+
+**Validation performed:**
+
+1. EIP-4361 required structure and field ordering
+2. Domain, address, URI, version, chain ID, nonce, and RFC 3339 timestamps
+3. Expiration / not-before timing
+4. Message domain ↔ URI host consistency
+5. Connected site origin, connected chain, and signing account match
+
+Validation is run in the UI for user review and again in `txHandlers.ts` before
+signing for all signing-capable account types. If a SIWE message has validation
+errors, the Sign button stays disabled until the user types the exact phrase
+`I understand`. The popup then sends the extension-only `allowUnsafeSiwe`
+confirmation flag so the background handler can skip SIWE validation for that
+request. The dapp-supplied signer parameter must still match the pinned account;
+that check is separate from SIWE validation and is not bypassable.
 
 ### Combined Navigation
 

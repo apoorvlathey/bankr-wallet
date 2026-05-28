@@ -14,6 +14,16 @@ import { TestButton } from "./TestButton";
 
 const PERMIT_SPENDER = "0x0000000000000000000000000000000000000001";
 const SPOOFED_SIGNER = "0x000000000000000000000000000000000000dEaD";
+const OPENSEA_SIWE_MESSAGE = `opensea.io wants you to sign in with your Ethereum account:
+0xab7def16D63C49422Bd8692e118aB780Eb5410E6
+
+Click to sign in and accept the OpenSea Terms of Service (https://opensea.io/tos) and Privacy Policy (https://opensea.io/privacy).
+
+URI: https://opensea.io/profile
+Version: 1
+Chain ID: 8453
+Nonce: tarh0hle7nag2n3gmroja56br5
+Issued At: 2026-05-27T17:26:57.380Z`;
 
 export function SignatureSection() {
   const request = useEip1193();
@@ -49,6 +59,12 @@ export function SignatureSection() {
         toHex("Spoofed signer test — params[1] != active account"),
         SPOOFED_SIGNER,
       ],
+    });
+
+  const personalSignOpenSeaSiweMismatch = () =>
+    request({
+      method: "personal_sign",
+      params: [toHex(OPENSEA_SIWE_MESSAGE), address],
     });
 
   const ethSign = () =>
@@ -173,6 +189,12 @@ export function SignatureSection() {
         description='Sets params[1] to 0x...dEaD instead of the active account. WalletChan should reject with "Signer address does not match active account".'
         onRun={personalSignSpoofedSigner}
         variant="outline"
+      />
+      <TestButton
+        label="personal_sign (OpenSea SIWE mismatch)"
+        description="Literal OpenSea SIWE payload. WalletChan should open the decoded SIWE view and flag the site/account mismatch plus missing Expiration Time. RPC signer param uses the connected account so the request reaches the confirmation UI."
+        onRun={personalSignOpenSeaSiweMismatch}
+        isDisabled={chainId !== 8453}
       />
       <TestButton
         label="eth_sign (deprecated)"

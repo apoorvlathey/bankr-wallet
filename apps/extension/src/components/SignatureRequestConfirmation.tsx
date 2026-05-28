@@ -1,4 +1,4 @@
-import { useState, memo } from "react";
+import { useEffect, useState, memo } from "react";
 import {
   Box,
   VStack,
@@ -12,12 +12,15 @@ import {
   Spacer,
   Image,
   Spinner,
+  Input,
+  Collapse,
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { ArrowBackIcon, ChevronLeftIcon, ChevronRightIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "@chakra-ui/icons";
 import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import TypedDataDisplay from "@/components/TypedDataDisplay";
+import SiweMessageDisplay from "@/components/SiweMessageDisplay";
 import { Eip712DigestDisplay } from "@/components/DigestDisplay";
 import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
@@ -26,6 +29,7 @@ import ChainIcon from "@/components/ChainIcon";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
+import { analyzeSiweMessage } from "@/lib/siwe";
 import { useTheme, useStripTokens, useIconChipBg, useChainBadgeStyle } from "@/theme";
 
 interface SignatureRequestConfirmationProps {
@@ -268,6 +272,26 @@ function SignatureRequestConfirmation({
   );
   const { message, rawData, typedData } = formatSignatureData(signature.method, signature.params);
   const signerAddress = getSignerAddress(signature.method, signature.params);
+  const siweAnalysis =
+    signature.method === "personal_sign"
+      ? analyzeSiweMessage(message, {
+          origin,
+          signerAddress,
+          connectedChainId: signature.chainId,
+        })
+      : null;
+  const siweBlockingError = siweAnalysis?.errors[0]?.message;
+  const [siweOverrideText, setSiweOverrideText] = useState("");
+  const [siweOverrideOpen, setSiweOverrideOpen] = useState(false);
+  const siweOverrideOk =
+    siweOverrideText.trim().toLowerCase() === "i understand";
+  const siweOverrideRequired = !!siweBlockingError;
+
+  useEffect(() => {
+    setSiweOverrideText("");
+    setSiweOverrideOpen(false);
+  }, [sigRequest.id]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Tracks the in-flight reject for immediate spinner feedback during the
   // ~100–300 ms gap between the click and the parent navigating away.
@@ -312,6 +336,7 @@ function SignatureRequestConfirmation({
             sigId: sigRequest.id,
             password: "", // Use cached password
             tabId,
+            allowUnsafeSiwe: siweOverrideRequired && siweOverrideOk,
           },
           resolve
         );
@@ -487,6 +512,14 @@ function SignatureRequestConfirmation({
           />
         )}
 
+        {siweAnalysis && (
+          <SiweMessageDisplay
+            analysis={siweAnalysis}
+            connectedChainId={signature.chainId}
+            chainName={resolvedChain?.name ?? chainName}
+          />
+        )}
+
         {/* Request Info Card */}
         <Box
           bg="surface.raised"
@@ -646,9 +679,9 @@ function SignatureRequestConfirmation({
               defaultCollapsed={clearSigningStatus === "matched"}
               connectedChainId={signature.chainId}
             />
-          ) : (
+          ) : !siweAnalysis ? (
             <MessageDataDisplay message={message} rawData={rawData} />
-          ))}
+          ) : null)}
 
         {/* Pinned bottom section — `mt="auto"` keeps it anchored to the
             bottom when content is shorter than the viewport; `position:sticky`
@@ -687,6 +720,78 @@ function SignatureRequestConfirmation({
             </Box>
           )}
 
+          {siweOverrideRequired &&
+            (accountType === "privateKey" || accountType === "seedPhrase" || accountType === "bankr") && (
+              <Box
+                bg="status.warning.bg"
+                border={tokens.borders.thin}
+                borderColor="status.warning.border"
+                borderRadius="lg"
+                overflow="hidden"
+                mt={2}
+              >
+                <HStack
+                  as="button"
+                  type="button"
+                  w="full"
+                  p={3}
+                  justify="space-between"
+                  textAlign="left"
+                  onClick={() => setSiweOverrideOpen((open) => !open)}
+                  disabled={isSubmitting || isRejecting}
+                  _hover={{ bg: "status.warning.bg" }}
+                  _disabled={{ cursor: "not-allowed", opacity: 0.65 }}
+                  aria-expanded={siweOverrideOpen}
+                >
+                  <Text fontSize="sm" color="status.warning.fg" fontWeight="900">
+                    Continue Anyways?
+                  </Text>
+                  <ChevronDownIcon
+                    color="status.warning.fg"
+                    transform={
+                      siweOverrideOpen ? "rotate(180deg)" : "rotate(0deg)"
+                    }
+                    transition="transform 0.15s ease"
+                    flexShrink={0}
+                  />
+                </HStack>
+                <Collapse in={siweOverrideOpen} animateOpacity>
+                  <VStack
+                    spacing={2}
+                    align="stretch"
+                    px={3}
+                    pb={3}
+                    pt={0}
+                  >
+                    <Text
+                      fontSize="xs"
+                      color="status.warning.fg"
+                      fontWeight="800"
+                      lineHeight="short"
+                    >
+                      This SIWE message failed validation. Signing anyway may
+                      log you into the wrong site, chain, or account.
+                    </Text>
+                    <Text fontSize="2xs" color="status.warning.fg" fontWeight="700">
+                      Type{" "}
+                      <Text as="span" fontWeight="900">
+                        I understand
+                      </Text>{" "}
+                      to sign anyway.
+                    </Text>
+                    <Input
+                      placeholder="I understand"
+                      value={siweOverrideText}
+                      onChange={(e) => setSiweOverrideText(e.target.value)}
+                      isDisabled={isSubmitting || isRejecting}
+                      fontSize="sm"
+                      bg="surface.sunken"
+                    />
+                  </VStack>
+                </Collapse>
+              </Box>
+            )}
+
           {/* Action Buttons */}
           {(accountType === "privateKey" || accountType === "seedPhrase" || accountType === "bankr") ? (
             <HStack spacing={3}>
@@ -708,7 +813,8 @@ function SignatureRequestConfirmation({
                 onClick={handleConfirm}
                 isLoading={isSubmitting}
                 loadingText="Signing..."
-                isDisabled={isRejecting}
+                isDisabled={isRejecting || (siweOverrideRequired && !siweOverrideOk)}
+                title={siweBlockingError && !siweOverrideOk ? `SIWE validation failed: ${siweBlockingError}` : undefined}
               >
                 Sign
               </Button>

@@ -55,8 +55,10 @@ import {
   removePendingSignatureRequest,
   getPendingSignatureRequestById,
   SignatureParams,
+  PendingSignatureRequest,
 } from "./pendingSignatureStorage";
 import { pinnedTxRequest, pinnedSignatureRequest } from "./pinnedRequest";
+import { validateSiwePersonalSignRequest } from "@/lib/siwe";
 import {
   addTxToHistory,
   updateTxInHistory,
@@ -1422,14 +1424,33 @@ function extractSignerParam(
   return params?.[0];
 }
 
+function validateSiweSignatureForAccount(
+  pending: PendingSignatureRequest,
+  accountAddress: string,
+  allowUnsafeSiwe = false,
+): string | null {
+  if (allowUnsafeSiwe) return null;
+
+  const result = validateSiwePersonalSignRequest(
+    pending.signature.method,
+    pending.signature.params,
+    {
+      origin: pending.origin,
+      signerAddress: accountAddress,
+      connectedChainId: pending.signature.chainId,
+    },
+  );
+  return result.ok ? null : result.error;
+}
+
 /**
  * Handles signature confirmation for PK accounts
  */
 export async function handleConfirmSignatureRequest(
   sigId: string,
   password: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   tabId?: number,
+  allowUnsafeSiwe = false,
 ): Promise<SignatureResult> {
   const pending = await getPendingSignatureRequestById(sigId);
   // SECURITY: re-check expiry at confirm time in case cleanup didn't run.
@@ -1458,6 +1479,15 @@ export async function handleConfirmSignatureRequest(
       success: false,
       error: "Signer address does not match active account",
     };
+  }
+
+  const siweError = validateSiweSignatureForAccount(
+    pending,
+    account.address,
+    allowUnsafeSiwe,
+  );
+  if (siweError) {
+    return { success: false, error: siweError };
   }
 
   if (account.type !== "privateKey" && account.type !== "seedPhrase") {
@@ -1549,6 +1579,7 @@ export async function handleConfirmSignatureRequest(
 export async function handleConfirmSignatureRequestBankr(
   sigId: string,
   password: string,
+  allowUnsafeSiwe = false,
 ): Promise<SignatureResult> {
   const pending = await getPendingSignatureRequestById(sigId);
   // SECURITY: re-check expiry at confirm time in case cleanup didn't run.
@@ -1582,6 +1613,15 @@ export async function handleConfirmSignatureRequestBankr(
       success: false,
       error: "Signer address does not match active account",
     };
+  }
+
+  const siweError = validateSiweSignatureForAccount(
+    pending,
+    pinnedAccount.address,
+    allowUnsafeSiwe,
+  );
+  if (siweError) {
+    return { success: false, error: siweError };
   }
 
   // Try to use cached API key first
