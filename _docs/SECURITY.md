@@ -188,6 +188,12 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 | `lockWallet`     | Clears all in-memory caches | None needed (user-initiated, non-destructive) |
 | `clearTxHistory` | Deletes transaction history | None (no secrets involved)                    |
 
+### Transaction History Enrichment Handlers
+
+| Handler | Effect | Guard |
+| --- | --- | --- |
+| `backfillAssetChanges` | Extension UI asks the service worker to re-fetch a confirmed tx receipt and populate missing `assetChanges` on an existing history entry. Does not expose secrets or create transactions. | `EXTENSION_ONLY_MESSAGES` |
+
 ### Authentication Handlers
 
 | Handler               | Notes                                                                    |

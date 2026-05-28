@@ -965,7 +965,7 @@ The same path covers ERC-5792 batched txs because the ERC-7821 wrapper is itself
 
 ### Post-confirm Asset Changes Extraction
 
-After a tx confirms successfully, `applyReceiptToHistory` (in `txReceiptPoller.ts`) fires-and-forgets `extractAndStoreAssetChanges` from `chrome/assetChangesExtractor.ts`. The extractor:
+After a tx confirms successfully, the receipt path fires-and-forgets `extractAndStoreAssetChanges` from `chrome/assetChangesExtractor.ts`. Most txs flow through `applyReceiptToHistory` (in `txReceiptPoller.ts`). Bankr direct-success paths (`txHandlers.ts`, `batchTxHandlers.ts`, and `crossDappBatchHandlers.ts`) use `receiptEnrichment.ts` to retry `eth_getTransactionReceipt` asynchronously, because Bankr can return `success` before the user's configured RPC has indexed the receipt. For ERC-5792 responses, an immediately available raw receipt is converted to the sanitized `BundleReceipt` shape before storing it for `wallet_getCallsStatus`, while the raw receipt is kept for internal extraction. `TxDetailModal` also sends the extension-only `backfillAssetChanges` message when a confirmed history entry has a `txHash` but no `assetChanges`, so old entries and service-worker-interrupted retries can repair themselves on open. The extractor:
 
 1. Decodes the receipt's `logs[]` for ERC-20 `Transfer(from, to, amount)` events (topic0 = `0xddf252ad…`, exactly 3 topics — ERC-721 logs have 4 and are skipped naturally) where the lowercased `from` OR `to` matches the sender. Internal pool routing is filtered out.
 2. Resolves `symbol/decimals/logoUrl` per unique token via `tokenMetadata.ts`, which shares swap-list, Bungee-list, watched-asset, and hardcoded-logo fallbacks.

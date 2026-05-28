@@ -1099,6 +1099,15 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
     ],
   );
 
+  useEffect(() => {
+    if (!isOpen) return;
+    if (tx.assetChanges || tx.status !== "success" || !tx.txHash) return;
+    chrome.runtime.sendMessage({
+      type: "backfillAssetChanges",
+      txId: tx.id,
+    });
+  }, [isOpen, tx.id, tx.status, tx.txHash, tx.assetChanges]);
+
   // USD prices keyed by `${chainId}-${address-lowercase}` for ERC-20s and
   // `${chainId}-native` for native deltas. Populated lazily from assetChanges
   // + destAssetChanges + bridge dest chain native so the Token Changes rows

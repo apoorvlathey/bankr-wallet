@@ -89,6 +89,7 @@ import {
   clearTxHistoryForAddresses,
   cleanupStaleProcessingTxs,
 } from "./txHistoryStorage";
+import { queueAssetChangesBackfill } from "./receiptEnrichment";
 import {
   getConversations,
   getConversation,
@@ -740,6 +741,7 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "setAutoLockTimeout",
   // Full token metadata may include watched/custom-token metadata.
   "resolveTokenMetadata",
+  "backfillAssetChanges",
   // EIP-7702 delegation management
   "getDelegationStatus",
   "probeDelegateContract",
@@ -2858,6 +2860,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "getTxHistory": {
       getTxHistory().then((history) => {
         sendResponse(history);
+      });
+      return true;
+    }
+
+    case "backfillAssetChanges": {
+      queueAssetChangesBackfill(String(message.txId || "")).then((result) => {
+        sendResponse(result);
       });
       return true;
     }

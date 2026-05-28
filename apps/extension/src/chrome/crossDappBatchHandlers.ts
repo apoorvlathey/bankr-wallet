@@ -70,7 +70,13 @@ import {
   getTxById,
 } from "./txHistoryStorage";
 import { startReceiptPolling } from "./txReceiptPoller";
-import { writeResultToStorage, showNotification, getRpcUrl } from "./txHandlers";
+import {
+  extractAssetChangesWhenReceiptAvailable,
+  fetchBundleReceipt,
+  fetchRawTransactionReceipt,
+  toBundleReceipt,
+} from "./receiptEnrichment";
+import { writeResultToStorage, showNotification } from "./txHandlers";
 import { encodeBatchCalls } from "./batchTxHandlers";
 import {
   BUNDLE_STATUS,
@@ -803,11 +809,21 @@ export async function handleConfirmCrossDappBatch(
     }
 
     if (ship.status === "success" && txHash) {
-      const receipt = await fetchBundleReceipt(txHash, batch.chainId);
+      const rawReceipt = await fetchRawTransactionReceipt(txHash, batch.chainId);
+      const receipt = rawReceipt ? toBundleReceipt(rawReceipt.receipt) : null;
       await updateTxInHistory(historyId, {
         status: "success",
         txHash,
         completedAt: Date.now(),
+      });
+      extractAssetChangesWhenReceiptAvailable({
+        txId: historyId,
+        txHash,
+        chainId: batch.chainId,
+        userAddress: batch.fromAddress,
+        receipt: rawReceipt?.receipt,
+        rpcUrl: rawReceipt?.rpcUrl,
+        logPrefix: "[cross-dapp]",
       });
       await fanOutWalletSendCalls({ kind: "confirmed", txHash, receipt });
 
@@ -885,45 +901,6 @@ async function trackCrossDappBatchCompletion(args: {
       });
     }
     return;
-  }
-}
-
-async function fetchBundleReceipt(
-  txHash: string,
-  chainId: number,
-): Promise<BundleReceipt | null> {
-  const rpcUrl = await getRpcUrl(chainId);
-  if (!rpcUrl) return null;
-
-  try {
-    const response = await fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "eth_getTransactionReceipt",
-        params: [txHash],
-      }),
-    });
-    const data = await response.json();
-    const receipt = data.result;
-    if (!receipt) return null;
-
-    return {
-      status: receipt.status,
-      blockHash: receipt.blockHash,
-      blockNumber: receipt.blockNumber,
-      gasUsed: receipt.gasUsed,
-      transactionHash: receipt.transactionHash,
-      logs: (receipt.logs || []).map((log: any) => ({
-        address: log.address,
-        topics: log.topics,
-        data: log.data,
-      })),
-    };
-  } catch {
-    return null;
   }
 }
 

@@ -53,6 +53,12 @@ import {
 } from "./txHistoryStorage";
 import { attachClearSignedMetaToHistory } from "./clearSignedMetaSnapshot";
 import { startReceiptPolling, applyReceiptToHistory } from "./txReceiptPoller";
+import {
+  extractAssetChangesWhenReceiptAvailable,
+  fetchBundleReceipt,
+  fetchRawTransactionReceipt,
+  toBundleReceipt,
+} from "./receiptEnrichment";
 import { openExtensionPopup, writeResultToStorage, showNotification, getRpcUrl } from "./txHandlers";
 import {
   signAndBroadcastTransaction,
@@ -747,8 +753,13 @@ async function processBatchTransactionInBackground(
         completedAt: Date.now(),
       });
     } else if (result.status === "success" && txHash) {
-      // Fetch receipt for bundle status
-      const receipt = await fetchReceipt(txHash, pending.chainId);
+      // Fetch receipt once: sanitized shape goes to wallet_getCallsStatus,
+      // raw shape feeds internal history enrichers such as asset changes.
+      const rawReceipt = await fetchRawTransactionReceipt(
+        txHash,
+        pending.chainId,
+      );
+      const receipt = rawReceipt ? toBundleReceipt(rawReceipt.receipt) : null;
 
       await updateBundleStatus(bundleId, {
         status: BUNDLE_STATUS.CONFIRMED,
@@ -761,6 +772,16 @@ async function processBatchTransactionInBackground(
         status: "success",
         txHash,
         completedAt: Date.now(),
+      });
+
+      extractAssetChangesWhenReceiptAvailable({
+        txId: bundleId,
+        txHash,
+        chainId: pending.chainId,
+        userAddress: pinnedAddress,
+        receipt: rawReceipt?.receipt,
+        rpcUrl: rawReceipt?.rpcUrl,
+        logPrefix: "[batch]",
       });
 
       // Fire-and-forget gas fee fetch
@@ -1299,7 +1320,7 @@ async function trackNonAtomicBundleCompletion(
     if (tx?.status === "success") {
       successCount++;
       if (r.txHash) {
-        const receipt = await fetchReceipt(r.txHash, pending.chainId);
+        const receipt = await fetchBundleReceipt(r.txHash, pending.chainId);
         if (receipt) receipts.push(receipt);
       }
     } else {
@@ -1386,7 +1407,7 @@ async function trackAtomicBundleCompletion(
     if (!tx || tx.status === "processing" || tx.status === "pending") continue;
 
     if (tx.status === "success") {
-      const receipt = await fetchReceipt(txHash, pending.chainId);
+      const receipt = await fetchBundleReceipt(txHash, pending.chainId);
       await updateBundleStatus(bundleId, {
         status: BUNDLE_STATUS.CONFIRMED,
         txHash,
@@ -1925,45 +1946,6 @@ export async function handleWalletShowCallsStatus(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-async function fetchReceipt(
-  txHash: string,
-  chainId: number,
-): Promise<BundleReceipt | null> {
-  const rpcUrl = await getRpcUrl(chainId);
-  if (!rpcUrl) return null;
-
-  try {
-    const response = await fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "eth_getTransactionReceipt",
-        params: [txHash],
-      }),
-    });
-    const data = await response.json();
-    const receipt = data.result;
-    if (!receipt) return null;
-
-    return {
-      status: receipt.status,
-      blockHash: receipt.blockHash,
-      blockNumber: receipt.blockNumber,
-      gasUsed: receipt.gasUsed,
-      transactionHash: receipt.transactionHash,
-      logs: (receipt.logs || []).map((log: any) => ({
-        address: log.address,
-        topics: log.topics,
-        data: log.data,
-      })),
-    };
-  } catch {
-    return null;
-  }
-}
 
 async function fetchAndStoreBatchGasData(
   bundleId: string,

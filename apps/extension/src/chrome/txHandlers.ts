@@ -83,6 +83,7 @@ import {
   isSidePanelSupported,
 } from "./sidepanelManager";
 import { startReceiptPolling, applyReceiptToHistory } from "./txReceiptPoller";
+import { extractAssetChangesWhenReceiptAvailable } from "./receiptEnrichment";
 import {
   getNextNonce,
   resetNonce,
@@ -1005,6 +1006,13 @@ async function processTransactionInBackground(
         status: "success",
         txHash,
         completedAt: Date.now(),
+      });
+      extractAssetChangesWhenReceiptAvailable({
+        txId,
+        txHash,
+        chainId: pending.tx.chainId,
+        userAddress: pending.tx.from,
+        logPrefix: "[bankr]",
       });
 
       // Fire-and-forget gas fee fetch
@@ -2223,6 +2231,13 @@ async function processSwapTxBankr(
         status: "success",
         txHash,
         completedAt: Date.now(),
+      });
+      extractAssetChangesWhenReceiptAvailable({
+        txId,
+        txHash,
+        chainId: pending.tx.chainId,
+        userAddress: pending.tx.from,
+        logPrefix: "[bankr-swap]",
       });
       fetchAndStoreGasData(txId, txHash, pending.tx.chainId);
 
