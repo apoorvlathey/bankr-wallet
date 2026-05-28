@@ -10,6 +10,10 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.14.0] - 2026-05-28
+
 ### Added
 
 - **SIWE review for signature requests.** Sign-In with Ethereum messages now render as a structured review with site, account, chain, URI, nonce, timing, resources, copy/explorer actions, and validation warnings. Blocking SIWE errors such as domain, signer, chain, expiry, or format mismatches require an explicit override before signing.
@@ -23,6 +27,7 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 - Bankr API batch and cross-dapp batch receipts now feed the shared receipt-enrichment path, restoring post-confirm asset-change backfills in Activity.
 - Chat API errors now extract the useful Bankr error message, wallet-locked chat responses render as error bubbles, and the Midnight chat input no longer gets an extra outer frame.
 - The Send screen and token dropdown now stay within the popup viewport, with corrected overflow behavior and theme-aware validation styling.
+
 
 ## [3.13.0] - 2026-05-27
 
@@ -478,7 +483,8 @@ This release is a full rebuild of the wallet — multiple account types, a real 
 - View address on Debank from the homepage.
 - Lock-wallet button and footer attribution.
 
-[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.13.0...HEAD
+[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.14.0...HEAD
+[3.14.0]: https://github.com/apoorvlathey/walletchan/compare/v3.13.0...v3.14.0
 [3.13.0]: https://github.com/apoorvlathey/walletchan/compare/v3.12.0...v3.13.0
 [3.12.0]: https://github.com/apoorvlathey/walletchan/compare/v3.11.0...v3.12.0
 [3.11.0]: https://github.com/apoorvlathey/walletchan/compare/v3.10.0...v3.11.0
