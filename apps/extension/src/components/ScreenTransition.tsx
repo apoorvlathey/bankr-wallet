@@ -38,6 +38,7 @@ export type AppView =
   | "addAccount"
   | "transfer"
   | "swap"
+  | "more"
   | "batchTxConfirm"
   | "crossDappBatchConfirm";
 
@@ -58,6 +59,7 @@ export const SCREEN_META: Record<AppView, ScreenMeta> = {
   accountSettings: { kind: "slide", depth: 1 },
   swap: { kind: "slide", depth: 1 },
   transfer: { kind: "slide", depth: 1 },
+  more: { kind: "slide", depth: 1 },
   chat: { kind: "slide", depth: 1 },
   addAccount: { kind: "slide", depth: 1 },
   pendingTxList: { kind: "slide", depth: 1 },

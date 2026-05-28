@@ -81,6 +81,16 @@ const SwapIcon = (props: any) => (
   </Icon>
 );
 
+// More icon (four app tiles)
+const MoreIcon = (props: any) => (
+  <Icon viewBox="0 0 24 24" {...props}>
+    <path
+      fill="currentColor"
+      d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z"
+    />
+  </Icon>
+);
+
 /**
  * Detects if we're running in Arc browser using CSS variable
  * Arc browser injects --arc-palette-title CSS variable
@@ -123,6 +133,7 @@ const QRCodeModal = lazy(() =>
 );
 const TokenTransfer = lazy(() => import("@/components/TokenTransfer"));
 const SwapView = lazy(() => import("@/components/Swap/SwapView"));
+const MoreActionsView = lazy(() => import("@/components/MoreActionsView"));
 const WatchAssetConfirmation = lazy(() => import("@/components/WatchAssetConfirmation"));
 const AddChain = lazy(() => import("@/components/Settings/AddChain"));
 
@@ -151,6 +162,7 @@ if (typeof window !== "undefined") {
     void import("@/components/QRCodeModal");
     void import("@/components/TokenTransfer");
     void import("@/components/Swap/SwapView");
+    void import("@/components/MoreActionsView");
     void import("@/components/WatchAssetConfirmation");
     void import("@/components/Settings/AddChain");
   });
@@ -176,7 +188,7 @@ import { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
 import { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import type { Account, PasswordType } from "@/chrome/types";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
-import { TWITTER_URL, WALLETCHAN_ICON_URL, WALLETCHAN_OS_URL, WALLETCHAN_STAKE_URL, WALLETCHAN_VAULT_DATA_API } from "@/constants/externalUrls";
+import { TWITTER_URL, WALLETCHAN_ICON_URL, WALLETCHAN_OS_URL, WALLETCHAN_VAULT_DATA_API } from "@/constants/externalUrls";
 import {
   getDefaultChainName,
   getResolvedChainById,
@@ -2330,6 +2342,30 @@ function App() {
     );
   }
 
+  // More actions view
+  if (view === "more") {
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <MoreActionsView
+              fromAddress={address}
+              stakeApy={stakeApy}
+              onBack={() => setView("main")}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
   // Pending tx list view
   if (view === "pendingTxList") {
     return (
@@ -3784,7 +3820,7 @@ function App() {
               </HStack>
             )}
 
-            {/* Swap + Send + Stake Buttons */}
+            {/* Swap + Send + More Buttons */}
             {address && activeAccount?.type !== "impersonator" && (
               <Box
                 display="grid"
@@ -3868,74 +3904,35 @@ function App() {
                 >
                   Send
                 </Button>
-                <Box minW={0} position="relative">
-                  {stakeApy !== null && (
-                    <Box
-                      position="absolute"
-                      top={isDarkTheme ? "-6px" : "-8px"}
-                      right={isDarkTheme ? "-6px" : "-4px"}
-                      bg="accent.primary"
-                      color="accentFg.primary"
-                      fontSize="8px"
-                      fontWeight="900"
-                      px={1.5}
-                      py="1px"
-                      border={isDarkTheme ? "1px solid" : "2px solid"}
-                      borderColor={
-                        isDarkTheme ? "accent.primary" : "border.default"
-                      }
-                      borderRadius={isDarkTheme ? "sm" : undefined}
-                      zIndex={1}
-                      lineHeight="1.2"
-                    >
-                      {stakeApy.toFixed(1)}% APY
-                    </Box>
-                  )}
-                  <Button
-                    w="100%"
-                    bg="surface.raised"
-                    color="text.primary"
-                    border="3px solid"
-                    borderColor="border.default"
-                    boxShadow="card"
-                    fontWeight="800"
-                    fontSize="xs"
-                    textTransform="uppercase"
-                    letterSpacing="normal"
-                    iconSpacing={1.5}
-                    px={1.5}
-                    minW={0}
-                    whiteSpace="nowrap"
-                    leftIcon={
-                      <Icon
-                        viewBox="0 0 24 24"
-                        boxSize={4}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M12 3v12m0 0l-4-4m4 4l4-4" />
-                        <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
-                      </Icon>
-                    }
-                    onClick={() => {
-                      chrome.tabs.create({ url: WALLETCHAN_STAKE_URL });
-                    }}
-                    _hover={{
-                      bg: "surface.raisedHover",
-                      transform: "translateY(-2px)",
-                      boxShadow: "cardHover",
-                    }}
-                    _active={{
-                      transform: "translate(2px, 2px)",
-                      boxShadow: "none",
-                    }}
-                  >
-                    Stake
-                  </Button>
-                </Box>
+                <Button
+                  w="100%"
+                  bg="surface.raised"
+                  color="text.primary"
+                  border="3px solid"
+                  borderColor="border.default"
+                  boxShadow="card"
+                  fontWeight="800"
+                  fontSize="xs"
+                  textTransform="uppercase"
+                  letterSpacing="normal"
+                  iconSpacing={1.5}
+                  px={1.5}
+                  minW={0}
+                  whiteSpace="nowrap"
+                  leftIcon={<MoreIcon boxSize={4} />}
+                  onClick={() => setView("more")}
+                  _hover={{
+                    bg: "surface.raisedHover",
+                    transform: "translateY(-2px)",
+                    boxShadow: "cardHover",
+                  }}
+                  _active={{
+                    transform: "translate(2px, 2px)",
+                    boxShadow: "none",
+                  }}
+                >
+                  More
+                </Button>
               </Box>
             )}
 

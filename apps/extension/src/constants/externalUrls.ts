@@ -41,6 +41,8 @@ export const WALLETCHAN_CLEAR_SIGNING_API = `${WALLETCHAN_API_BASE}/clearsigning
 export const WALLETCHAN_ICON_URL = "https://walletchan.com/images/walletchan-icon.png";
 export const WALLETCHAN_STAKE_URL = "https://stake.walletchan.com";
 export const WALLETCHAN_OS_URL = "https://os.walletchan.com";
+export const WALLETCHAN_MIGRATE_URL = "https://migrate.eth.sh";
+export const REVOKE_CASH_URL = "https://revoke.cash";
 
 // ---------------------------------------------------------------------------
 // Bankr API
