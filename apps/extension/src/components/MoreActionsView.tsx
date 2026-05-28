@@ -17,6 +17,7 @@ import {
 import { ThemedCard, useStripTokens, useTheme } from "@/theme";
 import {
   REVOKE_CASH_URL,
+  revokeCashAddressUrl,
   WALLETCHAN_MIGRATE_URL,
   WALLETCHAN_STAKE_URL,
 } from "@/constants/externalUrls";
@@ -275,7 +276,10 @@ export default function MoreActionsView({
       icon: <RevokeIcon />,
       iconBg: "accent.highlight",
       iconColor: "accentFg.highlight",
-      onClick: () => openExternal(REVOKE_CASH_URL),
+      onClick: () =>
+        openExternal(
+          fromAddress ? revokeCashAddressUrl(fromAddress) : REVOKE_CASH_URL,
+        ),
     },
   ];
 

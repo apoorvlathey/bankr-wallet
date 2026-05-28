@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -67,6 +67,7 @@ export default function WalletConnectView({
   const { tokens, themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
   const [uri, setUri] = useState("");
+  const uriInputRef = useRef<HTMLTextAreaElement>(null);
   const [sessions, setSessions] = useState<WalletConnectSessionSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -94,6 +95,14 @@ export default function WalletConnectView({
   useEffect(() => {
     void loadSessions();
   }, [loadSessions]);
+
+  useEffect(() => {
+    const animationFrame = requestAnimationFrame(() => {
+      uriInputRef.current?.focus({ preventScroll: true });
+    });
+
+    return () => cancelAnimationFrame(animationFrame);
+  }, []);
 
   useEffect(() => {
     const handleMessage = (message: {
@@ -236,6 +245,7 @@ export default function WalletConnectView({
               </Box>
             </HStack>
             <Textarea
+              ref={uriInputRef}
               value={uri}
               onChange={(event) => setUri(event.target.value)}
               onPaste={(event) => {

@@ -43,6 +43,8 @@ export const WALLETCHAN_STAKE_URL = "https://stake.walletchan.com";
 export const WALLETCHAN_OS_URL = "https://os.walletchan.com";
 export const WALLETCHAN_MIGRATE_URL = "https://migrate.eth.sh";
 export const REVOKE_CASH_URL = "https://revoke.cash";
+export const revokeCashAddressUrl = (address: string) =>
+  `${REVOKE_CASH_URL}/address/${encodeURIComponent(address)}`;
 
 // ---------------------------------------------------------------------------
 // Bankr API
