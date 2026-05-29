@@ -10,6 +10,10 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.15.0] - 2026-05-29
+
 ### Added
 
 - **WalletConnect bridge.** More -> WalletConnect now lets users pair WalletChan with WalletConnect dapps, manage active sessions, and route transactions, signatures, chain switches, read-only RPC calls, and ERC-5792 batch requests through the same confirmation flow used by injected dapps.
@@ -28,6 +32,7 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 - Private Key and Seed Phrase EIP-7702 atomic batches now keep native value in the encoded inner calls while signing the outer EOA self-call with `value: 0x0`, avoiding redundant native self-sends and incorrect gas/Tenderly values.
 - Batch gas estimates and insufficient-balance checks still include the reviewed inner native values after the EIP-7702 outer-value fix.
+
 
 ## [3.14.0] - 2026-05-28
 
@@ -500,7 +505,8 @@ This release is a full rebuild of the wallet — multiple account types, a real 
 - View address on Debank from the homepage.
 - Lock-wallet button and footer attribution.
 
-[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.14.0...HEAD
+[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.15.0...HEAD
+[3.15.0]: https://github.com/apoorvlathey/walletchan/compare/v3.14.0...v3.15.0
 [3.14.0]: https://github.com/apoorvlathey/walletchan/compare/v3.13.0...v3.14.0
 [3.13.0]: https://github.com/apoorvlathey/walletchan/compare/v3.12.0...v3.13.0
 [3.12.0]: https://github.com/apoorvlathey/walletchan/compare/v3.11.0...v3.12.0
