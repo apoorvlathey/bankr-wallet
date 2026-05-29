@@ -165,6 +165,7 @@ apps/extension/src/
 │   ├── walletConnectRequestHandlers.ts # WalletConnect request router
 │   ├── walletConnectBatchRequestHandlers.ts # WalletConnect ERC-5792 adapters
 │   ├── walletConnectRpcRequestHandlers.ts # WalletConnect chain/RPC adapters
+│   ├── walletConnectProposal.ts # WalletConnect proposal normalization + rejection details
 │   ├── walletConnectChainState.ts # WalletConnect-specific active chain state
 │   ├── walletConnectStorage.ts # WalletConnect request routing/state storage
 │   ├── pendingBatchTxStorage.ts  # Pending batch request persistence

@@ -384,6 +384,7 @@ src/
 │   ├── walletConnectRequestHandlers.ts # WalletConnect request intake → pending tx/signature queues
 │   ├── walletConnectBatchRequestHandlers.ts # WalletConnect ERC-5792 request adapters
 │   ├── walletConnectRpcRequestHandlers.ts # WalletConnect chain/RPC request adapters
+│   ├── walletConnectProposal.ts # Proposal namespace normalization + rejection details
 │   ├── walletConnectProtocol.ts # WalletConnect JSON-RPC response helpers
 │   ├── walletConnectHelpers.ts # WalletConnect session/method utility helpers
 │   ├── walletConnectChainState.ts # Shared WalletConnect active-chain state + chainChanged events
@@ -782,6 +783,7 @@ WalletConnect support is a parallel dapp transport for sites that do not list Wa
 **Background modules:**
 
 - `walletConnectHandlers.ts` initializes WalletKit in the MV3 service worker, approves/rejects session proposals, exposes UI-only pair/list/disconnect handlers, and bridges final `txResult:*` / `sigResult:*` writes back to WalletConnect.
+- `walletConnectProposal.ts` normalizes chainless `eip155` namespaces to the current active account's visible chains before `approveSession()`. This handles dapps that request EVM methods without an explicit `chains` array while preserving the existing Bankr-vs-local account chain restrictions. Proposals with no remaining approvable namespace are rejected instead of calling `approveSession()` with `{}`; the rejection is also broadcast to `WalletConnectView` as `walletConnectProposalRejected` so the UI can show the dapp logo, requested chain names/icons/IDs, and prefill the Add Chain screen when the chain is not configured. After a chain is added from that WalletConnect route, the popup returns to WalletConnect with a retry prompt because the original proposal was already rejected.
 - `walletConnectRequestHandlers.ts` routes `session_request` events. `eth_sendTransaction` becomes a pinned `PendingTxRequest`; `personal_sign` / typed-data methods become pinned `PendingSignatureRequest`s. The normal popup opens via `openExtensionPopup()`.
 - `walletConnectBatchRequestHandlers.ts` adapts ERC-5792 methods (`wallet_getCapabilities`, `wallet_sendCalls`, `wallet_getCallsStatus`, `wallet_showCallsStatus`) to the existing `batchTxHandlers.ts` implementation.
 - `walletConnectRpcRequestHandlers.ts` handles `wallet_switchEthereumChain`, `wallet_addEthereumChain`, and allowlisted read-only RPC forwarding.

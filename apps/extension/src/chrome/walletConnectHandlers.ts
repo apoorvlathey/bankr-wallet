@@ -3,6 +3,7 @@ import { WalletKit } from "@reown/walletkit";
 import { buildApprovedNamespaces } from "@walletconnect/utils";
 import { WALLETCHAN_ICON_URL } from "@/constants/externalUrls";
 import { getStoredNetworksInfo, getVisibleChains } from "@/lib/chains";
+import type { WalletConnectProposalRejection } from "@/types/walletConnect";
 import { getActiveAccount } from "./accountStorage";
 import {
   getWalletConnectPendingRequest,
@@ -14,6 +15,12 @@ import {
   isSigningAccount,
   summarizeWalletConnectSession,
 } from "./walletConnectHelpers";
+import {
+  buildProposalRejection,
+  hasApprovedNamespaces,
+  normalizeWalletConnectProposal,
+  type WalletConnectSupportedNamespaces,
+} from "./walletConnectProposal";
 import { handleWalletConnectSessionRequest } from "./walletConnectRequestHandlers";
 import {
   getWalletConnectActiveChainId,
@@ -48,6 +55,17 @@ async function broadcastSessionsChanged(): Promise<void> {
       type: "walletConnectSessionsChanged",
       sessions: getActiveSessionSummaries(),
       activeChainId,
+    })
+    .catch(() => {});
+}
+
+function broadcastProposalRejected(
+  rejection: WalletConnectProposalRejection,
+): void {
+  chrome.runtime
+    .sendMessage({
+      type: "walletConnectProposalRejected",
+      rejection,
     })
     .catch(() => {});
 }
@@ -185,31 +203,46 @@ async function handleSessionProposal(proposal: any): Promise<void> {
 
   try {
     const networksInfo = await getStoredNetworksInfo();
-    const chains = getVisibleChains(networksInfo, account.type).map(
+    const visibleChains = getVisibleChains(networksInfo, account.type);
+    const chains = visibleChains.map(
       (chain) => `eip155:${chain.chainId}`,
     );
     const accounts = chains.map((chain) => `${chain}:${account.address}`);
-    const namespaces = buildApprovedNamespaces({
-      proposal: proposal.params,
-      supportedNamespaces: {
-        eip155: {
-          chains,
-          accounts,
-          methods: WALLETCONNECT_SUPPORTED_METHODS,
-          events: WALLETCONNECT_SUPPORTED_EVENTS,
-        },
+    const supportedNamespaces: WalletConnectSupportedNamespaces = {
+      eip155: {
+        chains,
+        accounts,
+        methods: WALLETCONNECT_SUPPORTED_METHODS,
+        events: WALLETCONNECT_SUPPORTED_EVENTS,
       },
+    };
+    const namespaces = buildApprovedNamespaces({
+      proposal: normalizeWalletConnectProposal(
+        proposal.params,
+        supportedNamespaces,
+      ),
+      supportedNamespaces,
     });
+    if (!hasApprovedNamespaces(namespaces)) {
+      throw new Error(
+        "No supported WalletConnect chains or methods matched this dapp",
+      );
+    }
 
     await kit.approveSession({ id: proposal.id, namespaces });
     void broadcastSessionsChanged();
   } catch (error) {
+    const rejection = await buildProposalRejection(
+      proposal,
+      account.type,
+      error,
+    );
+    broadcastProposalRejected(rejection);
     await kit.rejectSession({
       id: proposal.id,
       reason: {
         code: 5000,
-        message:
-          error instanceof Error ? error.message : "Failed to approve session",
+        message: rejection.error,
       },
     });
   }

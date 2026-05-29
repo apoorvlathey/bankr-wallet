@@ -185,7 +185,11 @@ import { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
 import { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import type { Account, PasswordType } from "@/chrome/types";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
-import type { WalletConnectSessionSummary } from "@/types/walletConnect";
+import type {
+  WalletConnectAddChainContext,
+  WalletConnectRetryNotice,
+  WalletConnectSessionSummary,
+} from "@/types/walletConnect";
 import { TWITTER_URL, WALLETCHAN_ICON_URL, WALLETCHAN_OS_URL, WALLETCHAN_VAULT_DATA_API } from "@/constants/externalUrls";
 import {
   getDefaultChainName,
@@ -200,6 +204,11 @@ export type CombinedRequest =
   | { type: "sig"; request: PendingSignatureRequest }
   | { type: "batch"; request: PendingBatchTxRequest }
   | { type: "crossDappBatch"; request: CrossDappBatch };
+
+type AddChainReturnTarget = {
+  view: "walletConnect";
+  dappName?: string;
+};
 
 // Helper to combine and sort requests by timestamp.
 // The cross-dapp batch (when present) is always prepended as the FIRST element
@@ -297,6 +306,12 @@ function App() {
   } | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<"main" | "chains">("main");
   const [settingsInitialEditChainName, setSettingsInitialEditChainName] = useState<string | undefined>(undefined);
+  const [settingsAddChainInitialRequest, setSettingsAddChainInitialRequest] =
+    useState<PendingAddChainRequest | undefined>(undefined);
+  const [settingsAddChainReturnTarget, setSettingsAddChainReturnTarget] =
+    useState<AddChainReturnTarget | null>(null);
+  const [walletConnectRetryNotice, setWalletConnectRetryNotice] =
+    useState<WalletConnectRetryNotice | null>(null);
   const [, setOnboardingTabId] = useState<number | null>(null);
   const [startChatWithNew, setStartChatWithNew] = useState(false);
   const [returnToChatAfterUnlock, setReturnToChatAfterUnlock] = useState(false);
@@ -1818,11 +1833,51 @@ function App() {
   }, []);
 
   const handleChainSaved = useCallback((chain: { chainName: string; chainId: number }) => {
+    const returnTarget = settingsAddChainReturnTarget;
     setRpcIssueChainIds((prev) => prev.filter((id) => id !== chain.chainId));
     setDismissedRpcIssueChainIds((prev) => prev.filter((id) => id !== chain.chainId));
     setSettingsInitialEditChainName(undefined);
+    setSettingsAddChainInitialRequest(undefined);
+    setSettingsAddChainReturnTarget(null);
     setSettingsInitialTab("main");
     setPortfolioRefreshTrigger((prev) => prev + 1);
+    if (returnTarget?.view === "walletConnect") {
+      setWalletConnectRetryNotice({
+        dappName: returnTarget.dappName,
+        chainName: chain.chainName,
+        chainId: chain.chainId,
+      });
+      setView("walletConnect");
+    }
+  }, [settingsAddChainReturnTarget]);
+
+  const openSettingsAddChain = useCallback(
+    (request?: PendingAddChainRequest) => {
+      setSettingsAddChainInitialRequest(request);
+      setSettingsAddChainReturnTarget(null);
+      setView("settingsAddChain");
+    },
+    [],
+  );
+
+  const openWalletConnectAddChain = useCallback(
+    (
+      request?: PendingAddChainRequest,
+      context?: WalletConnectAddChainContext,
+    ) => {
+      setSettingsAddChainInitialRequest(request);
+      setSettingsAddChainReturnTarget({
+        view: "walletConnect",
+        dappName: context?.dappName,
+      });
+      setWalletConnectRetryNotice(null);
+      setView("settingsAddChain");
+    },
+    [],
+  );
+
+  const dismissWalletConnectRetryNotice = useCallback(() => {
+    setWalletConnectRetryNotice(null);
   }, []);
 
   const handleHiddenTokensChanged = useCallback(() => {
@@ -2040,6 +2095,8 @@ function App() {
                 close={async () => {
                   setSettingsInitialTab("main");
                   setSettingsInitialEditChainName(undefined);
+                  setSettingsAddChainInitialRequest(undefined);
+                  setSettingsAddChainReturnTarget(null);
                   // After settings, check if now have API key
                   const has = await hasEncryptedApiKey();
                   setHasApiKey(has);
@@ -2118,9 +2175,15 @@ function App() {
               <Settings
                 initialTab="chains"
                 initialChainsTab="add"
+                initialAddChainRequest={settingsAddChainInitialRequest}
                 initialEditChainName={undefined}
                 onChainSaved={handleChainSaved}
+                onInitialAddChainCancelled={() =>
+                  setSettingsAddChainReturnTarget(null)
+                }
                 close={async () => {
+                  setSettingsAddChainInitialRequest(undefined);
+                  setSettingsAddChainReturnTarget(null);
                   const has = await hasEncryptedApiKey();
                   setHasApiKey(has);
 
@@ -2429,7 +2492,10 @@ function App() {
                 setView("accountSettings");
               }}
               onChainSelect={handleWalletConnectChainSelect}
-              onAddChain={() => setView("settingsAddChain")}
+              onAddChain={() => openWalletConnectAddChain()}
+              onAddChainRequest={openWalletConnectAddChain}
+              retryNotice={walletConnectRetryNotice}
+              onDismissRetryNotice={dismissWalletConnectRetryNotice}
             />
           </Suspense>
         </Box>
@@ -2906,11 +2972,13 @@ function App() {
             <AddChain
               initialRequest={pendingAddChainRequest}
               mode="dapp"
-              back={() => {
-                chrome.runtime.sendMessage({
-                  type: "rejectAddChain",
-                  requestId: pendingAddChainRequest.id,
-                });
+              back={(options) => {
+                if (!options?.added) {
+                  chrome.runtime.sendMessage({
+                    type: "rejectAddChain",
+                    requestId: pendingAddChainRequest.id,
+                  });
+                }
                 setPendingAddChainRequest(null);
                 if (isInSidePanel || isFullscreenTab) {
                   setView("main");
@@ -3529,7 +3597,7 @@ function App() {
                   setView("accountSettings");
                 }}
                 onChainSelect={handleHomepageChainSelect}
-                onAddChain={() => setView("settingsAddChain")}
+                onAddChain={() => openSettingsAddChain()}
               />
             </Suspense>
 

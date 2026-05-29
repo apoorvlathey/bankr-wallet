@@ -31,6 +31,7 @@ import {
 import { useNetworks } from "@/contexts/NetworksContext";
 import { NetworksInfo } from "@/types";
 import type { AccountType } from "@/chrome/types";
+import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { getChainConfig } from "@/constants/chainConfig";
 import ChainIcon from "@/components/ChainIcon";
@@ -219,13 +220,17 @@ function Chain({
 function Chains({
   close,
   initialTab = "list",
+  initialAddChainRequest,
   initialEditChainName,
   onChainSaved,
+  onInitialAddChainCancelled,
 }: {
   close: () => void;
   initialTab?: "list" | "add";
+  initialAddChainRequest?: PendingAddChainRequest;
   initialEditChainName?: string;
   onChainSaved?: (chain: { chainName: string; chainId: number }) => void;
+  onInitialAddChainCancelled?: () => void;
 }) {
   const { networksInfo, setNetworksInfo } = useNetworks();
   const toast = useThemedToast();
@@ -246,9 +251,27 @@ function Chains({
 
   useEffect(() => {
     if (initialTab === "add") {
-      setTab(<AddChain back={() => setTab(undefined)} />);
+      setTab(
+        <AddChain
+          back={(options) => {
+            if (!options?.added) onInitialAddChainCancelled?.();
+            setTab(undefined);
+          }}
+          initialRequest={initialAddChainRequest}
+          onAdded={
+            onChainSaved
+              ? (chainName, chainId) => onChainSaved({ chainName, chainId })
+              : undefined
+          }
+        />,
+      );
     }
-  }, [initialTab]);
+  }, [
+    initialAddChainRequest,
+    initialTab,
+    onChainSaved,
+    onInitialAddChainCancelled,
+  ]);
 
   useEffect(() => {
     if (!pendingInitialEditChainName || !networksInfo?.[pendingInitialEditChainName]) return;

@@ -4,24 +4,27 @@ import {
   Button,
   HStack,
   IconButton,
-  Image,
   Text,
   Textarea,
   VStack,
 } from "@chakra-ui/react";
-import {
-  ArrowBackIcon,
-  CloseIcon,
-  LinkIcon,
-  RepeatIcon,
-} from "@chakra-ui/icons";
+import { ArrowBackIcon, LinkIcon } from "@chakra-ui/icons";
 import AccountNetworkControls from "@/components/AccountNetworkControls";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
+import {
+  WalletConnectProposalNotice,
+  WalletConnectRetryNoticeCard,
+} from "@/components/WalletConnectProposalNotice";
+import WalletConnectSessionsList from "@/components/WalletConnectSessionsList";
+import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import type { Account } from "@/chrome/types";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import type { ResolvedChain } from "@/lib/chains";
 import { ThemedCard, useTheme } from "@/theme";
 import type {
+  WalletConnectAddChainContext,
+  WalletConnectProposalRejection,
+  WalletConnectRetryNotice,
   WalletConnectSessionSummary,
   WalletConnectSessionsResponse,
 } from "@/types/walletConnect";
@@ -37,6 +40,12 @@ interface WalletConnectViewProps {
   onAccountSettings: (account: Account) => void;
   onChainSelect: (chainName: string) => void;
   onAddChain: () => void;
+  onAddChainRequest: (
+    request: PendingAddChainRequest,
+    context?: WalletConnectAddChainContext,
+  ) => void;
+  retryNotice?: WalletConnectRetryNotice | null;
+  onDismissRetryNotice: () => void;
 }
 
 function sendMessage<T>(message: { type: string; [key: string]: any }): Promise<T> {
@@ -62,6 +71,9 @@ export default function WalletConnectView({
   onAccountSettings,
   onChainSelect,
   onAddChain,
+  onAddChainRequest,
+  retryNotice,
+  onDismissRetryNotice,
 }: WalletConnectViewProps) {
   const toast = useThemedToast();
   const { tokens, themeId } = useTheme();
@@ -75,6 +87,8 @@ export default function WalletConnectView({
     null,
   );
   const [initError, setInitError] = useState<string | null>(null);
+  const [proposalRejection, setProposalRejection] =
+    useState<WalletConnectProposalRejection | null>(null);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -108,16 +122,29 @@ export default function WalletConnectView({
     const handleMessage = (message: {
       type: string;
       sessions?: WalletConnectSessionSummary[];
+      rejection?: WalletConnectProposalRejection;
     }) => {
       if (message.type === "walletConnectSessionsChanged") {
         setSessions(message.sessions || []);
         setInitError(null);
       }
+      if (
+        message.type === "walletConnectProposalRejected" &&
+        message.rejection
+      ) {
+        onDismissRetryNotice();
+        setProposalRejection(message.rejection);
+        toast({
+          title: "WalletConnect needs attention",
+          description: message.rejection.error,
+          status: "warning",
+        });
+      }
     };
 
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
-  }, []);
+  }, [onDismissRetryNotice, toast]);
 
   const canConnect = uri.trim().startsWith("wc:");
 
@@ -125,6 +152,8 @@ export default function WalletConnectView({
     const trimmedUri = nextUri.trim();
     if (!trimmedUri.startsWith("wc:") || isConnecting) return;
     setIsConnecting(true);
+    setProposalRejection(null);
+    onDismissRetryNotice();
     try {
       const response = await sendMessage<{ success: boolean; error?: string }>({
         type: "walletConnectPair",
@@ -149,7 +178,7 @@ export default function WalletConnectView({
     } finally {
       setIsConnecting(false);
     }
-  }, [isConnecting, loadSessions, toast, uri]);
+  }, [isConnecting, loadSessions, onDismissRetryNotice, toast, uri]);
 
   const disconnect = async (topic: string) => {
     setDisconnectingTopic(topic);
@@ -296,105 +325,32 @@ export default function WalletConnectView({
           </ThemedCard>
         )}
 
-        <HStack justify="space-between">
-          <Box minW={0}>
-            <Text
-              color="text.primary"
-              fontSize="sm"
-              fontWeight="900"
-              textTransform="uppercase"
-            >
-              Connected Dapps
-            </Text>
-            <Text color="text.secondary" fontSize="xs" fontWeight="600">
-              {sessions.length} active session{sessions.length === 1 ? "" : "s"}
-            </Text>
-          </Box>
-          <IconButton
-            aria-label="Refresh sessions"
-            icon={<RepeatIcon />}
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              setIsLoading(true);
-              void loadSessions();
-            }}
+        {retryNotice && (
+          <WalletConnectRetryNoticeCard
+            notice={retryNotice}
+            onDismiss={onDismissRetryNotice}
           />
-        </HStack>
+        )}
 
-        <VStack align="stretch" spacing={2}>
-          {isLoading ? (
-            <ThemedCard weight="thin">
-              <Text color="text.secondary" fontSize="xs" fontWeight="700">
-                Loading sessions...
-              </Text>
-            </ThemedCard>
-          ) : sessions.length === 0 ? (
-            <ThemedCard weight="thin">
-              <Text color="text.secondary" fontSize="xs" fontWeight="700">
-                No connected dapps.
-              </Text>
-            </ThemedCard>
-          ) : (
-            sessions.map((session) => (
-              <ThemedCard key={session.topic} weight="thin">
-                <HStack spacing={3} minW={0}>
-                  <Box
-                    w="36px"
-                    h="36px"
-                    bg="accent.secondary"
-                    color="accentFg.secondary"
-                    borderRadius={isDarkTheme ? "md" : undefined}
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    overflow="hidden"
-                    flexShrink={0}
-                  >
-                    {session.icons[0] ? (
-                      <Image
-                        src={session.icons[0]}
-                        alt=""
-                        w="100%"
-                        h="100%"
-                        objectFit="cover"
-                      />
-                    ) : (
-                      <WalletConnectLogoIcon />
-                    )}
-                  </Box>
-                  <Box minW={0} flex={1}>
-                    <Text
-                      color="text.primary"
-                      fontSize="sm"
-                      fontWeight="900"
-                      lineHeight="1.1"
-                      noOfLines={1}
-                    >
-                      {session.name}
-                    </Text>
-                    <Text
-                      color="text.secondary"
-                      fontSize="xs"
-                      fontWeight="600"
-                      noOfLines={1}
-                    >
-                      {session.url || "WalletConnect session"}
-                    </Text>
-                  </Box>
-                  <IconButton
-                    aria-label={`Disconnect ${session.name}`}
-                    icon={<CloseIcon />}
-                    size="sm"
-                    variant="ghost"
-                    isLoading={disconnectingTopic === session.topic}
-                    onClick={() => disconnect(session.topic)}
-                  />
-                </HStack>
-              </ThemedCard>
-            ))
-          )}
-        </VStack>
+        {proposalRejection && (
+          <WalletConnectProposalNotice
+            rejection={proposalRejection}
+            accountType={activeAccount?.type}
+            onDismiss={() => setProposalRejection(null)}
+            onAddChainRequest={onAddChainRequest}
+          />
+        )}
+
+        <WalletConnectSessionsList
+          sessions={sessions}
+          isLoading={isLoading}
+          disconnectingTopic={disconnectingTopic}
+          onDisconnect={disconnect}
+          onRefresh={() => {
+            setIsLoading(true);
+            void loadSessions();
+          }}
+        />
       </VStack>
     </Box>
   );

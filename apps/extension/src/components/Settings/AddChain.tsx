@@ -21,10 +21,10 @@ import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import { KNOWN_CHAINS } from "@/constants/knownChains.generated";
 
 interface AddChainProps {
-  back: () => void;
+  back: (options?: { added?: boolean }) => void;
   initialRequest?: PendingAddChainRequest;
   mode?: "settings" | "dapp";
-  onAdded?: (chainName: string) => void;
+  onAdded?: (chainName: string, chainId: number) => void;
 }
 
 /** Fetch chainId from an RPC endpoint via eth_chainId. */
@@ -242,8 +242,8 @@ function AddChain({
         };
       });
 
-      back();
-      onAdded?.(result.chainName || chainName);
+      onAdded?.(result.chainName || chainName, parseInt(chainId, 10));
+      back({ added: true });
       setIsBtnLoading(false);
       return;
     }
@@ -266,8 +266,8 @@ function AddChain({
       };
     });
 
-    back();
-    onAdded?.(chainName);
+    onAdded?.(chainName, parseInt(chainId, 10));
+    back({ added: true });
     setIsBtnLoading(false);
   };
 

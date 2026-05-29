@@ -22,6 +22,7 @@ import {
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { ArrowBackIcon, Search2Icon, SmallCloseIcon } from "@chakra-ui/icons";
+import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 
 import { clearChatHistory } from "@/chrome/chatStorage";
 import { TWITTER_URL } from "@/constants/externalUrls";
@@ -69,8 +70,10 @@ interface SettingsProps {
   onSessionExpired?: () => void;
   initialTab?: SettingsTab;
   initialChainsTab?: "list" | "add";
+  initialAddChainRequest?: PendingAddChainRequest;
   initialEditChainName?: string;
   onChainSaved?: (chain: { chainName: string; chainId: number }) => void;
+  onInitialAddChainCancelled?: () => void;
 }
 
 function Settings({
@@ -79,8 +82,10 @@ function Settings({
   onSessionExpired,
   initialTab = "main",
   initialChainsTab = "list",
+  initialAddChainRequest,
   initialEditChainName,
   onChainSaved,
+  onInitialAddChainCancelled,
 }: SettingsProps) {
   const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [isAgentPasswordEnabled, setIsAgentPasswordEnabled] = useState(false);
@@ -182,8 +187,10 @@ function Settings({
       <Chains
         close={() => setTab("main")}
         initialTab={initialChainsTab}
+        initialAddChainRequest={initialAddChainRequest}
         initialEditChainName={initialEditChainName}
         onChainSaved={onChainSaved}
+        onInitialAddChainCancelled={onInitialAddChainCancelled}
       />
     );
   } else if (tab === "changePassword") {
