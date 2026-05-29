@@ -77,7 +77,10 @@ import {
   toBundleReceipt,
 } from "./receiptEnrichment";
 import { writeResultToStorage, showNotification } from "./txHandlers";
-import { encodeBatchCalls } from "./batchTxHandlers";
+import {
+  encodeBatchCalls,
+  omitOuterValueForEip7702,
+} from "./batchTxHandlers";
 import {
   BUNDLE_STATUS,
   type ERC5792Call,
@@ -579,11 +582,15 @@ export async function handleConfirmCrossDappBatch(
     }));
 
     const encoded = encodeBatchCalls(calls, batch.fromAddress);
+    const outerBatchTx =
+      batch.accountType === "bankr"
+        ? encoded
+        : omitOuterValueForEip7702(encoded);
     const tx: TransactionParams = {
       from: batch.fromAddress,
-      to: encoded.to,
-      data: encoded.data,
-      value: encoded.value,
+      to: outerBatchTx.to,
+      data: outerBatchTx.data,
+      value: outerBatchTx.value,
       chainId: batch.chainId,
     };
 
@@ -749,7 +756,7 @@ export async function handleConfirmCrossDappBatch(
         accountAddress: batchAccount.address as `0x${string}`,
         accountType: batch.accountType,
         chainId: batch.chainId,
-        encoded,
+        encoded: outerBatchTx,
         password,
         precomputedGasEstimates,
       });

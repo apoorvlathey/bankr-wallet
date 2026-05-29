@@ -57,7 +57,10 @@ import {
   CALL_ACCENTS,
   CALL_ACCENT_FGS,
 } from "@/components/BatchCallsList";
-import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
+import {
+  encodeBatchCalls,
+  omitOuterValueForEip7702,
+} from "@/chrome/batchTxHandlers";
 import { isForceInclusionSupportedForAccount, FORCE_INCLUSION_CHAINS } from "@/constants/chainRegistry";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
@@ -297,6 +300,15 @@ function BatchTransactionConfirmation({
     origin === "WalletChan" || origin === "Cross-Dapp Batch";
 
   const fromAddress = params.from || accountAddress;
+  const batchPlan = useBatchPlan({
+    accountId: batchRequest.accountId ?? null,
+    accountType: accountType ?? null,
+    chainId: batchRequest.chainId,
+  });
+  const isLocalSigningAccount =
+    accountType === "privateKey" || accountType === "seedPhrase";
+  const isEip7702Atomic =
+    isLocalSigningAccount && batchPlan.strategy === "atomic-7702";
 
   // Encode batch calls for simulation and Tenderly. The encoder throws when
   // an inner call targets the user's own EOA with payload — catch so React
@@ -318,6 +330,13 @@ function BatchTransactionConfirmation({
       };
     }
   }, [calls, fromAddress]);
+  const outerEncodedBatch = useMemo(
+    () =>
+      isEip7702Atomic
+        ? omitOuterValueForEip7702(encodedBatch)
+        : encodedBatch,
+    [encodedBatch, isEip7702Atomic],
+  );
 
   // Synthetic PendingTxRequest for AssetChangesDisplay
   const syntheticTxRequest: PendingTxRequest = useMemo(
@@ -325,9 +344,9 @@ function BatchTransactionConfirmation({
       id: batchRequest.id,
       tx: {
         from: fromAddress,
-        to: encodedBatch.to,
-        data: encodedBatch.data,
-        value: encodedBatch.value,
+        to: outerEncodedBatch.to,
+        data: outerEncodedBatch.data,
+        value: outerEncodedBatch.value,
         chainId,
       },
       origin: batchRequest.origin,
@@ -335,7 +354,7 @@ function BatchTransactionConfirmation({
       chainName: batchRequest.chainName,
       timestamp: batchRequest.timestamp,
     }),
-    [batchRequest, encodedBatch, fromAddress, chainId],
+    [batchRequest, outerEncodedBatch, fromAddress, chainId],
   );
 
   const toggleCall = (index: number) => {
@@ -354,11 +373,6 @@ function BatchTransactionConfirmation({
     });
   };
 
-  const batchPlan = useBatchPlan({
-    accountId: batchRequest.accountId ?? null,
-    accountType: accountType ?? null,
-    chainId: batchRequest.chainId,
-  });
   // PK/SP defaults to non-atomic (auto-sequential broadcasts). Once we
   // resolve a 7702 delegate for the EOA+chain, flip to atomic — the batch
   // ships as a single type-4 tx that the EOA self-executes via ERC-7821.
@@ -366,8 +380,6 @@ function BatchTransactionConfirmation({
   const isNonAtomic =
     (accountType === "privateKey" || accountType === "seedPhrase") &&
     batchPlan.strategy !== "atomic-7702";
-  const isLocalSigningAccount =
-    accountType === "privateKey" || accountType === "seedPhrase";
 
   // Split mode: only meaningful for PK/Seed accounts. Cross-dapp batches
   // (`customConfirmHandler` present) and Bankr/impersonator accounts are
@@ -1381,9 +1393,9 @@ function BatchTransactionConfirmation({
           batchedTx={isNonAtomic ? undefined : {
             tx: {
               from: fromAddress,
-              to: encodedBatch.to,
-              data: encodedBatch.data,
-              value: encodedBatch.value,
+              to: outerEncodedBatch.to,
+              data: outerEncodedBatch.data,
+              value: outerEncodedBatch.value,
               chainId,
             },
             label: `Batch Transaction (${calls.length} calls)`,
@@ -1409,10 +1421,10 @@ function BatchTransactionConfirmation({
           const tenderlyUrl = (() => {
             const tenderlyParams = new URLSearchParams({
               from: fromAddress,
-              value: encodedBatch.value || "0",
-              rawFunctionInput: encodedBatch.data || "0x",
+              value: outerEncodedBatch.value || "0",
+              rawFunctionInput: outerEncodedBatch.data || "0x",
               network: String(chainId),
-              contractAddress: encodedBatch.to,
+              contractAddress: outerEncodedBatch.to,
             });
             return `https://dashboard.tenderly.co/simulator/new?${tenderlyParams}`;
           })();
@@ -1433,9 +1445,9 @@ function BatchTransactionConfirmation({
                     self-call signed by PK/SP atomic-7702 batches. Per-call
                     digests still live inside each CallCard. */}
                 {isAtomic7702 &&
-                  encodedBatch.data &&
-                  encodedBatch.data !== "0x" && (
-                    <CalldataDigestDisplay calldata={encodedBatch.data} />
+                  outerEncodedBatch.data &&
+                  outerEncodedBatch.data !== "0x" && (
+                    <CalldataDigestDisplay calldata={outerEncodedBatch.data} />
                   )}
 
                 {/*

@@ -28,6 +28,7 @@ import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
 import SmartAccountSetupBanner from "@/components/SmartAccountSetupBanner";
+import { omitOuterValueForEip7702 } from "@/chrome/batchTxHandlers";
 import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
 import { formatTokenAmount, formatTokenAmountFromBase } from "@/lib/tokenFormatUtils";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
@@ -199,14 +200,21 @@ function SwapConfirmation({
     tx: { ...entry.tx, from: fromAddress },
     label: entry.origin,
   }));
+  const isEip7702Batched =
+    isBatched &&
+    (accountType === "privateKey" || accountType === "seedPhrase");
+  const outerBatchedTx =
+    batchedTx && isEip7702Batched
+      ? omitOuterValueForEip7702(batchedTx)
+      : batchedTx;
 
-  const gasBatchedTx = batchedTx
+  const gasBatchedTx = outerBatchedTx
     ? {
         tx: {
           from: fromAddress,
-          to: batchedTx.to,
-          data: batchedTx.data,
-          value: batchedTx.value,
+          to: outerBatchedTx.to,
+          data: outerBatchedTx.data,
+          value: outerBatchedTx.value,
           chainId,
         },
         label: `Batched (${transactions.length} calls)`,

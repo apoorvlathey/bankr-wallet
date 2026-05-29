@@ -1064,7 +1064,7 @@ To avoid an intermediate "pending" flash on the activity tab, all three broadcas
 
 If the sync call throws or times out (5s), the broadcaster transparently falls through to the standard `client.sendTransaction()` + `startReceiptPolling()` path. Users always get *some* outcome.
 
-The same path covers ERC-5792 batched txs because the ERC-7821 wrapper is itself a single signed tx. Bankr-API accounts are unaffected (MegaETH is `isBankrSupported: false`).
+The same path covers ERC-5792 batched txs because the ERC-7821 wrapper is itself a single signed tx. For PK/SP EIP-7702 wrappers, inner `Call.value` amounts stay encoded and visible to the user, but the signed outer EOA self-call uses `value: 0x0` to avoid a redundant native transfer to self. Bankr-API accounts are unaffected (MegaETH is `isBankrSupported: false`).
 
 ### Post-confirm Asset Changes Extraction
 

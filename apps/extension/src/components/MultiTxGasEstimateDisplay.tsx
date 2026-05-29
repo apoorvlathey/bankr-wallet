@@ -208,6 +208,15 @@ function isValidGasLimit(val: string): boolean {
   return !isNaN(n) && n > 0 && Number.isInteger(n);
 }
 
+function parseTxValueWei(value?: string): bigint {
+  if (!value || value === "0x" || value === "0x0") return 0n;
+  try {
+    return BigInt(value);
+  } catch {
+    return 0n;
+  }
+}
+
 function MultiTxGasEstimateDisplay({
   transactions,
   accountType,
@@ -292,17 +301,51 @@ function MultiTxGasEstimateDisplay({
 
   // Determine what to estimate for display
   const toEstimate: TxGasInput[] = batchedTx ? [batchedTx] : transactions;
-  const estimateTxKey = toEstimate.map((t) => t.tx.to + t.tx.data).join(",");
+  const estimateTxKey = toEstimate
+    .map((t) => `${t.tx.to}|${t.tx.data}|${t.tx.value}`)
+    .join(",");
+  const innerValueKey = transactions.map((t) => t.tx.value).join(",");
+  const batchedNativeOutlayWei = useMemo(() => {
+    if (!batchedTx) return 0n;
+    const outerValue = parseTxValueWei(batchedTx.tx.value);
+    const innerValue = transactions.reduce(
+      (sum, item) => sum + parseTxValueWei(item.tx.value),
+      0n,
+    );
+    return innerValue > outerValue ? innerValue : outerValue;
+  }, [batchedTx, transactions]);
+
+  const withBatchedNativeOutlayBalance = useCallback(
+    (results: (GasEstimate | null)[]) => {
+      if (!isLocalSigningAccount || !batchedTx || results.length !== 1) {
+        return results;
+      }
+      return results.map((result) => {
+        if (!result) return result;
+        const gasCostWei = parseTxValueWei(result.estimatedCostWei);
+        const balanceWei = parseTxValueWei(result.accountBalance);
+        return {
+          ...result,
+          insufficientBalance:
+            balanceWei < gasCostWei + batchedNativeOutlayWei,
+        };
+      });
+    },
+    [batchedNativeOutlayWei, batchedTx, isLocalSigningAccount],
+  );
 
   // Stable key for dependency — only re-run when actual tx data changes
   const estimateKey = useMemo(
     () =>
       estimateTxKey +
+      (batchedTx ? `:innerValue:${innerValueKey}` : "") +
       (isNonAtomic ? ":na" : "") +
       (forceInclusion ? ":fi" : "") +
       (eip7702Delegate ? `:7702:${eip7702Delegate.toLowerCase()}` : ""),
     [
       estimateTxKey,
+      innerValueKey,
+      batchedTx,
       isNonAtomic,
       forceInclusion,
       eip7702Delegate,
@@ -573,22 +616,14 @@ function MultiTxGasEstimateDisplay({
             const wrappedGas = sumGas + 30_000n;
             const maxFeeWei = BigInt(wrapped.maxFeePerGas || "0");
             const wrappedCost = wrappedGas * maxFeeWei;
-            const valueWei = batchedTx?.tx.value
-              ? (() => {
-                  try {
-                    return BigInt(batchedTx.tx.value);
-                  } catch {
-                    return 0n;
-                  }
-                })()
-              : 0n;
             const balance = BigInt(wrapped.accountBalance || "0");
             finalResults = [
               {
                 ...wrapped,
                 gasLimit: wrappedGas.toString(),
                 estimatedCostWei: wrappedCost.toString(),
-                insufficientBalance: balance < wrappedCost + valueWei,
+                insufficientBalance:
+                  balance < wrappedCost + batchedNativeOutlayWei,
                 estimationFailed: false,
                 estimationError: undefined,
                 estimationErrorFull: undefined,
@@ -602,6 +637,8 @@ function MultiTxGasEstimateDisplay({
               },
             );
           }
+
+          finalResults = withBatchedNativeOutlayBalance(finalResults);
 
           setEstimates(finalResults);
           if (isLocalSigningAccount && batchedTx) {

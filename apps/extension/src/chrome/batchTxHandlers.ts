@@ -205,6 +205,18 @@ export function encodeBatchCalls(
   };
 }
 
+/**
+ * EIP-7702 batches self-call the EOA. The inner ERC-7821 Call.value fields
+ * already tell the delegate how much native value to forward to each target,
+ * and the EOA already holds that balance. Sending the summed value on the
+ * outer self-call only appears as a redundant native transfer to self.
+ */
+export function omitOuterValueForEip7702(
+  batchTx: { to: string; data: string; value: string },
+): { to: string; data: string; value: string } {
+  return { ...batchTx, value: "0x0" };
+}
+
 // ---------------------------------------------------------------------------
 // Prevent double-execution
 // ---------------------------------------------------------------------------
@@ -1626,6 +1638,7 @@ export async function processBatchTransactionAtomic7702InBackground(
   // ERC-7821 calldata, target = the EOA itself (which becomes a smart account
   // for the duration of this tx via the 7702 delegation designator).
   const batchTx = encodeBatchCalls(calls, fromAddr);
+  const outerBatchTx = omitOuterValueForEip7702(batchTx);
 
   const displayName = functionNames?.length
     ? `Batch: ${functionNames.join(", ")}`
@@ -1643,9 +1656,9 @@ export async function processBatchTransactionAtomic7702InBackground(
     status: "processing",
     tx: {
       from: fromAddr,
-      to: batchTx.to,
-      data: batchTx.data,
-      value: batchTx.value,
+      to: outerBatchTx.to,
+      data: outerBatchTx.data,
+      value: outerBatchTx.value,
       chainId,
     },
     origin: pending.origin,
@@ -1771,9 +1784,9 @@ export async function processBatchTransactionAtomic7702InBackground(
       privateKey,
       {
         from: fromAddr,
-        to: batchTx.to,
-        data: batchTx.data,
-        value: batchTx.value,
+        to: outerBatchTx.to,
+        data: outerBatchTx.data,
+        value: outerBatchTx.value,
         chainId,
         nonce: txNonce,
         gas: gasHex,
