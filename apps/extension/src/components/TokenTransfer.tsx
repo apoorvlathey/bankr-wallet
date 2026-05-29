@@ -51,6 +51,7 @@ import { buildTransferTx } from "@/chrome/transferUtils";
 import { SWAP_SUPPORTED_CHAIN_IDS } from "@/constants/chainRegistry";
 import type { Account } from "@/chrome/types";
 import TokenSelector from "@/components/Swap/TokenSelector";
+import { NativeCalldataDecodeModal } from "@/components/NativeCalldataDecodeModal";
 import { NATIVE_TOKEN_ADDRESS, type TokenListEntry } from "@/chrome/swapApi";
 import { WALLETCHAN_STAKE_URL } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
@@ -260,6 +261,7 @@ function TokenTransfer({
   // data; auto-clears whenever that precondition no longer holds.
   const [isContractDeployment, setIsContractDeployment] = useState(false);
   const deployToggle = useDisclosure();
+  const calldataDecodeModal = useDisclosure();
 
   // Fetch all holdings once
   useEffect(() => {
@@ -634,6 +636,17 @@ function TokenTransfer({
     ? chainName.replace(/\s+testnet$/i, "").trim() || chainName
     : chainName;
   const explorerUrl = getResolvedChainById(selectedChainId, networksInfo)?.explorer ?? "";
+  const decodeCalldataDisabledReason = (() => {
+    if (!hasNativeCalldata) {
+      return hexDataIsEmpty ? "Add calldata to decode." : "Fix calldata hex first.";
+    }
+    if (!recipient.trim()) return "Enter a recipient to decode against.";
+    if (isResolving) return "Resolving recipient.";
+    if (!isRecipientValid || !resolvedAddress) return "Use a valid recipient.";
+    return null;
+  })();
+  const canOpenCalldataDecoder =
+    !isContractDeployment && decodeCalldataDisabledReason === null;
   const [chainSearch, setChainSearch] = useState("");
   const chainSearchInputRef = useRef<HTMLInputElement>(null);
   const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
@@ -981,10 +994,16 @@ function TokenTransfer({
     <Box
       p={4}
       h="100%"
+      maxH="100%"
+      flex="1"
       minH={0}
       overflowY="auto"
       overflowX="hidden"
       bg="surface.base"
+      css={{
+        WebkitOverflowScrolling: "touch",
+        overscrollBehaviorY: "contain",
+      }}
     >
       <VStack spacing={3} align="stretch">
         {/* Header */}
@@ -1746,134 +1765,161 @@ function TokenTransfer({
             </HStack>
             <Collapse in={isHexDataExpanded} animateOpacity>
               <Box mt={1.5}>
-                {/* Advanced-settings gear sits in its own row above the
-                    textarea (right-aligned), so it doesn't overlap the
-                    input. Gear only renders for native sends with no
-                    recipient entered, or when deploy is already on so the
-                    user can toggle it back off. Popover renders via Portal
-                    so it escapes the textarea's stacking context. */}
-                {canShowDeployToggle && (
+                {/* Top-right hex-data action. The deploy gear owns this slot
+                    while deployment settings are available; otherwise the
+                    native calldata decoder uses the same compact position. */}
+                {(canShowDeployToggle || !isContractDeployment) && (
                   <HStack justify="flex-end" spacing={1.5} mb={1}>
-                    <Popover
-                      isOpen={deployToggle.isOpen}
-                      onOpen={deployToggle.onOpen}
-                      onClose={deployToggle.onClose}
-                      placement="bottom-end"
-                    >
-                      <PopoverTrigger>
-                        {/* When deploy is active, the trigger expands to
-                            include the "Deploy Contract" label so the whole
-                            group (gear + text) is one tap target. Otherwise
-                            it stays a compact icon-only button. */}
-                        {isContractDeployment ? (
+                    {canShowDeployToggle ? (
+                      <Popover
+                        isOpen={deployToggle.isOpen}
+                        onOpen={deployToggle.onOpen}
+                        onClose={deployToggle.onClose}
+                        placement="bottom-end"
+                      >
+                        <PopoverTrigger>
+                          {/* When deploy is active, the trigger expands to
+                              include the "Deploy Contract" label so the whole
+                              group (gear + text) is one tap target. Otherwise
+                              it stays a compact icon-only button. */}
+                          {isContractDeployment ? (
+                            <Button
+                              aria-label="Advanced hex data settings"
+                              size="xs"
+                              variant="ghost"
+                              h="22px"
+                              px={1.5}
+                              leftIcon={<SettingsIcon boxSize="12px" />}
+                              iconSpacing={1.5}
+                              color="accent.secondary"
+                              fontSize="2xs"
+                              fontWeight="800"
+                              textTransform="uppercase"
+                              letterSpacing="0.06em"
+                              _hover={{ bg: "bg.muted" }}
+                            >
+                              Deploy Contract
+                            </Button>
+                          ) : (
+                            <IconButton
+                              aria-label="Advanced hex data settings"
+                              icon={<SettingsIcon boxSize="12px" />}
+                              size="xs"
+                              variant="ghost"
+                              minW="22px"
+                              h="22px"
+                              color="text.tertiary"
+                              _hover={{ bg: "bg.muted" }}
+                            />
+                          )}
+                        </PopoverTrigger>
+                        <Portal>
+                          <PopoverContent
+                            bg="surface.raised"
+                            border={tokens.borders.medium}
+                            borderColor="border.default"
+                            borderRadius="lg"
+                            boxShadow="card"
+                            w="240px"
+                            zIndex="popover"
+                            _focus={{ outline: "none", boxShadow: "card" }}
+                          >
+                            <PopoverArrow bg="surface.raised" />
+                            <PopoverBody p={3}>
+                              <VStack align="stretch" spacing={2}>
+                                <Text
+                                  fontSize="2xs"
+                                  fontWeight="800"
+                                  color="text.tertiary"
+                                  textTransform="uppercase"
+                                  letterSpacing="0.06em"
+                                >
+                                  Advanced
+                                </Text>
+                                {/* Whole card is the tap target so users can
+                                    click anywhere — checkbox, heading, or
+                                    description — to toggle. The Checkbox below
+                                    is pointer-event-disabled so it never fights
+                                    the Box's onClick; the Box owns toggling. */}
+                                <Box
+                                  bg="surface.base"
+                                  border={tokens.borders.thin}
+                                  borderColor="border.default"
+                                  borderRadius="md"
+                                  px={2.5}
+                                  py={2}
+                                  opacity={hasNativeCalldata ? 1 : 0.55}
+                                  cursor={hasNativeCalldata ? "pointer" : "not-allowed"}
+                                  role={hasNativeCalldata ? "button" : undefined}
+                                  aria-pressed={isContractDeployment}
+                                  onClick={() => {
+                                    if (!hasNativeCalldata) return;
+                                    setIsContractDeployment((prev) => !prev);
+                                    deployToggle.onClose();
+                                  }}
+                                  _hover={hasNativeCalldata ? { bg: "bg.muted" } : undefined}
+                                  transition="background 0.15s"
+                                >
+                                  <Checkbox
+                                    isChecked={isContractDeployment}
+                                    isDisabled={!hasNativeCalldata}
+                                    pointerEvents="none"
+                                    size="sm"
+                                    sx={{
+                                      "& .chakra-checkbox__control": {
+                                        borderWidth: "2px",
+                                        borderColor: "border.default",
+                                        bg: "surface.base",
+                                      },
+                                      "& .chakra-checkbox__label": {
+                                        fontSize: "xs",
+                                        fontWeight: 800,
+                                        color: "text.primary",
+                                      },
+                                    }}
+                                  >
+                                    Deploy contract
+                                  </Checkbox>
+                                  <Text fontSize="2xs" color="text.tertiary" fontWeight="600" mt={1}>
+                                    {hasNativeCalldata
+                                      ? "Send as a contract deployment. Recipient is set to null and the bytes below are treated as the deployment bytecode."
+                                      : "Add valid hex data to enable. The bytes below will be the deployment bytecode."}
+                                  </Text>
+                                </Box>
+                              </VStack>
+                            </PopoverBody>
+                          </PopoverContent>
+                        </Portal>
+                      </Popover>
+                    ) : (
+                      <Tooltip
+                        label={decodeCalldataDisabledReason || "Decode calldata"}
+                        fontSize="xs"
+                        hasArrow
+                        isDisabled={canOpenCalldataDecoder}
+                      >
+                        <Box as="span" display="inline-block">
                           <Button
-                            aria-label="Advanced hex data settings"
                             size="xs"
                             variant="ghost"
                             h="22px"
                             px={1.5}
-                            leftIcon={<SettingsIcon boxSize="12px" />}
+                            leftIcon={<Search2Icon boxSize="12px" />}
                             iconSpacing={1.5}
                             color="accent.secondary"
                             fontSize="2xs"
                             fontWeight="800"
                             textTransform="uppercase"
                             letterSpacing="0.06em"
+                            isDisabled={!canOpenCalldataDecoder}
+                            onClick={calldataDecodeModal.onOpen}
                             _hover={{ bg: "bg.muted" }}
                           >
-                            Deploy Contract
+                            Decode
                           </Button>
-                        ) : (
-                          <IconButton
-                            aria-label="Advanced hex data settings"
-                            icon={<SettingsIcon boxSize="12px" />}
-                            size="xs"
-                            variant="ghost"
-                            minW="22px"
-                            h="22px"
-                            color="text.tertiary"
-                            _hover={{ bg: "bg.muted" }}
-                          />
-                        )}
-                      </PopoverTrigger>
-                      <Portal>
-                        <PopoverContent
-                          bg="surface.raised"
-                          border={tokens.borders.medium}
-                          borderColor="border.default"
-                          borderRadius="lg"
-                          boxShadow="card"
-                          w="240px"
-                          zIndex="popover"
-                          _focus={{ outline: "none", boxShadow: "card" }}
-                        >
-                          <PopoverArrow bg="surface.raised" />
-                          <PopoverBody p={3}>
-                            <VStack align="stretch" spacing={2}>
-                              <Text
-                                fontSize="2xs"
-                                fontWeight="800"
-                                color="text.tertiary"
-                                textTransform="uppercase"
-                                letterSpacing="0.06em"
-                              >
-                                Advanced
-                              </Text>
-                              {/* Whole card is the tap target so users can
-                                  click anywhere — checkbox, heading, or
-                                  description — to toggle. The Checkbox below
-                                  is pointer-event-disabled so it never fights
-                                  the Box's onClick; the Box owns toggling. */}
-                              <Box
-                                bg="surface.base"
-                                border={tokens.borders.thin}
-                                borderColor="border.default"
-                                borderRadius="md"
-                                px={2.5}
-                                py={2}
-                                opacity={hasNativeCalldata ? 1 : 0.55}
-                                cursor={hasNativeCalldata ? "pointer" : "not-allowed"}
-                                role={hasNativeCalldata ? "button" : undefined}
-                                aria-pressed={isContractDeployment}
-                                onClick={() => {
-                                  if (!hasNativeCalldata) return;
-                                  setIsContractDeployment((prev) => !prev);
-                                  deployToggle.onClose();
-                                }}
-                                _hover={hasNativeCalldata ? { bg: "bg.muted" } : undefined}
-                                transition="background 0.15s"
-                              >
-                                <Checkbox
-                                  isChecked={isContractDeployment}
-                                  isDisabled={!hasNativeCalldata}
-                                  pointerEvents="none"
-                                  size="sm"
-                                  sx={{
-                                    "& .chakra-checkbox__control": {
-                                      borderWidth: "2px",
-                                      borderColor: "border.default",
-                                      bg: "surface.base",
-                                    },
-                                    "& .chakra-checkbox__label": {
-                                      fontSize: "xs",
-                                      fontWeight: 800,
-                                      color: "text.primary",
-                                    },
-                                  }}
-                                >
-                                  Deploy contract
-                                </Checkbox>
-                                <Text fontSize="2xs" color="text.tertiary" fontWeight="600" mt={1}>
-                                  {hasNativeCalldata
-                                    ? "Send as a contract deployment. Recipient is set to null and the bytes below are treated as the deployment bytecode."
-                                    : "Add valid hex data to enable. The bytes below will be the deployment bytecode."}
-                                </Text>
-                              </Box>
-                            </VStack>
-                          </PopoverBody>
-                        </PopoverContent>
-                      </Portal>
-                    </Popover>
+                        </Box>
+                      </Tooltip>
+                    )}
                   </HStack>
                 )}
                 <Textarea
@@ -1992,37 +2038,61 @@ function TokenTransfer({
           </Box>
         )}
 
-        {/* Action buttons */}
-        <HStack spacing={3} mt={2}>
-          <Button
-            variant="secondary"
-            flex={1}
-            onClick={onBack}
-            isDisabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-          <Button
-            flex={1}
-            onClick={handleSubmit}
-            isLoading={isSubmitting}
-            isDisabled={!canSubmit || accountType === "impersonator"}
-            bg="accent.secondary"
-            color="accentFg.secondary"
-            border={tokens.borders.medium}
-            borderColor="border.default"
-            boxShadow="card"
-            fontWeight="700"
-            fontSize={isSponsoredFlow ? "xs" : undefined}
-            _hover={{
-              bg: "accent.secondary",
-              opacity: 0.9,
-              boxShadow: "cardHover",
-            }}
-          >
-            {isSponsoredFlow ? "Sign (Gas-Free)" : "Send"}
-          </Button>
-        </HStack>
+        {/* Action buttons — sticky when the form content exceeds the viewport.
+            This mirrors the confirmation screens while remaining in normal
+            document flow when the form is short. */}
+        <Box
+          position="sticky"
+          bottom={0}
+          bg="surface.base"
+          pt={2}
+          pb={4}
+          mx={-4}
+          px={4}
+          zIndex={1}
+        >
+          <HStack spacing={3}>
+            <Button
+              variant="secondary"
+              flex={1}
+              onClick={onBack}
+              isDisabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              flex={1}
+              onClick={handleSubmit}
+              isLoading={isSubmitting}
+              isDisabled={!canSubmit || accountType === "impersonator"}
+              bg="accent.secondary"
+              color="accentFg.secondary"
+              border={tokens.borders.medium}
+              borderColor="border.default"
+              boxShadow="card"
+              fontWeight="700"
+              fontSize={isSponsoredFlow ? "xs" : undefined}
+              _hover={{
+                bg: "accent.secondary",
+                opacity: 0.9,
+                boxShadow: "cardHover",
+              }}
+            >
+              {isSponsoredFlow ? "Sign (Gas-Free)" : "Send"}
+            </Button>
+          </HStack>
+        </Box>
+
+        {canOpenCalldataDecoder && resolvedAddress && (
+          <NativeCalldataDecodeModal
+            isOpen={calldataDecodeModal.isOpen}
+            onClose={calldataDecodeModal.onClose}
+            calldata={trimmedHexData}
+            from={fromAddress}
+            to={resolvedAddress}
+            chainId={selectedChainId}
+          />
+        )}
       </VStack>
     </Box>
   );

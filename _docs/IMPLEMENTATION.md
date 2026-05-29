@@ -431,7 +431,8 @@ src/
 │   ├── SiweMessageDisplay.tsx # Human-readable SIWE auth review + raw message disclosure
 │   ├── SiweValidationIssues.tsx # SIWE validation issue list
 │   ├── TokenHoldings.tsx    # Portfolio token list with USD values
-│   ├── TokenTransfer.tsx    # Token transfer form (recipient, amount, send)
+│   ├── TokenTransfer.tsx    # Token transfer form (recipient, amount, optional native calldata)
+│   ├── NativeCalldataDecodeModal.tsx # Send-form native calldata preview (clear-signing + decoder)
 │   ├── SeedPhraseSetup.tsx  # Seed phrase generate/import flow (12-word grid)
 │   ├── CalldataDecoder.tsx  # Decoded/Raw tab for transaction calldata (eth.sh API)
 │   ├── TypedDataDisplay.tsx # Structured typed data display for EIP-712 signatures
@@ -1293,8 +1294,14 @@ Important constraints:
 1. User clicks a token in TokenHoldings
 2. App.tsx switches to `"transfer"` view with selected token state
 3. TokenTransfer form: recipient address input, amount input with MAX button
+   - Native-token sends can include optional hex calldata. The send form shows
+     a **Decode Calldata** modal for valid non-deploy native calldata once the
+     recipient resolves. The modal reuses `ClearSigningView` against
+     `{ chainId, recipient, calldata }` and `CalldataDecoder`; the decoder is
+     collapsed by default when clear signing renders.
 4. On submit, `buildTransferTx()` creates calldata:
-   - **Native**: `{ to, value: parseEther(amount), data: "0x" }`
+   - **Native**: `{ to, value: parseEther(amount), data: "0x" }` or the
+     user-provided hex calldata
    - **ERC20**: `{ to: contractAddress, data: encodeFunctionData("transfer", [to, amount]), value: "0x0" }`
 5. Sends `initiateTransfer` message to background
 6. Background creates a `PendingTxRequest` with origin "WalletChan"
@@ -1306,6 +1313,11 @@ Transaction calldata is decoded using the eth.sh API:
 
 - **API**: POST `https://eth.sh/api/calldata/decoder-recursive` with `{ calldata, address, chainId }`
 - **Component**: `CalldataDecoder.tsx` with Decoded/Raw tab toggle
+- **Native send preview**: `NativeCalldataDecodeModal.tsx` composes
+  `ClearSigningView` + `CalldataDecoder` from the send form before the pending
+  tx is created. It is hidden while the same native calldata is marked as a
+  contract deployment because deployment bytecode has no recipient contract to
+  resolve clear signing or ABI decoding against.
 - **Parameter display**: Color-coded by type (addresses=blue with labels, numbers=gold, bools=green/red, bytes=muted)
 - **Fallback**: Raw hex if decode fails or for contract deployments (no `to` address)
 

@@ -10,7 +10,7 @@
  * pass an `onResolved` callback so they can collapse the raw decoder beneath.
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Box,
   HStack,
@@ -140,6 +140,11 @@ export function ClearSigningView(props: ClearSigningViewProps) {
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<MatchedState | null>(null);
   const { onResolved } = props;
+  const onResolvedRef = useRef(onResolved);
+
+  useEffect(() => {
+    onResolvedRef.current = onResolved;
+  }, [onResolved]);
 
   // Stable signature for the effect dependency array — re-run whenever the
   // payload we'd render against changes.
@@ -191,7 +196,7 @@ export function ClearSigningView(props: ClearSigningViewProps) {
       if (!enabled) {
         console.log(`${tag} ✗ feature disabled in settings`);
         setLoading(false);
-        onResolved?.(false);
+        onResolvedRef.current?.(false);
         return;
       }
 
@@ -241,7 +246,7 @@ export function ClearSigningView(props: ClearSigningViewProps) {
           );
         }
         setLoading(false);
-        onResolved?.(false);
+        onResolvedRef.current?.(false);
         return;
       }
       console.log(`${tag} ✓ matched format`, matched.formatKey);
@@ -256,7 +261,7 @@ export function ClearSigningView(props: ClearSigningViewProps) {
           `${tag} ✗ decode failed for format "${matched.formatKey}" (calldata likely doesn't match the signature ABI)`,
         );
         setLoading(false);
-        onResolved?.(false);
+        onResolvedRef.current?.(false);
         return;
       }
       console.log(`${tag} ✓ decoded data`, data);
@@ -280,14 +285,14 @@ export function ClearSigningView(props: ClearSigningViewProps) {
       if (!formatRuntimeGuardsPass(matched.format, renderInput, descriptor)) {
         console.log(`${tag} ✗ runtime field guards did not pass`);
         setLoading(false);
-        onResolved?.(false);
+        onResolvedRef.current?.(false);
         return;
       }
       const fields = applyFormat(matched.format, renderInput, descriptor);
       if (fields.length === 0) {
         console.log(`${tag} ✗ applyFormat produced 0 fields`);
         setLoading(false);
-        onResolved?.(false);
+        onResolvedRef.current?.(false);
         return;
       }
       console.log(`${tag} ✓ rendering ${fields.length} field(s)`);
@@ -299,14 +304,14 @@ export function ClearSigningView(props: ClearSigningViewProps) {
         ownerName: descriptor.metadata?.owner,
       });
       setLoading(false);
-      onResolved?.(true);
+      onResolvedRef.current?.(true);
     })();
 
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, chainId, lookupAddress, calldataValue, typedDataKey, onResolved, screenEntered]);
+  }, [kind, chainId, lookupAddress, calldataValue, typedDataKey, screenEntered]);
 
   if (loading) {
     if (hideLoadingSkeleton) return null;
