@@ -10,7 +10,24 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **WalletConnect bridge.** More -> WalletConnect now lets users pair WalletChan with WalletConnect dapps, manage active sessions, and route transactions, signatures, chain switches, read-only RPC calls, and ERC-5792 batch requests through the same confirmation flow used by injected dapps.
+- **dapp3 Browser.** More -> dapp3 Browser opens a WalletChan extension page for `.eth` names, raw ERC-4804 `0x` addresses, and pasted gateway URLs, with favorite dapps and recently cached dapps.
+- **More Actions hub.** The popup now has a dedicated More screen for secondary actions, including WalletConnect, dapp3 Browser, token hiding, and external WalletChan links.
+- **Portfolio token hiding.** Users can hide ERC-20 tokens from Holdings, manage hidden tokens from More -> Hide Tokens, and keep hidden tokens out of visible totals, Send/Swap holdings, and new portfolio snapshots.
+- **Native calldata preview in Send.** Native-token sends with custom calldata can now be decoded before the transaction is created, using the clear-signing view plus the raw calldata decoder.
+- Settings now shows the installed extension version.
+
+### Changed
+
+- Portfolio refreshes now prioritize tokens received by recent confirmed transactions and avoid unnecessary refresh work for collapsed low-value groups, reducing popup RPC load while keeping new balances visible.
+- Chain selector labels fit more reliably in compact account/network controls.
+
+### Fixed
+
+- Private Key and Seed Phrase EIP-7702 atomic batches now keep native value in the encoded inner calls while signing the outer EOA self-call with `value: 0x0`, avoiding redundant native self-sends and incorrect gas/Tenderly values.
+- Batch gas estimates and insufficient-balance checks still include the reviewed inner native values after the EIP-7702 outer-value fix.
 
 ## [3.14.0] - 2026-05-28
 
