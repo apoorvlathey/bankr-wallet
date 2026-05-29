@@ -156,6 +156,11 @@ export function encodeBatchCalls(
   // site (cross-dapp batches, internal flows, etc.).
   const eoaLower = walletAddress.toLowerCase();
   for (let i = 0; i < calls.length; i++) {
+    if (!calls[i].to) {
+      throw new Error(
+        `Call ${i + 1} has no recipient address — contract deployments cannot be encoded in a batch`,
+      );
+    }
     const to = (calls[i].to ?? "").toLowerCase();
     if (to !== eoaLower) continue;
     const data = calls[i].data ?? "0x";

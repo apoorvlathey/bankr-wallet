@@ -371,25 +371,29 @@ function TransactionConfirmation({
   const internalSendTokenLabel = origin.startsWith("Send ")
     ? origin.slice(5).trim()
     : null;
+  const isContractDeployment = !tx.to;
 
   // ─── Cross-Dapp Batch Eligibility ──────────────────────────────────────
   // Bankr accounts always qualify (atomic ship via Bankr API on Bankr-supported
   // chains). PK / Seed Phrase accounts qualify only when the same resolver used
   // by the ship path finds a usable 7702 delegate, including externally-set
   // custom-chain delegations and excluding stale/incompatible ones.
+  // Contract deployments have no recipient address, so they cannot be encoded
+  // as ERC-7821 calls and must stay on the regular single-tx path.
   // SECURITY: impersonator (view-only) accounts cannot ship batches.
   const txBatchPlan = useBatchPlan({
     accountId: txRequest.accountId ?? null,
-    accountType: accountType ?? null,
+    accountType: isContractDeployment ? null : accountType ?? null,
     chainId: tx.chainId,
   });
   const canBatchAccount = useMemo(() => {
+    if (isContractDeployment) return false;
     if (accountType === "bankr") return true;
     if (accountType === "privateKey" || accountType === "seedPhrase") {
       return txBatchPlan.strategy === "atomic-7702";
     }
     return false;
-  }, [accountType, txBatchPlan.strategy]);
+  }, [accountType, isContractDeployment, txBatchPlan.strategy]);
 
   // Reason the button is disabled, or null if it's enabled. Used for the
   // tooltip popover. The button is rendered ONLY when canBatchAccount is true.

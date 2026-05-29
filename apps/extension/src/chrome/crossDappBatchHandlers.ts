@@ -91,6 +91,12 @@ import type { GasEstimate } from "./gasEstimation";
 // Prevent double-shipping if user clicks Confirm twice in quick succession.
 let isProcessing = false;
 
+function hasConcreteRecipientAddress(
+  to: TransactionParams["to"] | ERC5792Call["to"] | undefined,
+): to is string {
+  return typeof to === "string" && /^0x[a-fA-F0-9]{40}$/.test(to);
+}
+
 /**
  * Reject reasons for an account/chain combo when starting or joining a
  * cross-dapp batch. Returned as a human-friendly string, or null if the
@@ -192,6 +198,12 @@ export async function handleAddToCrossDappBatch(
   }
   if (!pending.tx.from) {
     return { success: false, error: "Pending request is no longer valid" };
+  }
+  if (!hasConcreteRecipientAddress(pending.tx.to)) {
+    return {
+      success: false,
+      error: "Contract deployment transactions cannot be added to a batch",
+    };
   }
 
   const pinned = await resolvePinnedCrossDappAccount(pending, pending.tx.from);
@@ -329,6 +341,12 @@ export async function handleAddCallsToCrossDappBatch(
   if (!pending.params.calls || pending.params.calls.length === 0) {
     return { success: false, error: "Bundle has no calls to add" };
   }
+  if (pending.params.calls.some((call) => !hasConcreteRecipientAddress(call.to))) {
+    return {
+      success: false,
+      error: "Contract deployment calls cannot be added to a batch",
+    };
+  }
 
   const totalCalls = pending.params.calls.length;
   const now = Date.now();
@@ -340,7 +358,7 @@ export async function handleAddCallsToCrossDappBatch(
       txId: `${bundleId}:${callIndex}`,
       tx: {
         from: lockedFromAddress as `0x${string}`,
-        to: (call.to ?? "0x") as string,
+        to: call.to as string,
         data: (call.data ?? "0x") as string,
         value: (call.value ?? "0x0") as string,
         chainId: pending.chainId,
@@ -570,13 +588,19 @@ export async function handleConfirmCrossDappBatch(
   if (chainEligErr) {
     return { success: false, error: chainEligErr };
   }
+  if (batch.entries.some((entry) => !hasConcreteRecipientAddress(entry.tx.to))) {
+    return {
+      success: false,
+      error: "Contract deployment transactions cannot be confirmed as a batch",
+    };
+  }
 
   isProcessing = true;
 
   try {
     // Build ERC-5792 calls and encode as a single ERC-7821 self-call tx.
     const calls: ERC5792Call[] = batch.entries.map((entry) => ({
-      to: (entry.tx.to ?? "0x") as `0x${string}`,
+      to: entry.tx.to as `0x${string}`,
       value: (entry.tx.value ?? "0x0") as `0x${string}`,
       data: (entry.tx.data ?? "0x") as `0x${string}`,
     }));

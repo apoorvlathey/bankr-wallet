@@ -252,6 +252,7 @@ function BatchTransactionConfirmation({
 
   const { params, origin, chainName, favicon, chainId } = batchRequest;
   const calls = params.calls;
+  const hasDeploymentCall = calls.some((call) => !call.to);
 
   // Sum of msg.value across all calls. Surfaced in the top summary box so a
   // user reviewing a multi-call batch (e.g. a bridge whose second call carries
@@ -589,7 +590,9 @@ function BatchTransactionConfirmation({
     canBatchAccount &&
     !customConfirmHandler && // hide on the cross-dapp batch screen itself
     !!onAddedToBatch &&
-    !isNonAtomic;
+    !isNonAtomic &&
+    !hasDeploymentCall &&
+    !encodingError;
 
   // Force inclusion progress screen (atomic batches only)
   if (state === "forceInclusion" && forceInclusionInfo) {
