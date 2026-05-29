@@ -122,6 +122,10 @@ const QRCodeModal = lazy(() =>
 const TokenTransfer = lazy(() => import("@/components/TokenTransfer"));
 const SwapView = lazy(() => import("@/components/Swap/SwapView"));
 const MoreActionsView = lazy(() => import("@/components/MoreActionsView"));
+const HideTokensView = lazy(() => import("@/components/HideTokensView"));
+const HiddenPortfolioTokensView = lazy(
+  () => import("@/components/HiddenPortfolioTokensView"),
+);
 const WalletConnectView = lazy(() => import("@/components/WalletConnectView"));
 const WatchAssetConfirmation = lazy(() => import("@/components/WatchAssetConfirmation"));
 const AddChain = lazy(() => import("@/components/Settings/AddChain"));
@@ -152,6 +156,8 @@ if (typeof window !== "undefined") {
     void import("@/components/TokenTransfer");
     void import("@/components/Swap/SwapView");
     void import("@/components/MoreActionsView");
+    void import("@/components/HideTokensView");
+    void import("@/components/HiddenPortfolioTokensView");
     void import("@/components/WalletConnectView");
     void import("@/components/WatchAssetConfirmation");
     void import("@/components/Settings/AddChain");
@@ -1819,6 +1825,11 @@ function App() {
     setPortfolioRefreshTrigger((prev) => prev + 1);
   }, []);
 
+  const handleHiddenTokensChanged = useCallback(() => {
+    setPortfolioRefreshTrigger((prev) => prev + 1);
+    setHoldingsTabTrigger((prev) => prev + 1);
+  }, []);
+
   if (isLoading) {
     return (
       <Box
@@ -2338,6 +2349,54 @@ function App() {
               stakeApy={stakeApy}
               onBack={() => setView("main")}
               onWalletConnect={() => setView("walletConnect")}
+              onHideTokens={() => setView("hideTokens")}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
+  if (view === "hideTokens") {
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <HideTokensView
+              address={address}
+              onBack={() => setView("more")}
+              onOpenHidden={() => setView("hiddenTokens")}
+              onHiddenTokensChanged={handleHiddenTokensChanged}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
+  if (view === "hiddenTokens") {
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <HiddenPortfolioTokensView
+              address={address}
+              onBack={() => setView("hideTokens")}
+              onHiddenTokensChanged={handleHiddenTokensChanged}
             />
           </Suspense>
         </Box>

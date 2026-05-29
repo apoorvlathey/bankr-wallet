@@ -39,8 +39,10 @@ interface HoldingsState {
   loading: boolean;
   hideValue: boolean;
   toggleHideValue: () => void;
-  refresh: () => void;
+  refresh: (options?: { forceSnapshot?: boolean }) => Promise<void>;
   tokenKeys: Set<string>;
+  allTokenKeys: Set<string>;
+  hiddenTokenKeys: Set<string>;
   apiUnavailable: boolean;
 }
 
@@ -72,6 +74,7 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
   const [holdingsState, setHoldingsState] = useState<HoldingsState | null>(null);
   const holdingsStateRef = useRef<HoldingsState | null>(null);
   holdingsStateRef.current = holdingsState;
+  const [chartRefreshNonce, setChartRefreshNonce] = useState(0);
   const addTokenModal = useDisclosure();
   const { networksInfo } = useNetworks();
   const visibleChains = getVisibleChains(networksInfo);
@@ -152,6 +155,10 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
 
   const handleStateChange = useCallback((state: HoldingsState) => {
     setHoldingsState(state);
+  }, []);
+
+  const handleSnapshotsChanged = useCallback(() => {
+    setChartRefreshNonce((n) => n + 1);
   }, []);
 
   const formatUsd = (value: number): string =>
@@ -437,7 +444,7 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
                   size="xs"
                   variant="ghost"
                   color="text.secondary"
-                  onClick={holdingsState.refresh}
+                  onClick={() => holdingsState.refresh()}
                   _hover={{ color: "accent.secondary" }}
                   minW="auto"
                   isDisabled={holdingsState.loading}
@@ -452,7 +459,7 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
             <PortfolioChart
               address={address}
               hideValue={holdingsState?.hideValue}
-              refreshTrigger={refreshTrigger}
+              refreshTrigger={refreshTrigger + chartRefreshNonce}
             />
             {holdingsState?.apiUnavailable && (
               <HStack
@@ -514,6 +521,7 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
                 hideCard
                 onStateChange={handleStateChange}
                 filterChainId={filterChainId}
+                onSnapshotsChanged={handleSnapshotsChanged}
               />
             </Suspense>
           </TabPanel>
@@ -528,8 +536,13 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
       <AddTokenModal
         isOpen={addTokenModal.isOpen}
         onClose={addTokenModal.onClose}
-        onTokenAdded={() => holdingsState?.refresh()}
+        onTokenAdded={async (options) => {
+          await holdingsState?.refresh(options);
+          handleSnapshotsChanged();
+        }}
         existingTokenKeys={holdingsState?.tokenKeys ?? new Set()}
+        allTokenKeys={holdingsState?.allTokenKeys ?? new Set()}
+        hiddenTokenKeys={holdingsState?.hiddenTokenKeys ?? new Set()}
       />
     </Box>
   );

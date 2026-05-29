@@ -230,6 +230,7 @@ import {
   PendingAddChainRequest,
 } from "./pendingAddChainStorage";
 import { addCustomToken, getCustomTokens } from "./customTokenStorage";
+import { unhidePortfolioToken } from "./hiddenPortfolioTokens";
 import { getResolvedChainById } from "@/lib/chains";
 import type { NetworksInfo } from "@/types";
 
@@ -961,6 +962,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             decimals: pending.asset.decimals,
             image: pending.asset.image,
           });
+          await unhidePortfolioToken(pending.chainId, pending.asset.address);
           await removePendingWatchAssetRequest(message.watchAssetId);
           await writeResultToStorage(`watchAssetResult:${message.watchAssetId}`, {
             success: true,
@@ -3002,6 +3004,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               "seedGroups",
               "accounts",
               "portfolioSnapshots",
+              "hiddenPortfolioTokens",
               "ensIdentityCache",
               "ensAvatarImageCache",
               "customDelegates",

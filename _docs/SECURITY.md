@@ -461,6 +461,7 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 | `rpcResult:{id}`           | No               | Transient RPC result (written after RPC call, read+deleted by content script)    |
 | `txHistory`                | No               | Completed transaction log. Cross-dapp batch entries may include per-call `{ origin, favicon }` display metadata; no secrets. |
 | `chatHistory`              | No               | Chat conversation history                               |
+| `hiddenPortfolioTokens`    | No               | Global list of ERC-20 token keys the user hid from portfolio totals. Contains public token metadata only. |
 | `cs:enabled`               | No               | Clear-signing descriptor fetch opt-out flag             |
 | `cs:desc:{chainId}:{address}:{kind}:{selector\|format}` | No | Clear-signing descriptor cache; public metadata only, schema-versioned |
 

@@ -23,7 +23,8 @@ const MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000; // 8 days
  */
 export async function recordSnapshot(
   address: string,
-  totalValueUsd: number
+  totalValueUsd: number,
+  options: { force?: boolean } = {},
 ): Promise<void> {
   const key = address.toLowerCase();
   const data = await chrome.storage.local.get(STORAGE_KEY);
@@ -33,17 +34,15 @@ export async function recordSnapshot(
   const now = Date.now();
 
   // Skip if last snapshot is too recent
-  if (snapshots.length > 0) {
+  if (!options.force && snapshots.length > 0) {
     const last = snapshots[snapshots.length - 1];
     if (now - last.timestamp < MIN_INTERVAL_MS) return;
   }
 
-  // Append new snapshot
-  snapshots.push({ timestamp: now, totalValueUsd });
-
   // Prune entries older than 8 days
   const cutoff = now - MAX_AGE_MS;
   const pruned = snapshots.filter((s) => s.timestamp >= cutoff);
+  pruned.push({ timestamp: now, totalValueUsd });
 
   store[key] = pruned;
   await chrome.storage.local.set({ [STORAGE_KEY]: store });

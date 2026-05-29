@@ -13,6 +13,7 @@ import {
   ArrowBackIcon,
   ChevronRightIcon,
   ExternalLinkIcon,
+  ViewOffIcon,
 } from "@chakra-ui/icons";
 import { ThemedCard, useStripTokens, useTheme } from "@/theme";
 import {
@@ -27,6 +28,7 @@ import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
 interface MoreActionsViewProps {
   onBack: () => void;
   onWalletConnect: () => void;
+  onHideTokens: () => void;
   fromAddress: string;
   stakeApy: number | null;
 }
@@ -237,6 +239,7 @@ function ActionRow({ action }: { action: MoreAction }) {
 export default function MoreActionsView({
   onBack,
   onWalletConnect,
+  onHideTokens,
   fromAddress,
   stakeApy,
 }: MoreActionsViewProps) {
@@ -280,6 +283,15 @@ export default function MoreActionsView({
         openExternal(
           fromAddress ? revokeCashAddressUrl(fromAddress) : REVOKE_CASH_URL,
         ),
+    },
+    {
+      title: "Hide Tokens",
+      detail: "Hide spam tokens from portfolio",
+      icon: <ViewOffIcon boxSize={5} />,
+      iconBg: "surface.sunken",
+      iconColor: "text.secondary",
+      external: false,
+      onClick: onHideTokens,
     },
   ];
 

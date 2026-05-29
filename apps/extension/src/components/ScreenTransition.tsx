@@ -39,6 +39,8 @@ export type AppView =
   | "transfer"
   | "swap"
   | "more"
+  | "hideTokens"
+  | "hiddenTokens"
   | "walletConnect"
   | "batchTxConfirm"
   | "crossDappBatchConfirm";
@@ -61,6 +63,8 @@ export const SCREEN_META: Record<AppView, ScreenMeta> = {
   swap: { kind: "slide", depth: 1 },
   transfer: { kind: "slide", depth: 1 },
   more: { kind: "slide", depth: 1 },
+  hideTokens: { kind: "slide", depth: 2 },
+  hiddenTokens: { kind: "slide", depth: 3 },
   walletConnect: { kind: "slide", depth: 1 },
   chat: { kind: "slide", depth: 1 },
   addAccount: { kind: "slide", depth: 1 },

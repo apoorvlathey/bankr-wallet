@@ -74,6 +74,7 @@ Persists across extension restarts. Cleared only on manual reset or uninstall.
 | -------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------- | ---------- |
 | `chatHistory`        | `Conversation[]` — `{ id, title, messages, createdAt, updatedAt }` | Chat conversations with Bankr AI. Max 50 conversations, 100 messages each.   | v0.2.0     |
 | `portfolioSnapshots` | `Record<address, HoldingsSnapshot[]>`                              | Portfolio value snapshots per address. 1-hour min interval, 8-day retention. | v1.0.0     |
+| `hiddenPortfolioTokens` | `HiddenPortfolioToken[]` — `HiddenPortfolioToken` is `{ chainId, contractAddress, symbol?, name?, logoUrl?, hiddenAt }` | Global list of ERC-20 tokens hidden from Holdings across all wallet addresses. `loadPortfolioTokenCatalog` filters these before totals are calculated, so current value and newly-written snapshots exclude hidden tokens. Add Token / wallet_watchAsset remove the matching hidden entry globally. Additive; absence means no hidden tokens. Older per-address development records are flattened lazily. | next |
 | `ensIdentityCache`   | `Record<address, { name, avatar, resolvedAt }>`                    | Resolved ENS/Basename/WNS/Mega names and avatars. 6-hour cache.              | v1.0.0     |
 | `ensAvatarImageCache` | `Record<url, { dataUrl, sizeBytes, cachedAt, lastAccessedAt }>`   | Avatar/token-logo image bytes re-encoded to WebP (via `createImageBitmap` + `OffscreenCanvas`, background-only) and stored as data URLs. Keyed by source URL, 14-day TTL, LRU-pruned to 200 entries / 5 MB. Re-encoding strips SVG scripts/metadata so cached bytes are guaranteed raster pixels. Renderer pages keep a best-effort `window.localStorage` mirror (`walletchan:imageCacheMirror:v1`, capped at ~2 MB) so already-cached images can paint synchronously on first render; `chrome.storage.local` is canonical and no migration is required if the mirror is absent. | v3.3.0 |
 | `customTokens`       | `CustomToken[]` — `{ contractAddress, chainId, symbol, name, decimals, addedAt }` | User-added custom ERC-20 tokens for portfolio tracking. Merged into holdings on each load; skipped if API already returns the token. | v2.2.0 |
@@ -214,12 +215,13 @@ Migration from any prior version:
 - If `chainName` (the global selected-chain key) pointed at the old custom name, rewrites it to `"Optimism"` so the user's active chain doesn't silently revert to the default
 - Idempotent: short-circuits when no non-canonical chainId-10 entry is found
 
-### next (WalletConnect bridge)
+### next (WalletConnect bridge + portfolio token hiding)
 
 New keys:
 
 - `chrome.storage.local.walletConnectPendingRequests` (optional, additive)
 - `chrome.storage.local.walletConnectChainId` (optional, additive)
+- `chrome.storage.local.hiddenPortfolioTokens` (optional, additive)
 
 Modified keys:
 
@@ -227,4 +229,4 @@ Modified keys:
 
 Migration from any prior version:
 
-- No migration required. Missing `walletConnectPendingRequests` resolves to an empty map, missing `walletConnectChainId` falls back to the current global chain or first visible chain, and old pending request entries without `walletConnect` metadata follow the injected-provider result path unchanged.
+- No migration required. Missing `walletConnectPendingRequests` resolves to an empty map, missing `walletConnectChainId` falls back to the current global chain or first visible chain, missing `hiddenPortfolioTokens` resolves to no hidden tokens, legacy per-address hidden-token records are flattened lazily to the global list, and old pending request entries without `walletConnect` metadata follow the injected-provider result path unchanged.

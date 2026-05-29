@@ -1,5 +1,9 @@
 import { fetchPortfolio, type DefiPosition, type PortfolioToken } from "@/chrome/portfolioApi";
 import { getCustomTokens } from "@/chrome/customTokenStorage";
+import {
+  getHiddenPortfolioTokenKeys,
+  getPortfolioTokenKey,
+} from "@/chrome/hiddenPortfolioTokens";
 import { getRecentReceivedTokens } from "@/chrome/recentlyReceivedTokens";
 import {
   getStoredNetworksInfo,
@@ -34,6 +38,8 @@ export interface PortfolioTokenCatalog {
   defiPositions: DefiPosition[];
   totalValueUsd: number;
   customTokenKeys: Set<string>;
+  allTokenKeys: Set<string>;
+  hiddenTokenKeys: Set<string>;
   /**
    * True when the upstream portfolio API failed. Native balances are still
    * resolved onchain in that case, but ERC-20 balances and DeFi positions
@@ -174,7 +180,13 @@ function applyTokenMetadata(
 export async function loadPortfolioTokenCatalog(
   address: string,
 ): Promise<PortfolioTokenCatalog> {
-  const [portfolioResult, customTokens, networksInfo, recentReceived] =
+  const [
+    portfolioResult,
+    customTokens,
+    networksInfo,
+    recentReceived,
+    hiddenTokenKeys,
+  ] =
     await Promise.all([
       fetchPortfolio(address).then(
         (data) => ({ ok: true as const, data }),
@@ -183,6 +195,7 @@ export async function loadPortfolioTokenCatalog(
       getCustomTokens(),
       getStoredNetworksInfo(),
       getRecentReceivedTokens(),
+      getHiddenPortfolioTokenKeys(),
     ]);
 
   const apiUnavailable = !portfolioResult.ok;
@@ -194,11 +207,18 @@ export async function loadPortfolioTokenCatalog(
     : { tokens: [], defiPositions: [], totalValueUsd: 0 };
 
   const apiTokenKeys = new Set(
-    data.tokens.map((t) => `${t.chainId}-${t.contractAddress.toLowerCase()}`),
+    data.tokens.map((t) =>
+      getPortfolioTokenKey(t.chainId, t.contractAddress),
+    ),
   );
 
   const customAsPortfolio: PortfolioToken[] = customTokens
-    .filter((ct) => !apiTokenKeys.has(`${ct.chainId}-${ct.contractAddress}`))
+    .filter(
+      (ct) =>
+        !apiTokenKeys.has(
+          getPortfolioTokenKey(ct.chainId, ct.contractAddress),
+        ),
+    )
     .map((ct) => ({
       symbol: ct.symbol,
       name: ct.name,
@@ -219,12 +239,12 @@ export async function loadPortfolioTokenCatalog(
   // the next render. Auto-expires after 5 min (see `recentlyReceivedTokens.ts`).
   const customKeys = new Set(
     customAsPortfolio.map(
-      (ct) => `${ct.chainId}-${ct.contractAddress.toLowerCase()}`,
+      (ct) => getPortfolioTokenKey(ct.chainId, ct.contractAddress),
     ),
   );
   const recentAsPortfolio: PortfolioToken[] = recentReceived
     .filter((rt) => {
-      const key = `${rt.chainId}-${rt.contractAddress.toLowerCase()}`;
+      const key = getPortfolioTokenKey(rt.chainId, rt.contractAddress);
       return !apiTokenKeys.has(key) && !customKeys.has(key);
     })
     .map((rt) => ({
@@ -415,16 +435,32 @@ export async function loadPortfolioTokenCatalog(
     return next;
   });
 
-  const totalValueUsd = finalTokens.reduce((sum, t) => sum + t.valueUsd, 0) +
+  const visibleTokens = finalTokens.filter(
+    (token) =>
+      !hiddenTokenKeys.has(
+        getPortfolioTokenKey(token.chainId, token.contractAddress),
+      ),
+  );
+  const allTokenKeys = new Set(
+    finalTokens.map((token) =>
+      getPortfolioTokenKey(token.chainId, token.contractAddress),
+    ),
+  );
+
+  const totalValueUsd = visibleTokens.reduce((sum, t) => sum + t.valueUsd, 0) +
     (data.defiPositions || []).reduce((sum, p) => sum + p.valueUsd, 0);
 
   return {
-    tokens: finalTokens,
+    tokens: visibleTokens,
     defiPositions: data.defiPositions || [],
     totalValueUsd,
     customTokenKeys: new Set(
-      customTokens.map((ct) => `${ct.chainId}-${ct.contractAddress}`),
+      customTokens.map((ct) =>
+        getPortfolioTokenKey(ct.chainId, ct.contractAddress),
+      ),
     ),
+    allTokenKeys,
+    hiddenTokenKeys,
     apiUnavailable,
   };
 }

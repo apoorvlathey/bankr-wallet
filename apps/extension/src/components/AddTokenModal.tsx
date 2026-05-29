@@ -23,6 +23,10 @@ import {
 } from "@chakra-ui/react";
 import { ChevronDownIcon, WarningIcon } from "@chakra-ui/icons";
 import { addCustomToken } from "@/chrome/customTokenStorage";
+import {
+  getPortfolioTokenKey,
+  unhidePortfolioToken,
+} from "@/chrome/hiddenPortfolioTokens";
 import { useNetworks } from "@/contexts/NetworksContext";
 import ChainIcon from "@/components/ChainIcon";
 import { getVisibleChains, getResolvedChainByName } from "@/lib/chains";
@@ -31,8 +35,10 @@ import { useStripTokens, useTheme } from "@/theme";
 interface AddTokenModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onTokenAdded: () => void;
+  onTokenAdded: (options?: { forceSnapshot?: boolean }) => void | Promise<void>;
   existingTokenKeys: Set<string>;
+  allTokenKeys: Set<string>;
+  hiddenTokenKeys: Set<string>;
 }
 
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
@@ -42,6 +48,8 @@ export default function AddTokenModal({
   onClose,
   onTokenAdded,
   existingTokenKeys,
+  allTokenKeys,
+  hiddenTokenKeys,
 }: AddTokenModalProps) {
   const { networksInfo } = useNetworks();
 
@@ -60,9 +68,10 @@ export default function AddTokenModal({
   const [saving, setSaving] = useState(false);
   const fetchCounterRef = useRef(0);
 
+  const tokenKey = getPortfolioTokenKey(selectedChainId, tokenAddress);
+  const isHiddenToken = fetched && hiddenTokenKeys.has(tokenKey);
   const isDuplicate =
-    fetched &&
-    existingTokenKeys.has(`${selectedChainId}-${tokenAddress.toLowerCase()}`);
+    fetched && !isHiddenToken && existingTokenKeys.has(tokenKey);
 
   // Reset state when modal closes
   useEffect(() => {
@@ -163,14 +172,21 @@ export default function AddTokenModal({
     if (!fetched || isDuplicate || !symbol || !decimals) return;
     setSaving(true);
     try {
-      await addCustomToken({
-        contractAddress: tokenAddress,
-        chainId: selectedChainId,
-        symbol,
-        name,
-        decimals: parseInt(decimals, 10),
-      });
-      onTokenAdded();
+      if (isHiddenToken) {
+        await unhidePortfolioToken(selectedChainId, tokenAddress);
+      }
+
+      if (!isHiddenToken || !allTokenKeys.has(tokenKey)) {
+        await addCustomToken({
+          contractAddress: tokenAddress,
+          chainId: selectedChainId,
+          symbol,
+          name,
+          decimals: parseInt(decimals, 10),
+        });
+      }
+
+      await onTokenAdded({ forceSnapshot: true });
       onClose();
     } catch {
       setError("Failed to save token");
@@ -181,6 +197,7 @@ export default function AddTokenModal({
 
   const selectedChain = chainList.find((c) => c.chainId === selectedChainId);
   const canSave = fetched && !isDuplicate && !loading && !saving && symbol && decimals;
+  const saveLabel = isHiddenToken ? "Add Back" : "Add Token";
   const headerStrip = useStripTokens();
   const { tokens } = useTheme();
 
@@ -327,6 +344,24 @@ export default function AddTokenModal({
               </HStack>
             )}
 
+            {/* Hidden token notice */}
+            {isHiddenToken && (
+              <HStack
+                bg="status.info.bg"
+                border={tokens.borders.thin}
+                borderColor="status.info.border"
+                borderRadius="md"
+                px={3}
+                py={2}
+              >
+                <WarningIcon color="status.info.fg" boxSize="12px" />
+                <Text fontSize="xs" fontWeight="700" color="status.info.fg">
+                  This token is hidden. Adding it back will make it visible in
+                  all portfolios again.
+                </Text>
+              </HStack>
+            )}
+
             {/* Fetched metadata fields */}
             {fetched && !isDuplicate && (
               <VStack spacing={3} align="stretch">
@@ -374,7 +409,7 @@ export default function AddTokenModal({
               isLoading={saving}
               w="full"
             >
-              Add Token
+              {saveLabel}
             </Button>
           </VStack>
         </ModalBody>

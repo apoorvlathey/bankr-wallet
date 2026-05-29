@@ -368,6 +368,10 @@ src/
 │   ├── gasEstimation.ts     # Pre-confirmation gas estimation (RPC fees, CoinGecko USD price)
 │   ├── bankrApi.ts          # Bankr API client (submit, sign, job polling)
 │   ├── portfolioApi.ts      # Portfolio API client (fetches token holdings via website)
+│   ├── portfolioTokens.ts   # Shared portfolio catalog merge/filter logic
+│   ├── portfolioSnapshotStorage.ts # Per-address aggregate portfolio value snapshots
+│   ├── portfolioSnapshotRefresh.ts # Force-records current visibility-adjusted portfolio totals
+│   ├── hiddenPortfolioTokens.ts # Global hidden-token storage for Holdings
 │   ├── tokenMetadata.ts     # Shared ERC-20/native metadata resolver (swap list, Bungee list, custom tokens)
 │   ├── tokenLogoConstants.ts # Hardcoded token-logo fallbacks not covered by upstream token lists
 │   ├── onchainBalances.ts   # Onchain balance verification via Multicall3 batching
@@ -436,6 +440,7 @@ src/
 │   ├── SeedPhraseSetup.tsx  # Seed phrase generate/import flow (12-word grid)
 │   ├── CalldataDecoder.tsx  # Decoded/Raw tab for transaction calldata (eth.sh API)
 │   ├── TypedDataDisplay.tsx # Structured typed data display for EIP-712 signatures
+│   ├── HideTokenModal.tsx   # Portfolio hide-token confirmation
 │   └── shared/
 │       ├── AccountTypeIcons.tsx # SVG icons per account type (Robot, Key, Seed, Eye)
 │       └── PrivateKeyInput.tsx  # Reusable PK import/generate input with address derivation
@@ -1232,7 +1237,11 @@ API portfolio data is shown immediately, while onchain balances are verified in 
 - ERC-20 metadata fallback via `tokenMetadata.ts` so recently received/custom tokens can reuse the same logo/name source as Swap/Bridge selectors
 - The CoinGecko fallback runs through the background `coingeckoService.ts`, which batches lookups and persists market/search caches in `chrome.storage.local` so reopening the popup doesn't cold-start CoinGecko traffic each time
 
-This prevents the send/swap/holdings views from drifting when custom tokens or custom chains are added.
+After the merged catalog is built, `portfolioTokens.ts` filters global hidden tokens from `chrome.storage.local.hiddenPortfolioTokens` before calculating `totalValueUsd`. This keeps Holdings, Send, Swap holdings, current totals, and newly-written balance snapshots aligned across every wallet address. `AddTokenModal` removes a matching hidden entry before adding a token; if the Portfolio API already returned that token, no custom token record is created.
+
+Users can hide tokens from the Holdings row overflow menu or from More → Hide Tokens. The More screen reuses the shared portfolio catalog and onchain balance verification, lets users select multiple visible ERC-20 tokens, and writes them to the global hidden-token list in one batch. Its Currently Hidden sub-screen lists hidden tokens across all accounts and can show a token again globally. Bulk hide/show paths force-record a visibility-adjusted current snapshot without deleting existing chart history, then refresh the Holdings tab/chart.
+
+This prevents the send/swap/holdings views from drifting when custom tokens, custom chains, or hidden-token preferences are added.
 
 ### Shared Chain Icon Resolution
 
@@ -1254,6 +1263,8 @@ Important constraints:
 ### TokenHoldings Component
 
 - Shows token list with symbol, balance, USD value, chain badge
+- Hover actions include Swap, Send, custom-token Edit, and an overflow menu for hiding ERC-20 tokens
+- Hiding a token stores a global hidden-token entry, removes it from totals, clears cached holdings, and force-appends a current aggregate snapshot so future chart points reflect the hidden-token view without deleting existing chart history
 - Total portfolio value header with hide/show toggle (persisted in `chrome.storage.sync.hidePortfolioValue`)
 - 60-second client-side cache
 - Refresh button, loading skeletons, empty state
@@ -1265,8 +1276,9 @@ Important constraints:
 
 **How it works:**
 
-- `recordSnapshot(address, totalValueUsd)` is called fire-and-forget from `TokenHoldings.tsx` after each portfolio load (preferring onchain enhanced value, falling back to API-only)
-- Snapshots are deduplicated: skipped if the last snapshot for the address is <1 hour old
+- `recordSnapshot(address, totalValueUsd, options?)` is called from `TokenHoldings.tsx` after each portfolio load (preferring onchain enhanced value, falling back to API-only)
+- Hidden-token visibility changes call `recordSnapshot(..., { force: true })` to append the current visible total immediately while preserving prior chart history
+- Snapshots are deduplicated by default: skipped if the last snapshot for the address is <1 hour old unless `force` is set
 - Entries older than 8 days are pruned on each write
 - Addresses are normalized to lowercase
 
@@ -1279,7 +1291,7 @@ Important constraints:
 
 **Exports:**
 
-- `recordSnapshot(address, totalValueUsd)` — append snapshot (with dedup + prune)
+- `recordSnapshot(address, totalValueUsd, options?)` — append snapshot (with dedup + prune, or forced append)
 - `getSnapshots(address)` — read all snapshots for an address
 
 **Future expansion:**
