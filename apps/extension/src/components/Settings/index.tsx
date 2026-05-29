@@ -90,6 +90,7 @@ function Settings({
   const toast = useThemedToast();
   const { themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
+  const currentVersion = chrome.runtime.getManifest().version;
   // Reused for the Chain RPCs chip — same recessed strip pattern as the
   // chevron, so the row reads as a "system" tile in both themes.
   const chainStrip = useStripTokens();
@@ -326,35 +327,40 @@ function Settings({
 
         <Box h="3px" bg="border.default" w="full" />
 
-        <HStack spacing={1} justify="center">
-          <Text fontSize="sm" color="text.tertiary" fontWeight="500">
-            Built by
+        <VStack spacing={1} align="center">
+          <Text fontSize="xs" color="fg.muted" fontWeight="700">
+            Version {currentVersion}
           </Text>
-          <Link
-            display="flex"
-            alignItems="center"
-            gap={1}
-            color="accent.secondary"
-            fontWeight="700"
-            _hover={{ color: "accent.primary" }}
-            onClick={() => {
-              chrome.tabs.create({ url: TWITTER_URL });
-            }}
-          >
-            <Box
-              as="svg"
-              viewBox="0 0 24 24"
-              w="14px"
-              h="14px"
-              fill="currentColor"
-            >
-              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-            </Box>
-            <Text fontSize="sm" textDecor="underline">
-              @apoorveth
+          <HStack spacing={1} justify="center">
+            <Text fontSize="sm" color="text.tertiary" fontWeight="500">
+              Built by
             </Text>
-          </Link>
-        </HStack>
+            <Link
+              display="flex"
+              alignItems="center"
+              gap={1}
+              color="accent.secondary"
+              fontWeight="700"
+              _hover={{ color: "accent.primary" }}
+              onClick={() => {
+                chrome.tabs.create({ url: TWITTER_URL });
+              }}
+            >
+              <Box
+                as="svg"
+                viewBox="0 0 24 24"
+                w="14px"
+                h="14px"
+                fill="currentColor"
+              >
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              </Box>
+              <Text fontSize="sm" textDecor="underline">
+                @apoorveth
+              </Text>
+            </Link>
+          </HStack>
+        </VStack>
       </VStack>
     );
   }
