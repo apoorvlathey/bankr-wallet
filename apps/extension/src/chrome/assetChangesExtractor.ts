@@ -345,8 +345,8 @@ export async function extractAndStoreAssetChanges(
       payerForGas: true,
     });
     if (!record) return;
+    await seedRecentlyReceivedSafely(args.chainId, record);
     await updateTxInHistory(args.txId, { assetChanges: record });
-    await seedRecentlyReceived(args.chainId, record);
   } catch (err) {
     console.warn("[assetChanges] source extraction failed", err);
   }
@@ -381,8 +381,8 @@ export async function extractAndStoreDestinationAssetChanges(
       payerForGas: false,
     });
     if (!record) return;
+    await seedRecentlyReceivedSafely(args.destChainId, record);
     await updateTxInHistory(args.txId, { destAssetChanges: record });
-    await seedRecentlyReceived(args.destChainId, record);
   } catch (err) {
     console.warn("[assetChanges] destination extraction failed", err);
   }
@@ -406,6 +406,17 @@ async function seedRecentlyReceived(
       decimals: transfer.decimals,
       logoUrl: transfer.logoUrl,
     });
+  }
+}
+
+async function seedRecentlyReceivedSafely(
+  chainId: number,
+  record: AssetChangeRecord,
+): Promise<void> {
+  try {
+    await seedRecentlyReceived(chainId, record);
+  } catch (err) {
+    console.warn("[assetChanges] recent received token seed failed", err);
   }
 }
 

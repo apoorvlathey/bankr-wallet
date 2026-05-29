@@ -24,6 +24,7 @@ import {
   MenuItem,
   Portal,
   Icon,
+  Spinner,
 } from "@chakra-ui/react";
 import { CheckIcon, ChevronDownIcon, CopyIcon, ExternalLinkIcon, RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 import { useDisclosure } from "@chakra-ui/react";
@@ -40,6 +41,17 @@ import { getChainEnvironmentLabel } from "@/lib/chainIcons";
 import EditCustomTokenModal from "@/components/EditCustomTokenModal";
 import HideTokenModal from "@/components/HideTokenModal";
 import ChainIcon from "@/components/ChainIcon";
+import {
+  LOW_VALUE_TOKEN_THRESHOLD_USD,
+  getDefiTotal,
+  getTokenKeySet,
+  getWalletTokenTotal,
+  hasPositiveBalance,
+  getReceiptTokenRefresh,
+  mergeTokenBalanceRefresh,
+  shouldFetchOnInitialPortfolioLoad,
+  sortTokensByValue,
+} from "@/components/tokenHoldingsUtils";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById, getVisibleChains } from "@/lib/chains";
 import { Decorator } from "@/theme";
@@ -56,6 +68,7 @@ interface HoldingsSnapshot {
   customTokenKeys: Set<string>;
   allTokenKeys: Set<string>;
   hiddenTokenKeys: Set<string>;
+  onchainFetchedTokenKeys: Set<string>;
   rpcIssueChainIds: number[];
   apiUnavailable: boolean;
   timestamp: number;
@@ -88,11 +101,12 @@ interface TokenHoldingsProps {
 
 interface LoadPortfolioOptions {
   forceSnapshot?: boolean;
+  forceRefreshTokenKeys?: Set<string>;
+  forceRefreshTokens?: PortfolioToken[];
 }
 
 const ERC20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const LOW_VALUE_TOKEN_THRESHOLD_USD = 0.1;
 
 const EllipsisHorizontalIcon = (props: any) => (
   <Icon viewBox="0 0 24 24" fill="none" {...props}>
@@ -471,12 +485,17 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
   const [customTokenKeys, setCustomTokenKeys] = useState<Set<string>>(() => initialSnapshot?.customTokenKeys ?? new Set());
   const [allTokenKeys, setAllTokenKeys] = useState<Set<string>>(() => initialSnapshot?.allTokenKeys ?? new Set());
   const [hiddenTokenKeys, setHiddenTokenKeys] = useState<Set<string>>(() => initialSnapshot?.hiddenTokenKeys ?? new Set());
+  const [onchainFetchedTokenKeys, setOnchainFetchedTokenKeys] = useState<Set<string>>(
+    () => initialSnapshot?.onchainFetchedTokenKeys ?? new Set(),
+  );
   const [apiUnavailable, setApiUnavailable] = useState(() => initialSnapshot?.apiUnavailable ?? false);
   const [editingToken, setEditingToken] = useState<PortfolioToken | null>(null);
   const [tokenToHide, setTokenToHide] = useState<PortfolioToken | null>(null);
   const [hidingToken, setHidingToken] = useState(false);
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
   const [showLowValueTokens, setShowLowValueTokens] = useState(false);
+  const [portfolioBalanceRefreshing, setPortfolioBalanceRefreshing] = useState(false);
+  const [lowValueLoading, setLowValueLoading] = useState(false);
   const editModal = useDisclosure();
 
   // Load hide preference
@@ -514,11 +533,31 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
 
       try {
         const catalog = await loadPortfolioTokenCatalog(address);
-        const mergedTokens = catalog.tokens;
+        const catalogTokenKeys = getTokenKeySet(catalog.tokens);
+        const receiptTokenStubs = (options.forceRefreshTokens ?? []).filter(
+          (token) =>
+            !catalogTokenKeys.has(
+              getPortfolioTokenKey(token.chainId, token.contractAddress),
+            ) &&
+            !catalog.hiddenTokenKeys.has(
+              getPortfolioTokenKey(token.chainId, token.contractAddress),
+            ),
+        );
+        const mergedTokens = [...catalog.tokens, ...receiptTokenStubs].filter(
+          (token) =>
+            !catalog.hiddenTokenKeys.has(
+              getPortfolioTokenKey(token.chainId, token.contractAddress),
+            ),
+        );
+        const forcedRefreshTokenKeys = new Set([
+          ...catalog.recentReceivedTokenKeys,
+          ...(options.forceRefreshTokenKeys ?? []),
+        ]);
 
         setCustomTokenKeys(catalog.customTokenKeys);
         setAllTokenKeys(catalog.allTokenKeys);
         setHiddenTokenKeys(catalog.hiddenTokenKeys);
+        setOnchainFetchedTokenKeys(new Set());
         setApiUnavailable(catalog.apiUnavailable);
 
         // Hide tokens whose balance is still 0 in the catalog. The catalog
@@ -526,11 +565,11 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         // resolution has something to fetch for) but those placeholders show
         // up as a row of "0 ETH / $0" entries that vanish a second later
         // when RPC reports the real balance — a flicker the user definitely
-        // notices. Render only the tokens we already know are non-zero, then
-        // let `fetchOnchainBalances` (still receiving the full `mergedTokens`)
-        // fill the rest in.
-        const knownNonZeroTokens = mergedTokens.filter(
-          (t) => parseFloat(t.balance) > 0,
+        // notices. Render only the tokens we already know are non-zero; the
+        // selective onchain pass below fills visible primary rows and native
+        // placeholders without touching collapsed low-value ERC-20s.
+        const knownNonZeroTokens = sortTokensByValue(
+          mergedTokens.filter(hasPositiveBalance),
         );
 
         // Show merged data immediately so user isn't stuck on skeleton loader
@@ -550,24 +589,70 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         setLastFetched(fetchedAt);
         const cacheKey = holdingsCacheKey(address, chainReloadKey);
 
-        // Enhance with onchain balances in the background.
-        // If RPCs are rate-limited or slow, user already sees API values.
-        try {
-          const onchain = await fetchOnchainBalances(address, mergedTokens);
-          onRpcIssuesChange?.(onchain.rpcIssueChainIds);
-          setTokens(onchain.tokens);
+        const tokensToRefresh = mergedTokens.filter((token) =>
+          forcedRefreshTokenKeys.has(
+            getPortfolioTokenKey(token.chainId, token.contractAddress),
+          ) ||
+          shouldFetchOnInitialPortfolioLoad(token, showLowValueTokens),
+        );
+        const refreshedKeys = getTokenKeySet(tokensToRefresh);
+
+        if (tokensToRefresh.length === 0) {
           setLoading(false);
-          // Total = onchain corrected wallet tokens + DeFi positions
-          const defiTotal = (catalog.defiPositions || []).reduce((s: number, p: DefiPosition) => s + p.valueUsd, 0);
-          const total = onchain.totalValueUsd + defiTotal;
+          setPortfolioBalanceRefreshing(false);
+          holdingsCache.set(cacheKey, {
+            tokens: knownNonZeroTokens,
+            defiPositions: catalog.defiPositions || [],
+            totalValueUsd: catalog.totalValueUsd,
+            customTokenKeys: catalog.customTokenKeys,
+            allTokenKeys: catalog.allTokenKeys,
+            hiddenTokenKeys: catalog.hiddenTokenKeys,
+            onchainFetchedTokenKeys: new Set(),
+            rpcIssueChainIds: [],
+            apiUnavailable: catalog.apiUnavailable,
+            timestamp: fetchedAt,
+          });
+          try {
+            await recordSnapshot(address, catalog.totalValueUsd, {
+              force: options.forceSnapshot,
+            });
+            onSnapshotsChanged?.();
+          } catch {
+            // Snapshot failures should not block holdings rendering.
+          }
+          return;
+        }
+
+        // Enhance visible primary balances in the background. Low-value ERC-20s
+        // stay on catalog/API values until the collapsed group is expanded.
+        setPortfolioBalanceRefreshing(true);
+        try {
+          const onchain = await fetchOnchainBalances(address, tokensToRefresh, {
+            preserveZeroBalanceTokens: true,
+          });
+          onRpcIssuesChange?.(onchain.rpcIssueChainIds);
+          const displayTokens = mergeTokenBalanceRefresh(
+            mergedTokens,
+            onchain.tokens,
+            refreshedKeys,
+          );
+          setTokens(displayTokens);
+          setOnchainFetchedTokenKeys(refreshedKeys);
+          setLoading(false);
+          // Total = refreshed visible wallet tokens + deferred low-value API
+          // values + DeFi positions.
+          const total =
+            getWalletTokenTotal(displayTokens) +
+            getDefiTotal(catalog.defiPositions || []);
           setTotalValueUsd(total);
           holdingsCache.set(cacheKey, {
-            tokens: onchain.tokens,
+            tokens: displayTokens,
             defiPositions: catalog.defiPositions || [],
             totalValueUsd: total,
             customTokenKeys: catalog.customTokenKeys,
             allTokenKeys: catalog.allTokenKeys,
             hiddenTokenKeys: catalog.hiddenTokenKeys,
+            onchainFetchedTokenKeys: refreshedKeys,
             rpcIssueChainIds: onchain.rpcIssueChainIds,
             apiUnavailable: catalog.apiUnavailable,
             timestamp: fetchedAt,
@@ -584,6 +669,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         } catch (err) {
           onRpcIssuesChange?.([]);
           setLoading(false);
+          setOnchainFetchedTokenKeys(new Set());
           // RPC failed entirely — keep only the known non-zero tokens in
           // the cache too, so a refresh from cache doesn't bring back the
           // zero-balance placeholder rows we just suppressed.
@@ -594,6 +680,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
             customTokenKeys: catalog.customTokenKeys,
             allTokenKeys: catalog.allTokenKeys,
             hiddenTokenKeys: catalog.hiddenTokenKeys,
+            onchainFetchedTokenKeys: new Set(),
             rpcIssueChainIds: [],
             apiUnavailable: catalog.apiUnavailable,
             timestamp: fetchedAt,
@@ -607,14 +694,17 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
           } catch {
             // Snapshot failures should not block holdings rendering.
           }
+        } finally {
+          setPortfolioBalanceRefreshing(false);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load portfolio");
         onRpcIssuesChange?.([]);
+        setPortfolioBalanceRefreshing(false);
         setLoading(false);
       }
     },
-    [address, chainReloadKey, lastFetched, onRpcIssuesChange, onSnapshotsChanged, tokens.length]
+    [address, chainReloadKey, lastFetched, onRpcIssuesChange, onSnapshotsChanged, showLowValueTokens, tokens.length]
   );
 
   // Reload when address or the set of visible chains changes. Seed from the
@@ -629,9 +719,12 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       setCustomTokenKeys(cached.customTokenKeys);
       setAllTokenKeys(cached.allTokenKeys);
       setHiddenTokenKeys(cached.hiddenTokenKeys);
+      setOnchainFetchedTokenKeys(cached.onchainFetchedTokenKeys ?? new Set());
       setApiUnavailable(cached.apiUnavailable);
       setLastFetched(cached.timestamp);
       setLoading(false);
+      setPortfolioBalanceRefreshing(false);
+      setLowValueLoading(false);
       onRpcIssuesChange?.(cached.rpcIssueChainIds);
     } else {
       setTokens([]);
@@ -640,18 +733,19 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       setCustomTokenKeys(new Set());
       setAllTokenKeys(new Set());
       setHiddenTokenKeys(new Set());
+      setOnchainFetchedTokenKeys(new Set());
       setApiUnavailable(false);
       setLastFetched(0);
       setLoading(true);
+      setPortfolioBalanceRefreshing(false);
+      setLowValueLoading(false);
     }
     loadPortfolio(true);
   }, [address, chainReloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Hot-refresh portfolio whenever a confirmed tx writes asset changes —
-  // the receipt poller fires `txHistoryUpdated` with the updated entry, and
-  // any inbound ERC-20 has already been added to `recentlyReceivedTokens`,
-  // so a forced reload picks it up before the upstream portfolio API
-  // catches up.
+  // Hot-refresh portfolio whenever a confirmed tx writes asset changes. The
+  // receipt's ERC-20s bypass the low-value deferral so the just-touched rows
+  // get immediate RPC balances even while "Under $0.10" stays collapsed.
   useEffect(() => {
     if (!address) return;
     const listener = (message: any) => {
@@ -664,7 +758,11 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       )
         return;
       if (!updated.assetChanges && !updated.destAssetChanges) return;
-      loadPortfolio(true);
+      const receiptRefresh = getReceiptTokenRefresh(updated);
+      loadPortfolio(true, {
+        forceRefreshTokenKeys: receiptRefresh.tokenKeys,
+        forceRefreshTokens: receiptRefresh.tokenStubs,
+      });
     };
     chrome.runtime.onMessage.addListener(listener);
     return () => chrome.runtime.onMessage.removeListener(listener);
@@ -708,6 +806,89 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       ),
     };
   }, [filteredTokens]);
+
+  const refreshLowValueTokenBalances = useCallback(async () => {
+    if (!address || portfolioBalanceRefreshing || lowValueLoading) return;
+
+    const tokensToRefresh = lowValueTokens.filter((token) => {
+      const key = getPortfolioTokenKey(token.chainId, token.contractAddress);
+      return !hiddenTokenKeys.has(key) && !onchainFetchedTokenKeys.has(key);
+    });
+    if (tokensToRefresh.length === 0) return;
+
+    const refreshedKeys = getTokenKeySet(tokensToRefresh);
+    setLowValueLoading(true);
+
+    try {
+      const onchain = await fetchOnchainBalances(address, tokensToRefresh, {
+        preserveZeroBalanceTokens: true,
+      });
+      onRpcIssuesChange?.(onchain.rpcIssueChainIds);
+
+      const nextTokens = mergeTokenBalanceRefresh(
+        tokens,
+        onchain.tokens,
+        refreshedKeys,
+      );
+      const nextFetchedKeys = new Set(onchainFetchedTokenKeys);
+      refreshedKeys.forEach((key) => nextFetchedKeys.add(key));
+      const total = getWalletTokenTotal(nextTokens) + getDefiTotal(defiPositions);
+      const fetchedAt = Date.now();
+      const cacheKey = holdingsCacheKey(address, chainReloadKey);
+
+      setTokens(nextTokens);
+      setOnchainFetchedTokenKeys(nextFetchedKeys);
+      setTotalValueUsd(total);
+      setLastFetched(fetchedAt);
+      holdingsCache.set(cacheKey, {
+        tokens: nextTokens,
+        defiPositions,
+        totalValueUsd: total,
+        customTokenKeys,
+        allTokenKeys,
+        hiddenTokenKeys,
+        onchainFetchedTokenKeys: nextFetchedKeys,
+        rpcIssueChainIds: onchain.rpcIssueChainIds,
+        apiUnavailable,
+        timestamp: fetchedAt,
+      });
+
+      try {
+        await recordSnapshot(address, total);
+        onSnapshotsChanged?.();
+      } catch {
+        // Snapshot failures should not block expanded low-value rows.
+      }
+    } catch {
+      // Keep catalog/API balances for the collapsed group if RPC refresh fails.
+    } finally {
+      setLowValueLoading(false);
+    }
+  }, [
+    address,
+    allTokenKeys,
+    apiUnavailable,
+    chainReloadKey,
+    customTokenKeys,
+    defiPositions,
+    hiddenTokenKeys,
+    lowValueLoading,
+    lowValueTokens,
+    onRpcIssuesChange,
+    onSnapshotsChanged,
+    onchainFetchedTokenKeys,
+    portfolioBalanceRefreshing,
+    tokens,
+  ]);
+
+  useEffect(() => {
+    if (!showLowValueTokens || portfolioBalanceRefreshing) return;
+    void refreshLowValueTokenBalances();
+  }, [
+    portfolioBalanceRefreshing,
+    refreshLowValueTokenBalances,
+    showLowValueTokens,
+  ]);
 
   // Batch the logo-cache lookup across every token + nested staking position
   // so all rows benefit from the same `ensAvatarImageCache` data-URL cache
@@ -793,6 +974,11 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         ),
       );
       setHiddenTokenKeys((prev) => new Set(prev).add(tokenKey));
+      setOnchainFetchedTokenKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(tokenKey);
+        return next;
+      });
       setTotalValueUsd((prev) =>
         Math.max(0, prev - Math.max(0, tokenToHide.valueUsd || 0)),
       );
@@ -922,6 +1108,15 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                   >
                     Under $0.10
                   </Text>
+                  {lowValueLoading && (
+                    <Spinner
+                      thickness="2px"
+                      speed="0.65s"
+                      color="text.secondary"
+                      boxSize="12px"
+                      flexShrink={0}
+                    />
+                  )}
                 </HStack>
                 <Text
                   fontSize="10px"

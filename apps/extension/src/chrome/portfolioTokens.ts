@@ -38,6 +38,7 @@ export interface PortfolioTokenCatalog {
   defiPositions: DefiPosition[];
   totalValueUsd: number;
   customTokenKeys: Set<string>;
+  recentReceivedTokenKeys: Set<string>;
   allTokenKeys: Set<string>;
   hiddenTokenKeys: Set<string>;
   /**
@@ -457,6 +458,11 @@ export async function loadPortfolioTokenCatalog(
     customTokenKeys: new Set(
       customTokens.map((ct) =>
         getPortfolioTokenKey(ct.chainId, ct.contractAddress),
+      ),
+    ),
+    recentReceivedTokenKeys: new Set(
+      recentReceived.map((rt) =>
+        getPortfolioTokenKey(rt.chainId, rt.contractAddress),
       ),
     ),
     allTokenKeys,
