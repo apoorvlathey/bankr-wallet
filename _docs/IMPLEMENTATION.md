@@ -575,6 +575,58 @@ The onboarding page has its own Vite build config:
 
 Build command: `pnpm build:onboarding` (included in `pnpm build`)
 
+## dapp3 ENS Browser
+
+WalletChan includes the dapp3 ENS browsing resolver inside the extension. The
+More screen exposes `dapp3 Browser`, which opens the standalone extension page
+`browse.html` in a browser tab. That page is a WalletChan-branded search-bar
+launcher accepting either a `.eth` name or a raw `0x` contract address, with
+optional path/query/hash suffixes. It is intentionally not rendered inside the
+popup.
+
+The launcher intentionally reuses the same resolver path as address-bar
+browsing:
+
+1. `pages/Dapp3Browser.tsx` parses input using the dapp3 launcher rules:
+   - `name.eth[/path]` -> `http://name.eth[/path]`
+   - `0x<address>[/path]` -> `https://0x<address>.w3eth.io[/path]`
+   - pasted `*.eth.limo`, `*.eth.link`, `*.w3eth.io`, and
+     `0x<address>.1.w3link.io` gateway URLs are normalized back to the
+     underlying ENS/address target.
+2. The page navigates the current browser tab to `interstitial.html#<target-url>`.
+3. `EnsInterstitial` parses the fragment and sends `ens-cache-check` followed
+   by `ens-resolve` to the service worker.
+4. `ensBrowsing/resolver.ts` resolves ENS `contenthash` records to IPFS/IPNS,
+   or falls back to ERC-4804 / ERC-5219 onchain HTML via the resolved address.
+5. The service worker chooses either the hosted gateway (`eth.limo` /
+   `w3eth.io`) or the configured local Kubo gateway based on the existing
+   `ensBrowsing` settings. Raw `0x` address mode follows the same split:
+   `pinOnchainHtml` OFF probes support and routes to hosted `w3eth.io`;
+   `pinOnchainHtml` ON fetches and pins the HTML body to local Kubo.
+   Navigations to w3link's mainnet pattern (`0x<address>.1.w3link.io`) are
+   also redirected to the interstitial and normalized into this raw-address
+   path when ENS browsing is enabled.
+
+The launcher lists user-pinned `ensBookmarks` entries first as browser-style
+"Favorite dapps" tiles, followed by the freshest valid `ensResolveCache`
+entries as "Recently cached dapps" tiles in a wider strip below the search bar.
+Tile clicks submit the ENS name/address back through the same interstitial path
+rather than constructing gateway URLs in the page. Gateway visits can attach
+optional title/favicon metadata to the cache; older entries fall back to the
+gateway `/favicon.ico` path and then to a letter tile if the image fails. Raw
+`0x` ERC-4804 address-mode resolutions are cached here too so onchain HTML
+dapps opened without ENS still appear in the recent tiles.
+
+On local-gateway pages, the injected WalletChan · dapp3 banner links its left
+logo/title cluster to `browse.html` in the same tab. The right side includes a
+star button that writes/removes a local `ensBookmarks` entry for the current
+ENS/address identity and path. Bookmarks store only non-secret display metadata
+such as title and favicon.
+
+No wallet credentials are used by this flow. It only reads Ethereum mainnet via
+the configured RPC and optionally writes non-secret ENS / ERC-4804 caches and
+bookmarks.
+
 ## Transaction Flow
 
 ### 1. Dapp Discovers & Connects to Wallet

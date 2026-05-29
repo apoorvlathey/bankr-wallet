@@ -13,6 +13,7 @@ const ETH_GATEWAY_REDIRECT_RULE_ID = 1002;
 const ETH_GATEWAY_BYPASS_RULE_ID = 1003;
 const W3ETH_REDIRECT_RULE_ID = 1004;
 const W3ETH_BYPASS_RULE_ID = 1005;
+const W3LINK_REDIRECT_RULE_ID = 1006;
 
 // Any host ending in `.eth` (first-level or arbitrary subdomain). Excludes
 // `eth.limo` and `w3eth.io` by construction — those hosts end in `.limo` /
@@ -35,6 +36,13 @@ const ETH_GATEWAY_REGEX =
 // the request right back to w3eth.io and bounce indefinitely.
 const W3ETH_REGEX =
   "^https?://([a-z0-9-]+(?:\\.[a-z0-9-]+)*)\\.w3eth\\.io\\.?(?::\\d+)?(/.*)?$";
+
+// Match w3link's ERC-4804 mainnet gateway shape:
+// `<0x-address>.1.w3link.io`. The middle label is the chain id; this resolver
+// currently reads ERC-4804 from Ethereum mainnet only, so we intentionally
+// accept chain id 1 rather than every numeric chain label.
+const W3LINK_MAINNET_REGEX =
+  "^https?://(0x[a-f0-9]{40})\\.1\\.w3link\\.io\\.?(?::\\d+)?(/.*)?$";
 
 export async function installEthRedirectRule(): Promise<void> {
   // The interstitial is a web-accessible resource, so DNR can redirect to it.
@@ -105,6 +113,39 @@ export async function removeEthGatewayRedirectRule(): Promise<void> {
     removeRuleIds: [ETH_GATEWAY_REDIRECT_RULE_ID],
   });
   console.log("[ens] DNR eth.limo/link redirect rule removed");
+}
+
+export async function installW3linkRedirectRule(): Promise<void> {
+  // Send `https?://<addr>.1.w3link.io[:port][/path]` straight to the
+  // interstitial. Avoid a two-hop `w3link -> <addr>.eth -> interstitial`
+  // redirect because Chromium does not reliably re-run DNR on the rewritten
+  // main-frame URL before DNS/navigation handling.
+  const interstitial = chrome.runtime.getURL("interstitial.html");
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [W3LINK_REDIRECT_RULE_ID],
+    addRules: [
+      {
+        id: W3LINK_REDIRECT_RULE_ID,
+        priority: 1,
+        action: {
+          type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
+          redirect: { regexSubstitution: `${interstitial}#\\0` },
+        },
+        condition: {
+          regexFilter: W3LINK_MAINNET_REGEX,
+          resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME],
+        },
+      },
+    ],
+  });
+  console.log("[ens] DNR w3link.io redirect rule installed");
+}
+
+export async function removeW3linkRedirectRule(): Promise<void> {
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [W3LINK_REDIRECT_RULE_ID],
+  });
+  console.log("[ens] DNR w3link.io redirect rule removed");
 }
 
 // Per-tab session ALLOW rule that punches through the gateway redirect for a

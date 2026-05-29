@@ -25,6 +25,7 @@ import {
   findCachedByGatewayLabel,
   getCached,
   setCached,
+  updateCachedMetadata,
 } from "./cache";
 import {
   probeKuboGateway,
@@ -132,18 +133,16 @@ async function resolveAndRedirect(
   };
   await chrome.storage.session.set({ [`tab:${tabId}`]: ctx });
 
-  // Skip the ENS-resolve cache for raw-address resolutions: there's no ENS
-  // lookup to cache, and `fetchPinAndCacheErc4804` has its own sha256-based
-  // per-contract dedup that handles unchanged re-resolves cheaply.
-  if (!/^0x[a-f0-9]{40}$/i.test(result.ensName)) {
-    await setCached({
-      ensName: result.ensName,
-      kind: result.kind,
-      value: result.value,
-      resolvedAt: Date.now(),
-      contractAddress: result.contractAddress,
-    }).catch((e) => console.warn("[ens] cache write failed", e));
-  }
+  // Also cache raw-address ERC-4804 resolutions. The raw address path has its
+  // own body-level web3 cache, but `browse.html` uses this cache as recent
+  // dapp history and the interstitial can fast-path repeated address visits.
+  await setCached({
+    ensName: result.ensName,
+    kind: result.kind,
+    value: result.value,
+    resolvedAt: Date.now(),
+    contractAddress: result.contractAddress,
+  }).catch((e) => console.warn("[ens] cache write failed", e));
 
   await chrome.tabs.update(tabId, { url: target });
   return { ok: true };
@@ -214,6 +213,21 @@ export function handleEnsBrowsingMessage(
 ): boolean {
   if (!msg || typeof msg !== "object") return false;
   const m = msg as Record<string, unknown>;
+
+  if (m.type === "ens-cache-metadata") {
+    const name = String(m.name ?? "").toLowerCase();
+    const title = typeof m.title === "string" ? m.title : undefined;
+    const favicon = typeof m.favicon === "string" ? m.favicon : undefined;
+    if (!/^(?:[a-z0-9-]+\.)+eth$/.test(name)) {
+      sendResponse({ ok: false, error: "invalid ENS name" });
+      return true;
+    }
+    updateCachedMetadata(name, { title, favicon }).then(
+      () => sendResponse({ ok: true }),
+      (e) => sendResponse({ ok: false, error: e?.message ?? String(e) }),
+    );
+    return true;
+  }
 
   if (m.type === "ens-get-tab-ctx") {
     const tabId = sender.tab?.id;
@@ -313,13 +327,14 @@ export function handleEnsBrowsingMessage(
 
   if (m.type === "ens-resolve") {
     const tabId = sender.tab?.id ?? (m.tabId as number | undefined);
+    const name = String(m.name);
     if (tabId == null) {
       sendResponse({ ok: false, error: "no tabId" });
       return true;
     }
     resolveAndRedirect(
       tabId,
-      String(m.name),
+      name,
       String(m.path ?? "/"),
       String(m.search ?? ""),
       String(m.hash ?? ""),

@@ -2,10 +2,10 @@ import { defineConfig } from "vite";
 import path from "path";
 import { sharedConfig, sharedBuildConfig, buildDir } from "./vite.config";
 
-// Builds the ENS browsing standalone pages (interstitial + error + setup-kubo)
-// in a single rollup pass, mirroring vite.config.onboarding.ts. Each page is a
-// separate HTML entry so they can be opened independently as web-accessible
-// resources from the DNR redirect / settings link.
+// Builds the ENS browsing standalone pages (launcher + interstitial + error +
+// setup-kubo) in a single rollup pass, mirroring vite.config.onboarding.ts.
+// Each page is a separate HTML entry so they can be opened independently from
+// the More launcher, DNR redirect, or settings link.
 export default defineConfig({
   ...sharedConfig,
   build: {
@@ -14,6 +14,7 @@ export default defineConfig({
     emptyOutDir: false,
     rollupOptions: {
       input: {
+        browse: path.resolve(__dirname, "browse.html"),
         interstitial: path.resolve(__dirname, "interstitial.html"),
         "ens-error": path.resolve(__dirname, "ens-error.html"),
         "setup-kubo": path.resolve(__dirname, "setup-kubo.html"),

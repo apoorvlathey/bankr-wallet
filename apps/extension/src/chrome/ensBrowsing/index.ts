@@ -13,10 +13,12 @@ import {
 import {
   installEthGatewayRedirectRule,
   installEthRedirectRule,
+  installW3linkRedirectRule,
   installW3ethRedirectRule,
   removeEthGatewayBypassForTab,
   removeEthGatewayRedirectRule,
   removeEthRedirectRule,
+  removeW3linkRedirectRule,
   removeW3ethBypassForTab,
   removeW3ethRedirectRule,
 } from "./dnrRules";
@@ -38,11 +40,13 @@ async function syncRules(settings: EnsBrowsingSettings): Promise<void> {
     await Promise.all([
       installEthRedirectRule(),
       installEthGatewayRedirectRule(),
+      installW3linkRedirectRule(),
     ]);
   } else {
     await Promise.all([
       removeEthRedirectRule(),
       removeEthGatewayRedirectRule(),
+      removeW3linkRedirectRule(),
     ]);
   }
   if (shouldInterceptW3eth(settings)) {

@@ -24,6 +24,7 @@ import {
 } from "@/constants/externalUrls";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
+import { GlobeIcon } from "@/components/Settings/icons";
 
 interface MoreActionsViewProps {
   onBack: () => void;
@@ -243,6 +244,9 @@ export default function MoreActionsView({
   fromAddress,
   stakeApy,
 }: MoreActionsViewProps) {
+  const isFirefox =
+    typeof navigator !== "undefined" && /Firefox/.test(navigator.userAgent);
+
   const primaryActions: MoreAction[] = [
     {
       title: "Stake",
@@ -273,6 +277,18 @@ export default function MoreActionsView({
       external: false,
       onClick: onWalletConnect,
     },
+    ...(!isFirefox
+      ? [
+          {
+            title: "dapp3 Browser",
+            detail: "ENS, IPFS, onchain HTML",
+            icon: <GlobeIcon boxSize={5} />,
+            iconBg: "chart.positive",
+            iconColor: "surface.base",
+            onClick: () => openExternal(chrome.runtime.getURL("browse.html")),
+          },
+        ]
+      : []),
     {
       title: "Revoke Approvals",
       detail: "revoke.cash",

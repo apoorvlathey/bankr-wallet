@@ -85,8 +85,9 @@ export async function resolveEns(
   const stripped = lower.endsWith(".") ? lower.slice(0, -1) : lower;
 
   // Raw-address mode: the W3ETH_REGEX DNR rule rewrites
-  // `0x<addr>.w3eth.io` → `http://0x<addr>.eth`, which arrives here as
-  // `0x<addr>.eth`. Skip ENS lookup and resolve as an ERC-4804 contract.
+  // `0x<addr>.w3eth.io` rewrites to `http://0x<addr>.eth`; the w3link
+  // interstitial path normalizes `0x<addr>.1.w3link.io` to the same
+  // `0x<addr>.eth` shape. Skip ENS lookup and resolve as an ERC-4804 contract.
   const labelOnly = stripped.slice(0, -4);
   if (/^0x[a-f0-9]{40}$/.test(labelOnly)) {
     return resolveContractAddress(labelOnly);
@@ -224,15 +225,17 @@ export async function resolveEns(
 }
 
 // Resolve a raw 0x contract address as an ERC-4804 dapp, skipping ENS lookup.
-// Reached via the `0x<addr>.w3eth.io` interception path — the W3ETH_REGEX
-// rewrites those URLs to `http://0x<addr>.eth` and `resolveEns` detects the
-// shape and dispatches here. The `ensName` field on the response is the
-// lowercased address itself, since there is no associated ENS name.
+// Reached via either:
+//   - `0x<addr>.w3eth.io` interception, where the W3ETH_REGEX rewrite produces
+//     `http://0x<addr>.eth`, or
+//   - `0x<addr>.1.w3link.io` interception, where the interstitial normalizes
+//     the mainnet w3link URL to the same raw-address `.eth` shape, or
+//   - the manual dapp3 launcher, which opens interstitial.html directly.
 //
-// The w3eth.io DNR rule is only installed when pinOnchainHtml is ON, so we
-// can assume the local-pin path is the right destination. If Kubo is up but
-// not CORS-allowed, the returned `kubo-cors-blocked` code bounces the user
-// through setup-kubo.html.
+// The `ensName` field on the response is the lowercased address itself, since
+// there is no associated ENS name. When pinOnchainHtml is OFF, we only probe
+// ERC-4804 support and then route to hosted w3eth.io. When pinOnchainHtml is
+// ON, we fetch + pin the HTML body to local Kubo.
 export async function resolveContractAddress(
   address: string,
 ): Promise<ResolveResponse> {
@@ -253,6 +256,27 @@ export async function resolveContractAddress(
 
   // TODO(helios): wrap in Helios verified transport when available.
   const client = getDirectClient(rpcUrl);
+
+  const settings = await getEnsBrowsingSettings();
+  if (!settings.pinOnchainHtml) {
+    try {
+      await fetchErc4804(client, lower as `0x${string}`, { probeOnly: true });
+    } catch (e) {
+      if (e instanceof Web3FetchError) {
+        return { ok: false, error: `web3-${e.detail.kind}: ${e.message}` };
+      }
+      return { ok: false, error: `ERC-4804 probe failed: ${describe(e)}` };
+    }
+    return {
+      ok: true,
+      kind: "web3",
+      value: lower,
+      ensName: lower,
+      trustedDirectly: true,
+      contractAddress: lower as `0x${string}`,
+    };
+  }
+
   return await fetchPinAndCacheErc4804(
     client,
     lower as `0x${string}`,

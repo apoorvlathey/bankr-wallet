@@ -50,6 +50,24 @@ function parseTarget(): ParsedTarget | null {
     return null;
   }
   const host = u.hostname.replace(/\.$/, "").toLowerCase();
+  const w3linkMatch = host.match(/^(0x[a-f0-9]{40})\.1\.w3link\.io$/i);
+  if (w3linkMatch?.[1]) {
+    return {
+      ensName: `${w3linkMatch[1].toLowerCase()}.eth`,
+      path: u.pathname || "/",
+      search: u.search,
+      hash: u.hash,
+    };
+  }
+  const w3ethMatch = host.match(/^([a-z0-9-]+(?:\.[a-z0-9-]+)*)\.w3eth\.io$/i);
+  if (w3ethMatch?.[1]) {
+    return {
+      ensName: `${w3ethMatch[1].toLowerCase()}.eth`,
+      path: u.pathname || "/",
+      search: u.search,
+      hash: u.hash,
+    };
+  }
   if (!/^(?:[a-z0-9-]+\.)+eth$/.test(host)) return null;
   return {
     ensName: host,
@@ -63,10 +81,10 @@ type ResolveResult =
   | { ok: true }
   | { ok: false; error: string; code?: string };
 
-// Raw-address w3eth.io URLs arrive here as `0x<addr>.eth` because the
-// W3ETH_REGEX rewrite tacks `.eth` on so the existing ENS_REGEX rule routes
-// it to the interstitial. For display we want the bare address back — the
-// `.eth` is plumbing, not part of the user-visible identity.
+// Raw-address gateway URLs arrive here as `0x<addr>.eth` either because a DNR
+// gateway rewrite tacks `.eth` on or because the manual dapp3 launcher
+// normalized the target before opening this page. For display we want the bare
+// address back — the `.eth` is plumbing, not part of the user-visible identity.
 function displayName(ensName: string): string {
   const lower = ensName.toLowerCase();
   if (lower.endsWith(".eth") && /^0x[a-f0-9]{40}\.eth$/.test(lower)) {

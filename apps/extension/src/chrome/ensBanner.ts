@@ -1,3 +1,12 @@
+import {
+  addBookmark,
+  isBookmarked,
+  normalizeBookmarkPath,
+  onBookmarksChanged,
+  removeBookmark,
+  type EnsBookmark,
+} from "./ensBrowsing/bookmarks";
+
 // ENS identity banner — content script matched on Kubo's subdomain gateway
 // (`*.ipfs.localhost` / `*.ipns.localhost`) so the user keeps seeing the
 // original ENS name even though the URL bar shows the CID-subdomain target.
@@ -70,6 +79,63 @@ async function getTheme(): Promise<Theme> {
 function currentPath(): string {
   const p = location.pathname + location.search + location.hash;
   return p === "/" ? "" : p;
+}
+
+function safeFaviconUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  if (/^https?:\/\//i.test(url) || /^data:image\//i.test(url)) return url;
+  return undefined;
+}
+
+function scrapePageMetadata(): {
+  title?: string;
+  favicon?: string;
+} {
+  const title = document.title?.trim() || undefined;
+  const iconSelectors = [
+    'link[rel~="icon"]',
+    'link[rel="shortcut icon"]',
+    'link[rel="apple-touch-icon"]',
+    'link[rel="apple-touch-icon-precomposed"]',
+  ];
+  let favicon: string | undefined;
+  for (const selector of iconSelectors) {
+    const el = document.querySelector(selector) as HTMLLinkElement | null;
+    const href = el?.getAttribute("href");
+    if (!href) continue;
+    try {
+      favicon = safeFaviconUrl(new URL(href, location.href).toString());
+      if (favicon) break;
+    } catch {
+      // Malformed favicon href; skip it.
+    }
+  }
+  return { title, favicon };
+}
+
+function sendCacheMetadata(ctx: TabContext): void {
+  if (/^0x[a-f0-9]{40}$/i.test(ctx.ensName)) return;
+  const metadata = scrapePageMetadata();
+  if (!metadata.title && !metadata.favicon) return;
+  chrome.runtime
+    .sendMessage({
+      type: "ens-cache-metadata",
+      name: ctx.ensName,
+      title: metadata.title,
+      favicon: metadata.favicon,
+    })
+    .catch(() => undefined);
+}
+
+function scheduleCacheMetadataCapture(ctx: TabContext): void {
+  const capture = () => sendCacheMetadata(ctx);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", capture, { once: true });
+  } else {
+    queueMicrotask(capture);
+  }
+  window.addEventListener("load", capture, { once: true });
+  window.setTimeout(capture, 1500);
 }
 
 // Parse an address-bar input into a navigable URL.
@@ -273,6 +339,7 @@ type Refs = {
   urlInput: HTMLDivElement;
   brandImg: HTMLImageElement;
   right: HTMLSpanElement;
+  starBtn: HTMLButtonElement;
   historyLink: HTMLAnchorElement;
   menuBtn: HTMLButtonElement;
   menu: HTMLDivElement;
@@ -340,6 +407,25 @@ function buildBanner(theme: Theme): Refs {
       min-width: 0;
     }
     .right { justify-content: flex-end; }
+    .brand-link {
+      all: unset;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      flex: none;
+      height: 32px;
+      padding: 0 6px 0 0;
+      border-radius: ${isMidnight ? "6px" : "0"};
+      color: inherit;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background-color 150ms;
+    }
+    .brand-link:hover,
+    .brand-link:focus-visible {
+      background: rgba(255,255,255,0.06);
+      outline: none;
+    }
     .brand {
       display: inline-flex;
       align-items: center;
@@ -425,6 +511,33 @@ function buildBanner(theme: Theme): Refs {
       border: 2px solid ${stripBorder};
       font-size: 11px;
       border-radius: ${isMidnight ? "4px" : "0"};
+    }
+    .star-btn {
+      all: unset;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      flex: none;
+      border-radius: ${isMidnight ? "4px" : "0"};
+      color: ${stripFgMuted};
+      cursor: pointer;
+      transition: background-color 150ms, color 150ms;
+    }
+    .star-btn svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+    }
+    .star-btn:hover,
+    .star-btn:focus-visible {
+      background: rgba(255,255,255,0.08);
+      color: ${stripFg};
+      outline: none;
+    }
+    .star-btn.favorited {
+      color: ${theme.accent};
     }
     .ens-history-link {
       all: unset;
@@ -517,6 +630,10 @@ function buildBanner(theme: Theme): Refs {
 
   const left = document.createElement("span");
   left.className = "left";
+  const homeLink = document.createElement("a");
+  homeLink.className = "brand-link";
+  homeLink.href = chrome.runtime.getURL("browse.html");
+  homeLink.title = "Open WalletChan Browser";
   const brand = document.createElement("span");
   brand.className = "brand";
   const brandImg = document.createElement("img");
@@ -526,8 +643,9 @@ function buildBanner(theme: Theme): Refs {
   const label = document.createElement("span");
   label.className = "label";
   label.textContent = "WALLETCHAN · DAPP3";
-  left.appendChild(brand);
-  left.appendChild(label);
+  homeLink.appendChild(brand);
+  homeLink.appendChild(label);
+  left.appendChild(homeLink);
   bar.appendChild(left);
 
   const identity = document.createElement("div");
@@ -551,6 +669,18 @@ function buildBanner(theme: Theme): Refs {
   const urlInput = document.createElement("div");
   urlInput.className = "urlfield";
   identity.appendChild(urlInput);
+  const starBtn = document.createElement("button");
+  starBtn.className = "star-btn";
+  starBtn.type = "button";
+  starBtn.setAttribute("aria-label", "Favorite this dapp");
+  starBtn.setAttribute("aria-pressed", "false");
+  starBtn.title = "Favorite this dapp";
+  starBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 3.5l2.65 5.36 5.92.86-4.28 4.17 1.01 5.89L12 17l-5.3 2.78 1.01-5.89-4.28-4.17 5.92-.86L12 3.5z"/>
+    </svg>
+  `;
+  identity.appendChild(starBtn);
   bar.appendChild(identity);
 
   const right = document.createElement("span");
@@ -593,6 +723,7 @@ function buildBanner(theme: Theme): Refs {
     urlInput,
     brandImg,
     right,
+    starBtn: q<HTMLButtonElement>(".star-btn"),
     historyLink: q<HTMLAnchorElement>(".ens-history-link"),
     menuBtn: q<HTMLButtonElement>(".menu-btn"),
     menu: q<HTMLDivElement>(".menu"),
@@ -605,6 +736,7 @@ function buildBanner(theme: Theme): Refs {
 let currentCtx: TabContext | null = null;
 let currentField: AddressField | null = null;
 let inputFocused = false;
+let refreshStarState: (() => void) | null = null;
 
 function mountedHost(): HTMLDivElement | null {
   return document.getElementById(BANNER_ID) as HTMLDivElement | null;
@@ -618,6 +750,7 @@ async function mount() {
   const ctx = await getTabCtx();
   if (!ctx) return;
   currentCtx = ctx;
+  scheduleCacheMetadataCapture(ctx);
   if (mountedHost()) return;
 
   const theme = await getTheme();
@@ -653,7 +786,65 @@ async function mount() {
   wireRightSection(refs, ctx);
 }
 
+function applyStarState(refs: Refs, favorited: boolean): void {
+  const icon = refs.starBtn.querySelector("svg");
+  refs.starBtn.classList.toggle("favorited", favorited);
+  refs.starBtn.setAttribute("aria-pressed", favorited ? "true" : "false");
+  refs.starBtn.setAttribute(
+    "aria-label",
+    favorited ? "Remove from favorites" : "Favorite this dapp",
+  );
+  refs.starBtn.title = favorited
+    ? "Remove from favorites"
+    : "Favorite this dapp";
+  icon?.setAttribute("fill", favorited ? "currentColor" : "none");
+}
+
+function currentBookmarkPath(): string {
+  return normalizeBookmarkPath(currentPath());
+}
+
+function buildBookmark(ctx: TabContext, path: string): EnsBookmark {
+  const metadata = scrapePageMetadata();
+  return {
+    ensName: ctx.ensName.toLowerCase(),
+    path,
+    kind: ctx.kind,
+    contractAddress: ctx.contractAddress,
+    title: metadata.title,
+    favicon: metadata.favicon,
+    addedAt: Date.now(),
+  };
+}
+
+function wireStar(refs: Refs, ctx: TabContext): void {
+  const ensName = ctx.ensName.toLowerCase();
+  const refresh = () => {
+    isBookmarked(ensName, currentBookmarkPath())
+      .then((favorited) => applyStarState(refs, favorited))
+      .catch(() => applyStarState(refs, false));
+  };
+
+  refreshStarState = refresh;
+  refresh();
+  onBookmarksChanged(refresh);
+
+  refs.starBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const path = currentBookmarkPath();
+    const favorited = refs.starBtn.classList.contains("favorited");
+    if (favorited) {
+      await removeBookmark(ensName, path);
+    } else {
+      await addBookmark(buildBookmark(ctx, path));
+    }
+    refresh();
+  });
+}
+
 function wireRightSection(refs: Refs, ctx: TabContext) {
+  wireStar(refs, ctx);
+
   // ENS History link — external. Hidden for address-mode (0x... ERC-4804)
   // navigations since there's no ENS name to link to.
   const isAddressNav = /^0x[a-f0-9]{40}$/i.test(ctx.ensName);
@@ -729,8 +920,9 @@ function wireRightSection(refs: Refs, ctx: TabContext) {
 }
 
 function syncFieldFromLocation() {
-  if (!currentCtx || !currentField || inputFocused) return;
-  currentField.setValue(buildCurrentValue(currentCtx));
+  if (!currentCtx || !currentField) return;
+  if (!inputFocused) currentField.setValue(buildCurrentValue(currentCtx));
+  refreshStarState?.();
 }
 
 // Re-render on SPA navigations so the path-on-the-right portion stays current
