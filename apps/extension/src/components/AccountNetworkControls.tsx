@@ -32,6 +32,12 @@ interface AccountNetworkControlsProps {
   onAddChain: () => void;
 }
 
+function getSelectedChainFontSize(chainName: string) {
+  if (chainName.length > 20) return "2xs";
+  if (chainName.length > 16) return "xs";
+  return "sm";
+}
+
 function AccountNetworkControls({
   accounts,
   activeAccount,
@@ -210,7 +216,7 @@ function AccountNetworkControls({
               color="text.secondary"
             />
             {selectedChain ? (
-              <HStack spacing={1.5} minW={0} align="center" pr={3}>
+              <HStack spacing={2.5} minW={0} align="center" pr={3}>
                 <ChainIcon
                   chainId={selectedChain.chainId}
                   chainName={selectedChain.name}
@@ -219,7 +225,7 @@ function AccountNetworkControls({
                   withChip
                 />
                 <Text
-                  fontSize="2xs"
+                  fontSize={getSelectedChainFontSize(selectedChain.name)}
                   fontWeight="700"
                   whiteSpace="normal"
                   lineHeight="1.2"
