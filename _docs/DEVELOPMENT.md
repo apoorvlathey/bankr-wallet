@@ -17,6 +17,7 @@ This is a pnpm workspaces monorepo containing the browser extension (`apps/exten
 | Staking Indexer | Ponder                  | Hono       | Ponder     |
 | TG Bot          | Grammy + Hono           | —          | tsc        |
 | Arb Bot         | Node.js + viem          | —          | tsc        |
+| WalletChan RPC  | Node.js + Hono          | —          | tsc        |
 | Contracts       | Solidity                | —          | Foundry    |
 
 ## Commands
@@ -31,11 +32,13 @@ pnpm dev:website           # Start website dev server at localhost:3030
 pnpm dev:staking-indexer   # Start staking indexer at localhost:42070
 pnpm dev:tg-bot            # Start TG bot + API at localhost:3001
 pnpm dev:arb-bot           # Start arb bot (requires .env with PRIVATE_KEY + BASE_RPC_URL)
+pnpm dev:walletchan-rpc    # Start local JSON-RPC -> WalletConnect proxy at localhost:4209
 
 # Build
 pnpm build              # Build both extension and website
 pnpm build:extension    # Build extension in PRODUCTION mode (output: apps/extension/build/)
 pnpm build:website      # Build website only
+pnpm build:walletchan-rpc # Build WalletChan RPC CLI only
 
 # Extension-specific
 pnpm zip                # Build + zip (for GitHub Releases)

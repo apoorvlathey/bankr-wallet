@@ -65,7 +65,7 @@
 
 ## Development
 
-This repository is a monorepo containing the browser extension and [website](apps/website/). See [DEVELOPMENT.md](_docs/DEVELOPMENT.md) for detailed development instructions.
+This repository is a monorepo containing the browser extension, [website](apps/website/), and supporting apps including [WalletChan RPC](apps/walletchan-rpc/). See [DEVELOPMENT.md](_docs/DEVELOPMENT.md) for detailed development instructions.
 
 ### Prerequisites
 
