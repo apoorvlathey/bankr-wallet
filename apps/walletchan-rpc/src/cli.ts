@@ -61,7 +61,7 @@ Examples:
   walletchan-rpc --chain base
   walletchan-rpc --chain base --chain ethereum
   walletchan-rpc --chain base --rpc base=https://mainnet.base.org
-  walletchan-rpc --chain 84532 --rpc 84532=https://sepolia.base.org
+  walletchan-rpc --chain 43114 --rpc 43114=https://api.avax.network/ext/bc/C/rpc
 `,
     )
     .parse(stripForwardedSeparator(argv));

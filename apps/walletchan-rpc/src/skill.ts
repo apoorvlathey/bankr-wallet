@@ -51,6 +51,10 @@ This skill was served by a live WalletChan RPC instance. Use the runtime details
 
 Send standard JSON-RPC over HTTP to \`${rpcUrl}\` or \`${rpcUrl}/rpc\`. Any JSON-RPC client can use this endpoint, including JavaScript code, shell scripts, viem, ethers, Foundry, or an AI agent.
 
+Built-in chain aliases and default RPC URLs are copied from WalletChan's extension registry. Common aliases include \`ethereum\`, \`arbitrum\`, \`base\`, \`bnb\`, \`optimism\`, \`megaeth\`, \`polygon\`, \`unichain\`, \`gnosis\`, \`monad\`, \`sonic\`, \`sei\`, \`mantle\`, \`linea\`, \`berachain\`, and \`base-sepolia\`.
+
+WalletChan RPC is not limited to built-in chain names. The CLI can expose any EVM chain supported by the connected wallet when the user starts it with a numeric chain ID and upstream RPC URL, for example \`--chain 43114 --rpc 43114=https://api.avax.network/ext/bc/C/rpc\`.
+
 Use these wallet methods:
 
 ${methods.map((method) => `- \`${method}\``).join("\n")}
@@ -64,6 +68,7 @@ Read-only JSON-RPC methods may be forwarded to the configured upstream RPC. Loca
 - If the wallet rejects a request, report the rejection to the user. Do not retry rejected sends automatically.
 - Use only an approved account from \`eth_accounts\` as \`from\` or Foundry \`--sender\`.
 - If a request targets a different configured chain, include the target \`chainId\` or call \`wallet_switchEthereumChain\` first.
+- If the needed EVM chain is not configured, ask the user to restart the CLI with \`--chain <chainId> --rpc <chainId>=https://...\`.
 - WalletConnect sessions persist across CLI restarts. Ask the user to restart with \`--force-new-session\` only when they want a fresh pairing.
 
 ## Discovery

@@ -11,6 +11,7 @@ Use it for:
 - Giving AI agents wallet access through a local RPC, with every send or signature still requiring user approval
 - Foundry, Cast, viem, ethers, shell scripts, or any JSON-RPC client
 - User-approved sends, signatures, and ERC-5792 `wallet_sendCalls` batches
+- Any EVM chain when you provide its numeric chain ID and upstream RPC URL
 - WalletConnect-compatible wallets, including [WalletChan](https://walletchan.com) and many mobile wallets
 
 ## Usage
@@ -56,30 +57,80 @@ The live skill includes the current RPC URL, approved account, active chain, and
 
 ## Chains
 
-Named chains are built in:
+WalletChan RPC is not limited to the chains in this table. It can expose any EVM chain that the connected wallet supports when you provide a numeric chain ID and upstream RPC URL.
+
+Built-in names and default RPC URLs are copied from WalletChan's extension registry:
 
 ```bash
 walletchan-rpc --chain base
-walletchan-rpc --chain base --chain ethereum
-walletchan-rpc --chain polygon --port 4210
+walletchan-rpc --chain base --chain arbitrum
+walletchan-rpc --chain optimism --port 4210
 ```
 
-Supported names:
+Mainnet aliases:
 
-| Name       | Chain ID | Default RPC                       |
-| ---------- | -------- | --------------------------------- |
-| `base`     | 8453     | `https://mainnet.base.org`        |
-| `ethereum` | 1        | `https://eth.llamarpc.com`        |
-| `megaeth`  | 4326     | `https://mainnet.megaeth.com/rpc` |
-| `polygon`  | 137      | `https://polygon-rpc.com`         |
-| `unichain` | 130      | `https://mainnet.unichain.org`    |
+| Name             | Chain ID | Default RPC                            |
+| ---------------- | -------- | -------------------------------------- |
+| `ethereum`       | 1        | `https://eth.drpc.org`                 |
+| `arbitrum`       | 42161    | `https://arb1.arbitrum.io/rpc`         |
+| `base`           | 8453     | `https://base.drpc.org`                |
+| `bnb`            | 56       | `https://bsc-dataseed.binance.org`     |
+| `optimism`       | 10       | `https://mainnet.optimism.io`          |
+| `megaeth`        | 4326     | `https://mainnet.megaeth.com/rpc`      |
+| `polygon`        | 137      | `https://polygon.drpc.org`             |
+| `unichain`       | 130      | `https://mainnet.unichain.org`         |
+| `gnosis`         | 100      | `https://gnosis.drpc.org`              |
+| `monad`          | 143      | `https://monad.drpc.org`               |
+| `sonic`          | 146      | `https://sonic.drpc.org`               |
+| `intuition`      | 1155     | `https://rpc.intuition.systems`        |
+| `sei`            | 1329     | `https://sei.drpc.org`                 |
+| `ronin`          | 2020     | `https://ronin.drpc.org`               |
+| `citrea`         | 4114     | `https://rpc.citrea.xyz`               |
+| `tempo`          | 4217     | `https://tempo.drpc.org`               |
+| `mantle`         | 5000     | `https://mantle.drpc.org`              |
+| `arbitrum-nova` | 42170    | `https://arbitrum-nova.drpc.org`       |
+| `celo`           | 42220    | `https://celo.drpc.org`                |
+| `ink`            | 57073    | `https://ink.drpc.org`                 |
+| `linea`          | 59144    | `https://linea.drpc.org`               |
+| `berachain`      | 80094    | `https://berachain.drpc.org`           |
+| `katana`         | 747474   | `https://katana.drpc.org`              |
 
-Override RPC URLs per selected chain:
+Testnet aliases:
+
+| Name                 | Chain ID | Default RPC                                      |
+| -------------------- | -------- | ------------------------------------------------ |
+| `bnb-testnet`        | 97       | `https://data-seed-prebsc-1-s1.bnbchain.org:8545` |
+| `unichain-sepolia`   | 1301     | `https://sepolia.unichain.org`                   |
+| `sei-testnet`        | 1328     | `https://evm-rpc-testnet.sei-apis.com`           |
+| `mantle-sepolia`     | 5003     | `https://rpc.sepolia.mantle.xyz`                 |
+| `citrea-testnet`     | 5115     | `https://rpc.testnet.citrea.xyz`                 |
+| `megaeth-testnet`    | 6343     | `https://carrot.megaeth.com/rpc`                 |
+| `monad-testnet`      | 10143    | `https://testnet-rpc.monad.xyz`                  |
+| `gnosis-chiado`      | 10200    | `https://rpc.chiadochain.net`                    |
+| `intuition-testnet`  | 13579    | `https://testnet.rpc.intuition.systems`          |
+| `sonic-testnet`      | 14601    | `https://rpc.testnet.soniclabs.com`              |
+| `tempo-testnet`      | 42431    | `https://rpc.moderato.tempo.xyz`                 |
+| `linea-sepolia`      | 59141    | `https://rpc.sepolia.linea.build`                |
+| `polygon-amoy`       | 80002    | `https://rpc-amoy.polygon.technology`            |
+| `berachain-bepolia`  | 80069    | `https://bepolia.rpc.berachain.com`              |
+| `base-sepolia`       | 84532    | `https://sepolia.base.org`                       |
+| `ronin-saigon`       | 202601   | `https://saigon-testnet.roninchain.com/rpc`      |
+| `arbitrum-sepolia`   | 421614   | `https://sepolia-rollup.arbitrum.io/rpc`         |
+| `hoodi`              | 560048   | `https://rpc.hoodi.ethpandaops.io`               |
+| `katana-bokuto`      | 737373   | `https://rpc.bokuto.katanarpc.com`               |
+| `ink-sepolia`        | 763373   | `https://rpc-gel-sepolia.inkonchain.com`         |
+| `celo-sepolia`       | 11142220 | `https://forno.celo-sepolia.celo-testnet.org`    |
+| `sepolia`            | 11155111 | `https://11155111.rpc.thirdweb.com`              |
+| `optimism-sepolia`   | 11155420 | `https://sepolia.optimism.io`                    |
+
+For any other EVM chain, use its numeric chain ID and provide an RPC URL:
 
 ```bash
 walletchan-rpc --chain base --rpc base=https://mainnet.base.org
-walletchan-rpc --chain 84532 --rpc 84532=https://sepolia.base.org
+walletchan-rpc --chain 43114 --rpc 43114=https://api.avax.network/ext/bc/C/rpc
 ```
+
+Repeat `--chain` to expose multiple chains. Requests can target a configured chain with `wallet_switchEthereumChain` or by including a `chainId` where the method supports it.
 
 ## Batching
 
