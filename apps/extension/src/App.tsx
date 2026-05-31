@@ -38,6 +38,7 @@ import {
 } from "@chakra-ui/icons";
 
 import { useTheme, useStripTokens } from "@/theme";
+import { closeSidePanelForWindow } from "@/lib/sidePanelControls";
 
 // Sidepanel icon
 const SidePanelIcon = (props: any) => (
@@ -822,9 +823,17 @@ function App() {
   const openInFullscreenTab = async () => {
     // Open the extension in a new tab
     const extensionUrl = chrome.runtime.getURL("index.html");
-    await chrome.tabs.create({ url: extensionUrl });
+    const tab = await chrome.tabs.create({ url: extensionUrl });
+    if (isInSidePanel) {
+      const closed = await closeSidePanelForWindow(tab.windowId);
+      if (!closed) {
+        window.close();
+      }
+      return;
+    }
+
     // Close popup if we're in popup mode
-    if (!isInSidePanel && !isFullscreenTab) {
+    if (!isFullscreenTab) {
       window.close();
     }
   };

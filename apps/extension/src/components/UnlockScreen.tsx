@@ -31,6 +31,7 @@ import {
 } from "@chakra-ui/icons";
 import { TWITTER_URL } from "@/constants/externalUrls";
 import { Decorator, useTheme } from "@/theme";
+import { closeSidePanelForWindow } from "@/lib/sidePanelControls";
 
 // Sidepanel icon
 const SidePanelIcon = (props: any) => (
@@ -73,7 +74,7 @@ function UnlockScreen({
   const [error, setError] = useState("");
   const [sidePanelSupported, setSidePanelSupported] = useState(false);
   const [sidePanelMode, setSidePanelMode] = useState(false);
-  const [, setIsInSidePanel] = useState(false);
+  const [isInSidePanel, setIsInSidePanel] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isAgentPasswordEnabled, setIsAgentPasswordEnabled] = useState(false);
   const passwordInputRef = useRef<HTMLInputElement>(null);
@@ -123,8 +124,16 @@ function UnlockScreen({
         setSidePanelMode(mode);
       }
 
-      // Detect if currently in sidepanel
-      setIsInSidePanel(window.innerHeight > 620);
+      // Detect if currently in sidepanel. Popup windows can be the same height
+      // as the sidepanel, so don't rely on dimensions alone.
+      let inPopupWindow = false;
+      try {
+        const currentWindow = await chrome.windows.getCurrent();
+        inPopupWindow = currentWindow.type === "popup";
+      } catch {
+        inPopupWindow = false;
+      }
+      setIsInSidePanel(supported && !inPopupWindow && window.innerHeight > 620);
 
       // Check if agent password is enabled
       const agentEnabled = await checkAgentPasswordEnabled();
@@ -203,9 +212,15 @@ function UnlockScreen({
     }
   };
 
-  const openFullScreen = () => {
+  const openFullScreen = async () => {
     // Open extension in a new tab
-    chrome.tabs.create({ url: chrome.runtime.getURL("index.html") });
+    const tab = await chrome.tabs.create({ url: chrome.runtime.getURL("index.html") });
+    if (isInSidePanel) {
+      const closed = await closeSidePanelForWindow(tab.windowId);
+      if (!closed) {
+        window.close();
+      }
+    }
   };
 
   const handleUnlock = async () => {
