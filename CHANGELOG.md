@@ -10,7 +10,19 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **WalletConnect relay keepalive.** Active WalletConnect sessions now keep polling the relay from the background service worker, so dapp transaction and signature requests arrive without waiting for the popup or sidepanel to be opened.
+
+### Changed
+
+- WalletConnect pairing now strips whitespace from pasted URIs, so copied QR payloads with spaces or line breaks connect correctly.
+- Opening WalletChan in fullscreen from the sidepanel now closes the sidepanel when supported, including from the locked screen, avoiding duplicate extension surfaces.
+- Custom-chain delete confirmation uses a centered, compact themed dialog.
+
+### Fixed
+
+- ERC-7730 clear-signing native `amount` fields now render human-readable native token amounts using the active chain's decimals instead of raw integer values.
 
 ## [3.15.0] - 2026-05-29
 
