@@ -1,5 +1,6 @@
 import { resolvePath, type PathValue } from "./resolvePath";
 import type { Erc7730Descriptor, Erc7730Field, Erc7730Format } from "./types";
+import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 
 /**
  * Apply a descriptor `display.formats[…]` to a normalized data root (calldata
@@ -38,7 +39,7 @@ export type RenderedValue =
       thresholdMessage?: string;
       tokenMetadata?: TokenMetadataHint;
     }
-  | { kind: "amount"; amountRaw: string; chainId?: number }
+  | { kind: "amount"; amountRaw: string; chainId?: number; decimals?: number }
   | { kind: "date"; timestamp: number }
   | { kind: "duration"; seconds: number }
   | {
@@ -67,6 +68,11 @@ export interface RenderInput {
   data: unknown;
   /** Chain context — used by tokenAmount / amount formatters. */
   chainId: number;
+  /** Runtime native-currency metadata, including custom-chain overrides. */
+  nativeCurrency?: {
+    symbol?: string;
+    decimals?: number;
+  };
   /**
    * ERC-7730 envelope context referenced with `@` paths. For calldata this is
    * the containing transaction/call; for EIP-712 this is the signing envelope
@@ -438,7 +444,12 @@ function toRenderedValue(
       };
     }
     case "amount": {
-      return { kind: "amount", amountRaw: stringifyAmount(raw), chainId: input.chainId };
+      return {
+        kind: "amount",
+        amountRaw: stringifyAmount(raw),
+        chainId: input.chainId,
+        decimals: normalizeDecimals(input.nativeCurrency?.decimals) ?? undefined,
+      };
     }
     case "date": {
       const encoding = String(params.encoding || "timestamp");
@@ -750,7 +761,10 @@ function renderedValueToIntentText(value: RenderedValue, fallbackChainId: number
           }`
         : value.amountRaw;
     case "amount":
-      return value.amountRaw;
+      return formatDecimalRaw(
+        value.amountRaw,
+        value.decimals ?? nativeDecimalsForChain(value.chainId ?? fallbackChainId),
+      );
     case "date":
       return new Date(value.timestamp * 1000).toLocaleString();
     case "duration":
@@ -1170,6 +1184,17 @@ function stringifyAmount(v: unknown): string {
   if (typeof v === "number") return String(v);
   if (typeof v === "string") return v;
   return String(v);
+}
+
+function nativeDecimalsForChain(chainId: number): number {
+  const entry = CHAIN_REGISTRY.find((chain) => chain.chainId === chainId);
+  return normalizeDecimals(entry?.nativeCurrency.decimals) ?? 18;
+}
+
+function normalizeDecimals(value: unknown): number | null {
+  if (typeof value !== "number") return null;
+  if (!Number.isInteger(value) || value < 0 || value > 255) return null;
+  return value;
 }
 
 function formatDecimalRaw(raw: string, decimals: number): string {

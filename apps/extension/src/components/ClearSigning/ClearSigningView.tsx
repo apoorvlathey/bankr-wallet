@@ -135,8 +135,18 @@ export function ClearSigningView(props: ClearSigningViewProps) {
   // tower. Bauhaus's hard shadows are part of the aesthetic so we leave
   // them alone there.
   const { themeId } = useTheme();
+  const { networksInfo } = useNetworks();
   const cardShadow =
     depth > 0 && themeId === "midnight" ? "none" : undefined;
+  const nativeCurrency = useMemo(() => {
+    const runtimeNative = getNativeAssetMeta(chainId, networksInfo);
+    const builtIn = CHAIN_REGISTRY.find((chain) => chain.chainId === chainId);
+    const symbol =
+      runtimeNative?.symbol || builtIn?.nativeCurrency.symbol || "ETH";
+    const decimals =
+      runtimeNative?.decimals ?? builtIn?.nativeCurrency.decimals ?? 18;
+    return { symbol, decimals };
+  }, [chainId, networksInfo]);
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<MatchedState | null>(null);
   const { onResolved } = props;
@@ -281,7 +291,7 @@ export function ClearSigningView(props: ClearSigningViewProps) {
               value: "0",
               domain: props.typedData.domain,
             };
-      const renderInput = { data, chainId, envelope };
+      const renderInput = { data, chainId, nativeCurrency, envelope };
       if (!formatRuntimeGuardsPass(matched.format, renderInput, descriptor)) {
         console.log(`${tag} ✗ runtime field guards did not pass`);
         setLoading(false);
@@ -311,7 +321,15 @@ export function ClearSigningView(props: ClearSigningViewProps) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, chainId, lookupAddress, calldataValue, typedDataKey, screenEntered]);
+  }, [
+    kind,
+    chainId,
+    lookupAddress,
+    calldataValue,
+    typedDataKey,
+    screenEntered,
+    nativeCurrency,
+  ]);
 
   if (loading) {
     if (hideLoadingSkeleton) return null;
