@@ -66,6 +66,7 @@ Read-only JSON-RPC methods may be forwarded to the configured upstream RPC. Loca
 - Use \`eth_sendTransaction\` for sends. Never use \`eth_sendRawTransaction\`, \`eth_sign\`, or \`eth_signTransaction\`.
 - Every send/sign/batch request opens a user approval prompt in the connected wallet.
 - If the wallet rejects a request, report the rejection to the user. Do not retry rejected sends automatically.
+- If a wallet-mutating request returns JSON-RPC code \`4900\` with \`data.code: "walletconnect_disconnected"\`, the WalletConnect session was closed or lost. Call \`${rpcUrl}/pairing\`, show the returned URI to the user, wait for pairing, then retry with freshly prepared transaction data when applicable.
 - Use only an approved account from \`eth_accounts\` as \`from\` or Foundry \`--sender\`.
 - If a request targets a different configured chain, include the target \`chainId\` or call \`wallet_switchEthereumChain\` first.
 - If the needed EVM chain is not configured, ask the user to restart the CLI with \`--chain <chainId> --rpc <chainId>=https://...\`.
@@ -76,6 +77,7 @@ Read-only JSON-RPC methods may be forwarded to the configured upstream RPC. Loca
 \`\`\`bash
 curl -s ${rpcUrl}/health
 curl -s ${rpcUrl}/session
+curl -s ${rpcUrl}/pairing
 curl -s ${rpcUrl}/SKILL.md
 \`\`\`
 

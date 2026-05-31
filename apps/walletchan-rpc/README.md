@@ -55,6 +55,8 @@ curl http://127.0.0.1:4209/SKILL.md
 
 The live skill includes the current RPC URL, approved account, active chain, and batching state.
 
+If the wallet connection is revoked from WalletChan, the RPC treats the session as disconnected once the WalletConnect session is deleted, expires, or updates to zero approved accounts. In an interactive terminal, the CLI prints the disconnect reason and waits for Enter before generating a fresh WalletConnect URI. Non-interactive callers can call `http://127.0.0.1:4209/pairing` to get a fresh URI without restarting the RPC process.
+
 ## Chains
 
 WalletChan RPC is not limited to the chains in this table. It can expose any EVM chain that the connected wallet supports when you provide a numeric chain ID and upstream RPC URL.
@@ -177,6 +179,8 @@ Rejected methods:
 ## Session Lifecycle
 
 WalletConnect sessions persist across CLI restarts by default. If a compatible stored session exists for the same host and port, the CLI reuses it and skips the QR/paste flow.
+
+During a running process, stale or manually revoked sessions are invalidated automatically. Interactive CLI sessions prompt for Enter before generating a new URI; a fresh pairing URI is also available from `/pairing`.
 
 To discard stored sessions and force a fresh pairing:
 

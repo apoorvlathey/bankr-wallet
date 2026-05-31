@@ -77,6 +77,7 @@ Read-only JSON-RPC methods may be forwarded to the configured upstream RPC. Loca
 ```bash
 curl -s http://127.0.0.1:4209/health
 curl -s http://127.0.0.1:4209/session
+curl -s http://127.0.0.1:4209/pairing
 curl -s http://127.0.0.1:4209/SKILL.md
 ```
 

@@ -39,6 +39,7 @@ export function startRpcServer(config: CliConfig, context: RpcContext): ServerTy
     c.json({
       ok: true,
       connected: context.wallet.connected,
+      accounts: context.wallet.getAccounts(),
       activeChainId: context.getActiveChain().chainId,
       chains: context.chains.map((chain) => ({
         name: chain.name,
@@ -54,6 +55,29 @@ export function startRpcServer(config: CliConfig, context: RpcContext): ServerTy
       session: context.wallet.connected ? context.wallet.getSessionInfo() : null,
     }),
   );
+  app.get("/pairing", async (c) => {
+    try {
+      const pairingUri = await context.wallet.getPairingUri();
+      return c.json({
+        connected: context.wallet.connected,
+        pairingUri,
+        activeChainId: context.getActiveChain().chainId,
+        chains: context.chains.map((chain) => ({
+          name: chain.name,
+          chainId: chain.chainId,
+        })),
+      });
+    } catch (error) {
+      return c.json(
+        {
+          connected: false,
+          pairingUri: null,
+          error: error instanceof Error ? error.message : "Failed to create WalletConnect pairing URI",
+        },
+        500,
+      );
+    }
+  });
 
   return serve(
     {

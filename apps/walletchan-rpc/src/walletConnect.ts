@@ -24,6 +24,7 @@ const BATCH_METHODS = [
 ];
 
 const WALLETCONNECT_EVENTS = ["chainChanged", "accountsChanged"];
+const PAIRING_URI_TTL_MS = 4 * 60 * 1000;
 const APPROVAL_METHODS = new Set([
   "eth_sendTransaction",
   "personal_sign",
@@ -34,6 +35,12 @@ const APPROVAL_METHODS = new Set([
 
 type SignClientInstance = Awaited<ReturnType<typeof SignClient.init>>;
 type Session = SignClientInstance["session"]["values"][number];
+
+interface SessionProposal {
+  uri: string;
+  approval: () => Promise<SessionInfo>;
+  createdAt: number;
+}
 
 export interface WalletConnectBridgeConfig {
   chains: RuntimeChain[];
@@ -52,9 +59,18 @@ export interface SessionInfo {
   topic: string;
 }
 
+export interface SessionDisconnectInfo {
+  reason: string;
+  topic: string;
+}
+
+type SessionDisconnectListener = (info: SessionDisconnectInfo) => void;
+
 export class WalletConnectBridge {
   private client: SignClientInstance | null = null;
+  private readonly disconnectListeners = new Set<SessionDisconnectListener>();
   private session: Session | null = null;
+  private pendingProposal: SessionProposal | null = null;
   private readonly methods: string[];
 
   constructor(private readonly config: WalletConnectBridgeConfig) {
@@ -64,11 +80,18 @@ export class WalletConnectBridge {
   }
 
   get connected(): boolean {
-    return !!this.session;
+    return this.getConnectedSession() !== null;
   }
 
   get sessionTopic(): string | null {
-    return this.session?.topic || null;
+    return this.getConnectedSession()?.topic || null;
+  }
+
+  onDisconnect(listener: SessionDisconnectListener): () => void {
+    this.disconnectListeners.add(listener);
+    return () => {
+      this.disconnectListeners.delete(listener);
+    };
   }
 
   async init(): Promise<SessionInfo | null> {
@@ -101,10 +124,10 @@ export class WalletConnectBridge {
     return this.restoreStoredSession();
   }
 
-  async createSessionProposal(): Promise<{
-    uri: string;
-    approval: () => Promise<SessionInfo>;
-  }> {
+  async createSessionProposal(): Promise<SessionProposal> {
+    const pending = this.getPendingProposal();
+    if (!this.connected && pending) return pending;
+
     const client = this.getClient();
     const chains = this.config.chains.map((chain) => toCaip2(chain.chainId));
     const { uri, approval } = await client.connect({
@@ -121,15 +144,33 @@ export class WalletConnectBridge {
       throw new Error("WalletConnect did not return a pairing URI");
     }
 
-    return {
-      uri,
-      approval: async () => {
-        const session = await approval();
+    let proposal: SessionProposal;
+    const approvalPromise = approval()
+      .then((session) => {
         this.validateSession(session);
         this.session = session;
         return this.getSessionInfo();
-      },
+      })
+      .finally(() => {
+        if (this.pendingProposal === proposal) {
+          this.pendingProposal = null;
+        }
+      });
+    void approvalPromise.catch(() => undefined);
+
+    proposal = {
+      uri,
+      approval: () => approvalPromise,
+      createdAt: Date.now(),
     };
+    this.pendingProposal = proposal;
+    return proposal;
+  }
+
+  async getPairingUri(): Promise<string | null> {
+    if (this.connected) return null;
+    const proposal = await this.createSessionProposal();
+    return proposal.uri;
   }
 
   async request(chainId: number, method: string, params: unknown[]): Promise<unknown> {
@@ -153,7 +194,8 @@ export class WalletConnectBridge {
   }
 
   getAccounts(chainId?: number): string[] {
-    const session = this.getSession();
+    const session = this.getConnectedSession();
+    if (!session) return [];
     return getSessionAccounts(session, chainId);
   }
 
@@ -174,24 +216,43 @@ export class WalletConnectBridge {
   }
 
   close(): void {
-    this.session = null;
+    this.clearSession();
   }
 
   private attachListeners(): void {
     const client = this.getClient();
     client.on("session_delete", ({ topic }: { topic: string }) => {
       if (this.session?.topic === topic) {
-        this.session = null;
+        this.clearSession("WalletConnect session was closed by the wallet.");
       }
     });
     client.on("session_expire", ({ topic }: { topic: string }) => {
       if (this.session?.topic === topic) {
-        this.session = null;
+        this.clearSession("WalletConnect session expired.");
       }
     });
     client.on("session_update", ({ topic }: { topic: string }) => {
       if (this.session?.topic === topic) {
-        this.session = client.session.get(topic);
+        try {
+          this.session = client.session.get(topic);
+        } catch {
+          this.clearSession("WalletConnect session was removed.");
+          return;
+        }
+        this.getConnectedSession();
+      }
+    });
+    client.on("session_event", (event: {
+      topic: string;
+      params?: { event?: { name?: string; data?: unknown } };
+    }) => {
+      if (this.session?.topic !== event.topic) return;
+      const sessionEvent = event.params?.event;
+      if (sessionEvent?.name === "accountsChanged" && Array.isArray(sessionEvent.data) && sessionEvent.data.length === 0) {
+        this.clearSession("WalletConnect session no longer has approved accounts.");
+      }
+      if (sessionEvent?.name === "disconnect") {
+        this.clearSession("WalletConnect session was disconnected by the wallet.");
       }
     });
   }
@@ -235,6 +296,52 @@ export class WalletConnectBridge {
     return null;
   }
 
+  private getPendingProposal(): SessionProposal | null {
+    if (!this.pendingProposal) return null;
+    if (Date.now() - this.pendingProposal.createdAt <= PAIRING_URI_TTL_MS) {
+      return this.pendingProposal;
+    }
+    this.pendingProposal = null;
+    return null;
+  }
+
+  private getConnectedSession(): Session | null {
+    if (!this.session) return null;
+    if (this.client && this.session.topic) {
+      try {
+        this.session = this.client.session.get(this.session.topic);
+      } catch {
+        this.clearSession("WalletConnect session was removed.");
+        return null;
+      }
+    }
+    if (isSessionExpired(this.session)) {
+      this.clearSession("WalletConnect session expired.");
+      return null;
+    }
+    try {
+      this.validateSession(this.session);
+      return this.session;
+    } catch (error) {
+      this.clearSession(error instanceof Error ? error.message : "WalletConnect session is no longer valid.");
+      return null;
+    }
+  }
+
+  private clearSession(reason?: string): void {
+    const previousTopic = this.session?.topic;
+    this.session = null;
+    if (reason && previousTopic) {
+      this.emitDisconnect({ reason, topic: previousTopic });
+    }
+  }
+
+  private emitDisconnect(info: SessionDisconnectInfo): void {
+    for (const listener of this.disconnectListeners) {
+      listener(info);
+    }
+  }
+
   private async disconnectStoredSessions(message: string): Promise<void> {
     const client = this.getClient();
     const topics = new Set<string>();
@@ -273,10 +380,11 @@ export class WalletConnectBridge {
   }
 
   private getSession(): Session {
-    if (!this.session) {
+    const session = this.getConnectedSession();
+    if (!session) {
       throw new Error("WalletConnect session is not connected");
     }
-    return this.session;
+    return session;
   }
 
   private getChainLabel(chainId: number): string {

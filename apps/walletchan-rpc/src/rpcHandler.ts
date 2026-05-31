@@ -135,6 +135,10 @@ async function sendTransaction(
   request: JsonRpcRequest,
   context: RpcContext,
 ): Promise<unknown> {
+  if (!context.wallet.connected) {
+    throw walletDisconnectedError();
+  }
+
   const params = getParamsArray(request);
   const tx = params[0];
   if (!isRecord(tx)) {
@@ -191,11 +195,22 @@ async function sendWalletRequest(
   context: RpcContext,
   chain: RuntimeChain,
 ): Promise<unknown> {
-  return context.wallet.request(
-    chain.chainId,
-    request.method as string,
-    getParamsArray(request),
-  );
+  if (!context.wallet.connected) {
+    throw walletDisconnectedError();
+  }
+
+  try {
+    return await context.wallet.request(
+      chain.chainId,
+      request.method as string,
+      getParamsArray(request),
+    );
+  } catch (error) {
+    if (isWalletConnectDisconnectedError(error)) {
+      throw walletDisconnectedError(error instanceof Error ? error.message : String(error));
+    }
+    throw error;
+  }
 }
 
 function resolveSignatureChain(
@@ -278,4 +293,26 @@ function getBundleIdParam(params: unknown[]): string | null {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function walletDisconnectedError(reason?: string): RpcError {
+  return new RpcError(
+    4900,
+    "WalletConnect session is disconnected. Pair WalletChan again using /pairing or WalletChan MCP get_pairing_uri.",
+    {
+      code: "walletconnect_disconnected",
+      needsPairing: true,
+      reason,
+    },
+  );
+}
+
+function isWalletConnectDisconnectedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /WalletConnect session is not connected/i.test(message) ||
+    /WalletConnect session .*disconnected/i.test(message) ||
+    /session .*expired/i.test(message) ||
+    /session .*removed/i.test(message) ||
+    /session topic/i.test(message) ||
+    /No matching key/i.test(message);
 }

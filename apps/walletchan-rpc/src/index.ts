@@ -9,12 +9,17 @@ import { formatChains } from "./chains.js";
 import { log, stopActiveSpinner, style, withSpinner } from "./logger.js";
 import { startRpcServer } from "./rpcServer.js";
 import type { RpcContext } from "./rpcHandler.js";
-import { WalletConnectBridge } from "./walletConnect.js";
+import {
+  WalletConnectBridge,
+  type SessionDisconnectInfo,
+  type SessionInfo,
+} from "./walletConnect.js";
 
 async function main(): Promise<void> {
   const config = parseCli(process.argv);
   let activeChain: RuntimeChain = config.chains[0];
   let server: ServerType | null = null;
+  let reconnecting = false;
   let shuttingDown = false;
 
   const wallet = new WalletConnectBridge({
@@ -58,6 +63,11 @@ async function main(): Promise<void> {
   log.raw("");
 
   server = startRpcServer(config, context);
+  wallet.onDisconnect((info) => {
+    if (!shuttingDown) {
+      void handleWalletDisconnect(info);
+    }
+  });
 
   let session = await wallet.init();
   if (session) {
@@ -73,6 +83,43 @@ async function main(): Promise<void> {
       log.dim("Stored WalletConnect sessions cleared.");
     }
 
+    session = await runPairingFlow();
+  }
+
+  printReadyInfo(session);
+
+  async function handleWalletDisconnect(info: SessionDisconnectInfo): Promise<void> {
+    if (reconnecting) return;
+    reconnecting = true;
+    stopActiveSpinner();
+    log.raw("");
+    log.error(`WalletConnect disconnected: ${info.reason}`);
+
+    if (!process.stdin.isTTY) {
+      log.warn(
+        `Generate a new URI with curl http://${config.host}:${config.port}/pairing or the MCP get_pairing_uri tool.`,
+      );
+      reconnecting = false;
+      return;
+    }
+
+    while (!shuttingDown && !wallet.connected) {
+      await waitForEnter("Press Enter to generate a new WalletConnect URI...");
+      if (shuttingDown || wallet.connected) break;
+
+      try {
+        const newSession = await runPairingFlow();
+        printReadyInfo(newSession);
+        break;
+      } catch (error) {
+        log.error(error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    reconnecting = false;
+  }
+
+  async function runPairingFlow(): Promise<SessionInfo> {
     const proposal = await wallet.createSessionProposal();
     const clipboard = await copyToClipboard(proposal.uri);
 
@@ -94,26 +141,42 @@ async function main(): Promise<void> {
     }
     log.raw("");
 
-    session = await withSpinner("Waiting for wallet approval", proposal.approval);
-    log.success(`Connected: ${session.accounts.join(", ")}`);
-    if (session.peerName) {
-      log.dim(`Wallet: ${session.peerName}${session.peerUrl ? ` (${session.peerUrl})` : ""}`);
+    const approvedSession = await withSpinner("Waiting for wallet approval", proposal.approval);
+    log.success(`Connected: ${approvedSession.accounts.join(", ")}`);
+    if (approvedSession.peerName) {
+      log.dim(
+        `Wallet: ${approvedSession.peerName}${approvedSession.peerUrl ? ` (${approvedSession.peerUrl})` : ""}`,
+      );
     }
+    return approvedSession;
   }
 
-  log.raw("");
-  log.info(`Chains: ${formatChains(config.chains)}`);
-  log.info(`Active chain: ${activeChain.name} (${activeChain.chainId})`);
-  log.raw("");
-  log.info("Cast example:");
-  log.raw(
-    `  cast send 0xContractAddress "transfer(address,uint256)" 0xRecipient 1000000000000000000 --rpc-url http://${config.host}:${config.port} --unlocked --from ${session.accounts[0] || "0xYourAddress"}`,
-  );
-  log.raw("");
-  log.info("Forge script example:");
-  log.raw(
-    `  forge script script/Deploy.s.sol --rpc-url http://${config.host}:${config.port} --broadcast --unlocked --sender ${session.accounts[0] || "0xYourAddress"}`,
-  );
+  function printReadyInfo(readySession: SessionInfo): void {
+    log.raw("");
+    log.info(`Chains: ${formatChains(config.chains)}`);
+    log.info(`Active chain: ${activeChain.name} (${activeChain.chainId})`);
+    log.raw("");
+    log.info("Cast example:");
+    log.raw(
+      `  cast send 0xContractAddress "transfer(address,uint256)" 0xRecipient 1000000000000000000 --rpc-url http://${config.host}:${config.port} --unlocked --from ${readySession.accounts[0] || "0xYourAddress"}`,
+    );
+    log.raw("");
+    log.info("Forge script example:");
+    log.raw(
+      `  forge script script/Deploy.s.sol --rpc-url http://${config.host}:${config.port} --broadcast --unlocked --sender ${readySession.accounts[0] || "0xYourAddress"}`,
+    );
+  }
+}
+
+function waitForEnter(message: string): Promise<void> {
+  return new Promise((resolveWait) => {
+    process.stdout.write(`${style.yellow(message)} `);
+    process.stdin.resume();
+    process.stdin.once("data", () => {
+      process.stdin.pause();
+      resolveWait();
+    });
+  });
 }
 
 main().catch((error) => {
