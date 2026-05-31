@@ -622,6 +622,12 @@ initWalletConnect().catch((e) =>
   console.warn("[WalletConnect] init failed", e),
 );
 
+chrome.runtime.onStartup.addListener(() => {
+  initWalletConnect().catch((e) =>
+    console.warn("[WalletConnect] startup init failed", e),
+  );
+});
+
 // Handle extension icon click when popup is cleared (sidepanel mode)
 // When sidepanel mode is active, setPopup('') causes onClicked to fire instead of opening a popup.
 // We try sidePanel.open() and verify it actually opened. Some browsers (Arc) resolve the promise

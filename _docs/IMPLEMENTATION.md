@@ -388,6 +388,7 @@ src/
 │   ├── walletConnectProtocol.ts # WalletConnect JSON-RPC response helpers
 │   ├── walletConnectHelpers.ts # WalletConnect session/method utility helpers
 │   ├── walletConnectChainState.ts # Shared WalletConnect active-chain state + chainChanged events
+│   ├── walletConnectKeepalive.ts # Relay keepalive while approved WC sessions exist
 │   ├── walletConnectStorage.ts # WalletConnect request-result routing metadata and active WC chain
 │   ├── txHistoryStorage.ts  # Persistent storage for completed transaction history
 │   ├── delegationHandlers.ts # EIP-7702 delegate management (getStatus / setCustom / removeCustom / probe / revoke)
@@ -789,6 +790,7 @@ WalletConnect support is a parallel dapp transport for sites that do not list Wa
 - `walletConnectRpcRequestHandlers.ts` handles `wallet_switchEthereumChain`, `wallet_addEthereumChain`, and allowlisted read-only RPC forwarding.
 - `walletConnectProtocol.ts` centralizes WalletConnect JSON-RPC success/error responses; `walletConnectHelpers.ts` holds session/account/method helpers.
 - `walletConnectChainState.ts` maintains a WalletConnect-specific active chain (`walletConnectChainId`) separate from injected per-tab chain state. Explicit `wallet_switchEthereumChain` calls and inferred `args.params.chainId` changes from WC requests update this key and emit `chainChanged` to all active WC sessions that support the chain.
+- `walletConnectKeepalive.ts` keeps the MV3 service worker responsive while approved WalletConnect sessions exist. It sends a `*_batchFetchMessages` relay request every 20s, processes any queued relay messages, and stops when the last active WC session is disconnected. This prevents WalletConnect tx/signature requests from waiting until the popup or sidepanel is opened.
 - `walletConnectStorage.ts` stores `walletConnectPendingRequests`, a transient map from `txId`/`sigId` to `{ topic, requestId, method }` so `writeResultToStorage()` can answer the original WC request after the user confirms/rejects.
 
 **Environment:** WalletConnect uses `VITE_WALLETCONNECT_PROJECT_ID` (or `VITE_WC_PROJECT_ID`) when provided, and otherwise falls back to WalletChan's default public WalletConnect project ID.

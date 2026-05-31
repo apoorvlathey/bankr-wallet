@@ -26,6 +26,10 @@ import {
   getWalletConnectActiveChainId,
   setWalletConnectActiveChainByName,
 } from "./walletConnectChainState";
+import {
+  startWalletConnectKeepalive,
+  stopWalletConnectKeepalive,
+} from "./walletConnectKeepalive";
 
 type WalletKitInstance = Awaited<ReturnType<typeof WalletKit.init>>;
 
@@ -49,11 +53,18 @@ function getActiveSessionSummaries() {
 }
 
 async function broadcastSessionsChanged(): Promise<void> {
+  const sessions = getActiveSessionSummaries();
+  if (sessions.length > 0) {
+    startWalletConnectKeepalive(() => walletKit);
+  } else {
+    stopWalletConnectKeepalive();
+  }
+
   const activeChainId = await getWalletConnectActiveChainId();
   chrome.runtime
     .sendMessage({
       type: "walletConnectSessionsChanged",
-      sessions: getActiveSessionSummaries(),
+      sessions,
       activeChainId,
     })
     .catch(() => {});
@@ -117,6 +128,7 @@ export async function initWalletConnect(): Promise<boolean> {
       error instanceof Error ? error.message : "Failed to initialize WalletConnect";
     walletKit = null;
     listenersAttached = false;
+    stopWalletConnectKeepalive();
     return false;
   } finally {
     initPromise = null;

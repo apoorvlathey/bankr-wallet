@@ -245,6 +245,8 @@ WalletConnect event handlers live in `walletConnectHandlers.ts`, `walletConnectR
 
 Chainless `eip155` proposal namespaces are filled with that same visible chain set before approval, because some dapps request EVM methods without listing chains. If normalization still leaves no approvable namespace, the proposal is rejected rather than approved with an empty namespace. The rejection broadcast (`walletConnectProposalRejected`) contains only dapp metadata, requested chain IDs/methods, and known public chain metadata used to render the chain notice and prefill Add Chain; it contains no secrets or session request payloads.
 
+`walletConnectKeepalive.ts` runs only while approved WalletConnect sessions exist. It sends periodic `*_batchFetchMessages` requests to the WalletConnect relay so the MV3 service worker stays awake and can receive relay requests without an open popup/sidepanel. The keepalive uses session topics and relay routing metadata only; it does not read cached passwords, API keys, private keys, seed phrases, or transaction payload secrets.
+
 For `eth_sendTransaction`, the WC request is converted to a `PendingTxRequest` with `accountId` / `accountAddress` / `accountType` pinned through `pinnedTxRequest()`. For `personal_sign` / typed-data signatures, the request is converted to a `PendingSignatureRequest` through `pinnedSignatureRequest()`. Confirm-time signing still routes through `txHandlers.ts`, so Bankr, private-key, and seed-phrase accounts keep their existing password/session-restoration behavior. View-only impersonator accounts cannot sign.
 
 For ERC-5792 `wallet_sendCalls`, the WC request reuses `batchTxHandlers.ts` and is converted to a `PendingBatchTxRequest` with the account authorized in the WalletConnect session passed explicitly into the batch handler. The batch bundle status is scoped to the WalletConnect peer metadata, so another WC peer cannot query or open a bundle it did not create.
@@ -614,7 +616,7 @@ Quick reference for which files to examine based on what area of security you're
 - `inject.ts` - Content script bridge (message whitelist)
 - `impersonator.ts` - Inpage provider (what the webpage can call)
 - `background.ts` - Message router (what handlers exist)
-- `walletConnectHandlers.ts` / `walletConnectRequestHandlers.ts` / `walletConnectBatchRequestHandlers.ts` / `walletConnectRpcRequestHandlers.ts` - WalletConnect relay session approval and request intake
+- `walletConnectHandlers.ts` / `walletConnectRequestHandlers.ts` / `walletConnectBatchRequestHandlers.ts` / `walletConnectRpcRequestHandlers.ts` / `walletConnectKeepalive.ts` - WalletConnect relay session approval, request intake, and active-session relay keepalive
 
 ### Transaction security
 
