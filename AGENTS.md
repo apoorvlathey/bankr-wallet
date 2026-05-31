@@ -63,6 +63,8 @@ walletchan/
 │   ├── staking-indexer/  # Ponder indexer for sBNKRW vault staking
 │   ├── tg-bot/           # Token-gated Telegram bot (Grammy + Hono)
 │   ├── arb-bot/          # WETH↔WCHAN/BNKRW cross-pool arbitrage bot (Base)
+│   ├── walletchan-rpc/   # Local JSON-RPC -> WalletConnect bridge
+│   ├── walletchan-mcp/   # Local stdio MCP adapter for WalletChan RPC + Base skills
 │   └── contracts/        # Solidity smart contracts (Foundry)
 ├── packages/
 │   ├── shared/           # Shared design tokens, assets, and contract constants
@@ -86,6 +88,8 @@ walletchan/
 | Staking Indexer | Ponder                  | Hono       | Ponder     |
 | TG Bot          | Grammy + Hono           | —          | tsc        |
 | Arb Bot         | Node.js + viem          | —          | tsc        |
+| WalletChan RPC  | Node.js + Hono          | —          | tsc        |
+| WalletChan MCP  | Node.js stdio MCP       | —          | tsc        |
 | Contracts       | Solidity                | —          | Foundry    |
 
 **Design System**: Bauhaus - geometric, primary colors (Red #D02020, Blue #1040C0, Yellow #F0C020), hard shadows, thick borders. See `_docs/STYLING.md`.
@@ -102,11 +106,15 @@ pnpm dev:website           # Start website dev server at localhost:3000
 pnpm dev:staking-indexer   # Start staking indexer at localhost:42070
 pnpm dev:tg-bot            # Start TG bot + API at localhost:3001
 pnpm dev:arb-bot           # Start arb bot (requires .env with PRIVATE_KEY + BASE_RPC_URL)
+pnpm dev:walletchan-rpc    # Start local JSON-RPC -> WalletConnect proxy at localhost:4209
+pnpm dev:walletchan-mcp    # Start local stdio MCP adapter backed by walletchan-rpc
 
 # Build
 pnpm build              # Build both extension and website
 pnpm build:extension    # Build extension only (output: apps/extension/build/)
 pnpm build:website      # Build website only
+pnpm build:walletchan-rpc # Build WalletChan RPC CLI only
+pnpm build:walletchan-mcp # Build WalletChan MCP CLI only
 
 # Extension-specific
 pnpm zip                # Build + zip (for GitHub Releases)
@@ -215,6 +223,8 @@ When working on features, refer to these docs:
 | `_docs/CALLDATA.md`                                      | Calldata decoder UI, param components, type routing       |
 | `_docs/ASSET_CHANGES_SIMULATION.md`                      | Tx simulation: state override injection, metadata retry   |
 | `_docs/ERC5792.md`                                       | ERC-5792 batch txs: message flow, ERC-7821 encoding, 7702 plan |
+| `_docs/WALLETCHAN_RPC.md`                                | Local JSON-RPC -> WalletConnect bridge implementation      |
+| `_docs/WALLETCHAN_MCP.md`                                | Local MCP adapter, managed RPC, and Base skill wrapping              |
 | `apps/staking-indexer/STAKING_INDEXER_IMPLEMENTATION.md` | Staking indexer: sBNKRW vault events, balance tracking (legacy) |
 | `apps/wchan-vault-indexer/IMPLEMENTATION.md`             | WCHAN vault indexer: sWCHAN balance tracking, APY, snapshots    |
 | `_docs/DEVELOPMENT.md`                                   | Build process, dev environment setup                      |

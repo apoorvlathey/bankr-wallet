@@ -1,0 +1,39 @@
+{
+  "name": "@walletchan/mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Local MCP adapter for WalletChan RPC and Base MCP-style DeFi skills",
+  "license": "MIT",
+  "bin": {
+    "walletchan-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "SKILL.md",
+    "LICENSE.md"
+  ],
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc && chmod +x dist/index.js",
+    "start": "node dist/index.js",
+    "pack:dry-run": "pnpm build && pnpm publish --dry-run --access public",
+    "publish:dry-run": "pnpm publish --dry-run --access public",
+    "publish:npm": "pnpm publish --access public",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@morpho-org/cli": "0.2.0",
+    "@walletchan/rpc": "workspace:^0.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

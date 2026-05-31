@@ -18,6 +18,7 @@ This is a pnpm workspaces monorepo containing the browser extension (`apps/exten
 | TG Bot          | Grammy + Hono           | —          | tsc        |
 | Arb Bot         | Node.js + viem          | —          | tsc        |
 | WalletChan RPC  | Node.js + Hono          | —          | tsc        |
+| WalletChan MCP  | Node.js stdio MCP       | —          | tsc        |
 | Contracts       | Solidity                | —          | Foundry    |
 
 ## Commands
@@ -33,12 +34,14 @@ pnpm dev:staking-indexer   # Start staking indexer at localhost:42070
 pnpm dev:tg-bot            # Start TG bot + API at localhost:3001
 pnpm dev:arb-bot           # Start arb bot (requires .env with PRIVATE_KEY + BASE_RPC_URL)
 pnpm dev:walletchan-rpc    # Start local JSON-RPC -> WalletConnect proxy at localhost:4209
+pnpm dev:walletchan-mcp    # Start local stdio MCP adapter backed by walletchan-rpc
 
 # Build
 pnpm build              # Build both extension and website
 pnpm build:extension    # Build extension in PRODUCTION mode (output: apps/extension/build/)
 pnpm build:website      # Build website only
 pnpm build:walletchan-rpc # Build WalletChan RPC CLI only
+pnpm build:walletchan-mcp # Build WalletChan MCP CLI only
 
 # Extension-specific
 pnpm zip                # Build + zip (for GitHub Releases)
@@ -126,6 +129,13 @@ Starts the Next.js dev server at `http://localhost:3030`. The port is intentiona
 ## Environment Variables
 
 When adding or using new environment variables in any app, always update (or create) the `.env.example` file in that app's directory. This ensures developers know what env vars are needed.
+
+## WalletChan RPC / MCP
+
+Implementation details for the local agent tooling live in:
+
+- [`WALLETCHAN_RPC.md`](./WALLETCHAN_RPC.md) - local JSON-RPC to WalletConnect bridge
+- [`WALLETCHAN_MCP.md`](./WALLETCHAN_MCP.md) - local stdio MCP adapter, managed RPC, and Base skill wrapping
 
 ## Releasing & Publishing
 
