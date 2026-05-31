@@ -60,6 +60,10 @@ function sendMessage<T>(message: { type: string; [key: string]: any }): Promise<
   });
 }
 
+function normalizeWalletConnectUri(value: string): string {
+  return value.replace(/\s+/g, "");
+}
+
 export default function WalletConnectView({
   accounts,
   activeAccount,
@@ -146,18 +150,18 @@ export default function WalletConnectView({
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
   }, [onDismissRetryNotice, toast]);
 
-  const canConnect = uri.trim().startsWith("wc:");
+  const canConnect = normalizeWalletConnectUri(uri).startsWith("wc:");
 
   const connect = useCallback(async (nextUri = uri) => {
-    const trimmedUri = nextUri.trim();
-    if (!trimmedUri.startsWith("wc:") || isConnecting) return;
+    const normalizedUri = normalizeWalletConnectUri(nextUri);
+    if (!normalizedUri.startsWith("wc:") || isConnecting) return;
     setIsConnecting(true);
     setProposalRejection(null);
     onDismissRetryNotice();
     try {
       const response = await sendMessage<{ success: boolean; error?: string }>({
         type: "walletConnectPair",
-        uri: trimmedUri,
+        uri: normalizedUri,
       });
       if (!response.success) {
         throw new Error(response.error || "Failed to connect dapp");
@@ -278,7 +282,9 @@ export default function WalletConnectView({
               value={uri}
               onChange={(event) => setUri(event.target.value)}
               onPaste={(event) => {
-                const pastedUri = event.clipboardData.getData("text").trim();
+                const pastedUri = normalizeWalletConnectUri(
+                  event.clipboardData.getData("text"),
+                );
                 if (!pastedUri.startsWith("wc:")) return;
                 event.preventDefault();
                 setUri(pastedUri);
