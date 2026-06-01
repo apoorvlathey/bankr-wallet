@@ -20,6 +20,7 @@ try {
     {
       enabled: config.managedRpcEnabled,
       rpcUrl: config.rpcUrl,
+      rpcHost: config.rpcHost,
       chains: config.rpcChains,
       rpcOverrides: config.rpcOverrides,
       forceNewSession: config.forceNewSession,

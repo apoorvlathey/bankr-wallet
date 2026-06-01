@@ -42,6 +42,7 @@ export function startRpcServer(config: CliConfig, context: RpcContext): ServerTy
       ok: true,
       connected: context.wallet.connected,
       accounts: context.wallet.getAccounts(),
+      batching: context.wallet.getBatchingInfo(),
       activeChainId: context.getActiveChain().chainId,
       chains: context.chains.map((chain) => ({
         name: chain.name,
@@ -52,6 +53,7 @@ export function startRpcServer(config: CliConfig, context: RpcContext): ServerTy
   app.get("/session", (c) =>
     c.json({
       connected: context.wallet.connected,
+      batching: context.wallet.getBatchingInfo(),
       activeChainId: context.getActiveChain().chainId,
       chains: formatChains(context.chains),
       session: context.wallet.connected ? context.wallet.getSessionInfo() : null,
@@ -66,6 +68,7 @@ export function startRpcServer(config: CliConfig, context: RpcContext): ServerTy
         connected: context.wallet.connected,
         pairingUri,
         pairingUrl: formatPairingUrl(config),
+        batching: context.wallet.getBatchingInfo(),
         activeChainId: context.getActiveChain().chainId,
         chains: context.chains.map((chain) => ({
           name: chain.name,
@@ -163,6 +166,7 @@ async function getPairingViewState(config: CliConfig, context: RpcContext, inclu
   const effectiveUri = connected ? null : pairingUri;
   return {
     connected,
+    batching: context.wallet.getBatchingInfo(),
     pairingUri: effectiveUri,
     pairingUrl: formatPairingUrl(config),
     qrDataUrl: effectiveUri && includeQr ? await createQrDataUrl(effectiveUri) : null,

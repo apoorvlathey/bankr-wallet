@@ -93,7 +93,7 @@ curl -s http://127.0.0.1:4209 \
 
 ## wallet_sendCalls
 
-When batching is enabled, prefer `wallet_sendCalls` for related write actions that should be reviewed and submitted together. The goal is to reduce the number of wallet approval popups for one user intent while preserving a clear wallet confirmation.
+Prefer `wallet_sendCalls` for related write actions that should be reviewed and submitted together. If the connected wallet supports ERC-5792, WalletChan forwards the batch. If it does not, WalletChan RPC sends the calls sequentially as individual `eth_sendTransaction` requests and waits for each transaction receipt before requesting the next confirmation.
 
 Use `wallet_sendCalls` when:
 
@@ -102,7 +102,7 @@ Use `wallet_sendCalls` when:
 - The flow would otherwise require multiple approvals for one task, such as `approve + swap`, `approve + stake`, `approve + deposit`, `approve + bridge`, or `claim + stake`.
 - The calls must target one chain and use the same approved `from` account.
 
-For dependent actions such as `approve + swap` or `approve + stake`, set `atomicRequired: true` so the wallet must execute all calls atomically or none of the material effects should land onchain. Put calls in execution order: approval first, then the action that consumes the approval. For independent but related actions, such as sending tokens to multiple recipients, still prefer one `wallet_sendCalls` request so the user reviews one batch instead of several popups.
+For dependent actions such as `approve + swap` or `approve + stake`, set `atomicRequired: true` so ERC-5792 wallets must execute all calls atomically or none of the material effects should land onchain. If the wallet lacks ERC-5792, WalletChan will report `atomic: false` and use receipt-gated sequential fallback instead. Put calls in execution order: approval first, then the action that consumes the approval.
 
 Do not use `wallet_sendCalls` for unrelated actions that the user should consider separately, for cross-chain flows, or as a blind retry after the user rejects a request. If the user query describes one cohesive task with multiple same-chain writes, batch it.
 

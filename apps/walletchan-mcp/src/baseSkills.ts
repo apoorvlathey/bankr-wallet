@@ -116,14 +116,14 @@ When this plugin says to use Base MCP:
 - CLI-capable plugin paths such as \`npx @morpho-org/cli@latest ...\` -> use WalletChan MCP \`run_base_plugin_cli\` first when \`list_base_plugin_runners\` shows a supported runner. This avoids Claude shell egress allowlist failures while keeping CLI execution pinned and structured.
 - remote MCP plugin paths such as Virtuals MCP -> use WalletChan MCP \`list_remote_mcp_tools\`, \`call_remote_mcp_tool\`, and the remote SIWE login helpers when the protocol profile is allowlisted. If no profile exists, use the harness' configured MCP connector.
 
-WalletChan MCP does not return a Base Account approval URL. It sends the request to the local WalletChan RPC server, which forwards it through WalletConnect. If no wallet is paired, call \`get_pairing_uri\` and show the returned \`pairingUrl\` browser QR page when present, or the WalletConnect URI otherwise. Tell the user to approve or reject transaction and signature requests in their wallet. If a \`requestId\` is returned, poll it with \`get_request_status\` after the user acts.
+WalletChan MCP does not return a Base Account approval URL. It sends the request to the local WalletChan RPC server, which forwards it through WalletConnect. If no wallet is paired, call \`get_pairing_uri\` and show the returned \`pairingUrl\` browser QR page when present, or the WalletConnect URI otherwise. Tell the user to approve or reject transaction and signature requests in their wallet. If a \`requestId\` is returned, poll it with \`get_request_status\` after the user acts. If the paired wallet does not support ERC-5792 batching, WalletChan RPC sends each call as an individual transaction and waits for each receipt before the next prompt.
 
 If any WalletChan wallet tool returns \`status: "needs_pairing"\` or \`errorCode: "walletconnect_disconnected"\`, the WalletConnect session was closed or lost. Do not keep retrying the same wallet action. Show the returned \`pairingUrl\` or \`pairingUri\` if present, otherwise call \`get_pairing_uri\`; after the user pairs a wallet again, retry the action. If \`reprepareRequired\` is true, prepare fresh calldata before resubmitting because transaction calldata or simulation output can go stale.
 
 Fast-path orchestration:
 
 1. For supported CLI plugins, call \`run_base_plugin_cli\` with structured args. Current default runners cover Morpho and Aerodrome. For prepare commands, set \`submitPreparedCalls: true\` after the user has selected the action/vault/market.
-2. For Base MCP \`swap\`-style flows, call WalletChan MCP \`swap\`. It uses WalletChan's first-party swap API, adds ERC-20/Permit2 approvals only when needed, and sends the final batch to WalletChan.
+2. For Base MCP \`swap\`-style flows, call WalletChan MCP \`swap\`. It uses WalletChan's first-party swap API, adds ERC-20/Permit2 approvals only when needed, and sends the final call set to WalletChan.
 3. For HTTP tx-builder plugins, call WalletChan MCP \`web_request\` when the host is allowlisted, then pass the full prepare response body to \`send_prepared_calls\`. Current default hosts cover Moonwell, Uniswap, Avantis, Bankr discovery, Morpho API hosts, and \`walletchan-rpc\` default upstream RPC hosts.
 4. For allowlisted remote MCP plugins, call \`list_remote_mcp_tools\` / \`call_remote_mcp_tool\`. For Virtuals login, call \`start_remote_mcp_siwe_login\`, wait for WalletChan approval, then call \`complete_remote_mcp_siwe_login\`. This preserves the exact SIWE challenge; do not manually reconstruct or summarize it.
 5. Use \`send_calls\` directly only when you already have a clean \`calls\` array.
@@ -165,13 +165,13 @@ If a wallet action returns \`status: "needs_pairing"\` or \`errorCode: "walletco
 
 - \`get_pairing_uri\`: starts or inspects the managed WalletChan RPC bridge and returns the browser QR page URL plus WalletConnect URI when pairing is needed.
 - \`get_wallets\`: returns approved WalletChan RPC accounts.
-- \`send_calls\`: sends an ERC-5792 \`wallet_sendCalls\` batch to WalletChan.
-- \`send_prepared_calls\`: normalizes common Base plugin prepare responses and sends the resulting batch to WalletChan.
+- \`send_calls\`: sends wallet calls to WalletChan. ERC-5792 wallets receive one batch; non-batching wallets receive sequential \`eth_sendTransaction\` prompts.
+- \`send_prepared_calls\`: normalizes common Base plugin prepare responses and sends the resulting calls to WalletChan.
 - \`get_portfolio_balances\`: fetches first-party WalletChan portfolio balances for an address or connected account.
 - \`get_swap_price\`: fetches an indicative first-party WalletChan swap price.
-- \`swap\`: quotes a swap, adds needed ERC-20/Permit2 approvals, and sends the batch to WalletChan.
+- \`swap\`: quotes a swap, adds needed ERC-20/Permit2 approvals, and sends the calls to WalletChan.
 - \`get_bridge_quote\`: fetches a first-party WalletChan bridge quote.
-- \`bridge\`: quotes a bridge, adds needed ERC-20 approvals, and sends the batch to WalletChan.
+- \`bridge\`: quotes a bridge, adds needed ERC-20 approvals, and sends the calls to WalletChan.
 - \`get_bridge_status\`: checks bridge status by request hash or source transaction hash.
 - \`web_request\`: calls allowlisted HTTPS protocol APIs from the local WalletChan MCP process.
 - \`run_base_plugin_cli\`: runs pinned, allowlisted protocol CLI commands from the local WalletChan MCP process.

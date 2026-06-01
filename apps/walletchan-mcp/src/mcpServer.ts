@@ -123,10 +123,10 @@ export class McpServer {
           serverInfo: {
             name: "walletchan-mcp",
             title: "WalletChan",
-            version: "0.1.1",
+            version: "0.1.2",
           },
           instructions:
-            "WalletChan MCP routes wallet requests through the local WalletChan RPC bridge over WalletConnect. If pairing is needed, call get_pairing_uri and show the local pairing URL or WalletConnect URI to the user; clients that render MCP image content may also show the attached QR code.",
+            "WalletChan MCP routes wallet requests through the local WalletChan RPC bridge over WalletConnect. If pairing is needed, call get_pairing_uri and show the local pairing URL or WalletConnect URI to the user. When a pairing URI is available, the tool returns an MCP image content block with the QR code before the text fallback.",
         };
       case "notifications/initialized":
       case "notifications/cancelled":
@@ -195,18 +195,17 @@ export class McpServer {
 }
 
 async function formatToolContent(result: unknown): Promise<ToolContentBlock[]> {
-  const content: ToolContentBlock[] = [
-    {
-      type: "text",
-      text: formatToolResult(result),
-    },
-  ];
-
+  const content: ToolContentBlock[] = [];
   const pairingUri = extractPairingUri(result);
   if (pairingUri) {
     const qr = await createPairingQrContent(pairingUri);
     if (qr) content.push(qr);
   }
+
+  content.push({
+    type: "text",
+    text: formatToolResult(result),
+  });
 
   return content;
 }

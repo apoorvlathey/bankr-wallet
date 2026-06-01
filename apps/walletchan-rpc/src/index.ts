@@ -37,6 +37,8 @@ async function main(): Promise<void> {
     chains: config.chains,
     getActiveChain: () => activeChain,
     includeBatching: config.includeBatching,
+    localBundles: new Map(),
+    sequentialReceiptTimeoutMs: config.requestTimeoutSeconds * 1000,
     setActiveChain: (chain) => {
       activeChain = chain;
       log.dim(`Active chain switched to ${chain.name} (${chain.chainId})`);

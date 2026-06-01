@@ -25,9 +25,8 @@ export function formatRuntimeSkill(config: CliConfig, context: RpcContext): stri
   const session = getSession(context);
   const accounts = session?.accounts || [];
   const preferredAccount = accounts[0] || "0xYourApprovedAccount";
-  const methods = context.includeBatching
-    ? [...APPROVAL_METHODS, ...BATCH_METHODS]
-    : APPROVAL_METHODS;
+  const batching = context.wallet.getBatchingInfo();
+  const methods = [...APPROVAL_METHODS, ...BATCH_METHODS];
 
   return `---
 name: walletchan-rpc
@@ -46,7 +45,8 @@ This skill was served by a live WalletChan RPC instance. Use the runtime details
 - Approved accounts: ${accounts.length > 0 ? accounts.map((account) => `\`${account}\``).join(", ") : "`none`"}
 - Active chain: \`${activeChain.name}\` (${activeChain.chainId}, \`${activeChainId}\`)
 - Configured chains: \`${formatChains(context.chains)}\`
-- Batching: \`${context.includeBatching ? "enabled" : "disabled"}\`
+- Wallet ERC-5792 batching: \`${batching.supported ? "supported" : "not supported"}\`
+- WalletChan send_calls mode: \`${batching.supported ? "erc5792" : "sequential_fallback"}\`
 - Wallet: \`${session?.peerName || "unknown"}\`${session?.peerUrl ? ` (${session.peerUrl})` : ""}
 
 ## How To Use
@@ -95,7 +95,7 @@ curl -s ${rpcUrl} \\
 
 ## wallet_sendCalls
 
-When batching is enabled, prefer \`wallet_sendCalls\` for related write actions that should be reviewed and submitted together. The goal is to reduce the number of wallet approval popups for one user intent while preserving a clear wallet confirmation.
+Prefer \`wallet_sendCalls\` for related write actions that should be reviewed and submitted together. If the connected wallet supports ERC-5792, WalletChan forwards the batch. If it does not, WalletChan RPC sends the calls sequentially as individual \`eth_sendTransaction\` requests and waits for each transaction receipt before requesting the next confirmation.
 
 Use \`wallet_sendCalls\` when:
 

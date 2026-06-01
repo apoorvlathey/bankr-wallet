@@ -11,7 +11,7 @@ Nothing moves onchain just because the assistant suggests it. Transactions and s
 - Connect your WalletChan extension to an AI assistant via WalletConnect.
 - Check connected wallets and portfolio balances.
 - Swap and bridge tokens using WalletChan's first-party APIs.
-- Send transactions, ERC-5792 batch calls, and sign messages.
+- Send transactions, ERC-5792 batch calls, sequential fallback call sets, and sign messages.
 - Use Base MCP-style DeFi skills when a protocol skill can produce wallet calls for WalletChan approval.
 
 | Skill | What It Supports |
@@ -219,6 +219,12 @@ Use a different local RPC port:
 
 ```bash
 walletchan-mcp --rpc-url http://127.0.0.1:4210
+```
+
+Bind the managed RPC to all interfaces inside an isolated container while Docker publishes the port only to host loopback:
+
+```bash
+walletchan-mcp --rpc-host 0.0.0.0
 ```
 
 Disable protocol helper surfaces:

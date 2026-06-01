@@ -8,6 +8,7 @@ import type { WalletChanRpcClient, WalletChanRpcHealth } from "./rpcClient.js";
 export interface ManagedRpcConfig {
   enabled: boolean;
   rpcUrl: string;
+  rpcHost: string;
   chains: string[];
   rpcOverrides: string[];
   forceNewSession: boolean;
@@ -82,6 +83,7 @@ export class ManagedRpcProcess {
       rpcUrl: this.config.rpcUrl,
       connected: currentConnected,
       activeChainId: pairing?.activeChainId ?? health?.activeChainId ?? null,
+      batching: pairing?.batching ?? health?.batching ?? null,
       chains: pairing?.chains ?? health?.chains ?? [],
       pairingUri,
       pairingUrl,
@@ -123,6 +125,8 @@ export class ManagedRpcProcess {
       ...entrypoint.baseArgs,
       ...this.config.chains.flatMap((chain) => ["--chain", chain]),
       ...this.config.rpcOverrides.flatMap((override) => ["--rpc", override]),
+      "--host",
+      this.config.rpcHost,
       "--port",
       String(port),
       "--request-timeout",

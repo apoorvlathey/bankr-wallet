@@ -59,7 +59,7 @@ The server implements the stdio MCP JSON-RPC methods needed by current clients:
 | `notifications/cancelled` | No-op |
 | `ping` | Returns `{}` |
 | `tools/list` | Returns the WalletChan tool set with `title`, `description`, and JSON schemas |
-| `tools/call` | Executes a tool and returns text content, `structuredContent`, and a PNG image content block when a WalletConnect pairing QR is available |
+| `tools/call` | Executes a tool and returns `structuredContent`; when a WalletConnect pairing QR is available, the PNG image content block is returned before the text fallback |
 | `resources/list` | Lists WalletChan skill and adapted Base plugin resources |
 | `resources/read` | Reads WalletChan skill markdown or fetches upstream Base markdown with overrides |
 | `resources/templates/list` | Returns no templates |
@@ -73,8 +73,8 @@ The current implementation uses newline-delimited JSON messages over stdio.
 |---|---|
 | `get_pairing_uri` | Starts or inspects managed `walletchan-rpc`; returns WalletConnect URI and local `/qr` QR page when pairing is needed, with an MCP image block containing a QR code for clients that render tool images |
 | `get_wallets` | Ensures RPC is started, reads `/health` and `eth_accounts`, optionally validates a chain |
-| `send_calls` | Builds ERC-5792 `wallet_sendCalls` params and submits to `walletchan-rpc` |
-| `send_prepared_calls` | Extracts calls from common Base plugin prepare-response shapes and submits the batch to `walletchan-rpc` |
+| `send_calls` | Builds `wallet_sendCalls` params and submits to `walletchan-rpc`; ERC-5792 wallets receive a native batch, non-batching wallets receive sequential transaction prompts |
+| `send_prepared_calls` | Extracts calls from common Base plugin prepare-response shapes and submits them through the same native-batch or sequential-fallback path |
 | `get_portfolio_balances` | Fetches first-party WalletChan portfolio balances for an address or connected account |
 | `get_swap_price` | Fetches an indicative first-party WalletChan swap price |
 | `swap` | Quotes a swap, adds required ERC-20/Permit2 approvals, and submits the batch to `walletchan-rpc` |
@@ -176,6 +176,7 @@ Managed RPC is enabled by default. The MCP server uses this logic:
 Default managed RPC config:
 
 - RPC URL: `http://127.0.0.1:4209`
+- RPC bind host: `127.0.0.1` (`--rpc-host 0.0.0.0` is useful inside isolated containers whose published port is restricted to host loopback)
 - Chain: `base`
 - Batching: enabled
 - Request timeout: `300` seconds
@@ -186,6 +187,8 @@ If another older `walletchan-rpc` is already running on the same URL and does no
 If the user manually disconnects the WalletConnect session from the wallet, the RPC marks the session disconnected when it sees a delete/expire/update-to-empty signal. Interactive `walletchan-rpc` terminals prompt for Enter before printing a new URI. MCP-managed RPC runs non-interactively, so the next `get_pairing_uri` call asks `/pairing` for a new URI without restarting the MCP server. MCP also returns the `/qr` page URL so the user can scan a QR in the browser.
 
 When `get_pairing_uri` returns an unpaired state with a `wc:` URI, `mcpServer.ts` appends a PNG QR code as a standard MCP `image` content item. The structured result stays unchanged and still contains `pairingUri`; QR image support is intentionally additive because not every MCP terminal client renders image blocks inline.
+
+The QR image block is emitted before the text fallback so clients that show the first renderable content item can display the QR. Clients that do not render MCP images should still show `pairingUrl` and the raw `wc:` URI.
 
 ## Base Skill Adaptation
 
@@ -291,6 +294,7 @@ Pairing QR display depends on the client. MCP image content is part of the proto
 | Variable | Purpose |
 |---|---|
 | `WALLETCHAN_RPC_URL` | Override RPC URL, default `http://127.0.0.1:4209` |
+| `WALLETCHAN_MCP_RPC_HOST` / `WALLETCHAN_RPC_HOST` | Bind host for the managed `walletchan-rpc` child, default `127.0.0.1` |
 | `WALLETCHAN_MCP_API_BASE` / `WALLETCHAN_API_BASE` | First-party WalletChan API base for portfolio, swap, and bridge tools, default `https://walletchan.com/api` |
 | `WALLETCHAN_MCP_MANAGED_RPC` | Set to `false` to disable automatic RPC child process |
 | `WALLETCHAN_MCP_CHAINS` | Comma-separated managed RPC chains |

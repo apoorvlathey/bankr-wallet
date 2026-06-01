@@ -10,7 +10,7 @@ Use it for:
 
 - Giving AI agents wallet access through a local RPC, with every send or signature still requiring user approval
 - Foundry, Cast, viem, ethers, shell scripts, or any JSON-RPC client
-- User-approved sends, signatures, and ERC-5792 `wallet_sendCalls` batches
+- User-approved sends, signatures, and `wallet_sendCalls` call sets with ERC-5792 batching or sequential fallback
 - Any EVM chain when you provide its numeric chain ID and upstream RPC URL
 - WalletConnect-compatible wallets, including [WalletChan](https://walletchan.com) and many mobile wallets
 
@@ -44,6 +44,12 @@ On first use, the CLI copies the `wc:` URI to your clipboard, then prints a term
 - Browser QR page: open `http://127.0.0.1:4209/qr`, then scan the QR or copy the URI.
 
 The local RPC, `SKILL.md`, and `/qr` endpoints start immediately at `http://127.0.0.1:4209` by default. Wallet requests become available after the wallet session is approved.
+
+For isolated containers, bind the RPC inside the container while publishing the port only to host loopback:
+
+```bash
+walletchan-rpc --chain base --host 0.0.0.0
+```
 
 ## Agent Skill
 
@@ -143,11 +149,9 @@ ERC-5792 batching is enabled by default. The WalletConnect proposal includes:
 - `wallet_getCallsStatus`
 - `wallet_showCallsStatus`
 
-For wallets that do not support batching:
+If the paired wallet does not approve those ERC-5792 methods, WalletChan RPC still accepts `wallet_sendCalls`. It sends each call as an individual `eth_sendTransaction`, waits for that transaction receipt, then asks for the next approval. The returned bundle has `mode: "sequential_fallback"` and `atomic: false`.
 
-```bash
-walletchan-rpc --chain base --skip-batching
-```
+`--skip-batching` is still available when you do not want to request ERC-5792 methods during pairing, but it no longer disables `wallet_sendCalls`; it forces the sequential fallback path.
 
 ## JSON-RPC Behavior
 
@@ -157,7 +161,9 @@ Wallet requests are sent through WalletConnect:
 - `personal_sign`
 - `eth_signTypedData_v3`
 - `eth_signTypedData_v4`
-- ERC-5792 methods, unless `--skip-batching` is set
+- ERC-5792 methods when approved by the wallet
+
+When ERC-5792 is not approved, `wallet_sendCalls`, `wallet_getCapabilities`, and local bundle status still work through WalletChan's sequential fallback.
 
 Read-only and unknown methods are forwarded to the active chain's upstream RPC.
 
@@ -193,6 +199,10 @@ Use `--force-new-session` when switching wallets, changing to a wallet that supp
 ## Environment
 
 `WALLETCONNECT_PROJECT_ID` is optional. If omitted, the CLI uses WalletChan's default public WalletConnect project ID.
+
+`WALLETCHAN_RPC_HOST` sets the default bind host.
+
+`WALLETCHAN_RPC_STORAGE_DIR` sets the WalletConnect storage root. Use this in containers to keep session state in a persistent, writable volume owned by the process user.
 
 ## Foundry
 

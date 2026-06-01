@@ -72,15 +72,15 @@ Events:
 - `chainChanged`
 - `accountsChanged`
 
-Session storage is scoped by host and port using a WalletConnect storage prefix and temp-directory database path. This prevents different local RPC ports from accidentally sharing incompatible sessions. `--force-new-session` disconnects stored sessions and pairings before proposing a fresh session.
+Session storage is scoped by host and port using a WalletConnect storage prefix and database path. By default the storage root is user-scoped under `/tmp/walletchan-rpc-uid-<uid>`; `WALLETCHAN_RPC_STORAGE_DIR` overrides the root, which is useful for persistent Docker volumes. This prevents different local RPC ports from accidentally sharing incompatible sessions and avoids root-owned temp directories breaking non-root MCP child processes. `--force-new-session` disconnects stored sessions and pairings before proposing a fresh session.
 
 After approval, `validateSession()` ensures:
 
 - every requested chain is approved
-- every requested method is approved
+- every base wallet method is approved
 - at least one EVM account is present
 
-If the wallet does not support ERC-5792, rerun with `--skip-batching`.
+ERC-5792 methods are treated as a capability, not as a pairing requirement. If the wallet approves `wallet_sendCalls`, `wallet_getCapabilities`, `wallet_getCallsStatus`, and `wallet_showCallsStatus`, WalletChan RPC forwards batches natively. If those methods are missing, the session still connects and `wallet_sendCalls` uses the sequential fallback described below.
 
 At runtime, `connected` means the bridge has a non-expired WalletConnect session with at least one approved EVM account. If the wallet deletes the session, expires it, sends an empty `accountsChanged` event, or updates the session to zero EVM accounts, the bridge clears the in-memory session.
 
@@ -111,7 +111,7 @@ Local methods handled directly:
 | `eth_requestAccounts` | Same as `eth_accounts`; pairing happens out-of-band in the CLI |
 | `eth_chainId` | Returns active chain ID as hex |
 | `net_version` | Returns active chain ID as decimal string |
-| `web3_clientVersion` | Returns `WalletChanRPC/0.1.0` |
+| `web3_clientVersion` | Returns `WalletChanRPC/0.1.4` |
 | `wallet_switchEthereumChain` | Switches the process-local active chain to a configured chain |
 
 WalletConnect-forwarded approval methods:
@@ -122,10 +122,10 @@ WalletConnect-forwarded approval methods:
 | `personal_sign` | Forwards on the active chain |
 | `eth_signTypedData_v3` | Uses EIP-712 domain `chainId` when provided |
 | `eth_signTypedData_v4` | Uses EIP-712 domain `chainId` when provided |
-| `wallet_getCapabilities` | Forwards to WalletChan, using requested chain IDs when present |
-| `wallet_sendCalls` | Requires configured `chainId`; stores bundle ID to chain mapping |
-| `wallet_getCallsStatus` | Routes status polling to the original bundle chain when known |
-| `wallet_showCallsStatus` | Same bundle-chain routing as status polling |
+| `wallet_getCapabilities` | Forwards when approved; otherwise returns local sequential-fallback capabilities |
+| `wallet_sendCalls` | Requires configured `chainId`; uses native ERC-5792 when approved, otherwise sequential fallback |
+| `wallet_getCallsStatus` | Routes native status polling to the original bundle chain when known, or reads local sequential bundles |
+| `wallet_showCallsStatus` | Same native bundle-chain routing as status polling; local sequential bundles return local status |
 
 `personal_sign` should use standard WalletConnect/EIP-1193 params: `[message, address]`. Do not pass a protocol wrapper such as `{ "message": "..." }` as the message. Higher-level callers such as WalletChan MCP unwrap remote-MCP SIWE envelopes before calling `walletchan-rpc`, so the RPC can remain wallet-agnostic and forward the same request shape any WalletConnect wallet expects.
 
@@ -137,15 +137,18 @@ Rejected methods:
 - `eth_sign`: rejected as unsafe
 - `eth_signTransaction`: rejected because it creates signed transactions outside the approval flow
 
-## ERC-5792 Batch Routing
+## `wallet_sendCalls` Routing
 
 When `wallet_sendCalls` is received:
 
-1. `rpcHandler.ts` validates that batching is enabled.
-2. It requires params to include a configured `chainId`.
-3. The original request is forwarded to WalletChan via WalletConnect.
-4. The returned bundle ID is recorded in `context.bundleChains`.
-5. Later `wallet_getCallsStatus` and `wallet_showCallsStatus` requests use that map to select the original chain instead of whichever chain is currently active.
+1. `rpcHandler.ts` requires params to include a configured `chainId`.
+2. If the connected wallet approved ERC-5792 batching, the original request is forwarded through WalletConnect.
+3. The returned native bundle ID is recorded in `context.bundleChains`.
+4. Later native `wallet_getCallsStatus` and `wallet_showCallsStatus` requests use that map to select the original chain instead of whichever chain is currently active.
+5. If the wallet did not approve ERC-5792 batching, the RPC creates a local sequential bundle, sends each call as `eth_sendTransaction`, waits for that transaction receipt, then prompts for the next call.
+6. Sequential fallback bundles return `mode: "sequential_fallback"`, `atomic: false`, ordered `transactionHashes`, per-call status, and local `wallet_getCallsStatus` support.
+
+Sequential fallback preserves ordered dependent flows such as `approve + swap` for wallets without ERC-5792 support, but it is not atomic. If call 1 confirms and call 2 is rejected or fails, call 1 remains onchain. Wallets that support ERC-5792 continue to use native batching.
 
 WalletChan extension owns the actual batch execution. For extension-side batch behavior, see `_docs/ERC5792.md`.
 
@@ -159,7 +162,9 @@ walletchan-rpc --chain 43114 --rpc 43114=https://api.avax.network/ext/bc/C/rpc
 
 `wallet_switchEthereumChain` only switches among chains configured at process start. It does not add new chains at runtime.
 
-## HTTP Routes
+## Host Binding and HTTP Routes
+
+By default the RPC binds to `127.0.0.1`. Use `--host <host>` or `WALLETCHAN_RPC_HOST` when the process must listen on another interface, for example `--host 0.0.0.0` inside an isolated Docker container whose port is published only to host loopback.
 
 | Route | Method | Purpose |
 |---|---|---|
@@ -179,6 +184,14 @@ JSON-RPC batch arrays are supported. Empty JSON-RPC batches return `-32600`. Not
 `/health` includes `accounts`; an empty array with `connected: false` means the process is running but needs a fresh WalletConnect pairing.
 
 `/qr` is the most reliable QR surface for agents and terminal harnesses because it renders in a normal browser instead of depending on inline image support in an MCP client. The page says to connect a wallet to WalletChan RPC via WalletConnect rather than naming a specific wallet. It polls `/qr?format=json` every few seconds, reuses the current pending WalletConnect proposal, and updates automatically when a new URI is issued after disconnect or proposal expiry. The copy button writes the raw `wc:` URI to the clipboard. `/uri` remains as a compatibility alias.
+
+## Environment
+
+`WALLETCONNECT_PROJECT_ID` is optional. If omitted, the CLI uses WalletChan's default public WalletConnect project ID.
+
+`WALLETCHAN_RPC_HOST` sets the default bind host for the HTTP server.
+
+`WALLETCHAN_RPC_STORAGE_DIR` sets the WalletConnect storage root. Use this in containers to keep session state in a persistent, writable volume owned by the process user.
 
 ## Security Properties
 

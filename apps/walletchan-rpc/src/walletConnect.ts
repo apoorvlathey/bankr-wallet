@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { accessSync, constants, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Core } from "@walletconnect/core";
@@ -21,6 +21,11 @@ const BATCH_METHODS = [
   "wallet_sendCalls",
   "wallet_getCallsStatus",
   "wallet_showCallsStatus",
+];
+
+const REQUIRED_BATCH_METHODS = [
+  "wallet_sendCalls",
+  "wallet_getCallsStatus",
 ];
 
 const WALLETCONNECT_EVENTS = ["chainChanged", "accountsChanged"];
@@ -54,9 +59,19 @@ export interface WalletConnectBridgeConfig {
 
 export interface SessionInfo {
   accounts: string[];
+  batching: SessionBatchingInfo;
+  methods: string[];
   peerName: string;
   peerUrl: string;
   topic: string;
+}
+
+export interface SessionBatchingInfo {
+  requested: boolean;
+  supported: boolean;
+  mode: "erc5792" | "sequential_fallback" | "disconnected";
+  approvedMethods: string[];
+  missingMethods: string[];
 }
 
 export interface SessionDisconnectInfo {
@@ -70,6 +85,7 @@ export class WalletConnectBridge {
   private client: SignClientInstance | null = null;
   private readonly disconnectListeners = new Set<SessionDisconnectListener>();
   private session: Session | null = null;
+  private batchingInfo: SessionBatchingInfo;
   private pendingProposal: SessionProposal | null = null;
   private readonly methods: string[];
 
@@ -77,6 +93,7 @@ export class WalletConnectBridge {
     this.methods = config.includeBatching
       ? [...BASE_METHODS, ...BATCH_METHODS]
       : [...BASE_METHODS];
+    this.batchingInfo = disconnectedBatchingInfo(config.includeBatching);
   }
 
   get connected(): boolean {
@@ -85,6 +102,21 @@ export class WalletConnectBridge {
 
   get sessionTopic(): string | null {
     return this.getConnectedSession()?.topic || null;
+  }
+
+  getBatchingInfo(): SessionBatchingInfo {
+    this.getConnectedSession();
+    return this.batchingInfo;
+  }
+
+  supportsBatching(): boolean {
+    return this.getBatchingInfo().supported;
+  }
+
+  supportsMethod(method: string): boolean {
+    const session = this.getConnectedSession();
+    if (!session) return false;
+    return getSessionMethodSet(session).has(method);
   }
 
   onDisconnect(listener: SessionDisconnectListener): () => void {
@@ -149,6 +181,7 @@ export class WalletConnectBridge {
       .then((session) => {
         this.validateSession(session);
         this.session = session;
+        this.batchingInfo = getSessionBatchingInfo(session, this.config.includeBatching);
         return this.getSessionInfo();
       })
       .finally(() => {
@@ -203,6 +236,8 @@ export class WalletConnectBridge {
     const session = this.getSession();
     return {
       accounts: this.getAccounts(),
+      batching: this.batchingInfo,
+      methods: getSessionMethods(session),
       peerName: session.peer?.metadata?.name || "WalletConnect wallet",
       peerUrl: session.peer?.metadata?.url || "",
       topic: session.topic,
@@ -258,7 +293,7 @@ export class WalletConnectBridge {
   }
 
   private validateSession(session: Session): void {
-    const approvedMethods = new Set(session.namespaces?.eip155?.methods || []);
+    const approvedMethods = getSessionMethodSet(session);
     const approvedChains = getSessionChainSet(session);
     const requestedChains = this.config.chains.map((chain) => toCaip2(chain.chainId));
 
@@ -267,17 +302,16 @@ export class WalletConnectBridge {
       throw new Error(`Wallet did not approve chains: ${missingChains.join(", ")}`);
     }
 
-    const missingMethods = this.methods.filter((method) => !approvedMethods.has(method));
+    const missingMethods = BASE_METHODS.filter((method) => !approvedMethods.has(method));
     if (missingMethods.length > 0) {
-      const batchingHint = this.config.includeBatching
-        ? " Rerun with --skip-batching for wallets without ERC-5792 support."
-        : "";
-      throw new Error(`Wallet did not approve methods: ${missingMethods.join(", ")}.${batchingHint}`);
+      throw new Error(`Wallet did not approve methods: ${missingMethods.join(", ")}.`);
     }
 
     if (getSessionAccounts(session).length === 0) {
       throw new Error("Wallet did not approve any EVM accounts");
     }
+
+    this.batchingInfo = getSessionBatchingInfo(session, this.config.includeBatching);
   }
 
   private restoreStoredSession(): SessionInfo | null {
@@ -287,6 +321,7 @@ export class WalletConnectBridge {
       try {
         this.validateSession(session);
         this.session = session;
+        this.batchingInfo = getSessionBatchingInfo(session, this.config.includeBatching);
         return this.getSessionInfo();
       } catch {
         // A stored session may not match the current chain/method request.
@@ -321,6 +356,7 @@ export class WalletConnectBridge {
     }
     try {
       this.validateSession(this.session);
+      this.batchingInfo = getSessionBatchingInfo(this.session, this.config.includeBatching);
       return this.session;
     } catch (error) {
       this.clearSession(error instanceof Error ? error.message : "WalletConnect session is no longer valid.");
@@ -331,6 +367,7 @@ export class WalletConnectBridge {
   private clearSession(reason?: string): void {
     const previousTopic = this.session?.topic;
     this.session = null;
+    this.batchingInfo = disconnectedBatchingInfo(this.config.includeBatching);
     if (reason && previousTopic) {
       this.emitDisconnect({ reason, topic: previousTopic });
     }
@@ -420,6 +457,41 @@ function getSessionAccounts(session: Session, chainId?: number): string[] {
   return result;
 }
 
+function getSessionMethods(session: Session): string[] {
+  return Array.from(getSessionMethodSet(session)).sort();
+}
+
+function getSessionMethodSet(session: Session): Set<string> {
+  return new Set(
+    (session.namespaces?.eip155?.methods || [])
+      .filter((method): method is string => typeof method === "string"),
+  );
+}
+
+function getSessionBatchingInfo(session: Session, requested: boolean): SessionBatchingInfo {
+  const approvedMethods = getSessionMethodSet(session);
+  const missingMethods = BATCH_METHODS.filter((method) => !approvedMethods.has(method));
+  const supported = requested &&
+    REQUIRED_BATCH_METHODS.every((method) => approvedMethods.has(method));
+  return {
+    requested,
+    supported,
+    mode: supported ? "erc5792" : "sequential_fallback",
+    approvedMethods: BATCH_METHODS.filter((method) => approvedMethods.has(method)),
+    missingMethods,
+  };
+}
+
+function disconnectedBatchingInfo(requested: boolean): SessionBatchingInfo {
+  return {
+    requested,
+    supported: false,
+    mode: "disconnected",
+    approvedMethods: [],
+    missingMethods: requested ? [...BATCH_METHODS] : [],
+  };
+}
+
 function getSessionChainSet(session: Session): Set<string> {
   const chains = new Set<string>();
   for (const chain of session.namespaces?.eip155?.chains || []) {
@@ -436,7 +508,22 @@ function getSessionChainSet(session: Session): Set<string> {
 }
 
 function getStorageBase(host: string, port: number): string {
-  const storageDir = join(tmpdir(), "walletchan-rpc");
-  mkdirSync(storageDir, { recursive: true });
-  return join(storageDir, `${host.replace(/[^a-zA-Z0-9.-]/g, "_")}-${port}`);
+  const storageRoot =
+    process.env.WALLETCHAN_RPC_STORAGE_DIR ||
+    join(tmpdir(), `walletchan-rpc-${getStorageScope()}`);
+  const storageDir = join(storageRoot, `${sanitizeStorageSegment(host)}-${port}`);
+  mkdirSync(storageDir, { recursive: true, mode: 0o700 });
+  accessSync(storageDir, constants.R_OK | constants.W_OK | constants.X_OK);
+  return storageDir;
+}
+
+function getStorageScope(): string {
+  if (typeof process.getuid === "function") {
+    return `uid-${process.getuid()}`;
+  }
+  return sanitizeStorageSegment(process.env.USER || process.env.USERNAME || "default");
+}
+
+function sanitizeStorageSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9.-]/g, "_");
 }

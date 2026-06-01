@@ -46,7 +46,7 @@ If WalletChan is not paired, call `get_pairing_uri` and show the `pairingUrl` to
 
 If a wallet action returns `status: "needs_pairing"` or `errorCode: "walletconnect_disconnected"`, the WalletConnect session was closed or lost. Show the returned `pairingUrl` or `pairingUri` if present, otherwise call `get_pairing_uri`; use the QR image too when the client displays one. After the user pairs again, retry the wallet action; if `reprepareRequired` is true, refresh calldata first.
 
-Tell the user to approve in WalletChan, then call `get_request_status` when a request ID is returned.
+Tell the user to approve in WalletChan, then call `get_request_status` when a request ID is returned. If the paired wallet does not support ERC-5792 batching, `send_calls`, `send_prepared_calls`, `swap`, and `bridge` still work by sending each call as an individual transaction and waiting for each receipt before the next prompt.
 
 ## Base Plugin Resources
 
@@ -55,7 +55,7 @@ Use `load_base_plugin` or MCP resources to read adapted Base plugin docs. The ad
 Fast path:
 
 1. Supported CLI plugin: `run_base_plugin_cli` -> `send_prepared_calls` or `submitPreparedCalls: true`. Current default runners cover Morpho and Aerodrome.
-2. Base swap-style flow: WalletChan MCP `swap`. It uses WalletChan's first-party swap API, adds needed approvals, and sends the final batch to WalletChan.
+2. Base swap-style flow: WalletChan MCP `swap`. It uses WalletChan's first-party swap API, adds needed approvals, and sends the final call set to WalletChan.
 3. HTTP tx-builder plugin: WalletChan MCP `web_request` for allowlisted hosts -> `send_prepared_calls`. Current default hosts cover Moonwell, Uniswap, Avantis, Bankr discovery, Morpho API hosts, and `walletchan-rpc` default upstream RPC hosts.
 4. Allowlisted remote MCP plugin: use `list_remote_mcp_tools` / `call_remote_mcp_tool`. For Virtuals login, use `start_remote_mcp_siwe_login`, wait for WalletChan approval, then call `complete_remote_mcp_siwe_login`. This preserves the exact SIWE challenge; do not manually reconstruct or summarize it.
 5. Direct calldata already in hand: `send_prepared_calls` or `send_calls`.

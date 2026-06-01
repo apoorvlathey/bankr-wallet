@@ -11,16 +11,28 @@ export interface WalletChanRpcHealth {
   ok: boolean;
   connected: boolean;
   accounts?: string[];
+  batching?: WalletChanRpcBatching;
   activeChainId: number;
   chains: RuntimeChainSummary[];
 }
 
+export interface WalletChanRpcBatching {
+  requested: boolean;
+  supported: boolean;
+  mode: "erc5792" | "sequential_fallback" | "disconnected";
+  approvedMethods: string[];
+  missingMethods: string[];
+}
+
 export interface WalletChanRpcSession {
   connected: boolean;
+  batching?: WalletChanRpcBatching;
   activeChainId: number;
   chains: string;
   session: {
     accounts: string[];
+    batching?: WalletChanRpcBatching;
+    methods?: string[];
     peerName: string;
     peerUrl: string;
     topic: string;
@@ -31,6 +43,7 @@ export interface WalletChanRpcPairing {
   connected: boolean;
   pairingUri: string | null;
   pairingUrl?: string;
+  batching?: WalletChanRpcBatching;
   activeChainId: number;
   chains: RuntimeChainSummary[];
   error?: string;
@@ -124,6 +137,8 @@ export class WalletChanRpcClient {
     status: "connected" | "needs_pairing";
     needsPairing: boolean;
     activeChainId: number;
+    batching?: WalletChanRpcBatching;
+    batchingSupported: boolean;
     accounts: string[];
     baseAccount: { address: string; chainId: number } | null;
     wallets: Array<{ address: string; chainId: number }>;
@@ -143,6 +158,8 @@ export class WalletChanRpcClient {
       status: connected ? "connected" : "needs_pairing",
       needsPairing: !connected,
       activeChainId: health.activeChainId,
+      batching: health.batching,
+      batchingSupported: health.batching?.supported === true,
       accounts: normalizedAccounts,
       baseAccount: normalizedAccounts[0]
         ? { address: normalizedAccounts[0], chainId: health.activeChainId }
@@ -155,7 +172,9 @@ export class WalletChanRpcClient {
       rpcUrl: this.baseUrl,
       recommendedNextTool: connected ? null : "get_pairing_uri",
       message: connected
-        ? "WalletChan RPC is paired and has approved accounts."
+        ? health.batching?.supported
+          ? "WalletChan RPC is paired and has approved accounts. The wallet supports ERC-5792 batching."
+          : "WalletChan RPC is paired and has approved accounts. The wallet does not support ERC-5792 batching, so send_calls will use sequential transaction fallback."
         : "WalletChan RPC is running, but WalletConnect is not paired or has no approved accounts. Call get_pairing_uri before sending wallet requests.",
     };
   }

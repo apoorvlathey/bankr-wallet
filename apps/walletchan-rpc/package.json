@@ -1,6 +1,6 @@
 {
   "name": "@walletchan/rpc",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "description": "Local JSON-RPC proxy that routes wallet requests through WalletConnect",
   "license": "MIT",

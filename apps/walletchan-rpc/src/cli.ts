@@ -18,6 +18,7 @@ export interface CliConfig {
 interface RawOptions {
   chain: string[];
   rpc: string[];
+  host: string;
   port: string;
   forceNewSession?: boolean;
   projectId?: string;
@@ -47,10 +48,11 @@ export function parseCli(argv: string[]): CliConfig {
     .description("Local JSON-RPC proxy that routes wallet requests through WalletConnect")
     .option("-c, --chain <name-or-id>", "chain to expose; repeatable", collect, [])
     .option("-r, --rpc <chain=url>", "override upstream RPC for a selected chain; repeatable", collect, [])
+    .option("--host <host>", "local RPC bind host", process.env.WALLETCHAN_RPC_HOST || "127.0.0.1")
     .option("-p, --port <number>", "local RPC port", "4209")
     .option("--force-new-session", "discard stored WalletConnect sessions and show a fresh pairing URI")
     .option("--project-id <id>", "WalletConnect project ID")
-    .option("--skip-batching", "do not require or expose ERC-5792 wallet_sendCalls")
+    .option("--skip-batching", "do not request ERC-5792 methods; wallet_sendCalls uses sequential fallback")
     .option("--request-timeout <seconds>", "WalletConnect request timeout", "300")
     .option("--upstream-timeout <milliseconds>", "upstream RPC timeout", "15000")
     .addHelpText(
@@ -86,7 +88,7 @@ Examples:
   const config: CliConfig = {
     chains: resolveRuntimeChains(options.chain, options.rpc),
     forceNewSession: Boolean(options.forceNewSession),
-    host: "127.0.0.1",
+    host: parseHost(options.host, "--host"),
     includeBatching: !options.skipBatching,
     port: parsePositiveInteger(options.port, "--port"),
     projectId,
@@ -105,6 +107,17 @@ Examples:
   return config;
 }
 
+function parseHost(value: string, label: string): string {
+  const host = value.trim();
+  if (!host) {
+    throw new Error(`${label} must not be empty`);
+  }
+  if (/\s/.test(host)) {
+    throw new Error(`${label} must not contain whitespace`);
+  }
+  return host;
+}
+
 function stripForwardedSeparator(argv: string[]): string[] {
   return argv.filter((value, index) => index < 2 || value !== "--");
 }
@@ -114,6 +127,6 @@ export function formatCliSummary(config: CliConfig): string {
     style.green(`Local RPC: http://${config.host}:${config.port}`),
     style.purple(`SKILL.md:  http://${config.host}:${config.port}/SKILL.md`),
     `Chains:    ${formatChains(config.chains)}`,
-    `Batching:  ${config.includeBatching ? "enabled" : "disabled"}`,
+    `ERC-5792:   ${config.includeBatching ? "requested if wallet supports it" : "not requested; sequential fallback only"}`,
   ].join("\n");
 }

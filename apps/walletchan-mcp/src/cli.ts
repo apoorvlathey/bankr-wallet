@@ -1,5 +1,6 @@
 export interface CliConfig {
   rpcUrl: string;
+  rpcHost: string;
   walletchanApiBaseUrl: string;
   managedRpcEnabled: boolean;
   rpcChains: string[];
@@ -19,6 +20,10 @@ export interface CliConfig {
 export function parseCli(argv: string[]): CliConfig {
   const args = stripForwardedSeparator(argv).slice(2);
   let rpcUrl = process.env.WALLETCHAN_RPC_URL || "http://127.0.0.1:4209";
+  let rpcHost =
+    process.env.WALLETCHAN_MCP_RPC_HOST ||
+    process.env.WALLETCHAN_RPC_HOST ||
+    "127.0.0.1";
   let walletchanApiBaseUrl =
     process.env.WALLETCHAN_MCP_API_BASE ||
     process.env.WALLETCHAN_API_BASE ||
@@ -46,6 +51,10 @@ export function parseCli(argv: string[]): CliConfig {
       rpcUrl = requireValue(args, ++i, "--rpc-url");
     } else if (arg.startsWith("--rpc-url=")) {
       rpcUrl = arg.slice("--rpc-url=".length);
+    } else if (arg === "--rpc-host") {
+      rpcHost = requireValue(args, ++i, "--rpc-host");
+    } else if (arg.startsWith("--rpc-host=")) {
+      rpcHost = arg.slice("--rpc-host=".length);
     } else if (arg === "--api-base") {
       walletchanApiBaseUrl = requireValue(args, ++i, "--api-base");
     } else if (arg.startsWith("--api-base=")) {
@@ -117,6 +126,7 @@ export function parseCli(argv: string[]): CliConfig {
 
   return {
     rpcUrl: parsed.toString().replace(/\/$/, ""),
+    rpcHost: parseHost(rpcHost, "--rpc-host"),
     walletchanApiBaseUrl: parsedApiBase.toString().replace(/\/$/, ""),
     managedRpcEnabled,
     rpcChains: rpcChains.length > 0 ? rpcChains : ["base"],
@@ -132,6 +142,17 @@ export function parseCli(argv: string[]): CliConfig {
     requestTimeoutSeconds,
     upstreamTimeoutMs,
   };
+}
+
+function parseHost(value: string, label: string): string {
+  const host = value.trim();
+  if (!host) {
+    throw new Error(`${label} must not be empty`);
+  }
+  if (/\s/.test(host)) {
+    throw new Error(`${label} must not contain whitespace`);
+  }
+  return host;
 }
 
 function parseEnvHosts(value: string | undefined): string[] {
@@ -168,6 +189,7 @@ Usage:
 
 Options:
   --rpc-url <url>           WalletChan RPC URL (default: http://127.0.0.1:4209)
+  --rpc-host <host>         Managed walletchan-rpc bind host (default: 127.0.0.1)
   --api-base <url>          WalletChan API base URL (default: https://walletchan.com/api)
   --no-managed-rpc          Do not auto-start walletchan-rpc; use an existing RPC server
   --chain <name-or-id>      Chain for managed walletchan-rpc; repeatable (default: base)

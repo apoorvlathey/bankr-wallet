@@ -48,7 +48,7 @@ export class WalletChanTools {
       {
         name: "get_pairing_uri",
         title: "Get Pairing URI",
-        description: "Start or inspect the managed WalletChan RPC bridge and return the WalletConnect pairing URI and local QR page URL when pairing is needed. Clients that render MCP image content may also show an attached QR code.",
+        description: "Start or inspect the managed WalletChan RPC bridge and return the WalletConnect pairing URI and local QR page URL when pairing is needed. When a pairing URI is available, the tool emits an MCP image content block with the QR code before the text fallback.",
         inputSchema: objectSchema({
           waitMs: {
             description: "How long to wait for the pairing URI when starting walletchan-rpc. Defaults to 15000.",
@@ -70,7 +70,7 @@ export class WalletChanTools {
       {
         name: "send_calls",
         title: "Send Calls",
-        description: "Submit an ERC-5792 wallet_sendCalls batch through WalletChan RPC for user approval in WalletChan.",
+        description: "Submit wallet calls through WalletChan RPC. Uses ERC-5792 wallet_sendCalls when the wallet supports it, otherwise sends the calls sequentially as individual user-approved transactions.",
         inputSchema: objectSchema(
           {
             chain: {
@@ -97,7 +97,7 @@ export class WalletChanTools {
       {
         name: "send_prepared_calls",
         title: "Send Prepared Calls",
-        description: "Normalize a Base plugin prepare response into wallet_sendCalls and submit it through WalletChan. Accepts common shapes like transactions[], calls[], {data:{to,value,data}}, and approval+action objects.",
+        description: "Normalize a Base plugin prepare response into wallet calls and submit it through WalletChan. Accepts common shapes like transactions[], calls[], {data:{to,value,data}}, and approval+action objects. Non-batching wallets get sequential transaction fallback.",
         inputSchema: objectSchema(
           {
             prepared: {
@@ -999,14 +999,16 @@ export class WalletChanTools {
     metadata?: Record<string, unknown>;
   }): Promise<unknown> {
     const result = await this.withRpc(() => this.sendCallsWithAtomicFallback(args));
+    const resultRecord = asRecord(result);
     const requestId = extractBundleId(result);
+    const status = mapSubmissionStatus(resultRecord);
     return {
-      ...asRecord(result),
+      ...resultRecord,
       ...args.metadata,
       requestId,
-      status: "pending",
+      status,
       approvalMode: "walletchan_popup",
-      message: "Approve or reject this batch in the WalletChan popup.",
+      message: submissionMessage(resultRecord, status),
     };
   }
 
@@ -1198,6 +1200,24 @@ function mapBundleStatus(value: unknown): string {
   if (status >= 200 && status < 300) return "confirmed";
   if (status >= 400) return "failed";
   return "unknown";
+}
+
+function mapSubmissionStatus(value: Record<string, unknown>): string {
+  const status = mapBundleStatus(value);
+  return status === "unknown" ? "pending" : status;
+}
+
+function submissionMessage(value: Record<string, unknown>, status: string): string {
+  if (value.mode === "sequential_fallback") {
+    if (status === "confirmed") {
+      return "Wallet did not support ERC-5792 batching, so WalletChan submitted each transaction sequentially and confirmed each receipt.";
+    }
+    if (status === "failed") {
+      return "Wallet did not support ERC-5792 batching, so WalletChan used sequential transactions, but the sequence failed. Inspect the bundle for the failed call.";
+    }
+    return "Wallet does not support ERC-5792 batching. Approve each transaction in order in the WalletChan popup.";
+  }
+  return "Approve or reject this batch in the WalletChan popup.";
 }
 
 function getBlockingPreparedWarning(value: unknown): string | null {
