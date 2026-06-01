@@ -19,6 +19,7 @@ const BATCH_METHODS = [
 
 export function formatRuntimeSkill(config: CliConfig, context: RpcContext): string {
   const rpcUrl = `http://${config.host}:${config.port}`;
+  const pairingUrl = `${rpcUrl}/qr`;
   const activeChain = context.getActiveChain();
   const activeChainId = toHexChainId(activeChain.chainId);
   const session = getSession(context);
@@ -40,6 +41,7 @@ This skill was served by a live WalletChan RPC instance. Use the runtime details
 ## Runtime
 
 - RPC URL: \`${rpcUrl}\`
+- Pairing QR URL: \`${pairingUrl}\`
 - Connected: \`${context.wallet.connected ? "yes" : "no"}\`
 - Approved accounts: ${accounts.length > 0 ? accounts.map((account) => `\`${account}\``).join(", ") : "`none`"}
 - Active chain: \`${activeChain.name}\` (${activeChain.chainId}, \`${activeChainId}\`)
@@ -50,6 +52,8 @@ This skill was served by a live WalletChan RPC instance. Use the runtime details
 ## How To Use
 
 Send standard JSON-RPC over HTTP to \`${rpcUrl}\` or \`${rpcUrl}/rpc\`. Any JSON-RPC client can use this endpoint, including JavaScript code, shell scripts, viem, ethers, Foundry, or an AI agent.
+
+If no wallet is paired, show the user \`${pairingUrl}\` so they can connect a wallet to WalletChan RPC via WalletConnect. The page displays a browser QR code, includes a copy button for the WalletConnect URI, and refreshes its pairing state automatically.
 
 Built-in chain aliases and default RPC URLs are copied from WalletChan's extension registry. Common aliases include \`ethereum\`, \`arbitrum\`, \`base\`, \`bnb\`, \`optimism\`, \`megaeth\`, \`polygon\`, \`unichain\`, \`gnosis\`, \`monad\`, \`sonic\`, \`sei\`, \`mantle\`, \`linea\`, \`berachain\`, and \`base-sepolia\`.
 
@@ -66,7 +70,7 @@ Read-only JSON-RPC methods may be forwarded to the configured upstream RPC. Loca
 - Use \`eth_sendTransaction\` for sends. Never use \`eth_sendRawTransaction\`, \`eth_sign\`, or \`eth_signTransaction\`.
 - Every send/sign/batch request opens a user approval prompt in the connected wallet.
 - If the wallet rejects a request, report the rejection to the user. Do not retry rejected sends automatically.
-- If a wallet-mutating request returns JSON-RPC code \`4900\` with \`data.code: "walletconnect_disconnected"\`, the WalletConnect session was closed or lost. Call \`${rpcUrl}/pairing\`, show the returned URI to the user, wait for pairing, then retry with freshly prepared transaction data when applicable.
+- If a wallet-mutating request returns JSON-RPC code \`4900\` with \`data.code: "walletconnect_disconnected"\`, the WalletConnect session was closed or lost. Show \`${pairingUrl}\` to the user, or call \`${rpcUrl}/pairing\` and show the returned URI, wait for pairing, then retry with freshly prepared transaction data when applicable.
 - Use only an approved account from \`eth_accounts\` as \`from\` or Foundry \`--sender\`.
 - If a request targets a different configured chain, include the target \`chainId\` or call \`wallet_switchEthereumChain\` first.
 - If the needed EVM chain is not configured, ask the user to restart the CLI with \`--chain <chainId> --rpc <chainId>=https://...\`.
@@ -78,6 +82,8 @@ Read-only JSON-RPC methods may be forwarded to the configured upstream RPC. Loca
 curl -s ${rpcUrl}/health
 curl -s ${rpcUrl}/session
 curl -s ${rpcUrl}/pairing
+curl -s ${rpcUrl}/qr?format=json
+# Browser QR page: ${pairingUrl}
 curl -s ${rpcUrl}/SKILL.md
 \`\`\`
 

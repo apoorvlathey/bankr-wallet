@@ -71,6 +71,7 @@ export class ManagedRpcProcess {
       this.pairingUri = pairing.pairingUri;
     }
     const currentConnected = connected || Boolean(pairing?.connected);
+    const pairingUrl = pairing?.pairingUrl || formatPairingPageUrl(this.config.rpcUrl);
     const pairingUri = currentConnected
       ? null
       : this.pairingUri || await this.waitForPairingUri(waitMs);
@@ -83,10 +84,11 @@ export class ManagedRpcProcess {
       activeChainId: pairing?.activeChainId ?? health?.activeChainId ?? null,
       chains: pairing?.chains ?? health?.chains ?? [],
       pairingUri,
+      pairingUrl,
       message: currentConnected
         ? "WalletChan RPC is already paired."
         : pairingUri
-          ? "Paste this WalletConnect URI in WalletChan: More -> WalletConnect -> paste."
+          ? "Open the pairing URL to scan the QR code, or paste this WalletConnect URI in any WalletConnect-capable wallet."
           : this.externalProcessDetected
             ? "An existing walletchan-rpc process is running on this URL, but this MCP process could not ask it for a fresh pairing URI. Use that process's terminal output, or restart with --force-new-session on an unused --rpc-url port."
             : "WalletChan RPC is starting, but no WalletConnect URI was observed yet. Call get_pairing_uri again.",
@@ -250,6 +252,15 @@ function resolveRpcPackageDir(): string {
 
 function isLocalHost(hostname: string): boolean {
   return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
+}
+
+function formatPairingPageUrl(rpcUrl: string): string {
+  const url = new URL(rpcUrl);
+  if (url.hostname === "0.0.0.0") url.hostname = "127.0.0.1";
+  url.pathname = "/qr";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
 }
 
 function sleep(ms: number): Promise<void> {

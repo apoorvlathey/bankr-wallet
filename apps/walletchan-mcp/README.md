@@ -131,13 +131,13 @@ After installation, ask your assistant:
 Connect to WalletChan.
 ```
 
-The assistant should call `get_pairing_uri` and show a WalletConnect URI that starts with `wc:`.
+The assistant should call `get_pairing_uri` and show the pairing result. The response includes a local `pairingUrl` such as `http://127.0.0.1:4209/qr`; open it to scan a browser QR code or copy the WalletConnect URI. Clients that render MCP images may also show a QR code directly in chat. The response still includes a WalletConnect URI that starts with `wc:` as the raw paste fallback.
 
 In WalletChan:
 
 1. Open the extension.
 2. Go to `More -> WalletConnect`.
-3. Paste the URI.
+3. Scan the browser QR, scan the chat QR if your client displayed one, or paste the URI.
 4. Approve the pairing.
 
 After pairing, ask:
@@ -257,7 +257,13 @@ Restart or reload your MCP client after adding the config. In Claude Code, run `
 
 ### The assistant shows a WalletConnect URI but pairing does not complete
 
-Make sure WalletChan is unlocked, paste the full `wc:` URI, and approve the pairing in the extension. If the URI expired, ask the assistant to connect to WalletChan again.
+Make sure your wallet is unlocked, open the returned `pairingUrl` or paste the full `wc:` URI, and approve the pairing in the wallet. If the URI expired, ask the assistant to connect again.
+
+### The assistant does not show a QR code
+
+WalletChan MCP returns a standard MCP image block for the pairing QR when a `wc:` URI is available, but terminal clients may show only text or an image placeholder. Use the `wc:` URI in the same response: WalletChan -> More -> WalletConnect -> paste.
+
+For a scannable QR that does not depend on chat image rendering, open the `pairingUrl` returned by `get_pairing_uri`, usually `http://127.0.0.1:4209/qr`.
 
 ### A transaction tool says `needs_pairing`
 

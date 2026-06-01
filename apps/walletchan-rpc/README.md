@@ -38,12 +38,12 @@ From this repo:
 pnpm dev:walletchan-rpc --chain base
 ```
 
-On first use, the CLI copies the `wc:` URI to your clipboard, then prints a terminal QR code and raw URI.
+On first use, the CLI copies the `wc:` URI to your clipboard, then prints a terminal QR code, raw URI, and browser QR URL.
 
-- WalletChan extension: open More -> WalletConnect and paste.
-- Mobile wallets: scan the QR code.
+- Wallet app: scan the QR code or paste the WalletConnect URI.
+- Browser QR page: open `http://127.0.0.1:4209/qr`, then scan the QR or copy the URI.
 
-The local RPC and `SKILL.md` endpoint start immediately at `http://127.0.0.1:4209` by default. Wallet requests become available after the wallet session is approved.
+The local RPC, `SKILL.md`, and `/qr` endpoints start immediately at `http://127.0.0.1:4209` by default. Wallet requests become available after the wallet session is approved.
 
 ## Agent Skill
 
@@ -55,7 +55,7 @@ curl http://127.0.0.1:4209/SKILL.md
 
 The live skill includes the current RPC URL, approved account, active chain, and batching state.
 
-If the wallet connection is revoked from WalletChan, the RPC treats the session as disconnected once the WalletConnect session is deleted, expires, or updates to zero approved accounts. In an interactive terminal, the CLI prints the disconnect reason and waits for Enter before generating a fresh WalletConnect URI. Non-interactive callers can call `http://127.0.0.1:4209/pairing` to get a fresh URI without restarting the RPC process.
+If the wallet connection is revoked, the RPC treats the session as disconnected once the WalletConnect session is deleted, expires, or updates to zero approved accounts. In an interactive terminal, the CLI prints the disconnect reason and waits for Enter before generating a fresh WalletConnect URI. Non-interactive callers can call `http://127.0.0.1:4209/pairing` to get a fresh URI without restarting the RPC process, or show `http://127.0.0.1:4209/qr` so the user can scan the browser QR page.
 
 ## Chains
 
@@ -180,7 +180,7 @@ Rejected methods:
 
 WalletConnect sessions persist across CLI restarts by default. If a compatible stored session exists for the same host and port, the CLI reuses it and skips the QR/paste flow.
 
-During a running process, stale or manually revoked sessions are invalidated automatically. Interactive CLI sessions prompt for Enter before generating a new URI; a fresh pairing URI is also available from `/pairing`.
+During a running process, stale or manually revoked sessions are invalidated automatically. Interactive CLI sessions prompt for Enter before generating a new URI; a fresh pairing URI is also available from `/pairing`. The browser QR page at `/qr` polls the local process and updates automatically when a new URI is issued. `/uri` remains available as a compatibility alias.
 
 To discard stored sessions and force a fresh pairing:
 

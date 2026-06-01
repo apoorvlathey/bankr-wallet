@@ -298,7 +298,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function walletDisconnectedError(reason?: string): RpcError {
   return new RpcError(
     4900,
-    "WalletConnect session is disconnected. Pair WalletChan again using /pairing or WalletChan MCP get_pairing_uri.",
+    "WalletConnect session is disconnected. Pair a wallet again using /pairing or WalletChan MCP get_pairing_uri.",
     {
       code: "walletconnect_disconnected",
       needsPairing: true,

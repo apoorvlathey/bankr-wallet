@@ -72,6 +72,38 @@ pnpm zip:cws    # builds + zips without `key` (for CWS upload)
 
 Then upload `apps/extension/zip/walletchan-vX.Y.Z.zip` to a new GitHub release.
 
+## NPM Packages: WalletChan RPC and MCP
+
+`apps/walletchan-rpc` and `apps/walletchan-mcp` are published separately to npm as `@walletchan/rpc` and `@walletchan/mcp`. This flow is independent of the browser extension `pnpm release:*` commands.
+
+Use patch/minor/major according to semver, then update package metadata in the same commit as the code change:
+
+- `apps/walletchan-rpc/package.json` `version`
+- `apps/walletchan-mcp/package.json` `version`
+- `apps/walletchan-mcp/src/mcpServer.ts` `serverInfo.version`
+- `apps/walletchan-mcp/package.json` `dependencies["@walletchan/rpc"]` when MCP needs the new RPC package
+- `pnpm-lock.yaml` via `pnpm install --lockfile-only`
+
+For an RPC + MCP release:
+
+```bash
+pnpm install --lockfile-only
+pnpm build:walletchan-mcp
+
+pnpm publish:walletchan-rpc:dry-run
+pnpm publish:walletchan-mcp:dry-run
+
+pnpm publish:walletchan-rpc
+pnpm publish:walletchan-mcp
+```
+
+Publish `@walletchan/rpc` before `@walletchan/mcp` when MCP depends on the new RPC version. After publishing, verify npm:
+
+```bash
+npm view @walletchan/rpc version
+npm view @walletchan/mcp version
+```
+
 ## GitHub Releases (Sideloading)
 
 GitHub Releases provide a ZIP file for users who want to sideload the extension in developer mode. This is useful for beta testing or trying out the extension before it's approved on CWS.

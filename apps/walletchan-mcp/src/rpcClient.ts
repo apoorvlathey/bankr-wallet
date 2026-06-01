@@ -30,6 +30,7 @@ export interface WalletChanRpcSession {
 export interface WalletChanRpcPairing {
   connected: boolean;
   pairingUri: string | null;
+  pairingUrl?: string;
   activeChainId: number;
   chains: RuntimeChainSummary[];
   error?: string;
@@ -241,7 +242,7 @@ export class WalletChanRpcClient {
     const health = await this.health();
     if (!health.connected) {
       throw new Error(
-        `WalletChan RPC is not connected. Start walletchan-rpc and pair WalletChan first.`,
+        `WalletChan RPC is not connected. Start walletchan-rpc and pair a wallet first.`,
       );
     }
 
@@ -260,7 +261,7 @@ export class WalletChanRpcClient {
   async resolveFrom(value?: string): Promise<string> {
     const accounts = (await this.accounts()).map((account) => account.toLowerCase());
     if (accounts.length === 0) {
-      throw new Error("No approved WalletChan RPC account. Pair WalletChan first.");
+      throw new Error("No approved WalletChan RPC account. Pair a wallet first.");
     }
     if (!value) return accounts[0];
     const normalized = value.toLowerCase();
@@ -367,7 +368,7 @@ export function isWalletConnectionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /WalletChan RPC is not connected/i.test(message) ||
     /No approved WalletChan RPC account/i.test(message) ||
-    /Pair WalletChan first/i.test(message) ||
+    /Pair (WalletChan|a wallet) first/i.test(message) ||
     /WalletConnect is not paired/i.test(message) ||
     /WalletConnect session is not connected/i.test(message) ||
     /WalletConnect session .*disconnected/i.test(message) ||

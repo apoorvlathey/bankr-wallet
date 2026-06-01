@@ -97,7 +97,7 @@ async function main(): Promise<void> {
 
     if (!process.stdin.isTTY) {
       log.warn(
-        `Generate a new URI with curl http://${config.host}:${config.port}/pairing or the MCP get_pairing_uri tool.`,
+        `Generate a new URI with curl http://${config.host}:${config.port}/pairing, open http://${config.host}:${config.port}/qr, or use the MCP get_pairing_uri tool.`,
       );
       reconnecting = false;
       return;
@@ -125,11 +125,11 @@ async function main(): Promise<void> {
 
     log.info("Pair with a wallet:");
     if (clipboard.success) {
-      log.info("  WalletChan extension: More -> WalletConnect -> paste");
+      log.info("  Wallet app: scan the QR or paste the copied WalletConnect URI");
     } else {
-      log.info("  WalletChan extension: More -> WalletConnect -> paste the URI below");
+      log.info("  Wallet app: scan the QR or paste the WalletConnect URI below");
     }
-    log.info("  Mobile wallet: scan the QR");
+    log.info(`  Browser QR: http://${config.host}:${config.port}/qr`);
     log.raw("");
     qrcode.generate(proposal.uri, { small: true }, (qr) => log.raw(qr));
     log.raw(proposal.uri);

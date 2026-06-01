@@ -27,7 +27,9 @@ yarn dlx @walletchan/rpc --chain base
 bunx @walletchan/rpc --chain base
 ```
 
-The CLI starts the local RPC and `SKILL.md` endpoint immediately, then displays a WalletConnect QR/URI if no reusable session exists. The user must approve the WalletConnect session before wallet send/sign requests can succeed. Stored WalletConnect sessions are reused across CLI restarts by default.
+The CLI starts the local RPC, browser QR page, and `SKILL.md` endpoint immediately, then displays a WalletConnect QR/URI if no reusable session exists. The user must approve the WalletConnect session before wallet send/sign requests can succeed. Stored WalletConnect sessions are reused across CLI restarts by default.
+
+If the user needs to pair or re-pair, show `http://127.0.0.1:4209/qr` by default. It displays a wallet-agnostic QR image and copy button in the browser, and refreshes automatically if a new WalletConnect URI is issued. If the user is on a different port, use that port. `/uri` remains available as a compatibility alias.
 
 Built-in chain aliases and default RPC URLs are copied from WalletChan's extension registry. Common aliases include `ethereum`, `arbitrum`, `base`, `bnb`, `optimism`, `megaeth`, `polygon`, `unichain`, `gnosis`, `monad`, `sonic`, `sei`, `mantle`, `linea`, `berachain`, and `base-sepolia`.
 
@@ -71,6 +73,7 @@ Read-only JSON-RPC methods may be forwarded to the configured upstream RPC. Loca
 - If a request targets a different configured chain, include the target `chainId` or call `wallet_switchEthereumChain` first.
 - If the needed EVM chain is not configured, ask the user to restart the CLI with `--chain <chainId> --rpc <chainId>=https://...`.
 - WalletConnect sessions persist across CLI restarts. Ask the user to restart with `--force-new-session` only when they want a fresh pairing.
+- For disconnected sessions, prefer showing the browser QR page (`/qr`) over relying on terminal-rendered or chat-rendered QR images.
 
 ## Discovery
 
@@ -78,6 +81,7 @@ Read-only JSON-RPC methods may be forwarded to the configured upstream RPC. Loca
 curl -s http://127.0.0.1:4209/health
 curl -s http://127.0.0.1:4209/session
 curl -s http://127.0.0.1:4209/pairing
+curl -s http://127.0.0.1:4209/qr?format=json
 curl -s http://127.0.0.1:4209/SKILL.md
 ```
 

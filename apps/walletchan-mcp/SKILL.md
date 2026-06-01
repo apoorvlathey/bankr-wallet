@@ -15,9 +15,9 @@ Start this MCP server in your MCP client:
 npx @walletchan/mcp
 ```
 
-WalletChan MCP starts a managed local `walletchan-rpc` bridge by default. Before wallet tools can succeed, call `get_pairing_uri` and show the returned WalletConnect URI to the user.
+WalletChan MCP starts a managed local `walletchan-rpc` bridge by default. Before wallet tools can succeed, call `get_pairing_uri` and show the returned `pairingUrl` or WalletConnect URI to the user. `pairingUrl` opens the local RPC browser QR page, normally `/qr`. If the client renders MCP image content, the tool response may also include a QR code image; the URI remains the raw fallback.
 
-The user pairs it in WalletChan: More -> WalletConnect -> paste.
+The user pairs a wallet by scanning the browser QR or pasting the URI in any WalletConnect-capable wallet.
 
 ## Tool Mapping
 
@@ -42,9 +42,9 @@ Do not use x402 tools or other Base MCP-specific tools unless WalletChan MCP exp
 
 WalletChan does not return a Base Account approval URL. Wallet requests are sent through WalletChan RPC to the WalletChan extension via WalletConnect. The user approves or rejects in the WalletChan popup.
 
-If WalletChan is not paired, call `get_pairing_uri` and show the exact URI to the user. After they pair, retry `get_wallets`.
+If WalletChan is not paired, call `get_pairing_uri` and show the `pairingUrl` to the user when present. If a QR image appears in chat, the user can scan it instead; otherwise they can paste the exact `pairingUri`. After they pair, retry `get_wallets`.
 
-If a wallet action returns `status: "needs_pairing"` or `errorCode: "walletconnect_disconnected"`, the WalletConnect session was closed or lost. Show the returned `pairingUri` if present, otherwise call `get_pairing_uri`. After the user pairs again, retry the wallet action; if `reprepareRequired` is true, refresh calldata first.
+If a wallet action returns `status: "needs_pairing"` or `errorCode: "walletconnect_disconnected"`, the WalletConnect session was closed or lost. Show the returned `pairingUrl` or `pairingUri` if present, otherwise call `get_pairing_uri`; use the QR image too when the client displays one. After the user pairs again, retry the wallet action; if `reprepareRequired` is true, refresh calldata first.
 
 Tell the user to approve in WalletChan, then call `get_request_status` when a request ID is returned.
 

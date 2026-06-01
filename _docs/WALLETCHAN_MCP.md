@@ -59,7 +59,7 @@ The server implements the stdio MCP JSON-RPC methods needed by current clients:
 | `notifications/cancelled` | No-op |
 | `ping` | Returns `{}` |
 | `tools/list` | Returns the WalletChan tool set with `title`, `description`, and JSON schemas |
-| `tools/call` | Executes a tool and returns both text content and `structuredContent` |
+| `tools/call` | Executes a tool and returns text content, `structuredContent`, and a PNG image content block when a WalletConnect pairing QR is available |
 | `resources/list` | Lists WalletChan skill and adapted Base plugin resources |
 | `resources/read` | Reads WalletChan skill markdown or fetches upstream Base markdown with overrides |
 | `resources/templates/list` | Returns no templates |
@@ -71,7 +71,7 @@ The current implementation uses newline-delimited JSON messages over stdio.
 
 | Tool | Backing behavior |
 |---|---|
-| `get_pairing_uri` | Starts or inspects managed `walletchan-rpc`; returns WalletConnect URI when pairing is needed |
+| `get_pairing_uri` | Starts or inspects managed `walletchan-rpc`; returns WalletConnect URI and local `/qr` QR page when pairing is needed, with an MCP image block containing a QR code for clients that render tool images |
 | `get_wallets` | Ensures RPC is started, reads `/health` and `eth_accounts`, optionally validates a chain |
 | `send_calls` | Builds ERC-5792 `wallet_sendCalls` params and submits to `walletchan-rpc` |
 | `send_prepared_calls` | Extracts calls from common Base plugin prepare-response shapes and submits the batch to `walletchan-rpc` |
@@ -107,13 +107,14 @@ WalletChan MCP treats a closed/lost WalletConnect session as a recoverable tool 
   "errorCode": "walletconnect_disconnected",
   "needsPairing": true,
   "pairingUri": "wc:...",
+  "pairingUrl": "http://127.0.0.1:4209/qr",
   "recommendedNextTool": "get_pairing_uri",
   "retryAfterPairingTool": "send_prepared_calls",
   "reprepareRequired": true
 }
 ```
 
-The harness should show `pairingUri` when present, otherwise call `get_pairing_uri`. After the user pairs WalletChan again, retry the action. If `reprepareRequired` is true, rebuild or re-fetch prepared calldata first because quotes, simulations, and nonces can go stale.
+The harness should show `pairingUrl` when present so the user can open a browser QR page, or show `pairingUri` directly when a link is not usable. If neither is present, call `get_pairing_uri`. Tool responses that include a `pairingUri` also include a standard MCP `image` content block with a PNG QR code when generation succeeds. Clients that render MCP images can show the QR directly; terminal clients may still show only a placeholder, so `/qr` and the raw `wc:` URI remain the reliable fallbacks. After the user pairs a wallet again, retry the action. If `reprepareRequired` is true, rebuild or re-fetch prepared calldata first because quotes, simulations, and nonces can go stale.
 
 `get_wallets` also reports `status: "needs_pairing"` / `needsPairing: true` when the RPC process is running but no approved WalletConnect account is available. `get_request_status` applies the same recovery shape for async signature/transaction requests that failed after the initial tool call returned a request ID.
 
@@ -169,7 +170,7 @@ Managed RPC is enabled by default. The MCP server uses this logic:
 3. Prefer `@walletchan/rpc/dist/index.js`.
 4. If no dist file exists but source is available in the monorepo, fall back to `pnpm --dir <repoRoot> --filter @walletchan/rpc dev --`.
 5. Spawn the child with selected chain flags, RPC overrides, timeouts, batching mode, project ID, and optional `--force-new-session`.
-6. Ask the RPC `/pairing` route for a fresh `wc:` URI when `/health` reports no usable session. Child stdout parsing is kept as a startup fallback.
+6. Ask the RPC `/pairing` route for a fresh `wc:` URI when `/health` reports no usable session. The response includes `pairingUrl` for the RPC `/qr` browser QR page. Child stdout parsing is kept as a startup fallback.
 7. On MCP shutdown, terminate the managed child.
 
 Default managed RPC config:
@@ -182,7 +183,9 @@ Default managed RPC config:
 
 If another older `walletchan-rpc` is already running on the same URL and does not expose `/pairing`, MCP cannot recover its original printed `wc:` URI. In that case `get_pairing_uri` reports that the existing process is external and asks the user to use that process's terminal output or restart on an unused port with `--force-new-session`.
 
-If the user manually disconnects the WalletConnect session from WalletChan, the RPC marks the session disconnected when it sees a delete/expire/update-to-empty signal. Interactive `walletchan-rpc` terminals prompt for Enter before printing a new URI. MCP-managed RPC runs non-interactively, so the next `get_pairing_uri` call asks `/pairing` for a new URI without restarting the MCP server.
+If the user manually disconnects the WalletConnect session from the wallet, the RPC marks the session disconnected when it sees a delete/expire/update-to-empty signal. Interactive `walletchan-rpc` terminals prompt for Enter before printing a new URI. MCP-managed RPC runs non-interactively, so the next `get_pairing_uri` call asks `/pairing` for a new URI without restarting the MCP server. MCP also returns the `/qr` page URL so the user can scan a QR in the browser.
+
+When `get_pairing_uri` returns an unpaired state with a `wc:` URI, `mcpServer.ts` appends a PNG QR code as a standard MCP `image` content item. The structured result stays unchanged and still contains `pairingUri`; QR image support is intentionally additive because not every MCP terminal client renders image blocks inline.
 
 ## Base Skill Adaptation
 
@@ -281,6 +284,8 @@ Practical setup paths:
 
 Plain stdio MCP does not provide a standard cross-client icon field. Some clients may show a monogram fallback even though the server and tools expose readable `title` metadata.
 
+Pairing QR display depends on the client. MCP image content is part of the protocol, and Claude Code/Codex can consume image blocks, but terminal UIs may render only a placeholder rather than a scannable inline image. WalletChan MCP therefore returns `pairingUrl` for the RPC browser QR page, the `wc:` URI in text/structured content, and the optional QR image block.
+
 ## Environment Variables
 
 | Variable | Purpose |
@@ -300,6 +305,21 @@ Plain stdio MCP does not provide a standard cross-client icon field. Some client
 
 Keep `apps/walletchan-mcp/.env.example` in sync when adding env vars.
 
+## NPM Publishing
+
+`@walletchan/mcp` is published from `apps/walletchan-mcp`. For publishable MCP changes, bump both `apps/walletchan-mcp/package.json` and `serverInfo.version` in `apps/walletchan-mcp/src/mcpServer.ts`. If MCP depends on new `walletchan-rpc` behavior, bump `apps/walletchan-mcp/package.json` `dependencies["@walletchan/rpc"]` to the new workspace range and publish `@walletchan/rpc` first.
+
+From the repo root:
+
+```bash
+pnpm install --lockfile-only
+pnpm build:walletchan-mcp
+pnpm publish:walletchan-mcp:dry-run
+pnpm publish:walletchan-mcp
+```
+
+For combined RPC + MCP releases, run both dry-runs before publishing either package, then publish RPC first and MCP second. Keep the detailed release flow in `_docs/PUBLISHING.md` in sync.
+
 ## Testing Checklist
 
 For MCP-only changes:
@@ -314,7 +334,7 @@ For MCP-only changes:
      | node apps/walletchan-mcp/dist/index.js --no-managed-rpc
    ```
 3. Run `get_pairing_uri` on an unused port with `--force-new-session` and verify a `wc:` URI is returned.
-4. Pair WalletChan and run `get_wallets`.
+4. Pair a wallet and run `get_wallets`.
 5. Call `get_portfolio_balances` for the paired address.
 6. Call `get_swap_price` with a small read-only quote, then `swap` with `previewOnly: true`.
 7. Call `get_bridge_quote` with a small read-only route, then `bridge` with `previewOnly: true`.

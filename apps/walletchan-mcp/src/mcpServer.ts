@@ -1,4 +1,5 @@
 import readline from "node:readline";
+import QRCode from "qrcode";
 import { readSkillResource, listSkillResources } from "./baseSkills.js";
 import { WalletChanTools } from "./tools.js";
 
@@ -23,6 +24,17 @@ interface JsonRpcResponse {
   result?: unknown;
   error?: JsonRpcError;
 }
+
+type ToolContentBlock =
+  | {
+      type: "text";
+      text: string;
+    }
+  | {
+      type: "image";
+      data: string;
+      mimeType: string;
+    };
 
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -111,10 +123,10 @@ export class McpServer {
           serverInfo: {
             name: "walletchan-mcp",
             title: "WalletChan",
-            version: "0.1.0",
+            version: "0.1.1",
           },
           instructions:
-            "WalletChan MCP routes wallet requests through the local WalletChan extension. If pairing is needed, call get_pairing_uri and show the WalletConnect URI to the user.",
+            "WalletChan MCP routes wallet requests through the local WalletChan RPC bridge over WalletConnect. If pairing is needed, call get_pairing_uri and show the local pairing URL or WalletConnect URI to the user; clients that render MCP image content may also show the attached QR code.",
         };
       case "notifications/initialized":
       case "notifications/cancelled":
@@ -144,12 +156,7 @@ export class McpServer {
 
     const result = await this.tools.call(name, params.arguments);
     return {
-      content: [
-        {
-          type: "text",
-          text: formatToolResult(result),
-        },
-      ],
+      content: await formatToolContent(result),
       structuredContent: result,
       isError: false,
     };
@@ -187,8 +194,56 @@ export class McpServer {
   }
 }
 
+async function formatToolContent(result: unknown): Promise<ToolContentBlock[]> {
+  const content: ToolContentBlock[] = [
+    {
+      type: "text",
+      text: formatToolResult(result),
+    },
+  ];
+
+  const pairingUri = extractPairingUri(result);
+  if (pairingUri) {
+    const qr = await createPairingQrContent(pairingUri);
+    if (qr) content.push(qr);
+  }
+
+  return content;
+}
+
 function formatToolResult(result: unknown): string {
   return typeof result === "string" ? result : JSON.stringify(result, null, 2);
+}
+
+function extractPairingUri(result: unknown): string | null {
+  if (!isRecord(result)) return null;
+  const pairingUri = result.pairingUri;
+  if (typeof pairingUri === "string" && pairingUri.startsWith("wc:")) {
+    return pairingUri;
+  }
+  return null;
+}
+
+async function createPairingQrContent(uri: string): Promise<ToolContentBlock | null> {
+  try {
+    const dataUrl = await QRCode.toDataURL(uri, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      scale: 8,
+      type: "image/png",
+    });
+    const marker = "base64,";
+    const index = dataUrl.indexOf(marker);
+    if (index === -1 || !dataUrl.startsWith("data:image/png;")) return null;
+
+    return {
+      type: "image",
+      data: dataUrl.slice(index + marker.length),
+      mimeType: "image/png",
+    };
+  } catch {
+    return null;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

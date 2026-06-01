@@ -48,7 +48,7 @@ export class WalletChanTools {
       {
         name: "get_pairing_uri",
         title: "Get Pairing URI",
-        description: "Start or inspect the managed WalletChan RPC bridge and return the WalletConnect pairing URI when pairing is needed.",
+        description: "Start or inspect the managed WalletChan RPC bridge and return the WalletConnect pairing URI and local QR page URL when pairing is needed. Clients that render MCP image content may also show an attached QR code.",
         inputSchema: objectSchema({
           waitMs: {
             description: "How long to wait for the pairing URI when starting walletchan-rpc. Defaults to 15000.",
@@ -878,10 +878,15 @@ export class WalletChanTools {
       pairingUri: null,
       error: pairingError instanceof Error ? pairingError.message : String(pairingError),
     }));
-    const connected = isRecord(recovery) && recovery.connected === true;
+    const recoveryRecord: Record<string, unknown> = isRecord(recovery) ? recovery : {};
+    const connected = recoveryRecord.connected === true;
     const pairingUri =
-      isRecord(recovery) && typeof recovery.pairingUri === "string"
-        ? recovery.pairingUri
+      typeof recoveryRecord.pairingUri === "string"
+        ? recoveryRecord.pairingUri
+        : null;
+    const pairingUrl =
+      typeof recoveryRecord.pairingUrl === "string"
+        ? recoveryRecord.pairingUrl
         : null;
 
     return {
@@ -893,14 +898,15 @@ export class WalletChanTools {
       approvalMode: "walletchan_popup",
       reconnect: recovery,
       pairingUri,
+      pairingUrl,
       recommendedNextTool: connected ? toolName : "get_pairing_uri",
       retryAfterPairingTool: toolName,
       reprepareRequired: isPreparedActionTool(toolName),
       message: connected
         ? "WalletChan RPC reports a paired wallet again. Retry the wallet action."
         : pairingUri
-          ? "The WalletConnect session is disconnected. Show this pairing URI to the user, wait for WalletChan to pair, then retry the wallet action."
-          : "The WalletConnect session is disconnected. Call get_pairing_uri to create a fresh WalletConnect URI, wait for WalletChan to pair, then retry the wallet action.",
+          ? "The WalletConnect session is disconnected. Show the pairing URL or WalletConnect URI to the user, wait for a wallet to pair, then retry the wallet action."
+          : "The WalletConnect session is disconnected. Call get_pairing_uri to create a fresh WalletConnect URI, wait for a wallet to pair, then retry the wallet action.",
     };
   }
 

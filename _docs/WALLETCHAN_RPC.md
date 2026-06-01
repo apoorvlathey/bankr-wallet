@@ -10,6 +10,7 @@ Default runtime:
 
 - Local HTTP JSON-RPC: `http://127.0.0.1:4209`
 - Skill/manual endpoint: `http://127.0.0.1:4209/SKILL.md`
+- Browser pairing QR page: `http://127.0.0.1:4209/qr`
 - Health endpoint: `http://127.0.0.1:4209/health`
 - Session endpoint: `http://127.0.0.1:4209/session`
 - Default exposed chain: provided by CLI, commonly `--chain base`
@@ -36,14 +37,14 @@ Default runtime:
 1. `index.ts` parses CLI args through `parseCli()`.
 2. Runtime chains are resolved from `--chain` and `--rpc <chain=url>` in `chains.ts`.
 3. A `WalletConnectBridge` is created with the selected chains, WalletConnect project ID, batching mode, request timeout, and host/port.
-4. `startRpcServer()` starts the local HTTP server immediately. This lets `/health`, `/session`, `/pairing`, and `/SKILL.md` work while pairing is in progress.
+4. `startRpcServer()` starts the local HTTP server immediately. This lets `/health`, `/session`, `/pairing`, `/qr`, `/uri`, and `/SKILL.md` work while pairing is in progress.
 5. `wallet.init()` creates a WalletConnect `SignClient` with metadata:
    - name: `WalletChan RPC`
    - URL: the local RPC URL
    - icon: WalletChan hosted icon URL
 6. If a compatible stored session exists, it is reused.
-7. If no session is available, the process creates a WalletConnect proposal, prints the `wc:` URI, renders a terminal QR code, and tries to copy the URI to the clipboard.
-8. The user pairs from WalletChan: `More -> WalletConnect -> paste`.
+7. If no session is available, the process creates a WalletConnect proposal, prints the `wc:` URI, renders a terminal QR code, exposes the browser QR page at `/qr`, and tries to copy the URI to the clipboard.
+8. The user pairs from a WalletConnect-capable wallet by scanning the QR code or pasting the `wc:` URI.
 9. Once approved, the RPC can serve accounts, transactions, signatures, and ERC-5792 batches.
 
 On `SIGINT` or `SIGTERM`, the HTTP server is closed and the in-memory WalletConnect session handle is cleared. Stored sessions remain available for later reuse unless `--force-new-session` is used.
@@ -83,14 +84,14 @@ If the wallet does not support ERC-5792, rerun with `--skip-batching`.
 
 At runtime, `connected` means the bridge has a non-expired WalletConnect session with at least one approved EVM account. If the wallet deletes the session, expires it, sends an empty `accountsChanged` event, or updates the session to zero EVM accounts, the bridge clears the in-memory session.
 
-When `walletchan-rpc` is running in an interactive terminal, a lost session prints a disconnect error and waits for the user to press Enter before generating a new WalletConnect URI. This avoids surprising the user with a new QR/pairing URI every time a wallet is intentionally disconnected. Non-interactive callers, including MCP-managed child processes, should call `/pairing` to create a fresh URI without restarting the RPC process.
+When `walletchan-rpc` is running in an interactive terminal, a lost session prints a disconnect error and waits for the user to press Enter before generating a new WalletConnect URI. This avoids surprising the user with a new QR/pairing URI every time a wallet is intentionally disconnected. Non-interactive callers, including MCP-managed child processes, should call `/pairing` to create a fresh URI without restarting the RPC process, or show `/qr` so the user can scan a browser QR page.
 
 Wallet-mutating JSON-RPC requests fail with code `4900` when the WalletConnect session is disconnected:
 
 ```json
 {
   "code": 4900,
-  "message": "WalletConnect session is disconnected. Pair WalletChan again using /pairing or WalletChan MCP get_pairing_uri.",
+  "message": "WalletConnect session is disconnected. Pair a wallet again using /pairing or WalletChan MCP get_pairing_uri.",
   "data": {
     "code": "walletconnect_disconnected",
     "needsPairing": true
@@ -167,12 +168,17 @@ walletchan-rpc --chain 43114 --rpc 43114=https://api.avax.network/ext/bc/C/rpc
 | `/health` | `GET` | Machine-readable status for MCP management |
 | `/session` | `GET` | Connected session metadata and active chain |
 | `/pairing` | `GET` | Returns a fresh WalletConnect URI when no valid session is connected |
+| `/qr` | `GET` | Browser page with wallet-agnostic QR image, copy button, and auto-refreshing pairing state |
+| `/qr?format=json` | `GET` | Machine-readable pairing page state, including QR data URL |
+| `/uri` | `GET` | Compatibility alias for `/qr` |
 | `/SKILL.md` | `GET` | Agent-facing runtime guide |
 | `/skill.md` | `GET` | Case-insensitive convenience alias |
 
 JSON-RPC batch arrays are supported. Empty JSON-RPC batches return `-32600`. Notifications return HTTP `204` when no response is required.
 
 `/health` includes `accounts`; an empty array with `connected: false` means the process is running but needs a fresh WalletConnect pairing.
+
+`/qr` is the most reliable QR surface for agents and terminal harnesses because it renders in a normal browser instead of depending on inline image support in an MCP client. The page says to connect a wallet to WalletChan RPC via WalletConnect rather than naming a specific wallet. It polls `/qr?format=json` every few seconds, reuses the current pending WalletConnect proposal, and updates automatically when a new URI is issued after disconnect or proposal expiry. The copy button writes the raw `wc:` URI to the clipboard. `/uri` remains as a compatibility alias.
 
 ## Security Properties
 
@@ -184,13 +190,25 @@ JSON-RPC batch arrays are supported. Empty JSON-RPC batches return `-32600`. Not
 - WalletConnect session reuse is explicit and can be reset with `--force-new-session`.
 - Request timeout defaults to at least 300 seconds because WalletConnect approvals can take user time.
 
+## NPM Publishing
+
+`@walletchan/rpc` is published from `apps/walletchan-rpc`. For publishable RPC changes, bump `apps/walletchan-rpc/package.json`, run `pnpm install --lockfile-only`, then build and dry-run from the repo root:
+
+```bash
+pnpm build:walletchan-rpc
+pnpm publish:walletchan-rpc:dry-run
+pnpm publish:walletchan-rpc
+```
+
+If WalletChan MCP depends on the new RPC behavior, also bump MCP's `@walletchan/rpc` workspace range and publish `@walletchan/rpc` before `@walletchan/mcp`. Keep the detailed release flow in `_docs/PUBLISHING.md` in sync.
+
 ## Testing Checklist
 
 For RPC-only changes:
 
 1. Build: `pnpm build:walletchan-rpc`
 2. Start: `pnpm dev:walletchan-rpc --chain base --force-new-session`
-3. Pair in WalletChan with the printed `wc:` URI.
+3. Pair a wallet with the printed `wc:` URI.
 4. Check `curl http://127.0.0.1:4209/health`.
 5. Check `eth_accounts` with `cast rpc --rpc-url http://127.0.0.1:4209 eth_accounts`.
 6. Test `wallet_switchEthereumChain` if chain routing changed.
