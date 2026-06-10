@@ -4,6 +4,7 @@ import { ManagedRpcProcess } from "./managedRpc.js";
 import { BasePluginCliRunner } from "./basePluginCli.js";
 import { parseCli } from "./cli.js";
 import { McpServer } from "./mcpServer.js";
+import { ProtocolRegistry } from "./protocols/registry.js";
 import { RemoteMcpRegistry } from "./remoteMcp.js";
 import { WalletChanRpcClient } from "./rpcClient.js";
 import { RequestTracker } from "./requestTracker.js";
@@ -46,6 +47,20 @@ try {
   });
   const walletchanActions = new WalletChanActionBuilder(walletchanApi, rpc);
   const remoteMcp = new RemoteMcpRegistry();
+  const protocols = new ProtocolRegistry({
+    veil: {
+      enabled: config.veilEnabled,
+      privateActionsEnabled: config.veilPrivateActionsEnabled,
+      dir: config.veilDir,
+      rpcUrl: config.baseRpcUrl,
+      relayUrl: config.veilRelayUrl,
+      x402RelayUrl: config.veilX402RelayUrl,
+      command: config.veilCommand,
+      args: config.veilArgs,
+      startupTimeoutMs: config.veilStartupTimeoutMs,
+      callTimeoutMs: config.veilCallTimeoutMs,
+    },
+  });
   const tools = new WalletChanTools(
     rpc,
     tracker,
@@ -54,12 +69,14 @@ try {
     basePluginCli,
     walletchanActions,
     remoteMcp,
+    protocols,
   );
   let shuttingDown = false;
   const shutdown = (): void => {
     if (shuttingDown) return;
     shuttingDown = true;
     rpcManager.shutdown();
+    protocols.shutdown();
   };
   process.once("SIGINT", () => {
     shutdown();

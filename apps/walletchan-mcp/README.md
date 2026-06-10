@@ -13,6 +13,7 @@ Nothing moves onchain just because the assistant suggests it. Transactions and s
 - Swap and bridge tokens using WalletChan's first-party APIs.
 - Send transactions, ERC-5792 batch calls, sequential fallback call sets, and sign messages.
 - Use Base MCP-style DeFi skills when a protocol skill can produce wallet calls for WalletChan approval.
+- Use Veil Cash on Base through a managed Veil MCP child process, with register/deposit calldata approved by WalletChan.
 
 | Skill | What It Supports |
 | --- | --- |
@@ -23,6 +24,7 @@ Nothing moves onchain just because the assistant suggests it. Transactions and s
 | Avantis | Perps market actions when the skill returns executable calls. |
 | Bankr | Token discovery and supported token actions. |
 | Virtuals | Agent/token discovery and SIWE login with WalletChan signature approval. |
+| Veil | Local key setup, status/balances, register/deposit preparation, and WalletChan-approved public deposits. |
 
 ## Requirements
 
@@ -146,6 +148,8 @@ After pairing, ask:
 Show me my connected WalletChan wallets.
 ```
 
+To switch wallets or force a fresh WalletConnect proposal, ask the assistant to get a new WalletChan pairing URI. The tool supports `forceNewSession: true`; this disconnects stored WalletConnect sessions and returns a new QR/URI. The browser QR page also has a fresh URI control, or can be opened with `/qr?force=true`.
+
 The assistant should report the approved wallet address and chain.
 
 ## Try It
@@ -191,8 +195,33 @@ Some protocol skills fetch data from protocol APIs, run protocol CLIs, or call p
 - `run_base_plugin_cli` for pinned protocol CLIs such as Morpho and Aerodrome.
 - `list_remote_mcp_tools` and `call_remote_mcp_tool` for allowlisted remote protocol MCP profiles.
 - `start_remote_mcp_siwe_login` and `complete_remote_mcp_siwe_login` for SIWE login flows that must preserve the exact challenge message.
+- `list_protocols`, `list_protocol_tools`, and `call_protocol_tool` for managed protocol integrations such as Veil MCP.
 
 WalletChan MCP does not run arbitrary shell commands, proxy arbitrary MCP servers, or call arbitrary web hosts from a skill file.
+
+### Veil Cash
+
+WalletChan MCP can start a managed Veil MCP child process for Veil Cash on Base. Public Veil actions use Veil MCP to prepare calldata, then WalletChan MCP submits that calldata through the existing WalletChan popup approval path.
+
+Useful prompts:
+
+```text
+Check my Veil status.
+```
+
+```text
+Register my WalletChan account with Veil.
+```
+
+```text
+Prepare a 20 USDC Veil deposit and submit it through WalletChan.
+```
+
+Veil key material is managed by Veil MCP locally, not by the WalletChan extension vault. WalletChan MCP launches Veil MCP in a controlled working directory so `.env.veil` and `.veil-x402-receipts.json` are not written into your project or random MCP client launch directories. Override the directory with `WALLETCHAN_MCP_VEIL_DIR`. WalletChan MCP also passes a Base `RPC_URL` to Veil; it is inherited from the global WalletChan MCP Base RPC override (`--rpc base=<url>` or `WALLETCHAN_MCP_RPC_OVERRIDES=base=<url>`) or defaults to `https://base.drpc.org`.
+
+Veil x402 payment submits through the Veil relay and does not open a WalletChan popup. Use `veil_x402_quote` first, then call `veil_pay_x402` with a tight `maxPayment` and `confirm: true` after the user approves the exact spend. WalletChan MCP blocks under-minimum relay attempts before calling Veil: normal withdrawals require at least `0.001 ETH` or `0.01 USDC`, and x402 payments require a supported quote of at least `0.01 USDC`. Other private Veil relay tools such as withdraw, transfer, and UTXO consolidation remain disabled by default; enable them only for explicit user-controlled flows with `WALLETCHAN_MCP_VEIL_PRIVATE_ACTIONS=true`.
+
+If the hosted Veil relay returns `Gas price too high, try again later`, WalletChan MCP surfaces a dedicated error explaining that the relay refused the private withdrawal because Base gas is above the relay cap. WalletChan MCP cannot override that cap with `--rpc base=...`; x402 callers should check for an already-funded payer once, then wait before retrying if none can cover the payment.
 
 ## Advanced Configuration
 
@@ -233,6 +262,31 @@ Disable protocol helper surfaces:
 walletchan-mcp --disable-plugin-cli --disable-web-request
 ```
 
+Disable the managed Veil MCP integration:
+
+```bash
+walletchan-mcp --disable-veil
+```
+
+Use a persistent global Veil MCP binary for faster startup:
+
+```bash
+npm install -g @veil-cash/mcp@0.2.1
+walletchan-mcp --veil-command veil-mcp
+```
+
+Use a dedicated Veil data directory:
+
+```bash
+walletchan-mcp --veil-dir ~/.walletchan-mcp/veil
+```
+
+Use a dedicated Base RPC for both WalletChan RPC and Veil:
+
+```bash
+walletchan-mcp --rpc base=https://your-base-rpc.example
+```
+
 Add an extra allowlisted HTTPS host for protocol data:
 
 ```bash
@@ -248,6 +302,8 @@ walletchan-mcp --allow-web-host api.example.org
 - CLI helpers use pinned packages, structured arguments, no shell execution, timeouts, and output caps.
 - `web_request` only supports allowlisted HTTPS hosts.
 - `send_prepared_calls` refuses protocol prepare responses with error-level warnings unless the user explicitly chooses to continue.
+- Managed protocol integrations run in controlled working directories. Veil `.env.veil` stays in the managed Veil directory unless you override it.
+- Veil x402 relay payment requires a quoted cap and explicit confirmation; broader Veil private relay actions are disabled by default because they do not use WalletChan popup approval.
 
 The approval path is:
 

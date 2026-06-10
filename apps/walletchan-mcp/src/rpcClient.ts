@@ -41,6 +41,7 @@ export interface WalletChanRpcSession {
 
 export interface WalletChanRpcPairing {
   connected: boolean;
+  accounts?: string[];
   pairingUri: string | null;
   pairingUrl?: string;
   batching?: WalletChanRpcBatching;
@@ -117,8 +118,10 @@ export class WalletChanRpcClient {
     return this.fetchJson<WalletChanRpcSession>("/session");
   }
 
-  async pairing(): Promise<WalletChanRpcPairing> {
-    return this.fetchJson<WalletChanRpcPairing>("/pairing");
+  async pairing(args: { forceNewSession?: boolean } = {}): Promise<WalletChanRpcPairing> {
+    return this.fetchJson<WalletChanRpcPairing>(
+      args.forceNewSession ? "/pairing?force=true" : "/pairing",
+    );
   }
 
   async accounts(): Promise<string[]> {
@@ -147,11 +150,18 @@ export class WalletChanRpcClient {
     recommendedNextTool: string | null;
     message: string;
   }> {
-    const [health, accounts] = await Promise.all([
+    const [health, rpcAccounts] = await Promise.all([
       this.health(),
       this.accounts().catch(() => []),
     ]);
-    const normalizedAccounts = accounts.map((account) => account.toLowerCase());
+    let normalizedAccounts = normalizeAccounts(health.accounts);
+    if (normalizedAccounts.length === 0) {
+      normalizedAccounts = normalizeAccounts(rpcAccounts);
+    }
+    if (health.connected && normalizedAccounts.length === 0) {
+      await sleep(500);
+      normalizedAccounts = normalizeAccounts(await this.accounts().catch(() => []));
+    }
     const connected = health.connected && normalizedAccounts.length > 0;
     return {
       connected,
@@ -333,6 +343,18 @@ export class WalletChanRpcClient {
     }
     return response.json() as Promise<T>;
   }
+}
+
+function normalizeAccounts(accounts: unknown): string[] {
+  return Array.isArray(accounts)
+    ? accounts
+      .filter((account): account is string => typeof account === "string")
+      .map((account) => account.toLowerCase())
+    : [];
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function normalizeCall(call: WalletCall): WalletCall {

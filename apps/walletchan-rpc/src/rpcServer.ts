@@ -37,35 +37,46 @@ export function startRpcServer(config: CliConfig, context: RpcContext): ServerTy
   app.post("/rpc", handleRpc);
   app.get("/skill.md", (c) => skillResponse(c, config, context));
   app.get("/SKILL.md", (c) => skillResponse(c, config, context));
-  app.get("/health", (c) =>
-    c.json({
+  app.get("/health", (c) => {
+    const accounts = context.wallet.getAccounts();
+    const connected = context.wallet.connected && accounts.length > 0;
+    return c.json({
       ok: true,
-      connected: context.wallet.connected,
-      accounts: context.wallet.getAccounts(),
+      connected,
+      accounts,
       batching: context.wallet.getBatchingInfo(),
       activeChainId: context.getActiveChain().chainId,
       chains: context.chains.map((chain) => ({
         name: chain.name,
         chainId: chain.chainId,
       })),
-    }),
-  );
-  app.get("/session", (c) =>
-    c.json({
-      connected: context.wallet.connected,
+    });
+  });
+  app.get("/session", (c) => {
+    const accounts = context.wallet.getAccounts();
+    const connected = context.wallet.connected && accounts.length > 0;
+    return c.json({
+      connected,
       batching: context.wallet.getBatchingInfo(),
       activeChainId: context.getActiveChain().chainId,
       chains: formatChains(context.chains),
-      session: context.wallet.connected ? context.wallet.getSessionInfo() : null,
-    }),
-  );
+      session: connected ? context.wallet.getSessionInfo() : null,
+    });
+  });
   app.get("/qr", (c) => pairingQrResponse(c, config, context));
   app.get("/uri", (c) => pairingQrResponse(c, config, context));
   app.get("/pairing", async (c) => {
     try {
+      const forceNewSession = isTruthyQuery(c.req.query("force"));
+      if (forceNewSession) {
+        await context.wallet.disconnectStored("WalletChan RPC pairing was reset by request");
+      }
       const pairingUri = await context.wallet.getPairingUri();
+      const accounts = context.wallet.getAccounts();
+      const connected = context.wallet.connected && accounts.length > 0;
       return c.json({
-        connected: context.wallet.connected,
+        connected,
+        accounts,
         pairingUri,
         pairingUrl: formatPairingUrl(config),
         batching: context.wallet.getBatchingInfo(),
@@ -100,11 +111,16 @@ export function startRpcServer(config: CliConfig, context: RpcContext): ServerTy
   );
 }
 
+function isTruthyQuery(value: string | undefined): boolean {
+  return value === "1" || value === "true" || value === "yes";
+}
+
 async function pairingQrResponse(c: Context, config: CliConfig, context: RpcContext): Promise<Response> {
   const format = c.req.query("format");
+  const forceNewSession = isTruthyQuery(c.req.query("force"));
   if (format === "json") {
     try {
-      return c.json(await getPairingViewState(config, context, true));
+      return c.json(await getPairingViewState(config, context, true, { forceNewSession }));
     } catch (error) {
       return c.json(
         {
@@ -119,7 +135,7 @@ async function pairingQrResponse(c: Context, config: CliConfig, context: RpcCont
     }
   }
 
-  return qrPageResponse(c, config, context);
+  return qrPageResponse(c, config, context, { forceNewSession });
 }
 
 function skillResponse(c: Context, config: CliConfig, context: RpcContext): Response {
@@ -128,13 +144,20 @@ function skillResponse(c: Context, config: CliConfig, context: RpcContext): Resp
   });
 }
 
-async function qrPageResponse(c: Context, config: CliConfig, context: RpcContext): Promise<Response> {
+async function qrPageResponse(
+  c: Context,
+  config: CliConfig,
+  context: RpcContext,
+  options: { forceNewSession?: boolean } = {},
+): Promise<Response> {
   const nonce = randomBytes(16).toString("base64");
-  const initialState = await getPairingViewState(config, context, true).catch((error) => ({
+  const initialState = await getPairingViewState(config, context, true, options).catch((error) => ({
     connected: false,
+    accounts: [],
     pairingUri: null,
     pairingUrl: formatPairingUrl(config),
     qrDataUrl: null,
+    forceNewSession: options.forceNewSession === true,
     activeChainId: context.getActiveChain().chainId,
     chains: context.chains.map((chain) => ({
       name: chain.name,
@@ -160,16 +183,27 @@ async function qrPageResponse(c: Context, config: CliConfig, context: RpcContext
   });
 }
 
-async function getPairingViewState(config: CliConfig, context: RpcContext, includeQr: boolean): Promise<Record<string, unknown>> {
+async function getPairingViewState(
+  config: CliConfig,
+  context: RpcContext,
+  includeQr: boolean,
+  options: { forceNewSession?: boolean } = {},
+): Promise<Record<string, unknown>> {
+  if (options.forceNewSession) {
+    await context.wallet.disconnectStored("WalletChan RPC pairing was reset by request");
+  }
+  const accounts = context.wallet.getAccounts();
+  const connected = context.wallet.connected && accounts.length > 0;
   const pairingUri = await context.wallet.getPairingUri();
-  const connected = context.wallet.connected;
   const effectiveUri = connected ? null : pairingUri;
   return {
     connected,
+    accounts,
     batching: context.wallet.getBatchingInfo(),
     pairingUri: effectiveUri,
     pairingUrl: formatPairingUrl(config),
     qrDataUrl: effectiveUri && includeQr ? await createQrDataUrl(effectiveUri) : null,
+    forceNewSession: options.forceNewSession === true,
     activeChainId: context.getActiveChain().chainId,
     chains: context.chains.map((chain) => ({
       name: chain.name,
@@ -295,6 +329,10 @@ function formatQrPage(initialState: Record<string, unknown>, nonce: string): str
       opacity: 0.55;
       box-shadow: none;
     }
+    button.secondary {
+      background: var(--blue);
+      color: #ffffff;
+    }
     .hint {
       margin: 14px 0 0;
       font-size: 13px;
@@ -313,6 +351,7 @@ function formatQrPage(initialState: Record<string, unknown>, nonce: string): str
     </div>
     <textarea id="uri" readonly aria-label="WalletConnect URI"></textarea>
     <button id="copy" type="button">Copy URI</button>
+    <button id="fresh" class="secondary" type="button">New Wallet URI</button>
     <p class="hint">Scan this QR from any WalletConnect-capable wallet, or copy and paste the URI.</p>
   </main>
   <script id="initial-state" type="application/json" nonce="${nonce}">${initialJson}</script>
@@ -323,6 +362,7 @@ function formatQrPage(initialState: Record<string, unknown>, nonce: string): str
     const connectedEl = document.getElementById("connected");
     const uriEl = document.getElementById("uri");
     const copyEl = document.getElementById("copy");
+    const freshEl = document.getElementById("fresh");
     let currentUri = "";
 
     function render(state) {
@@ -341,11 +381,12 @@ function formatQrPage(initialState: Record<string, unknown>, nonce: string): str
       uriEl.value = uri;
       copyEl.disabled = !uri;
       copyEl.textContent = uri ? "Copy URI" : connected ? "Connected" : "Waiting";
+      freshEl.disabled = false;
     }
 
-    async function refresh() {
+    async function refresh(force = false) {
       try {
-        const response = await fetch("/qr?format=json", { cache: "no-store" });
+        const response = await fetch(force ? "/qr?format=json&force=true" : "/qr?format=json", { cache: "no-store" });
         render(await response.json());
       } catch (error) {
         render({
@@ -371,6 +412,12 @@ function formatQrPage(initialState: Record<string, unknown>, nonce: string): str
       window.setTimeout(() => {
         if (currentUri) copyEl.textContent = "Copy URI";
       }, 1500);
+    });
+
+    freshEl.addEventListener("click", () => {
+      freshEl.disabled = true;
+      statusEl.textContent = "Generating a fresh WalletConnect URI...";
+      refresh(true);
     });
 
     render(JSON.parse(stateEl.textContent || "{}"));

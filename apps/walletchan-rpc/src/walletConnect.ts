@@ -248,6 +248,8 @@ export class WalletConnectBridge {
     if (!this.client) return;
     await this.disconnectStoredSessions(message);
     this.session = null;
+    this.pendingProposal = null;
+    this.batchingInfo = disconnectedBatchingInfo(this.config.includeBatching);
   }
 
   close(): void {
@@ -381,23 +383,18 @@ export class WalletConnectBridge {
 
   private async disconnectStoredSessions(message: string): Promise<void> {
     const client = this.getClient();
-    const topics = new Set<string>();
+    const sessionTopics = new Set<string>();
 
     for (const session of client.session.values) {
-      if (session.topic) topics.add(session.topic);
-    }
-
-    const pairings = (client.pairing?.values || []) as Array<{ topic?: string }>;
-    for (const pairing of pairings) {
-      if (pairing.topic) topics.add(pairing.topic);
+      if (session.topic) sessionTopics.add(session.topic);
     }
 
     await Promise.all(
-      Array.from(topics).map((topic) => this.disconnectTopic(topic, message)),
+      Array.from(sessionTopics).map((topic) => this.disconnectSessionTopic(topic, message)),
     );
   }
 
-  private async disconnectTopic(topic: string, message: string): Promise<void> {
+  private async disconnectSessionTopic(topic: string, message: string): Promise<void> {
     const client = this.getClient();
     try {
       await client.disconnect({
@@ -405,7 +402,9 @@ export class WalletConnectBridge {
         reason: { code: 6000, message },
       });
     } catch {
-      // Stale topics are best-effort cleanup only.
+      // The wallet may already have removed the topic. Drop the local session so
+      // future starts do not restore a stale account approval.
+      await client.session.delete(topic, { code: 6000, message }).catch(() => undefined);
     }
   }
 

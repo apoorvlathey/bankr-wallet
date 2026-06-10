@@ -61,17 +61,23 @@ export class ManagedRpcProcess {
     await this.startPromise;
   }
 
-  async getPairingState(waitMs = 15000): Promise<Record<string, unknown>> {
+  async getPairingState(
+    waitMs = 15000,
+    options: { forceNewSession?: boolean } = {},
+  ): Promise<Record<string, unknown>> {
     await this.ensureStarted();
     const health = await this.rpc.health().catch(() => null);
-    const connected = Boolean(
-      health?.connected && (health.accounts === undefined || health.accounts.length > 0),
-    );
-    const pairing = connected ? null : await this.rpc.pairing().catch(() => null);
+    const healthAccounts = normalizeAccounts(health?.accounts);
+    const connected = Boolean(health?.connected && healthAccounts.length > 0);
+    const pairing = (connected && !options.forceNewSession)
+      ? null
+      : await this.rpc.pairing({ forceNewSession: options.forceNewSession }).catch(() => null);
     if (pairing?.pairingUri) {
       this.pairingUri = pairing.pairingUri;
     }
-    const currentConnected = connected || Boolean(pairing?.connected);
+    const pairingAccounts = normalizeAccounts(pairing?.accounts);
+    const currentConnected = !options.forceNewSession &&
+      (connected || Boolean(pairing?.connected && pairingAccounts.length > 0));
     const pairingUrl = pairing?.pairingUrl || formatPairingPageUrl(this.config.rpcUrl);
     const pairingUri = currentConnected
       ? null
@@ -84,9 +90,13 @@ export class ManagedRpcProcess {
       connected: currentConnected,
       activeChainId: pairing?.activeChainId ?? health?.activeChainId ?? null,
       batching: pairing?.batching ?? health?.batching ?? null,
+      accounts: currentConnected
+        ? (healthAccounts.length > 0 ? healthAccounts : pairingAccounts)
+        : [],
       chains: pairing?.chains ?? health?.chains ?? [],
       pairingUri,
       pairingUrl,
+      forceNewSession: options.forceNewSession === true,
       message: currentConnected
         ? "WalletChan RPC is already paired."
         : pairingUri
@@ -265,6 +275,14 @@ function formatPairingPageUrl(rpcUrl: string): string {
   url.search = "";
   url.hash = "";
   return url.toString();
+}
+
+function normalizeAccounts(accounts: unknown): string[] {
+  return Array.isArray(accounts)
+    ? accounts
+      .filter((account): account is string => typeof account === "string")
+      .map((account) => account.toLowerCase())
+    : [];
 }
 
 function sleep(ms: number): Promise<void> {

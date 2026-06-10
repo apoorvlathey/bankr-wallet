@@ -157,7 +157,7 @@ export class McpServer {
     const result = await this.tools.call(name, params.arguments);
     return {
       content: await formatToolContent(result),
-      structuredContent: result,
+      structuredContent: formatStructuredContent(result),
       isError: false,
     };
   }
@@ -211,7 +211,14 @@ async function formatToolContent(result: unknown): Promise<ToolContentBlock[]> {
 }
 
 function formatToolResult(result: unknown): string {
-  return typeof result === "string" ? result : JSON.stringify(result, null, 2);
+  if (typeof result === "string") return result;
+  const formatted = JSON.stringify(result, null, 2);
+  return formatted ?? String(result);
+}
+
+function formatStructuredContent(result: unknown): Record<string, unknown> {
+  if (isRecord(result)) return result;
+  return { result: result ?? null };
 }
 
 function extractPairingUri(result: unknown): string | null {

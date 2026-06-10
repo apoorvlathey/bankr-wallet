@@ -27,6 +27,10 @@ The MCP server never signs directly. It sends JSON-RPC requests to `walletchan-r
 | `apps/walletchan-mcp/src/baseSkills.ts` | WalletChan skill resource and adapted upstream Base skill resources |
 | `apps/walletchan-mcp/src/basePluginCli.ts` | Pinned, allowlisted protocol CLI runners for Base plugin flows |
 | `apps/walletchan-mcp/src/remoteMcp.ts` | Allowlisted remote protocol MCP proxy profiles such as Virtuals ACP |
+| `apps/walletchan-mcp/src/protocols/` | Modular protocol integration runtime for managed MCPs, CLIs, HTTP APIs, SDK adapters, and related wrappers |
+| `apps/walletchan-mcp/src/protocols/stdioMcpClient.ts` | Generic newline-delimited MCP-over-stdio child-process client |
+| `apps/walletchan-mcp/src/protocols/localData.ts` | OS app-data directory resolution for protocol working directories |
+| `apps/walletchan-mcp/src/protocols/veil/` | Veil MCP profile, controlled env/cwd policy, and first-class Veil tool definitions |
 | `apps/walletchan-mcp/src/siwe.ts` | MCP-side EIP-4361/SIWE validation and exact-message preparation |
 | `apps/walletchan-mcp/src/walletchanApi.ts` | First-party WalletChan API client for portfolio, swap, and bridge |
 | `apps/walletchan-mcp/src/walletchanActions.ts` | Portfolio/swap/bridge tool orchestration and approval-call preparation |
@@ -67,6 +71,8 @@ The server implements the stdio MCP JSON-RPC methods needed by current clients:
 
 The current implementation uses newline-delimited JSON messages over stdio.
 
+`tools/call` always returns object-shaped `structuredContent` for MCP client compatibility. Tool results that are already plain objects are passed through; primitive or array results from managed protocol children are wrapped as `{ result: ... }`. The text content block still contains the human-readable raw result.
+
 ## Tool Surface
 
 | Tool | Backing behavior |
@@ -88,6 +94,13 @@ The current implementation uses newline-delimited JSON messages over stdio.
 | `call_remote_mcp_tool` | Calls non-login tools on an allowlisted protocol MCP profile |
 | `start_remote_mcp_siwe_login` | Starts an allowlisted remote MCP SIWE login and opens WalletChan signature approval for the exact challenge |
 | `complete_remote_mcp_siwe_login` | Completes an allowlisted remote MCP SIWE login after WalletChan signature approval |
+| `list_protocols` | Lists managed protocol integrations such as Veil MCP |
+| `list_protocol_tools` | Lists raw tools exposed by a managed protocol integration |
+| `call_protocol_tool` | Calls raw allowlisted protocol tools; first-class wrappers are preferred |
+| `veil_status`, `veil_init_keypair`, `veil_get_balances`, `veil_deposit_status`, `veil_wait_for_deposit` | Veil read/setup/status flows through a managed Veil MCP child |
+| `veil_prepare_register`, `veil_prepare_deposit` | Veil public Base calldata preparation; `submitPreparedCalls: true` submits the prepared calls through WalletChan |
+| `veil_x402_quote`, `veil_x402_receipts`, `veil_x402_payer_balances`, `veil_subaccount_status` | Veil read-only x402/subaccount helpers |
+| `veil_pay_x402` | Veil private x402 payment through the Veil relay; requires `maxPayment` and `confirm: true` after explicit user approval |
 | `sign_siwe` | Validates an EIP-4361 SIWE message, then signs the exact message through WalletChan |
 | `get_request_status` | Reads local async request status or calls `wallet_getCallsStatus` |
 | `sign` | Starts `personal_sign`, `eth_signTypedData_v3`, or `eth_signTypedData_v4` through RPC |
@@ -186,6 +199,8 @@ If another older `walletchan-rpc` is already running on the same URL and does no
 
 If the user manually disconnects the WalletConnect session from the wallet, the RPC marks the session disconnected when it sees a delete/expire/update-to-empty signal. Interactive `walletchan-rpc` terminals prompt for Enter before printing a new URI. MCP-managed RPC runs non-interactively, so the next `get_pairing_uri` call asks `/pairing` for a new URI without restarting the MCP server. MCP also returns the `/qr` page URL so the user can scan a QR in the browser.
 
+`get_pairing_uri` accepts `forceNewSession: true` (or `force: true`) to disconnect stored WalletConnect sessions and create a fresh URI for switching wallets. The RPC `/pairing?force=true` endpoint backs this behavior. The browser QR page also supports `/qr?force=true` and a "New Wallet URI" button. A normal `get_pairing_uri` call should only report `connected: true` / "already paired" when the RPC also reports at least one approved account.
+
 When `get_pairing_uri` returns an unpaired state with a `wc:` URI, `mcpServer.ts` appends a PNG QR code as a standard MCP `image` content item. The structured result stays unchanged and still contains `pairingUri`; QR image support is intentionally additive because not every MCP terminal client renders image blocks inline.
 
 The QR image block is emitted before the text fallback so clients that show the first renderable content item can display the QR. Clients that do not render MCP images should still show `pairingUrl` and the raw `wc:` URI.
@@ -238,8 +253,30 @@ The scalable compatibility model is pattern-based:
 - other remote MCP plugins: harness protocol MCP connector -> WalletChan MCP wallet tools
 - already-normalized calldata: `send_calls`
 - signature/session plugins: `sign_siwe` or `sign` + `get_request_status`
+- managed protocol integrations: `src/protocols/<protocol>` + optional first-class wrappers; current initial profile is Veil MCP
 
 Adding a new Base skill should not require arbitrary third-party execution code in WalletChan MCP. Future HTTP-only skills can usually work by adding allowlisted hosts with `WALLETCHAN_MCP_WEB_HOSTS` / `--allow-web-host`. Future CLI-only skills need a small pinned runner profile or a separate protocol MCP. Otherwise the harness should run protocol-specific CLIs or call protocol-specific MCP servers, and WalletChan MCP should handle wallet state, signatures, and transaction approval.
+
+## Managed Protocol Integrations
+
+Runtime protocol integrations live under `apps/walletchan-mcp/src/protocols`, while agent-readable markdown lives under `apps/walletchan-mcp/skills`.
+
+Use `src/protocols/<protocol>` for protocol-specific execution code, regardless of whether that protocol uses a local MCP child, a pinned CLI, an HTTP API, or a future SDK adapter. Keep `tools.ts` as a thin public MCP surface that delegates into protocol modules.
+
+The first managed protocol profile is Veil:
+
+- WalletChan MCP starts Veil MCP as a long-lived stdio child on first Veil call.
+- The default invocation is `npx -y --ignore-scripts --no-audit --no-fund @veil-cash/mcp@0.2.1`; users can set `WALLETCHAN_MCP_VEIL_COMMAND=veil-mcp` after a global install for faster startup.
+- Veil's cwd is controlled by WalletChan MCP so `.env.veil` and `.veil-x402-receipts.json` are written under the managed Veil data directory, not an arbitrary MCP client cwd.
+- The default Veil data root is OS app-data (`~/Library/Application Support/WalletChan MCP/veil` on macOS, `%APPDATA%/WalletChan MCP/veil` on Windows, `$XDG_DATA_HOME/walletchan-mcp/veil` or `~/.local/share/walletchan-mcp/veil` on Linux). `WALLETCHAN_MCP_VEIL_DIR` overrides the exact Veil working directory. `WALLETCHAN_MCP_DATA_DIR` overrides the shared WalletChan MCP data root.
+- WalletChan MCP always passes a Base `RPC_URL` to Veil. Veil inherits from WalletChan MCP's global Base RPC resolution: `--rpc base=<url>` or `WALLETCHAN_MCP_RPC_OVERRIDES=base=<url>`, otherwise WalletChan's Base default `https://base.drpc.org`. There is no Veil-specific Base RPC option. This avoids Veil falling back to rate-limited public Base RPC endpoints while keeping protocol integrations aligned with WalletChan's chain configuration.
+- Veil public actions return `{ chain: "base", calls: [...] }`, which `send_prepared_calls` already accepts. `veil_prepare_register` and `veil_prepare_deposit` expose `submitPreparedCalls: true` as the convenience path.
+- `veil_prepare_deposit` validates current Veil minimum net deposit amounts before preparing calldata: `0.01 ETH` and `20 USDC`. This blocks requests that would revert with `MinimumDepositNotMet` before opening WalletChan.
+- Veil x402 payment is visible in the tool catalog. Call `veil_x402_quote` first to confirm the resource is x402 v2 exact Base USDC and below the requested cap. After explicit user approval, call `veil_pay_x402` with the same request fields, `maxPayment`, and `confirm: true`.
+- WalletChan MCP normalizes Veil x402 HTTP methods before forwarding to Veil MCP: lowercase or padded `method` values are uppercased, and a present non-null `body` implies `POST` when `method` is omitted. A non-POST body is rejected at the WalletChan boundary with a clear error.
+- WalletChan MCP preflights Veil relay withdrawal minimums before calling private relay tools. `veil_withdraw` requires at least `0.001 ETH` or `0.01 USDC`. `veil_pay_x402` quotes first and blocks supported x402 payments below the Veil USDC relay withdrawal minimum of `0.01 USDC`, preventing wasted payer discovery/funding attempts.
+- WalletChan MCP normalizes Veil relay gas-cap failures. If the hosted Veil relay returns `Gas price too high, try again later`, the wrapper reports that the private withdrawal was refused because Base gas is above the Veil relay cap. This is independent of WalletChan's configured Base RPC URL, and WalletChan MCP cannot raise the hosted relay cap. x402 agents should check payer balances once, reuse a funded `payerIndex` only when it can cover the payment, otherwise wait before retrying.
+- Broader Veil private relay actions (`veil_withdraw`, `veil_transfer`, `veil_consolidate_utxos`) are blocked unless `WALLETCHAN_MCP_VEIL_PRIVATE_ACTIONS=true`, because they submit through the Veil relay without WalletChan popup approval.
 
 ### Expanding Base Skill Support
 
@@ -269,8 +306,9 @@ WalletChan MCP is not a general third-party execution layer. It has two narrow p
 - `web_request` only supports HTTPS `GET`/`POST` to allowlisted hosts. Default hosts cover the current HTTP-based Base plugins and all default upstream RPC hosts from `walletchan-rpc`.
 - `run_base_plugin_cli` only supports pinned protocol packages and known command/argument schemas. It uses `spawn` without a shell, rejects unknown args, applies timeout/output caps, and sets official protocol endpoint env vars instead of trusting ambient endpoint overrides.
 - The Aerodrome runner uses `uvx` to execute the pinned Sugar SDK git ref and needs `uvx` on `PATH`. It defaults to `walletchan-rpc`'s Base upstream RPC, `https://base.drpc.org`.
+- Managed protocol MCPs are profile-based and run with controlled cwd/env. Private protocol actions that bypass WalletChan approval must be explicitly gated.
 
-WalletChan MCP still does not proxy arbitrary remote MCPs, execute arbitrary shell commands, or fetch arbitrary web hosts. Remote MCP proxying is profile-based and currently allowlists Virtuals ACP only.
+WalletChan MCP still does not proxy arbitrary remote MCPs, execute arbitrary shell commands, or fetch arbitrary web hosts. Remote MCP proxying is profile-based and currently allowlists Virtuals ACP only. Managed protocol integrations are also profile-based; the initial stdio profile is Veil MCP.
 
 ## Client Compatibility
 
@@ -306,6 +344,16 @@ Pairing QR display depends on the client. MCP image content is part of the proto
 | `WALLETCHAN_MCP_PLUGIN_CLI` | Set to `false` to disable pinned protocol CLI runners |
 | `WALLETCHAN_MCP_MORPHO_API_URL` | Optional Morpho API URL override, restricted to official Morpho API hosts |
 | `WALLETCHAN_MCP_AERODROME_RPC_URL` | Optional Base RPC URL for Aerodrome Sugar SDK runner, default `https://base.drpc.org` |
+| `WALLETCHAN_MCP_DATA_DIR` | Optional shared app-data root for managed protocol state |
+| `WALLETCHAN_MCP_VEIL` | Set to `false` to disable managed Veil MCP tools |
+| `WALLETCHAN_MCP_VEIL_PRIVATE_ACTIONS` | Set to `true` to enable Veil relay-backed private tools |
+| `WALLETCHAN_MCP_VEIL_DIR` | Exact working directory for Veil `.env.veil` and receipts |
+| `WALLETCHAN_MCP_VEIL_RELAY_URL` | Veil relay URL passed as `RELAY_URL` |
+| `WALLETCHAN_MCP_VEIL_X402_RELAY_URL` | x402 relay URL passed as `X402_RELAY_URL` |
+| `WALLETCHAN_MCP_VEIL_COMMAND` | Override Veil MCP child command; default is `npx` |
+| `WALLETCHAN_MCP_VEIL_ARGS` | Extra Veil command args; JSON string array or whitespace-separated |
+| `WALLETCHAN_MCP_VEIL_STARTUP_TIMEOUT_MS` | Veil MCP startup timeout, default `120000` |
+| `WALLETCHAN_MCP_VEIL_CALL_TIMEOUT_MS` | Veil MCP call timeout, default `120000` |
 
 Keep `apps/walletchan-mcp/.env.example` in sync when adding env vars.
 
@@ -337,7 +385,7 @@ For MCP-only changes:
      '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
      | node apps/walletchan-mcp/dist/index.js --no-managed-rpc
    ```
-3. Run `get_pairing_uri` on an unused port with `--force-new-session` and verify a `wc:` URI is returned.
+3. Run `get_pairing_uri` on an unused port with `--force-new-session` and `forceNewSession: true`; verify a `wc:` URI is returned.
 4. Pair a wallet and run `get_wallets`.
 5. Call `get_portfolio_balances` for the paired address.
 6. Call `get_swap_price` with a small read-only quote, then `swap` with `previewOnly: true`.
@@ -347,6 +395,10 @@ For MCP-only changes:
 10. Call `run_base_plugin_cli` with a read-only command such as Morpho `query-vaults` or Aerodrome `pools`.
 11. Call `web_request` against `https://api.morpho.org/graphql` with a small `POST` introspection query and verify non-allowlisted hosts are rejected.
 12. For Base skill changes, load at least one plugin with `load_base_plugin` and confirm supported external API/CLI steps point to `web_request` / `run_base_plugin_cli` before harness fallbacks.
+13. Call `list_skill_resources` and verify Veil resources are listed.
+14. Call `list_protocols` and verify the Veil profile reports its managed data directory.
+15. With `WALLETCHAN_MCP_VEIL_COMMAND=veil-mcp` or the default npx path, call `veil_status` and verify it does not write `.env.veil` into the repo.
+16. Call `veil_prepare_deposit` with `submitPreparedCalls: false` or omitted to verify the prepare payload shape and the `walletchanPreflight.veilDeposit` result before testing WalletChan approval.
 
 If a change touches transaction or signature behavior through RPC, also test the WalletChan approval path across all WalletChan account types:
 

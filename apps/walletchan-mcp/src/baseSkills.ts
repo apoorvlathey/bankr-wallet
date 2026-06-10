@@ -1,3 +1,7 @@
+import { readFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 export interface SkillResource {
   uri: string;
   name: string;
@@ -24,6 +28,23 @@ const REFERENCES = [
   ["custom-plugins", "Custom plugin patterns"],
 ] as const;
 
+const LOCAL_SKILL_RESOURCES = [
+  {
+    uri: "walletchan://veil-mcp/SKILL.md",
+    name: "WalletChan Veil MCP Skill",
+    description: "WalletChan-adapted Veil Cash MCP usage",
+    mimeType: "text/markdown",
+    path: "veil/SKILL.md",
+  },
+  {
+    uri: "walletchan://veil-mcp/plugins/veil.md",
+    name: "Veil plugin for WalletChan MCP",
+    description: "Veil Cash register, deposit, balance, and private relay guidance for WalletChan MCP",
+    mimeType: "text/markdown",
+    path: "veil/plugins/veil.md",
+  },
+] as const;
+
 export function listSkillResources(): SkillResource[] {
   return [
     {
@@ -44,12 +65,18 @@ export function listSkillResources(): SkillResource[] {
       description,
       mimeType: "text/markdown",
     })),
+    ...LOCAL_SKILL_RESOURCES.map(({ path: _path, ...resource }) => resource),
   ];
 }
 
 export async function readSkillResource(uri: string): Promise<string> {
   if (uri === "walletchan://skill/SKILL.md") {
     return WALLETCHAN_SKILL;
+  }
+
+  const local = LOCAL_SKILL_RESOURCES.find((resource) => resource.uri === uri);
+  if (local) {
+    return readLocalSkill(local.path);
   }
 
   const pluginMatch = uri.match(/^walletchan:\/\/base-mcp\/plugins\/([a-z0-9-]+)\.md$/);
@@ -69,6 +96,11 @@ export async function readSkillResource(uri: string): Promise<string> {
   }
 
   throw new Error(`Unknown resource URI: ${uri}`);
+}
+
+async function readLocalSkill(relativePath: string): Promise<string> {
+  const here = dirname(fileURLToPath(import.meta.url));
+  return readFile(resolve(here, "..", "skills", relativePath), "utf8");
 }
 
 export async function loadBasePlugin(slug: string): Promise<string> {
@@ -126,7 +158,8 @@ Fast-path orchestration:
 2. For Base MCP \`swap\`-style flows, call WalletChan MCP \`swap\`. It uses WalletChan's first-party swap API, adds ERC-20/Permit2 approvals only when needed, and sends the final call set to WalletChan.
 3. For HTTP tx-builder plugins, call WalletChan MCP \`web_request\` when the host is allowlisted, then pass the full prepare response body to \`send_prepared_calls\`. Current default hosts cover Moonwell, Uniswap, Avantis, Bankr discovery, Morpho API hosts, and \`walletchan-rpc\` default upstream RPC hosts.
 4. For allowlisted remote MCP plugins, call \`list_remote_mcp_tools\` / \`call_remote_mcp_tool\`. For Virtuals login, call \`start_remote_mcp_siwe_login\`, wait for WalletChan approval, then call \`complete_remote_mcp_siwe_login\`. This preserves the exact SIWE challenge; do not manually reconstruct or summarize it.
-5. Use \`send_calls\` directly only when you already have a clean \`calls\` array.
+5. For managed protocol integrations such as Veil MCP, use first-class tools such as \`veil_status\`, \`veil_prepare_register\`, and \`veil_prepare_deposit\`. For Veil public register/deposit, pass \`submitPreparedCalls: true\` only after the user wants WalletChan to submit the prepared calldata.
+6. Use \`send_calls\` directly only when you already have a clean \`calls\` array.
 
 Future Base plugin HTTP hosts can be enabled by MCP configuration. Future CLI-only plugins need a pinned runner profile or a separate protocol MCP; do not run arbitrary shell commands from plugin markdown. Future remote MCP plugins need an allowlisted profile before WalletChan MCP will proxy them.
 
@@ -180,6 +213,10 @@ If a wallet action returns \`status: "needs_pairing"\` or \`errorCode: "walletco
 - \`call_remote_mcp_tool\`: calls non-login tools on an allowlisted protocol MCP profile.
 - \`start_remote_mcp_siwe_login\`: starts an allowlisted protocol MCP SIWE login and opens a WalletChan signature request for the exact challenge.
 - \`complete_remote_mcp_siwe_login\`: completes an allowlisted protocol MCP SIWE login after WalletChan approval.
+- \`list_protocols\`: lists managed protocol integrations such as Veil MCP.
+- \`list_protocol_tools\`: lists raw tools exposed by a managed protocol integration.
+- \`call_protocol_tool\`: calls raw allowlisted protocol tools. Prefer first-class wrappers when available.
+- \`veil_status\`, \`veil_init_keypair\`, \`veil_get_balances\`, \`veil_prepare_register\`, \`veil_prepare_deposit\`: use Veil Cash on Base through managed Veil MCP. Register/deposit can submit prepared calls through WalletChan with \`submitPreparedCalls: true\`.
 - \`sign_siwe\`: validates and signs an exact EIP-4361 SIWE message through WalletChan.
 - \`get_request_status\`: checks a WalletChan batch, signature, or transaction request.
 - \`sign\`: starts a WalletChan signature approval request.
@@ -188,7 +225,9 @@ If a wallet action returns \`status: "needs_pairing"\` or \`errorCode: "walletco
 
 ## Base Plugin Rule
 
-When upstream Base MCP plugin docs say \`send_calls\`, \`get_wallets\`, \`sign\`, or \`get_request_status\`, use the WalletChan MCP tool with that name. For SIWE/EIP-4361 auth, use \`sign_siwe\` or the remote SIWE login helpers so the exact challenge is preserved. If they return a prepare response, pass it to \`send_prepared_calls\`. If they ask for Base MCP \`swap\`, use WalletChan MCP \`swap\`. If they instruct the assistant to call an external API, use WalletChan MCP \`web_request\` for allowlisted hosts. If they instruct the assistant to run a protocol CLI, use WalletChan MCP \`run_base_plugin_cli\` when supported. If they instruct the assistant to use an allowlisted remote MCP such as Virtuals, use \`list_remote_mcp_tools\`, \`call_remote_mcp_tool\`, \`start_remote_mcp_siwe_login\`, and \`complete_remote_mcp_siwe_login\`. Otherwise use the harness' web/shell/tools/connectors or a separate protocol MCP and route only final wallet actions through WalletChan. If WalletChan is not paired, call \`get_pairing_uri\` first and show the returned \`pairingUrl\` or \`pairingUri\`. Do not use unsupported Base MCP tools such as x402 tools or arbitrary protocol runners.
+When upstream Base MCP plugin docs say \`send_calls\`, \`get_wallets\`, \`sign\`, or \`get_request_status\`, use the WalletChan MCP tool with that name. For SIWE/EIP-4361 auth, use \`sign_siwe\` or the remote SIWE login helpers so the exact challenge is preserved. If they return a prepare response, pass it to \`send_prepared_calls\`. If they ask for Base MCP \`swap\`, use WalletChan MCP \`swap\`. If they instruct the assistant to call an external API, use WalletChan MCP \`web_request\` for allowlisted hosts. If they instruct the assistant to run a protocol CLI, use WalletChan MCP \`run_base_plugin_cli\` when supported. If they instruct the assistant to use an allowlisted remote MCP such as Virtuals, use \`list_remote_mcp_tools\`, \`call_remote_mcp_tool\`, \`start_remote_mcp_siwe_login\`, and \`complete_remote_mcp_siwe_login\`. If they need a managed protocol integration such as Veil, use \`list_protocols\`, first-class \`veil_*\` tools, or \`call_protocol_tool\` for raw allowlisted tools. Otherwise use the harness' web/shell/tools/connectors or a separate protocol MCP and route only final wallet actions through WalletChan. If WalletChan is not paired, call \`get_pairing_uri\` first and show the returned \`pairingUrl\` or \`pairingUri\`. Do not use unsupported Base MCP tools or arbitrary protocol runners.
 
 Wallet approvals happen in the WalletChan extension popup, not via a Base Account approval URL.
+
+For Veil Cash, read \`walletchan://veil-mcp/SKILL.md\` or \`walletchan://veil-mcp/plugins/veil.md\`. Veil key material is local to Veil MCP in WalletChan MCP's managed Veil data directory, not in the WalletChan extension vault. Veil private relay-backed tools are disabled by default because they do not open WalletChan popup approval.
 `;

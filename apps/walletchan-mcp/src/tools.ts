@@ -3,6 +3,7 @@ import type { BasePluginCliRunner } from "./basePluginCli.js";
 import { loadBasePlugin, listSkillResources } from "./baseSkills.js";
 import type { ManagedRpcProcess } from "./managedRpc.js";
 import { extractPreparedCalls } from "./preparedCalls.js";
+import type { ProtocolRegistry } from "./protocols/registry.js";
 import type { WalletCall } from "./rpcClient.js";
 import {
   isWalletConnectionError,
@@ -41,6 +42,7 @@ export class WalletChanTools {
     private readonly basePluginCli: BasePluginCliRunner,
     private readonly walletchanActions: WalletChanActionBuilder,
     private readonly remoteMcp: RemoteMcpRegistry,
+    private readonly protocols: ProtocolRegistry,
   ) {}
 
   list(): ToolDefinition[] {
@@ -53,6 +55,14 @@ export class WalletChanTools {
           waitMs: {
             description: "How long to wait for the pairing URI when starting walletchan-rpc. Defaults to 15000.",
             type: "number",
+          },
+          forceNewSession: {
+            description: "If true, disconnect stored WalletConnect sessions and generate a fresh URI for pairing a different wallet.",
+            type: "boolean",
+          },
+          force: {
+            description: "Alias for forceNewSession.",
+            type: "boolean",
           },
         }),
       },
@@ -390,6 +400,7 @@ export class WalletChanTools {
           },
         }, ["loginId"]),
       },
+      ...this.protocols.listToolDefinitions(),
       {
         name: "sign_siwe",
         title: "Sign SIWE",
@@ -545,6 +556,9 @@ export class WalletChanTools {
       case "get_pairing_uri":
         return this.rpcManager.getPairingState(
           typeof input.waitMs === "number" ? input.waitMs : 15000,
+          {
+            forceNewSession: input.forceNewSession === true || input.force === true,
+          },
         );
       case "get_wallets":
         return this.getWallets(input);
@@ -612,6 +626,14 @@ export class WalletChanTools {
         return this.startRemoteMcpSiweLogin(input);
       case "complete_remote_mcp_siwe_login":
         return this.completeRemoteMcpSiweLogin(input);
+      case "list_protocols":
+        return this.protocols.listProtocols();
+      case "list_protocol_tools":
+        return this.protocols.listTools(
+          requiredString(input.protocol, "list_protocol_tools requires protocol"),
+        );
+      case "call_protocol_tool":
+        return this.callProtocolTool(input);
       case "sign_siwe":
         return this.signSiwe(input);
       case "sign": {
@@ -660,6 +682,9 @@ export class WalletChanTools {
       case "list_skill_resources":
         return { resources: listSkillResources() };
       default:
+        if (this.protocols.getWrappedTool(name)) {
+          return this.callWrappedProtocolTool(name, input);
+        }
         throw new Error(`Unknown tool: ${name}`);
     }
   }
@@ -802,6 +827,78 @@ export class WalletChanTools {
     };
   }
 
+  private async callProtocolTool(input: Record<string, unknown>): Promise<unknown> {
+    const result = await this.protocols.callTool(
+      requiredString(input.protocol, "call_protocol_tool requires protocol"),
+      requiredString(input.tool, "call_protocol_tool requires tool"),
+      isRecord(input.arguments) ? input.arguments : {},
+      optionalNumber(input.timeoutMs),
+    );
+    return result.parsed ?? result.raw;
+  }
+
+  private async callWrappedProtocolTool(
+    publicToolName: string,
+    input: Record<string, unknown>,
+  ): Promise<unknown> {
+    const wrapped = this.protocols.getWrappedTool(publicToolName);
+    if (!wrapped) throw new Error(`Unknown protocol wrapper: ${publicToolName}`);
+    if (wrapped.protocolId !== "veil") {
+      throw new Error(`Unsupported wrapped protocol: ${wrapped.protocolId}`);
+    }
+    return this.callVeilTool(wrapped.toolName, input);
+  }
+
+  private async callVeilTool(
+    toolName: string,
+    input: Record<string, unknown>,
+  ): Promise<unknown> {
+    const args = { ...input };
+    if (this.protocols.veilNeedsOwner(toolName) && !optionalString(args.owner)) {
+      await this.rpcManager.ensureStarted();
+      args.owner = await this.rpc.resolveFrom(undefined);
+    }
+    if (toolName === "veil_prepare_deposit") {
+      assertVeilDepositMinimum(args);
+    }
+
+    const submitPreparedCalls = input.submitPreparedCalls === true &&
+      this.protocols.isVeilPrepareTool(toolName);
+    for (const key of [
+      "submitPreparedCalls",
+      "chain",
+      "from",
+      "atomicRequired",
+      "previewOnly",
+      "allowWarnings",
+    ]) {
+      delete args[key];
+    }
+
+    const result = await this.protocols.callTool(
+      "veil",
+      toolName,
+      args,
+      veilTimeoutMs(toolName, input),
+    );
+    const payload = result.parsed ?? result.raw;
+    if (!submitPreparedCalls) return payload;
+
+    return {
+      protocol: "veil",
+      tool: toolName,
+      result: payload,
+      submission: await this.startPreparedCallsSubmission({
+        prepared: payload,
+        chain: input.chain,
+        from: input.from,
+        atomicRequired: input.atomicRequired,
+        previewOnly: input.previewOnly,
+        allowWarnings: input.allowWarnings,
+      }),
+    };
+  }
+
   private async getRequestStatus(requestId: string): Promise<unknown> {
     const tracked = this.tracker.get(requestId);
     if (tracked) {
@@ -838,9 +935,13 @@ export class WalletChanTools {
       }
       return {
         requestId,
-        status: tracked.kind === "signature" ? "signed" : "confirmed",
         kind: tracked.kind,
-        [tracked.kind === "signature" ? "signature" : "txHash"]: tracked.result,
+        ...(tracked.kind === "signature"
+          ? { signature: tracked.result }
+          : formatTrackedTransactionResult(tracked.result)),
+        status: tracked.kind === "signature"
+          ? "signed"
+          : mapTrackedTransactionStatus(tracked.result),
         createdAt: tracked.createdAt,
       };
     }
@@ -911,11 +1012,56 @@ export class WalletChanTools {
   }
 
   private async sendPreparedCalls(input: Record<string, unknown>): Promise<unknown> {
+    const submission = this.buildPreparedCallSubmission(input);
+    if (submission.preview) return submission.preview;
+    if (submission.args.calls.length === 0) {
+      return emptyPreparedSubmissionResult(submission);
+    }
+    return this.sendCallBatch(submission.args);
+  }
+
+  private async startPreparedCallsSubmission(input: Record<string, unknown>): Promise<unknown> {
+    const submission = this.buildPreparedCallSubmission(input);
+    if (submission.preview) return submission.preview;
+    if (submission.args.calls.length === 0) {
+      return emptyPreparedSubmissionResult(submission);
+    }
+    await this.ensureWalletReady();
+    const request = this.tracker.start(
+      "transaction",
+      this.withRpc(() => this.sendCallsWithAtomicFallback(submission.args)),
+    );
+    return {
+      chain: submission.prepared.chain,
+      callCount: submission.args.calls.length,
+      ...submission.args.metadata,
+      requestId: request.id,
+      status: "pending",
+      approvalMode: "walletchan_popup",
+      message: "Approve or reject the WalletChan transaction request, then call get_request_status with requestId.",
+    };
+  }
+
+  private buildPreparedCallSubmission(input: Record<string, unknown>): {
+    prepared: ReturnType<typeof extractPreparedCalls>;
+    args: {
+      chain: unknown;
+      from?: string;
+      atomicRequired?: boolean;
+      calls: WalletCall[];
+      metadata?: Record<string, unknown>;
+    };
+    preview?: Record<string, unknown>;
+  } {
     const prepared = extractPreparedCalls(input.prepared, input.chain);
     if (input.previewOnly === true) {
       return {
-        ...prepared,
-        status: "preview",
+        prepared,
+        args: preparedCallBatchArgs(input, prepared),
+        preview: {
+          ...prepared,
+          status: "preview",
+        },
       };
     }
     const blockingWarning = getBlockingPreparedWarning(input.prepared);
@@ -924,17 +1070,10 @@ export class WalletChanTools {
         `Prepared response contains an error-level warning; refusing to submit. Preview the calls or pass allowWarnings=true only if the user explicitly wants to continue. Warning: ${blockingWarning}`,
       );
     }
-    return this.sendCallBatch({
-      chain: prepared.chain,
-      from: optionalString(input.from),
-      atomicRequired:
-        typeof input.atomicRequired === "boolean" ? input.atomicRequired : undefined,
-      calls: prepared.calls,
-      metadata: {
-        preparedSourcePaths: prepared.sourcePaths,
-        preparedWarnings: prepared.warnings,
-      },
-    });
+    return {
+      prepared,
+      args: preparedCallBatchArgs(input, prepared),
+    };
   }
 
   private async runBasePluginCli(input: Record<string, unknown>): Promise<unknown> {
@@ -1171,6 +1310,45 @@ function extractBundleId(result: unknown): string {
   throw new Error("WalletChan RPC did not return a wallet_sendCalls bundle ID");
 }
 
+function preparedCallBatchArgs(
+  input: Record<string, unknown>,
+  prepared: ReturnType<typeof extractPreparedCalls>,
+): {
+  chain: unknown;
+  from?: string;
+  atomicRequired?: boolean;
+  calls: WalletCall[];
+  metadata: Record<string, unknown>;
+} {
+  return {
+    chain: prepared.chain,
+    from: optionalString(input.from),
+    atomicRequired:
+      typeof input.atomicRequired === "boolean" ? input.atomicRequired : undefined,
+    calls: prepared.calls,
+    metadata: {
+      preparedSourcePaths: prepared.sourcePaths,
+      preparedWarnings: prepared.warnings,
+    },
+  };
+}
+
+function emptyPreparedSubmissionResult(
+  submission: {
+    prepared: ReturnType<typeof extractPreparedCalls>;
+    args: { metadata?: Record<string, unknown> };
+  },
+): Record<string, unknown> {
+  return {
+    chain: submission.prepared.chain,
+    calls: [],
+    ...submission.args.metadata,
+    status: "no_calls",
+    approvalMode: "none",
+    message: "Prepared response did not contain any calls to submit.",
+  };
+}
+
 function isAtomicUnsupportedError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /atomic/i.test(message) && /not (available|supported)|unsupported/i.test(message);
@@ -1182,7 +1360,73 @@ function isPreparedActionTool(toolName: string): boolean {
     toolName === "send_transaction" ||
     toolName === "swap" ||
     toolName === "bridge" ||
-    toolName === "run_base_plugin_cli";
+    toolName === "run_base_plugin_cli" ||
+    toolName === "veil_prepare_register" ||
+    toolName === "veil_prepare_deposit";
+}
+
+function veilTimeoutMs(toolName: string, input: Record<string, unknown>): number | undefined {
+  if (toolName !== "veil_wait_for_deposit") {
+    return optionalNumber(input.timeoutMs);
+  }
+  const timeoutSeconds = typeof input.timeoutSeconds === "number" && Number.isFinite(input.timeoutSeconds)
+    ? Math.max(1, Math.min(1800, input.timeoutSeconds))
+    : 900;
+  return (timeoutSeconds + 30) * 1000;
+}
+
+const VEIL_DEPOSIT_MINIMUMS = {
+  ETH: {
+    decimals: 18,
+    minUnits: 10_000_000_000_000_000n,
+    minLabel: "0.01 ETH",
+  },
+  USDC: {
+    decimals: 6,
+    minUnits: 20_000_000n,
+    minLabel: "20 USDC",
+  },
+} as const;
+
+function assertVeilDepositMinimum(input: Record<string, unknown>): void {
+  const rawAsset = requiredString(input.asset, "veil_prepare_deposit requires asset").toUpperCase();
+  if (rawAsset !== "ETH" && rawAsset !== "USDC") {
+    throw new Error("veil_prepare_deposit asset must be ETH or USDC");
+  }
+  const amount = requiredString(input.amount, "veil_prepare_deposit requires amount");
+  const minimum = VEIL_DEPOSIT_MINIMUMS[rawAsset];
+  const amountUnits = parseDecimalUnits(amount, minimum.decimals);
+  if (amountUnits >= minimum.minUnits) return;
+
+  const minimumGrossUnits = minimum.minUnits + (minimum.minUnits * 30n) / 10_000n;
+  throw new Error(
+    `Minimum Veil ${rawAsset} deposit is ${minimum.minLabel} net before the 0.3% fee. ` +
+      `Requested ${amount} ${rawAsset}; Veil would revert with MinimumDepositNotMet. ` +
+      `Use at least ${minimum.minLabel} net. The wallet needs about ${formatDecimalUnits(minimumGrossUnits, minimum.decimals)} ${rawAsset} including fee.`,
+  );
+}
+
+function parseDecimalUnits(value: string, decimals: number): bigint {
+  const trimmed = value.trim();
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(trimmed);
+  if (!match) {
+    throw new Error(`Invalid decimal amount: ${value}`);
+  }
+  const whole = match[1];
+  const fraction = match[2] ?? "";
+  if (fraction.length > decimals) {
+    throw new Error(`Amount ${value} has too many decimal places; max is ${decimals}`);
+  }
+  return BigInt(whole + fraction.padEnd(decimals, "0"));
+}
+
+function formatDecimalUnits(value: bigint, decimals: number): string {
+  const negative = value < 0n;
+  const absolute = negative ? -value : value;
+  const padded = absolute.toString().padStart(decimals + 1, "0");
+  const whole = padded.slice(0, -decimals);
+  const fraction = padded.slice(-decimals).replace(/0+$/, "");
+  return `${negative ? "-" : ""}${whole}${fraction ? `.${fraction}` : ""}`;
 }
 
 function requiredRequestId(input: Record<string, unknown>): string {
@@ -1205,6 +1449,22 @@ function mapBundleStatus(value: unknown): string {
 function mapSubmissionStatus(value: Record<string, unknown>): string {
   const status = mapBundleStatus(value);
   return status === "unknown" ? "pending" : status;
+}
+
+function mapTrackedTransactionStatus(value: unknown): string {
+  if (typeof value === "string" && value) return "confirmed";
+  return mapSubmissionStatus(asRecord(value));
+}
+
+function formatTrackedTransactionResult(value: unknown): Record<string, unknown> {
+  if (typeof value === "string") {
+    return { txHash: value };
+  }
+  const record = asRecord(value);
+  return {
+    ...record,
+    transactionResult: value,
+  };
 }
 
 function submissionMessage(value: Record<string, unknown>, status: string): string {

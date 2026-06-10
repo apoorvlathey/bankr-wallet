@@ -11,6 +11,7 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
+    "skills",
     "README.md",
     "SKILL.md",
     "LICENSE.md"
