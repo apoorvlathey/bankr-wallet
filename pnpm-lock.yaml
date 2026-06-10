@@ -291,7 +291,7 @@ importers:
         specifier: 0.2.0
         version: 0.2.0
       '@walletchan/rpc':
-        specifier: workspace:^0.1.4
+        specifier: workspace:^0.2.0
         version: link:../walletchan-rpc
       qrcode:
         specifier: 1.5.3

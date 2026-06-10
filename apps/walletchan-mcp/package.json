@@ -1,6 +1,6 @@
 {
   "name": "@walletchan/mcp",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "type": "module",
   "description": "Local MCP adapter for WalletChan RPC and Base MCP-style DeFi skills",
   "license": "MIT",
@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@morpho-org/cli": "0.2.0",
-    "@walletchan/rpc": "workspace:^0.1.4",
+    "@walletchan/rpc": "workspace:^0.2.0",
     "qrcode": "1.5.3"
   },
   "devDependencies": {

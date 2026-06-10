@@ -115,7 +115,7 @@ async function handleMethod(
     case "net_version":
       return successResponse(id, String(context.getActiveChain().chainId));
     case "web3_clientVersion":
-      return successResponse(id, "WalletChanRPC/0.1.4");
+      return successResponse(id, "WalletChanRPC/0.2.0");
     case "wallet_switchEthereumChain":
       return successResponse(id, await switchEthereumChain(request, context));
     case "eth_sendTransaction":

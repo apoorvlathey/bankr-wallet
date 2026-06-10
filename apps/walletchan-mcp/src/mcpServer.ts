@@ -123,7 +123,7 @@ export class McpServer {
           serverInfo: {
             name: "walletchan-mcp",
             title: "WalletChan",
-            version: "0.1.2",
+            version: "0.2.0",
           },
           instructions:
             "WalletChan MCP routes wallet requests through the local WalletChan RPC bridge over WalletConnect. If pairing is needed, call get_pairing_uri and show the local pairing URL or WalletConnect URI to the user. When a pairing URI is available, the tool returns an MCP image content block with the QR code before the text fallback.",

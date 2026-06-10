@@ -107,7 +107,7 @@ export class StdioMcpClient {
       capabilities: {},
       clientInfo: {
         name: "walletchan-mcp",
-        version: "0.1.2",
+        version: "0.2.0",
       },
     }, this.config.startupTimeoutMs);
     this.sendNotification("notifications/initialized", {});
