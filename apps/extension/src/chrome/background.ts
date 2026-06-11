@@ -706,6 +706,7 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   // Rejections (prevent malicious page from rejecting user's pending requests)
   "rejectTransaction",
   "rejectBatchTransaction",
+  "splitBatchIntoIndividualTxs",
   "removeCallFromPendingBatch",
   "updateCallInPendingBatch",
   "rejectSignatureRequest",
@@ -727,6 +728,12 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "deriveSeedAccount",
   "addPrivateKeyAccount",
   "removeAccount",
+  "getAccounts",
+  "getTabAccount",
+  "setTabAccount",
+  "getSeedGroups",
+  // getActiveAccount intentionally stays content-script reachable: inject.ts
+  // uses it during provider initialization to correct stale synced address state.
   "setActiveAccount",
   "renameSeedGroup",
   "updateAccountDisplayName",
@@ -734,12 +741,18 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   // Credential / session management
   "unlockWallet",
   "lockWallet",
+  "isApiKeyCached",
+  "isWalletUnlocked",
+  "validateSession",
+  "tryRestoreSession",
   "clearApiKeyCache",
   "saveApiKeyWithCachedPassword",
   "getCachedPassword",
   "changePasswordWithCachedPassword",
   "setAgentPassword",
   "removeAgentPassword",
+  "isAgentPasswordEnabled",
+  "getPasswordType",
   // Sensitive reads (pending request details)
   "getPendingTxRequests",
   "getPendingBatchTxRequests",
@@ -747,6 +760,10 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "getPendingSignatureRequests",
   "getPendingWatchAssetRequests",
   "getPendingAddChainRequests",
+  "getTxHistory",
+  "getProcessingTxs",
+  "getFailedTxResult",
+  "checkPendingTxReceipt",
   // Key reveal (already had isExtensionPage but included for completeness)
   "migrateFromLegacy",
   "generateMnemonic",
@@ -762,8 +779,17 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   // Settings that affect security
   "setSidePanelMode",
   "setAutoLockTimeout",
+  "getAutoLockTimeout",
+  "setArcBrowser",
+  "isSidePanelSupported",
+  "getSidePanelMode",
+  "openPopupWindow",
+  "getClearSigningEnabled",
+  "setClearSigningEnabled",
+  "INVALIDATE_CLEAR_SIGNING_CACHE",
   // Full token metadata may include watched/custom-token metadata.
   "resolveTokenMetadata",
+  "lookupCustomToken",
   "backfillAssetChanges",
   // EIP-7702 delegation management
   "getDelegationStatus",
@@ -781,7 +807,28 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "executeSwapDirect",
   "executeSwapBatch",
   "executeSwapAtomicPK",
+  "initiateTransfer",
+  "cancelProcessingTx",
   "sponsoredTransfer",
+  "checkPremiumStatus",
+  // Transaction-confirmation helpers operate on pending wallet context.
+  "estimateGas",
+  "estimateForceInclusionGas",
+  "estimateBatchGasSequential",
+  "simulateAssetChanges",
+  "simulateBatchAssetChanges",
+  "simulateBatchAssetChangesNonAtomic",
+  "retryTokenMetadata",
+  // Chat history and prompt submission are extension UI only.
+  "submitChatPrompt",
+  "getChatConversations",
+  "getChatConversation",
+  "createChatConversation",
+  "deleteChatConversation",
+  "addChatMessage",
+  "updateChatMessage",
+  // Clear-signing descriptor requests can use extension cache/preferences.
+  "GET_CLEAR_SIGNING_DESCRIPTOR",
 ]);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

@@ -159,9 +159,9 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 
 | Handler             | What It Exposes                                               | Guard                                                  |
 | ------------------- | ------------------------------------------------------------- | ------------------------------------------------------ |
-| `getCachedApiKey`   | Returns plaintext API key to caller                           | Session must be unlocked; auto-lock timeout checked    |
+| `getCachedApiKey`   | Returns plaintext API key to caller                           | Extension page sender, master session, auto-lock timeout checked |
 | `revealPrivateKey`  | Returns plaintext private key                                 | Requires password verification + blocks agent password |
-| `getCachedPassword` | Returns `hasCachedPassword` boolean (not the password itself) | None needed (boolean only)                             |
+| `getCachedPassword` | Returns `hasCachedPassword` boolean (not the password itself) | `EXTENSION_ONLY_MESSAGES`                              |
 
 ### Secret-Modifying Handlers
 
@@ -178,8 +178,9 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 | Handler                    | Effect                                           | Guard                              |
 | -------------------------- | ------------------------------------------------ | ---------------------------------- |
 | `removeAccount`            | Deletes account reference                        | Agent password blocked             |
-| `setActiveAccount`         | Changes active account + updates storage address | None (non-destructive, no secrets) |
-| `updateAccountDisplayName` | Changes display name                             | None (non-destructive)             |
+| `setActiveAccount`         | Changes active account + updates storage address | `EXTENSION_ONLY_MESSAGES`          |
+| `setTabAccount`            | Changes per-tab selected account                 | `EXTENSION_ONLY_MESSAGES`          |
+| `updateAccountDisplayName` | Changes display name                             | `EXTENSION_ONLY_MESSAGES`          |
 
 ### Destructive Handlers
 
@@ -187,7 +188,27 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 | ---------------- | --------------------------- | --------------------------------------------- |
 | `resetExtension` | Wipes ALL extension data    | Agent password blocked                        |
 | `lockWallet`     | Clears all in-memory caches | None needed (user-initiated, non-destructive) |
-| `clearTxHistory` | Deletes transaction history | None (no secrets involved)                    |
+| `clearTxHistory` | Deletes transaction history | `EXTENSION_ONLY_MESSAGES`                     |
+
+### Extension-Only UI Reads and Actions
+
+`background.ts` has a central `EXTENSION_ONLY_MESSAGES` gate. Any message that
+is owned by popup/sidepanel/onboarding UI and reads wallet state, account
+metadata, chat history, pending-request details, transaction history/status,
+session/auth status, clear-signing preferences/cache, or mutates extension-only
+state must be added to this set. Current examples include:
+
+| Handler Class | Examples | Why Extension-Only |
+| --- | --- | --- |
+| Account/session reads | `getAccounts`, `getTabAccount`, `getSeedGroups`, `isWalletUnlocked`, `isApiKeyCached`, `tryRestoreSession`, `getPasswordType`, `getAutoLockTimeout` | Avoid exposing wallet/account/session state to content scripts. |
+| Transaction/history UI | `getTxHistory`, `getProcessingTxs`, `getFailedTxResult`, `checkPendingTxReceipt`, `cancelProcessingTx`, `splitBatchIntoIndividualTxs`, gas/simulation helpers | Avoid letting content scripts inspect or alter local pending/history/status state. |
+| Chat | `submitChatPrompt`, `getChatConversations`, `getChatConversation`, `createChatConversation`, `deleteChatConversation`, `addChatMessage`, `updateChatMessage` | Chat prompt submission uses the user's Bankr credentials/session and chat history is local user data. |
+| Settings/cache | `setArcBrowser`, `getSidePanelMode`, `setSidePanelMode`, `getClearSigningEnabled`, `setClearSigningEnabled`, `INVALIDATE_CLEAR_SIGNING_CACHE` | These are extension UI preferences/cache controls, not dapp APIs. |
+
+`getActiveAccount` is the narrow exception: `inject.ts` uses it during content
+script initialization to correct stale synced address state before emitting
+`accountsChanged`. Webpages cannot call it directly because `inject.ts` does
+not forward an inpage message for it.
 
 ### Transaction History Enrichment Handlers
 
@@ -385,14 +406,20 @@ handleConfirmSignatureRequest*() → validateSiwePersonalSignRequest()
 
 ### Inpage-to-Background Messages (via inject.ts)
 
-Only these message types are forwarded from webpage to background:
+Only these inpage message types are accepted from the webpage by `inject.ts`:
 
-| Message Type            | Purpose                                              |
-| ----------------------- | ---------------------------------------------------- |
-| `i_sendTransaction`     | Transaction request (from, to, data, value, chainId) |
-| `i_signatureRequest`    | Signature request (method, params, chainId)          |
-| `i_rpcRequest`          | RPC proxy call (rpcUrl, method, params)              |
-| `i_switchEthereumChain` | Chain switch request (chainId)                       |
+| Inpage Message Type       | Background Message / Effect                                      | Purpose |
+| ------------------------- | ---------------------------------------------------------------- | ------- |
+| `i_sendTransaction`       | `sendTransaction`                                                | Transaction request (`from`, `to`, `data`, `value`, `chainId`) |
+| `i_signatureRequest`      | `signatureRequest`                                               | Signature request (`method`, `params`, `chainId`) |
+| `i_rpcRequest`            | `rpcRequest`                                                     | RPC proxy call through the extension-selected RPC URL |
+| `i_switchEthereumChain`   | Updates tab chain state; may send `dappChainSwitchNotification`  | Chain switch request (`chainId`) |
+| `i_addEthereumChain`      | `addEthereumChain`                                               | User-confirmed chain add/switch request |
+| `i_watchAsset`            | `watchAsset`                                                     | User-confirmed `wallet_watchAsset` request |
+| `i_walletGetCapabilities` | `walletGetCapabilities`                                          | ERC-5792 capability query |
+| `i_walletSendCalls`       | `walletSendCalls`                                                | ERC-5792 batch request |
+| `i_walletGetCallsStatus`  | `walletGetCallsStatus`                                           | ERC-5792 bundle status query |
+| `i_walletShowCallsStatus` | `walletShowCallsStatus`                                          | Opens WalletChan status UI for a bundle |
 
 **Source validation**: `inject.ts` checks `e.source === window` before forwarding.
 
@@ -526,7 +553,7 @@ These must always hold true. Violations indicate a security bug.
 
 7. **Session restore only works for "Never" auto-lock** - `tryRestoreSession()` checks `autoLockTimeout === 0` before attempting restoration.
 
-8. **Content script only forwards whitelisted message types** - `inject.ts` only bridges `i_sendTransaction`, `i_signatureRequest`, `i_rpcRequest`, `i_switchEthereumChain` from page to background. In the reverse direction, only `setAddress`, `setChainId`, and `setAccount` are forwarded from background to the webpage.
+8. **Content script only forwards whitelisted message types** - `inject.ts` only bridges the documented dapp-facing allowlist from page to background: transaction/signature requests, RPC proxy calls, chain add/switch/watch-asset prompts, and ERC-5792 capability/batch/status methods. In the reverse direction, only `setAddress`, `setChainId`, and `setAccount` are forwarded from background to the webpage.
 
 9. **No `eval()` or dynamic code execution** - MV3 CSP prevents this, but also verify no `new Function()` or similar patterns exist.
 
