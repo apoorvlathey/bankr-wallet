@@ -467,6 +467,7 @@ function UnlockScreen({
                   bg="accent.primary"
                   border="2px solid"
                   borderColor="border.default"
+                  borderRadius={tokens.radii.card}
                   p={2}
                 >
                   <HStack>

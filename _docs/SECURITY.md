@@ -522,23 +522,25 @@ These must always hold true. Violations indicate a security bug.
 
 5. **Service worker suspend clears credentials** - The `suspend` event handler in `background.ts` calls `clearCachedApiKey()` and `clearCachedVault()`.
 
-6. **Session restore only works for "Never" auto-lock** - `tryRestoreSession()` checks `autoLockTimeout === 0` before attempting restoration.
+6. **Timed auto-lock clears every in-memory credential** - All cached credential getters, including `getCachedVaultKey()` and `getPasswordType()`, enforce the configured timeout. Expiry clears the API key, password, private-key vault, vault key, and password type together.
 
-7. **Content script only forwards whitelisted message types** - `inject.ts` only bridges `i_sendTransaction`, `i_signatureRequest`, `i_rpcRequest`, `i_switchEthereumChain` from page to background. In the reverse direction, only `setAddress`, `setChainId`, and `setAccount` are forwarded from background to the webpage.
+7. **Session restore only works for "Never" auto-lock** - `tryRestoreSession()` checks `autoLockTimeout === 0` before attempting restoration.
 
-8. **No `eval()` or dynamic code execution** - MV3 CSP prevents this, but also verify no `new Function()` or similar patterns exist.
+8. **Content script only forwards whitelisted message types** - `inject.ts` only bridges `i_sendTransaction`, `i_signatureRequest`, `i_rpcRequest`, `i_switchEthereumChain` from page to background. In the reverse direction, only `setAddress`, `setChainId`, and `setAccount` are forwarded from background to the webpage.
 
-9. **Secret-returning handlers verify sender origin** - Handlers like `getCachedApiKey`, `revealPrivateKey`, `revealSeedPhrase`, and `generateMnemonic` check `isExtensionPage(sender)` to ensure the request comes from an extension page, not a content script on a web page.
+9. **No `eval()` or dynamic code execution** - MV3 CSP prevents this, but also verify no `new Function()` or similar patterns exist.
 
-10. **Password change re-encrypts all password-derived vaults atomically** - `handleChangePasswordWithCachedPassword` computes all new encrypted values in memory first (`encryptedVaultKeyMaster`, `pkVault`, `mnemonicVault`), then writes them in a single `chrome.storage.local.set()` call. This prevents partial-write corruption where the vault key is updated but private key/mnemonic vaults remain encrypted with the old password.
+10. **Secret-returning handlers verify sender origin** - Handlers like `getCachedApiKey`, `revealPrivateKey`, `revealSeedPhrase`, and `generateMnemonic` check `isExtensionPage(sender)` to ensure the request comes from an extension page, not a content script on a web page.
 
-11. **Transaction confirmation checks expiry** - `handleConfirmTransaction`, `handleConfirmTransactionAsync`, and `handleConfirmTransactionAsyncPK` reject requests older than 30 minutes (`TX_EXPIRY_MS`), preventing stale transaction confirmation.
+11. **Password change re-encrypts all password-derived vaults atomically** - `handleChangePasswordWithCachedPassword` computes all new encrypted values in memory first (`encryptedVaultKeyMaster`, `pkVault`, `mnemonicVault`), then writes them in a single `chrome.storage.local.set()` call. This prevents partial-write corruption where the vault key is updated but private key/mnemonic vaults remain encrypted with the old password.
 
-12. **Transaction double-execution prevention** - A `processingTxIds` Set in `txHandlers.ts` prevents the same transaction from being submitted twice if two confirm messages arrive concurrently.
+12. **Transaction confirmation checks expiry** - `handleConfirmTransaction`, `handleConfirmTransactionAsync`, and `handleConfirmTransactionAsyncPK` reject requests older than 30 minutes (`TX_EXPIRY_MS`), preventing stale transaction confirmation.
 
-13. **RPC proxy restricts URL sources** - `handleRpcRequest` only accepts extension-configured RPC URLs, preventing arbitrary webpage-controlled endpoints. A 15-second timeout prevents resource exhaustion from slow servers. The inpage dapp-RPC fast path only uses HTTP(S) JSON-RPC URLs discovered from the page itself, validates the chain with `eth_chainId`, forwards only allowlisted non-critical read methods, and falls back to the extension RPC on error or timeout.
+13. **Transaction double-execution prevention** - A `processingTxIds` Set in `txHandlers.ts` prevents the same transaction from being submitted twice if two confirm messages arrive concurrently.
 
-14. **Input length validation on user-facing strings** - Display names and group names are capped at 100 characters to prevent storage bloat from malformed inputs. Unknown message types are logged with `console.warn` for debuggability.
+14. **RPC proxy restricts URL sources** - `handleRpcRequest` only accepts extension-configured RPC URLs, preventing arbitrary webpage-controlled endpoints. A 15-second timeout prevents resource exhaustion from slow servers. The inpage dapp-RPC fast path only uses HTTP(S) JSON-RPC URLs discovered from the page itself, validates the chain with `eth_chainId`, forwards only allowlisted non-critical read methods, and falls back to the extension RPC on error or timeout.
+
+15. **Input length validation on user-facing strings** - Display names and group names are capped at 100 characters to prevent storage bloat from malformed inputs. Unknown message types are logged with `console.warn` for debuggability.
 
 ---
 

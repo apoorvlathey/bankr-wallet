@@ -30,6 +30,7 @@ let cachedPasswordType: PasswordType | null = null;
 // Session cache for decrypted vault key
 // This is the intermediate key that decrypts actual data (API key, private keys)
 let cachedVaultKey: CryptoKey | null = null;
+let authCacheTimestamp: number = 0;
 
 // Session ID for tracking active sessions across service worker restarts
 // Used with chrome.storage.session for session restoration when auto-lock is "Never"
@@ -54,6 +55,27 @@ export const VALID_AUTO_LOCK_TIMEOUTS = new Set([
   14400000,   // 4 hours
   0,          // Never (default)
 ]);
+
+function isCacheEntryValid(timestamp: number): boolean {
+  const timeout = cachedAutoLockTimeout ?? DEFAULT_AUTO_LOCK_TIMEOUT;
+  return (
+    activeUIConnections > 0 ||
+    timeout === 0 ||
+    (timestamp > 0 && Date.now() - timestamp < timeout)
+  );
+}
+
+function clearExpiredAuthCache(): void {
+  cachedApiKey = null;
+  cachedPassword = null;
+  cachedVault = null;
+  cachedPasswordType = null;
+  cachedVaultKey = null;
+  cacheTimestamp = 0;
+  vaultCacheTimestamp = 0;
+  authCacheTimestamp = 0;
+  currentSessionId = null;
+}
 
 /**
  * Gets the auto-lock timeout from storage (with caching)
@@ -109,13 +131,10 @@ export function updateCachedAutoLockTimeout(newValue: number | undefined): void 
  * Gets cached API key if still valid
  */
 export function getCachedApiKey(): string | null {
-  const timeout = cachedAutoLockTimeout ?? DEFAULT_AUTO_LOCK_TIMEOUT;
-  // Skip timeout check while UI is open, or if timeout is 0 ("Never")
-  if (cachedApiKey && (activeUIConnections > 0 || timeout === 0 || Date.now() - cacheTimestamp < timeout)) {
+  if (cachedApiKey && isCacheEntryValid(cacheTimestamp)) {
     return cachedApiKey;
   }
-  cachedApiKey = null;
-  cachedPassword = null;
+  if (cachedApiKey) clearExpiredAuthCache();
   return null;
 }
 
@@ -123,12 +142,10 @@ export function getCachedApiKey(): string | null {
  * Gets cached password if still valid
  */
 export function getCachedPassword(): string | null {
-  const timeout = cachedAutoLockTimeout ?? DEFAULT_AUTO_LOCK_TIMEOUT;
-  // Skip timeout check while UI is open, or if timeout is 0 ("Never")
-  if (cachedPassword && (activeUIConnections > 0 || timeout === 0 || Date.now() - cacheTimestamp < timeout)) {
+  if (cachedPassword && isCacheEntryValid(cacheTimestamp)) {
     return cachedPassword;
   }
-  cachedPassword = null;
+  if (cachedPassword) clearExpiredAuthCache();
   return null;
 }
 
@@ -173,18 +190,17 @@ export function clearCachedApiKey(): void {
   cachedPasswordType = null;
   cachedVaultKey = null;
   cacheTimestamp = 0;
+  authCacheTimestamp = 0;
 }
 
 /**
  * Gets cached vault if still valid
  */
 export function getCachedVault(): DecryptedEntry[] | null {
-  const timeout = cachedAutoLockTimeout ?? DEFAULT_AUTO_LOCK_TIMEOUT;
-  // Skip timeout check while UI is open, or if timeout is 0 ("Never")
-  if (cachedVault && (activeUIConnections > 0 || timeout === 0 || Date.now() - vaultCacheTimestamp < timeout)) {
+  if (cachedVault && isCacheEntryValid(vaultCacheTimestamp)) {
     return cachedVault;
   }
-  cachedVault = null;
+  if (cachedVault) clearExpiredAuthCache();
   return null;
 }
 
@@ -208,7 +224,13 @@ export function clearCachedVault(): void {
  * Gets cached vault key
  */
 export function getCachedVaultKey(): CryptoKey | null {
-  return cachedVaultKey;
+  if (cachedVaultKey && isCacheEntryValid(authCacheTimestamp)) {
+    return cachedVaultKey;
+  }
+  if (cachedVaultKey) {
+    clearExpiredAuthCache();
+  }
+  return null;
 }
 
 /**
@@ -216,13 +238,20 @@ export function getCachedVaultKey(): CryptoKey | null {
  */
 export function setCachedVaultKey(key: CryptoKey | null): void {
   cachedVaultKey = key;
+  authCacheTimestamp = key ? Date.now() : 0;
 }
 
 /**
  * Gets cached password type
  */
 export function getPasswordType(): PasswordType | null {
-  return cachedPasswordType;
+  if (cachedPasswordType && isCacheEntryValid(authCacheTimestamp)) {
+    return cachedPasswordType;
+  }
+  if (cachedPasswordType) {
+    clearExpiredAuthCache();
+  }
+  return null;
 }
 
 /**
@@ -230,6 +259,7 @@ export function getPasswordType(): PasswordType | null {
  */
 export function setCachedPasswordType(type: PasswordType | null): void {
   cachedPasswordType = type;
+  authCacheTimestamp = type ? Date.now() : 0;
 }
 
 /**
@@ -466,6 +496,9 @@ export function decrementUIConnections(): void {
     }
     if (cachedVault) {
       vaultCacheTimestamp = Date.now();
+    }
+    if (cachedVaultKey || cachedPasswordType) {
+      authCacheTimestamp = Date.now();
     }
   }
 }

@@ -1779,6 +1779,10 @@ Users can configure the auto-lock timeout via Settings → Auto-Lock:
 - Background worker caches the timeout value in memory for performance
 - Storage change listener keeps cached value in sync across tabs
 - When timeout is `0` ("Never"), cache validation always passes
+- All credential getters enforce the same timeout, including the vault key
+  and cached password type. When a timed session expires, the background
+  worker clears the cached API key, password, private-key vault, vault key,
+  and password type together.
 - Changes take effect immediately (no restart required)
 - **Validation**: `setAutoLockTimeout` validates against allowed values and returns `false` for invalid values
 
