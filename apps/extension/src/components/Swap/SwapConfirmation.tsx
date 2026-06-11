@@ -192,7 +192,10 @@ function SwapConfirmation({
   };
 
   const handleFunctionName = (index: number, name: string) => {
-    setDecodedFunctionNames((prev) => ({ ...prev, [index]: name }));
+    setDecodedFunctionNames((prev) => {
+      if (prev[index] === name) return prev;
+      return { ...prev, [index]: name };
+    });
   };
 
   // Build gas estimation inputs
@@ -629,7 +632,8 @@ function SwapConfirmation({
             const isExpanded = expandedCalls.has(i);
             const hasCalldata = entry.tx.data && entry.tx.data !== "0x";
             const hasValue = entry.tx.value && entry.tx.value !== "0x0" && entry.tx.value !== "0x";
-            const displayName = decodedFunctionNames[i] || entry.origin;
+            const displayName =
+              entry.origin || decodedFunctionNames[i] || entry.functionName || "Transaction";
 
             return (
               <Box
