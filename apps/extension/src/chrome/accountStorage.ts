@@ -255,6 +255,56 @@ export async function updateAccountDisplayName(
 }
 
 /**
+ * Validates whether a Bankr account can rotate to the given address.
+ */
+export async function validateBankrAccountAddressUpdate(
+  accountId: string,
+  address: string
+): Promise<void> {
+  const accounts = await getAccounts();
+  const account = accounts.find((a) => a.id === accountId);
+  if (!account) {
+    throw new Error("Account not found");
+  }
+  if (account.type !== "bankr") {
+    throw new Error("Only Bankr accounts can update API wallet addresses");
+  }
+
+  const normalized = address.toLowerCase();
+  const duplicate = accounts.find(
+    (a) => a.id !== accountId && a.address.toLowerCase() === normalized
+  );
+  if (duplicate) {
+    throw new Error("An account with this address already exists");
+  }
+}
+
+/**
+ * Updates a Bankr account's wallet address.
+ */
+export async function updateBankrAccountAddress(
+  accountId: string,
+  address: string
+): Promise<BankrAccount> {
+  await validateBankrAccountAddressUpdate(accountId, address);
+
+  const accounts = await getAccounts();
+  const index = accounts.findIndex((a) => a.id === accountId);
+  if (index === -1 || accounts[index].type !== "bankr") {
+    throw new Error("Account not found");
+  }
+
+  const updated: BankrAccount = {
+    ...accounts[index],
+    type: "bankr",
+    address: address.toLowerCase(),
+  };
+  accounts[index] = updated;
+  await saveAccounts(accounts);
+  return updated;
+}
+
+/**
  * Clears all accounts (used during reset)
  */
 export async function clearAllAccounts(): Promise<void> {

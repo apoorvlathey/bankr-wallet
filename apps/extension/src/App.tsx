@@ -569,7 +569,13 @@ function App() {
     const accountList = await sendMessageWithRetry<Account[]>({
       type: "getAccounts",
     });
-    setAccounts(accountList || []);
+    const nextAccounts = accountList || [];
+    setAccounts(nextAccounts);
+    setSettingsAccount((current) =>
+      current
+        ? nextAccounts.find((account) => account.id === current.id) || current
+        : current,
+    );
 
     const active = await sendMessageWithRetry<Account | null>({
       type: "getActiveAccount",
@@ -602,7 +608,7 @@ function App() {
       }
     }
 
-    return { accounts: accountList || [], activeAccount: active };
+    return { accounts: nextAccounts, activeAccount: active };
   };
 
   const handleAccountSwitch = async (account: Account) => {

@@ -168,6 +168,7 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 | Handler                            | What It Modifies                                                                                                             | Guard                                      |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | `saveApiKeyWithCachedPassword`     | Overwrites encrypted API key                                                                                                 | Agent password blocked                     |
+| `saveBankrApiKeyAndAddress`        | Overwrites encrypted API key and updates the Bankr account address in `accounts[]` after duplicate-address validation        | Agent password blocked via API-key save    |
 | `changePasswordWithCachedPassword` | Atomically re-encrypts vault key, pkVault entries, and mnemonicVault entries with new master password (single storage write) | Agent password blocked                     |
 | `addBankrAccount`                  | Can overwrite encrypted API key (when `message.apiKey` provided)                                                             | Agent password blocked when apiKey present |
 | `addPrivateKeyAccount`             | Adds new entry to encrypted private key vault                                                                                | Agent password blocked                     |

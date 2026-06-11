@@ -111,12 +111,18 @@ The extension maintains address consistency between storage and the active accou
    - Updates `address` and `displayAddress` in `chrome.storage.sync`
    - The storage change listener broadcasts `setAddress` to all tabs
 
-3. **On Content Script Init**: The inject.ts script:
+3. **On Bankr API Key & Address Change**: The Account Settings form calls
+   `saveBankrApiKeyAndAddress`, which saves the new API key and updates the
+   Bankr account's `accounts[].address` entry. If that account is active, the
+   background worker also syncs `chrome.storage.sync.address/displayAddress`
+   and broadcasts `accountsUpdated`.
+
+4. **On Content Script Init**: The inject.ts script:
    - Reads the initial address from `chrome.storage.sync`
    - Verifies with background that the address matches the active account
    - If mismatched (e.g., stale storage), emits `accountsChanged` with the correct address
 
-4. **On Address Change**: The inject.ts `setAddress` handler now emits `accountsChanged` when the address changes, ensuring dApps are notified of updates from any source.
+5. **On Address Change**: The inject.ts `setAddress` handler now emits `accountsChanged` when the address changes, ensuring dApps are notified of updates from any source.
 
 ### Transaction Routing
 
@@ -1850,6 +1856,7 @@ The following message handlers attempt session restoration when auto-lock is "Ne
 | `getCachedApiKey`                  | Display API key in settings              |
 | `submitChatPrompt`                 | Chat with Bankr AI                       |
 | `saveApiKeyWithCachedPassword`     | Update API key while unlocked            |
+| `saveBankrApiKeyAndAddress`        | Update Bankr API key and account address while unlocked |
 | `changePasswordWithCachedPassword` | Change wallet password while unlocked    |
 | `addBankrAccount`                  | Add new Bankr account with API key       |
 | `addPrivateKeyAccount`             | Add new private key account              |
@@ -2111,6 +2118,7 @@ Build command: `pnpm build`
 | `getCachedPassword`                | Check if password is cached                                                                     |
 | `getCachedApiKey`                  | Get decrypted API key (if cached). **Sender-verified**: extension pages only                    |
 | `saveApiKeyWithCachedPassword`     | Save new API key using cached password                                                          |
+| `saveBankrApiKeyAndAddress`        | Save a Bankr account's API key and update that account's wallet address in `accounts[]`         |
 | `changePasswordWithCachedPassword` | Change password using cached password                                                           |
 | `isSidePanelSupported`             | Check if browser supports sidepanel                                                             |
 | `getSidePanelMode`                 | Get current sidepanel mode setting                                                              |

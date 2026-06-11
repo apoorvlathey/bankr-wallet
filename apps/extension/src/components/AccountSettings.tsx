@@ -57,7 +57,7 @@ import { truncateAddress } from "@/lib/addressUtils";
 interface AccountSettingsProps {
   account: Account | null;
   onClose: () => void;
-  onAccountUpdated: () => void;
+  onAccountUpdated: () => void | Promise<unknown>;
   totalAccounts: number;
 }
 
@@ -240,28 +240,12 @@ function AccountSettings({
         return;
       }
 
-      if (hasCachedPassword) {
-        const result = await new Promise<{ success: boolean; error?: string }>(
-          (resolve) => {
-            chrome.runtime.sendMessage(
-              { type: "saveApiKeyWithCachedPassword", apiKey: apiKey.trim() },
-              resolve,
-            );
-          },
-        );
+      if (!account || account.type !== "bankr") {
+        setIsSubmittingApiKey(false);
+        return;
+      }
 
-        if (!result.success) {
-          toast({
-            title: "Error saving API key",
-            description: result.error || "Failed to save API key",
-            status: "error",
-            duration: 5000,
-            isClosable: true,
-          });
-          setIsSubmittingApiKey(false);
-          return;
-        }
-      } else {
+      if (!hasCachedPassword) {
         const unlockResult = await new Promise<{
           success: boolean;
           error?: string;
@@ -282,32 +266,30 @@ function AccountSettings({
           setIsSubmittingApiKey(false);
           return;
         }
-        const saveResult = await new Promise<{
-          success: boolean;
-          error?: string;
-        }>((resolve) => {
-          chrome.runtime.sendMessage(
-            { type: "saveApiKeyWithCachedPassword", apiKey: apiKey.trim() },
-            resolve,
-          );
-        });
-        if (!saveResult.success) {
-          toast({
-            title: "Error saving API key",
-            description: saveResult.error || "Failed to save API key",
-            status: "error",
-            duration: 5000,
-            isClosable: true,
-          });
-          setIsSubmittingApiKey(false);
-          return;
-        }
       }
 
-      await chrome.storage.sync.set({
-        address: resolvedAddress,
-        displayAddress: walletAddress.trim(),
+      const saveResult = await new Promise<{
+        success: boolean;
+        error?: string;
+      }>((resolve) => {
+        chrome.runtime.sendMessage({
+          type: "saveBankrApiKeyAndAddress",
+          accountId: account.id,
+          apiKey: apiKey.trim(),
+          address: resolvedAddress,
+        }, resolve);
       });
+      if (!saveResult.success) {
+        toast({
+          title: "Error saving configuration",
+          description: saveResult.error || "Failed to save configuration",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
+        setIsSubmittingApiKey(false);
+        return;
+      }
 
       toast({
         title: "Configuration saved",
@@ -317,7 +299,7 @@ function AccountSettings({
         isClosable: true,
       });
 
-      onAccountUpdated();
+      await onAccountUpdated();
       setView("settings");
     } catch (error) {
       toast({

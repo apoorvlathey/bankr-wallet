@@ -25,6 +25,8 @@ import {
   renameSeedGroup,
   updateSeedGroupCount,
   updateAccountDisplayName,
+  validateBankrAccountAddressUpdate,
+  updateBankrAccountAddress,
   findAccountByAddress,
   convertToSeedPhraseAccount,
 } from "./accountStorage";
@@ -728,6 +730,7 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "setActiveAccount",
   "renameSeedGroup",
   "updateAccountDisplayName",
+  "saveBankrApiKeyAndAddress",
   // Credential / session management
   "unlockWallet",
   "lockWallet",
@@ -2368,6 +2371,58 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       tryRestoreSession(handleUnlockWallet).then((restored) => {
         sendResponse(restored);
       });
+      return true;
+    }
+
+    case "saveBankrApiKeyAndAddress": {
+      (async () => {
+        try {
+          const accountId =
+            typeof message.accountId === "string" ? message.accountId : "";
+          const apiKey =
+            typeof message.apiKey === "string" ? message.apiKey.trim() : "";
+          const address =
+            typeof message.address === "string" ? message.address.trim() : "";
+
+          if (!accountId || !apiKey || !address) {
+            sendResponse({
+              success: false,
+              error: "Missing account, API key, or address",
+            });
+            return;
+          }
+
+          await validateBankrAccountAddressUpdate(accountId, address);
+
+          const saveResult = await handleSaveApiKeyWithCachedPassword(apiKey);
+          if (!saveResult.success) {
+            sendResponse(saveResult);
+            return;
+          }
+
+          const updated = await updateBankrAccountAddress(accountId, address);
+          const activeAccount = await getActiveAccount();
+          if (activeAccount?.id === updated.id) {
+            await chrome.storage.sync.set({
+              address: updated.address,
+              displayAddress: updated.displayName || updated.address,
+            });
+          }
+
+          chrome.runtime
+            .sendMessage({ type: "accountsUpdated" })
+            .catch(() => {});
+          sendResponse({ success: true, account: updated });
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to save configuration",
+          });
+        }
+      })();
       return true;
     }
 
