@@ -168,6 +168,11 @@ if (typeof window !== "undefined") {
 // Eager load components needed immediately
 import UnlockScreen from "@/components/UnlockScreen";
 import { ScreenStack, type AppView } from "@/components/ScreenTransition";
+import type { SettingsTab } from "@/components/Settings";
+import type {
+  AccountSettingsSubView,
+  BankrConfigDraft,
+} from "@/components/AccountSettings";
 import PendingTxBanner from "@/components/PendingTxBanner";
 import WalletConnectBanner from "@/components/WalletConnectBanner";
 import PortfolioTabs from "@/components/PortfolioTabs";
@@ -210,6 +215,11 @@ type AddChainReturnTarget = {
   view: "walletConnect";
   dappName?: string;
 };
+
+type UnlockReturnTarget =
+  | { view: "settings"; tab: SettingsTab }
+  | { view: "settingsAddChain" }
+  | { view: "accountSettings"; subView: AccountSettingsSubView };
 
 // Helper to combine and sort requests by timestamp.
 // The cross-dapp batch (when present) is always prepended as the FIRST element
@@ -305,7 +315,8 @@ function App() {
     error: string;
     origin: string;
   } | null>(null);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<"main" | "chains">("main");
+  const [settingsInitialTab, setSettingsInitialTab] =
+    useState<SettingsTab>("main");
   const [settingsInitialEditChainName, setSettingsInitialEditChainName] = useState<string | undefined>(undefined);
   const [settingsAddChainInitialRequest, setSettingsAddChainInitialRequest] =
     useState<PendingAddChainRequest | undefined>(undefined);
@@ -324,6 +335,12 @@ function App() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
   const [settingsAccount, setSettingsAccount] = useState<Account | null>(null);
+  const [accountSettingsInitialView, setAccountSettingsInitialView] =
+    useState<AccountSettingsSubView>("settings");
+  const [accountSettingsApiKeyDraft, setAccountSettingsApiKeyDraft] =
+    useState<BankrConfigDraft | null>(null);
+  const unlockReturnTargetRef = useRef<UnlockReturnTarget | null>(null);
+  const unlockRouteHandledRef = useRef(false);
   const selectedChain = getResolvedChainByName(chainName, networksInfo);
   const visibleChains = getVisibleChains(networksInfo, activeAccount?.type);
 
@@ -1500,8 +1517,34 @@ function App() {
   }, [isWalletUnlocked]);
 
   const handleUnlock = useCallback(async () => {
+    if (unlockRouteHandledRef.current) return;
+    unlockRouteHandledRef.current = true;
+
     // Mark wallet as unlocked
+    isWalletUnlockedRef.current = true;
     setIsWalletUnlocked(true);
+
+    const unlockReturnTarget = unlockReturnTargetRef.current;
+    if (unlockReturnTarget) {
+      unlockReturnTargetRef.current = null;
+      setReturnToChatAfterUnlock(false);
+      setReturnToConversationId(null);
+
+      if (unlockReturnTarget.view === "settings") {
+        setSettingsInitialTab(unlockReturnTarget.tab);
+        setView("settings");
+        return;
+      }
+
+      if (unlockReturnTarget.view === "settingsAddChain") {
+        setView("settingsAddChain");
+        return;
+      }
+
+      setAccountSettingsInitialView(unlockReturnTarget.subView);
+      setView("accountSettings");
+      return;
+    }
 
     // If we came from chat, return to chat
     if (returnToChatAfterUnlock) {
@@ -1549,6 +1592,9 @@ function App() {
   const isWalletUnlockedRef = useRef(isWalletUnlocked);
   useEffect(() => {
     isWalletUnlockedRef.current = isWalletUnlocked;
+    if (!isWalletUnlocked) {
+      unlockRouteHandledRef.current = false;
+    }
   }, [isWalletUnlocked]);
   useEffect(() => {
     const handler = (
@@ -1557,6 +1603,8 @@ function App() {
       sendResponse: (response?: unknown) => void,
     ) => {
       if (message?.type === "walletLockedExternal") {
+        isWalletUnlockedRef.current = false;
+        unlockRouteHandledRef.current = false;
         setIsWalletUnlocked(false);
         setPasswordType(null);
         setView("unlock");
@@ -1895,6 +1943,34 @@ function App() {
     setWalletConnectRetryNotice(null);
   }, []);
 
+  const requestUnlockReturn = useCallback((target: UnlockReturnTarget) => {
+    unlockReturnTargetRef.current = target;
+    isWalletUnlockedRef.current = false;
+    unlockRouteHandledRef.current = false;
+    setIsWalletUnlocked(false);
+    setView("unlock");
+  }, []);
+
+  const handleSettingsSessionExpired = useCallback(
+    (returnTab: SettingsTab = "main") => {
+      setSettingsInitialTab(returnTab);
+      requestUnlockReturn({ view: "settings", tab: returnTab });
+    },
+    [requestUnlockReturn],
+  );
+
+  const handleSettingsAddChainSessionExpired = useCallback(() => {
+    requestUnlockReturn({ view: "settingsAddChain" });
+  }, [requestUnlockReturn]);
+
+  const handleAccountSettingsSessionExpired = useCallback(
+    (returnView: AccountSettingsSubView = "settings") => {
+      setAccountSettingsInitialView(returnView);
+      requestUnlockReturn({ view: "accountSettings", subView: returnView });
+    },
+    [requestUnlockReturn],
+  );
+
   const handleHiddenTokensChanged = useCallback(() => {
     setPortfolioRefreshTrigger((prev) => prev + 1);
     setHoldingsTabTrigger((prev) => prev + 1);
@@ -2154,10 +2230,7 @@ function App() {
                   }
                 }}
                 showBackButton={hasApiKey}
-                onSessionExpired={() => {
-                  setIsWalletUnlocked(false);
-                  setView("unlock");
-                }}
+                onSessionExpired={handleSettingsSessionExpired}
               />
             </Suspense>
           </Container>
@@ -2211,10 +2284,7 @@ function App() {
                     setView("main");
                   }
                 }}
-                onSessionExpired={() => {
-                  setIsWalletUnlocked(false);
-                  setView("unlock");
-                }}
+                onSessionExpired={handleSettingsAddChainSessionExpired}
               />
             </Suspense>
           </Container>
@@ -2241,10 +2311,16 @@ function App() {
               account={settingsAccount}
               onClose={() => {
                 setSettingsAccount(null);
+                setAccountSettingsInitialView("settings");
+                setAccountSettingsApiKeyDraft(null);
                 setView("main");
               }}
               onAccountUpdated={loadAccounts}
               totalAccounts={accounts.length}
+              initialView={accountSettingsInitialView}
+              onSessionExpired={handleAccountSettingsSessionExpired}
+              apiKeyDraft={accountSettingsApiKeyDraft}
+              onApiKeyDraftChange={setAccountSettingsApiKeyDraft}
             />
           </Suspense>
         </Box>
@@ -2503,6 +2579,8 @@ function App() {
               onAccountSelect={handleAccountSwitch}
               onAddAccount={() => setView("addAccount")}
               onAccountSettings={(account) => {
+                setAccountSettingsInitialView("settings");
+                setAccountSettingsApiKeyDraft(null);
                 setSettingsAccount(account);
                 setView("accountSettings");
               }}
@@ -3608,6 +3686,8 @@ function App() {
                 onAccountSelect={handleAccountSwitch}
                 onAddAccount={() => setView("addAccount")}
                 onAccountSettings={(account) => {
+                  setAccountSettingsInitialView("settings");
+                  setAccountSettingsApiKeyDraft(null);
                   setSettingsAccount(account);
                   setView("accountSettings");
                 }}

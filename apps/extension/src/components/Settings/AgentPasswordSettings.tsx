@@ -55,7 +55,11 @@ interface AgentPasswordSettingsProps {
 
 type ViewMode = "status" | "set" | "remove";
 
-function AgentPasswordSettings({ onComplete, onCancel }: AgentPasswordSettingsProps) {
+function AgentPasswordSettings({
+  onComplete,
+  onCancel,
+  onSessionExpired,
+}: AgentPasswordSettingsProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("status");
   const [isAgentEnabled, setIsAgentEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -145,6 +149,10 @@ function AgentPasswordSettings({ onComplete, onCancel }: AgentPasswordSettingsPr
 
       if (!response.success) {
         if (response.error?.includes("Must be unlocked with master password")) {
+          if (onSessionExpired) {
+            onSessionExpired();
+            return;
+          }
           toast({
             title: "Master password required",
             description: "You must be unlocked with master password to set agent password",
