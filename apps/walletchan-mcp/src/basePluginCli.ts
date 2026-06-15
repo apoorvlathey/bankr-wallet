@@ -23,6 +23,35 @@ export interface BasePluginCliRunResult {
   parsed?: unknown;
 }
 
+export interface BasePluginCliCommandInfo {
+  plugin: string;
+  command: string;
+  category: "read" | "write";
+  options: Array<{
+    name: string;
+    required: boolean;
+    kind:
+      | "address"
+      | "amount"
+      | "amount-or-max"
+      | "base-chain-id"
+      | "boolean"
+      | "chain"
+      | "direction"
+      | "fields"
+      | "fraction"
+      | "integer"
+      | "market-id"
+      | "market-sort"
+      | "number"
+      | "pool-type"
+      | "sort"
+      | "symbol"
+      | "token";
+    choices?: readonly string[];
+  }>;
+}
+
 interface CliRunnerConfig {
   enabled: boolean;
   morphoApiUrl?: string;
@@ -428,17 +457,7 @@ export class BasePluginCliRunner {
       throw new Error("Base plugin CLI runner is disabled.");
     }
 
-    const plugin = input.plugin.trim().toLowerCase();
-    const runner = this.runners[plugin];
-    if (!runner) {
-      throw new Error(`Unsupported Base plugin CLI runner: ${input.plugin}`);
-    }
-
-    const command = input.command.trim();
-    const commandSpec = runner.commands[command];
-    if (!commandSpec) {
-      throw new Error(`Unsupported ${plugin} CLI command: ${input.command}`);
-    }
+    const { plugin, runner, command, commandSpec } = this.requireCommand(input.plugin, input.command);
 
     const commandArgs = buildCommandArgs(commandSpec, input.args, runner.argumentStyle);
     const { executable, processArgs } = buildProcessInvocation(runner, command, commandArgs);
@@ -458,6 +477,42 @@ export class BasePluginCliRunner {
       ...(output.stderr ? { stderr: output.stderr } : {}),
       ...(parsed === undefined ? {} : { parsed }),
     };
+  }
+
+  getCommandInfo(pluginName: string, commandName: string): BasePluginCliCommandInfo {
+    const { plugin, command, commandSpec } = this.requireCommand(pluginName, commandName);
+    return {
+      plugin,
+      command,
+      category: commandSpec.category,
+      options: commandSpec.options.map((opt) => ({
+        name: opt.name,
+        required: opt.required === true,
+        kind: opt.kind,
+        choices: opt.choices,
+      })),
+    };
+  }
+
+  private requireCommand(pluginName: string, commandName: string): {
+    plugin: string;
+    runner: RunnerSpec;
+    command: string;
+    commandSpec: CommandSpec;
+  } {
+    const plugin = pluginName.trim().toLowerCase();
+    const runner = this.runners[plugin];
+    if (!runner) {
+      throw new Error(`Unsupported Base plugin CLI runner: ${pluginName}`);
+    }
+
+    const command = commandName.trim();
+    const commandSpec = runner.commands[command];
+    if (!commandSpec) {
+      throw new Error(`Unsupported ${plugin} CLI command: ${commandName}`);
+    }
+
+    return { plugin, runner, command, commandSpec };
   }
 }
 

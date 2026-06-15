@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 
 import { ManagedRpcProcess } from "./managedRpc.js";
+import { AgentWalletStore } from "./agentWallets.js";
+import { AgentDelegationManager } from "./agentDelegation.js";
+import { AgentEoaExecutor } from "./agentEoaExecutor.js";
+import { AgentX402Client } from "./agentX402.js";
 import { BasePluginCliRunner } from "./basePluginCli.js";
 import { parseCli } from "./cli.js";
 import { McpServer } from "./mcpServer.js";
+import { OneShotRelayer } from "./oneShotRelayer.js";
 import { ProtocolRegistry } from "./protocols/registry.js";
 import { RemoteMcpRegistry } from "./remoteMcp.js";
 import { WalletChanRpcClient } from "./rpcClient.js";
@@ -47,6 +52,15 @@ try {
   });
   const walletchanActions = new WalletChanActionBuilder(walletchanApi, rpc);
   const remoteMcp = new RemoteMcpRegistry();
+  const agentWallets = new AgentWalletStore();
+  const agentDelegation = new AgentDelegationManager(agentWallets);
+  const agentEoa = new AgentEoaExecutor(agentWallets, {
+    baseRpcUrl: config.baseRpcUrl,
+  });
+  const agentX402 = new AgentX402Client(agentWallets, {
+    baseRpcUrl: config.baseRpcUrl,
+  });
+  const oneShotRelayer = new OneShotRelayer(agentWallets);
   const protocols = new ProtocolRegistry({
     veil: {
       enabled: config.veilEnabled,
@@ -70,6 +84,11 @@ try {
     walletchanActions,
     remoteMcp,
     protocols,
+    agentWallets,
+    agentDelegation,
+    agentEoa,
+    agentX402,
+    oneShotRelayer,
   );
   let shuttingDown = false;
   const shutdown = (): void => {

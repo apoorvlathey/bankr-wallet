@@ -19,6 +19,26 @@ WalletChan MCP starts a managed local `walletchan-rpc` bridge by default. Before
 
 The user pairs a wallet by scanning the browser QR or pasting the URI in any WalletConnect-capable wallet.
 
+## Execution Profiles
+
+WalletChan MCP supports execution profiles:
+
+- `walletconnect` is the existing approval path through WalletChan RPC, WalletConnect, and the WalletChan popup.
+- `agent:<walletId>` is the delegated local agent-wallet path for ERC-7710/1Shot execution work.
+- `agent-eoa:<walletId>` is the raw local agent EOA path for direct agent-wallet actions.
+
+Use `list_execution_profiles` and `get_default_execution_profile` before choosing an executor for user-controlled flows. If the user says to use their main wallet, use `walletconnect`. If the user says to use the agent wallet, use `agent` or a concrete `agent:<walletId>` profile. If they specifically ask for the raw agent wallet, use `agent-eoa` or `agent-eoa:<walletId>`.
+
+Agent wallet key material and signed delegation payloads are encrypted locally under the WalletChan MCP app-data directory. On first agent wallet create/import, MCP auto-creates a local `vault-secret` file when no advanced env override is configured. Never ask for the vault secret as an MCP tool argument. Current agent-wallet tools return addresses and profile IDs only, never private keys.
+
+If the user intentionally wants to forget old local agent wallets and start fresh, use `agent_reset_vault` with `confirm: true` and `confirmationText: "RESET_AGENT_VAULT"`. This clears local agent-wallet metadata/delegations/defaults without requiring the old vault secret; the next create/import will auto-create a new local `vault-secret`.
+
+For 1Shot delegated execution, call `agent_prepare_delegation` directly; it defaults to `delegateMode: "oneshot-relayer"` and resolves the current 1Shot `targetAddress` automatically. Then call `agent_request_delegation_signature`, wait for WalletChan popup approval, call `agent_complete_delegation`, and set the default profile to `agent:<walletId>` if the user wants agent execution by default. Use `delegateMode: "agent-wallet"` only for delegated x402 endpoints that require the local agent wallet address as the delegate.
+
+If `send_calls`, `send_prepared_calls`, or `agent_oneshot_relay_calls` returns `status: "needs_function_call_delegation"`, do not retry the same transaction or switch vaults. Call `agent_prepare_delegation` with the returned `prepareDelegationArgs`, then request and complete the delegation signature, then retry the original transaction. This happens when the active delegation is a token-transfer scope but the prepared DeFi calls require protocol contract methods.
+
+Use `agent_eoa_get_balance` for raw agent funding checks. Use `agent_eoa_send_transaction` or `agent_eoa_send_calls` only when the user explicitly asks to use the raw agent wallet; these tools sign locally and do not open a WalletChan popup. Sequential raw calls are not atomic.
+
 ## Tool Mapping
 
 When an upstream Base MCP plugin says:
@@ -37,7 +57,15 @@ When an upstream Base MCP plugin says:
 - remote MCP plugin paths such as Virtuals MCP -> use WalletChan MCP `list_remote_mcp_tools`, `call_remote_mcp_tool`, and the remote SIWE login helpers when the protocol profile is allowlisted. If no profile exists, use the harness' configured MCP connector.
 - managed protocol integrations such as Veil MCP -> use WalletChan MCP `list_protocols`, first-class `veil_*` tools, or `call_protocol_tool` for raw allowlisted protocol tools.
 
-Do not use x402 tools or other Base MCP-specific tools unless WalletChan MCP exposes compatible tools for them.
+Use `executionProfile` on mutating tools when the user wants a per-call override. `walletconnect` means the paired WalletChan wallet and popup approval. `agent:<walletId>` means delegated 1Shot execution from an active ERC-7710 delegation. `agent-eoa:<walletId>` means raw local agent EOA signing.
+
+When using `agent:<walletId>` for DeFi prepare flows, the effective protocol user is the delegation's main-wallet `delegator`, not the local agent EOA address. For supported CLI write commands, `run_base_plugin_cli` automatically binds owner-style arguments such as Morpho `user-address` and Aerodrome `wallet` to that delegator before simulation/preparation. Do not manually set those arguments to the agent EOA unless the user explicitly chose `agent-eoa`.
+
+A daily USDC transfer delegation is not enough for DeFi protocol calls. If delegated `agent` submission returns `status: "needs_delegation_signature"`, show the user the WalletChan signature request and, after approval, call `agent_complete_delegation` with the returned `recommendedNextArgs`. That activates the reusable 1Shot function-call delegation and submits the original pending action automatically. Reuse the active function-call delegation for later matching calls; do not request a new delegation unless the targets/selectors are not covered.
+
+Delegated 1Shot submissions estimate before sending. If the result is `status: "estimate_failed"`, stop and report the estimate error; do not retry blindly or switch to `agent-eoa`. The MCP relayer logic updates only the 1Shot fee-collector transfer when `requiredPaymentAmount` changes and adds a tiny fee buffer, so protocol approvals in prepared DeFi bundles must remain intact.
+
+For x402 resources, use `agent_x402_quote` and `agent_x402_pay`. The default `agent:<walletId>` path requires the endpoint to advertise `extra.assetTransferMethod: "erc7710"` and consumes an active delegation to the agent wallet address. Do not use the 1Shot `targetAddress` delegation for x402. If the quote returns `delegatedPaymentSupported: false`, stop and tell the user the endpoint does not support ERC-7710 delegated x402 payment; do not retry with `agent-eoa` unless the user explicitly wants raw agent-wallet USDC payment. Use Veil x402 tools only when the user explicitly wants the private Veil flow.
 
 ## Approval Flow
 

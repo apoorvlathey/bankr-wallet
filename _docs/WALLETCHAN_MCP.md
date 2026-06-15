@@ -11,7 +11,14 @@ The design goal is:
 - replace Base Account approval links with WalletChan popup approvals
 - start and manage `walletchan-rpc` automatically by default
 
-The MCP server never signs directly. It sends JSON-RPC requests to `walletchan-rpc`, which forwards transaction/signature requests to WalletChan over WalletConnect.
+For `walletconnect` profiles, the MCP server never signs directly. It sends JSON-RPC requests to `walletchan-rpc`, which forwards transaction/signature requests to WalletChan over WalletConnect. Local `agent` and `agent-eoa` profiles are different: MCP stores an encrypted agent wallet key, uses it to sign ERC-7710 redelegations or raw agent EOA transactions, and never exposes the private key through tools.
+
+Detailed agent/delegation docs live under `_docs/walletchan-mcp/`:
+
+- `_docs/walletchan-mcp/HACKATHON_NOTES.md`
+- `_docs/walletchan-mcp/AGENT_WALLETS.md`
+- `_docs/walletchan-mcp/X402_DELEGATED_PAYMENTS.md`
+- `_docs/walletchan-mcp/BASE_SKILLS_AND_PROTOCOLS.md`
 
 ## Source Map
 
@@ -24,6 +31,11 @@ The MCP server never signs directly. It sends JSON-RPC requests to `walletchan-r
 | `apps/walletchan-mcp/src/rpcClient.ts` | HTTP JSON-RPC client for `walletchan-rpc` |
 | `apps/walletchan-mcp/src/managedRpc.ts` | Optional child-process manager for `walletchan-rpc` |
 | `apps/walletchan-mcp/src/requestTracker.ts` | Async status tracking for single tx/signature requests |
+| `apps/walletchan-mcp/src/agentWallets.ts` | Local encrypted agent wallet vault and execution-profile state |
+| `apps/walletchan-mcp/src/agentDelegation.ts` | MetaMask Smart Accounts Kit delegation preparation, typed-data payload construction, and signature verification |
+| `apps/walletchan-mcp/src/agentEoaExecutor.ts` | Raw local agent EOA balance reads and direct signing/broadcast helpers |
+| `apps/walletchan-mcp/src/oneShotRelayer.ts` | 1Shot public relayer JSON-RPC adapter for ERC-7710 delegated execution |
+| `apps/walletchan-mcp/src/agentX402.ts` | Agent x402 buyer flow using MetaMask ERC-7710 delegation by default, with explicit raw `agent-eoa` fallback |
 | `apps/walletchan-mcp/src/baseSkills.ts` | WalletChan skill resource and adapted upstream Base skill resources |
 | `apps/walletchan-mcp/src/basePluginCli.ts` | Pinned, allowlisted protocol CLI runners for Base plugin flows |
 | `apps/walletchan-mcp/src/remoteMcp.ts` | Allowlisted remote protocol MCP proxy profiles such as Virtuals ACP |
@@ -79,13 +91,19 @@ The current implementation uses newline-delimited JSON messages over stdio.
 |---|---|
 | `get_pairing_uri` | Starts or inspects managed `walletchan-rpc`; returns WalletConnect URI and local `/qr` QR page when pairing is needed, with an MCP image block containing a QR code for clients that render tool images |
 | `get_wallets` | Ensures RPC is started, reads `/health` and `eth_accounts`, optionally validates a chain |
-| `send_calls` | Builds `wallet_sendCalls` params and submits to `walletchan-rpc`; ERC-5792 wallets receive a native batch, non-batching wallets receive sequential transaction prompts |
-| `send_prepared_calls` | Extracts calls from common Base plugin prepare-response shapes and submits them through the same native-batch or sequential-fallback path |
+| `list_execution_profiles`, `get_default_execution_profile`, `set_default_execution_profile`, `clear_default_execution_profile` | Manage local MCP execution-profile preference. `walletconnect` is the existing WalletChan popup path; `agent:<walletId>` and `agent-eoa:<walletId>` are local agent wallet profiles. |
+| `agent_create_wallet`, `agent_import_wallet`, `agent_list_wallets`, `agent_get_wallet`, `agent_delete_wallet`, `agent_reset_vault` | Manage local encrypted agent wallet metadata and key material. Tools return addresses/profile IDs only, never private keys. `agent_reset_vault` forgets local agent state without decrypting, for explicit fresh-start flows. |
+| `agent_prepare_delegation`, `agent_request_delegation_signature`, `agent_complete_delegation`, `agent_list_delegations`, `agent_get_delegation`, `agent_delete_delegation` | Create and store ERC-7710 delegation sessions. `agent_prepare_delegation` defaults to `delegateMode: "oneshot-relayer"` and resolves the current 1Shot `targetAddress` automatically; use `delegateMode: "agent-wallet"` for delegated x402. Signature requests go through the existing WalletChan typed-data popup; signed delegation payloads are encrypted in the local agent vault. |
+| `agent_oneshot_get_capabilities`, `agent_oneshot_get_fee_data`, `agent_oneshot_relay_calls`, `agent_oneshot_get_status` | 1Shot public relayer integration for ERC-7710 delegated calls. Relay calls automatically prefer an active delegation whose `delegate` matches the relayer `targetAddress`. If the active delegation scope cannot authorize prepared DeFi calls, the relay path returns `needs_function_call_delegation` with `prepareDelegationArgs` for a scoped function-call delegation. Confirmed submissions estimate first, update only the fee transfer when 1Shot returns a different required payment amount, add a tiny fee buffer, and stop with `estimate_failed` instead of submitting when estimation fails. |
+| `agent_x402_quote`, `agent_x402_pay` | x402 resource probe/pay flow. `agent:<walletId>` consumes the main wallet's ERC-7710 delegation when the endpoint advertises `assetTransferMethod: "erc7710"`; `agent-eoa:<walletId>` is the explicit raw agent-wallet fallback. |
+| `agent_eoa_get_balance`, `agent_eoa_send_transaction`, `agent_eoa_send_calls` | Raw local agent EOA balance reads and direct local signing/broadcast. This bypasses WalletChan popup approval and is intended for explicit raw-agent use, funding checks, and fallback/debug paths. |
+| `send_calls` | Routes calls by `executionProfile` or stored default. `walletconnect` submits to `walletchan-rpc`; `agent` submits via 1Shot; `agent-eoa` signs/broadcasts locally. |
+| `send_prepared_calls` | Extracts calls from common Base plugin prepare-response shapes and routes them through the same selected execution profile |
 | `get_portfolio_balances` | Fetches first-party WalletChan portfolio balances for an address or connected account |
 | `get_swap_price` | Fetches an indicative first-party WalletChan swap price |
-| `swap` | Quotes a swap, adds required ERC-20/Permit2 approvals, and submits the batch to `walletchan-rpc` |
+| `swap` | Quotes a swap, adds required ERC-20/Permit2 approvals, and routes the prepared calls through the selected execution profile |
 | `get_bridge_quote` | Fetches a first-party WalletChan bridge quote |
-| `bridge` | Quotes a bridge, builds required approval + bridge calls, and submits the batch to `walletchan-rpc` |
+| `bridge` | Quotes a bridge, builds required approval + bridge calls, and routes the prepared calls through the selected execution profile |
 | `get_bridge_status` | Fetches bridge status by Bungee request hash or source transaction hash |
 | `web_request` | Calls allowlisted HTTPS protocol APIs from the local MCP process |
 | `run_base_plugin_cli` | Runs pinned, allowlisted protocol CLI commands such as Morpho CLI and Aerodrome Sugar SDK |
@@ -104,7 +122,7 @@ The current implementation uses newline-delimited JSON messages over stdio.
 | `sign_siwe` | Validates an EIP-4361 SIWE message, then signs the exact message through WalletChan |
 | `get_request_status` | Reads local async request status or calls `wallet_getCallsStatus` |
 | `sign` | Starts `personal_sign`, `eth_signTypedData_v3`, or `eth_signTypedData_v4` through RPC |
-| `send_transaction` | Starts a single `eth_sendTransaction` through RPC |
+| `send_transaction` | Routes a single transaction through `walletconnect`, `agent`, or `agent-eoa` |
 | `load_base_plugin` | Fetches upstream Base plugin markdown and prepends WalletChan execution rules |
 | `list_skill_resources` | Lists MCP resources exposed by `baseSkills.ts` |
 
@@ -139,7 +157,15 @@ The harness should show `pairingUrl` when present so the user can open a browser
 - approval/action objects such as Uniswap `approval` + `swap`
 - wrapper objects where the plugin payload is nested under `body`
 
-Use `previewOnly: true` to inspect the normalized call list without sending it to WalletChan.
+Use `previewOnly: true` to inspect the normalized call list without sending it.
+
+Mutating tools accept `executionProfile` (or `profileId`) to override the stored default for a single call. `walletconnect` preserves the existing WalletChan popup path. `agent:<walletId>` submits delegated calls through 1Shot with the active delegation for that agent wallet and chain. `agent-eoa:<walletId>` signs locally with the agent wallet private key and broadcasts calls sequentially; this path is not atomic.
+
+For delegated `agent` execution, the protocol account is the delegation `delegator` main wallet, not the local agent EOA address. `run_base_plugin_cli` write commands automatically default or rewrite owner-style arguments such as Morpho `user-address` and Aerodrome `wallet` to that delegator before preparing/simulating calldata. If a delegated-agent prepare command is explicitly pointed at an unrelated address, MCP refuses it because 1Shot cannot spend from that account through the stored delegation. Use `agent-eoa` only when the raw agent wallet itself should be the protocol user and source of funds.
+
+ERC-20 transfer scopes are only sufficient for direct token transfer-style actions. DeFi flows such as Morpho deposits include protocol calls such as token approval and vault deposit, so delegated `agent` submission preflights the prepared call bundle against active 1Shot delegations. If no reusable function-call delegation covers the call targets/selectors, MCP prepares the correct 1Shot relayer delegation, opens the WalletChan signature request, and stores the original action as a short-lived pending action. After approval, `agent_complete_delegation` can submit that pending action automatically.
+
+Before submitting through 1Shot, MCP calls `relayer_estimate7710Transaction`. If the estimate returns a new `requiredPaymentAmount`, MCP rewrites only the ERC-20 `transfer(feeCollector, amount)` execution that pays 1Shot and re-estimates; protocol token calls such as Morpho approvals must be preserved. The rewritten payment uses `requiredPaymentAmount` plus a small buffer so 1-unit relayer-side price drift does not fail the task. If estimation still returns `success: false`, MCP returns `status: "estimate_failed"` and does not call `relayer_send7710Transaction`.
 
 Actual submission is blocked by default when the prepared response contains error-level warnings such as failed simulation or insufficient balance. Callers can pass `allowWarnings: true`, but only after the user explicitly asks to continue despite the warning.
 
@@ -152,6 +178,27 @@ When `atomicRequired` is omitted, MCP submits batches with the Base-like atomic 
 `swap` resolves token symbols from the WalletChan swap token list when possible, fetches both the indicative price and firm quote, checks current ERC-20 and Permit2 allowance through `walletchan-rpc` `eth_call`, and adds only the approval calls still needed. It then submits the approval + swap batch through the same `send_calls` approval path. `previewOnly: true` or `submit: false` returns the quote and prepared calls without opening WalletChan.
 
 `bridge` resolves token symbols from WalletChan/Bungee token lists, fetches a fresh quote, prefers Bungee manual routes, calls `build-tx` when needed, checks ERC-20 allowance, and submits approval + bridge as a WalletChan batch. Auto routes with executable `txData` are supported. Auto routes that require a Permit2 typed-data submit path are intentionally not submitted by this high-level tool yet; use protocol-specific handling plus WalletChan `sign` if that path becomes necessary.
+
+### Agent Wallet Profiles
+
+WalletChan MCP has an execution-profile registry so mutating tools can choose between the paired WalletChan wallet and locally managed agent wallets without extension changes:
+
+- `walletconnect` — existing path through `walletchan-rpc`, WalletConnect, and the WalletChan popup.
+- `agent:<walletId>` — delegated agent path for ERC-7710/1Shot execution and delegated x402 payment.
+- `agent-eoa:<walletId>` — raw local agent EOA path for direct agent-wallet interactions.
+
+Agent wallets are stored under the WalletChan MCP app-data root in `agent-wallets`. Private keys and signed delegation payloads are encrypted in `agent-wallets.json` with AES-256-GCM and PBKDF2-SHA256. On first agent-wallet create/import, MCP automatically creates a local `vault-secret` file in the agent-wallet directory; `WALLETCHAN_MCP_AGENT_VAULT_SECRET` and `WALLETCHAN_MCP_AGENT_VAULT_SECRET_FILE` are advanced overrides for migration/recovery. MCP tool arguments never accept the vault secret and no tool returns private keys.
+
+The two delegated targets are intentionally different:
+
+| Use | Delegation `delegate` |
+|---|---|
+| 1Shot relayed DeFi execution | 1Shot `targetAddress` from `agent_oneshot_get_capabilities` |
+| x402 delegated payment | agent wallet address |
+
+The `agent` profile never falls back to raw agent-wallet payment for x402. If an endpoint does not advertise `extra.assetTransferMethod: "erc7710"`, `agent_x402_quote` reports `delegatedPaymentSupported: false` and `agent_x402_pay` rejects instead of spending the agent EOA's USDC. Use an ERC-7710 x402 server or a future WalletChan-owned x402 endpoint documented in `_docs/walletchan-mcp/X402_DELEGATED_PAYMENTS.md`.
+
+See `_docs/walletchan-mcp/AGENT_WALLETS.md` for storage, secret generation, profile resolution, and delegation lifecycle details.
 
 ### SIWE and Remote MCP Login
 
@@ -207,97 +254,15 @@ The QR image block is emitted before the text fallback so clients that show the 
 
 ## Base Skill Adaptation
 
-`baseSkills.ts` exposes resources under WalletChan URIs:
+`baseSkills.ts` exposes WalletChan-adapted Base MCP plugin resources, including Morpho, Moonwell, Uniswap, Avantis, Aerodrome, Virtuals, Bankr, and Base MCP references. The adapter keeps upstream markdown close to Base while prepending WalletChan-specific execution rules: use `get_pairing_uri` for pairing, map Base wallet tools to WalletChan tools, prefer `send_prepared_calls`, use allowlisted web/CLI/remote MCP helpers, expect WalletChan popup approval, and use `agent_x402_quote` / `agent_x402_pay` only for ERC-7710 x402 resources.
 
-- `walletchan://skill/SKILL.md`
-- `walletchan://base-mcp/plugins/morpho.md`
-- `walletchan://base-mcp/plugins/moonwell.md`
-- `walletchan://base-mcp/plugins/uniswap.md`
-- `walletchan://base-mcp/plugins/avantis.md`
-- `walletchan://base-mcp/plugins/aerodrome.md`
-- `walletchan://base-mcp/plugins/virtuals.md`
-- `walletchan://base-mcp/plugins/bankr.md`
-- `walletchan://base-mcp/references/batch-calls.md`
-- `walletchan://base-mcp/references/approval-mode.md`
-- `walletchan://base-mcp/references/custom-plugins.md`
-
-Plugin and reference resources are fetched from:
-
-```text
-https://raw.githubusercontent.com/base/skills/refs/heads/master/skills/base-mcp
-```
-
-Before returning upstream markdown, MCP prepends a WalletChan override that tells the agent:
-
-- use WalletChan MCP `get_pairing_uri` if the wallet is not paired
-- map Base MCP `get_wallets`, `send_calls`, `get_request_status`, and `sign` to WalletChan MCP tools with the same names
-- prefer `send_prepared_calls` for prepare responses instead of making the agent manually map calldata
-- use WalletChan MCP `web_request` for external API or `web_request` plugin paths when the target host is allowlisted
-- use WalletChan MCP `run_base_plugin_cli` for CLI-capable plugin paths when `list_base_plugin_runners` shows a supported runner
-- use WalletChan MCP `swap` for Base MCP `swap`-style paths
-- use WalletChan MCP portfolio/bridge tools for portfolio and bridge requests
-- use WalletChan MCP remote MCP tools for allowlisted profiles such as Virtuals
-- use harness-configured protocol MCP connectors for remote MCP plugin paths when no allowlisted WalletChan profile exists
-- expect approval in the WalletChan popup
-- do not use Base Account approval URLs
-- skip unsupported Base MCP tools such as x402
-
-This keeps the skill text close to upstream Base while changing only the execution layer.
-
-The scalable compatibility model is pattern-based:
-
-- supported CLI plugins: `run_base_plugin_cli` -> `send_prepared_calls`; current defaults cover Morpho and Aerodrome
-- Base MCP swap-style flows: `swap` via WalletChan's first-party swap API
-- HTTP tx-builder plugins: `web_request` for allowlisted hosts -> `send_prepared_calls`; current defaults cover Moonwell, Uniswap, Avantis, Bankr discovery, and Morpho API hosts
-- allowlisted remote MCP plugins: `list_remote_mcp_tools` / `call_remote_mcp_tool`; SIWE login uses `start_remote_mcp_siwe_login` -> WalletChan popup -> `complete_remote_mcp_siwe_login`
-- other remote MCP plugins: harness protocol MCP connector -> WalletChan MCP wallet tools
-- already-normalized calldata: `send_calls`
-- signature/session plugins: `sign_siwe` or `sign` + `get_request_status`
-- managed protocol integrations: `src/protocols/<protocol>` + optional first-class wrappers; current initial profile is Veil MCP
-
-Adding a new Base skill should not require arbitrary third-party execution code in WalletChan MCP. Future HTTP-only skills can usually work by adding allowlisted hosts with `WALLETCHAN_MCP_WEB_HOSTS` / `--allow-web-host`. Future CLI-only skills need a small pinned runner profile or a separate protocol MCP. Otherwise the harness should run protocol-specific CLIs or call protocol-specific MCP servers, and WalletChan MCP should handle wallet state, signatures, and transaction approval.
+Detailed Base skill, CLI runner, remote MCP, and protocol-expansion guidance lives in `_docs/walletchan-mcp/BASE_SKILLS_AND_PROTOCOLS.md`.
 
 ## Managed Protocol Integrations
 
-Runtime protocol integrations live under `apps/walletchan-mcp/src/protocols`, while agent-readable markdown lives under `apps/walletchan-mcp/skills`.
+Runtime protocol integrations live under `apps/walletchan-mcp/src/protocols`, while agent-readable markdown lives under `apps/walletchan-mcp/skills`. The first managed protocol profile is Veil MCP. It runs in a controlled working directory, inherits WalletChan MCP's Base RPC configuration, and gates private relay-backed actions behind explicit env configuration.
 
-Use `src/protocols/<protocol>` for protocol-specific execution code, regardless of whether that protocol uses a local MCP child, a pinned CLI, an HTTP API, or a future SDK adapter. Keep `tools.ts` as a thin public MCP surface that delegates into protocol modules.
-
-The first managed protocol profile is Veil:
-
-- WalletChan MCP starts Veil MCP as a long-lived stdio child on first Veil call.
-- The default invocation is `npx -y --ignore-scripts --no-audit --no-fund @veil-cash/mcp@0.2.1`; users can set `WALLETCHAN_MCP_VEIL_COMMAND=veil-mcp` after a global install for faster startup.
-- Veil's cwd is controlled by WalletChan MCP so `.env.veil` and `.veil-x402-receipts.json` are written under the managed Veil data directory, not an arbitrary MCP client cwd.
-- The default Veil data root is OS app-data (`~/Library/Application Support/WalletChan MCP/veil` on macOS, `%APPDATA%/WalletChan MCP/veil` on Windows, `$XDG_DATA_HOME/walletchan-mcp/veil` or `~/.local/share/walletchan-mcp/veil` on Linux). `WALLETCHAN_MCP_VEIL_DIR` overrides the exact Veil working directory. `WALLETCHAN_MCP_DATA_DIR` overrides the shared WalletChan MCP data root.
-- WalletChan MCP always passes a Base `RPC_URL` to Veil. Veil inherits from WalletChan MCP's global Base RPC resolution: `--rpc base=<url>` or `WALLETCHAN_MCP_RPC_OVERRIDES=base=<url>`, otherwise WalletChan's Base default `https://base.drpc.org`. There is no Veil-specific Base RPC option. This avoids Veil falling back to rate-limited public Base RPC endpoints while keeping protocol integrations aligned with WalletChan's chain configuration.
-- Veil public actions return `{ chain: "base", calls: [...] }`, which `send_prepared_calls` already accepts. `veil_prepare_register` and `veil_prepare_deposit` expose `submitPreparedCalls: true` as the convenience path.
-- `veil_prepare_deposit` validates current Veil minimum net deposit amounts before preparing calldata: `0.01 ETH` and `20 USDC`. This blocks requests that would revert with `MinimumDepositNotMet` before opening WalletChan.
-- Veil x402 payment is visible in the tool catalog. Call `veil_x402_quote` first to confirm the resource is x402 v2 exact Base USDC and below the requested cap. After explicit user approval, call `veil_pay_x402` with the same request fields, `maxPayment`, and `confirm: true`.
-- WalletChan MCP normalizes Veil x402 HTTP methods before forwarding to Veil MCP: lowercase or padded `method` values are uppercased, and a present non-null `body` implies `POST` when `method` is omitted. A non-POST body is rejected at the WalletChan boundary with a clear error.
-- WalletChan MCP preflights Veil relay withdrawal minimums before calling private relay tools. `veil_withdraw` requires at least `0.001 ETH` or `0.01 USDC`. `veil_pay_x402` quotes first and blocks supported x402 payments below the Veil USDC relay withdrawal minimum of `0.01 USDC`, preventing wasted payer discovery/funding attempts.
-- WalletChan MCP normalizes Veil relay gas-cap failures. If the hosted Veil relay returns `Gas price too high, try again later`, the wrapper reports that the private withdrawal was refused because Base gas is above the Veil relay cap. This is independent of WalletChan's configured Base RPC URL, and WalletChan MCP cannot raise the hosted relay cap. x402 agents should check payer balances once, reuse a funded `payerIndex` only when it can cover the payment, otherwise wait before retrying.
-- Broader Veil private relay actions (`veil_withdraw`, `veil_transfer`, `veil_consolidate_utxos`) are blocked unless `WALLETCHAN_MCP_VEIL_PRIVATE_ACTIONS=true`, because they submit through the Veil relay without WalletChan popup approval.
-
-### Expanding Base Skill Support
-
-Use this checklist when Base adds a new skill or an existing skill changes its execution path:
-
-1. Load the upstream plugin first with `load_base_plugin` using the Base plugin slug. `load_base_plugin` accepts any safe lowercase slug matching `^[a-z0-9-]+$`, so new upstream markdown can be tested without a code change if the file exists under Base's `skills/base-mcp/plugins/` directory.
-2. Classify the plugin's action path:
-   - Wallet-only: if it already produces `calls[]`, `transactions[]`, approval/action objects, or `{ data: { to, value, data } }`, route it through `send_prepared_calls`.
-   - HTTP/API: if it asks for a `web_request` or direct protocol API call, prefer WalletChan MCP `web_request`, then pass the complete prepare response to `send_prepared_calls`.
-   - CLI: if it asks for `npx`, `uvx`, or another CLI, use `run_base_plugin_cli` only when `list_base_plugin_runners` exposes a pinned runner for that plugin and command.
-   - Remote MCP: if it matches an allowlisted profile, use `list_remote_mcp_tools` / `call_remote_mcp_tool`; if the profile has SIWE login, use `start_remote_mcp_siwe_login` and `complete_remote_mcp_siwe_login`. Otherwise configure that MCP in the harness and use WalletChan MCP only for wallet state, signatures, and final transaction approval.
-   - Base swap/tool path: if it requires Base MCP `swap`, use WalletChan MCP `swap`.
-   - Unsupported Base MCP tool: if it requires Base MCP-only tools such as x402, skip that flow until WalletChan MCP exposes an equivalent.
-3. For a new HTTP/API plugin, add only the minimal official hosts needed for prepare/discovery calls. Prefer deployment config first with `WALLETCHAN_MCP_WEB_HOSTS` / `--allow-web-host`. Add hosts to `DEFAULT_WEB_REQUEST_HOSTS` only when the skill should work out of the box for all local WalletChan MCP users.
-4. For a new CLI plugin, add a runner profile in `basePluginCli.ts` instead of allowing arbitrary shell execution. Pin the package or git ref, define explicit commands/options, validate every argument type, use `spawn` with `shell: false`, and set any required official endpoint/RPC env vars in `defaultEnv`.
-5. If a CLI prepare command returns a new response shape, extend `preparedCalls.ts` so `send_prepared_calls` can normalize it. Keep the normalization shape-based and generic when possible, rather than protocol-specific.
-6. For a new remote MCP plugin that should work without user-side connector setup, add a small allowlisted profile in `remoteMcp.ts`. Prefer generic profile metadata and only special-case login orchestration when the remote MCP requires exact SIWE challenge preservation.
-7. Update `apps/walletchan-mcp/SKILL.md`, `apps/walletchan-mcp/README.md`, and this doc with the new host/runner/env behavior. If new env vars are added, update `apps/walletchan-mcp/.env.example`. If `walletchan-rpc` default upstream RPCs change, update `apps/walletchan-mcp/src/walletchanRpcDefaults.ts` so MCP web/CLI host allowlists remain aligned.
-8. Smoke test the safest read-only path first, then a `previewOnly: true` prepare path, then an actual WalletChan approval path if the change touches transaction submission or signing.
-
-Do not add a generic "run whatever the skill says" shell/web escape hatch. That would make future skills feel automatic, but it would also let upstream markdown expand local execution privileges without a code review.
+Detailed managed protocol behavior and the checklist for expanding Base skill support live in `_docs/walletchan-mcp/BASE_SKILLS_AND_PROTOCOLS.md`.
 
 ## Third-Party Boundary
 
@@ -345,6 +310,10 @@ Pairing QR display depends on the client. MCP image content is part of the proto
 | `WALLETCHAN_MCP_MORPHO_API_URL` | Optional Morpho API URL override, restricted to official Morpho API hosts |
 | `WALLETCHAN_MCP_AERODROME_RPC_URL` | Optional Base RPC URL for Aerodrome Sugar SDK runner, default `https://base.drpc.org` |
 | `WALLETCHAN_MCP_DATA_DIR` | Optional shared app-data root for managed protocol state |
+| `WALLETCHAN_MCP_AGENT_WALLET_DIR` | Optional exact directory for local agent wallet metadata/key vault; defaults to the WalletChan MCP app-data root under `agent-wallets` |
+| `WALLETCHAN_MCP_AGENT_VAULT_SECRET` | Optional advanced override secret for local agent wallet encryption; normally MCP uses the auto-created `vault-secret` file |
+| `WALLETCHAN_MCP_AGENT_VAULT_SECRET_FILE` | Optional advanced override file containing the agent vault secret |
+| `WALLETCHAN_MCP_ONESHOT_RELAYER_URL` | Optional 1Shot public relayer JSON-RPC endpoint override, default `https://relayer.1shotapi.com/relayers` |
 | `WALLETCHAN_MCP_VEIL` | Set to `false` to disable managed Veil MCP tools |
 | `WALLETCHAN_MCP_VEIL_PRIVATE_ACTIONS` | Set to `true` to enable Veil relay-backed private tools |
 | `WALLETCHAN_MCP_VEIL_DIR` | Exact working directory for Veil `.env.veil` and receipts |
@@ -356,6 +325,8 @@ Pairing QR display depends on the client. MCP image content is part of the proto
 | `WALLETCHAN_MCP_VEIL_CALL_TIMEOUT_MS` | Veil MCP call timeout, default `120000` |
 
 Keep `apps/walletchan-mcp/.env.example` in sync when adding env vars.
+
+For agent vault secret generation and storage guidance, see `_docs/walletchan-mcp/AGENT_WALLETS.md`.
 
 ## NPM Publishing
 
@@ -399,6 +370,8 @@ For MCP-only changes:
 14. Call `list_protocols` and verify the Veil profile reports its managed data directory.
 15. With `WALLETCHAN_MCP_VEIL_COMMAND=veil-mcp` or the default npx path, call `veil_status` and verify it does not write `.env.veil` into the repo.
 16. Call `veil_prepare_deposit` with `submitPreparedCalls: false` or omitted to verify the prepare payload shape and the `walletchanPreflight.veilDeposit` result before testing WalletChan approval.
+17. For agent-wallet changes, use a temporary `WALLETCHAN_MCP_AGENT_WALLET_DIR`, then smoke `agent_create_wallet`, `list_execution_profiles`, `agent_delete_wallet`, and `agent_reset_vault`. Verify a `vault-secret` file is auto-created in the temp directory and reset works without the old secret.
+18. For delegated x402 changes, call `agent_x402_quote` against both an ERC-7710-supporting test endpoint and a non-ERC-7710 x402 endpoint. Verify the latter returns `delegatedPaymentSupported: false` or rejects without falling back to `agent-eoa`.
 
 If a change touches transaction or signature behavior through RPC, also test the WalletChan approval path across all WalletChan account types:
 

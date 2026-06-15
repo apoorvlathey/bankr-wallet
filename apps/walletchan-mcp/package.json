@@ -26,9 +26,14 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
+    "@metamask/smart-accounts-kit": "^1.6.0",
+    "@metamask/x402": "^0.2.0",
     "@morpho-org/cli": "0.2.0",
     "@walletchan/rpc": "workspace:^0.2.0",
-    "qrcode": "1.5.3"
+    "@x402/evm": "^2.15.0",
+    "@x402/fetch": "^2.15.0",
+    "qrcode": "1.5.3",
+    "viem": "^2.30.4"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

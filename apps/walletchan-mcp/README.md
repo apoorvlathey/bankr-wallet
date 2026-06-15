@@ -1,10 +1,10 @@
 # WalletChan MCP
 
-Connect AI agents to your existing WalletChan local accounts, with every transaction approved by you. Works with Claude, Cursor, Codex, and other local MCP clients.
+Connect AI agents to WalletChan accounts with popup approval by default, plus scoped delegated execution when you opt in. Works with Claude, Cursor, Codex, and other local MCP clients.
 
-WalletChan MCP is a local Model Context Protocol server that lets an AI assistant prepare wallet actions and route them to your WalletChan extension for approval. It is designed for the same kind of chat-based onchain workflow as Base MCP, but approvals happen in WalletChan through WalletConnect instead of Base Account.
+WalletChan MCP is a local Model Context Protocol server that lets an AI assistant prepare wallet actions, route normal requests to your WalletChan extension for approval, and execute pre-authorized agent flows through signed ERC-7710 delegations. It is designed for the same kind of chat-based onchain workflow as Base MCP, but the normal approval path happens in WalletChan through WalletConnect instead of Base Account.
 
-Nothing moves onchain just because the assistant suggests it. Transactions and signatures still require you to review and approve them in the WalletChan popup.
+For the normal `walletconnect` execution profile, nothing moves onchain just because the assistant suggests it: transactions and signatures still require you to review and approve them in the WalletChan popup. For delegated `agent` profiles, you approve a scoped ERC-7710 delegation once, then the local agent can execute only in-scope transactions through that delegation.
 
 ## What You Can Do
 
@@ -12,24 +12,27 @@ Nothing moves onchain just because the assistant suggests it. Transactions and s
 - Check connected wallets and portfolio balances.
 - Swap and bridge tokens using WalletChan's first-party APIs.
 - Send transactions, ERC-5792 batch calls, sequential fallback call sets, and sign messages.
-- Use Base MCP-style DeFi skills when a protocol skill can produce wallet calls for WalletChan approval.
+- Create local encrypted agent wallets and choose an execution profile for future delegated/relayed execution while keeping the existing WalletConnect approval path available.
+- Delegate scoped permissions from your main WalletChan wallet to 1Shot so an agent can relay in-scope DeFi transactions without a WalletChan popup every time.
+- Use one-time WalletChan signature approvals for reusable function-call delegations, so matching contract calls can be consumed later by the agent until the signed scope no longer covers the request.
+- Use Base MCP-style DeFi skills when a protocol skill can produce wallet calls for WalletChan approval or delegated agent execution.
 - Use Veil Cash on Base through a managed Veil MCP child process, with register/deposit calldata approved by WalletChan.
 
-| Skill | What It Supports |
-| --- | --- |
-| Morpho | Vault discovery and prepared supply/deposit flows. |
-| Moonwell | Lending market discovery and prepared supply/borrow flows. |
-| Aerodrome | Pool discovery, swap/liquidity preparation through supported CLI flows. |
-| Uniswap | Pool and liquidity workflows when the skill returns executable calls. |
-| Avantis | Perps market actions when the skill returns executable calls. |
-| Bankr | Token discovery and supported token actions. |
-| Virtuals | Agent/token discovery and SIWE login with WalletChan signature approval. |
-| Veil | Local key setup, status/balances, register/deposit preparation, and WalletChan-approved public deposits. |
+| Skill     | What It Supports                                                                                         |
+| --------- | -------------------------------------------------------------------------------------------------------- |
+| Morpho    | Vault discovery and prepared supply/deposit flows.                                                       |
+| Moonwell  | Lending market discovery and prepared supply/borrow flows.                                               |
+| Aerodrome | Pool discovery, swap/liquidity preparation through supported CLI flows.                                  |
+| Uniswap   | Pool and liquidity workflows when the skill returns executable calls.                                    |
+| Avantis   | Perps market actions when the skill returns executable calls.                                            |
+| Bankr     | Token discovery and supported token actions.                                                             |
+| Virtuals  | Agent/token discovery and SIWE login with WalletChan signature approval.                                 |
+| Veil      | Local key setup, status/balances, register/deposit preparation, and WalletChan-approved public deposits. |
 
 ## Requirements
 
 - Node.js 18 or newer.
-- WalletChan browser extension installed and unlocked.
+- WalletChan browser extension or any other wallet supporting WalletConnect installed.
 - An MCP client that supports local stdio MCP servers, such as Claude Desktop, Claude Code, Cursor, or Codex.
 
 WalletChan MCP starts a local `walletchan-rpc` bridge for you. You do not need to run a separate RPC process in normal use.
@@ -176,7 +179,104 @@ Find USDC vault options on Morpho Base, then prepare a 1 USDC deposit into the v
 Sign in to Virtuals with my WalletChan wallet.
 ```
 
-For transactions and signatures, the assistant prepares the request and WalletChan opens a popup. Review the details there and approve or reject.
+For transactions and signatures, the assistant prepares the request and WalletChan opens a popup when the execution profile is `walletconnect`. Agent profiles use a local agent key plus signed delegations, so in-scope transactions do not open a popup each time.
+
+### Agent Wallets, Delegations, and 1Shot
+
+WalletChan MCP supports three execution profiles:
+
+| Profile                | What happens                                                                                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `walletconnect`        | Uses the paired WalletChan wallet and opens WalletChan popup approval for transactions/signatures.                                                           |
+| `agent:<walletId>`     | Uses a local encrypted agent wallet plus signed ERC-7710 delegations from the main wallet, then submits matching calls through the 1Shot relayer.            |
+| `agent-eoa:<walletId>` | Signs directly with the raw local agent EOA and broadcasts sequential calls. This bypasses WalletChan popup approval and is only for explicit raw-agent use. |
+
+The delegated `agent` flow does not fund the local agent EOA for normal DeFi actions. The main WalletChan wallet remains the delegator/source account. The agent wallet signs and submits the redelegated permission context, while 1Shot relays the transaction. That is why an unfunded agent EOA can still execute a delegated Morpho deposit from the main wallet when the signed delegation covers the prepared calls.
+
+Create or import an agent wallet:
+
+```text
+agent_create_wallet({ label: "Hackathon Agent" })
+```
+
+or:
+
+```text
+agent_import_wallet({ privateKey: "0x...", label: "Hackathon Agent" })
+```
+
+No env setup is required for the normal path. MCP creates a local `vault-secret` file automatically on first use; private keys and signed delegation payloads are encrypted locally and never returned by tools.
+
+Inspect and choose execution profiles:
+
+```text
+list_execution_profiles()
+set_default_execution_profile({ profileId: "agent:<walletId>" })
+get_default_execution_profile()
+clear_default_execution_profile()
+```
+
+Setting the default to `agent:<walletId>` makes mutating tools try delegated 1Shot execution by default. Use a per-call `executionProfile: "walletconnect"` override when the user wants the normal WalletChan popup path for a specific transaction. Use `agent-eoa:<walletId>` only when the user explicitly wants the raw local agent wallet to spend directly.
+
+For 1Shot delegated DeFi execution, the delegation target must be the 1Shot relayer `targetAddress`. `agent_prepare_delegation` defaults to `delegateMode: "oneshot-relayer"` and resolves the current target automatically:
+
+```text
+agent_prepare_delegation({
+  walletId: "<walletId>",
+  chain: 8453,
+  amount: "10",
+  label: "Base agent allowance"
+})
+agent_request_delegation_signature({ delegationId: "<delegationId>" })
+```
+
+After the WalletChan popup is approved:
+
+```text
+agent_complete_delegation({ delegationId: "<delegationId>" })
+set_default_execution_profile({ profileId: "agent:<walletId>" })
+```
+
+That first delegation can cover direct token-transfer-style actions, depending on its scope. DeFi protocols usually need more than a token transfer. For example, a Morpho USDC vault deposit may require a USDC approval call and a vault deposit call, so a simple daily USDC transfer scope is not enough.
+
+When a prepared DeFi transaction needs protocol contract calls outside the active delegation, MCP preflights the call bundle and returns a structured request such as `needs_function_call_delegation` / `needs_delegation_signature`. The response includes `prepareDelegationArgs` and often `recommendedNextArgs`. The assistant should use those arguments exactly:
+
+```text
+agent_prepare_delegation({ ...prepareDelegationArgs })
+agent_request_delegation_signature({ delegationId: "<delegationId>" })
+```
+
+After the user approves the one-time WalletChan signature request:
+
+```text
+agent_complete_delegation({ ...recommendedNextArgs })
+```
+
+This stores a reusable function-call delegation scoped to the prepared targets/selectors, such as USDC `approve` plus a Morpho vault `deposit` selector. Future matching calls can be consumed by the agent without new WalletChan popups until the signed scope, expiry, or configured limits no longer cover the request. If a future transaction targets a different contract or selector, MCP asks for a new scoped delegation instead of silently broadening authority.
+
+Once the `agent` profile is active, these tools can route through the selected profile unless an `executionProfile` override is passed:
+
+- `send_calls`
+- `send_prepared_calls`
+- `send_transaction`
+- `swap`
+- `bridge`
+- `run_base_plugin_cli({ submitPreparedCalls: true })`
+
+For Base DeFi skill flows, `run_base_plugin_cli` and `send_prepared_calls` treat the delegation `delegator` as the protocol user. Supported CLI write commands automatically bind owner-style arguments such as Morpho `user-address` and Aerodrome `wallet` to the main delegator address, not the local agent EOA. This prevents false insufficient-balance simulations against an unfunded agent wallet.
+
+Confirmed 1Shot submissions always estimate before sending. When 1Shot returns a higher `requiredPaymentAmount`, MCP updates only the ERC-20 `transfer` to the 1Shot fee collector, adds a tiny fee buffer, and re-estimates, preserving protocol approvals/deposits in the bundle. If estimation still fails, MCP returns `status: "estimate_failed"` and does not submit a relayer task.
+
+Use these 1Shot tools directly when debugging or building a custom flow:
+
+- `agent_oneshot_get_capabilities`
+- `agent_oneshot_get_fee_data`
+- `agent_oneshot_relay_calls`
+- `agent_oneshot_get_status`
+
+For x402 hackathon resources, use `agent_x402_quote` and `agent_x402_pay`. The default `agent:<walletId>` path pays through the main wallet's ERC-7710 delegation only when the endpoint advertises `extra.assetTransferMethod: "erc7710"`. x402 requires a separate delegation with `delegateMode: "agent-wallet"` because x402 delegated payment targets the local agent wallet address, not the 1Shot relayer target. Use `agent-eoa:<walletId>` only when the user explicitly wants raw agent-wallet USDC payment.
+
+If `agent_x402_quote` returns `delegatedPaymentSupported: false`, the endpoint cannot be paid through the delegated agent path directly. Do not retry with `agent-eoa` unless you explicitly want to spend the agent wallet's own USDC. For future demos, prefer a WalletChan-owned x402 endpoint that advertises ERC-7710 delegated payment directly.
 
 ## How Base MCP-Style Skills Work
 
@@ -293,11 +393,44 @@ Add an extra allowlisted HTTPS host for protocol data:
 walletchan-mcp --allow-web-host api.example.org
 ```
 
+### Agent Wallet Storage and Recovery
+
+WalletChan MCP can create or import local agent wallets for delegated agent execution work. Agent wallet metadata, private keys, and signed delegation payloads are stored encrypted locally.
+
+No env setup is required for the normal path. On first agent wallet create/import, MCP generates a random `vault-secret` file under the agent-wallet data directory, locks it down with best-effort `0600` permissions, and uses it to encrypt the local key vault. `WALLETCHAN_MCP_AGENT_VAULT_SECRET` and `WALLETCHAN_MCP_AGENT_VAULT_SECRET_FILE` remain advanced overrides for migration/recovery.
+
+Agent wallets are stored under the WalletChan MCP app-data root in an `agent-wallets` directory by default. Override the exact directory with `WALLETCHAN_MCP_AGENT_WALLET_DIR`.
+
+To intentionally forget all local agent wallets/delegations and start fresh, call:
+
+```text
+agent_reset_vault({ confirm: true, confirmationText: "RESET_AGENT_VAULT" })
+```
+
+This does not require the old vault secret. The next `agent_create_wallet` or `agent_import_wallet` call creates a new local `vault-secret` file automatically.
+
+If an old `agent-wallets.json` exists but the matching vault secret is unavailable, MCP may still list the public wallet metadata. Those agent profiles are marked `locked`, and the effective default falls back to `walletconnect` until you restore the old secret or run `agent_reset_vault`.
+
+Raw agent EOA helpers:
+
+```text
+Show the Base USDC balance for my raw agent wallet.
+```
+
+```text
+Use the raw agent wallet to send this prepared transaction.
+```
+
+The raw `agent-eoa` path signs locally and broadcasts directly to the configured chain RPC. It does not open a WalletChan popup, and sequential raw calls are not atomic. Use the `walletconnect` profile whenever the user wants their main WalletChan wallet approval flow.
+
 ## Security Model
 
-- WalletChan MCP never receives your private keys or seed phrase.
-- WalletChan MCP does not approve transactions by itself.
-- Transaction and signature approval happens in the WalletChan extension.
+- WalletChan MCP never receives your main WalletChan private keys or seed phrase. Local agent wallet keys are created or imported into MCP only when you use agent-wallet tools.
+- The `walletconnect` profile does not approve transactions by itself. Transaction and signature approval happens in the WalletChan extension.
+- The delegated `agent` profile can execute without a per-transaction popup only after the main WalletChan wallet signs an ERC-7710 delegation. Execution remains bounded by the signed delegation scope, target, selectors, expiry, and configured limits.
+- Signed delegation payloads are stored encrypted because they authorize future in-scope execution.
+- Local agent wallet private keys are encrypted on disk with AES-256-GCM and PBKDF2-SHA256 using the local `vault-secret` file or an advanced env override; no MCP tool returns private keys.
+- Raw `agent-eoa` tools sign locally and broadcast directly from the agent wallet. They must only be used when the user explicitly chooses the raw agent wallet.
 - Protocol helpers are allowlisted and constrained.
 - CLI helpers use pinned packages, structured arguments, no shell execution, timeouts, and output caps.
 - `web_request` only supports allowlisted HTTPS hosts.
@@ -305,10 +438,16 @@ walletchan-mcp --allow-web-host api.example.org
 - Managed protocol integrations run in controlled working directories. Veil `.env.veil` stays in the managed Veil directory unless you override it.
 - Veil x402 relay payment requires a quoted cap and explicit confirmation; broader Veil private relay actions are disabled by default because they do not use WalletChan popup approval.
 
-The approval path is:
+The normal WalletConnect approval path is:
 
 ```text
 AI assistant -> WalletChan MCP -> local walletchan-rpc -> WalletConnect -> WalletChan popup -> user approval
+```
+
+The delegated agent execution path is:
+
+```text
+AI assistant -> WalletChan MCP agent profile -> signed ERC-7710 delegation -> 1Shot relayer -> in-scope onchain execution
 ```
 
 ## Troubleshooting
@@ -330,6 +469,14 @@ For a scannable QR that does not depend on chat image rendering, open the `pairi
 ### A transaction tool says `needs_pairing`
 
 The WalletConnect session was closed or expired. Pair again with the URI returned by the tool. For prepared DeFi transactions, ask the assistant to prepare a fresh transaction before resubmitting.
+
+### An old agent wallet still appears
+
+Agent wallet public metadata is stored in `agent-wallets.json`, so it may still be listed after removing an old vault secret. If the matching secret is unavailable, the profile is marked `locked` and does not remain the effective default. To intentionally forget local agent wallets/delegations and start fresh, call:
+
+```text
+agent_reset_vault({ confirm: true, confirmationText: "RESET_AGENT_VAULT" })
+```
 
 ### A protocol skill cannot fetch data
 
