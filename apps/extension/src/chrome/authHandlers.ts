@@ -4,6 +4,7 @@
  */
 
 import {
+  encrypt,
   loadDecryptedApiKey,
   hasEncryptedApiKey,
   generateVaultKey,
@@ -16,7 +17,7 @@ import {
 } from "./crypto";
 import {
   decryptAllKeys,
-  reEncryptVault,
+  computeReEncryptedVault,
   hasVaultEntries,
   loadVault,
   isVaultKeyEncrypted,
@@ -630,11 +631,11 @@ export async function handleChangePasswordWithCachedPassword(
         return { success: false, error: "Password change verification failed; rotation aborted" };
       }
     } else {
-      // Legacy system: re-encrypt data directly with new password.
-      // NOTE: H-7 round-trip verify is not retrofitted on this branch
-      // because legacy users will be upgraded to the vault-key system on
-      // their next unlock, where the verify path runs.
-      const { loadDecryptedApiKey, saveEncryptedApiKey } = await import("./crypto");
+      // Legacy system: re-encrypt password-derived data directly with the
+      // new password. Prepare every replacement in memory first, then write
+      // once so API key, PK vault, and mnemonic vault cannot be split across
+      // old/new passwords if the service worker dies mid-rotation.
+      const storageUpdate: Record<string, unknown> = {};
 
       // Decrypt API key with cached password (if exists)
       const hasApiKey = await hasEncryptedApiKey();
@@ -643,17 +644,30 @@ export async function handleChangePasswordWithCachedPassword(
         if (!apiKey) {
           return { success: false, error: "Failed to decrypt API key" };
         }
-        // Re-encrypt with new password
-        await saveEncryptedApiKey(apiKey, newPassword);
+        storageUpdate.encryptedApiKey = await encrypt(apiKey, newPassword);
       }
 
       // Re-encrypt the vault with new password (if exists)
       const hasVault = await hasVaultEntries();
       if (hasVault) {
-        const success = await reEncryptVault(currentPassword, newPassword);
-        if (!success) {
+        const newVault = await computeReEncryptedVault(currentPassword, newPassword);
+        if (!newVault) {
           return { success: false, error: "Failed to re-encrypt vault" };
         }
+        storageUpdate[VAULT_STORAGE_KEY] = newVault;
+      }
+
+      const hasMnemonicEntries = await hasMnemonics();
+      if (hasMnemonicEntries) {
+        const newMnemonicVault = await computeReEncryptedMnemonicVault(currentPassword, newPassword);
+        if (!newMnemonicVault) {
+          return { success: false, error: "Failed to re-encrypt mnemonic vault" };
+        }
+        storageUpdate.mnemonicVault = newMnemonicVault;
+      }
+
+      if (Object.keys(storageUpdate).length > 0) {
+        await chrome.storage.local.set(storageUpdate);
       }
     }
 

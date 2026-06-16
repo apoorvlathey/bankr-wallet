@@ -2006,7 +2006,7 @@ When changing the wallet password (Settings → Change Password):
    - API key (in `encryptedApiKeyVault`) unchanged
    - Private keys (in `pkVault` with `salt: ""`) unchanged
    - Seed phrases (in `mnemonicVault` with `salt: ""`) unchanged
-6. **Agent password remains valid** - `encryptedVaultKeyAgent` is unchanged
+6. **Agent password is cleared** - `encryptedVaultKeyAgent` is removed and must be set again after the master password changes
 
 **Why atomic**: If any re-encryption step fails (OOM, crypto error), no storage writes happen. Without atomicity, the vault key could be updated to the new password while legacy entries remain encrypted with the old password, making data inaccessible.
 
@@ -2014,9 +2014,9 @@ When changing the wallet password (Settings → Change Password):
 
 **Legacy System** (pre-vault key migration):
 
-1. Decrypt API key with old password
-2. Re-encrypt API key with new password
-3. Re-encrypt private key vault with new password
+1. Decrypt API key, private-key vault, and mnemonic vault with old password
+2. Re-encrypt all present legacy secrets with new password in memory
+3. Persist `encryptedApiKey`, `pkVault`, and `mnemonicVault` together in one `chrome.storage.local.set()` call
 
 ### Pending Transaction Storage
 
