@@ -375,6 +375,7 @@ src/
 │   ├── accountStorage.ts    # Account CRUD operations (includes seed groups, PK→seed conversion)
 │   ├── storageLock.ts       # Per-key serializer for chrome.storage read-modify-write helpers
 │   ├── networkStorage.ts    # Service-worker-owned networksInfo mutations + active-chain fallback
+│   ├── walletResetStorage.ts # Source of truth for reset-owned storage keys and transient prefixes
 │   ├── gasEstimation.ts     # Pre-confirmation gas estimation (RPC fees, CoinGecko USD price)
 │   ├── bankrApi.ts          # Bankr API client (submit, sign, job polling)
 │   ├── portfolioApi.ts      # Portfolio API client (fetches token holdings via website)
@@ -2164,6 +2165,7 @@ content script only for provider initialization address correction.
 | `isApiKeyCached`                   | Check if password needed                                                                        |
 | `unlockWallet`                     | Unlock wallet with password                                                                     |
 | `lockWallet`                       | Lock wallet (clear cached credentials)                                                          |
+| `resetExtension`                   | Reset wallet identity state using `walletResetStorage.ts`; clears secrets, accounts, pending requests, WalletConnect routing, cross-dapp batches, tx history, wallet portfolio state, transient result keys, and session auth state |
 | `confirmTransaction`               | User approved tx (sync, waits)                                                                  |
 | `confirmTransactionAsync`          | User approved tx (async, Bankr API). Optional `functionName` field                              |
 | `confirmTransactionAsyncPK`        | User approved tx (async, PK/seed local sign). Optional `functionName` and `gasOverrides` fields |
@@ -2461,6 +2463,28 @@ The header includes a lock icon button that allows users to manually lock the wa
 - Useful for security when stepping away from the computer
 
 Sends `lockWallet` message to background and redirects to the unlock screen.
+
+### Reset Extension
+
+The unlock screen's reset action sends `resetExtension` to the background. The
+handler is agent-password blocked, calls `clearAllAuthState()` before storage
+mutation, aborts in-flight tx work through `performSecurityReset()`, then removes
+wallet-owned storage through `chrome/walletResetStorage.ts`.
+
+`walletResetStorage.ts` is the source of truth for reset-owned keys and
+prefixes. It clears secrets/accounts (`encrypted*`, `pkVault`, `mnemonicVault`,
+`accounts`, `seedGroups`), pending request queues (`pendingTxRequests`,
+`pendingSignatureRequests`, `pendingBatchTxRequests`,
+`pendingWatchAssetRequests`, `pendingAddChainRequests`), WalletConnect routing
+state (`walletConnectPendingRequests`, `walletConnectChainId`), cross-dapp batch
+state (`crossDappBatch`, `bundleStatuses`), bridge state (`pendingBridges`),
+wallet portfolio state (`portfolioSnapshots`, `hiddenPortfolioTokens`,
+`customTokens`, `customDelegates`, `recentlyReceivedTokens`), and transient
+result/artifact prefixes (`txResult:`, `sigResult:`, `rpcResult:`,
+`addChainResult:`, `watchAssetResult:`, `batchTxResult:`, `batchTxAck:`,
+`capabilitiesResult:`, `callsStatusResult:`, `notification-`, `fiProgress:`).
+Keep that module in sync with `_docs/STORAGE.md` when adding new wallet-scoped
+storage.
 
 ### Footer Attribution
 

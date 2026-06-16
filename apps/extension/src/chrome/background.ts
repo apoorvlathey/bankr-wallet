@@ -115,6 +115,12 @@ import {
   setNetworkHiddenState,
   updateNetworkEntry,
 } from "./networkStorage";
+import {
+  getStorageKeysWithPrefixes,
+  getWalletLocalStorageKeysToRemove,
+  WALLET_RESULT_STORAGE_PREFIXES,
+  WALLET_SYNC_STORAGE_KEYS,
+} from "./walletResetStorage";
 
 // Session & cache management
 import {
@@ -135,7 +141,6 @@ import {
   isWalletUnlocked,
   getPrivateKeyFromCache,
   getCurrentSessionId,
-  clearSessionStorage,
   tryRestoreSession,
   incrementUIConnections,
   decrementUIConnections,
@@ -460,12 +465,10 @@ setInterval(() => {
 
 // Clean up stale result keys from storage (from previous service worker sessions)
 chrome.storage.local.get(null).then((items) => {
-  const STALE_PREFIXES = [
-    "txResult:", "sigResult:", "rpcResult:",
-    "batchTxResult:", "batchTxAck:", "capabilitiesResult:", "callsStatusResult:",
-  ];
-  const staleKeys = Object.keys(items).filter((k) => {
-    if (!STALE_PREFIXES.some((p) => k.startsWith(p))) return false;
+  const staleKeys = getStorageKeysWithPrefixes(
+    items,
+    WALLET_RESULT_STORAGE_PREFIXES,
+  ).filter((k) => {
     const entry = items[k];
     return entry?.timestamp && Date.now() - entry.timestamp > 30 * 60 * 1000;
   });
@@ -3250,53 +3253,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        // SECURITY: Perform full memory cleanup first (before async storage operations)
-        clearCachedApiKey();
-        clearCachedVault();
-
-        await performSecurityReset();
         try {
+          // SECURITY: Perform full auth cleanup first (before async storage operations)
+          await clearAllAuthState();
+
+          await performSecurityReset();
+
           const allLocalStorage = await chrome.storage.local.get(null);
-          const notificationKeys = Object.keys(allLocalStorage).filter((key) =>
-            key.startsWith("notification-"),
-          );
+          const localKeys = getWalletLocalStorageKeysToRemove(allLocalStorage);
 
           await Promise.all([
-            chrome.storage.local.remove([
-              "encryptedApiKey",
-              "encryptedApiKeyVault",
-              "encryptedVaultKeyMaster",
-              "encryptedVaultKeyAgent",
-              "agentPasswordEnabled",
-              "txHistory",
-              "pendingTxRequests",
-              "pendingSignatureRequests",
-              "chatHistory",
-              "pkVault",
-              "mnemonicVault",
-              "seedGroups",
-              "accounts",
-              "portfolioSnapshots",
-              "hiddenPortfolioTokens",
-              "ensIdentityCache",
-              "ensAvatarImageCache",
-              "customDelegates",
-              ...notificationKeys,
-            ]),
-            chrome.storage.sync.remove([
-              "address",
-              "displayAddress",
-              "networksInfo",
-              "chainName",
-              "autoLockTimeout",
-              "isArcBrowser",
-              "hidePortfolioValue",
-              "sidePanelVerified",
-              "sidePanelMode",
-              "activeAccountId",
-              "tabAccounts",
-            ]),
-            clearSessionStorage(),
+            chrome.storage.local.remove(localKeys),
+            chrome.storage.sync.remove([...WALLET_SYNC_STORAGE_KEYS]),
           ]);
 
           await chrome.action.setBadgeText({ text: "" });

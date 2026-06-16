@@ -186,7 +186,7 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 
 | Handler          | Effect                      | Guard                                         |
 | ---------------- | --------------------------- | --------------------------------------------- |
-| `resetExtension` | Wipes ALL extension data    | Agent password blocked                        |
+| `resetExtension` | Wipes wallet identity state, pending queues, WalletConnect routing, cross-dapp batches, tx history, wallet portfolio state, transient result keys, and session auth state via `walletResetStorage.ts` | Agent password blocked |
 | `lockWallet`     | Clears all in-memory caches | None needed (user-initiated, non-destructive) |
 | `clearTxHistory` | Deletes transaction history | `EXTENSION_ONLY_MESSAGES`                     |
 

@@ -90,6 +90,10 @@ import {
   clearNoncesForAddress,
   clearAllNonces,
 } from "./nonceManager";
+import {
+  getStorageKeysWithPrefixes,
+  WALLET_LOCAL_STORAGE_PREFIXES,
+} from "./walletResetStorage";
 import { FOURBYTE_SOURCIFY_LOOKUP_URL, FOURBYTE_DIRECTORY_API_URL } from "@/constants/externalUrls";
 
 export interface TransactionResult {
@@ -1822,13 +1826,14 @@ export async function performSecurityReset(): Promise<void> {
   }
   activeAbortControllers.clear();
 
-  // Write reset errors to storage for any pending requests
+  // Clear transient result/progress artifacts for any pending requests.
   const allKeys = await chrome.storage.local.get(null);
-  const pendingResultKeys = Object.keys(allKeys).filter(
-    (k) => k.startsWith("txResult:") || k.startsWith("sigResult:"),
+  const transientKeys = getStorageKeysWithPrefixes(
+    allKeys,
+    WALLET_LOCAL_STORAGE_PREFIXES,
   );
-  if (pendingResultKeys.length > 0) {
-    await chrome.storage.local.remove(pendingResultKeys);
+  if (transientKeys.length > 0) {
+    await chrome.storage.local.remove(transientKeys);
   }
 
   // Clear failed transaction results

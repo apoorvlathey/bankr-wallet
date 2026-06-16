@@ -33,7 +33,10 @@ Rule: check `cachedVaultKey` to determine which system is active before saving A
 
 ## chrome.storage.local
 
-Persists across extension restarts. Cleared only on manual reset or uninstall.
+Persists across extension restarts. Wallet-scoped keys and transient prefixes
+are cleared by manual reset through `apps/extension/src/chrome/walletResetStorage.ts`;
+other app preferences/caches are cleared only on uninstall or by their own TTL
+logic.
 
 ### Encryption & Vault Keys
 
