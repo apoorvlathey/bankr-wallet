@@ -572,7 +572,7 @@ These must always hold true. Violations indicate a security bug.
 
 4. **Encryption uses fresh randomness** - Every encryption operation generates a new random salt and IV. Never reuse salt/IV pairs.
 
-5. **Service worker suspend clears credentials** - The `suspend` event handler in `background.ts` calls `clearCachedApiKey()` and `clearCachedVault()`.
+5. **Service worker suspend clears credentials** - The `suspend` event handler in `background.ts` calls `clearInMemoryAuthCache()`, which clears the API key, password, private-key vault, vault key, password type, and session ID together.
 
 6. **Timed auto-lock clears every in-memory credential** - All cached credential getters, including `getCachedVaultKey()` and `getPasswordType()`, enforce the configured timeout. Expiry clears the API key, password, private-key vault, vault key, and password type together.
 

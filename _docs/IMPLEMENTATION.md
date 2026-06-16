@@ -2190,7 +2190,7 @@ content script only for provider initialization address correction.
 | `getPendingSignatureRequests`      | Get all pending signature requests                                                              |
 | `rejectSignatureRequest`           | User rejected signature request                                                                 |
 | `cancelTransaction`                | User cancelled in-progress tx                                                                   |
-| `clearApiKeyCache`                 | Clear cached API key                                                                            |
+| `clearApiKeyCache`                 | Legacy alias for full auth-state teardown (`clearAllAuthState`)                                 |
 | `getCachedPassword`                | Check if password is cached                                                                     |
 | `getCachedApiKey`                  | Get decrypted API key (if cached). **Sender-verified**: extension pages only                    |
 | `saveApiKeyWithCachedPassword`     | Save new API key using cached password                                                          |

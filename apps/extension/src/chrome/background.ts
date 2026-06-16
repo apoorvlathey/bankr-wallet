@@ -132,10 +132,8 @@ import {
   updateCachedAutoLockTimeout,
   getCachedApiKey,
   setCachedApiKeyDirect,
-  clearCachedApiKey,
   getCachedPassword,
   setCachedVault,
-  clearCachedVault,
   getCachedVaultKey,
   getPasswordType,
   resolvePasswordType,
@@ -149,6 +147,7 @@ import {
   incrementUIConnections,
   decrementUIConnections,
   clearAllAuthState,
+  clearInMemoryAuthCache,
 } from "./sessionCache";
 
 // Auth handlers
@@ -455,8 +454,7 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
 
 // Clear cache when service worker suspends
 self.addEventListener("suspend", () => {
-  clearCachedApiKey();
-  clearCachedVault();
+  clearInMemoryAuthCache();
 });
 
 // Clean up expired transactions, signature requests, and batch requests periodically
@@ -1516,9 +1514,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "clearApiKeyCache": {
-      clearCachedApiKey();
-      sendResponse({ success: true });
-      return false;
+      (async () => {
+        await clearAllAuthState();
+        chrome.runtime.sendMessage({ type: "walletLockedExternal" }).catch(() => {});
+        sendResponse({ success: true });
+      })();
+      return true;
     }
 
     case "unlockWallet": {
