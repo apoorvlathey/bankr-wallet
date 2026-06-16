@@ -846,6 +846,14 @@ For non-atomic PK/SP batches (and cross-dapp batches), one shared `<GasTierPicke
 
 **Dapp-provided gas as a floor (non-atomic path):** When the input transactions carry a `tx.gas` value (e.g., a swap response from `/api/swap/quote` whose gas was already estimated + buffered server-side), the component clamps each per-call gas limit to `max(simulated × buffer, dapp_tx_gas)` after `estimateBatchGasSequential` returns. This prevents simulator under-estimates — `eth_simulateV1` has been observed ~25% below real need for Uniswap V4-with-hooks swaps on Base, regardless of RPC provider — from silently downgrading a correct API value at signing time. The user can still edit downward in the picker. See `_docs/SWAP.md` ("Gas budgeting") for the full background.
 
+**Ordered local multi-tx broadcast:** Non-atomic PK/SP dapp batches and direct
+swap/bridge multi-tx submissions pre-assign sequential nonces, then broadcast
+one raw transaction at a time. Each signed tx still carries explicit gas and fee
+params so no gas/fee estimation runs during broadcast. If nonce N fails before
+the raw tx is accepted, the nonce cache is reset and nonce N+1... rows are
+marked failed/skipped instead of being signed; this prevents stale higher-nonce
+transactions from executing later after a future user tx fills the gap.
+
 **Warnings:**
 | Condition | Display |
 |---|---|

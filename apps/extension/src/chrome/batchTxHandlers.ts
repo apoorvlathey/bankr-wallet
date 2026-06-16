@@ -1166,13 +1166,15 @@ async function processBatchTransactionNonAtomicInBackground(
     );
   }
 
-  // Phase 2 (concurrent broadcast): sign + broadcast each with pre-assigned nonce.
-  // Provide gas + fee params from estimates so viem makes ZERO RPC calls during broadcast
-  // (only eth_sendRawTransaction). This avoids 429 rate limiting breaking the broadcast.
+  // Phase 2 (ordered broadcast): sign + broadcast each pre-assigned nonce only
+  // after the previous raw tx was accepted. Later nonce txs must not enter the
+  // mempool if an earlier nonce fails before broadcast, otherwise a future user
+  // tx can fill the gap and release stale batch tail transactions.
   const txHashes: string[] = [];
   const results: Array<{ txId: string; success: boolean; txHash?: string; error?: string }> = [];
 
-  const broadcastPromises = prepared.map(async (item, i) => {
+  for (let i = 0; i < prepared.length; i++) {
+    const item = prepared[i];
     try {
       const est = gasEstimates[i];
       const txForSigning = {
@@ -1212,7 +1214,7 @@ async function processBatchTransactionNonAtomicInBackground(
         startReceiptPolling(item.txId, result.txHash, chainId);
       }
 
-      return { txId: item.txId, success: true, txHash: result.txHash };
+      results.push({ txId: item.txId, success: true, txHash: result.txHash });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       resetNonce(fromAddr, chainId);
@@ -1223,12 +1225,25 @@ async function processBatchTransactionNonAtomicInBackground(
         completedAt: Date.now(),
       });
 
-      return { txId: item.txId, success: false, error: errorMessage };
-    }
-  });
+      results.push({ txId: item.txId, success: false, error: errorMessage });
 
-  const broadcastResults = await Promise.all(broadcastPromises);
-  results.push(...broadcastResults);
+      const skippedError =
+        "Skipped because an earlier batch transaction failed to broadcast";
+      for (const skipped of prepared.slice(i + 1)) {
+        await updateTxInHistory(skipped.txId, {
+          status: "failed",
+          error: skippedError,
+          completedAt: Date.now(),
+        });
+        results.push({
+          txId: skipped.txId,
+          success: false,
+          error: skippedError,
+        });
+      }
+      break;
+    }
+  }
 
   // Collect tx hashes for bundle status
   for (const r of results) {
@@ -1280,7 +1295,7 @@ async function processBatchTransactionNonAtomicInBackground(
       await showNotification(
         `tx-partial-${bundleId}`,
         "Batch Partially Failed",
-        `${failedCount}/${calls.length} calls failed to broadcast on ${pending.chainName}`,
+        `${failedCount}/${calls.length} calls failed or were skipped on ${pending.chainName}`,
       );
     }
 

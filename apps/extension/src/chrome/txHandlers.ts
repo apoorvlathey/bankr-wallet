@@ -2166,13 +2166,15 @@ export async function handleExecuteSwapDirect(
     prepared.push({ txId, pending, nonce, functionName: entry.functionName, swapMeta: entry.swapMeta });
   }
 
-  // Phase 2 (concurrent): broadcast all TXs with pre-assigned nonces.
+  // Phase 2 (ordered): broadcast nonce N+1 only after nonce N is accepted.
+  // This avoids stranded higher-nonce swap legs executing later if an earlier
+  // approval/bridge leg fails before it reaches the mempool.
   // gasEstimates[i] aligns with prepared[i] because we built `prepared`
   // by iterating `transactions` in order — same indexing the UI used.
   for (let i = 0; i < prepared.length; i++) {
     const item = prepared[i];
     const gasOverride = gasEstimates?.[i];
-    broadcastSwapTxLocal(
+    const result = await broadcastSwapTxLocal(
       item.txId,
       item.pending,
       account,
@@ -2188,6 +2190,27 @@ export async function handleExecuteSwapDirect(
           }
         : undefined,
     );
+    if (!result.success) {
+      const skippedError =
+        "Skipped because an earlier swap transaction failed to broadcast";
+      for (const skipped of prepared.slice(i + 1)) {
+        await updateTxInHistory(skipped.txId, {
+          status: "failed",
+          error: skippedError,
+          completedAt: Date.now(),
+        });
+      }
+      return {
+        // If earlier legs already reached the mempool, close the swap flow and
+        // let Activity/notifications surface the partial failure. Keeping the
+        // confirmation open would invite a duplicate retry against new nonces.
+        success: i > 0,
+        txIds,
+        error: `Transaction ${i + 1}/${prepared.length} failed to broadcast: ${
+          result.error || "Unknown error"
+        }`,
+      };
+    }
   }
 
   return { success: true, txIds };
@@ -2288,7 +2311,7 @@ async function processSwapTxBankr(
 }
 
 /**
- * Fire-and-forget: sign+broadcast a swap tx with a pre-assigned nonce.
+ * Sign and broadcast one swap tx with a pre-assigned nonce.
  * History entry must already exist (created in the preparation phase).
  */
 async function broadcastSwapTxLocal(
@@ -2300,7 +2323,7 @@ async function broadcastSwapTxLocal(
   rpcUrl?: string,
   customChainMeta?: { name: string; nativeCurrency?: { name: string; symbol: string; decimals: number }; explorer?: string },
   gasOverrides?: GasOverrides,
-): Promise<void> {
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
 
@@ -2343,11 +2366,13 @@ async function broadcastSwapTxLocal(
     } else {
       await updateTxInHistory(txId, { status: "pending", txHash });
     }
+    return { success: true, txHash };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
     resetNonce(pending.tx.from, pending.tx.chainId);
     await handleTransactionFailure(txId, pending, errorMessage);
+    return { success: false, error: errorMessage };
   } finally {
     activeAbortControllers.delete(txId);
   }
