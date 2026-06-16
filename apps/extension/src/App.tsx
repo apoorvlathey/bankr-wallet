@@ -39,6 +39,7 @@ import {
 
 import { useTheme, useStripTokens } from "@/theme";
 import { closeSidePanelForWindow } from "@/lib/sidePanelControls";
+import TransactionConfirmationErrorBoundary from "@/components/TransactionConfirmationErrorBoundary";
 
 // Sidepanel icon
 const SidePanelIcon = (props: any) => (
@@ -2659,55 +2660,64 @@ function App() {
           flexDirection="column"
         >
           <Suspense fallback={<LoadingFallback />}>
-            <TransactionConfirmation
-              key={selectedTxRequest.id}
-              txRequest={selectedTxRequest}
-              currentIndex={currentIndex >= 0 ? currentIndex : 0}
+            <TransactionConfirmationErrorBoundary
+              txId={selectedTxRequest.id}
               totalCount={totalCount}
-              isInSidePanel={isInSidePanel || isFullscreenTab}
-              accountType={activeAccount?.type}
-              crossDappBatch={crossDappBatch}
-              onBack={() => {
-                if (totalCount > 1) {
-                  setView("pendingTxList");
-                } else {
-                  setView("main");
-                }
-              }}
-              onConfirmed={handleTxConfirmed}
               onRejected={handleTxRejected}
               onRejectAll={handleRejectAll}
               onBeforeReject={navigateToAdjacentRequest}
-              onAddedToBatch={() => {
-                setSelectedTxRequest(null);
-                setView("crossDappBatchConfirm");
-              }}
-              onNavigate={(direction) => {
-                const currentIdx = combinedRequests.findIndex(
-                  (r) =>
-                    r.type === "tx" && r.request.id === selectedTxRequest.id,
-                );
-                const newIdx =
-                  direction === "prev" ? currentIdx - 1 : currentIdx + 1;
-                if (newIdx >= 0 && newIdx < combinedRequests.length) {
-                  const nextRequest = combinedRequests[newIdx];
-                  if (nextRequest.type === "tx") {
-                    setSelectedTxRequest(nextRequest.request);
-                  } else if (nextRequest.type === "batch") {
-                    setSelectedTxRequest(null);
-                    setSelectedBatchRequest(nextRequest.request);
-                    setView("batchTxConfirm");
-                  } else if (nextRequest.type === "crossDappBatch") {
-                    setSelectedTxRequest(null);
-                    setView("crossDappBatchConfirm");
+            >
+              <TransactionConfirmation
+                key={selectedTxRequest.id}
+                txRequest={selectedTxRequest}
+                currentIndex={currentIndex >= 0 ? currentIndex : 0}
+                totalCount={totalCount}
+                isInSidePanel={isInSidePanel || isFullscreenTab}
+                accountType={activeAccount?.type}
+                crossDappBatch={crossDappBatch}
+                onBack={() => {
+                  if (totalCount > 1) {
+                    setView("pendingTxList");
                   } else {
-                    setSelectedTxRequest(null);
-                    setSelectedSignatureRequest(nextRequest.request);
-                    setView("signatureConfirm");
+                    setView("main");
                   }
-                }
-              }}
-            />
+                }}
+                onConfirmed={handleTxConfirmed}
+                onRejected={handleTxRejected}
+                onRejectAll={handleRejectAll}
+                onBeforeReject={navigateToAdjacentRequest}
+                onAddedToBatch={() => {
+                  setSelectedTxRequest(null);
+                  setView("crossDappBatchConfirm");
+                }}
+                onNavigate={(direction) => {
+                  const currentIdx = combinedRequests.findIndex(
+                    (r) =>
+                      r.type === "tx" &&
+                      r.request.id === selectedTxRequest.id,
+                  );
+                  const newIdx =
+                    direction === "prev" ? currentIdx - 1 : currentIdx + 1;
+                  if (newIdx >= 0 && newIdx < combinedRequests.length) {
+                    const nextRequest = combinedRequests[newIdx];
+                    if (nextRequest.type === "tx") {
+                      setSelectedTxRequest(nextRequest.request);
+                    } else if (nextRequest.type === "batch") {
+                      setSelectedTxRequest(null);
+                      setSelectedBatchRequest(nextRequest.request);
+                      setView("batchTxConfirm");
+                    } else if (nextRequest.type === "crossDappBatch") {
+                      setSelectedTxRequest(null);
+                      setView("crossDappBatchConfirm");
+                    } else {
+                      setSelectedTxRequest(null);
+                      setSelectedSignatureRequest(nextRequest.request);
+                      setView("signatureConfirm");
+                    }
+                  }
+                }}
+              />
+            </TransactionConfirmationErrorBoundary>
           </Suspense>
         </Box>
       </Box>

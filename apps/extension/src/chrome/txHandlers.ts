@@ -94,6 +94,7 @@ import {
   getStorageKeysWithPrefixes,
   WALLET_LOCAL_STORAGE_PREFIXES,
 } from "./walletResetStorage";
+import { normalizeTransactionValue } from "./transactionValidation";
 import { FOURBYTE_SOURCIFY_LOOKUP_URL, FOURBYTE_DIRECTORY_API_URL } from "@/constants/externalUrls";
 
 export interface TransactionResult {
@@ -230,6 +231,20 @@ export function handleTransactionRequest(
       return;
     }
 
+    const normalizedValue = normalizeTransactionValue(tx.value);
+    if (!normalizedValue.ok) {
+      await writeResultToStorage(`txResult:${txId}`, {
+        success: false,
+        error: normalizedValue.error,
+      });
+      return;
+    }
+
+    const txWithNormalizedValue: TransactionParams = {
+      ...tx,
+      value: normalizedValue.value,
+    };
+
     // On chains whose gas model differs from standard EVM (MegaETH), dapp-side
     // gas estimates from wagmi/ethers are systematically wrong (computed against
     // standard EVM rules, missing MegaETH's storage gas component). Strip the
@@ -237,8 +252,8 @@ export function handleTransactionRequest(
     // signing) re-estimates via the chain's own eth_estimateGas. Fee fields
     // are preserved — under-priced fees only delay inclusion, not revert.
     const sanitizedTx = CHAIN_BY_ID_TX.get(tx.chainId)?.usesNonStandardGasModel
-      ? { ...tx, gas: undefined }
-      : tx;
+      ? { ...txWithNormalizedValue, gas: undefined }
+      : txWithNormalizedValue;
 
     const pendingRequest = pinnedTxRequest(activeAccount, {
       id: txId,

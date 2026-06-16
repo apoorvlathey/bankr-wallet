@@ -15,6 +15,7 @@ import {
 } from "./pendingSignatureStorage";
 import { pinnedSignatureRequest, pinnedTxRequest } from "./pinnedRequest";
 import { openExtensionPopup } from "./txHandlers";
+import { normalizeTransactionValue } from "./transactionValidation";
 import { saveWalletConnectPendingRequest } from "./walletConnectStorage";
 import {
   WALLETCONNECT_SAFE_RPC_METHODS,
@@ -160,11 +161,15 @@ async function createPendingTransactionRequest(
   const txId = crypto.randomUUID();
   const peer = getSessionMetadata(kit.getActiveSessions()?.[args.topic]);
   const chainName = await getStoredChainName(chainId);
+  const normalizedValue = normalizeTransactionValue(rawTx.value);
+  if (!normalizedValue.ok) {
+    throw new Error(normalizedValue.error);
+  }
   const tx: TransactionParams = {
     from: account.address,
     to: isAddress(rawTx.to) ? rawTx.to : null,
     data: typeof rawTx.data === "string" ? rawTx.data : "0x",
-    value: typeof rawTx.value === "string" ? rawTx.value : "0x0",
+    value: normalizedValue.value,
     chainId,
     ...(typeof rawTx.gas === "string" ? { gas: rawTx.gas } : {}),
     ...(typeof rawTx.gasPrice === "string" ? { gasPrice: rawTx.gasPrice } : {}),

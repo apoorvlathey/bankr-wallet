@@ -167,6 +167,7 @@ apps/extension/src/
 │   ├── bankrApi.ts          # Bankr API client
 │   ├── txSimulation.ts      # Asset change simulation (state override injection)
 │   ├── gasEstimation.ts     # Gas estimation + native token price
+│   ├── transactionValidation.ts # Dapp transaction quantity validation/normalization
 │   ├── batchTxHandlers.ts   # ERC-5792 batch tx handlers + ERC-7821 encoding
 │   ├── erc5792Types.ts      # ERC-5792 type definitions
 │   ├── walletConnectHandlers.ts # WalletConnect init, sessions, result bridge
@@ -183,6 +184,7 @@ apps/extension/src/
 │   └── inject.ts            # Content script bridge
 ├── components/
 │   ├── TransactionConfirmation.tsx
+│   ├── TransactionConfirmationErrorBoundary.tsx # Last-resort reject UI for malformed tx renders
 │   ├── BatchTransactionConfirmation.tsx  # Batch tx confirmation UI (ERC-5792)
 │   ├── AssetChangesDisplay.tsx    # Simulated token flow display
 │   ├── SignatureRequestConfirmation.tsx
