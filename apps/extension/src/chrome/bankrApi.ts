@@ -94,6 +94,80 @@ function extractBankrErrorMessage(text: string): string {
   return unwrap(text, 0);
 }
 
+function extractBankrErrorPayloadMessage(payload: unknown): string | null {
+  try {
+    const serialized = JSON.stringify(payload);
+    if (!serialized) return null;
+    const extracted = extractBankrErrorMessage(serialized);
+    return extracted && extracted !== serialized ? extracted : null;
+  } catch {
+    return null;
+  }
+}
+
+function isEvmTransactionHash(value: string): boolean {
+  return /^0x[0-9a-fA-F]{64}$/.test(value);
+}
+
+function normalizeSubmitTransactionDirectResponse(
+  payload: unknown
+): SubmitTransactionDirectResponse {
+  if (!payload || typeof payload !== "object") {
+    throw new BankrApiError("Bankr returned an invalid transaction response");
+  }
+
+  const body = payload as Record<string, unknown>;
+  const rawStatus = body.status;
+  const status =
+    rawStatus === "success" || rawStatus === "reverted" || rawStatus === "pending"
+      ? rawStatus
+      : null;
+
+  if (!status) {
+    throw new BankrApiError(
+      extractBankrErrorPayloadMessage(payload) ||
+        "Bankr returned a transaction response without a valid status",
+    );
+  }
+
+  const success = body.success === true;
+  const transactionHash =
+    typeof body.transactionHash === "string" && body.transactionHash.trim()
+      ? body.transactionHash.trim()
+      : typeof body.txHash === "string" && body.txHash.trim()
+        ? body.txHash.trim()
+        : "";
+
+  if (status !== "reverted" && !success) {
+    throw new BankrApiError(
+      extractBankrErrorPayloadMessage(payload) ||
+        "Bankr transaction submission failed",
+    );
+  }
+
+  if (!transactionHash) {
+    throw new BankrApiError(
+      status === "pending"
+        ? "Bankr returned a pending transaction without a transaction hash"
+        : `Bankr returned a ${status} transaction without a transaction hash`,
+    );
+  }
+
+  if (!isEvmTransactionHash(transactionHash)) {
+    throw new BankrApiError("Bankr returned an invalid transaction hash");
+  }
+
+  return {
+    success,
+    transactionHash,
+    status,
+    ...(typeof body.blockNumber === "string" ? { blockNumber: body.blockNumber } : {}),
+    ...(typeof body.gasUsed === "string" ? { gasUsed: body.gasUsed } : {}),
+    ...(typeof body.signer === "string" ? { signer: body.signer } : {}),
+    ...(typeof body.chainId === "number" ? { chainId: body.chainId } : {}),
+  };
+}
+
 /**
  * Submits a transaction directly via /wallet/submit (synchronous, no polling)
  */
@@ -134,15 +208,23 @@ export async function submitTransactionDirect(
     signal,
   });
 
+  const text = await response.text();
+
   if (!response.ok) {
-    const text = await response.text();
     throw new BankrApiError(
-      `Failed to submit transaction: ${text}`,
+      `Failed to submit transaction: ${extractBankrErrorMessage(text)}`,
       response.status
     );
   }
 
-  return response.json();
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    throw new BankrApiError("Bankr returned invalid JSON for transaction submission");
+  }
+
+  return normalizeSubmitTransactionDirectResponse(payload);
 }
 
 /**

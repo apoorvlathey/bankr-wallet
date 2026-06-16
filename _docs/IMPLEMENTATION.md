@@ -2071,6 +2071,7 @@ The `/wallet/submit` API returns a structured response:
 - `status: "success"` — transaction confirmed onchain, `transactionHash` contains the hash
 - `status: "reverted"` — transaction confirmed but reverted, treated as failure
 - `status: "pending"` — transaction submitted but not yet confirmed, treated as success
+- `submitTransactionDirect()` normalizes `txHash` to `transactionHash`, requires a valid EVM transaction hash for every accepted status, and throws `BankrApiError` for missing/invalid `status`, `success !== true` on non-reverted responses, invalid JSON, or ambiguous pending bodies. This prevents Activity rows from being left pending without a pollable transaction hash.
 
 ## Build Configuration
 
