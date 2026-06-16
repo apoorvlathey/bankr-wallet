@@ -13,6 +13,12 @@ import {
   Image,
   Icon,
   Tooltip,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverBody,
+  PopoverArrow,
+  Portal,
   Switch,
   Collapse,
 } from "@chakra-ui/react";
@@ -113,6 +119,11 @@ type ParsedTransactionValue =
   | { ok: true; wei: bigint }
   | { ok: false; raw: string };
 
+const WEI_PER_NATIVE_UNIT = 1_000_000_000_000_000_000n;
+const COMPACT_NATIVE_VALUE_DECIMALS = 6;
+const COMPACT_NATIVE_VALUE_UNIT =
+  WEI_PER_NATIVE_UNIT / 10n ** BigInt(COMPACT_NATIVE_VALUE_DECIMALS);
+
 function parseTransactionValueWei(value: string | undefined): ParsedTransactionValue {
   if (!value || value === "0" || value === "0x0" || value === "0x") {
     return { ok: true, wei: 0n };
@@ -123,6 +134,46 @@ function parseTransactionValueWei(value: string | undefined): ParsedTransactionV
   } catch {
     return { ok: false, raw: value };
   }
+}
+
+function formatNativeValueExact(wei: bigint, symbol: string): string {
+  const whole = wei / WEI_PER_NATIVE_UNIT;
+  const fractional = wei % WEI_PER_NATIVE_UNIT;
+
+  if (fractional === 0n) {
+    return `${whole.toString()} ${symbol}`;
+  }
+
+  const fractionalText = fractional
+    .toString()
+    .padStart(18, "0")
+    .replace(/0+$/, "");
+
+  return `${whole.toString()}.${fractionalText} ${symbol}`;
+}
+
+function formatNativeValueCompact(wei: bigint, symbol: string): string {
+  if (wei === 0n) {
+    return `0 ${symbol}`;
+  }
+
+  const whole = wei / WEI_PER_NATIVE_UNIT;
+  const fractional = wei % WEI_PER_NATIVE_UNIT;
+
+  if (whole === 0n && fractional < COMPACT_NATIVE_VALUE_UNIT) {
+    return `<0.000001 ${symbol}`;
+  }
+
+  const compactFractional = (fractional / COMPACT_NATIVE_VALUE_UNIT)
+    .toString()
+    .padStart(COMPACT_NATIVE_VALUE_DECIMALS, "0")
+    .replace(/0+$/, "");
+
+  if (!compactFractional) {
+    return `${whole.toString()} ${symbol}`;
+  }
+
+  return `${whole.toString()}.${compactFractional} ${symbol}`;
 }
 
 // Copy button component
@@ -638,16 +689,21 @@ function TransactionConfirmation({
   );
   const isCalldataMalformed = calldataValidation.malformed;
 
-  const formatValue = (): string => {
+  const nativeValueDisplay = useMemo(() => {
     if (!parsedTxValue.ok) {
-      return "Invalid value";
+      return {
+        compact: "Invalid value",
+        exact: null,
+        showExact: false,
+      };
     }
-    if (parsedTxValue.wei === 0n) {
-      return `0 ${nativeSym}`;
-    }
-    const eth = Number(parsedTxValue.wei) / 1e18;
-    return `${eth.toFixed(6)} ${nativeSym}`;
-  };
+
+    return {
+      compact: formatNativeValueCompact(parsedTxValue.wei, nativeSym),
+      exact: formatNativeValueExact(parsedTxValue.wei, nativeSym),
+      showExact: parsedTxValue.wei > 0n,
+    };
+  }, [nativeSym, parsedTxValue]);
 
   const isValueZero = parsedTxValue.ok && parsedTxValue.wei === 0n;
 
@@ -1599,9 +1655,58 @@ function TransactionConfirmation({
                 >
                   Value
                 </Text>
-                <Text fontSize="xs" fontWeight="700" color="text.primary">
-                  {formatValue()}
-                </Text>
+                {nativeValueDisplay.showExact ? (
+                  <Popover
+                    trigger="hover"
+                    placement="top-end"
+                    openDelay={150}
+                    closeDelay={100}
+                  >
+                    <PopoverTrigger>
+                      <Text
+                        fontSize="xs"
+                        fontWeight="700"
+                        color="text.primary"
+                        cursor="help"
+                        maxW="210px"
+                        isTruncated
+                        textAlign="right"
+                        tabIndex={0}
+                      >
+                        {nativeValueDisplay.compact}
+                      </Text>
+                    </PopoverTrigger>
+                    <Portal>
+                      <PopoverContent maxW="260px" w="max-content" zIndex="popover">
+                        <PopoverArrow />
+                        <PopoverBody p={3}>
+                          <VStack align="stretch" spacing={1}>
+                            <Text
+                              fontSize="2xs"
+                              color="text.secondary"
+                              fontWeight="800"
+                              textTransform="uppercase"
+                            >
+                              Full precision
+                            </Text>
+                            <Text
+                              fontSize="xs"
+                              color="text.primary"
+                              fontWeight="700"
+                              wordBreak="break-all"
+                            >
+                              {nativeValueDisplay.exact}
+                            </Text>
+                          </VStack>
+                        </PopoverBody>
+                      </PopoverContent>
+                    </Portal>
+                  </Popover>
+                ) : (
+                  <Text fontSize="xs" fontWeight="700" color="text.primary">
+                    {nativeValueDisplay.compact}
+                  </Text>
+                )}
               </HStack>
             )}
           </VStack>
