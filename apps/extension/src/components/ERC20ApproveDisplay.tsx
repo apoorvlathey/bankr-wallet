@@ -29,7 +29,8 @@ import {
 import { resolveAddressToName } from "@/lib/ensUtils";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { useTheme } from "@/theme";
-import { getChainConfig } from "@/constants/chainConfig";
+import { useNetworks } from "@/contexts/NetworksContext";
+import { getResolvedChainById } from "@/lib/chains";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import {
   getCachedTokenMetadataSync,
@@ -155,6 +156,7 @@ export default function ERC20ApproveDisplay({
   onSaveCalldata,
 }: ERC20ApproveDisplayProps) {
   const { tokens, themeId } = useTheme();
+  const { networksInfo } = useNetworks();
   const isDarkTheme = themeId === "midnight";
   const initialToken = toTokenMeta(
     getCachedTokenMetadataSync(chainId, tokenAddress),
@@ -193,7 +195,7 @@ export default function ERC20ApproveDisplay({
   const [copiedSpender, setCopiedSpender] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
 
-  const chainConfig = getChainConfig(chainId);
+  const explorerUrl = getResolvedChainById(chainId, networksInfo)?.explorer ?? "";
 
   // Fetch token metadata through the centralized resolver shared by
   // clear-signing, tx history, portfolio stubs, and batch inline summaries.
@@ -444,7 +446,7 @@ export default function ERC20ApproveDisplay({
             onClick={handleCopyToken}
             _hover={{ color: "accent.secondary", bg: "surface.raised" }}
           />
-          {chainConfig.explorer && (
+          {explorerUrl && (
             <IconButton
               aria-label="View token on explorer"
               icon={<ExternalLinkIcon boxSize="10px" />}
@@ -455,7 +457,7 @@ export default function ERC20ApproveDisplay({
               color="text.tertiary"
               onClick={() =>
                 window.open(
-                  `${chainConfig.explorer}/address/${tokenAddress}`,
+                  `${explorerUrl}/address/${tokenAddress}`,
                   "_blank",
                 )
               }
@@ -758,7 +760,7 @@ export default function ERC20ApproveDisplay({
                   onClick={handleCopySpender}
                   _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                 />
-                {chainConfig.explorer && (
+                {explorerUrl && (
                   <IconButton
                     aria-label="View on explorer"
                     icon={<ExternalLinkIcon boxSize="9px" />}
@@ -769,7 +771,7 @@ export default function ERC20ApproveDisplay({
                     color="text.tertiary"
                     onClick={() =>
                       window.open(
-                        `${chainConfig.explorer}/address/${approval.spender}`,
+                        `${explorerUrl}/address/${approval.spender}`,
                         "_blank",
                       )
                     }

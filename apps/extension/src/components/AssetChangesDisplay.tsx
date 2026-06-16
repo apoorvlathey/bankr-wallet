@@ -32,7 +32,8 @@ import type {
   TokenMetadataResult,
   NftStandard,
 } from "@/chrome/txSimulation";
-import { getChainConfig } from "@/constants/chainConfig";
+import { useNetworks } from "@/contexts/NetworksContext";
+import { getResolvedChainById } from "@/lib/chains";
 import { ShapesLoader } from "@/components/Chat/ShapesLoader";
 import { useTheme } from "@/theme";
 import { formatUsd } from "@/lib/currencyFormatUtils";
@@ -430,7 +431,13 @@ function NftPreview({ change }: { change: AssetChange }) {
   );
 }
 
-function AssetRow({ change, chainId }: { change: AssetChange; chainId: number }) {
+function AssetRow({
+  change,
+  explorerUrl,
+}: {
+  change: AssetChange;
+  explorerUrl: string;
+}) {
   const [copied, setCopied] = useState(false);
   const isNative = change.address === "native";
   const isNft = !!change.nft;
@@ -526,26 +533,23 @@ function AssetRow({ change, chainId }: { change: AssetChange; chainId: number })
                     _hover={{ color: "accent.secondary", bg: "transparent" }}
                   />
                 </Tooltip>
-                {(() => {
-                  const cfg = getChainConfig(chainId);
-                  return cfg.explorer ? (
-                    <Tooltip label="View on explorer" fontSize="xs" hasArrow>
-                      <IconButton
-                        aria-label="View on explorer"
-                        icon={<ExternalLinkIcon boxSize="9px" />}
-                        size="xs"
-                        variant="ghost"
-                        minW="16px"
-                        h="16px"
-                        color="text.tertiary"
-                        onClick={() =>
-                          window.open(`${cfg.explorer}/address/${change.address}`, "_blank")
-                        }
-                        _hover={{ color: "accent.secondary", bg: "transparent" }}
-                      />
-                    </Tooltip>
-                  ) : null;
-                })()}
+                {explorerUrl && (
+                  <Tooltip label="View on explorer" fontSize="xs" hasArrow>
+                    <IconButton
+                      aria-label="View on explorer"
+                      icon={<ExternalLinkIcon boxSize="9px" />}
+                      size="xs"
+                      variant="ghost"
+                      minW="16px"
+                      h="16px"
+                      color="text.tertiary"
+                      onClick={() =>
+                        window.open(`${explorerUrl}/address/${change.address}`, "_blank")
+                      }
+                      _hover={{ color: "accent.secondary", bg: "transparent" }}
+                    />
+                  </Tooltip>
+                )}
               </HStack>
               {!isNft && change.valueUsd !== null && (
                 <Text fontSize="2xs" fontWeight="600" color="text.secondary" flexShrink={0}>
@@ -587,6 +591,9 @@ function AssetChangesDisplay({
   onSimulationUnavailableChange,
 }: AssetChangesDisplayProps) {
   const { tokens } = useTheme();
+  const { networksInfo } = useNetworks();
+  const explorerUrl =
+    getResolvedChainById(txRequest.tx.chainId, networksInfo)?.explorer ?? "";
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
@@ -871,7 +878,7 @@ function AssetChangesDisplay({
                   <AssetRow
                     key={`out-${c.address}-${i}`}
                     change={c}
-                    chainId={txRequest.tx.chainId}
+                    explorerUrl={explorerUrl}
                   />
                 ))}
               </VStack>
@@ -896,7 +903,7 @@ function AssetChangesDisplay({
                   <AssetRow
                     key={`in-${c.address}-${i}`}
                     change={c}
-                    chainId={txRequest.tx.chainId}
+                    explorerUrl={explorerUrl}
                   />
                 ))}
               </VStack>
