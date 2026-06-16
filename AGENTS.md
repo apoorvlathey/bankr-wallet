@@ -178,6 +178,7 @@ apps/extension/src/
 │   ├── walletConnectStorage.ts # WalletConnect request routing/state storage
 │   ├── pendingBatchTxStorage.ts  # Pending batch request persistence
 │   ├── bundleStatusStorage.ts    # Bundle status for getCallsStatus
+│   ├── storageCachePruner.ts # Best-effort pruning for non-critical storage caches
 │   ├── impersonator.ts      # Inpage provider (EIP-6963 + ERC-5792)
 │   └── inject.ts            # Content script bridge
 ├── components/

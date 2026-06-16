@@ -231,6 +231,7 @@ Native asset price/logo resolution is centralized in `src/chrome/coingeckoServic
 - `portfolioTokens.ts` sends a single batched background message for custom-chain native assets instead of hitting CoinGecko from the popup
 - The service batches CoinGecko `coins/markets` requests across a short buffer window, caches market data in memory + `chrome.storage.local`, and caches search/resolution results for unknown custom assets
 - On CoinGecko `429`, the service falls back to cached/stale data and backs off briefly instead of hammering the API
+- Persistent metadata/image cache writes are best-effort. `src/chrome/storageCachePruner.ts` runs on service-worker startup and every 6 hours to delete expired non-critical cache entries, so cache bloat cannot block wallet-critical writes such as vault/account/pending-transaction state.
 
 ERC-20 display metadata is centralized in `src/chrome/tokenMetadata.ts`.
 
@@ -376,6 +377,7 @@ src/
 │   ├── storageLock.ts       # Per-key serializer for chrome.storage read-modify-write helpers
 │   ├── networkStorage.ts    # Service-worker-owned networksInfo mutations + active-chain fallback
 │   ├── walletResetStorage.ts # Source of truth for reset-owned storage keys and transient prefixes
+│   ├── storageCachePruner.ts # Best-effort pruning for non-critical storage-backed caches
 │   ├── gasEstimation.ts     # Pre-confirmation gas estimation (RPC fees, CoinGecko USD price)
 │   ├── bankrApi.ts          # Bankr API client (submit, sign, job polling)
 │   ├── portfolioApi.ts      # Portfolio API client (fetches token holdings via website)
@@ -2088,19 +2090,29 @@ Build command: `pnpm build`
     "service_worker": "static/js/background.js",
     "type": "module"
   },
-  "permissions": ["activeTab", "storage", "sidePanel", "notifications", "tabs"]
+  "permissions": [
+    "activeTab",
+    "storage",
+    "sidePanel",
+    "notifications",
+    "tabs",
+    "declarativeNetRequestWithHostAccess",
+    "unlimitedStorage"
+  ]
 }
 ```
 
 ### Permissions
 
-| Permission      | Purpose                                                |
-| --------------- | ------------------------------------------------------ |
-| `activeTab`     | Access to the currently active tab                     |
-| `storage`       | Store encrypted API key, settings, transaction history |
-| `sidePanel`     | Enable sidepanel mode (Chrome 114+)                    |
-| `notifications` | Show transaction success/failure notifications         |
-| `tabs`          | Query and close extension tabs (e.g., onboarding page) |
+| Permission                         | Purpose                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| `activeTab`                        | Access to the currently active tab                                      |
+| `storage`                          | Store encrypted API key, settings, transaction history                  |
+| `sidePanel`                        | Enable sidepanel mode (Chrome 114+)                                     |
+| `notifications`                    | Show transaction success/failure notifications                          |
+| `tabs`                             | Query and close extension tabs (e.g., onboarding page)                  |
+| `declarativeNetRequestWithHostAccess` | Scope ENS Browsing redirects and local IPFS HTTPS-upgrade exemptions |
+| `unlimitedStorage`                 | Keep storage.local quota headroom for wallet-critical persistent writes |
 
 ## Message Types
 

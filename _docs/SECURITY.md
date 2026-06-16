@@ -551,7 +551,7 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 | Setting                    | Value                                                        | Security Note                                                                  |
 | -------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | `manifest_version`         | 3                                                            | MV3 enforces CSP, no `eval()`, no remote code                                  |
-| `permissions`              | `activeTab`, `storage`, `sidePanel`, `notifications`, `tabs` | No `webRequest`, no `debugger`                                                 |
+| `permissions`              | `activeTab`, `storage`, `sidePanel`, `notifications`, `tabs`, `declarativeNetRequestWithHostAccess`, `unlimitedStorage` | No `webRequest`, no `debugger`; `unlimitedStorage` protects wallet-critical writes from optional cache growth |
 | `host_permissions`         | `https://*/*`, `http://*/*`                                  | Broad, needed for RPC proxy (extension-configured URL only, 15s timeout) + content script |
 | `content_scripts.matches`  | All URLs                                                     | Wallet must inject on all pages for dapp detection                             |
 | `externally_connectable`   | Not defined                                                  | External websites cannot send messages to background                           |
@@ -595,6 +595,8 @@ These must always hold true. Violations indicate a security bug.
 15. **RPC proxy restricts URL sources** - `handleRpcRequest` only accepts extension-configured RPC URLs, preventing arbitrary webpage-controlled endpoints. A 15-second timeout prevents resource exhaustion from slow servers. The inpage dapp-RPC fast path only uses HTTP(S) JSON-RPC URLs discovered from the page itself, validates the chain with `eth_chainId`, forwards only allowlisted non-critical read methods, and falls back to the extension RPC on error or timeout.
 
 16. **Input length validation on user-facing strings** - Display names and group names are capped at 100 characters to prevent storage bloat from malformed inputs. Unknown message types are logged with `console.warn` for debuggability.
+
+17. **Non-critical caches are fail-open** - Metadata/image caches (`tokenInfo:*`, `tokenLogo:*`, `ethShLabels:*`, `swapTokenList:*`, `cs:desc:*`, CoinGecko caches, and `ensAvatarImageCache`) must never block wallet-critical storage writes. Cache writes are best-effort and expired entries are pruned by `storageCachePruner.ts`.
 
 ---
 

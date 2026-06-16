@@ -244,9 +244,13 @@ export async function fetchTokenInfo(
   const promise = fetchTokenInfoOnchain(tokenAddress, chainId)
     .then(async (data) => {
       if (data) {
-        await chrome.storage.local.set({
-          [cacheKey]: { data, fetchedAt: Date.now() } satisfies CachedTokenInfo,
-        });
+        try {
+          await chrome.storage.local.set({
+            [cacheKey]: { data, fetchedAt: Date.now() } satisfies CachedTokenInfo,
+          });
+        } catch {
+          // Cache writes are best-effort; live RPC data is still usable.
+        }
       }
       return data;
     })
@@ -456,9 +460,13 @@ export async function getCachedTokenLogo(
       const addrLower = address.toLowerCase();
       const entry = list.find((t) => t.address.toLowerCase() === addrLower);
       const logoUrl = entry?.logoURI || "";
-      await chrome.storage.local.set({
-        [cacheKey]: { logoUrl, fetchedAt: Date.now() } satisfies CachedTokenLogo,
-      });
+      try {
+        await chrome.storage.local.set({
+          [cacheKey]: { logoUrl, fetchedAt: Date.now() } satisfies CachedTokenLogo,
+        });
+      } catch {
+        // Cache writes are best-effort; callers can use the live lookup result.
+      }
       return logoUrl || null;
     } finally {
       inflightTokenLogo.delete(cacheKey);
@@ -492,9 +500,13 @@ export async function getCachedTokenList(
 
     // Cache the raw API response — pinning happens at read time so changes
     // to EXTRA_TOKENS_PER_CHAIN take effect without invalidating the cache.
-    await chrome.storage.local.set({
-      [key]: { tokens, fetchedAt: Date.now() } satisfies CachedTokenList,
-    });
+    try {
+      await chrome.storage.local.set({
+        [key]: { tokens, fetchedAt: Date.now() } satisfies CachedTokenList,
+      });
+    } catch {
+      // Cache writes are best-effort; return the fetched list anyway.
+    }
 
     return mergePinnedTokens(chainId, tokens);
   } catch {

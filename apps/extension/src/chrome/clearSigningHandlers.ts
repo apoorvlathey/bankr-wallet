@@ -121,7 +121,11 @@ async function writeCache(
     updatedAt: Date.now(),
     descriptor,
   };
-  await chrome.storage.local.set({ [key]: entry });
+  try {
+    await chrome.storage.local.set({ [key]: entry });
+  } catch {
+    // Cache writes are best-effort; descriptor results should still render.
+  }
 }
 
 async function fetchDescriptor(

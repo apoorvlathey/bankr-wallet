@@ -35,8 +35,10 @@ Rule: check `cachedVaultKey` to determine which system is active before saving A
 
 Persists across extension restarts. Wallet-scoped keys and transient prefixes
 are cleared by manual reset through `apps/extension/src/chrome/walletResetStorage.ts`;
-other app preferences/caches are cleared only on uninstall or by their own TTL
-logic.
+other app preferences persist until changed by the user. Non-critical metadata
+and image caches are pruned by `apps/extension/src/chrome/storageCachePruner.ts`
+on service-worker startup and every 6 hours, in addition to their normal
+read-time TTL checks.
 
 ### Encryption & Vault Keys
 
@@ -79,7 +81,7 @@ logic.
 | `portfolioSnapshots` | `Record<address, HoldingsSnapshot[]>`                              | Portfolio value snapshots per address. 1-hour min interval, 8-day retention. | v1.0.0     |
 | `hiddenPortfolioTokens` | `HiddenPortfolioToken[]` — `HiddenPortfolioToken` is `{ chainId, contractAddress, symbol?, name?, logoUrl?, hiddenAt }` | Global list of ERC-20 tokens hidden from Holdings across all wallet addresses. `loadPortfolioTokenCatalog` filters these before totals are calculated, so current value and newly-written snapshots exclude hidden tokens. Add Token / wallet_watchAsset remove the matching hidden entry globally. Additive; absence means no hidden tokens. Older per-address development records are flattened lazily. | next |
 | `ensIdentityCache`   | `Record<address, { name, avatar, resolvedAt }>`                    | Resolved ENS/Basename/WNS/Mega names and avatars. 6-hour cache.              | v1.0.0     |
-| `ensAvatarImageCache` | `Record<url, { dataUrl, sizeBytes, cachedAt, lastAccessedAt }>`   | Avatar/token-logo image bytes re-encoded to WebP (via `createImageBitmap` + `OffscreenCanvas`, background-only) and stored as data URLs. Keyed by source URL, 14-day TTL, LRU-pruned to 200 entries / 5 MB. Re-encoding strips SVG scripts/metadata so cached bytes are guaranteed raster pixels. Renderer pages keep a best-effort `window.localStorage` mirror (`walletchan:imageCacheMirror:v1`, capped at ~2 MB) so already-cached images can paint synchronously on first render; `chrome.storage.local` is canonical and no migration is required if the mirror is absent. | v3.3.0 |
+| `ensAvatarImageCache` | `Record<url, { dataUrl, sizeBytes, cachedAt, lastAccessedAt }>`   | Avatar/token-logo image bytes re-encoded to WebP (via `createImageBitmap` + `OffscreenCanvas`, background-only) and stored as data URLs. Keyed by source URL, 14-day TTL, LRU-pruned to 200 entries / 5 MB on write and periodically compacted by `storageCachePruner.ts`. Re-encoding strips SVG scripts/metadata so cached bytes are guaranteed raster pixels. Renderer pages keep a best-effort `window.localStorage` mirror (`walletchan:imageCacheMirror:v1`, capped at ~2 MB) so already-cached images can paint synchronously on first render; `chrome.storage.local` is canonical and no migration is required if the mirror is absent. | v3.3.0 |
 | `customTokens`       | `CustomToken[]` — `{ contractAddress, chainId, symbol, name, decimals, addedAt }` | User-added custom ERC-20 tokens for portfolio tracking. Merged into holdings on each load; skipped if API already returns the token. | v2.2.0 |
 | `customDelegates`    | `Record<accountId, Record<chainId, "0x...">>` | Per-account × per-chain EIP-7702 custom-delegate mirror used by the Smart Account UI for display/prefill. Runtime batch resolution trusts `eth_getCode(EOA)` and the default-delegate registry, not this storage key. Reconciled from chain after Set/Revoke receipts, cleared automatically on account removal and when the onchain delegate is revoked/default. See [`7702.md`](./7702.md). | next |
 | `recentlyReceivedTokens` | `Record<"chainId-address", { chainId, contractAddress, addedAt, symbol?, decimals?, logoUrl?, name? }>` | Tokens the user just received in a confirmed tx but the upstream portfolio API hasn't re-indexed yet. Best-effort write by `assetChangesExtractor` after a tx's ERC-20 Transfer logs decode an inbound entry and before broadcasting the tx-history asset-change update; merged into the portfolio catalog (`loadPortfolioTokenCatalog`) like `customTokens` until the entry expires. Auto-expires per-entry after 5 min — lazy pruning inside `getRecentReceivedTokens`. | next |
@@ -90,6 +92,14 @@ logic.
 | `tokenInfo:{chainId}:{address}` | `{ data: { name, symbol, decimals }, fetchedAt }`        | Cached onchain ERC-20 metadata. Avoids 3-RPC roundtrip (`name` + `symbol` + `decimals`) every time we render a token amount. Symbol/decimals are immutable on chain; 30-day TTL is a safety net for occasional proxy-upgrade `name` changes. Written by `fetchTokenInfo` in `swapApi.ts`. | next |
 | `tokenLogo:{chainId}:{address}` | `{ logoUrl: string, fetchedAt }`                          | Cached per-token logo URL (resolved from the swap token list once, then read directly from storage). Empty string = known-no-logo. Replaces the per-render `fetchSwapTokenList` payload (200KB+) for inline token logos — only the small URL crosses the popup ↔ background channel. 30-day TTL. Written by `getCachedTokenLogo` in `swapApi.ts`. The actual image bytes are cached separately in `ensAvatarImageCache` (shared with ENS avatars). | next |
 | `ethShLabels:{chainId}:{address}` | `{ labels: string[], fetchedAt }`                       | Cached eth.sh contract labels (e.g. `["Permit2"]`, `["Uniswap V3 Router"]`). Empty array = known-no-labels (still cached to avoid re-hitting on every popup mount). Shared by six surfaces (tx + approve + signature + clear-signing + AddressParam + batch inline summary) via `getEthShLabels` in `lib/ethShLabelsCache.ts`, which also dedupes in-flight requests so a 5-call batch to the same spender makes one fetch instead of six. 7-day TTL. | next |
+| `swapTokenList:{chainId}` | `{ tokens: SwapToken[], fetchedAt }`                              | Cached swap token list response for a chain. Pinning/extra token merge happens on read, so the cached upstream payload can stay raw. 1-day TTL. Written by `getCachedTokenList` in `swapApi.ts`. | next |
+
+These metadata/image cache keys are non-critical. Cache writes are best-effort
+and may be skipped if `chrome.storage.local` rejects the write; callers still use
+the live response. `storageCachePruner.ts` deletes expired `tokenInfo:*`,
+`tokenLogo:*`, `ethShLabels:*`, `swapTokenList:*`, `cs:desc:*`, CoinGecko cache
+entries, and old avatar image entries so cache bloat does not block wallet
+state writes.
 
 ### Transient (dynamic keys)
 
@@ -226,11 +236,16 @@ New keys:
 - `chrome.storage.local.walletConnectPendingRequests` (optional, additive)
 - `chrome.storage.local.walletConnectChainId` (optional, additive)
 - `chrome.storage.local.hiddenPortfolioTokens` (optional, additive)
+- `chrome.storage.local.swapTokenList:{chainId}` (optional cache; absence refetches)
 
 Modified keys:
 
 - `pendingTxRequests` and `pendingSignatureRequests` can include optional `walletConnect` display/response metadata.
+- Non-critical metadata/image cache writes are best-effort and expired cache
+  entries are actively pruned by `storageCachePruner.ts`.
+- Chrome and Firefox manifests include `unlimitedStorage` to preserve headroom
+  for wallet-critical persistent writes even when optional metadata caches grow.
 
 Migration from any prior version:
 
-- No migration required. Missing `walletConnectPendingRequests` resolves to an empty map, missing `walletConnectChainId` falls back to the current global chain or first visible chain, missing `hiddenPortfolioTokens` resolves to no hidden tokens, legacy per-address hidden-token records are flattened lazily to the global list, and old pending request entries without `walletConnect` metadata follow the injected-provider result path unchanged.
+- No migration required. Missing `walletConnectPendingRequests` resolves to an empty map, missing `walletConnectChainId` falls back to the current global chain or first visible chain, missing `hiddenPortfolioTokens` resolves to no hidden tokens, missing cache keys are lazily refetched, legacy per-address hidden-token records are flattened lazily to the global list, and old pending request entries without `walletConnect` metadata follow the injected-provider result path unchanged.

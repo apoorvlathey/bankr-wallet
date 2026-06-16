@@ -530,27 +530,43 @@ class CoinGeckoService {
   }
 
   private async persistMarketCache() {
-    await chrome.storage.local.set({
-      [MARKET_CACHE_STORAGE_KEY]: Object.fromEntries(this.marketCache),
-    });
+    try {
+      await chrome.storage.local.set({
+        [MARKET_CACHE_STORAGE_KEY]: Object.fromEntries(this.marketCache),
+      });
+    } catch {
+      // Cache persistence is best-effort; live/in-memory results still work.
+    }
   }
 
   private async persistSearchCache() {
-    await chrome.storage.local.set({
-      [SEARCH_CACHE_STORAGE_KEY]: Object.fromEntries(this.searchCache),
-    });
+    try {
+      await chrome.storage.local.set({
+        [SEARCH_CACHE_STORAGE_KEY]: Object.fromEntries(this.searchCache),
+      });
+    } catch {
+      // Cache persistence is best-effort; live/in-memory results still work.
+    }
   }
 
   private async persistResolutionCache() {
-    await chrome.storage.local.set({
-      [RESOLUTION_CACHE_STORAGE_KEY]: Object.fromEntries(this.resolutionCache),
-    });
+    try {
+      await chrome.storage.local.set({
+        [RESOLUTION_CACHE_STORAGE_KEY]: Object.fromEntries(this.resolutionCache),
+      });
+    } catch {
+      // Cache persistence is best-effort; live/in-memory results still work.
+    }
   }
 
   private async persistErc20PriceCache() {
-    await chrome.storage.local.set({
-      [ERC20_PRICE_CACHE_STORAGE_KEY]: Object.fromEntries(this.erc20PriceCache),
-    });
+    try {
+      await chrome.storage.local.set({
+        [ERC20_PRICE_CACHE_STORAGE_KEY]: Object.fromEntries(this.erc20PriceCache),
+      });
+    } catch {
+      // Cache persistence is best-effort; live/in-memory results still work.
+    }
   }
 }
 

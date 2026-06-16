@@ -121,6 +121,10 @@ import {
   WALLET_RESULT_STORAGE_PREFIXES,
   WALLET_SYNC_STORAGE_KEYS,
 } from "./walletResetStorage";
+import {
+  CACHE_PRUNE_INTERVAL_MS,
+  pruneNonCriticalStorageCaches,
+} from "./storageCachePruner";
 
 // Session & cache management
 import {
@@ -463,6 +467,12 @@ setInterval(() => {
   clearExpiredWalletConnectPendingRequests();
 }, 60000); // Every minute
 
+function pruneStorageCachesBestEffort(): void {
+  pruneNonCriticalStorageCaches().catch((error) => {
+    console.warn("[storage-cache] prune failed:", error);
+  });
+}
+
 // Clean up stale result keys from storage (from previous service worker sessions)
 chrome.storage.local.get(null).then((items) => {
   const staleKeys = getStorageKeysWithPrefixes(
@@ -474,6 +484,10 @@ chrome.storage.local.get(null).then((items) => {
   });
   if (staleKeys.length > 0) chrome.storage.local.remove(staleKeys);
 });
+
+// Keep non-critical metadata/image caches from crowding wallet-critical state.
+pruneStorageCachesBestEffort();
+setInterval(pruneStorageCachesBestEffort, CACHE_PRUNE_INTERVAL_MS);
 
 // Clean up old bundle statuses on startup
 cleanupOldBundleStatuses();
