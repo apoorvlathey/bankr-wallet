@@ -21,6 +21,7 @@ import {
   addImpersonatorAccount,
   addSeedPhraseAccount,
   addSeedGroup,
+  removeSeedGroup,
   getSeedGroups,
   renameSeedGroup,
   updateSeedGroupCount,
@@ -37,7 +38,7 @@ import {
   isValidMnemonic,
   derivePrivateKey as deriveSeedPrivateKey,
 } from "./seedPhraseUtils";
-import { storeMnemonic, getMnemonic } from "./mnemonicStorage";
+import { storeMnemonic, getMnemonic, removeMnemonic } from "./mnemonicStorage";
 import { deriveAddress } from "./localSigner";
 import { validateEIP712TypedData } from "./eip712Validator";
 import {
@@ -1873,19 +1874,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return;
           }
 
-          // Create seed group
-          const group = await addSeedGroup(message.name);
-
-          // Encrypt and store mnemonic
-          await storeMnemonic(group.id, mnemonic, password);
-
-          const importedAccounts: SeedPhraseAccount[] = [];
+          const importableCandidates: Array<{
+            index: number;
+            address: string;
+          }> = [];
           for (const idx of indices) {
             const privateKey = deriveSeedPrivateKey(mnemonic, idx);
             const address = deriveAddress(privateKey);
-
-            // Check if address already exists (PK → seed phrase conversion)
             const existingAccount = await findAccountByAddress(address);
+            if (!existingAccount || existingAccount.type === "privateKey") {
+              importableCandidates.push({ index: idx, address });
+            }
+          }
+
+          if (importableCandidates.length === 0) {
+            sendResponse({
+              success: false,
+              error: "All selected addresses already exist in this wallet",
+            });
+            return;
+          }
+
+          const group = await addSeedGroup(message.name);
+          let mnemonicStored = false;
+
+          // Store the mnemonic only after at least one selected address can be
+          // imported or converted. Failed duplicate-only imports must not leave
+          // orphaned seed material in storage.
+          try {
+            await storeMnemonic(group.id, mnemonic, password);
+            mnemonicStored = true;
+          } catch (error) {
+            await removeSeedGroup(group.id);
+            throw error;
+          }
+
+          const importedAccounts: SeedPhraseAccount[] = [];
+          for (const candidate of importableCandidates) {
+            // Check if address already exists (PK → seed phrase conversion)
+            const existingAccount = await findAccountByAddress(
+              candidate.address,
+            );
             let account: SeedPhraseAccount;
 
             if (existingAccount) {
@@ -1893,7 +1922,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 const converted = await convertToSeedPhraseAccount(
                   existingAccount.id,
                   group.id,
-                  idx,
+                  candidate.index,
                 );
                 if (!converted) throw new Error("Failed to convert account");
                 account = converted;
@@ -1903,10 +1932,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 continue;
               }
             } else {
+              const privateKey = deriveSeedPrivateKey(
+                mnemonic,
+                candidate.index,
+              );
               account = await addSeedPhraseAccount(
-                address,
+                candidate.address,
                 group.id,
-                idx,
+                candidate.index,
                 // Only apply the user-supplied display name to the first
                 // imported account so multi-imports don't collide on name.
                 importedAccounts.length === 0
@@ -1919,7 +1952,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
 
           if (importedAccounts.length === 0) {
-            // Every selected index already mapped to a non-PK account
+            if (mnemonicStored) await removeMnemonic(group.id);
+            await removeSeedGroup(group.id);
             sendResponse({
               success: false,
               error: "All selected addresses already exist in this wallet",
