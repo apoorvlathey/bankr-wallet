@@ -30,12 +30,10 @@ import {
 } from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { NetworksInfo } from "@/types";
-import type { AccountType } from "@/chrome/types";
 import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { getChainConfig } from "@/constants/chainConfig";
 import ChainIcon from "@/components/ChainIcon";
-import { getVisibleChains } from "@/lib/chains";
 import { ThemedCard, Decorator, useIconChipBg, useTheme } from "@/theme";
 import EditChain from "./EditChain";
 import AddChain from "./AddChain";
@@ -232,14 +230,11 @@ function Chains({
   onChainSaved?: (chain: { chainName: string; chainId: number }) => void;
   onInitialAddChainCancelled?: () => void;
 }) {
-  const { networksInfo, setNetworksInfo } = useNetworks();
+  const { networksInfo } = useNetworks();
   const toast = useThemedToast();
 
   const [tab, setTab] = useState<React.ReactElement>();
   const [pendingInitialEditChainName, setPendingInitialEditChainName] = useState(initialEditChainName);
-  const [activeAccountType, setActiveAccountType] = useState<AccountType | null>(
-    null,
-  );
   const [activeChainName, setActiveChainName] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const searchInputRef = React.useRef<HTMLInputElement>(null);
@@ -286,11 +281,6 @@ function Chains({
   }, [pendingInitialEditChainName, networksInfo, onChainSaved]);
 
   useEffect(() => {
-    chrome.runtime.sendMessage({ type: "getActiveAccount" }, (account) => {
-      if (chrome.runtime.lastError) return;
-      setActiveAccountType(account?.type ?? null);
-    });
-
     chrome.storage.sync.get("chainName").then(({ chainName }) => {
       setActiveChainName(chainName ?? null);
     });
@@ -317,77 +307,55 @@ function Chains({
     return () => window.clearTimeout(timeout);
   }, []);
 
-  const getFallbackChainName = (
-    nextNetworksInfo: NetworksInfo,
-    excludedChainName?: string,
-  ): string | null => {
-    const visibleChains = getVisibleChains(nextNetworksInfo, activeAccountType).filter(
-      (chain) => chain.name !== excludedChainName,
-    );
-    return visibleChains[0]?.name ?? null;
-  };
-
-  const applyNetworkUpdate = async (
-    nextNetworksInfo: NetworksInfo,
-    options?: { hiddenChainName?: string; deletedChainName?: string },
-  ) => {
-    const hiddenChainName = options?.hiddenChainName;
-    const deletedChainName = options?.deletedChainName;
-    const invalidatedChainName = deletedChainName || hiddenChainName;
-    const shouldSwitch =
-      !!activeChainName &&
-      !!invalidatedChainName &&
-      activeChainName === invalidatedChainName;
-
-    const fallbackChainName = shouldSwitch
-      ? getFallbackChainName(nextNetworksInfo, deletedChainName)
-      : null;
-
-    if (shouldSwitch && !fallbackChainName) {
-      toast({
-        title: deletedChainName ? "Cannot delete chain" : "Cannot hide chain",
-        description: "This is the last visible chain for the current account.",
-        status: "error",
-        duration: 3000,
-      });
-      return false;
-    }
-
-    setNetworksInfo(nextNetworksInfo);
-
-    if (fallbackChainName) {
-      await chrome.storage.sync.set({ chainName: fallbackChainName });
-      setActiveChainName(fallbackChainName);
-      toast({
-        title: deletedChainName
-          ? "Active chain deleted"
-          : "Active chain hidden",
-        description: `Switched to ${fallbackChainName}.`,
-        status: "info",
-        duration: 2500,
-      });
-    }
-
-    return true;
-  };
-
   const toggleHidden = async (chainName: string) => {
     if (!networksInfo) return;
 
-    const nextNetworksInfo = {
-      ...networksInfo,
-      [chainName]: {
-        ...networksInfo[chainName],
-        hidden: !networksInfo[chainName].hidden,
-      },
-    };
+    const network = networksInfo[chainName];
+    if (!network) return;
 
-    const switched = await applyNetworkUpdate(nextNetworksInfo, {
-      hiddenChainName: nextNetworksInfo[chainName].hidden ? chainName : undefined,
+    const hidden = !network.hidden;
+    const result = await new Promise<{
+      success: boolean;
+      error?: string;
+      fallbackChainName?: string;
+    }>((resolve) => {
+      chrome.runtime.sendMessage(
+        {
+          type: "setNetworkHidden",
+          chainName,
+          hidden,
+        },
+        (response) =>
+          resolve(
+            response ?? {
+              success: false,
+              error: chrome.runtime.lastError?.message || "Network update failed.",
+            },
+          ),
+      );
     });
-    if (switched && activeChainName !== chainName) {
+
+    if (!result.success) {
       toast({
-        title: nextNetworksInfo[chainName].hidden ? "Chain hidden" : "Chain shown",
+        title: hidden ? "Cannot hide chain" : "Cannot show chain",
+        description: result.error || "Network update failed.",
+        status: "error",
+        duration: 3000,
+      });
+      return;
+    }
+
+    if (result.fallbackChainName) {
+      setActiveChainName(result.fallbackChainName);
+      toast({
+        title: "Active chain hidden",
+        description: `Switched to ${result.fallbackChainName}.`,
+        status: "info",
+        duration: 2500,
+      });
+    } else if (activeChainName !== chainName) {
+      toast({
+        title: hidden ? "Chain hidden" : "Chain shown",
         description: chainName,
         status: "success",
         duration: 1800,
@@ -401,13 +369,44 @@ function Chains({
   };
 
   const doDelete = async () => {
-    if (chainToDelete && networksInfo) {
-      const next = { ...networksInfo };
-      delete next[chainToDelete];
-      const deleted = await applyNetworkUpdate(next, {
-        deletedChainName: chainToDelete,
+    if (chainToDelete) {
+      const result = await new Promise<{
+        success: boolean;
+        error?: string;
+        fallbackChainName?: string;
+      }>((resolve) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "deleteNetwork",
+            chainName: chainToDelete,
+          },
+          (response) =>
+            resolve(
+              response ?? {
+                success: false,
+                error: chrome.runtime.lastError?.message || "Network update failed.",
+              },
+            ),
+        );
       });
-      if (!deleted) return;
+      if (!result.success) {
+        toast({
+          title: "Cannot delete chain",
+          description: result.error || "Network update failed.",
+          status: "error",
+          duration: 3000,
+        });
+        return;
+      }
+      if (result.fallbackChainName) {
+        setActiveChainName(result.fallbackChainName);
+        toast({
+          title: "Active chain deleted",
+          description: `Switched to ${result.fallbackChainName}.`,
+          status: "info",
+          duration: 2500,
+        });
+      }
     }
     setChainToDelete(null);
     onClose();

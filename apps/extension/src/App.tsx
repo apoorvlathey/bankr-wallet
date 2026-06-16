@@ -1459,9 +1459,25 @@ function App() {
   useUpdateEffect(() => {
     const updateChainId = async () => {
       if (networksInfo && chainName) {
-        const tab = await currentTab();
         const chain = getResolvedChainByName(chainName, networksInfo);
-        if (!chain) return;
+
+        if (
+          !chain ||
+          chain.hidden ||
+          (activeAccount?.type === "bankr" && !chain.isBankrSupported)
+        ) {
+          const fallbackChainName = getDefaultChainName(
+            networksInfo,
+            activeAccount?.type,
+          );
+          if (fallbackChainName && fallbackChainName !== chainName) {
+            setChainName(fallbackChainName);
+            await chrome.storage.sync.set({ chainName: fallbackChainName });
+          }
+          return;
+        }
+
+        const tab = await currentTab();
 
         chrome.tabs
           .sendMessage(tab.id!, {
@@ -1477,23 +1493,7 @@ function App() {
     };
 
     updateChainId();
-  }, [chainName, networksInfo]);
-
-  useUpdateEffect(() => {
-    if (
-      activeAccount?.type === "bankr" &&
-      networksInfo &&
-      chainName
-    ) {
-      const currentChain = getResolvedChainByName(chainName, networksInfo);
-      if (currentChain && !currentChain.isBankrSupported) {
-        const fallbackChainName = getDefaultChainName(networksInfo, "bankr");
-        if (fallbackChainName && fallbackChainName !== chainName) {
-          setChainName(fallbackChainName);
-        }
-      }
-    }
-  }, [activeAccount?.type, networksInfo, chainName]);
+  }, [activeAccount?.type, chainName, networksInfo]);
 
   useUpdateEffect(() => {
     if (reloadRequired && networksInfo) {

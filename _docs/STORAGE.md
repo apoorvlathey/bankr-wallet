@@ -126,7 +126,7 @@ Syncs across Chrome profiles (if signed in). Persists across restarts.
 | `address`         | `string` (`0x...`)                              | Active wallet address. Written by popup on account switch, read by inject.ts for provider init. | v0.1.0     |
 | `displayAddress`  | `string`                                        | Display-friendly name (ENS name, custom label, or raw address).                                 | v0.1.0     |
 | `chainName`       | `string` (e.g. `"Base"`)                        | Currently selected network. Per-tab via inject.ts, global default via popup.                    | v0.1.0     |
-| `networksInfo`    | `Record<string, { chainId, rpcUrl, explorer }>` | Supported networks config. Written by NetworksContext on first load.                            | v0.1.0     |
+| `networksInfo`    | `Record<string, { chainId, rpcUrl, hidden?, isCustom?, explorer?, nativeCurrency? }>` | Supported network runtime config. Built-ins are normalized from `chainRegistry`; this key stores RPC overrides, hidden flags, and user-added custom chains. Mutating writes are service-worker-owned via `networkStorage.ts`; `NetworksContext` mirrors storage changes and bootstraps missing defaults through `ensureNetworksInfo`. | v0.1.0     |
 | `activeAccountId` | `string` (UUID)                                 | Currently active account ID. Falls back to first account if missing.                            | v1.0.0     |
 | `tabAccounts`     | `Record<number, string>` (tabId → accountId)    | Per-tab account overrides. Cleaned up when accounts are removed.                                | v1.0.0     |
 

@@ -107,6 +107,13 @@ import {
   getClearSigningEnabled,
   setClearSigningEnabled,
 } from "./clearSigningHandlers";
+import {
+  addNetworkIfMissing,
+  deleteNetworkEntry,
+  ensureNetworksInfo,
+  setNetworkHiddenState,
+  updateNetworkEntry,
+} from "./networkStorage";
 
 // Session & cache management
 import {
@@ -794,6 +801,12 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "getClearSigningEnabled",
   "setClearSigningEnabled",
   "INVALIDATE_CLEAR_SIGNING_CACHE",
+  // Network settings mutate synced provider-visible chain metadata.
+  "ensureNetworksInfo",
+  "addNetwork",
+  "updateNetwork",
+  "setNetworkHidden",
+  "deleteNetwork",
   // Full token metadata may include watched/custom-token metadata.
   "resolveTokenMetadata",
   "lookupCustomToken",
@@ -1082,63 +1095,89 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "ensureNetworksInfo": {
+      ensureNetworksInfo().then(sendResponse);
+      return true;
+    }
+
+    case "addNetwork": {
+      addNetworkIfMissing({
+        chainName: message.chainName,
+        entry: message.entry,
+      }).then(sendResponse);
+      return true;
+    }
+
+    case "updateNetwork": {
+      updateNetworkEntry({
+        chainName: message.chainName,
+        nextChainName: message.nextChainName,
+        entry: message.entry,
+      }).then(sendResponse);
+      return true;
+    }
+
+    case "setNetworkHidden": {
+      (async () => {
+        const activeAccount = await getActiveAccount();
+        const result = await setNetworkHiddenState({
+          chainName: message.chainName,
+          hidden: message.hidden,
+          activeAccountType: activeAccount?.type,
+        });
+        sendResponse(result);
+      })();
+      return true;
+    }
+
+    case "deleteNetwork": {
+      (async () => {
+        const activeAccount = await getActiveAccount();
+        const result = await deleteNetworkEntry({
+          chainName: message.chainName,
+          activeAccountType: activeAccount?.type,
+        });
+        sendResponse(result);
+      })();
+      return true;
+    }
+
     case "confirmAddChain": {
       (async () => {
         const requests = await getPendingAddChainRequests();
         const pending = requests.find((r) => r.id === message.requestId);
         if (pending) {
-          const { networksInfo } = await chrome.storage.sync.get("networksInfo");
-          const nets = networksInfo || {};
-
-          const existingName = Object.keys(nets).find(
-            (name) => nets[name].chainId === pending.chainId,
-          );
-
           const name = message.chainName || pending.chainName || `Chain ${pending.chainId}`;
           const rpcUrl = message.rpcUrl || pending.rpcUrls?.[0] || "";
           const explorer =
             message.explorer || pending.blockExplorerUrls?.[0] || "";
           const nativeCurrency =
             message.nativeCurrency || pending.nativeCurrency;
-
-          if (!existingName) {
-            nets[name] = {
+          const activeAccount = await getActiveAccount();
+          const addResult = await addNetworkIfMissing({
+            chainName: name,
+            entry: {
               chainId: message.chainId || pending.chainId,
               rpcUrl,
               isCustom: true,
               explorer: explorer || undefined,
               nativeCurrency,
-            };
+            },
+            switchIfSupportedForAccountType: activeAccount?.type ?? null,
+          });
+
+          if (!addResult.success) {
+            sendResponse(addResult);
+            return;
           }
-
-          const resolvedName = existingName || name;
-          const resolvedRpcUrl = existingName ? nets[existingName].rpcUrl : rpcUrl;
-          const activeAccount = await getActiveAccount();
-          const resolvedChain = getResolvedChainById(
-            message.chainId || pending.chainId,
-            nets,
-          );
-          const shouldSwitch =
-            activeAccount?.type !== "bankr" ||
-            resolvedChain?.isBankrSupported === true;
-
-          await chrome.storage.sync.set(
-            shouldSwitch
-              ? {
-                  networksInfo: nets,
-                  chainName: resolvedName,
-                }
-              : {
-                  networksInfo: nets,
-                },
-          );
 
           await removePendingAddChainRequest(pending.id);
           const result = {
             success: true,
-            rpcUrl: resolvedRpcUrl,
-            chainName: resolvedName,
-            shouldSwitch,
+            rpcUrl:
+              addResult.networksInfo[addResult.chainName]?.rpcUrl || rpcUrl,
+            chainName: addResult.chainName,
+            shouldSwitch: addResult.shouldSwitch,
           };
           await writeResultToStorage(`addChainResult:${pending.id}`, result);
           sendResponse(result);

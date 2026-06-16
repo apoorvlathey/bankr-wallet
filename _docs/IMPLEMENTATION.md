@@ -197,7 +197,7 @@ The following chains are supported for transaction signing (listed in dropdown o
 | Polygon  | 137      | https://polygon-rpc.com         | ✅        | ✅                   |          |
 | Unichain | 130      | https://mainnet.unichain.org    | ✅        | ✅                   | ✅       |
 
-These are configured in `src/constants/chainRegistry.ts` (the single source of truth for built-in chain data) and pre-populated on first install.
+These are configured in `src/constants/chainRegistry.ts` (the single source of truth for built-in chain data) and normalized into `networksInfo` by the service-worker bootstrap if storage is missing.
 
 ### Runtime Chain Resolution
 
@@ -206,8 +206,10 @@ Built-in chain metadata and user-customized chain state are intentionally split:
 - `src/constants/chainRegistry.ts` defines the canonical built-in chains and all derived static maps
 - `chrome.storage.sync.networksInfo` stores runtime overrides only: edited RPC URLs, hidden flags, and user-added custom chains
 - `src/lib/chains.ts` is the required merge layer for runtime code. It normalizes `networksInfo`, keeps built-in chains keyed by their registry name, and exposes helpers like `getVisibleChains`, `getResolvedChainById`, and `getStoredRpcUrl`
+- `src/chrome/networkStorage.ts` owns mutating writes to `networksInfo` in the service worker. Settings UI and dapp `wallet_addEthereumChain` confirmations call extension-only background messages (`addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain`) instead of writing a full popup snapshot back to storage.
+- `src/contexts/NetworksContext.tsx` is a read-through mirror: it initializes via `ensureNetworksInfo` and subscribes to `chrome.storage.onChanged` for `networksInfo`, so long-lived sidepanels pick up chains added by other extension flows.
 
-**Important:** Do not read `CHAIN_REGISTRY` and `networksInfo` separately in components/handlers to rebuild chain lists or look up RPC/explorer/native currency data. That is what caused custom-chain support to drift across screens. New runtime chain logic should go through `src/lib/chains.ts`.
+**Important:** Do not read `CHAIN_REGISTRY` and `networksInfo` separately in components/handlers to rebuild chain lists or look up RPC/explorer/native currency data. That is what caused custom-chain support to drift across screens. New runtime chain logic should go through `src/lib/chains.ts`, and new network mutations should go through `src/chrome/networkStorage.ts` so stale popup snapshots cannot delete chains added by the background.
 
 **Default Network**: Base is set as the default network for new installations.
 
@@ -372,6 +374,7 @@ src/
 │   ├── localSigner.ts       # Transaction and message signing with viem
 │   ├── accountStorage.ts    # Account CRUD operations (includes seed groups, PK→seed conversion)
 │   ├── storageLock.ts       # Per-key serializer for chrome.storage read-modify-write helpers
+│   ├── networkStorage.ts    # Service-worker-owned networksInfo mutations + active-chain fallback
 │   ├── gasEstimation.ts     # Pre-confirmation gas estimation (RPC fees, CoinGecko USD price)
 │   ├── bankrApi.ts          # Bankr API client (submit, sign, job polling)
 │   ├── portfolioApi.ts      # Portfolio API client (fetches token holdings via website)
@@ -1227,11 +1230,13 @@ This applies to pending request queues (`pendingTxRequests`,
 `pendingSignatureRequests`, `pendingBatchTxRequests`,
 `pendingWatchAssetRequests`, `pendingAddChainRequests`,
 `walletConnectPendingRequests`), account metadata (`accounts`, `tabAccounts`,
-`seedGroups`), `customTokens`, `txHistory`, `bundleStatuses`, and
-`pendingBridges`. Because popup pages and the background are separate JS
-contexts, `customTokens` mutations are routed through background messages
-(`addCustomToken`, `updateCustomToken`, `removeCustomToken`) so all writes share
-the service worker's lock instance.
+`seedGroups`), `customTokens`, `networksInfo`, `txHistory`, `bundleStatuses`,
+and `pendingBridges`. Because popup pages and the background are separate JS
+contexts, `customTokens` and `networksInfo` mutations are routed through
+background messages (`addCustomToken`, `updateCustomToken`,
+`removeCustomToken`; `addNetwork`, `updateNetwork`, `setNetworkHidden`,
+`deleteNetwork`, `confirmAddChain`) so all writes share the service worker's
+lock instance.
 
 ### UI Component
 

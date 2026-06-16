@@ -204,6 +204,7 @@ state must be added to this set. Current examples include:
 | Transaction/history UI | `getTxHistory`, `getProcessingTxs`, `getFailedTxResult`, `checkPendingTxReceipt`, `cancelProcessingTx`, `splitBatchIntoIndividualTxs`, gas/simulation helpers | Avoid letting content scripts inspect or alter local pending/history/status state. |
 | Chat | `submitChatPrompt`, `getChatConversations`, `getChatConversation`, `createChatConversation`, `deleteChatConversation`, `addChatMessage`, `updateChatMessage` | Chat prompt submission uses the user's Bankr credentials/session and chat history is local user data. |
 | Settings/cache | `setArcBrowser`, `getSidePanelMode`, `setSidePanelMode`, `getClearSigningEnabled`, `setClearSigningEnabled`, `INVALIDATE_CLEAR_SIGNING_CACHE` | These are extension UI preferences/cache controls, not dapp APIs. |
+| Network settings | `ensureNetworksInfo`, `addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain` | Mutate provider-visible `networksInfo` / `chainName`; keep service-worker-owned so webpages cannot alter wallet RPC metadata or clobber user-added chains. |
 
 `getActiveAccount` is the narrow exception: `inject.ts` uses it during content
 script initialization to correct stale synced address state before emitting
@@ -311,6 +312,15 @@ metadata from `customTokens`. `addCustomToken`, `updateCustomToken`, and
 manual token list. Content scripts may still call the narrower `fetchTokenInfo`
 / `fetchTokenLogo` helpers; those return public chain/token-list metadata only
 and do not expose watched-asset custom-token records.
+
+### Network Metadata Handlers
+
+`networksInfo` mutations are routed through `networkStorage.ts` in the service
+worker and gated by `EXTENSION_ONLY_MESSAGES`. Popup/sidepanel pages mirror
+`chrome.storage.sync.networksInfo` through `NetworksContext`; they must not
+write full local snapshots back to storage. This prevents a stale long-lived
+sidepanel from deleting a chain that was added by a dapp confirmation in the
+background.
 
 ---
 
@@ -526,6 +536,8 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 | ------------------------------------------------------ | ------------------------------------ |
 | `address`                                              | Current wallet address               |
 | `displayAddress`                                       | Display-friendly address             |
+| `chainName`                                            | Active chain name                    |
+| `networksInfo`                                         | Runtime chain RPC/hidden/custom metadata; service-worker-owned mutations |
 | `activeAccountId`                                      | Active account ID                    |
 | `autoLockTimeout`                                      | Auto-lock timeout (ms)               |
 | `tabAccounts`                                          | Per-tab account overrides            |

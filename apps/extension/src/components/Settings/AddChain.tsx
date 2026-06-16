@@ -43,13 +43,20 @@ async function fetchChainId(rpcUrl: string): Promise<number | null> {
   }
 }
 
+type NetworkMutationResponse = {
+  success: boolean;
+  chainName?: string;
+  chainId?: number;
+  error?: string;
+};
+
 function AddChain({
   back,
   initialRequest,
   mode = "settings",
   onAdded,
 }: AddChainProps) {
-  const { networksInfo, setNetworksInfo, setReloadRequired } = useNetworks();
+  const { networksInfo, setReloadRequired } = useNetworks();
   const { themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
 
@@ -218,7 +225,13 @@ function AddChain({
               decimals: parseInt(currencyDecimals, 10) || 18,
             },
           },
-          (response) => resolve(response),
+          (response) =>
+            resolve(
+              response ?? {
+                success: false,
+                error: chrome.runtime.lastError?.message || "Failed to add network.",
+              },
+            ),
         );
       });
 
@@ -228,45 +241,40 @@ function AddChain({
         return;
       }
 
-      setNetworksInfo((_networksInfo) => {
-        const existingName = Object.keys(_networksInfo || {}).find(
-          (name) => _networksInfo?.[name].chainId === parseInt(chainId, 10),
-        );
-        if (existingName) {
-          return _networksInfo;
-        }
-
-        return {
-          ..._networksInfo,
-          [result.chainName || chainName]: buildEntry(),
-        };
-      });
-
       onAdded?.(result.chainName || chainName, parseInt(chainId, 10));
       back({ added: true });
       setIsBtnLoading(false);
       return;
     }
 
-    setNetworksInfo((_networksInfo) => {
-      const existingName = Object.keys(_networksInfo || {}).find(
-        (name) => _networksInfo?.[name].chainId === parseInt(chainId, 10),
+    const result = await new Promise<NetworkMutationResponse>((resolve) => {
+      chrome.runtime.sendMessage(
+        {
+          type: "addNetwork",
+          chainName,
+          entry: buildEntry(),
+        },
+        (response) =>
+          resolve(
+            response ?? {
+              success: false,
+              error: chrome.runtime.lastError?.message || "Failed to add network.",
+            },
+          ),
       );
-      if (existingName) {
-        return _networksInfo;
-      }
-
-      if (!_networksInfo || Object.keys(_networksInfo).length === 0) {
-        setReloadRequired(true);
-      }
-
-      return {
-        ..._networksInfo,
-        [chainName]: buildEntry(),
-      };
     });
 
-    onAdded?.(chainName, parseInt(chainId, 10));
+    if (!result.success) {
+      setRpcWarning(result.error || "Failed to add network.");
+      setIsBtnLoading(false);
+      return;
+    }
+
+    if (!networksInfo || Object.keys(networksInfo).length === 0) {
+      setReloadRequired(true);
+    }
+
+    onAdded?.(result.chainName || chainName, result.chainId || parseInt(chainId, 10));
     back({ added: true });
     setIsBtnLoading(false);
   };

@@ -1,14 +1,10 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
-import { useUpdateEffect } from "@chakra-ui/react";
 import { NetworksInfo } from "@/types";
 import { DEFAULT_NETWORKS } from "@/constants/networks";
 import { normalizeNetworksInfo } from "@/lib/chains";
 
 type NetworkContextType = {
   networksInfo: NetworksInfo | undefined;
-  setNetworksInfo: React.Dispatch<
-    React.SetStateAction<NetworksInfo | undefined>
-  >;
   reloadRequired: boolean;
   setReloadRequired: React.Dispatch<React.SetStateAction<boolean>>;
 };
@@ -16,7 +12,6 @@ type NetworkContextType = {
 // eslint-disable-next-line react-refresh/only-export-components
 export const NetworksContext = createContext<NetworkContextType>({
   networksInfo: undefined,
-  setNetworksInfo: () => {},
   reloadRequired: false,
   setReloadRequired: () => {},
 });
@@ -28,44 +23,59 @@ export const NetworksProvider: React.FunctionComponent<{
   const [reloadRequired, setReloadRequired] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetch = async () => {
+      try {
+        const response = (await chrome.runtime.sendMessage({
+          type: "ensureNetworksInfo",
+        })) as { success?: boolean; networksInfo?: NetworksInfo } | undefined;
+        if (!cancelled && response?.success && response.networksInfo) {
+          setNetworksInfo(normalizeNetworksInfo(response.networksInfo));
+          return;
+        }
+      } catch {
+        // Fall back to direct read below; this keeps rendering resilient if the
+        // service worker is restarting while the popup opens.
+      }
+
       const { networksInfo: storedNetworksInfo } =
         (await chrome.storage.sync.get("networksInfo")) as {
           networksInfo: NetworksInfo | undefined;
         };
 
-      if (storedNetworksInfo) {
-        setNetworksInfo(normalizeNetworksInfo(storedNetworksInfo));
-      } else {
-        // Initialize with default networks if nothing stored
-        setNetworksInfo(normalizeNetworksInfo(DEFAULT_NETWORKS));
+      if (!cancelled) {
+        setNetworksInfo(
+          normalizeNetworksInfo(storedNetworksInfo ?? DEFAULT_NETWORKS),
+        );
       }
+    };
+
+    const handleStorageChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string,
+    ) => {
+      if (areaName !== "sync" || !changes.networksInfo) return;
+      setNetworksInfo(
+        normalizeNetworksInfo(
+          (changes.networksInfo.newValue as NetworksInfo | undefined) ??
+            DEFAULT_NETWORKS,
+        ),
+      );
     };
 
     fetch();
-  }, []);
-
-  useUpdateEffect(() => {
-    const saveToBrowser = async () => {
-      if (!networksInfo) return;
-
-      const normalized = normalizeNetworksInfo(networksInfo);
-      if (JSON.stringify(networksInfo) !== JSON.stringify(normalized)) {
-        setNetworksInfo(normalized);
-        return;
-      }
-
-      await chrome.storage.sync.set({ networksInfo: normalized });
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => {
+      cancelled = true;
+      chrome.storage.onChanged.removeListener(handleStorageChange);
     };
-
-    saveToBrowser();
-  }, [networksInfo]);
+  }, []);
 
   return (
     <NetworksContext.Provider
       value={{
         networksInfo,
-        setNetworksInfo,
         reloadRequired,
         setReloadRequired,
       }}
