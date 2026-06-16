@@ -1469,11 +1469,15 @@ function validateSiweSignatureForAccount(
 ): string | null {
   if (allowUnsafeSiwe) return null;
 
+  // SECURITY: bind SIWE validation to Chrome-attested sender.origin when it
+  // exists; fall back for legacy/persisted requests and WalletConnect peers.
+  const trustedOrigin = pending.senderOrigin ?? pending.origin;
+
   const result = validateSiwePersonalSignRequest(
     pending.signature.method,
     pending.signature.params,
     {
-      origin: pending.origin,
+      origin: trustedOrigin,
       signerAddress: accountAddress,
       connectedChainId: pending.signature.chainId,
     },

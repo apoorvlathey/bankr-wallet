@@ -962,7 +962,7 @@ raw-message block.
 
 **Human-readable display:**
 
-- "Sign in to {domain}" summary with the SIWE statement
+- "Sign in to {domain}" summary with the SIWE statement and dapp favicon
 - Site, account, chain, URI, issued/expiration times, request ID, nonce, and resources
 - Copy + explorer actions for the SIWE account address
 - Validation status and issue list
@@ -974,7 +974,10 @@ raw-message block.
 2. Domain, address, URI, version, chain ID, nonce, and RFC 3339 timestamps
 3. Expiration / not-before timing
 4. Message domain ↔ URI host consistency
-5. Connected site origin, connected chain, and signing account match
+5. Connected site origin, connected chain, and signing account match. For
+   dapp-originated requests, SIWE uses the Chrome-attested `sender.origin`
+   captured as `senderOrigin` when available, falling back to the persisted
+   request origin for legacy entries and WalletConnect peers.
 
 Validation is run in the UI for user review and again in `txHandlers.ts` before
 signing for all signing-capable account types. If a SIWE message has validation

@@ -258,6 +258,20 @@ function SignatureRequestConfirmation({
   const iconChipBg = useIconChipBg();
   const { networksInfo } = useNetworks();
   const { signature, origin, chainName, favicon } = sigRequest;
+  const trustedOrigin = sigRequest.senderOrigin ?? origin;
+  const trustedOriginHostname = (() => {
+    try {
+      return new URL(trustedOrigin).hostname;
+    } catch {
+      try {
+        return new URL(origin).hostname;
+      } catch {
+        return trustedOrigin;
+      }
+    }
+  })();
+  const trustedFallbackFavicon = googleFaviconUrl(trustedOriginHostname);
+  const trustedFavicon = favicon || trustedFallbackFavicon;
   const resolvedChain = getResolvedChainById(signature.chainId, networksInfo);
   // Chain badge colors — mirrors TransactionConfirmation so the pill looks
   // identical across surfaces. All per-theme branching lives in
@@ -275,7 +289,7 @@ function SignatureRequestConfirmation({
   const siweAnalysis =
     signature.method === "personal_sign"
       ? analyzeSiweMessage(message, {
-          origin,
+          origin: trustedOrigin,
           signerAddress,
           connectedChainId: signature.chainId,
         })
@@ -518,6 +532,8 @@ function SignatureRequestConfirmation({
             analysis={siweAnalysis}
             connectedChainId={signature.chainId}
             chainName={resolvedChain?.name ?? chainName}
+            faviconUrl={trustedFavicon}
+            fallbackFaviconUrl={trustedFallbackFavicon}
           />
         )}
 
@@ -565,16 +581,13 @@ function SignatureRequestConfirmation({
                   justifyContent="center"
                 >
                   <Image
-                    src={
-                      favicon ||
-                      googleFaviconUrl(new URL(origin).hostname)
-                    }
+                    src={trustedFavicon}
                     alt="favicon"
                     boxSize="14px"
                     sx={{ filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.4)) drop-shadow(0 0 0.5px rgba(255,255,255,0.4))" }}
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
-                      const googleFallback = googleFaviconUrl(new URL(origin).hostname);
+                      const googleFallback = trustedFallbackFavicon;
                       if (target.src !== googleFallback) {
                         target.src = googleFallback;
                       }
@@ -583,7 +596,7 @@ function SignatureRequestConfirmation({
                   />
                 </Box>
                 <Text fontSize="xs" fontWeight="700" color="text.primary">
-                  {new URL(origin).hostname}
+                  {trustedOriginHostname}
                 </Text>
               </HStack>
             </HStack>
