@@ -4,8 +4,10 @@
  */
 
 import type { PendingBatchTxRequest, PinnedBatchTxRequest } from "./erc5792Types";
+import { withStorageLock } from "./storageLock";
 
 const STORAGE_KEY = "pendingBatchTxRequests";
+const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
 const TX_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
 
 export async function getPendingBatchTxRequests(): Promise<PendingBatchTxRequest[]> {
@@ -16,17 +18,21 @@ export async function getPendingBatchTxRequests(): Promise<PendingBatchTxRequest
 export async function savePendingBatchTxRequest(
   request: PinnedBatchTxRequest,
 ): Promise<void> {
-  const requests = await getPendingBatchTxRequests();
-  requests.push(request);
-  await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingBatchTxRequests();
+    requests.push(request);
+    await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  });
   const { updateBadge } = await import("./pendingTxStorage");
   await updateBadge();
 }
 
 export async function removePendingBatchTxRequest(bundleId: string): Promise<void> {
-  const requests = await getPendingBatchTxRequests();
-  const filtered = requests.filter((r) => r.id !== bundleId);
-  await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingBatchTxRequests();
+    const filtered = requests.filter((r) => r.id !== bundleId);
+    await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  });
   const { updateBadge } = await import("./pendingTxStorage");
   await updateBadge();
 }
@@ -54,30 +60,32 @@ export async function updateCallInPendingBatchTxRequest(
   callIndex: number,
   newData: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const requests = await getPendingBatchTxRequests();
-  const idx = requests.findIndex((r) => r.id === bundleId);
-  if (idx === -1) return { success: false, error: "Batch not found" };
+  return withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingBatchTxRequests();
+    const idx = requests.findIndex((r) => r.id === bundleId);
+    if (idx === -1) return { success: false, error: "Batch not found" };
 
-  const target = requests[idx];
-  const calls = target.params.calls ?? [];
-  if (callIndex < 0 || callIndex >= calls.length) {
-    return { success: false, error: "Call index out of range" };
-  }
-  if (!/^0x[0-9a-fA-F]*$/.test(newData)) {
-    return { success: false, error: "Invalid calldata hex" };
-  }
+    const target = requests[idx];
+    const calls = target.params.calls ?? [];
+    if (callIndex < 0 || callIndex >= calls.length) {
+      return { success: false, error: "Call index out of range" };
+    }
+    if (!/^0x[0-9a-fA-F]*$/.test(newData)) {
+      return { success: false, error: "Invalid calldata hex" };
+    }
 
-  const nextCalls = calls.map((c, i) =>
-    i === callIndex ? { ...c, data: newData as `0x${string}` } : c,
-  );
-  const updated: PendingBatchTxRequest = {
-    ...target,
-    params: { ...target.params, calls: nextCalls },
-  };
-  const next = [...requests];
-  next[idx] = updated;
-  await chrome.storage.local.set({ [STORAGE_KEY]: next });
-  return { success: true };
+    const nextCalls = calls.map((c, i) =>
+      i === callIndex ? { ...c, data: newData as `0x${string}` } : c,
+    );
+    const updated: PendingBatchTxRequest = {
+      ...target,
+      params: { ...target.params, calls: nextCalls },
+    };
+    const next = [...requests];
+    next[idx] = updated;
+    await chrome.storage.local.set({ [STORAGE_KEY]: next });
+    return { success: true };
+  });
 }
 
 /**
@@ -89,34 +97,42 @@ export async function removeCallFromPendingBatchTxRequest(
   bundleId: string,
   callIndex: number,
 ): Promise<{ found: boolean; remainingCalls: number }> {
-  const requests = await getPendingBatchTxRequests();
-  const idx = requests.findIndex((r) => r.id === bundleId);
-  if (idx === -1) return { found: false, remainingCalls: 0 };
+  return withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingBatchTxRequests();
+    const idx = requests.findIndex((r) => r.id === bundleId);
+    if (idx === -1) return { found: false, remainingCalls: 0 };
 
-  const target = requests[idx];
-  const calls = target.params.calls ?? [];
-  if (callIndex < 0 || callIndex >= calls.length) {
-    return { found: true, remainingCalls: calls.length };
-  }
+    const target = requests[idx];
+    const calls = target.params.calls ?? [];
+    if (callIndex < 0 || callIndex >= calls.length) {
+      return { found: true, remainingCalls: calls.length };
+    }
 
-  const nextCalls = calls.filter((_, i) => i !== callIndex);
-  const updated: PendingBatchTxRequest = {
-    ...target,
-    params: { ...target.params, calls: nextCalls },
-  };
-  const next = [...requests];
-  next[idx] = updated;
-  await chrome.storage.local.set({ [STORAGE_KEY]: next });
-  return { found: true, remainingCalls: nextCalls.length };
+    const nextCalls = calls.filter((_, i) => i !== callIndex);
+    const updated: PendingBatchTxRequest = {
+      ...target,
+      params: { ...target.params, calls: nextCalls },
+    };
+    const next = [...requests];
+    next[idx] = updated;
+    await chrome.storage.local.set({ [STORAGE_KEY]: next });
+    return { found: true, remainingCalls: nextCalls.length };
+  });
 }
 
 export async function clearExpiredBatchTxRequests(): Promise<void> {
-  const requests = await getPendingBatchTxRequests();
-  const now = Date.now();
-  const valid = requests.filter((r) => now - r.timestamp < TX_EXPIRY_MS);
+  let changed = false;
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingBatchTxRequests();
+    const now = Date.now();
+    const valid = requests.filter((r) => now - r.timestamp < TX_EXPIRY_MS);
 
-  if (valid.length !== requests.length) {
-    await chrome.storage.local.set({ [STORAGE_KEY]: valid });
+    if (valid.length !== requests.length) {
+      await chrome.storage.local.set({ [STORAGE_KEY]: valid });
+      changed = true;
+    }
+  });
+  if (changed) {
     const { updateBadge } = await import("./pendingTxStorage");
     await updateBadge();
   }

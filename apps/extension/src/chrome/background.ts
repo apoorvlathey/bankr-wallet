@@ -45,6 +45,7 @@ import {
   getPendingTxRequests,
   clearExpiredTxRequests,
   updateBadge,
+  updatePendingTxRequestData,
 } from "./pendingTxStorage";
 import {
   removePendingSignatureRequest,
@@ -231,7 +232,12 @@ import {
   getPendingAddChainRequests,
   PendingAddChainRequest,
 } from "./pendingAddChainStorage";
-import { addCustomToken, getCustomTokens } from "./customTokenStorage";
+import {
+  addCustomToken,
+  getCustomTokens,
+  removeCustomToken,
+  updateCustomToken,
+} from "./customTokenStorage";
 import { unhidePortfolioToken } from "./hiddenPortfolioTokens";
 import { getResolvedChainById } from "@/lib/chains";
 import type { NetworksInfo } from "@/types";
@@ -708,6 +714,7 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "rejectBatchTransaction",
   "splitBatchIntoIndividualTxs",
   "removeCallFromPendingBatch",
+  "updatePendingTxRequestData",
   "updateCallInPendingBatch",
   "rejectSignatureRequest",
   "rejectAddChain",
@@ -790,6 +797,9 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   // Full token metadata may include watched/custom-token metadata.
   "resolveTokenMetadata",
   "lookupCustomToken",
+  "addCustomToken",
+  "updateCustomToken",
+  "removeCustomToken",
   "backfillAssetChanges",
   // EIP-7702 delegation management
   "getDelegationStatus",
@@ -1331,6 +1341,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       ).then((result) => {
         sendResponse(result);
       });
+      return true;
+    }
+
+    case "updatePendingTxRequestData": {
+      updatePendingTxRequestData(message.txId, message.newData)
+        .then(() => sendResponse({ success: true }))
+        .catch((err) =>
+          sendResponse({
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
       return true;
     }
 
@@ -2784,6 +2806,76 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               t.contractAddress === addr,
           );
           sendResponse({ success: true, data: match || null });
+        } catch (err) {
+          sendResponse({
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })();
+      return true;
+    }
+
+    case "addCustomToken": {
+      (async () => {
+        try {
+          const token: Parameters<typeof addCustomToken>[0] = {
+            chainId: Number(message.chainId),
+            contractAddress: String(message.contractAddress || ""),
+            symbol: String(message.symbol || ""),
+            name: String(message.name || ""),
+            decimals: Number(message.decimals),
+          };
+          if (typeof message.image === "string") {
+            token.image = message.image;
+          }
+          await addCustomToken(token);
+          sendResponse({ success: true });
+        } catch (err) {
+          sendResponse({
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })();
+      return true;
+    }
+
+    case "updateCustomToken": {
+      (async () => {
+        try {
+          const updates: Parameters<typeof updateCustomToken>[2] = {};
+          if ("name" in message) updates.name = String(message.name || "");
+          if ("symbol" in message) updates.symbol = String(message.symbol || "");
+          if ("decimals" in message) updates.decimals = Number(message.decimals);
+          if ("image" in message && typeof message.image === "string") {
+            updates.image = message.image;
+          }
+
+          await updateCustomToken(
+            Number(message.chainId),
+            String(message.contractAddress || ""),
+            updates,
+          );
+          sendResponse({ success: true });
+        } catch (err) {
+          sendResponse({
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })();
+      return true;
+    }
+
+    case "removeCustomToken": {
+      (async () => {
+        try {
+          await removeCustomToken(
+            Number(message.chainId),
+            String(message.contractAddress || ""),
+          );
+          sendResponse({ success: true });
         } catch (err) {
           sendResponse({
             success: false,

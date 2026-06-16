@@ -371,6 +371,7 @@ src/
 │   ├── types.ts             # Account and vault type definitions
 │   ├── localSigner.ts       # Transaction and message signing with viem
 │   ├── accountStorage.ts    # Account CRUD operations (includes seed groups, PK→seed conversion)
+│   ├── storageLock.ts       # Per-key serializer for chrome.storage read-modify-write helpers
 │   ├── gasEstimation.ts     # Pre-confirmation gas estimation (RPC fees, CoinGecko USD price)
 │   ├── bankrApi.ts          # Bankr API client (submit, sign, job polling)
 │   ├── portfolioApi.ts      # Portfolio API client (fetches token holdings via website)
@@ -1213,6 +1214,25 @@ Gas data is not available at confirmation time (tx hasn't been mined). It's fetc
 - **Max entries**: 50 (oldest entries removed when limit exceeded)
 - **Sort order**: Newest first (by `createdAt`)
 
+### Chrome Storage RMW Locks
+
+Any helper that reads a `chrome.storage` array/map/object, mutates it, and
+writes the full value back must serialize that key through
+`src/chrome/storageLock.ts`. Use a lock key that includes the storage area and
+storage key (for example `local:pendingTxRequests` or `sync:tabAccounts`) so
+unrelated stores can still write in parallel while same-key read-modify-write
+operations cannot clobber each other.
+
+This applies to pending request queues (`pendingTxRequests`,
+`pendingSignatureRequests`, `pendingBatchTxRequests`,
+`pendingWatchAssetRequests`, `pendingAddChainRequests`,
+`walletConnectPendingRequests`), account metadata (`accounts`, `tabAccounts`,
+`seedGroups`), `customTokens`, `txHistory`, `bundleStatuses`, and
+`pendingBridges`. Because popup pages and the background are separate JS
+contexts, `customTokens` mutations are routed through background messages
+(`addCustomToken`, `updateCustomToken`, `removeCustomToken`) so all writes share
+the service worker's lock instance.
+
 ### UI Component
 
 `src/components/TxStatusList.tsx` displays the transaction history:
@@ -1996,6 +2016,7 @@ Transactions are stored persistently in `chrome.storage.local`:
 - Extension badge shows count of pending requests
 - Transactions auto-expire after 30 minutes (periodic cleanup + enforced at confirmation time)
 - Confirmation handlers reject expired requests even if periodic cleanup hasn't run
+- Save/remove/expiry writes are serialized with `storageLock.ts` so a cleanup interval cannot erase a request saved by a concurrent dapp or WalletConnect request
 - A `processingTxIds` Set prevents the same transaction from being confirmed twice concurrently
 - User can review and confirm/reject at any time
 
@@ -2142,6 +2163,7 @@ content script only for provider initialization address correction.
 | `confirmTransactionAsync`          | User approved tx (async, Bankr API). Optional `functionName` field                              |
 | `confirmTransactionAsyncPK`        | User approved tx (async, PK/seed local sign). Optional `functionName` and `gasOverrides` fields |
 | `estimateGas`                      | Estimate gas for pending tx (returns `GasEstimate` with fees, balance, USD price)               |
+| `updatePendingTxRequestData`       | Persist edited calldata for a pending single transaction                                        |
 | `rejectTransaction`                | User rejected tx                                                                                |
 | `getPendingSignatureRequests`      | Get all pending signature requests                                                              |
 | `rejectSignatureRequest`           | User rejected signature request                                                                 |
@@ -2160,6 +2182,12 @@ content script only for provider initialization address correction.
 | `setAutoLockTimeout`               | Set auto-lock timeout (ms)                                                                      |
 | `getTxHistory`                     | Get completed transaction history                                                               |
 | `clearTxHistory`                   | Clear all transaction history                                                                   |
+| `fetchTokenInfo`                   | Resolve ERC-20 name/symbol/decimals through background RPC helpers                              |
+| `resolveTokenMetadata`             | Resolve token metadata and logo, including user custom tokens                                   |
+| `lookupCustomToken`                | Read-only lookup in `customTokens`                                                              |
+| `addCustomToken`                   | Add a manual/custom token through the background-owned `customTokens` write path                 |
+| `updateCustomToken`                | Edit a manual/custom token through the background-owned `customTokens` write path                |
+| `removeCustomToken`                | Remove a manual/custom token through the background-owned `customTokens` write path              |
 | `getAccounts`                      | Get all accounts (metadata only)                                                                |
 | `getActiveAccount`                 | Get currently active account                                                                    |
 | `setActiveAccount`                 | Set active account by ID (also updates storage address)                                         |

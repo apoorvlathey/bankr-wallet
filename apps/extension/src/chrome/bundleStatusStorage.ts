@@ -4,6 +4,7 @@
  */
 
 import type { BundleStatus } from "./erc5792Types";
+import { withStorageLock } from "./storageLock";
 
 const STORAGE_KEY = "bundleStatuses";
 const MAX_ENTRIES = 100;
@@ -17,13 +18,7 @@ const RETENTION_MS = 24 * 60 * 60 * 1000; // 24 hours
  * parallel; without a write lock, two updates can read the same old array and
  * the later write clobbers the earlier bundle back to PENDING.
  */
-let bundleStatusWriteLock: Promise<unknown> = Promise.resolve();
-
-function withBundleStatusLock<T>(fn: () => Promise<T>): Promise<T> {
-  const next = bundleStatusWriteLock.then(fn, fn);
-  bundleStatusWriteLock = next.catch(() => undefined);
-  return next;
-}
+const BUNDLE_STATUS_LOCK_KEY = `local:${STORAGE_KEY}`;
 
 export async function getBundleStatuses(): Promise<BundleStatus[]> {
   const data = await chrome.storage.local.get(STORAGE_KEY);
@@ -31,7 +26,7 @@ export async function getBundleStatuses(): Promise<BundleStatus[]> {
 }
 
 export async function saveBundleStatus(status: BundleStatus): Promise<void> {
-  return withBundleStatusLock(async () => {
+  return withStorageLock(BUNDLE_STATUS_LOCK_KEY, async () => {
     const statuses = await getBundleStatuses();
     statuses.push(status);
     // Evict oldest if over limit
@@ -51,7 +46,7 @@ export async function updateBundleStatus(
   bundleId: string,
   updates: Partial<BundleStatus>,
 ): Promise<void> {
-  return withBundleStatusLock(async () => {
+  return withStorageLock(BUNDLE_STATUS_LOCK_KEY, async () => {
     const statuses = await getBundleStatuses();
     const idx = statuses.findIndex((s) => s.id === bundleId);
     if (idx === -1) return;
@@ -61,7 +56,7 @@ export async function updateBundleStatus(
 }
 
 export async function cleanupOldBundleStatuses(): Promise<void> {
-  return withBundleStatusLock(async () => {
+  return withStorageLock(BUNDLE_STATUS_LOCK_KEY, async () => {
     const statuses = await getBundleStatuses();
     const now = Date.now();
     const valid = statuses.filter((s) => now - s.createdAt < RETENTION_MS);

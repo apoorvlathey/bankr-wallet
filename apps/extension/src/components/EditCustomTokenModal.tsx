@@ -15,7 +15,6 @@ import {
   FormLabel,
 } from "@chakra-ui/react";
 import { getChainConfig } from "@/constants/chainConfig";
-import { updateCustomToken, removeCustomToken } from "@/chrome/customTokenStorage";
 import ChainIcon from "@/components/ChainIcon";
 
 interface EditCustomTokenModalProps {
@@ -29,6 +28,17 @@ interface EditCustomTokenModalProps {
     name: string;
     decimals: number;
   } | null;
+}
+
+async function sendCustomTokenWrite(
+  message: Record<string, unknown>
+): Promise<void> {
+  const response = await new Promise<{ success: boolean; error?: string }>((resolve) => {
+    chrome.runtime.sendMessage(message, resolve);
+  });
+  if (!response?.success) {
+    throw new Error(response?.error || "Failed to save token");
+  }
 }
 
 export default function EditCustomTokenModal({
@@ -60,7 +70,10 @@ export default function EditCustomTokenModal({
     if (!symbol || !decimals) return;
     setSaving(true);
     try {
-      await updateCustomToken(token.chainId, token.contractAddress, {
+      await sendCustomTokenWrite({
+        type: "updateCustomToken",
+        chainId: token.chainId,
+        contractAddress: token.contractAddress,
         name,
         symbol,
         decimals: parseInt(decimals, 10),
@@ -78,7 +91,11 @@ export default function EditCustomTokenModal({
       return;
     }
     setSaving(true);
-    removeCustomToken(token.chainId, token.contractAddress)
+    sendCustomTokenWrite({
+      type: "removeCustomToken",
+      chainId: token.chainId,
+      contractAddress: token.contractAddress,
+    })
       .then(() => { onUpdated(); onClose(); })
       .finally(() => setSaving(false));
   };

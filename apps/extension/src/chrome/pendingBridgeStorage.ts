@@ -13,6 +13,7 @@
  */
 
 import type { BungeeStatusCode } from "@walletchan/shared/bungee";
+import { withStorageLock } from "./storageLock";
 
 export interface PendingBridge {
   /** The tx-history entry id this bridge maps to. */
@@ -40,12 +41,7 @@ const PENDING_BRIDGES_KEY = "pendingBridges";
 const STALE_PRUNE_AGE_MS = 60 * 60 * 1000;
 
 /** Serialize writes to the bag so concurrent updates don't clobber each other. */
-let writeLock: Promise<unknown> = Promise.resolve();
-function withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
-  const next = writeLock.then(fn, fn);
-  writeLock = next.catch(() => undefined);
-  return next;
-}
+const PENDING_BRIDGES_LOCK_KEY = `local:${PENDING_BRIDGES_KEY}`;
 
 export async function getPendingBridges(): Promise<Record<string, PendingBridge>> {
   const data = await chrome.storage.local.get(PENDING_BRIDGES_KEY);
@@ -53,7 +49,7 @@ export async function getPendingBridges(): Promise<Record<string, PendingBridge>
 }
 
 export async function addPendingBridge(entry: PendingBridge): Promise<void> {
-  await withWriteLock(async () => {
+  await withStorageLock(PENDING_BRIDGES_LOCK_KEY, async () => {
     const bag = await getPendingBridges();
     bag[entry.sourceTxHash.toLowerCase()] = entry;
     await chrome.storage.local.set({ [PENDING_BRIDGES_KEY]: bag });
@@ -64,7 +60,7 @@ export async function updatePendingBridge(
   sourceTxHash: string,
   updates: Partial<PendingBridge>,
 ): Promise<void> {
-  await withWriteLock(async () => {
+  await withStorageLock(PENDING_BRIDGES_LOCK_KEY, async () => {
     const bag = await getPendingBridges();
     const key = sourceTxHash.toLowerCase();
     const existing = bag[key];
@@ -75,7 +71,7 @@ export async function updatePendingBridge(
 }
 
 export async function removePendingBridge(sourceTxHash: string): Promise<void> {
-  await withWriteLock(async () => {
+  await withStorageLock(PENDING_BRIDGES_LOCK_KEY, async () => {
     const bag = await getPendingBridges();
     delete bag[sourceTxHash.toLowerCase()];
     await chrome.storage.local.set({ [PENDING_BRIDGES_KEY]: bag });
@@ -84,7 +80,7 @@ export async function removePendingBridge(sourceTxHash: string): Promise<void> {
 
 /** Drop entries older than 1h that never reached a terminal state. */
 export async function prunePendingBridges(): Promise<void> {
-  await withWriteLock(async () => {
+  await withStorageLock(PENDING_BRIDGES_LOCK_KEY, async () => {
     const bag = await getPendingBridges();
     const now = Date.now();
     let changed = false;

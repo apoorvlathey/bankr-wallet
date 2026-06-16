@@ -26,7 +26,6 @@ import {
   encodeApproveCalldata,
   INFINITE_THRESHOLD,
 } from "@/lib/erc20Approve";
-import { updatePendingTxRequestData } from "@/chrome/pendingTxStorage";
 import { resolveAddressToName } from "@/lib/ensUtils";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { useTheme } from "@/theme";
@@ -298,7 +297,16 @@ export default function ERC20ApproveDisplay({
       const result = await onSaveCalldata(newData);
       if (!result.success) return;
     } else if (txId) {
-      await updatePendingTxRequestData(txId, newData);
+      const result = await new Promise<{ success: boolean; error?: string }>(
+        (resolve) => {
+          chrome.runtime.sendMessage(
+            { type: "updatePendingTxRequestData", txId, newData },
+            (response) =>
+              resolve(response || { success: false, error: "No response" }),
+          );
+        },
+      );
+      if (!result.success) return;
     } else {
       return;
     }

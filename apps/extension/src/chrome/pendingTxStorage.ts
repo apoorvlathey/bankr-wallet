@@ -4,6 +4,7 @@
  */
 
 import { TransactionParams } from "./bankrApi";
+import { withStorageLock } from "./storageLock";
 
 export interface PendingTxRequest {
   id: string;
@@ -64,6 +65,7 @@ export type PinnedTxRequest = PendingTxRequest &
   Required<Pick<PendingTxRequest, "accountId" | "accountAddress" | "accountType">>;
 
 const STORAGE_KEY = "pendingTxRequests";
+const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
 const TX_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
@@ -82,9 +84,11 @@ export async function getPendingTxRequests(): Promise<PendingTxRequest[]> {
 export async function savePendingTxRequest(
   request: PinnedTxRequest
 ): Promise<void> {
-  const requests = await getPendingTxRequests();
-  requests.push(request);
-  await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingTxRequests();
+    requests.push(request);
+    await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  });
   await updateBadge();
 }
 
@@ -92,9 +96,11 @@ export async function savePendingTxRequest(
  * Remove a pending transaction request by ID
  */
 export async function removePendingTxRequest(txId: string): Promise<void> {
-  const requests = await getPendingTxRequests();
-  const filtered = requests.filter((r) => r.id !== txId);
-  await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingTxRequests();
+    const filtered = requests.filter((r) => r.id !== txId);
+    await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  });
   await updateBadge();
 }
 
@@ -112,14 +118,18 @@ export async function getPendingTxRequestById(
  * Clear expired transaction requests (older than 30 minutes)
  */
 export async function clearExpiredTxRequests(): Promise<void> {
-  const requests = await getPendingTxRequests();
-  const now = Date.now();
-  const valid = requests.filter((r) => now - r.timestamp < TX_EXPIRY_MS);
+  let changed = false;
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingTxRequests();
+    const now = Date.now();
+    const valid = requests.filter((r) => now - r.timestamp < TX_EXPIRY_MS);
 
-  if (valid.length !== requests.length) {
-    await chrome.storage.local.set({ [STORAGE_KEY]: valid });
-    await updateBadge();
-  }
+    if (valid.length !== requests.length) {
+      await chrome.storage.local.set({ [STORAGE_KEY]: valid });
+      changed = true;
+    }
+  });
+  if (changed) await updateBadge();
 }
 
 /**
@@ -158,17 +168,21 @@ export async function updatePendingTxRequestData(
   txId: string,
   newData: string,
 ): Promise<void> {
-  const requests = await getPendingTxRequests();
-  const idx = requests.findIndex((r) => r.id === txId);
-  if (idx === -1) return;
-  requests[idx].tx.data = newData;
-  await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingTxRequests();
+    const idx = requests.findIndex((r) => r.id === txId);
+    if (idx === -1) return;
+    requests[idx].tx.data = newData;
+    await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  });
 }
 
 /**
  * Clear all pending transaction requests
  */
 export async function clearAllPendingTxRequests(): Promise<void> {
-  await chrome.storage.local.set({ [STORAGE_KEY]: [] });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    await chrome.storage.local.set({ [STORAGE_KEY]: [] });
+  });
   await updateBadge();
 }

@@ -6,6 +6,7 @@ import {
   Text,
   Button,
   Image,
+  Spinner,
 } from "@chakra-ui/react";
 import { getChainConfig } from "@/constants/chainConfig";
 import type { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
@@ -135,6 +136,7 @@ export default function WatchAssetConfirmation({
           bg="surface.raised"
           border="2px solid"
           borderColor="border.default"
+          borderRadius="2xl"
           boxShadow="card"
           w="full"
           p={5}
@@ -180,6 +182,7 @@ export default function WatchAssetConfirmation({
               py={1.5}
               border="1px solid"
               borderColor="border.subtle"
+              borderRadius="md"
               w="full"
               textAlign="center"
               noOfLines={1}
@@ -200,10 +203,8 @@ export default function WatchAssetConfirmation({
           onClick={handleReject}
           isLoading={rejecting}
           isDisabled={confirming}
-          variant="outline"
-          fontWeight="800"
-          fontSize="xs"
-          h="44px"
+          variant="secondary"
+          spinner={<Spinner size="sm" sx={{ animationDirection: "reverse" }} />}
           flex={1}
         >
           Reject
@@ -212,14 +213,7 @@ export default function WatchAssetConfirmation({
           onClick={handleConfirm}
           isLoading={confirming}
           isDisabled={rejecting}
-          bg={stripBg}
-          color={stripFg}
-          fontWeight="800"
-          fontSize="xs"
-          border="2px solid"
-          borderColor="border.default"
-          h="44px"
-          _hover={{ bg: stripBg, opacity: 0.9 }}
+          variant="highlight"
           flex={1}
         >
           Add Token

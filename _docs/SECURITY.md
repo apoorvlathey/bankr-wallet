@@ -224,6 +224,13 @@ not forward an inpage message for it.
 | `setAgentPassword`    | Requires `getPasswordType() === "master"`                                |
 | `removeAgentPassword` | Requires explicit master password verification (not just cached)         |
 
+### Pending Transaction Edit Handlers
+
+`updatePendingTxRequestData` mutates a pending single transaction's calldata
+before the user signs, for example when the confirmation UI edits an ERC-20
+approve amount. It must stay gated by `EXTENSION_ONLY_MESSAGES` so a webpage
+cannot silently alter a pending tx between display and signing.
+
 ### Dapp-Initiated Batch Handlers (`batchTxHandlers.ts`)
 
 These mutate `pendingBatchTxRequests` (dapp `wallet_sendCalls`) before the user signs. All gated by `EXTENSION_ONLY_MESSAGES`:
@@ -297,7 +304,13 @@ Set/Revoke storage reconciliation must read `eth_getCode(EOA)` after any termina
 
 ### Token Metadata Handlers
 
-`resolveTokenMetadata` is gated by `EXTENSION_ONLY_MESSAGES` because it can include user-added custom-token metadata from `customTokens`. Content scripts may still call the narrower `fetchTokenInfo` / `fetchTokenLogo` helpers; those return public chain/token-list metadata only and do not expose watched-asset custom-token records.
+`resolveTokenMetadata` and `lookupCustomToken` are gated by
+`EXTENSION_ONLY_MESSAGES` because they can include user-added custom-token
+metadata from `customTokens`. `addCustomToken`, `updateCustomToken`, and
+`removeCustomToken` are also extension-only so webpages cannot mutate the user's
+manual token list. Content scripts may still call the narrower `fetchTokenInfo`
+/ `fetchTokenLogo` helpers; those return public chain/token-list metadata only
+and do not expose watched-asset custom-token records.
 
 ---
 

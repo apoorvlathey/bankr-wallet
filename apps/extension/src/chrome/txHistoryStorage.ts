@@ -4,6 +4,7 @@
  */
 
 import { TransactionParams } from "./bankrApi";
+import { withStorageLock } from "./storageLock";
 
 export type TxStatus = "processing" | "pending" | "success" | "failed";
 
@@ -255,14 +256,7 @@ const MAX_HISTORY_SIZE = 50;
  * concurrency isn't a concern: chrome.storage in MV3 is only written by the
  * service worker.)
  */
-let txHistoryWriteLock: Promise<unknown> = Promise.resolve();
-function withTxHistoryLock<T>(fn: () => Promise<T>): Promise<T> {
-  // Chain the new task onto the previous one (success OR failure — we always
-  // release the lock so a thrown error can't permanently freeze the queue).
-  const next = txHistoryWriteLock.then(fn, fn);
-  txHistoryWriteLock = next.catch(() => undefined);
-  return next;
-}
+const TX_HISTORY_LOCK_KEY = `local:${TX_HISTORY_KEY}`;
 
 /**
  * Get all transaction history (newest first)
@@ -276,7 +270,7 @@ export async function getTxHistory(): Promise<CompletedTransaction[]> {
  * Add a new transaction to history
  */
 export async function addTxToHistory(tx: CompletedTransaction): Promise<void> {
-  return withTxHistoryLock(async () => {
+  return withStorageLock(TX_HISTORY_LOCK_KEY, async () => {
     const history = await getTxHistory();
 
     // Add at beginning (newest first)
@@ -303,7 +297,7 @@ export async function updateTxInHistory(
   txId: string,
   updates: Partial<CompletedTransaction>
 ): Promise<void> {
-  return withTxHistoryLock(async () => {
+  return withStorageLock(TX_HISTORY_LOCK_KEY, async () => {
     const history = await getTxHistory();
     const index = history.findIndex((tx) => tx.id === txId);
 
@@ -365,7 +359,7 @@ export async function getPendingConfirmationTxs(): Promise<
 export async function cleanupStaleProcessingTxs(
   maxAgeMs: number = 5 * 60 * 1000,
 ): Promise<void> {
-  return withTxHistoryLock(async () => {
+  return withStorageLock(TX_HISTORY_LOCK_KEY, async () => {
     const history = await getTxHistory();
     const now = Date.now();
     let changed = false;
@@ -393,7 +387,9 @@ export async function cleanupStaleProcessingTxs(
  * Clear all transaction history
  */
 export async function clearTxHistory(): Promise<void> {
-  await chrome.storage.local.remove(TX_HISTORY_KEY);
+  await withStorageLock(TX_HISTORY_LOCK_KEY, async () => {
+    await chrome.storage.local.remove(TX_HISTORY_KEY);
+  });
 
   // Notify open views
   chrome.runtime.sendMessage({ type: "txHistoryUpdated" }).catch(() => {
@@ -411,7 +407,7 @@ export async function clearTxHistoryForAddresses(
   addresses: string[],
 ): Promise<void> {
   if (addresses.length === 0) return;
-  return withTxHistoryLock(async () => {
+  return withStorageLock(TX_HISTORY_LOCK_KEY, async () => {
     const history = await getTxHistory();
     const removeSet = new Set(addresses.map((a) => a.toLowerCase()));
     const remaining = history.filter(
