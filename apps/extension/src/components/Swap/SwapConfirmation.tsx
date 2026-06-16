@@ -34,6 +34,8 @@ import { formatTokenAmount, formatTokenAmountFromBase } from "@/lib/tokenFormatU
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { useTheme } from "@/theme";
+import { useNetworks } from "@/contexts/NetworksContext";
+import { getNativeAssetMeta } from "@/lib/chains";
 // Theme-aware accent stripes shared with the batch confirmation surfaces, so a
 // multi-step swap reads as the same kind of "stack of independent calls" in
 // either palette (Bauhaus red/blue/yellow, Midnight indigo/cyan/amber).
@@ -120,10 +122,10 @@ const formatOutputAmount = (amount: string, decimals: number): string =>
 const formatUsd = (value: number): string =>
   formatUsdShared(value, { zeroAsEmpty: true });
 
-function formatValue(value: string): string {
+function formatValue(value: string, nativeSymbol: string): string {
   const wei = BigInt(value);
   const eth = Number(wei) / 1e18;
-  return `${eth.toFixed(6)} ETH`;
+  return `${eth.toFixed(6)} ${nativeSymbol}`;
 }
 
 // Vertical down arrow icon
@@ -178,9 +180,14 @@ function SwapConfirmation({
   const sellLogoSrc = cachedSellLogo || sellToken.logoUrl;
   const buyLogoSrc = cachedBuyLogo || buyTokenLogoURI;
   const { themeId } = useTheme();
+  const { networksInfo } = useNetworks();
   const isDarkTheme = themeId === "midnight";
   const [expandedCalls, setExpandedCalls] = useState<Set<number>>(new Set());
   const [decodedFunctionNames, setDecodedFunctionNames] = useState<Record<number, string>>({});
+  const sourceNativeSymbol =
+    getNativeAssetMeta(chainId, networksInfo)?.symbol ??
+    config.nativeCurrency?.symbol ??
+    "ETH";
 
   const toggleCall = (index: number) => {
     setExpandedCalls((prev) => {
@@ -258,10 +265,9 @@ function SwapConfirmation({
     }
     if (feeWei === 0n) return null;
 
-    const nativeSymbol = config.nativeCurrency?.symbol ?? "ETH";
     const nativeAmount = Number(feeWei) / 1e18;
     const trimmed = nativeAmount.toFixed(6).replace(/\.?0+$/, "");
-    const amountLabel = `${trimmed} ${nativeSymbol}`;
+    const amountLabel = `${trimmed} ${sourceNativeSymbol}`;
     const usdPrice = bridgeMeta?.sourceNativePriceUsd;
     let usdLabel: string | null = null;
     if (usdPrice && usdPrice > 0) {
@@ -747,7 +753,7 @@ function SwapConfirmation({
                           Value
                         </Text>
                         <Text fontSize="xs" fontWeight="700" color="text.primary">
-                          {formatValue(entry.tx.value)}
+                          {formatValue(entry.tx.value, sourceNativeSymbol)}
                         </Text>
                       </HStack>
                     )}
