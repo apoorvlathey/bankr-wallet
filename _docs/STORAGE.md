@@ -49,6 +49,7 @@ read-time TTL checks.
 | `encryptedVaultKeyMaster` | `{ ciphertext, iv, salt }` (base64) | Vault key encrypted with the master password. Presence of this key means vault key system is active.                                | v1.0.0     |
 | `encryptedVaultKeyAgent`  | `{ ciphertext, iv, salt }` (base64) | Vault key encrypted with the agent password. Only exists when agent password is enabled.                                            | v1.0.0     |
 | `agentPasswordEnabled`    | `boolean`                           | Whether agent password is set up.                                                                                                   | v1.0.0     |
+| `sessionEncKey`           | `string` (base64 32-byte AES key)   | Local half of "Never" auto-lock session restoration. Pairs with `chrome.storage.session.encryptedSessionPassword`; removed on lock/session clear/reset. | v1.0.0     |
 
 **Encryption chain (current):** password → PBKDF2 → decrypts `encryptedVaultKeyMaster` → vault key → decrypts `encryptedApiKeyVault`, `pkVault`, `mnemonicVault`
 
@@ -67,9 +68,13 @@ read-time TTL checks.
 | -------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------- |
 | `pendingTxRequests`        | `PendingTxRequest[]` — `{ id, tx, origin, favicon, chainName, timestamp, walletConnect? }` | Pending transaction requests awaiting user confirmation. 30-minute expiry. `walletConnect` is optional metadata for requests received over WalletConnect: `{ topic, requestId, method, peerName, peerUrl?, peerIcon? }`. | v0.1.0     |
 | `pendingSignatureRequests` | `PendingSignatureRequest[]` — `{ id, signature, origin, favicon, chainName, timestamp, walletConnect? }` | Pending signature requests awaiting user confirmation. 30-minute expiry. `walletConnect` has the same optional metadata shape as transaction requests. | v1.0.0     |
+| `pendingBatchTxRequests`   | `PendingBatchTxRequest[]` — `{ id, params, origin, favicon, chainName, chainId, timestamp, accountType?, accountId?, accountAddress?, tabId?, frameId?, senderOrigin?, requestChainId? }` | Pending ERC-5792 `wallet_sendCalls` bundle requests awaiting user confirmation. 30-minute expiry. New entries are pinned with `accountId` / `accountAddress` / `accountType`; optional on the stored shape for backward compatibility with older entries. | next |
+| `pendingWatchAssetRequests` | `PendingWatchAssetRequest[]` — `{ id, asset, chainId, origin, favicon, timestamp }` | Pending `wallet_watchAsset` prompts. `asset` is `{ address, symbol, decimals, image? }`. Survives popup close until accepted/rejected; result is written to `watchAssetResult:{id}`. | next |
+| `pendingAddChainRequests`  | `PendingAddChainRequest[]` — `{ id, chainId, chainName?, nativeCurrency?, rpcUrls?, blockExplorerUrls?, origin, favicon, timestamp }` | Pending `wallet_addEthereumChain` prompts. Survives popup close until accepted/rejected; result is written to `addChainResult:{id}`. | next |
 | `walletConnectPendingRequests` | `Record<txId\|sigId, { id, kind, topic, requestId, method, timestamp }>` | Bridges WalletConnect session requests to the normal pending tx/signature queues. Written when a WC request is enqueued; consumed when `txResult:{id}` / `sigResult:{id}` is written so the background can respond to the dapp over WalletConnect. Expired after 30 minutes. Additive; absence means no in-flight WC requests. | next |
 | `walletConnectChainId` | `number` | WalletConnect-specific active EVM chain ID. Updated by the WalletConnect screen's chain selector, explicit WC `wallet_switchEthereumChain` requests, and inferred `args.params.chainId` changes from WC requests. Separate from `chrome.storage.sync.chainName` so injected dapps keep their existing per-tab chain behavior. Absence falls back to the current global `chainName` or the first visible chain for the active account type. | next |
 | `crossDappBatch`           | `CrossDappBatch \| null` — `{ fromAddress, chainId, chainName, accountType, entries: [{ txId, tx, origin, favicon, addedAt, source? }], createdAt }` | Single user-assembled cross-dapp batch (Bankr/impersonator only). Locked to the `fromAddress` + `chainId` of the first entry added. Cleared on ship/reject/last-removed. Each entry's `source` is `{ kind: "eth_sendTransaction" }` (default) or `{ kind: "wallet_sendCalls", bundleId, callIndex, totalCalls }`. For `eth_sendTransaction` entries the dapp promise is held open in inject.ts and resolved by writing `txResult:{txId}` on ship/reject. For `wallet_sendCalls` entries the dapp already received its bundle id via `batchTxAck`; we keep its `bundleStatuses` entry at PENDING while the calls live in the batch and transition it to CONFIRMED/REVERTED/OFFCHAIN_FAILURE on ship/remove/reject. Sibling calls from the same bundle are added/removed/resolved as a unit. | v2.4.0     |
+| `bundleStatuses`           | `BundleStatus[]` — `{ id, chainId, status, atomic, txHash?, txHashes?, receipts?, createdAt, completedAt?, error?, origin?, splitMode?, splitCalls?, splitNextIndex?, splitContext? }` | ERC-5792 `wallet_getCallsStatus` lifecycle state. Retained up to 100 entries and pruned after 24h. Split-mode fields track manually split non-atomic batches and the pinned context used to enqueue each single-tx confirmation. | next |
 | `txHistory`                | `CompletedTransaction[]` — `{ id, status, tx, origin, chainName, chainId, txHash, ..., clearSignedMeta?, batchCallOrigins?, bridge?, assetChanges?, destAssetChanges? }` | Completed transaction history. Max 50 entries. `clearSignedMeta` (optional, added v3.7.1) snapshots the clear-signed summary at submission time — `{ kind: "approve"\|"transfer"\|"nativeSend"\|"erc7730", amount?, tokenSymbol?, tokenLogo?, tokenAddress?, isInfinite?, counterparty?, counterpartyLabel?, counterpartyEns?, intent?, contractName? }` — so the Activity tab can render "Approved 100 USDC to Uniswap V3 Router" without re-running RPC / eth.sh / ENS lookups on every render. Old entries lacking the field gracefully fall back to the raw `functionName` row. `batchCallOrigins` (optional, additive) is written for cross-dapp batch history entries — one `{ origin, favicon }` per encoded call — so the decoded batch-call list in TxDetailModal can show each contributing dapp instead of the synthetic "Cross-Dapp Batch" origin. Old entries without it fall back to the batch-level `origin/favicon`. `bridge` (optional, additive) marks a cross-chain bridge tx — `{ sourceChainId, sourceTxHash?, destinationChainId, destinationChainName, destinationTxHash?, bungeeStatusCode?, requestHash?, routeName?, receiverAddress?, refundTxHash? }`. Set at submission time on the bridge call entry; the destination fields fill in as `bridgeStatusPoller` reads Bungee's `/status`. Old entries without it simply render as plain swaps. `assetChanges` (optional, additive) is the post-confirm snapshot of ERC-20 + native flows for the sender — `{ blockNumber, nativeDelta?, erc20Transfers: [{ token, direction: "in"\|"out", counterparty, amountWei, symbol?, decimals?, logoUrl? }] }` — written by `assetChangesExtractor` from receipt logs + `eth_getBalance` so the Activity modal can render "what actually flowed in/out of my wallet". `destAssetChanges` (same shape) is the bridge-destination leg, populated after `bridge.destinationTxHash` arrives. Failed and pre-existing entries simply lack these fields. | v1.0.0     |
 | `pendingBridges`           | `Record<sourceTxHash, PendingBridge>` — `{ txId, sourceTxHash, sourceChainId, destinationChainId, destinationChainName, receiverAddress, createdAt, requestHash?, bungeeStatusCode?, lastPolledAt?, routeName? }` | Cross-chain bridge requests waiting on destination-chain settlement. Written by `maybeStartBridgePolling` after the source tx confirms; entries are removed once `bridgeStatusPoller` sees a terminal Bungee status code (`FULFILLED` / `SETTLED` / `EXPIRED` / `CANCELLED` / `REFUNDED`). Resumed on `runtime.onStartup` so a long-running bridge eventually fires its notification even if the service worker dies mid-poll. Auto-pruned at startup if older than 1h with no terminal state. | next     |
 
@@ -93,13 +98,22 @@ read-time TTL checks.
 | `tokenLogo:{chainId}:{address}` | `{ logoUrl: string, fetchedAt }`                          | Cached per-token logo URL (resolved from the swap token list once, then read directly from storage). Empty string = known-no-logo. Replaces the per-render `fetchSwapTokenList` payload (200KB+) for inline token logos — only the small URL crosses the popup ↔ background channel. 30-day TTL. Written by `getCachedTokenLogo` in `swapApi.ts`. The actual image bytes are cached separately in `ensAvatarImageCache` (shared with ENS avatars). | next |
 | `ethShLabels:{chainId}:{address}` | `{ labels: string[], fetchedAt }`                       | Cached eth.sh contract labels (e.g. `["Permit2"]`, `["Uniswap V3 Router"]`). Empty array = known-no-labels (still cached to avoid re-hitting on every popup mount). Shared by six surfaces (tx + approve + signature + clear-signing + AddressParam + batch inline summary) via `getEthShLabels` in `lib/ethShLabelsCache.ts`, which also dedupes in-flight requests so a 5-call batch to the same spender makes one fetch instead of six. 7-day TTL. | next |
 | `swapTokenList:{chainId}` | `{ tokens: SwapToken[], fetchedAt }`                              | Cached swap token list response for a chain. Pinning/extra token merge happens on read, so the cached upstream payload can stay raw. 1-day TTL. Written by `getCachedTokenList` in `swapApi.ts`. | next |
+| `bungeeChains` | `{ chains: BungeeChain[], fetchedAt }` | Cached Bungee supported-chain list for bridge chain pickers and chain-logo fallbacks. 24-hour TTL. Written by `getCachedBungeeChains` in `bridgeApi.ts`; mirrored in memory by `lib/bungeeChainCache.ts`. | next |
+| `bungeeTokens:{chainId}` | `{ tokens: BungeeToken[], fetchedAt }` | Cached Bungee token list for one chain. 24-hour TTL. Written by `getCachedBungeeTokens` in `bridgeApi.ts`; WCHAN is pinned on Base at read time, not stored as a migration requirement. | next |
+
+### Local Settings
+
+| Key               | Shape                       | Description                                                                                                      | Introduced |
+| ----------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------- |
+| `selectedThemeId` | `"bauhaus" \| "midnight"`   | Active theme ID. Absent = default `"bauhaus"`. Canonical store is `chrome.storage.local`; mirrored to `window.localStorage` for synchronous pre-React boot (no flash). See `_docs/THEMING_PRD.md`. | v3.2.0 |
 
 These metadata/image cache keys are non-critical. Cache writes are best-effort
 and may be skipped if `chrome.storage.local` rejects the write; callers still use
 the live response. `storageCachePruner.ts` deletes expired `tokenInfo:*`,
 `tokenLogo:*`, `ethShLabels:*`, `swapTokenList:*`, `cs:desc:*`, CoinGecko cache
 entries, and old avatar image entries so cache bloat does not block wallet
-state writes.
+state writes. Bridge/Bungee caches use read-time 24-hour TTLs and are overwritten
+on the next successful fetch.
 
 ### Transient (dynamic keys)
 
@@ -109,6 +123,13 @@ state writes.
 | `txResult:{txId}`   | `{ result: { success, txHash?, error? }, timestamp }`   | Transaction result. Written by background on confirm/reject, read+deleted by content script. If `txId` is present in `walletConnectPendingRequests`, the background also sends the tx hash/error back over WalletConnect and removes the mapping. Stale keys cleaned >30m. |
 | `sigResult:{sigId}` | `{ result: { success, signature?, error? }, timestamp }` | Signature result. Written by background on confirm/reject, read+deleted by content script. If `sigId` is present in `walletConnectPendingRequests`, the background also sends the signature/error back over WalletConnect and removes the mapping. Stale keys cleaned >30m. |
 | `rpcResult:{id}`    | `{ result: { result?, error? }, timestamp }`             | RPC proxy result. Written by background after RPC call, read+deleted by content script. 30s timeout, stale keys cleaned >30m. |
+| `addChainResult:{id}` | `{ result: { success, error?, rpcUrl?, chainName?, shouldSwitch? }, timestamp }` | `wallet_addEthereumChain` result. Written by background after accept/reject, read+deleted by content script. Stale keys cleaned >30m. |
+| `watchAssetResult:{id}` | `{ result: { success, error? }, timestamp }` | `wallet_watchAsset` result. Written by background after accept/reject, read+deleted by content script. Stale keys cleaned >30m. |
+| `batchTxAck:{bundleId}` | `{ result: { success, id?, error?, code? }, timestamp }` | Initial ERC-5792 `wallet_sendCalls` acknowledgement. Lets the dapp receive a bundle ID before final execution. Read+deleted by content script / WalletConnect adapter. Stale keys cleaned >30m. |
+| `batchTxResult:{bundleId}` | `{ result: { success, id?, txHash?, txHashes?, error?, code? }, timestamp }` | ERC-5792 batch terminal/offchain result for content-script or WalletConnect callers. Read+deleted by the waiting caller. Stale keys cleaned >30m. |
+| `capabilitiesResult:{id}` | `{ result: unknown, timestamp }` | `wallet_getCapabilities` result. Written by background, read+deleted by content script. Stale keys cleaned >30m. |
+| `callsStatusResult:{id}` | `{ result: unknown, timestamp }` | `wallet_getCallsStatus` result. Written by background, read+deleted by content script. Stale keys cleaned >30m. |
+| `fiProgress:{txId}` | `ForceInclusionState` | Force-inclusion progress state for a transaction. Stored while replacement/force-inclusion work is in flight, updated by background workers, and removed by wallet reset. |
 
 ### Clear Signing (ERC-7730)
 
@@ -152,7 +173,6 @@ Syncs across Chrome profiles (if signed in). Persists across restarts.
 | `sidePanelVerified`  | `boolean`                   | Whether sidepanel has been verified for this browser.                                                   | v0.2.0     |
 | `isArcBrowser`       | `boolean`                   | Detected Arc browser — disables sidepanel.                                                              | v0.2.0     |
 | `hidePortfolioValue` | `boolean`                   | User preference to hide USD values in portfolio.                                                        | v1.0.0     |
-| `selectedThemeId`    | `"bauhaus" \| "midnight"`   | Active theme ID. Absent = default `"bauhaus"`. Mirrored to `window.localStorage` for synchronous pre-React boot (no flash). See `_docs/THEMING_PRD.md`. | v3.2.0 |
 | `defaultGasTier`     | `"slow" \| "standard" \| "fast"` | User's last preset gas-tier choice from the tx-confirmation tier picker. Absent = default `"standard"`. The Custom tier is intentionally not persisted — it's always a one-shot opt-in for the current confirmation. | v3.4.0 |
 | `swapSlippageBps`    | `number` (BPS, 1–10000) | User's last slippage tolerance in basis points (e.g. `500` = 5%). Absent = `DEFAULT_SLIPPAGE_BPS` (5%). Read once on SwapView mount; persisted on every SlippageSettings change so a user who tunes it down (or up) doesn't see it reset to 5% next session. | next |
 
@@ -167,7 +187,7 @@ Cleared when browser closes. NOT synced. Used only for session restoration when 
 | `sessionId`                | `string` (UUID)              | Session identifier for tracking across service worker restarts.                                                                      | v1.0.0     |
 | `sessionStartedAt`         | `number` (timestamp)         | When the session was established.                                                                                                    | v1.0.0     |
 | `autoLockNever`            | `boolean`                    | Flag indicating this session uses "Never" auto-lock.                                                                                 | v1.0.0     |
-| `encryptedSessionPassword` | `{ data, key, iv }` (base64) | Password encrypted with random AES-GCM key for session restoration after service worker restart. Only set when auto-lock is "Never". | v1.0.0     |
+| `encryptedSessionPassword` | `{ data, iv }` (base64)      | Password ciphertext and IV for session restoration after service worker restart. The AES key half lives in `chrome.storage.local.sessionEncKey`. Only set when auto-lock is "Never". On browsers without native `storage.session`, the shim stores this under `chrome.storage.local.__session__encryptedSessionPassword` and clears it on startup. | v1.0.0     |
 | `passwordType`             | `"master" \| "agent"`        | Which password was used to unlock. Restored to maintain agent password access control guards after service worker restart.           | v1.3.0     |
 | `tab:{tabId}`              | `TabContext` — `{ ensName, kind, value, path, search, hash, contractAddress?, resolvedAt }` | Per-tab ENS resolution context. Written by the SW after a successful `.eth` redirect, read by the banner content script via `chrome.runtime.sendMessage({ type: "get-tab-ctx" })` so it can render the original ENS identity on top of the gateway-served page. Cleaned up on `chrome.tabs.onRemoved`. | next       |
 
@@ -236,11 +256,26 @@ New keys:
 - `chrome.storage.local.walletConnectPendingRequests` (optional, additive)
 - `chrome.storage.local.walletConnectChainId` (optional, additive)
 - `chrome.storage.local.hiddenPortfolioTokens` (optional, additive)
+- `chrome.storage.local.pendingBatchTxRequests` (optional pending ERC-5792 queue)
+- `chrome.storage.local.pendingWatchAssetRequests` (optional pending watch-asset queue)
+- `chrome.storage.local.pendingAddChainRequests` (optional pending add-chain queue)
+- `chrome.storage.local.bundleStatuses` (optional ERC-5792 status cache)
+- `chrome.storage.local.pendingBridges` (optional bridge settlement queue)
+- `chrome.storage.local.customDelegates` (optional EIP-7702 UI mirror)
+- `chrome.storage.local.recentlyReceivedTokens` (optional portfolio freshness overlay)
+- `chrome.storage.local.sessionEncKey` (session-restore key half for "Never" auto-lock)
 - `chrome.storage.local.swapTokenList:{chainId}` (optional cache; absence refetches)
+- `chrome.storage.local.bungeeChains` and `bungeeTokens:{chainId}` (optional bridge metadata caches; absence refetches)
+- Transient local prefixes: `addChainResult:`, `watchAssetResult:`, `batchTxAck:`,
+  `batchTxResult:`, `capabilitiesResult:`, `callsStatusResult:`, and
+  `fiProgress:`
 
 Modified keys:
 
 - `pendingTxRequests` and `pendingSignatureRequests` can include optional `walletConnect` display/response metadata.
+- `encryptedSessionPassword` stores only `{ data, iv }`; the AES key half is
+  stored separately in `chrome.storage.local.sessionEncKey`.
+- `selectedThemeId` is canonical in `chrome.storage.local`, not sync storage.
 - Non-critical metadata/image cache writes are best-effort and expired cache
   entries are actively pruned by `storageCachePruner.ts`.
 - Chrome and Firefox manifests include `unlimitedStorage` to preserve headroom
