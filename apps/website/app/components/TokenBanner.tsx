@@ -54,7 +54,7 @@ export function TokenBanner() {
     window.history.replaceState({}, "", url.toString());
   }, [onClose]);
 
-  const { isOnPage } = useSiteNav();
+  const { href, isOnPage } = useSiteNav();
 
   const isMigratePage = isOnPage("/migrate");
   const [displayValue, setDisplayValue] = useState<string | null>(null);
@@ -493,11 +493,7 @@ export function TokenBanner() {
             <Text bg="#ffdf00">New Ticker,</Text> <Text>Same Vision</Text>
           </HStack>
           <Link
-            href={
-              process.env.NODE_ENV === "development"
-                ? "/migrate"
-                : "https://migrate.walletchan.com"
-            }
+            href={href("/migrate")}
             bg="bauhaus.red"
             color="white"
             px={{ base: 2, md: 3 }}

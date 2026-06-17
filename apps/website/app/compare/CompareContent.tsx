@@ -18,6 +18,7 @@ import { Footer } from "../components/Footer";
 import { BuyModal, type BuyToken } from "../coins/components/BuyModal";
 import { TOKEN_ADDRESS } from "../constants";
 import { noTokenWallets } from "../data/compareTokens";
+import { useSiteNav } from "../lib/useSiteNav";
 import { useCompareData } from "./useCompareData";
 
 const WCHAN_TOKEN: BuyToken = {
@@ -40,6 +41,7 @@ function formatPercent(value: number): string {
 export default function CompareContent() {
   const { tokens, wchanMarketCap, wchanVolume24h } = useCompareData();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { href } = useSiteNav();
 
   const oursIndex = tokens.findIndex((t) => t.isOurs);
   const oursToken = oursIndex >= 0 ? tokens[oursIndex] : null;
@@ -143,6 +145,8 @@ export default function CompareContent() {
               {/* Token rows */}
               {tokens.map((token, i) => {
                 const isOurs = token.isOurs;
+                const websiteHref =
+                  isOurs && token.website ? href("/") : token.website;
 
                 // Gap calculations for WCHAN row
                 let gapAbove: {
@@ -252,10 +256,10 @@ export default function CompareContent() {
                             >
                               {token.name}
                             </Text>
-                            {token.website && (
+                            {websiteHref && (
                               <Link
-                                href={token.website}
-                                isExternal
+                                href={websiteHref}
+                                isExternal={websiteHref.startsWith("http")}
                                 display={{ base: "none", sm: "flex" }}
                                 alignItems="center"
                                 color="gray.400"

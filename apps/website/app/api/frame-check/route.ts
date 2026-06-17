@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isOfficialWalletChanHostMention } from "../../lib/siteRouting";
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get("url");
@@ -39,8 +40,7 @@ export async function GET(req: NextRequest) {
       // If it lists specific domains but no wildcard, likely blocked for us
       else if (
         !value.includes("*") &&
-        !value.includes("walletchan.com") &&
-        !value.includes("walletchan.xyz")
+        !isOfficialWalletChanHostMention(value)
       ) {
         cspBlocked = true;
       }

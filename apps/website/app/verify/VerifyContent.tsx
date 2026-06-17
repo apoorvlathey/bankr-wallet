@@ -20,6 +20,7 @@ import { useAccount, useSignMessage } from "wagmi";
 import { formatUnits } from "viem";
 import { Navigation } from "../components/Navigation";
 import { TG_BOT_API_URL, WCHAN_VAULT_INDEXER_API_URL } from "../constants";
+import { useSiteNav } from "../lib/useSiteNav";
 
 const MotionBox = motion(Box);
 
@@ -32,6 +33,9 @@ interface VerifyInfo {
 
 function VerifyContent() {
   const toast = useToast();
+  const { href } = useSiteNav();
+  const stakeHref = href("/stake");
+  const stakeIsExternal = stakeHref.startsWith("http");
   const headingRef = useRef(null);
   const isHeadingInView = useInView(headingRef, { once: true });
 
@@ -544,13 +548,13 @@ function VerifyContent() {
                         </Text>
                       </HStack>
 
-                      {!hasEnoughStake && (
-                        <HStack spacing={2} w="full">
-                          <Link
-                            href="https://stake.walletchan.com"
-                            isExternal
-                            flex={1}
-                          >
+	                      {!hasEnoughStake && (
+	                        <HStack spacing={2} w="full">
+	                          <Link
+	                            href={stakeHref}
+	                            isExternal={stakeIsExternal}
+	                            flex={1}
+	                          >
                             <Button
                               w="full"
                               variant="secondary"

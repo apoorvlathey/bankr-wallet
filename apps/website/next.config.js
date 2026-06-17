@@ -1,96 +1,110 @@
 /** @type {import('next').NextConfig} */
 
-// Subdomain rewrites are mirrored across these TLDs. Add a new TLD here once
-// it's configured in Vercel and DNS, and every rewrite below will pick it up.
-const SUBDOMAIN_TLDS = ["walletchan.com", "walletchan.xyz"];
-
-const SUBDOMAIN_REWRITES = [
-  // coins.* rewrite removed (redirects to homepage now)
-  { slug: "stake" },
-  { slug: "migrate" },
-  { slug: "admin" },
-  { slug: "compare" },
-  { slug: "mainnet" },
-  { slug: "os" },
-  { slug: "test" },
-];
+const routing = require("./routing.config.json");
 
 function buildRewrites() {
   const rewrites = [];
-  for (const { slug } of SUBDOMAIN_REWRITES) {
-    for (const tld of SUBDOMAIN_TLDS) {
+
+  for (const { slug, path } of routing.routes) {
+    for (const host of routing.subdomainBaseHosts) {
       rewrites.push({
         source: "/:path((?!_next|api|images|og|screenshots).*)",
-        has: [{ type: "host", value: `${slug}.${tld}` }],
-        destination: `/${slug}/:path*`,
+        has: [{ type: "host", value: `${slug}.${host}` }],
+        destination: `${path}/:path*`,
       });
     }
   }
+
+  for (const host of routing.redirectBaseHosts) {
+    rewrites.push({
+      source: "/:path((?!_next|api|images|og|screenshots|go).*)",
+      has: [{ type: "host", value: host }],
+      destination: "/go?__wc_path=:path*",
+    });
+
+    for (const { slug, path } of routing.routes) {
+      rewrites.push({
+        source: "/:path((?!_next|api|images|og|screenshots|go).*)",
+        has: [{ type: "host", value: `${slug}.${host}` }],
+        destination: `/go?__wc_prefix=${path}&__wc_path=:path*`,
+      });
+    }
+
+    for (const slug of routing.retiredSubdomainSlugs) {
+      rewrites.push({
+        source: "/:path((?!_next|api|images|og|screenshots|go).*)",
+        has: [{ type: "host", value: `${slug}.${host}` }],
+        destination: "/go?__wc_path=",
+      });
+    }
+  }
+
   return rewrites;
+}
+
+function buildRedirects() {
+  const redirects = [];
+
+  for (const host of routing.subdomainBaseHosts) {
+    for (const slug of routing.retiredSubdomainSlugs) {
+      redirects.push({
+        source: "/:path*",
+        has: [{ type: "host", value: `${slug}.${host}` }],
+        destination: `https://${host}`,
+        permanent: false,
+      });
+    }
+  }
+
+  return redirects;
+}
+
+function buildHeaders() {
+  const headers = [];
+
+  for (const host of routing.pathBaseHosts) {
+    headers.push({
+      source: "/:path*",
+      has: [{ type: "host", value: host }],
+      headers: [{ key: "X-Robots-Tag", value: "noindex, follow" }],
+    });
+  }
+
+  for (const host of routing.redirectBaseHosts) {
+    headers.push({
+      source: "/:path*",
+      has: [{ type: "host", value: host }],
+      headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+    });
+
+    for (const { slug } of routing.routes) {
+      headers.push({
+        source: "/:path*",
+        has: [{ type: "host", value: `${slug}.${host}` }],
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      });
+    }
+
+    for (const slug of routing.retiredSubdomainSlugs) {
+      headers.push({
+        source: "/:path*",
+        has: [{ type: "host", value: `${slug}.${host}` }],
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      });
+    }
+  }
+
+  return headers;
 }
 
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@walletchan/shared"],
+  async headers() {
+    return buildHeaders();
+  },
   async redirects() {
-    return [
-      // Redirect coins subdomains -> homepage (coins page discontinued)
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "coins.bankrwallet.app" }],
-        destination: "https://walletchan.com",
-        permanent: false,
-      },
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "coins.walletchan.com" }],
-        destination: "https://walletchan.com",
-        permanent: false,
-      },
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "coins.walletchan.xyz" }],
-        destination: "https://walletchan.xyz",
-        permanent: false,
-      },
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "stake.bankrwallet.app" }],
-        destination: "https://stake.walletchan.com/:path*",
-        permanent: true,
-      },
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "migrate.bankrwallet.app" }],
-        destination: "https://migrate.walletchan.com/:path*",
-        permanent: true,
-      },
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "admin.bankrwallet.app" }],
-        destination: "https://admin.walletchan.com/:path*",
-        permanent: true,
-      },
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "compare.bankrwallet.app" }],
-        destination: "https://compare.walletchan.com/:path*",
-        permanent: true,
-      },
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "mainnet.bankrwallet.app" }],
-        destination: "https://mainnet.walletchan.com/:path*",
-        permanent: true,
-      },
-      // Redirect bankrwallet.app -> walletchan.com (main domain, must be last)
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "bankrwallet.app" }],
-        destination: "https://walletchan.com/:path*",
-        permanent: true,
-      },
-    ];
+    return buildRedirects();
   },
   async rewrites() {
     return {

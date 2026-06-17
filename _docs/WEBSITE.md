@@ -1,7 +1,8 @@
 # WalletChan Landing Page - Product Requirements Document
 
-**Domain**: walletchan.com  
-**Design System**: Bauhaus (see STYLING.md)  
+**Primary domain**: walletchan.com
+**Fallback domain**: walletchan.eth.sh
+**Design System**: Bauhaus (see STYLING.md)
 **Status**: Planning
 
 ---
@@ -798,7 +799,7 @@ apps/website/
 │   ├── page.tsx
 │   ├── components/        # Hero, Features, TokenSection, etc.
 │   └── lib/
-│       ├── siteRouting.ts # Subdomain registry + pure URL resolution functions
+│       ├── siteRouting.ts # Domain-aware routing helpers
 │       ├── useSiteNav.ts  # React hook wrapping siteRouting for client components
 │       └── theme.ts       # Chakra UI Bauhaus theme
 ```
@@ -829,34 +830,32 @@ export default function MyPage() {
 
 **Note**: Pages that only import child components using wagmi (like `swap/page.tsx` importing `SwapCard`) don't need this — only pages that directly use wagmi hooks in the page file itself.
 
-### Adding a new subdomain
+### Domain routing
 
-When adding a new page that should be accessible via a subdomain (e.g., `foo.walletchan.com`), update **four things**:
+Website routing is centralized in:
 
-1. **Add a `beforeFiles` rewrite** in `apps/website/next.config.js` to map the subdomain to the route:
-   ```js
-   { source: "/:path((?!_next|api|images|og|screenshots).*)", has: [{ type: "host", value: "foo.walletchan.com" }], destination: "/foo/:path*" }
-   ```
-2. **Add a redirect** in `apps/website/next.config.js` from the old `bankrwallet.app` subdomain:
-   ```js
-   { source: "/:path*", has: [{ type: "host", value: "foo.bankrwallet.app" }], destination: "https://foo.walletchan.com/:path*", permanent: true }
-   ```
-3. **Add the route to the subdomain registry** in `apps/website/app/lib/siteRouting.ts`:
-   ```ts
-   { path: "/foo", subdomain: "foo.walletchan.com" }
-   ```
-   This is the single source of truth for client-side subdomain routing. All navigation helpers (`resolveHref`, `useSiteNav` hook, `getBasePath`) derive from this array.
-4. **Add the subdomain in Vercel** project domain settings.
+- `apps/website/routing.config.json` — host modes and route registry used by `next.config.js`
+- `apps/website/app/lib/siteRouting.ts` — pure URL resolution helpers used by React and server code
+- `apps/website/app/lib/useSiteNav.ts` — React hook wrapping `siteRouting.ts`
 
-**Existing subdomains**: `os`, `stake`, `migrate`, `compare`, `mainnet`, `admin`.
+Host modes:
 
-### Cross-subdomain URL routing
+- `walletchan.com` is the canonical SEO host. Route pages use subdomains: `/stake` resolves to `https://stake.walletchan.com/`, `/os` resolves to `https://os.walletchan.com/`.
+- `walletchan.eth.sh` is the direct-access fallback host for ISP/DNS blocks. Route pages use paths: `/stake`, `/os`, `/mainnet`, etc. Do not redirect this host to `walletchan.com`; Next config sends `X-Robots-Tag: noindex, follow` so it does not compete with the canonical host.
+- `bankrwallet.app` is a redirect host only. It serves a noindex redirect page that probes `walletchan.com` from the user's browser and falls back to `walletchan.eth.sh` if the primary host cannot load. Next config also sends `X-Robots-Tag: noindex, nofollow` for this host and its registered subdomains.
+- Localhost always uses paths so the dev server works normally.
+
+When adding a new routed page, update `apps/website/routing.config.json`, add the route page, and add any required Vercel domains for `slug.walletchan.com`. Do not manually construct `*.walletchan.com`, `walletchan.eth.sh`, or `bankrwallet.app` URLs in components.
+
+**Existing routed pages**: `os`, `stake`, `migrate`, `compare`, `mainnet`, `admin`, `test`.
+
+### Cross-domain URL routing
 
 **CRITICAL**: Never construct subdomain URLs manually or use raw `window.location.hostname` checks for routing. Always use the centralized routing helpers:
 
 - **`useSiteNav()` hook** (`apps/website/app/lib/useSiteNav.ts`) — for React components. Provides:
-  - `href(path)` — resolves any internal path to the correct URL (handles localhost vs subdomain vs main site)
-  - `homeHref` — logo/home link (`"/"` on localhost, `"https://walletchan.com"` on subdomains)
+  - `href(path)` — resolves any internal path to the correct URL (handles localhost, `walletchan.com` subdomains, and `walletchan.eth.sh` path routes)
+  - `homeHref` — logo/home link (`"/"` on localhost and path hosts, `"https://walletchan.com"` on subdomains)
   - `isOnPage(route)` — checks if on a specific page (works with both pathname and subdomain)
   - `getRouteBasePath(route)` — returns `""` on own subdomain, `"/os"` etc. elsewhere
   - `isLocalhost`, `isOnSubdomain`, `currentRoute`
@@ -867,8 +866,8 @@ When adding a new page that should be accessible via a subdomain (e.g., `foo.wal
 ```tsx
 // In a component on any page/subdomain:
 const { href, homeHref, isOnPage } = useSiteNav();
-<Link href={href("/stake")}>Stake</Link>         // → "/stake" on localhost, "https://stake.walletchan.com" on prod
-<Link href={href("#install")}>Install</Link>     // → "#install" on homepage, "https://walletchan.com/#install" on subdomains
-<Link href={homeHref}>Home</Link>                // → "/" on localhost, "https://walletchan.com" on subdomains
-const isOnStake = isOnPage("/stake");            // → true on /stake path OR stake.walletchan.com
+<Link href={href("/stake")}>Stake</Link>      // localhost/walletchan.eth.sh → "/stake"; walletchan.com → "https://stake.walletchan.com/"
+<Link href={href("#install")}>Install</Link>  // anchors stay on the current path host, but target walletchan.com home from subdomains
+<Link href={homeHref}>Home</Link>             // "/" on path hosts, "https://walletchan.com" on subdomains
+const isOnStake = isOnPage("/stake");         // true on /stake paths OR stake.walletchan.com
 ```

@@ -61,7 +61,9 @@ export function useSiteNav() {
     /** Whether on a specific page (checks both pathname and subdomain) */
     isOnPage: useCallback(
       (route: SubdomainRoute) =>
-        pathname === route || currentRoute === route,
+        pathname === route ||
+        pathname.startsWith(`${route}/`) ||
+        currentRoute === route,
       [pathname, currentRoute]
     ),
   };

@@ -1,0 +1,17 @@
+{
+  "primaryHost": "walletchan.com",
+  "fallbackHost": "walletchan.eth.sh",
+  "subdomainBaseHosts": ["walletchan.com"],
+  "pathBaseHosts": ["walletchan.eth.sh"],
+  "redirectBaseHosts": ["bankrwallet.app"],
+  "retiredSubdomainSlugs": ["coins"],
+  "routes": [
+    { "path": "/os", "slug": "os" },
+    { "path": "/stake", "slug": "stake" },
+    { "path": "/migrate", "slug": "migrate" },
+    { "path": "/compare", "slug": "compare" },
+    { "path": "/mainnet", "slug": "mainnet" },
+    { "path": "/admin", "slug": "admin" },
+    { "path": "/test", "slug": "test" }
+  ]
+}
