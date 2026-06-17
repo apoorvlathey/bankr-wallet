@@ -10,6 +10,10 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.17.0] - 2026-06-17
+
 ### Added
 
 - Seed phrase imports can now coexist with view-only impersonator entries for the same address, so users can import or derive the real signing account without removing the viewer first.
@@ -43,6 +47,7 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 - Bankr submit responses are validated before transactions are treated as accepted.
 - Legacy API-key writes are blocked once vault-key storage is active, preventing stale password-encrypted key material from being recreated.
 - Unsupported raw-hash `eth_sign` signing paths stay rejected across Bankr API, Private Key, and Seed Phrase accounts.
+
 
 ## [3.16.0] - 2026-05-31
 
@@ -554,7 +559,8 @@ This release is a full rebuild of the wallet — multiple account types, a real 
 - View address on Debank from the homepage.
 - Lock-wallet button and footer attribution.
 
-[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.16.0...HEAD
+[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.17.0...HEAD
+[3.17.0]: https://github.com/apoorvlathey/walletchan/compare/v3.16.0...v3.17.0
 [3.16.0]: https://github.com/apoorvlathey/walletchan/compare/v3.15.0...v3.16.0
 [3.15.0]: https://github.com/apoorvlathey/walletchan/compare/v3.14.0...v3.15.0
 [3.14.0]: https://github.com/apoorvlathey/walletchan/compare/v3.13.0...v3.14.0
