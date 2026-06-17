@@ -94,7 +94,7 @@ export const WATCH_ASSET_TEST_PARAMS = {
     address: "0x6B7aCF45a2e7395d9feBb96ddF6B14e2F69d79A8",
     symbol: "WCHAN",
     decimals: 18,
-    image: "https://walletchan.eth.sh/images/wchan.png",
+    image: "https://walletchan.eth.sh/images/walletchan-icon.png",
   },
 };
 
