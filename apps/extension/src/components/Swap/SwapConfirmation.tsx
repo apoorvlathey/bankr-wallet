@@ -33,7 +33,7 @@ import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
 import { formatTokenAmount, formatTokenAmountFromBase } from "@/lib/tokenFormatUtils";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getNativeAssetMeta } from "@/lib/chains";
 // Theme-aware accent stripes shared with the batch confirmation surfaces, so a
@@ -181,7 +181,7 @@ function SwapConfirmation({
   const buyLogoSrc = cachedBuyLogo || buyTokenLogoURI;
   const { themeId } = useTheme();
   const { networksInfo } = useNetworks();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const [expandedCalls, setExpandedCalls] = useState<Set<number>>(new Set());
   const [decodedFunctionNames, setDecodedFunctionNames] = useState<Record<number, string>>({});
   const sourceNativeSymbol =

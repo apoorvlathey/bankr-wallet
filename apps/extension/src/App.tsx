@@ -1,5 +1,4 @@
-import {
-  useState,
+import { useState,
   useEffect,
   useCallback,
   useRef,
@@ -37,7 +36,7 @@ import {
   ChatIcon,
 } from "@chakra-ui/icons";
 
-import { useTheme, useStripTokens } from "@/theme";
+import { isDarkThemeId, useTheme, useStripTokens } from "@/theme";
 import { closeSidePanelForWindow } from "@/lib/sidePanelControls";
 import TransactionConfirmationErrorBoundary from "@/components/TransactionConfirmationErrorBoundary";
 
@@ -261,7 +260,7 @@ const LoadingFallback = () => (
 
 function App() {
   const { themeId, tokens } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const stripTokens = useStripTokens();
   const addressPillTokens = useStripTokens("elevated");
   const { networksInfo, reloadRequired, setReloadRequired } = useNetworks();

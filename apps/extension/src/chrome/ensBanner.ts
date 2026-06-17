@@ -37,6 +37,7 @@ type TabContext = {
 
 type Theme = {
   themeId: "bauhaus" | "midnight";
+  isDark: boolean;
   bg: string;
   fg: string;
   fgMuted: string;
@@ -47,6 +48,7 @@ type Theme = {
 
 const FALLBACK_THEME: Theme = {
   themeId: "bauhaus",
+  isDark: false,
   bg: "#121212",
   fg: "#FFFFFF",
   fgMuted: "#A8A8A8",
@@ -367,8 +369,7 @@ function buildBanner(theme: Theme): Refs {
   ].join("; ");
 
   const shadow = host.attachShadow({ mode: "closed" });
-  const isMidnight = theme.themeId === "midnight";
-  const logoRadius = isMidnight ? "4px" : "0";
+  const logoRadius = theme.isDark ? "4px" : "0";
 
   // Strip uses the Bauhaus color palette in BOTH themes — the dark
   // `#121212` bar reads as a chrome surface on top of any page content.

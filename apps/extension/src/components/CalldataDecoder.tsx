@@ -15,7 +15,7 @@ import { ShapesLoader } from "@/components/Chat/ShapesLoader";
 import { decodeRecursive } from "@/lib/decoder";
 import { renderParams } from "@/components/renderParams";
 import type { DecodeRecursiveResult } from "@/lib/decoder/types";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 
 interface CalldataDecoderProps {
   calldata: string;
@@ -130,7 +130,7 @@ function isAbiDecodeBetter(
 
 function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollapsed = false, flat = false }: CalldataDecoderProps) {
   const { themeId, tokens } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   // Selected tab strip uses an inverted contrast (Bauhaus paints it black with
   // white text; Midnight uses a recessed dark surface so we don't compete with
   // the modal-style luminous shadows). Same pattern as Phase 5 header bar.

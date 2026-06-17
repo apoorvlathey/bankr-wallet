@@ -42,6 +42,7 @@
 
 import { useTheme } from "./ThemeProvider";
 import { DEFAULT_CHAIN_CONFIG } from "@/constants/chainRegistry";
+import { isDarkThemeId } from "./tokens";
 
 export interface ChainBadgeStyle {
   /** Badge/pill background */
@@ -70,7 +71,7 @@ export function resolveChainBadgeStyle(
   brandFg: string,
   isCustom = false,
 ): ChainBadgeStyle {
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
 
   // Chains not in CHAIN_REGISTRY fall back to DEFAULT_CHAIN_CONFIG, whose
   // sentinel white-on-white values would render the badge unreadable in

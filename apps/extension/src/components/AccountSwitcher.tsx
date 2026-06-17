@@ -20,7 +20,7 @@ import { blo } from "blo";
 import type { Account, SeedGroup } from "@/chrome/types";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 import { truncateAddress } from "@/lib/addressUtils";
 
 // Blockies avatar for PK accounts using blo
@@ -130,7 +130,7 @@ function AccountSwitcher({
   // with the holdings total) to a muted violet info chip. Bauhaus keeps the
   // original amber for poster-style emphasis.
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const pkTagBg = isDarkTheme ? "status.info.bg" : "accent.highlight";
   const pkTagFg = isDarkTheme ? "status.info.fg" : "accentFg.highlight";
   const pkTagBorder = isDarkTheme ? "status.info.border" : "border.default";

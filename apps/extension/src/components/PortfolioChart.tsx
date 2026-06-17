@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Box, HStack, Text, Skeleton } from "@chakra-ui/react";
 import { getSnapshots } from "@/chrome/portfolioSnapshotStorage";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 import { formatAbsoluteTimestamp } from "@/lib/timeFormatUtils";
 
 interface PortfolioChartProps {
@@ -63,7 +63,7 @@ export default function PortfolioChart({
   refreshTrigger = 0,
 }: PortfolioChartProps) {
   const { themeId, tokens } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);

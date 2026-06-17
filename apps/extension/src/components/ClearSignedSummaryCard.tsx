@@ -1,5 +1,4 @@
-import {
-  Box,
+import { Box,
   VStack,
   HStack,
   Text,
@@ -19,7 +18,7 @@ import { useState } from "react";
 
 import type { ClearSignedMeta } from "@/chrome/txHistoryStorage";
 import { getChainConfig } from "@/constants/chainConfig";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 
 /**
@@ -51,7 +50,7 @@ interface Props {
 //     section cards (transferMeta, From→To, gas).
 function useCardBg(meta: ClearSignedMeta) {
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   if (meta.kind === "approve") {
     if (meta.isRevoke) {
       return isDarkTheme ? "surface.raisedHover" : "status.success.tint";
@@ -112,7 +111,7 @@ function CopyIconButton({
 
 export default function ClearSignedSummaryCard({ meta, chainId }: Props) {
   const { tokens, themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const cardBg = useCardBg(meta);
   const chainConfig = getChainConfig(chainId);
 

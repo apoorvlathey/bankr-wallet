@@ -17,7 +17,17 @@ import type { ComponentType } from "react";
 // Identity
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ThemeId = "bauhaus" | "midnight";
+export const THEME_IDS = ["bauhaus", "midnight"] as const;
+
+export type ThemeId = (typeof THEME_IDS)[number];
+
+export function isThemeId(value: unknown): value is ThemeId {
+  return typeof value === "string" && THEME_IDS.includes(value as ThemeId);
+}
+
+export function isDarkThemeId(value: ThemeId | string): boolean {
+  return value === "midnight";
+}
 
 export interface ThemePreview {
   /** Background color used in the picker card */

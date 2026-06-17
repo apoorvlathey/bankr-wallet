@@ -11,7 +11,7 @@ import {
 } from "@chakra-ui/react";
 import { ChevronDownIcon } from "@chakra-ui/icons";
 import { CopyButton } from "@/components/CopyButton";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 import {
   computeCalldataDigest,
   computeEip712Digest,
@@ -88,7 +88,7 @@ function DigestBox({
   const [tab, setTab] = useState<DigestTab>(defaultTab);
   const tabOrder: readonly DigestTab[] = ["hex", "emoji"];
   const { tokens, themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   // Alternating hex-chunk colors — Bauhaus uses primary red/green, Midnight
   // swaps to amber/blue so the chunks pop against the dark surface (red/green
   // both render muddy on `bg.muted` in Midnight).

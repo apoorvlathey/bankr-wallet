@@ -20,7 +20,7 @@ import {
   LockIcon,
   ArrowBackIcon,
 } from "@chakra-ui/icons";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 import type { Account, PasswordType } from "@/chrome/types";
 import { truncateAddress } from "@/lib/addressUtils";
 
@@ -31,7 +31,7 @@ interface Props {
 
 function RevealPrivateKey({ account, onBack }: Props) {
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showKey, setShowKey] = useState(false);

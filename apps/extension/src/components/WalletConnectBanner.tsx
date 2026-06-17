@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Box, HStack, Text } from "@chakra-ui/react";
 import { ChevronRightIcon, LinkIcon } from "@chakra-ui/icons";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 
 interface WalletConnectBannerProps {
   sessionCount: number;
@@ -13,7 +13,7 @@ function WalletConnectBanner({
   onClick,
 }: WalletConnectBannerProps) {
   const { tokens, themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const linkIconBg = isDarkTheme ? "accentFg.secondary" : "border.default";
   const linkIconColor = isDarkTheme ? "accent.secondary" : "accentFg.secondary";
   const arrowIconColor = "accentFg.secondary";

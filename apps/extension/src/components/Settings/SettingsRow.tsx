@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { Box, HStack, Text } from "@chakra-ui/react";
 import { ChevronRightIcon } from "@chakra-ui/icons";
-import { ThemedCard, Decorator, useStripTokens, useTheme } from "@/theme";
+import { isDarkThemeId, ThemedCard, Decorator, useStripTokens, useTheme } from "@/theme";
 import type { DecoratorAccent } from "@/theme";
 
 /**
@@ -48,7 +48,7 @@ export function SettingsRow({
   // square in Midnight (because fg.primary is near-white there).
   const chevronStrip = useStripTokens();
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   return (
     <ThemedCard
       weight="medium"

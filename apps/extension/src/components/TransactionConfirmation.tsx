@@ -57,7 +57,7 @@ import { detectAbiEncodingError } from "@/lib/calldataValidation";
 import { MalformedCalldataBanner } from "@/components/MalformedCalldataBanner";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
-import { useTheme, useStripTokens, useChainBadgeStyle, useIconChipBg } from "@/theme";
+import { isDarkThemeId, useTheme, useStripTokens, useChainBadgeStyle, useIconChipBg } from "@/theme";
 import {
   getResolvedChainById,
   getStoredNativeCurrencySymbol,
@@ -321,7 +321,7 @@ function TransactionConfirmation({
 }: TransactionConfirmationProps) {
   const { networksInfo } = useNetworks();
   const { themeId, tokens } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   // Bauhaus paints the count badge as a stark black strip with white text;
   // Midnight uses a recessed dark surface — see useStripTokens.
   const { bg: stripBg, fg: stripFg } = useStripTokens();

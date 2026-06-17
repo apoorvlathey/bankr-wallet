@@ -1,5 +1,4 @@
-import {
-  Badge,
+import { Badge,
   Box,
   HStack,
   Icon,
@@ -15,7 +14,7 @@ import {
   ExternalLinkIcon,
   ViewOffIcon,
 } from "@chakra-ui/icons";
-import { ThemedCard, useStripTokens, useTheme } from "@/theme";
+import { isDarkThemeId, ThemedCard, useStripTokens, useTheme } from "@/theme";
 import {
   REVOKE_CASH_URL,
   revokeCashAddressUrl,
@@ -117,7 +116,7 @@ function ActionBadge({ children }: { children: string }) {
 
 function ActionTile({ action }: { action: MoreAction }) {
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
 
   return (
     <ThemedCard
@@ -175,7 +174,7 @@ function ActionTile({ action }: { action: MoreAction }) {
 function ActionRow({ action }: { action: MoreAction }) {
   const strip = useStripTokens();
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const isExternal = action.external !== false;
 
   return (

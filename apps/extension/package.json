@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm dev:web && pnpm dev:onboarding && pnpm dev:ens-pages && concurrently 'pnpm dev:inpage' 'pnpm dev:inject' 'pnpm dev:ens-banner' 'pnpm dev:background'",
+    "dev:preview": "vite --host 0.0.0.0 -c vite.config.preview.ts",
     "dev:web": "pnpm build:web --mode development",
     "dev:onboarding": "pnpm build:onboarding --mode development",
     "dev:ens-pages": "pnpm build:ens-pages --mode development",
@@ -13,6 +14,7 @@
     "dev:ens-banner": "pnpm build:ens-banner --mode development",
     "dev:background": "pnpm build:background --mode development",
     "build": "pnpm build:web && pnpm build:onboarding && pnpm build:ens-pages && concurrently 'pnpm build:inpage' 'pnpm build:inject' 'pnpm build:ens-banner' 'pnpm build:background'",
+    "build:preview": "vite build -c vite.config.preview.ts",
     "build:web": "vite build",
     "build:onboarding": "vite build -c vite.config.onboarding.ts",
     "build:ens-pages": "vite build -c vite.config.ensPages.ts",

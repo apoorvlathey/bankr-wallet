@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
-import {
-  Box,
+import { Box,
   HStack,
   Spacer,
   VStack,
@@ -34,7 +33,7 @@ import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { getChainConfig } from "@/constants/chainConfig";
 import ChainIcon from "@/components/ChainIcon";
-import { ThemedCard, Decorator, useIconChipBg, useTheme } from "@/theme";
+import { isDarkThemeId, ThemedCard, Decorator, useIconChipBg, useTheme } from "@/theme";
 import EditChain from "./EditChain";
 import AddChain from "./AddChain";
 
@@ -66,7 +65,7 @@ function Chain({
   const rpcDisplay = getRpcDisplay(network.rpcUrl);
   const iconChipBg = useIconChipBg();
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
 
   return (
     <ThemedCard

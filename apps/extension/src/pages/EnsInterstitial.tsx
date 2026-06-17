@@ -28,7 +28,7 @@ import {
   Text,
   VStack,
 } from "@chakra-ui/react";
-import { Decorator, ThemedPanel, useTheme } from "@/theme";
+import { isDarkThemeId, Decorator, ThemedPanel, useTheme } from "@/theme";
 
 type ParsedTarget = {
   ensName: string;
@@ -95,7 +95,7 @@ function displayName(ensName: string): string {
 
 export default function EnsInterstitial() {
   const { tokens, themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const target = useMemo(() => parseTarget(), []);
   const displayedName = useMemo(
     () => (target ? displayName(target.ensName) : ""),

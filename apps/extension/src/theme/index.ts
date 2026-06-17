@@ -65,3 +65,4 @@ export type {
   ThemeDecorators,
   ThemePreview,
 } from "./tokens";
+export { THEME_IDS, isThemeId, isDarkThemeId } from "./tokens";

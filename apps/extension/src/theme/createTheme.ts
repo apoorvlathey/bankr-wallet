@@ -184,8 +184,8 @@ function buildButton(t: ThemeTokens) {
       },
       outline: {
         bg: "transparent",
+        border: t.borders.thin,
         borderColor: "border.default",
-        borderWidth: "2px",
         color: "fg.primary",
         _hover: {
           bg: "bg.muted",
@@ -263,8 +263,11 @@ function buildInput(t: ThemeTokens) {
       boxShadow: t.shadows.focus,
     },
     _invalid: {
-      borderColor: "accent.primary",
-      boxShadow: `3px 3px 0px 0px ${t.colors.accent.primary}`,
+      borderColor: t.colorMode === "dark" ? "status.error.border" : "accent.primary",
+      boxShadow:
+        t.colorMode === "dark"
+          ? t.shadows.focus
+          : `3px 3px 0px 0px ${t.colors.accent.primary}`,
     },
   };
 
@@ -537,9 +540,9 @@ function buildModal(t: ThemeTokens) {
 function buildMenu(t: ThemeTokens) {
   // Bauhaus signature hover is the yellow bar; Midnight uses a quieter
   // raised-hover surface because amber + light text is unreadable.
-  const isMidnight = t.id === "midnight";
-  const hoverBg = isMidnight ? "surface.raisedHover" : "accent.highlight";
-  const hoverColor = isMidnight ? "fg.primary" : "accentFg.highlight";
+  const isDarkTheme = t.colorMode === "dark";
+  const hoverBg = isDarkTheme ? "surface.raisedHover" : "accent.highlight";
+  const hoverColor = isDarkTheme ? "fg.primary" : "accentFg.highlight";
 
   return {
     baseStyle: {

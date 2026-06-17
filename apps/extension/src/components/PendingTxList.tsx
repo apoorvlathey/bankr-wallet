@@ -19,7 +19,7 @@ import { getChainConfig } from "@/constants/chainConfig";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { getCombinedRequests } from "@/App";
 import ChainIcon from "@/components/ChainIcon";
-import { useStripTokens, useTheme, resolveChainBadgeStyle } from "@/theme";
+import { isDarkThemeId, useStripTokens, useTheme, resolveChainBadgeStyle } from "@/theme";
 import { formatRelativeTime } from "@/lib/timeFormatUtils";
 
 function getOriginHostname(origin: string): string | null {
@@ -68,7 +68,7 @@ function PendingTxList({
   // Theme-aware count badge — same pattern used in batch / signature confirmation.
   const { bg: stripBg, fg: stripFg } = useStripTokens();
   const { tokens, themeId } = useTheme();
-  const isDark = themeId === "midnight";
+  const isDark = isDarkThemeId(themeId);
   // Chain pill styling — delegates to the shared resolver so pending-list
   // pills match the tx request popup's Network pill (light chip + brand text
   // on Midnight for known chains, neutral surface chip for unknown/custom).

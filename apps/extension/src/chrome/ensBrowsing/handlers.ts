@@ -38,6 +38,7 @@ import {
   removeMfsPath,
   unpinFromKubo,
 } from "./kubo";
+import { isDarkThemeId, isThemeId, type ThemeId } from "@/theme/tokens";
 import {
   listWeb3Entries,
   mfsPathFor,
@@ -432,13 +433,17 @@ export function handleEnsBrowsingMessage(
     // re-renders on `chrome.storage.onChanged` when the user switches theme.
     (async () => {
       const stored = (await chrome.storage.local.get("selectedThemeId")) as {
-        selectedThemeId?: "bauhaus" | "midnight";
+        selectedThemeId?: string;
       };
-      const themeId = stored.selectedThemeId === "midnight" ? "midnight" : "bauhaus";
+      const themeId: ThemeId = isThemeId(stored.selectedThemeId)
+        ? stored.selectedThemeId
+        : "bauhaus";
+      const isDark = isDarkThemeId(themeId);
       const theme =
-        themeId === "midnight"
+        isDark
           ? {
               themeId,
+              isDark,
               bg: "#0F1320",
               fg: "#E6E8EF",
               fgMuted: "#8C92A8",
@@ -448,6 +453,7 @@ export function handleEnsBrowsingMessage(
             }
           : {
               themeId,
+              isDark,
               bg: "#121212",
               fg: "#FFFFFF",
               fgMuted: "#A8A8A8",

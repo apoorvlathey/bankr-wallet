@@ -28,7 +28,7 @@ import {
 } from "@/lib/erc20Approve";
 import { resolveAddressToName } from "@/lib/ensUtils";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
@@ -157,7 +157,7 @@ export default function ERC20ApproveDisplay({
 }: ERC20ApproveDisplayProps) {
   const { tokens, themeId } = useTheme();
   const { networksInfo } = useNetworks();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const initialToken = toTokenMeta(
     getCachedTokenMetadataSync(chainId, tokenAddress),
   );

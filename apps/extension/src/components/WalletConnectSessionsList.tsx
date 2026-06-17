@@ -1,7 +1,7 @@
 import { Box, HStack, IconButton, Image, Text, VStack } from "@chakra-ui/react";
 import { CloseIcon, RepeatIcon } from "@chakra-ui/icons";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
-import { ThemedCard, useTheme } from "@/theme";
+import { isDarkThemeId, ThemedCard, useTheme } from "@/theme";
 import type { WalletConnectSessionSummary } from "@/types/walletConnect";
 
 interface WalletConnectSessionsListProps {
@@ -20,7 +20,7 @@ export default function WalletConnectSessionsList({
   onRefresh,
 }: WalletConnectSessionsListProps) {
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
 
   return (
     <>

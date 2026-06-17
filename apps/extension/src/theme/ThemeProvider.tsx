@@ -31,7 +31,10 @@ export const themes: Record<ThemeId, ThemeTokens> = {
 
 /** Ordered list for theme picker UIs */
 // eslint-disable-next-line react-refresh/only-export-components
-export const themeList: ThemeTokens[] = [bauhausTokens, midnightTokens];
+export const themeList: ThemeTokens[] = [
+  bauhausTokens,
+  midnightTokens,
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Context

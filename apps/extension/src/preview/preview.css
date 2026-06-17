@@ -1,0 +1,14 @@
+html,
+body {
+  width: 100%;
+  height: auto;
+  min-height: 100vh;
+}
+
+#preview-root {
+  min-height: 100vh;
+}
+
+body {
+  overflow-x: auto;
+}

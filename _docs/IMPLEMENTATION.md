@@ -20,11 +20,11 @@ This document describes the core architecture and transaction handling implement
 
 ## Theme Engine
 
-As of v3.2.0 the extension ships a token-driven theme engine with two themes:
-**Bauhaus** (light, geometric, primary colors, hard shadows) and **Midnight**
+As of v3.2.0 the extension ships a token-driven theme engine. Current themes:
+**Bauhaus** (light, geometric, primary colors, hard shadows), **Midnight**
 (dark, modern, soft luminous shadows, rounded corners). Users select a theme
-from Settings → Appearance; the choice persists in `chrome.storage.local` and
-does NOT sync across devices.
+from Settings → Appearance; the choice persists in
+`chrome.storage.local` and does NOT sync across devices.
 
 **Architecture:**
 
@@ -55,6 +55,25 @@ literals or names like `bauhaus.red`. The factory translates tokens to a
 Chakra theme per the active `ThemeTokens` shape. To add a new theme, drop a
 file in `themes/` satisfying the contract and register it in `ThemeProvider.tsx`.
 Zero component edits.
+
+For dark-theme-specific behavior, use `isDarkThemeId(themeId)` or
+`tokens.colorMode === "dark"` instead of comparing directly to `"midnight"`.
+This keeps future dark variants on the same contrast/ornament rules.
+
+## Extension Preview Harness
+
+The extension includes a Vite preview harness for fast theme iteration without
+loading the browser extension:
+
+```bash
+pnpm dev:extension-preview
+```
+
+Open `http://localhost:4317/preview/all` to compare the key popup screens in
+fixed popup/sidepanel frames. The harness lives in `apps/extension/src/preview/`
+and mounts real confirmation/settings/unlock components with deterministic
+fixtures plus a preview-only Chrome API shim. See `_docs/EXTENSION_PREVIEW.md`
+for the workflow and rules for adding preview screens.
 
 See `_docs/STYLING.md` for the full token vocabulary and authoring rules.
 See `_docs/THEMING_PRD.md` for the engine architecture and phased rollout history.

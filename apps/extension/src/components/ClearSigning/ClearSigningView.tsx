@@ -26,7 +26,7 @@ import { CopyIcon, CheckIcon, ExternalLinkIcon, ChevronRightIcon, ChevronDownIco
 import { blo } from "blo";
 
 import { ThemedCard } from "@/theme/primitives/ThemedCard";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 import { getChainConfig } from "@/constants/chainConfig";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import { formatUsd } from "@/lib/currencyFormatUtils";
@@ -137,7 +137,7 @@ export function ClearSigningView(props: ClearSigningViewProps) {
   const { themeId } = useTheme();
   const { networksInfo } = useNetworks();
   const cardShadow =
-    depth > 0 && themeId === "midnight" ? "none" : undefined;
+    depth > 0 && isDarkThemeId(themeId) ? "none" : undefined;
   const nativeCurrency = useMemo(() => {
     const runtimeNative = getNativeAssetMeta(chainId, networksInfo);
     const builtIn = CHAIN_REGISTRY.find((chain) => chain.chainId === chainId);

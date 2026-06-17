@@ -37,8 +37,8 @@ export interface StripTokens {
 }
 
 export function useStripTokens(variant: StripVariant = "inverted"): StripTokens {
-  const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const { tokens } = useTheme();
+  const isDarkTheme = tokens.colorMode === "dark";
 
   if (variant === "elevated") {
     // Bauhaus keeps the literal inverted black bar — it's a signature look and

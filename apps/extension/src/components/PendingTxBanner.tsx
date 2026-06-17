@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { HStack, Box, Text } from "@chakra-ui/react";
 import { BellIcon, ChevronRightIcon } from "@chakra-ui/icons";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 
 interface PendingTxBannerProps {
   txCount: number;
@@ -26,7 +26,7 @@ function PendingTxBanner({
   onClickCrossDappBatch,
 }: PendingTxBannerProps) {
   const { tokens, themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const totalCount = txCount + signatureCount + batchCount + crossDappBatchCount;
   if (totalCount === 0) return null;
 

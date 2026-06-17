@@ -26,7 +26,7 @@ import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 
 import { clearChatHistory } from "@/chrome/chatStorage";
 import { TWITTER_URL } from "@/constants/externalUrls";
-import { useStripTokens, useTheme } from "@/theme";
+import { isDarkThemeId, useStripTokens, useTheme } from "@/theme";
 import Chains from "./Chains";
 import ChangePassword from "./ChangePassword";
 import AutoLockSettings from "./AutoLockSettings";
@@ -94,7 +94,7 @@ function Settings({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const toast = useThemedToast();
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const currentVersion = chrome.runtime.getManifest().version;
   // Reused for the Chain RPCs chip — same recessed strip pattern as the
   // chevron, so the row reads as a "system" tile in both themes.

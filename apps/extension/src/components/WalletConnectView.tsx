@@ -20,7 +20,7 @@ import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import type { Account } from "@/chrome/types";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import type { ResolvedChain } from "@/lib/chains";
-import { ThemedCard, useTheme } from "@/theme";
+import { isDarkThemeId, ThemedCard, useTheme } from "@/theme";
 import type {
   WalletConnectAddChainContext,
   WalletConnectProposalRejection,
@@ -81,7 +81,7 @@ export default function WalletConnectView({
 }: WalletConnectViewProps) {
   const toast = useThemedToast();
   const { tokens, themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const [uri, setUri] = useState("");
   const uriInputRef = useRef<HTMLTextAreaElement>(null);
   const [sessions, setSessions] = useState<WalletConnectSessionSummary[]>([]);

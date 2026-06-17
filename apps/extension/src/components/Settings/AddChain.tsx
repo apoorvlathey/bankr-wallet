@@ -16,7 +16,7 @@ import {
 } from "@chakra-ui/react";
 import { ArrowBackIcon, ExternalLinkIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import { KNOWN_CHAINS } from "@/constants/knownChains.generated";
 
@@ -58,7 +58,7 @@ function AddChain({
 }: AddChainProps) {
   const { networksInfo, setReloadRequired } = useNetworks();
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
 
   const defaultName = initialRequest?.chainName ?? "";
   const defaultChainId =

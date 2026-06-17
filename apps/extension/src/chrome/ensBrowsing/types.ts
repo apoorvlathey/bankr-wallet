@@ -51,6 +51,7 @@ export type ContentUpdatedMessage = {
 // so we hand them a flat color set.
 export type BannerThemeTokens = {
   themeId: "bauhaus" | "midnight";
+  isDark: boolean;
   bg: string;
   fg: string;
   fgMuted: string;

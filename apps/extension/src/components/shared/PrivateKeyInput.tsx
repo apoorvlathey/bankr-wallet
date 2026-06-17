@@ -16,7 +16,7 @@ import {
 } from "@chakra-ui/react";
 import { ViewIcon, ViewOffIcon, CheckIcon, RepeatIcon, CopyIcon } from "@chakra-ui/icons";
 import { generatePrivateKey } from "@/utils/privateKeyUtils";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 
 type PkMode = "import" | "generate";
 
@@ -40,7 +40,7 @@ export default function PrivateKeyInput({
   autoFocus,
 }: PrivateKeyInputProps) {
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const [pkMode, setPkMode] = useState<PkMode>("import");
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [pkCopied, setPkCopied] = useState(false);

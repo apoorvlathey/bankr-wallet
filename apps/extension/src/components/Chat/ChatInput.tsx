@@ -1,7 +1,7 @@
 import { useState, KeyboardEvent } from "react";
 import { HStack, Input, IconButton, Box } from "@chakra-ui/react";
 import { ArrowForwardIcon } from "@chakra-ui/icons";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -16,7 +16,7 @@ export function ChatInput({
 }: ChatInputProps) {
   const [input, setInput] = useState("");
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
 
   const handleSend = () => {
     const trimmed = input.trim();

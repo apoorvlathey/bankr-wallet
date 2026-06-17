@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev:extension": "pnpm --filter @walletchan/extension dev",
+    "dev:extension-preview": "pnpm --filter @walletchan/extension dev:preview",
     "dev:website": "pnpm --filter @walletchan/website dev",
     "build": "pnpm build:extension && pnpm build:website",
     "build:extension": "pnpm --filter @walletchan/extension build",

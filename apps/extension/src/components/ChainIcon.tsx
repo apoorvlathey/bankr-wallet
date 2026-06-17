@@ -1,7 +1,7 @@
 import { Box, Image, Text } from "@chakra-ui/react";
 import { resolveChainIconMeta } from "@/lib/chainIcons";
 import { useBungeeChainsVersion } from "@/lib/useBungeeChainsVersion";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 
 /**
  * Renders a shipped chain icon when known, reuses mainnet icons for common
@@ -34,7 +34,7 @@ export default function ChainIcon({
   const meta = resolveChainIconMeta(chainId, chainName);
   const altText = chainName || `Chain ${chainId}`;
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const showChip = withChip && isDarkTheme && Boolean(meta.iconSrc);
   const fallbackBg = isDarkTheme ? "whiteAlpha.900" : meta.bg;
   const fallbackText = isDarkTheme ? "fg.inverse" : meta.text;

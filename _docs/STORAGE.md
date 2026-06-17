@@ -105,7 +105,7 @@ read-time TTL checks.
 
 | Key               | Shape                       | Description                                                                                                      | Introduced |
 | ----------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------- |
-| `selectedThemeId` | `"bauhaus" \| "midnight"`   | Active theme ID. Absent = default `"bauhaus"`. Canonical store is `chrome.storage.local`; mirrored to `window.localStorage` for synchronous pre-React boot (no flash). See `_docs/THEMING_PRD.md`. | v3.2.0 |
+| `selectedThemeId` | `"bauhaus" \| "midnight"`   | Active theme ID. Absent or invalid value = default `"bauhaus"`. Canonical store is `chrome.storage.local`; mirrored to `window.localStorage` for synchronous pre-React boot (no flash). See `_docs/THEMING_PRD.md`. | v3.2.0 |
 
 These metadata/image cache keys are non-critical. Cache writes are best-effort
 and may be skipped if `chrome.storage.local` rejects the write; callers still use

@@ -50,7 +50,7 @@ import {
   getStoredNativeCurrencySymbol,
   getStoredRpcUrl,
 } from "@/lib/chains";
-import { useTheme, useChainBadgeStyle } from "@/theme";
+import { isDarkThemeId, useTheme, useChainBadgeStyle } from "@/theme";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import ClearSignedSummaryCard from "@/components/ClearSignedSummaryCard";
@@ -800,7 +800,7 @@ function ForceInclusionSteps({
   txHash: string | undefined;
 }) {
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   // The step circles are vivid filled discs (red/green/blue) with a small icon
   // inside. White contrasts well against the vivid Bauhaus palette but vanishes
   // against Midnight's lighter chart tints — flip to a near-black icon there.
@@ -1230,8 +1230,8 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
   // On midnight, the error.fg coral reads as another "error" cue on top of the
   // already-red container — use a neutral light surface so the CTA feels like
   // an action, not a warning. Bauhaus error.fg is already WHITE, so it's fine.
-  const rebroadcastBg = themeId === "midnight" ? "fg.primary" : "status.error.fg";
-  const rebroadcastFg = themeId === "midnight" ? "fg.inverse" : "status.error.bg";
+  const rebroadcastBg = isDarkThemeId(themeId) ? "fg.primary" : "status.error.fg";
+  const rebroadcastFg = isDarkThemeId(themeId) ? "fg.inverse" : "status.error.bg";
 
   const canRebroadcast =
     tx.status === "failed" &&

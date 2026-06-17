@@ -1,6 +1,6 @@
 import { Box, HStack } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 
 interface ShapesLoaderProps {
   size?: string;
@@ -100,7 +100,7 @@ function MidnightDotPulseLoader({ size }: { size: string }) {
 
 export function ShapesLoader({ size = "10px" }: ShapesLoaderProps) {
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
 
   return isDarkTheme ? (
     <MidnightDotPulseLoader size={size} />

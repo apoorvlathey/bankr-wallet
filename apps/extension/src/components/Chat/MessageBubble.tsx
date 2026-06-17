@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Box, Text, Link, Button, HStack, IconButton } from "@chakra-ui/react";
 import { LockIcon, RepeatIcon, CopyIcon, CheckIcon } from "@chakra-ui/icons";
 import { Message } from "@/chrome/chatStorage";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 import ShapesLoader from "./ShapesLoader";
 
 
@@ -55,7 +55,7 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock, onRetry, onResend }: MessageBubbleProps) {
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const [copied, setCopied] = useState(false);
   const isUser = message.role === "user";
   const isPending = message.status === "pending";

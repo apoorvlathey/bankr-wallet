@@ -30,7 +30,7 @@ import PortfolioTokenManageRow from "@/components/PortfolioTokenManageRow";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
-import { ThemedCard, useStripTokens, useTheme } from "@/theme";
+import { isDarkThemeId, ThemedCard, useStripTokens, useTheme } from "@/theme";
 
 const ERC20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -89,7 +89,7 @@ export default function HideTokensView({
   const { networksInfo } = useNetworks();
   const strip = useStripTokens();
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const [tokens, setTokens] = useState<PortfolioToken[]>([]);
   const [hiddenCount, setHiddenCount] = useState(0);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());

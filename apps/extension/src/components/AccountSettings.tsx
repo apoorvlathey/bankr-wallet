@@ -39,7 +39,7 @@ import {
 } from "@chakra-ui/icons";
 import { blo } from "blo";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { useTheme, IconBox } from "@/theme";
+import { isDarkThemeId, useTheme, IconBox } from "@/theme";
 import type { Account, PasswordType, SeedGroup } from "@/chrome/types";
 import { resolveNameToAddress, isResolvableName } from "@/lib/ensUtils";
 import { isAddress } from "@ethersproject/address";
@@ -93,7 +93,7 @@ function AccountSettings({
 }: AccountSettingsProps) {
   const toast = useThemedToast();
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const [view, setView] = useState<AccountSettingsSubView>(initialView);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");

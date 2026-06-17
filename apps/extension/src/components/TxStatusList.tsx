@@ -25,7 +25,7 @@ import { getResolvedChainById } from "@/lib/chains";
 import TxDetailModal from "@/components/TxDetailModal";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import ChainIcon from "@/components/ChainIcon";
-import { useIconChipBg, useTheme } from "@/theme";
+import { isDarkThemeId, useIconChipBg, useTheme } from "@/theme";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 
 interface TxStatusListProps {
@@ -461,7 +461,7 @@ function TxStatusItem({
   const { networksInfo } = useNetworks();
   const iconChipBg = useIconChipBg();
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const config = getChainConfig(tx.chainId);
   const explorerBase =
     getResolvedChainById(tx.chainId, networksInfo)?.explorer ||

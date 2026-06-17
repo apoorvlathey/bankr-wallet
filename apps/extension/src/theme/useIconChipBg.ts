@@ -18,6 +18,6 @@
 import { useTheme } from "./ThemeProvider";
 
 export function useIconChipBg(): string {
-  const { themeId } = useTheme();
-  return themeId === "midnight" ? "whiteAlpha.900" : "bg.muted";
+  const { tokens } = useTheme();
+  return tokens.colorMode === "dark" ? "whiteAlpha.900" : "bg.muted";
 }

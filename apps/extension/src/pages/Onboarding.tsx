@@ -35,7 +35,7 @@ import PrivateKeyInput from "@/components/shared/PrivateKeyInput";
 import SeedPhraseSetup from "@/components/SeedPhraseSetup";
 import ThemeSwitcher from "@/components/shared/ThemeSwitcher";
 import { TWITTER_URL, BANKR_BOT_API_PAGE, BANKR_BOT_TERMINAL_PAGE } from "@/constants/externalUrls";
-import { useTheme } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 
 type OnboardingStep =
   | "welcome"
@@ -71,7 +71,7 @@ function StepIndicator({
   totalSteps: number;
 }) {
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const colors = ["accent.primary", "accent.secondary", "accent.highlight"];
   return (
     <VStack spacing={2}>
@@ -119,7 +119,7 @@ const bounceArrow = keyframes`
 
 function Onboarding() {
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const [step, setStep] = useState<OnboardingStep>("welcome");
   const [isCheckingSetup, setIsCheckingSetup] = useState(true);
   const [accountTypeChoice, setAccountTypeChoice] =

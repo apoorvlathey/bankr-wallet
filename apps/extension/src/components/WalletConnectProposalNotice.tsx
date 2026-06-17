@@ -1,5 +1,4 @@
-import {
-  Box,
+import { Box,
   Button,
   HStack,
   IconButton,
@@ -12,7 +11,7 @@ import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import type { AccountType } from "@/chrome/types";
 import ChainIcon from "@/components/ChainIcon";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
-import { ThemedCard, useTheme } from "@/theme";
+import { isDarkThemeId, ThemedCard, useTheme } from "@/theme";
 import type {
   WalletConnectAddChainContext,
   WalletConnectProposalRejection,
@@ -83,7 +82,7 @@ function DappLogo({
   size?: string;
 }) {
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const fallback = (
     <Box color="accentFg.secondary">
       <WalletConnectLogoIcon />
@@ -255,7 +254,7 @@ export function WalletConnectRetryNoticeCard({
   onDismiss,
 }: RetryNoticeProps) {
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
 
   return (
     <ThemedCard weight="medium">

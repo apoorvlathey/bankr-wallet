@@ -13,14 +13,14 @@
  */
 
 import { DEFAULT_THEME_ID, loadSelectedThemeId } from "./useThemeSelection";
-import type { ThemeId } from "./tokens";
+import { isThemeId, type ThemeId } from "./tokens";
 
 export const LOCALSTORAGE_THEME_KEY = "selectedThemeId";
 
 function readLocalStorageThemeId(): ThemeId {
   try {
     const cached = window.localStorage.getItem(LOCALSTORAGE_THEME_KEY);
-    if (cached === "bauhaus" || cached === "midnight") return cached;
+    if (isThemeId(cached)) return cached;
   } catch {
     // localStorage may be unavailable in some Chrome contexts; ignore.
   }

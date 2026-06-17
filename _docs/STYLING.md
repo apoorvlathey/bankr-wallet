@@ -39,7 +39,7 @@ Always aim to:
 # WalletChan Theme Engine
 
 > **Read this section first.** As of v3.2.0, WalletChan ships a token-driven
-> theme engine with two themes (Bauhaus + Midnight) — components must consume
+> theme engine with multiple themes (Bauhaus, Midnight) — components must consume
 > intent tokens, NOT theme-specific color literals. The Bauhaus design brief
 > below this section is preserved as the original style spec but is no longer
 > the canonical reference for component code.
@@ -56,7 +56,7 @@ know whether the active theme is Bauhaus, Midnight, or any future addition.
 ThemeTokens (contract)
   ↓
 themes/bauhaus.ts ┐
-themes/midnight.ts ┴ → createChakraTheme() → ChakraProvider → React tree
+themes/midnight.ts ┘ → createChakraTheme() → ChakraProvider → React tree
 ```
 
 To add a new theme: write `themes/{name}.ts` satisfying `ThemeTokens`, register
@@ -139,9 +139,9 @@ break the moment a theme decided red wasn't the right CTA color.
    use `chart.negative` — the only token that's RED in both themes.
 5. **For inverted "dark CTA strip" bars** (tx confirmation count badges, chat
    header, Add Token CTA), use the shared `useStripTokens()` hook from `@/theme`.
-   Don't duplicate the `themeId === "midnight" ? ... : ...` ternary inline.
+   Don't duplicate dark-theme ternaries inline.
 6. **For toasts**, use `useThemedToast()` from `@/hooks/useThemedToast`. The
-   hook maps each status to an accent intent and respects both themes.
+   hook maps each status to an accent intent and respects all themes.
 7. **`<ModalContent>` and `<MenuList>` should NOT carry inline `bg`/`border`/
    `borderRadius`/`boxShadow` overrides.** The Modal and Menu baseStyles in
    `createTheme.ts` paint them from theme tokens. Same for `<PopoverContent>`
@@ -150,7 +150,9 @@ break the moment a theme decided red wasn't the right CTA color.
    `_invalid` state in `createTheme.ts` paint the border/shadow. Don't pass a
    ternary to `borderColor`.
 9. **For Bauhaus-only ornaments** (corner squares, triangles, decorative dots),
-   wrap them in `{!isDarkTheme && (...)}` so Midnight skips them entirely.
+   wrap them in `{!isDarkTheme && (...)}` where `isDarkTheme` comes from
+   `isDarkThemeId(themeId)` or `tokens.colorMode === "dark"`. Use the helper
+   instead of direct ID comparisons so future dark themes get the same restraint.
 10. **For SVG `stroke=` and CSS triangle hacks via `borderBottomColor`**, use the
     CSS-var form `var(--chakra-colors-accent-highlight)` instead of token names —
     Chakra style props don't always resolve token paths in those slots.
@@ -172,6 +174,19 @@ To add a new theme (e.g. `themes/paper.ts`):
 4. Add a `ThemePreview` for the picker card.
 5. Build, load the extension, switch themes from Settings → Appearance, walk
    through every screen × every wallet type to spot-check.
+
+## Theme Exploration Workflow
+
+Use `_docs/EXTENSION_PREVIEW.md` for temporary visual experiments. A theme spike
+can add a local theme file and registry entry on an exploration branch, but do
+not merge experimental theme IDs into the extension unless the theme is being
+promoted as a shipped option.
+
+Before promoting a theme, update the theme registry, `THEME_IDS`, storage docs,
+implementation docs, ENS banner flat tokens, CSS pre-paint selectors, and the
+preview toolbar. Then run the extension and preview builds. The `/preview/home`
+screen should mirror the production homepage placement before judging colors;
+fix the preview layout first if it drifts from `App.tsx`.
 
 The full architecture, phased rollout history, and design decisions are in
 `_docs/THEMING_PRD.md`.

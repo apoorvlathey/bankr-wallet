@@ -16,7 +16,7 @@ import {
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { ViewIcon, ViewOffIcon, ArrowBackIcon, InfoIcon } from "@chakra-ui/icons";
-import { ThemedCard, useTheme } from "@/theme";
+import { isDarkThemeId, ThemedCard, useTheme } from "@/theme";
 
 interface ChangePasswordProps {
   onComplete: () => void;
@@ -49,7 +49,7 @@ function ChangePassword({ onComplete, onCancel, onSessionExpired }: ChangePasswo
 
   const toast = useThemedToast();
   const { themeId } = useTheme();
-  const isDarkTheme = themeId === "midnight";
+  const isDarkTheme = isDarkThemeId(themeId);
   const intervalRef = useRef<number | null>(null);
 
   // Check session on mount and periodically
