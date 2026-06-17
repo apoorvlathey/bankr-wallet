@@ -623,6 +623,16 @@ browsing:
    also redirected to the interstitial and normalized into this raw-address
    path when ENS browsing is enabled.
 
+Hosted-gateway redirect rules are deliberately conditional. The base `.eth`
+and w3link rules are installed whenever ENS browsing is enabled. The
+`*.eth.limo` / `*.eth.link` rewrite is installed only when `useLocalGateway` is
+ON, because WalletChan's hosted fallback already targets eth.limo and rewriting
+that target back to `.eth` creates an interstitial reload loop. Before the
+resolver, cache fast-path, or content-refresh flow intentionally navigates a
+tab to eth.limo or w3eth.io, the service worker installs the matching per-tab
+DNR ALLOW bypass. That bypass protects tabs from WalletChan's old Dapp3-style
+gateway rewrite state after WalletChan has chosen a hosted gateway.
+
 The launcher lists user-pinned `ensBookmarks` entries first as browser-style
 "Favorite dapps" tiles, followed by the freshest valid `ensResolveCache`
 entries as "Recently cached dapps" tiles in a wider strip below the search bar.

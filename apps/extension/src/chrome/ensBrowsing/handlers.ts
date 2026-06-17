@@ -20,7 +20,12 @@ import {
   buildSubdomainUrl,
   parseGatewayHost,
 } from "./gateway";
-import { addEthGatewayBypassForTab, addW3ethBypassForTab } from "./dnrRules";
+import {
+  addEthGatewayBypassForTab,
+  addW3ethBypassForTab,
+  removeEthGatewayRedirectRule,
+  removeW3ethRedirectRule,
+} from "./dnrRules";
 import {
   findCachedByGatewayLabel,
   getCached,
@@ -78,6 +83,45 @@ async function chooseGatewayUrl(
     });
   }
   return buildHostedGatewayUrl(kind, ensName, path || "/", search, hash);
+}
+
+function hostedGatewayKind(url: string): "eth" | "w3eth" | null {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (/\.eth\.(?:limo|link)\.?$/.test(host)) return "eth";
+    if (/\.w3eth\.io\.?$/.test(host)) return "w3eth";
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+// If a hosted gateway redirect rule is present for this tab, an intentional
+// navigation to eth.limo / w3eth.io would otherwise get rewritten back to the
+// interstitial. Install a per-tab ALLOW rule before the navigation. If Chrome
+// rejects the session rule for any reason, remove the corresponding redirect
+// rule as a last-resort loop breaker; reaching the hosted gateway is better
+// than trapping the tab in an interstitial reload cycle.
+async function prepareHostedGatewayNavigation(
+  tabId: number,
+  url: string,
+): Promise<void> {
+  const kind = hostedGatewayKind(url);
+  if (!kind) return;
+  try {
+    if (kind === "eth") {
+      await addEthGatewayBypassForTab(tabId);
+    } else {
+      await addW3ethBypassForTab(tabId);
+    }
+  } catch (e) {
+    console.warn("[ens] hosted gateway bypass failed; removing redirect rule", e);
+    if (kind === "eth") {
+      await removeEthGatewayRedirectRule().catch(() => undefined);
+    } else {
+      await removeW3ethRedirectRule().catch(() => undefined);
+    }
+  }
 }
 
 // Decide whether to use the local Kubo subdomain gateway vs the hosted one.
@@ -144,6 +188,7 @@ async function resolveAndRedirect(
     contractAddress: result.contractAddress,
   }).catch((e) => console.warn("[ens] cache write failed", e));
 
+  await prepareHostedGatewayNavigation(tabId, target);
   await chrome.tabs.update(tabId, { url: target });
   return { ok: true };
 }
@@ -192,6 +237,7 @@ async function refreshFromCache(
     search,
     hash,
   );
+  await prepareHostedGatewayNavigation(tabId, newGateway);
   chrome.tabs
     .sendMessage(tabId, {
       type: "ens-content-updated",
@@ -317,6 +363,7 @@ export function handleEnsBrowsingMessage(
         fromCache: true,
       };
       await chrome.storage.session.set({ [`tab:${tabId}`]: ctx });
+      await prepareHostedGatewayNavigation(tabId, gatewayUrl);
       sendResponse({ cached: true, gatewayUrl });
       refreshFromCache(tabId, name, path, search, hash, c.value).catch((e) =>
         console.warn("[ens] refreshFromCache threw", e),
@@ -357,17 +404,11 @@ export function handleEnsBrowsingMessage(
     }
     (async () => {
       try {
-        let host = "";
-        try {
-          host = new URL(url).hostname.toLowerCase();
-        } catch {
-          /* keep host empty — fall through with no bypass */
+        if (!hostedGatewayKind(url)) {
+          sendResponse({ ok: false, error: "invalid hosted gateway URL" });
+          return;
         }
-        if (/\.eth\.(?:limo|link)\.?$/.test(host)) {
-          await addEthGatewayBypassForTab(tabId);
-        } else if (/\.w3eth\.io\.?$/.test(host)) {
-          await addW3ethBypassForTab(tabId);
-        }
+        await prepareHostedGatewayNavigation(tabId, url);
         await chrome.tabs.update(tabId, { url });
         sendResponse({ ok: true });
       } catch (e) {

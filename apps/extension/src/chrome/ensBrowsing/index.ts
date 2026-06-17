@@ -35,19 +35,29 @@ function shouldInterceptW3eth(s: EnsBrowsingSettings): boolean {
   return s.enabled && s.useLocalGateway && s.pinOnchainHtml;
 }
 
+// eth.limo/link interception is only useful when the user has opted into local
+// IPFS routing. Hosted fallback already lands on eth.limo; rewriting that
+// gateway while hosted routing is active creates an interstitial bounce loop.
+function shouldInterceptEthGateway(s: EnsBrowsingSettings): boolean {
+  return s.enabled && s.useLocalGateway;
+}
+
 async function syncRules(settings: EnsBrowsingSettings): Promise<void> {
   if (settings.enabled) {
     await Promise.all([
       installEthRedirectRule(),
-      installEthGatewayRedirectRule(),
       installW3linkRedirectRule(),
     ]);
   } else {
     await Promise.all([
       removeEthRedirectRule(),
-      removeEthGatewayRedirectRule(),
       removeW3linkRedirectRule(),
     ]);
+  }
+  if (shouldInterceptEthGateway(settings)) {
+    await installEthGatewayRedirectRule();
+  } else {
+    await removeEthGatewayRedirectRule();
   }
   if (shouldInterceptW3eth(settings)) {
     await installW3ethRedirectRule();
