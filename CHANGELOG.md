@@ -10,7 +10,39 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- Seed phrase imports can now coexist with view-only impersonator entries for the same address, so users can import or derive the real signing account without removing the viewer first.
+- Single-transaction confirmations now have a reject-capable fallback screen for malformed pending requests, preventing bad dapp payloads from blanking the popup.
+
+### Changed
+
+- Non-critical metadata caches now request more browser storage headroom and prune stale token, avatar, clear-signing, CoinGecko, and swap-token cache entries before they can crowd out wallet-critical writes.
+- Private Key and Seed Phrase multi-transaction broadcasts now submit local transactions sequentially and stop on the first failure, reducing the chance that later nonce transactions execute after a bundle appears to fail.
+
+### Fixed
+
+- Bankr API account address rotation now updates the account record, synced active address, and connected dapps after changing the API key and address.
+- Seed phrase imports no longer persist duplicate encrypted seed material when selected derived addresses are already present.
+- Native value handling is safer across injected dapp requests, WalletConnect, ERC-5792 batches, cross-dapp batches, swap confirmations, and transaction review: malformed values are rejected, precision is preserved, native symbols match the source chain, and reviewed native amounts remain intact.
+- Cross-dapp EIP-7702 batches now include the required authorization gas bump when a local account needs first-time delegation.
+- Pending requests, WalletConnect state, custom tokens, transaction history, and custom network settings now use locked storage writes so overlapping updates do not drop requests or overwrite edits.
+- Wallet reset now clears extension state more completely, including pending requests, WalletConnect sessions, cached metadata, and local account artifacts.
+- Settings flows that require unlock now return to the requested settings pane after authentication.
+- ENS hosted-gateway pages no longer get stuck in a reload loop while normalizing URLs.
+- Swap confirmations no longer crash from decoded calldata label updates, and calldata/value rows now show the correct labels and native asset symbol.
+- Approval and asset-change explorer links now use the resolved chain explorer instead of falling back to the wrong network.
+- Legacy password changes now re-encrypt API-key, private-key, and seed-phrase vault data in one storage update.
+- Partial auth cleanup no longer leaves mismatched cached credentials after errors or lock operations.
+
+### Security
+
+- Auto-lock now expires the cached vault key and password type, so the locked state consistently blocks Bankr API, Private Key, and Seed Phrase signing.
+- Background handlers intended only for the extension UI are now gated from content-script senders, including chat, account/settings mutations, transaction cancellation, and history/conversation reads.
+- SIWE review now binds the displayed prompt to the trusted requesting origin and keeps domain/signature validation aligned with the actual dapp sender.
+- Bankr submit responses are validated before transactions are treated as accepted.
+- Legacy API-key writes are blocked once vault-key storage is active, preventing stale password-encrypted key material from being recreated.
+- Unsupported raw-hash `eth_sign` signing paths stay rejected across Bankr API, Private Key, and Seed Phrase accounts.
 
 ## [3.16.0] - 2026-05-31
 
