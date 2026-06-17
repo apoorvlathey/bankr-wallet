@@ -46,6 +46,7 @@ import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
 import { useTheme } from "@/theme";
+import NativeValueAmount from "@/components/NativeValueAmount";
 
 // Per-call accent rotation. The three intent slots (primary/secondary/highlight)
 // map to RED/BLUE/YELLOW in Bauhaus and to indigo/cyan/amber in Midnight, so each
@@ -200,16 +201,14 @@ export function CallCard({
   const accentFg = CALL_ACCENT_FGS[index % CALL_ACCENT_FGS.length];
   const config = getChainConfig(chainId);
   const resolvedChain = getResolvedChainById(chainId, networksInfo);
+  const nativeCurrency =
+    resolvedChain?.nativeCurrency ?? config.nativeCurrency;
   const hasCalldata = call.data && call.data !== "0x";
   const hasValue =
     call.value && call.value !== "0x0" && call.value !== "0x";
 
-  const sym = resolvedChain?.nativeCurrency.symbol || "ETH";
-  const formatValue = (value: string): string => {
-    const wei = BigInt(value);
-    const eth = Number(wei) / 1e18;
-    return `${eth.toFixed(6)} ${sym}`;
-  };
+  const sym = nativeCurrency?.symbol || "ETH";
+  const nativeDecimals = nativeCurrency?.decimals ?? 18;
 
   // Unified inline summary — covers ERC-20 transfer ("Send 100 USDC to
   // vitalik.eth"), approve ("Approve unlimited USDC to uniswap-router"),
@@ -399,7 +398,8 @@ export function CallCard({
             chainId={chainId}
             config={config}
             hasValue={!!hasValue}
-            formatValue={formatValue}
+            nativeSymbol={sym}
+            nativeDecimals={nativeDecimals}
             onFunctionName={onFunctionName}
             onEditCallData={onEditCallData}
           />
@@ -479,9 +479,13 @@ export function CallCard({
                 >
                   Value
                 </Text>
-                <Text fontSize="xs" fontWeight="700" color="text.primary">
-                  {formatValue(call.value!)}
-                </Text>
+                <NativeValueAmount
+                  value={call.value}
+                  symbol={sym}
+                  decimals={nativeDecimals}
+                  fontSize="xs"
+                  fontWeight="700"
+                />
               </HStack>
             )}
 
@@ -526,7 +530,8 @@ function BuiltinExpandedContent({
   chainId,
   config,
   hasValue,
-  formatValue,
+  nativeSymbol,
+  nativeDecimals,
   onFunctionName,
   onEditCallData,
 }: {
@@ -534,7 +539,8 @@ function BuiltinExpandedContent({
   chainId: number;
   config: ReturnType<typeof getChainConfig>;
   hasValue: boolean;
-  formatValue: (value: string) => string;
+  nativeSymbol: string;
+  nativeDecimals: number;
   onFunctionName: (name: string) => void;
   onEditCallData?: (
     newData: string,
@@ -699,9 +705,13 @@ function BuiltinExpandedContent({
                   >
                     Value
                   </Text>
-                  <Text fontSize="xs" fontWeight="700" color="text.primary">
-                    {formatValue(call.value!)}
-                  </Text>
+                  <NativeValueAmount
+                    value={call.value}
+                    symbol={nativeSymbol}
+                    decimals={nativeDecimals}
+                    fontSize="xs"
+                    fontWeight="700"
+                  />
                 </HStack>
               )}
 

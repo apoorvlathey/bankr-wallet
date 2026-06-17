@@ -65,7 +65,7 @@ function isCacheEntryValid(timestamp: number): boolean {
   );
 }
 
-function clearExpiredAuthCache(): void {
+export function clearInMemoryAuthCache(): void {
   cachedApiKey = null;
   cachedPassword = null;
   cachedVault = null;
@@ -134,7 +134,7 @@ export function getCachedApiKey(): string | null {
   if (cachedApiKey && isCacheEntryValid(cacheTimestamp)) {
     return cachedApiKey;
   }
-  if (cachedApiKey) clearExpiredAuthCache();
+  if (cachedApiKey) clearInMemoryAuthCache();
   return null;
 }
 
@@ -145,7 +145,7 @@ export function getCachedPassword(): string | null {
   if (cachedPassword && isCacheEntryValid(cacheTimestamp)) {
     return cachedPassword;
   }
-  if (cachedPassword) clearExpiredAuthCache();
+  if (cachedPassword) clearInMemoryAuthCache();
   return null;
 }
 
@@ -182,25 +182,13 @@ export function setCachedPasswordDirect(password: string | null): void {
 }
 
 /**
- * Clears the cached API key, password, vault key, and password type
- */
-export function clearCachedApiKey(): void {
-  cachedApiKey = null;
-  cachedPassword = null;
-  cachedPasswordType = null;
-  cachedVaultKey = null;
-  cacheTimestamp = 0;
-  authCacheTimestamp = 0;
-}
-
-/**
  * Gets cached vault if still valid
  */
 export function getCachedVault(): DecryptedEntry[] | null {
   if (cachedVault && isCacheEntryValid(vaultCacheTimestamp)) {
     return cachedVault;
   }
-  if (cachedVault) clearExpiredAuthCache();
+  if (cachedVault) clearInMemoryAuthCache();
   return null;
 }
 
@@ -213,14 +201,6 @@ export function setCachedVault(vault: DecryptedEntry[]): void {
 }
 
 /**
- * Clears the cached vault
- */
-export function clearCachedVault(): void {
-  cachedVault = null;
-  vaultCacheTimestamp = 0;
-}
-
-/**
  * Gets cached vault key
  */
 export function getCachedVaultKey(): CryptoKey | null {
@@ -228,7 +208,7 @@ export function getCachedVaultKey(): CryptoKey | null {
     return cachedVaultKey;
   }
   if (cachedVaultKey) {
-    clearExpiredAuthCache();
+    clearInMemoryAuthCache();
   }
   return null;
 }
@@ -249,7 +229,7 @@ export function getPasswordType(): PasswordType | null {
     return cachedPasswordType;
   }
   if (cachedPasswordType) {
-    clearExpiredAuthCache();
+    clearInMemoryAuthCache();
   }
   return null;
 }
@@ -510,12 +490,7 @@ export function decrementUIConnections(): void {
  * broadcast.
  */
 export async function clearAllAuthState(): Promise<void> {
-  clearCachedApiKey();
-  clearCachedVault();
-  setCachedVaultKey(null);
-  setCachedPasswordDirect(null);
-  setCachedPasswordType(null);
-  setCurrentSessionId(null);
+  clearInMemoryAuthCache();
   await clearSessionStorage();
 }
 

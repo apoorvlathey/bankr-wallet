@@ -534,6 +534,7 @@ function UnlockScreen({
                 bg="accent.highlight"
                 border="2px solid"
                 borderColor="border.default"
+                borderRadius={tokens.radii.badge}
               >
                 <WarningTwoIcon color="accentFg.highlight" />
               </Box>
@@ -545,9 +546,20 @@ function UnlockScreen({
               <Text color="text.secondary" fontSize="sm" fontWeight="500">
                 This will clear all your stored data including:
               </Text>
-              <Box pl={4} borderLeft="4px solid" borderColor="accent.primary">
+              <Box
+                pl={4}
+                borderLeft="4px solid"
+                borderColor="accent.primary"
+                borderRadius={tokens.radii.card}
+              >
                 <Text color="text.secondary" fontSize="sm">
                   Your encrypted API key
+                </Text>
+                <Text color="text.secondary" fontSize="sm">
+                  Your imported private keys
+                </Text>
+                <Text color="text.secondary" fontSize="sm">
+                  Your stored seed phrases
                 </Text>
                 <Text color="text.secondary" fontSize="sm">
                   Your wallet address
@@ -562,10 +574,12 @@ function UnlockScreen({
                 bg="accent.highlight"
                 border="2px solid"
                 borderColor="border.default"
+                borderRadius={tokens.radii.card}
               >
                 <Text color="accentFg.highlight" fontSize="sm" fontWeight="700">
-                  You will need to enter your Bankr API key and set up a new
-                  password again.
+                  Make sure your private keys and seed phrases are saved
+                  somewhere outside WalletChan. Resetting will wipe them from
+                  this extension.
                 </Text>
               </Box>
             </VStack>

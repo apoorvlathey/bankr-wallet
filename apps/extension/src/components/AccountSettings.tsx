@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import {
   Box,
   VStack,
@@ -59,20 +59,42 @@ interface AccountSettingsProps {
   onClose: () => void;
   onAccountUpdated: () => void | Promise<unknown>;
   totalAccounts: number;
+  initialView?: AccountSettingsSubView;
+  onSessionExpired?: (returnView?: AccountSettingsSubView) => void;
+  apiKeyDraft?: BankrConfigDraft | null;
+  onApiKeyDraftChange?: (draft: BankrConfigDraft | null) => void;
 }
 
-type SubView = "settings" | "changeApiKey" | "revealPrivateKey" | "revealSeedPhrase";
+export type AccountSettingsSubView =
+  | "settings"
+  | "changeApiKey"
+  | "revealPrivateKey"
+  | "revealSeedPhrase";
+
+export interface BankrConfigDraft {
+  accountId: string;
+  apiKey: string;
+  walletAddress: string;
+}
+
+function isWalletLockedError(error: string | undefined): boolean {
+  return /wallet is locked|session expired|please unlock/i.test(error || "");
+}
 
 function AccountSettings({
   account,
   onClose,
   onAccountUpdated,
   totalAccounts,
+  initialView = "settings",
+  onSessionExpired,
+  apiKeyDraft,
+  onApiKeyDraftChange,
 }: AccountSettingsProps) {
   const toast = useThemedToast();
   const { themeId } = useTheme();
   const isDarkTheme = themeId === "midnight";
-  const [view, setView] = useState<SubView>("settings");
+  const [view, setView] = useState<AccountSettingsSubView>(initialView);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -102,6 +124,14 @@ function AccountSettings({
     password?: string;
   }>({});
 
+  const apiKeyDraftRef = useRef<BankrConfigDraft | null | undefined>(
+    apiKeyDraft,
+  );
+
+  useEffect(() => {
+    apiKeyDraftRef.current = apiKeyDraft;
+  }, [apiKeyDraft]);
+
   // Cached ENS identity for header avatar/name — refreshed when the screen
   // mounts and whenever the user clicks "Refresh ENS Data".
   const [ensIdentity, setEnsIdentity] = useState<{
@@ -128,11 +158,14 @@ function AccountSettings({
   // Initialize editable fields when account changes.
   useEffect(() => {
     if (!account) return;
+    const currentDraft = apiKeyDraftRef.current;
+    const draftForAccount =
+      currentDraft?.accountId === account.id ? currentDraft : null;
     setDisplayName(account.displayName || "");
-    setView("settings");
-    setApiKey("");
+    setView(initialView);
+    setApiKey(draftForAccount?.apiKey || "");
     setShowApiKey(false);
-    setWalletAddress("");
+    setWalletAddress(draftForAccount?.walletAddress || "");
     setPassword("");
     setShowPassword(false);
     setApiKeyErrors({});
@@ -151,28 +184,59 @@ function AccountSettings({
         },
       );
     }
-  }, [account]);
+  }, [account, initialView]);
 
   // Load data when switching to changeApiKey view
   useEffect(() => {
     if (view === "changeApiKey" && account?.type === "bankr") {
+      let cancelled = false;
+      const currentDraft = apiKeyDraftRef.current;
+      const draftForAccount =
+        currentDraft?.accountId === account.id ? currentDraft : null;
+      const hasDraftForAccount = !!draftForAccount;
       chrome.runtime.sendMessage({ type: "getCachedPassword" }, (response) => {
-        setHasCachedPassword(response?.hasCachedPassword || false);
+        if (cancelled) return;
+        const hasPassword = response?.hasCachedPassword || false;
+        setHasCachedPassword(hasPassword);
+        if (!hasPassword && onSessionExpired) {
+          onSessionExpired("changeApiKey");
+        }
       });
       chrome.runtime.sendMessage(
         { type: "getPasswordType" },
         (response: { passwordType: PasswordType | null }) => {
+          if (cancelled) return;
           setPasswordType(response.passwordType);
         },
       );
       chrome.runtime.sendMessage({ type: "getCachedApiKey" }, (response) => {
-        if (response?.apiKey) {
+        if (cancelled) return;
+        if (response?.apiKey && !hasDraftForAccount) {
           setApiKey(response.apiKey);
         }
       });
-      setWalletAddress(account.address);
+      setWalletAddress(
+        draftForAccount ? draftForAccount.walletAddress : account.address,
+      );
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [view, account]);
+  }, [view, account, onSessionExpired]);
+
+  const persistApiKeyDraft = (nextApiKey: string, nextWalletAddress: string) => {
+    if (!account || account.type !== "bankr") return;
+    onApiKeyDraftChange?.({
+      accountId: account.id,
+      apiKey: nextApiKey,
+      walletAddress: nextWalletAddress,
+    });
+  };
+
+  const closeApiKeyForm = () => {
+    onApiKeyDraftChange?.(null);
+    setView("settings");
+  };
 
   // API Key change helpers
   const resolveAddress = async (input: string): Promise<string | null> => {
@@ -280,6 +344,11 @@ function AccountSettings({
         }, resolve);
       });
       if (!saveResult.success) {
+        if (isWalletLockedError(saveResult.error) && onSessionExpired) {
+          onSessionExpired("changeApiKey");
+          setIsSubmittingApiKey(false);
+          return;
+        }
         toast({
           title: "Error saving configuration",
           description: saveResult.error || "Failed to save configuration",
@@ -300,6 +369,7 @@ function AccountSettings({
       });
 
       await onAccountUpdated();
+      onApiKeyDraftChange?.(null);
       setView("settings");
     } catch (error) {
       toast({
@@ -495,7 +565,7 @@ function AccountSettings({
             icon={<ArrowBackIcon />}
             variant="ghost"
             size="sm"
-            onClick={() => setView("settings")}
+            onClick={closeApiKeyForm}
           />
           <Text
             fontSize="lg"
@@ -533,7 +603,7 @@ function AccountSettings({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setView("settings")}
+              onClick={closeApiKeyForm}
               alignSelf="flex-start"
             >
               Back
@@ -560,7 +630,9 @@ function AccountSettings({
                   placeholder="Enter your API key"
                   value={apiKey}
                   onChange={(e) => {
-                    setApiKey(e.target.value);
+                    const nextApiKey = e.target.value;
+                    setApiKey(nextApiKey);
+                    persistApiKeyDraft(nextApiKey, walletAddress);
                     setApiKeyErrors({});
                   }}
                   pr="3rem"
@@ -595,7 +667,9 @@ function AccountSettings({
                 placeholder="0x... or name (e.g., vitalik.eth, name.mega)"
                 value={walletAddress}
                 onChange={(e) => {
-                  setWalletAddress(e.target.value);
+                  const nextWalletAddress = e.target.value;
+                  setWalletAddress(nextWalletAddress);
+                  persistApiKeyDraft(apiKey, nextWalletAddress);
                   setApiKeyErrors({});
                 }}
               />
@@ -663,7 +737,7 @@ function AccountSettings({
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setView("settings")}
+                onClick={closeApiKeyForm}
               >
                 Cancel
               </Button>

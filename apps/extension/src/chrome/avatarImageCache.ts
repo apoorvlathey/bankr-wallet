@@ -38,7 +38,11 @@ async function readCache(): Promise<AvatarCache> {
 }
 
 async function writeCache(cache: AvatarCache): Promise<void> {
-  await chrome.storage.local.set({ [STORAGE_KEY]: cache });
+  try {
+    await chrome.storage.local.set({ [STORAGE_KEY]: cache });
+  } catch {
+    // Image caching is best-effort; callers can still use live URLs/results.
+  }
 }
 
 function isCacheEntryValid(entry: AvatarCacheEntry): boolean {

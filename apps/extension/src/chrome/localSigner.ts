@@ -377,10 +377,14 @@ export async function handleSignatureRequest(
     }
 
     case "eth_sign": {
-      // params[0] is the address, params[1] is the data hash
-      // eth_sign is dangerous and often disabled, but we'll support it
-      const dataHash = params[1];
-      return signMessage(privateKey, dataHash);
+      // SECURITY: eth_sign signs an untyped raw digest and must stay rejected at
+      // intake. Keep the old mapping visible as a reminder not to re-enable it.
+      // params[0] is the address, params[1] is the data hash.
+      // const dataHash = params[1];
+      // return signMessage(privateKey, dataHash);
+      throw new Error(
+        "eth_sign is deprecated and unsafe; use personal_sign or eth_signTypedData_v4"
+      );
     }
 
     case "eth_signTypedData":

@@ -39,6 +39,7 @@ import {
 
 import { useTheme, useStripTokens } from "@/theme";
 import { closeSidePanelForWindow } from "@/lib/sidePanelControls";
+import TransactionConfirmationErrorBoundary from "@/components/TransactionConfirmationErrorBoundary";
 
 // Sidepanel icon
 const SidePanelIcon = (props: any) => (
@@ -168,6 +169,11 @@ if (typeof window !== "undefined") {
 // Eager load components needed immediately
 import UnlockScreen from "@/components/UnlockScreen";
 import { ScreenStack, type AppView } from "@/components/ScreenTransition";
+import type { SettingsTab } from "@/components/Settings";
+import type {
+  AccountSettingsSubView,
+  BankrConfigDraft,
+} from "@/components/AccountSettings";
 import PendingTxBanner from "@/components/PendingTxBanner";
 import WalletConnectBanner from "@/components/WalletConnectBanner";
 import PortfolioTabs from "@/components/PortfolioTabs";
@@ -210,6 +216,11 @@ type AddChainReturnTarget = {
   view: "walletConnect";
   dappName?: string;
 };
+
+type UnlockReturnTarget =
+  | { view: "settings"; tab: SettingsTab }
+  | { view: "settingsAddChain" }
+  | { view: "accountSettings"; subView: AccountSettingsSubView };
 
 // Helper to combine and sort requests by timestamp.
 // The cross-dapp batch (when present) is always prepended as the FIRST element
@@ -305,7 +316,8 @@ function App() {
     error: string;
     origin: string;
   } | null>(null);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<"main" | "chains">("main");
+  const [settingsInitialTab, setSettingsInitialTab] =
+    useState<SettingsTab>("main");
   const [settingsInitialEditChainName, setSettingsInitialEditChainName] = useState<string | undefined>(undefined);
   const [settingsAddChainInitialRequest, setSettingsAddChainInitialRequest] =
     useState<PendingAddChainRequest | undefined>(undefined);
@@ -324,6 +336,12 @@ function App() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
   const [settingsAccount, setSettingsAccount] = useState<Account | null>(null);
+  const [accountSettingsInitialView, setAccountSettingsInitialView] =
+    useState<AccountSettingsSubView>("settings");
+  const [accountSettingsApiKeyDraft, setAccountSettingsApiKeyDraft] =
+    useState<BankrConfigDraft | null>(null);
+  const unlockReturnTargetRef = useRef<UnlockReturnTarget | null>(null);
+  const unlockRouteHandledRef = useRef(false);
   const selectedChain = getResolvedChainByName(chainName, networksInfo);
   const visibleChains = getVisibleChains(networksInfo, activeAccount?.type);
 
@@ -1442,9 +1460,25 @@ function App() {
   useUpdateEffect(() => {
     const updateChainId = async () => {
       if (networksInfo && chainName) {
-        const tab = await currentTab();
         const chain = getResolvedChainByName(chainName, networksInfo);
-        if (!chain) return;
+
+        if (
+          !chain ||
+          chain.hidden ||
+          (activeAccount?.type === "bankr" && !chain.isBankrSupported)
+        ) {
+          const fallbackChainName = getDefaultChainName(
+            networksInfo,
+            activeAccount?.type,
+          );
+          if (fallbackChainName && fallbackChainName !== chainName) {
+            setChainName(fallbackChainName);
+            await chrome.storage.sync.set({ chainName: fallbackChainName });
+          }
+          return;
+        }
+
+        const tab = await currentTab();
 
         chrome.tabs
           .sendMessage(tab.id!, {
@@ -1460,23 +1494,7 @@ function App() {
     };
 
     updateChainId();
-  }, [chainName, networksInfo]);
-
-  useUpdateEffect(() => {
-    if (
-      activeAccount?.type === "bankr" &&
-      networksInfo &&
-      chainName
-    ) {
-      const currentChain = getResolvedChainByName(chainName, networksInfo);
-      if (currentChain && !currentChain.isBankrSupported) {
-        const fallbackChainName = getDefaultChainName(networksInfo, "bankr");
-        if (fallbackChainName && fallbackChainName !== chainName) {
-          setChainName(fallbackChainName);
-        }
-      }
-    }
-  }, [activeAccount?.type, networksInfo, chainName]);
+  }, [activeAccount?.type, chainName, networksInfo]);
 
   useUpdateEffect(() => {
     if (reloadRequired && networksInfo) {
@@ -1500,8 +1518,34 @@ function App() {
   }, [isWalletUnlocked]);
 
   const handleUnlock = useCallback(async () => {
+    if (unlockRouteHandledRef.current) return;
+    unlockRouteHandledRef.current = true;
+
     // Mark wallet as unlocked
+    isWalletUnlockedRef.current = true;
     setIsWalletUnlocked(true);
+
+    const unlockReturnTarget = unlockReturnTargetRef.current;
+    if (unlockReturnTarget) {
+      unlockReturnTargetRef.current = null;
+      setReturnToChatAfterUnlock(false);
+      setReturnToConversationId(null);
+
+      if (unlockReturnTarget.view === "settings") {
+        setSettingsInitialTab(unlockReturnTarget.tab);
+        setView("settings");
+        return;
+      }
+
+      if (unlockReturnTarget.view === "settingsAddChain") {
+        setView("settingsAddChain");
+        return;
+      }
+
+      setAccountSettingsInitialView(unlockReturnTarget.subView);
+      setView("accountSettings");
+      return;
+    }
 
     // If we came from chat, return to chat
     if (returnToChatAfterUnlock) {
@@ -1549,6 +1593,9 @@ function App() {
   const isWalletUnlockedRef = useRef(isWalletUnlocked);
   useEffect(() => {
     isWalletUnlockedRef.current = isWalletUnlocked;
+    if (!isWalletUnlocked) {
+      unlockRouteHandledRef.current = false;
+    }
   }, [isWalletUnlocked]);
   useEffect(() => {
     const handler = (
@@ -1557,6 +1604,8 @@ function App() {
       sendResponse: (response?: unknown) => void,
     ) => {
       if (message?.type === "walletLockedExternal") {
+        isWalletUnlockedRef.current = false;
+        unlockRouteHandledRef.current = false;
         setIsWalletUnlocked(false);
         setPasswordType(null);
         setView("unlock");
@@ -1895,6 +1944,34 @@ function App() {
     setWalletConnectRetryNotice(null);
   }, []);
 
+  const requestUnlockReturn = useCallback((target: UnlockReturnTarget) => {
+    unlockReturnTargetRef.current = target;
+    isWalletUnlockedRef.current = false;
+    unlockRouteHandledRef.current = false;
+    setIsWalletUnlocked(false);
+    setView("unlock");
+  }, []);
+
+  const handleSettingsSessionExpired = useCallback(
+    (returnTab: SettingsTab = "main") => {
+      setSettingsInitialTab(returnTab);
+      requestUnlockReturn({ view: "settings", tab: returnTab });
+    },
+    [requestUnlockReturn],
+  );
+
+  const handleSettingsAddChainSessionExpired = useCallback(() => {
+    requestUnlockReturn({ view: "settingsAddChain" });
+  }, [requestUnlockReturn]);
+
+  const handleAccountSettingsSessionExpired = useCallback(
+    (returnView: AccountSettingsSubView = "settings") => {
+      setAccountSettingsInitialView(returnView);
+      requestUnlockReturn({ view: "accountSettings", subView: returnView });
+    },
+    [requestUnlockReturn],
+  );
+
   const handleHiddenTokensChanged = useCallback(() => {
     setPortfolioRefreshTrigger((prev) => prev + 1);
     setHoldingsTabTrigger((prev) => prev + 1);
@@ -2154,10 +2231,7 @@ function App() {
                   }
                 }}
                 showBackButton={hasApiKey}
-                onSessionExpired={() => {
-                  setIsWalletUnlocked(false);
-                  setView("unlock");
-                }}
+                onSessionExpired={handleSettingsSessionExpired}
               />
             </Suspense>
           </Container>
@@ -2211,10 +2285,7 @@ function App() {
                     setView("main");
                   }
                 }}
-                onSessionExpired={() => {
-                  setIsWalletUnlocked(false);
-                  setView("unlock");
-                }}
+                onSessionExpired={handleSettingsAddChainSessionExpired}
               />
             </Suspense>
           </Container>
@@ -2241,10 +2312,16 @@ function App() {
               account={settingsAccount}
               onClose={() => {
                 setSettingsAccount(null);
+                setAccountSettingsInitialView("settings");
+                setAccountSettingsApiKeyDraft(null);
                 setView("main");
               }}
               onAccountUpdated={loadAccounts}
               totalAccounts={accounts.length}
+              initialView={accountSettingsInitialView}
+              onSessionExpired={handleAccountSettingsSessionExpired}
+              apiKeyDraft={accountSettingsApiKeyDraft}
+              onApiKeyDraftChange={setAccountSettingsApiKeyDraft}
             />
           </Suspense>
         </Box>
@@ -2503,6 +2580,8 @@ function App() {
               onAccountSelect={handleAccountSwitch}
               onAddAccount={() => setView("addAccount")}
               onAccountSettings={(account) => {
+                setAccountSettingsInitialView("settings");
+                setAccountSettingsApiKeyDraft(null);
                 setSettingsAccount(account);
                 setView("accountSettings");
               }}
@@ -2581,55 +2660,64 @@ function App() {
           flexDirection="column"
         >
           <Suspense fallback={<LoadingFallback />}>
-            <TransactionConfirmation
-              key={selectedTxRequest.id}
-              txRequest={selectedTxRequest}
-              currentIndex={currentIndex >= 0 ? currentIndex : 0}
+            <TransactionConfirmationErrorBoundary
+              txId={selectedTxRequest.id}
               totalCount={totalCount}
-              isInSidePanel={isInSidePanel || isFullscreenTab}
-              accountType={activeAccount?.type}
-              crossDappBatch={crossDappBatch}
-              onBack={() => {
-                if (totalCount > 1) {
-                  setView("pendingTxList");
-                } else {
-                  setView("main");
-                }
-              }}
-              onConfirmed={handleTxConfirmed}
               onRejected={handleTxRejected}
               onRejectAll={handleRejectAll}
               onBeforeReject={navigateToAdjacentRequest}
-              onAddedToBatch={() => {
-                setSelectedTxRequest(null);
-                setView("crossDappBatchConfirm");
-              }}
-              onNavigate={(direction) => {
-                const currentIdx = combinedRequests.findIndex(
-                  (r) =>
-                    r.type === "tx" && r.request.id === selectedTxRequest.id,
-                );
-                const newIdx =
-                  direction === "prev" ? currentIdx - 1 : currentIdx + 1;
-                if (newIdx >= 0 && newIdx < combinedRequests.length) {
-                  const nextRequest = combinedRequests[newIdx];
-                  if (nextRequest.type === "tx") {
-                    setSelectedTxRequest(nextRequest.request);
-                  } else if (nextRequest.type === "batch") {
-                    setSelectedTxRequest(null);
-                    setSelectedBatchRequest(nextRequest.request);
-                    setView("batchTxConfirm");
-                  } else if (nextRequest.type === "crossDappBatch") {
-                    setSelectedTxRequest(null);
-                    setView("crossDappBatchConfirm");
+            >
+              <TransactionConfirmation
+                key={selectedTxRequest.id}
+                txRequest={selectedTxRequest}
+                currentIndex={currentIndex >= 0 ? currentIndex : 0}
+                totalCount={totalCount}
+                isInSidePanel={isInSidePanel || isFullscreenTab}
+                accountType={activeAccount?.type}
+                crossDappBatch={crossDappBatch}
+                onBack={() => {
+                  if (totalCount > 1) {
+                    setView("pendingTxList");
                   } else {
-                    setSelectedTxRequest(null);
-                    setSelectedSignatureRequest(nextRequest.request);
-                    setView("signatureConfirm");
+                    setView("main");
                   }
-                }
-              }}
-            />
+                }}
+                onConfirmed={handleTxConfirmed}
+                onRejected={handleTxRejected}
+                onRejectAll={handleRejectAll}
+                onBeforeReject={navigateToAdjacentRequest}
+                onAddedToBatch={() => {
+                  setSelectedTxRequest(null);
+                  setView("crossDappBatchConfirm");
+                }}
+                onNavigate={(direction) => {
+                  const currentIdx = combinedRequests.findIndex(
+                    (r) =>
+                      r.type === "tx" &&
+                      r.request.id === selectedTxRequest.id,
+                  );
+                  const newIdx =
+                    direction === "prev" ? currentIdx - 1 : currentIdx + 1;
+                  if (newIdx >= 0 && newIdx < combinedRequests.length) {
+                    const nextRequest = combinedRequests[newIdx];
+                    if (nextRequest.type === "tx") {
+                      setSelectedTxRequest(nextRequest.request);
+                    } else if (nextRequest.type === "batch") {
+                      setSelectedTxRequest(null);
+                      setSelectedBatchRequest(nextRequest.request);
+                      setView("batchTxConfirm");
+                    } else if (nextRequest.type === "crossDappBatch") {
+                      setSelectedTxRequest(null);
+                      setView("crossDappBatchConfirm");
+                    } else {
+                      setSelectedTxRequest(null);
+                      setSelectedSignatureRequest(nextRequest.request);
+                      setView("signatureConfirm");
+                    }
+                  }
+                }}
+              />
+            </TransactionConfirmationErrorBoundary>
           </Suspense>
         </Box>
       </Box>
@@ -3608,6 +3696,8 @@ function App() {
                 onAccountSelect={handleAccountSwitch}
                 onAddAccount={() => setView("addAccount")}
                 onAccountSettings={(account) => {
+                  setAccountSettingsInitialView("settings");
+                  setAccountSettingsApiKeyDraft(null);
                   setSettingsAccount(account);
                   setView("accountSettings");
                 }}

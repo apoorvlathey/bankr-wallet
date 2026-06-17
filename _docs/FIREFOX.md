@@ -27,13 +27,14 @@ The same five Vite configs build both browsers. `process.env.BROWSER` is the gat
 
 ## Manifest divergence
 
-Both manifests share `name`, `version`, `description`, `icons`, `action`, `content_scripts`, `host_permissions`, and `web_accessible_resources`. The differences:
+Both manifests share `name`, `version`, `description`, `icons`, `action`, `content_scripts`, `host_permissions`, `web_accessible_resources`, and the core `activeTab` / `storage` / `notifications` / `tabs` / `unlimitedStorage` permissions. The differences:
 
 | Key | Chrome (`public/manifest.json`) | Firefox (`manifest.firefox.json`) |
 |---|---|---|
 | `background` | `{ "service_worker": "static/js/background.js", "type": "module" }` | `{ "scripts": ["static/js/background.js"] }` |
 | `side_panel` | `{ "default_path": "index.html" }` | (absent) |
 | `permissions` includes `"sidePanel"` | yes | no |
+| `permissions` includes `"declarativeNetRequestWithHostAccess"` | yes | no |
 | `browser_specific_settings.gecko.strict_min_version` | (irrelevant) | `"121.0"` |
 | `browser_specific_settings.gecko.data_collection_permissions` | (irrelevant) | `{ "required": ["none"] }` (AMO requirement since Nov 2025) |
 

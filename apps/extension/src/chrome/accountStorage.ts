@@ -5,11 +5,15 @@
  */
 
 import type { Account, BankrAccount, PrivateKeyAccount, SeedPhraseAccount, ImpersonatorAccount, SeedGroup } from "./types";
+import { withStorageLock } from "./storageLock";
 
 const ACCOUNTS_STORAGE_KEY = "accounts";
 const ACTIVE_ACCOUNT_ID_KEY = "activeAccountId";
 const TAB_ACCOUNTS_KEY = "tabAccounts";
 const SEED_GROUPS_KEY = "seedGroups";
+const ACCOUNTS_LOCK_KEY = `local:${ACCOUNTS_STORAGE_KEY}`;
+const TAB_ACCOUNTS_LOCK_KEY = `sync:${TAB_ACCOUNTS_KEY}`;
+const SEED_GROUPS_LOCK_KEY = `local:${SEED_GROUPS_KEY}`;
 
 /**
  * Gets all accounts from storage
@@ -98,25 +102,31 @@ export async function setTabAccount(
   tabId: number,
   accountId: string
 ): Promise<void> {
-  const tabAccounts = await getTabAccounts();
-  tabAccounts[tabId] = accountId;
-  await chrome.storage.sync.set({ [TAB_ACCOUNTS_KEY]: tabAccounts });
+  await withStorageLock(TAB_ACCOUNTS_LOCK_KEY, async () => {
+    const tabAccounts = await getTabAccounts();
+    tabAccounts[tabId] = accountId;
+    await chrome.storage.sync.set({ [TAB_ACCOUNTS_KEY]: tabAccounts });
+  });
 }
 
 /**
  * Clears the account override for a specific tab
  */
 export async function clearTabAccount(tabId: number): Promise<void> {
-  const tabAccounts = await getTabAccounts();
-  delete tabAccounts[tabId];
-  await chrome.storage.sync.set({ [TAB_ACCOUNTS_KEY]: tabAccounts });
+  await withStorageLock(TAB_ACCOUNTS_LOCK_KEY, async () => {
+    const tabAccounts = await getTabAccounts();
+    delete tabAccounts[tabId];
+    await chrome.storage.sync.set({ [TAB_ACCOUNTS_KEY]: tabAccounts });
+  });
 }
 
 /**
  * Clears all tab account mappings
  */
 export async function clearAllTabAccounts(): Promise<void> {
-  await chrome.storage.sync.remove(TAB_ACCOUNTS_KEY);
+  await withStorageLock(TAB_ACCOUNTS_LOCK_KEY, async () => {
+    await chrome.storage.sync.remove(TAB_ACCOUNTS_KEY);
+  });
 }
 
 /**
@@ -126,18 +136,20 @@ export async function addBankrAccount(
   address: string,
   displayName?: string
 ): Promise<BankrAccount> {
-  const accounts = await getAccounts();
+  const newAccount = await withStorageLock(ACCOUNTS_LOCK_KEY, async () => {
+    const accounts = await getAccounts();
+    const account: BankrAccount = {
+      id: crypto.randomUUID(),
+      type: "bankr",
+      address: address.toLowerCase(),
+      displayName,
+      createdAt: Date.now(),
+    };
 
-  const newAccount: BankrAccount = {
-    id: crypto.randomUUID(),
-    type: "bankr",
-    address: address.toLowerCase(),
-    displayName,
-    createdAt: Date.now(),
-  };
-
-  accounts.push(newAccount);
-  await saveAccounts(accounts);
+    accounts.push(account);
+    await saveAccounts(accounts);
+    return account;
+  });
   await setActiveAccountId(newAccount.id);
 
   return newAccount;
@@ -151,18 +163,20 @@ export async function addPrivateKeyAccount(
   address: string,
   displayName?: string
 ): Promise<PrivateKeyAccount> {
-  const accounts = await getAccounts();
+  const newAccount = await withStorageLock(ACCOUNTS_LOCK_KEY, async () => {
+    const accounts = await getAccounts();
+    const account: PrivateKeyAccount = {
+      id: crypto.randomUUID(),
+      type: "privateKey",
+      address: address.toLowerCase(),
+      displayName,
+      createdAt: Date.now(),
+    };
 
-  const newAccount: PrivateKeyAccount = {
-    id: crypto.randomUUID(),
-    type: "privateKey",
-    address: address.toLowerCase(),
-    displayName,
-    createdAt: Date.now(),
-  };
-
-  accounts.push(newAccount);
-  await saveAccounts(accounts);
+    accounts.push(account);
+    await saveAccounts(accounts);
+    return account;
+  });
   await setActiveAccountId(newAccount.id);
 
   return newAccount;
@@ -176,18 +190,20 @@ export async function addImpersonatorAccount(
   address: string,
   displayName?: string
 ): Promise<ImpersonatorAccount> {
-  const accounts = await getAccounts();
+  const newAccount = await withStorageLock(ACCOUNTS_LOCK_KEY, async () => {
+    const accounts = await getAccounts();
+    const account: ImpersonatorAccount = {
+      id: crypto.randomUUID(),
+      type: "impersonator",
+      address: address.toLowerCase(),
+      displayName,
+      createdAt: Date.now(),
+    };
 
-  const newAccount: ImpersonatorAccount = {
-    id: crypto.randomUUID(),
-    type: "impersonator",
-    address: address.toLowerCase(),
-    displayName,
-    createdAt: Date.now(),
-  };
-
-  accounts.push(newAccount);
-  await saveAccounts(accounts);
+    accounts.push(account);
+    await saveAccounts(accounts);
+    return account;
+  });
   await setActiveAccountId(newAccount.id);
 
   return newAccount;
@@ -198,9 +214,12 @@ export async function addImpersonatorAccount(
  * Note: Does NOT remove the private key from vault - caller must do that
  */
 export async function removeAccount(accountId: string): Promise<void> {
-  const accounts = await getAccounts();
-  const filteredAccounts = accounts.filter((a) => a.id !== accountId);
-  await saveAccounts(filteredAccounts);
+  const filteredAccounts = await withStorageLock(ACCOUNTS_LOCK_KEY, async () => {
+    const accounts = await getAccounts();
+    const next = accounts.filter((a) => a.id !== accountId);
+    await saveAccounts(next);
+    return next;
+  });
 
   // If the removed account was active, set a new active account
   const activeId = await getActiveAccountId();
@@ -213,17 +232,19 @@ export async function removeAccount(accountId: string): Promise<void> {
   }
 
   // Clear any tab mappings to this account
-  const tabAccounts = await getTabAccounts();
-  let changed = false;
-  for (const tabId in tabAccounts) {
-    if (tabAccounts[tabId] === accountId) {
-      delete tabAccounts[tabId];
-      changed = true;
+  await withStorageLock(TAB_ACCOUNTS_LOCK_KEY, async () => {
+    const tabAccounts = await getTabAccounts();
+    let changed = false;
+    for (const tabId in tabAccounts) {
+      if (tabAccounts[tabId] === accountId) {
+        delete tabAccounts[tabId];
+        changed = true;
+      }
     }
-  }
-  if (changed) {
-    await chrome.storage.sync.set({ [TAB_ACCOUNTS_KEY]: tabAccounts });
-  }
+    if (changed) {
+      await chrome.storage.sync.set({ [TAB_ACCOUNTS_KEY]: tabAccounts });
+    }
+  });
 
   // Drop any EIP-7702 custom-delegate overrides the user configured for this
   // account. The onchain delegation (if any) remains — that's a property of
@@ -246,12 +267,14 @@ export async function updateAccountDisplayName(
   accountId: string,
   displayName: string
 ): Promise<void> {
-  const accounts = await getAccounts();
-  const account = accounts.find((a) => a.id === accountId);
-  if (account) {
-    account.displayName = displayName;
-    await saveAccounts(accounts);
-  }
+  await withStorageLock(ACCOUNTS_LOCK_KEY, async () => {
+    const accounts = await getAccounts();
+    const account = accounts.find((a) => a.id === accountId);
+    if (account) {
+      account.displayName = displayName;
+      await saveAccounts(accounts);
+    }
+  });
 }
 
 /**
@@ -286,30 +309,46 @@ export async function updateBankrAccountAddress(
   accountId: string,
   address: string
 ): Promise<BankrAccount> {
-  await validateBankrAccountAddressUpdate(accountId, address);
+  return withStorageLock(ACCOUNTS_LOCK_KEY, async () => {
+    const accounts = await getAccounts();
+    const index = accounts.findIndex((a) => a.id === accountId);
+    const account = accounts[index];
+    if (!account) {
+      throw new Error("Account not found");
+    }
+    if (account.type !== "bankr") {
+      throw new Error("Only Bankr accounts can update API wallet addresses");
+    }
 
-  const accounts = await getAccounts();
-  const index = accounts.findIndex((a) => a.id === accountId);
-  if (index === -1 || accounts[index].type !== "bankr") {
-    throw new Error("Account not found");
-  }
+    const normalized = address.toLowerCase();
+    const duplicate = accounts.find(
+      (a) => a.id !== accountId && a.address.toLowerCase() === normalized
+    );
+    if (duplicate) {
+      throw new Error("An account with this address already exists");
+    }
 
-  const updated: BankrAccount = {
-    ...accounts[index],
-    type: "bankr",
-    address: address.toLowerCase(),
-  };
-  accounts[index] = updated;
-  await saveAccounts(accounts);
-  return updated;
+    const updated: BankrAccount = {
+      ...account,
+      type: "bankr",
+      address: normalized,
+    };
+    accounts[index] = updated;
+    await saveAccounts(accounts);
+    return updated;
+  });
 }
 
 /**
  * Clears all accounts (used during reset)
  */
 export async function clearAllAccounts(): Promise<void> {
-  await chrome.storage.local.remove(ACCOUNTS_STORAGE_KEY);
-  await chrome.storage.sync.remove([ACTIVE_ACCOUNT_ID_KEY, TAB_ACCOUNTS_KEY]);
+  await withStorageLock(ACCOUNTS_LOCK_KEY, async () => {
+    await chrome.storage.local.remove(ACCOUNTS_STORAGE_KEY);
+  });
+  await withStorageLock(TAB_ACCOUNTS_LOCK_KEY, async () => {
+    await chrome.storage.sync.remove([ACTIVE_ACCOUNT_ID_KEY, TAB_ACCOUNTS_KEY]);
+  });
 }
 
 /**
@@ -339,20 +378,22 @@ export async function addSeedPhraseAccount(
   derivationIndex: number,
   displayName?: string
 ): Promise<SeedPhraseAccount> {
-  const accounts = await getAccounts();
+  const newAccount = await withStorageLock(ACCOUNTS_LOCK_KEY, async () => {
+    const accounts = await getAccounts();
+    const account: SeedPhraseAccount = {
+      id: crypto.randomUUID(),
+      type: "seedPhrase",
+      address: address.toLowerCase(),
+      seedGroupId,
+      derivationIndex,
+      displayName,
+      createdAt: Date.now(),
+    };
 
-  const newAccount: SeedPhraseAccount = {
-    id: crypto.randomUUID(),
-    type: "seedPhrase",
-    address: address.toLowerCase(),
-    seedGroupId,
-    derivationIndex,
-    displayName,
-    createdAt: Date.now(),
-  };
-
-  accounts.push(newAccount);
-  await saveAccounts(accounts);
+    accounts.push(account);
+    await saveAccounts(accounts);
+    return account;
+  });
   await setActiveAccountId(newAccount.id);
 
   return newAccount;
@@ -370,19 +411,21 @@ export async function getSeedGroups(): Promise<SeedGroup[]> {
  * Adds a new seed group
  */
 export async function addSeedGroup(name?: string): Promise<SeedGroup> {
-  const groups = await getSeedGroups();
-  const nextNum = groups.length + 1;
+  return withStorageLock(SEED_GROUPS_LOCK_KEY, async () => {
+    const groups = await getSeedGroups();
+    const nextNum = groups.length + 1;
 
-  const group: SeedGroup = {
-    id: crypto.randomUUID(),
-    name: name || `Seed #${nextNum}`,
-    createdAt: Date.now(),
-    accountCount: 0,
-  };
+    const group: SeedGroup = {
+      id: crypto.randomUUID(),
+      name: name || `Seed #${nextNum}`,
+      createdAt: Date.now(),
+      accountCount: 0,
+    };
 
-  groups.push(group);
-  await chrome.storage.local.set({ [SEED_GROUPS_KEY]: groups });
-  return group;
+    groups.push(group);
+    await chrome.storage.local.set({ [SEED_GROUPS_KEY]: groups });
+    return group;
+  });
 }
 
 /**
@@ -392,12 +435,14 @@ export async function updateSeedGroupCount(
   seedGroupId: string,
   accountCount: number
 ): Promise<void> {
-  const groups = await getSeedGroups();
-  const group = groups.find((g) => g.id === seedGroupId);
-  if (group) {
-    group.accountCount = accountCount;
-    await chrome.storage.local.set({ [SEED_GROUPS_KEY]: groups });
-  }
+  await withStorageLock(SEED_GROUPS_LOCK_KEY, async () => {
+    const groups = await getSeedGroups();
+    const group = groups.find((g) => g.id === seedGroupId);
+    if (group) {
+      group.accountCount = accountCount;
+      await chrome.storage.local.set({ [SEED_GROUPS_KEY]: groups });
+    }
+  });
 }
 
 /**
@@ -407,21 +452,25 @@ export async function renameSeedGroup(
   seedGroupId: string,
   newName: string
 ): Promise<void> {
-  const groups = await getSeedGroups();
-  const group = groups.find((g) => g.id === seedGroupId);
-  if (group) {
-    group.name = newName;
-    await chrome.storage.local.set({ [SEED_GROUPS_KEY]: groups });
-  }
+  await withStorageLock(SEED_GROUPS_LOCK_KEY, async () => {
+    const groups = await getSeedGroups();
+    const group = groups.find((g) => g.id === seedGroupId);
+    if (group) {
+      group.name = newName;
+      await chrome.storage.local.set({ [SEED_GROUPS_KEY]: groups });
+    }
+  });
 }
 
 /**
  * Removes a seed group
  */
 export async function removeSeedGroup(seedGroupId: string): Promise<void> {
-  const groups = await getSeedGroups();
-  const filtered = groups.filter((g) => g.id !== seedGroupId);
-  await chrome.storage.local.set({ [SEED_GROUPS_KEY]: filtered });
+  await withStorageLock(SEED_GROUPS_LOCK_KEY, async () => {
+    const groups = await getSeedGroups();
+    const filtered = groups.filter((g) => g.id !== seedGroupId);
+    await chrome.storage.local.set({ [SEED_GROUPS_KEY]: filtered });
+  });
 }
 
 /**
@@ -433,6 +482,22 @@ export async function findAccountByAddress(address: string): Promise<Account | n
 }
 
 /**
+ * Finds a non-impersonator account by address (case-insensitive).
+ * View-only impersonators may coexist with real signing/API accounts.
+ */
+export async function findNonImpersonatorAccountByAddress(
+  address: string
+): Promise<Account | null> {
+  const normalized = address.toLowerCase();
+  const accounts = await getAccounts();
+  return (
+    accounts.find(
+      (a) => a.type !== "impersonator" && a.address.toLowerCase() === normalized
+    ) || null
+  );
+}
+
+/**
  * Converts a private key account to a seed phrase account in-place.
  * Preserves the same account ID, display name, and vault entry.
  */
@@ -441,23 +506,27 @@ export async function convertToSeedPhraseAccount(
   seedGroupId: string,
   derivationIndex: number
 ): Promise<SeedPhraseAccount | null> {
-  const accounts = await getAccounts();
-  const index = accounts.findIndex((a) => a.id === accountId);
-  if (index === -1) return null;
+  const converted = await withStorageLock(ACCOUNTS_LOCK_KEY, async () => {
+    const accounts = await getAccounts();
+    const index = accounts.findIndex((a) => a.id === accountId);
+    if (index === -1) return null;
 
-  const existing = accounts[index];
-  const converted: SeedPhraseAccount = {
-    id: existing.id,
-    type: "seedPhrase",
-    address: existing.address,
-    displayName: existing.displayName,
-    createdAt: existing.createdAt,
-    seedGroupId,
-    derivationIndex,
-  };
+    const existing = accounts[index];
+    const account: SeedPhraseAccount = {
+      id: existing.id,
+      type: "seedPhrase",
+      address: existing.address,
+      displayName: existing.displayName,
+      createdAt: existing.createdAt,
+      seedGroupId,
+      derivationIndex,
+    };
 
-  accounts[index] = converted;
-  await saveAccounts(accounts);
+    accounts[index] = account;
+    await saveAccounts(accounts);
+    return account;
+  });
+  if (!converted) return null;
   await setActiveAccountId(converted.id);
   return converted;
 }

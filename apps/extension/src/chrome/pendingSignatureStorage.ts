@@ -3,6 +3,8 @@
  * Signature requests are stored in chrome.storage.local and survive popup closes
  */
 
+import { withStorageLock } from "./storageLock";
+
 export type SignatureMethod =
   | "personal_sign"
   | "eth_sign"
@@ -52,6 +54,7 @@ export type PinnedSignatureRequest = PendingSignatureRequest &
   Required<Pick<PendingSignatureRequest, "accountId" | "accountAddress" | "accountType">>;
 
 const STORAGE_KEY = "pendingSignatureRequests";
+const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
 const SIGNATURE_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
@@ -70,9 +73,11 @@ export async function getPendingSignatureRequests(): Promise<PendingSignatureReq
 export async function savePendingSignatureRequest(
   request: PinnedSignatureRequest
 ): Promise<void> {
-  const requests = await getPendingSignatureRequests();
-  requests.push(request);
-  await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingSignatureRequests();
+    requests.push(request);
+    await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  });
   await updateSignatureBadge();
 }
 
@@ -80,9 +85,11 @@ export async function savePendingSignatureRequest(
  * Remove a pending signature request by ID
  */
 export async function removePendingSignatureRequest(sigId: string): Promise<void> {
-  const requests = await getPendingSignatureRequests();
-  const filtered = requests.filter((r) => r.id !== sigId);
-  await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingSignatureRequests();
+    const filtered = requests.filter((r) => r.id !== sigId);
+    await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  });
   await updateSignatureBadge();
 }
 
@@ -100,14 +107,18 @@ export async function getPendingSignatureRequestById(
  * Clear expired signature requests (older than 30 minutes)
  */
 export async function clearExpiredSignatureRequests(): Promise<void> {
-  const requests = await getPendingSignatureRequests();
-  const now = Date.now();
-  const valid = requests.filter((r) => now - r.timestamp < SIGNATURE_EXPIRY_MS);
+  let changed = false;
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingSignatureRequests();
+    const now = Date.now();
+    const valid = requests.filter((r) => now - r.timestamp < SIGNATURE_EXPIRY_MS);
 
-  if (valid.length !== requests.length) {
-    await chrome.storage.local.set({ [STORAGE_KEY]: valid });
-    await updateSignatureBadge();
-  }
+    if (valid.length !== requests.length) {
+      await chrome.storage.local.set({ [STORAGE_KEY]: valid });
+      changed = true;
+    }
+  });
+  if (changed) await updateSignatureBadge();
 }
 
 /**
@@ -125,6 +136,8 @@ export async function updateSignatureBadge(): Promise<void> {
  * Clear all pending signature requests
  */
 export async function clearAllPendingSignatureRequests(): Promise<void> {
-  await chrome.storage.local.set({ [STORAGE_KEY]: [] });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    await chrome.storage.local.set({ [STORAGE_KEY]: [] });
+  });
   await updateSignatureBadge();
 }

@@ -80,16 +80,16 @@ The extension supports four distinct account types that can be used simultaneous
 - **Byte conversion**: Uses native `bytesToHex()` from `cryptoUtils.ts` instead of Node.js `Buffer` (not available in browser service worker)
 - **Files**: `seedPhraseUtils.ts` (BIP39/44), `mnemonicStorage.ts` (encrypted CRUD + `reEncryptMnemonicVault` for password changes), `SeedPhraseSetup.tsx` (UI), `RevealSeedPhraseModal.tsx` (reveal with password)
 - **Display**: Account dropdown shows seed group name + derivation index (e.g., "Seed #1 · #0"). Account settings shows derivation index in type label.
-- **Address picker (shared)**: `components/SeedAddressPicker.tsx` is the single picker UI used by both flows: (1) new-import in `SeedPhraseSetup`, and (2) "Derive Addresses" on an existing seed group in `AddAccount`. Each row renders avatar (ENS or blockie), ENS name, BIP44 index, truncated address, portfolio USD total (`fetchPortfolio`, aborted on unmount), a copy button, and an Etherscan-mainnet link. The picker calls the background `previewSeedAddresses` handler, which accepts EITHER a raw `mnemonic` (import flow, no auth) OR a `seedGroupId` (existing-group flow, decrypts the stored mnemonic — requires unlocked wallet with master password). Paginates 5 at a time. Existing-group mode initial-fetches `0..maxExistingIndex + 5` so users see their already-added accounts in context (locked as "added"). `addSeedPhraseGroup` and `deriveSeedAccount` both accept `indices: number[]` — non-PK collisions are silently skipped, PK collisions still convert in place. Generate flow is unchanged (always derives index 0; nothing to discover on a fresh mnemonic).
+- **Address picker (shared)**: `components/SeedAddressPicker.tsx` is the single picker UI used by both flows: (1) new-import in `SeedPhraseSetup`, and (2) "Derive Addresses" on an existing seed group in `AddAccount`. Each row renders avatar (ENS or blockie), ENS name, BIP44 index, truncated address, portfolio USD total (`fetchPortfolio`, aborted on unmount), a copy button, and an Etherscan-mainnet link. The picker calls the background `previewSeedAddresses` handler, which accepts EITHER a raw `mnemonic` (import flow, no auth) OR a `seedGroupId` (existing-group flow, decrypts the stored mnemonic — requires unlocked wallet with master password). Paginates 5 at a time. Existing-group mode initial-fetches `0..maxExistingIndex + 5` so users see their already-added real accounts in context (locked as "added"). `addSeedPhraseGroup` and `deriveSeedAccount` both accept `indices: number[]` — bankr/seed collisions are silently skipped, PK collisions still convert in place, and view-only impersonators are ignored so they can coexist with imported seed accounts. `addSeedPhraseGroup` prevalidates that at least one selected index can be imported or converted before creating a seed group or writing `mnemonicVault`; duplicate-only imports fail without persisting seed material. Generate flow is unchanged (always derives index 0; nothing to discover on a fresh mnemonic).
 
 #### PK → Seed Phrase Account Conversion
 
 When importing a seed phrase whose derived address matches an existing private key account, the extension converts the PK account to a seed phrase account **in-place** rather than creating a duplicate or throwing an error:
 
 1. Derive private key + address at index N as usual
-2. Check if the address already exists in accounts via `findAccountByAddress()`
+2. Check if the address already exists in non-impersonator accounts
 3. If it matches a `privateKey` account → call `convertToSeedPhraseAccount()` to update type, add seedGroupId/derivationIndex, preserve same account ID, display name, and vault entry. Skip `addKeyToVault` (key already in vault under same ID).
-4. If it matches any other type (bankr/impersonator/seedPhrase) → error "An account with this address already exists"
+4. If it matches a `bankr` or `seedPhrase` account → skip/error as a duplicate; if it matches only a view-only `impersonator`, import the seed account alongside it
 5. This applies to both `addSeedPhraseGroup` (index 0) and `deriveSeedAccount` (index N) handlers
 
 ### Account Selection
@@ -197,7 +197,7 @@ The following chains are supported for transaction signing (listed in dropdown o
 | Polygon  | 137      | https://polygon-rpc.com         | ✅        | ✅                   |          |
 | Unichain | 130      | https://mainnet.unichain.org    | ✅        | ✅                   | ✅       |
 
-These are configured in `src/constants/chainRegistry.ts` (the single source of truth for built-in chain data) and pre-populated on first install.
+These are configured in `src/constants/chainRegistry.ts` (the single source of truth for built-in chain data) and normalized into `networksInfo` by the service-worker bootstrap if storage is missing.
 
 ### Runtime Chain Resolution
 
@@ -206,8 +206,10 @@ Built-in chain metadata and user-customized chain state are intentionally split:
 - `src/constants/chainRegistry.ts` defines the canonical built-in chains and all derived static maps
 - `chrome.storage.sync.networksInfo` stores runtime overrides only: edited RPC URLs, hidden flags, and user-added custom chains
 - `src/lib/chains.ts` is the required merge layer for runtime code. It normalizes `networksInfo`, keeps built-in chains keyed by their registry name, and exposes helpers like `getVisibleChains`, `getResolvedChainById`, and `getStoredRpcUrl`
+- `src/chrome/networkStorage.ts` owns mutating writes to `networksInfo` in the service worker. Settings UI and dapp `wallet_addEthereumChain` confirmations call extension-only background messages (`addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain`) instead of writing a full popup snapshot back to storage.
+- `src/contexts/NetworksContext.tsx` is a read-through mirror: it initializes via `ensureNetworksInfo` and subscribes to `chrome.storage.onChanged` for `networksInfo`, so long-lived sidepanels pick up chains added by other extension flows.
 
-**Important:** Do not read `CHAIN_REGISTRY` and `networksInfo` separately in components/handlers to rebuild chain lists or look up RPC/explorer/native currency data. That is what caused custom-chain support to drift across screens. New runtime chain logic should go through `src/lib/chains.ts`.
+**Important:** Do not read `CHAIN_REGISTRY` and `networksInfo` separately in components/handlers to rebuild chain lists or look up RPC/explorer/native currency data. That is what caused custom-chain support to drift across screens. New runtime chain logic should go through `src/lib/chains.ts`, and new network mutations should go through `src/chrome/networkStorage.ts` so stale popup snapshots cannot delete chains added by the background.
 
 **Default Network**: Base is set as the default network for new installations.
 
@@ -229,6 +231,7 @@ Native asset price/logo resolution is centralized in `src/chrome/coingeckoServic
 - `portfolioTokens.ts` sends a single batched background message for custom-chain native assets instead of hitting CoinGecko from the popup
 - The service batches CoinGecko `coins/markets` requests across a short buffer window, caches market data in memory + `chrome.storage.local`, and caches search/resolution results for unknown custom assets
 - On CoinGecko `429`, the service falls back to cached/stale data and backs off briefly instead of hammering the API
+- Persistent metadata/image cache writes are best-effort. `src/chrome/storageCachePruner.ts` runs on service-worker startup and every 6 hours to delete expired non-critical cache entries, so cache bloat cannot block wallet-critical writes such as vault/account/pending-transaction state.
 
 ERC-20 display metadata is centralized in `src/chrome/tokenMetadata.ts`.
 
@@ -371,6 +374,11 @@ src/
 │   ├── types.ts             # Account and vault type definitions
 │   ├── localSigner.ts       # Transaction and message signing with viem
 │   ├── accountStorage.ts    # Account CRUD operations (includes seed groups, PK→seed conversion)
+│   ├── storageLock.ts       # Per-key serializer for chrome.storage read-modify-write helpers
+│   ├── networkStorage.ts    # Service-worker-owned networksInfo mutations + active-chain fallback
+│   ├── walletResetStorage.ts # Source of truth for reset-owned storage keys and transient prefixes
+│   ├── storageCachePruner.ts # Best-effort pruning for non-critical storage-backed caches
+│   ├── transactionValidation.ts # Dapp transaction quantity validation/normalization
 │   ├── gasEstimation.ts     # Pre-confirmation gas estimation (RPC fees, CoinGecko USD price)
 │   ├── bankrApi.ts          # Bankr API client (submit, sign, job polling)
 │   ├── portfolioApi.ts      # Portfolio API client (fetches token holdings via website)
@@ -406,8 +414,7 @@ src/
 ├── lib/
 │   └── siwe/                # EIP-4361 parser + validation shared by UI and signing handlers
 ├── pages/
-│   ├── Onboarding.tsx       # Full-page onboarding wizard for first-time setup
-│   └── ApiKeySetup.tsx      # API key + wallet address configuration
+│   └── Onboarding.tsx       # Full-page onboarding wizard for first-time setup
 ├── components/
 │   ├── Chat/
 │   │   ├── ChatView.tsx     # Main chat orchestrator (list/chat modes)
@@ -439,6 +446,7 @@ src/
 │   ├── TxDetailModal.tsx    # Transaction detail modal (gas fees, function name, addresses)
 │   ├── GasEstimateDisplay.tsx # Collapsible gas fee display with editable params (PK/Seed)
 │   ├── TransactionConfirmation.tsx # In-popup tx confirmation with success animation
+│   ├── TransactionConfirmationErrorBoundary.tsx # Last-resort reject UI for malformed tx renders
 │   ├── SignatureRequestConfirmation.tsx # Signature request display for Bankr/PK/Seed signing
 │   ├── SiweMessageDisplay.tsx # Human-readable SIWE auth review + raw message disclosure
 │   ├── SiweValidationIssues.tsx # SIWE validation issue list
@@ -711,6 +719,7 @@ await provider.request({
 `src/chrome/background.ts`:
 
 - Uses the `txId` provided in the message (generated by content script)
+- Validates and normalizes `tx.value` through `src/chrome/transactionValidation.ts`; malformed values write a `txResult:{txId}` error and are not stored as pending requests
 - Stores pending transaction in `chrome.storage.local`
 - Updates extension badge with pending count
 - **Auto-opens popup window** for user confirmation
@@ -791,7 +800,7 @@ WalletConnect support is a parallel dapp transport for sites that do not list Wa
 
 - `walletConnectHandlers.ts` initializes WalletKit in the MV3 service worker, approves/rejects session proposals, exposes UI-only pair/list/disconnect handlers, and bridges final `txResult:*` / `sigResult:*` writes back to WalletConnect.
 - `walletConnectProposal.ts` normalizes chainless `eip155` namespaces to the current active account's visible chains before `approveSession()`. This handles dapps that request EVM methods without an explicit `chains` array while preserving the existing Bankr-vs-local account chain restrictions. Proposals with no remaining approvable namespace are rejected instead of calling `approveSession()` with `{}`; the rejection is also broadcast to `WalletConnectView` as `walletConnectProposalRejected` so the UI can show the dapp logo, requested chain names/icons/IDs, and prefill the Add Chain screen when the chain is not configured. After a chain is added from that WalletConnect route, the popup returns to WalletConnect with a retry prompt because the original proposal was already rejected.
-- `walletConnectRequestHandlers.ts` routes `session_request` events. `eth_sendTransaction` becomes a pinned `PendingTxRequest`; `personal_sign` / typed-data methods become pinned `PendingSignatureRequest`s. The normal popup opens via `openExtensionPopup()`.
+- `walletConnectRequestHandlers.ts` routes `session_request` events. `eth_sendTransaction` validates/normalizes `tx.value` through `transactionValidation.ts` before it becomes a pinned `PendingTxRequest`; `personal_sign` / typed-data methods become pinned `PendingSignatureRequest`s. The normal popup opens via `openExtensionPopup()`.
 - `walletConnectBatchRequestHandlers.ts` adapts ERC-5792 methods (`wallet_getCapabilities`, `wallet_sendCalls`, `wallet_getCallsStatus`, `wallet_showCallsStatus`) to the existing `batchTxHandlers.ts` implementation.
 - `walletConnectRpcRequestHandlers.ts` handles `wallet_switchEthereumChain`, `wallet_addEthereumChain`, and allowlisted read-only RPC forwarding.
 - `walletConnectProtocol.ts` centralizes WalletConnect JSON-RPC success/error responses; `walletConnectHelpers.ts` holds session/account/method helpers.
@@ -804,7 +813,7 @@ WalletConnect support is a parallel dapp transport for sites that do not list Wa
 **Supported request behavior:**
 
 - `eth_sendTransaction` uses the same confirmation screens and Bankr/PK/Seed signing paths as injected dapp transactions.
-- ERC-5792 batching is supported over WalletConnect through `wallet_getCapabilities`, `wallet_sendCalls`, `wallet_getCallsStatus`, and `wallet_showCallsStatus`. `wallet_sendCalls` responds immediately with the bundle id; the dapp polls `wallet_getCallsStatus` just like the injected-provider route.
+- ERC-5792 batching is supported over WalletConnect through `wallet_getCapabilities`, `wallet_sendCalls`, `wallet_getCallsStatus`, and `wallet_showCallsStatus`. `wallet_sendCalls` responds immediately with the bundle id; the dapp polls `wallet_getCallsStatus` just like the injected-provider route. Each inner call's native `value` is normalized through `transactionValidation.ts` before the batch is stored; malformed values return a `batchTxAck` error and older malformed pending batches are blocked in the confirmation UI.
 - `personal_sign`, `eth_signTypedData_v3`, and `eth_signTypedData_v4` use the same signature confirmation screens. EIP-712 validation/sanitization is shared with the injected-provider path.
 - `eth_sign` and deprecated `eth_signTypedData` v1 are rejected.
 - `eth_accounts`, `eth_requestAccounts`, `eth_chainId`, `net_version`, `wallet_switchEthereumChain`, and a small read-only RPC allowlist are answered directly in the background.
@@ -845,6 +854,14 @@ Pre-confirmation gas estimation shown on the transaction confirmation screen. Fe
 For non-atomic PK/SP batches (and cross-dapp batches), one shared `<GasTierPicker>` at the top applies its Priority / Max Fee uniformly to every call. Per-call gas limit editor stays as before. Atomic Bankr batches keep their server-managed gas UX. Same Custom-tier coupling rules as the single-tx editor.
 
 **Dapp-provided gas as a floor (non-atomic path):** When the input transactions carry a `tx.gas` value (e.g., a swap response from `/api/swap/quote` whose gas was already estimated + buffered server-side), the component clamps each per-call gas limit to `max(simulated × buffer, dapp_tx_gas)` after `estimateBatchGasSequential` returns. This prevents simulator under-estimates — `eth_simulateV1` has been observed ~25% below real need for Uniswap V4-with-hooks swaps on Base, regardless of RPC provider — from silently downgrading a correct API value at signing time. The user can still edit downward in the picker. See `_docs/SWAP.md` ("Gas budgeting") for the full background.
+
+**Ordered local multi-tx broadcast:** Non-atomic PK/SP dapp batches and direct
+swap/bridge multi-tx submissions pre-assign sequential nonces, then broadcast
+one raw transaction at a time. Each signed tx still carries explicit gas and fee
+params so no gas/fee estimation runs during broadcast. If nonce N fails before
+the raw tx is accepted, the nonce cache is reset and nonce N+1... rows are
+marked failed/skipped instead of being signed; this prevents stale higher-nonce
+transactions from executing later after a future user tx fills the gap.
 
 **Warnings:**
 | Condition | Display |
@@ -944,7 +961,7 @@ raw-message block.
 
 **Human-readable display:**
 
-- "Sign in to {domain}" summary with the SIWE statement
+- "Sign in to {domain}" summary with the SIWE statement and dapp favicon
 - Site, account, chain, URI, issued/expiration times, request ID, nonce, and resources
 - Copy + explorer actions for the SIWE account address
 - Validation status and issue list
@@ -956,7 +973,10 @@ raw-message block.
 2. Domain, address, URI, version, chain ID, nonce, and RFC 3339 timestamps
 3. Expiration / not-before timing
 4. Message domain ↔ URI host consistency
-5. Connected site origin, connected chain, and signing account match
+5. Connected site origin, connected chain, and signing account match. For
+   dapp-originated requests, SIWE uses the Chrome-attested `sender.origin`
+   captured as `senderOrigin` when available, falling back to the persisted
+   request origin for legacy entries and WalletConnect peers.
 
 Validation is run in the UI for user review and again in `txHandlers.ts` before
 signing for all signing-capable account types. If a SIWE message has validation
@@ -1204,6 +1224,27 @@ Gas data is not available at confirmation time (tx hasn't been mined). It's fetc
 - **Key**: `txHistory` in `chrome.storage.local`
 - **Max entries**: 50 (oldest entries removed when limit exceeded)
 - **Sort order**: Newest first (by `createdAt`)
+
+### Chrome Storage RMW Locks
+
+Any helper that reads a `chrome.storage` array/map/object, mutates it, and
+writes the full value back must serialize that key through
+`src/chrome/storageLock.ts`. Use a lock key that includes the storage area and
+storage key (for example `local:pendingTxRequests` or `sync:tabAccounts`) so
+unrelated stores can still write in parallel while same-key read-modify-write
+operations cannot clobber each other.
+
+This applies to pending request queues (`pendingTxRequests`,
+`pendingSignatureRequests`, `pendingBatchTxRequests`,
+`pendingWatchAssetRequests`, `pendingAddChainRequests`,
+`walletConnectPendingRequests`), account metadata (`accounts`, `tabAccounts`,
+`seedGroups`), `customTokens`, `networksInfo`, `txHistory`, `bundleStatuses`,
+and `pendingBridges`. Because popup pages and the background are separate JS
+contexts, `customTokens` and `networksInfo` mutations are routed through
+background messages (`addCustomToken`, `updateCustomToken`,
+`removeCustomToken`; `addNetwork`, `updateNetwork`, `setNetworkHidden`,
+`deleteNetwork`, `confirmAddChain`) so all writes share the service worker's
+lock instance.
 
 ### UI Component
 
@@ -1733,7 +1774,8 @@ Users can optionally configure an **agent password** that allows AI agents to un
 **API Keys**:
 
 - If `cachedVaultKey` exists → encrypt with vault key → save to `encryptedApiKeyVault`
-- If no vault key (legacy) → encrypt with password → save to `encryptedApiKey`
+- If no vault key and no `encryptedVaultKeyMaster` exists (pre-migration setup/legacy) → encrypt with password → save to `encryptedApiKey`
+- `saveEncryptedApiKey()` refuses to write legacy `encryptedApiKey` once `encryptedVaultKeyMaster` exists, so post-migration callers must use the vault-key path
 - Handled automatically by `handleSaveApiKeyWithCachedPassword()` and `addBankrAccount` handler
 
 **Private Keys**:
@@ -1967,7 +2009,7 @@ When changing the wallet password (Settings → Change Password):
    - API key (in `encryptedApiKeyVault`) unchanged
    - Private keys (in `pkVault` with `salt: ""`) unchanged
    - Seed phrases (in `mnemonicVault` with `salt: ""`) unchanged
-6. **Agent password remains valid** - `encryptedVaultKeyAgent` is unchanged
+6. **Agent password is cleared** - `encryptedVaultKeyAgent` is removed and must be set again after the master password changes
 
 **Why atomic**: If any re-encryption step fails (OOM, crypto error), no storage writes happen. Without atomicity, the vault key could be updated to the new password while legacy entries remain encrypted with the old password, making data inaccessible.
 
@@ -1975,9 +2017,9 @@ When changing the wallet password (Settings → Change Password):
 
 **Legacy System** (pre-vault key migration):
 
-1. Decrypt API key with old password
-2. Re-encrypt API key with new password
-3. Re-encrypt private key vault with new password
+1. Decrypt API key, private-key vault, and mnemonic vault with old password
+2. Re-encrypt all present legacy secrets with new password in memory
+3. Persist `encryptedApiKey`, `pkVault`, and `mnemonicVault` together in one `chrome.storage.local.set()` call
 
 ### Pending Transaction Storage
 
@@ -1988,6 +2030,7 @@ Transactions are stored persistently in `chrome.storage.local`:
 - Extension badge shows count of pending requests
 - Transactions auto-expire after 30 minutes (periodic cleanup + enforced at confirmation time)
 - Confirmation handlers reject expired requests even if periodic cleanup hasn't run
+- Save/remove/expiry writes are serialized with `storageLock.ts` so a cleanup interval cannot erase a request saved by a concurrent dapp or WalletConnect request
 - A `processingTxIds` Set prevents the same transaction from being confirmed twice concurrently
 - User can review and confirm/reject at any time
 
@@ -2028,6 +2071,7 @@ The `/wallet/submit` API returns a structured response:
 - `status: "success"` — transaction confirmed onchain, `transactionHash` contains the hash
 - `status: "reverted"` — transaction confirmed but reverted, treated as failure
 - `status: "pending"` — transaction submitted but not yet confirmed, treated as success
+- `submitTransactionDirect()` normalizes `txHash` to `transactionHash`, requires a valid EVM transaction hash for every accepted status, and throws `BankrApiError` for missing/invalid `status`, `success !== true` on non-reverted responses, invalid JSON, or ambiguous pending bodies. This prevents Activity rows from being left pending without a pollable transaction hash.
 
 ## Build Configuration
 
@@ -2053,19 +2097,29 @@ Build command: `pnpm build`
     "service_worker": "static/js/background.js",
     "type": "module"
   },
-  "permissions": ["activeTab", "storage", "sidePanel", "notifications", "tabs"]
+  "permissions": [
+    "activeTab",
+    "storage",
+    "sidePanel",
+    "notifications",
+    "tabs",
+    "declarativeNetRequestWithHostAccess",
+    "unlimitedStorage"
+  ]
 }
 ```
 
 ### Permissions
 
-| Permission      | Purpose                                                |
-| --------------- | ------------------------------------------------------ |
-| `activeTab`     | Access to the currently active tab                     |
-| `storage`       | Store encrypted API key, settings, transaction history |
-| `sidePanel`     | Enable sidepanel mode (Chrome 114+)                    |
-| `notifications` | Show transaction success/failure notifications         |
-| `tabs`          | Query and close extension tabs (e.g., onboarding page) |
+| Permission                         | Purpose                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| `activeTab`                        | Access to the currently active tab                                      |
+| `storage`                          | Store encrypted API key, settings, transaction history                  |
+| `sidePanel`                        | Enable sidepanel mode (Chrome 114+)                                     |
+| `notifications`                    | Show transaction success/failure notifications                          |
+| `tabs`                             | Query and close extension tabs (e.g., onboarding page)                  |
+| `declarativeNetRequestWithHostAccess` | Scope ENS Browsing redirects and local IPFS HTTPS-upgrade exemptions |
+| `unlimitedStorage`                 | Keep storage.local quota headroom for wallet-critical persistent writes |
 
 ## Message Types
 
@@ -2130,15 +2184,17 @@ content script only for provider initialization address correction.
 | `isApiKeyCached`                   | Check if password needed                                                                        |
 | `unlockWallet`                     | Unlock wallet with password                                                                     |
 | `lockWallet`                       | Lock wallet (clear cached credentials)                                                          |
+| `resetExtension`                   | Reset wallet identity state using `walletResetStorage.ts`; clears secrets, accounts, pending requests, WalletConnect routing, cross-dapp batches, tx history, wallet portfolio state, transient result keys, and session auth state |
 | `confirmTransaction`               | User approved tx (sync, waits)                                                                  |
 | `confirmTransactionAsync`          | User approved tx (async, Bankr API). Optional `functionName` field                              |
 | `confirmTransactionAsyncPK`        | User approved tx (async, PK/seed local sign). Optional `functionName` and `gasOverrides` fields |
 | `estimateGas`                      | Estimate gas for pending tx (returns `GasEstimate` with fees, balance, USD price)               |
+| `updatePendingTxRequestData`       | Persist edited calldata for a pending single transaction                                        |
 | `rejectTransaction`                | User rejected tx                                                                                |
 | `getPendingSignatureRequests`      | Get all pending signature requests                                                              |
 | `rejectSignatureRequest`           | User rejected signature request                                                                 |
 | `cancelTransaction`                | User cancelled in-progress tx                                                                   |
-| `clearApiKeyCache`                 | Clear cached API key                                                                            |
+| `clearApiKeyCache`                 | Legacy alias for full auth-state teardown (`clearAllAuthState`)                                 |
 | `getCachedPassword`                | Check if password is cached                                                                     |
 | `getCachedApiKey`                  | Get decrypted API key (if cached). **Sender-verified**: extension pages only                    |
 | `saveApiKeyWithCachedPassword`     | Save new API key using cached password                                                          |
@@ -2152,6 +2208,12 @@ content script only for provider initialization address correction.
 | `setAutoLockTimeout`               | Set auto-lock timeout (ms)                                                                      |
 | `getTxHistory`                     | Get completed transaction history                                                               |
 | `clearTxHistory`                   | Clear all transaction history                                                                   |
+| `fetchTokenInfo`                   | Resolve ERC-20 name/symbol/decimals through background RPC helpers                              |
+| `resolveTokenMetadata`             | Resolve token metadata and logo, including user custom tokens                                   |
+| `lookupCustomToken`                | Read-only lookup in `customTokens`                                                              |
+| `addCustomToken`                   | Add a manual/custom token through the background-owned `customTokens` write path                 |
+| `updateCustomToken`                | Edit a manual/custom token through the background-owned `customTokens` write path                |
+| `removeCustomToken`                | Remove a manual/custom token through the background-owned `customTokens` write path              |
 | `getAccounts`                      | Get all accounts (metadata only)                                                                |
 | `getActiveAccount`                 | Get currently active account                                                                    |
 | `setActiveAccount`                 | Set active account by ID (also updates storage address)                                         |
@@ -2164,7 +2226,7 @@ content script only for provider initialization address correction.
 | `updateAccountDisplayName`         | Update account display name                                                                     |
 | `addImpersonatorAccount`           | Add view-only impersonator account (address only)                                               |
 | `generateMnemonic`                 | Generate fresh BIP39 mnemonic (no storage). **Sender-verified**                                 |
-| `addSeedPhraseGroup`               | Generate/import mnemonic, create seed group, derive the requested set of indices (defaults to `[0]`; handles PK collision, silently skips already-imported non-PK addresses) |
+| `addSeedPhraseGroup`               | Generate/import mnemonic, prevalidate that at least one requested index is importable, create seed group, derive the requested set of indices (defaults to `[0]`; handles PK collision, silently skips already-imported non-PK addresses) |
 | `previewSeedAddresses`             | Derive a paginated range of addresses from a candidate mnemonic without persisting anything (used by the import picker). **Sender-verified** |
 | `deriveSeedAccount`                | Derive next account from existing seed group (handles PK collision)                             |
 | `revealSeedPhrase`                 | Reveal mnemonic (requires master password verification). **Sender-verified**                    |
@@ -2420,6 +2482,28 @@ The header includes a lock icon button that allows users to manually lock the wa
 - Useful for security when stepping away from the computer
 
 Sends `lockWallet` message to background and redirects to the unlock screen.
+
+### Reset Extension
+
+The unlock screen's reset action sends `resetExtension` to the background. The
+handler is agent-password blocked, calls `clearAllAuthState()` before storage
+mutation, aborts in-flight tx work through `performSecurityReset()`, then removes
+wallet-owned storage through `chrome/walletResetStorage.ts`.
+
+`walletResetStorage.ts` is the source of truth for reset-owned keys and
+prefixes. It clears secrets/accounts (`encrypted*`, `pkVault`, `mnemonicVault`,
+`accounts`, `seedGroups`), pending request queues (`pendingTxRequests`,
+`pendingSignatureRequests`, `pendingBatchTxRequests`,
+`pendingWatchAssetRequests`, `pendingAddChainRequests`), WalletConnect routing
+state (`walletConnectPendingRequests`, `walletConnectChainId`), cross-dapp batch
+state (`crossDappBatch`, `bundleStatuses`), bridge state (`pendingBridges`),
+wallet portfolio state (`portfolioSnapshots`, `hiddenPortfolioTokens`,
+`customTokens`, `customDelegates`, `recentlyReceivedTokens`), and transient
+result/artifact prefixes (`txResult:`, `sigResult:`, `rpcResult:`,
+`addChainResult:`, `watchAssetResult:`, `batchTxResult:`, `batchTxAck:`,
+`capabilitiesResult:`, `callsStatusResult:`, `notification-`, `fiProgress:`).
+Keep that module in sync with `_docs/STORAGE.md` when adding new wallet-scoped
+storage.
 
 ### Footer Attribution
 

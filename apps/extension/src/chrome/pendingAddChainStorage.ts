@@ -3,6 +3,8 @@
  * Requests are stored in chrome.storage.local and survive popup closes.
  */
 
+import { withStorageLock } from "./storageLock";
+
 export interface PendingAddChainRequest {
   id: string;
   chainId: number;
@@ -16,6 +18,7 @@ export interface PendingAddChainRequest {
 }
 
 const STORAGE_KEY = "pendingAddChainRequests";
+const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
 
 export async function getPendingAddChainRequests(): Promise<PendingAddChainRequest[]> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
@@ -25,13 +28,17 @@ export async function getPendingAddChainRequests(): Promise<PendingAddChainReque
 export async function savePendingAddChainRequest(
   request: PendingAddChainRequest
 ): Promise<void> {
-  const requests = await getPendingAddChainRequests();
-  requests.push(request);
-  await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingAddChainRequests();
+    requests.push(request);
+    await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  });
 }
 
 export async function removePendingAddChainRequest(id: string): Promise<void> {
-  const requests = await getPendingAddChainRequests();
-  const filtered = requests.filter((r) => r.id !== id);
-  await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingAddChainRequests();
+    const filtered = requests.filter((r) => r.id !== id);
+    await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  });
 }

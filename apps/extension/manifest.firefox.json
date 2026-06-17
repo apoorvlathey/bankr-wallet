@@ -49,7 +49,8 @@
     "activeTab",
     "storage",
     "notifications",
-    "tabs"
+    "tabs",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "https://*/*",

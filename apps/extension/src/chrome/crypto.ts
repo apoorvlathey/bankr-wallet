@@ -74,6 +74,12 @@ export async function saveEncryptedApiKey(
   apiKey: string,
   password: string
 ): Promise<void> {
+  if (await hasVaultKeySystem()) {
+    throw new Error(
+      "Legacy API key storage is disabled after vault key migration",
+    );
+  }
+
   const encryptedData = await encrypt(apiKey, password);
   await chrome.storage.local.set({ encryptedApiKey: encryptedData });
 }

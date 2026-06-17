@@ -83,6 +83,7 @@ import type {
 import { BUNDLE_STATUS, ERC5792_ERRORS } from "./erc5792Types";
 import { OP_STACK_CHAIN_IDS } from "../constants/networks";
 import { pinnedBatchTxRequest } from "./pinnedRequest";
+import { normalizeTransactionValue } from "./transactionValidation";
 
 // ---------------------------------------------------------------------------
 // ERC-7821 batch encoding
@@ -118,6 +119,36 @@ const ERC7821_ABI = [
 // satisfies that for every conforming delegator.
 const ERC7821_BATCH_MODE =
   "0x0100000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
+
+function normalizeCallValueOrThrow(
+  value: unknown,
+  callIndex: number,
+): `0x${string}` {
+  const normalized = normalizeTransactionValue(value);
+  if (!normalized.ok) {
+    throw new Error(`Call ${callIndex + 1} value is invalid: ${normalized.error}`);
+  }
+  return normalized.value as `0x${string}`;
+}
+
+function normalizeBatchCallValues(
+  calls: ERC5792Call[],
+): { ok: true; calls: ERC5792Call[] } | { ok: false; error: string } {
+  try {
+    return {
+      ok: true,
+      calls: calls.map((call, index) => ({
+        ...call,
+        value: normalizeCallValueOrThrow(call.value, index),
+      })),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
 
 /**
  * Encode an array of ERC-5792 calls into a single ERC-7821 batch transaction.
@@ -164,7 +195,7 @@ export function encodeBatchCalls(
     const to = (calls[i].to ?? "").toLowerCase();
     if (to !== eoaLower) continue;
     const data = calls[i].data ?? "0x";
-    const valueHex = calls[i].value ?? "0x0";
+    const valueHex = normalizeCallValueOrThrow(calls[i].value, i);
     const hasData = data !== "0x" && data !== "0x0" && data.length > 2;
     const hasValue = valueHex !== "0x" && valueHex !== "0x0" && BigInt(valueHex) > 0n;
     if (hasData || hasValue) {
@@ -174,9 +205,9 @@ export function encodeBatchCalls(
     }
   }
 
-  const encodedCalls = calls.map((call) => ({
+  const encodedCalls = calls.map((call, index) => ({
     to: call.to as `0x${string}`,
-    value: call.value ? BigInt(call.value) : 0n,
+    value: BigInt(normalizeCallValueOrThrow(call.value, index)),
     data: (call.data || "0x") as `0x${string}`,
   }));
 
@@ -462,6 +493,21 @@ export function handleWalletSendCalls(
       return;
     }
 
+    const normalizedCalls = normalizeBatchCallValues(params.calls);
+    if (!normalizedCalls.ok) {
+      await writeResultToStorage(`batchTxAck:${bundleId}`, {
+        success: false,
+        error: normalizedCalls.error,
+        code: -32602,
+      });
+      return;
+    }
+
+    const normalizedParams: WalletSendCallsParams = {
+      ...params,
+      calls: normalizedCalls.calls,
+    };
+
     // ERC-7821 self-recursion guard.
     //
     // The exploit: a batched inner call `{ to: EOA, data: execute(mode,
@@ -482,7 +528,7 @@ export function handleWalletSendCalls(
     // sends) for a threat that's only theoretical on the delegates we use.
     {
       const eoa = account.address.toLowerCase();
-      const offending = params.calls.findIndex((call) => {
+      const offending = normalizedParams.calls.findIndex((call) => {
         const to = (call.to ?? "").toLowerCase();
         if (to !== eoa) return false;
         const data = call.data ?? "0x";
@@ -513,7 +559,7 @@ export function handleWalletSendCalls(
     }
 
     // SECURITY: validate every per-call from (if provided) matches the active account.
-    for (const call of params.calls) {
+    for (const call of normalizedParams.calls) {
       const callFrom = (call as ERC5792Call & { from?: string }).from;
       if (
         typeof callFrom === "string" &&
@@ -539,7 +585,7 @@ export function handleWalletSendCalls(
     if (
       isPKOrSP &&
       params.atomicRequired === true &&
-      params.calls.length > 1
+      normalizedParams.calls.length > 1
     ) {
       const resolved = await getStoredResolvedChainById(chainId);
       let canBeAtomic = false;
@@ -576,7 +622,7 @@ export function handleWalletSendCalls(
     // Save pending request (include accountType for confirm handler routing)
     const pendingRequest = pinnedBatchTxRequest(account, {
       id: bundleId,
-      params,
+      params: normalizedParams,
       origin,
       favicon,
       chainName,
@@ -731,37 +777,37 @@ async function processBatchTransactionInBackground(
   pinnedAddress: string,
   functionNames?: string[],
 ): Promise<void> {
-  // Encode calls into single ERC-7821 tx using the pinned account address.
-  const batchTx = encodeBatchCalls(pending.params.calls, pinnedAddress);
-
-  const tx: TransactionParams = {
-    from: pinnedAddress,
-    to: batchTx.to,
-    data: batchTx.data,
-    value: batchTx.value,
-    chainId: pending.chainId,
-  };
-
-  // Compose display function name
-  const displayName = functionNames?.length
-    ? `Batch: ${functionNames.join(", ")}`
-    : `Batch (${pending.params.calls.length} calls)`;
-
-  // Save to tx history as "processing"
-  await addTxToHistory({
-    id: bundleId,
-    status: "processing",
-    tx,
-    origin: pending.origin,
-    favicon: pending.favicon,
-    chainName: pending.chainName,
-    chainId: pending.chainId,
-    createdAt: pending.timestamp,
-    accountType: "bankr",
-    functionName: displayName,
-  });
-
   try {
+    // Encode calls into single ERC-7821 tx using the pinned account address.
+    const batchTx = encodeBatchCalls(pending.params.calls, pinnedAddress);
+
+    const tx: TransactionParams = {
+      from: pinnedAddress,
+      to: batchTx.to,
+      data: batchTx.data,
+      value: batchTx.value,
+      chainId: pending.chainId,
+    };
+
+    // Compose display function name
+    const displayName = functionNames?.length
+      ? `Batch: ${functionNames.join(", ")}`
+      : `Batch (${pending.params.calls.length} calls)`;
+
+    // Save to tx history as "processing"
+    await addTxToHistory({
+      id: bundleId,
+      status: "processing",
+      tx,
+      origin: pending.origin,
+      favicon: pending.favicon,
+      chainName: pending.chainName,
+      chainId: pending.chainId,
+      createdAt: pending.timestamp,
+      accountType: "bankr",
+      functionName: displayName,
+    });
+
     const result = await submitTransactionDirect(apiKey, tx);
     const txHash = result.transactionHash;
 
@@ -1166,13 +1212,15 @@ async function processBatchTransactionNonAtomicInBackground(
     );
   }
 
-  // Phase 2 (concurrent broadcast): sign + broadcast each with pre-assigned nonce.
-  // Provide gas + fee params from estimates so viem makes ZERO RPC calls during broadcast
-  // (only eth_sendRawTransaction). This avoids 429 rate limiting breaking the broadcast.
+  // Phase 2 (ordered broadcast): sign + broadcast each pre-assigned nonce only
+  // after the previous raw tx was accepted. Later nonce txs must not enter the
+  // mempool if an earlier nonce fails before broadcast, otherwise a future user
+  // tx can fill the gap and release stale batch tail transactions.
   const txHashes: string[] = [];
   const results: Array<{ txId: string; success: boolean; txHash?: string; error?: string }> = [];
 
-  const broadcastPromises = prepared.map(async (item, i) => {
+  for (let i = 0; i < prepared.length; i++) {
+    const item = prepared[i];
     try {
       const est = gasEstimates[i];
       const txForSigning = {
@@ -1212,7 +1260,7 @@ async function processBatchTransactionNonAtomicInBackground(
         startReceiptPolling(item.txId, result.txHash, chainId);
       }
 
-      return { txId: item.txId, success: true, txHash: result.txHash };
+      results.push({ txId: item.txId, success: true, txHash: result.txHash });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       resetNonce(fromAddr, chainId);
@@ -1223,12 +1271,25 @@ async function processBatchTransactionNonAtomicInBackground(
         completedAt: Date.now(),
       });
 
-      return { txId: item.txId, success: false, error: errorMessage };
-    }
-  });
+      results.push({ txId: item.txId, success: false, error: errorMessage });
 
-  const broadcastResults = await Promise.all(broadcastPromises);
-  results.push(...broadcastResults);
+      const skippedError =
+        "Skipped because an earlier batch transaction failed to broadcast";
+      for (const skipped of prepared.slice(i + 1)) {
+        await updateTxInHistory(skipped.txId, {
+          status: "failed",
+          error: skippedError,
+          completedAt: Date.now(),
+        });
+        results.push({
+          txId: skipped.txId,
+          success: false,
+          error: skippedError,
+        });
+      }
+      break;
+    }
+  }
 
   // Collect tx hashes for bundle status
   for (const r of results) {
@@ -1280,7 +1341,7 @@ async function processBatchTransactionNonAtomicInBackground(
       await showNotification(
         `tx-partial-${bundleId}`,
         "Batch Partially Failed",
-        `${failedCount}/${calls.length} calls failed to broadcast on ${pending.chainName}`,
+        `${failedCount}/${calls.length} calls failed or were skipped on ${pending.chainName}`,
       );
     }
 
@@ -1640,46 +1701,58 @@ export async function processBatchTransactionAtomic7702InBackground(
       }
     : undefined;
 
-  // ERC-7821 calldata, target = the EOA itself (which becomes a smart account
-  // for the duration of this tx via the 7702 delegation designator).
-  const batchTx = encodeBatchCalls(calls, fromAddr);
-  const outerBatchTx = omitOuterValueForEip7702(batchTx);
-
   const displayName = functionNames?.length
     ? `Batch: ${functionNames.join(", ")}`
     : `Batch (${calls.length} calls)`;
 
-  // Single bundle-level tx history entry — atomic means one onchain tx, one
-  // hash, one explorer link, just like Bankr atomic batches.
-  //
-  // Keep metadata in the initial object literal. The service-worker production
-  // build minifies with Terser; it folded the previous conditional spreads to
-  // `...{}` and also removed late property assignment before this object
-  // escaped to chrome.storage, dropping bridge/swap metadata before storage.
-  const historyEntry: CompletedTransaction = {
-    id: bundleId,
-    status: "processing",
-    tx: {
-      from: fromAddr,
-      to: outerBatchTx.to,
-      data: outerBatchTx.data,
-      value: outerBatchTx.value,
+  let outerBatchTx: ReturnType<typeof omitOuterValueForEip7702> | null = null;
+  try {
+    // ERC-7821 calldata, target = the EOA itself (which becomes a smart account
+    // for the duration of this tx via the 7702 delegation designator).
+    const batchTx = encodeBatchCalls(calls, fromAddr);
+    outerBatchTx = omitOuterValueForEip7702(batchTx);
+
+    // Single bundle-level tx history entry — atomic means one onchain tx, one
+    // hash, one explorer link, just like Bankr atomic batches.
+    //
+    // Keep metadata in the initial object literal. The service-worker production
+    // build minifies with Terser; it folded the previous conditional spreads to
+    // `...{}` and also removed late property assignment before this object
+    // escaped to chrome.storage, dropping bridge/swap metadata before storage.
+    const historyEntry: CompletedTransaction = {
+      id: bundleId,
+      status: "processing",
+      tx: {
+        from: fromAddr,
+        to: outerBatchTx.to,
+        data: outerBatchTx.data,
+        value: outerBatchTx.value,
+        chainId,
+      },
+      origin: pending.origin,
+      favicon: pending.favicon,
+      chainName: pending.chainName,
       chainId,
-    },
-    origin: pending.origin,
-    favicon: pending.favicon,
-    chainName: pending.chainName,
-    chainId,
-    createdAt: pending.timestamp,
-    accountType: account.type as "privateKey" | "seedPhrase",
-    functionName: displayName,
-    accountId: pending.accountId,
-    swapMeta: historyMeta?.swapMeta,
-    bridge: historyMeta?.bridge,
-  };
-  await addTxToHistory(historyEntry);
+      createdAt: pending.timestamp,
+      accountType: account.type as "privateKey" | "seedPhrase",
+      functionName: displayName,
+      accountId: pending.accountId,
+      swapMeta: historyMeta?.swapMeta,
+      bridge: historyMeta?.bridge,
+    };
+    await addTxToHistory(historyEntry);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    await handleBatchFailure(bundleId, pending, message);
+    processingBundleIds.delete(bundleId);
+    return;
+  }
 
   try {
+    if (!outerBatchTx) {
+      throw new Error("Failed to encode batch transaction");
+    }
+
     // Reserve the nonce for our tx. If we also need to bundle an authorization,
     // that auth must reference EOA.nonce AFTER this tx is included — which is
     // txNonce + 1 (the EOA's nonce is bumped by inclusion before the auth list

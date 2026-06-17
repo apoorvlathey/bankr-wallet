@@ -21,13 +21,14 @@ import {
   addImpersonatorAccount,
   addSeedPhraseAccount,
   addSeedGroup,
+  removeSeedGroup,
   getSeedGroups,
   renameSeedGroup,
   updateSeedGroupCount,
   updateAccountDisplayName,
   validateBankrAccountAddressUpdate,
   updateBankrAccountAddress,
-  findAccountByAddress,
+  findNonImpersonatorAccountByAddress,
   convertToSeedPhraseAccount,
 } from "./accountStorage";
 import type { SeedPhraseAccount } from "./types";
@@ -37,7 +38,7 @@ import {
   isValidMnemonic,
   derivePrivateKey as deriveSeedPrivateKey,
 } from "./seedPhraseUtils";
-import { storeMnemonic, getMnemonic } from "./mnemonicStorage";
+import { storeMnemonic, getMnemonic, removeMnemonic } from "./mnemonicStorage";
 import { deriveAddress } from "./localSigner";
 import { validateEIP712TypedData } from "./eip712Validator";
 import {
@@ -45,6 +46,7 @@ import {
   getPendingTxRequests,
   clearExpiredTxRequests,
   updateBadge,
+  updatePendingTxRequestData,
 } from "./pendingTxStorage";
 import {
   removePendingSignatureRequest,
@@ -106,6 +108,23 @@ import {
   getClearSigningEnabled,
   setClearSigningEnabled,
 } from "./clearSigningHandlers";
+import {
+  addNetworkIfMissing,
+  deleteNetworkEntry,
+  ensureNetworksInfo,
+  setNetworkHiddenState,
+  updateNetworkEntry,
+} from "./networkStorage";
+import {
+  getStorageKeysWithPrefixes,
+  getWalletLocalStorageKeysToRemove,
+  WALLET_RESULT_STORAGE_PREFIXES,
+  WALLET_SYNC_STORAGE_KEYS,
+} from "./walletResetStorage";
+import {
+  CACHE_PRUNE_INTERVAL_MS,
+  pruneNonCriticalStorageCaches,
+} from "./storageCachePruner";
 
 // Session & cache management
 import {
@@ -113,10 +132,8 @@ import {
   updateCachedAutoLockTimeout,
   getCachedApiKey,
   setCachedApiKeyDirect,
-  clearCachedApiKey,
   getCachedPassword,
   setCachedVault,
-  clearCachedVault,
   getCachedVaultKey,
   getPasswordType,
   resolvePasswordType,
@@ -126,11 +143,11 @@ import {
   isWalletUnlocked,
   getPrivateKeyFromCache,
   getCurrentSessionId,
-  clearSessionStorage,
   tryRestoreSession,
   incrementUIConnections,
   decrementUIConnections,
   clearAllAuthState,
+  clearInMemoryAuthCache,
 } from "./sessionCache";
 
 // Auth handlers
@@ -231,7 +248,12 @@ import {
   getPendingAddChainRequests,
   PendingAddChainRequest,
 } from "./pendingAddChainStorage";
-import { addCustomToken, getCustomTokens } from "./customTokenStorage";
+import {
+  addCustomToken,
+  getCustomTokens,
+  removeCustomToken,
+  updateCustomToken,
+} from "./customTokenStorage";
 import { unhidePortfolioToken } from "./hiddenPortfolioTokens";
 import { getResolvedChainById } from "@/lib/chains";
 import type { NetworksInfo } from "@/types";
@@ -432,8 +454,7 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
 
 // Clear cache when service worker suspends
 self.addEventListener("suspend", () => {
-  clearCachedApiKey();
-  clearCachedVault();
+  clearInMemoryAuthCache();
 });
 
 // Clean up expired transactions, signature requests, and batch requests periodically
@@ -444,19 +465,27 @@ setInterval(() => {
   clearExpiredWalletConnectPendingRequests();
 }, 60000); // Every minute
 
+function pruneStorageCachesBestEffort(): void {
+  pruneNonCriticalStorageCaches().catch((error) => {
+    console.warn("[storage-cache] prune failed:", error);
+  });
+}
+
 // Clean up stale result keys from storage (from previous service worker sessions)
 chrome.storage.local.get(null).then((items) => {
-  const STALE_PREFIXES = [
-    "txResult:", "sigResult:", "rpcResult:",
-    "batchTxResult:", "batchTxAck:", "capabilitiesResult:", "callsStatusResult:",
-  ];
-  const staleKeys = Object.keys(items).filter((k) => {
-    if (!STALE_PREFIXES.some((p) => k.startsWith(p))) return false;
+  const staleKeys = getStorageKeysWithPrefixes(
+    items,
+    WALLET_RESULT_STORAGE_PREFIXES,
+  ).filter((k) => {
     const entry = items[k];
     return entry?.timestamp && Date.now() - entry.timestamp > 30 * 60 * 1000;
   });
   if (staleKeys.length > 0) chrome.storage.local.remove(staleKeys);
 });
+
+// Keep non-critical metadata/image caches from crowding wallet-critical state.
+pruneStorageCachesBestEffort();
+setInterval(pruneStorageCachesBestEffort, CACHE_PRUNE_INTERVAL_MS);
 
 // Clean up old bundle statuses on startup
 cleanupOldBundleStatuses();
@@ -708,6 +737,7 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "rejectBatchTransaction",
   "splitBatchIntoIndividualTxs",
   "removeCallFromPendingBatch",
+  "updatePendingTxRequestData",
   "updateCallInPendingBatch",
   "rejectSignatureRequest",
   "rejectAddChain",
@@ -787,9 +817,18 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "getClearSigningEnabled",
   "setClearSigningEnabled",
   "INVALIDATE_CLEAR_SIGNING_CACHE",
+  // Network settings mutate synced provider-visible chain metadata.
+  "ensureNetworksInfo",
+  "addNetwork",
+  "updateNetwork",
+  "setNetworkHidden",
+  "deleteNetwork",
   // Full token metadata may include watched/custom-token metadata.
   "resolveTokenMetadata",
   "lookupCustomToken",
+  "addCustomToken",
+  "updateCustomToken",
+  "removeCustomToken",
   "backfillAssetChanges",
   // EIP-7702 delegation management
   "getDelegationStatus",
@@ -1072,63 +1111,89 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "ensureNetworksInfo": {
+      ensureNetworksInfo().then(sendResponse);
+      return true;
+    }
+
+    case "addNetwork": {
+      addNetworkIfMissing({
+        chainName: message.chainName,
+        entry: message.entry,
+      }).then(sendResponse);
+      return true;
+    }
+
+    case "updateNetwork": {
+      updateNetworkEntry({
+        chainName: message.chainName,
+        nextChainName: message.nextChainName,
+        entry: message.entry,
+      }).then(sendResponse);
+      return true;
+    }
+
+    case "setNetworkHidden": {
+      (async () => {
+        const activeAccount = await getActiveAccount();
+        const result = await setNetworkHiddenState({
+          chainName: message.chainName,
+          hidden: message.hidden,
+          activeAccountType: activeAccount?.type,
+        });
+        sendResponse(result);
+      })();
+      return true;
+    }
+
+    case "deleteNetwork": {
+      (async () => {
+        const activeAccount = await getActiveAccount();
+        const result = await deleteNetworkEntry({
+          chainName: message.chainName,
+          activeAccountType: activeAccount?.type,
+        });
+        sendResponse(result);
+      })();
+      return true;
+    }
+
     case "confirmAddChain": {
       (async () => {
         const requests = await getPendingAddChainRequests();
         const pending = requests.find((r) => r.id === message.requestId);
         if (pending) {
-          const { networksInfo } = await chrome.storage.sync.get("networksInfo");
-          const nets = networksInfo || {};
-
-          const existingName = Object.keys(nets).find(
-            (name) => nets[name].chainId === pending.chainId,
-          );
-
           const name = message.chainName || pending.chainName || `Chain ${pending.chainId}`;
           const rpcUrl = message.rpcUrl || pending.rpcUrls?.[0] || "";
           const explorer =
             message.explorer || pending.blockExplorerUrls?.[0] || "";
           const nativeCurrency =
             message.nativeCurrency || pending.nativeCurrency;
-
-          if (!existingName) {
-            nets[name] = {
+          const activeAccount = await getActiveAccount();
+          const addResult = await addNetworkIfMissing({
+            chainName: name,
+            entry: {
               chainId: message.chainId || pending.chainId,
               rpcUrl,
               isCustom: true,
               explorer: explorer || undefined,
               nativeCurrency,
-            };
+            },
+            switchIfSupportedForAccountType: activeAccount?.type ?? null,
+          });
+
+          if (!addResult.success) {
+            sendResponse(addResult);
+            return;
           }
-
-          const resolvedName = existingName || name;
-          const resolvedRpcUrl = existingName ? nets[existingName].rpcUrl : rpcUrl;
-          const activeAccount = await getActiveAccount();
-          const resolvedChain = getResolvedChainById(
-            message.chainId || pending.chainId,
-            nets,
-          );
-          const shouldSwitch =
-            activeAccount?.type !== "bankr" ||
-            resolvedChain?.isBankrSupported === true;
-
-          await chrome.storage.sync.set(
-            shouldSwitch
-              ? {
-                  networksInfo: nets,
-                  chainName: resolvedName,
-                }
-              : {
-                  networksInfo: nets,
-                },
-          );
 
           await removePendingAddChainRequest(pending.id);
           const result = {
             success: true,
-            rpcUrl: resolvedRpcUrl,
-            chainName: resolvedName,
-            shouldSwitch,
+            rpcUrl:
+              addResult.networksInfo[addResult.chainName]?.rpcUrl || rpcUrl,
+            chainName: addResult.chainName,
+            shouldSwitch: addResult.shouldSwitch,
           };
           await writeResultToStorage(`addChainResult:${pending.id}`, result);
           sendResponse(result);
@@ -1334,6 +1399,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "updatePendingTxRequestData": {
+      updatePendingTxRequestData(message.txId, message.newData)
+        .then(() => sendResponse({ success: true }))
+        .catch((err) =>
+          sendResponse({
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      return true;
+    }
+
     case "addToCrossDappBatch": {
       handleAddToCrossDappBatch(message.txId).then((result) => {
         sendResponse(result);
@@ -1437,9 +1514,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "clearApiKeyCache": {
-      clearCachedApiKey();
-      sendResponse({ success: true });
-      return false;
+      (async () => {
+        await clearAllAuthState();
+        chrome.runtime.sendMessage({ type: "walletLockedExternal" }).catch(() => {});
+        sendResponse({ success: true });
+      })();
+      return true;
     }
 
     case "unlockWallet": {
@@ -1715,7 +1795,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const startIdx = Math.max(0, Math.floor(start ?? 0));
           const total = Math.max(1, Math.min(20, Math.floor(count ?? 5)));
           const existingAddresses = new Set(
-            (await getAccounts()).map((a) => a.address.toLowerCase()),
+            (await getAccounts())
+              .filter((a) => a.type !== "impersonator")
+              .map((a) => a.address.toLowerCase()),
           );
           const items = [] as Array<{
             index: number;
@@ -1812,19 +1894,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return;
           }
 
-          // Create seed group
-          const group = await addSeedGroup(message.name);
-
-          // Encrypt and store mnemonic
-          await storeMnemonic(group.id, mnemonic, password);
-
-          const importedAccounts: SeedPhraseAccount[] = [];
+          const importableCandidates: Array<{
+            index: number;
+            address: string;
+          }> = [];
           for (const idx of indices) {
             const privateKey = deriveSeedPrivateKey(mnemonic, idx);
             const address = deriveAddress(privateKey);
+            const existingAccount =
+              await findNonImpersonatorAccountByAddress(address);
+            if (!existingAccount || existingAccount.type === "privateKey") {
+              importableCandidates.push({ index: idx, address });
+            }
+          }
 
+          if (importableCandidates.length === 0) {
+            sendResponse({
+              success: false,
+              error: "All selected addresses already exist in this wallet",
+            });
+            return;
+          }
+
+          const group = await addSeedGroup(message.name);
+          let mnemonicStored = false;
+
+          // Store the mnemonic only after at least one selected address can be
+          // imported or converted. Failed duplicate-only imports must not leave
+          // orphaned seed material in storage.
+          try {
+            await storeMnemonic(group.id, mnemonic, password);
+            mnemonicStored = true;
+          } catch (error) {
+            await removeSeedGroup(group.id);
+            throw error;
+          }
+
+          const importedAccounts: SeedPhraseAccount[] = [];
+          for (const candidate of importableCandidates) {
             // Check if address already exists (PK → seed phrase conversion)
-            const existingAccount = await findAccountByAddress(address);
+            const existingAccount =
+              await findNonImpersonatorAccountByAddress(candidate.address);
             let account: SeedPhraseAccount;
 
             if (existingAccount) {
@@ -1832,20 +1942,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 const converted = await convertToSeedPhraseAccount(
                   existingAccount.id,
                   group.id,
-                  idx,
+                  candidate.index,
                 );
                 if (!converted) throw new Error("Failed to convert account");
                 account = converted;
               } else {
-                // Skip duplicates that are already seed/bankr/impersonator.
+                // Skip duplicates that are already seed/bankr.
                 // We don't want to fail the whole import for one collision.
                 continue;
               }
             } else {
+              const privateKey = deriveSeedPrivateKey(
+                mnemonic,
+                candidate.index,
+              );
               account = await addSeedPhraseAccount(
-                address,
+                candidate.address,
                 group.id,
-                idx,
+                candidate.index,
                 // Only apply the user-supplied display name to the first
                 // imported account so multi-imports don't collide on name.
                 importedAccounts.length === 0
@@ -1858,7 +1972,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
 
           if (importedAccounts.length === 0) {
-            // Every selected index already mapped to a non-PK account
+            if (mnemonicStored) await removeMnemonic(group.id);
+            await removeSeedGroup(group.id);
             sendResponse({
               success: false,
               error: "All selected addresses already exist in this wallet",
@@ -1976,7 +2091,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const privateKey = deriveSeedPrivateKey(mnemonic, idx);
             const address = deriveAddress(privateKey);
 
-            const existingAccount = await findAccountByAddress(address);
+            const existingAccount =
+              await findNonImpersonatorAccountByAddress(address);
             let account: SeedPhraseAccount;
 
             if (existingAccount) {
@@ -1989,7 +2105,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 if (!converted) throw new Error("Failed to convert account");
                 account = converted;
               } else {
-                // Already a seed-phrase / bankr / impersonator account.
+                // Already a seed-phrase / bankr account.
                 // Skip silently so a multi-derive doesn't fail on one collision.
                 continue;
               }
@@ -2794,6 +2910,76 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "addCustomToken": {
+      (async () => {
+        try {
+          const token: Parameters<typeof addCustomToken>[0] = {
+            chainId: Number(message.chainId),
+            contractAddress: String(message.contractAddress || ""),
+            symbol: String(message.symbol || ""),
+            name: String(message.name || ""),
+            decimals: Number(message.decimals),
+          };
+          if (typeof message.image === "string") {
+            token.image = message.image;
+          }
+          await addCustomToken(token);
+          sendResponse({ success: true });
+        } catch (err) {
+          sendResponse({
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })();
+      return true;
+    }
+
+    case "updateCustomToken": {
+      (async () => {
+        try {
+          const updates: Parameters<typeof updateCustomToken>[2] = {};
+          if ("name" in message) updates.name = String(message.name || "");
+          if ("symbol" in message) updates.symbol = String(message.symbol || "");
+          if ("decimals" in message) updates.decimals = Number(message.decimals);
+          if ("image" in message && typeof message.image === "string") {
+            updates.image = message.image;
+          }
+
+          await updateCustomToken(
+            Number(message.chainId),
+            String(message.contractAddress || ""),
+            updates,
+          );
+          sendResponse({ success: true });
+        } catch (err) {
+          sendResponse({
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })();
+      return true;
+    }
+
+    case "removeCustomToken": {
+      (async () => {
+        try {
+          await removeCustomToken(
+            Number(message.chainId),
+            String(message.contractAddress || ""),
+          );
+          sendResponse({ success: true });
+        } catch (err) {
+          sendResponse({
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })();
+      return true;
+    }
+
     case "fetchTokenPrice": {
       fetchTokenPrice(message.chainId, message.address)
         .then((priceUsd) =>
@@ -3085,53 +3271,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        // SECURITY: Perform full memory cleanup first (before async storage operations)
-        clearCachedApiKey();
-        clearCachedVault();
-
-        await performSecurityReset();
         try {
+          // SECURITY: Perform full auth cleanup first (before async storage operations)
+          await clearAllAuthState();
+
+          await performSecurityReset();
+
           const allLocalStorage = await chrome.storage.local.get(null);
-          const notificationKeys = Object.keys(allLocalStorage).filter((key) =>
-            key.startsWith("notification-"),
-          );
+          const localKeys = getWalletLocalStorageKeysToRemove(allLocalStorage);
 
           await Promise.all([
-            chrome.storage.local.remove([
-              "encryptedApiKey",
-              "encryptedApiKeyVault",
-              "encryptedVaultKeyMaster",
-              "encryptedVaultKeyAgent",
-              "agentPasswordEnabled",
-              "txHistory",
-              "pendingTxRequests",
-              "pendingSignatureRequests",
-              "chatHistory",
-              "pkVault",
-              "mnemonicVault",
-              "seedGroups",
-              "accounts",
-              "portfolioSnapshots",
-              "hiddenPortfolioTokens",
-              "ensIdentityCache",
-              "ensAvatarImageCache",
-              "customDelegates",
-              ...notificationKeys,
-            ]),
-            chrome.storage.sync.remove([
-              "address",
-              "displayAddress",
-              "networksInfo",
-              "chainName",
-              "autoLockTimeout",
-              "isArcBrowser",
-              "hidePortfolioValue",
-              "sidePanelVerified",
-              "sidePanelMode",
-              "activeAccountId",
-              "tabAccounts",
-            ]),
-            clearSessionStorage(),
+            chrome.storage.local.remove(localKeys),
+            chrome.storage.sync.remove([...WALLET_SYNC_STORAGE_KEYS]),
           ]);
 
           await chrome.action.setBadgeText({ text: "" });

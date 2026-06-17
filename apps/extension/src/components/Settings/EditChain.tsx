@@ -42,9 +42,15 @@ function EditChain({
   back: () => void;
   onSaved?: (chain: { chainName: string; chainId: number }) => void;
 }) {
-  const { networksInfo, setNetworksInfo } = useNetworks();
+  const { networksInfo } = useNetworks();
 
-  const isCustom = networksInfo?.[chainName]?.isCustom === true;
+  const currentEntry = networksInfo?.[chainName];
+  const isCustom = currentEntry?.isCustom === true;
+  const currentChainId = currentEntry?.chainId;
+  const currentRpcUrl = currentEntry?.rpcUrl;
+  const currentExplorer = currentEntry?.explorer;
+  const currentCurrencySymbol = currentEntry?.nativeCurrency?.symbol;
+  const currentCurrencyDecimals = currentEntry?.nativeCurrency?.decimals;
 
   const [newChainName, setNewChainName] = useState<string>(chainName);
   const [chainId, setChainId] = useState<string>();
@@ -95,50 +101,71 @@ function EditChain({
         }
       }
 
-      doSave();
+      await doSave();
     } else {
       setIsBtnLoading(false);
     }
   };
 
-  const doSave = () => {
+  const doSave = async () => {
     if (!newChainName || !chainId || !rpc || !networksInfo) return;
 
     const savedChainId = parseInt(chainId);
     const savedChainName = newChainName;
 
-    setNetworksInfo((_networksInfo) => {
-      if (newChainName !== chainName && _networksInfo) {
-        delete _networksInfo[chainName];
-      }
-      return {
-        ..._networksInfo,
-        [newChainName]: {
-          chainId: savedChainId,
-          rpcUrl: rpc,
-          ...(isCustom && {
-            isCustom: true,
-            explorer: explorer.replace(/\/+$/, "") || undefined,
-            nativeCurrency: {
-              name: currencySymbol,
-              symbol: currencySymbol,
-              decimals: parseInt(currencyDecimals) || 18,
-            },
-          }),
-          // Preserve hidden state
-          hidden: networksInfo[chainName]?.hidden,
+    const result = await new Promise<{
+      success: boolean;
+      chainName?: string;
+      chainId?: number;
+      error?: string;
+    }>((resolve) => {
+      chrome.runtime.sendMessage(
+        {
+          type: "updateNetwork",
+          chainName,
+          nextChainName: savedChainName,
+          entry: {
+            chainId: savedChainId,
+            rpcUrl: rpc,
+            ...(isCustom && {
+              isCustom: true,
+              explorer: explorer.replace(/\/+$/, "") || undefined,
+              nativeCurrency: {
+                name: currencySymbol,
+                symbol: currencySymbol,
+                decimals: parseInt(currencyDecimals) || 18,
+              },
+            }),
+          },
         },
-      };
+        (response) =>
+          resolve(
+            response ?? {
+              success: false,
+              error: chrome.runtime.lastError?.message || "Failed to save network.",
+            },
+          ),
+      );
     });
-    onSaved?.({ chainName: savedChainName, chainId: savedChainId });
+
+    if (!result.success) {
+      setRpcWarning(result.error || "Failed to save network.");
+      setIsBtnLoading(false);
+      return;
+    }
+
+    onSaved?.({
+      chainName: result.chainName || savedChainName,
+      chainId: result.chainId || savedChainId,
+    });
     back();
     setIsBtnLoading(false);
   };
 
-  const forceSave = () => {
+  const forceSave = async () => {
     setRpcWarning("");
     setForceAllowed(false);
-    doSave();
+    await doSave();
   };
 
   const numericChainId = chainId ? Number.parseInt(chainId, 10) : NaN;
@@ -147,15 +174,21 @@ function EditChain({
     : "";
 
   useEffect(() => {
-    if (networksInfo) {
-      const entry = networksInfo[chainName];
-      setChainId(entry.chainId.toString());
-      setRpc(entry.rpcUrl);
-      setExplorer(entry.explorer ?? "");
-      setCurrencySymbol(entry.nativeCurrency?.symbol ?? "ETH");
-      setCurrencyDecimals((entry.nativeCurrency?.decimals ?? 18).toString());
-    }
-  }, [networksInfo, chainName]);
+    if (!currentChainId || !currentRpcUrl) return;
+    setNewChainName(chainName);
+    setChainId(currentChainId.toString());
+    setRpc(currentRpcUrl);
+    setExplorer(currentExplorer ?? "");
+    setCurrencySymbol(currentCurrencySymbol ?? "ETH");
+    setCurrencyDecimals((currentCurrencyDecimals ?? 18).toString());
+  }, [
+    chainName,
+    currentChainId,
+    currentRpcUrl,
+    currentExplorer,
+    currentCurrencySymbol,
+    currentCurrencyDecimals,
+  ]);
 
   return (
     <VStack spacing={4} align="stretch">

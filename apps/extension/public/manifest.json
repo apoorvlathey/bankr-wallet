@@ -59,7 +59,8 @@
     "sidePanel",
     "notifications",
     "tabs",
-    "declarativeNetRequestWithHostAccess"
+    "declarativeNetRequestWithHostAccess",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "https://*/*",

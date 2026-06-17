@@ -72,44 +72,44 @@ export async function processForceInclusionBatchBankr(
     return;
   }
 
-  // Encode calls into single ERC-7821 tx
-  const { encodeBatchCalls } = await import("./batchTxHandlers");
-  const batchTx = encodeBatchCalls(pending.params.calls, account.address);
-
-  // Create synthetic L2 tx from the encoded batch
-  const syntheticL2Tx: TransactionParams = {
-    from: account.address,
-    to: batchTx.to,
-    data: batchTx.data,
-    value: batchTx.value,
-    chainId: pending.chainId,
-  };
-
-  const displayName = functionNames?.length
-    ? `Batch: ${functionNames.join(", ")} (Force Inclusion)`
-    : `Batch (${pending.params.calls.length} calls) (Force Inclusion)`;
-
-  // Save to tx history with forceInclusionMeta from the start
-  await addTxToHistory({
-    id: bundleId,
-    status: "processing",
-    tx: syntheticL2Tx,
-    origin: pending.origin,
-    favicon: pending.favicon,
-    chainName: pending.chainName,
-    chainId: pending.chainId,
-    createdAt: pending.timestamp,
-    accountType: "bankr",
-    functionName: displayName,
-    forceInclusionMeta: {
-      l1TxHash: "",
-      l1ChainId: info.l1ChainId,
-      l2ChainId: pending.chainId,
-      l2Confirmed: false,
-    },
-  });
-
   try {
+    // Encode calls into single ERC-7821 tx
+    const { encodeBatchCalls } = await import("./batchTxHandlers");
+    const batchTx = encodeBatchCalls(pending.params.calls, account.address);
+
+    // Create synthetic L2 tx from the encoded batch
+    const syntheticL2Tx: TransactionParams = {
+      from: account.address,
+      to: batchTx.to,
+      data: batchTx.data,
+      value: batchTx.value,
+      chainId: pending.chainId,
+    };
+
+    const displayName = functionNames?.length
+      ? `Batch: ${functionNames.join(", ")} (Force Inclusion)`
+      : `Batch (${pending.params.calls.length} calls) (Force Inclusion)`;
+
+    // Save to tx history with forceInclusionMeta from the start
+    await addTxToHistory({
+      id: bundleId,
+      status: "processing",
+      tx: syntheticL2Tx,
+      origin: pending.origin,
+      favicon: pending.favicon,
+      chainName: pending.chainName,
+      chainId: pending.chainId,
+      createdAt: pending.timestamp,
+      accountType: "bankr",
+      functionName: displayName,
+      forceInclusionMeta: {
+        l1TxHash: "",
+        l1ChainId: info.l1ChainId,
+        l2ChainId: pending.chainId,
+        l2Confirmed: false,
+      },
+    });
+
     // Stage 1: Build L1 deposit tx
     await progress("building");
     const l1TxParams = await buildL1DepositTxParams(syntheticL2Tx, info);

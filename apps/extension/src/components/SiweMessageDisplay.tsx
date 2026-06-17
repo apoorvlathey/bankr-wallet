@@ -6,6 +6,7 @@ import {
   Collapse,
   HStack,
   IconButton,
+  Image,
   Link,
   Text,
   VStack,
@@ -24,6 +25,8 @@ interface SiweMessageDisplayProps {
   analysis: SiweAnalysis;
   connectedChainId: number;
   chainName: string;
+  faviconUrl?: string | null;
+  fallbackFaviconUrl?: string;
 }
 
 function formatDate(value?: string): string {
@@ -140,6 +143,8 @@ export default function SiweMessageDisplay({
   analysis,
   connectedChainId,
   chainName,
+  faviconUrl,
+  fallbackFaviconUrl,
 }: SiweMessageDisplayProps) {
   const { tokens } = useTheme();
   const [rawOpen, setRawOpen] = useState(false);
@@ -168,35 +173,71 @@ export default function SiweMessageDisplay({
       >
         <VStack spacing={0} align="stretch">
           <Box p={3}>
-            <HStack justify="space-between" align="start" spacing={3}>
-              <VStack align="start" spacing={1} minW={0}>
-                <Text
-                  fontSize="lg"
+            <VStack align="stretch" spacing={2}>
+              <HStack justify="space-between" align="start" spacing={3}>
+                <HStack align="start" spacing={2.5} minW={0} flex="1">
+                  {faviconUrl && (
+                    <Box
+                      bg="whiteAlpha.900"
+                      border="1.5px solid"
+                      borderColor="border.subtle"
+                      borderRadius="md"
+                      p={1}
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                      flexShrink={0}
+                    >
+                      <Image
+                        src={faviconUrl}
+                        alt=""
+                        boxSize="20px"
+                        fallback={<Box boxSize="20px" bg="surface.sunken" borderRadius="sm" />}
+                        onError={(event) => {
+                          if (!fallbackFaviconUrl) return;
+                          const target = event.target as HTMLImageElement;
+                          if (target.src !== fallbackFaviconUrl) {
+                            target.src = fallbackFaviconUrl;
+                          }
+                        }}
+                      />
+                    </Box>
+                  )}
+                  <Text
+                    fontSize="lg"
+                    fontWeight="900"
+                    color="text.primary"
+                    lineHeight="1.1"
+                    wordBreak="break-word"
+                    minW={0}
+                  >
+                    Sign in to {displayDomain}
+                  </Text>
+                </HStack>
+                <Badge
+                  bg={status.bg}
+                  color={status.color}
+                  border="1px solid"
+                  borderColor="border.default"
+                  fontSize="2xs"
                   fontWeight="900"
-                  color="text.primary"
-                  lineHeight="1.1"
-                  wordBreak="break-word"
+                  px={2}
+                  py={1}
+                  flexShrink={0}
                 >
-                  Sign in to {displayDomain}
-                </Text>
-                <Text fontSize="xs" color="text.secondary" fontWeight="700">
-                  {fields.statement || "Authenticate with your Ethereum account"}
-                </Text>
-              </VStack>
-              <Badge
-                bg={status.bg}
-                color={status.color}
-                border="1px solid"
-                borderColor="border.default"
-                fontSize="2xs"
-                fontWeight="900"
-                px={2}
-                py={1}
-                flexShrink={0}
+                  {status.label}
+                </Badge>
+              </HStack>
+              <Text
+                fontSize="xs"
+                color="text.secondary"
+                fontWeight="700"
+                lineHeight="short"
+                wordBreak="break-word"
               >
-                {status.label}
-              </Badge>
-            </HStack>
+                {fields.statement || "Authenticate with your Ethereum account"}
+              </Text>
+            </VStack>
           </Box>
 
           <DetailRow label="Site">

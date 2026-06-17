@@ -3,6 +3,8 @@
  * Key: "customTokens" in chrome.storage.local
  */
 
+import { withStorageLock } from "./storageLock";
+
 export interface CustomToken {
   contractAddress: string; // always lowercase
   chainId: number;
@@ -21,6 +23,7 @@ export interface CustomToken {
 }
 
 const STORAGE_KEY = "customTokens";
+const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
 
 export async function getCustomTokens(): Promise<CustomToken[]> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
@@ -30,16 +33,18 @@ export async function getCustomTokens(): Promise<CustomToken[]> {
 export async function addCustomToken(
   token: Omit<CustomToken, "addedAt">
 ): Promise<void> {
-  const existing = await getCustomTokens();
-  const key = `${token.chainId}-${token.contractAddress.toLowerCase()}`;
-  if (existing.some((t) => `${t.chainId}-${t.contractAddress}` === key)) return;
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const existing = await getCustomTokens();
+    const key = `${token.chainId}-${token.contractAddress.toLowerCase()}`;
+    if (existing.some((t) => `${t.chainId}-${t.contractAddress}` === key)) return;
 
-  existing.push({
-    ...token,
-    contractAddress: token.contractAddress.toLowerCase(),
-    addedAt: Date.now(),
+    existing.push({
+      ...token,
+      contractAddress: token.contractAddress.toLowerCase(),
+      addedAt: Date.now(),
+    });
+    await chrome.storage.local.set({ [STORAGE_KEY]: existing });
   });
-  await chrome.storage.local.set({ [STORAGE_KEY]: existing });
 }
 
 export async function updateCustomToken(
@@ -47,24 +52,28 @@ export async function updateCustomToken(
   contractAddress: string,
   updates: Partial<Pick<CustomToken, "name" | "symbol" | "decimals" | "image">>
 ): Promise<void> {
-  const existing = await getCustomTokens();
-  const addr = contractAddress.toLowerCase();
-  const idx = existing.findIndex(
-    (t) => t.chainId === chainId && t.contractAddress === addr
-  );
-  if (idx === -1) return;
-  existing[idx] = { ...existing[idx], ...updates };
-  await chrome.storage.local.set({ [STORAGE_KEY]: existing });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const existing = await getCustomTokens();
+    const addr = contractAddress.toLowerCase();
+    const idx = existing.findIndex(
+      (t) => t.chainId === chainId && t.contractAddress === addr
+    );
+    if (idx === -1) return;
+    existing[idx] = { ...existing[idx], ...updates };
+    await chrome.storage.local.set({ [STORAGE_KEY]: existing });
+  });
 }
 
 export async function removeCustomToken(
   chainId: number,
   contractAddress: string
 ): Promise<void> {
-  const existing = await getCustomTokens();
-  const addr = contractAddress.toLowerCase();
-  const filtered = existing.filter(
-    (t) => !(t.chainId === chainId && t.contractAddress === addr)
-  );
-  await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const existing = await getCustomTokens();
+    const addr = contractAddress.toLowerCase();
+    const filtered = existing.filter(
+      (t) => !(t.chainId === chainId && t.contractAddress === addr)
+    );
+    await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  });
 }

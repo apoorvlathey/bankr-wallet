@@ -13,6 +13,12 @@ import {
   Image,
   Icon,
   Tooltip,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverBody,
+  PopoverArrow,
+  Portal,
   Switch,
   Collapse,
 } from "@chakra-ui/react";
@@ -26,6 +32,7 @@ import {
   CheckIcon,
   ExternalLinkIcon,
   SettingsIcon,
+  WarningIcon,
 } from "@chakra-ui/icons";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { CalldataDigestDisplay } from "@/components/DigestDisplay";
@@ -107,6 +114,67 @@ interface TransactionConfirmationProps {
 }
 
 type ConfirmationState = "ready" | "submitting" | "sent" | "error" | "forceInclusion";
+
+type ParsedTransactionValue =
+  | { ok: true; wei: bigint }
+  | { ok: false; raw: string };
+
+const WEI_PER_NATIVE_UNIT = 1_000_000_000_000_000_000n;
+const COMPACT_NATIVE_VALUE_DECIMALS = 6;
+const COMPACT_NATIVE_VALUE_UNIT =
+  WEI_PER_NATIVE_UNIT / 10n ** BigInt(COMPACT_NATIVE_VALUE_DECIMALS);
+
+function parseTransactionValueWei(value: string | undefined): ParsedTransactionValue {
+  if (!value || value === "0" || value === "0x0" || value === "0x") {
+    return { ok: true, wei: 0n };
+  }
+  try {
+    const wei = BigInt(value);
+    return wei >= 0n ? { ok: true, wei } : { ok: false, raw: value };
+  } catch {
+    return { ok: false, raw: value };
+  }
+}
+
+function formatNativeValueExact(wei: bigint, symbol: string): string {
+  const whole = wei / WEI_PER_NATIVE_UNIT;
+  const fractional = wei % WEI_PER_NATIVE_UNIT;
+
+  if (fractional === 0n) {
+    return `${whole.toString()} ${symbol}`;
+  }
+
+  const fractionalText = fractional
+    .toString()
+    .padStart(18, "0")
+    .replace(/0+$/, "");
+
+  return `${whole.toString()}.${fractionalText} ${symbol}`;
+}
+
+function formatNativeValueCompact(wei: bigint, symbol: string): string {
+  if (wei === 0n) {
+    return `0 ${symbol}`;
+  }
+
+  const whole = wei / WEI_PER_NATIVE_UNIT;
+  const fractional = wei % WEI_PER_NATIVE_UNIT;
+
+  if (whole === 0n && fractional < COMPACT_NATIVE_VALUE_UNIT) {
+    return `<0.000001 ${symbol}`;
+  }
+
+  const compactFractional = (fractional / COMPACT_NATIVE_VALUE_UNIT)
+    .toString()
+    .padStart(COMPACT_NATIVE_VALUE_DECIMALS, "0")
+    .replace(/0+$/, "");
+
+  if (!compactFractional) {
+    return `${whole.toString()} ${symbol}`;
+  }
+
+  return `${whole.toString()}.${compactFractional} ${symbol}`;
+}
 
 // Copy button component
 function CopyButton({
@@ -289,24 +357,31 @@ function TransactionConfirmation({
   const delegation7702 = txRequest.delegation7702Meta;
   const is7702Revoke = delegation7702?.kind === "revoke";
   const is7702SetDelegate = delegation7702?.kind === "setDelegate";
+  const { tx, origin, chainName, favicon } = txRequest;
+  const parsedTxValue = useMemo(
+    () => parseTransactionValueWei(tx.value),
+    [tx.value],
+  );
+  const isValueMalformed = !parsedTxValue.ok;
   // Detect ERC20 approve calls. The dedicated approval surface is clearer
   // than the generic ERC-7730 card, so valid approvals skip ClearSigningView
   // below and keep the raw calldata panel collapsed for inspection.
   const parsedApproval = useMemo(
     () =>
-      txRequest.tx.to && txRequest.tx.data
-        ? parseApproveCalldata(txRequest.tx.data)
+      tx.to && tx.data
+        ? parseApproveCalldata(tx.data)
         : null,
-    [txRequest.tx.to, txRequest.tx.data],
+    [tx.to, tx.data],
   );
   // Clear-signing resolution lifecycle — "loading" until the descriptor
   // fetch settles. Holding off the raw CalldataDecoder until then prevents a
   // flash-open / collapse glitch when a descriptor matches.
   const clearSigningEligible = !!(
-    txRequest.tx.data &&
-    txRequest.tx.data !== "0x" &&
-    txRequest.tx.to &&
-    !parsedApproval
+    tx.data &&
+    tx.data !== "0x" &&
+    tx.to &&
+    !parsedApproval &&
+    !isValueMalformed
   );
   const [clearSigningStatus, setClearSigningStatus] = useState<
     "loading" | "matched" | "absent"
@@ -327,6 +402,13 @@ function TransactionConfirmation({
   const [gasValid, setGasValid] = useState(true);
   const [forceInclusion, setForceInclusion] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  useEffect(() => {
+    if (!isValueMalformed) return;
+    setGasValid(false);
+    setSimulationReverted(false);
+    setSimulationUnavailable(false);
+  }, [isValueMalformed, txRequest.id]);
 
   // Split-mode state. When this tx is part of a user-split wallet_sendCalls
   // bundle we need to (a) gate Confirm until the prior split tx lands and
@@ -366,7 +448,6 @@ function TransactionConfirmation({
     return { l1ChainId: entry.l1ChainId, l1ChainName: entry.l1ChainName };
   }, [txRequest.tx.chainId, accountType, delegation7702]);
 
-  const { tx, origin, chainName, favicon } = txRequest;
   const isInternalWalletChan = origin === "WalletChan";
   const internalSendTokenLabel = origin.startsWith("Send ")
     ? origin.slice(5).trim()
@@ -398,6 +479,7 @@ function TransactionConfirmation({
   // Reason the button is disabled, or null if it's enabled. Used for the
   // tooltip popover. The button is rendered ONLY when canBatchAccount is true.
   const addToBatchDisabledReason = useMemo<string | null>(() => {
+    if (isValueMalformed) return "Transaction value is malformed.";
     if (!crossDappBatch) return null; // first add — no constraints yet
     if (
       crossDappBatch.fromAddress.toLowerCase() !== tx.from.toLowerCase()
@@ -408,7 +490,7 @@ function TransactionConfirmation({
       return `Pending batch on ${crossDappBatch.chainName} — clear it first.`;
     }
     return null;
-  }, [crossDappBatch, tx.from, tx.chainId]);
+  }, [crossDappBatch, isValueMalformed, tx.from, tx.chainId]);
 
   const handleAddToBatch = () => {
     if (isAddingToBatch) return;
@@ -607,17 +689,23 @@ function TransactionConfirmation({
   );
   const isCalldataMalformed = calldataValidation.malformed;
 
-  const formatValue = (value: string | undefined): string => {
-    if (!value || value === "0" || value === "0x0") {
-      return `0 ${nativeSym}`;
+  const nativeValueDisplay = useMemo(() => {
+    if (!parsedTxValue.ok) {
+      return {
+        compact: "Invalid value",
+        exact: null,
+        showExact: false,
+      };
     }
-    const wei = BigInt(value);
-    const eth = Number(wei) / 1e18;
-    return `${eth.toFixed(6)} ${nativeSym}`;
-  };
 
-  const isValueZero =
-    !tx.value || tx.value === "0" || tx.value === "0x0" || tx.value === "0x";
+    return {
+      compact: formatNativeValueCompact(parsedTxValue.wei, nativeSym),
+      exact: formatNativeValueExact(parsedTxValue.wei, nativeSym),
+      showExact: parsedTxValue.wei > 0n,
+    };
+  }, [nativeSym, parsedTxValue]);
+
+  const isValueZero = parsedTxValue.ok && parsedTxValue.wei === 0n;
 
   // Force inclusion progress screen
   if (state === "forceInclusion" && forceInclusionInfo) {
@@ -879,10 +967,9 @@ function TransactionConfirmation({
               value={JSON.stringify(
                 {
                   to: tx.to || null,
-                  value:
-                    tx.value && tx.value !== "0" && tx.value !== "0x0"
-                      ? BigInt(tx.value).toString()
-                      : "0",
+                  value: parsedTxValue.ok
+                    ? parsedTxValue.wei.toString()
+                    : String(tx.value ?? ""),
                   data: tx.data || "0x",
                 },
                 null,
@@ -939,6 +1026,36 @@ function TransactionConfirmation({
             reason={calldataValidation.reason!}
             functionName={calldataValidation.functionName}
           />
+        )}
+
+        {isValueMalformed && (
+          <HStack
+            align="flex-start"
+            spacing={3}
+            p={3}
+            bg="status.error.bg"
+            color="status.error.fg"
+            border={tokens.borders.medium}
+            borderColor="status.error.border"
+            borderRadius="lg"
+            boxShadow="card"
+          >
+            <WarningIcon boxSize={4} flexShrink={0} mt={0.5} />
+            <VStack spacing={1} align="stretch">
+              <Text
+                fontSize="sm"
+                fontWeight="900"
+                textTransform="uppercase"
+                lineHeight="short"
+              >
+                Malformed transaction value
+              </Text>
+              <Text fontSize="xs" fontWeight="600" lineHeight="short">
+                This request includes an invalid native-token value. Reject it
+                and ask the site to send a valid transaction.
+              </Text>
+            </VStack>
+          </HStack>
         )}
 
         {/* ERC20 Approve detection — shown above tx info when present.
@@ -1538,16 +1655,65 @@ function TransactionConfirmation({
                 >
                   Value
                 </Text>
-                <Text fontSize="xs" fontWeight="700" color="text.primary">
-                  {formatValue(tx.value)}
-                </Text>
+                {nativeValueDisplay.showExact ? (
+                  <Popover
+                    trigger="hover"
+                    placement="top-end"
+                    openDelay={150}
+                    closeDelay={100}
+                  >
+                    <PopoverTrigger>
+                      <Text
+                        fontSize="xs"
+                        fontWeight="700"
+                        color="text.primary"
+                        cursor="help"
+                        maxW="210px"
+                        isTruncated
+                        textAlign="right"
+                        tabIndex={0}
+                      >
+                        {nativeValueDisplay.compact}
+                      </Text>
+                    </PopoverTrigger>
+                    <Portal>
+                      <PopoverContent maxW="260px" w="max-content" zIndex="popover">
+                        <PopoverArrow />
+                        <PopoverBody p={3}>
+                          <VStack align="stretch" spacing={1}>
+                            <Text
+                              fontSize="2xs"
+                              color="text.secondary"
+                              fontWeight="800"
+                              textTransform="uppercase"
+                            >
+                              Full precision
+                            </Text>
+                            <Text
+                              fontSize="xs"
+                              color="text.primary"
+                              fontWeight="700"
+                              wordBreak="break-all"
+                            >
+                              {nativeValueDisplay.exact}
+                            </Text>
+                          </VStack>
+                        </PopoverBody>
+                      </PopoverContent>
+                    </Portal>
+                  </Popover>
+                ) : (
+                  <Text fontSize="xs" fontWeight="700" color="text.primary">
+                    {nativeValueDisplay.compact}
+                  </Text>
+                )}
               </HStack>
             )}
           </VStack>
         </Box>
 
         {/* Asset Changes (simulation) */}
-        {tx.to && (
+        {tx.to && !isValueMalformed && (
           <AssetChangesDisplay
             txRequest={txRequest}
             onRevertedChange={setSimulationReverted}
@@ -1558,14 +1724,16 @@ function TransactionConfirmation({
         {/* Gas Estimate. The `key` includes the split-resolution counter so
             the component remounts after the prior split tx lands, forcing a
             fresh eth_estimateGas against the new chain state. */}
-        <GasEstimateDisplay
-          key={gasEstimateKey}
-          txRequest={txRequest}
-          accountType={accountType}
-          onGasOverrides={setGasOverrides}
-          onValidityChange={setGasValid}
-          forceInclusion={forceInclusion}
-        />
+        {!isValueMalformed && (
+          <GasEstimateDisplay
+            key={gasEstimateKey}
+            txRequest={txRequest}
+            accountType={accountType}
+            onGasOverrides={setGasOverrides}
+            onValidityChange={setGasValid}
+            forceInclusion={forceInclusion}
+          />
+        )}
 
         {/* Calldata (Decoded + Raw). Collapsed by default on approvals —
             the structured ERC20ApproveDisplay above already shows function
@@ -1839,11 +2007,13 @@ function TransactionConfirmation({
               ? "Fix the error above before retrying"
               : isCalldataMalformed
                 ? "Calldata is malformed — signing blocked"
-                : !splitState.ready
-                  ? splitState.label || "Waiting for prior transaction to land"
-                  : !gasValid
-                    ? "Set a valid gas fee — fee fields can't be empty / max fee must cover base + priority"
-                    : null;
+                : isValueMalformed
+                  ? "Transaction value is malformed — signing blocked"
+                  : !splitState.ready
+                    ? splitState.label || "Waiting for prior transaction to land"
+                    : !gasValid
+                      ? "Set a valid gas fee — fee fields can't be empty / max fee must cover base + priority"
+                      : null;
           return (
             <HStack spacing={3} pb={1}>
               <Button

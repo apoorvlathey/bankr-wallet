@@ -86,7 +86,10 @@ import {
   type ERC5792Call,
   type BundleReceipt,
 } from "./erc5792Types";
-import type { GasEstimate } from "./gasEstimation";
+import {
+  bumpGasForEip7702Auth,
+  type GasEstimate,
+} from "./gasEstimation";
 
 // Prevent double-shipping if user clicks Confirm twice in quick succession.
 let isProcessing = false;
@@ -1076,6 +1079,20 @@ async function shipCrossDappBatchPkSp(args: {
     const fallbackGas =
       120_000 * Math.max(1, args.precomputedGasEstimates?.length ?? 8) +
       80_000;
+    let gasHex =
+      summedFromEstimates && summedFromEstimates > 0
+        ? `0x${Math.ceil(summedFromEstimates).toString(16)}`
+        : `0x${fallbackGas.toString(16)}`;
+    // State-override simulations and fallback estimates cannot include the
+    // EIP-7702 authorization tuple's intrinsic cost. Mirror the regular
+    // atomic batch path so first-time cross-dapp delegation doesn't under-gas.
+    if (needsAuthorization) {
+      gasHex = `0x${bumpGasForEip7702Auth(
+        args.chainId,
+        BigInt(gasHex),
+        1,
+      ).toString(16)}`;
+    }
 
     let maxFeePerGas: string | undefined;
     let maxPriorityFeePerGas: string | undefined;
@@ -1104,11 +1121,7 @@ async function shipCrossDappBatchPkSp(args: {
         value: args.encoded.value,
         chainId: args.chainId,
         nonce: txNonce,
-        gas: `0x${Math.ceil(
-          summedFromEstimates && summedFromEstimates > 0
-            ? summedFromEstimates
-            : fallbackGas,
-        ).toString(16)}`,
+        gas: gasHex,
         maxFeePerGas,
         maxPriorityFeePerGas,
         ...(authorizationList

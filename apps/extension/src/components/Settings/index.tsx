@@ -51,7 +51,7 @@ import {
   DatabaseIcon,
 } from "./icons";
 
-type SettingsTab =
+export type SettingsTab =
   | "main"
   | "security"
   | "data"
@@ -67,7 +67,7 @@ type SettingsTab =
 interface SettingsProps {
   close: () => void;
   showBackButton?: boolean;
-  onSessionExpired?: () => void;
+  onSessionExpired?: (returnTab?: SettingsTab) => void;
   initialTab?: SettingsTab;
   initialChainsTab?: "list" | "add";
   initialAddChainRequest?: PendingAddChainRequest;
@@ -176,6 +176,14 @@ function Settings({
     onAction: fireAction,
   };
 
+  const handleSessionExpired = () => {
+    if (onSessionExpired) {
+      onSessionExpired(tab);
+    } else {
+      setTab("main");
+    }
+  };
+
   // Confirmation modals are owned by the parent so DataSettings (and any future
   // sub-tab) can trigger them via `fireAction`. They MUST stay mounted across
   // tab transitions — early-returning the sub-tab would unmount this JSX and
@@ -198,7 +206,7 @@ function Settings({
       <ChangePassword
         onComplete={() => setTab("main")}
         onCancel={() => setTab("main")}
-        onSessionExpired={onSessionExpired || (() => setTab("main"))}
+        onSessionExpired={handleSessionExpired}
       />
     );
   } else if (tab === "autoLock") {
@@ -216,7 +224,7 @@ function Settings({
           setTab("main");
         }}
         onCancel={() => setTab("main")}
-        onSessionExpired={onSessionExpired || (() => setTab("main"))}
+        onSessionExpired={handleSessionExpired}
       />
     );
   } else if (tab === "appearance") {

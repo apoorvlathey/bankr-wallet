@@ -186,7 +186,7 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 
 | Handler          | Effect                      | Guard                                         |
 | ---------------- | --------------------------- | --------------------------------------------- |
-| `resetExtension` | Wipes ALL extension data    | Agent password blocked                        |
+| `resetExtension` | Wipes wallet identity state, pending queues, WalletConnect routing, cross-dapp batches, tx history, wallet portfolio state, transient result keys, and session auth state via `walletResetStorage.ts` | Agent password blocked |
 | `lockWallet`     | Clears all in-memory caches | None needed (user-initiated, non-destructive) |
 | `clearTxHistory` | Deletes transaction history | `EXTENSION_ONLY_MESSAGES`                     |
 
@@ -204,6 +204,7 @@ state must be added to this set. Current examples include:
 | Transaction/history UI | `getTxHistory`, `getProcessingTxs`, `getFailedTxResult`, `checkPendingTxReceipt`, `cancelProcessingTx`, `splitBatchIntoIndividualTxs`, gas/simulation helpers | Avoid letting content scripts inspect or alter local pending/history/status state. |
 | Chat | `submitChatPrompt`, `getChatConversations`, `getChatConversation`, `createChatConversation`, `deleteChatConversation`, `addChatMessage`, `updateChatMessage` | Chat prompt submission uses the user's Bankr credentials/session and chat history is local user data. |
 | Settings/cache | `setArcBrowser`, `getSidePanelMode`, `setSidePanelMode`, `getClearSigningEnabled`, `setClearSigningEnabled`, `INVALIDATE_CLEAR_SIGNING_CACHE` | These are extension UI preferences/cache controls, not dapp APIs. |
+| Network settings | `ensureNetworksInfo`, `addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain` | Mutate provider-visible `networksInfo` / `chainName`; keep service-worker-owned so webpages cannot alter wallet RPC metadata or clobber user-added chains. |
 
 `getActiveAccount` is the narrow exception: `inject.ts` uses it during content
 script initialization to correct stale synced address state before emitting
@@ -223,6 +224,13 @@ not forward an inpage message for it.
 | `unlockWallet`        | Tries master password first, then agent. Sets `passwordType` accordingly |
 | `setAgentPassword`    | Requires `getPasswordType() === "master"`                                |
 | `removeAgentPassword` | Requires explicit master password verification (not just cached)         |
+
+### Pending Transaction Edit Handlers
+
+`updatePendingTxRequestData` mutates a pending single transaction's calldata
+before the user signs, for example when the confirmation UI edits an ERC-20
+approve amount. It must stay gated by `EXTENSION_ONLY_MESSAGES` so a webpage
+cannot silently alter a pending tx between display and signing.
 
 ### Dapp-Initiated Batch Handlers (`batchTxHandlers.ts`)
 
@@ -297,7 +305,22 @@ Set/Revoke storage reconciliation must read `eth_getCode(EOA)` after any termina
 
 ### Token Metadata Handlers
 
-`resolveTokenMetadata` is gated by `EXTENSION_ONLY_MESSAGES` because it can include user-added custom-token metadata from `customTokens`. Content scripts may still call the narrower `fetchTokenInfo` / `fetchTokenLogo` helpers; those return public chain/token-list metadata only and do not expose watched-asset custom-token records.
+`resolveTokenMetadata` and `lookupCustomToken` are gated by
+`EXTENSION_ONLY_MESSAGES` because they can include user-added custom-token
+metadata from `customTokens`. `addCustomToken`, `updateCustomToken`, and
+`removeCustomToken` are also extension-only so webpages cannot mutate the user's
+manual token list. Content scripts may still call the narrower `fetchTokenInfo`
+/ `fetchTokenLogo` helpers; those return public chain/token-list metadata only
+and do not expose watched-asset custom-token records.
+
+### Network Metadata Handlers
+
+`networksInfo` mutations are routed through `networkStorage.ts` in the service
+worker and gated by `EXTENSION_ONLY_MESSAGES`. Popup/sidepanel pages mirror
+`chrome.storage.sync.networksInfo` through `NetworksContext`; they must not
+write full local snapshots back to storage. This prevents a stale long-lived
+sidepanel from deleting a chain that was added by a dapp confirmation in the
+background.
 
 ---
 
@@ -513,6 +536,8 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 | ------------------------------------------------------ | ------------------------------------ |
 | `address`                                              | Current wallet address               |
 | `displayAddress`                                       | Display-friendly address             |
+| `chainName`                                            | Active chain name                    |
+| `networksInfo`                                         | Runtime chain RPC/hidden/custom metadata; service-worker-owned mutations |
 | `activeAccountId`                                      | Active account ID                    |
 | `autoLockTimeout`                                      | Auto-lock timeout (ms)               |
 | `tabAccounts`                                          | Per-tab account overrides            |
@@ -526,7 +551,7 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 | Setting                    | Value                                                        | Security Note                                                                  |
 | -------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | `manifest_version`         | 3                                                            | MV3 enforces CSP, no `eval()`, no remote code                                  |
-| `permissions`              | `activeTab`, `storage`, `sidePanel`, `notifications`, `tabs` | No `webRequest`, no `debugger`                                                 |
+| `permissions`              | `activeTab`, `storage`, `sidePanel`, `notifications`, `tabs`, `declarativeNetRequestWithHostAccess`, `unlimitedStorage` | No `webRequest`, no `debugger`; `unlimitedStorage` protects wallet-critical writes from optional cache growth |
 | `host_permissions`         | `https://*/*`, `http://*/*`                                  | Broad, needed for RPC proxy (extension-configured URL only, 15s timeout) + content script |
 | `content_scripts.matches`  | All URLs                                                     | Wallet must inject on all pages for dapp detection                             |
 | `externally_connectable`   | Not defined                                                  | External websites cannot send messages to background                           |
@@ -547,7 +572,7 @@ These must always hold true. Violations indicate a security bug.
 
 4. **Encryption uses fresh randomness** - Every encryption operation generates a new random salt and IV. Never reuse salt/IV pairs.
 
-5. **Service worker suspend clears credentials** - The `suspend` event handler in `background.ts` calls `clearCachedApiKey()` and `clearCachedVault()`.
+5. **Service worker suspend clears credentials** - The `suspend` event handler in `background.ts` calls `clearInMemoryAuthCache()`, which clears the API key, password, private-key vault, vault key, password type, and session ID together.
 
 6. **Timed auto-lock clears every in-memory credential** - All cached credential getters, including `getCachedVaultKey()` and `getPasswordType()`, enforce the configured timeout. Expiry clears the API key, password, private-key vault, vault key, and password type together.
 
@@ -561,13 +586,17 @@ These must always hold true. Violations indicate a security bug.
 
 11. **Password change re-encrypts all password-derived vaults atomically** - `handleChangePasswordWithCachedPassword` computes all new encrypted values in memory first (`encryptedVaultKeyMaster`, `pkVault`, `mnemonicVault`), then writes them in a single `chrome.storage.local.set()` call. This prevents partial-write corruption where the vault key is updated but private key/mnemonic vaults remain encrypted with the old password.
 
-12. **Transaction confirmation checks expiry** - `handleConfirmTransaction`, `handleConfirmTransactionAsync`, and `handleConfirmTransactionAsyncPK` reject requests older than 30 minutes (`TX_EXPIRY_MS`), preventing stale transaction confirmation.
+12. **Duplicate-only seed imports do not persist secrets** - `addSeedPhraseGroup` validates that at least one selected derivation index can be imported or converted before creating `seedGroups` metadata or writing the encrypted mnemonic to `mnemonicVault`.
 
-13. **Transaction double-execution prevention** - A `processingTxIds` Set in `txHandlers.ts` prevents the same transaction from being submitted twice if two confirm messages arrive concurrently.
+13. **Transaction confirmation checks expiry** - `handleConfirmTransaction`, `handleConfirmTransactionAsync`, and `handleConfirmTransactionAsyncPK` reject requests older than 30 minutes (`TX_EXPIRY_MS`), preventing stale transaction confirmation.
 
-14. **RPC proxy restricts URL sources** - `handleRpcRequest` only accepts extension-configured RPC URLs, preventing arbitrary webpage-controlled endpoints. A 15-second timeout prevents resource exhaustion from slow servers. The inpage dapp-RPC fast path only uses HTTP(S) JSON-RPC URLs discovered from the page itself, validates the chain with `eth_chainId`, forwards only allowlisted non-critical read methods, and falls back to the extension RPC on error or timeout.
+14. **Transaction double-execution prevention** - A `processingTxIds` Set in `txHandlers.ts` prevents the same transaction from being submitted twice if two confirm messages arrive concurrently.
 
-15. **Input length validation on user-facing strings** - Display names and group names are capped at 100 characters to prevent storage bloat from malformed inputs. Unknown message types are logged with `console.warn` for debuggability.
+15. **RPC proxy restricts URL sources** - `handleRpcRequest` only accepts extension-configured RPC URLs, preventing arbitrary webpage-controlled endpoints. A 15-second timeout prevents resource exhaustion from slow servers. The inpage dapp-RPC fast path only uses HTTP(S) JSON-RPC URLs discovered from the page itself, validates the chain with `eth_chainId`, forwards only allowlisted non-critical read methods, and falls back to the extension RPC on error or timeout.
+
+16. **Input length validation on user-facing strings** - Display names and group names are capped at 100 characters to prevent storage bloat from malformed inputs. Unknown message types are logged with `console.warn` for debuggability.
+
+17. **Non-critical caches are fail-open** - Metadata/image caches (`tokenInfo:*`, `tokenLogo:*`, `ethShLabels:*`, `swapTokenList:*`, `cs:desc:*`, CoinGecko caches, and `ensAvatarImageCache`) must never block wallet-critical storage writes. Cache writes are best-effort and expired entries are pruned by `storageCachePruner.ts`.
 
 ---
 

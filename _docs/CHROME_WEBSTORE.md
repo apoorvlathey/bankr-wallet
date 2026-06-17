@@ -143,6 +143,16 @@ The extension does NOT block ads, modify third-party headers, or read response b
 
 ---
 
+### 9. unlimitedStorage
+
+**Justification:**
+
+WalletChan stores wallet-critical state in `chrome.storage.local`, including encrypted vault metadata, pending transaction requests, transaction results, and user-added network/account settings. It also stores optional public metadata caches such as token metadata, token logos, clear-signing descriptors, CoinGecko responses, and sanitized raster image bytes for avatars/logos.
+
+`unlimitedStorage` prevents optional cache growth from exhausting the default local-storage quota and causing wallet-critical writes to fail. The extension still prunes non-critical cache entries on startup and every 6 hours, and cache writes are best-effort so the wallet remains functional if a cache write is rejected.
+
+---
+
 ## Privacy Policy URL
 
 https://github.com/apoorvlathey/walletchan/blob/master/PRIVACY_POLICY.md

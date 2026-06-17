@@ -1,5 +1,8 @@
+import { withStorageLock } from "./storageLock";
+
 const STORAGE_KEY = "walletConnectPendingRequests";
 const CHAIN_STORAGE_KEY = "walletConnectChainId";
+const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
 const WALLETCONNECT_REQUEST_EXPIRY_MS = 30 * 60 * 1000;
 
 export interface WalletConnectPendingRequest {
@@ -35,9 +38,11 @@ export async function getWalletConnectPendingRequests(): Promise<PendingRequestM
 export async function saveWalletConnectPendingRequest(
   request: WalletConnectPendingRequest,
 ): Promise<void> {
-  const requests = await getWalletConnectPendingRequests();
-  requests[request.id] = request;
-  await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getWalletConnectPendingRequests();
+    requests[request.id] = request;
+    await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  });
 }
 
 export async function getWalletConnectPendingRequest(
@@ -50,25 +55,29 @@ export async function getWalletConnectPendingRequest(
 export async function removeWalletConnectPendingRequest(
   id: string,
 ): Promise<void> {
-  const requests = await getWalletConnectPendingRequests();
-  if (!requests[id]) return;
-  delete requests[id];
-  await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getWalletConnectPendingRequests();
+    if (!requests[id]) return;
+    delete requests[id];
+    await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  });
 }
 
 export async function clearExpiredWalletConnectPendingRequests(): Promise<void> {
-  const requests = await getWalletConnectPendingRequests();
-  const now = Date.now();
-  let changed = false;
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getWalletConnectPendingRequests();
+    const now = Date.now();
+    let changed = false;
 
-  for (const [id, request] of Object.entries(requests)) {
-    if (now - request.timestamp > WALLETCONNECT_REQUEST_EXPIRY_MS) {
-      delete requests[id];
-      changed = true;
+    for (const [id, request] of Object.entries(requests)) {
+      if (now - request.timestamp > WALLETCONNECT_REQUEST_EXPIRY_MS) {
+        delete requests[id];
+        changed = true;
+      }
     }
-  }
 
-  if (changed) {
-    await chrome.storage.local.set({ [STORAGE_KEY]: requests });
-  }
+    if (changed) {
+      await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+    }
+  });
 }

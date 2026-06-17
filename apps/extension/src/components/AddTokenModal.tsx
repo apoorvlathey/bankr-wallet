@@ -22,7 +22,6 @@ import {
   Portal,
 } from "@chakra-ui/react";
 import { ChevronDownIcon, WarningIcon } from "@chakra-ui/icons";
-import { addCustomToken } from "@/chrome/customTokenStorage";
 import {
   getPortfolioTokenKey,
   unhidePortfolioToken,
@@ -42,6 +41,17 @@ interface AddTokenModalProps {
 }
 
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
+
+async function sendCustomTokenWrite(
+  message: Record<string, unknown>
+): Promise<void> {
+  const response = await new Promise<{ success: boolean; error?: string }>((resolve) => {
+    chrome.runtime.sendMessage(message, resolve);
+  });
+  if (!response?.success) {
+    throw new Error(response?.error || "Failed to save token");
+  }
+}
 
 export default function AddTokenModal({
   isOpen,
@@ -177,7 +187,8 @@ export default function AddTokenModal({
       }
 
       if (!isHiddenToken || !allTokenKeys.has(tokenKey)) {
-        await addCustomToken({
+        await sendCustomTokenWrite({
+          type: "addCustomToken",
           contractAddress: tokenAddress,
           chainId: selectedChainId,
           symbol,
