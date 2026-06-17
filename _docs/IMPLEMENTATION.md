@@ -414,8 +414,7 @@ src/
 ├── lib/
 │   └── siwe/                # EIP-4361 parser + validation shared by UI and signing handlers
 ├── pages/
-│   ├── Onboarding.tsx       # Full-page onboarding wizard for first-time setup
-│   └── ApiKeySetup.tsx      # API key + wallet address configuration
+│   └── Onboarding.tsx       # Full-page onboarding wizard for first-time setup
 ├── components/
 │   ├── Chat/
 │   │   ├── ChatView.tsx     # Main chat orchestrator (list/chat modes)
@@ -1775,7 +1774,8 @@ Users can optionally configure an **agent password** that allows AI agents to un
 **API Keys**:
 
 - If `cachedVaultKey` exists → encrypt with vault key → save to `encryptedApiKeyVault`
-- If no vault key (legacy) → encrypt with password → save to `encryptedApiKey`
+- If no vault key and no `encryptedVaultKeyMaster` exists (pre-migration setup/legacy) → encrypt with password → save to `encryptedApiKey`
+- `saveEncryptedApiKey()` refuses to write legacy `encryptedApiKey` once `encryptedVaultKeyMaster` exists, so post-migration callers must use the vault-key path
 - Handled automatically by `handleSaveApiKeyWithCachedPassword()` and `addBankrAccount` handler
 
 **Private Keys**:

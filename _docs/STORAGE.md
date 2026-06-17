@@ -44,7 +44,7 @@ read-time TTL checks.
 
 | Key                       | Shape                               | Description                                                                                                                         | Introduced |
 | ------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| `encryptedApiKey`         | `{ ciphertext, iv, salt }` (base64) | API key encrypted directly with password via PBKDF2 + AES-256-GCM. **Legacy format** — kept after vault key migration for fallback. | v0.1.0     |
+| `encryptedApiKey`         | `{ ciphertext, iv, salt }` (base64) | API key encrypted directly with password via PBKDF2 + AES-256-GCM. **Legacy format** — only writable before `encryptedVaultKeyMaster` exists; post-migration callers must use `encryptedApiKeyVault`. | v0.1.0     |
 | `encryptedApiKeyVault`    | `{ ciphertext, iv }` (base64)       | API key encrypted with the vault key (no salt — key is raw). **Current format.**                                                    | v1.0.0     |
 | `encryptedVaultKeyMaster` | `{ ciphertext, iv, salt }` (base64) | Vault key encrypted with the master password. Presence of this key means vault key system is active.                                | v1.0.0     |
 | `encryptedVaultKeyAgent`  | `{ ciphertext, iv, salt }` (base64) | Vault key encrypted with the agent password. Only exists when agent password is enabled.                                            | v1.0.0     |
