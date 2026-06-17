@@ -482,6 +482,22 @@ export async function findAccountByAddress(address: string): Promise<Account | n
 }
 
 /**
+ * Finds a non-impersonator account by address (case-insensitive).
+ * View-only impersonators may coexist with real signing/API accounts.
+ */
+export async function findNonImpersonatorAccountByAddress(
+  address: string
+): Promise<Account | null> {
+  const normalized = address.toLowerCase();
+  const accounts = await getAccounts();
+  return (
+    accounts.find(
+      (a) => a.type !== "impersonator" && a.address.toLowerCase() === normalized
+    ) || null
+  );
+}
+
+/**
  * Converts a private key account to a seed phrase account in-place.
  * Preserves the same account ID, display name, and vault entry.
  */

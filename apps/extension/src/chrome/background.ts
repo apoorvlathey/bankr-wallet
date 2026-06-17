@@ -28,7 +28,7 @@ import {
   updateAccountDisplayName,
   validateBankrAccountAddressUpdate,
   updateBankrAccountAddress,
-  findAccountByAddress,
+  findNonImpersonatorAccountByAddress,
   convertToSeedPhraseAccount,
 } from "./accountStorage";
 import type { SeedPhraseAccount } from "./types";
@@ -1795,7 +1795,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const startIdx = Math.max(0, Math.floor(start ?? 0));
           const total = Math.max(1, Math.min(20, Math.floor(count ?? 5)));
           const existingAddresses = new Set(
-            (await getAccounts()).map((a) => a.address.toLowerCase()),
+            (await getAccounts())
+              .filter((a) => a.type !== "impersonator")
+              .map((a) => a.address.toLowerCase()),
           );
           const items = [] as Array<{
             index: number;
@@ -1899,7 +1901,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           for (const idx of indices) {
             const privateKey = deriveSeedPrivateKey(mnemonic, idx);
             const address = deriveAddress(privateKey);
-            const existingAccount = await findAccountByAddress(address);
+            const existingAccount =
+              await findNonImpersonatorAccountByAddress(address);
             if (!existingAccount || existingAccount.type === "privateKey") {
               importableCandidates.push({ index: idx, address });
             }
@@ -1930,9 +1933,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const importedAccounts: SeedPhraseAccount[] = [];
           for (const candidate of importableCandidates) {
             // Check if address already exists (PK → seed phrase conversion)
-            const existingAccount = await findAccountByAddress(
-              candidate.address,
-            );
+            const existingAccount =
+              await findNonImpersonatorAccountByAddress(candidate.address);
             let account: SeedPhraseAccount;
 
             if (existingAccount) {
@@ -1945,7 +1947,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 if (!converted) throw new Error("Failed to convert account");
                 account = converted;
               } else {
-                // Skip duplicates that are already seed/bankr/impersonator.
+                // Skip duplicates that are already seed/bankr.
                 // We don't want to fail the whole import for one collision.
                 continue;
               }
@@ -2089,7 +2091,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const privateKey = deriveSeedPrivateKey(mnemonic, idx);
             const address = deriveAddress(privateKey);
 
-            const existingAccount = await findAccountByAddress(address);
+            const existingAccount =
+              await findNonImpersonatorAccountByAddress(address);
             let account: SeedPhraseAccount;
 
             if (existingAccount) {
@@ -2102,7 +2105,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 if (!converted) throw new Error("Failed to convert account");
                 account = converted;
               } else {
-                // Already a seed-phrase / bankr / impersonator account.
+                // Already a seed-phrase / bankr account.
                 // Skip silently so a multi-derive doesn't fail on one collision.
                 continue;
               }
