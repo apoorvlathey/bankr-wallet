@@ -57,6 +57,8 @@ import {
   CALL_ACCENTS,
   CALL_ACCENT_FGS,
 } from "@/components/BatchCallsList";
+import NativeValueAmount from "@/components/NativeValueAmount";
+import { nativeAmountToNumber } from "@/lib/nativeValueFormat";
 import {
   encodeBatchCalls,
   omitOuterValueForEip7702,
@@ -66,6 +68,7 @@ import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
 import { useTheme, useStripTokens, useChainBadgeStyle, useIconChipBg } from "@/theme";
+import { normalizeTransactionValue } from "@/chrome/transactionValidation";
 
 const scaleIn = keyframes`
   0% { transform: scale(0) rotate(-10deg); opacity: 0; }
@@ -253,6 +256,21 @@ function BatchTransactionConfirmation({
   const { params, origin, chainName, favicon, chainId } = batchRequest;
   const calls = params.calls;
   const hasDeploymentCall = calls.some((call) => !call.to);
+  const nativeCurrency =
+    resolvedChain?.nativeCurrency ?? chainBadgeConfig.nativeCurrency;
+  const nativeSymbol = nativeCurrency?.symbol || "ETH";
+  const nativeDecimals = nativeCurrency?.decimals ?? 18;
+
+  const malformedValueInfo = useMemo(() => {
+    for (let i = 0; i < calls.length; i++) {
+      const result = normalizeTransactionValue(calls[i].value);
+      if (!result.ok) {
+        return { index: i, reason: result.error };
+      }
+    }
+    return null;
+  }, [calls]);
+  const isValueMalformed = !!malformedValueInfo;
 
   // Sum of msg.value across all calls. Surfaced in the top summary box so a
   // user reviewing a multi-call batch (e.g. a bridge whose second call carries
@@ -317,6 +335,16 @@ function BatchTransactionConfirmation({
   // keeps downstream simulators/Tenderly inert; signing is blocked separately
   // via `encodingError` below.
   const { encodedBatch, encodingError } = useMemo(() => {
+    if (malformedValueInfo) {
+      return {
+        encodedBatch: {
+          to: fromAddress,
+          data: "0x" as `0x${string}`,
+          value: "0x0",
+        },
+        encodingError: null,
+      };
+    }
     try {
       return { encodedBatch: encodeBatchCalls(calls, fromAddress), encodingError: null };
     } catch (e) {
@@ -330,7 +358,7 @@ function BatchTransactionConfirmation({
         encodingError: msg,
       };
     }
-  }, [calls, fromAddress]);
+  }, [calls, fromAddress, malformedValueInfo]);
   const outerEncodedBatch = useMemo(
     () =>
       isEip7702Atomic
@@ -592,6 +620,7 @@ function BatchTransactionConfirmation({
     !!onAddedToBatch &&
     !isNonAtomic &&
     !hasDeploymentCall &&
+    !isValueMalformed &&
     !encodingError;
 
   // Force inclusion progress screen (atomic batches only)
@@ -954,6 +983,16 @@ function BatchTransactionConfirmation({
           />
         )}
 
+        {/* Malformed-value banner — protects older persisted batches and blocks
+            signing if any ERC-5792 call carries an invalid native value. */}
+        {malformedValueInfo && (
+          <MalformedCalldataBanner
+            borders={tokens.borders}
+            title="Malformed value — signing blocked"
+            reason={`Call #${malformedValueInfo.index + 1}: ${malformedValueInfo.reason}`}
+          />
+        )}
+
         {/* ERC-7821 self-recursion guard — blocks signing when an inner call
             targets the user's own EOA with calldata or value, which could
             re-enter execute() with auth bypassed. */}
@@ -1152,12 +1191,13 @@ function BatchTransactionConfirmation({
                   Value
                 </Text>
                 {(() => {
-                  const sym = resolvedChain?.nativeCurrency.symbol || "ETH";
-                  const eth = Number(totalValueWei) / 1e18;
-                  const trimmed = eth.toFixed(6).replace(/\.?0+$/, "");
+                  const nativeAmount = nativeAmountToNumber(
+                    totalValueWei,
+                    nativeDecimals,
+                  );
                   const usdValue =
                     nativePriceUsd && nativePriceUsd > 0
-                      ? eth * nativePriceUsd
+                      ? nativeAmount * nativePriceUsd
                       : null;
                   const usdLabel =
                     usdValue === null
@@ -1167,9 +1207,14 @@ function BatchTransactionConfirmation({
                         : `$${usdValue.toFixed(2)}`;
                   return (
                     <VStack spacing={0} align="flex-end">
-                      <Text fontSize="sm" fontWeight="700" fontFamily="mono">
-                        {trimmed} {sym}
-                      </Text>
+                      <NativeValueAmount
+                        value={totalValueWei}
+                        symbol={nativeSymbol}
+                        decimals={nativeDecimals}
+                        fontSize="sm"
+                        fontWeight="700"
+                        fontFamily="mono"
+                      />
                       {usdLabel && (
                         <Text
                           fontSize="2xs"
@@ -1629,16 +1674,18 @@ function BatchTransactionConfirmation({
                         ? "Reject in progress"
                         : state === "error"
                           ? "Fix the error above before retrying"
-                          : encodingError
-                            ? "Unsafe batch — signing blocked"
-                          : isCalldataMalformed
-                            ? "Calldata is malformed — signing blocked"
-                            : isLocalSigningAccount &&
-                                batchPlan.strategy === "loading"
-                              ? "Checking smart account support"
-                              : !gasValid
-                                ? "Set a valid gas fee — fee fields can't be empty / max fee must cover base + priority"
-                                : null;
+                          : isValueMalformed
+                            ? "Transaction value is malformed — signing blocked"
+                            : encodingError
+                              ? "Unsafe batch — signing blocked"
+                              : isCalldataMalformed
+                                ? "Calldata is malformed — signing blocked"
+                                : isLocalSigningAccount &&
+                                    batchPlan.strategy === "loading"
+                                  ? "Checking smart account support"
+                                  : !gasValid
+                                    ? "Set a valid gas fee — fee fields can't be empty / max fee must cover base + priority"
+                                    : null;
                       return (
                         <Box
                           flex={1}
@@ -1775,7 +1822,7 @@ function BatchTransactionConfirmation({
               onClick={handleConfirmSplit}
               isLoading={splitting}
               loadingText="Splitting"
-              isDisabled={isCalldataMalformed || !!encodingError}
+              isDisabled={isCalldataMalformed || isValueMalformed || !!encodingError}
             >
               Split
             </Button>

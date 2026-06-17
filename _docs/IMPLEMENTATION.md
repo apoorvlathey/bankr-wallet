@@ -813,7 +813,7 @@ WalletConnect support is a parallel dapp transport for sites that do not list Wa
 **Supported request behavior:**
 
 - `eth_sendTransaction` uses the same confirmation screens and Bankr/PK/Seed signing paths as injected dapp transactions.
-- ERC-5792 batching is supported over WalletConnect through `wallet_getCapabilities`, `wallet_sendCalls`, `wallet_getCallsStatus`, and `wallet_showCallsStatus`. `wallet_sendCalls` responds immediately with the bundle id; the dapp polls `wallet_getCallsStatus` just like the injected-provider route.
+- ERC-5792 batching is supported over WalletConnect through `wallet_getCapabilities`, `wallet_sendCalls`, `wallet_getCallsStatus`, and `wallet_showCallsStatus`. `wallet_sendCalls` responds immediately with the bundle id; the dapp polls `wallet_getCallsStatus` just like the injected-provider route. Each inner call's native `value` is normalized through `transactionValidation.ts` before the batch is stored; malformed values return a `batchTxAck` error and older malformed pending batches are blocked in the confirmation UI.
 - `personal_sign`, `eth_signTypedData_v3`, and `eth_signTypedData_v4` use the same signature confirmation screens. EIP-712 validation/sanitization is shared with the injected-provider path.
 - `eth_sign` and deprecated `eth_signTypedData` v1 are rejected.
 - `eth_accounts`, `eth_requestAccounts`, `eth_chainId`, `net_version`, `wallet_switchEthereumChain`, and a small read-only RPC allowlist are answered directly in the background.
