@@ -1,5 +1,5 @@
 /**
- * Swap API layer — calls walletchan.com server-side proxy endpoints
+ * Swap API layer — calls WalletChan server-side proxy endpoints
  * for 0x Swap API v2 (AllowanceHolder flow). Multi-chain support.
  */
 import {
@@ -515,7 +515,7 @@ export async function getCachedTokenList(
 }
 
 // ---------------------------------------------------------------------------
-// Token Price (USD via CoinGecko, proxied through walletchan.com with a
+// Token Price (USD via CoinGecko, proxied through WalletChan with a
 // direct CoinGecko fallback when the proxy is unreachable or returns 0)
 // ---------------------------------------------------------------------------
 

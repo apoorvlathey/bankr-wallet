@@ -83,7 +83,7 @@ simulation. The regression test is `apps/contracts/test/TxSimulator.t.sol`.
 
 For each token with a non-zero balance change, we need `name`, `symbol`, `decimals`, `logoUrl`, and `priceUsd`. Three sources, in priority order:
 
-1. **Swap token list** (`getCachedTokenList`) — cached 24h from `walletchan.com/api/swap/token-list`. Has name, symbol, decimals, logoURI for ~1000 popular tokens per chain. Fastest and most reliable.
+1. **Swap token list** (`getCachedTokenList`) — cached 24h from `walletchan.eth.sh/api/swap/token-list`. Has name, symbol, decimals, logoURI for ~1000 popular tokens per chain. Fastest and most reliable.
 
 2. **Onchain multicall** — for tokens not in the list, batch `name()`, `symbol()`, `decimals()` via Multicall3 (`0xcA11bde05977b3631167028862bE2a173976CA11`). Must pass `multicallAddress` explicitly since the viem client is created without a `chain` object.
 
@@ -93,7 +93,7 @@ For native currency (ETH/BNB/POL), metadata comes from `CHAIN_REGISTRY` and the 
 
 #### Step 4: Fetch USD Prices
 
-- **ERC-20 tokens**: `fetchTokenPrice(chainId, address)` via `walletchan.com/api/swap/token-price` (CoinGecko proxy)
+- **ERC-20 tokens**: `fetchTokenPrice(chainId, address)` via `walletchan.eth.sh/api/swap/token-price` (CoinGecko proxy)
 - **Native currency**: `fetchNativePrice(chainId)` from `gasEstimation.ts`, which now routes through the shared background `coingeckoService.ts` (batched markets fetch + persisted cache)
 
 All price fetches run in parallel with `Promise.all`.

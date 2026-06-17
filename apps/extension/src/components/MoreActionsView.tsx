@@ -259,7 +259,7 @@ export default function MoreActionsView({
     },
     {
       title: "Migrate Tokens",
-      detail: "migrate.eth.sh",
+      detail: "walletchan.eth.sh/migrate",
       icon: <MigrateIcon />,
       iconBg: "accent.secondary",
       iconColor: "accentFg.secondary",

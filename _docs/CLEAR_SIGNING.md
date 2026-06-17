@@ -6,7 +6,7 @@ The extension renders a human-readable view of transactions and EIP-712 signatur
 
 Descriptors come from the public registry at [`ethereum/clear-signing-erc7730-registry`](https://github.com/ethereum/clear-signing-erc7730-registry). **Nothing is bundled** in the extension. The website acts as a thin proxy + cache:
 
-- `walletchan.com/api/clearsigning/descriptor?chainId=…&address=0x…&kind=calldata|eip712&selector=0x…|formatKey=…` → descriptor JSON, or 404.
+- `walletchan.eth.sh/api/clearsigning/descriptor?chainId=…&address=0x…&kind=calldata|eip712&selector=0x…|formatKey=…` → descriptor JSON, or 404.
 - The proxy uses a committed `(chainId, address) → registry path[]` snapshot (`apps/website/data/clearsigning-index.json`). When multiple registry descriptors share the same address, the route fetches candidates and returns the one whose `display.formats` matches the calldata selector or EIP-712 encoded type.
 - Regenerate the snapshot with `pnpm tsx apps/website/scripts/snapshot-clearsigning-index.ts`.
 
@@ -20,7 +20,7 @@ Confirmation surface
                  └─ clearSigningHandlers.ts (background)
                       ├─ chrome.storage.local cache  cs:desc:<chainId>:<address>:<kind>:<selector|format>
                       │    (TTL 7d hits, 1d misses; schema v3)
-                      ├─ walletchan.com/api/clearsigning/descriptor (direct)
+                      ├─ walletchan.eth.sh/api/clearsigning/descriptor (direct)
                       ├─ ON MISS → proxyResolver.ts (Safe / EIP-1967 / beacon)
                       │    └─ re-fetch descriptor for impl address
                       │    └─ extend descriptor.deployments to include the proxy
@@ -226,7 +226,7 @@ Downstream propagation comes for free: sign-time handlers (`handleConfirmBatchTr
 
 ## Privacy
 
-A descriptor fetch reveals `(chainId, contract address)` to the walletchan.com proxy. Users who don't want this can opt out under **Settings → Privacy → "Use clear-signing descriptors"** (default ON). When OFF, the background handler short-circuits before any network or storage access.
+A descriptor fetch reveals `(chainId, contract address)` to the WalletChan proxy. Users who don't want this can opt out under **Settings → Privacy → "Use clear-signing descriptors"** (default ON). When OFF, the background handler short-circuits before any network or storage access.
 
 ## Adding a new descriptor
 

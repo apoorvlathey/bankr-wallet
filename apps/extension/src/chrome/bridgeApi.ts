@@ -1,5 +1,5 @@
 /**
- * Bridge API layer — calls walletchan.com server-side proxy endpoints
+ * Bridge API layer — calls WalletChan server-side proxy endpoints
  * for Bungee (cross-chain). The proxy holds the BUNGEE_API_KEY +
  * affiliate id, normalizes the native-token sentinel, and applies the
  * sWCHAN-tiered integrator fee. See `_docs/BRIDGE.md`.

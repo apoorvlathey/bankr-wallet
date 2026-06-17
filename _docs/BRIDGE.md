@@ -226,7 +226,7 @@ All defined in `apps/website/.env.local` (see `.env.local.example`).
 
 The wallet extension's Swap surface (`apps/extension/src/components/Swap/SwapView.tsx`) accepts a different chain on the buy side via the `BuyChainMenu` picker. When `sellChainId !== buyChainId`, the surface flips to **bridge mode**:
 
-- **Quote**: extension calls the same proxy via a new `fetchBridgeQuote` background message → `https://walletchan.com/api/bridge/quote`. Same response shape, same `isPremiumFee` tier — no separate sWCHAN logic lives in the extension.
+- **Quote**: extension calls the same proxy via a new `fetchBridgeQuote` background message → `https://walletchan.eth.sh/api/bridge/quote`. Same response shape, same `isPremiumFee` tier — no separate sWCHAN logic lives in the extension.
 - **Build**: at confirm time, the extension re-quotes (Bungee quoteIds expire ~60s) and then calls `fetchBridgeBuildTx` for the firm `{ approvalData?, txData }`.
 - **Execute**: bridge txs flow through the existing swap handlers — `executeSwapDirect` (PK / Seed, per-call gas tier override) or `executeSwapBatch` (Bankr atomic ERC-7821). The bridge call entry carries a `bridge` field on `SwapTxEntry`, which is persisted onto the `CompletedTransaction.bridge` shape.
 - **Route selection**: prefer `manualRoutes[0]` because `/build-tx` can refresh firm calldata. If no manual route exists but `autoRoute.txData` is present, the extension treats that auto route as executable tx data and stages it directly. This covers Bungee pairs such as native XPL on Plasma → USDC on Base, where the quote can return `manualRoutes: []` and an `autoRoute` with `userOp: "tx"`.

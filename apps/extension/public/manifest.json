@@ -3,7 +3,7 @@
   "version": "3.17.0",
   "manifest_version": 3,
   "description": "WalletChan",
-  "homepage_url": "https://walletchan.com",
+  "homepage_url": "https://walletchan.eth.sh",
   "browser_specific_settings": {
     "gecko": {
       "id": "extension@walletchan"

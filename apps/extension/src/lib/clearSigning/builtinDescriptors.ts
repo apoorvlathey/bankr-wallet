@@ -2,7 +2,7 @@
  * Built-in (client-side) ERC-7730 descriptors for well-known generic
  * function selectors.
  *
- * The remote registry at walletchan.com/api/clearsigning/descriptor is keyed
+ * The remote registry at walletchan.eth.sh/api/clearsigning/descriptor is keyed
  * by (chainId, contract address, selector/EIP-712 type) — fine for per-app
  * contracts (Permit2, Uniswap router, etc.), but useless for "every ERC-20
  * ever deployed".

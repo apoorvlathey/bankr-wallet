@@ -80,7 +80,7 @@ The extension has two build modes, selected via Vite's `--mode` flag. They produ
 
 **What flips between modes**:
 
-The entire `WALLETCHAN_API_BASE` constant in `apps/extension/src/constants/externalUrls.ts` flips when `import.meta.env.MODE === "development"`. Every derived endpoint (portfolio, swap, bridge, sponsored-transfer, premium-status, vault-data, clear-signing) follows it. Development → `http://localhost:3030/api`; production → `https://walletchan.com/api`. The dev port lives in `WALLETCHAN_DEV_PORT` and matches `apps/website/package.json`'s `dev` script (`next dev -p 3030`) — change both together if you ever need to move it.
+The entire `WALLETCHAN_API_BASE` constant in `apps/extension/src/constants/externalUrls.ts` flips when `import.meta.env.MODE === "development"`. Every derived endpoint (portfolio, swap, bridge, sponsored-transfer, premium-status, vault-data, clear-signing) follows it. Development → `http://localhost:3030/api`; production → `https://walletchan.eth.sh/api` so extension APIs remain reachable on ISPs that block `walletchan.com` DNS. The dev port lives in `WALLETCHAN_DEV_PORT` and matches `apps/website/package.json`'s `dev` script (`next dev -p 3030`) — change both together if you ever need to move it.
 
 **Rule of thumb:**
 

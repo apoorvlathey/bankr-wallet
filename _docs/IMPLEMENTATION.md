@@ -1325,7 +1325,7 @@ out terminal status updates to multiple source `wallet_sendCalls` bundle IDs.
 Token holdings are fetched via a website API route that wraps the Octav API:
 
 - **Website route**: `apps/website/app/api/portfolio/route.ts` (GET `/api/portfolio?address=0x...`)
-- **Extension client**: `portfolioApi.ts` fetches from `https://walletchan.com/api/portfolio`
+- **Extension client**: `portfolioApi.ts` fetches from `https://walletchan.eth.sh/api/portfolio`
 - **Response format**: Provider-agnostic `PortfolioResponse` with `tokens[]` and `totalValueUsd`
 
 ### Onchain Balance Verification
@@ -2572,7 +2572,7 @@ SwapView (internal sellChainId, buyChainId — never updates the global chain)
   ├─ same chain → existing 0x swap (fetchSwapPrice / Quote)
   │
   └─ different chain → bridge mode
-       1. fetchBridgeQuote → walletchan.com/api/bridge/quote
+       1. fetchBridgeQuote → walletchan.eth.sh/api/bridge/quote
           (server applies sWCHAN-tiered fee; same isPremiumFee surfaced)
        2. route selection → prefer manualRoutes[0]; fallback to autoRoute.txData
           when Bungee returns executable tx data without Permit2 typed-data

@@ -10,7 +10,8 @@
 // Single switch for the API base. Under `pnpm dev:extension` (Vite mode ===
 // "development") we point at the local Next.js dev server so any proxy route
 // you're working on round-trips against `pnpm dev:website` without a deploy.
-// Production builds hit walletchan.com.
+// Production builds hit walletchan.eth.sh so users on ISPs that block
+// walletchan.com DNS can still use extension-backed website APIs.
 //
 // Port is centralised in `WALLETCHAN_DEV_PORT` — match it with the website's
 // dev script (`apps/website/package.json` runs `next dev -p 3030`). When you
@@ -20,7 +21,9 @@
 // the `vite` dev-server, not `vite build`. Always gate on `MODE`.
 // ---------------------------------------------------------------------------
 export const WALLETCHAN_DEV_PORT = 3030;
-const WALLETCHAN_API_BASE_PROD = "https://walletchan.com/api";
+export const WALLETCHAN_SITE_HOST = "walletchan.eth.sh";
+export const WALLETCHAN_SITE_URL = `https://${WALLETCHAN_SITE_HOST}`;
+const WALLETCHAN_API_BASE_PROD = `${WALLETCHAN_SITE_URL}/api`;
 const WALLETCHAN_API_BASE_DEV = `http://localhost:${WALLETCHAN_DEV_PORT}/api`;
 export const WALLETCHAN_API_BASE =
   import.meta.env.MODE === "development"
@@ -38,10 +41,10 @@ export const WALLETCHAN_CLEAR_SIGNING_API = `${WALLETCHAN_API_BASE}/clearsigning
 // ---------------------------------------------------------------------------
 // WalletChan Assets & Pages
 // ---------------------------------------------------------------------------
-export const WALLETCHAN_ICON_URL = "https://walletchan.com/images/walletchan-icon.png";
-export const WALLETCHAN_STAKE_URL = "https://stake.walletchan.com";
-export const WALLETCHAN_OS_URL = "https://os.walletchan.com";
-export const WALLETCHAN_MIGRATE_URL = "https://migrate.eth.sh";
+export const WALLETCHAN_ICON_URL = `${WALLETCHAN_SITE_URL}/images/walletchan-icon.png`;
+export const WALLETCHAN_STAKE_URL = `${WALLETCHAN_SITE_URL}/stake`;
+export const WALLETCHAN_OS_URL = `${WALLETCHAN_SITE_URL}/os`;
+export const WALLETCHAN_MIGRATE_URL = `${WALLETCHAN_SITE_URL}/migrate`;
 export const REVOKE_CASH_URL = "https://revoke.cash";
 export const revokeCashAddressUrl = (address: string) =>
   `${REVOKE_CASH_URL}/address/${encodeURIComponent(address)}`;

@@ -10,6 +10,7 @@ import {
   Spinner,
 } from "@chakra-ui/react";
 import { ArrowBackIcon } from "@chakra-ui/icons";
+import { WALLETCHAN_SITE_HOST } from "@/constants/externalUrls";
 import { ThemedCard } from "@/theme";
 
 interface ClearSigningSettingsProps {
@@ -72,7 +73,7 @@ export default function ClearSigningSettings({ onBack }: ClearSigningSettingsPro
 
       <Box>
         <Text fontSize="xs" color="fg.muted">
-          When enabled, the wallet contacts <Text as="span" fontFamily="mono">walletchan.com</Text> to
+          When enabled, the wallet contacts <Text as="span" fontFamily="mono">{WALLETCHAN_SITE_HOST}</Text> to
           look up descriptors for the contracts you interact with. Disable to
           stop these requests entirely — the raw decoder will still work.
         </Text>

@@ -1,7 +1,10 @@
 import { Core } from "@walletconnect/core";
 import { WalletKit } from "@reown/walletkit";
 import { buildApprovedNamespaces } from "@walletconnect/utils";
-import { WALLETCHAN_ICON_URL } from "@/constants/externalUrls";
+import {
+  WALLETCHAN_ICON_URL,
+  WALLETCHAN_SITE_URL,
+} from "@/constants/externalUrls";
 import { getStoredNetworksInfo, getVisibleChains } from "@/lib/chains";
 import type { WalletConnectProposalRejection } from "@/types/walletConnect";
 import { getActiveAccount } from "./accountStorage";
@@ -109,7 +112,7 @@ export async function initWalletConnect(): Promise<boolean> {
         metadata: {
           name: "WalletChan",
           description: "WalletChan browser wallet extension",
-          url: "https://walletchan.com",
+          url: WALLETCHAN_SITE_URL,
           icons: [WALLETCHAN_ICON_URL],
         },
       });
