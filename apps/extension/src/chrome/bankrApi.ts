@@ -256,8 +256,13 @@ export async function signMessageViaApi(
     }
     body = { signatureType: "personal_sign", message };
   } else if (method === "eth_sign") {
-    // params[0] is address, params[1] is the data hash — best-effort as personal_sign
-    body = { signatureType: "personal_sign", message: params[1] };
+    // SECURITY: eth_sign signs an untyped raw digest and must stay rejected at
+    // intake. Keep the old mapping visible as a reminder not to re-enable it.
+    // params[0] is address, params[1] is the data hash.
+    // body = { signatureType: "personal_sign", message: params[1] };
+    throw new BankrApiError(
+      "eth_sign is deprecated and unsafe; use personal_sign or eth_signTypedData_v4"
+    );
   } else if (method.startsWith("eth_signTypedData")) {
     // params[0] is address, params[1] is typed data (may be stringified JSON)
     let typedData = params[1];
