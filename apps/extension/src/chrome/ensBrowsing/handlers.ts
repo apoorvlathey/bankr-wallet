@@ -38,7 +38,13 @@ import {
   removeMfsPath,
   unpinFromKubo,
 } from "./kubo";
-import { isDarkThemeId, isThemeId, type ThemeId } from "@/theme/tokens";
+import {
+  DEFAULT_THEME_ID,
+  SELECTED_THEME_STORAGE_KEY,
+  isDarkThemeId,
+  isThemeId,
+  type ThemeId,
+} from "@/theme/tokens";
 import {
   listWeb3Entries,
   mfsPathFor,
@@ -432,12 +438,12 @@ export function handleEnsBrowsingMessage(
     // paint without loading Chakra. We hand it a flat token set; the banner
     // re-renders on `chrome.storage.onChanged` when the user switches theme.
     (async () => {
-      const stored = (await chrome.storage.local.get("selectedThemeId")) as {
+      const stored = (await chrome.storage.local.get(SELECTED_THEME_STORAGE_KEY)) as {
         selectedThemeId?: string;
       };
       const themeId: ThemeId = isThemeId(stored.selectedThemeId)
         ? stored.selectedThemeId
-        : "bauhaus";
+        : DEFAULT_THEME_ID;
       const isDark = isDarkThemeId(themeId);
       const theme =
         isDark

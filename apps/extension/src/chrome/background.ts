@@ -256,6 +256,11 @@ import {
 import { unhidePortfolioToken } from "./hiddenPortfolioTokens";
 import { getResolvedChainById } from "@/lib/chains";
 import type { NetworksInfo } from "@/types";
+import {
+  FRESH_INSTALL_THEME_ID,
+  SELECTED_THEME_STORAGE_KEY,
+  isThemeId,
+} from "@/theme/tokens";
 
 import {
   isSidePanelSupported,
@@ -607,9 +612,25 @@ async function migrateCustomOptimismChain(): Promise<void> {
   }
 }
 
+async function initializeThemeForFreshInstall(): Promise<void> {
+  const stored = (await chrome.storage.local.get(SELECTED_THEME_STORAGE_KEY)) as Record<
+    string,
+    unknown
+  >;
+
+  if (isThemeId(stored[SELECTED_THEME_STORAGE_KEY])) {
+    return;
+  }
+
+  await chrome.storage.local.set({
+    [SELECTED_THEME_STORAGE_KEY]: FRESH_INSTALL_THEME_ID,
+  });
+}
+
 // Handle extension install/update
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === "install") {
+    await initializeThemeForFreshInstall();
     // First time install - open onboarding page
     const onboardingUrl = chrome.runtime.getURL("onboarding.html");
     await chrome.tabs.create({ url: onboardingUrl });

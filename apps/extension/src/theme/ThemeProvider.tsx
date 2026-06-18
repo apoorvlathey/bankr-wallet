@@ -14,7 +14,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { ChakraProvider } from "@chakra-ui/react";
 import { createChakraTheme } from "./createTheme";
-import type { ThemeId, ThemeTokens } from "./tokens";
+import { DEFAULT_THEME_ID, type ThemeId, type ThemeTokens } from "./tokens";
 import { bauhausTokens } from "./themes/bauhaus";
 import { midnightTokens } from "./themes/midnight";
 import { useThemeSelection } from "./useThemeSelection";
@@ -32,8 +32,8 @@ export const themes: Record<ThemeId, ThemeTokens> = {
 /** Ordered list for theme picker UIs */
 // eslint-disable-next-line react-refresh/only-export-components
 export const themeList: ThemeTokens[] = [
-  bauhausTokens,
   midnightTokens,
+  bauhausTokens,
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ interface ThemeProviderProps {
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const { themeId, setThemeId } = useThemeSelection();
 
-  const tokens = themes[themeId] ?? bauhausTokens;
+  const tokens = themes[themeId] ?? themes[DEFAULT_THEME_ID];
 
   // Rebuild the Chakra theme only when the active theme ID changes.
   // The factory output is large; memoizing keeps switching cheap.

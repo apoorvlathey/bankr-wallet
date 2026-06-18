@@ -34,12 +34,12 @@ apps/extension/src/theme/
 ├── createTheme.ts           # Factory: tokens → Chakra extendTheme config (Button/Input/
 │                            #   Modal/Menu/Popover/Slider/Tooltip baseStyles)
 ├── ThemeProvider.tsx        # React context + ChakraProvider wrapper, switches at runtime
-├── useThemeSelection.ts     # chrome.storage.local read/write
+├── useThemeSelection.ts     # chrome.storage.local read/write; missing selection falls back to Bauhaus
 ├── useStripTokens.ts        # Shared dark CTA strip color pair (used in 8+ places)
 ├── bootstrap.ts             # Pre-React paint sync to avoid theme flash
 ├── themes/
-│   ├── bauhaus.ts           # Default theme
-│   └── midnight.ts          # Dark theme
+│   ├── bauhaus.ts           # Light geometric fallback for existing installs with no stored selection
+│   └── midnight.ts          # Default dark theme for fresh installs
 └── primitives/              # Theme-aware atoms (ThemedCard, ThemedField, IconBox, …)
 ```
 
@@ -48,6 +48,10 @@ synchronously before React renders, which reads a localStorage mirror of the
 canonical `chrome.storage.local` selection and sets `<html data-theme=...>`.
 The CSS in `index.css` / `onboarding.css` uses theme-attribute selectors so
 the very first paint matches the user's choice — no flash of the wrong theme.
+Fresh installs initialize `selectedThemeId` to Midnight from the service
+worker/onboarding path. Existing installs that predate the setting and still
+lack `selectedThemeId` fall back to Bauhaus so updates do not auto-change their
+appearance.
 
 **Component contract:** Components must consume **intent tokens** —
 `accent.primary`, `surface.raised`, `chart.numeric`, etc. — never theme-color

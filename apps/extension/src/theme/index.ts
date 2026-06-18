@@ -14,8 +14,6 @@ export {
   loadSelectedThemeId,
   saveSelectedThemeId,
   readBootstrapThemeId,
-  SELECTED_THEME_STORAGE_KEY,
-  DEFAULT_THEME_ID,
 } from "./useThemeSelection";
 export { useStripTokens } from "./useStripTokens";
 export type { StripTokens, StripVariant } from "./useStripTokens";
@@ -65,4 +63,11 @@ export type {
   ThemeDecorators,
   ThemePreview,
 } from "./tokens";
-export { THEME_IDS, isThemeId, isDarkThemeId } from "./tokens";
+export {
+  THEME_IDS,
+  SELECTED_THEME_STORAGE_KEY,
+  DEFAULT_THEME_ID,
+  FRESH_INSTALL_THEME_ID,
+  isThemeId,
+  isDarkThemeId,
+} from "./tokens";

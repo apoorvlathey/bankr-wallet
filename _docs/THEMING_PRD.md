@@ -296,17 +296,17 @@ The existing `apps/extension/src/theme.ts` gets deleted at the end of Phase 1 (i
 
 | Location | Key | Shape | Default | Introduced |
 |---|---|---|---|---|
-| `chrome.storage.local` | `selectedThemeId` | `"bauhaus" \| "midnight"` | `"bauhaus"` | v3.2.0 |
+| `chrome.storage.local` | `selectedThemeId` | `"bauhaus" \| "midnight"` | Fresh install writes `"midnight"`; missing/invalid fallback is `"bauhaus"` | v3.2.0 |
 
-**Why `local`, not `sync`:** sync causes cross-device flash during hydration (device A is on Midnight, opens on device B which defaulted to Bauhaus, flashes). Local gives a clean per-device experience with zero migration complexity.
+**Why `local`, not `sync`:** sync causes cross-device flash during hydration (device A is on Bauhaus, opens on device B which defaults to Midnight, flashes). Local gives a clean per-device experience without cross-device preference churn.
 
 **Hydration pattern** (avoids flash on popup open):
 
-1. `ThemeProvider` synchronously renders with `themes.bauhaus` on first mount.
+1. `ThemeProvider` synchronously renders with the bootstrap theme. If no preference exists, it uses the Bauhaus compatibility fallback.
 2. Immediately after mount, it calls `chrome.storage.local.get("selectedThemeId")` and swaps.
 3. To eliminate the flash entirely, we write the selected theme ID to `document.documentElement.dataset.theme` in `index.tsx` **before** React mounts, and read it synchronously from `ThemeProvider`. The dataset attribute is updated every time the user changes themes.
 
-**Migration:** None needed — absence of the key = new install or existing user on default Bauhaus. Both cases resolve to `"bauhaus"` → legacy visuals preserved.
+**Migration:** None needed for existing users — absence of the key still resolves to `"bauhaus"` so updates do not auto-change appearance. Fresh installs explicitly write `"midnight"` and do not follow the user's system light/dark mode.
 
 **Temporary theme experiments:** use the preview workflow in
 `_docs/EXTENSION_PREVIEW.md`. Do not leave experimental theme IDs in this
@@ -814,7 +814,7 @@ This requires a grep + replace sweep. ~30-50 usage sites.
 - `apps/extension/src/components/decodedParams/{UintParam,IntParam,BytesParam,StringParam}.tsx` — all 4 files: `numericColor` conditional → `"chart.numeric"`. Dropped `useTheme` imports.
 - `apps/extension/src/components/{TransactionConfirmation,BatchTransactionConfirmation,SignatureRequestConfirmation,WatchAssetConfirmation,PendingTxList,Chat/ChatHeader,Chat/ChatList}.tsx` — all 7 files migrated to `useStripTokens()`. Confirmation files (Tx/Batch/Sig) keep their `useTheme()` import for ornament wrapping (`!isDarkTheme && ...`).
 - `apps/extension/src/components/{TransactionConfirmation,SignatureRequestConfirmation}.tsx` — Phase 8 Reject All button bug fixed: idle `color="status.error.fg"` (WHITE in Bauhaus, invisible) → `color="chart.negative"` (RED in both themes). `BatchTransactionConfirmation.tsx` was already correct.
-- `apps/extension/src/index.css` and `apps/extension/src/onboarding.css` — added `html[data-theme="midnight"]` selectors so the popup-window-mode wash and the onboarding body bg pick up the Midnight base color (`#0A0C10`) before React paints. Bauhaus default `#F0F0F0` is preserved.
+- `apps/extension/src/index.css` and `apps/extension/src/onboarding.css` — added `html[data-theme="midnight"]` selectors so the popup-window-mode wash and the onboarding body bg pick up the Midnight base color (`#0A0C10`) before React paints. Bauhaus keeps its `#F0F0F0` base when selected.
 
 **Refactor heuristic additions (the running cleanup playbook):**
 

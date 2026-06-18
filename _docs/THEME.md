@@ -554,12 +554,12 @@ One key only:
 
 | Location | Key | Shape | Default | Introduced |
 |---|---|---|---|---|
-| `chrome.storage.local` | `selectedThemeId` | `"bauhaus" \| "midnight"` | `"bauhaus"` | v3.2.0 |
+| `chrome.storage.local` | `selectedThemeId` | `"bauhaus" \| "midnight"` | Fresh install writes `"midnight"`; missing/invalid fallback is `"bauhaus"` | v3.2.0 |
 
 Why `local`, not `sync`: cross-device sync would cause a flash on the second
-device during hydration (device A is on Midnight, device B opens defaulted to
-Bauhaus, then switches). Local gives a clean per-device experience with zero
-migration complexity.
+device during hydration (device A is on Bauhaus, device B opens defaulted to
+Midnight, then switches). Local gives a clean per-device experience without
+cross-device preference churn.
 
 **Migration:** none needed. Absence of the key resolves to `"bauhaus"` →
 existing users see legacy visuals on first load post-update.

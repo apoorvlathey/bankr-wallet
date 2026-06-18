@@ -12,8 +12,8 @@
  * and rely on the async hydration in `useThemeSelection` to catch up.
  */
 
-import { DEFAULT_THEME_ID, loadSelectedThemeId } from "./useThemeSelection";
-import { isThemeId, type ThemeId } from "./tokens";
+import { loadSelectedThemeId } from "./useThemeSelection";
+import { DEFAULT_THEME_ID, isThemeId, type ThemeId } from "./tokens";
 
 export const LOCALSTORAGE_THEME_KEY = "selectedThemeId";
 

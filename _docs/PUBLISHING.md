@@ -253,6 +253,7 @@ Chrome extensions auto-update silently. Users cannot choose to stay on an old ve
 | v1.0.0  | Vault key (on first unlock)                                             | `authHandlers.ts` auto-migrates `encryptedApiKey` → `encryptedVaultKeyMaster` + `encryptedApiKeyVault`                                                                                                                                           |
 | v1.3.0  | Private key vault-key encryption (on first unlock with master password) | `authHandlers.ts` auto-migrates `pkVault` and `mnemonicVault` entries from password encryption (`salt !== ""`) to vault-key encryption (`salt === ""`). Enables agent password to sign transactions. Idempotent, dual-format support maintained. |
 | v3.2.0  | None (additive only)                                                    | `selectedThemeId` added to `chrome.storage.local`. Absence resolves to default `"bauhaus"`, so legacy users see no change. No migration code required. See `_docs/THEMING_PRD.md`.                                                              |
+| v3.17.0 | Fresh-install theme initialization                                      | New installs write `selectedThemeId: "midnight"` before onboarding opens. Updates do not write the key, and missing/invalid values still fall back to `"bauhaus"` so existing installs are not auto-changed. No storage shape change.          |
 
 ### Testing an update locally
 

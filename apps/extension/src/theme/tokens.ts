@@ -21,6 +21,10 @@ export const THEME_IDS = ["bauhaus", "midnight"] as const;
 
 export type ThemeId = (typeof THEME_IDS)[number];
 
+export const SELECTED_THEME_STORAGE_KEY = "selectedThemeId";
+export const DEFAULT_THEME_ID: ThemeId = "bauhaus";
+export const FRESH_INSTALL_THEME_ID: ThemeId = "midnight";
+
 export function isThemeId(value: unknown): value is ThemeId {
   return typeof value === "string" && THEME_IDS.includes(value as ThemeId);
 }

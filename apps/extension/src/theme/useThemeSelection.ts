@@ -2,7 +2,7 @@
  * useThemeSelection — read and write the user's selected theme.
  *
  * Storage location: `chrome.storage.local.selectedThemeId`
- *   - Default: `"bauhaus"` (legacy users get the existing visuals on first load)
+ *   - Default: `"bauhaus"` when no preference exists, preserving existing installs
  *   - Updated synchronously across popup instances via the `chrome.storage.onChanged` listener
  *
  * The hook is intentionally minimal: it only deals with the persisted preference
@@ -11,10 +11,12 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
-import { isThemeId, type ThemeId } from "./tokens";
-
-export const SELECTED_THEME_STORAGE_KEY = "selectedThemeId";
-export const DEFAULT_THEME_ID: ThemeId = "bauhaus";
+import {
+  DEFAULT_THEME_ID,
+  SELECTED_THEME_STORAGE_KEY,
+  isThemeId,
+  type ThemeId,
+} from "./tokens";
 
 /**
  * Synchronously read the cached theme ID from `document.documentElement.dataset.theme`.
