@@ -24,8 +24,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const params = new URLSearchParams({
+      chainIds: chainId,
+      list: "full",
+    });
+
     const response = await fetch(
-      `${BUNGEE_API_URL}/api/v1/tokens/list?chainId=${chainId}`,
+      `${BUNGEE_API_URL}/v3/swap/tokens/list?${params.toString()}`,
       {
         headers: bungeeHeaders(),
         signal: AbortSignal.timeout(15_000),
@@ -48,7 +53,7 @@ export async function GET(request: NextRequest) {
       headers: { "Cache-Control": "public, max-age=3600" },
     });
   } catch (error) {
-    console.error("Bungee tokens API error:", error);
+    console.error("Socket tokens API error:", error);
     if (cached) {
       return NextResponse.json(cached.data, {
         headers: { "Cache-Control": "public, max-age=300" },

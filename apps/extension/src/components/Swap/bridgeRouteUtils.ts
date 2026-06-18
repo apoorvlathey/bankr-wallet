@@ -1,11 +1,10 @@
 import type {
-  BungeeAutoRoute,
   BungeeManualRoute,
   BungeeQuoteResponse,
 } from "@walletchan/shared/bungee";
 
-export type ExecutableBridgeRoute = BungeeManualRoute | BungeeAutoRoute;
-export type ExecutableBridgeRouteSource = "manual" | "auto-tx";
+export type ExecutableBridgeRoute = BungeeManualRoute;
+export type ExecutableBridgeRouteSource = "tx";
 
 export interface ExecutableBridgeRouteSelection {
   route: ExecutableBridgeRoute;
@@ -13,21 +12,15 @@ export interface ExecutableBridgeRouteSelection {
 }
 
 /**
- * Prefer manual routes because build-tx can refresh the executable calldata.
- * Some Bungee pairs only return an autoRoute with txData and no typed-data
- * signature; that is still directly executable by the extension.
+ * Socket Swap V3 returns executable tx routes in result.manualRoutes[0] via
+ * our backend adapter. The legacy auto/submit flow is intentionally ignored.
  */
 export function getExecutableBridgeRouteSelection(
   quote: BungeeQuoteResponse | null | undefined,
 ): ExecutableBridgeRouteSelection | null {
   const manualRoute = quote?.result?.manualRoutes?.[0];
   if (manualRoute) {
-    return { route: manualRoute, source: "manual" };
-  }
-
-  const autoRoute = quote?.result?.autoRoute;
-  if (autoRoute?.txData) {
-    return { route: autoRoute, source: "auto-tx" };
+    return { route: manualRoute, source: "tx" };
   }
 
   return null;

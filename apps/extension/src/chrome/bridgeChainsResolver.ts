@@ -4,7 +4,7 @@
  * - **Source chains**: must be signable by the extension. Uses the runtime
  *   configured chain list (built-ins + user-added custom chains), filtered by
  *   account type, and keeps chains that 0x supports for same-chain swaps OR
- *   Bungee supports as bridge sources.
+ *   Socket supports as bridge sources.
  * - **Destination chains**: only needs metadata for display + tx-link.
  *   Returns Bungee's full EVM-only list so the picker auto-expands when
  *   Bungee adds support for new chains.

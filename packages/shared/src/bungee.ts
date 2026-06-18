@@ -1,6 +1,7 @@
 /**
- * Bungee API types — covers /quote, /build-tx, /submit, /status, /supported-chains, /tokens/list.
- * Reference: https://docs.bungee.exchange
+ * Socket Swap V3 API types, kept under the historical `bungee` export path.
+ * Covers /quote, /status, /supported-chains, /tokens/list.
+ * Reference: https://docs.socket.tech
  *
  * Shared across the website (`apps/website/app/bridge/**`) and the extension
  * (`apps/extension/src/chrome/bridgeApi.ts`).
@@ -73,15 +74,23 @@ export interface BungeeTxData {
   data: string;
   value: string;
   chainId: number;
+  gas?: string;
+  gasPrice?: string;
 }
 
 export interface BungeeManualRoute {
   output: BungeeAmountAndUsd;
   quoteId: string;
   quoteExpiry?: number;
+  expiresAt?: number;
   gasFee?: {
     gasAmount?: string;
     feesInUsd?: number;
+    gasToken?: BungeeToken;
+    gasLimit?: string;
+    gasPrice?: string;
+    estimatedFee?: string;
+    feeInUsd?: number;
   };
   routeDetails?: {
     name?: string;
@@ -90,9 +99,11 @@ export interface BungeeManualRoute {
   estimatedTime?: number;
   approvalData?: BungeeApprovalData | null;
   txData?: BungeeTxData;
+  /** Raw Socket V3 route for forward-compatible fields we do not render yet. */
+  socketRoute?: Record<string, unknown>;
 }
 
-/** Auto-mode route: user signs the Permit2 EIP-712 payload and we POST it to /submit. */
+/** Legacy Bungee auto-mode route. Socket V3 clients should use manualRoutes[].txData. */
 export interface BungeeAutoRoute {
   userOp?: string;
   requestHash?: string;
@@ -126,6 +137,8 @@ export interface BungeeAutoRoute {
 
 export interface BungeeQuoteResult {
   input: BungeeAmountAndUsd;
+  /** Socket Swap V3's native route array. */
+  routes?: Record<string, unknown>[];
   manualRoutes: BungeeManualRoute[];
   autoRoute?: BungeeAutoRoute | null;
   quoteId?: string;
@@ -141,27 +154,13 @@ export interface BungeeQuoteResponse {
   feeBps?: string;
 }
 
-export interface BungeeBuildTxResult {
-  txData: BungeeTxData;
-  approvalData?: BungeeApprovalData | null;
-  userOp?: string;
-}
-
-export interface BungeeBuildTxResponse {
-  success: boolean;
-  result: BungeeBuildTxResult;
-}
-
-export interface BungeeSubmitResponse {
-  success: boolean;
-  result: {
-    requestHash: string;
-  };
-}
-
 export interface BungeeStatusEntry {
   /** Overall request hash. */
   hash?: string;
+  /** Socket Swap V3 quote id. Stored in `hash` too for legacy callers. */
+  quoteId?: string;
+  status?: string;
+  statusCode?: string;
   bungeeStatusCode: BungeeStatusCode;
   originData?: {
     txHash?: string;
@@ -187,6 +186,8 @@ export interface BungeeStatusEntry {
     name?: string;
     logoURI?: string;
   };
+  /** Raw Socket V3 status object for forward-compatible fields. */
+  socketStatus?: Record<string, unknown>;
 }
 
 export interface BungeeStatusResponse {

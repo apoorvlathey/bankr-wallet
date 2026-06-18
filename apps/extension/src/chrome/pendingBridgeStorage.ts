@@ -2,7 +2,7 @@
  * Pending bridge storage.
  *
  * Keyed by the source-chain tx hash because that's the canonical handle we
- * always have post-broadcast (request hash sometimes lags). Each entry tracks
+ * always have post-broadcast. Each entry tracks
  * what we need to keep polling `/status` for the destination leg and to
  * surface a final notification, even across service-worker restarts.
  *
@@ -27,13 +27,13 @@ export interface PendingBridge {
   receiverAddress: string;
   /** When we first added this entry. */
   createdAt: number;
-  /** Bungee request hash, learned once /status returns it. */
+  /** Socket quoteId, kept under the legacy requestHash field name. */
   requestHash?: string;
   /** Latest status code we have seen. */
   bungeeStatusCode?: BungeeStatusCode;
   /** When the poller last successfully read /status. */
   lastPolledAt?: number;
-  /** Cosmetic — Bungee route name. */
+  /** Cosmetic — Socket route name. */
   routeName?: string;
 }
 

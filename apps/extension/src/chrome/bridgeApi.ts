@@ -1,6 +1,6 @@
 /**
  * Bridge API layer — calls WalletChan server-side proxy endpoints
- * for Bungee (cross-chain). The proxy holds the BUNGEE_API_KEY +
+ * for Socket Swap V3. The proxy holds the Socket/Bungee API key +
  * affiliate id, normalizes the native-token sentinel, and applies the
  * sWCHAN-tiered integrator fee. See `_docs/BRIDGE.md`.
  *
@@ -12,7 +12,6 @@ import { WALLETCHAN_BRIDGE_API_BASE, WALLETCHAN_ICON_URL } from "@/constants/ext
 import { WCHAN_TOKEN_ADDRESS, BASE_CHAIN_ID } from "@walletchan/shared/contracts";
 import {
   BUNGEE_NATIVE_TOKEN,
-  type BungeeBuildTxResponse,
   type BungeeChain,
   type BungeeChainsResponse,
   type BungeeQuoteResponse,
@@ -27,7 +26,7 @@ const CHAINS_CACHE_TTL = 24 * 60 * 60 * 1000;
 const TOKENS_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
-// Quote / build-tx / status
+// Quote / status
 // ---------------------------------------------------------------------------
 
 export interface BridgeQuoteParams {
@@ -41,7 +40,7 @@ export interface BridgeQuoteParams {
   outputToken: string;
   /** Input amount in wei. */
   inputAmount: string;
-  /** Slippage in percent (e.g. 1 = 1%). Bungee's quote slippage param is percent. */
+  /** Slippage in percent (e.g. 1 = 1%). Socket's quote slippage param is percent. */
   slippage?: number;
 }
 
@@ -69,20 +68,8 @@ export async function fetchBridgeQuote(
   return data;
 }
 
-export async function fetchBridgeBuildTx(
-  quoteId: string,
-): Promise<BungeeBuildTxResponse> {
-  const res = await fetch(`${BRIDGE_API_BASE}/build-tx?quoteId=${encodeURIComponent(quoteId)}`, {
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || data.reason || `API error ${res.status}`);
-  }
-  return data;
-}
-
 export interface BridgeStatusParams {
+  /** Historical field name; Socket V3 expects this value to be the quoteId. */
   requestHash?: string;
   txHash?: string;
 }
@@ -213,7 +200,7 @@ export async function getCachedBungeeTokens(
         return mergePinnedTokens(chainId, cached?.tokens ?? []);
       }
       const data: BungeeTokenListResponse = await res.json();
-      // Bungee's /tokens/list is keyed by chainId string.
+      // Socket's /tokens/list is keyed by chainId string.
       const byChain = data.result ?? {};
       const tokens = byChain[String(chainId)] ?? [];
       await chrome.storage.local.set({

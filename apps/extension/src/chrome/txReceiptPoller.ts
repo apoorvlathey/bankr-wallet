@@ -186,7 +186,7 @@ export async function applyReceiptToHistory(
   await maybeAdvanceSplitBundle(txId, txHash, succeeded ? "success" : "reverted", receipt);
 
   // Cross-chain bridge txs: when the source tx confirms, hand off to the
-  // Bungee status poller for the destination leg. The helper is a no-op
+  // Socket status poller for the destination leg. The helper is a no-op
   // when the entry has no `bridge` meta or has already settled.
   if (succeeded) {
     try {

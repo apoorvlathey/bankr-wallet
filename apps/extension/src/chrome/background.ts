@@ -216,7 +216,6 @@ import {
 import { resolveTokenLogoUrl, resolveTokenMetadata } from "./tokenMetadata";
 import {
   fetchBridgeQuote,
-  fetchBridgeBuildTx,
   fetchBridgeStatus,
   getCachedBungeeChains,
   getCachedBungeeTokens,
@@ -2806,15 +2805,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         inputAmount: message.inputAmount,
         slippage: message.slippage,
       })
-        .then((data) => sendResponse({ success: true, data }))
-        .catch((err) =>
-          sendResponse({ success: false, error: err.message }),
-        );
-      return true;
-    }
-
-    case "fetchBridgeBuildTx": {
-      fetchBridgeBuildTx(message.quoteId)
         .then((data) => sendResponse({ success: true, data }))
         .catch((err) =>
           sendResponse({ success: false, error: err.message }),

@@ -214,8 +214,8 @@ export default function BridgeContent() {
               textAlign="center"
               maxW="md"
             >
-              Powered by Bungee. Single-popup execution where supported, with
-              Permit2 signature fallback.
+              Powered by Socket. Single-popup execution where your wallet
+              supports atomic calls.
             </Text>
 
             <Box

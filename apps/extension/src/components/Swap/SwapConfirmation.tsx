@@ -102,7 +102,7 @@ interface SwapConfirmationProps {
    * Bridge-mode metadata. When set, this screen renders the cross-chain
    * variant: title flips to "Confirm Bridge", buy row shows the destination
    * chain badge alongside the buy token, and the receipt includes the
-   * Bungee route name + estimated time. Gas plumbing is unchanged — the
+   * Socket route name + estimated time. Gas plumbing is unchanged — the
    * underlying source tx still uses MultiTxGasEstimateDisplay's tier picker.
    */
   bridgeMeta?: {
@@ -233,7 +233,7 @@ function SwapConfirmation({
 
   // Bridge fee = msg.value attached to the source tx(s). For LayerZero /
   // Stargate routes this funds destination-chain message delivery and is
-  // paid in the source chain's native token (Bungee returns it inside
+  // paid in the source chain's native token (Socket returns it inside
   // `txData.value`). When the user is bridging native ETH itself, the
   // value also includes the input amount — subtract it to isolate the
   // protocol fee so the row reflects only the cost of bridging.

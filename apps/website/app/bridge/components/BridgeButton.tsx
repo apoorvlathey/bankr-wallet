@@ -13,13 +13,11 @@ import {
   useCapabilities,
   useSendCalls,
   useWaitForCallsStatus,
-  useSignTypedData,
 } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { erc20Abi, maxUint256, type Address } from "viem";
 import {
   BUNGEE_NATIVE_TOKEN,
-  type BungeeApprovalData,
   type BungeeQuoteResponse,
 } from "@walletchan/shared/bungee";
 
@@ -28,8 +26,6 @@ type Step =
   | "switching"
   | "quoting"
   | "approving"
-  | "signing"
-  | "submitting"
   | "broadcasting"
   | "confirming";
 
@@ -71,11 +67,11 @@ export function BridgeButton({
   const { switchChainAsync } = useSwitchChain();
   const { sendTransactionAsync } = useSendTransaction();
   const { writeContractAsync } = useWriteContract();
-  const { signTypedDataAsync } = useSignTypedData();
 
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState<string | null>(null);
   const [pendingBundleId, setPendingBundleId] = useState<string | null>(null);
+  const [pendingQuoteId, setPendingQuoteId] = useState<string | null>(null);
   const [pendingTxHash, setPendingTxHash] = useState<`0x${string}` | null>(null);
 
   // ERC-5792 capability detection on the origin chain.
@@ -125,7 +121,11 @@ export function BridgeButton({
       const hash = last?.transactionHash as `0x${string}` | undefined;
       if (hash && pendingTxHash !== hash) {
         setPendingTxHash(hash);
-        onSubmitted({ txHash: hash, chainId: originChainId });
+        onSubmitted({
+          requestHash: pendingQuoteId ?? undefined,
+          txHash: hash,
+          chainId: originChainId,
+        });
       }
       setStep("idle");
       setPendingBundleId(null);
@@ -146,6 +146,7 @@ export function BridgeButton({
     bundleError,
     pendingBundleId,
     pendingTxHash,
+    pendingQuoteId,
     onSubmitted,
     originChainId,
   ]);
@@ -196,38 +197,30 @@ export function BridgeButton({
         throw new Error("Failed to fetch firm quote");
       }
 
-      const manualRoute = firm.result.manualRoutes?.[0];
-      const autoRoute = firm.result.autoRoute;
+      const route = firm.result.manualRoutes?.[0];
+      if (!route) {
+        throw new Error("No bridge route returned by Socket");
+      }
+
+      const txData = route.txData;
+      const approvalData = route.approvalData ?? null;
+      if (!txData?.to) {
+        throw new Error("Socket did not return bridge transaction data");
+      }
 
       // ---- Path A: ERC-5792 batched manual mode (1 popup) ----
-      if (supportsAtomicBatch && manualRoute) {
-        // Need build-tx for atomic batches because the quote response's
-        // manualRoutes entry may not include the executable txData payload.
-        const buildResp = await fetch(
-          `/api/bridge/build-tx?quoteId=${encodeURIComponent(manualRoute.quoteId)}`,
-        );
-        const buildData = await buildResp.json();
-        if (!buildResp.ok || !buildData.success) {
-          throw new Error(
-            buildData.error || `Build-tx failed: ${buildResp.status}`,
-          );
-        }
-
-        const txData = buildData.result.txData as {
-          to: `0x${string}`;
-          data: `0x${string}`;
-          value: string;
-        };
-        const approvalData = buildData.result
-          .approvalData as BungeeApprovalData | null;
-
+      if (supportsAtomicBatch) {
         const calls: Array<{
           to: `0x${string}`;
           data: `0x${string}`;
           value: bigint;
         }> = [];
 
-        if (approvalData && !isNative(inputToken)) {
+        if (
+          approvalData &&
+          !isNative(inputToken) &&
+          (currentAllowance ?? 0n) < BigInt(approvalData.amount)
+        ) {
           // approve(spender, amount)
           const approveData =
             "0x095ea7b3" +
@@ -243,14 +236,16 @@ export function BridgeButton({
         }
 
         calls.push({
-          to: txData.to,
-          data: txData.data,
+          to: txData.to as `0x${string}`,
+          data: txData.data as `0x${string}`,
           value: BigInt(txData.value || "0"),
         });
 
         setStep("broadcasting");
         const { id } = await sendCallsAsync({ calls });
         setPendingBundleId(id);
+        setPendingQuoteId(route.quoteId);
+        onSubmitted({ requestHash: route.quoteId, chainId: originChainId });
         setStep("confirming");
         return;
       }
@@ -258,98 +253,44 @@ export function BridgeButton({
       // ---- Path B: Manual mode without atomic batching ----
       // ERC20: approve if needed, then send the bridge tx
       // Native: skip approve, just send
-      if (manualRoute) {
-        const buildResp = await fetch(
-          `/api/bridge/build-tx?quoteId=${encodeURIComponent(manualRoute.quoteId)}`,
-        );
-        const buildData = await buildResp.json();
-        if (!buildResp.ok || !buildData.success) {
-          throw new Error(
-            buildData.error || `Build-tx failed: ${buildResp.status}`,
-          );
-        }
-
-        const txData = buildData.result.txData;
-        const approvalData = buildData.result
-          .approvalData as BungeeApprovalData | null;
-
-        if (
-          approvalData &&
-          !isNative(inputToken) &&
-          (currentAllowance ?? 0n) < BigInt(approvalData.amount)
-        ) {
-          setStep("approving");
-          const approveHash = await writeContractAsync({
-            address: approvalData.tokenAddress as Address,
-            abi: erc20Abi,
-            functionName: "approve",
-            args: [
-              approvalData.spenderAddress as Address,
-              BigInt(approvalData.amount),
-            ],
-            chainId: originChainId,
-          });
-          // Wait for receipt before broadcasting the bridge tx
-          // (best-effort: many wallets will accept the next tx anyway)
-          await new Promise((r) => setTimeout(r, 2000));
-          void approveHash;
-        }
-
-        setStep("broadcasting");
-        const hash = await sendTransactionAsync({
-          to: txData.to as Address,
-          data: txData.data as `0x${string}`,
-          value: BigInt(txData.value || "0"),
+      if (
+        approvalData &&
+        !isNative(inputToken) &&
+        (currentAllowance ?? 0n) < BigInt(approvalData.amount)
+      ) {
+        setStep("approving");
+        const approveHash = await writeContractAsync({
+          address: approvalData.tokenAddress as Address,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [
+            approvalData.spenderAddress as Address,
+            BigInt(approvalData.amount),
+          ],
           chainId: originChainId,
         });
-        setPendingTxHash(hash);
-        onSubmitted({ txHash: hash, chainId: originChainId });
-        setStep("confirming");
-        return;
+        // Wait for receipt before broadcasting the bridge tx
+        // (best-effort: many wallets will accept the next tx anyway)
+        await new Promise((r) => setTimeout(r, 2000));
+        void approveHash;
       }
 
-      // ---- Path C: Auto mode (Permit2 signature) ----
-      if (autoRoute && autoRoute.signTypedData) {
-        setStep("signing");
-        // signTypedDataAsync's parameter type is heavily narrowed and doesn't
-        // accept dynamic schemas. Bungee's typed-data payload is well-formed
-        // EIP-712; cast through unknown to satisfy wagmi's generic inference.
-        const sig = await signTypedDataAsync(
-          {
-            domain: autoRoute.signTypedData.domain,
-            types: autoRoute.signTypedData.types,
-            primaryType:
-              autoRoute.signTypedData.primaryType ??
-              "PermitWitnessTransferFrom",
-            message: autoRoute.signTypedData.message,
-          } as unknown as Parameters<typeof signTypedDataAsync>[0],
-        );
-
-        setStep("submitting");
-        const submitResp = await fetch("/api/bridge/submit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            quoteId: autoRoute.quoteId,
-            requestType: autoRoute.requestType,
-            request: autoRoute.request,
-            userSignature: sig,
-          }),
-        });
-        const submitData = await submitResp.json();
-        if (!submitResp.ok || !submitData.success) {
-          throw new Error(
-            submitData.error || `Submit failed: ${submitResp.status}`,
-          );
-        }
-
-        const requestHash = submitData.result?.requestHash as string;
-        onSubmitted({ requestHash, chainId: originChainId });
-        setStep("idle");
-        return;
-      }
-
-      throw new Error("No bridge route returned by Bungee");
+      setStep("broadcasting");
+      const hash = await sendTransactionAsync({
+        to: txData.to as Address,
+        data: txData.data as `0x${string}`,
+        value: BigInt(txData.value || "0"),
+        chainId: originChainId,
+      });
+      setPendingTxHash(hash);
+      setPendingQuoteId(route.quoteId);
+      onSubmitted({
+        requestHash: route.quoteId,
+        txHash: hash,
+        chainId: originChainId,
+      });
+      setStep("confirming");
+      return;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       // Strip noisy boilerplate from wallet errors
@@ -381,8 +322,6 @@ export function BridgeButton({
     switching: "Switching network…",
     quoting: "Getting fresh quote…",
     approving: "Approving token…",
-    signing: "Sign in your wallet…",
-    submitting: "Submitting bridge…",
     broadcasting: "Confirm in your wallet…",
     confirming: "Waiting for confirmation…",
   };

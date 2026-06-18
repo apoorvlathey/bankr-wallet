@@ -49,7 +49,7 @@ export async function GET() {
 
   try {
     const response = await fetch(
-      `${BUNGEE_API_URL}/api/v1/supported-chains`,
+      `${BUNGEE_API_URL}/v3/swap/supported-chains`,
       {
         headers: bungeeHeaders(),
         signal: AbortSignal.timeout(15_000),
@@ -74,7 +74,7 @@ export async function GET() {
       headers: { "Cache-Control": "public, max-age=3600" },
     });
   } catch (error) {
-    console.error("Bungee chains API error:", error);
+    console.error("Socket chains API error:", error);
     if (cache) {
       return NextResponse.json(cache.data, {
         headers: { "Cache-Control": "public, max-age=300" },

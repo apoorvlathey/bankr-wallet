@@ -40,7 +40,7 @@ interface BridgeQuoteDisplayProps {
   buyTokenSymbol: string;
   buyTokenDecimals: number;
   buyTokenPriceUsd?: number;
-  /** User-selected slippage in bps (100 = 1%). Used ONLY when Bungee omits
+  /** User-selected slippage in bps (100 = 1%). Used ONLY when Socket omits
    *  `output.minAmountOut` — when present we trust whatever Bungee returns. */
   slippageBps: number;
   /** Source chain native symbol (e.g., "ETH") used to label the bridge
@@ -65,7 +65,7 @@ export default function BridgeQuoteDisplay({
   const route = getExecutableBridgeRoute(quote);
   if (!route) return null;
 
-  // Trust Bungee's `output.minAmountOut` when present. Only when it's truly
+  // Trust Socket's `output.minAmountOut` when present. Only when it's truly
   // omitted do we fall back to deriving the floor locally from the user-
   // selected slippage so the UI doesn't restate the expected amount.
   const amountWei = route.output.amount;
@@ -105,10 +105,7 @@ export default function BridgeQuoteDisplay({
 
   // Bridge protocol fee = msg.value on the source tx. For LayerZero / Stargate
   // routes this funds destination-chain message delivery and is paid in the
-  // source chain's native token. Bungee returns it under `txData.value` (in
-  // wei); some quotes omit it until build-tx, in which case the row stays
-  // hidden here — the confirm screen always surfaces it from the firm
-  // build-tx response.
+  // source chain's native token. Socket returns it under `txData.value`.
   const protocolFeeWei = (() => {
     const raw = route.txData?.value;
     if (!raw) return 0n;

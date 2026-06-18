@@ -1,7 +1,7 @@
 /**
  * Bridge status poller.
  *
- * After a cross-chain source-tx confirms, we ask Bungee's `/status` endpoint
+ * After a cross-chain source-tx confirms, we ask Socket's status endpoint
  * (every 5s → 30s, 15 min cap) for the destination leg. Once a terminal
  * status code lands, we update the tx-history entry's `bridge` field with the
  * destination tx hash, fire a browser notification, and drop the pending
@@ -83,7 +83,10 @@ async function checkAndApplyStatus(sourceTxHash: string): Promise<boolean> {
 
   let statusEntry: BungeeStatusEntry | undefined;
   try {
-    const res = await fetchBridgeStatus({ txHash: sourceTxHash });
+    const res = await fetchBridgeStatus({
+      requestHash: entry.requestHash,
+      txHash: sourceTxHash,
+    });
     statusEntry = res.result?.[0];
   } catch {
     // Network blip — let the backoff loop retry.

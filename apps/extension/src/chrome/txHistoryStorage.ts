@@ -119,12 +119,12 @@ export interface AssetChangeRecord {
 /**
  * Metadata for cross-chain bridge txs. Present on the **source-chain** tx-
  * history entry. The source tx itself confirms via the normal receipt poller;
- * once it does, `bridgeStatusPoller` polls Bungee's /status endpoint and
+ * once it does, `bridgeStatusPoller` polls Socket's status endpoint and
  * updates `destinationTxHash` + `bungeeStatusCode` here when the destination
  * leg lands. Optional — only present on bridge entries.
  */
 export interface BridgeMeta {
-  /** Bungee request hash. May arrive after the source tx is mined. */
+  /** Socket quoteId, kept under the legacy requestHash field name. */
   requestHash?: string;
   /** Source chain (same as the parent CompletedTransaction.chainId). */
   sourceChainId: number;
@@ -135,9 +135,9 @@ export interface BridgeMeta {
   destinationChainName: string;
   /** Destination tx hash, populated once Bungee fulfills the request. */
   destinationTxHash?: string;
-  /** Latest Bungee status code seen for this request. */
+  /** Latest mapped bridge status code seen for this request. */
   bungeeStatusCode?: number;
-  /** Bungee route name (e.g. "stargate-v2"). Cosmetic. */
+  /** Socket route name (e.g. "Across"). Cosmetic. */
   routeName?: string;
   /** Destination receiver address. Defaults to source `from` when omitted. */
   receiverAddress?: string;

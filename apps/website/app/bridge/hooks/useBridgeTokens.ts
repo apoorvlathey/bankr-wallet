@@ -17,7 +17,7 @@ async function fetchTokens(chainId: number): Promise<BungeeToken[]> {
     if (!response.ok || !data.success) {
       throw new Error("Failed to load tokens");
     }
-    // Bungee returns { result: { "<chainId>": Token[] } }
+    // Socket returns { result: { "<chainId>": Token[] } }
     const byChain = data.result ?? {};
     const tokens = byChain[String(chainId)] ?? [];
     cache.set(chainId, tokens);

@@ -2593,11 +2593,12 @@ SwapView (internal sellChainId, buyChainId — never updates the global chain)
   └─ different chain → bridge mode
        1. fetchBridgeQuote → walletchan.eth.sh/api/bridge/quote
           (server applies sWCHAN-tiered fee; same isPremiumFee surfaced)
-       2. route selection → prefer manualRoutes[0]; fallback to autoRoute.txData
-          when Bungee returns executable tx data without Permit2 typed-data
-       3. handlePrepareBridge → fetchBridgeBuildTx for manual route firm tx data
-          OR use autoRoute.txData directly
+       2. route selection → use manualRoutes[0]; the server adapts Socket V3
+          result.routes[] into this legacy field.
+       3. handlePrepareBridge → re-quote and use approvalData + txData from
+          manualRoutes[0] directly. Socket V3 has no build-tx or submit step.
        4. SwapTxEntry[]: [approve?, bridge] with bridge meta on the last entry
+          (requestHash stores Socket's quoteId for status polling)
        5. SwapConfirmation (same screen) renders with bridgeMeta prop —
           title flips, dest chain badge appears, gas plumbing unchanged.
        6. Bankr path: encodeBatchCalls → ERC-7821 atomic via executeSwapBatch.
@@ -2611,7 +2612,7 @@ SwapView (internal sellChainId, buyChainId — never updates the global chain)
 |---|---|
 | Bridge metadata on `CompletedTransaction` | `apps/extension/src/chrome/txHistoryStorage.ts` (optional `bridge?` field) |
 | In-flight bridges across SW restarts | `apps/extension/src/chrome/pendingBridgeStorage.ts` (`pendingBridges` chrome.storage.local key) |
-| Status polling | `apps/extension/src/chrome/bridgeStatusPoller.ts` (5s → 30s exp. backoff, 15-min cap, terminal codes from `BungeeStatusCode`) |
+| Status polling | `apps/extension/src/chrome/bridgeStatusPoller.ts` (5s → 30s exp. backoff, 15-min cap, polls Socket status with the stored quoteId/requestHash and terminal codes from `BungeeStatusCode`) |
 | Post-source-tx hook | `txReceiptPoller.applyReceiptToHistory` calls `maybeStartBridgePolling(txId)` on success; the Bankr direct-success path in `txHandlers.processSwapTxBankr` does the same |
 | Service-worker restart resilience | `background.ts` calls `resumePendingBridgePollers()` on startup |
 | Browser notification | `chrome.notifications.create` from `bridgeStatusPoller.fireTerminalNotification`; click target is the **destination** explorer URL (stored under `notification-<id>` so the existing click handler routes to the right tab) |

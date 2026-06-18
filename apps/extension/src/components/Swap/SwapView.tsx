@@ -1020,42 +1020,22 @@ function SwapView({
         return;
       }
 
-      // 3. Resolve executable tx data. Manual routes require build-tx;
-      // auto-tx routes already carry txData and do not need Permit2 signing.
-      let built_txData = route.txData;
-      let built_approval = route.approvalData ?? null;
-      if (routeSelection.source === "manual") {
-        if (!route.quoteId) {
-          toast({
-            title: "Bridge quote failed",
-            description: "Bungee did not return a quote id",
-            status: "error",
-            duration: 3000,
-          });
-          return;
-        }
-        const built = await new Promise<{ success: boolean; data?: import("@walletchan/shared/bungee").BungeeBuildTxResponse; error?: string }>((resolve) => {
-          chrome.runtime.sendMessage(
-            { type: "fetchBridgeBuildTx", quoteId: route.quoteId },
-            resolve,
-          );
+      // 3. Socket Swap V3 returns executable txData directly in the quote.
+      const built_txData = route.txData;
+      const built_approval = route.approvalData ?? null;
+      if (!route.quoteId) {
+        toast({
+          title: "Bridge quote failed",
+          description: "Socket did not return a quote id",
+          status: "error",
+          duration: 3000,
         });
-        built_txData = built?.data?.result?.txData;
-        built_approval = built?.data?.result?.approvalData ?? null;
-        if (!built?.success || !built_txData) {
-          toast({
-            title: "Bridge build failed",
-            description: built?.error || "Could not build bridge transaction",
-            status: "error",
-            duration: 3000,
-          });
-          return;
-        }
+        return;
       }
       if (!built_txData) {
         toast({
           title: "Bridge build failed",
-          description: "Bungee did not return bridge transaction data",
+          description: "Socket did not return bridge transaction data",
           status: "error",
           duration: 3000,
         });
@@ -1129,6 +1109,7 @@ function SwapView({
           destinationChainName: resolvedBuyChainName,
           routeName: route.routeDetails?.name,
           receiverAddress: fromAddress,
+          requestHash: route.quoteId,
         },
       });
 
