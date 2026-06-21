@@ -3,6 +3,7 @@
  */
 
 import { BANKR_API_BASE } from "@/constants/externalUrls";
+import { normalizeBankrTypedDataChainId } from "./bankrApiUtils";
 
 const API_BASE_URL = BANKR_API_BASE;
 
@@ -269,6 +270,7 @@ export async function signMessageViaApi(
     if (typeof typedData === "string") {
       typedData = JSON.parse(typedData);
     }
+    typedData = normalizeBankrTypedDataChainId(typedData);
     body = { signatureType: "eth_signTypedData_v4", typedData };
   } else {
     throw new BankrApiError(`Unsupported signing method: ${method}`);
