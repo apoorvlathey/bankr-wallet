@@ -14,9 +14,12 @@
 
 import {
   createPublicClient,
+  decodeFunctionResult,
+  encodeFunctionData,
   http,
   namehash,
   parseAbi,
+  type Hex,
   type PublicClient,
 } from "viem";
 import { mainnet } from "viem/chains";
@@ -47,6 +50,14 @@ const RESOLVER_ABI = parseAbi([
   "function addr(bytes32 node) view returns (address)",
 ]);
 
+const UNIVERSAL_RESOLVER_ABI = parseAbi([
+  "function resolveWithGateways(bytes name, bytes data, string[] gateways) view returns (bytes result, address resolver)",
+]);
+
+const ENS_UNIVERSAL_RESOLVER_ADDRESS =
+  mainnet.contracts.ensUniversalResolver.address;
+const LOCAL_BATCH_GATEWAY_URL = "x-batch-gateway:true";
+
 let directClientCache: { url: string; client: PublicClient } | null = null;
 
 function getDirectClient(url: string): PublicClient {
@@ -72,6 +83,50 @@ export type ResolveOptions = {
 // returning `createPublicClient({ transport: custom(heliosEip1193Provider()) })`,
 // and `resolveEns` / `resolveContractAddress` choose between getHeliosClient()
 // and getDirectClient(rpcUrl) based on opts.bypassHelios + Helios sync state.
+
+function dnsEncodeName(name: string): Hex {
+  let hex = "0x";
+  for (const label of name.split(".")) {
+    if (!label || label.length > 63) {
+      throw new Error(`Invalid ENS label length in ${name}`);
+    }
+    hex += label.length.toString(16).padStart(2, "0");
+    for (let i = 0; i < label.length; i += 1) {
+      const code = label.charCodeAt(i);
+      if (code > 0x7f) {
+        throw new Error(`Non-ASCII ENS label in ${name}`);
+      }
+      hex += code.toString(16).padStart(2, "0");
+    }
+  }
+  return `${hex}00` as Hex;
+}
+
+async function readContenthashViaUniversalResolver(
+  client: PublicClient,
+  name: string,
+): Promise<Hex> {
+  const node = namehash(name);
+  const data = encodeFunctionData({
+    abi: RESOLVER_ABI,
+    functionName: "contenthash",
+    args: [node],
+  });
+  const [result] = await client.readContract({
+    address: ENS_UNIVERSAL_RESOLVER_ADDRESS,
+    abi: UNIVERSAL_RESOLVER_ABI,
+    functionName: "resolveWithGateways",
+    args: [dnsEncodeName(name), data, [LOCAL_BATCH_GATEWAY_URL]],
+  });
+
+  if (!result || result === "0x") return "0x";
+  return decodeFunctionResult({
+    abi: RESOLVER_ABI,
+    functionName: "contenthash",
+    args: [node],
+    data: result,
+  }) as Hex;
+}
 
 export async function resolveEns(
   name: string,
@@ -107,31 +162,13 @@ export async function resolveEns(
   const client = getDirectClient(rpcUrl);
   const trustedDirectly = true;
 
-  let resolverAddress: `0x${string}`;
-  try {
-    resolverAddress = (await client.getEnsResolver({
-      name: stripped,
-    })) as `0x${string}`;
-  } catch (e) {
-    return {
-      ok: false,
-      error: `No ENS resolver for ${stripped}: ${describe(e)}`,
-    };
-  }
-
   let raw: `0x${string}`;
+  let contenthashReadError: string | null = null;
   try {
-    raw = await client.readContract({
-      address: resolverAddress,
-      abi: RESOLVER_ABI,
-      functionName: "contenthash",
-      args: [namehash(stripped)],
-    });
+    raw = await readContenthashViaUniversalResolver(client, stripped);
   } catch (e) {
-    return {
-      ok: false,
-      error: `Failed to read contenthash for ${stripped}: ${describe(e)}`,
-    };
+    raw = "0x";
+    contenthashReadError = describe(e);
   }
 
   // Contenthash branch: ipfs / ipns are the primary path. Decoded value is
@@ -166,21 +203,18 @@ export async function resolveEns(
   // The hosted-gateway path only needs to *detect* support so it can route
   // to w3eth.io; the full fetch-pin-cache flow lives in the branch below
   // gated on `pinOnchainHtml`.
-  let address: `0x${string}`;
+  let address: `0x${string}` | null;
   try {
-    address = (await client.readContract({
-      address: resolverAddress,
-      abi: RESOLVER_ABI,
-      functionName: "addr",
-      args: [namehash(stripped)],
-    })) as `0x${string}`;
+    address = await client.getEnsAddress({ name: stripped });
   } catch (e) {
     const detail = describe(e);
     return {
       ok: false,
       error: contenthashUsable
         ? `Unsupported contenthash codec "${codec}" and addr() failed: ${detail}`
-        : `${stripped} has no contenthash and addr() failed: ${detail}`,
+        : contenthashReadError
+          ? `Failed to read contenthash for ${stripped}: ${contenthashReadError}; addr() also failed: ${detail}`
+          : `${stripped} has no contenthash and addr() failed: ${detail}`,
     };
   }
 
@@ -189,7 +223,9 @@ export async function resolveEns(
       ok: false,
       error: contenthashUsable
         ? `Unsupported contenthash codec "${codec}". Supported: ipfs, ipns, ERC-4804.`
-        : `${stripped} has no contenthash and no addr record set.`,
+        : contenthashReadError
+          ? `Failed to read contenthash for ${stripped}: ${contenthashReadError}; no addr record set.`
+          : `${stripped} has no contenthash and no addr record set.`,
     };
   }
 

@@ -635,8 +635,12 @@ browsing:
 2. The page navigates the current browser tab to `interstitial.html#<target-url>`.
 3. `EnsInterstitial` parses the fragment and sends `ens-cache-check` followed
    by `ens-resolve` to the service worker.
-4. `ensBrowsing/resolver.ts` resolves ENS `contenthash` records to IPFS/IPNS,
-   or falls back to ERC-4804 / ERC-5219 onchain HTML via the resolved address.
+4. `ensBrowsing/resolver.ts` resolves ENS `contenthash` records through the
+   Ethereum mainnet Universal Resolver `resolveWithGateways` path, so CCIP-Read
+   / ENSv2-backed names such as `.base.eth` can expose IPFS/IPNS content. If no
+   supported contenthash is present, it falls back to viem `getEnsAddress`
+   (same Universal Resolver path) and probes ERC-4804 / ERC-5219 onchain HTML
+   via the resolved address.
 5. The service worker chooses either the hosted gateway (`eth.limo` /
    `w3eth.io`) or the configured local Kubo gateway based on the existing
    `ensBrowsing` settings. Raw `0x` address mode follows the same split:
