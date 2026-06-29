@@ -31,6 +31,7 @@ export type AppView =
   | "pendingTxList"
   | "txConfirm"
   | "signatureConfirm"
+  | "erc7715PermissionConfirm"
   | "watchAssetConfirm"
   | "addChainConfirm"
   | "waitingForOnboarding"
@@ -73,6 +74,7 @@ export const SCREEN_META: Record<AppView, ScreenMeta> = {
   batchTxConfirm: { kind: "slide", depth: 1 },
   crossDappBatchConfirm: { kind: "slide", depth: 1 },
   signatureConfirm: { kind: "slide", depth: 1 },
+  erc7715PermissionConfirm: { kind: "slide", depth: 1 },
   watchAssetConfirm: { kind: "slide", depth: 1 },
   addChainConfirm: { kind: "slide", depth: 1 },
   unlock: { kind: "fade", depth: 0 },

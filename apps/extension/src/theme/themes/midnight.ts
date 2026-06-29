@@ -92,9 +92,12 @@ const ERROR_FG = "#F87171";
 const ERROR_BG = "#2A0D10";
 const ERROR_BORDER = "#5A1D23";
 
-const INFO_FG = "#A78BFA";
-const INFO_BG = "#1A1440";
-const INFO_BORDER = "#3B2B7A";
+// Informational surfaces should feel calm and explanatory, not branded or
+// cautionary. Keep them out of the primary violet family so permission/revoke
+// callouts do not read as warnings.
+const INFO_FG = "#7DD3FC";
+const INFO_BG = "#0B2230";
+const INFO_BORDER = "#1E5A74";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shadow strings — declared as constants so motion.hover can re-reference the

@@ -23,6 +23,7 @@ const ROUTES: Array<{ id: PreviewRoute; label: string }> = [
   { id: "portfolio", label: "Portfolio" },
   { id: "batch", label: "Batch" },
   { id: "cross-batch", label: "Cross batch" },
+  { id: "permission", label: "Permission" },
   { id: "all", label: "All" },
 ];
 

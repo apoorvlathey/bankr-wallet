@@ -19,6 +19,8 @@ export const WALLET_LOCAL_STORAGE_KEYS = [
   "pendingTxRequests",
   "pendingSignatureRequests",
   "pendingBatchTxRequests",
+  "pendingErc7715PermissionRequests",
+  "erc7715PermissionGrants",
   "pendingWatchAssetRequests",
   "pendingAddChainRequests",
   "walletConnectPendingRequests",
@@ -62,6 +64,7 @@ export const WALLET_RESULT_STORAGE_PREFIXES = [
   "batchTxAck:",
   "capabilitiesResult:",
   "callsStatusResult:",
+  "erc7715PermissionResult:",
 ] as const;
 
 export const WALLET_ARTIFACT_STORAGE_PREFIXES = [

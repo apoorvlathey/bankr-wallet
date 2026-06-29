@@ -294,11 +294,14 @@ export async function completeWalletConnectRequestIfNeeded(
 ): Promise<void> {
   const txPrefix = "txResult:";
   const sigPrefix = "sigResult:";
+  const erc7715Prefix = "erc7715PermissionResult:";
   const id = key.startsWith(txPrefix)
     ? key.slice(txPrefix.length)
     : key.startsWith(sigPrefix)
       ? key.slice(sigPrefix.length)
-      : null;
+      : key.startsWith(erc7715Prefix)
+        ? key.slice(erc7715Prefix.length)
+        : null;
   if (!id) return;
 
   const pending = await getWalletConnectPendingRequest(id);
@@ -306,8 +309,15 @@ export async function completeWalletConnectRequestIfNeeded(
 
   try {
     const payload =
-      pending.kind === "transaction" ? result.txHash : result.signature;
-    if (result.success === true && typeof payload === "string") {
+      pending.kind === "transaction"
+        ? result.txHash
+        : pending.kind === "signature"
+          ? result.signature
+          : result.result;
+    if (
+      result.success === true &&
+      (typeof payload === "string" || Array.isArray(payload))
+    ) {
       await respondSessionRequest(pending.topic, pending.requestId, payload);
     } else {
       const error =

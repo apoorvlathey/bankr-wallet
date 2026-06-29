@@ -6,6 +6,19 @@
 import { TransactionParams } from "./bankrApi";
 import { withStorageLock } from "./storageLock";
 
+export interface Erc7715PermissionRevokeMeta {
+  grantId: string;
+  origin?: string;
+  favicon?: string | null;
+  permissionType?: string;
+  delegate?: `0x${string}`;
+  tokenAddress?: `0x${string}`;
+  amount?: `0x${string}`;
+  periodDuration?: number;
+  expiresAt?: number | null;
+  approvalRevocationMethods?: string[];
+}
+
 export interface PendingTxRequest {
   id: string;
   tx: TransactionParams;
@@ -53,6 +66,15 @@ export interface PendingTxRequest {
     targetDelegate: `0x${string}`;
     kind: "revoke" | "setDelegate";
   };
+  /**
+   * ERC-7715 permission grant disable tx. The tx calls DelegationManager
+   * `disableDelegation(delegation)`; after a successful receipt, the receipt
+   * poller marks the stored grant locally revoked so it stops being returned
+   * by `wallet_getGrantedExecutionPermissions`. Extra fields are public
+   * display snapshots for the confirmation UI; `grantId` remains the only field
+   * required by the receipt path.
+   */
+  erc7715PermissionRevokeMeta?: Erc7715PermissionRevokeMeta;
 }
 
 /**
@@ -143,14 +165,19 @@ export async function updateBadge(): Promise<void> {
   const { getPendingSignatureRequests } = await import("./pendingSignatureStorage");
   const { getPendingBatchTxRequests } = await import("./pendingBatchTxStorage");
   const { getCrossDappBatch } = await import("./crossDappBatchStorage");
+  const { getPendingErc7715PermissionRequests } = await import(
+    "./pendingErc7715PermissionStorage"
+  );
   const sigRequests = await getPendingSignatureRequests();
   const batchRequests = await getPendingBatchTxRequests();
+  const permissionRequests = await getPendingErc7715PermissionRequests();
   const crossDappBatch = await getCrossDappBatch();
   const crossDappBatchCount = crossDappBatch?.entries.length ? 1 : 0;
   const count =
     txRequests.length +
     sigRequests.length +
     batchRequests.length +
+    permissionRequests.length +
     crossDappBatchCount;
 
   if (count > 0) {

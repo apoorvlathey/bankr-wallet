@@ -19,6 +19,7 @@ import { Footer } from "../components/Footer";
 import { ConnectSection } from "./sections/ConnectSection";
 import { SendTxSection } from "./sections/SendTxSection";
 import { SignatureSection } from "./sections/SignatureSection";
+import { DelegationsSection } from "./sections/DelegationsSection";
 import { BatchSection } from "./sections/BatchSection";
 import { WatchAssetSection } from "./sections/WatchAssetSection";
 import { ChainSection } from "./sections/ChainSection";
@@ -200,11 +201,40 @@ export default function TestContent() {
                   },
                 }}
               >
-                <ConnectButton
-                  chainStatus="none"
-                  showBalance={false}
-                  accountStatus="address"
-                />
+                <ConnectButton.Custom>
+                  {({
+                    account,
+                    chain,
+                    mounted,
+                    openAccountModal,
+                    openChainModal,
+                    openConnectModal,
+                  }) => {
+                    const connected = mounted && account && chain;
+                    const isWrongNetwork = connected && chain.unsupported;
+
+                    return (
+                      <Button
+                        size="sm"
+                        variant={connected ? "outline" : "primary"}
+                        onClick={
+                          !connected
+                            ? openConnectModal
+                            : isWrongNetwork
+                              ? openChainModal
+                              : openAccountModal
+                        }
+                        minW="150px"
+                      >
+                        {!connected
+                          ? "Connect Wallet"
+                          : isWrongNetwork
+                            ? "Wrong Network"
+                            : "Manage Wallet"}
+                      </Button>
+                    );
+                  }}
+                </ConnectButton.Custom>
               </Box>
             </HStack>
           </Flex>
@@ -221,6 +251,10 @@ export default function TestContent() {
 
             <SectionCard title="Signatures" accent="yellow">
               <SignatureSection />
+            </SectionCard>
+
+            <SectionCard title="Delegations (ERC-7715)" accent="blue">
+              <DelegationsSection />
             </SectionCard>
 
             <SectionCard title="Batch (ERC-5792)" accent="green">

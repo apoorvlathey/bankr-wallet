@@ -111,8 +111,8 @@ pnpm dev:walletchan-mcp    # Start local stdio MCP adapter backed by walletchan-
 
 # Build
 pnpm build              # Build both extension and website
-pnpm build:extension    # Build extension only (output: apps/extension/build/)
-pnpm build:website      # Build website only
+pnpm build:extension    # Full Chrome extension build (all manifest scripts; output: apps/extension/build/)
+pnpm build:website      # Build website only; do NOT use this to verify extension reloads
 pnpm build:walletchan-rpc # Build WalletChan RPC CLI only
 pnpm build:walletchan-mcp # Build WalletChan MCP CLI only
 
@@ -170,6 +170,14 @@ apps/extension/src/
 │   ├── transactionValidation.ts # Dapp transaction quantity validation/normalization
 │   ├── batchTxHandlers.ts   # ERC-5792 batch tx handlers + ERC-7821 encoding
 │   ├── erc5792Types.ts      # ERC-5792 type definitions
+│   ├── erc7715PermissionHandlers.ts # ERC-7715 delegated permission methods
+│   ├── erc7715PermissionPreflight.ts # ERC-7715 request/account/delegate policy checks
+│   ├── erc7715PermissionRegistry.ts # Supported permission/rule validation
+│   ├── erc7715PermissionCaveats.ts  # ERC-7715 -> DeleGator caveat mapping
+│   ├── erc7715DelegationSigning.ts  # WalletChan-owned ERC-7710 typed data/context encoding
+│   ├── erc7715PermissionLock.ts     # MetaMask-style in-process request lock
+│   ├── pendingErc7715PermissionStorage.ts # Pending ERC-7715 prompts and grants
+│   ├── localAccountKeyResolver.ts # Session-restoring local signer key lookup
 │   ├── walletConnectHandlers.ts # WalletConnect init, sessions, result bridge
 │   ├── walletConnectRequestHandlers.ts # WalletConnect request router
 │   ├── walletConnectBatchRequestHandlers.ts # WalletConnect ERC-5792 adapters
@@ -186,6 +194,11 @@ apps/extension/src/
 │   ├── TransactionConfirmation.tsx
 │   ├── TransactionConfirmationErrorBoundary.tsx # Last-resort reject UI for malformed tx renders
 │   ├── BatchTransactionConfirmation.tsx  # Batch tx confirmation UI (ERC-5792)
+│   ├── Erc7715PermissionConfirmation.tsx # Delegated permission confirmation UI
+│   ├── Erc7715PermissionEditableControls.tsx # Adjustable delegated permission fields
+│   ├── Erc7715PermissionReview.tsx # Human-readable ERC-7715 permission details
+│   ├── Erc7715PermissionTokenCard.tsx # ERC-7715 token metadata, balance, and value summary
+│   ├── useErc7715PermissionAsset.ts # ERC-7715 token metadata and live balance hook
 │   ├── AssetChangesDisplay.tsx    # Simulated token flow display
 │   ├── SignatureRequestConfirmation.tsx
 │   ├── UnlockScreen.tsx
@@ -457,3 +470,10 @@ Railway's default Nixpacks builder does NOT work for this pnpm monorepo with `wo
 2. Go to `chrome://extensions`
 3. Click refresh icon on WalletChan card
 4. Test in a dapp (e.g., app.aave.com)
+
+Always run the full `pnpm build:extension` before reloading the unpacked
+Chrome extension. Do not use package-level partial builds such as
+`pnpm --filter @walletchan/extension build:web` for reload testing: they only
+refresh part of `apps/extension/build/` and can leave manifest-referenced
+scripts like `static/js/inject.js`, `static/js/inpage.js`, or
+`static/js/background.js` missing or stale.

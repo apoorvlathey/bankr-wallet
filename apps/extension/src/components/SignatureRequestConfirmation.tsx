@@ -23,6 +23,7 @@ import TypedDataDisplay from "@/components/TypedDataDisplay";
 import SiweMessageDisplay from "@/components/SiweMessageDisplay";
 import { Eip712DigestDisplay } from "@/components/DigestDisplay";
 import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
+import Erc7710DelegationDisplay from "@/components/Erc7710DelegationDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
@@ -30,6 +31,7 @@ import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
 import { analyzeSiweMessage } from "@/lib/siwe";
+import { isErc7710DelegationTypedData } from "@/lib/erc7710Delegation";
 import { isDarkThemeId, useTheme, useStripTokens, useIconChipBg, useChainBadgeStyle } from "@/theme";
 
 interface SignatureRequestConfirmationProps {
@@ -310,13 +312,25 @@ function SignatureRequestConfirmation({
   // Tracks the in-flight reject for immediate spinner feedback during the
   // ~100–300 ms gap between the click and the parent navigating away.
   const [isRejecting, setIsRejecting] = useState(false);
-  // Clear-signing resolution lifecycle. Eligible = there's a verifyingContract
-  // to look up; once eligible, we hold off rendering the raw structured/raw
-  // tabs until resolution settles so we don't get a flash-then-collapse.
-  const clearSigningEligible = !!typedData?.domain?.verifyingContract;
+  const erc7710Delegation = isErc7710DelegationTypedData(typedData)
+    ? typedData
+    : null;
+  const hasErc7710Delegation = !!erc7710Delegation;
+  // Clear-signing resolution lifecycle. ERC-7710 delegations use a local
+  // custom renderer because the upstream ERC-7730 registry has no generic
+  // descriptor for them. Other typed data with a verifyingContract still goes
+  // through the remote ERC-7730 resolver.
+  const clearSigningEligible =
+    !!typedData?.domain?.verifyingContract && !erc7710Delegation;
   const [clearSigningStatus, setClearSigningStatus] = useState<
     "loading" | "matched" | "absent"
-  >(clearSigningEligible ? "loading" : "absent");
+  >(hasErc7710Delegation ? "matched" : clearSigningEligible ? "loading" : "absent");
+
+  useEffect(() => {
+    setClearSigningStatus(
+      hasErc7710Delegation ? "matched" : clearSigningEligible ? "loading" : "absent",
+    );
+  }, [sigRequest.id, hasErc7710Delegation, clearSigningEligible]);
 
   const handleCancel = () => {
     if (isRejecting) return;
@@ -507,13 +521,20 @@ function SignatureRequestConfirmation({
           <Box w={10} flexShrink={0} aria-hidden />
         </HStack>
 
-        {/* Clear-signing (ERC-7730) view — rendered ABOVE the request info
+        {/* Clear-signing view — rendered ABOVE the request info
             card on purpose, mirroring how the ERC-20 approval display sits
             above the Origin/From/Network rows on tx confirmations. The
             human-readable intent ("what is this actually doing?") is the
             primary content the user needs; provenance metadata is secondary.
             We hold off rendering the structured/raw block further down until
             this resolves to avoid a flash-then-collapse. */}
+        {erc7710Delegation && (
+          <Erc7710DelegationDisplay
+            typedData={erc7710Delegation}
+            chainId={signature.chainId}
+          />
+        )}
+
         {clearSigningEligible && (
           <ClearSigningView
             kind="eip712"

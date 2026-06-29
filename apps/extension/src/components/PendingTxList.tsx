@@ -13,6 +13,7 @@ import {
 import { ArrowBackIcon, ChevronRightIcon } from "@chakra-ui/icons";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
+import type { PendingErc7715PermissionRequest } from "@/chrome/pendingErc7715PermissionStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
 import { getChainConfig } from "@/constants/chainConfig";
@@ -43,11 +44,13 @@ function getFaviconUrl(origin: string, favicon: string | null): string | undefin
 interface PendingTxListProps {
   txRequests: PendingTxRequest[];
   signatureRequests: PendingSignatureRequest[];
+  permissionRequests?: PendingErc7715PermissionRequest[];
   batchRequests?: PendingBatchTxRequest[];
   crossDappBatch?: CrossDappBatch | null;
   onBack: () => void;
   onSelectTx: (txRequest: PendingTxRequest) => void;
   onSelectSignature: (sigRequest: PendingSignatureRequest) => void;
+  onSelectPermission?: (request: PendingErc7715PermissionRequest) => void;
   onSelectBatch?: (batchRequest: PendingBatchTxRequest) => void;
   onSelectCrossDappBatch?: () => void;
   onRejectAll: () => void;
@@ -56,11 +59,13 @@ interface PendingTxListProps {
 function PendingTxList({
   txRequests,
   signatureRequests,
+  permissionRequests = [],
   batchRequests = [],
   crossDappBatch,
   onBack,
   onSelectTx,
   onSelectSignature,
+  onSelectPermission,
   onSelectBatch,
   onSelectCrossDappBatch,
   onRejectAll,
@@ -81,6 +86,7 @@ function PendingTxList({
     signatureRequests,
     batchRequests,
     crossDappBatch,
+    permissionRequests,
   );
   const totalCount = combinedRequests.length;
 
@@ -472,6 +478,124 @@ function PendingTxList({
                           </Badge>
                           <Text fontSize="xs" color="text.tertiary" fontWeight="500" whiteSpace="nowrap">
                             {request.params.calls.length} calls
+                          </Text>
+                        </HStack>
+                      </Box>
+                    </HStack>
+                    <Box bg={stripBg} p={1} borderRadius={tokens.radii.badge} ml={2} flexShrink={0}>
+                      <ChevronRightIcon color={stripFg} />
+                    </Box>
+                  </HStack>
+                </Box>
+              );
+            } else if (item.type === "permission") {
+              const request = item.request;
+              const config = getChainConfig(request.chainId);
+              const chainPill = resolveChainPill(config.bg, config.text);
+              return (
+                <Box
+                  key={request.id}
+                  bg="surface.raised"
+                  border={tokens.borders.medium}
+                  borderColor="border.default"
+                  borderRadius={tokens.radii.card}
+                  boxShadow="card"
+                  p={3}
+                  cursor="pointer"
+                  onClick={() => onSelectPermission?.(request)}
+                  _hover={{
+                    transform: "translateY(-2px)",
+                    boxShadow: "cardHover",
+                  }}
+                  _active={{
+                    transform: "translate(2px, 2px)",
+                    boxShadow: "none",
+                  }}
+                  transition="all 0.2s ease-out"
+                  position="relative"
+                >
+                  <Badge
+                    position="absolute"
+                    top="-10px"
+                    left="-3px"
+                    fontSize="xs"
+                    bg="accent.highlight"
+                    color="accentFg.highlight"
+                    border="2px solid"
+                    borderColor="border.default"
+                    px={1.5}
+                    zIndex={1}
+                  >
+                    PERM
+                  </Badge>
+
+                  <HStack justify="space-between">
+                    <HStack spacing={3} flex={1}>
+                      <Badge
+                        bg={stripBg}
+                        color={stripFg}
+                        fontSize="xs"
+                        minW="28px"
+                        textAlign="center"
+                        fontWeight="700"
+                      >
+                        #{index + 1}
+                      </Badge>
+                      <Box
+                        bg="surface.raised"
+                        border={tokens.borders.thin}
+                        borderColor="border.default"
+                        borderRadius={tokens.radii.badge}
+                        p={1}
+                        flexShrink={0}
+                        lineHeight="0"
+                      >
+                        <Image
+                          src={getFaviconUrl(request.origin, request.favicon)}
+                          alt="favicon"
+                          w="24px"
+                          h="24px"
+                          objectFit="contain"
+                          display="block"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            const fallback = getFaviconUrl(request.origin, null);
+                            if (fallback) target.src = fallback;
+                          }}
+                        />
+                      </Box>
+                      <Box flex={1} minW={0}>
+                        <HStack justify="space-between" spacing={2}>
+                          <Text fontSize="sm" fontWeight="700" color="text.primary" noOfLines={1} flex={1} minW={0}>
+                            {getOriginDisplay(request.origin)}
+                          </Text>
+                          <Text fontSize="xs" color="text.tertiary" fontWeight="500" whiteSpace="nowrap">
+                            {formatTimestamp(request.timestamp)}
+                          </Text>
+                        </HStack>
+                        <HStack spacing={2} mt={1}>
+                          <Badge
+                            fontSize="xs"
+                            bg={chainPill.bg}
+                            color={chainPill.color}
+                            border={isDark ? "1.5px solid" : "2px solid"}
+                            borderColor={chainPill.borderColor}
+                            px={2}
+                            py={0.5}
+                            display="flex"
+                            alignItems="center"
+                            gap={1}
+                          >
+                            <ChainIcon
+                              chainId={request.chainId}
+                              chainName={request.chainName}
+                              size="10px"
+                              withChip
+                            />
+                            {request.chainName}
+                          </Badge>
+                          <Text fontSize="xs" color="text.tertiary" fontWeight="500" whiteSpace="nowrap">
+                            {request.permissionType}
                           </Text>
                         </HStack>
                       </Box>

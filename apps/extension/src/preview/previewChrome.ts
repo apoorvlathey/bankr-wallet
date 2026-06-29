@@ -215,6 +215,37 @@ function responseForMessage(message: any): unknown {
       return simulationResult;
     case "retryTokenMetadata":
       return { tokenChanges: simulationResult.tokenChanges };
+    case "fetchTokenInfo":
+      return {
+        success: true,
+        data: {
+          name: "USD Coin",
+          symbol: "USDC",
+          decimals: 6,
+        },
+      };
+    case "resolveTokenMetadata":
+      return {
+        success: true,
+        data: {
+          name:
+            String(message?.tokenAddress || "").toLowerCase() === "native"
+              ? "Ether"
+              : "USD Coin",
+          symbol:
+            String(message?.tokenAddress || "").toLowerCase() === "native"
+              ? "ETH"
+              : "USDC",
+          decimals:
+            String(message?.tokenAddress || "").toLowerCase() === "native"
+              ? 18
+              : 6,
+          logoUrl:
+            String(message?.tokenAddress || "").toLowerCase() === "native"
+              ? undefined
+              : "https://assets.coingecko.com/coins/images/6319/small/usdc.png",
+        },
+      };
     case "getDelegationStatus":
       return {
         success: true,
@@ -228,9 +259,11 @@ function responseForMessage(message: any): unknown {
     case "confirmSignatureRequest":
     case "confirmBatchTransactionAsync":
     case "confirmBatchTransactionAsyncPK":
+    case "confirmErc7715PermissionRequest":
     case "rejectTransaction":
     case "rejectSignatureRequest":
     case "rejectBatchTransaction":
+    case "rejectErc7715PermissionRequest":
     case "addToCrossDappBatch":
     case "addCallsToCrossDappBatch":
     case "updatePendingTxRequestData":

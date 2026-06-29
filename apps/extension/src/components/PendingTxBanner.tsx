@@ -6,11 +6,13 @@ import { isDarkThemeId, useTheme } from "@/theme";
 interface PendingTxBannerProps {
   txCount: number;
   signatureCount: number;
+  permissionCount?: number;
   batchCount?: number;
   /** Number of entries staged in the user-assembled cross-dapp batch */
   crossDappBatchCount?: number;
   onClickTx: () => void;
   onClickSignature: () => void;
+  onClickPermission?: () => void;
   onClickBatch?: () => void;
   onClickCrossDappBatch?: () => void;
 }
@@ -18,16 +20,19 @@ interface PendingTxBannerProps {
 function PendingTxBanner({
   txCount,
   signatureCount,
+  permissionCount = 0,
   batchCount = 0,
   crossDappBatchCount = 0,
   onClickTx,
   onClickSignature,
+  onClickPermission,
   onClickBatch,
   onClickCrossDappBatch,
 }: PendingTxBannerProps) {
   const { tokens, themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
-  const totalCount = txCount + signatureCount + batchCount + crossDappBatchCount;
+  const totalCount =
+    txCount + signatureCount + permissionCount + batchCount + crossDappBatchCount;
   if (totalCount === 0) return null;
 
   // Determine the label and action based on what's pending
@@ -35,12 +40,14 @@ function PendingTxBanner({
     const parts: string[] = [];
     if (txCount > 0) parts.push(`${txCount} TX`);
     if (batchCount > 0) parts.push(`${batchCount} Batch`);
+    if (permissionCount > 0) parts.push(`${permissionCount} Perm`);
     if (signatureCount > 0) parts.push(`${signatureCount} Sig`);
     if (crossDappBatchCount > 0)
       parts.push(`${crossDappBatchCount} in Batch`);
     if (parts.length > 1) return parts.join(", ");
     if (txCount > 0) return `${txCount} Pending Request${txCount > 1 ? "s" : ""}`;
     if (batchCount > 0) return `${batchCount} Batch Request${batchCount > 1 ? "s" : ""}`;
+    if (permissionCount > 0) return `${permissionCount} Permission Request${permissionCount > 1 ? "s" : ""}`;
     if (crossDappBatchCount > 0)
       return `Batch (${crossDappBatchCount} call${crossDappBatchCount > 1 ? "s" : ""})`;
     return `${signatureCount} Signature Request${signatureCount > 1 ? "s" : ""}`;
@@ -53,6 +60,8 @@ function PendingTxBanner({
       onClickTx();
     } else if (batchCount > 0) {
       onClickBatch?.();
+    } else if (permissionCount > 0) {
+      onClickPermission?.();
     } else if (crossDappBatchCount > 0) {
       onClickCrossDappBatch?.();
     } else {

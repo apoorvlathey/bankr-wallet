@@ -2,7 +2,7 @@
 
 import { Text } from "@chakra-ui/react";
 import { useAccount, useChainId } from "wagmi";
-import { toHex } from "viem";
+import { toHex, type Address } from "viem";
 import { useEip1193 } from "../hooks/useEip1193";
 import {
   MAIL_TYPED_DATA,
@@ -16,6 +16,16 @@ import { TestButton } from "./TestButton";
 const PERMIT_SPENDER = "0x0000000000000000000000000000000000000001";
 const X402_PAY_TO = "0x0000000000000000000000000000000000000402";
 const SPOOFED_SIGNER = "0x000000000000000000000000000000000000dEaD";
+const ERC7710_ROOT_AUTHORITY =
+  "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+const DELEGATION_MANAGER: Address =
+  "0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3";
+const ERC7710_DELEGATE: Address =
+  "0x1111111111111111111111111111111111111111";
+const ALLOWED_TARGETS_ENFORCER: Address =
+  "0x7F20f61b1f09b08D970938F6fa563634d65c4EeB";
+const LIMITED_CALLS_ENFORCER: Address =
+  "0x04658B29F6b82ed55274221a06Fc97D318E25416";
 const OPENSEA_SIWE_MESSAGE = `opensea.io wants you to sign in with your Ethereum account:
 0xab7def16D63C49422Bd8692e118aB780Eb5410E6
 
@@ -33,6 +43,34 @@ function randomBytes32() {
   return `0x${Array.from(bytes, (byte) =>
     byte.toString(16).padStart(2, "0"),
   ).join("")}`;
+}
+
+const ERC7710_DELEGATION_TYPES = {
+  EIP712Domain: [
+    { name: "name", type: "string" },
+    { name: "version", type: "string" },
+    { name: "chainId", type: "uint256" },
+    { name: "verifyingContract", type: "address" },
+  ],
+  Delegation: [
+    { name: "delegate", type: "address" },
+    { name: "delegator", type: "address" },
+    { name: "authority", type: "bytes32" },
+    { name: "caveats", type: "Caveat[]" },
+    { name: "salt", type: "uint256" },
+  ],
+  Caveat: [
+    { name: "enforcer", type: "address" },
+    { name: "terms", type: "bytes" },
+  ],
+} as const;
+
+function encodeAddressTerm(address: Address) {
+  return `0x${"0".repeat(24)}${address.slice(2)}`;
+}
+
+function encodeUint256Term(value: bigint) {
+  return `0x${value.toString(16).padStart(64, "0")}`;
 }
 
 export function SignatureSection() {
@@ -186,6 +224,67 @@ export function SignatureSection() {
     });
   };
 
+  const signErc7710Delegation = () => {
+    if (!usdc) throw new Error(`No USDC on ${chain?.name ?? chainId}`);
+    return request({
+      method: "eth_signTypedData_v4",
+      params: [
+        address,
+        JSON.stringify({
+          domain: {
+            name: "DelegationManager",
+            version: "1",
+            chainId,
+            verifyingContract: DELEGATION_MANAGER,
+          },
+          types: ERC7710_DELEGATION_TYPES,
+          primaryType: "Delegation",
+          message: {
+            delegate: ERC7710_DELEGATE,
+            delegator: address,
+            authority: ERC7710_ROOT_AUTHORITY,
+            caveats: [
+              {
+                enforcer: ALLOWED_TARGETS_ENFORCER,
+                terms: encodeAddressTerm(usdc.address),
+              },
+              {
+                enforcer: LIMITED_CALLS_ENFORCER,
+                terms: encodeUint256Term(3n),
+              },
+            ],
+            salt: Date.now().toString(),
+          },
+        }),
+      ],
+    });
+  };
+
+  const signErc7710UncaveatedDelegation = () =>
+    request({
+      method: "eth_signTypedData_v4",
+      params: [
+        address,
+        JSON.stringify({
+          domain: {
+            name: "DelegationManager",
+            version: "1",
+            chainId,
+            verifyingContract: DELEGATION_MANAGER,
+          },
+          types: ERC7710_DELEGATION_TYPES,
+          primaryType: "Delegation",
+          message: {
+            delegate: ERC7710_DELEGATE,
+            delegator: address,
+            authority: ERC7710_ROOT_AUTHORITY,
+            caveats: [],
+            salt: Date.now().toString(),
+          },
+        }),
+      ],
+    });
+
   const signPermitWrongChain = () => {
     const mainnetUsdc = TEST_CHAINS[1]!.usdc!;
     const deadline = Math.floor(Date.now() / 1000) + 3600;
@@ -269,6 +368,18 @@ export function SignatureSection() {
         description="ERC-3009 authorization used by x402 exact payments. Signs a 5 USDC transfer authorization on Base."
         onRun={signTransferWithAuthorization}
         isDisabled={chainId !== 8453}
+      />
+      <TestButton
+        label={`eth_signTypedData_v4 — ERC-7710 delegation (${chain?.name ?? "..."})`}
+        description='Raw Delegation Framework typed data. WalletChan should reject with "Use wallet_requestExecutionPermissions for delegated permissions."'
+        onRun={signErc7710Delegation}
+        isDisabled={!usdc}
+      />
+      <TestButton
+        label="eth_signTypedData_v4 — ERC-7710 uncaveated"
+        description="Same Delegation schema with zero caveats. WalletChan should reject before this reaches a signature approval screen."
+        onRun={signErc7710UncaveatedDelegation}
+        variant="outline"
       />
       <TestButton
         label="eth_signTypedData_v4 — Permit (wrong chain)"

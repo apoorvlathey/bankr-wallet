@@ -24,6 +24,7 @@ interface EIP6963AnnounceProviderEvent extends CustomEvent {
 import { makeProviderError } from "./providerErrors";
 import { WALLET_ICON } from "./walletIcon";
 import { DappRpcForwarder, installDappRpcDiscovery } from "./dappRpcForwarding";
+import { ERC7715_PERMISSION_REQUEST_IN_PROGRESS_ERROR } from "./erc7715PermissionLock";
 
 // Session UUID for EIP-6963 (generated once per page load)
 const SESSION_UUID = crypto.randomUUID();
@@ -111,6 +112,17 @@ const pendingCallsStatusCallbacks = new Map<
   { resolve: (result: any) => void; reject: (error: Error) => void }
 >();
 
+// Pending ERC-7715 delegated-permission callbacks
+const pendingExecutionPermissionCallbacks = new Map<
+  string,
+  {
+    resolve: (result: any) => void;
+    reject: (error: Error) => void;
+    method: string;
+  }
+>();
+let requestExecutionPermissionsInProgress = false;
+
 // Helper to make RPC calls through content script (to bypass page CSP)
 function rpcCall(rpcUrl: string, method: string, params: any[]): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -190,6 +202,13 @@ class ImpersonatorProvider extends EventEmitter {
   }
 
   async send(method: string, params?: Array<any>): Promise<any> {
+    if (requestExecutionPermissionsInProgress) {
+      throw makeProviderError(
+        ERC7715_PERMISSION_REQUEST_IN_PROGRESS_ERROR,
+        -32002,
+      );
+    }
+
     switch (method) {
       // modified methods
       case "eth_requestAccounts": {
@@ -473,6 +492,65 @@ class ImpersonatorProvider extends EventEmitter {
           );
         }
         return Promise.resolve();
+      }
+
+      // ── ERC-7715 Delegated Permission Methods ───────────────────────────
+      case "wallet_getSupportedExecutionPermissions":
+      case "wallet_getGrantedExecutionPermissions":
+      case "wallet_requestExecutionPermissions": {
+        const requestId = crypto.randomUUID();
+        const timeoutMs =
+          method === "wallet_requestExecutionPermissions"
+            ? 5 * 60 * 1000
+            : 15000;
+
+        if (method === "wallet_requestExecutionPermissions") {
+          if (requestExecutionPermissionsInProgress) {
+            return Promise.reject(
+              makeProviderError(
+                "Cannot process requests while a wallet_requestExecutionPermissions request is in process",
+                -32002,
+              ),
+            );
+          }
+          requestExecutionPermissionsInProgress = true;
+        }
+
+        const executionPermissionPromise = new Promise<any>((resolve, reject) => {
+          pendingExecutionPermissionCallbacks.set(requestId, {
+            resolve,
+            reject,
+            method,
+          });
+
+          window.postMessage(
+            {
+              type: "i_walletExecutionPermissions",
+              msg: {
+                id: requestId,
+                method,
+                params: params || [],
+                chainId: this.chainId,
+              },
+            },
+            "*",
+          );
+
+          setTimeout(() => {
+            if (pendingExecutionPermissionCallbacks.has(requestId)) {
+              pendingExecutionPermissionCallbacks.delete(requestId);
+              reject(makeProviderError(`${method} timeout`));
+            }
+          }, timeoutMs);
+        });
+
+        if (method === "wallet_requestExecutionPermissions") {
+          return executionPermissionPromise.finally(() => {
+            requestExecutionPermissionsInProgress = false;
+          });
+        }
+
+        return executionPermissionPromise;
       }
 
       case "eth_sendTransaction": {
@@ -815,6 +893,22 @@ window.addEventListener("message", (e: any) => {
         } else {
           const errorMessage = e.data.msg.error || "Failed to get calls status";
           logProviderError("wallet_getCallsStatus", errorMessage, e.data.msg.code);
+          callbacks.reject(makeProviderError(errorMessage, e.data.msg.code));
+        }
+      }
+      break;
+    }
+    case "walletExecutionPermissionsResult": {
+      const requestId = e.data.msg.id as string;
+      const callbacks = pendingExecutionPermissionCallbacks.get(requestId);
+      if (callbacks) {
+        pendingExecutionPermissionCallbacks.delete(requestId);
+        if (e.data.msg.success) {
+          callbacks.resolve(e.data.msg.result);
+        } else {
+          const errorMessage =
+            e.data.msg.error || `${callbacks.method} failed`;
+          logProviderError(callbacks.method, errorMessage, e.data.msg.code);
           callbacks.reject(makeProviderError(errorMessage, e.data.msg.code));
         }
       }

@@ -221,6 +221,7 @@ Downstream propagation comes for free: sign-time handlers (`handleConfirmBatchTr
 | `BatchTransactionConfirmation.tsx` (ERC-5792 batch)    | Inline summary on every CallCard header; `BuiltinExpandedContent` swaps in `ERC20ApproveDisplay` for approves (full editor) and `ClearSigningView` for other built-ins, with TO + raw decoder + digest collapsed behind a single "Calldata" disclosure. Non-built-in calls render a top-of-screen `BatchClearSigningSummary` card per call. |
 | `CrossDappBatchConfirmation.tsx` (user-assembled)      | Inherits via the wrapped `BatchTransactionConfirmation`; provides its own `onEditCallData` override to route through `updateCallInCrossDappBatch`. |
 | `SignatureRequestConfirmation.tsx` (EIP-712 typed)     | Above `TypedDataDisplay`; raw struct collapses on hit.      |
+| `TxDetailModal.tsx` (Activity tab)                     | Renders the submitted tx's stored `clearSignedMeta`; ERC-7715 revoke txs reuse `erc7715PermissionRevokeMeta` to show the delegated-permission revoke summary above raw calldata. |
 
 `personal_sign` / `eth_sign` are intentionally out of scope — they have no contract context, so clear signing doesn't apply.
 

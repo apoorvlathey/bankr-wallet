@@ -1,6 +1,9 @@
 import { NetworksInfo } from "../types";
 import { getResolvedChainById } from "@/lib/chains";
 
+const ERC7715_PERMISSION_RESULT_PREFIX = "erc7715PermissionResult:";
+const ERC7715_PERMISSION_TIMEOUT_MS = 5 * 60 * 1000;
+
 function isTopFrame(): boolean {
   try {
     return window.top === window;
@@ -701,6 +704,13 @@ window.addEventListener("message", async (e) => {
       waitForStorageResult<any>(
         `capabilitiesResult:${requestId}`, 15 * 1000
       ).then((result) => {
+        if (result?.success === false) {
+          window.postMessage(
+            { type: "walletGetCapabilitiesResult", msg: { id, success: false, error: result.error } },
+            "*"
+          );
+          return;
+        }
         window.postMessage(
           { type: "walletGetCapabilitiesResult", msg: { id, success: true, result } },
           "*"
@@ -773,6 +783,13 @@ window.addEventListener("message", async (e) => {
       waitForStorageResult<any>(
         `callsStatusResult:${requestId}`, 15 * 1000
       ).then((result) => {
+        if (result?.success === false) {
+          window.postMessage(
+            { type: "walletGetCallsStatusResult", msg: { id, success: false, error: result.error } },
+            "*"
+          );
+          return;
+        }
         window.postMessage(
           { type: "walletGetCallsStatusResult", msg: { id, success: true, result } },
           "*"
@@ -798,6 +815,109 @@ window.addEventListener("message", async (e) => {
         type: "walletShowCallsStatus",
         bundleId,
       });
+      break;
+    }
+
+    case "i_walletExecutionPermissions": {
+      const { id, method, params, chainId } = e.data.msg as {
+        id: string;
+        method: string;
+        params: unknown[];
+        chainId: number;
+      };
+
+      try {
+        if (method === "wallet_requestExecutionPermissions") {
+          const permissionRequestId = crypto.randomUUID();
+          const enqueueResult = await chrome.runtime.sendMessage({
+            type: "walletExecutionPermissions",
+            requestId: permissionRequestId,
+            method,
+            params,
+            chainId,
+            origin: window.location.origin,
+            favicon: getFaviconUrl(),
+          });
+
+          if (enqueueResult?.success !== true) {
+            window.postMessage(
+              {
+                type: "walletExecutionPermissionsResult",
+                msg: {
+                  id,
+                  success: false,
+                  error: enqueueResult?.error || `${method} failed`,
+                },
+              },
+              "*",
+            );
+            break;
+          }
+
+          const permissionResult = await waitForStorageResult<{
+            success: boolean;
+            result?: unknown;
+            error?: string;
+          }>(
+            `${ERC7715_PERMISSION_RESULT_PREFIX}${permissionRequestId}`,
+            ERC7715_PERMISSION_TIMEOUT_MS,
+          );
+
+          window.postMessage(
+            {
+              type: "walletExecutionPermissionsResult",
+              msg: {
+                id,
+                success: permissionResult.success === true,
+                result: permissionResult.result,
+                error:
+                  permissionResult.success === true
+                    ? undefined
+                    : permissionResult.error || `${method} failed`,
+              },
+            },
+            "*",
+          );
+          break;
+        }
+
+        const result = await chrome.runtime.sendMessage({
+          type: "walletExecutionPermissions",
+          method,
+          params,
+          chainId,
+          origin: window.location.origin,
+          favicon: getFaviconUrl(),
+        });
+
+        window.postMessage(
+          {
+            type: "walletExecutionPermissionsResult",
+            msg: {
+              id,
+              success: result?.success === true,
+              result: result?.result,
+              error:
+                result?.success === true
+                  ? undefined
+                  : result?.error || `${method} failed`,
+            },
+          },
+          "*",
+        );
+      } catch (err) {
+        window.postMessage(
+          {
+            type: "walletExecutionPermissionsResult",
+            msg: {
+              id,
+              success: false,
+              error: err instanceof Error ? err.message : `${method} failed`,
+            },
+          },
+          "*",
+        );
+      }
       break;
     }
   }

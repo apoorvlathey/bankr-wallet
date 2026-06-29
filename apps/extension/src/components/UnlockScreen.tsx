@@ -59,6 +59,7 @@ interface UnlockScreenProps {
   pendingTxCount: number;
   pendingSignatureCount: number;
   pendingBatchCount?: number;
+  pendingPermissionCount?: number;
 }
 
 function UnlockScreen({
@@ -66,6 +67,7 @@ function UnlockScreen({
   pendingTxCount,
   pendingSignatureCount,
   pendingBatchCount = 0,
+  pendingPermissionCount = 0,
 }: UnlockScreenProps) {
   const toast = useThemedToast();
   const { tokens } = useTheme();
@@ -325,7 +327,10 @@ function UnlockScreen({
       </HStack>
 
       {/* Pending requests banner - below the top controls */}
-      {(pendingTxCount > 0 || pendingSignatureCount > 0 || pendingBatchCount > 0) && (
+      {(pendingTxCount > 0 ||
+        pendingSignatureCount > 0 ||
+        pendingBatchCount > 0 ||
+        pendingPermissionCount > 0) && (
         <Box
           position="absolute"
           top={12}
@@ -361,10 +366,12 @@ function UnlockScreen({
                 const parts: string[] = [];
                 if (pendingTxCount > 0) parts.push(`${pendingTxCount} tx`);
                 if (pendingBatchCount > 0) parts.push(`${pendingBatchCount} batch`);
+                if (pendingPermissionCount > 0) parts.push(`${pendingPermissionCount} perm`);
                 if (pendingSignatureCount > 0) parts.push(`${pendingSignatureCount} sig`);
                 if (parts.length > 1) return `${parts.join(", ")} pending`;
                 if (pendingTxCount > 0) return `${pendingTxCount} pending request${pendingTxCount > 1 ? "s" : ""}`;
                 if (pendingBatchCount > 0) return `${pendingBatchCount} batch request${pendingBatchCount > 1 ? "s" : ""}`;
+                if (pendingPermissionCount > 0) return `${pendingPermissionCount} permission${pendingPermissionCount > 1 ? "s" : ""}`;
                 return `${pendingSignatureCount} signature${pendingSignatureCount > 1 ? "s" : ""}`;
               })()}
             </Text>

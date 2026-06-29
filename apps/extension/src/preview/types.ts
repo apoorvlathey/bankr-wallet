@@ -7,6 +7,7 @@ export type PreviewRoute =
   | "portfolio"
   | "batch"
   | "cross-batch"
+  | "permission"
   | "all";
 
 export type FrameMode = "popup" | "window" | "sidepanel";

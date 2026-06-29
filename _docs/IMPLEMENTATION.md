@@ -390,6 +390,14 @@ src/
 │   ├── sessionCache.ts      # Credential caching, session persistence, auto-lock
 │   ├── authHandlers.ts      # Wallet unlock, vault key system, password management
 │   ├── txHandlers.ts        # Transaction/signature handlers, notifications
+│   ├── erc7715PermissionHandlers.ts # ERC-7715 delegated permission methods
+│   ├── erc7715PermissionPreflight.ts # ERC-7715 request/account/delegate policy checks
+│   ├── erc7715PermissionRegistry.ts # Supported permission/rule validation
+│   ├── erc7715PermissionCaveats.ts  # ERC-7715 -> DeleGator caveat mapping
+│   ├── erc7715DelegationSigning.ts  # WalletChan-owned ERC-7710 typed data/context encoding
+│   ├── erc7715PermissionLock.ts     # MetaMask-style in-process request lock
+│   ├── pendingErc7715PermissionStorage.ts # Pending ERC-7715 prompts and grants
+│   ├── localAccountKeyResolver.ts # Session-restoring local signer key lookup
 │   ├── chatHandlers.ts      # Bankr AI chat prompt handling
 │   ├── sidepanelManager.ts  # Side panel detection and mode management
 │   ├── cryptoUtils.ts       # Shared crypto utilities (PBKDF2, base64, bytesToHex, constants)
@@ -475,6 +483,11 @@ src/
 │   ├── TransactionConfirmation.tsx # In-popup tx confirmation with success animation
 │   ├── TransactionConfirmationErrorBoundary.tsx # Last-resort reject UI for malformed tx renders
 │   ├── SignatureRequestConfirmation.tsx # Signature request display for Bankr/PK/Seed signing
+│   ├── Erc7715PermissionConfirmation.tsx # ERC-7715 delegated-permission approval screen
+│   ├── Erc7715PermissionReview.tsx # Human-readable delegated-permission summary
+│   ├── Erc7715PermissionEditableControls.tsx # Adjustable amount/frequency/time controls
+│   ├── DelegatedPermissionsSection.tsx # Account-settings grant management/revoke section
+│   ├── DelegatedPermissionGrantCard.tsx # Active grant card with copy/explorer actions
 │   ├── SiweMessageDisplay.tsx # Human-readable SIWE auth review + raw message disclosure
 │   ├── SiweValidationIssues.tsx # SIWE validation issue list
 │   ├── TokenHoldings.tsx    # Portfolio token list with USD values
@@ -497,6 +510,8 @@ src/
 ├── lib/
 │   ├── ensUtils.ts          # ENS/Basename/WNS/GNS/Mega resolution (name, avatar, forward/reverse)
 │   ├── ensIdentityCache.ts  # ENS identity cache (chrome.storage.local, 6-hour TTL)
+│   ├── erc7715PermissionEditing.ts # Editable ERC-7715 request guardrails
+│   ├── erc7715PermissionDisplay.ts # ERC-7715 grant display formatting helpers
 │   └── gasFormatUtils.ts    # Gas formatting utilities (formatEth, formatGwei, formatNumber)
 ├── onboarding.tsx           # React entry point for onboarding page
 └── App.tsx                  # Main popup application
@@ -839,7 +854,7 @@ WalletConnect support is a parallel dapp transport for sites that do not list Wa
 
 **Background modules:**
 
-- `walletConnectHandlers.ts` initializes WalletKit in the MV3 service worker, approves/rejects session proposals, exposes UI-only pair/list/disconnect handlers, and bridges final `txResult:*` / `sigResult:*` writes back to WalletConnect.
+- `walletConnectHandlers.ts` initializes WalletKit in the MV3 service worker, approves/rejects session proposals, exposes UI-only pair/list/disconnect handlers, and bridges final `txResult:*` / `sigResult:*` / `erc7715PermissionResult:*` writes back to WalletConnect.
 - `walletConnectProposal.ts` normalizes chainless `eip155` namespaces to the current active account's visible chains before `approveSession()`. This handles dapps that request EVM methods without an explicit `chains` array while preserving the existing Bankr-vs-local account chain restrictions. Proposals with no remaining approvable namespace are rejected instead of calling `approveSession()` with `{}`; the rejection is also broadcast to `WalletConnectView` as `walletConnectProposalRejected` so the UI can show the dapp logo, requested chain names/icons/IDs, and prefill the Add Chain screen when the chain is not configured. After a chain is added from that WalletConnect route, the popup returns to WalletConnect with a retry prompt because the original proposal was already rejected.
 - `walletConnectRequestHandlers.ts` routes `session_request` events. `eth_sendTransaction` validates/normalizes `tx.value` through `transactionValidation.ts` before it becomes a pinned `PendingTxRequest`; `personal_sign` / typed-data methods become pinned `PendingSignatureRequest`s. The normal popup opens via `openExtensionPopup()`.
 - `walletConnectBatchRequestHandlers.ts` adapts ERC-5792 methods (`wallet_getCapabilities`, `wallet_sendCalls`, `wallet_getCallsStatus`, `wallet_showCallsStatus`) to the existing `batchTxHandlers.ts` implementation.
@@ -847,7 +862,7 @@ WalletConnect support is a parallel dapp transport for sites that do not list Wa
 - `walletConnectProtocol.ts` centralizes WalletConnect JSON-RPC success/error responses; `walletConnectHelpers.ts` holds session/account/method helpers.
 - `walletConnectChainState.ts` maintains a WalletConnect-specific active chain (`walletConnectChainId`) separate from injected per-tab chain state. Explicit `wallet_switchEthereumChain` calls and inferred `args.params.chainId` changes from WC requests update this key and emit `chainChanged` to all active WC sessions that support the chain.
 - `walletConnectKeepalive.ts` keeps the MV3 service worker responsive while approved WalletConnect sessions exist. It sends a `*_batchFetchMessages` relay request every 20s, processes any queued relay messages, and stops when the last active WC session is disconnected. This prevents WalletConnect tx/signature requests from waiting until the popup or sidepanel is opened.
-- `walletConnectStorage.ts` stores `walletConnectPendingRequests`, a transient map from `txId`/`sigId` to `{ topic, requestId, method }` so `writeResultToStorage()` can answer the original WC request after the user confirms/rejects.
+- `walletConnectStorage.ts` stores `walletConnectPendingRequests`, a transient map from tx/signature/ERC-7715 permission ids to `{ kind, topic, requestId, method }` so result-key writes can answer the original WC request after the user confirms/rejects.
 
 **Environment:** WalletConnect uses `VITE_WALLETCONNECT_PROJECT_ID` (or `VITE_WC_PROJECT_ID`) when provided, and otherwise falls back to WalletChan's default public WalletConnect project ID.
 
@@ -983,6 +998,10 @@ The SignatureRequestConfirmation component shows:
 - Decoded message content (for personal_sign)
 - Human-readable SIWE auth review for EIP-4361 messages
 - Raw data with copy button
+
+External ERC-7710 `Delegation` typed-data requests are rejected before they are
+stored as pending signatures. Dapps must use ERC-7715 permission methods
+instead; WalletChan-generated delegation signing must stay on an internal path.
 
 **For Bankr API Accounts:**
 
@@ -1489,6 +1508,211 @@ EIP-712 typed data signatures show structured display:
 - **Primary type**: highlighted header
 - **Message fields**: recursive display for nested objects/arrays, address labels from eth.sh
 - Personal_sign and eth_sign fall back to plain message + raw data display
+
+### ERC-7710 / ERC-7715 Delegated Permissions
+
+Raw ERC-7710 delegation typed data is not a dapp signing surface.
+`eip712Validator.ts` rejects external `eth_signTypedData_v3` /
+`eth_signTypedData_v4` requests whose primary type and fields match the
+Delegation Framework `Delegation` schema, and `txHandlers.ts` repeats the check
+at confirm time for persisted legacy requests.
+
+Dapps must use ERC-7715 provider methods:
+
+- `wallet_getSupportedExecutionPermissions`: returns WalletChan's fixed
+  supported permission types and chain IDs that have a known default 7702
+  DeleGator deployment.
+- `wallet_getGrantedExecutionPermissions`: returns active, non-expired grants
+  scoped to the requesting origin, active account, and chain.
+- `wallet_requestExecutionPermissions`: is routed through
+  `erc7715PermissionHandlers.ts`. It runs preflight in
+  `erc7715PermissionPreflight.ts`: local signer account only, valid ERC-7715
+  request shape, fixed permission/rule allowlist from
+  `erc7715PermissionRegistry.ts`, `from` matching the active account, supported
+  chain, configured RPC URL, and live `eth_getCode(activeEOA)` showing
+  WalletChan's default MetaMask DeleGator. If preflight passes, the request is
+  stored in `pendingErc7715PermissionRequests`, shown in
+  `Erc7715PermissionConfirmation.tsx`, and resolved after user approval or
+  rejection. Permission prompts use a five-minute lifetime. Final approval,
+  rejection, and timeout results are written to
+  `erc7715PermissionResult:{id}` so injected and WalletConnect callers do not
+  depend on a long-lived MV3 `sendMessage` response channel.
+
+While a `wallet_requestExecutionPermissions` request is in progress,
+WalletChan blocks additional external dapp requests with the same
+MetaMask-style in-process error. The injected provider holds an inpage lock so
+locally answered methods like `eth_chainId` cannot bypass the block, and the
+background router enforces the same lock for injected transaction, signature,
+batch, RPC proxy, capabilities/status, watch-asset, add-chain, and execution
+permission requests. The lock is also derived from unexpired
+`pendingErc7715PermissionRequests`, so it survives MV3 service-worker restarts;
+until that storage-backed state is loaded, external provider RPCs fail closed.
+The enqueue path synchronizes the derived storage lock from the saved pending
+request list before releasing the temporary in-memory lock, avoiding an
+enqueue-to-storage-change window where another external request could slip in.
+The WalletConnect router also checks `erc7715PermissionLock.ts` before
+processing session requests.
+
+Current permission vocabulary is deliberately narrow:
+
+- `native-token-allowance`: `data.allowanceAmount`, `data.startTime`
+- `native-token-periodic`: `data.periodAmount`, `data.periodDuration`,
+  `data.startTime`
+- `native-token-stream`: optional `data.initialAmount`, optional
+  `data.maxAmount`, `data.amountPerSecond`, `data.startTime`
+- `erc20-token-allowance`: `data.tokenAddress`, `data.allowanceAmount`,
+  `data.startTime`
+- `erc20-token-periodic`: `data.tokenAddress`, `data.periodAmount`,
+  `data.periodDuration`, `data.startTime`
+- `erc20-token-stream`: `data.tokenAddress`, optional `data.initialAmount`,
+  optional `data.maxAmount`, `data.amountPerSecond`, `data.startTime`
+- `token-approval-revocation`: boolean revocation primitives
+  `erc20Approve`, `erc721Approve`, `erc721SetApprovalForAll`,
+  `permit2Approve`, `permit2Lockdown`, and `permit2InvalidateNonces`. The
+  `permit2InvalidateNonces` flag must currently be `false`; WalletChan rejects
+  broad Permit2 nonce invalidation until a later phase can scope it to exact
+  token/spender pairs.
+
+The registry rejects unknown fields, `MAX_UINT256` / zero amounts for
+non-stream allowances, periodic durations over ten years, malformed token
+addresses, duplicate/expired `expiry` rules, and start times that are not
+before expiry. All stream grants require an expiry. This keeps the exposure
+time-bounded and prevents the DeleGator stream enforcers from later reverting
+because their elapsed-time multiplication happens before the max-amount clamp.
+Token approval revocation requires at least one revocation primitive and an
+expiry, and broad Permit2 nonce invalidation is rejected because it can cancel
+unrelated pending Permit2 signatures without token/spender pinning. If any
+enabled Permit2 primitive is requested, preflight requires a WalletChan built-in
+chain and live code at canonical Permit2
+`0x000000000022D473030F116dDEE9F6B43aC78BA3` on the configured RPC.
+The field names follow MetaMask's Gator permission payloads so later caveat
+construction and UI work can line up with the same semantics.
+`permission.justification` is accepted as optional display-only metadata
+(WalletChan also tolerates legacy `permission.data.justification` and
+normalizes it out of `data`). It is bounded, shown to the user, persisted with
+the request/response, and never used as a caveat input.
+
+`erc7715PermissionCaveats.ts` owns the phase-one permission-to-caveat mapping.
+It uses the MetaMask DeleGator v1.3.0 `DelegationManager`, `ROOT_AUTHORITY`,
+`TimestampEnforcer`, `ExactCalldataEnforcer`, `ValueLteEnforcer`,
+`NativeTokenPeriodTransferEnforcer`, `NativeTokenStreamingEnforcer`,
+`ERC20PeriodTransferEnforcer`, `ERC20StreamingEnforcer`,
+`ApprovalRevocationEnforcer`, and `NonceEnforcer` constants and encodes terms
+with the same fixed-width layouts as `@metamask/delegation-core`.
+Native-token permissions always include `ExactCalldataEnforcer(0x)` because the
+native enforcers constrain `value` but not target/calldata. ERC-20 permissions
+always include `ValueLteEnforcer(0)` because the ERC-20 enforcers constrain
+token transfers but should not allow native value. Standard grants include a
+`NonceEnforcer` term read from `currentNonce(DelegationManager, delegator)` at
+preflight/confirmation so nonce invalidation can revoke them. Allowance grants
+use the relevant periodic enforcer with `periodDuration = uint256.max`, which
+matches the current MetaMask/Gator permission decoder shape. Timestamp caveats
+are expiry-only for the current ERC-7715 vocabulary; start time is enforced by
+the period/stream enforcer terms. Token approval revocation terms are the
+MetaMask/DeleGator one-byte bitmask, also paired with `NonceEnforcer`.
+On approval, `erc7715DelegationSigning.ts` constructs the ERC-7710 typed data
+internally with `delegator = active account`, `delegate = request.to`,
+`authority = ROOT_AUTHORITY`, canonical `DelegationManager`, and only the
+WalletChan-derived caveats. The EIP-712 `Caveat` type intentionally contains
+only `enforcer` and `terms`; `args` are not signed by ERC-7710 and are added
+only to the ABI-encoded signed delegation context. The local private-key/seed
+signer signs that typed data after confirmation, the signed delegation chain is
+ABI-encoded as the ERC-7715 `context`, and `dependencies` is currently `[]`
+because the EOA must already be EIP-7702-authorized to WalletChan's default
+delegate. Grant records are stored in `erc7715PermissionGrants` with the
+original request, returned response, signed delegation, typed data, caveats,
+expiry, and context hash.
+Dapps cannot submit arbitrary enforcer addresses through the ERC-7715 path.
+
+Account Settings includes a delegated-permissions management section for
+private-key and seed-phrase accounts. It lists active, non-expired grants for
+the selected account grouped by requesting origin, displays the chain,
+permission type, delegate, token, amount/frequency, and expiry, and exposes an
+onchain revoke action. Active grant reads call `eth_getCode(account)`,
+`disabledDelegations(hash)`, and any stored `NonceEnforcer` term over the
+configured chain RPC. If the EOA is no longer delegated to WalletChan's default
+DeleGator, the delegation hash is disabled, or the stored nonce no longer
+matches the current nonce, WalletChan marks the grant revoked before returning
+results to Account Settings or `wallet_getGrantedExecutionPermissions`. If the
+RPC cannot verify onchain delegate/disabled/nonce state, active grant reads and
+onchain revoke initiation fail closed instead of returning an unverified grant
+as active.
+`initiateErc7715PermissionRevoke`
+validates account/grant ownership, checks the stored delegation manager, encodes
+MetaMask's `disableDelegation((...))` call for the signed ERC-7710 delegation,
+checks `disabledDelegations(hash)` like MetaMask's Gator revoke hook, and queues
+a normal WalletChan transaction to the canonical `DelegationManager` only when
+the delegation is not already disabled and no revoke tx for that grant is
+already pending. The receipt poller marks the grant
+`status: "revoked"` only after that tx succeeds. Queued revoke transactions
+carry `erc7715PermissionRevokeMeta` with display-safe grant details
+(`grantId`, original origin, permission type, delegate, token/amount/frequency,
+and expiry). `TransactionConfirmation.tsx` uses that snapshot to show a
+dedicated human-readable "Revoke delegated permission" summary and keeps the
+generic calldata decoder collapsed for audit access instead of making
+`disableDelegation((...))` the primary review surface. `TxDetailModal.tsx`
+reuses the same snapshot after submission so the Activity tab shows the
+delegated-permission revoke summary above the raw transaction details.
+
+The confirmation UI is purpose-built for delegated permissions:
+`Erc7715PermissionReview.tsx` shows the site, account, chain, delegate/session
+account, site-provided justification or an explicit italic missing-state,
+token/native asset logo/metadata, live token balance/USD value, amount,
+frequency for periodic permissions, stream rate / available-per-day / total
+exposure for stream permissions, token approval revocation method flags, and
+start/expiry as human-readable rows where applicable.
+`Erc7715PermissionEditableControls.tsx`
+lets users adjust supported fields before approval only when
+`permission.isAdjustmentAllowed === true`. Locked requests cannot change.
+Adjustable requests can set any positive bounded amount, change periodic
+frequency, move start time later, move an already-past start time earlier
+within the past, and add, remove, or change expiry. For token approval
+revocation, the revocation method flags are immutable and the user can only
+adjust the required expiry. Background confirmation
+re-validates the edited ERC-7715 request with
+`erc7715PermissionPreflight.ts`, checks it with
+`lib/erc7715PermissionEditing.ts`, recomputes caveats from the edited request,
+and signs only that recomputed delegation. Raw delegation/caveat details live
+behind an advanced accordion for auditability. ERC-20 token amounts are not
+formatted or signable with guessed decimals: if metadata lookup cannot verify a
+token's decimals, the UI shows the token address and blocks amount editing /
+approval until metadata is verified.
+
+Injected-provider calls bridge through `i_walletExecutionPermissions` in
+`impersonator.ts` / `inject.ts`. The background route resolves the sender tab's
+selected account with `getTabAccount(tabId)` before preflight/listing so an
+omitted ERC-7715 `from` is scoped to the same account the dapp sees, not a
+mutable global popup account. For `wallet_requestExecutionPermissions`,
+`inject.ts` creates the pending permission id, sends it to background, and waits
+on `erc7715PermissionResult:{id}` just like tx/signature result keys. The
+inpage provider also rejects a second concurrent permission request immediately
+with `-32002`.
+
+WalletConnect requests use the same handler from
+`walletConnectRequestHandlers.ts` after session method allowlisting in
+`walletConnectHelpers.ts`; the WalletConnect adapter resolves the account from
+the session-authorized account set before preflight/listing so permission grants
+cannot drift to the popup's currently active account. WalletConnect
+`wallet_requestExecutionPermissions` requests are stored in
+`walletConnectPendingRequests` with kind `erc7715Permission` and completed when
+`erc7715PermissionResult:{id}` is written, so service-worker restarts do not
+orphan the dapp response. WalletConnect grants are stored under
+`walletconnect:<topic>` instead of peer-supplied URLs; peer metadata is
+display-only (`senderOrigin` / favicon) because WalletConnect metadata is
+self-reported.
+
+ERC-7715 `redeemDelegations(bytes[],bytes32[],bytes[])` transactions use a
+decoded asset-change preview in `txSimulation.ts` instead of the normal
+bytecode-injection simulator. DelegationManager redemption can depend on the
+delegator EOA's EIP-7702 smart-account code, and injecting `TxSimulator`
+bytecode at that same address can create false simulated reverts. WalletChan
+therefore decodes only supported single-default and batch-default executions,
+nets direct native sends plus canonical `ERC20.transfer(address,uint256)` sends
+against the delegator encoded in the permission context, and shows those through
+the same token metadata/logo/USD enrichment pipeline as simulated transfers. Any
+unsupported mode, non-zero outer DelegationManager tx value, self-transfer with
+non-zero value/amount, or arbitrary calldata remains "simulation unavailable"
+rather than showing a partial preview.
 
 ### Tenderly Simulation
 
@@ -2180,6 +2404,7 @@ Build command: `pnpm build`
 | `i_walletSendCalls`     | ERC-5792 batch request |
 | `i_walletGetCallsStatus` | ERC-5792 bundle status query |
 | `i_walletShowCallsStatus` | ERC-5792 status UI request |
+| `i_walletExecutionPermissions` | ERC-7715 delegated-permission methods |
 
 ### Content Script → Inpage (postMessage)
 
@@ -2195,6 +2420,7 @@ Build command: `pnpm build`
 | `setAddress`               | Account changed (forwarded from background)          |
 | `setChainId`               | Chain changed (forwarded from background)            |
 | `accountsChanged`          | Emitted when address changes (for dApp notification) |
+| `walletExecutionPermissionsResult` | ERC-7715 delegated-permission result or error |
 
 ### Content Script → Background (chrome.runtime)
 
@@ -2209,6 +2435,7 @@ Build command: `pnpm build`
 | `walletSendCalls`       | Queue ERC-5792 batch request. Includes `bundleId` generated by content script. Ack/result via storage keys.       |
 | `walletGetCallsStatus`  | ERC-5792 bundle status response path                                                                              |
 | `walletShowCallsStatus` | Opens/raises WalletChan status UI for an existing bundle                                                          |
+| `walletExecutionPermissions` | ERC-7715 delegated-permission discovery, active-grant listing, and user-confirmed request route             |
 
 ### Popup → Background (chrome.runtime)
 
@@ -2541,7 +2768,8 @@ prefixes. It clears secrets/accounts (`encrypted*`, `pkVault`, `mnemonicVault`,
 state (`walletConnectPendingRequests`, `walletConnectChainId`), cross-dapp batch
 state (`crossDappBatch`, `bundleStatuses`), bridge state (`pendingBridges`),
 wallet portfolio state (`portfolioSnapshots`, `portfolioHoldingsCache`,
-`hiddenPortfolioTokens`, `customTokens`, `customDelegates`, `recentlyReceivedTokens`), and transient
+`hiddenPortfolioTokens`, `customTokens`, `customDelegates`,
+`recentlyReceivedTokens`), and transient
 result/artifact prefixes (`txResult:`, `sigResult:`, `rpcResult:`,
 `addChainResult:`, `watchAssetResult:`, `batchTxResult:`, `batchTxAck:`,
 `capabilitiesResult:`, `callsStatusResult:`, `notification-`, `fiProgress:`).

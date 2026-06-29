@@ -127,7 +127,7 @@ function AccountSwitcher({
   const [nameFont, setNameFont] = useState("");
 
   // Under midnight, the Private Key tag swaps from loud amber (which competes
-  // with the holdings total) to a muted violet info chip. Bauhaus keeps the
+  // with the holdings total) to a muted cyan info chip. Bauhaus keeps the
   // original amber for poster-style emphasis.
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);

@@ -52,6 +52,7 @@ import AssetChangesDisplay, {
 import ERC20ApproveDisplay from "@/components/ERC20ApproveDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import ChainIcon from "@/components/ChainIcon";
+import Erc7715PermissionRevokeSummary from "@/components/Erc7715PermissionRevokeSummary";
 import { parseApproveCalldata } from "@/lib/erc20Approve";
 import { detectAbiEncodingError } from "@/lib/calldataValidation";
 import { MalformedCalldataBanner } from "@/components/MalformedCalldataBanner";
@@ -357,6 +358,8 @@ function TransactionConfirmation({
   const delegation7702 = txRequest.delegation7702Meta;
   const is7702Revoke = delegation7702?.kind === "revoke";
   const is7702SetDelegate = delegation7702?.kind === "setDelegate";
+  const erc7715RevokeMeta = txRequest.erc7715PermissionRevokeMeta;
+  const isErc7715PermissionRevoke = !!erc7715RevokeMeta;
   const { tx, origin, chainName, favicon } = txRequest;
   const parsedTxValue = useMemo(
     () => parseTransactionValueWei(tx.value),
@@ -381,6 +384,7 @@ function TransactionConfirmation({
     tx.data !== "0x" &&
     tx.to &&
     !parsedApproval &&
+    !isErc7715PermissionRevoke &&
     !isValueMalformed
   );
   const [clearSigningStatus, setClearSigningStatus] = useState<
@@ -627,13 +631,15 @@ function TransactionConfirmation({
         : "confirmTransactionAsync";
 
     // Determine function name: use decoded name, or "Contract Deployment" for deploys
-    const functionName = is7702Revoke
-      ? "Revoke smart-account delegation"
-      : is7702SetDelegate
-        ? "Set smart-account delegation"
-        : !tx.to
-          ? "Contract Deployment"
-          : decodedFunctionName || undefined;
+    const functionName = isErc7715PermissionRevoke
+      ? "Revoke delegated permission"
+      : is7702Revoke
+        ? "Revoke smart-account delegation"
+        : is7702SetDelegate
+          ? "Set smart-account delegation"
+          : !tx.to
+            ? "Contract Deployment"
+            : decodedFunctionName || undefined;
 
     chrome.runtime.sendMessage(
       {
@@ -1321,6 +1327,16 @@ function TransactionConfirmation({
           </Box>
         )}
 
+        {erc7715RevokeMeta && (
+          <Erc7715PermissionRevokeSummary
+            meta={erc7715RevokeMeta}
+            chainId={tx.chainId}
+            chainName={chainName}
+            explorer={resolvedChain?.explorer || chainBadgeConfig.explorer}
+            nativeSymbol={nativeSym}
+          />
+        )}
+
         {/* Clear-signing (ERC-7730) view — rendered ABOVE the tx info card,
             matching the ERC-20 approve display's placement. The human-readable
             intent is the primary content; Origin/From/Network are secondary.
@@ -1747,7 +1763,9 @@ function TransactionConfirmation({
             to={tx.to}
             chainId={tx.chainId}
             onFunctionName={setDecodedFunctionName}
-            defaultCollapsed={!!parsedApproval || clearSigningMatched}
+            defaultCollapsed={
+              !!parsedApproval || clearSigningMatched || isErc7715PermissionRevoke
+            }
           />
         )}
         {/* Raw-only fallback for contract deployments */}

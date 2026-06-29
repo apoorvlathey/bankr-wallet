@@ -67,6 +67,13 @@ walletchan/
 
 Extension has 5 Vite build targets (main / onboarding / inpage / inject / background). Message flow: Dapp → inpage.js → inject.js → background.js → Bankr API. Full details in [`_docs/IMPLEMENTATION.md`](./_docs/IMPLEMENTATION.md).
 
+When validating or preparing the unpacked Chrome extension, always run
+`pnpm build:extension` from the repo root. Do not use package-level partial
+builds such as `pnpm --filter @walletchan/extension build:web` for extension
+reload testing: they only refresh part of `apps/extension/build/` and can leave
+manifest-referenced scripts like `static/js/inject.js`, `static/js/inpage.js`,
+or `static/js/background.js` missing or stale.
+
 Design system is token-driven with two themes (Bauhaus + Midnight). Components consume *intent* tokens (`accent.primary`, `surface.raised`, etc.) — never theme-color literals. See [`_docs/THEME.md`](./_docs/THEME.md).
 
 ## Documentation References

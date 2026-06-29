@@ -1,5 +1,16 @@
 import { getStoredChainName } from "@/lib/chains";
-import { validateEIP712TypedData } from "./eip712Validator";
+import {
+  RAW_ERC7710_DELEGATION_SIGNATURE_ERROR,
+  validateEIP712TypedData,
+} from "./eip712Validator";
+import {
+  handleErc7715PermissionMethod,
+  isErc7715PermissionMethod,
+} from "./erc7715PermissionHandlers";
+import {
+  ERC7715_PERMISSION_REQUEST_IN_PROGRESS_ERROR,
+  isErc7715PermissionRequestLocked,
+} from "./erc7715PermissionLock";
 import type { TransactionParams } from "./bankrApi";
 import {
   handleWalletConnectGetCallsStatus,
@@ -16,7 +27,10 @@ import {
 import { pinnedSignatureRequest, pinnedTxRequest } from "./pinnedRequest";
 import { openExtensionPopup } from "./txHandlers";
 import { normalizeTransactionValue } from "./transactionValidation";
-import { saveWalletConnectPendingRequest } from "./walletConnectStorage";
+import {
+  removeWalletConnectPendingRequest,
+  saveWalletConnectPendingRequest,
+} from "./walletConnectStorage";
 import {
   WALLETCONNECT_SAFE_RPC_METHODS,
   chainIdFromCaip2,
@@ -49,6 +63,16 @@ function getAuthorizedAccounts(
   return getSessionAccounts(kit.getActiveSessions()?.[topic], chainId);
 }
 
+function requestedErc7715Account(method: string, params: any[]): string | null {
+  if (method !== "wallet_requestExecutionPermissions") return null;
+  const request = params[0];
+  return isAddress(request?.from) ? request.from : null;
+}
+
+function walletConnectPermissionOrigin(topic: string): string {
+  return `walletconnect:${topic}`;
+}
+
 export async function handleWalletConnectSessionRequest(
   kit: WalletKitLike,
   args: any,
@@ -64,6 +88,16 @@ export async function handleWalletConnectSessionRequest(
   }
 
   try {
+    if (isErc7715PermissionRequestLocked()) {
+      await rejectSessionRequest(
+        kit,
+        args,
+        -32002,
+        ERC7715_PERMISSION_REQUEST_IN_PROGRESS_ERROR,
+      );
+      return;
+    }
+
     if (
       method !== "wallet_switchEthereumChain" &&
       method !== "wallet_addEthereumChain"
@@ -89,6 +123,59 @@ export async function handleWalletConnectSessionRequest(
     }
     if (method === "wallet_showCallsStatus") {
       await handleWalletConnectShowCallsStatus(kit, args, requestParams);
+      return;
+    }
+    if (isErc7715PermissionMethod(method)) {
+      const session = kit.getActiveSessions()?.[args.topic];
+      const account = await resolveSessionSigningAccount(
+        session,
+        chainId,
+        requestedErc7715Account(method, requestParams),
+      );
+      const peer = getSessionMetadata(session);
+      if (method === "wallet_requestExecutionPermissions") {
+        const permissionRequestId = crypto.randomUUID();
+        await saveWalletConnectPendingRequest({
+          id: permissionRequestId,
+          kind: "erc7715Permission",
+          topic: args.topic,
+          requestId: args.id,
+          method,
+          timestamp: Date.now(),
+        });
+
+        try {
+          await handleErc7715PermissionMethod({
+            method,
+            params: requestParams,
+            origin: walletConnectPermissionOrigin(args.topic),
+            favicon: peer.icon || null,
+            chainId,
+            account,
+            senderOrigin: peer.url || peer.name,
+            requestId: permissionRequestId,
+            waitForResult: false,
+          });
+        } catch (error) {
+          await removeWalletConnectPendingRequest(permissionRequestId);
+          throw error;
+        }
+        return;
+      }
+
+      await respondSessionRequest(
+        kit,
+        args,
+        await handleErc7715PermissionMethod({
+          method,
+          params: requestParams,
+          origin: walletConnectPermissionOrigin(args.topic),
+          favicon: peer.icon || null,
+          chainId,
+          account,
+          senderOrigin: peer.url || peer.name,
+        }),
+      );
       return;
     }
     if (isSignatureMethod(method)) {
@@ -234,7 +321,11 @@ async function createPendingSignatureRequest(
   if (method === "eth_signTypedData_v3" || method === "eth_signTypedData_v4") {
     const validation = validateEIP712TypedData(method, params[1]);
     if (!validation.valid) {
-      throw new Error("Data must conform to EIP-712 schema");
+      throw new Error(
+        validation.error === RAW_ERC7710_DELEGATION_SIGNATURE_ERROR
+          ? RAW_ERC7710_DELEGATION_SIGNATURE_ERROR
+          : "Data must conform to EIP-712 schema",
+      );
     }
     if (validation.sanitized) params[1] = validation.sanitized;
   }

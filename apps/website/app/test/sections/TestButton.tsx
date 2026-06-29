@@ -21,6 +21,11 @@ type TestButtonProps = {
   isDisabled?: boolean;
   /** Extra controls (e.g. an <Input />) rendered above the button. */
   children?: React.ReactNode;
+  /** Extra controls rendered below the result once this test returns. */
+  renderResultActions?: (args: {
+    value: unknown;
+    status: Status;
+  }) => React.ReactNode;
 };
 
 function stringify(value: unknown): string {
@@ -44,16 +49,20 @@ export function TestButton({
   variant = "secondary",
   isDisabled,
   children,
+  renderResultActions,
 }: TestButtonProps) {
   const [status, setStatus] = useState<Status>("idle");
   const [result, setResult] = useState<string | null>(null);
+  const [resultValue, setResultValue] = useState<unknown>(undefined);
 
   const handleClick = useCallback(async () => {
     setStatus("pending");
     setResult(null);
+    setResultValue(undefined);
     try {
       const value = await onRun();
       setResult(stringify(value));
+      setResultValue(value);
       setStatus("ok");
     } catch (err: unknown) {
       const msg =
@@ -63,6 +72,7 @@ export function TestButton({
             ? err
             : stringify(err);
       setResult(msg);
+      setResultValue(err);
       setStatus("error");
     }
   }, [onRun]);
@@ -140,6 +150,9 @@ export function TestButton({
           </Code>
         </Box>
       )}
+
+      {result !== null &&
+        renderResultActions?.({ value: resultValue, status })}
     </VStack>
   );
 }

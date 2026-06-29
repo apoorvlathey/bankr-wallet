@@ -25,6 +25,7 @@ Useful direct routes:
 - `/preview/portfolio`
 - `/preview/batch`
 - `/preview/cross-batch`
+- `/preview/permission`
 
 The top toolbar switches between the registered production themes, Bauhaus and
 Midnight, and between popup `360x600`, popup-window `480x720`, and sidepanel
@@ -41,7 +42,7 @@ Files:
 - `apps/extension/src/preview/PreviewHome.tsx` — production homepage replica
   with deterministic account/portfolio data.
 - `apps/extension/src/preview/fixtures.ts` — deterministic accounts, chains,
-  txs, signatures, and batches.
+  txs, signatures, batches, and delegated permission requests.
 - `apps/extension/src/preview/previewChrome.ts` — preview-only Chrome API shim.
 
 The harness mounts real theme providers and selected real extension components
@@ -95,7 +96,8 @@ theme tokens, or fixtures change.
 
 - The preview shim returns deterministic success responses and mock gas/simulation
   data. It is not a wallet backend.
-- Transaction confirmation, signature confirmation, batch confirmation, unlock,
-  settings appearance, and dense portfolio/home surfaces are covered first.
+- Transaction confirmation, signature confirmation, batch confirmation, delegated
+  permission confirmation, unlock, settings appearance, and dense portfolio/home
+  surfaces are covered first.
 - Browser-extension-only behavior still needs normal extension testing before
   release.

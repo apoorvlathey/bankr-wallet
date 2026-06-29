@@ -232,7 +232,7 @@ Midnight is the opposite of Bauhaus in feeling, not just palette: where Bauhaus 
 | `status.success` | `{ bg: "#0E2E1F", fg: "#4ADE80", border: "#1F5033" }` | |
 | `status.warning` | `{ bg: "#2E240E", fg: "#F6C86E", border: "#53401F" }` | |
 | `status.error` | `{ bg: "#2E0E13", fg: "#FF6B7A", border: "#551F2A" }` | |
-| `status.info` | `{ bg: "#0E1B2E", fg: "#7C8BFF", border: "#1F3255" }` | |
+| `status.info` | `{ bg: "#0B2230", fg: "#7DD3FC", border: "#1E5A74" }` | Calm petrol/cyan info surfaces, intentionally outside the primary violet family |
 
 ### Structural rules
 

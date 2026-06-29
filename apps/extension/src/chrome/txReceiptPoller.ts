@@ -179,6 +179,10 @@ export async function applyReceiptToHistory(
   // delegation into `customDelegates`.
   await syncDelegationMirrorFromChain(txId, chainId, options.rpcUrl);
 
+  if (succeeded) {
+    await markErc7715PermissionRevokedFromReceipt(txId);
+  }
+
   await showConfirmationNotification(txId, txHash, chainId, succeeded);
 
   // If this tx is a slice of a user-split wallet_sendCalls bundle, advance
@@ -198,6 +202,24 @@ export async function applyReceiptToHistory(
   }
 
   return succeeded;
+}
+
+async function markErc7715PermissionRevokedFromReceipt(
+  txId: string,
+): Promise<void> {
+  try {
+    const tx = await getTxById(txId);
+    const grantId = tx?.erc7715PermissionRevokeMeta?.grantId;
+    const accountId = tx?.accountId;
+    if (!grantId || !accountId) return;
+
+    const { revokeErc7715PermissionGrant } = await import(
+      "./pendingErc7715PermissionStorage"
+    );
+    await revokeErc7715PermissionGrant({ grantId, accountId });
+  } catch (err) {
+    console.warn("[receipt] ERC-7715 grant local revoke sync failed", err);
+  }
 }
 
 async function syncDelegationMirrorFromChain(

@@ -16,6 +16,9 @@ export interface EIP712ValidationResult {
   sanitized?: string;
 }
 
+export const RAW_ERC7710_DELEGATION_SIGNATURE_ERROR =
+  "Use wallet_requestExecutionPermissions for delegated permissions. Raw delegation signatures are not supported.";
+
 // Maximum allowed nesting depth for type definitions
 // Legitimate DeFi protocols rarely exceed 10 levels
 const MAX_NESTING_DEPTH = 50;
@@ -95,6 +98,13 @@ export function validateEIP712TypedData(
     return { valid: false, error: "Missing or invalid 'message' field" };
   }
 
+  if (isRawErc7710DelegationSignatureRequest(method, data)) {
+    return {
+      valid: false,
+      error: RAW_ERC7710_DELEGATION_SIGNATURE_ERROR,
+    };
+  }
+
   // Check max object depth on the entire payload to prevent deeply nested
   // objects anywhere (types, domain, message, or extra properties) from
   // crashing the UI during stringify/render.
@@ -150,6 +160,58 @@ export function validateEIP712TypedData(
   });
 
   return { valid: true, sanitized };
+}
+
+export function isRawErc7710DelegationSignatureRequest(
+  method: string,
+  typedData: unknown,
+): boolean {
+  if (method !== "eth_signTypedData_v3" && method !== "eth_signTypedData_v4") {
+    return false;
+  }
+
+  let data: any;
+  try {
+    data = typeof typedData === "string" ? JSON.parse(typedData) : typedData;
+  } catch {
+    return false;
+  }
+
+  if (!data || typeof data !== "object" || data.primaryType !== "Delegation") {
+    return false;
+  }
+
+  const message = data.message;
+  const types = data.types;
+  const delegationFields = Array.isArray(types?.Delegation)
+    ? types.Delegation
+    : [];
+
+  const declaresDelegationShape =
+    hasTypeField(delegationFields, "delegate", "address") &&
+    hasTypeField(delegationFields, "delegator", "address") &&
+    hasTypeField(delegationFields, "authority", "bytes32") &&
+    hasTypeField(delegationFields, "caveats", "Caveat[]");
+
+  if (!message || typeof message !== "object") {
+    return declaresDelegationShape;
+  }
+
+  const hasDelegationMessageShape =
+    typeof message.delegate === "string" &&
+    typeof message.delegator === "string" &&
+    typeof message.authority === "string" &&
+    Array.isArray(message.caveats);
+
+  return declaresDelegationShape || hasDelegationMessageShape;
+}
+
+function hasTypeField(
+  fields: Array<{ name?: unknown; type?: unknown }>,
+  name: string,
+  type: string,
+): boolean {
+  return fields.some((field) => field.name === name && field.type === type);
 }
 
 /**

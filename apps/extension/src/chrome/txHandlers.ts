@@ -57,6 +57,10 @@ import {
   SignatureParams,
   PendingSignatureRequest,
 } from "./pendingSignatureStorage";
+import {
+  isRawErc7710DelegationSignatureRequest,
+  RAW_ERC7710_DELEGATION_SIGNATURE_ERROR,
+} from "./eip712Validator";
 import { pinnedTxRequest, pinnedSignatureRequest } from "./pinnedRequest";
 import { validateSiwePersonalSignRequest } from "@/lib/siwe";
 import {
@@ -356,6 +360,19 @@ export function handleSignatureRequest(
           });
           return;
         }
+      }
+
+      if (
+        isRawErc7710DelegationSignatureRequest(
+          signature.method,
+          signature.params?.[1],
+        )
+      ) {
+        await writeResultToStorage(`sigResult:${sigId}`, {
+          success: false,
+          error: RAW_ERC7710_DELEGATION_SIGNATURE_ERROR,
+        });
+        return;
       }
     }
 
@@ -1201,6 +1218,7 @@ async function processLocalTransactionInBackground(
     parentBundleId: pending.parentBundleId,
     bundleIndex: pending.bundleIndex,
     delegation7702Meta: pending.delegation7702Meta,
+    erc7715PermissionRevokeMeta: pending.erc7715PermissionRevokeMeta,
     accountId: pending.accountId,
   });
 
@@ -1508,6 +1526,19 @@ export async function handleConfirmSignatureRequest(
   }
   const account = pinned.account;
 
+  if (
+    isRawErc7710DelegationSignatureRequest(
+      pending.signature.method,
+      pending.signature.params?.[1],
+    )
+  ) {
+    await removePendingSignatureRequest(sigId);
+    return {
+      success: false,
+      error: RAW_ERC7710_DELEGATION_SIGNATURE_ERROR,
+    };
+  }
+
   // SECURITY: enforce that the dapp-supplied signer matches the pinned account
   const signerParam = extractSignerParam(
     pending.signature.method,
@@ -1643,6 +1674,20 @@ export async function handleConfirmSignatureRequestBankr(
   if (pinnedAccount.type !== "bankr") {
     return { success: false, error: "Pending request is no longer valid" };
   }
+
+  if (
+    isRawErc7710DelegationSignatureRequest(
+      pending.signature.method,
+      pending.signature.params?.[1],
+    )
+  ) {
+    await removePendingSignatureRequest(sigId);
+    return {
+      success: false,
+      error: RAW_ERC7710_DELEGATION_SIGNATURE_ERROR,
+    };
+  }
+
   const signerParam = extractSignerParam(
     pending.signature.method,
     pending.signature.params,

@@ -7,7 +7,7 @@ const WALLETCONNECT_REQUEST_EXPIRY_MS = 30 * 60 * 1000;
 
 export interface WalletConnectPendingRequest {
   id: string;
-  kind: "transaction" | "signature";
+  kind: "transaction" | "signature" | "erc7715Permission";
   topic: string;
   requestId: number;
   method: string;

@@ -105,6 +105,9 @@ const TransactionConfirmation = lazy(
 const SignatureRequestConfirmation = lazy(
   () => import("@/components/SignatureRequestConfirmation"),
 );
+const Erc7715PermissionConfirmation = lazy(
+  () => import("@/components/Erc7715PermissionConfirmation"),
+);
 const PendingTxList = lazy(() => import("@/components/PendingTxList"));
 const BatchTransactionConfirmation = lazy(
   () => import("@/components/BatchTransactionConfirmation"),
@@ -146,6 +149,7 @@ if (typeof window !== "undefined") {
     void import("@/components/Settings");
     void import("@/components/TransactionConfirmation");
     void import("@/components/SignatureRequestConfirmation");
+    void import("@/components/Erc7715PermissionConfirmation");
     void import("@/components/PendingTxList");
     void import("@/components/BatchTransactionConfirmation");
     void import("@/components/CrossDappBatchConfirmation");
@@ -181,6 +185,7 @@ import ChainIcon from "@/components/ChainIcon";
 import { hasEncryptedApiKey } from "@/chrome/crypto";
 import { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
+import type { PendingErc7715PermissionRequest } from "@/chrome/pendingErc7715PermissionStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import {
   getCrossDappBatch,
@@ -207,6 +212,7 @@ import {
 export type CombinedRequest =
   | { type: "tx"; request: PendingTxRequest }
   | { type: "sig"; request: PendingSignatureRequest }
+  | { type: "permission"; request: PendingErc7715PermissionRequest }
   | { type: "batch"; request: PendingBatchTxRequest }
   | { type: "crossDappBatch"; request: CrossDappBatch };
 
@@ -229,10 +235,15 @@ export function getCombinedRequests(
   sigRequests: PendingSignatureRequest[],
   batchRequests: PendingBatchTxRequest[] = [],
   crossDappBatch?: CrossDappBatch | null,
+  permissionRequests: PendingErc7715PermissionRequest[] = [],
 ): CombinedRequest[] {
   const rest: CombinedRequest[] = [
     ...txRequests.map((r) => ({ type: "tx" as const, request: r })),
     ...sigRequests.map((r) => ({ type: "sig" as const, request: r })),
+    ...permissionRequests.map((r) => ({
+      type: "permission" as const,
+      request: r,
+    })),
     ...batchRequests.map((r) => ({ type: "batch" as const, request: r })),
   ];
   // Sort the rest by timestamp ascending (oldest first)
@@ -279,6 +290,12 @@ function App() {
   >([]);
   const [selectedSignatureRequest, setSelectedSignatureRequest] =
     useState<PendingSignatureRequest | null>(null);
+  const [pendingErc7715PermissionRequests, setPendingErc7715PermissionRequests] =
+    useState<PendingErc7715PermissionRequest[]>([]);
+  const [
+    selectedErc7715PermissionRequest,
+    setSelectedErc7715PermissionRequest,
+  ] = useState<PendingErc7715PermissionRequest | null>(null);
   const [pendingWatchAssetRequest, setPendingWatchAssetRequest] =
     useState<PendingWatchAssetRequest | null>(null);
   const [pendingAddChainRequest, setPendingAddChainRequest] =
@@ -505,6 +522,16 @@ function App() {
       type: "getPendingSignatureRequests",
     });
     setPendingSignatureRequests(requests || []);
+    return requests || [];
+  };
+
+  const loadPendingErc7715PermissionRequests = async () => {
+    const requests = await sendMessageWithRetry<
+      PendingErc7715PermissionRequest[]
+    >({
+      type: "getPendingErc7715PermissionRequests",
+    });
+    setPendingErc7715PermissionRequests(requests || []);
     return requests || [];
   };
 
@@ -938,6 +965,7 @@ function App() {
       // Load pending requests
       const requests = await loadPendingRequests();
       const sigRequests = await loadPendingSignatureRequests();
+      const permissionRequests = await loadPendingErc7715PermissionRequests();
       const batchRequests = await loadPendingBatchRequests();
       const watchAssetRequests = await loadPendingWatchAssetRequests();
       const addChainRequests = await loadPendingAddChainRequests();
@@ -1047,6 +1075,11 @@ function App() {
       } else if (batchRequests.length > 0) {
         setSelectedBatchRequest(batchRequests[batchRequests.length - 1]);
         setView("batchTxConfirm");
+      } else if (permissionRequests.length > 0) {
+        setSelectedErc7715PermissionRequest(
+          permissionRequests[permissionRequests.length - 1],
+        );
+        setView("erc7715PermissionConfirm");
       } else if (sigRequests.length > 0) {
         // Auto-open newest (last) pending signature request
         setSelectedSignatureRequest(sigRequests[sigRequests.length - 1]);
@@ -1078,6 +1111,7 @@ function App() {
         type: string;
         txRequest?: PendingTxRequest;
         sigRequest?: PendingSignatureRequest;
+        request?: PendingErc7715PermissionRequest | PendingWatchAssetRequest | PendingAddChainRequest;
         batchRequest?: PendingBatchTxRequest;
         sessions?: WalletConnectSessionSummary[];
         activeChainId?: number | null;
@@ -1133,6 +1167,24 @@ function App() {
           if (isUnlocked) {
             setSelectedBatchRequest(batchReq);
             setView("batchTxConfirm");
+          } else {
+            setView("unlock");
+          }
+        })();
+        return;
+      }
+      if (
+        message.type === "newPendingErc7715PermissionRequest" &&
+        message.request
+      ) {
+        const permissionRequest =
+          message.request as PendingErc7715PermissionRequest;
+        (async () => {
+          const isUnlocked = await checkLockState();
+          setIsWalletUnlocked(isUnlocked);
+          if (isUnlocked) {
+            setSelectedErc7715PermissionRequest(permissionRequest);
+            setView("erc7715PermissionConfirm");
           } else {
             setView("unlock");
           }
@@ -1273,6 +1325,7 @@ function App() {
                 // single txConfirm→next transition.
                 const hasOtherPending =
                   pendingBatchRequests.length > 0 ||
+                  pendingErc7715PermissionRequests.length > 0 ||
                   pendingSignatureRequests.length > 0 ||
                   (crossDappBatch != null &&
                     crossDappBatch.entries.length > 0);
@@ -1312,11 +1365,44 @@ function App() {
                 const hasOtherPending =
                   pendingRequests.length > 0 ||
                   pendingBatchRequests.length > 0 ||
+                  pendingErc7715PermissionRequests.length > 0 ||
                   (crossDappBatch != null &&
                     crossDappBatch.entries.length > 0);
                 if (view === "signatureConfirm" && !hasOtherPending) {
                   setView("main");
                 }
+              }
+            }
+          }
+        }
+        if (changes.pendingErc7715PermissionRequests) {
+          const updated: PendingErc7715PermissionRequest[] =
+            changes.pendingErc7715PermissionRequests.newValue || [];
+          setPendingErc7715PermissionRequests(updated);
+          if (
+            selectedErc7715PermissionRequest &&
+            !updated.find(
+              (r) => r.id === selectedErc7715PermissionRequest.id,
+            )
+          ) {
+            if (updated.length > 0) {
+              setSelectedErc7715PermissionRequest(updated[0]);
+            } else if (
+              view === "erc7715PermissionConfirm" &&
+              !isInSidePanel &&
+              !isFullscreenTab
+            ) {
+              // Popup mode: let the confirmation callback close or route.
+            } else {
+              setSelectedErc7715PermissionRequest(null);
+              const hasOtherPending =
+                pendingRequests.length > 0 ||
+                pendingBatchRequests.length > 0 ||
+                pendingSignatureRequests.length > 0 ||
+                (crossDappBatch != null &&
+                  crossDappBatch.entries.length > 0);
+              if (view === "erc7715PermissionConfirm" && !hasOtherPending) {
+                setView("main");
               }
             }
           }
@@ -1353,6 +1439,7 @@ function App() {
               // batchTxConfirm→main→next intermediate slide.
               const hasOtherPending =
                 pendingRequests.length > 0 ||
+                pendingErc7715PermissionRequests.length > 0 ||
                 pendingSignatureRequests.length > 0 ||
                 (crossDappBatch != null &&
                   crossDappBatch.entries.length > 0);
@@ -1410,7 +1497,7 @@ function App() {
 
     chrome.storage.onChanged.addListener(handleStorageChange);
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
-  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, selectedBatchRequest, pendingWatchAssetRequest, pendingRequests, pendingBatchRequests, pendingSignatureRequests, crossDappBatch, view, isInSidePanel, isFullscreenTab]);
+  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, selectedErc7715PermissionRequest, selectedBatchRequest, pendingWatchAssetRequest, pendingRequests, pendingBatchRequests, pendingSignatureRequests, pendingErc7715PermissionRequests, crossDappBatch, view, isInSidePanel, isFullscreenTab]);
 
   // Listen for tab activation changes to update chain for current tab
   useEffect(() => {
@@ -1543,6 +1630,7 @@ function App() {
     // Refresh pending requests after unlock
     const requests = await loadPendingRequests();
     const sigRequests = await loadPendingSignatureRequests();
+    const permissionRequests = await loadPendingErc7715PermissionRequests();
     const batchReqs = await loadPendingBatchRequests();
     const watchAssetRequests = await loadPendingWatchAssetRequests();
     const addChainReqs = await loadPendingAddChainRequests();
@@ -1553,6 +1641,11 @@ function App() {
     } else if (batchReqs.length > 0) {
       setSelectedBatchRequest(batchReqs[batchReqs.length - 1]);
       setView("batchTxConfirm");
+    } else if (permissionRequests.length > 0) {
+      setSelectedErc7715PermissionRequest(
+        permissionRequests[permissionRequests.length - 1],
+      );
+      setView("erc7715PermissionConfirm");
     } else if (sigRequests.length > 0) {
       setSelectedSignatureRequest(sigRequests[sigRequests.length - 1]);
       setView("signatureConfirm");
@@ -1630,6 +1723,7 @@ function App() {
       pendingSignatureRequests,
       pendingBatchRequests,
       crossDappBatch,
+      pendingErc7715PermissionRequests,
     );
     if (combined.length <= 1) return;
 
@@ -1647,6 +1741,15 @@ function App() {
         (r) =>
           r.type === "sig" && r.request.id === selectedSignatureRequest.id,
       );
+    } else if (
+      view === "erc7715PermissionConfirm" &&
+      selectedErc7715PermissionRequest
+    ) {
+      currentIdx = combined.findIndex(
+        (r) =>
+          r.type === "permission" &&
+          r.request.id === selectedErc7715PermissionRequest.id,
+      );
     } else if (view === "crossDappBatchConfirm") {
       currentIdx = combined.findIndex((r) => r.type === "crossDappBatch");
     }
@@ -1659,33 +1762,47 @@ function App() {
     if (target.type === "tx") {
       setSelectedBatchRequest(null);
       setSelectedSignatureRequest(null);
+      setSelectedErc7715PermissionRequest(null);
       setSelectedTxRequest(target.request);
       if (view !== "txConfirm") setView("txConfirm");
     } else if (target.type === "batch") {
       setSelectedTxRequest(null);
       setSelectedSignatureRequest(null);
+      setSelectedErc7715PermissionRequest(null);
       setSelectedBatchRequest(target.request);
       if (view !== "batchTxConfirm") setView("batchTxConfirm");
+    } else if (target.type === "permission") {
+      setSelectedTxRequest(null);
+      setSelectedBatchRequest(null);
+      setSelectedSignatureRequest(null);
+      setSelectedErc7715PermissionRequest(target.request);
+      if (view !== "erc7715PermissionConfirm") {
+        setView("erc7715PermissionConfirm");
+      }
     } else if (target.type === "sig") {
       setSelectedTxRequest(null);
       setSelectedBatchRequest(null);
+      setSelectedErc7715PermissionRequest(null);
       setSelectedSignatureRequest(target.request);
       if (view !== "signatureConfirm") setView("signatureConfirm");
     } else if (target.type === "crossDappBatch") {
       setSelectedTxRequest(null);
       setSelectedBatchRequest(null);
       setSelectedSignatureRequest(null);
+      setSelectedErc7715PermissionRequest(null);
       if (view !== "crossDappBatchConfirm") setView("crossDappBatchConfirm");
     }
     preNavigatedRef.current = true;
   }, [
     pendingRequests,
     pendingSignatureRequests,
+    pendingErc7715PermissionRequests,
     pendingBatchRequests,
     crossDappBatch,
     selectedTxRequest,
     selectedBatchRequest,
     selectedSignatureRequest,
+    selectedErc7715PermissionRequest,
     view,
   ]);
 
@@ -1728,11 +1845,20 @@ function App() {
         setSelectedTxRequest(null);
         setSelectedBatchRequest(batchReqs[0]);
         setView("batchTxConfirm");
-      } else if (isInSidePanel || isFullscreenTab) {
-        setSelectedTxRequest(null);
-        setView("main");
       } else {
-        window.close();
+        const permissionReqs = await loadPendingErc7715PermissionRequests();
+        if (permissionReqs.length > 0) {
+          setSelectedTxRequest(null);
+          setSelectedErc7715PermissionRequest(permissionReqs[0]);
+          setView("erc7715PermissionConfirm");
+          return;
+        }
+        if (isInSidePanel || isFullscreenTab) {
+          setSelectedTxRequest(null);
+          setView("main");
+        } else {
+          window.close();
+        }
       }
     }
   // Rejection fallback routing reads the current pending-request helpers.
@@ -1767,6 +1893,14 @@ function App() {
         );
       });
     }
+    for (const request of pendingErc7715PermissionRequests) {
+      await new Promise<void>((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: "rejectErc7715PermissionRequest", requestId: request.id },
+          () => resolve(),
+        );
+      });
+    }
     // Reject the cross-dapp batch (if any). The handler fans out a rejection
     // to every dapp that contributed a tx to the batch.
     if (crossDappBatch) {
@@ -1781,10 +1915,12 @@ function App() {
       setPendingRequests([]);
       setPendingBatchRequests([]);
       setPendingSignatureRequests([]);
+      setPendingErc7715PermissionRequests([]);
       setCrossDappBatch(null);
       setSelectedTxRequest(null);
       setSelectedBatchRequest(null);
       setSelectedSignatureRequest(null);
+      setSelectedErc7715PermissionRequest(null);
       setView("main");
     } else {
       window.close();
@@ -1793,6 +1929,7 @@ function App() {
     pendingRequests,
     pendingBatchRequests,
     pendingSignatureRequests,
+    pendingErc7715PermissionRequests,
     crossDappBatch,
     isInSidePanel,
     isFullscreenTab,
@@ -1826,16 +1963,74 @@ function App() {
         setSelectedSignatureRequest(null);
         setSelectedBatchRequest(batchReqs[0]);
         setView("batchTxConfirm");
-      } else if (isInSidePanel || isFullscreenTab) {
-        setSelectedSignatureRequest(null);
-        setView("main");
       } else {
-        window.close();
+        const permissionReqs = await loadPendingErc7715PermissionRequests();
+        if (permissionReqs.length > 0) {
+          setSelectedSignatureRequest(null);
+          setSelectedErc7715PermissionRequest(permissionReqs[0]);
+          setView("erc7715PermissionConfirm");
+        } else if (isInSidePanel || isFullscreenTab) {
+          setSelectedSignatureRequest(null);
+          setView("main");
+        } else {
+          window.close();
+        }
       }
     }
   // Signature completion fallback routing reads the current pending-request helpers.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSignatureRequest?.id, isInSidePanel, isFullscreenTab]);
+
+  const handleErc7715PermissionCancelled = useCallback(async () => {
+    if (preNavigatedRef.current) {
+      preNavigatedRef.current = false;
+      return;
+    }
+
+    const currentRequestId = selectedErc7715PermissionRequest?.id;
+    const permissionRequests = await loadPendingErc7715PermissionRequests();
+    const remaining = permissionRequests.filter(
+      (request) => request.id !== currentRequestId,
+    );
+
+    if (remaining.length > 0) {
+      setSelectedErc7715PermissionRequest(remaining[0]);
+      return;
+    }
+
+    const txRequests = await loadPendingRequests();
+    if (txRequests.length > 0) {
+      setSelectedErc7715PermissionRequest(null);
+      setSelectedTxRequest(txRequests[0]);
+      setView("txConfirm");
+      return;
+    }
+
+    const batchReqs = await loadPendingBatchRequests();
+    if (batchReqs.length > 0) {
+      setSelectedErc7715PermissionRequest(null);
+      setSelectedBatchRequest(batchReqs[0]);
+      setView("batchTxConfirm");
+      return;
+    }
+
+    const sigRequests = await loadPendingSignatureRequests();
+    if (sigRequests.length > 0) {
+      setSelectedErc7715PermissionRequest(null);
+      setSelectedSignatureRequest(sigRequests[0]);
+      setView("signatureConfirm");
+      return;
+    }
+
+    setSelectedErc7715PermissionRequest(null);
+    if (isInSidePanel || isFullscreenTab) {
+      setView("main");
+    } else {
+      window.close();
+    }
+  // Permission completion fallback routing reads the current pending-request helpers.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedErc7715PermissionRequest?.id, isInSidePanel, isFullscreenTab]);
 
   const handleCancelAllSignatures = useCallback(async () => {
     // Cancel all pending signature requests
@@ -1861,12 +2056,20 @@ function App() {
         setSelectedSignatureRequest(null);
         setSelectedBatchRequest(batchReqs[0]);
         setView("batchTxConfirm");
-      } else if (isInSidePanel || isFullscreenTab) {
-        setPendingSignatureRequests([]);
-        setSelectedSignatureRequest(null);
-        setView("main");
       } else {
-        window.close();
+        const permissionReqs = await loadPendingErc7715PermissionRequests();
+        if (permissionReqs.length > 0) {
+          setPendingSignatureRequests([]);
+          setSelectedSignatureRequest(null);
+          setSelectedErc7715PermissionRequest(permissionReqs[0]);
+          setView("erc7715PermissionConfirm");
+        } else if (isInSidePanel || isFullscreenTab) {
+          setPendingSignatureRequests([]);
+          setSelectedSignatureRequest(null);
+          setView("main");
+        } else {
+          window.close();
+        }
       }
     }
   // Bulk cancellation fallback routing reads the current pending-request helpers.
@@ -2001,6 +2204,7 @@ function App() {
             pendingTxCount={pendingRequests.length}
             pendingSignatureCount={pendingSignatureRequests.length}
             pendingBatchCount={pendingBatchRequests.length}
+            pendingPermissionCount={pendingErc7715PermissionRequests.length}
           />
         </Box>
       </Box>
@@ -2594,6 +2798,7 @@ function App() {
             <PendingTxList
               txRequests={pendingRequests}
               signatureRequests={pendingSignatureRequests}
+              permissionRequests={pendingErc7715PermissionRequests}
               batchRequests={pendingBatchRequests}
               crossDappBatch={crossDappBatch}
               onBack={() => setView("main")}
@@ -2604,6 +2809,10 @@ function App() {
               onSelectSignature={(sig) => {
                 setSelectedSignatureRequest(sig);
                 setView("signatureConfirm");
+              }}
+              onSelectPermission={(request) => {
+                setSelectedErc7715PermissionRequest(request);
+                setView("erc7715PermissionConfirm");
               }}
               onSelectBatch={(batch) => {
                 setSelectedBatchRequest(batch);
@@ -2625,6 +2834,7 @@ function App() {
       pendingSignatureRequests,
       pendingBatchRequests,
       crossDappBatch,
+      pendingErc7715PermissionRequests,
     );
     const currentIndex = combinedRequests.findIndex(
       (r) => r.type === "tx" && r.request.id === selectedTxRequest.id,
@@ -2654,7 +2864,7 @@ function App() {
                 currentIndex={currentIndex >= 0 ? currentIndex : 0}
                 totalCount={totalCount}
                 isInSidePanel={isInSidePanel || isFullscreenTab}
-                accountType={activeAccount?.type}
+                accountType={selectedTxRequest.accountType ?? activeAccount?.type}
                 crossDappBatch={crossDappBatch}
                 onBack={() => {
                   if (totalCount > 1) {
@@ -2690,6 +2900,10 @@ function App() {
                     } else if (nextRequest.type === "crossDappBatch") {
                       setSelectedTxRequest(null);
                       setView("crossDappBatchConfirm");
+                    } else if (nextRequest.type === "permission") {
+                      setSelectedTxRequest(null);
+                      setSelectedErc7715PermissionRequest(nextRequest.request);
+                      setView("erc7715PermissionConfirm");
                     } else {
                       setSelectedTxRequest(null);
                       setSelectedSignatureRequest(nextRequest.request);
@@ -2712,6 +2926,7 @@ function App() {
       pendingSignatureRequests,
       pendingBatchRequests,
       crossDappBatch,
+      pendingErc7715PermissionRequests,
     );
     const currentIndex = combinedRequests.findIndex(
       (r) => r.type === "batch" && r.request.id === selectedBatchRequest.id,
@@ -2734,7 +2949,7 @@ function App() {
               currentIndex={currentIndex >= 0 ? currentIndex : 0}
               totalCount={totalCount}
               isInSidePanel={isInSidePanel || isFullscreenTab}
-              accountType={activeAccount?.type}
+              accountType={selectedBatchRequest.accountType ?? activeAccount?.type}
               accountAddress={address}
               crossDappBatch={crossDappBatch}
               onAddedToBatch={() => {
@@ -2825,6 +3040,10 @@ function App() {
                   } else if (nextRequest.type === "crossDappBatch") {
                     setSelectedBatchRequest(null);
                     setView("crossDappBatchConfirm");
+                  } else if (nextRequest.type === "permission") {
+                    setSelectedBatchRequest(null);
+                    setSelectedErc7715PermissionRequest(nextRequest.request);
+                    setView("erc7715PermissionConfirm");
                   } else {
                     setSelectedBatchRequest(null);
                     setSelectedSignatureRequest(nextRequest.request);
@@ -2846,6 +3065,7 @@ function App() {
       pendingSignatureRequests,
       pendingBatchRequests,
       crossDappBatch,
+      pendingErc7715PermissionRequests,
     );
     const currentIndex = combinedRequests.findIndex(
       (r) => r.type === "crossDappBatch",
@@ -2927,6 +3147,94 @@ function App() {
                   } else if (nextRequest.type === "sig") {
                     setSelectedSignatureRequest(nextRequest.request);
                     setView("signatureConfirm");
+                  } else if (nextRequest.type === "permission") {
+                    setSelectedErc7715PermissionRequest(nextRequest.request);
+                    setView("erc7715PermissionConfirm");
+                  }
+                }
+              }}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
+  // Delegated permission confirmation view (ERC-7715)
+  if (
+    view === "erc7715PermissionConfirm" &&
+    selectedErc7715PermissionRequest
+  ) {
+    const combinedRequests = getCombinedRequests(
+      pendingRequests,
+      pendingSignatureRequests,
+      pendingBatchRequests,
+      crossDappBatch,
+      pendingErc7715PermissionRequests,
+    );
+    const currentIndex = combinedRequests.findIndex(
+      (r) =>
+        r.type === "permission" &&
+        r.request.id === selectedErc7715PermissionRequest.id,
+    );
+    const totalCount = combinedRequests.length;
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <Erc7715PermissionConfirmation
+              key={selectedErc7715PermissionRequest.id}
+              permissionRequest={selectedErc7715PermissionRequest}
+              currentIndex={currentIndex >= 0 ? currentIndex : 0}
+              totalCount={totalCount}
+              isInSidePanel={isInSidePanel || isFullscreenTab}
+              accountType={selectedErc7715PermissionRequest.accountType}
+              onBack={() => {
+                setSelectedErc7715PermissionRequest(null);
+                if (totalCount > 1) {
+                  setView("pendingTxList");
+                } else {
+                  setView("main");
+                }
+              }}
+              onCancelled={handleErc7715PermissionCancelled}
+              onCancelAll={handleRejectAll}
+              onBeforeCancel={navigateToAdjacentRequest}
+              onConfirmed={handleErc7715PermissionCancelled}
+              onNavigate={(direction) => {
+                const currentIdx = combinedRequests.findIndex(
+                  (r) =>
+                    r.type === "permission" &&
+                    r.request.id === selectedErc7715PermissionRequest.id,
+                );
+                const newIdx =
+                  direction === "prev" ? currentIdx - 1 : currentIdx + 1;
+                if (newIdx >= 0 && newIdx < combinedRequests.length) {
+                  const nextRequest = combinedRequests[newIdx];
+                  if (nextRequest.type === "permission") {
+                    setSelectedErc7715PermissionRequest(nextRequest.request);
+                  } else if (nextRequest.type === "tx") {
+                    setSelectedErc7715PermissionRequest(null);
+                    setSelectedTxRequest(nextRequest.request);
+                    setView("txConfirm");
+                  } else if (nextRequest.type === "batch") {
+                    setSelectedErc7715PermissionRequest(null);
+                    setSelectedBatchRequest(nextRequest.request);
+                    setView("batchTxConfirm");
+                  } else if (nextRequest.type === "crossDappBatch") {
+                    setSelectedErc7715PermissionRequest(null);
+                    setView("crossDappBatchConfirm");
+                  } else if (nextRequest.type === "sig") {
+                    setSelectedErc7715PermissionRequest(null);
+                    setSelectedSignatureRequest(nextRequest.request);
+                    setView("signatureConfirm");
                   }
                 }
               }}
@@ -2944,6 +3252,7 @@ function App() {
       pendingSignatureRequests,
       pendingBatchRequests,
       crossDappBatch,
+      pendingErc7715PermissionRequests,
     );
     const currentIndex = combinedRequests.findIndex(
       (r) => r.type === "sig" && r.request.id === selectedSignatureRequest.id,
@@ -2966,7 +3275,9 @@ function App() {
               currentIndex={currentIndex >= 0 ? currentIndex : 0}
               totalCount={totalCount}
               isInSidePanel={isInSidePanel || isFullscreenTab}
-              accountType={activeAccount?.type}
+              accountType={
+                selectedSignatureRequest.accountType ?? activeAccount?.type
+              }
               onBack={() => {
                 setSelectedSignatureRequest(null);
                 if (totalCount > 1) {
@@ -3002,6 +3313,10 @@ function App() {
                   } else if (nextRequest.type === "crossDappBatch") {
                     setSelectedSignatureRequest(null);
                     setView("crossDappBatchConfirm");
+                  } else if (nextRequest.type === "permission") {
+                    setSelectedSignatureRequest(null);
+                    setSelectedErc7715PermissionRequest(nextRequest.request);
+                    setView("erc7715PermissionConfirm");
                   }
                 }
               }}
@@ -3497,12 +3812,14 @@ function App() {
             <PendingTxBanner
               txCount={pendingRequests.length}
               signatureCount={pendingSignatureRequests.length}
+              permissionCount={pendingErc7715PermissionRequests.length}
               batchCount={pendingBatchRequests.length}
               crossDappBatchCount={crossDappBatch?.entries.length ?? 0}
               onClickTx={() => {
                 const onlyOneTx =
                   pendingRequests.length === 1 &&
                   pendingSignatureRequests.length === 0 &&
+                  pendingErc7715PermissionRequests.length === 0 &&
                   pendingBatchRequests.length === 0 &&
                   !crossDappBatch;
                 if (onlyOneTx) {
@@ -3518,10 +3835,27 @@ function App() {
                   setView("signatureConfirm");
                 }
               }}
+              onClickPermission={() => {
+                const onlyOnePermission =
+                  pendingErc7715PermissionRequests.length === 1 &&
+                  pendingRequests.length === 0 &&
+                  pendingSignatureRequests.length === 0 &&
+                  pendingBatchRequests.length === 0 &&
+                  !crossDappBatch;
+                if (onlyOnePermission) {
+                  setSelectedErc7715PermissionRequest(
+                    pendingErc7715PermissionRequests[0],
+                  );
+                  setView("erc7715PermissionConfirm");
+                } else {
+                  setView("pendingTxList");
+                }
+              }}
               onClickBatch={() => {
                 const onlyOneBatch =
                   pendingBatchRequests.length === 1 &&
                   pendingRequests.length === 0 &&
+                  pendingErc7715PermissionRequests.length === 0 &&
                   pendingSignatureRequests.length === 0 &&
                   !crossDappBatch;
                 if (onlyOneBatch) {
@@ -3668,24 +4002,22 @@ function App() {
             )}
 
             {/* Account Switcher + Chain Selector Row */}
-            <Suspense fallback={null}>
-              <AccountNetworkControls
-                accounts={accounts}
-                activeAccount={activeAccount}
-                selectedChain={selectedChain}
-                visibleChains={visibleChains}
-                onAccountSelect={handleAccountSwitch}
-                onAddAccount={() => setView("addAccount")}
-                onAccountSettings={(account) => {
-                  setAccountSettingsInitialView("settings");
-                  setAccountSettingsApiKeyDraft(null);
-                  setSettingsAccount(account);
-                  setView("accountSettings");
-                }}
-                onChainSelect={handleHomepageChainSelect}
-                onAddChain={() => openSettingsAddChain()}
-              />
-            </Suspense>
+            <AccountNetworkControls
+              accounts={accounts}
+              activeAccount={activeAccount}
+              selectedChain={selectedChain}
+              visibleChains={visibleChains}
+              onAccountSelect={handleAccountSwitch}
+              onAddAccount={() => setView("addAccount")}
+              onAccountSettings={(account) => {
+                setAccountSettingsInitialView("settings");
+                setAccountSettingsApiKeyDraft(null);
+                setSettingsAccount(account);
+                setView("accountSettings");
+              }}
+              onChainSelect={handleHomepageChainSelect}
+              onAddChain={() => openSettingsAddChain()}
+            />
 
             {/* Address Bar — compact utility row.
                 Uses the `elevated` strip variant so Bauhaus keeps its stark

@@ -48,6 +48,7 @@ import {
   getEnsIdentityCache,
 } from "@/lib/ensIdentityCache";
 import { CopyButton } from "./CopyButton";
+import DelegatedPermissionsSection from "./DelegatedPermissionsSection";
 import SmartAccountSection from "./SmartAccountSection";
 import RevealPrivateKey from "./RevealPrivateKey";
 import RevealSeedPhrase from "./RevealSeedPhrase";
@@ -1038,6 +1039,8 @@ function AccountSettings({
               accountId={account.id}
               accountAddress={account.address}
             />
+            <Divider borderColor="border.subtle" />
+            <DelegatedPermissionsSection accountId={account.id} />
           </>
         )}
 

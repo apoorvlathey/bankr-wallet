@@ -40,7 +40,27 @@ import {
 } from "./seedPhraseUtils";
 import { storeMnemonic, getMnemonic, removeMnemonic } from "./mnemonicStorage";
 import { deriveAddress } from "./localSigner";
-import { validateEIP712TypedData } from "./eip712Validator";
+import {
+  RAW_ERC7710_DELEGATION_SIGNATURE_ERROR,
+  validateEIP712TypedData,
+} from "./eip712Validator";
+import {
+  clearExpiredErc7715PermissionRequests,
+  getPendingErc7715PermissionRequests,
+} from "./pendingErc7715PermissionStorage";
+import {
+  handleErc7715PermissionMethod,
+  handleConfirmErc7715PermissionRequest,
+  handleRejectErc7715PermissionRequest,
+  handleInitiateErc7715PermissionRevoke,
+  getActiveErc7715PermissionGrantsWithOnchainSync,
+  isErc7715PermissionMethod,
+} from "./erc7715PermissionHandlers";
+import {
+  ERC7715_PERMISSION_REQUEST_IN_PROGRESS_ERROR,
+  isErc7715PermissionRequestLocked,
+  refreshErc7715PermissionRequestLockFromStorage,
+} from "./erc7715PermissionLock";
 import {
   removePendingTxRequest,
   getPendingTxRequests,
@@ -415,10 +435,115 @@ function isExtensionPage(sender: chrome.runtime.MessageSender): boolean {
   return !!sender.url?.startsWith(EXTENSION_ORIGIN_PREFIX);
 }
 
+const EXTERNAL_PROVIDER_RPC_MESSAGES_BLOCKED_DURING_ERC7715 = new Set([
+  "addEthereumChain",
+  "dappChainSwitchNotification",
+  "rpcRequest",
+  "sendTransaction",
+  "signatureRequest",
+  "walletExecutionPermissions",
+  "walletGetCallsStatus",
+  "walletGetCapabilities",
+  "walletSendCalls",
+  "walletShowCallsStatus",
+  "watchAsset",
+]);
+
+function rejectExternalProviderRequestDuringErc7715Lock(
+  message: any,
+  sendResponse: (response?: any) => void,
+): boolean {
+  if (!EXTERNAL_PROVIDER_RPC_MESSAGES_BLOCKED_DURING_ERC7715.has(message.type)) {
+    return false;
+  }
+  if (!isErc7715PermissionRequestLocked()) return false;
+
+  const error = ERC7715_PERMISSION_REQUEST_IN_PROGRESS_ERROR;
+  switch (message.type) {
+    case "sendTransaction":
+      if (typeof message.txId === "string") {
+        void writeResultToStorage(`txResult:${message.txId}`, {
+          success: false,
+          error,
+        });
+      }
+      return true;
+    case "signatureRequest":
+      if (typeof message.sigId === "string") {
+        void writeResultToStorage(`sigResult:${message.sigId}`, {
+          success: false,
+          error,
+        });
+      }
+      return true;
+    case "walletSendCalls":
+      if (typeof message.bundleId === "string") {
+        void writeResultToStorage(`batchTxAck:${message.bundleId}`, {
+          success: false,
+          error,
+          code: -32002,
+        });
+      }
+      return true;
+    case "walletGetCapabilities":
+      if (typeof message.requestId === "string") {
+        void writeResultToStorage(`capabilitiesResult:${message.requestId}`, {
+          success: false,
+          error,
+        });
+      }
+      return true;
+    case "walletGetCallsStatus":
+      if (typeof message.requestId === "string") {
+        void writeResultToStorage(`callsStatusResult:${message.requestId}`, {
+          success: false,
+          error,
+        });
+      }
+      return true;
+    case "watchAsset":
+      if (typeof message.watchAssetId === "string") {
+        void writeResultToStorage(`watchAssetResult:${message.watchAssetId}`, {
+          success: false,
+          error,
+        });
+      }
+      return true;
+    case "addEthereumChain":
+      if (typeof message.requestId === "string") {
+        void writeResultToStorage(`addChainResult:${message.requestId}`, {
+          success: false,
+          error,
+        });
+      }
+      return true;
+    case "rpcRequest":
+      if (typeof message.rpcId === "string") {
+        void writeResultToStorage(`rpcResult:${message.rpcId}`, { error });
+      }
+      return true;
+    case "walletExecutionPermissions":
+      sendResponse({ success: false, error });
+      return true;
+    case "walletShowCallsStatus":
+    case "dappChainSwitchNotification":
+      return true;
+    default:
+      return false;
+  }
+}
+
 // ─── Chrome Event Listeners ──────────────────────────────────────────────────
 
 // Listen for storage changes to update cached timeout and broadcast address changes
 chrome.storage.onChanged.addListener(async (changes, areaName) => {
+  if (
+    areaName === "local" &&
+    changes.pendingErc7715PermissionRequests
+  ) {
+    void refreshErc7715PermissionRequestLockFromStorage();
+  }
+
   if (areaName === "sync") {
     if (changes[AUTO_LOCK_STORAGE_KEY]) {
       updateCachedAutoLockTimeout(changes[AUTO_LOCK_STORAGE_KEY].newValue);
@@ -466,6 +591,7 @@ setInterval(() => {
   clearExpiredTxRequests();
   clearExpiredSignatureRequests();
   clearExpiredBatchTxRequests();
+  clearExpiredErc7715PermissionRequests();
   clearExpiredWalletConnectPendingRequests();
 }, 60000); // Every minute
 
@@ -750,6 +876,7 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "confirmBatchTransactionAsync",
   "confirmBatchTransactionAsyncPK",
   "confirmSignatureRequest",
+  "confirmErc7715PermissionRequest",
   "confirmAddChain",
   "confirmWatchAsset",
   // Rejections (prevent malicious page from rejecting user's pending requests)
@@ -760,6 +887,7 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "updatePendingTxRequestData",
   "updateCallInPendingBatch",
   "rejectSignatureRequest",
+  "rejectErc7715PermissionRequest",
   "rejectAddChain",
   "rejectWatchAsset",
   "cancelTransaction",
@@ -808,6 +936,9 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "getPendingBatchTxRequests",
   "getPendingTransaction",
   "getPendingSignatureRequests",
+  "getPendingErc7715PermissionRequests",
+  "getErc7715PermissionGrantsForAccount",
+  "initiateErc7715PermissionRevoke",
   "getPendingWatchAssetRequests",
   "getPendingAddChainRequests",
   "getTxHistory",
@@ -903,6 +1034,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (
+    !isExtensionPage(sender) &&
+    rejectExternalProviderRequestDuringErc7715Lock(message, sendResponse)
+  ) {
+    return false;
+  }
+
   switch (message.type) {
     case "walletConnectGetSessions": {
       handleWalletConnectGetSessions().then((result) => {
@@ -987,7 +1125,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           );
           writeResultToStorage(`sigResult:${message.sigId}`, {
             success: false,
-            error: "Data must conform to EIP-712 schema",
+            error:
+              validationResult.error === RAW_ERC7710_DELEGATION_SIGNATURE_ERROR
+                ? RAW_ERC7710_DELEGATION_SIGNATURE_ERROR
+                : "Data must conform to EIP-712 schema",
           });
           return false;
         }
@@ -1017,6 +1158,54 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case "getPendingErc7715PermissionRequests": {
+      getPendingErc7715PermissionRequests().then((requests) => {
+        sendResponse(requests);
+      });
+      return true;
+    }
+
+    case "getErc7715PermissionGrantsForAccount": {
+      const accountId =
+        typeof message.accountId === "string" ? message.accountId : "";
+      if (!accountId) {
+        sendResponse({ success: false, error: "Account id is required" });
+        return true;
+      }
+
+      getActiveErc7715PermissionGrantsWithOnchainSync({
+        accountId,
+      })
+        .then((grants) =>
+          grants.sort((a, b) => b.createdAt - a.createdAt),
+        )
+        .then((grants) => sendResponse({ success: true, grants }))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
+    case "initiateErc7715PermissionRevoke": {
+      const accountId =
+        typeof message.accountId === "string" ? message.accountId : "";
+      const grantId = typeof message.grantId === "string" ? message.grantId : "";
+      if (!accountId || !grantId) {
+        sendResponse({
+          success: false,
+          error: "Account id and grant id are required",
+        });
+        return true;
+      }
+
+      handleInitiateErc7715PermissionRevoke({ accountId, grantId })
+        .then((result) => sendResponse(result))
+        .catch((err) =>
+          sendResponse({ success: false, error: err.message }),
+        );
+      return true;
+    }
+
     case "rejectSignatureRequest": {
       const result: SignatureResult = {
         success: false,
@@ -1024,6 +1213,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       };
       removePendingSignatureRequest(message.sigId).then(async () => {
         await writeResultToStorage(`sigResult:${message.sigId}`, result);
+        sendResponse(result);
+      });
+      return true;
+    }
+
+    case "rejectErc7715PermissionRequest": {
+      handleRejectErc7715PermissionRequest(message.requestId).then((result) => {
         sendResponse(result);
       });
       return true;
@@ -1298,6 +1494,51 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const requestOrigin = sender.origin ?? undefined;
       handleWalletShowCallsStatus(message.bundleId, requestOrigin);
       return false;
+    }
+
+    case "walletExecutionPermissions": {
+      (async () => {
+        try {
+          if (!isErc7715PermissionMethod(message.method)) {
+            throw new Error(
+              `Unsupported execution permission method: ${message.method}`,
+            );
+          }
+
+          const account =
+            typeof sender.tab?.id === "number"
+              ? await getTabAccount(sender.tab.id)
+              : undefined;
+          const result = await handleErc7715PermissionMethod({
+            method: message.method,
+            params: Array.isArray(message.params) ? message.params : [],
+            origin: sender.origin ?? message.origin ?? undefined,
+            chainId:
+              typeof message.chainId === "number" ? message.chainId : undefined,
+            favicon: message.favicon || null,
+            senderWindowId: sender.tab?.windowId,
+            senderOrigin: sender.origin ?? undefined,
+            tabId: sender.tab?.id,
+            frameId: sender.frameId,
+            account: account ?? undefined,
+            requestId:
+              typeof message.requestId === "string"
+                ? message.requestId
+                : undefined,
+            waitForResult: message.method !== "wallet_requestExecutionPermissions",
+          });
+          sendResponse({ success: true, result });
+        } catch (err) {
+          sendResponse({
+            success: false,
+            error:
+              err instanceof Error
+                ? err.message
+                : "Execution permission request failed",
+          });
+        }
+      })();
+      return true;
     }
 
     case "getPendingBatchTxRequests": {
@@ -2467,6 +2708,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await writeResultToStorage(`sigResult:${message.sigId}`, result);
         sendResponse(result);
       })();
+      return true;
+    }
+
+    case "confirmErc7715PermissionRequest": {
+      handleConfirmErc7715PermissionRequest(
+        message.requestId,
+        message.password || "",
+        message.editedRequest,
+      ).then((result) => {
+        sendResponse(result);
+      });
       return true;
     }
 

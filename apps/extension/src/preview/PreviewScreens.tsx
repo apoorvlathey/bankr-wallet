@@ -16,11 +16,13 @@ import TransactionConfirmation from "@/components/TransactionConfirmation";
 import SignatureRequestConfirmation from "@/components/SignatureRequestConfirmation";
 import BatchTransactionConfirmation from "@/components/BatchTransactionConfirmation";
 import CrossDappBatchConfirmation from "@/components/CrossDappBatchConfirmation";
+import Erc7715PermissionConfirmation from "@/components/Erc7715PermissionConfirmation";
 import AppearanceSettings from "@/components/Settings/AppearanceSettings";
 import PreviewHome from "./PreviewHome";
 import {
   previewBatchRequest,
   previewCrossDappBatch,
+  previewPermissionRequest,
   previewSignatureRequest,
   previewTxRequest,
 } from "./fixtures";
@@ -124,7 +126,13 @@ export function PreviewScreen({
     case "unlock":
       return (
         <PreviewShell>
-          <UnlockScreen onUnlock={noop} pendingTxCount={1} pendingSignatureCount={1} pendingBatchCount={1} />
+          <UnlockScreen
+            onUnlock={noop}
+            pendingTxCount={1}
+            pendingSignatureCount={1}
+            pendingBatchCount={1}
+            pendingPermissionCount={1}
+          />
         </PreviewShell>
       );
     case "tx":
@@ -132,8 +140,8 @@ export function PreviewScreen({
         <PreviewShell>
           <TransactionConfirmation
             txRequest={previewTxRequest}
-            currentIndex={1}
-            totalCount={4}
+            currentIndex={0}
+            totalCount={5}
             isInSidePanel={mode === "sidepanel"}
             accountType="bankr"
             onBack={noop}
@@ -151,8 +159,8 @@ export function PreviewScreen({
         <PreviewShell>
           <SignatureRequestConfirmation
             sigRequest={previewSignatureRequest}
-            currentIndex={2}
-            totalCount={4}
+            currentIndex={1}
+            totalCount={5}
             isInSidePanel={mode === "sidepanel"}
             accountType="bankr"
             onBack={noop}
@@ -172,8 +180,8 @@ export function PreviewScreen({
         <PreviewShell>
           <BatchTransactionConfirmation
             batchRequest={previewBatchRequest}
-            currentIndex={3}
-            totalCount={4}
+            currentIndex={2}
+            totalCount={5}
             isInSidePanel={mode === "sidepanel"}
             accountType="bankr"
             accountAddress={previewTxRequest.tx.from}
@@ -192,12 +200,29 @@ export function PreviewScreen({
         <PreviewShell>
           <CrossDappBatchConfirmation
             batch={previewCrossDappBatch}
-            currentIndex={4}
-            totalCount={4}
+            currentIndex={3}
+            totalCount={5}
             isInSidePanel={mode === "sidepanel"}
             onBack={noop}
             onConfirmed={noop}
             onRejected={noop}
+            onNavigate={noop}
+          />
+        </PreviewShell>
+      );
+    case "permission":
+      return (
+        <PreviewShell>
+          <Erc7715PermissionConfirmation
+            permissionRequest={previewPermissionRequest}
+            currentIndex={4}
+            totalCount={5}
+            isInSidePanel={mode === "sidepanel"}
+            accountType="privateKey"
+            onBack={noop}
+            onConfirmed={noop}
+            onCancelled={noop}
+            onCancelAll={noop}
             onNavigate={noop}
           />
         </PreviewShell>

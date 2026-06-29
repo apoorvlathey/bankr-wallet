@@ -369,6 +369,7 @@ function buildBanner(theme: Theme): Refs {
   ].join("; ");
 
   const shadow = host.attachShadow({ mode: "closed" });
+  const isMidnight = theme.themeId === "midnight";
   const logoRadius = theme.isDark ? "4px" : "0";
 
   // Strip uses the Bauhaus color palette in BOTH themes — the dark

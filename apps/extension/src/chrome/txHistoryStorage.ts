@@ -4,6 +4,7 @@
  */
 
 import { TransactionParams } from "./bankrApi";
+import type { Erc7715PermissionRevokeMeta } from "./pendingTxStorage";
 import { withStorageLock } from "./storageLock";
 
 export type TxStatus = "processing" | "pending" | "success" | "failed";
@@ -208,6 +209,14 @@ export interface CompletedTransaction {
     targetDelegate: `0x${string}`;
     kind: "revoke" | "setDelegate";
   };
+  /**
+   * ERC-7715 permission grant disable tx. Present on WalletChan-queued
+   * DelegationManager `disableDelegation` transactions so the receipt path can
+   * mark the grant locally revoked only after the onchain tx succeeds. Extra
+   * fields are public display snapshots copied from the pending request for
+   * activity/history readability.
+   */
+  erc7715PermissionRevokeMeta?: Erc7715PermissionRevokeMeta;
   /**
    * Account ID this tx was signed by. Captured at addTxToHistory time so
    * post-confirm hooks (e.g., the `customDelegates` mirror in

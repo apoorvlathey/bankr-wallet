@@ -3,6 +3,11 @@ import type { PendingTxRequest } from "@/chrome/pendingTxStorage";
 import type { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
+import type { PendingErc7715PermissionRequest } from "@/chrome/pendingErc7715PermissionStorage";
+import {
+  ERC7710_EMPTY_CAVEAT_ARGS,
+  METAMASK_DELEGATOR_V1_3_CAVEAT_ENFORCERS,
+} from "@/chrome/erc7715PermissionCaveats";
 import { getVisibleChains, normalizeNetworksInfo } from "@/lib/chains";
 import { DEFAULT_NETWORKS } from "@/constants/networks";
 
@@ -15,6 +20,18 @@ const approveData =
   "0x095ea7b3" +
   previewSpender.toLowerCase().replace("0x", "").padStart(64, "0") +
   BigInt(250_000_000).toString(16).padStart(64, "0");
+
+const previewPermissionStart = Math.floor(Date.now() / 1000);
+const previewPermissionExpiry = previewPermissionStart + 3600;
+const previewPermissionAmount = 1_000_000_000_000_000n;
+
+function fixedWidthHex(value: bigint | number, bytes: number): `0x${string}` {
+  return `0x${BigInt(value).toString(16).padStart(bytes * 2, "0")}`;
+}
+
+function concatHex(parts: `0x${string}`[]): `0x${string}` {
+  return `0x${parts.map((part) => part.slice(2)).join("")}`;
+}
 
 export const previewAccounts: Account[] = [
   {
@@ -169,4 +186,60 @@ export const previewCrossDappBatch: CrossDappBatch = {
       source: { kind: "eth_sendTransaction" },
     },
   ],
+};
+
+export const previewPermissionRequest: PendingErc7715PermissionRequest = {
+  id: "preview-permission-native",
+  origin: "http://localhost:3030",
+  favicon: "/icon128.png",
+  timestamp: Date.now() - 12000,
+  chainName: "Base",
+  chainId: 8453,
+  request: {
+    chainId: "0x2105",
+    from: previewAddress as `0x${string}`,
+    to: previewSpender as `0x${string}`,
+    permission: {
+      type: "native-token-allowance",
+      isAdjustmentAllowed: true,
+      data: {
+        allowanceAmount: `0x${previewPermissionAmount.toString(16)}`,
+        startTime: previewPermissionStart,
+      },
+    },
+    rules: [
+      {
+        type: "expiry",
+        data: {
+          timestamp: previewPermissionExpiry,
+        },
+      },
+    ],
+  },
+  permissionType: "native-token-allowance",
+  caveats: [
+    {
+      enforcerName: "NativeTokenTransferAmountEnforcer",
+      enforcer:
+        METAMASK_DELEGATOR_V1_3_CAVEAT_ENFORCERS.NativeTokenTransferAmountEnforcer,
+      terms: fixedWidthHex(previewPermissionAmount, 32),
+      args: ERC7710_EMPTY_CAVEAT_ARGS,
+    },
+    {
+      enforcerName: "TimestampEnforcer",
+      enforcer: METAMASK_DELEGATOR_V1_3_CAVEAT_ENFORCERS.TimestampEnforcer,
+      terms: concatHex([
+        fixedWidthHex(previewPermissionStart, 16),
+        fixedWidthHex(previewPermissionExpiry, 16),
+      ]),
+      args: ERC7710_EMPTY_CAVEAT_ARGS,
+    },
+  ],
+  accountId: "preview-pk",
+  accountAddress: previewAddress,
+  accountType: "privateKey",
+  tabId: 1,
+  frameId: 0,
+  senderOrigin: "http://localhost:3030",
+  requestChainId: 8453,
 };

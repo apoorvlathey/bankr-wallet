@@ -56,6 +56,7 @@ import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import ClearSignedSummaryCard from "@/components/ClearSignedSummaryCard";
 import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
 import { BatchCallsList } from "@/components/BatchCallsList";
+import Erc7715PermissionRevokeSummary from "@/components/Erc7715PermissionRevokeSummary";
 import {
   decodeErc7821Batch,
   looksLikeErc7821SelfBatch,
@@ -935,6 +936,12 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
   const hasBatchCalls = !!batchCalls && batchCalls.length > 0;
   const delegationMeta = tx.delegation7702Meta;
   const hasDelegation = !!delegationMeta;
+  const erc7715RevokeMeta = tx.erc7715PermissionRevokeMeta;
+  const hasErc7715Revoke = !!erc7715RevokeMeta;
+  // Match the live confirmation screen: ERC-7715 revoke txs get the dedicated
+  // permission summary, not a second generic ERC-7730/clear-signing card for
+  // the same DelegationManager calldata.
+  const clearSignedMeta = hasErc7715Revoke ? undefined : tx.clearSignedMeta;
   // eth.sh label for the delegation target — shared cache, so this is free
   // on reopen and free if any other surface (tx-confirmation screen, etc.)
   // already fetched it.
@@ -957,6 +964,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
   // tx do?", the raw From/To/Value/Calldata rows are power-user details so
   // we default them collapsed. Hero sources, in priority order:
   //   - clear-signed snapshot (Approved/Transferred/Native-send/ERC-7730)
+  //   - ERC-7715 permission revoke snapshot (DelegationManager disable tx)
   //   - batch calls (decoded ERC-7821 self-call from atomic-7702 / Bankr)
   //   - delegation7702 (Set / Revoke smart-account tx — target lives in the
   //     authorization list, not in calldata, so the raw FROM/TO/data view
@@ -966,7 +974,8 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
   // Bridge / swap txs are virtually always wallet-initiated, so this is
   // also the place to honor "collapse for wallet-initiated swap txs".
   const hasHero =
-    !!tx.clearSignedMeta ||
+    !!clearSignedMeta ||
+    hasErc7715Revoke ||
     hasBatchCalls ||
     hasDelegation ||
     !!tx.swapMeta ||
@@ -1949,6 +1958,19 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
               </Text>
             </HStack>
 
+            {/* ERC-7715 revoke clear-signing hero. The queued transaction is a
+                DelegationManager disable call; without the display snapshot
+                the activity modal only shows raw tuple calldata. */}
+            {erc7715RevokeMeta && (
+              <Erc7715PermissionRevokeSummary
+                meta={erc7715RevokeMeta}
+                chainId={tx.chainId}
+                chainName={resolvedChain?.name ?? tx.chainName}
+                explorer={explorerBase}
+                nativeSymbol={nativeSym}
+              />
+            )}
+
             {/* Per-call hero for atomic batches. Decoded from the ERC-7821
                 self-call calldata on open (no storage cost). Reuses the same
                 CallCard + clear-signing pipeline the tx-confirmation surface
@@ -2149,7 +2171,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 tx-confirmation surface uses. It re-decodes the calldata
                 against the descriptor to produce per-field rows (e.g.
                 "Amount to supply: 2 USDC", "Collateral recipient: …"). */}
-            {tx.clearSignedMeta && tx.clearSignedMeta.kind === "erc7730" && tx.tx.to && tx.tx.data ? (
+            {clearSignedMeta && clearSignedMeta.kind === "erc7730" && tx.tx.to && tx.tx.data ? (
               <ClearSigningView
                 kind="calldata"
                 chainId={tx.chainId}
@@ -2158,8 +2180,8 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 calldata={tx.tx.data}
                 value={tx.tx.value}
               />
-            ) : tx.clearSignedMeta ? (
-              <ClearSignedSummaryCard meta={tx.clearSignedMeta} chainId={tx.chainId} />
+            ) : clearSignedMeta ? (
+              <ClearSignedSummaryCard meta={clearSignedMeta} chainId={tx.chainId} />
             ) : null}
 
             {/* Toggle for the raw tx details. Default collapsed when the
