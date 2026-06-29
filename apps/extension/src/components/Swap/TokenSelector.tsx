@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import {
   Box,
   VStack,
@@ -86,6 +86,7 @@ interface TokenSelectorProps {
    *  where the portfolio API returns nothing and the native balance only
    *  appears once the onchain RPC call resolves. */
   isLoadingHoldings?: boolean;
+  onOpenChange?: (isOpen: boolean) => void;
 }
 
 export default function TokenSelector({
@@ -103,6 +104,7 @@ export default function TokenSelector({
   chainName,
   dropdownAlign = "left",
   isLoadingHoldings = false,
+  onOpenChange,
 }: TokenSelectorProps) {
   const { networksInfo } = useNetworks();
   const [isOpen, setIsOpen] = useState(false);
@@ -118,19 +120,30 @@ export default function TokenSelector({
   const searchTerm = search.trim().toLowerCase();
   const excludeLower = excludeAddress?.toLowerCase();
 
+  const closeDropdown = useCallback(() => {
+    setIsOpen(false);
+    setSearch("");
+    onOpenChange?.(false);
+  }, [onOpenChange]);
+
+  const handleTriggerClick = () => {
+    const next = !isOpen;
+    setIsOpen(next);
+    onOpenChange?.(next);
+  };
+
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (
         containerRef.current &&
         !containerRef.current.contains(e.target as Node)
       ) {
-        setIsOpen(false);
-        setSearch("");
+        closeDropdown();
       }
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+  }, [closeDropdown]);
 
   useEffect(() => {
     if (isOpen) {
@@ -245,23 +258,10 @@ export default function TokenSelector({
     );
   }, [restTokens, searchTerm]);
 
-  const visibleRest = filteredRest.slice(0, visibleCount);
-
-  // Batched logo cache — drops a single hook call instead of one per row, and
-  // gives every list row (selected token chip, holdings, popular, full list,
-  // resolved custom token) the same data-URL cache used by the rest of the UI.
-  const cachedLogoMap = useCachedAvatarMap(
-    useMemo(() => {
-      const urls: Array<string | null | undefined> = [];
-      if (selectedToken?.logoUrl) urls.push(selectedToken.logoUrl);
-      for (const h of holdings) urls.push(h.logoUrl);
-      for (const t of filteredRest) urls.push(t.logoURI);
-      if (resolvedCustomToken?.logoUrl) urls.push(resolvedCustomToken.logoUrl);
-      return urls;
-    }, [selectedToken, holdings, filteredRest, resolvedCustomToken]),
+  const visibleRest = useMemo(
+    () => filteredRest.slice(0, visibleCount),
+    [filteredRest, visibleCount],
   );
-  const resolveLogo = (url: string | undefined): string | undefined =>
-    (url && cachedLogoMap.get(url)) || url;
 
   // Popular tokens: ordered per-chain list, matched against holdings + token
   // list, with native token pinned to our canonical icon.
@@ -317,6 +317,33 @@ export default function TokenSelector({
     return result;
   }, [tokenList, holdings, excludeLower, searchTerm, chainId, networksInfo]);
 
+  // Batched logo cache — drops a single hook call instead of one per row, and
+  // gives visible rows the same data-URL cache used by the rest of the UI.
+  // Keep the closed trigger cheap: cache only the selected-token chip until
+  // the dropdown opens, then warm logos for the rows actually rendered.
+  const cachedLogoMap = useCachedAvatarMap(
+    useMemo(() => {
+      const urls: Array<string | null | undefined> = [];
+      if (selectedToken?.logoUrl) urls.push(selectedToken.logoUrl);
+      if (!isOpen) return urls;
+
+      for (const h of filteredHoldings) urls.push(h.logoUrl);
+      for (const t of popularTokens) urls.push(t.logoUrl);
+      for (const t of visibleRest) urls.push(t.logoURI);
+      if (resolvedCustomToken?.logoUrl) urls.push(resolvedCustomToken.logoUrl);
+      return urls;
+    }, [
+      selectedToken?.logoUrl,
+      isOpen,
+      filteredHoldings,
+      popularTokens,
+      visibleRest,
+      resolvedCustomToken?.logoUrl,
+    ]),
+  );
+  const resolveLogo = (url: string | undefined): string | undefined =>
+    (url && cachedLogoMap.get(url)) || url;
+
   const handleScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
@@ -327,20 +354,17 @@ export default function TokenSelector({
 
   const handleSelectHolding = (h: PortfolioToken) => {
     onSelect(h);
-    setIsOpen(false);
-    setSearch("");
+    closeDropdown();
   };
 
   const handleSelectListEntry = (t: TokenListEntry) => {
     onSelect(entryToPortfolioToken(t, chainId));
-    setIsOpen(false);
-    setSearch("");
+    closeDropdown();
   };
 
   const handleSelectPortfolio = (p: PortfolioToken) => {
     onSelect(p);
-    setIsOpen(false);
-    setSearch("");
+    closeDropdown();
   };
 
   const isSelectedAddr = (addr: string) => {
@@ -371,7 +395,7 @@ export default function TokenSelector({
         _hover={{ borderColor: "accent.secondary" }}
         display="flex"
         alignItems="center"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleTriggerClick}
       >
         <HStack spacing={2}>
           {selectedToken &&
@@ -557,8 +581,7 @@ export default function TokenSelector({
                     _hover={{ filter: "brightness(0.85)" }}
                     onClick={() => {
                       onSelectCustomToken(resolvedCustomToken);
-                      setIsOpen(false);
-                      setSearch("");
+                      closeDropdown();
                     }}
                     spacing={2}
                   >

@@ -181,21 +181,10 @@ export default function BuyTokenSelector({
     );
   }, [restTokens, searchTerm]);
 
-  const visibleRest = filteredRest.slice(0, visibleCount);
-
-  // Batched logo cache — shares the avatar/token-logo data-URL cache so every
-  // row paints synchronously from chrome.storage on reopen.
-  const cachedLogoMap = useCachedAvatarMap(
-    useMemo(() => {
-      const urls: Array<string | null | undefined> = [];
-      if (selectedToken?.logoURI) urls.push(selectedToken.logoURI);
-      for (const h of holdings) urls.push(h.logoUrl);
-      for (const t of filteredRest) urls.push(t.logoURI);
-      return urls;
-    }, [selectedToken, holdings, filteredRest]),
+  const visibleRest = useMemo(
+    () => filteredRest.slice(0, visibleCount),
+    [filteredRest, visibleCount],
   );
-  const resolveLogo = (url: string | undefined): string | undefined =>
-    (url && cachedLogoMap.get(url)) || url;
 
   // Popular tokens: ordered per-chain list, matched against holdings + token list
   const popularTokens = useMemo(() => {
@@ -257,6 +246,32 @@ export default function BuyTokenSelector({
     }
     return result;
   }, [tokenList, holdings, excludeLower, searchTerm, chainId, networksInfo]);
+
+  // Batched logo cache — shares the avatar/token-logo data-URL cache so visible
+  // rows paint synchronously from chrome.storage on reopen. While closed, only
+  // the selected chip is visible, so avoid warming the whole token list.
+  const cachedLogoMap = useCachedAvatarMap(
+    useMemo(() => {
+      const urls: Array<string | null | undefined> = [];
+      if (selectedToken?.logoURI) urls.push(selectedToken.logoURI);
+      if (!isOpen) return urls;
+
+      for (const h of filteredHoldings) urls.push(h.logoUrl);
+      for (const t of popularTokens) urls.push(t.logoURI);
+      for (const t of visibleRest) urls.push(t.logoURI);
+      if (pendingToken?.logoURI) urls.push(pendingToken.logoURI);
+      return urls;
+    }, [
+      selectedToken?.logoURI,
+      isOpen,
+      filteredHoldings,
+      popularTokens,
+      visibleRest,
+      pendingToken?.logoURI,
+    ]),
+  );
+  const resolveLogo = (url: string | undefined): string | undefined =>
+    (url && cachedLogoMap.get(url)) || url;
 
   const handleScroll = () => {
     const el = scrollRef.current;

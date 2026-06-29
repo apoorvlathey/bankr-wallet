@@ -242,6 +242,8 @@ function TokenTransfer({
   const [selectedToken, setSelectedToken] = useState<PortfolioToken | null>(initialToken || null);
   const [allTokens, setAllTokens] = useState<PortfolioToken[]>([]);
   const [tokenList, setTokenList] = useState<TokenListEntry[]>([]);
+  const [tokenListChainId, setTokenListChainId] = useState<number | null>(null);
+  const [isTokenSelectorOpen, setIsTokenSelectorOpen] = useState(false);
   const [holdingsLoading, setHoldingsLoading] = useState(false);
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
@@ -301,25 +303,38 @@ function TokenTransfer({
 
   // Swap token list for the selected chain — feeds the Send dropdown's "All
   // tokens" group and lets popular chips (USDC, USDT, ...) appear even when
-  // the user has zero onchain balance of them. Mirrors SwapView's fetch.
+  // the user has zero onchain balance of them. Fetch only once the selector
+  // opens so landing on the Send page doesn't warm a hidden token catalog or
+  // its logos.
   useEffect(() => {
+    if (!isTokenSelectorOpen) return;
+
     if (!SWAP_SUPPORTED_CHAIN_IDS.has(selectedChainId)) {
       setTokenList([]);
+      setTokenListChainId(null);
       return;
     }
+
+    if (tokenListChainId === selectedChainId) return;
+
     let cancelled = false;
     chrome.runtime.sendMessage(
       { type: "fetchSwapTokenList", chainId: selectedChainId },
       (res) => {
         if (cancelled) return;
-        if (res?.success && Array.isArray(res.data)) setTokenList(res.data);
-        else setTokenList([]);
+        if (res?.success && Array.isArray(res.data)) {
+          setTokenList(res.data);
+          setTokenListChainId(selectedChainId);
+        } else {
+          setTokenList([]);
+          setTokenListChainId(null);
+        }
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [selectedChainId]);
+  }, [selectedChainId, isTokenSelectorOpen, tokenListChainId]);
 
   // -----------------------------------------------------------------------
   // Onchain balance fallback for the selected token. Mirrors SwapView's
@@ -462,6 +477,8 @@ function TokenTransfer({
 
   const handleChainChange = (newChainId: number) => {
     setSelectedChainId(newChainId);
+    setTokenList([]);
+    setTokenListChainId(null);
     // Auto-select first token on that chain
     const onChain = allTokens.filter((t) => t.chainId === newChainId);
     setSelectedToken(onChain.length > 0 ? onChain[0] : null);
@@ -1308,6 +1325,7 @@ function TokenTransfer({
                   chainName={chainName}
                   dropdownAlign="right"
                   isLoadingHoldings={holdingsLoading}
+                  onOpenChange={setIsTokenSelectorOpen}
                 />
               </Box>
             </HStack>
