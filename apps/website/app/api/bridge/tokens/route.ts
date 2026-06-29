@@ -26,7 +26,6 @@ export async function GET(request: NextRequest) {
   try {
     const params = new URLSearchParams({
       chainIds: chainId,
-      list: "full",
     });
 
     const response = await fetch(
