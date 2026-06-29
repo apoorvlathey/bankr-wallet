@@ -13,8 +13,15 @@ import {
   InputGroup,
   InputRightElement,
   Spinner,
+  Tooltip,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, WarningTwoIcon } from "@chakra-ui/icons";
+import {
+  ArrowBackIcon,
+  DeleteIcon,
+  ViewIcon,
+  ViewOffIcon,
+  WarningTwoIcon,
+} from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
 
 /** Fetch chainId from an RPC endpoint via eth_chainId. */
@@ -37,10 +44,14 @@ function EditChain({
   chainName,
   back,
   onSaved,
+  onToggleHidden,
+  onDelete,
 }: {
   chainName: string;
   back: () => void;
   onSaved?: (chain: { chainName: string; chainId: number }) => void;
+  onToggleHidden?: (hidden: boolean) => void;
+  onDelete?: () => void;
 }) {
   const { networksInfo } = useNetworks();
 
@@ -205,6 +216,29 @@ function EditChain({
           Edit Chain
         </Text>
         <Spacer />
+        {currentEntry && onToggleHidden && (
+          <Tooltip label={currentEntry.hidden ? "Show chain" : "Hide chain"} hasArrow>
+            <IconButton
+              aria-label={currentEntry.hidden ? "Show chain" : "Hide chain"}
+              icon={currentEntry.hidden ? <ViewOffIcon /> : <ViewIcon />}
+              variant="ghost"
+              size="sm"
+              onClick={() => onToggleHidden(!currentEntry.hidden)}
+            />
+          </Tooltip>
+        )}
+        {isCustom && onDelete && (
+          <Tooltip label="Delete chain" hasArrow>
+            <IconButton
+              aria-label="Delete chain"
+              icon={<DeleteIcon />}
+              variant="ghost"
+              size="sm"
+              color="chart.negative"
+              onClick={onDelete}
+            />
+          </Tooltip>
+        )}
       </HStack>
 
       <FormControl>

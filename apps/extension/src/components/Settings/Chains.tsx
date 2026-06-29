@@ -237,82 +237,24 @@ function Chains({
   const [activeChainName, setActiveChainName] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const networksInfoRef = React.useRef(networksInfo);
+  const activeChainNameRef = React.useRef(activeChainName);
+  networksInfoRef.current = networksInfo;
+  activeChainNameRef.current = activeChainName;
 
   // Delete confirmation
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [chainToDelete, setChainToDelete] = useState<string | null>(null);
   const cancelRef = React.useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    if (initialTab === "add") {
-      setTab(
-        <AddChain
-          back={(options) => {
-            if (!options?.added) onInitialAddChainCancelled?.();
-            setTab(undefined);
-          }}
-          initialRequest={initialAddChainRequest}
-          onAdded={
-            onChainSaved
-              ? (chainName, chainId) => onChainSaved({ chainName, chainId })
-              : undefined
-          }
-        />,
-      );
-    }
-  }, [
-    initialAddChainRequest,
-    initialTab,
-    onChainSaved,
-    onInitialAddChainCancelled,
-  ]);
+  const toggleHidden = React.useCallback(async (chainName: string, nextHidden?: boolean) => {
+    const currentNetworksInfo = networksInfoRef.current;
+    if (!currentNetworksInfo) return;
 
-  useEffect(() => {
-    if (!pendingInitialEditChainName || !networksInfo?.[pendingInitialEditChainName]) return;
-    setTab(
-      <EditChain
-        back={() => setTab(undefined)}
-        chainName={pendingInitialEditChainName}
-        onSaved={onChainSaved}
-      />,
-    );
-    setPendingInitialEditChainName(undefined);
-  }, [pendingInitialEditChainName, networksInfo, onChainSaved]);
-
-  useEffect(() => {
-    chrome.storage.sync.get("chainName").then(({ chainName }) => {
-      setActiveChainName(chainName ?? null);
-    });
-
-    const handleStorageChange = (
-      changes: { [key: string]: chrome.storage.StorageChange },
-      areaName: string,
-    ) => {
-      if (areaName === "sync" && changes.chainName) {
-        setActiveChainName(changes.chainName.newValue ?? null);
-      }
-    };
-
-    chrome.storage.onChanged.addListener(handleStorageChange);
-    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
-  }, []);
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      searchInputRef.current?.focus();
-      searchInputRef.current?.select();
-    }, 0);
-
-    return () => window.clearTimeout(timeout);
-  }, []);
-
-  const toggleHidden = async (chainName: string) => {
-    if (!networksInfo) return;
-
-    const network = networksInfo[chainName];
+    const network = currentNetworksInfo[chainName];
     if (!network) return;
 
-    const hidden = !network.hidden;
+    const hidden = nextHidden ?? !network.hidden;
     const result = await new Promise<{
       success: boolean;
       error?: string;
@@ -352,7 +294,7 @@ function Chains({
         status: "info",
         duration: 2500,
       });
-    } else if (activeChainName !== chainName) {
+    } else if (activeChainNameRef.current !== chainName) {
       toast({
         title: hidden ? "Chain hidden" : "Chain shown",
         description: chainName,
@@ -360,14 +302,30 @@ function Chains({
         duration: 1800,
       });
     }
-  };
+  }, [toast]);
 
-  const confirmDelete = (chainName: string) => {
+  const confirmDelete = React.useCallback((chainName: string) => {
     setChainToDelete(chainName);
     onOpen();
-  };
+  }, [onOpen]);
 
-  const doDelete = async () => {
+  const openEditChain = React.useCallback((chainName: string) => {
+    setTab(
+      <EditChain
+        back={() => setTab(undefined)}
+        chainName={chainName}
+        onSaved={onChainSaved}
+        onToggleHidden={(hidden) => toggleHidden(chainName, hidden)}
+        onDelete={
+          networksInfo?.[chainName]?.isCustom
+            ? () => confirmDelete(chainName)
+            : undefined
+        }
+      />,
+    );
+  }, [confirmDelete, networksInfo, onChainSaved, toggleHidden]);
+
+  const doDelete = React.useCallback(async () => {
     if (chainToDelete) {
       const result = await new Promise<{
         success: boolean;
@@ -406,14 +364,68 @@ function Chains({
           duration: 2500,
         });
       }
+      setTab(undefined);
     }
     setChainToDelete(null);
     onClose();
-  };
+  }, [chainToDelete, onClose, toast]);
 
-  if (tab !== undefined) {
-    return tab;
-  }
+  useEffect(() => {
+    if (initialTab === "add") {
+      setTab(
+        <AddChain
+          back={(options) => {
+            if (!options?.added) onInitialAddChainCancelled?.();
+            setTab(undefined);
+          }}
+          initialRequest={initialAddChainRequest}
+          onAdded={
+            onChainSaved
+              ? (chainName, chainId) => onChainSaved({ chainName, chainId })
+              : undefined
+          }
+        />,
+      );
+    }
+  }, [
+    initialAddChainRequest,
+    initialTab,
+    onChainSaved,
+    onInitialAddChainCancelled,
+  ]);
+
+  useEffect(() => {
+    if (!pendingInitialEditChainName || !networksInfo?.[pendingInitialEditChainName]) return;
+    openEditChain(pendingInitialEditChainName);
+    setPendingInitialEditChainName(undefined);
+  }, [pendingInitialEditChainName, networksInfo, openEditChain]);
+
+  useEffect(() => {
+    chrome.storage.sync.get("chainName").then(({ chainName }) => {
+      setActiveChainName(chainName ?? null);
+    });
+
+    const handleStorageChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string,
+    ) => {
+      if (areaName === "sync" && changes.chainName) {
+        setActiveChainName(changes.chainName.newValue ?? null);
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
+  }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, []);
 
   const chainEntries = networksInfo
     ? Object.entries(networksInfo).sort(([nameA, networkA], [nameB, networkB]) => {
@@ -440,6 +452,51 @@ function Chains({
         );
       })
     : chainEntries;
+
+  const deleteDialog = (
+    <AlertDialog
+      isOpen={isOpen}
+      leastDestructiveRef={cancelRef}
+      onClose={onClose}
+      isCentered
+    >
+      <AlertDialogOverlay bg="surface.overlay">
+        <AlertDialogContent mx={4} maxW="320px" w="calc(100% - 2rem)">
+          <AlertDialogHeader
+            fontWeight="900"
+            fontSize="md"
+            textTransform="uppercase"
+            color="fg.primary"
+            borderBottomWidth="1px"
+            borderColor="border.subtle"
+          >
+            Delete Chain
+          </AlertDialogHeader>
+          <AlertDialogBody color="text.secondary" py={4} fontSize="sm" fontWeight="500">
+            Remove <strong>{chainToDelete}</strong> from your networks? This
+            cannot be undone.
+          </AlertDialogBody>
+          <AlertDialogFooter gap={2} borderTopWidth="1px" borderColor="border.subtle">
+            <Button ref={cancelRef} variant="secondary" size="sm" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button variant="danger" size="sm" onClick={doDelete}>
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialogOverlay>
+    </AlertDialog>
+  );
+
+  if (tab !== undefined) {
+    return (
+      <>
+        {tab}
+        {deleteDialog}
+      </>
+    );
+  }
 
   return (
     <VStack spacing={4} align="stretch">
@@ -499,13 +556,7 @@ function Chains({
               network={network}
               isActive={activeChainName === chainName}
               openEditChain={() =>
-                setTab(
-                  <EditChain
-                    back={() => setTab(undefined)}
-                    chainName={chainName}
-                    onSaved={onChainSaved}
-                  />
-                )
+                openEditChain(chainName)
               }
               onToggleHidden={() => toggleHidden(chainName)}
               onDelete={
@@ -525,39 +576,7 @@ function Chains({
       </VStack>
 
       {/* Delete confirmation dialog */}
-      <AlertDialog
-        isOpen={isOpen}
-        leastDestructiveRef={cancelRef}
-        onClose={onClose}
-        isCentered
-      >
-        <AlertDialogOverlay bg="surface.overlay">
-          <AlertDialogContent mx={4} maxW="320px" w="calc(100% - 2rem)">
-            <AlertDialogHeader
-              fontWeight="900"
-              fontSize="md"
-              textTransform="uppercase"
-              color="fg.primary"
-              borderBottomWidth="1px"
-              borderColor="border.subtle"
-            >
-              Delete Chain
-            </AlertDialogHeader>
-            <AlertDialogBody color="text.secondary" py={4} fontSize="sm" fontWeight="500">
-              Remove <strong>{chainToDelete}</strong> from your networks? This
-              cannot be undone.
-            </AlertDialogBody>
-            <AlertDialogFooter gap={2} borderTopWidth="1px" borderColor="border.subtle">
-              <Button ref={cancelRef} variant="secondary" size="sm" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button variant="danger" size="sm" onClick={doDelete}>
-                Delete
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialogOverlay>
-      </AlertDialog>
+      {deleteDialog}
     </VStack>
   );
 }
