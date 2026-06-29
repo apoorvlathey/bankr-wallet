@@ -35,6 +35,13 @@ import {
   hidePortfolioToken,
 } from "@/chrome/hiddenPortfolioTokens";
 import { loadPortfolioTokenCatalog } from "@/chrome/portfolioTokens";
+import {
+  clearPortfolioHoldingsCache,
+  getPortfolioHoldingsSnapshot,
+  getPortfolioHoldingsSnapshotSync,
+  savePortfolioHoldingsSnapshot,
+  type PortfolioHoldingsCacheSnapshot,
+} from "@/chrome/portfolioHoldingsCache";
 import { recordSnapshot } from "@/chrome/portfolioSnapshotStorage";
 import { getChainConfig } from "@/constants/chainConfig";
 import { getChainEnvironmentLabel } from "@/lib/chainIcons";
@@ -76,6 +83,154 @@ interface HoldingsSnapshot {
 const holdingsCache = new Map<string, HoldingsSnapshot>();
 const holdingsCacheKey = (address: string, reloadKey: string) =>
   `${address.toLowerCase()}|${reloadKey}`;
+const PORTFOLIO_BACKGROUND_TASK_DELAY_MS = 250;
+
+function toStoredHoldingsSnapshot(
+  snapshot: HoldingsSnapshot,
+): PortfolioHoldingsCacheSnapshot {
+  return {
+    ...snapshot,
+    customTokenKeys: Array.from(snapshot.customTokenKeys),
+    allTokenKeys: Array.from(snapshot.allTokenKeys),
+    hiddenTokenKeys: Array.from(snapshot.hiddenTokenKeys),
+    onchainFetchedTokenKeys: Array.from(snapshot.onchainFetchedTokenKeys),
+  };
+}
+
+function fromStoredHoldingsSnapshot(
+  snapshot: PortfolioHoldingsCacheSnapshot,
+): HoldingsSnapshot {
+  return {
+    ...snapshot,
+    customTokenKeys: new Set(snapshot.customTokenKeys),
+    allTokenKeys: new Set(snapshot.allTokenKeys),
+    hiddenTokenKeys: new Set(snapshot.hiddenTokenKeys),
+    onchainFetchedTokenKeys: new Set(snapshot.onchainFetchedTokenKeys),
+  };
+}
+
+function writeHoldingsSnapshot(
+  cacheKey: string,
+  snapshot: HoldingsSnapshot,
+): void {
+  holdingsCache.set(cacheKey, snapshot);
+  void savePortfolioHoldingsSnapshot(
+    cacheKey,
+    toStoredHoldingsSnapshot(snapshot),
+  ).catch(() => undefined);
+}
+
+async function clearHoldingsCaches(): Promise<void> {
+  holdingsCache.clear();
+  try {
+    await clearPortfolioHoldingsCache();
+  } catch {
+    // Best-effort display cache; live portfolio loading must continue.
+  }
+}
+
+function hasHoldingsSnapshotContent(snapshot: HoldingsSnapshot): boolean {
+  return snapshot.tokens.length > 0 || snapshot.defiPositions.length > 0;
+}
+
+function readCachedHoldingsSnapshot(cacheKey: string): HoldingsSnapshot | null {
+  const cached = holdingsCache.get(cacheKey);
+  if (cached && hasHoldingsSnapshotContent(cached)) return cached;
+  if (cached) holdingsCache.delete(cacheKey);
+
+  const mirrored = getPortfolioHoldingsSnapshotSync(cacheKey);
+  if (!mirrored) return null;
+
+  const snapshot = fromStoredHoldingsSnapshot(mirrored);
+  if (!hasHoldingsSnapshotContent(snapshot)) return null;
+  holdingsCache.set(cacheKey, snapshot);
+  return snapshot;
+}
+
+function schedulePortfolioBackgroundTask(task: () => Promise<void>): void {
+  window.setTimeout(() => {
+    void task();
+  }, PORTFOLIO_BACKGROUND_TASK_DELAY_MS);
+}
+
+function hasRenderablePortfolioToken(token: PortfolioToken): boolean {
+  return hasPositiveBalance(token) || Number(token.valueUsd || 0) > 0;
+}
+
+function isVisibleTokenRow(
+  token: PortfolioToken,
+  includeLowValueTokens: boolean,
+): boolean {
+  return (
+    includeLowValueTokens ||
+    Number(token.valueUsd || 0) >= LOW_VALUE_TOKEN_THRESHOLD_USD
+  );
+}
+
+function getVisibleTokenKeySet(
+  tokens: PortfolioToken[],
+  includeLowValueTokens: boolean,
+): Set<string> {
+  return getTokenKeySet(
+    tokens.filter((token) => isVisibleTokenRow(token, includeLowValueTokens)),
+  );
+}
+
+function collectTokenLogoUrls(
+  token: PortfolioToken,
+  urls: Array<string | null | undefined>,
+): void {
+  urls.push(token.logoUrl);
+  for (const pos of token.defiPositions ?? []) {
+    urls.push(pos.protocolLogo);
+    for (const asset of pos.assets ?? []) urls.push(asset.logoUrl);
+    for (const asset of pos.rewardAssets ?? []) urls.push(asset.logoUrl);
+  }
+}
+
+function mergeTokenEnrichment(
+  currentTokens: PortfolioToken[],
+  enrichedTokens: PortfolioToken[],
+): PortfolioToken[] {
+  const enrichedByKey = new Map(
+    enrichedTokens.map((token) => [
+      getPortfolioTokenKey(token.chainId, token.contractAddress),
+      token,
+    ]),
+  );
+  const seen = new Set<string>();
+
+  const merged = currentTokens.map((token) => {
+    const key = getPortfolioTokenKey(token.chainId, token.contractAddress);
+    seen.add(key);
+    const enriched = enrichedByKey.get(key);
+    if (!enriched) return token;
+
+    const priceUsd = enriched.priceUsd > 0 ? enriched.priceUsd : token.priceUsd;
+    const balanceNum = parseFloat(token.balance || "0");
+    return {
+      ...token,
+      symbol: token.symbol || enriched.symbol,
+      name: token.name || enriched.name,
+      decimals: token.decimals ?? enriched.decimals,
+      logoUrl: token.logoUrl || enriched.logoUrl,
+      priceUsd,
+      valueUsd:
+        priceUsd > 0 && balanceNum > 0
+          ? balanceNum * priceUsd
+          : token.valueUsd || enriched.valueUsd,
+    };
+  });
+
+  for (const enriched of enrichedTokens) {
+    const key = getPortfolioTokenKey(enriched.chainId, enriched.contractAddress);
+    if (!seen.has(key) && hasPositiveBalance(enriched)) {
+      merged.push(enriched);
+    }
+  }
+
+  return sortTokensByValue(merged.filter(hasPositiveBalance));
+}
 
 interface TokenHoldingsProps {
   address: string;
@@ -103,6 +258,7 @@ interface LoadPortfolioOptions {
   forceSnapshot?: boolean;
   forceRefreshTokenKeys?: Set<string>;
   forceRefreshTokens?: PortfolioToken[];
+  suppressSkeleton?: boolean;
 }
 
 const ERC20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
@@ -471,10 +627,10 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         .join("|"),
     [networksInfo],
   );
-  // Hydrate from the module cache so the homepage doesn't flash a skeleton
-  // every time the user navigates back. The background refetch in the effect
-  // below keeps the data fresh.
-  const initialSnapshot = holdingsCache.get(holdingsCacheKey(address, chainReloadKey));
+  // Hydrate synchronously from memory or the renderer localStorage mirror so a
+  // reopened popup can paint before async chrome.storage reads complete.
+  const initialCacheKey = holdingsCacheKey(address, chainReloadKey);
+  const initialSnapshot = readCachedHoldingsSnapshot(initialCacheKey);
   const [tokens, setTokens] = useState<PortfolioToken[]>(() => initialSnapshot?.tokens ?? []);
   const [defiPositions, setDefiPositions] = useState<DefiPosition[]>(() => initialSnapshot?.defiPositions ?? []);
   const [totalValueUsd, setTotalValueUsd] = useState(() => initialSnapshot?.totalValueUsd ?? 0);
@@ -497,6 +653,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
   const [portfolioBalanceRefreshing, setPortfolioBalanceRefreshing] = useState(false);
   const [lowValueLoading, setLowValueLoading] = useState(false);
   const editModal = useDisclosure();
+  const loadVersionRef = useRef(0);
 
   // Load hide preference
   useEffect(() => {
@@ -515,24 +672,49 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
   const toggleHideValueRef = useRef(toggleHideValue);
   toggleHideValueRef.current = toggleHideValue;
 
+  const applyHoldingsSnapshot = useCallback(
+    (snapshot: HoldingsSnapshot) => {
+      setTokens(snapshot.tokens);
+      setDefiPositions(snapshot.defiPositions);
+      setTotalValueUsd(snapshot.totalValueUsd);
+      setCustomTokenKeys(snapshot.customTokenKeys);
+      setAllTokenKeys(snapshot.allTokenKeys);
+      setHiddenTokenKeys(snapshot.hiddenTokenKeys);
+      setOnchainFetchedTokenKeys(snapshot.onchainFetchedTokenKeys);
+      setApiUnavailable(snapshot.apiUnavailable);
+      setLastFetched(snapshot.timestamp);
+      setLoading(false);
+      setPortfolioBalanceRefreshing(false);
+      setLowValueLoading(false);
+      onRpcIssuesChange?.(snapshot.rpcIssueChainIds);
+    },
+    [onRpcIssuesChange],
+  );
+
   const loadPortfolio = useCallback(
     async (force = false, options: LoadPortfolioOptions = {}) => {
       if (!address) return;
-      if (options.forceSnapshot) holdingsCache.clear();
+      if (options.forceSnapshot) await clearHoldingsCaches();
       // Cache for 60s unless forced
       if (!force && Date.now() - lastFetched < 60_000 && tokens.length > 0) return;
+      const loadVersion = loadVersionRef.current + 1;
+      loadVersionRef.current = loadVersion;
+      const isCurrentLoad = () => loadVersionRef.current === loadVersion;
 
       // Only show the skeleton when we have nothing on screen yet. If we're
       // revalidating cached data, keep the old values visible until the fresh
       // ones land so the homepage feels instantly ready.
-      const hasExistingData = tokens.length > 0;
+      const hasExistingData = tokens.length > 0 || options.suppressSkeleton;
       if (!hasExistingData) {
         setLoading(true);
       }
       setError(null);
 
       try {
-        const catalog = await loadPortfolioTokenCatalog(address);
+        const catalog = await loadPortfolioTokenCatalog(address, {
+          enrich: false,
+        });
+        if (!isCurrentLoad()) return;
         const catalogTokenKeys = getTokenKeySet(catalog.tokens);
         const receiptTokenStubs = (options.forceRefreshTokens ?? []).filter(
           (token) =>
@@ -560,34 +742,80 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         setOnchainFetchedTokenKeys(new Set());
         setApiUnavailable(catalog.apiUnavailable);
 
-        // Hide tokens whose balance is still 0 in the catalog. The catalog
-        // injects a native placeholder per visible chain (so onchain balance
-        // resolution has something to fetch for) but those placeholders show
-        // up as a row of "0 ETH / $0" entries that vanish a second later
-        // when RPC reports the real balance — a flicker the user definitely
-        // notices. Render only the tokens we already know are non-zero; the
-        // selective onchain pass below fills visible primary rows and native
-        // placeholders without touching collapsed low-value ERC-20s.
-        const knownNonZeroTokens = sortTokensByValue(
-          mergedTokens.filter(hasPositiveBalance),
+        // Paint API-backed rows immediately. Zero-value native placeholders are
+        // kept out until the detached RPC pass can replace them with real
+        // balances.
+        const initialDisplayTokens = sortTokensByValue(
+          mergedTokens.filter(hasRenderablePortfolioToken),
         );
 
         // Show merged data immediately so user isn't stuck on skeleton loader
-        setTokens(knownNonZeroTokens);
+        setTokens(initialDisplayTokens);
         setDefiPositions(catalog.defiPositions || []);
         setTotalValueUsd(catalog.totalValueUsd);
-        // Only flip out of the skeleton state if we already have something
-        // to render. When the portfolio API is down (or returned nothing
-        // useful), `knownNonZeroTokens` is empty and the onchain pass is
-        // about to fill in native balances — flipping `loading` off here
-        // would briefly show "No tokens found" until that pass resolves.
-        const hasInitialContent =
-          knownNonZeroTokens.length > 0 ||
-          (catalog.defiPositions || []).length > 0;
-        if (hasInitialContent) setLoading(false);
+        setLoading(false);
         const fetchedAt = Date.now();
         setLastFetched(fetchedAt);
         const cacheKey = holdingsCacheKey(address, chainReloadKey);
+        const applyEnrichedCatalog = async (
+          baseTokens: PortfolioToken[],
+          fetchedTokenKeys: Set<string>,
+          rpcIssueChainIds: number[],
+        ) => {
+          try {
+            const enrichedCatalog = await loadPortfolioTokenCatalog(address, {
+              includeErc20PriceFallback: false,
+              enrichTokenKeys: getVisibleTokenKeySet(
+                baseTokens,
+                showLowValueTokens,
+              ),
+            });
+            if (!isCurrentLoad()) return;
+            const enrichedTokens = mergeTokenEnrichment(
+              baseTokens,
+              enrichedCatalog.tokens,
+            );
+            const enrichedTotal =
+              getWalletTokenTotal(enrichedTokens) +
+              getDefiTotal(enrichedCatalog.defiPositions || []);
+            const enrichedAt = Date.now();
+
+            setTokens(enrichedTokens);
+            setDefiPositions(enrichedCatalog.defiPositions || []);
+            setTotalValueUsd(enrichedTotal);
+            setCustomTokenKeys(enrichedCatalog.customTokenKeys);
+            setAllTokenKeys(enrichedCatalog.allTokenKeys);
+            setHiddenTokenKeys(enrichedCatalog.hiddenTokenKeys);
+            setApiUnavailable(enrichedCatalog.apiUnavailable);
+            setLastFetched(enrichedAt);
+            writeHoldingsSnapshot(cacheKey, {
+              tokens: enrichedTokens,
+              defiPositions: enrichedCatalog.defiPositions || [],
+              totalValueUsd: enrichedTotal,
+              customTokenKeys: enrichedCatalog.customTokenKeys,
+              allTokenKeys: enrichedCatalog.allTokenKeys,
+              hiddenTokenKeys: enrichedCatalog.hiddenTokenKeys,
+              onchainFetchedTokenKeys: fetchedTokenKeys,
+              rpcIssueChainIds,
+              apiUnavailable: enrichedCatalog.apiUnavailable,
+              timestamp: enrichedAt,
+            });
+          } catch {
+            // Metadata/price enrichment is best-effort; keep the fast catalog.
+          }
+        };
+        const recordLoadedSnapshot = (total: number) => {
+          schedulePortfolioBackgroundTask(async () => {
+            try {
+              await recordSnapshot(address, total, {
+                force: options.forceSnapshot,
+              });
+              onSnapshotsChanged?.();
+            } catch {
+              // Snapshot failures should not block holdings rendering.
+            }
+          });
+        };
 
         const tokensToRefresh = mergedTokens.filter((token) =>
           forcedRefreshTokenKeys.has(
@@ -600,8 +828,8 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         if (tokensToRefresh.length === 0) {
           setLoading(false);
           setPortfolioBalanceRefreshing(false);
-          holdingsCache.set(cacheKey, {
-            tokens: knownNonZeroTokens,
+          writeHoldingsSnapshot(cacheKey, {
+            tokens: initialDisplayTokens,
             defiPositions: catalog.defiPositions || [],
             totalValueUsd: catalog.totalValueUsd,
             customTokenKeys: catalog.customTokenKeys,
@@ -612,92 +840,86 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
             apiUnavailable: catalog.apiUnavailable,
             timestamp: fetchedAt,
           });
-          try {
-            await recordSnapshot(address, catalog.totalValueUsd, {
-              force: options.forceSnapshot,
-            });
-            onSnapshotsChanged?.();
-          } catch {
-            // Snapshot failures should not block holdings rendering.
-          }
+          recordLoadedSnapshot(catalog.totalValueUsd);
+          schedulePortfolioBackgroundTask(() =>
+            applyEnrichedCatalog(initialDisplayTokens, new Set(), []),
+          );
           return;
         }
 
         // Enhance visible primary balances in the background. Low-value ERC-20s
         // stay on catalog/API values until the collapsed group is expanded.
         setPortfolioBalanceRefreshing(true);
-        try {
-          const onchain = await fetchOnchainBalances(address, tokensToRefresh, {
-            preserveZeroBalanceTokens: true,
-          });
-          onRpcIssuesChange?.(onchain.rpcIssueChainIds);
-          const displayTokens = mergeTokenBalanceRefresh(
-            mergedTokens,
-            onchain.tokens,
-            refreshedKeys,
-          );
-          setTokens(displayTokens);
-          setOnchainFetchedTokenKeys(refreshedKeys);
-          setLoading(false);
-          // Total = refreshed visible wallet tokens + deferred low-value API
-          // values + DeFi positions.
-          const total =
-            getWalletTokenTotal(displayTokens) +
-            getDefiTotal(catalog.defiPositions || []);
-          setTotalValueUsd(total);
-          holdingsCache.set(cacheKey, {
-            tokens: displayTokens,
-            defiPositions: catalog.defiPositions || [],
-            totalValueUsd: total,
-            customTokenKeys: catalog.customTokenKeys,
-            allTokenKeys: catalog.allTokenKeys,
-            hiddenTokenKeys: catalog.hiddenTokenKeys,
-            onchainFetchedTokenKeys: refreshedKeys,
-            rpcIssueChainIds: onchain.rpcIssueChainIds,
-            apiUnavailable: catalog.apiUnavailable,
-            timestamp: fetchedAt,
-          });
-          // Record snapshot with onchain enhanced value.
+        schedulePortfolioBackgroundTask(async () => {
           try {
-            await recordSnapshot(address, total, {
-              force: options.forceSnapshot,
+            const onchain = await fetchOnchainBalances(address, tokensToRefresh, {
+              preserveZeroBalanceTokens: true,
             });
-            onSnapshotsChanged?.();
-          } catch {
-            // Snapshot failures should not downgrade the displayed portfolio.
-          }
-        } catch (err) {
-          onRpcIssuesChange?.([]);
-          setLoading(false);
-          setOnchainFetchedTokenKeys(new Set());
-          // RPC failed entirely — keep only the known non-zero tokens in
-          // the cache too, so a refresh from cache doesn't bring back the
-          // zero-balance placeholder rows we just suppressed.
-          holdingsCache.set(cacheKey, {
-            tokens: knownNonZeroTokens,
-            defiPositions: catalog.defiPositions || [],
-            totalValueUsd: catalog.totalValueUsd,
-            customTokenKeys: catalog.customTokenKeys,
-            allTokenKeys: catalog.allTokenKeys,
-            hiddenTokenKeys: catalog.hiddenTokenKeys,
-            onchainFetchedTokenKeys: new Set(),
-            rpcIssueChainIds: [],
-            apiUnavailable: catalog.apiUnavailable,
-            timestamp: fetchedAt,
-          });
-          // Record snapshot with API-only value.
-          try {
-            await recordSnapshot(address, catalog.totalValueUsd, {
-              force: options.forceSnapshot,
+            if (!isCurrentLoad()) return;
+            onRpcIssuesChange?.(onchain.rpcIssueChainIds);
+            const displayTokens = mergeTokenBalanceRefresh(
+              mergedTokens,
+              onchain.tokens,
+              refreshedKeys,
+            );
+            setTokens(displayTokens);
+            setOnchainFetchedTokenKeys(refreshedKeys);
+            setLoading(false);
+            // Total = refreshed visible wallet tokens + deferred low-value API
+            // values + DeFi positions.
+            const total =
+              getWalletTokenTotal(displayTokens) +
+              getDefiTotal(catalog.defiPositions || []);
+            setTotalValueUsd(total);
+            writeHoldingsSnapshot(cacheKey, {
+              tokens: displayTokens,
+              defiPositions: catalog.defiPositions || [],
+              totalValueUsd: total,
+              customTokenKeys: catalog.customTokenKeys,
+              allTokenKeys: catalog.allTokenKeys,
+              hiddenTokenKeys: catalog.hiddenTokenKeys,
+              onchainFetchedTokenKeys: refreshedKeys,
+              rpcIssueChainIds: onchain.rpcIssueChainIds,
+              apiUnavailable: catalog.apiUnavailable,
+              timestamp: fetchedAt,
             });
-            onSnapshotsChanged?.();
+            recordLoadedSnapshot(total);
+            void applyEnrichedCatalog(
+              displayTokens,
+              refreshedKeys,
+              onchain.rpcIssueChainIds,
+            );
           } catch {
-            // Snapshot failures should not block holdings rendering.
+            if (!isCurrentLoad()) return;
+            onRpcIssuesChange?.([]);
+            setLoading(false);
+            setOnchainFetchedTokenKeys(new Set());
+            // RPC failed entirely — keep only the known non-zero tokens in
+            // the cache too, so a refresh from cache doesn't bring back the
+            // zero-balance placeholder rows we just suppressed.
+            writeHoldingsSnapshot(cacheKey, {
+              tokens: initialDisplayTokens,
+              defiPositions: catalog.defiPositions || [],
+              totalValueUsd: catalog.totalValueUsd,
+              customTokenKeys: catalog.customTokenKeys,
+              allTokenKeys: catalog.allTokenKeys,
+              hiddenTokenKeys: catalog.hiddenTokenKeys,
+              onchainFetchedTokenKeys: new Set(),
+              rpcIssueChainIds: [],
+              apiUnavailable: catalog.apiUnavailable,
+              timestamp: fetchedAt,
+            });
+            recordLoadedSnapshot(catalog.totalValueUsd);
+            schedulePortfolioBackgroundTask(() =>
+              applyEnrichedCatalog(initialDisplayTokens, new Set(), []),
+            );
+          } finally {
+            if (isCurrentLoad()) setPortfolioBalanceRefreshing(false);
           }
-        } finally {
-          setPortfolioBalanceRefreshing(false);
-        }
+        });
+        return;
       } catch (err) {
+        if (!isCurrentLoad()) return;
         setError(err instanceof Error ? err.message : "Failed to load portfolio");
         onRpcIssuesChange?.([]);
         setPortfolioBalanceRefreshing(false);
@@ -708,24 +930,18 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
   );
 
   // Reload when address or the set of visible chains changes. Seed from the
-  // module cache if we have a snapshot for this (address, chains) pair so the
-  // list doesn't flash empty before the refetch completes.
+  // module cache first, then from storage on fresh popup/sidepanel mounts, so
+  // the list paints before the live API/RPC revalidation completes.
   useEffect(() => {
-    const cached = holdingsCache.get(holdingsCacheKey(address, chainReloadKey));
+    let cancelled = false;
+    const cacheKey = holdingsCacheKey(address, chainReloadKey);
+    const cached = readCachedHoldingsSnapshot(cacheKey);
     if (cached) {
-      setTokens(cached.tokens);
-      setDefiPositions(cached.defiPositions);
-      setTotalValueUsd(cached.totalValueUsd);
-      setCustomTokenKeys(cached.customTokenKeys);
-      setAllTokenKeys(cached.allTokenKeys);
-      setHiddenTokenKeys(cached.hiddenTokenKeys);
-      setOnchainFetchedTokenKeys(cached.onchainFetchedTokenKeys ?? new Set());
-      setApiUnavailable(cached.apiUnavailable);
-      setLastFetched(cached.timestamp);
-      setLoading(false);
-      setPortfolioBalanceRefreshing(false);
-      setLowValueLoading(false);
-      onRpcIssuesChange?.(cached.rpcIssueChainIds);
+      applyHoldingsSnapshot(cached);
+      void loadPortfolio(true, { suppressSkeleton: true });
+      return () => {
+        cancelled = true;
+      };
     } else {
       setTokens([]);
       setDefiPositions([]);
@@ -740,7 +956,29 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       setPortfolioBalanceRefreshing(false);
       setLowValueLoading(false);
     }
-    loadPortfolio(true);
+
+    void (async () => {
+      let hydrated = false;
+      try {
+        const storedSnapshot = await getPortfolioHoldingsSnapshot(cacheKey);
+        if (cancelled || !storedSnapshot) return;
+        const snapshot = fromStoredHoldingsSnapshot(storedSnapshot);
+        if (!hasHoldingsSnapshotContent(snapshot)) return;
+        holdingsCache.set(cacheKey, snapshot);
+        applyHoldingsSnapshot(snapshot);
+        hydrated = true;
+      } catch {
+        // Persistent holdings cache is optional; fall through to live loading.
+      } finally {
+        if (!cancelled) {
+          void loadPortfolio(true, { suppressSkeleton: hydrated });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [address, chainReloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Hot-refresh portfolio whenever a confirmed tx writes asset changes. The
@@ -840,7 +1078,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       setOnchainFetchedTokenKeys(nextFetchedKeys);
       setTotalValueUsd(total);
       setLastFetched(fetchedAt);
-      holdingsCache.set(cacheKey, {
+      writeHoldingsSnapshot(cacheKey, {
         tokens: nextTokens,
         defiPositions,
         totalValueUsd: total,
@@ -890,32 +1128,38 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
     showLowValueTokens,
   ]);
 
-  // Batch the logo-cache lookup across every token + nested staking position
-  // so all rows benefit from the same `ensAvatarImageCache` data-URL cache
-  // ENS avatars use. Renders synchronously on reopen for everything cached.
+  const filteredDefiPositions = useMemo(
+    () => filterChainId != null ? defiPositions.filter((p) => p.chainId === filterChainId) : defiPositions,
+    [defiPositions, filterChainId]
+  );
+
+  // Batch the logo-cache lookup across only the rows currently visible. The
+  // collapsed <$0.10 section can contain many dust tokens; warming those images
+  // while hidden creates background network and storage churn for no UI value.
   const cachedLogoMap = useCachedAvatarMap(
     useMemo(() => {
       const urls: Array<string | null | undefined> = [];
-      for (const t of tokens) {
-        urls.push(t.logoUrl);
-        for (const pos of t.defiPositions ?? []) {
-          for (const a of pos.assets ?? []) urls.push(a.logoUrl);
-          for (const a of pos.rewardAssets ?? []) urls.push(a.logoUrl);
+      for (const token of primaryTokens) {
+        collectTokenLogoUrls(token, urls);
+      }
+      if (showLowValueTokens) {
+        for (const token of lowValueTokens) {
+          collectTokenLogoUrls(token, urls);
         }
       }
+      for (const position of filteredDefiPositions) {
+        urls.push(position.protocolLogo);
+        for (const asset of position.assets ?? []) urls.push(asset.logoUrl);
+        for (const asset of position.rewardAssets ?? []) urls.push(asset.logoUrl);
+      }
       return urls;
-    }, [tokens]),
+    }, [filteredDefiPositions, lowValueTokens, primaryTokens, showLowValueTokens]),
   );
   const resolveLogo = useCallback(
     (url: string | undefined): string | undefined =>
       (url && cachedLogoMap.get(url)) || url,
     [cachedLogoMap],
   );
-  const filteredDefiPositions = useMemo(
-    () => filterChainId != null ? defiPositions.filter((p) => p.chainId === filterChainId) : defiPositions,
-    [defiPositions, filterChainId]
-  );
-
   // Notify parent of state changes for tab header display
   const loadPortfolioRef = useRef(loadPortfolio);
   loadPortfolioRef.current = loadPortfolio;
@@ -965,7 +1209,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
     setHidingToken(true);
     try {
       await hidePortfolioToken(tokenToHide);
-      holdingsCache.clear();
+      await clearHoldingsCaches();
       setTokens((prev) =>
         prev.filter(
           (token) =>
@@ -1128,38 +1372,40 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                   {lowValueTokens.length === 1 ? "token" : "tokens"} ·{" "}
                   {formatUsd(lowValueTotalUsd)}
                 </Text>
-              </HStack>
-              <Collapse in={showLowValueTokens} animateOpacity>
-                <VStack spacing={0} w="full">
-                  {lowValueTokens.map((token, i) => (
-                    <TokenRow
-                      key={`low-${token.chainId}-${token.contractAddress}-${i}`}
-                      rowKey={`low-${token.chainId}-${token.contractAddress}-${i}`}
-                      token={token}
-                      hasBottomBorder={
-                        i < lowValueTokens.length - 1 ||
-                        filteredDefiPositions.length > 0
-                      }
-                      customTokenKeys={customTokenKeys}
-                      networksInfo={networksInfo}
-                      onTokenClick={onTokenClick}
-                      onSwapClick={onSwapClick}
-                      onEditToken={(nextToken) => {
-                        setEditingToken(nextToken);
-                        editModal.onOpen();
-                      }}
-                      onHideToken={openHideTokenModal}
-                      resolveLogo={resolveLogo}
-                      copiedAddr={copiedAddr}
-                      setCopiedAddr={setCopiedAddr}
-                      hideValue={hideValue}
-                      formatUsd={formatUsd}
-                    />
-                  ))}
-                </VStack>
-              </Collapse>
-            </Box>
-          )}
+                </HStack>
+                <Collapse in={showLowValueTokens} animateOpacity>
+                  {showLowValueTokens ? (
+                    <VStack spacing={0} w="full">
+                      {lowValueTokens.map((token, i) => (
+                        <TokenRow
+                          key={`low-${token.chainId}-${token.contractAddress}-${i}`}
+                          rowKey={`low-${token.chainId}-${token.contractAddress}-${i}`}
+                          token={token}
+                          hasBottomBorder={
+                            i < lowValueTokens.length - 1 ||
+                            filteredDefiPositions.length > 0
+                          }
+                          customTokenKeys={customTokenKeys}
+                          networksInfo={networksInfo}
+                          onTokenClick={onTokenClick}
+                          onSwapClick={onSwapClick}
+                          onEditToken={(nextToken) => {
+                            setEditingToken(nextToken);
+                            editModal.onOpen();
+                          }}
+                          onHideToken={openHideTokenModal}
+                          resolveLogo={resolveLogo}
+                          copiedAddr={copiedAddr}
+                          setCopiedAddr={setCopiedAddr}
+                          hideValue={hideValue}
+                          formatUsd={formatUsd}
+                        />
+                      ))}
+                    </VStack>
+                  ) : null}
+                </Collapse>
+              </Box>
+            )}
 
           {/* DeFi Positions */}
           {filteredDefiPositions.length > 0 && (
@@ -1200,7 +1446,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                         >
                           {pos.protocolLogo ? (
                             <Image
-                              src={pos.protocolLogo}
+                              src={resolveLogo(pos.protocolLogo)}
                               alt={pos.protocol}
                               boxSize="28px"
                               borderRadius="6px"

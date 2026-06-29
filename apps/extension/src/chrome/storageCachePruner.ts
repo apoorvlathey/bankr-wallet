@@ -6,6 +6,11 @@
  * state. Keep TTLs in sync with the owning cache modules.
  */
 
+import {
+  PORTFOLIO_HOLDINGS_CACHE_KEY,
+  prunePortfolioHoldingsCacheValue,
+} from "@/chrome/portfolioHoldingsCache";
+
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
@@ -195,6 +200,20 @@ export async function pruneNonCriticalStorageCaches(): Promise<CachePruneSummary
       updates[AVATAR_CACHE_KEY] = avatarPruned.next;
     } else {
       keysToRemove.push(AVATAR_CACHE_KEY);
+    }
+  }
+
+  const portfolioHoldingsPruned = prunePortfolioHoldingsCacheValue(
+    allItems[PORTFOLIO_HOLDINGS_CACHE_KEY],
+    now,
+  );
+  if (portfolioHoldingsPruned.changed) {
+    compactedKeys += 1;
+    if (portfolioHoldingsPruned.next) {
+      updates[PORTFOLIO_HOLDINGS_CACHE_KEY] =
+        portfolioHoldingsPruned.next;
+    } else {
+      keysToRemove.push(PORTFOLIO_HOLDINGS_CACHE_KEY);
     }
   }
 

@@ -2889,7 +2889,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "resolveTokenMetadata": {
-      resolveTokenMetadata(message.chainId, String(message.tokenAddress || ""))
+      resolveTokenMetadata(message.chainId, String(message.tokenAddress || ""), {
+        includeBungeeTokens: message.includeBungeeTokens !== false,
+      })
         .then((data) => sendResponse({ success: true, data }))
         .catch((err) =>
           sendResponse({ success: false, error: err.message }),

@@ -39,6 +39,7 @@ import {
 import { isDarkThemeId, useTheme, useStripTokens } from "@/theme";
 import { closeSidePanelForWindow } from "@/lib/sidePanelControls";
 import TransactionConfirmationErrorBoundary from "@/components/TransactionConfirmationErrorBoundary";
+import AccountNetworkControls from "@/components/AccountNetworkControls";
 
 // Sidepanel icon
 const SidePanelIcon = (props: any) => (
@@ -112,7 +113,6 @@ const CrossDappBatchConfirmation = lazy(
   () => import("@/components/CrossDappBatchConfirmation"),
 );
 const ChatView = lazy(() => import("@/components/Chat/ChatView"));
-const AccountNetworkControls = lazy(() => import("@/components/AccountNetworkControls"));
 const AddAccount = lazy(() => import("@/components/AddAccount"));
 const AccountSettings = lazy(
   () => import("@/components/AccountSettings"),
@@ -150,7 +150,6 @@ if (typeof window !== "undefined") {
     void import("@/components/BatchTransactionConfirmation");
     void import("@/components/CrossDappBatchConfirmation");
     void import("@/components/Chat/ChatView");
-    void import("@/components/AccountNetworkControls");
     void import("@/components/AddAccount");
     void import("@/components/AccountSettings");
     void import("@/components/QRCodeModal");

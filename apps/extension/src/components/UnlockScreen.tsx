@@ -32,6 +32,7 @@ import {
 import { TWITTER_URL } from "@/constants/externalUrls";
 import { Decorator, useTheme } from "@/theme";
 import { closeSidePanelForWindow } from "@/lib/sidePanelControls";
+import { clearPortfolioHoldingsLocalMirror } from "@/chrome/portfolioHoldingsCache";
 
 // Sidepanel icon
 const SidePanelIcon = (props: any) => (
@@ -252,6 +253,7 @@ function UnlockScreen({
     chrome.runtime.sendMessage({ type: "resetExtension" }, (result) => {
       setIsResetting(false);
       if (result?.success) {
+        clearPortfolioHoldingsLocalMirror();
         onResetModalClose();
         toast({
           title: "Extension reset",

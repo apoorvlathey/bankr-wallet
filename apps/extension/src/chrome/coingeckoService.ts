@@ -21,7 +21,8 @@ const RESOLUTION_CACHE_TTL = 7 * 24 * 60 * 60_000;
 const ERC20_PRICE_CACHE_TTL = 5 * 60_000;
 const MARKET_BATCH_DELAY_MS = 150;
 const RATE_LIMIT_BACKOFF_MS = 60_000;
-const ERC20_PRICE_BATCH_SIZE = 30;
+const COINGECKO_ERC20_PRICE_BATCH_SIZE = 1;
+const GECKOTERMINAL_ERC20_PRICE_BATCH_SIZE = 30;
 
 const DIRECT_NATIVE_COINGECKO_IDS: Record<string, string> = {
   ether: "ethereum",
@@ -257,39 +258,23 @@ class CoinGeckoService {
     const gtNetwork = GECKOTERMINAL_NETWORK_IDS[chainId];
     const fetchedAt = Date.now();
     const priceByAddr = new Map<string, number>();
+    let rateLimited = false;
 
-    if (platformId) {
-      for (let i = 0; i < addresses.length; i += ERC20_PRICE_BATCH_SIZE) {
-        const chunk = addresses.slice(i, i + ERC20_PRICE_BATCH_SIZE);
-        try {
-          const url = `${COINGECKO_TOKEN_PRICE_API}/${platformId}?contract_addresses=${chunk.join(",")}&vs_currencies=usd`;
-          const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-          if (res.status === 429) {
-            this.marketBackoffUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
-            break;
-          }
-          if (!res.ok) continue;
-          const data = (await res.json()) as Record<string, { usd?: number }>;
-          for (const addr of chunk) {
-            const price = Number(data[addr.toLowerCase()]?.usd ?? 0);
-            if (price > 0) priceByAddr.set(addr.toLowerCase(), price);
-          }
-        } catch {
-          // Try next chunk; GeckoTerminal fallback below covers misses.
-        }
-      }
-    }
-
-    const unresolved = addresses.filter(
-      (a) => !priceByAddr.has(a.toLowerCase()),
-    );
-
-    if (gtNetwork && unresolved.length > 0) {
-      for (let i = 0; i < unresolved.length; i += ERC20_PRICE_BATCH_SIZE) {
-        const chunk = unresolved.slice(i, i + ERC20_PRICE_BATCH_SIZE);
+    if (gtNetwork) {
+      for (
+        let i = 0;
+        i < addresses.length;
+        i += GECKOTERMINAL_ERC20_PRICE_BATCH_SIZE
+      ) {
+        const chunk = addresses.slice(i, i + GECKOTERMINAL_ERC20_PRICE_BATCH_SIZE);
         try {
           const url = `${GECKOTERMINAL_TOKEN_PRICE_API}/${gtNetwork}/token_price/${chunk.join(",")}`;
           const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+          if (res.status === 429) {
+            this.marketBackoffUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
+            rateLimited = true;
+            break;
+          }
           if (!res.ok) continue;
           const data = (await res.json()) as {
             data?: { attributes?: { token_prices?: Record<string, string> } };
@@ -298,6 +283,37 @@ class CoinGeckoService {
           for (const addr of chunk) {
             const raw = prices[addr.toLowerCase()];
             const price = raw ? Number(raw) : 0;
+            if (price > 0) priceByAddr.set(addr.toLowerCase(), price);
+          }
+        } catch {
+          // CoinGecko single-address fallback below covers misses.
+        }
+      }
+    }
+
+    const unresolved = addresses.filter(
+      (a) => !priceByAddr.has(a.toLowerCase()),
+    );
+
+    if (!rateLimited && platformId && unresolved.length > 0) {
+      for (
+        let i = 0;
+        i < unresolved.length;
+        i += COINGECKO_ERC20_PRICE_BATCH_SIZE
+      ) {
+        const chunk = unresolved.slice(i, i + COINGECKO_ERC20_PRICE_BATCH_SIZE);
+        try {
+          const url = `${COINGECKO_TOKEN_PRICE_API}/${platformId}?contract_addresses=${chunk.join(",")}&vs_currencies=usd`;
+          const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+          if (res.status === 429) {
+            this.marketBackoffUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
+            rateLimited = true;
+            break;
+          }
+          if (!res.ok) continue;
+          const data = (await res.json()) as Record<string, { usd?: number }>;
+          for (const addr of chunk) {
+            const price = Number(data[addr.toLowerCase()]?.usd ?? 0);
             if (price > 0) priceByAddr.set(addr.toLowerCase(), price);
           }
         } catch {

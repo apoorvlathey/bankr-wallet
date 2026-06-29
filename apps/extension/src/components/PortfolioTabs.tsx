@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo, lazy, Suspense } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   Box,
   HStack,
@@ -26,13 +26,12 @@ import TxStatusList from "@/components/TxStatusList";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import AddTokenModal from "@/components/AddTokenModal";
 import PortfolioChart from "@/components/PortfolioChart";
+import TokenHoldings from "@/components/TokenHoldings";
 import ChainIcon from "@/components/ChainIcon";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
 import { getVisibleChains } from "@/lib/chains";
 import { isDarkThemeId, Decorator, useTheme } from "@/theme";
-
-const TokenHoldings = lazy(() => import("@/components/TokenHoldings"));
 
 interface HoldingsState {
   totalValueUsd: number;
@@ -510,20 +509,18 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
                 </Tooltip>
               </HStack>
             )}
-            <Suspense fallback={<Skeleton h="100px" />}>
-              <TokenHoldings
-                key={`${address}:${refreshTrigger}`}
-                address={address}
-                onTokenClick={onTokenClick}
-                onSwapClick={onSwapClick}
-                onRpcIssuesChange={onRpcIssuesChange}
-                hideHeader
-                hideCard
-                onStateChange={handleStateChange}
-                filterChainId={filterChainId}
-                onSnapshotsChanged={handleSnapshotsChanged}
-              />
-            </Suspense>
+            <TokenHoldings
+              key={`${address}:${refreshTrigger}`}
+              address={address}
+              onTokenClick={onTokenClick}
+              onSwapClick={onSwapClick}
+              onRpcIssuesChange={onRpcIssuesChange}
+              hideHeader
+              hideCard
+              onStateChange={handleStateChange}
+              filterChainId={filterChainId}
+              onSnapshotsChanged={handleSnapshotsChanged}
+            />
           </TabPanel>
           <TabPanel p={0}>
             <Box px={2} pb={2}>

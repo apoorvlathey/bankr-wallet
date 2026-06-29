@@ -84,6 +84,7 @@ read-time TTL checks.
 | -------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------- | ---------- |
 | `chatHistory`        | `Conversation[]` — `{ id, title, messages, createdAt, updatedAt }` | Chat conversations with Bankr AI. Max 50 conversations, 100 messages each.   | v0.2.0     |
 | `portfolioSnapshots` | `Record<address, HoldingsSnapshot[]>`                              | Portfolio value snapshots per address. 1-hour min interval, 8-day retention. | v1.0.0     |
+| `portfolioHoldingsCache` | `{ version: 1, entries: Record<"address|visible-chain-key", { tokens, defiPositions, totalValueUsd, customTokenKeys, allTokenKeys, hiddenTokenKeys, onchainFetchedTokenKeys, rpcIssueChainIds, apiUnavailable, timestamp }> }` | Best-effort local cache of the last rendered Holdings snapshot. `TokenHoldings` hydrates from it on fresh popup/sidepanel mounts before starting live portfolio API/RPC revalidation, so cached balances paint without the skeleton. Entries are keyed by wallet address plus the visible-chain reload key, capped to 12 entries, and TTL-pruned after 24 hours by `storageCachePruner.ts`. Renderer pages keep a smaller `window.localStorage` mirror (`walletchan:portfolioHoldingsCache:v1`, capped to 3 entries) so first render can hydrate synchronously; `chrome.storage.local` remains canonical and reset/hide paths clear the mirror. Additive; absence or invalid data simply refetches live portfolio data. | next |
 | `hiddenPortfolioTokens` | `HiddenPortfolioToken[]` — `HiddenPortfolioToken` is `{ chainId, contractAddress, symbol?, name?, logoUrl?, hiddenAt }` | Global list of ERC-20 tokens hidden from Holdings across all wallet addresses. `loadPortfolioTokenCatalog` filters these before totals are calculated, so current value and newly-written snapshots exclude hidden tokens. Add Token / wallet_watchAsset remove the matching hidden entry globally. Additive; absence means no hidden tokens. Older per-address development records are flattened lazily. | next |
 | `ensIdentityCache`   | `Record<address, { name, avatar, resolvedAt }>`                    | Resolved ENS/Basename/WNS/Mega names and avatars. 6-hour cache.              | v1.0.0     |
 | `ensAvatarImageCache` | `Record<url, { dataUrl, sizeBytes, cachedAt, lastAccessedAt }>`   | Avatar/token-logo image bytes re-encoded to WebP (via `createImageBitmap` + `OffscreenCanvas`, background-only) and stored as data URLs. Keyed by source URL, 14-day TTL, LRU-pruned to 200 entries / 5 MB on write and periodically compacted by `storageCachePruner.ts`. Re-encoding strips SVG scripts/metadata so cached bytes are guaranteed raster pixels. Renderer pages keep a best-effort `window.localStorage` mirror (`walletchan:imageCacheMirror:v1`, capped at ~2 MB) so already-cached images can paint synchronously on first render; `chrome.storage.local` is canonical and no migration is required if the mirror is absent. | v3.3.0 |
@@ -111,9 +112,9 @@ These metadata/image cache keys are non-critical. Cache writes are best-effort
 and may be skipped if `chrome.storage.local` rejects the write; callers still use
 the live response. `storageCachePruner.ts` deletes expired `tokenInfo:*`,
 `tokenLogo:*`, `ethShLabels:*`, `swapTokenList:*`, `cs:desc:*`, CoinGecko cache
-entries, and old avatar image entries so cache bloat does not block wallet
-state writes. Bridge/Bungee caches use read-time 24-hour TTLs and are overwritten
-on the next successful fetch.
+entries, stale `portfolioHoldingsCache` entries, and old avatar image entries
+so cache bloat does not block wallet state writes. Bridge/Bungee caches use
+read-time 24-hour TTLs and are overwritten on the next successful fetch.
 
 ### Transient (dynamic keys)
 
@@ -263,6 +264,7 @@ New keys:
 - `chrome.storage.local.pendingBridges` (optional bridge settlement queue)
 - `chrome.storage.local.customDelegates` (optional EIP-7702 UI mirror)
 - `chrome.storage.local.recentlyReceivedTokens` (optional portfolio freshness overlay)
+- `chrome.storage.local.portfolioHoldingsCache` (optional Holdings first-paint cache; absence refetches)
 - `chrome.storage.local.sessionEncKey` (session-restore key half for "Never" auto-lock)
 - `chrome.storage.local.swapTokenList:{chainId}` (optional cache; absence refetches)
 - `chrome.storage.local.bungeeChains` and `bungeeTokens:{chainId}` (optional bridge metadata caches; absence refetches)
@@ -283,4 +285,4 @@ Modified keys:
 
 Migration from any prior version:
 
-- No migration required. Missing `walletConnectPendingRequests` resolves to an empty map, missing `walletConnectChainId` falls back to the current global chain or first visible chain, missing `hiddenPortfolioTokens` resolves to no hidden tokens, missing cache keys are lazily refetched, legacy per-address hidden-token records are flattened lazily to the global list, and old pending request entries without `walletConnect` metadata follow the injected-provider result path unchanged.
+- No migration required. Missing `walletConnectPendingRequests` resolves to an empty map, missing `walletConnectChainId` falls back to the current global chain or first visible chain, missing `hiddenPortfolioTokens` resolves to no hidden tokens, missing cache keys are lazily refetched, missing `portfolioHoldingsCache` just shows the normal skeleton while live portfolio data loads, legacy per-address hidden-token records are flattened lazily to the global list, and old pending request entries without `walletConnect` metadata follow the injected-provider result path unchanged.

@@ -517,6 +517,7 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 | `txHistory`                | No               | Completed transaction log. Cross-dapp batch entries may include per-call `{ origin, favicon }` display metadata; no secrets. |
 | `chatHistory`              | No               | Chat conversation history                               |
 | `hiddenPortfolioTokens`    | No               | Global list of ERC-20 token keys the user hid from portfolio totals. Contains public token metadata only. |
+| `portfolioHoldingsCache`   | No               | Best-effort cached Holdings display snapshot (`tokens`, DeFi rows, totals, public token metadata, and RPC issue chain IDs). Optional and pruned; contains no credentials or signing material. Renderer localStorage mirror `walletchan:portfolioHoldingsCache:v1` stores the same public display shape for synchronous first paint. |
 | `cs:enabled`               | No               | Clear-signing descriptor fetch opt-out flag             |
 | `cs:desc:{chainId}:{address}:{kind}:{selector\|format}` | No | Clear-signing descriptor cache; public metadata only, schema-versioned |
 
@@ -596,7 +597,7 @@ These must always hold true. Violations indicate a security bug.
 
 16. **Input length validation on user-facing strings** - Display names and group names are capped at 100 characters to prevent storage bloat from malformed inputs. Unknown message types are logged with `console.warn` for debuggability.
 
-17. **Non-critical caches are fail-open** - Metadata/image caches (`tokenInfo:*`, `tokenLogo:*`, `ethShLabels:*`, `swapTokenList:*`, `cs:desc:*`, CoinGecko caches, and `ensAvatarImageCache`) must never block wallet-critical storage writes. Cache writes are best-effort and expired entries are pruned by `storageCachePruner.ts`.
+17. **Non-critical caches are fail-open** - Metadata/image caches (`tokenInfo:*`, `tokenLogo:*`, `ethShLabels:*`, `swapTokenList:*`, `cs:desc:*`, CoinGecko caches, `portfolioHoldingsCache`, and `ensAvatarImageCache`) must never block wallet-critical storage writes. Cache writes are best-effort and expired entries are pruned by `storageCachePruner.ts`.
 
 ---
 

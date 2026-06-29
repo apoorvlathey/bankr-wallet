@@ -21,6 +21,7 @@ export interface TokenMetadata {
 
 interface ResolveTokenMetadataOptions {
   includeCustomTokens?: boolean;
+  includeBungeeTokens?: boolean;
 }
 
 function normalizeTokenAddress(address: string): string | null {
@@ -113,7 +114,13 @@ export async function resolveTokenMetadata(
   if (normalized === "native") return resolveNativeMetadata(chainId);
 
   const includeCustomTokens = options.includeCustomTokens ?? true;
-  const cacheKey = `${chainId}:${normalized}:${includeCustomTokens ? "custom" : "public"}`;
+  const includeBungeeTokens = options.includeBungeeTokens ?? true;
+  const cacheKey = [
+    chainId,
+    normalized,
+    includeCustomTokens ? "custom" : "public",
+    includeBungeeTokens ? "bungee" : "no-bungee",
+  ].join(":");
   const inflight = inflightMetadata.get(cacheKey);
   if (inflight) return inflight;
 
@@ -121,10 +128,12 @@ export async function resolveTokenMetadata(
     const [info, swapLogo, bungee, custom] = await Promise.all([
       fetchTokenInfo(normalized, chainId).catch(() => null),
       getCachedTokenLogo(chainId, normalized).catch(() => null),
-      lookupBungeeToken(chainId, normalized),
+      includeBungeeTokens
+        ? lookupBungeeToken(chainId, normalized)
+        : Promise.resolve({} as TokenMetadata),
       includeCustomTokens
         ? lookupCustomToken(chainId, normalized)
-        : Promise.resolve({}),
+        : Promise.resolve({} as TokenMetadata),
     ]);
 
     const metadata = {

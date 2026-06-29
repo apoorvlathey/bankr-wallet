@@ -253,13 +253,16 @@ Native asset price/logo resolution is centralized in `src/chrome/coingeckoServic
 - `gasEstimation.ts` asks the service for built-in native token USD prices
 - `portfolioTokens.ts` sends a single batched background message for custom-chain native assets instead of hitting CoinGecko from the popup
 - The service batches CoinGecko `coins/markets` requests across a short buffer window, caches market data in memory + `chrome.storage.local`, and caches search/resolution results for unknown custom assets
+- ERC-20 batch price resolution tries GeckoTerminal's batched endpoint first, then falls back to CoinGecko one contract address at a time because CoinGecko's public `/simple/token_price/{platform}` endpoint rejects multi-address requests
 - On CoinGecko `429`, the service falls back to cached/stale data and backs off briefly instead of hammering the API
 - Persistent metadata/image cache writes are best-effort. `src/chrome/storageCachePruner.ts` runs on service-worker startup and every 6 hours to delete expired non-critical cache entries, so cache bloat cannot block wallet-critical writes such as vault/account/pending-transaction state.
+- `portfolioHoldingsCache` is also pruned there; it stores only public Holdings display snapshots for faster popup/sidepanel first paint and is safe to drop at any time.
 
 ERC-20 display metadata is centralized in `src/chrome/tokenMetadata.ts`.
 
 - Resolves name/symbol/decimals via `fetchTokenInfo`
 - Resolves logos through the swap token list, Bungee token list, watched-asset custom tokens, and `tokenLogoConstants.ts`
+- Portfolio catalog calls skip the Bungee token-list fallback so holdings render from the portfolio API/RPC without waiting on bridge token metadata
 - Used by receipt asset-change extraction, tx details backfill, clear-signed snapshots, batch call summaries, approve cards, and portfolio auto-add stubs so custom swap/bridge chains do not diverge by page
 - Logo image bytes are warmed through the shared `ensAvatarImageCache` sanitizer as soon as a metadata lookup finds a URL. Renderer pages read that cache through `src/lib/avatarCacheClient.ts`, which keeps a small `localStorage` mirror for synchronous first-paint reuse while `chrome.storage.local` remains the canonical cache.
 
@@ -407,6 +410,7 @@ src/
 │   ├── portfolioApi.ts      # Portfolio API client (fetches token holdings via website)
 │   ├── portfolioTokens.ts   # Shared portfolio catalog merge/filter logic
 │   ├── portfolioSnapshotStorage.ts # Per-address aggregate portfolio value snapshots
+│   ├── portfolioHoldingsCache.ts # Best-effort Holdings first-paint cache
 │   ├── portfolioSnapshotRefresh.ts # Force-records current visibility-adjusted portfolio totals
 │   ├── hiddenPortfolioTokens.ts # Global hidden-token storage for Holdings
 │   ├── tokenMetadata.ts     # Shared ERC-20/native metadata resolver (swap list, Bungee list, custom tokens)
@@ -1377,6 +1381,8 @@ API portfolio data is shown immediately, while onchain balances are verified in 
 - CoinGecko USD price fallback for custom-chain native tokens when the portfolio API has no price (for example `MON` on Monad)
 - ERC-20 metadata fallback via `tokenMetadata.ts` so recently received/custom tokens can reuse the same logo/name source as Swap/Bridge selectors
 - The CoinGecko fallback runs through the background `coingeckoService.ts`, which batches lookups and persists market/search caches in `chrome.storage.local` so reopening the popup doesn't cold-start CoinGecko traffic each time
+- `TokenHoldings` first calls the catalog with enrichment disabled so Portfolio API data renders immediately, then runs metadata/native-price enrichment and onchain balance refresh in detached background work. Holdings deliberately skips ERC-20 price fallback during enrichment to avoid fan-out/rate limits from token-price APIs; it keeps Portfolio API prices until the portfolio backend indexes newer values.
+- Fresh popup/sidepanel mounts hydrate from `chrome.storage.local.portfolioHoldingsCache` before the live fetch starts. Because `chrome.storage.local` is async and can still allow a one-frame skeleton, renderer pages also keep a tiny synchronous `window.localStorage` mirror (`walletchan:portfolioHoldingsCache:v1`) for first render. The canonical cache is keyed by address plus the visible-chain reload key, capped to 12 entries, TTL-pruned after 24 hours, and treated as optional display data; the mirror is capped to 3 entries and cleared on wallet reset/hide-token cache clears. Missing/invalid entries fall back to the normal live portfolio load.
 
 After the merged catalog is built, `portfolioTokens.ts` filters global hidden tokens from `chrome.storage.local.hiddenPortfolioTokens` before calculating `totalValueUsd`. This keeps Holdings, Send, Swap holdings, current totals, and newly-written balance snapshots aligned across every wallet address. Recently received token keys are returned alongside the catalog so Holdings can still RPC-refresh those tokens immediately even if their current USD value would normally place them in the collapsed low-value group. `AddTokenModal` removes a matching hidden entry before adding a token; if the Portfolio API already returned that token, no custom token record is created.
 
@@ -1407,7 +1413,7 @@ Important constraints:
 - Hover actions include Swap, Send, custom-token Edit, and an overflow menu for hiding ERC-20 tokens
 - Hiding a token stores a global hidden-token entry, removes it from totals, clears cached holdings, and force-appends a current aggregate snapshot so future chart points reflect the hidden-token view without deleting existing chart history
 - Total portfolio value header with hide/show toggle (persisted in `chrome.storage.sync.hidePortfolioValue`)
-- 60-second client-side cache
+- 60-second client-side cache plus a best-effort local `portfolioHoldingsCache` for first paint after popup/sidepanel reopen
 - Refresh button, loading skeletons, empty state
 - Click token → opens TokenTransfer view
 
@@ -2534,8 +2540,8 @@ prefixes. It clears secrets/accounts (`encrypted*`, `pkVault`, `mnemonicVault`,
 `pendingWatchAssetRequests`, `pendingAddChainRequests`), WalletConnect routing
 state (`walletConnectPendingRequests`, `walletConnectChainId`), cross-dapp batch
 state (`crossDappBatch`, `bundleStatuses`), bridge state (`pendingBridges`),
-wallet portfolio state (`portfolioSnapshots`, `hiddenPortfolioTokens`,
-`customTokens`, `customDelegates`, `recentlyReceivedTokens`), and transient
+wallet portfolio state (`portfolioSnapshots`, `portfolioHoldingsCache`,
+`hiddenPortfolioTokens`, `customTokens`, `customDelegates`, `recentlyReceivedTokens`), and transient
 result/artifact prefixes (`txResult:`, `sigResult:`, `rpcResult:`,
 `addChainResult:`, `watchAssetResult:`, `batchTxResult:`, `batchTxAck:`,
 `capabilitiesResult:`, `callsStatusResult:`, `notification-`, `fiProgress:`).

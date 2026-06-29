@@ -50,6 +50,26 @@ export interface PortfolioTokenCatalog {
   apiUnavailable: boolean;
 }
 
+export interface LoadPortfolioTokenCatalogOptions {
+  /**
+   * When false, return the API/storage catalog without waiting for best-effort
+   * metadata and price enrichment. This lets portfolio screens paint as soon as
+   * the primary portfolio API responds.
+   */
+  enrich?: boolean;
+  /**
+   * ERC-20 price fallbacks can fan out to external token-price APIs. Holdings
+   * first paint disables this and relies on portfolio API prices.
+   */
+  includeErc20PriceFallback?: boolean;
+  /**
+   * Optional token key allowlist for best-effort metadata/price enrichment.
+   * Portfolio views use this to avoid warming metadata and logo caches for
+   * collapsed low-value rows that are not visible yet.
+   */
+  enrichTokenKeys?: Set<string>;
+}
+
 async function resolveCustomNativePricesBatch(
   requests: { chainId: number; chainName: string; nativeCurrencyName: string; symbol: string }[],
 ): Promise<Map<number, { priceUsd: number; logoUrl?: string }>> {
@@ -131,6 +151,7 @@ async function resolveTokenMetadataBatch(
               type: "resolveTokenMetadata",
               chainId: request.chainId,
               tokenAddress: address,
+              includeBungeeTokens: false,
             },
             (response) => {
               resolve([
@@ -170,6 +191,41 @@ function applyTokenMetadata(
   return { ...token, logoUrl, symbol, name, decimals };
 }
 
+function finalizePortfolioTokens(
+  tokens: PortfolioToken[],
+  hiddenTokenKeys: Set<string>,
+  networksInfo: NetworksInfo,
+): { visibleTokens: PortfolioToken[]; allTokenKeys: Set<string> } {
+  const finalTokens = tokens.map((token) => {
+    let next = token;
+    // Native tokens without a logo fall back to the chain icon so non-ETH
+    // natives on custom chains render the correct asset image instead of an
+    // initials chip.
+    if (isNativeToken(next) && !next.logoUrl) {
+      const meta = getNativeAssetMeta(next.chainId, networksInfo);
+      if (meta?.logoUrl) next = { ...next, logoUrl: meta.logoUrl };
+    }
+    if (isNativeToken(next) && isTestnetChain(next.chainId, networksInfo)) {
+      next = { ...next, priceUsd: 0, valueUsd: 0 };
+    }
+    return next;
+  });
+
+  const visibleTokens = finalTokens.filter(
+    (token) =>
+      !hiddenTokenKeys.has(
+        getPortfolioTokenKey(token.chainId, token.contractAddress),
+      ),
+  );
+  const allTokenKeys = new Set(
+    finalTokens.map((token) =>
+      getPortfolioTokenKey(token.chainId, token.contractAddress),
+    ),
+  );
+
+  return { visibleTokens, allTokenKeys };
+}
+
 /**
  * Shared portfolio token catalog used by Holdings, Send, and Swap.
  *
@@ -180,7 +236,16 @@ function applyTokenMetadata(
  */
 export async function loadPortfolioTokenCatalog(
   address: string,
+  options: LoadPortfolioTokenCatalogOptions = {},
 ): Promise<PortfolioTokenCatalog> {
+  const enrich = options.enrich ?? true;
+  const includeErc20PriceFallback =
+    options.includeErc20PriceFallback ?? true;
+  const shouldEnrichToken = (token: PortfolioToken) =>
+    !options.enrichTokenKeys ||
+    options.enrichTokenKeys.has(
+      getPortfolioTokenKey(token.chainId, token.contractAddress),
+    );
   const [
     portfolioResult,
     customTokens,
@@ -206,6 +271,17 @@ export async function loadPortfolioTokenCatalog(
   const data = portfolioResult.ok
     ? portfolioResult.data
     : { tokens: [], defiPositions: [], totalValueUsd: 0 };
+
+  const customTokenKeys = new Set(
+    customTokens.map((ct) =>
+      getPortfolioTokenKey(ct.chainId, ct.contractAddress),
+    ),
+  );
+  const recentReceivedTokenKeys = new Set(
+    recentReceived.map((rt) =>
+      getPortfolioTokenKey(rt.chainId, rt.contractAddress),
+    ),
+  );
 
   const apiTokenKeys = new Set(
     data.tokens.map((t) =>
@@ -266,6 +342,7 @@ export async function loadPortfolioTokenCatalog(
       [...data.tokens, ...customAsPortfolio, ...recentAsPortfolio]
         .filter(
           (token) =>
+            shouldEnrichToken(token) &&
             !isNativeToken(token) &&
             (!token.logoUrl || !token.symbol || !token.name) &&
             /^0x[a-fA-F0-9]{40}$/.test(token.contractAddress),
@@ -279,8 +356,9 @@ export async function loadPortfolioTokenCatalog(
         }),
     ).values(),
   );
-  const resolvedTokenMetadata =
-    await resolveTokenMetadataBatch(metadataRequests);
+  const resolvedTokenMetadata = enrich
+    ? await resolveTokenMetadataBatch(metadataRequests)
+    : new Map<string, TokenMetadata>();
 
   const mergedTokens = [
     ...data.tokens,
@@ -328,6 +406,28 @@ export async function loadPortfolioTokenCatalog(
       valueUsd: 0,
       logoUrl: undefined,
     }));
+
+  if (!enrich) {
+    const { visibleTokens, allTokenKeys } = finalizePortfolioTokens(
+      [...mergedTokens, ...missingNativeTokens],
+      hiddenTokenKeys,
+      networksInfo,
+    );
+    const totalValueUsd =
+      visibleTokens.reduce((sum, t) => sum + t.valueUsd, 0) +
+      (data.defiPositions || []).reduce((sum, p) => sum + p.valueUsd, 0);
+
+    return {
+      tokens: visibleTokens,
+      defiPositions: data.defiPositions || [],
+      totalValueUsd,
+      customTokenKeys,
+      recentReceivedTokenKeys,
+      allTokenKeys,
+      hiddenTokenKeys,
+      apiUnavailable,
+    };
+  }
 
   const nativePriceRequests = Array.from(
     new Map(
@@ -384,26 +484,29 @@ export async function loadPortfolioTokenCatalog(
     }),
   );
 
-  const erc20PriceRequests = Array.from(
-    new Map(
-      tokensWithCustomNativePrices
-        .filter(
-          (token) =>
-            !isNativeToken(token) &&
-            token.priceUsd <= 0 &&
-            visibleChainsById.has(token.chainId) &&
-            !isTestnetChain(token.chainId, networksInfo) &&
-            /^0x[a-fA-F0-9]{40}$/.test(token.contractAddress),
-        )
-        .map((token) => {
-          const addr = token.contractAddress.toLowerCase();
-          return [
-            `${token.chainId}-${addr}`,
-            { chainId: token.chainId, contractAddress: addr },
-          ] as const;
-        }),
-    ).values(),
-  );
+  const erc20PriceRequests = includeErc20PriceFallback
+    ? Array.from(
+        new Map(
+          tokensWithCustomNativePrices
+            .filter(
+              (token) =>
+                !isNativeToken(token) &&
+                shouldEnrichToken(token) &&
+                token.priceUsd <= 0 &&
+                visibleChainsById.has(token.chainId) &&
+                !isTestnetChain(token.chainId, networksInfo) &&
+                /^0x[a-fA-F0-9]{40}$/.test(token.contractAddress),
+            )
+            .map((token) => {
+              const addr = token.contractAddress.toLowerCase();
+              return [
+                `${token.chainId}-${addr}`,
+                { chainId: token.chainId, contractAddress: addr },
+              ] as const;
+            }),
+        ).values(),
+      )
+    : [];
 
   const resolvedErc20Prices = await resolveErc20PricesBatch(erc20PriceRequests);
 
@@ -421,31 +524,10 @@ export async function loadPortfolioTokenCatalog(
     };
   });
 
-  const finalTokens = tokensWithErc20Prices.map((token) => {
-    let next = token;
-    // Native tokens without a logo fall back to the chain icon so non-ETH
-    // natives on custom chains (AVAX on Avalanche, BNB on non-registry BNB
-    // chains, …) render the correct asset image instead of an initials chip.
-    if (isNativeToken(next) && !next.logoUrl) {
-      const meta = getNativeAssetMeta(next.chainId, networksInfo);
-      if (meta?.logoUrl) next = { ...next, logoUrl: meta.logoUrl };
-    }
-    if (isNativeToken(next) && isTestnetChain(next.chainId, networksInfo)) {
-      next = { ...next, priceUsd: 0, valueUsd: 0 };
-    }
-    return next;
-  });
-
-  const visibleTokens = finalTokens.filter(
-    (token) =>
-      !hiddenTokenKeys.has(
-        getPortfolioTokenKey(token.chainId, token.contractAddress),
-      ),
-  );
-  const allTokenKeys = new Set(
-    finalTokens.map((token) =>
-      getPortfolioTokenKey(token.chainId, token.contractAddress),
-    ),
+  const { visibleTokens, allTokenKeys } = finalizePortfolioTokens(
+    tokensWithErc20Prices,
+    hiddenTokenKeys,
+    networksInfo,
   );
 
   const totalValueUsd = visibleTokens.reduce((sum, t) => sum + t.valueUsd, 0) +
@@ -455,16 +537,8 @@ export async function loadPortfolioTokenCatalog(
     tokens: visibleTokens,
     defiPositions: data.defiPositions || [],
     totalValueUsd,
-    customTokenKeys: new Set(
-      customTokens.map((ct) =>
-        getPortfolioTokenKey(ct.chainId, ct.contractAddress),
-      ),
-    ),
-    recentReceivedTokenKeys: new Set(
-      recentReceived.map((rt) =>
-        getPortfolioTokenKey(rt.chainId, rt.contractAddress),
-      ),
-    ),
+    customTokenKeys,
+    recentReceivedTokenKeys,
     allTokenKeys,
     hiddenTokenKeys,
     apiUnavailable,

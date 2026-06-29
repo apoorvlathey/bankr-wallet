@@ -19,6 +19,8 @@ const MAX_DOWNLOAD_BYTES = 2 * 1024 * 1024; // 2 MB raw download cap
 const MAX_ENCODED_BYTES = 512 * 1024; // 512 KB re-encoded cap per image
 const TARGET_DIM = 128; // resize box (avatars display ≤24 px, 128 covers 4x DPI)
 const FETCH_TIMEOUT_MS = 10_000;
+const LAST_ACCESS_WRITE_INTERVAL_MS = 60 * 60 * 1000;
+const MAX_CONCURRENT_IMAGE_FETCHES = 2;
 
 export interface AvatarCacheEntry {
   dataUrl: string;
@@ -31,6 +33,35 @@ type AvatarCache = Record<string, AvatarCacheEntry>;
 
 // Deduplicate concurrent fetches for the same URL within a service worker session.
 const inFlight = new Map<string, Promise<string | null>>();
+const fetchQueue: Array<() => void> = [];
+let activeImageFetches = 0;
+
+async function acquireImageFetchSlot(): Promise<void> {
+  if (activeImageFetches < MAX_CONCURRENT_IMAGE_FETCHES) {
+    activeImageFetches += 1;
+    return;
+  }
+
+  await new Promise<void>((resolve) => fetchQueue.push(resolve));
+}
+
+function releaseImageFetchSlot(): void {
+  const next = fetchQueue.shift();
+  if (next) {
+    next();
+    return;
+  }
+  activeImageFetches = Math.max(0, activeImageFetches - 1);
+}
+
+async function runQueuedImageFetch(url: string): Promise<string | null> {
+  await acquireImageFetchSlot();
+  try {
+    return await doFetchAndEncode(url);
+  } finally {
+    releaseImageFetchSlot();
+  }
+}
 
 async function readCache(): Promise<AvatarCache> {
   const res = await chrome.storage.local.get(STORAGE_KEY);
@@ -187,8 +218,11 @@ export async function getCachedAvatarImage(
   const cache = await readCache();
   const entry = cache[url];
   if (!entry || !isCacheEntryValid(entry)) return null;
-  entry.lastAccessedAt = Date.now();
-  await writeCache(cache);
+  const now = Date.now();
+  if (now - entry.lastAccessedAt > LAST_ACCESS_WRITE_INTERVAL_MS) {
+    entry.lastAccessedAt = now;
+    await writeCache(cache);
+  }
   return entry.dataUrl;
 }
 
@@ -207,7 +241,7 @@ export async function fetchAndCacheAvatarImage(
   const existing = inFlight.get(url);
   if (existing) return existing;
 
-  const promise = doFetchAndEncode(url).finally(() => inFlight.delete(url));
+  const promise = runQueuedImageFetch(url).finally(() => inFlight.delete(url));
   inFlight.set(url, promise);
   return promise;
 }

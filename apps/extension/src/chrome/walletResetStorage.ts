@@ -28,6 +28,7 @@ export const WALLET_LOCAL_STORAGE_KEYS = [
   "pendingBridges",
   "chatHistory",
   "portfolioSnapshots",
+  "portfolioHoldingsCache",
   "hiddenPortfolioTokens",
   "customTokens",
   "customDelegates",
