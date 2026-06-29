@@ -199,7 +199,7 @@ From there the existing recursive nested-calldata pipeline takes over: each inne
 
 For ERC-5792 batches, every per-call `CallCard` header runs `useErc20InlineSummary(to, data, chainId)`. When the calldata matches a built-in selector, it returns a structured `{ mode, prefix, amount, symbol, logoUrl, middle, recipient, recipientAvatarSrc, recipientAvatarKind }` summary that `BatchTransactionConfirmation` renders as e.g. **"Send 100 [USDC icon] USDC to vitalik.eth [avatar]"** or **"Approve unlimited [USDC icon] USDC to AugustusV6"**.
 
-Recipient resolution priority: own account label → ENS/Basename/WNS/Mega → eth.sh contract label → truncated `0xabcd…1234`. `MAX_UINT256` / `MAX_UINT160` (Permit2) approvals render as **"unlimited"** with a hover tooltip.
+Recipient resolution priority: own account label → ENS/Basename/WNS/GNS/Mega → eth.sh contract label → truncated `0xabcd…1234`. `MAX_UINT256` / `MAX_UINT160` (Permit2) approvals render as **"unlimited"** with a hover tooltip.
 
 When the inline summary fully resolves on a CallCard, the duplicated descriptor card is suppressed in the top-of-screen `BatchClearSigningSummary` (no point rendering the same recipient + amount twice) and the trailing contract-address chip on the collapsed header is hidden as redundant.
 

@@ -86,7 +86,7 @@ export const isResolvableName = (value: string): boolean => {
  *  - Line/paragraph separators (split the rendered name across lines)
  *  - Object Replacement Character (placeholder for missing glyphs)
  *
- * Any resolved name (ENS / Basename / Mega / Wei) containing one of these is
+ * Any resolved name (ENS / Basename / Wei / Gwei / Mega) containing one of these is
  * treated as hostile and discarded. We do NOT try to clean / repair the name —
  * showing a partial name is worse than showing the raw address.
  */
@@ -114,7 +114,7 @@ const PRINTABLE_ASCII_RE = /^[\x21-\x7e]+$/;
  *
  * Defense against reverse-resolution spoofing. An attacker who owns
  * `apple‐.eth` (with a combining mark) or a Cyrillic-Latin homoglyph name
- * can register it cheaply on ENS/Basenames/Mega and dangle it on a vanity
+ * can register it cheaply on ENS/Basenames/WNS/GNS/Mega and dangle it on a vanity
  * address; if a victim ever transacts with that address, the reverse lookup
  * decorates every future confirmation surface with a trusted-looking name.
  * Hard-rejecting hazardous chars and forcing punycode for non-ASCII names
@@ -225,8 +225,9 @@ const getMegaName = async (
 export const resolveNameToAddress = async (
   name: string
 ): Promise<Address | null> => {
-  // Handle .wei names via WNS — let RPC errors propagate
-  if (wei.isWei(name)) {
+  // Handle .wei/.gwei names via WNS/GNS. Missing mainnet RPC still surfaces
+  // from getUserRpcUrl; service-level misses/timeouts resolve as null.
+  if (wei.isSupportedName(name)) {
     const rpcUrl = await getUserRpcUrl(mainnet.id);
     wei.config({ rpc: rpcUrl });
     const address = await wei.resolve(name);
@@ -288,29 +289,37 @@ const getEnsName = async (address: string): Promise<string | null> => {
   }
 };
 
-const getWeiName = async (address: string): Promise<string | null> => {
+const getWeiName = async (
+  address: string,
+  suffix: ".wei" | ".gwei" = ".wei"
+): Promise<string | null> => {
   try {
-    // Configure Wei SDK to use user's Ethereum RPC instead of hardcoded defaults
+    // Configure name SDK to use user's Ethereum RPC instead of hardcoded defaults
     const rpcUrl = await getUserRpcUrl(mainnet.id);
     wei.config({ rpc: rpcUrl });
-    return sanitizeResolvedName(await wei.reverseResolve(address));
+    return sanitizeResolvedName(await wei.reverseResolve(address, suffix));
   } catch {
     return null;
   }
+};
+
+const getGweiName = async (address: string): Promise<string | null> => {
+  return getWeiName(address, ".gwei");
 };
 
 export const resolveAddressToName = async (
   address: string
 ): Promise<string | null> => {
   try {
-    const [ensName, basename, weiName, megaName] = await Promise.all([
+    const [ensName, basename, weiName, gweiName, megaName] = await Promise.all([
       getEnsName(address),
       getBasename(address as Address),
       getWeiName(address),
+      getGweiName(address),
       getMegaName(address),
     ]);
-    // Priority: ENS > Basename > WNS > Mega
-    return ensName || basename || weiName || megaName || null;
+    // Priority: ENS > Basename > WNS > GNS > Mega
+    return ensName || basename || weiName || gweiName || megaName || null;
   } catch (error) {
     console.error("Error resolving address to name:", error);
     return null;
@@ -379,6 +388,9 @@ export const getNameAvatar = async (
   if (isMega(name)) {
     return await getMegaAvatar(name);
   }
+  if (wei.isSupportedName(name)) {
+    return null;
+  }
   if (isBasename(name)) {
     const basenameAvatar = await getBasenameAvatar(name);
     if (basenameAvatar) return basenameAvatar;
@@ -388,26 +400,27 @@ export const getNameAvatar = async (
 };
 
 // ============================================================================
-// Combined Identity Resolution (ENS > Basename > WNS > Mega)
+// Combined Identity Resolution (ENS > Basename > WNS > GNS > Mega)
 // ============================================================================
 
 /**
  * Resolves name + avatar for an address with explicit priority:
- * ENS > Basename > WNS > Mega
+ * ENS > Basename > WNS > GNS > Mega
  * - Resolves all name services in parallel for speed
  * - If ENS name exists, uses ENS name + ENS avatar
  * - Falls back to Basename name + Basename avatar
- * - Falls back to WNS name (no avatar support for .wei names)
+ * - Falls back to WNS/GNS name (no avatar support for .wei/.gwei names)
  * - Falls back to Mega name + Mega avatar (via text record)
  */
 export const resolveEnsIdentity = async (
   address: string
 ): Promise<{ name: string | null; avatar: string | null }> => {
   try {
-    const [ensName, basename, weiName, megaName] = await Promise.all([
+    const [ensName, basename, weiName, gweiName, megaName] = await Promise.all([
       getEnsName(address),
       getBasename(address as Address),
       getWeiName(address),
+      getGweiName(address),
       getMegaName(address),
     ]);
 
@@ -423,9 +436,12 @@ export const resolveEnsIdentity = async (
       return { name: basename, avatar };
     }
 
-    // Fall back to WNS (no avatar support)
+    // Fall back to WNS/GNS (no avatar support)
     if (weiName) {
       return { name: weiName, avatar: null };
+    }
+    if (gweiName) {
+      return { name: gweiName, avatar: null };
     }
 
     // Fall back to Mega

@@ -246,7 +246,7 @@ export default function ERC20ApproveDisplay({
     };
   }, [approval.spender, chainId]);
 
-  // Reverse resolve the spender address to ENS/Basename/WNS. Shown as a
+  // Reverse resolve the spender address to ENS/Basename/WNS/GNS. Shown as a
   // separate badge so an onchain name and an eth.sh label can coexist
   // (same pattern as the outer "To" row).
   useEffect(() => {
@@ -685,7 +685,7 @@ export default function ERC20ApproveDisplay({
         </Box>
 
         {/* Spender — secondary. Mirrors the outer "To" row pattern:
-            an ENS/Basename/WNS badge (highlight) on top, the address pill
+            an ENS/Basename/WNS/GNS badge (highlight) on top, the address pill
             in the middle, and the eth.sh label badge (secondary) on the
             bottom. All three are optional; any subset may be visible. */}
         <Box

@@ -1,23 +1,36 @@
 /**
- * Wei Name Service SDK
- * Resolve .wei names with a single line of code
+ * Wei/Gwei Name Service SDK
+ * Resolve .wei and .gwei names with a single line of code
  *
  * Source: https://import.wei.domains/wei.js
+ * Gwei reference: https://github.com/lucadonnoh/gwei-names
  * Converted to TypeScript ES module for bundler compatibility
  *
  * Usage:
  *   import wei from '@/utils/wei'
  *   const addr = await wei.resolve('name.wei')
+ *   const gweiAddr = await wei.resolve('name.gwei')
  *   const name = await wei.reverseResolve('0x...')
  */
 
-export const CONTRACT = "0x0000000000696760E15f265e828DB644A0c242EB";
+export type NameServiceSuffix = ".wei" | ".gwei";
+
+export const WEI_CONTRACT = "0x0000000000696760E15f265e828DB644A0c242EB";
+export const GWEI_CONTRACT = "0x9D51D507BC7264d4fE8Ad1cf7Fe191933A0a81d6";
+export const CONTRACT = WEI_CONTRACT;
 export const BASE_PORTAL = "0x49048044D57e1C92A77f79988d21Fa8fAF74E97e";
 
 // Populated via config({ rpc }) — callers must set this before resolve/reverseResolve.
 // Keeping this empty by default ensures CHAIN_REGISTRY (via ensUtils.getUserRpcUrl) is
-// the single source of truth for the Ethereum mainnet RPC used by .wei resolution.
+// the single source of truth for the Ethereum mainnet RPC used by name resolution.
 let RPC_ENDPOINTS: string[] = [];
+
+const SERVICE_CONFIG: Record<NameServiceSuffix, { contract: string }> = {
+  ".wei": { contract: WEI_CONTRACT },
+  ".gwei": { contract: GWEI_CONTRACT },
+};
+
+const SUPPORTED_SUFFIXES: NameServiceSuffix[] = [".gwei", ".wei"];
 
 // Function selectors
 const SEL = {
@@ -31,11 +44,10 @@ function encodeString(str: string): string {
   const utf8 = new TextEncoder().encode(str);
   const len = utf8.length;
   const padded = Math.ceil(len / 32) * 32;
-  const data = new Uint8Array(64 + padded);
-  data[31] = 0x20; // offset
-  data[63] = len; // length
-  data.set(utf8, 64);
-  return bytesToHex(data);
+  const data = new Uint8Array(padded);
+  data.set(utf8);
+  const encodedData = bytesToHex(data).slice(2);
+  return `0x${encodeUint256(32n)}${encodeUint256(BigInt(len))}${encodedData}`;
 }
 
 function encodeUint256(n: bigint | number): string {
@@ -81,12 +93,12 @@ function decodeUint256(hex: string | null): bigint {
 }
 
 // RPC call with fallback
-async function ethCall(data: string): Promise<string> {
+async function ethCall(data: string, contract: string): Promise<string> {
   const body = JSON.stringify({
     jsonrpc: "2.0",
     id: 1,
     method: "eth_call",
-    params: [{ to: CONTRACT, data }, "latest"],
+    params: [{ to: contract, data }, "latest"],
   });
 
   for (const rpc of RPC_ENDPOINTS) {
@@ -105,12 +117,39 @@ async function ethCall(data: string): Promise<string> {
       const json = await res.json();
 
       if (json.error) continue;
-      return json.result;
+      return typeof json.result === "string" ? json.result : "0x";
     } catch {
       continue;
     }
   }
   throw new Error("All RPC endpoints failed");
+}
+
+function getSupportedSuffix(name: string): NameServiceSuffix | null {
+  if (!name || typeof name !== "string") return null;
+  const lower = name.toLowerCase().trim();
+  return SUPPORTED_SUFFIXES.find((suffix) => lower.endsWith(suffix)) ?? null;
+}
+
+function normalizeName(
+  name: string,
+  defaultSuffix: NameServiceSuffix = ".wei"
+): { fullName: string; suffix: NameServiceSuffix } | null {
+  if (!name || typeof name !== "string") return null;
+  const normalized = name.toLowerCase().trim();
+  if (!normalized) return null;
+
+  const detectedSuffix = getSupportedSuffix(normalized);
+  const suffix = detectedSuffix ?? defaultSuffix;
+  const label = detectedSuffix
+    ? normalized.slice(0, -detectedSuffix.length)
+    : normalized;
+  if (!label) return null;
+
+  return {
+    fullName: detectedSuffix ? normalized : `${label}${suffix}`,
+    suffix,
+  };
 }
 
 /**
@@ -122,28 +161,45 @@ export function isWei(name: string): boolean {
 }
 
 /**
- * Resolve a .wei name to an address
- * @param name - e.g. 'vitalik.wei' or 'vitalik'
+ * Check if a string is a .gwei name
+ */
+export function isGwei(name: string): boolean {
+  if (!name || typeof name !== "string") return false;
+  return name.toLowerCase().endsWith(".gwei");
+}
+
+/**
+ * Check if a string is a supported WNS/GNS name
+ */
+export function isSupportedName(name: string): boolean {
+  return getSupportedSuffix(name) !== null;
+}
+
+/**
+ * Resolve a .wei or .gwei name to an address
+ * @param name - e.g. 'vitalik.wei', 'vitalik.gwei', or 'vitalik'
  * @returns Address or null if not found
  */
-export async function resolve(name: string): Promise<string | null> {
-  if (!name) return null;
-
-  let label = name.toLowerCase().trim();
-  if (label.endsWith(".wei")) label = label.slice(0, -4);
-  if (!label) return null;
+export async function resolve(
+  name: string,
+  defaultSuffix: NameServiceSuffix = ".wei"
+): Promise<string | null> {
+  const normalized = normalizeName(name, defaultSuffix);
+  if (!normalized) return null;
 
   try {
+    const { contract } = SERVICE_CONFIG[normalized.suffix];
+
     // Get tokenId via computeId
-    const idData = SEL.computeId + encodeString(label + ".wei").slice(2);
-    const idResult = await ethCall(idData);
+    const idData = SEL.computeId + encodeString(normalized.fullName).slice(2);
+    const idResult = await ethCall(idData, contract);
     const tokenId = decodeUint256(idResult);
 
     if (tokenId === 0n) return null;
 
     // Resolve tokenId to address
     const resolveData = SEL.resolve + encodeUint256(tokenId);
-    const resolveResult = await ethCall(resolveData);
+    const resolveResult = await ethCall(resolveData, contract);
 
     return decodeAddress(resolveResult);
   } catch {
@@ -152,16 +208,20 @@ export async function resolve(name: string): Promise<string | null> {
 }
 
 /**
- * Reverse resolve an address to a .wei name
+ * Reverse resolve an address to a .wei or .gwei name
  * @param address - Ethereum address
  * @returns Name or null if not set
  */
-export async function reverseResolve(address: string): Promise<string | null> {
+export async function reverseResolve(
+  address: string,
+  suffix: NameServiceSuffix = ".wei"
+): Promise<string | null> {
   if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) return null;
 
   try {
+    const { contract } = SERVICE_CONFIG[suffix];
     const data = SEL.reverseResolve + encodeAddress(address);
-    const result = await ethCall(data);
+    const result = await ethCall(data, contract);
     const name = decodeString(result);
 
     return name || null;
@@ -171,14 +231,17 @@ export async function reverseResolve(address: string): Promise<string | null> {
 }
 
 /**
- * Resolve any input - address passthrough, .wei names resolved
- * @param input - Address or .wei name
+ * Resolve any input - address passthrough, .wei/.gwei names resolved
+ * @param input - Address, .wei name, or .gwei name
  */
-export async function resolveAny(input: string): Promise<string | null> {
+export async function resolveAny(
+  input: string,
+  defaultSuffix: NameServiceSuffix = ".wei"
+): Promise<string | null> {
   if (!input) return null;
   if (/^0x[a-fA-F0-9]{40}$/.test(input)) return input;
-  if (isWei(input) || !input.includes(".")) {
-    return resolve(input);
+  if (isSupportedName(input) || !input.includes(".")) {
+    return resolve(input, defaultSuffix);
   }
   return null;
 }
@@ -195,7 +258,7 @@ export function config(options: { rpc?: string | string[] }): void {
 
 /**
  * Bridge ETH from Mainnet to Base
- * @param recipient - Address, .wei name, or null for self
+ * @param recipient - Address, .wei/.gwei name, or null for self
  * @param amount - Amount in ETH (e.g., '0.1')
  * @param signer - Ethers.js signer
  * @returns Transaction response
@@ -257,9 +320,13 @@ const wei = {
   reverseResolve,
   resolveAny,
   isWei,
+  isGwei,
+  isSupportedName,
   config,
   bridgeToBase,
   CONTRACT,
+  WEI_CONTRACT,
+  GWEI_CONTRACT,
   BASE_PORTAL,
 };
 

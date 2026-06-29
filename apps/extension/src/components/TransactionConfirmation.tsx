@@ -607,7 +607,7 @@ function TransactionConfirmation({
     };
   }, [is7702SetDelegate, delegation7702, tx.chainId]);
 
-  // Reverse resolve the "to" address to get ENS/Basename/WNS name
+  // Reverse resolve the "to" address to get ENS/Basename/WNS/GNS name
   useEffect(() => {
     if (!tx.to) return;
     resolveAddressToName(tx.to)

@@ -426,7 +426,7 @@ function Onboarding() {
 
       // Handle Bankr account setup
       if (accountTypeChoice === "bankr") {
-        // Resolve address (in case it's ENS/Basename/WNS)
+        // Resolve address (in case it's ENS/Basename/WNS/GNS)
         let resolvedAddress: string | null;
         try {
           resolvedAddress = await resolveAddress(walletAddress.trim());

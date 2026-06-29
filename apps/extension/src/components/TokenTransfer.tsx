@@ -1514,7 +1514,7 @@ function TokenTransfer({
             )}
           </HStack>
           <Input
-            placeholder="0x..., ENS, Basename, .wei, or .mega"
+            placeholder="0x..., ENS, Basename, .wei, .gwei, or .mega"
             value={recipient}
             onChange={(e) => setRecipient(e.target.value.trim())}
             fontFamily="mono"

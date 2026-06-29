@@ -2,14 +2,14 @@
 
 ## Overview
 
-The calldata decoder shows decoded transaction calldata in the `TransactionConfirmation` view. It uses a local decoder (ported from swiss-knife) to recursively decode calldata, then renders each parameter with type-specific interactive components (ENS/Basename/WNS/Mega resolution for addresses, unit conversion for uints, collapsible nested calldata for bytes, etc.).
+The calldata decoder shows decoded transaction calldata in the `TransactionConfirmation` view. It uses a local decoder (ported from swiss-knife) to recursively decode calldata, then renders each parameter with type-specific interactive components (ENS/Basename/WNS/GNS/Mega resolution for addresses, unit conversion for uints, collapsible nested calldata for bytes, etc.).
 
 ## Architecture
 
 ```
 CalldataDecoder.tsx          ← Top-level component (tabs, loading, copy)
   └── renderParams.tsx       ← Routes Arg → type-specific component
-        ├── AddressParam     ← ENS/Basename/WNS/Mega resolution, avatars, labels, explorer link
+        ├── AddressParam     ← ENS/Basename/WNS/GNS/Mega resolution, avatars, labels, explorer link
         ├── UintParam        ← Unit conversion dropdown, format toggle
         ├── IntParam         ← Unit conversion dropdown (signed)
         ├── BoolParam        ← Green/red colored display
@@ -57,7 +57,7 @@ type Arg = {
 
 | Component | baseType match | Features |
 |-----------|---------------|----------|
-| `AddressParam` | `address`, bytes that pass `isAddress()` | ENS/Basename/WNS/Mega reverse resolution via `ensUtils.ts`, avatar display, eth.sh labels API, name/address toggle button, copy + explorer link |
+| `AddressParam` | `address`, bytes that pass `isAddress()` | ENS/Basename/WNS/GNS/Mega reverse resolution via `ensUtils.ts`, avatar display, eth.sh labels API, name/address toggle button, copy + explorer link |
 | `UintParam` | `uint*` | Custom unit dropdown (Wei/ETH/Gwei/10^6/Unix Time/Bps↔%/Minutes/Hours/Days), format toggle (comma-separated + compact notation), tooltip with raw value |
 | `IntParam` | `int*` | Same unit dropdown as UintParam (signed values) |
 | `BoolParam` | `bool` | Green (`bauhaus.green`) for true, red (`bauhaus.red`) for false |

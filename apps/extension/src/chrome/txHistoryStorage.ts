@@ -53,7 +53,7 @@ export interface ClearSignedMeta {
   counterparty?: string;
   /** First eth.sh label for counterparty, if any (e.g., "Uniswap V3 Router"). */
   counterpartyLabel?: string;
-  /** Reverse-resolved ENS / Basename / WNS for counterparty, if any. */
+  /** Reverse-resolved ENS / Basename / WNS / GNS for counterparty, if any. */
   counterpartyEns?: string;
   /** ERC-7730 only — descriptor's `display.formats[x].intent`. */
   intent?: string;
