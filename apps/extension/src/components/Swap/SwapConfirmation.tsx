@@ -646,15 +646,7 @@ function SwapConfirmation({
                 key={i}
                 border="2px solid"
                 borderColor="border.default"
-                borderLeftWidth="4px"
-                borderLeftColor={accent}
-                // Left edge is square so the colored accent stripe runs flush
-                // top-to-bottom; only the right side rounds. Mirrors the
-                // pattern in BatchTransactionConfirmation.
-                borderTopLeftRadius="0"
-                borderBottomLeftRadius="0"
-                borderTopRightRadius="lg"
-                borderBottomRightRadius="lg"
+                borderRadius="lg"
                 bg="surface.raised"
                 overflow="hidden"
               >

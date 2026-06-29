@@ -50,7 +50,7 @@ import NativeValueAmount from "@/components/NativeValueAmount";
 
 // Per-call accent rotation. The three intent slots (primary/secondary/highlight)
 // map to RED/BLUE/YELLOW in Bauhaus and to indigo/cyan/amber in Midnight, so each
-// call still gets a distinct identity stripe in either theme.
+// call still gets a distinct numbered badge in either theme.
 // eslint-disable-next-line react-refresh/only-export-components
 export const CALL_ACCENTS = [
   "accent.primary",
@@ -237,12 +237,7 @@ export function CallCard({
     <Box
       border={tokens.borders.thin}
       borderColor="border.default"
-      borderLeftWidth="4px"
-      borderLeftColor={accent}
-      borderTopLeftRadius="0"
-      borderBottomLeftRadius="0"
-      borderTopRightRadius="lg"
-      borderBottomRightRadius="lg"
+      borderRadius="lg"
       bg="surface.raised"
       overflow="hidden"
     >
