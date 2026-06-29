@@ -20,17 +20,18 @@ import {
   revokeCashAddressUrl,
   WALLETCHAN_MIGRATE_URL,
   WALLETCHAN_STAKE_URL,
+  WALLETCHAN_VAULT_DATA_API,
 } from "@/constants/externalUrls";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
 import { GlobeIcon } from "@/components/Settings/icons";
+import { useEffect, useState } from "react";
 
 interface MoreActionsViewProps {
   onBack: () => void;
   onWalletConnect: () => void;
   onHideTokens: () => void;
   fromAddress: string;
-  stakeApy: number | null;
 }
 
 interface MoreAction {
@@ -241,10 +242,31 @@ export default function MoreActionsView({
   onWalletConnect,
   onHideTokens,
   fromAddress,
-  stakeApy,
 }: MoreActionsViewProps) {
+  const [stakeApy, setStakeApy] = useState<number | null>(null);
   const isFirefox =
     typeof navigator !== "undefined" && /Firefox/.test(navigator.userAgent);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchApy = () => {
+      fetch(WALLETCHAN_VAULT_DATA_API, { signal: controller.signal })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.totalApy != null) setStakeApy(data.totalApy);
+        })
+        .catch(() => {});
+    };
+
+    fetchApy();
+    const interval = window.setInterval(fetchApy, 60_000);
+
+    return () => {
+      controller.abort();
+      window.clearInterval(interval);
+    };
+  }, []);
 
   const primaryActions: MoreAction[] = [
     {

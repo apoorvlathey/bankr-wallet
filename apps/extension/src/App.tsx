@@ -196,7 +196,7 @@ import type {
   WalletConnectRetryNotice,
   WalletConnectSessionSummary,
 } from "@/types/walletConnect";
-import { TWITTER_URL, WALLETCHAN_ICON_URL, WALLETCHAN_OS_URL, WALLETCHAN_VAULT_DATA_API } from "@/constants/externalUrls";
+import { TWITTER_URL, WALLETCHAN_ICON_URL, WALLETCHAN_OS_URL } from "@/constants/externalUrls";
 import {
   getDefaultChainName,
   getResolvedChainById,
@@ -368,7 +368,6 @@ function App() {
     { address: string; name: string; symbol: string; decimals: number; logoURI?: string } | undefined
   >();
   const [swapInitialSellToken, setSwapInitialSellToken] = useState<PortfolioToken | undefined>();
-  const [stakeApy, setStakeApy] = useState<number | null>(null);
   const [walletConnectSessionCount, setWalletConnectSessionCount] = useState(0);
   const [walletConnectChainId, setWalletConnectChainId] = useState<number | null>(null);
   const keepAlivePortRef = useRef<chrome.runtime.Port | null>(null);
@@ -1069,21 +1068,6 @@ function App() {
     init();
     // Startup bootstrap intentionally runs once for the active popup.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Fetch staking APY from website API
-  useEffect(() => {
-    const fetchApy = () => {
-      fetch(WALLETCHAN_VAULT_DATA_API)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (data?.totalApy != null) setStakeApy(data.totalApy);
-        })
-        .catch(() => {});
-    };
-    fetchApy();
-    const interval = setInterval(fetchApy, 60_000);
-    return () => clearInterval(interval);
   }, []);
 
   // Listen for new pending tx/signature requests (when sidepanel/popup is already open)
@@ -2500,7 +2484,6 @@ function App() {
           <Suspense fallback={<LoadingFallback />}>
             <MoreActionsView
               fromAddress={address}
-              stakeApy={stakeApy}
               onBack={() => setView("main")}
               onWalletConnect={() => setView("walletConnect")}
               onHideTokens={() => setView("hideTokens")}
