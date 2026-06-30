@@ -30,13 +30,16 @@ pnpm release:major  # 0.2.0 → 1.0.0 (breaking changes)
 
 **Important:** The working tree must be clean (no uncommitted changes) before running a release command.
 
+**Store artifact rule:** Every extension version bump must be followed by a fresh `pnpm zip:cws` run before uploading to stores. Do not reuse an older zip after changing `apps/extension/package.json` or either manifest version. This regenerates `apps/extension/cws-zip/walletchan-vX.Y.Z.zip` for Chrome Web Store and `apps/extension/zip/walletchan-firefox-vX.Y.Z.zip` for Firefox.
+
 This automatically (via `scripts/release.sh`):
 
 1. Bumps the version in `apps/extension/package.json`
-2. Syncs the version to `apps/extension/public/manifest.json`
-3. Commits both files from the repo root (so monorepo paths resolve correctly)
-4. Creates a git tag (e.g. `v0.2.1`)
-5. Pushes to origin with tags
+2. Syncs the version to `apps/extension/public/manifest.json` and `apps/extension/manifest.firefox.json`
+3. Promotes the populated `[Unreleased]` changelog into the new version
+4. Commits the release files from the repo root (so monorepo paths resolve correctly)
+5. Creates a git tag (e.g. `v0.2.1`)
+6. Pushes to origin with tags
 
 ### 2. GitHub Actions builds the release
 
@@ -49,7 +52,7 @@ Users can download the zip from GitHub Releases and load it as an unpacked exten
 
 ### 3. Upload to Chrome Web Store
 
-1. Create the CWS zip (builds automatically):
+1. Create the fresh store zips for the bumped version (builds automatically):
    ```bash
    pnpm zip:cws
    ```

@@ -132,6 +132,9 @@ cd apps/contracts && forge install <org>/<repo>   # Do NOT use --no-git
 pnpm release:patch      # 0.1.0 → 0.1.1
 pnpm release:minor      # 0.1.0 → 0.2.0
 pnpm release:major      # 0.1.0 → 1.0.0
+
+# Store artifacts (required after every extension version bump)
+pnpm zip:cws            # Fresh Chrome Web Store zip + Firefox zip for store uploads
 ```
 
 ## Extension Architecture
