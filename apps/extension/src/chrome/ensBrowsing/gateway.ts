@@ -2,8 +2,8 @@
 //
 // Two flavors:
 //   - `buildHostedGatewayUrl()` — hosted-gateway path. Returns the canonical
-//     hosted gateway URL for the kind: <name>.eth.limo for ipfs/ipns,
-//     <name>.w3eth.io for web3 (ERC-4804).
+//     hosted gateway URL for the kind: <name>.eth.limo or
+//     <name>.gwei.domains for ipfs/ipns, <name>.w3eth.io for web3 (ERC-4804).
 //   - `buildSubdomainUrl()` — local-gateway path. Returns the local Kubo
 //     subdomain gateway URL (<cid>.ipfs.<host>:<port>). Defaults to
 //     localhost:8080 but the caller can pass a user-configured host/port.
@@ -17,6 +17,7 @@ import {
 } from "./settingsStorage";
 
 const ETH_LIMO_HOST = "eth.limo";
+const GWEI_DOMAINS_HOST = "domains";
 const W3ETH_IO_HOST = "w3eth.io";
 
 export type GatewayLocation = { host: string; port: number };
@@ -45,9 +46,8 @@ export function buildSubdomainUrl(
 }
 
 // Route through the user's choice of hosted gateway. eth.limo for
-// IPFS/IPNS-served ENS sites; w3eth.io for ERC-4804 onchain HTML dapps. Both
-// gateways follow the `<name>.<gateway>` naming convention so the ENS name
-// remains visible in the address bar.
+// IPFS/IPNS-served ENS sites, gwei.domains for GNS sites, and w3eth.io for
+// ERC-4804 onchain HTML dapps. The name remains visible in the address bar.
 export function buildHostedGatewayUrl(
   kind: ResolveKind,
   ensName: string,
@@ -56,6 +56,11 @@ export function buildHostedGatewayUrl(
   hash = "",
 ): string {
   const lower = ensName.toLowerCase();
+  if (kind !== "web3" && lower.endsWith(".gwei")) {
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    return `https://${lower}.${GWEI_DOMAINS_HOST}${normalizedPath}${search}${hash}`;
+  }
+
   // ENS subdomains like `app.uniswap.eth` are passed through verbatim — both
   // eth.limo and w3eth.io route on the full label chain in front of `.eth`.
   const trimmed = lower.endsWith(".eth") ? lower.slice(0, -4) : lower;

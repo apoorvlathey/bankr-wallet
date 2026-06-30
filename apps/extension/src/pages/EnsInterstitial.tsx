@@ -1,9 +1,10 @@
 /**
  * EnsInterstitial — the brief themed page the user sees while WalletChan
- * resolves a `.eth` navigation.
+ * resolves a `.eth` / `.gwei` navigation.
  *
  * Flow:
- *   1. DNR rule redirects `*.eth` → `interstitial.html#<original-url>`.
+ *   1. DNR rule redirects `*.eth` / `*.gwei` →
+ *      `interstitial.html#<original-url>`.
  *   2. We parse the original URL out of `location.hash`.
  *   3. Ask SW for a cache hit (`ens-cache-check`) — if found, immediately
  *      redirect via `location.replace` and let the SW kick off background
@@ -68,7 +69,18 @@ function parseTarget(): ParsedTarget | null {
       hash: u.hash,
     };
   }
-  if (!/^(?:[a-z0-9-]+\.)+eth$/.test(host)) return null;
+  const gweiDomainsMatch = host.match(
+    /^((?:[a-z0-9-]+\.)+gwei)\.domains$/i,
+  );
+  if (gweiDomainsMatch?.[1]) {
+    return {
+      ensName: gweiDomainsMatch[1].toLowerCase(),
+      path: u.pathname || "/",
+      search: u.search,
+      hash: u.hash,
+    };
+  }
+  if (!/^(?:[a-z0-9-]+\.)+(?:eth|gwei)$/.test(host)) return null;
   return {
     ensName: host,
     path: u.pathname || "/",
@@ -105,7 +117,7 @@ export default function EnsInterstitial() {
 
   useEffect(() => {
     if (!target) {
-      setError("Couldn't parse the .eth URL from this navigation.");
+      setError("Couldn't parse the .eth / .gwei URL from this navigation.");
       return;
     }
     document.title = `Resolving ${displayName(target.ensName)}…`;
@@ -172,8 +184,8 @@ export default function EnsInterstitial() {
               Couldn't parse this URL
             </Text>
             <Text color="fg.muted" fontSize="sm">
-              The ENS browsing interstitial expects a fragment containing the
-              original navigation URL. Try typing the `.eth` name again.
+              The name browsing interstitial expects a fragment containing the
+              original navigation URL. Try typing the `.eth` or `.gwei` name again.
             </Text>
           </VStack>
         </ThemedPanel>
@@ -211,7 +223,7 @@ export default function EnsInterstitial() {
                 letterSpacing="0.08em"
                 fontWeight={700}
               >
-                WALLETCHAN · DAPP3 - ENS BROWSING
+                WALLETCHAN · DAPP3 - NAME BROWSING
               </Text>
             </HStack>
 

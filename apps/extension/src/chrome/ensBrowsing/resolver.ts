@@ -58,6 +58,11 @@ const ENS_UNIVERSAL_RESOLVER_ADDRESS =
   mainnet.contracts.ensUniversalResolver.address;
 const LOCAL_BATCH_GATEWAY_URL = "x-batch-gateway:true";
 
+// Gwei Name Service (GNS) NameNFT on Ethereum mainnet. The NameNFT is its own
+// ENS-style resolver: it exposes contenthash(bytes32 node) directly, keyed by
+// namehash("name.gwei").
+const GWEI_NAMENFT = "0x9D51D507BC7264d4fE8Ad1cf7Fe191933A0a81d6" as const;
+
 let directClientCache: { url: string; client: PublicClient } | null = null;
 
 function getDirectClient(url: string): PublicClient {
@@ -257,6 +262,86 @@ export async function resolveEns(
     ensName: stripped,
     trustedDirectly,
     contractAddress: address.toLowerCase() as `0x${string}`,
+  };
+}
+
+/** True for a fully-qualified `.gwei` name, including subdomains. */
+export function isGweiName(name: string): boolean {
+  return /^(?:[a-z0-9-]+\.)+gwei\.?$/.test(name.toLowerCase());
+}
+
+// Resolve a `.gwei` name to its IPFS/IPNS contenthash. Unlike ENS, GNS does
+// not need a Universal Resolver lookup here: read contenthash(namehash(name))
+// directly from the NameNFT resolver contract. No ERC-4804 fallback for v1.
+export async function resolveGwei(
+  name: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _opts: ResolveOptions = {},
+): Promise<ResolveResponse> {
+  const lower = name.toLowerCase();
+  if (!isGweiName(lower)) {
+    return { ok: false, error: `Not a .gwei name: ${name}` };
+  }
+  const stripped = lower.endsWith(".") ? lower.slice(0, -1) : lower;
+
+  const rpcUrl = await getStoredRpcUrl(1);
+  if (!rpcUrl) {
+    return {
+      ok: false,
+      error:
+        "No Ethereum mainnet RPC configured. Open WalletChan -> Settings -> Chain RPCs to add one.",
+      code: "no-mainnet-rpc",
+    };
+  }
+
+  // TODO(helios): wrap in Helios verified transport when available.
+  const client = getDirectClient(rpcUrl);
+  const trustedDirectly = true;
+
+  let raw: `0x${string}`;
+  try {
+    raw = await client.readContract({
+      address: GWEI_NAMENFT,
+      abi: RESOLVER_ABI,
+      functionName: "contenthash",
+      args: [namehash(stripped)],
+    });
+  } catch (e) {
+    return {
+      ok: false,
+      error: `Failed to read contenthash for ${stripped}: ${describe(e)}`,
+    };
+  }
+
+  if (!raw || raw === "0x") {
+    return { ok: false, error: `${stripped} has no website contenthash set.` };
+  }
+
+  let codec: string | undefined;
+  let decoded: string | undefined;
+  try {
+    codec = getCodec(raw);
+    decoded = decodeContentHash(raw);
+  } catch (e) {
+    return {
+      ok: false,
+      error: `Failed to decode contenthash for ${stripped}: ${describe(e)}`,
+    };
+  }
+
+  if (decoded != null && (codec === "ipfs" || codec === "ipns")) {
+    return {
+      ok: true,
+      kind: codec,
+      value: decoded,
+      ensName: stripped,
+      trustedDirectly,
+    };
+  }
+
+  return {
+    ok: false,
+    error: `Unsupported contenthash codec "${codec ?? "unknown"}" for ${stripped}. .gwei sites serve ipfs / ipns.`,
   };
 }
 

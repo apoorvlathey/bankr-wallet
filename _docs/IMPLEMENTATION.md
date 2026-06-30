@@ -638,19 +638,20 @@ Build command: `pnpm build:onboarding` (included in `pnpm build`)
 WalletChan includes the dapp3 ENS browsing resolver inside the extension. The
 More screen exposes `dapp3 Browser`, which opens the standalone extension page
 `browse.html` in a browser tab. That page is a WalletChan-branded search-bar
-launcher accepting either a `.eth` name or a raw `0x` contract address, with
-optional path/query/hash suffixes. It is intentionally not rendered inside the
-popup.
+launcher accepting a `.eth` name, `.gwei` name, or raw `0x` contract address,
+with optional path/query/hash suffixes. It is intentionally not rendered inside
+the popup.
 
 The launcher intentionally reuses the same resolver path as address-bar
 browsing:
 
 1. `pages/Dapp3Browser.tsx` parses input using the dapp3 launcher rules:
    - `name.eth[/path]` -> `http://name.eth[/path]`
+   - `name.gwei[/path]` -> `http://name.gwei[/path]`
    - `0x<address>[/path]` -> `https://0x<address>.w3eth.io[/path]`
-   - pasted `*.eth.limo`, `*.eth.link`, `*.w3eth.io`, and
+   - pasted `*.eth.limo`, `*.eth.link`, `*.gwei.domains`, `*.w3eth.io`, and
      `0x<address>.1.w3link.io` gateway URLs are normalized back to the
-     underlying ENS/address target.
+     underlying ENS/GNS/address target.
 2. The page navigates the current browser tab to `interstitial.html#<target-url>`.
 3. `EnsInterstitial` parses the fragment and sends `ens-cache-check` followed
    by `ens-resolve` to the service worker.
@@ -659,24 +660,28 @@ browsing:
    / ENSv2-backed names such as `.base.eth` can expose IPFS/IPNS content. If no
    supported contenthash is present, it falls back to viem `getEnsAddress`
    (same Universal Resolver path) and probes ERC-4804 / ERC-5219 onchain HTML
-   via the resolved address.
-5. The service worker chooses either the hosted gateway (`eth.limo` /
-   `w3eth.io`) or the configured local Kubo gateway based on the existing
-   `ensBrowsing` settings. Raw `0x` address mode follows the same split:
+   via the resolved address. `.gwei` names resolve through the GNS NameNFT
+   resolver contract on Ethereum mainnet by reading
+   `contenthash(namehash(name.gwei))` directly; `.gwei` supports IPFS/IPNS
+   contenthashes only, with no ERC-4804 fallback.
+5. The service worker chooses either the hosted gateway (`eth.limo`,
+   `gwei.domains`, or `w3eth.io`) or the configured local Kubo gateway based on
+   the existing `ensBrowsing` settings. Raw `0x` address mode follows the same split:
    `pinOnchainHtml` OFF probes support and routes to hosted `w3eth.io`;
    `pinOnchainHtml` ON fetches and pins the HTML body to local Kubo.
    Navigations to w3link's mainnet pattern (`0x<address>.1.w3link.io`) are
    also redirected to the interstitial and normalized into this raw-address
    path when ENS browsing is enabled.
 
-Hosted-gateway redirect rules are deliberately conditional. The base `.eth`
-and w3link rules are installed whenever ENS browsing is enabled. The
-`*.eth.limo` / `*.eth.link` rewrite is installed only when `useLocalGateway` is
-ON, because WalletChan's hosted fallback already targets eth.limo and rewriting
-that target back to `.eth` creates an interstitial reload loop. Before the
-resolver, cache fast-path, or content-refresh flow intentionally navigates a
-tab to eth.limo or w3eth.io, the service worker installs the matching per-tab
-DNR ALLOW bypass. That bypass protects tabs from WalletChan's old Dapp3-style
+Hosted-gateway redirect rules are deliberately conditional. The base `.eth` /
+`.gwei` and w3link rules are installed whenever ENS browsing is enabled. The
+`*.eth.limo` / `*.eth.link` and `*.gwei.domains` rewrites are installed only
+when `useLocalGateway` is ON, because WalletChan's hosted fallback already
+targets eth.limo or gwei.domains and rewriting that target back to `.eth` /
+`.gwei` creates an interstitial reload loop. Before the resolver, cache
+fast-path, or content-refresh flow intentionally navigates a tab to eth.limo,
+gwei.domains, or w3eth.io, the service worker installs the matching per-tab DNR
+ALLOW bypass. That bypass protects tabs from WalletChan's old Dapp3-style
 gateway rewrite state after WalletChan has chosen a hosted gateway.
 
 The launcher lists user-pinned `ensBookmarks` entries first as browser-style
@@ -692,8 +697,8 @@ dapps opened without ENS still appear in the recent tiles.
 On local-gateway pages, the injected WalletChan · dapp3 banner links its left
 logo/title cluster to `browse.html` in the same tab. The right side includes a
 star button that writes/removes a local `ensBookmarks` entry for the current
-ENS/address identity and path. Bookmarks store only non-secret display metadata
-such as title and favicon.
+ENS/GNS/address identity and path. Bookmarks store only non-secret display
+metadata such as title and favicon.
 
 No wallet credentials are used by this flow. It only reads Ethereum mainnet via
 the configured RPC and optionally writes non-secret ENS / ERC-4804 caches and

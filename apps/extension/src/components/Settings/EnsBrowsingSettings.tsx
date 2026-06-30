@@ -249,10 +249,10 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
           </HStack>
           <Text fontSize="xs" color="fg.secondary">
             {!settings?.enabled
-              ? "WalletChan does not intercept .eth navigations."
+              ? "WalletChan does not intercept .eth or .gwei navigations."
               : settings.useLocalGateway && kuboStatus === "online"
                 ? "Resolving via your local IPFS node."
-                : "Routing .eth via eth.limo and w3eth.io."}
+                : "Routing .eth/.gwei via eth.limo, gwei.domains, and w3eth.io."}
           </Text>
         </VStack>
       </ThemedCard>
@@ -671,8 +671,8 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
 
       <Box pt={1}>
         <Text fontSize="xs" color="fg.muted">
-          Type any .eth name in the address bar to open it directly. WalletChan
-          resolves the contenthash via your mainnet RPC.
+          Type any .eth or .gwei name in the address bar to open it directly.
+          WalletChan resolves the contenthash via your mainnet RPC.
         </Text>
       </Box>
     </VStack>

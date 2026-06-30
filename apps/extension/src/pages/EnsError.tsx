@@ -5,10 +5,10 @@
  * into Chrome's DNS-error UI.
  *
  * Query parameters:
- *   - name   : the ENS name we tried to resolve
+ *   - name   : the name we tried to resolve
  *   - error  : human-readable failure reason
  *   - path / search / hash : the original navigation path so the fallback
- *     "Try on eth.limo" link preserves it.
+ *     hosted gateway link preserves it.
  */
 
 import { useMemo } from "react";
@@ -43,7 +43,11 @@ function displayName(name: string): string {
   return name;
 }
 
-type Fallback = { url: string; label: string; gateway: "eth.limo" | "w3eth.io" };
+type Fallback = {
+  url: string;
+  label: string;
+  gateway: "eth.limo" | "gwei.domains" | "w3eth.io";
+};
 
 function hostedFallback(
   name: string,
@@ -59,6 +63,13 @@ function hostedFallback(
       url: `https://${addr}.w3eth.io${normalizedPath}${search}${hash}`,
       label: "Try on w3eth.io",
       gateway: "w3eth.io",
+    };
+  }
+  if (/^(?:[a-z0-9-]+\.)+gwei$/.test(lower)) {
+    return {
+      url: `https://${lower}.domains${normalizedPath}${search}${hash}`,
+      label: "Try on gwei.domains",
+      gateway: "gwei.domains",
     };
   }
   if (!/^(?:[a-z0-9-]+\.)+eth$/.test(lower)) return null;
@@ -95,7 +106,7 @@ export default function EnsError() {
               </IconBox>
               <VStack align="start" spacing={0}>
                 <Text fontSize="xs" color="fg.muted" letterSpacing="0.08em">
-                  WALLETCHAN · DAPP3 · ENS BROWSING
+                  WALLETCHAN · DAPP3 · NAME BROWSING
                 </Text>
                 <Text fontWeight={700} fontSize="md">
                   Couldn't resolve {displayedName || "this name"}

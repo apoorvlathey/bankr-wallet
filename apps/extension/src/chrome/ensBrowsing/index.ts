@@ -13,11 +13,14 @@ import {
 import {
   installEthGatewayRedirectRule,
   installEthRedirectRule,
+  installGweiDomainsRedirectRule,
   installW3linkRedirectRule,
   installW3ethRedirectRule,
   removeEthGatewayBypassForTab,
   removeEthGatewayRedirectRule,
   removeEthRedirectRule,
+  removeGweiDomainsBypassForTab,
+  removeGweiDomainsRedirectRule,
   removeW3linkRedirectRule,
   removeW3ethBypassForTab,
   removeW3ethRedirectRule,
@@ -35,9 +38,10 @@ function shouldInterceptW3eth(s: EnsBrowsingSettings): boolean {
   return s.enabled && s.useLocalGateway && s.pinOnchainHtml;
 }
 
-// eth.limo/link interception is only useful when the user has opted into local
-// IPFS routing. Hosted fallback already lands on eth.limo; rewriting that
-// gateway while hosted routing is active creates an interstitial bounce loop.
+// Hosted gateway interception is only useful when the user has opted into local
+// IPFS routing. Hosted fallback already lands on eth.limo / gwei.domains;
+// rewriting those gateways while hosted routing is active creates an
+// interstitial bounce loop.
 function shouldInterceptEthGateway(s: EnsBrowsingSettings): boolean {
   return s.enabled && s.useLocalGateway;
 }
@@ -55,9 +59,15 @@ async function syncRules(settings: EnsBrowsingSettings): Promise<void> {
     ]);
   }
   if (shouldInterceptEthGateway(settings)) {
-    await installEthGatewayRedirectRule();
+    await Promise.all([
+      installEthGatewayRedirectRule(),
+      installGweiDomainsRedirectRule(),
+    ]);
   } else {
-    await removeEthGatewayRedirectRule();
+    await Promise.all([
+      removeEthGatewayRedirectRule(),
+      removeGweiDomainsRedirectRule(),
+    ]);
   }
   if (shouldInterceptW3eth(settings)) {
     await installW3ethRedirectRule();
@@ -90,6 +100,7 @@ export async function initEnsBrowsing(): Promise<void> {
   chrome.tabs.onRemoved.addListener((tabId) => {
     chrome.storage.session.remove(`tab:${tabId}`).catch(() => undefined);
     removeEthGatewayBypassForTab(tabId).catch(() => undefined);
+    removeGweiDomainsBypassForTab(tabId).catch(() => undefined);
     removeW3ethBypassForTab(tabId).catch(() => undefined);
   });
 }

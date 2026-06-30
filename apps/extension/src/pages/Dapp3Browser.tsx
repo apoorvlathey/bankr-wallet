@@ -17,6 +17,7 @@ type ParsedTarget =
 
 const EXAMPLES = [
   { label: "vitalik.eth", value: "vitalik.eth" },
+  { label: "apoorv.gwei", value: "apoorv.gwei" },
   { label: "zrouter.eth", value: "zrouter.eth" },
   {
     label: "OFTScan (0x…9e32)",
@@ -68,7 +69,12 @@ function parseTarget(rawInput: string): ParsedTarget | null {
     return { kind: "ens", host: ethGateway[1], rest };
   }
 
-  if (/^(?:[a-z0-9-]+\.)+eth\.?$/.test(head)) {
+  const gweiGateway = head.match(/^((?:[a-z0-9-]+\.)+gwei)\.domains$/);
+  if (gweiGateway?.[1]) {
+    return { kind: "ens", host: gweiGateway[1], rest };
+  }
+
+  if (/^(?:[a-z0-9-]+\.)+(?:eth|gwei)\.?$/.test(head)) {
     return {
       kind: "ens",
       host: head.endsWith(".") ? head.slice(0, -1) : head,
@@ -108,6 +114,9 @@ function defaultFaviconUrl(site: FaviconSource): string {
       ? site.ensName.slice(0, -4)
       : site.ensName;
     return `https://${label}.w3eth.io/favicon.ico`;
+  }
+  if (site.ensName.endsWith(".gwei")) {
+    return `https://${site.ensName}.domains/favicon.ico`;
   }
   return `https://${site.ensName}.limo/favicon.ico`;
 }
@@ -187,7 +196,9 @@ export default function Dapp3Browser() {
   const openTarget = (raw: string = targetInput) => {
     const parsed = parseTarget(raw);
     if (!parsed) {
-      flashError("Couldn't parse that. Try `name.eth` or a 0x… contract address.");
+      flashError(
+        "Couldn't parse that. Try `name.eth`, `name.gwei`, or a 0x... contract address.",
+      );
       inputRef.current?.focus();
       inputRef.current?.select();
       return;
@@ -235,7 +246,7 @@ export default function Dapp3Browser() {
             </span>
             <h1>WalletChan Browser</h1>
             <p className="hero-subtitle">
-              Resolve & Browse ENS + IPFS and Onchain HTML sites locally
+              Resolve & Browse ENS, GNS, IPFS, and Onchain HTML sites locally
             </p>
           </div>
 
@@ -245,7 +256,7 @@ export default function Dapp3Browser() {
                 ref={inputRef}
                 id="target"
                 type="text"
-                placeholder="name.eth or 0x… address"
+                placeholder="name.eth, name.gwei, or 0x... address"
                 value={targetInput}
                 onChange={(event) => {
                   setTargetInput(event.target.value);

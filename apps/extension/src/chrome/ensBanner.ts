@@ -9,12 +9,13 @@ import {
 
 // ENS identity banner — content script matched on Kubo's subdomain gateway
 // (`*.ipfs.localhost` / `*.ipns.localhost`) so the user keeps seeing the
-// original ENS name even though the URL bar shows the CID-subdomain target.
+// original ENS/GNS name even though the URL bar shows the CID-subdomain target.
 //
 // Shadow-DOM strip pinned to the viewport top, with an editable address-bar
 // field in the center that mirrors `<ensName><pathname+search+hash>` and
-// auto-updates on SPA navigation. Enter submits to `http://<host>.eth/...`
-// which goes through the DNR → interstitial → resolver flow.
+// auto-updates on SPA navigation. Enter submits to `http://<name>.eth/...` or
+// `http://<name>.gwei/...`, which goes through the DNR -> interstitial ->
+// resolver flow.
 //
 // Theme tokens are fetched once from the SW via `ens-get-theme-tokens`;
 // Chakra isn't available in content-script land, so colors are applied as
@@ -141,8 +142,9 @@ function scheduleCacheMetadataCapture(ctx: TabContext): void {
 }
 
 // Parse an address-bar input into a navigable URL.
-//   - `<name>.eth[/path]` (incl. subdomains) → `http://<name>.eth/path`
-//     (caught by the ETH_REGEX DNR rule → interstitial → ENS resolve).
+//   - `<name>.eth[/path]` / `<name>.gwei[/path]` (incl. subdomains) →
+//     `http://<name>.<tld>/path` (caught by the name DNR rule →
+//     interstitial → name resolve).
 //   - `0x<40hex>[/path]` (raw ERC-4804 contract) → `https://<addr>.w3eth.io/path`
 //     (caught by W3ETH_REGEX when local pinning is on; otherwise goes straight
 //     to the public w3eth.io gateway).
@@ -161,14 +163,14 @@ function parseEthInput(raw: string): string | null {
   if (/^0x[a-f0-9]{40}$/.test(host)) {
     return `https://${host}.w3eth.io${path}`;
   }
-  if (!/^(?:[a-z0-9-]+\.)+eth$/.test(host)) return null;
+  if (!/^(?:[a-z0-9-]+\.)+(?:eth|gwei)$/.test(host)) return null;
   return `http://${host}${path}`;
 }
 
-// Split `<name>.eth/path` into host + path so the field can paint the host
-// bright and dim the path — mirrors how Chrome renders its omnibox.
+// Split `<name>.eth|.gwei/path` into host + path so the field can paint the
+// host bright and dim the path — mirrors how Chrome renders its omnibox.
 function splitUrl(text: string): { host: string; path: string } {
-  const m = text.match(/^(.+?\.eth)(.*)$/i);
+  const m = text.match(/^(.+?\.(?:eth|gwei))(.*)$/i);
   if (!m) return { host: text, path: "" };
   return { host: m[1]!, path: m[2]! };
 }
@@ -211,7 +213,7 @@ function setupAddressField(
   el.setAttribute("contenteditable", "plaintext-only");
   el.setAttribute("spellcheck", "false");
   el.setAttribute("role", "textbox");
-  el.setAttribute("aria-label", "ENS address");
+  el.setAttribute("aria-label", "Name address");
   if (opts.placeholder) el.setAttribute("data-placeholder", opts.placeholder);
 
   // ShadowRoot.getSelection is Chromium-only; required to read caret position
@@ -765,15 +767,15 @@ async function mount() {
 
   const field = setupAddressField(refs.urlInput, {
     shadowRoot: refs.shadow,
-    placeholder: "name.eth",
+    placeholder: "name.eth or name.gwei",
     onSubmit: (text) => {
       const url = parseEthInput(text);
       if (!url) {
         field.shake();
         return;
       }
-      // DNR catches *.eth main_frame → interstitial → SW resolve. Same path
-      // as typing into Chrome's own address bar.
+      // DNR catches *.eth / *.gwei main_frame -> interstitial -> SW resolve.
+      // Same path as typing into Chrome's own address bar.
       location.assign(url);
     },
     onEscape: () => {
@@ -848,9 +850,10 @@ function wireRightSection(refs: Refs, ctx: TabContext) {
   wireStar(refs, ctx);
 
   // ENS History link — external. Hidden for address-mode (0x... ERC-4804)
-  // navigations since there's no ENS name to link to.
+  // and `.gwei` navigations since ENS History only supports `.eth`.
   const isAddressNav = /^0x[a-f0-9]{40}$/i.test(ctx.ensName);
-  if (isAddressNav) {
+  const isGwei = /\.gwei$/i.test(ctx.ensName);
+  if (isAddressNav || isGwei) {
     refs.historyLink.style.display = "none";
   } else {
     refs.historyLink.href = `https://ens.eth.sh/history/${ctx.ensName.toLowerCase()}`;
@@ -858,9 +861,13 @@ function wireRightSection(refs: Refs, ctx: TabContext) {
 
   // Web3 (ERC-4804) dapps have no eth.limo equivalent — point at w3eth.io.
   const isWeb3 = ctx.kind === "web3" && !!ctx.contractAddress;
-  if (isWeb3) {
+  if (isWeb3 || isGwei) {
     const label = refs.openGatewayItem.querySelector("span");
-    if (label) label.textContent = "Open on w3eth.io gateway";
+    if (label) {
+      label.textContent = isWeb3
+        ? "Open on w3eth.io gateway"
+        : "Open on gwei.domains gateway";
+    }
   }
 
   const closeMenu = () => refs.menu.classList.remove("open");
@@ -902,15 +909,15 @@ function wireRightSection(refs: Refs, ctx: TabContext) {
     closeMenu();
     const p = currentPath() || "/";
     const path = p.startsWith("/") ? p : `/${p}`;
-    // Both gateways are intercepted by our DNR rules whenever this banner is
-    // mounted (banner only shows on *.ipfs.localhost, which means the local-
-    // pinning combo is on — and that's exactly the combo that installs the
-    // w3eth.io rule). Route through the SW so it can punch a per-tab ALLOW
-    // bypass before the navigation fires; otherwise the gateway redirect would
-    // bounce us right back to local.
+    // Hosted gateways can be intercepted by our DNR rules whenever this banner
+    // is mounted from local Kubo. Route through the SW so it can punch a
+    // per-tab ALLOW bypass before the navigation fires; otherwise the gateway
+    // redirect could bounce us right back to local.
     const url =
       isWeb3 && ctx.contractAddress
         ? `https://${ctx.contractAddress}.w3eth.io${path}`
+        : isGwei
+          ? `https://${ctx.ensName}.domains${path}`
         : `https://${ctx.ensName}.limo${path}`;
     chrome.runtime
       .sendMessage({ type: "ens-open-on-gateway", url })

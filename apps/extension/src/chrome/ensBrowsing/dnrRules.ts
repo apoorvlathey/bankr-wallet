@@ -1,7 +1,7 @@
-// Dynamic declarativeNetRequest rule that intercepts `*.eth` navigations and
-// bounces them to the extension's interstitial page with the original URL
-// preserved in the fragment. The interstitial then messages the SW to do
-// the actual ENS resolution.
+// Dynamic declarativeNetRequest rules that intercept `*.eth` / `*.gwei`
+// navigations and bounce them to the extension's interstitial page with the
+// original URL preserved in the fragment. The interstitial then messages the
+// SW to do the actual name resolution.
 //
 // Why DNR instead of webNavigation: DNR is silent on install (no permission
 // warning); webNavigation triggers "Read your browsing history" on update,
@@ -14,23 +14,31 @@ const ETH_GATEWAY_BYPASS_RULE_ID = 1003;
 const W3ETH_REDIRECT_RULE_ID = 1004;
 const W3ETH_BYPASS_RULE_ID = 1005;
 const W3LINK_REDIRECT_RULE_ID = 1006;
+const GWEI_DOMAINS_REDIRECT_RULE_ID = 1009;
+const GWEI_DOMAINS_BYPASS_RULE_ID = 1010;
 
-// Any host ending in `.eth` (first-level or arbitrary subdomain). Excludes
-// `eth.limo` and `w3eth.io` by construction — those hosts end in `.limo` /
-// `.io`, not `.eth`.
-const ETH_REGEX = "^https?://(?:[a-z0-9-]+\\.)+eth\\.?(?::\\d+)?(?:/.*)?$";
+// Any host ending in `.eth` or `.gwei` (first-level or arbitrary subdomain).
+// Excludes hosted gateways by construction: those hosts end in `.limo`,
+// `.domains`, or `.io`, not `.eth` / `.gwei`.
+const NAME_REGEX =
+  "^https?://(?:[a-z0-9-]+\\.)+(?:eth|gwei)\\.?(?::\\d+)?(?:/.*)?$";
 
 // Match `<label>.eth.limo` / `<label>.eth.link` and capture the label + path.
-// We rewrite to `http://<label>.eth<path>` so the ETH_REGEX rule above catches
+// We rewrite to `http://<label>.eth<path>` so the base name rule catches
 // the result on the next pass and routes through our interstitial. This gives
 // the user our verified-RPC resolution + local gateway path instead of the
 // public eth.limo / eth.link gateways.
 const ETH_GATEWAY_REGEX =
   "^https?://([a-z0-9-]+(?:\\.[a-z0-9-]+)*)\\.eth\\.(?:limo|link)\\.?(?::\\d+)?(/.*)?$";
 
+// Match `<label>.gwei.domains` and capture the label + path. We rewrite to
+// `http://<label>.gwei<path>` so NAME_REGEX catches the result on the next pass.
+const GWEI_DOMAINS_REGEX =
+  "^https?://([a-z0-9-]+(?:\\.[a-z0-9-]+)*)\\.gwei\\.domains\\.?(?::\\d+)?(/.*)?$";
+
 // Match `<label>.w3eth.io` (the ERC-4804 hosted gateway). w3eth.io strips the
 // `.eth` suffix from the ENS name (`vitalik.eth` → `vitalik.w3eth.io`), so we
-// rewrite back to `http://<label>.eth<path>` and let ETH_REGEX route it
+// rewrite back to `http://<label>.eth<path>` and let the base name rule route it
 // through the interstitial. We only install this rule when the local Kubo
 // pinning path is fully enabled — otherwise resolveAndRedirect would route
 // the request right back to w3eth.io and bounce indefinitely.
@@ -62,7 +70,7 @@ export async function installEthRedirectRule(): Promise<void> {
           redirect: { regexSubstitution: `${interstitial}#\\0` },
         },
         condition: {
-          regexFilter: ETH_REGEX,
+          regexFilter: NAME_REGEX,
           resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME],
         },
       },
@@ -85,9 +93,9 @@ export async function hasEthRedirectRule(): Promise<boolean> {
 
 export async function installEthGatewayRedirectRule(): Promise<void> {
   // Rewrites `https?://<label>.eth.(limo|link)[:port][/path]` → `http://<label>.eth[/path]`.
-  // Lower priority than the .eth rule (priority 2) — they don't compete on the
-  // same request (the .eth rule fires on the second pass after this rewrite),
-  // but keeping priorities distinct makes the chain easier to reason about.
+  // Lower priority than the base name rule (priority 2). They don't compete on
+  // the same request; the base name rule fires on the second pass after this
+  // rewrite. Keeping priorities distinct makes the chain easier to reason about.
   await chrome.declarativeNetRequest.updateDynamicRules({
     removeRuleIds: [ETH_GATEWAY_REDIRECT_RULE_ID],
     addRules: [
@@ -113,6 +121,37 @@ export async function removeEthGatewayRedirectRule(): Promise<void> {
     removeRuleIds: [ETH_GATEWAY_REDIRECT_RULE_ID],
   });
   console.log("[ens] DNR eth.limo/link redirect rule removed");
+}
+
+export async function installGweiDomainsRedirectRule(): Promise<void> {
+  // Rewrites `https?://<label>.gwei.domains[:port][/path]` →
+  // `http://<label>.gwei[/path]`. Lower priority than the base name rule
+  // so the rewritten request flows through the interstitial on the next pass.
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [GWEI_DOMAINS_REDIRECT_RULE_ID],
+    addRules: [
+      {
+        id: GWEI_DOMAINS_REDIRECT_RULE_ID,
+        priority: 1,
+        action: {
+          type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
+          redirect: { regexSubstitution: "http://\\1.gwei\\2" },
+        },
+        condition: {
+          regexFilter: GWEI_DOMAINS_REGEX,
+          resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME],
+        },
+      },
+    ],
+  });
+  console.log("[ens] DNR gwei.domains redirect rule installed");
+}
+
+export async function removeGweiDomainsRedirectRule(): Promise<void> {
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [GWEI_DOMAINS_REDIRECT_RULE_ID],
+  });
+  console.log("[ens] DNR gwei.domains redirect rule removed");
 }
 
 export async function installW3linkRedirectRule(): Promise<void> {
@@ -195,6 +234,54 @@ export async function removeEthGatewayBypassForTab(
   const current = await getEthGatewayBypassTabs();
   if (!current.includes(tabId)) return;
   await setEthGatewayBypassTabs(current.filter((id) => id !== tabId));
+}
+
+// Per-tab session ALLOW rule for "Open on gwei.domains gateway".
+
+async function getGweiDomainsBypassTabs(): Promise<number[]> {
+  const rules = await chrome.declarativeNetRequest.getSessionRules();
+  const rule = rules.find((r) => r.id === GWEI_DOMAINS_BYPASS_RULE_ID);
+  return (rule?.condition.tabIds as number[] | undefined) ?? [];
+}
+
+async function setGweiDomainsBypassTabs(tabIds: number[]): Promise<void> {
+  if (tabIds.length === 0) {
+    await chrome.declarativeNetRequest.updateSessionRules({
+      removeRuleIds: [GWEI_DOMAINS_BYPASS_RULE_ID],
+    });
+    return;
+  }
+  await chrome.declarativeNetRequest.updateSessionRules({
+    removeRuleIds: [GWEI_DOMAINS_BYPASS_RULE_ID],
+    addRules: [
+      {
+        id: GWEI_DOMAINS_BYPASS_RULE_ID,
+        priority: 3,
+        action: { type: chrome.declarativeNetRequest.RuleActionType.ALLOW },
+        condition: {
+          regexFilter: GWEI_DOMAINS_REGEX,
+          resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME],
+          tabIds,
+        },
+      },
+    ],
+  });
+}
+
+export async function addGweiDomainsBypassForTab(
+  tabId: number,
+): Promise<void> {
+  const current = await getGweiDomainsBypassTabs();
+  if (current.includes(tabId)) return;
+  await setGweiDomainsBypassTabs([...current, tabId]);
+}
+
+export async function removeGweiDomainsBypassForTab(
+  tabId: number,
+): Promise<void> {
+  const current = await getGweiDomainsBypassTabs();
+  if (!current.includes(tabId)) return;
+  await setGweiDomainsBypassTabs(current.filter((id) => id !== tabId));
 }
 
 // w3eth.io gateway interception. Mirrors the eth.limo/link rule above but only

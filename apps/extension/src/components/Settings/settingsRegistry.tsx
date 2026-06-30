@@ -74,8 +74,22 @@ export const LEAF_ENTRIES: readonly LeafEntry[] = [
   {
     id: "ensBrowsing",
     title: "dapp3 - ENS Browsing",
-    subtitle: "Visit .eth sites directly from the address bar",
-    keywords: ["dapp3", "ens", "eth", "ipfs", "ipns", "browse", "domain", "name", "eth.limo", "w3eth"],
+    subtitle: "Visit .eth and .gwei sites directly from the address bar",
+    keywords: [
+      "dapp3",
+      "ens",
+      "eth",
+      "gwei",
+      "gns",
+      "ipfs",
+      "ipns",
+      "browse",
+      "domain",
+      "name",
+      "eth.limo",
+      "gwei.domains",
+      "w3eth",
+    ],
     group: null,
   },
   {
@@ -262,7 +276,7 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
         <SettingsRow
           key={id}
           title="dapp3 - ENS Browsing"
-          subtitle="Visit .eth sites directly from the address bar"
+          subtitle="Visit .eth and .gwei sites directly from the address bar"
           icon={<GlobeIcon boxSize={5} />}
           iconBg="chart.positive"
           iconColor="surface.base"

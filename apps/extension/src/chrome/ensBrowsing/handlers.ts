@@ -11,10 +11,10 @@
 //
 // All redirect targets are computed from the current settings:
 // useLocalGateway ON + Kubo reachable → local subdomain gateway; otherwise →
-// hosted gateway (eth.limo / w3eth.io).
+// hosted gateway (eth.limo / gwei.domains / w3eth.io).
 
 import { getEnsBrowsingSettings } from "./settingsStorage";
-import { resolveEns } from "./resolver";
+import { isGweiName, resolveEns, resolveGwei } from "./resolver";
 import {
   buildHostedGatewayUrl,
   buildSubdomainUrl,
@@ -22,8 +22,10 @@ import {
 } from "./gateway";
 import {
   addEthGatewayBypassForTab,
+  addGweiDomainsBypassForTab,
   addW3ethBypassForTab,
   removeEthGatewayRedirectRule,
+  removeGweiDomainsRedirectRule,
   removeW3ethRedirectRule,
 } from "./dnrRules";
 import {
@@ -92,10 +94,11 @@ async function chooseGatewayUrl(
   return buildHostedGatewayUrl(kind, ensName, path || "/", search, hash);
 }
 
-function hostedGatewayKind(url: string): "eth" | "w3eth" | null {
+function hostedGatewayKind(url: string): "eth" | "gwei" | "w3eth" | null {
   try {
     const host = new URL(url).hostname.toLowerCase();
     if (/\.eth\.(?:limo|link)\.?$/.test(host)) return "eth";
+    if (/\.gwei\.domains\.?$/.test(host)) return "gwei";
     if (/\.w3eth\.io\.?$/.test(host)) return "w3eth";
   } catch {
     return null;
@@ -104,11 +107,11 @@ function hostedGatewayKind(url: string): "eth" | "w3eth" | null {
 }
 
 // If a hosted gateway redirect rule is present for this tab, an intentional
-// navigation to eth.limo / w3eth.io would otherwise get rewritten back to the
-// interstitial. Install a per-tab ALLOW rule before the navigation. If Chrome
-// rejects the session rule for any reason, remove the corresponding redirect
-// rule as a last-resort loop breaker; reaching the hosted gateway is better
-// than trapping the tab in an interstitial reload cycle.
+// navigation to eth.limo / gwei.domains / w3eth.io would otherwise get
+// rewritten back to the interstitial. Install a per-tab ALLOW rule before the
+// navigation. If Chrome rejects the session rule for any reason, remove the
+// corresponding redirect rule as a last-resort loop breaker; reaching the
+// hosted gateway is better than trapping the tab in an interstitial reload cycle.
 async function prepareHostedGatewayNavigation(
   tabId: number,
   url: string,
@@ -118,6 +121,8 @@ async function prepareHostedGatewayNavigation(
   try {
     if (kind === "eth") {
       await addEthGatewayBypassForTab(tabId);
+    } else if (kind === "gwei") {
+      await addGweiDomainsBypassForTab(tabId);
     } else {
       await addW3ethBypassForTab(tabId);
     }
@@ -125,6 +130,8 @@ async function prepareHostedGatewayNavigation(
     console.warn("[ens] hosted gateway bypass failed; removing redirect rule", e);
     if (kind === "eth") {
       await removeEthGatewayRedirectRule().catch(() => undefined);
+    } else if (kind === "gwei") {
+      await removeGweiDomainsRedirectRule().catch(() => undefined);
     } else {
       await removeW3ethRedirectRule().catch(() => undefined);
     }
@@ -154,7 +161,9 @@ async function resolveAndRedirect(
   search: string,
   hash: string,
 ): Promise<{ ok: true } | { ok: false; error: string; code?: string }> {
-  const result = await resolveEns(ensName);
+  const result = isGweiName(ensName)
+    ? await resolveGwei(ensName)
+    : await resolveEns(ensName);
   if (!result.ok) {
     if (result.code === "kubo-cors-blocked") {
       return { ok: false, error: result.error, code: result.code };
@@ -211,7 +220,9 @@ async function refreshFromCache(
   hash: string,
   cachedValue: string,
 ) {
-  const result = await resolveEns(ensName);
+  const result = isGweiName(ensName)
+    ? await resolveGwei(ensName)
+    : await resolveEns(ensName);
   if (!result.ok) {
     console.log(`[ens] background refresh of ${ensName} failed: ${result.error}`);
     return;
@@ -271,8 +282,8 @@ export function handleEnsBrowsingMessage(
     const name = String(m.name ?? "").toLowerCase();
     const title = typeof m.title === "string" ? m.title : undefined;
     const favicon = typeof m.favicon === "string" ? m.favicon : undefined;
-    if (!/^(?:[a-z0-9-]+\.)+eth$/.test(name)) {
-      sendResponse({ ok: false, error: "invalid ENS name" });
+    if (!/^(?:[a-z0-9-]+\.)+(?:eth|gwei)$/.test(name)) {
+      sendResponse({ ok: false, error: "invalid name" });
       return true;
     }
     updateCachedMetadata(name, { title, favicon }).then(
@@ -347,6 +358,13 @@ export function handleEnsBrowsingMessage(
       return true;
     }
     (async () => {
+      // GNS records are cheap to refresh and a stale CID can strand users on
+      // unavailable content, so resolve `.gwei` names fresh instead of taking
+      // the cache fast path.
+      if (isGweiName(name)) {
+        sendResponse({ cached: false });
+        return;
+      }
       const c = await getCached(name).catch(() => null);
       if (!c) {
         sendResponse({ cached: false });
@@ -400,9 +418,10 @@ export function handleEnsBrowsingMessage(
   }
 
   if (m.type === "ens-open-on-gateway" && typeof m.url === "string") {
-    // User clicked "Open on eth.limo" / "Open on w3eth.io gateway" from the
-    // banner menu. Install per-tab ALLOW rule(s) so our gateway-redirect rules
-    // don't rewrite the navigation straight back to local, then navigate.
+    // User clicked "Open on eth.limo" / "Open on gwei.domains" /
+    // "Open on w3eth.io gateway" from the banner menu. Install per-tab ALLOW
+    // rule(s) so our gateway-redirect rules don't rewrite the navigation
+    // straight back to local, then navigate.
     const tabId = sender.tab?.id ?? (m.tabId as number | undefined);
     const url = m.url;
     if (tabId == null) {
