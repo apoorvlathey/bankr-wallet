@@ -12,6 +12,29 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 _Nothing yet._
 
+## [3.18.0] - 2026-06-30
+
+### Added
+
+- **ERC-7715 delegated permissions.** Dapps and WalletConnect sessions can now request delegated permission grants with review, editable terms, pending-request handling, activity details, and revoke summaries.
+- **Gwei name support.** WalletChan now resolves `.gwei` names across address fields, confirmations, and transaction history.
+- **Gwei dapp3 Browser support.** The dapp3 Browser can now open `.gwei` IPFS/IPNS sites and shared `*.gwei.domains` links, alongside existing `.eth` browsing.
+- Account Settings now shows delegated permission grants and lets users review or revoke existing delegations.
+
+### Changed
+
+- Portfolio loading now uses a holdings cache and tighter non-critical metadata pruning, reducing repeated RPC/API work while keeping recently received tokens visible.
+- Swap and transfer token selectors delay logo requests until needed, reducing eager network work for large token lists.
+- Batch and swap confirmation call lists use a cleaner compact layout without the accent stripe.
+
+### Fixed
+
+- `.gwei` browser resolution refreshes GNS records directly before opening gateway content instead of relying on stale ENS cache checks.
+
+### Security
+
+- ERC-7715 permission requests now run preflight checks for the requesting account, delegate, supported permission/rule set, and local signing context before a grant can be approved.
+
 ## [3.17.0] - 2026-06-17
 
 ### Added
@@ -559,7 +582,8 @@ This release is a full rebuild of the wallet — multiple account types, a real 
 - View address on Debank from the homepage.
 - Lock-wallet button and footer attribution.
 
-[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.17.0...HEAD
+[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.18.0...HEAD
+[3.18.0]: https://github.com/apoorvlathey/walletchan/compare/v3.17.0...v3.18.0
 [3.17.0]: https://github.com/apoorvlathey/walletchan/compare/v3.16.0...v3.17.0
 [3.16.0]: https://github.com/apoorvlathey/walletchan/compare/v3.15.0...v3.16.0
 [3.15.0]: https://github.com/apoorvlathey/walletchan/compare/v3.14.0...v3.15.0
