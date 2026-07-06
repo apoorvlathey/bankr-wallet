@@ -39,7 +39,7 @@ import { getChainConfig } from "@/constants/chainConfig";
 import CalldataDecoder from "@/components/CalldataDecoder";
 import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
-import { isBuiltinCalldataSelector } from "@/lib/clearSigning/builtinDescriptors";
+import { isGenericBuiltinCalldataCall } from "@/lib/clearSigning/builtinDescriptors";
 import { useErc20InlineSummary } from "@/hooks/useErc20InlineSummary";
 import { CopyButton } from "@/components/CopyButton";
 import { googleFaviconUrl } from "@/constants/externalUrls";
@@ -87,7 +87,7 @@ export function BatchClearSigningSummary({
         // would duplicate the same recipient + amount info on every transfer
         // row. Remote-registry descriptors (Permit2, Uniswap router, etc.) and
         // anything we don't have a built-in for still render here.
-        if (isBuiltinCalldataSelector(call.data)) return null;
+        if (isGenericBuiltinCalldataCall(chainId, call.to, call.data)) return null;
         return (
           <PerCallClearSigning
             key={i}
@@ -387,7 +387,9 @@ export function CallCard({
       </HStack>
 
       <Collapse in={isExpanded} animateOpacity>
-        {hasCalldata && call.to && isBuiltinCalldataSelector(call.data) ? (
+        {hasCalldata &&
+        call.to &&
+        isGenericBuiltinCalldataCall(chainId, call.to, call.data) ? (
           <BuiltinExpandedContent
             call={call}
             chainId={chainId}

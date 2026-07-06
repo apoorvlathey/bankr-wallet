@@ -27,6 +27,7 @@ import {
   matchCalldataFormat,
   type MatchedFormat,
 } from "@/lib/clearSigning/matchDescriptor";
+import { getBuiltinCalldataDescriptor } from "@/lib/clearSigning/builtinDescriptors";
 import type { Erc7730Descriptor } from "@/lib/clearSigning/types";
 
 import { resolveTokenMetadata } from "./tokenMetadata";
@@ -154,22 +155,10 @@ async function buildErc7730Meta(
   data: string,
   chainId: number,
 ): Promise<ClearSignedMeta | null> {
-  const resp = await handleGetClearSigningDescriptor({
-    type: "GET_CLEAR_SIGNING_DESCRIPTOR",
-    chainId,
-    address: to,
-    kind: "calldata",
-    selector:
-      data?.startsWith("0x") && data.length >= 10
-        ? data.slice(0, 10).toLowerCase()
-        : undefined,
-  }).catch(() => null);
-  if (!resp || !resp.enabled || !resp.descriptor) return null;
+  const resolved = await resolveMatchedCalldataDescriptor(to, data, chainId);
+  if (!resolved) return null;
 
-  const descriptor: Erc7730Descriptor = resp.descriptor;
-  const match: MatchedFormat | null = matchCalldataFormat(descriptor, data);
-  if (!match) return null;
-
+  const { descriptor, match } = resolved;
   const intent =
     typeof match.format.intent === "string" ? match.format.intent : undefined;
   const contractName = descriptor.metadata?.contractName;
@@ -187,6 +176,38 @@ async function buildErc7730Meta(
     intent,
     contractName,
   };
+}
+
+async function resolveMatchedCalldataDescriptor(
+  to: string,
+  data: string,
+  chainId: number,
+): Promise<{ descriptor: Erc7730Descriptor; match: MatchedFormat } | null> {
+  const selector =
+    data?.startsWith("0x") && data.length >= 10
+      ? data.slice(0, 10).toLowerCase()
+      : undefined;
+
+  const resp = await handleGetClearSigningDescriptor({
+    type: "GET_CLEAR_SIGNING_DESCRIPTOR",
+    chainId,
+    address: to,
+    kind: "calldata",
+    selector,
+  }).catch(() => null);
+
+  if (resp?.enabled !== false && resp?.descriptor) {
+    const descriptor: Erc7730Descriptor = resp.descriptor;
+    const match = matchCalldataFormat(descriptor, data);
+    if (match) return { descriptor, match };
+  }
+
+  if (resp?.enabled === false) return null;
+
+  const local = getBuiltinCalldataDescriptor(chainId, to, data);
+  if (!local) return null;
+  const localMatch = matchCalldataFormat(local, data);
+  return localMatch ? { descriptor: local, match: localMatch } : null;
 }
 
 export async function buildClearSignedMeta(

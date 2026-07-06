@@ -1,6 +1,7 @@
 import { resolvePath, type PathValue } from "./resolvePath";
 import type { Erc7730Descriptor, Erc7730Field, Erc7730Format } from "./types";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import { decodeContentHashForDisplay } from "./contentHashFormat";
 
 /**
  * Apply a descriptor `display.formats[…]` to a normalized data root (calldata
@@ -53,6 +54,8 @@ export type RenderedValue =
   | { kind: "enum"; text: string }
   | { kind: "chainId"; chainId: number; text?: string }
   | { kind: "tokenTicker"; tokenAddress: string; chainId?: number; tokenMetadata?: TokenMetadataHint }
+  | { kind: "gweiName"; tokenId: string; chainId?: number }
+  | { kind: "contentHash"; raw: string; uri?: string; codec?: string; decoded?: string }
   | {
       kind: "calldata";
       callee: string;
@@ -506,6 +509,19 @@ function toRenderedValue(
         tokenMetadata: descriptorTokenMetadata(context.descriptor, tokenAddress, input),
       };
     }
+    case "gweiname":
+    case "gweiName".toLowerCase():
+      return {
+        kind: "gweiName",
+        tokenId: stringifyAmount(raw),
+        chainId: resolveChainIdParam(params, input, itemIndex),
+      };
+    case "contenthash": {
+      return {
+        kind: "contentHash",
+        ...decodeContentHashForDisplay(raw),
+      };
+    }
     case "nftname":
     case "nftName".toLowerCase(): {
       const collection =
@@ -777,6 +793,10 @@ function renderedValueToIntentText(value: RenderedValue, fallbackChainId: number
       return value.text || String(value.chainId);
     case "tokenTicker":
       return value.tokenMetadata?.symbol || shortAddress(value.tokenAddress);
+    case "gweiName":
+      return value.tokenId;
+    case "contentHash":
+      return value.uri || value.raw;
     case "raw":
       return value.text;
     case "calldata":

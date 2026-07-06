@@ -1504,6 +1504,43 @@ Transaction calldata is decoded using the eth.sh API:
 - **Parameter display**: Color-coded by type (addresses=blue with labels, numbers=gold, bools=green/red, bytes=muted)
 - **Fallback**: Raw hex if decode fails or for contract deployments (no `to` address)
 
+### Clear Signing Descriptors
+
+`ClearSigningView` renders ERC-7730-style descriptors for transaction calldata
+and EIP-712 messages before the raw decoder/typed-data panel. Descriptor
+resolution is remote-first, local-second:
+
+- `chrome/clearSigningHandlers.ts` fetches/caches remote descriptors from the
+  WalletChan clear-signing proxy. Results are keyed by chain, target address,
+  kind, and selector/format key.
+- `lib/clearSigning/builtinDescriptors.ts` is the local descriptor registry.
+  It contains generic selector descriptors (ERC-20 transfer/approve, Safe
+  MultiSend) and address-bound custom descriptors (GNS NameNFT,
+  SubdomainRegistrar, HumanRegistrar, Multicall3). Address-bound descriptors
+  must match both chain ID and deployed contract address before rendering.
+- `getBuiltinCalldataDescriptor()` is the single local fallback used by the UI
+  and by history snapshots. Add future custom local clear-signing coverage
+  there so confirmation screens, nested calls, and Activity metadata stay in
+  sync.
+- GNS descriptors render `tokenId` / `parentId` fields with the custom
+  `gweiName` value format. `ClearSigningView` resolves those IDs through
+  `NameNFT.getFullName(tokenId)` and displays the `.gwei` domain, falling back
+  to a compact token ID only if the name cannot be resolved.
+- GNS `setContenthash` renders the `hash` bytes as a `Website` field using the
+  custom `contentHash` value format. The pure formatter in
+  `lib/clearSigning/contentHashFormat.ts` decodes EIP-1577 contenthash bytes
+  into URI-style text such as `ipfs://...` or `ipns://...`, falling back to raw
+  bytes if a malformed or future codec cannot be decoded.
+- `isGenericBuiltinCalldataCall()` is intentionally narrower than
+  `getBuiltinCalldataDescriptor()`: it only identifies selector-generic calls
+  for batch UI de-duplication. Custom address-bound descriptors are not treated
+  as generic, which prevents selector collisions like ERC-721
+  `approve(address,uint256)` being displayed as an ERC-20 allowance.
+- `chrome/clearSignedMetaSnapshot.ts` builds Activity-row summaries through
+  the same remote-plus-local resolution path. If the remote registry misses or
+  has no matching format, it falls back to the local registry before recording
+  `clearSignedMeta`.
+
 ### Typed Data Display
 
 EIP-712 typed data signatures show structured display:

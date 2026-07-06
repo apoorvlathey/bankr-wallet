@@ -40,7 +40,7 @@ import {
   resolveTokenMetadataClient,
 } from "@/lib/tokenMetadataClient";
 import { useNetworks } from "@/contexts/NetworksContext";
-import { getNativeAssetMeta } from "@/lib/chains";
+import { getNativeAssetMeta, getResolvedChainById } from "@/lib/chains";
 import TokenLogo from "@/components/TokenLogo";
 import {
   encodeType,
@@ -59,6 +59,10 @@ import {
 import { decodeCalldataForDescriptor } from "@/lib/clearSigning/decodeForDescriptor";
 import { resolveDescriptor } from "@/lib/clearSigning/resolver";
 import { getBuiltinCalldataDescriptor } from "@/lib/clearSigning/builtinDescriptors";
+import {
+  formatGweiTokenFallback,
+  resolveGweiNameForTokenId,
+} from "@/lib/clearSigning/gnsNameResolver";
 import type { Erc7730Descriptor } from "@/lib/clearSigning/types";
 import { useScreenEntered } from "@/components/ScreenTransition";
 import { decodeRecursive } from "@/lib/decoder";
@@ -602,6 +606,19 @@ function RenderedValueView({ value, chainId }: { value: RenderedValue; chainId: 
           chainId={value.chainId ?? chainId}
           metadataHint={value.tokenMetadata}
         />
+      );
+    case "gweiName":
+      return (
+        <GweiNameInline
+          tokenId={value.tokenId}
+          chainId={value.chainId ?? chainId}
+        />
+      );
+    case "contentHash":
+      return (
+        <Text fontSize="xs" color="fg.primary" fontWeight="700" wordBreak="break-all">
+          {value.uri || value.raw}
+        </Text>
       );
     case "missing":
       return (
@@ -1431,6 +1448,63 @@ function TokenAmountInline({
         </Text>
       )}
     </VStack>
+  );
+}
+
+function GweiNameInline({
+  tokenId,
+  chainId,
+}: {
+  tokenId: string;
+  chainId: number;
+}) {
+  const { networksInfo } = useNetworks();
+  const rpcUrl = useMemo(
+    () => getResolvedChainById(chainId, networksInfo)?.rpcUrl,
+    [chainId, networksInfo],
+  );
+  const [name, setName] = useState<string | null>(null);
+  const [resolved, setResolved] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setName(null);
+    setResolved(false);
+
+    resolveGweiNameForTokenId({ chainId, rpcUrl, tokenId }).then((next) => {
+      if (cancelled) return;
+      setName(next);
+      setResolved(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chainId, rpcUrl, tokenId]);
+
+  if (name) {
+    return (
+      <Text
+        fontSize="xs"
+        color="fg.primary"
+        fontWeight="800"
+        wordBreak="break-word"
+      >
+        {name}
+      </Text>
+    );
+  }
+
+  return (
+    <Text
+      fontSize="xs"
+      fontFamily="mono"
+      color={resolved ? "fg.secondary" : "fg.muted"}
+      fontWeight="600"
+      wordBreak="break-all"
+    >
+      {formatGweiTokenFallback(tokenId)}
+    </Text>
   );
 }
 

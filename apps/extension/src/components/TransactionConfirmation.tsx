@@ -54,6 +54,7 @@ import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import ChainIcon from "@/components/ChainIcon";
 import Erc7715PermissionRevokeSummary from "@/components/Erc7715PermissionRevokeSummary";
 import { parseApproveCalldata } from "@/lib/erc20Approve";
+import { getAddressBoundCalldataDescriptor } from "@/lib/clearSigning/builtinDescriptors";
 import { detectAbiEncodingError } from "@/lib/calldataValidation";
 import { MalformedCalldataBanner } from "@/components/MalformedCalldataBanner";
 import { googleFaviconUrl } from "@/constants/externalUrls";
@@ -371,10 +372,12 @@ function TransactionConfirmation({
   // below and keep the raw calldata panel collapsed for inspection.
   const parsedApproval = useMemo(
     () =>
-      tx.to && tx.data
+      tx.to &&
+      tx.data &&
+      !getAddressBoundCalldataDescriptor(tx.chainId, tx.to, tx.data)
         ? parseApproveCalldata(tx.data)
         : null,
-    [tx.to, tx.data],
+    [tx.chainId, tx.to, tx.data],
   );
   // Clear-signing resolution lifecycle — "loading" until the descriptor
   // fetch settles. Holding off the raw CalldataDecoder until then prevents a
