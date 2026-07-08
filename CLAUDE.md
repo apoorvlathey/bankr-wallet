@@ -114,7 +114,7 @@ When working on features, refer to these docs.
 | [`apps/arb-bot/IMPLEMENTATION.md`](./apps/arb-bot/IMPLEMENTATION.md) | Arb bot: cross-pool strategy, batched RPC, encoding |
 | [`apps/wchan-vault-indexer/IMPLEMENTATION.md`](./apps/wchan-vault-indexer/IMPLEMENTATION.md) | WCHAN vault indexer: sWCHAN balance tracking, APY, snapshots |
 | [`apps/staking-indexer/STAKING_INDEXER_IMPLEMENTATION.md`](./apps/staking-indexer/STAKING_INDEXER_IMPLEMENTATION.md) | Staking indexer (legacy) |
-| `openclaw-skills/bankr/SKILL.md` | Bankr API interactions, workflows, error handling |
+| `_docs/bankr-skills/bankr/SKILL.md` | Bankr API interactions, workflows, error handling |
 | [github.com/apoorvlathey/walletchan-skill](https://github.com/apoorvlathey/walletchan-skill) | Public agent skill for driving the extension via CDP (canonical source lives in that repo) |
 
 ## Important Patterns (extension)

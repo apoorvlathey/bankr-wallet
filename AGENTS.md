@@ -254,7 +254,7 @@ When working on features, refer to these docs:
 | `apps/tg-bot/IMPLEMENTATION.md`                          | TG bot: verification flow, commands, API, balance checker |
 | `apps/arb-bot/IMPLEMENTATION.md`                         | Arb bot: cross-pool arb strategy, batched RPC, encoding   |
 | `_docs/TOKEN_GATED_TG.md`                                | Token-gated TG system: architecture, DB schema, security  |
-| `openclaw-skills/bankr/SKILL.md`                         | Bankr API interactions, workflows, error handling         |
+| `_docs/bankr-skills/bankr/SKILL.md`                      | Bankr API interactions, workflows, error handling         |
 
 ## Important Patterns
 
