@@ -1,0 +1,58 @@
+---
+name: walletchan-chain-research
+description: Research and verify EVM chain metadata for WalletChan chain additions or updates. Use when Codex is asked to add a new WalletChan chain, update chain params, verify RPC/explorer/native currency/icon, determine Bankr support, 0x swap support, Bungee/Socket bridge support, CoinGecko/GeckoTerminal IDs, or MetaMask EIP-7702 default delegate support.
+---
+
+# WalletChan Chain Research
+
+## Workflow
+
+1. Read the repo guidance first when working inside WalletChan:
+   - `AGENTS.md`
+   - `_docs/ADD_CHAIN.md`
+   - `_docs/IMPLEMENTATION.md`
+   - `_docs/SWAP.md` when swap support is relevant
+   - `_docs/7702.md` when EIP-7702 support is relevant
+2. Verify current facts from primary/live sources. Chain support, API support,
+   and contract deployments are unstable; do not rely on memory.
+3. Run the helper when network access is available:
+   ```bash
+   node .agents/skills/walletchan-chain-research/scripts/research_chain.mjs \
+     --chain-id 4663 \
+     --name "Robinhood Chain" \
+     --rpc "https://rpc.mainnet.chain.robinhood.com"
+   ```
+   Add `--icon-out apps/extension/public/chainIcons/<name>.<ext>` to download
+   the best chain icon. The script chooses the extension from `content-type`
+   when possible.
+4. Read `references/walletchan-fields.md` before editing code. Use it to map
+   verified facts into `apps/extension/src/constants/chainRegistry.ts` and any
+   duplicated website swap API allowlists.
+5. Treat EIP-7702 separately from “the chain supports type-4 txs”. WalletChan's
+   automatic atomic path requires the configured default delegate contract to be
+   deployed and non-empty on the chain.
+6. Report uncertainty explicitly. If a source cannot verify a field, leave the
+   risky flag false or omit the optional ID instead of guessing.
+
+## Required Sources
+
+Prefer these sources, in this order:
+
+- RPC: `eth_chainId`, `eth_getCode`, and optionally block samples for type-4 txs.
+- WalletChan/Bungee bridge endpoint: `/api/bridge/chains`.
+- 0x official supported-chains docs for Swap API support.
+- `@metamask/delegation-deployments` plus `eth_getCode` at WalletChan's
+  `EIP_7702_DEFAULT_DELEGATE` for default 7702 support.
+- CoinGecko asset platforms and token-list endpoints for `coingeckoPlatformId`.
+- GeckoTerminal networks API for `geckoTerminalNetworkId`.
+- Chainlist/chainid.network only as secondary metadata, not final support proof.
+
+## Output Checklist
+
+When finishing a chain research task, include:
+
+- Proposed `ChainEntry` values, including explicit true/false support flags.
+- Which swap/bridge/7702 facts were verified and from where.
+- Icon source and local path, if downloaded.
+- Files changed and validation commands run.
+- Any flags intentionally left false with the reason.

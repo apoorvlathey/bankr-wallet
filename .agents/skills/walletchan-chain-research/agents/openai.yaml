@@ -1,0 +1,4 @@
+interface:
+  display_name: "WalletChan Chain Research"
+  short_description: "Research EVM chain support for WalletChan"
+  default_prompt: "Use $walletchan-chain-research to research a new EVM chain for WalletChan."

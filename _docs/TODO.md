@@ -11,7 +11,8 @@ Don't push anything to github though. Make sure to auto compact your context whe
       current `@metamask/delegation-deployments` package includes chain 4663
       and that `eth_getCode(EIP_7702_DEFAULT_DELEGATE)` on
       `https://rpc.mainnet.chain.robinhood.com` returns non-empty bytecode.
-      Use `$walletchan-chain-research` for the support audit.
+      Use `.agents/skills/walletchan-chain-research/SKILL.md` for the support
+      audit.
 
 ## ERC-7710 / ERC-7715 Delegated Permissions
 

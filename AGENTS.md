@@ -246,6 +246,7 @@ When working on features, refer to these docs:
 | `_docs/WALLETCHAN_MCP.md`                                | Local MCP adapter, managed RPC, and Base skill wrapping              |
 | `apps/staking-indexer/STAKING_INDEXER_IMPLEMENTATION.md` | Staking indexer: sBNKRW vault events, balance tracking (legacy) |
 | `apps/wchan-vault-indexer/IMPLEMENTATION.md`             | WCHAN vault indexer: sWCHAN balance tracking, APY, snapshots    |
+| `.agents/skills/walletchan-chain-research/SKILL.md`      | Codex-local research checklist for adding/updating WalletChan chain params |
 | `_docs/DEVELOPMENT.md`                                   | Build process, dev environment setup                      |
 | `_docs/PUBLISHING.md`                                    | Release workflow, CWS upload, auto-update, signing        |
 | `_docs/STORAGE.md`                                       | Every chrome.storage key, shapes, version history         |
