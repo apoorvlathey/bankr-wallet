@@ -12,6 +12,22 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 _Nothing yet._
 
+## [3.19.0] - 2026-07-08
+
+### Added
+
+- **Robinhood chain support.** WalletChan now includes Robinhood as a built-in chain with chain metadata, icon support, and swap API routing.
+- **GNS clear-signing descriptors.** Transaction review now renders clearer summaries for GNS calls, including resolver-aware labels and content-hash formatting.
+
+### Fixed
+
+- Custom-chain add flows now propagate successful `wallet_addEthereumChain` requests back through the injected provider more reliably.
+- ERC-7715 permission requests now normalize relaxed EVM address input and edited permission data consistently before preflight and caveat generation.
+
+### Security
+
+- ERC-7715 delegated-permission validation now rejects ambiguous extras and revalidates edited terms before signing WalletChan-owned delegation data.
+
 ## [3.18.0] - 2026-06-30
 
 ### Added
@@ -582,7 +598,8 @@ This release is a full rebuild of the wallet — multiple account types, a real 
 - View address on Debank from the homepage.
 - Lock-wallet button and footer attribution.
 
-[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.18.0...HEAD
+[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.19.0...HEAD
+[3.19.0]: https://github.com/apoorvlathey/walletchan/compare/v3.18.0...v3.19.0
 [3.18.0]: https://github.com/apoorvlathey/walletchan/compare/v3.17.0...v3.18.0
 [3.17.0]: https://github.com/apoorvlathey/walletchan/compare/v3.16.0...v3.17.0
 [3.16.0]: https://github.com/apoorvlathey/walletchan/compare/v3.15.0...v3.16.0
