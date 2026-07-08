@@ -393,6 +393,7 @@ src/
 │   ├── txHandlers.ts        # Transaction/signature handlers, notifications
 │   ├── erc7715PermissionHandlers.ts # ERC-7715 delegated permission methods
 │   ├── erc7715PermissionPreflight.ts # ERC-7715 request/account/delegate policy checks
+│   ├── erc7715PermissionAddress.ts # ERC-7715 relaxed EVM address validation + checksum normalization
 │   ├── erc7715PermissionRegistry.ts # Supported permission/rule validation
 │   ├── erc7715PermissionCaveats.ts  # ERC-7715 -> DeleGator caveat mapping
 │   ├── erc7715DelegationSigning.ts  # WalletChan-owned ERC-7710 typed data/context encoding
@@ -1598,17 +1599,19 @@ processing session requests.
 
 Current permission vocabulary is deliberately narrow:
 
-- `native-token-allowance`: `data.allowanceAmount`, `data.startTime`
+- `native-token-allowance`: `data.allowanceAmount`, optional
+  `data.startTime`
 - `native-token-periodic`: `data.periodAmount`, `data.periodDuration`,
-  `data.startTime`
+  optional `data.startTime`
 - `native-token-stream`: optional `data.initialAmount`, optional
-  `data.maxAmount`, `data.amountPerSecond`, `data.startTime`
+  `data.maxAmount`, `data.amountPerSecond`, optional `data.startTime`
 - `erc20-token-allowance`: `data.tokenAddress`, `data.allowanceAmount`,
-  `data.startTime`
+  optional `data.startTime`
 - `erc20-token-periodic`: `data.tokenAddress`, `data.periodAmount`,
-  `data.periodDuration`, `data.startTime`
+  `data.periodDuration`, optional `data.startTime`
 - `erc20-token-stream`: `data.tokenAddress`, optional `data.initialAmount`,
-  optional `data.maxAmount`, `data.amountPerSecond`, `data.startTime`
+  optional `data.maxAmount`, `data.amountPerSecond`, optional
+  `data.startTime`
 - `token-approval-revocation`: boolean revocation primitives
   `erc20Approve`, `erc721Approve`, `erc721SetApprovalForAll`,
   `permit2Approve`, `permit2Lockdown`, and `permit2InvalidateNonces`. The
@@ -1622,6 +1625,10 @@ addresses, duplicate/expired `expiry` rules, and start times that are not
 before expiry. All stream grants require an expiry. This keeps the exposure
 time-bounded and prevents the DeleGator stream enforcers from later reverting
 because their elapsed-time multiplication happens before the max-amount clamp.
+EVM addresses are accepted in any valid `0x` 20-byte hex capitalization and
+normalized to EIP-55 checksum form before storage, display, caveat terms, and
+responses. Omitted `startTime` values follow MetaMask's Advanced Permissions
+behavior and are normalized to the preflight timestamp.
 Token approval revocation requires at least one revocation primitive and an
 expiry, and broad Permit2 nonce invalidation is rejected because it can cancel
 unrelated pending Permit2 signatures without token/spender pinning. If any
@@ -1705,13 +1712,16 @@ frequency for periodic permissions, stream rate / available-per-day / total
 exposure for stream permissions, token approval revocation method flags, and
 start/expiry as human-readable rows where applicable.
 `Erc7715PermissionEditableControls.tsx`
-lets users adjust supported fields before approval only when
-`permission.isAdjustmentAllowed === true`. Locked requests cannot change.
-Adjustable requests can set any positive bounded amount, change periodic
-frequency, move start time later, move an already-past start time earlier
-within the past, and add, remove, or change expiry. For token approval
-revocation, the revocation method flags are immutable and the user can only
-adjust the required expiry. Background confirmation
+lets users adjust supported permission terms before approval only when
+`permission.isAdjustmentAllowed === true`. Locked requests keep amount,
+frequency, start time, stream caps, and identity fields immutable. To match
+MetaMask Advanced Permissions behavior, users may still add, remove, extend, or
+shorten expiry on non-stream grants; stream expiry remains required and guarded
+with the streaming terms because it changes total exposure. Adjustable requests
+can set any positive bounded amount, change periodic frequency, move start time
+later, and move an already-past start time earlier within the past. For token
+approval revocation, the revocation method flags are immutable and the user can
+only adjust the required expiry. Background confirmation
 re-validates the edited ERC-7715 request with
 `erc7715PermissionPreflight.ts`, checks it with
 `lib/erc7715PermissionEditing.ts`, recomputes caveats from the edited request,

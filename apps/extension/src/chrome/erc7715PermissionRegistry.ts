@@ -1,8 +1,8 @@
-import { isAddress } from "viem";
 import {
   approvalRevocationFieldNames,
   approvalRevocationMask,
 } from "@/lib/erc7715ApprovalRevocation";
+import { normalizeErc7715Address } from "./erc7715PermissionAddress";
 
 export const ERC7715_SUPPORTED_RULE_TYPES = ["expiry"] as const;
 
@@ -126,15 +126,22 @@ function assertOptionalStartTime(
   }
 }
 
-function assertRequiredStartTime(
+function assertStartTimeIfPresent(
   data: Record<string, unknown>,
   permissionType: string,
   rules: RuleSummary,
 ) {
-  if (data.startTime === undefined) {
-    throw new Error(`${permissionType}.data.startTime is required`);
-  }
   assertOptionalStartTime(data, permissionType, rules);
+}
+
+function startTimeOrNow(data: Record<string, unknown>, permissionType: string) {
+  if (data.startTime === undefined) {
+    return Math.floor(Date.now() / 1000);
+  }
+  return assertSafeTimestamp(
+    data.startTime,
+    `${permissionType}.data.startTime`,
+  );
 }
 
 function assertPositiveDuration(value: unknown, label: string) {
@@ -185,10 +192,7 @@ function assertStreamFields(
     data.amountPerSecond,
     `${permissionType}.data.amountPerSecond`,
   );
-  const startTime = assertSafeTimestamp(
-    data.startTime,
-    `${permissionType}.data.startTime`,
-  );
+  const startTime = startTimeOrNow(data, permissionType);
 
   if (startTime <= 0) {
     throw new Error(`${permissionType}.data.startTime must be positive`);
@@ -365,7 +369,7 @@ export function validateErc7715Permission(
         data.allowanceAmount,
         `${permissionType}.data.allowanceAmount`,
       );
-      assertRequiredStartTime(data, permissionType, rules);
+      assertStartTimeIfPresent(data, permissionType, rules);
       return permissionType;
 
     case "native-token-periodic":
@@ -382,7 +386,7 @@ export function validateErc7715Permission(
         data.periodDuration,
         `${permissionType}.data.periodDuration`,
       );
-      assertRequiredStartTime(data, permissionType, rules);
+      assertStartTimeIfPresent(data, permissionType, rules);
       return permissionType;
 
     case "native-token-stream":
@@ -406,14 +410,15 @@ export function validateErc7715Permission(
         ["tokenAddress", "allowanceAmount", "startTime", "justification"],
         `${permissionType}.data`,
       );
-      if (!isAddress(data.tokenAddress)) {
-        throw new Error(`${permissionType}.data.tokenAddress must be an address`);
-      }
+      normalizeErc7715Address(
+        data.tokenAddress,
+        `${permissionType}.data.tokenAddress`,
+      );
       assertPositiveBoundedHexAmount(
         data.allowanceAmount,
         `${permissionType}.data.allowanceAmount`,
       );
-      assertRequiredStartTime(data, permissionType, rules);
+      assertStartTimeIfPresent(data, permissionType, rules);
       return permissionType;
 
     case "erc20-token-periodic":
@@ -428,9 +433,10 @@ export function validateErc7715Permission(
         ],
         `${permissionType}.data`,
       );
-      if (!isAddress(data.tokenAddress)) {
-        throw new Error(`${permissionType}.data.tokenAddress must be an address`);
-      }
+      normalizeErc7715Address(
+        data.tokenAddress,
+        `${permissionType}.data.tokenAddress`,
+      );
       assertPositiveBoundedHexAmount(
         data.periodAmount,
         `${permissionType}.data.periodAmount`,
@@ -439,7 +445,7 @@ export function validateErc7715Permission(
         data.periodDuration,
         `${permissionType}.data.periodDuration`,
       );
-      assertRequiredStartTime(data, permissionType, rules);
+      assertStartTimeIfPresent(data, permissionType, rules);
       return permissionType;
 
     case "erc20-token-stream":
@@ -455,9 +461,10 @@ export function validateErc7715Permission(
         ],
         `${permissionType}.data`,
       );
-      if (!isAddress(data.tokenAddress)) {
-        throw new Error(`${permissionType}.data.tokenAddress must be an address`);
-      }
+      normalizeErc7715Address(
+        data.tokenAddress,
+        `${permissionType}.data.tokenAddress`,
+      );
       assertStreamFields(data, permissionType, rules);
       return permissionType;
 

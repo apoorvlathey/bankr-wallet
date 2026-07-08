@@ -330,7 +330,8 @@ function Erc7715TokenPermissionEditableControls({
   const isStream = isErc7715StreamPermissionType(
     permissionRequest.permissionType,
   );
-  const canEdit = editedRequest.permission.isAdjustmentAllowed;
+  const canEditTerms = editedRequest.permission.isAdjustmentAllowed;
+  const canEditExpiry = canEditTerms || !isStream;
   const asset = useErc7715PermissionAsset({
     permissionRequest,
     editedRequest,
@@ -347,7 +348,7 @@ function Erc7715TokenPermissionEditableControls({
       : asset.decimalsStatus === "unverified"
         ? "Token decimals could not be verified. This permission cannot be signed safely."
         : null;
-  const isAmountInputDisabled = !canEdit || !hasVerifiedDecimals;
+  const isAmountInputDisabled = !canEditTerms || !hasVerifiedDecimals;
   const amountUsdEstimate = formatAmountUsdEstimate(
     amountInput,
     asset.priceUsd,
@@ -681,7 +682,7 @@ function Erc7715TokenPermissionEditableControls({
             </FormLabel>
             <Select
               value={selectedFrequency}
-              isDisabled={!canEdit}
+              isDisabled={!canEditTerms}
               onChange={(event) => handleFrequencyChange(event.target.value)}
             >
               {hasCustomFrequency && editedPeriodDuration !== null && (
@@ -883,7 +884,7 @@ function Erc7715TokenPermissionEditableControls({
         </FormLabel>
         <UtcDateTimePicker
           valueSeconds={editedStart}
-          disabled={!canEdit}
+          disabled={!canEditTerms}
           label="Start time"
           onChange={handleStartChange}
         />
@@ -901,17 +902,28 @@ function Erc7715TokenPermissionEditableControls({
           </FormLabel>
           <Switch
             isChecked={expiryEnabled}
-            isDisabled={!canEdit}
+            isDisabled={!canEditExpiry}
             onChange={(event) => handleExpiryToggle(event.target.checked)}
           />
         </HStack>
         {expiryEnabled && (
           <UtcDateTimePicker
             valueSeconds={editedExpiry}
-            disabled={!canEdit}
+            disabled={!canEditExpiry}
             label="Expiration date"
             onChange={handleExpiryChange}
           />
+        )}
+        {!expiryEnabled && (
+          <Text
+            color="status.warning.fg"
+            fontSize="sm"
+            fontWeight="800"
+            lineHeight="1.45"
+            mt={2}
+          >
+            This permission is ongoing. We recommend setting an expiration date.
+          </Text>
         )}
       </FormControl>
     </VStack>

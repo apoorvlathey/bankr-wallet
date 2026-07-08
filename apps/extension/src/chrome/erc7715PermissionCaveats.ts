@@ -1,6 +1,6 @@
-import { isAddress } from "viem";
 import { approvalRevocationMask } from "@/lib/erc7715ApprovalRevocation";
 import { validateErc7715PermissionRequestPayload } from "./erc7715PermissionRegistry";
+import { normalizeErc7715Address } from "./erc7715PermissionAddress";
 
 type Hex = `0x${string}`;
 type Address = Hex;
@@ -97,10 +97,7 @@ function numberValue(value: unknown, label: string): number {
 }
 
 function addressValue(value: unknown, label: string): Address {
-  if (!isAddress(value)) {
-    throw new Error(`${label} must be an address`);
-  }
-  return value;
+  return normalizeErc7715Address(value, label);
 }
 
 function caveat(

@@ -1,4 +1,4 @@
-import { createPublicClient, getAddress, http, isAddress } from "viem";
+import { createPublicClient, http } from "viem";
 import {
   CHAIN_REGISTRY,
   EIP_7702_DEFAULT_DELEGATE,
@@ -20,6 +20,7 @@ import {
   type Erc7715SupportedPermissionType,
   validateErc7715PermissionRequestPayload,
 } from "./erc7715PermissionRegistry";
+import { normalizeErc7715Address } from "./erc7715PermissionAddress";
 import {
   buildErc7715PermissionCaveats,
   ERC7710_DELEGATION_MANAGER,
@@ -73,10 +74,7 @@ export function parseHexChainId(value: unknown): number | null {
 }
 
 function normalizeAddress(value: unknown, label: string): Address {
-  if (!isAddress(value)) {
-    throw new Error(`${label} must be an address`);
-  }
-  return getAddress(value) as Address;
+  return normalizeErc7715Address(value, label) as Address;
 }
 
 function cloneRecord(value: unknown): Record<string, unknown> {
@@ -87,6 +85,54 @@ function clonePermissionData(value: unknown): Record<string, unknown> {
   const data = cloneRecord(value);
   delete data.justification;
   return data;
+}
+
+function isNativePermissionType(
+  permissionType: Erc7715SupportedPermissionType,
+): boolean {
+  return permissionType.startsWith("native-token-");
+}
+
+function normalizePermissionData({
+  data,
+  permissionType,
+  rules,
+  nowSeconds,
+}: {
+  data: Record<string, unknown>;
+  permissionType: Erc7715SupportedPermissionType;
+  rules?: Erc7715PermissionRequest["rules"];
+  nowSeconds: number;
+}): Record<string, unknown> {
+  const normalized = { ...data };
+
+  if (!isNativePermissionType(permissionType)) {
+    const tokenAddress = data.tokenAddress;
+    if (tokenAddress !== undefined) {
+      normalized.tokenAddress = normalizeAddress(
+        tokenAddress,
+        `${permissionType}.data.tokenAddress`,
+      );
+    }
+  }
+
+  if (
+    !isErc7715TokenApprovalRevocationPermissionType(permissionType) &&
+    normalized.startTime === undefined
+  ) {
+    normalized.startTime = nowSeconds;
+  }
+
+  const expiry = rules?.find((rule) => rule.type === "expiry")?.data.timestamp;
+  if (
+    typeof normalized.startTime === "number" &&
+    typeof expiry === "number" &&
+    normalized.startTime >= expiry
+  ) {
+    throw new Error(`${permissionType}.data.startTime must be before expiry`);
+  }
+
+  return normalized;
 }
 
 function makePreflightClient(rpcUrl: string, chainId: number) {
@@ -146,6 +192,7 @@ function normalizeErc7715PermissionRequest(
   request: Record<string, unknown>,
   permissionType: Erc7715SupportedPermissionType,
   activeAccountAddress: string,
+  nowSeconds: number,
 ): Erc7715PermissionRequest {
   const permission = request.permission as Record<string, unknown>;
   const justification = getErc7715PermissionJustification(permission);
@@ -170,7 +217,12 @@ function normalizeErc7715PermissionRequest(
       type: permissionType,
       isAdjustmentAllowed: permission.isAdjustmentAllowed === true,
       ...(justification ? { justification } : {}),
-      data: clonePermissionData(permission.data),
+      data: normalizePermissionData({
+        data: clonePermissionData(permission.data),
+        permissionType,
+        rules,
+        nowSeconds,
+      }),
     },
     ...(rules ? { rules } : {}),
   };
@@ -218,6 +270,7 @@ export async function assertRequestExecutionPermissionsEligible(
 
   const delegateReads = new Map<number, Promise<Address | null>>();
   const normalizedRequests: NormalizedPermissionPreflight[] = [];
+  const nowSeconds = Math.floor(Date.now() / 1000);
 
   for (const [index, request] of params.entries()) {
     if (!isObject(request)) {
@@ -235,10 +288,11 @@ export async function assertRequestExecutionPermissionsEligible(
     }
 
     if (request.from !== undefined) {
-      if (!isAddress(request.from)) {
-        throw new Error(`Permission request ${index} has invalid from address`);
-      }
-      if (request.from.toLowerCase() !== activeAccount.address.toLowerCase()) {
+      const requestFrom = normalizeAddress(
+        request.from,
+        `Permission request ${index} from address`,
+      );
+      if (requestFrom.toLowerCase() !== activeAccount.address.toLowerCase()) {
         throw new Error(
           "Permission request from address does not match active account",
         );
@@ -255,6 +309,7 @@ export async function assertRequestExecutionPermissionsEligible(
       request,
       permissionType,
       activeAccount.address,
+      nowSeconds,
     );
 
     const resolvedChain = await getStoredResolvedChainById(chainId);
@@ -307,7 +362,7 @@ export async function assertRequestExecutionPermissionsEligible(
       delegator: activeAccount.address as Address,
     });
 
-    const caveats = buildErc7715PermissionCaveats(request, index, {
+    const caveats = buildErc7715PermissionCaveats(normalizedRequest, index, {
       delegationNonce,
     });
 

@@ -175,6 +175,7 @@ apps/extension/src/
 │   ├── erc5792Types.ts      # ERC-5792 type definitions
 │   ├── erc7715PermissionHandlers.ts # ERC-7715 delegated permission methods
 │   ├── erc7715PermissionPreflight.ts # ERC-7715 request/account/delegate policy checks
+│   ├── erc7715PermissionAddress.ts # ERC-7715 relaxed EVM address validation + checksum normalization
 │   ├── erc7715PermissionRegistry.ts # Supported permission/rule validation
 │   ├── erc7715PermissionCaveats.ts  # ERC-7715 -> DeleGator caveat mapping
 │   ├── erc7715DelegationSigning.ts  # WalletChan-owned ERC-7710 typed data/context encoding

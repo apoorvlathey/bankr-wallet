@@ -336,14 +336,23 @@ export function assertErc7715PermissionEditIsAllowed(
     ? getErc7715PermissionMaxAmount(edited)
     : null;
 
+  // MetaMask allows users to change non-stream expiry even when dapps lock
+  // permission-term edits with isAdjustmentAllowed: false.
+  const permissionTermsChanged =
+    editedAmount !== originalAmount ||
+    editedStart !== originalStart ||
+    editedPeriod !== originalPeriod ||
+    editedInitial !== originalInitial ||
+    editedMax !== originalMax;
+  const expiryChanged = editedExpiry !== originalExpiry;
+
+  if (!original.permission.isAdjustmentAllowed && permissionTermsChanged) {
+    throw new Error("This permission does not allow user adjustments");
+  }
   if (
     !original.permission.isAdjustmentAllowed &&
-    (editedAmount !== originalAmount ||
-      editedStart !== originalStart ||
-      editedExpiry !== originalExpiry ||
-      editedPeriod !== originalPeriod ||
-      editedInitial !== originalInitial ||
-      editedMax !== originalMax)
+    isErc7715StreamPermissionType(original.permission.type) &&
+    expiryChanged
   ) {
     throw new Error("This permission does not allow user adjustments");
   }
@@ -387,7 +396,10 @@ export function assertErc7715PermissionEditIsAllowed(
     throw new Error("Permission start time cannot be earlier than requested");
   }
 
-  if (originalExpiry !== null) {
+  if (
+    isErc7715StreamPermissionType(edited.permission.type) &&
+    originalExpiry !== null
+  ) {
     if (editedExpiry !== null && editedExpiry > originalExpiry) {
       throw new Error("Permission expiry cannot be later than requested");
     }
