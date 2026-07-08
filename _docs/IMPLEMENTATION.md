@@ -1896,8 +1896,12 @@ If the dapp requests an unsupported chain ID:
 
 - Content script checks `networksInfo` for the chain
 - If not found, sends `switchEthereumChainError` message
-- Impersonator rejects the promise with error: `"Chain {chainId} is not supported"`
-- Dapp receives the error and can display appropriate UI
+- Impersonator rejects the promise with EIP-1193 error code `4902` and
+  message: `"Chain {chainId} is not supported"`
+- Dapps/libraries such as viem can then follow up with
+  `wallet_addEthereumChain`; the add-chain confirmation persists arbitrary
+  custom EVM chains into `networksInfo` and auto-switches only when the active
+  account type can use that chain
 
 ### Per-Tab Chain State
 

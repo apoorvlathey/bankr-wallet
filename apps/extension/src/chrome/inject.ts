@@ -351,6 +351,7 @@ window.addEventListener("message", async (e) => {
             msg: {
               chainId,
               error: "Networks not configured",
+              code: 4902,
             },
           },
           "*"
@@ -370,6 +371,7 @@ window.addEventListener("message", async (e) => {
             msg: {
               chainId,
               error: `Chain ${chainId} is not supported`,
+              code: 4902,
             },
           },
           "*"
@@ -401,14 +403,21 @@ window.addEventListener("message", async (e) => {
     }
 
     case "i_addEthereumChain": {
-      const { chainId, chainName: reqChainName, nativeCurrency, rpcUrls, blockExplorerUrls } =
-        e.data.msg as {
-          chainId: number;
-          chainName?: string;
-          nativeCurrency?: { name: string; symbol: string; decimals: number };
-          rpcUrls?: string[];
-          blockExplorerUrls?: string[];
-        };
+      const {
+        id,
+        chainId,
+        chainName: reqChainName,
+        nativeCurrency,
+        rpcUrls,
+        blockExplorerUrls,
+      } = e.data.msg as {
+        id: string;
+        chainId: number;
+        chainName?: string;
+        nativeCurrency?: { name: string; symbol: string; decimals: number };
+        rpcUrls?: string[];
+        blockExplorerUrls?: string[];
+      };
 
       // Check if chain already exists in networksInfo
       const { networksInfo: nets } = (await chrome.storage.sync.get("networksInfo")) as {
@@ -432,7 +441,13 @@ window.addEventListener("message", async (e) => {
             window.postMessage(
               {
                 type: "addEthereumChainResult",
-                msg: { success: true, chainId, rpcUrl: nets[name].rpcUrl },
+                msg: {
+                  id,
+                  success: true,
+                  chainId,
+                  rpcUrl: nets[name].rpcUrl,
+                  shouldSwitch,
+                },
               },
               "*"
             );
@@ -470,7 +485,13 @@ window.addEventListener("message", async (e) => {
             window.postMessage(
               {
                 type: "addEthereumChainResult",
-                msg: { success: true, chainId, rpcUrl: result.rpcUrl },
+                msg: {
+                  id,
+                  success: true,
+                  chainId,
+                  rpcUrl: result.rpcUrl,
+                  shouldSwitch: result.shouldSwitch,
+                },
               },
               "*"
             );
@@ -487,7 +508,15 @@ window.addEventListener("message", async (e) => {
             window.postMessage(
               {
                 type: "addEthereumChainResult",
-                msg: { success: false, error: result.error || "User rejected" },
+                msg: {
+                  id,
+                  success: false,
+                  error: result.error || "User rejected",
+                  code:
+                    !result.error || /reject/i.test(result.error)
+                      ? 4001
+                      : undefined,
+                },
               },
               "*"
             );
@@ -497,7 +526,7 @@ window.addEventListener("message", async (e) => {
           window.postMessage(
             {
               type: "addEthereumChainResult",
-              msg: { success: false, error: err.message },
+              msg: { id, success: false, error: err.message },
             },
             "*"
           );

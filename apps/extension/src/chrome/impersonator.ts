@@ -230,6 +230,7 @@ class ImpersonatorProvider extends EventEmitter {
         // @ts-ignore
         const addParams = params[0];
         const addChainId = Number(addParams.chainId as string);
+        const requestId = crypto.randomUUID();
 
         const addChainPromise = new Promise<null>((resolve, reject) => {
           // Forward full params to content script for add-or-switch logic
@@ -237,6 +238,7 @@ class ImpersonatorProvider extends EventEmitter {
             {
               type: "i_addEthereumChain",
               msg: {
+                id: requestId,
                 chainId: addChainId,
                 chainName: addParams.chainName,
                 nativeCurrency: addParams.nativeCurrency,
@@ -255,12 +257,20 @@ class ImpersonatorProvider extends EventEmitter {
 
               if (e.data.type === "addEthereumChainResult") {
                 const msg = e.data.msg;
+                if (msg.id !== requestId) return;
                 controller.abort();
                 if (msg.success) {
-                  this.setChainId(msg.chainId, msg.rpcUrl);
+                  if (msg.shouldSwitch !== false) {
+                    this.setChainId(msg.chainId, msg.rpcUrl);
+                  }
                   resolve(null);
                 } else {
-                  reject(makeProviderError(msg.error || `Failed to add chain ${addChainId}`));
+                  reject(
+                    makeProviderError(
+                      msg.error || `Failed to add chain ${addChainId}`,
+                      msg.code,
+                    ),
+                  );
                 }
               }
             },
@@ -320,6 +330,7 @@ class ImpersonatorProvider extends EventEmitter {
                     reject(
                       makeProviderError(
                         e.data.msg.error || `Chain ${chainId} is not supported`,
+                        e.data.msg.code,
                       ),
                     );
                   }
