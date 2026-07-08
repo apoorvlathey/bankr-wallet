@@ -275,6 +275,26 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     viemChain: polygon,
   },
   {
+    chainId: 4663,
+    name: "Robinhood Chain",
+    rpcUrl: "https://rpc.mainnet.chain.robinhood.com",
+    explorer: "https://robinhoodchain.blockscout.com",
+    icon: "/chainIcons/robinhood.webp",
+    bg: "rgba(0, 200, 5, 0.15)",
+    border: "rgba(0, 200, 5, 0.4)",
+    text: "#00C805",
+    nativeCurrency: ETH_CURRENCY,
+    isOpStack: false,
+    isBankrSupported: true,
+    isSwapSupported: true,
+    // MetaMask's default EIP7702StatelessDeleGator is not deployed on 4663
+    // in @metamask/delegation-deployments 1.4.0 / Robinhood RPC yet.
+    isEip7702Supported: false,
+    coingeckoTokenId: "ethereum",
+    coingeckoPlatformId: "robinhood",
+    geckoTerminalNetworkId: "robinhood",
+  },
+  {
     chainId: 130,
     name: "Unichain",
     rpcUrl: "https://mainnet.unichain.org",
@@ -352,6 +372,7 @@ export const ZEROX_SUPPORTED_CHAIN_IDS = new Set([
   999,    // HyperEVM
   2741,   // Abstract
   4217,   // Tempo
+  4663,   // Robinhood Chain
   5000,   // Mantle
   8453,   // Base
   9745,   // Plasma

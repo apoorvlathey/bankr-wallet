@@ -218,6 +218,7 @@ The following chains are supported for transaction signing (listed in dropdown o
 | Ethereum | 1        | https://eth.llamarpc.com        | ✅        | ✅                   |          |
 | MegaETH  | 4326     | https://mainnet.megaeth.com/rpc |           | ✅                   | ✅       |
 | Polygon  | 137      | https://polygon-rpc.com         | ✅        | ✅                   |          |
+| Robinhood Chain | 4663 | https://rpc.mainnet.chain.robinhood.com | ✅ | ✅ | |
 | Unichain | 130      | https://mainnet.unichain.org    | ✅        | ✅                   | ✅       |
 
 These are configured in `src/constants/chainRegistry.ts` (the single source of truth for built-in chain data) and normalized into `networksInfo` by the service-worker bootstrap if storage is missing.

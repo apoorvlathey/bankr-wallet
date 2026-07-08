@@ -12,6 +12,7 @@ const PLATFORM_IDS: Record<number, string> = {
   56: "binance-smart-chain",
   137: "polygon-pos",
   130: "unichain",
+  4663: "robinhood",
   43114: "avalanche",
 };
 

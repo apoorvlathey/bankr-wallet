@@ -16,7 +16,7 @@ User → SwapCard (UI) → useSwapQuote hook → /api/swap/price (Next.js route)
 
 ### Multi-chain support
 - The **website** swap page is Base-only (`SWAP_CHAIN_ID = 8453`)
-- The **extension** swap supports all 0x-supported chains (22 chains). The server-side API routes validate against the full `SUPPORTED_CHAIN_IDS` set. The extension's eligible chains are derived from `ZEROX_SUPPORTED_CHAIN_IDS` in `chainRegistry.ts` — custom chains added by users also get swap support if their chain ID is in the 0x set.
+- The **extension** swap supports all 0x-supported EVM chains (23 chains, including Robinhood Chain). The server-side API routes validate against the full `SUPPORTED_CHAIN_IDS` set. The extension's eligible chains are derived from `ZEROX_SUPPORTED_CHAIN_IDS` in `chainRegistry.ts` — custom chains added by users also get swap support if their chain ID is in the 0x set.
 
 ## 0x Integration
 

@@ -27,6 +27,7 @@ const SUPPORTED_CHAIN_IDS = new Set([
   "999",    // HyperEVM
   "2741",   // Abstract
   "4217",   // Tempo
+  "4663",   // Robinhood Chain
   "5000",   // Mantle
   "8453",   // Base
   "9745",   // Plasma
