@@ -371,12 +371,6 @@ function SignatureRequestConfirmation({
       });
 
       if (result.success) {
-        toast({
-          title: "Signed",
-          description: "Message signed successfully",
-          status: "success",
-          duration: 2000,
-        });
         onConfirmed?.();
       } else {
         toast({
