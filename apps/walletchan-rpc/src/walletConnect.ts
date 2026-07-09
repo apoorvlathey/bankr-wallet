@@ -6,6 +6,15 @@ import { SignClient } from "@walletconnect/sign-client";
 import type { RuntimeChain } from "./chains.js";
 import { toCaip2 } from "./chains.js";
 import { withSpinner } from "./logger.js";
+import type {
+  SessionBatchingInfo,
+  SessionDisconnectInfo,
+  SessionDisconnectListener,
+  SessionInfo,
+  SessionProposal,
+  WalletBridge,
+  WalletTransport,
+} from "./walletBridge.js";
 
 const WALLETCHAN_ICON_URL = "https://walletchan.com/images/walletchan-icon.png";
 
@@ -41,12 +50,6 @@ const APPROVAL_METHODS = new Set([
 type SignClientInstance = Awaited<ReturnType<typeof SignClient.init>>;
 type Session = SignClientInstance["session"]["values"][number];
 
-interface SessionProposal {
-  uri: string;
-  approval: () => Promise<SessionInfo>;
-  createdAt: number;
-}
-
 export interface WalletConnectBridgeConfig {
   chains: RuntimeChain[];
   forceNewSession: boolean;
@@ -57,31 +60,7 @@ export interface WalletConnectBridgeConfig {
   requestTimeoutSeconds: number;
 }
 
-export interface SessionInfo {
-  accounts: string[];
-  batching: SessionBatchingInfo;
-  methods: string[];
-  peerName: string;
-  peerUrl: string;
-  topic: string;
-}
-
-export interface SessionBatchingInfo {
-  requested: boolean;
-  supported: boolean;
-  mode: "erc5792" | "sequential_fallback" | "disconnected";
-  approvedMethods: string[];
-  missingMethods: string[];
-}
-
-export interface SessionDisconnectInfo {
-  reason: string;
-  topic: string;
-}
-
-type SessionDisconnectListener = (info: SessionDisconnectInfo) => void;
-
-export class WalletConnectBridge {
+export class WalletConnectBridge implements WalletBridge {
   private client: SignClientInstance | null = null;
   private readonly disconnectListeners = new Set<SessionDisconnectListener>();
   private session: Session | null = null;
@@ -94,6 +73,10 @@ export class WalletConnectBridge {
       ? [...BASE_METHODS, ...BATCH_METHODS]
       : [...BASE_METHODS];
     this.batchingInfo = disconnectedBatchingInfo(config.includeBatching);
+  }
+
+  get transport(): WalletTransport {
+    return "walletconnect";
   }
 
   get connected(): boolean {
@@ -241,6 +224,7 @@ export class WalletConnectBridge {
       peerName: session.peer?.metadata?.name || "WalletConnect wallet",
       peerUrl: session.peer?.metadata?.url || "",
       topic: session.topic,
+      transport: this.transport,
     };
   }
 

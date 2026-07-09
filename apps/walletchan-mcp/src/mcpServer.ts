@@ -123,10 +123,10 @@ export class McpServer {
           serverInfo: {
             name: "walletchan-mcp",
             title: "WalletChan",
-            version: "0.2.0",
+            version: "0.4.0",
           },
           instructions:
-            "WalletChan MCP routes wallet requests through the local WalletChan RPC bridge over WalletConnect. If pairing is needed, call get_pairing_uri and show the local pairing URL or WalletConnect URI to the user. When a pairing URI is available, the tool returns an MCP image content block with the QR code before the text fallback.",
+            "WalletChan MCP routes wallet requests through the local WalletChan RPC bridge. If pairing is needed, call get_pairing_uri and show the local pairing URL or pairing URI to the user. When a pairing URI is available, the tool returns an MCP image content block with the QR code before the text fallback.",
         };
       case "notifications/initialized":
       case "notifications/cancelled":
@@ -224,7 +224,14 @@ function formatStructuredContent(result: unknown): Record<string, unknown> {
 function extractPairingUri(result: unknown): string | null {
   if (!isRecord(result)) return null;
   const pairingUri = result.pairingUri;
-  if (typeof pairingUri === "string" && pairingUri.startsWith("wc:")) {
+  if (
+    typeof pairingUri === "string" &&
+    (
+      pairingUri.startsWith("wc:") ||
+      pairingUri.startsWith("metamask://") ||
+      pairingUri.startsWith("https://metamask.app.link/")
+    )
+  ) {
     return pairingUri;
   }
   return null;

@@ -15,7 +15,7 @@ Public Veil wallet actions:
 
 - use `veil_prepare_register` and `veil_prepare_deposit`
 - pass `submitPreparedCalls: true` when the user wants WalletChan to submit the prepared calldata
-- approval happens in the WalletChan popup through WalletConnect
+- approval happens in the paired wallet through WalletChan RPC's selected wallet transport
 - deposits must meet Veil's current net minimums before fee: `0.01 ETH` or `20 USDC`
 
 Private Veil relay actions:

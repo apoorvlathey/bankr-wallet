@@ -13,6 +13,7 @@ export interface ManagedRpcConfig {
   rpcOverrides: string[];
   forceNewSession: boolean;
   includeBatching: boolean;
+  walletTransport: "walletconnect" | "metamask-connect";
   walletConnectProjectId?: string;
   requestTimeoutSeconds: number;
   upstreamTimeoutMs: number;
@@ -63,21 +64,38 @@ export class ManagedRpcProcess {
 
   async getPairingState(
     waitMs = 15000,
-    options: { forceNewSession?: boolean } = {},
+    options: {
+      account?: string;
+      forceRequest?: boolean;
+      forceNewSession?: boolean;
+      walletTransport?: "walletconnect" | "metamask-connect";
+    } = {},
   ): Promise<Record<string, unknown>> {
     await this.ensureStarted();
     const health = await this.rpc.health().catch(() => null);
     const healthAccounts = normalizeAccounts(health?.accounts);
     const connected = Boolean(health?.connected && healthAccounts.length > 0);
-    const pairing = (connected && !options.forceNewSession)
+    const transportSwitchRequested =
+      Boolean(options.walletTransport && options.walletTransport !== health?.transport);
+    if (options.forceNewSession || transportSwitchRequested) {
+      this.pairingUri = null;
+    }
+    const pairing = (connected && !options.forceNewSession && !transportSwitchRequested)
       ? null
-      : await this.rpc.pairing({ forceNewSession: options.forceNewSession }).catch(() => null);
+      : await this.rpc.pairing({
+        account: options.account,
+        forceRequest: options.forceRequest,
+        forceNewSession: options.forceNewSession,
+        walletTransport: options.walletTransport,
+      }).catch(() => null);
     if (pairing?.pairingUri) {
       this.pairingUri = pairing.pairingUri;
     }
     const pairingAccounts = normalizeAccounts(pairing?.accounts);
     const currentConnected = !options.forceNewSession &&
-      (connected || Boolean(pairing?.connected && pairingAccounts.length > 0));
+      (pairing
+        ? Boolean(pairing.connected && pairingAccounts.length > 0)
+        : connected);
     const pairingUrl = pairing?.pairingUrl || formatPairingPageUrl(this.config.rpcUrl);
     const pairingUri = currentConnected
       ? null
@@ -90,6 +108,8 @@ export class ManagedRpcProcess {
       connected: currentConnected,
       activeChainId: pairing?.activeChainId ?? health?.activeChainId ?? null,
       batching: pairing?.batching ?? health?.batching ?? null,
+      transport: pairing?.transport ?? health?.transport ?? this.config.walletTransport,
+      requestedTransport: options.walletTransport ?? null,
       accounts: currentConnected
         ? (healthAccounts.length > 0 ? healthAccounts : pairingAccounts)
         : [],
@@ -100,10 +120,10 @@ export class ManagedRpcProcess {
       message: currentConnected
         ? "WalletChan RPC is already paired."
         : pairingUri
-          ? "Open the pairing URL to scan the QR code, or paste this WalletConnect URI in any WalletConnect-capable wallet."
+          ? "Open the pairing URL to scan the QR code, or paste this wallet pairing URI in the wallet app."
           : this.externalProcessDetected
             ? "An existing walletchan-rpc process is running on this URL, but this MCP process could not ask it for a fresh pairing URI. Use that process's terminal output, or restart with --force-new-session on an unused --rpc-url port."
-            : "WalletChan RPC is starting, but no WalletConnect URI was observed yet. Call get_pairing_uri again.",
+            : "WalletChan RPC is starting, but no pairing URI was observed yet. Call get_pairing_uri again.",
     };
   }
 
@@ -143,6 +163,8 @@ export class ManagedRpcProcess {
       String(this.config.requestTimeoutSeconds),
       "--upstream-timeout",
       String(this.config.upstreamTimeoutMs),
+      "--wallet-transport",
+      this.config.walletTransport,
     ];
 
     if (this.config.forceNewSession) args.push("--force-new-session");
@@ -176,7 +198,7 @@ export class ManagedRpcProcess {
 
   private handleChildOutput(chunk: Buffer): void {
     const text = chunk.toString("utf8");
-    const match = text.match(/wc:[^\s]+/);
+    const match = text.match(/(?:wc:[^\s]+|https:\/\/metamask\.app\.link\/[^\s]+|metamask:\/\/[^\s]+)/);
     if (match) {
       this.pairingUri = match[0];
       for (const waiter of this.pairingWaiters.splice(0)) {

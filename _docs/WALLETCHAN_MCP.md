@@ -11,7 +11,7 @@ The design goal is:
 - replace Base Account approval links with WalletChan popup approvals
 - start and manage `walletchan-rpc` automatically by default
 
-For `walletconnect` profiles, the MCP server never signs directly. It sends JSON-RPC requests to `walletchan-rpc`, which forwards transaction/signature requests to WalletChan over WalletConnect. Local `agent` and `agent-eoa` profiles are different: MCP stores an encrypted agent wallet key, uses it to sign ERC-7710 redelegations or raw agent EOA transactions, and never exposes the private key through tools.
+For `walletconnect` profiles, the MCP server never signs directly. It sends JSON-RPC requests to `walletchan-rpc`, which forwards transaction/signature requests through the managed RPC wallet transport. The default transport remains WalletConnect; `--wallet-transport metamask-connect` or `WALLETCHAN_MCP_WALLET_TRANSPORT=metamask-connect` uses MetaMask Connect instead. Local `agent` and `agent-eoa` profiles are different: MCP stores an encrypted agent wallet key, uses it to sign ERC-7710 redelegations or raw agent EOA transactions, and never exposes the private key through tools.
 
 Detailed agent/delegation docs live under `_docs/walletchan-mcp/`:
 
@@ -48,6 +48,7 @@ Detailed agent/delegation docs live under `_docs/walletchan-mcp/`:
 | `apps/walletchan-mcp/src/walletchanActions.ts` | Portfolio/swap/bridge tool orchestration and approval-call preparation |
 | `apps/walletchan-mcp/src/walletchanActionHelpers.ts` | Shared portfolio filtering, route selection, warning, and input helpers |
 | `apps/walletchan-mcp/src/walletchanTokens.ts` | WalletChan token-list resolution and human amount parsing for swap/bridge |
+| `apps/walletchan-mcp/src/nameResolver.ts` | Forward name-service resolution for ENS/subdomains, Basenames, WNS `.wei`, GNS `.gwei`, and MegaNames `.mega` |
 | `apps/walletchan-mcp/src/evmEncoding.ts` | Minimal ERC-20/Permit2 calldata and amount encoding helpers |
 | `apps/walletchan-mcp/src/webRequest.ts` | Allowlisted HTTPS protocol API request helper |
 | `apps/walletchan-mcp/src/walletchanRpcDefaults.ts` | Default upstream RPC URLs/hosts mirrored from `walletchan-rpc` |
@@ -75,7 +76,7 @@ The server implements the stdio MCP JSON-RPC methods needed by current clients:
 | `notifications/cancelled` | No-op |
 | `ping` | Returns `{}` |
 | `tools/list` | Returns the WalletChan tool set with `title`, `description`, and JSON schemas |
-| `tools/call` | Executes a tool and returns `structuredContent`; when a WalletConnect pairing QR is available, the PNG image content block is returned before the text fallback |
+| `tools/call` | Executes a tool and returns `structuredContent`; when a wallet pairing QR is available, the PNG image content block is returned before the text fallback |
 | `resources/list` | Lists WalletChan skill and adapted Base plugin resources |
 | `resources/read` | Reads WalletChan skill markdown or fetches upstream Base markdown with overrides |
 | `resources/templates/list` | Returns no templates |
@@ -89,8 +90,9 @@ The current implementation uses newline-delimited JSON messages over stdio.
 
 | Tool | Backing behavior |
 |---|---|
-| `get_pairing_uri` | Starts or inspects managed `walletchan-rpc`; returns WalletConnect URI and local `/qr` QR page when pairing is needed, with an MCP image block containing a QR code for clients that render tool images |
+| `get_pairing_uri` | Starts or inspects managed `walletchan-rpc`; returns the active wallet transport's pairing URI and local `/qr` QR page when pairing is needed, with an MCP image block containing a QR code for clients that render tool images |
 | `get_wallets` | Ensures RPC is started, reads `/health` and `eth_accounts`, optionally validates a chain |
+| `resolve_name`, `resolve_names` | Forward-resolves user-provided names to EVM addresses with WalletChan extension parity: ENS/subdomains, Basenames, WNS `.wei`, GNS `.gwei`, and MegaNames `.mega`. These tools use MCP RPC overrides first and WalletChan default RPCs second. |
 | `list_execution_profiles`, `get_default_execution_profile`, `set_default_execution_profile`, `clear_default_execution_profile` | Manage local MCP execution-profile preference. `walletconnect` is the existing WalletChan popup path; `agent:<walletId>` and `agent-eoa:<walletId>` are local agent wallet profiles. |
 | `agent_create_wallet`, `agent_import_wallet`, `agent_list_wallets`, `agent_get_wallet`, `agent_delete_wallet`, `agent_reset_vault` | Manage local encrypted agent wallet metadata and key material. Tools return addresses/profile IDs only, never private keys. `agent_reset_vault` forgets local agent state without decrypting, for explicit fresh-start flows. |
 | `agent_prepare_delegation`, `agent_request_delegation_signature`, `agent_complete_delegation`, `agent_list_delegations`, `agent_get_delegation`, `agent_delete_delegation` | Create and store ERC-7710 delegation sessions. `agent_prepare_delegation` defaults to `delegateMode: "oneshot-relayer"` and resolves the current 1Shot `targetAddress` automatically; use `delegateMode: "agent-wallet"` for delegated x402. Signature requests go through the existing WalletChan typed-data popup; signed delegation payloads are encrypted in the local agent vault. |
@@ -128,9 +130,9 @@ The current implementation uses newline-delimited JSON messages over stdio.
 
 `send_calls` returns the bundle ID from WalletChan RPC. `sign` and `send_transaction` return a local `walletchan-<uuid>` request ID immediately; the underlying RPC call resolves later when the user approves or rejects in WalletChan.
 
-### WalletConnect Disconnect Recovery
+### Wallet Disconnect Recovery
 
-WalletChan MCP treats a closed/lost WalletConnect session as a recoverable tool state, not a generic MCP failure. When `walletchan-rpc` reports JSON-RPC `4900`, when approved accounts disappear, or when a request fails with a WalletConnect session/topic error, wallet-action tools return structured content like:
+WalletChan MCP treats a closed/lost wallet session as a recoverable tool state, not a generic MCP failure. When `walletchan-rpc` reports JSON-RPC `4900`, when approved accounts disappear, or when a request fails with a WalletConnect or MetaMask Connect session error, wallet-action tools return structured content like:
 
 ```json
 {
@@ -145,9 +147,9 @@ WalletChan MCP treats a closed/lost WalletConnect session as a recoverable tool 
 }
 ```
 
-The harness should show `pairingUrl` when present so the user can open a browser QR page, or show `pairingUri` directly when a link is not usable. If neither is present, call `get_pairing_uri`. Tool responses that include a `pairingUri` also include a standard MCP `image` content block with a PNG QR code when generation succeeds. Clients that render MCP images can show the QR directly; terminal clients may still show only a placeholder, so `/qr` and the raw `wc:` URI remain the reliable fallbacks. After the user pairs a wallet again, retry the action. If `reprepareRequired` is true, rebuild or re-fetch prepared calldata first because quotes, simulations, and nonces can go stale.
+The harness should show `pairingUrl` when present so the user can open a browser QR page, or show `pairingUri` directly when a link is not usable. If neither is present, call `get_pairing_uri`. Tool responses that include a `pairingUri` also include a standard MCP `image` content block with a PNG QR code when generation succeeds. Clients that render MCP images can show the QR directly; terminal clients may still show only a placeholder, so `/qr` and the raw pairing URI remain the reliable fallbacks. After the user pairs a wallet again, retry the action. If `reprepareRequired` is true, rebuild or re-fetch prepared calldata first because quotes, simulations, and nonces can go stale.
 
-`get_wallets` also reports `status: "needs_pairing"` / `needsPairing: true` when the RPC process is running but no approved WalletConnect account is available. `get_request_status` applies the same recovery shape for async signature/transaction requests that failed after the initial tool call returned a request ID.
+`get_wallets` also reports `status: "needs_pairing"` / `needsPairing: true` when the RPC process is running but no approved wallet account is available. `get_request_status` applies the same recovery shape for async signature/transaction requests that failed after the initial tool call returned a request ID.
 
 `send_prepared_calls` is the main speed path for Base plugins. It accepts already-prepared output from a harness-run protocol API request, harness-run protocol CLI, or harness-configured protocol MCP prepare tool and extracts calls from these common shapes:
 
@@ -175,6 +177,8 @@ When `atomicRequired` is omitted, MCP submits batches with the Base-like atomic 
 
 `get_portfolio_balances`, `get_swap_price`, `swap`, `get_bridge_quote`, `bridge`, and `get_bridge_status` call the same first-party WalletChan API surface used by the extension. The default API base is `https://walletchan.com/api`; local website API development can override it with `--api-base` or `WALLETCHAN_MCP_API_BASE`.
 
+Name resolution is intentionally explicit. MCP tools do not silently accept names in transaction address fields; agents should call `resolve_name` or `resolve_names` for user-supplied names, inspect the returned `address`, then pass the raw address to wallet tools. Supported forward-resolution services match the extension's address input path: ENS and ENS subdomains, Basenames under `.base.eth`, WNS `.wei`, GNS `.gwei`, and MegaNames `.mega`. Ethereum mainnet RPC is used for ENS/Basenames/WNS/GNS, and MegaETH RPC is used for `.mega`; `--rpc` overrides take priority over WalletChan defaults.
+
 `swap` resolves token symbols from the WalletChan swap token list when possible, fetches both the indicative price and firm quote, checks current ERC-20 and Permit2 allowance through `walletchan-rpc` `eth_call`, and adds only the approval calls still needed. It then submits the approval + swap batch through the same `send_calls` approval path. `previewOnly: true` or `submit: false` returns the quote and prepared calls without opening WalletChan.
 
 `bridge` resolves token symbols from WalletChan/Bungee token lists, fetches a fresh quote, prefers Bungee manual routes, calls `build-tx` when needed, checks ERC-20 allowance, and submits approval + bridge as a WalletChan batch. Auto routes with executable `txData` are supported. Auto routes that require a Permit2 typed-data submit path are intentionally not submitted by this high-level tool yet; use protocol-specific handling plus WalletChan `sign` if that path becomes necessary.
@@ -183,7 +187,7 @@ When `atomicRequired` is omitted, MCP submits batches with the Base-like atomic 
 
 WalletChan MCP has an execution-profile registry so mutating tools can choose between the paired WalletChan wallet and locally managed agent wallets without extension changes:
 
-- `walletconnect` — existing path through `walletchan-rpc`, WalletConnect, and the WalletChan popup.
+- `walletconnect` — existing main-wallet approval path through `walletchan-rpc` and its selected wallet transport.
 - `agent:<walletId>` — delegated agent path for ERC-7710/1Shot execution and delegated x402 payment.
 - `agent-eoa:<walletId>` — raw local agent EOA path for direct agent-wallet interactions.
 
@@ -204,13 +208,13 @@ See `_docs/walletchan-mcp/AGENT_WALLETS.md` for storage, secret generation, prof
 
 `sign_siwe` exists for protocol login challenges such as Virtuals ACP. It accepts either the exact EIP-4361 message returned by a protocol tool or enough SIWE fields to build one. The preferred path is always the exact `message` returned by the protocol. The tool validates the header, address, URI, version, chain ID, nonce, and issued-at timestamp before opening WalletChan, so malformed copied challenges fail before a user sees a popup.
 
-Some remote MCPs return SIWE challenges wrapped as `{ "message": "..." }`, and some chat clients may pass that wrapper as either an object or a JSON string. WalletChan MCP unwraps that envelope before validation/signing. The WalletConnect request sent to `walletchan-rpc` must stay the standard `personal_sign` shape:
+Some remote MCPs return SIWE challenges wrapped as `{ "message": "..." }`, and some chat clients may pass that wrapper as either an object or a JSON string. WalletChan MCP unwraps that envelope before validation/signing. The wallet request sent to `walletchan-rpc` must stay the standard `personal_sign` shape:
 
 ```json
 ["app.virtuals.io wants you to sign in with your Ethereum account:\n...", "0xSigner"]
 ```
 
-Do not send the wrapper itself as the message, and do not add WalletChan-specific `personal_sign` params. WalletChan extension should receive the same standard request any WalletConnect wallet would receive. Since the WalletConnect peer is the local RPC bridge, wallet UIs may still show `127.0.0.1:4209` as the requester, but the raw SIWE message should be the protocol challenge, for example `app.virtuals.io`.
+Do not send the wrapper itself as the message, and do not add WalletChan-specific `personal_sign` params. The paired wallet should receive the same standard request any EIP-1193 or WalletConnect wallet would receive. Since the local RPC bridge is the requester, wallet UIs may still show `127.0.0.1:4209`, but the raw SIWE message should be the protocol challenge, for example `app.virtuals.io`.
 
 `start_remote_mcp_siwe_login` and `complete_remote_mcp_siwe_login` wrap the common remote-MCP SIWE pattern:
 
@@ -229,8 +233,8 @@ Managed RPC is enabled by default. The MCP server uses this logic:
 2. If not reachable, resolve the `@walletchan/rpc` package.
 3. Prefer `@walletchan/rpc/dist/index.js`.
 4. If no dist file exists but source is available in the monorepo, fall back to `pnpm --dir <repoRoot> --filter @walletchan/rpc dev --`.
-5. Spawn the child with selected chain flags, RPC overrides, timeouts, batching mode, project ID, and optional `--force-new-session`.
-6. Ask the RPC `/pairing` route for a fresh `wc:` URI when `/health` reports no usable session. The response includes `pairingUrl` for the RPC `/qr` browser QR page. Child stdout parsing is kept as a startup fallback.
+5. Spawn the child with selected chain flags, RPC overrides, wallet transport, timeouts, batching mode, project ID, and optional `--force-new-session`.
+6. Ask the RPC `/pairing` route for a fresh pairing URI when `/health` reports no usable session. The response includes `pairingUrl` for the RPC `/qr` browser QR page. Child stdout parsing is kept as a startup fallback.
 7. On MCP shutdown, terminate the managed child.
 
 Default managed RPC config:
@@ -238,19 +242,37 @@ Default managed RPC config:
 - RPC URL: `http://127.0.0.1:4209`
 - RPC bind host: `127.0.0.1` (`--rpc-host 0.0.0.0` is useful inside isolated containers whose published port is restricted to host loopback)
 - Chain: `base`
+- Wallet transport: `walletconnect`
 - Batching: enabled
 - Request timeout: `300` seconds
 - Upstream timeout: `15000` ms
 
-If another older `walletchan-rpc` is already running on the same URL and does not expose `/pairing`, MCP cannot recover its original printed `wc:` URI. In that case `get_pairing_uri` reports that the existing process is external and asks the user to use that process's terminal output or restart on an unused port with `--force-new-session`.
+If another older `walletchan-rpc` is already running on the same URL and does not expose `/pairing`, MCP cannot recover its original printed pairing URI. In that case `get_pairing_uri` reports that the existing process is external and asks the user to use that process's terminal output or restart on an unused port with `--force-new-session`.
 
-If the user manually disconnects the WalletConnect session from the wallet, the RPC marks the session disconnected when it sees a delete/expire/update-to-empty signal. Interactive `walletchan-rpc` terminals prompt for Enter before printing a new URI. MCP-managed RPC runs non-interactively, so the next `get_pairing_uri` call asks `/pairing` for a new URI without restarting the MCP server. MCP also returns the `/qr` page URL so the user can scan a QR in the browser.
+If the user manually disconnects the wallet session, the RPC marks the session disconnected when the selected transport reports disconnect or zero approved accounts. Interactive `walletchan-rpc` terminals prompt for Enter before printing a new URI. MCP-managed RPC runs non-interactively, so the next `get_pairing_uri` call asks `/pairing` for a new URI without restarting the MCP server. MCP also returns the `/qr` page URL so the user can scan a QR in the browser.
 
-`get_pairing_uri` accepts `forceNewSession: true` (or `force: true`) to disconnect stored WalletConnect sessions and create a fresh URI for switching wallets. The RPC `/pairing?force=true` endpoint backs this behavior. The browser QR page also supports `/qr?force=true` and a "New Wallet URI" button. A normal `get_pairing_uri` call should only report `connected: true` / "already paired" when the RPC also reports at least one approved account.
+`get_pairing_uri` accepts `forceNewSession: true` (or `force: true`) to disconnect stored wallet sessions and create a fresh URI for switching wallets. The RPC `/pairing?force=true` endpoint backs this behavior. The browser QR page also supports `/qr?force=true` and a "New Wallet URI" button. A normal `get_pairing_uri` call should only report `connected: true` / "already paired" when the RPC also reports at least one approved account.
 
-When `get_pairing_uri` returns an unpaired state with a `wc:` URI, `mcpServer.ts` appends a PNG QR code as a standard MCP `image` content item. The structured result stays unchanged and still contains `pairingUri`; QR image support is intentionally additive because not every MCP terminal client renders image blocks inline.
+`get_pairing_uri` also accepts `walletTransport` (or `transport`) to switch the managed RPC transport without restarting MCP:
 
-The QR image block is emitted before the text fallback so clients that show the first renderable content item can display the QR. Clients that do not render MCP images should still show `pairingUrl` and the raw `wc:` URI.
+```json
+{ "walletTransport": "metamask-connect", "forceNewSession": true }
+{ "walletTransport": "walletconnect", "forceNewSession": true }
+```
+
+MCP passes this through to the RPC `/pairing?transport=...` endpoint. This works for MCP-managed RPC and for external RPC processes that include the live-switch endpoint. Older external RPC processes without that endpoint still require restart. Use calls sequentially; concurrent transport-switch requests can race each other.
+
+For MetaMask Connect account switching, `get_wallets` should be called after the user changes the selected account in MetaMask Mobile; RPC refreshes from MetaMask Connect's selected account on account reads. If the selected address still does not update, call:
+
+```json
+{ "walletTransport": "metamask-connect", "account": "0x...", "forceRequest": true }
+```
+
+MCP passes this to `/pairing?transport=metamask-connect&account=...&forceRequest=true`, which calls MetaMask Connect `connect({ account, forceRequest: true })`.
+
+When `get_pairing_uri` returns an unpaired state with a supported pairing URI (`wc:`, `metamask://`, or `https://metamask.app.link/...`), `mcpServer.ts` appends a PNG QR code as a standard MCP `image` content item. The structured result stays unchanged and still contains `pairingUri`; QR image support is intentionally additive because not every MCP terminal client renders image blocks inline.
+
+The QR image block is emitted before the text fallback so clients that show the first renderable content item can display the QR. Clients that do not render MCP images should still show `pairingUrl` and the raw `pairingUri`.
 
 ## Base Skill Adaptation
 
@@ -290,7 +312,7 @@ Practical setup paths:
 
 Plain stdio MCP does not provide a standard cross-client icon field. Some clients may show a monogram fallback even though the server and tools expose readable `title` metadata.
 
-Pairing QR display depends on the client. MCP image content is part of the protocol, and Claude Code/Codex can consume image blocks, but terminal UIs may render only a placeholder rather than a scannable inline image. WalletChan MCP therefore returns `pairingUrl` for the RPC browser QR page, the `wc:` URI in text/structured content, and the optional QR image block.
+Pairing QR display depends on the client. MCP image content is part of the protocol, and Claude Code/Codex can consume image blocks, but terminal UIs may render only a placeholder rather than a scannable inline image. WalletChan MCP therefore returns `pairingUrl` for the RPC browser QR page, the raw pairing URI in text/structured content, and the optional QR image block.
 
 ## Environment Variables
 
@@ -302,6 +324,7 @@ Pairing QR display depends on the client. MCP image content is part of the proto
 | `WALLETCHAN_MCP_MANAGED_RPC` | Set to `false` to disable automatic RPC child process |
 | `WALLETCHAN_MCP_CHAINS` | Comma-separated managed RPC chains |
 | `WALLETCHAN_MCP_RPC_OVERRIDES` | Comma-separated managed RPC upstream overrides |
+| `WALLETCHAN_MCP_WALLET_TRANSPORT` / `WALLETCHAN_RPC_WALLET_TRANSPORT` | Managed RPC wallet transport: `walletconnect` or `metamask-connect` |
 | `WALLETCHAN_MCP_WALLETCONNECT_PROJECT_ID` | WalletConnect project ID for managed RPC |
 | `WALLETCONNECT_PROJECT_ID` / `WC_PROJECT_ID` | Fallback WalletConnect project ID |
 | `WALLETCHAN_MCP_WEB_REQUEST` | Set to `false` to disable allowlisted `web_request` |
@@ -330,13 +353,15 @@ For agent vault secret generation and storage guidance, see `_docs/walletchan-mc
 
 ## NPM Publishing
 
-`@walletchan/mcp` is published from `apps/walletchan-mcp`. For publishable MCP changes, bump both `apps/walletchan-mcp/package.json` and `serverInfo.version` in `apps/walletchan-mcp/src/mcpServer.ts`. If MCP depends on new `walletchan-rpc` behavior, bump `apps/walletchan-mcp/package.json` `dependencies["@walletchan/rpc"]` to the new workspace range and publish `@walletchan/rpc` first.
+`@walletchan/mcp` is published from `apps/walletchan-mcp`. For publishable MCP changes, update `apps/walletchan-mcp/CHANGELOG.md` from the package git diff, bump both `apps/walletchan-mcp/package.json` and `serverInfo.version` in `apps/walletchan-mcp/src/mcpServer.ts`. If MCP depends on new `walletchan-rpc` behavior, bump `apps/walletchan-mcp/package.json` `dependencies["@walletchan/rpc"]` to the new workspace range, mention that dependency in the MCP changelog entry, and publish `@walletchan/rpc` first.
 
 From the repo root:
 
 ```bash
+git log --oneline -- apps/walletchan-mcp _docs/WALLETCHAN_MCP.md
 pnpm install --lockfile-only
 pnpm build:walletchan-mcp
+pnpm pack:walletchan-mcp
 pnpm publish:walletchan-mcp:dry-run
 pnpm publish:walletchan-mcp
 ```
@@ -357,21 +382,24 @@ For MCP-only changes:
      | node apps/walletchan-mcp/dist/index.js --no-managed-rpc
    ```
 3. Run `get_pairing_uri` on an unused port with `--force-new-session` and `forceNewSession: true`; verify a `wc:` URI is returned.
-4. Pair a wallet and run `get_wallets`.
-5. Call `get_portfolio_balances` for the paired address.
-6. Call `get_swap_price` with a small read-only quote, then `swap` with `previewOnly: true`.
-7. Call `get_bridge_quote` with a small read-only route, then `bridge` with `previewOnly: true`.
-8. Load a Base plugin with `load_base_plugin`, then verify it contains WalletChan override text.
-9. Call `list_base_plugin_runners` and verify Morpho and Aerodrome commands are listed.
-10. Call `run_base_plugin_cli` with a read-only command such as Morpho `query-vaults` or Aerodrome `pools`.
-11. Call `web_request` against `https://api.morpho.org/graphql` with a small `POST` introspection query and verify non-allowlisted hosts are rejected.
-12. For Base skill changes, load at least one plugin with `load_base_plugin` and confirm supported external API/CLI steps point to `web_request` / `run_base_plugin_cli` before harness fallbacks.
-13. Call `list_skill_resources` and verify Veil resources are listed.
-14. Call `list_protocols` and verify the Veil profile reports its managed data directory.
-15. With `WALLETCHAN_MCP_VEIL_COMMAND=veil-mcp` or the default npx path, call `veil_status` and verify it does not write `.env.veil` into the repo.
-16. Call `veil_prepare_deposit` with `submitPreparedCalls: false` or omitted to verify the prepare payload shape and the `walletchanPreflight.veilDeposit` result before testing WalletChan approval.
-17. For agent-wallet changes, use a temporary `WALLETCHAN_MCP_AGENT_WALLET_DIR`, then smoke `agent_create_wallet`, `list_execution_profiles`, `agent_delete_wallet`, and `agent_reset_vault`. Verify a `vault-secret` file is auto-created in the temp directory and reset works without the old secret.
-18. For delegated x402 changes, call `agent_x402_quote` against both an ERC-7710-supporting test endpoint and a non-ERC-7710 x402 endpoint. Verify the latter returns `delegatedPaymentSupported: false` or rejects without falling back to `agent-eoa`.
+4. Run `get_pairing_uri({ walletTransport: "metamask-connect", forceNewSession: true })`; verify a MetaMask Connect URI or QR image is returned without restarting MCP.
+5. Switch back with `get_pairing_uri({ walletTransport: "walletconnect", forceNewSession: true })`; verify a `wc:` URI is returned.
+6. Call `resolve_name` for at least one ENS name and one unsupported/missing name; verify it returns structured address or unresolved output without requiring wallet pairing.
+7. Pair a wallet and run `get_wallets`.
+8. Call `get_portfolio_balances` for the paired address.
+9. Call `get_swap_price` with a small read-only quote, then `swap` with `previewOnly: true`.
+10. Call `get_bridge_quote` with a small read-only route, then `bridge` with `previewOnly: true`.
+11. Load a Base plugin with `load_base_plugin`, then verify it contains WalletChan override text.
+12. Call `list_base_plugin_runners` and verify Morpho and Aerodrome commands are listed.
+13. Call `run_base_plugin_cli` with a read-only command such as Morpho `query-vaults` or Aerodrome `pools`.
+14. Call `web_request` against `https://api.morpho.org/graphql` with a small `POST` introspection query and verify non-allowlisted hosts are rejected.
+15. For Base skill changes, load at least one plugin with `load_base_plugin` and confirm supported external API/CLI steps point to `web_request` / `run_base_plugin_cli` before harness fallbacks.
+16. Call `list_skill_resources` and verify Veil resources are listed.
+17. Call `list_protocols` and verify the Veil profile reports its managed data directory.
+18. With `WALLETCHAN_MCP_VEIL_COMMAND=veil-mcp` or the default npx path, call `veil_status` and verify it does not write `.env.veil` into the repo.
+19. Call `veil_prepare_deposit` with `submitPreparedCalls: false` or omitted to verify the prepare payload shape and the `walletchanPreflight.veilDeposit` result before testing WalletChan approval.
+20. For agent-wallet changes, use a temporary `WALLETCHAN_MCP_AGENT_WALLET_DIR`, then smoke `agent_create_wallet`, `list_execution_profiles`, `agent_delete_wallet`, and `agent_reset_vault`. Verify a `vault-secret` file is auto-created in the temp directory and reset works without the old secret.
+21. For delegated x402 changes, call `agent_x402_quote` against both an ERC-7710-supporting test endpoint and a non-ERC-7710 x402 endpoint. Verify the latter returns `delegatedPaymentSupported: false` or rejects without falling back to `agent-eoa`.
 
 If a change touches transaction or signature behavior through RPC, also test the WalletChan approval path across all WalletChan account types:
 

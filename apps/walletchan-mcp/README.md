@@ -2,17 +2,18 @@
 
 Connect AI agents to WalletChan accounts with popup approval by default, plus scoped delegated execution when you opt in. Works with Claude, Cursor, Codex, and other local MCP clients.
 
-WalletChan MCP is a local Model Context Protocol server that lets an AI assistant prepare wallet actions, route normal requests to your WalletChan extension for approval, and execute pre-authorized agent flows through signed ERC-7710 delegations. It is designed for the same kind of chat-based onchain workflow as Base MCP, but the normal approval path happens in WalletChan through WalletConnect instead of Base Account.
+WalletChan MCP is a local Model Context Protocol server that lets an AI assistant prepare wallet actions, route normal requests to a paired wallet for approval, and execute pre-authorized agent flows through signed ERC-7710 delegations. It is designed for the same kind of chat-based onchain workflow as Base MCP, but the normal approval path happens through WalletChan RPC with WalletConnect or MetaMask Connect instead of Base Account.
 
 For the normal `walletconnect` execution profile, nothing moves onchain just because the assistant suggests it: transactions and signatures still require you to review and approve them in the WalletChan popup. For delegated `agent` profiles, you approve a scoped ERC-7710 delegation once, then the local agent can execute only in-scope transactions through that delegation.
 
 ## What You Can Do
 
-- Connect your WalletChan extension to an AI assistant via WalletConnect.
+- Connect your WalletChan extension to an AI assistant via WalletConnect, or connect MetaMask Mobile through MetaMask Connect.
 - Check connected wallets and portfolio balances.
+- Resolve user-provided names to EVM addresses with WalletChan extension parity: ENS/subdomains, Basenames, WNS `.wei`, GNS `.gwei`, and MegaNames `.mega`.
 - Swap and bridge tokens using WalletChan's first-party APIs.
 - Send transactions, ERC-5792 batch calls, sequential fallback call sets, and sign messages.
-- Create local encrypted agent wallets and choose an execution profile for future delegated/relayed execution while keeping the existing WalletConnect approval path available.
+- Create local encrypted agent wallets and choose an execution profile for future delegated/relayed execution while keeping the main-wallet approval path available.
 - Delegate scoped permissions from your main WalletChan wallet to 1Shot so an agent can relay in-scope DeFi transactions without a WalletChan popup every time.
 - Use one-time WalletChan signature approvals for reusable function-call delegations, so matching contract calls can be consumed later by the agent until the signed scope no longer covers the request.
 - Use Base MCP-style DeFi skills when a protocol skill can produce wallet calls for WalletChan approval or delegated agent execution.
@@ -31,8 +32,8 @@ For the normal `walletconnect` execution profile, nothing moves onchain just bec
 
 ## Requirements
 
-- Node.js 18 or newer.
-- WalletChan browser extension or any other wallet supporting WalletConnect installed.
+- Node.js 20.19.0 or newer.
+- WalletChan browser extension or any other wallet supporting WalletConnect, or MetaMask Mobile for MetaMask Connect.
 - An MCP client that supports local stdio MCP servers, such as Claude Desktop, Claude Code, Cursor, or Codex.
 
 WalletChan MCP starts a local `walletchan-rpc` bridge for you. You do not need to run a separate RPC process in normal use.
@@ -136,9 +137,9 @@ After installation, ask your assistant:
 Connect to WalletChan.
 ```
 
-The assistant should call `get_pairing_uri` and show the pairing result. The response includes a local `pairingUrl` such as `http://127.0.0.1:4209/qr`; open it to scan a browser QR code or copy the WalletConnect URI. Clients that render MCP images may also show a QR code directly in chat. The response still includes a WalletConnect URI that starts with `wc:` as the raw paste fallback.
+The assistant should call `get_pairing_uri` and show the pairing result. The response includes a local `pairingUrl` such as `http://127.0.0.1:4209/qr`; open it to scan a browser QR code or copy the raw pairing URI. Clients that render MCP images may also show a QR code directly in chat. WalletConnect URIs start with `wc:`. MetaMask Connect URIs may use a MetaMask deep link or app link.
 
-In WalletChan:
+For WalletConnect with WalletChan:
 
 1. Open the extension.
 2. Go to `More -> WalletConnect`.
@@ -151,9 +152,41 @@ After pairing, ask:
 Show me my connected WalletChan wallets.
 ```
 
-To switch wallets or force a fresh WalletConnect proposal, ask the assistant to get a new WalletChan pairing URI. The tool supports `forceNewSession: true`; this disconnects stored WalletConnect sessions and returns a new QR/URI. The browser QR page also has a fresh URI control, or can be opened with `/qr?force=true`.
+To switch wallets or force a fresh proposal, ask the assistant to get a new WalletChan pairing URI. The tool supports `forceNewSession: true`; this clears the selected transport session and returns a new QR/URI. The browser QR page also has a fresh URI control, or can be opened with `/qr?force=true`.
+
+To switch the already-running managed RPC to MetaMask Connect without restarting MCP:
+
+```text
+get_pairing_uri({ walletTransport: "metamask-connect", forceNewSession: true })
+```
+
+To switch back to WalletConnect:
+
+```text
+get_pairing_uri({ walletTransport: "walletconnect", forceNewSession: true })
+```
+
+For MetaMask Connect account changes, call `get_wallets` after switching accounts in MetaMask Mobile. If the address still has not updated, ask MetaMask Connect to request the account explicitly:
+
+```text
+get_pairing_uri({ walletTransport: "metamask-connect", account: "0x...", forceRequest: true })
+```
 
 The assistant should report the approved wallet address and chain.
+
+## Name Resolution
+
+WalletChan MCP exposes forward name resolution tools for user-provided recipient or signer inputs:
+
+```text
+resolve_name({ name: "vitalik.eth" })
+resolve_name({ name: "name.base.eth" })
+resolve_name({ name: "name.wei" })
+resolve_name({ name: "name.gwei" })
+resolve_name({ name: "name.mega" })
+```
+
+`resolve_names` resolves a batch. The tools support the same forward-resolution families as the extension: ENS and subdomains, Basenames under `.base.eth`, WNS `.wei`, GNS `.gwei`, and MegaNames `.mega`. They use MCP `--rpc` overrides first for the relevant chain, then WalletChan default RPCs. They do not reverse-resolve addresses, fetch avatars, or silently rewrite transaction inputs; agents should call `resolve_name` explicitly, show the resolved address when useful, then pass the returned `address` into wallet tools.
 
 ## Try It
 
@@ -344,6 +377,14 @@ Expose more chains to WalletChan RPC:
 walletchan-mcp --chain base --chain ethereum --chain polygon
 ```
 
+Start the managed RPC with MetaMask Connect instead of WalletConnect:
+
+```bash
+walletchan-mcp --wallet-transport metamask-connect
+```
+
+The same default can be set with `WALLETCHAN_MCP_WALLET_TRANSPORT=metamask-connect`.
+
 Use a different local RPC port:
 
 ```bash
@@ -386,6 +427,15 @@ Use a dedicated Base RPC for both WalletChan RPC and Veil:
 ```bash
 walletchan-mcp --rpc base=https://your-base-rpc.example
 ```
+
+Use dedicated RPCs for name resolution:
+
+```bash
+walletchan-mcp --chain ethereum --rpc ethereum=https://your-ethereum-rpc.example
+walletchan-mcp --chain megaeth --rpc megaeth=https://your-megaeth-rpc.example
+```
+
+Ethereum RPC is used for ENS, Basenames, `.wei`, and `.gwei`. MegaETH RPC is used for `.mega`.
 
 Add an extra allowlisted HTTPS host for protocol data:
 
@@ -438,10 +488,10 @@ The raw `agent-eoa` path signs locally and broadcasts directly to the configured
 - Managed protocol integrations run in controlled working directories. Veil `.env.veil` stays in the managed Veil directory unless you override it.
 - Veil x402 relay payment requires a quoted cap and explicit confirmation; broader Veil private relay actions are disabled by default because they do not use WalletChan popup approval.
 
-The normal WalletConnect approval path is:
+The normal wallet-transport approval path is:
 
 ```text
-AI assistant -> WalletChan MCP -> local walletchan-rpc -> WalletConnect -> WalletChan popup -> user approval
+AI assistant -> WalletChan MCP -> local walletchan-rpc -> WalletConnect or MetaMask Connect -> wallet approval UI -> user approval
 ```
 
 The delegated agent execution path is:
@@ -456,19 +506,19 @@ AI assistant -> WalletChan MCP agent profile -> signed ERC-7710 delegation -> 1S
 
 Restart or reload your MCP client after adding the config. In Claude Code, run `/mcp`. In Cursor, check Settings -> MCP.
 
-### The assistant shows a WalletConnect URI but pairing does not complete
+### The assistant shows a pairing URI but pairing does not complete
 
-Make sure your wallet is unlocked, open the returned `pairingUrl` or paste the full `wc:` URI, and approve the pairing in the wallet. If the URI expired, ask the assistant to connect again.
+Make sure your wallet is unlocked, open the returned `pairingUrl` or paste the full raw URI, and approve the pairing in the wallet. If the URI expired, ask the assistant to connect again.
 
 ### The assistant does not show a QR code
 
-WalletChan MCP returns a standard MCP image block for the pairing QR when a `wc:` URI is available, but terminal clients may show only text or an image placeholder. Use the `wc:` URI in the same response: WalletChan -> More -> WalletConnect -> paste.
+WalletChan MCP returns a standard MCP image block for WalletConnect and MetaMask Connect pairing URIs, but terminal clients may show only text or an image placeholder. Use the raw URI in the same response as the fallback.
 
 For a scannable QR that does not depend on chat image rendering, open the `pairingUrl` returned by `get_pairing_uri`, usually `http://127.0.0.1:4209/qr`.
 
 ### A transaction tool says `needs_pairing`
 
-The WalletConnect session was closed or expired. Pair again with the URI returned by the tool. For prepared DeFi transactions, ask the assistant to prepare a fresh transaction before resubmitting.
+The selected wallet transport session was closed or expired. Pair again with the URI returned by the tool. For prepared DeFi transactions, ask the assistant to prepare a fresh transaction before resubmitting.
 
 ### An old agent wallet still appears
 

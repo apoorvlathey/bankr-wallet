@@ -1,8 +1,8 @@
 {
   "name": "@walletchan/mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
-  "description": "Local MCP adapter for WalletChan RPC and Base MCP-style DeFi skills",
+  "description": "Local MCP adapter for WalletChan RPC, WalletConnect, MetaMask Connect, and Base MCP-style DeFi skills",
   "license": "MIT",
   "bin": {
     "walletchan-mcp": "dist/index.js"
@@ -12,6 +12,7 @@
   "files": [
     "dist",
     "skills",
+    "CHANGELOG.md",
     "README.md",
     "SKILL.md",
     "LICENSE.md"
@@ -20,8 +21,8 @@
     "dev": "tsx src/index.ts",
     "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc && chmod +x dist/index.js",
     "start": "node dist/index.js",
-    "pack:dry-run": "pnpm build && pnpm publish --dry-run --access public",
-    "publish:dry-run": "pnpm publish --dry-run --access public",
+    "pack:dry-run": "pnpm build && npm pack --dry-run",
+    "publish:dry-run": "pnpm publish --dry-run --access public --no-git-checks",
     "publish:npm": "pnpm publish --access public",
     "prepublishOnly": "pnpm build"
   },
@@ -29,7 +30,7 @@
     "@metamask/smart-accounts-kit": "^1.6.0",
     "@metamask/x402": "^0.2.0",
     "@morpho-org/cli": "0.2.0",
-    "@walletchan/rpc": "workspace:^0.2.0",
+    "@walletchan/rpc": "workspace:^0.3.0",
     "@x402/evm": "^2.15.0",
     "@x402/fetch": "^2.15.0",
     "qrcode": "1.5.3",
@@ -41,6 +42,6 @@
     "typescript": "^5.6.3"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.19.0"
   }
 }

@@ -1,7 +1,7 @@
 import type { CliConfig } from "./cli.js";
 import { formatChains, toHexChainId } from "./chains.js";
 import type { RpcContext } from "./rpcHandler.js";
-import type { SessionInfo } from "./walletConnect.js";
+import type { SessionInfo } from "./walletBridge.js";
 
 const APPROVAL_METHODS = [
   "eth_sendTransaction",
@@ -27,6 +27,7 @@ export function formatRuntimeSkill(config: CliConfig, context: RpcContext): stri
   const preferredAccount = accounts[0] || "0xYourApprovedAccount";
   const batching = context.wallet.getBatchingInfo();
   const methods = [...APPROVAL_METHODS, ...BATCH_METHODS];
+  const pairingLabel = context.wallet.transport === "metamask-connect" ? "MetaMask Connect" : "WalletConnect";
 
   return `---
 name: walletchan-rpc
@@ -41,6 +42,7 @@ This skill was served by a live WalletChan RPC instance. Use the runtime details
 
 - RPC URL: \`${rpcUrl}\`
 - Pairing QR URL: \`${pairingUrl}\`
+- Wallet transport: \`${context.wallet.transport}\`
 - Connected: \`${context.wallet.connected ? "yes" : "no"}\`
 - Approved accounts: ${accounts.length > 0 ? accounts.map((account) => `\`${account}\``).join(", ") : "`none`"}
 - Active chain: \`${activeChain.name}\` (${activeChain.chainId}, \`${activeChainId}\`)
@@ -53,7 +55,11 @@ This skill was served by a live WalletChan RPC instance. Use the runtime details
 
 Send standard JSON-RPC over HTTP to \`${rpcUrl}\` or \`${rpcUrl}/rpc\`. Any JSON-RPC client can use this endpoint, including JavaScript code, shell scripts, viem, ethers, Foundry, or an AI agent.
 
-If no wallet is paired, show the user \`${pairingUrl}\` so they can connect a wallet to WalletChan RPC via WalletConnect. The page displays a browser QR code, includes a copy button for the WalletConnect URI, and refreshes its pairing state automatically.
+If no wallet is paired, show the user \`${pairingUrl}\` so they can connect a wallet to WalletChan RPC via ${pairingLabel}. The page displays a browser QR code, includes a copy button for the pairing URI, and refreshes its pairing state automatically.
+
+To switch wallet transports without restarting the RPC, call \`${rpcUrl}/pairing?transport=metamask-connect&force=true\` or \`${rpcUrl}/pairing?transport=walletconnect&force=true\`, then show the returned \`pairingUrl\` or \`pairingUri\`. Accepted transport aliases are \`walletconnect\`, \`wc\`, \`metamask-connect\`, \`metamask\`, and \`mm\`.
+
+In MetaMask Connect mode, account changes are tracked from provider \`accountsChanged\` events and MetaMask Connect's selected account. If a MetaMask Mobile account switch is not reflected yet, call \`${rpcUrl}/pairing?transport=metamask-connect&account=0x...&forceRequest=true\` to ask MetaMask Connect to select/request that account.
 
 Built-in chain aliases and default RPC URLs are copied from WalletChan's extension registry. Common aliases include \`ethereum\`, \`arbitrum\`, \`base\`, \`bnb\`, \`optimism\`, \`megaeth\`, \`polygon\`, \`unichain\`, \`gnosis\`, \`monad\`, \`sonic\`, \`sei\`, \`mantle\`, \`linea\`, \`berachain\`, and \`base-sepolia\`.
 
@@ -70,11 +76,11 @@ Read-only JSON-RPC methods may be forwarded to the configured upstream RPC. Loca
 - Use \`eth_sendTransaction\` for sends. Never use \`eth_sendRawTransaction\`, \`eth_sign\`, or \`eth_signTransaction\`.
 - Every send/sign/batch request opens a user approval prompt in the connected wallet.
 - If the wallet rejects a request, report the rejection to the user. Do not retry rejected sends automatically.
-- If a wallet-mutating request returns JSON-RPC code \`4900\` with \`data.code: "walletconnect_disconnected"\`, the WalletConnect session was closed or lost. Show \`${pairingUrl}\` to the user, or call \`${rpcUrl}/pairing\` and show the returned URI, wait for pairing, then retry with freshly prepared transaction data when applicable.
+- If a wallet-mutating request returns JSON-RPC code \`4900\` with \`data.code: "walletconnect_disconnected"\`, the ${pairingLabel} session was closed or lost. Show \`${pairingUrl}\` to the user, or call \`${rpcUrl}/pairing\` and show the returned URI, wait for pairing, then retry with freshly prepared transaction data when applicable.
 - Use only an approved account from \`eth_accounts\` as \`from\` or Foundry \`--sender\`.
 - If a request targets a different configured chain, include the target \`chainId\` or call \`wallet_switchEthereumChain\` first.
 - If the needed EVM chain is not configured, ask the user to restart the CLI with \`--chain <chainId> --rpc <chainId>=https://...\`.
-- WalletConnect sessions persist across CLI restarts. Ask the user to restart with \`--force-new-session\` only when they want a fresh pairing.
+- Wallet sessions can persist across CLI restarts depending on the selected transport. Ask the user to restart with \`--force-new-session\` only when they want a fresh pairing.
 
 ## Discovery
 

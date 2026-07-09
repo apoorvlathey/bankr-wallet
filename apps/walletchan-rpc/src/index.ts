@@ -9,11 +9,8 @@ import { formatChains } from "./chains.js";
 import { log, stopActiveSpinner, style, withSpinner } from "./logger.js";
 import { startRpcServer } from "./rpcServer.js";
 import type { RpcContext } from "./rpcHandler.js";
-import {
-  WalletConnectBridge,
-  type SessionDisconnectInfo,
-  type SessionInfo,
-} from "./walletConnect.js";
+import { WalletBridgeManager } from "./walletBridgeManager.js";
+import type { SessionDisconnectInfo, SessionInfo } from "./walletBridge.js";
 
 async function main(): Promise<void> {
   const config = parseCli(process.argv);
@@ -22,15 +19,7 @@ async function main(): Promise<void> {
   let reconnecting = false;
   let shuttingDown = false;
 
-  const wallet = new WalletConnectBridge({
-    chains: config.chains,
-    forceNewSession: config.forceNewSession,
-    host: config.host,
-    includeBatching: config.includeBatching,
-    port: config.port,
-    projectId: config.projectId,
-    requestTimeoutSeconds: config.requestTimeoutSeconds,
-  });
+  const wallet = new WalletBridgeManager(config);
 
   const context: RpcContext = {
     bundleChains: new Map(),
@@ -45,13 +34,14 @@ async function main(): Promise<void> {
     },
     upstreamTimeoutMs: config.upstreamTimeoutMs,
     wallet,
+    switchWalletTransport: (transport, options) => wallet.switchTransport(transport, options),
   };
 
   const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
     stopActiveSpinner();
-    log.dim(`\n${signal} received. Stopping RPC server. WalletConnect session remains paired.`);
+    log.dim(`\n${signal} received. Stopping RPC server. ${formatTransportName()} session remains paired.`);
     server?.close();
     wallet.close();
     process.exit(0);
@@ -71,9 +61,9 @@ async function main(): Promise<void> {
     }
   });
 
-  let session = await wallet.init();
+  const session = await wallet.init();
   if (session) {
-    log.success(`Reused WalletConnect session: ${session.accounts.join(", ")}`);
+    log.success(`Reused ${formatTransportName()} session: ${session.accounts.join(", ")}`);
     if (session.peerName) {
       log.dim(`Wallet: ${session.peerName}${session.peerUrl ? ` (${session.peerUrl})` : ""}`);
     }
@@ -82,20 +72,28 @@ async function main(): Promise<void> {
 
   if (!session) {
     if (config.forceNewSession) {
-      log.dim("Stored WalletConnect sessions cleared.");
+      log.dim(`Stored ${formatTransportName()} sessions cleared.`);
     }
 
-    session = await runPairingFlow();
+    try {
+      const newSession = await runPairingFlow();
+      printReadyInfo(newSession);
+    } catch (error) {
+      log.error(error instanceof Error ? error.message : String(error));
+      log.warn(
+        `RPC server is still running. Generate a new URI with curl http://${config.host}:${config.port}/pairing, open http://${config.host}:${config.port}/qr, or use the MCP get_pairing_uri tool.`,
+      );
+    }
+  } else {
+    printReadyInfo(session);
   }
-
-  printReadyInfo(session);
 
   async function handleWalletDisconnect(info: SessionDisconnectInfo): Promise<void> {
     if (reconnecting) return;
     reconnecting = true;
     stopActiveSpinner();
     log.raw("");
-    log.error(`WalletConnect disconnected: ${info.reason}`);
+    log.error(`${formatTransportName()} disconnected: ${info.reason}`);
 
     if (!process.stdin.isTTY) {
       log.warn(
@@ -106,7 +104,7 @@ async function main(): Promise<void> {
     }
 
     while (!shuttingDown && !wallet.connected) {
-      await waitForEnter("Press Enter to generate a new WalletConnect URI...");
+      await waitForEnter(`Press Enter to generate a new ${formatTransportName()} URI...`);
       if (shuttingDown || wallet.connected) break;
 
       try {
@@ -127,9 +125,9 @@ async function main(): Promise<void> {
 
     log.info("Pair with a wallet:");
     if (clipboard.success) {
-      log.info("  Wallet app: scan the QR or paste the copied WalletConnect URI");
+      log.info(`  Wallet app: scan the QR or paste the copied ${formatTransportName()} URI`);
     } else {
-      log.info("  Wallet app: scan the QR or paste the WalletConnect URI below");
+      log.info(`  Wallet app: scan the QR or paste the ${formatTransportName()} URI below`);
     }
     log.info(`  Browser QR: http://${config.host}:${config.port}/qr`);
     log.raw("");
@@ -139,7 +137,7 @@ async function main(): Promise<void> {
       log.success(`Copied to clipboard (${clipboard.command})`);
     } else {
       log.warn(`Clipboard copy failed: ${clipboard.error || "unknown error"}`);
-      log.warn("Copy the WalletConnect URI above manually.");
+      log.warn(`Copy the ${formatTransportName()} URI above manually.`);
     }
     log.raw("");
 
@@ -167,6 +165,10 @@ async function main(): Promise<void> {
     log.raw(
       `  forge script script/Deploy.s.sol --rpc-url http://${config.host}:${config.port} --broadcast --unlocked --sender ${readySession.accounts[0] || "0xYourAddress"}`,
     );
+  }
+
+  function formatTransportName(): string {
+    return wallet.transport === "metamask-connect" ? "MetaMask Connect" : "WalletConnect";
   }
 }
 

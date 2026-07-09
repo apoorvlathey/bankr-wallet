@@ -2,9 +2,9 @@
 
 ## Overview
 
-`apps/walletchan-rpc` is a local Ethereum JSON-RPC server that forwards wallet-mutating requests to a WalletConnect session. Its purpose is to let tools such as Foundry, viem, ethers, scripts, and AI agents talk to `http://127.0.0.1:4209` while every transaction or signature is still approved by the user in WalletChan.
+`apps/walletchan-rpc` is a local Ethereum JSON-RPC server that forwards wallet-mutating requests to a paired wallet session. The default transport is WalletConnect, and `--wallet-transport metamask-connect` uses MetaMask Connect. Its purpose is to let tools such as Foundry, viem, ethers, scripts, and AI agents talk to `http://127.0.0.1:4209` while every transaction or signature is still approved by the user in the wallet.
 
-The RPC process never holds private keys. It owns only a WalletConnect client session and upstream RPC configuration. WalletChan extension remains the signer and approval UI.
+The RPC process never holds private keys. It owns only a wallet-transport client session and upstream RPC configuration. The paired wallet remains the signer and approval UI.
 
 Default runtime:
 
@@ -14,16 +14,19 @@ Default runtime:
 - Health endpoint: `http://127.0.0.1:4209/health`
 - Session endpoint: `http://127.0.0.1:4209/session`
 - Default exposed chain: provided by CLI, commonly `--chain base`
+- Wallet transport: `walletconnect` by default; `metamask-connect` optional
 - WalletConnect project ID: env override or built-in public default
 
 ## Source Map
 
 | File | Responsibility |
 |---|---|
-| `apps/walletchan-rpc/src/index.ts` | CLI entrypoint, process lifecycle, WalletConnect pairing UX, server startup |
+| `apps/walletchan-rpc/src/index.ts` | CLI entrypoint, process lifecycle, wallet pairing UX, server startup |
 | `apps/walletchan-rpc/src/cli.ts` | CLI parsing, env fallbacks, defaults, validation |
 | `apps/walletchan-rpc/src/chains.ts` | Built-in chain aliases, chain ID parsing, upstream RPC resolution |
+| `apps/walletchan-rpc/src/walletBridge.ts` | Shared wallet transport interface and session types |
 | `apps/walletchan-rpc/src/walletConnect.ts` | WalletConnect core/sign-client setup, pairing, session restore, request forwarding |
+| `apps/walletchan-rpc/src/metamaskConnect.ts` | MetaMask Connect EVM client setup, pairing, account restore, request forwarding |
 | `apps/walletchan-rpc/src/rpcServer.ts` | Hono HTTP server, JSON-RPC batch handling, health/session/SKILL routes |
 | `apps/walletchan-rpc/src/rpcHandler.ts` | JSON-RPC method router and validation |
 | `apps/walletchan-rpc/src/upstream.ts` | Read-only and unknown method forwarding to upstream RPC |
@@ -36,18 +39,38 @@ Default runtime:
 
 1. `index.ts` parses CLI args through `parseCli()`.
 2. Runtime chains are resolved from `--chain` and `--rpc <chain=url>` in `chains.ts`.
-3. A `WalletConnectBridge` is created with the selected chains, WalletConnect project ID, batching mode, request timeout, and host/port.
+3. A wallet bridge is created from `--wallet-transport`: `WalletConnectBridge` for `walletconnect`, or `MetaMaskConnectBridge` for `metamask-connect`.
 4. `startRpcServer()` starts the local HTTP server immediately. This lets `/health`, `/session`, `/pairing`, `/qr`, `/uri`, and `/SKILL.md` work while pairing is in progress.
 5. `wallet.init()` creates a WalletConnect `SignClient` with metadata:
    - name: `WalletChan RPC`
    - URL: the local RPC URL
    - icon: WalletChan hosted icon URL
 6. If a compatible stored session exists, it is reused.
-7. If no session is available, the process creates a WalletConnect proposal, prints the `wc:` URI, renders a terminal QR code, exposes the browser QR page at `/qr`, and tries to copy the URI to the clipboard.
-8. The user pairs from a WalletConnect-capable wallet by scanning the QR code or pasting the `wc:` URI.
+7. If no session is available, the process creates a transport-specific pairing proposal, prints the URI, renders a terminal QR code, exposes the browser QR page at `/qr`, and tries to copy the URI to the clipboard.
+8. The user pairs by scanning the QR code or pasting the URI in the selected wallet transport.
 9. Once approved, the RPC can serve accounts, transactions, signatures, and ERC-5792 batches.
 
-On `SIGINT` or `SIGTERM`, the HTTP server is closed and the in-memory WalletConnect session handle is cleared. Stored sessions remain available for later reuse unless `--force-new-session` is used.
+On `SIGINT` or `SIGTERM`, the HTTP server is closed and the in-memory wallet session handle is cleared. Stored sessions remain available for later reuse unless `--force-new-session` is used.
+
+## Wallet Transport Selection
+
+`--wallet-transport walletconnect` is the default and preserves the existing WalletChan/WalletConnect behavior.
+
+`--wallet-transport metamask-connect` initializes MetaMask Connect with `@metamask/connect-evm`, `headless: true`, and the same configured chains/upstream RPC URLs. The RPC captures MetaMask Connect's `display_uri` event and serves that URI through the existing `/pairing` and `/qr` surfaces. This keeps MCP compatibility because clients still read `pairingUri`, `pairingUrl`, and optional QR image data from the same endpoints.
+
+MetaMask Connect mode forwards standard EIP-1193 request shapes through `client.getProvider().request(...)`. It currently reports ERC-5792 batching as unsupported, so local `wallet_sendCalls` uses the existing sequential fallback.
+
+Account state in MetaMask Connect mode is refreshed from provider `accountsChanged`, `client.accounts`, `client.selectedAccount`, and `client.getAccount()` whenever the RPC reads accounts. This handles MetaMask Mobile selected-account changes even if the provider event is missed. If a selected account still does not appear, `/pairing?transport=metamask-connect&account=0x...&forceRequest=true` calls MetaMask Connect `connect({ account, forceRequest: true })` to ask for that account explicitly.
+
+The active transport can also be switched at runtime without restarting the RPC:
+
+```bash
+curl "http://127.0.0.1:4209/pairing?transport=metamask-connect&force=true"
+curl "http://127.0.0.1:4209/pairing?transport=walletconnect&force=true"
+curl "http://127.0.0.1:4209/pairing?transport=metamask-connect&account=0x...&forceRequest=true"
+```
+
+`transport` accepts `walletconnect`, `wc`, `metamask-connect`, `metamask`, or `mm`. `force=true` clears the target transport's stored session before creating the new URI. Without `force=true`, switching to a transport with a reusable stored session can immediately report `connected: true`.
 
 ## WalletConnect Session Model
 
@@ -84,14 +107,14 @@ ERC-5792 methods are treated as a capability, not as a pairing requirement. If t
 
 At runtime, `connected` means the bridge has a non-expired WalletConnect session with at least one approved EVM account. If the wallet deletes the session, expires it, sends an empty `accountsChanged` event, or updates the session to zero EVM accounts, the bridge clears the in-memory session.
 
-When `walletchan-rpc` is running in an interactive terminal, a lost session prints a disconnect error and waits for the user to press Enter before generating a new WalletConnect URI. This avoids surprising the user with a new QR/pairing URI every time a wallet is intentionally disconnected. Non-interactive callers, including MCP-managed child processes, should call `/pairing` to create a fresh URI without restarting the RPC process, or show `/qr` so the user can scan a browser QR page.
+When `walletchan-rpc` is running in an interactive terminal, a lost session prints a disconnect error and waits for the user to press Enter before generating a new pairing URI. This avoids surprising the user with a new QR/pairing URI every time a wallet is intentionally disconnected. Non-interactive callers, including MCP-managed child processes, should call `/pairing` to create a fresh URI without restarting the RPC process, or show `/qr` so the user can scan a browser QR page.
 
-Wallet-mutating JSON-RPC requests fail with code `4900` when the WalletConnect session is disconnected:
+Wallet-mutating JSON-RPC requests fail with code `4900` when the wallet session is disconnected:
 
 ```json
 {
   "code": 4900,
-  "message": "WalletConnect session is disconnected. Pair a wallet again using /pairing or WalletChan MCP get_pairing_uri.",
+  "message": "Wallet session is disconnected. Pair a wallet again using /pairing or WalletChan MCP get_pairing_uri.",
   "data": {
     "code": "walletconnect_disconnected",
     "needsPairing": true
@@ -107,7 +130,7 @@ Local methods handled directly:
 
 | Method | Behavior |
 |---|---|
-| `eth_accounts` | Returns approved WalletConnect EVM accounts |
+| `eth_accounts` | Returns approved wallet EVM accounts |
 | `eth_requestAccounts` | Same as `eth_accounts`; pairing happens out-of-band in the CLI |
 | `eth_chainId` | Returns active chain ID as hex |
 | `net_version` | Returns active chain ID as decimal string |
@@ -142,7 +165,7 @@ Rejected methods:
 When `wallet_sendCalls` is received:
 
 1. `rpcHandler.ts` requires params to include a configured `chainId`.
-2. If the connected wallet approved ERC-5792 batching, the original request is forwarded through WalletConnect.
+2. If the connected wallet approved ERC-5792 batching, the original request is forwarded through the wallet transport.
 3. The returned native bundle ID is recorded in `context.bundleChains`.
 4. Later native `wallet_getCallsStatus` and `wallet_showCallsStatus` requests use that map to select the original chain instead of whichever chain is currently active.
 5. If the wallet did not approve ERC-5792 batching, the RPC creates a local sequential bundle, sends each call as `eth_sendTransaction`, waits for that transaction receipt, then prompts for the next call.
@@ -172,7 +195,8 @@ By default the RPC binds to `127.0.0.1`. Use `--host <host>` or `WALLETCHAN_RPC_
 | `/rpc` | `POST` | JSON-RPC endpoint alias |
 | `/health` | `GET` | Machine-readable status for MCP management |
 | `/session` | `GET` | Connected session metadata and active chain |
-| `/pairing` | `GET` | Returns a fresh WalletConnect URI when no valid session is connected |
+| `/pairing` | `GET` | Returns a fresh transport-specific pairing URI when no valid session is connected |
+| `/pairing?transport=metamask-connect&force=true` | `GET` | Switches the live wallet transport and returns the new pairing state |
 | `/qr` | `GET` | Browser page with wallet-agnostic QR image, copy button, and auto-refreshing pairing state |
 | `/qr?format=json` | `GET` | Machine-readable pairing page state, including QR data URL |
 | `/uri` | `GET` | Compatibility alias for `/qr` |
@@ -181,9 +205,9 @@ By default the RPC binds to `127.0.0.1`. Use `--host <host>` or `WALLETCHAN_RPC_
 
 JSON-RPC batch arrays are supported. Empty JSON-RPC batches return `-32600`. Notifications return HTTP `204` when no response is required.
 
-`/health` includes `accounts`; an empty array with `connected: false` means the process is running but needs a fresh WalletConnect pairing.
+`/health` includes `accounts` and `transport`; an empty array with `connected: false` means the process is running but needs a fresh wallet pairing.
 
-`/qr` is the most reliable QR surface for agents and terminal harnesses because it renders in a normal browser instead of depending on inline image support in an MCP client. The page says to connect a wallet to WalletChan RPC via WalletConnect rather than naming a specific wallet. It polls `/qr?format=json` every few seconds, reuses the current pending WalletConnect proposal, and updates automatically when a new URI is issued after disconnect or proposal expiry. The copy button writes the raw `wc:` URI to the clipboard. `/uri` remains as a compatibility alias.
+`/qr` is the most reliable QR surface for agents and terminal harnesses because it renders in a normal browser instead of depending on inline image support in an MCP client. The page labels the active transport, polls `/qr?format=json` every few seconds, reuses the current pending proposal, and updates automatically when a new URI is issued after disconnect or proposal expiry. The copy button writes the raw pairing URI to the clipboard. `/uri` remains as a compatibility alias.
 
 ## Environment
 
@@ -191,24 +215,28 @@ JSON-RPC batch arrays are supported. Empty JSON-RPC batches return `-32600`. Not
 
 `WALLETCHAN_RPC_HOST` sets the default bind host for the HTTP server.
 
+`WALLETCHAN_RPC_WALLET_TRANSPORT` sets the default wallet transport. Accepted values are `walletconnect` and `metamask-connect`.
+
 `WALLETCHAN_RPC_STORAGE_DIR` sets the WalletConnect storage root. Use this in containers to keep session state in a persistent, writable volume owned by the process user.
 
 ## Security Properties
 
 - No private keys are stored or loaded by `walletchan-rpc`.
-- Wallet-mutating methods go through WalletConnect and require wallet approval.
+- Wallet-mutating methods go through the selected wallet transport and require wallet approval.
 - Raw transaction submission is blocked.
 - Unsafe legacy signing methods are blocked.
 - Upstream RPC URLs are used only for read/unknown forwarding.
-- WalletConnect session reuse is explicit and can be reset with `--force-new-session`.
-- Request timeout defaults to at least 300 seconds because WalletConnect approvals can take user time.
+- Wallet transport session reuse is explicit and can be reset with `--force-new-session` or `/pairing?transport=...&force=true`.
+- Request timeout defaults to at least 300 seconds because wallet approvals can take user time.
 
 ## NPM Publishing
 
-`@walletchan/rpc` is published from `apps/walletchan-rpc`. For publishable RPC changes, bump `apps/walletchan-rpc/package.json`, run `pnpm install --lockfile-only`, then build and dry-run from the repo root:
+`@walletchan/rpc` is published from `apps/walletchan-rpc`. For publishable RPC changes, update `apps/walletchan-rpc/CHANGELOG.md` from the package git diff, bump `apps/walletchan-rpc/package.json`, run `pnpm install --lockfile-only`, then build and dry-run from the repo root:
 
 ```bash
+git log --oneline -- apps/walletchan-rpc _docs/WALLETCHAN_RPC.md
 pnpm build:walletchan-rpc
+pnpm pack:walletchan-rpc
 pnpm publish:walletchan-rpc:dry-run
 pnpm publish:walletchan-rpc
 ```
@@ -227,8 +255,10 @@ For RPC-only changes:
 6. Test `wallet_switchEthereumChain` if chain routing changed.
 7. Test a small `eth_sendTransaction`, a `personal_sign`, and an EIP-712 signature.
 8. Test `wallet_sendCalls` if ERC-5792 behavior changed.
+9. Test MetaMask Connect with `pnpm dev:walletchan-rpc --chain base --wallet-transport metamask-connect --force-new-session`.
+10. Test live transport switching with `/pairing?transport=metamask-connect&force=true` and `/pairing?transport=walletconnect&force=true`.
 
-If a change affects extension transaction/signature handling through WalletConnect, test all WalletChan account types:
+If a change affects extension transaction/signature handling through WalletConnect or WalletChan extension approval, test all WalletChan account types:
 
 - Bankr API accounts (`impersonator`)
 - Private key accounts (`privateKey`)

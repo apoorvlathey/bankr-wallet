@@ -6,6 +6,7 @@ import type { AgentX402Client } from "./agentX402.js";
 import type { BasePluginCliCommandInfo, BasePluginCliRunner } from "./basePluginCli.js";
 import { loadBasePlugin, listSkillResources } from "./baseSkills.js";
 import type { ManagedRpcProcess } from "./managedRpc.js";
+import type { NameResolver } from "./nameResolver.js";
 import type { OneShotRelayer } from "./oneShotRelayer.js";
 import { extractPreparedCalls } from "./preparedCalls.js";
 import type { ProtocolRegistry } from "./protocols/registry.js";
@@ -70,6 +71,7 @@ export class WalletChanTools {
     private readonly webRequest: WebRequestTool,
     private readonly basePluginCli: BasePluginCliRunner,
     private readonly walletchanActions: WalletChanActionBuilder,
+    private readonly nameResolver: NameResolver,
     private readonly remoteMcp: RemoteMcpRegistry,
     private readonly protocols: ProtocolRegistry,
     private readonly agentWallets: AgentWalletStore,
@@ -84,18 +86,34 @@ export class WalletChanTools {
       {
         name: "get_pairing_uri",
         title: "Get Pairing URI",
-        description: "Start or inspect the managed WalletChan RPC bridge and return the WalletConnect pairing URI and local QR page URL when pairing is needed. When a pairing URI is available, the tool emits an MCP image content block with the QR code before the text fallback.",
+        description: "Start or inspect the managed WalletChan RPC bridge and return the wallet pairing URI and local QR page URL when pairing is needed. The URI may be WalletConnect or MetaMask Connect depending on the managed RPC transport. When a pairing URI is available, the tool emits an MCP image content block with the QR code before the text fallback.",
         inputSchema: objectSchema({
           waitMs: {
             description: "How long to wait for the pairing URI when starting walletchan-rpc. Defaults to 15000.",
             type: "number",
           },
           forceNewSession: {
-            description: "If true, disconnect stored WalletConnect sessions and generate a fresh URI for pairing a different wallet.",
+            description: "If true, disconnect stored wallet sessions and generate a fresh URI for pairing a different wallet.",
             type: "boolean",
           },
           force: {
             description: "Alias for forceNewSession.",
+            type: "boolean",
+          },
+          walletTransport: {
+            description: "Optional live switch for the managed RPC wallet transport. Use walletconnect or metamask-connect.",
+            type: "string",
+          },
+          transport: {
+            description: "Alias for walletTransport.",
+            type: "string",
+          },
+          account: {
+            description: "Optional MetaMask Connect account address to request. Use with forceRequest: true when asking MetaMask to switch/select a specific account.",
+            type: "string",
+          },
+          forceRequest: {
+            description: "If true, ask the active transport to show a new connection/account request even if already connected. Currently useful for MetaMask Connect account switching.",
             type: "boolean",
           },
         }),
@@ -110,6 +128,35 @@ export class WalletChanTools {
             type: ["string", "number"],
           },
         }),
+      },
+      {
+        name: "resolve_name",
+        title: "Resolve Name",
+        description: "Resolve a user-provided WalletChan-supported name to an EVM address. Supports ENS and subdomains, Basenames under .base.eth, WNS .wei, GNS .gwei, and MegaNames .mega. Uses MCP RPC overrides first, then WalletChan default RPCs.",
+        inputSchema: objectSchema(
+          {
+            name: {
+              description: "Name to resolve, e.g. vitalik.eth, name.base.eth, name.wei, name.gwei, or name.mega.",
+              type: "string",
+            },
+          },
+          ["name"],
+        ),
+      },
+      {
+        name: "resolve_names",
+        title: "Resolve Names",
+        description: "Resolve multiple user-provided WalletChan-supported names to EVM addresses. Supports ENS/subdomains, Basenames, .wei, .gwei, and .mega.",
+        inputSchema: objectSchema(
+          {
+            names: {
+              description: "Names to resolve.",
+              type: "array",
+              items: { type: "string" },
+            },
+          },
+          ["names"],
+        ),
       },
       {
         name: "list_execution_profiles",
@@ -1130,11 +1177,24 @@ export class WalletChanTools {
         return this.rpcManager.getPairingState(
           typeof input.waitMs === "number" ? input.waitMs : 15000,
           {
+            account: parseOptionalAddressInput(input.account, "account"),
+            forceRequest: input.forceRequest === true,
             forceNewSession: input.forceNewSession === true || input.force === true,
+            walletTransport: parseWalletTransportInput(input.walletTransport ?? input.transport),
           },
         );
       case "get_wallets":
         return this.getWallets(input);
+      case "resolve_name":
+        return this.nameResolver.resolveName(requiredString(input.name, "resolve_name requires name"));
+      case "resolve_names":
+        return {
+          results: await Promise.all(
+            requiredStringArray(input.names, "resolve_names requires names").map((entry) =>
+              this.nameResolver.resolveName(entry),
+            ),
+          ),
+        };
       case "list_execution_profiles":
         return this.listExecutionProfiles();
       case "get_default_execution_profile":
@@ -2009,8 +2069,8 @@ export class WalletChanTools {
       message: connected
         ? "WalletChan RPC reports a paired wallet again. Retry the wallet action."
         : pairingUri
-          ? "The WalletConnect session is disconnected. Show the pairing URL or WalletConnect URI to the user, wait for a wallet to pair, then retry the wallet action."
-          : "The WalletConnect session is disconnected. Call get_pairing_uri to create a fresh WalletConnect URI, wait for a wallet to pair, then retry the wallet action.",
+          ? "The wallet session is disconnected. Show the pairing URL or pairing URI to the user, wait for a wallet to pair, then retry the wallet action."
+          : "The wallet session is disconnected. Call get_pairing_uri to create a fresh pairing URI, wait for a wallet to pair, then retry the wallet action.",
     };
   }
 
@@ -2762,6 +2822,31 @@ function isPreparedActionTool(toolName: string): boolean {
     toolName === "veil_prepare_deposit";
 }
 
+function parseWalletTransportInput(value: unknown): "walletconnect" | "metamask-connect" | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string") {
+    throw new Error("walletTransport must be walletconnect or metamask-connect");
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "walletconnect" || normalized === "wc") return "walletconnect";
+  if (
+    normalized === "metamask-connect" ||
+    normalized === "metamask" ||
+    normalized === "mm"
+  ) {
+    return "metamask-connect";
+  }
+  throw new Error("walletTransport must be walletconnect or metamask-connect");
+}
+
+function parseOptionalAddressInput(value: unknown, label: string): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value === "string" && /^0x[a-fA-F0-9]{40}$/.test(value)) {
+    return value.toLowerCase();
+  }
+  throw new Error(`${label} must be an EVM address`);
+}
+
 function veilTimeoutMs(toolName: string, input: Record<string, unknown>): number | undefined {
   if (toolName !== "veil_wait_for_deposit") {
     return optionalNumber(input.timeoutMs);
@@ -2965,6 +3050,12 @@ function optionalStringArray(value: unknown): string[] | undefined {
     }
     return entry;
   });
+}
+
+function requiredStringArray(value: unknown, message: string): string[] {
+  const parsed = optionalStringArray(value);
+  if (!parsed || parsed.length === 0) throw new Error(message);
+  return parsed;
 }
 
 function optionalChainIdArray(value: unknown): Array<string | number> | undefined {

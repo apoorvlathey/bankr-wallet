@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { formatChains, resolveRuntimeChains, type RuntimeChain } from "./chains.js";
 import { style } from "./logger.js";
+import type { WalletTransport } from "./walletBridge.js";
 
 const DEFAULT_PROJECT_ID = "56262dba600174595278ffdf73ceb06f";
 
@@ -13,6 +14,7 @@ export interface CliConfig {
   projectId: string;
   requestTimeoutSeconds: number;
   upstreamTimeoutMs: number;
+  walletTransport: WalletTransport;
 }
 
 interface RawOptions {
@@ -25,6 +27,7 @@ interface RawOptions {
   skipBatching?: boolean;
   requestTimeout: string;
   upstreamTimeout: string;
+  walletTransport?: string;
 }
 
 function collect(value: string, previous: string[]): string[] {
@@ -45,15 +48,16 @@ export function parseCli(argv: string[]): CliConfig {
 
   program
     .name("walletchan-rpc")
-    .description("Local JSON-RPC proxy that routes wallet requests through WalletConnect")
+    .description("Local JSON-RPC proxy that routes wallet requests through WalletConnect or MetaMask Connect")
     .option("-c, --chain <name-or-id>", "chain to expose; repeatable", collect, [])
     .option("-r, --rpc <chain=url>", "override upstream RPC for a selected chain; repeatable", collect, [])
     .option("--host <host>", "local RPC bind host", process.env.WALLETCHAN_RPC_HOST || "127.0.0.1")
     .option("-p, --port <number>", "local RPC port", "4209")
-    .option("--force-new-session", "discard stored WalletConnect sessions and show a fresh pairing URI")
+    .option("--force-new-session", "discard stored wallet sessions and show a fresh pairing URI")
+    .option("--wallet-transport <transport>", "wallet connection transport: walletconnect or metamask-connect", process.env.WALLETCHAN_RPC_WALLET_TRANSPORT || "walletconnect")
     .option("--project-id <id>", "WalletConnect project ID")
     .option("--skip-batching", "do not request ERC-5792 methods; wallet_sendCalls uses sequential fallback")
-    .option("--request-timeout <seconds>", "WalletConnect request timeout", "300")
+    .option("--request-timeout <seconds>", "wallet approval request timeout", "300")
     .option("--upstream-timeout <milliseconds>", "upstream RPC timeout", "15000")
     .addHelpText(
       "after",
@@ -82,7 +86,7 @@ Examples:
     "--request-timeout",
   );
   if (requestTimeoutSeconds < 300) {
-    throw new Error("--request-timeout must be at least 300 seconds for WalletConnect");
+    throw new Error("--request-timeout must be at least 300 seconds for wallet approvals");
   }
 
   const config: CliConfig = {
@@ -94,17 +98,31 @@ Examples:
     projectId,
     requestTimeoutSeconds,
     upstreamTimeoutMs: parsePositiveInteger(options.upstreamTimeout, "--upstream-timeout"),
+    walletTransport: parseWalletTransport(options.walletTransport),
   };
 
   if (config.port > 65535) {
     throw new Error("--port must be between 1 and 65535");
   }
 
-  if (!config.projectId) {
+  if (config.walletTransport === "walletconnect" && !config.projectId) {
     throw new Error("WalletConnect project ID is required");
   }
 
   return config;
+}
+
+function parseWalletTransport(value: string | undefined): WalletTransport {
+  const normalized = (value || "walletconnect").trim().toLowerCase();
+  if (normalized === "walletconnect" || normalized === "wc") return "walletconnect";
+  if (
+    normalized === "metamask-connect" ||
+    normalized === "metamask" ||
+    normalized === "mm"
+  ) {
+    return "metamask-connect";
+  }
+  throw new Error("--wallet-transport must be walletconnect or metamask-connect");
 }
 
 function parseHost(value: string, label: string): string {
@@ -127,6 +145,7 @@ export function formatCliSummary(config: CliConfig): string {
     style.green(`Local RPC: http://${config.host}:${config.port}`),
     style.purple(`SKILL.md:  http://${config.host}:${config.port}/SKILL.md`),
     `Chains:    ${formatChains(config.chains)}`,
+    `Transport: ${config.walletTransport}`,
     `ERC-5792:   ${config.includeBatching ? "requested if wallet supports it" : "not requested; sequential fallback only"}`,
   ].join("\n");
 }

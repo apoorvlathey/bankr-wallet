@@ -24,6 +24,7 @@ export interface CliConfig {
   veilCallTimeoutMs: number;
   forceNewSession: boolean;
   includeBatching: boolean;
+  walletTransport: "walletconnect" | "metamask-connect";
   walletConnectProjectId?: string;
   requestTimeoutSeconds: number;
   upstreamTimeoutMs: number;
@@ -65,6 +66,10 @@ export function parseCli(argv: string[]): CliConfig {
   ) ?? 120_000;
   let forceNewSession = false;
   let includeBatching = true;
+  let walletTransport = parseWalletTransport(
+    process.env.WALLETCHAN_MCP_WALLET_TRANSPORT ||
+    process.env.WALLETCHAN_RPC_WALLET_TRANSPORT,
+  );
   let walletConnectProjectId =
     process.env.WALLETCHAN_MCP_WALLETCONNECT_PROJECT_ID ||
     process.env.WALLETCONNECT_PROJECT_ID ||
@@ -156,6 +161,10 @@ export function parseCli(argv: string[]): CliConfig {
       walletConnectProjectId = arg.slice("--project-id=".length);
     } else if (arg === "--skip-batching") {
       includeBatching = false;
+    } else if (arg === "--wallet-transport") {
+      walletTransport = parseWalletTransport(requireValue(args, ++i, "--wallet-transport"));
+    } else if (arg.startsWith("--wallet-transport=")) {
+      walletTransport = parseWalletTransport(arg.slice("--wallet-transport=".length));
     } else if (arg === "--request-timeout") {
       requestTimeoutSeconds = parsePositiveInteger(
         requireValue(args, ++i, "--request-timeout"),
@@ -198,7 +207,7 @@ export function parseCli(argv: string[]): CliConfig {
     "WALLETCHAN_MCP_VEIL_X402_RELAY_URL / --veil-x402-relay-url",
   );
   if (requestTimeoutSeconds < 300) {
-    throw new Error("--request-timeout must be at least 300 seconds for WalletConnect");
+    throw new Error("--request-timeout must be at least 300 seconds for wallet approvals");
   }
 
   return {
@@ -225,10 +234,24 @@ export function parseCli(argv: string[]): CliConfig {
     veilCallTimeoutMs,
     forceNewSession,
     includeBatching,
+    walletTransport,
     walletConnectProjectId,
     requestTimeoutSeconds,
     upstreamTimeoutMs,
   };
+}
+
+function parseWalletTransport(value: string | undefined): "walletconnect" | "metamask-connect" {
+  const normalized = (value || "walletconnect").trim().toLowerCase();
+  if (normalized === "walletconnect" || normalized === "wc") return "walletconnect";
+  if (
+    normalized === "metamask-connect" ||
+    normalized === "metamask" ||
+    normalized === "mm"
+  ) {
+    return "metamask-connect";
+  }
+  throw new Error("--wallet-transport must be walletconnect or metamask-connect");
 }
 
 function parseHost(value: string, label: string): string {
@@ -341,10 +364,11 @@ Options:
   --veil-startup-timeout <ms>
                             Veil MCP startup timeout (default: 120000)
   --veil-call-timeout <ms>  Veil MCP call timeout (default: 120000)
-  --force-new-session       Clear stored WalletConnect sessions and show a fresh URI
+  --force-new-session       Clear stored wallet sessions and show a fresh URI
+  --wallet-transport <name> Managed wallet transport: walletconnect or metamask-connect
   --project-id <id>         WalletConnect project ID for managed walletchan-rpc
   --skip-batching           Start managed walletchan-rpc without ERC-5792 methods
-  --request-timeout <sec>   WalletConnect request timeout (default: 300)
+  --request-timeout <sec>   Wallet approval request timeout (default: 300)
   --upstream-timeout <ms>   Upstream RPC timeout (default: 15000)
   -h, --help                Show this help.
 `);

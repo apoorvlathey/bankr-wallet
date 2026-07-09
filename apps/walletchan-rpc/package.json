@@ -1,8 +1,8 @@
 {
   "name": "@walletchan/rpc",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
-  "description": "Local JSON-RPC proxy that routes wallet requests through WalletConnect",
+  "description": "Local JSON-RPC proxy that routes wallet requests through WalletConnect or MetaMask Connect",
   "license": "MIT",
   "homepage": "https://github.com/apoorvlathey/walletchan/tree/master/apps/walletchan-rpc#readme",
   "repository": {
@@ -16,6 +16,8 @@
   "keywords": [
     "walletchan",
     "walletconnect",
+    "metamask",
+    "metamask-connect",
     "json-rpc",
     "ethereum",
     "foundry",
@@ -27,7 +29,9 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
+    "assets",
     "dist",
+    "CHANGELOG.md",
     "README.md",
     "SKILL.md",
     "LICENSE.md"
@@ -46,6 +50,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
+    "@metamask/connect-evm": "^2.1.0",
     "@walletconnect/core": "2.23.9",
     "@walletconnect/sign-client": "2.23.9",
     "commander": "^14.0.0",
@@ -59,6 +64,6 @@
     "typescript": "^5.6.3"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.19.0"
   }
 }

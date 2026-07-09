@@ -15,15 +15,21 @@ Start this MCP server in your MCP client:
 npx @walletchan/mcp
 ```
 
-WalletChan MCP starts a managed local `walletchan-rpc` bridge by default. Before wallet tools can succeed, call `get_pairing_uri` and show the returned `pairingUrl` or WalletConnect URI to the user. `pairingUrl` opens the local RPC browser QR page, normally `/qr`. If the client renders MCP image content, the tool response may also include a QR code image; the URI remains the raw fallback.
+WalletChan MCP starts a managed local `walletchan-rpc` bridge by default. Before wallet tools can succeed, call `get_pairing_uri` and show the returned `pairingUrl` or pairing URI to the user. `pairingUrl` opens the local RPC browser QR page, normally `/qr`. If the client renders MCP image content, the tool response may also include a QR code image; the URI remains the raw fallback.
 
-The user pairs a wallet by scanning the browser QR or pasting the URI in any WalletConnect-capable wallet.
+The default wallet transport is WalletConnect. Use `get_pairing_uri({ walletTransport: "metamask-connect", forceNewSession: true })` to switch the already-running managed RPC to MetaMask Connect, or `get_pairing_uri({ walletTransport: "walletconnect", forceNewSession: true })` to switch back without restarting MCP. `transport` is accepted as an alias for `walletTransport`.
+
+For MetaMask Connect account switching, first call `get_wallets` after the user switches accounts in MetaMask Mobile; WalletChan RPC refreshes from MetaMask Connect's selected account when accounts are read. If it still shows the old account, call `get_pairing_uri({ walletTransport: "metamask-connect", account: "0x...", forceRequest: true })` to ask MetaMask Connect for that specific account without restarting MCP.
+
+The user pairs a wallet by scanning the browser QR or pasting the URI in the selected wallet app.
+
+Use `resolve_name` before passing a user-provided name as an address. It resolves ENS/subdomains, Basenames under `.base.eth`, WNS `.wei`, GNS `.gwei`, and MegaNames `.mega` to EVM addresses using MCP RPC overrides first and WalletChan defaults second. Use `resolve_names` for batches. Do not assume wallet tools accept names directly; pass the returned `address`.
 
 ## Execution Profiles
 
 WalletChan MCP supports execution profiles:
 
-- `walletconnect` is the existing approval path through WalletChan RPC, WalletConnect, and the WalletChan popup.
+- `walletconnect` is the existing main-wallet approval profile through WalletChan RPC and its selected wallet transport.
 - `agent:<walletId>` is the delegated local agent-wallet path for ERC-7710/1Shot execution work.
 - `agent-eoa:<walletId>` is the raw local agent EOA path for direct agent-wallet actions.
 
@@ -45,6 +51,7 @@ When an upstream Base MCP plugin says:
 
 - `get_wallets` before pairing -> first call WalletChan MCP `get_pairing_uri`
 - `get_wallets` -> use WalletChan MCP `get_wallets`
+- user-provided name such as `alice.eth`, `name.base.eth`, `name.wei`, `name.gwei`, or `name.mega` -> use WalletChan MCP `resolve_name`, then use the returned `address`
 - `send_calls` -> use WalletChan MCP `send_calls`
 - prepared transaction responses -> prefer WalletChan MCP `send_prepared_calls` instead of manually mapping common `transactions[]`, `calls[]`, approval+action, or `{ data: { to, value, data } }` shapes
 - Base MCP `swap` or user swap requests -> use WalletChan MCP `swap`; use `get_swap_price` first only when the user asks for a quote/preview
@@ -69,13 +76,13 @@ For x402 resources, use `agent_x402_quote` and `agent_x402_pay`. The default `ag
 
 ## Approval Flow
 
-WalletChan does not return a Base Account approval URL. Wallet requests are sent through WalletChan RPC to the WalletChan extension via WalletConnect. The user approves or rejects in the WalletChan popup.
+WalletChan does not return a Base Account approval URL. Wallet requests are sent through WalletChan RPC to the paired wallet transport. The user approves or rejects in the wallet popup.
 
 If WalletChan is not paired, call `get_pairing_uri` and show the `pairingUrl` to the user when present. If a QR image appears in chat, the user can scan it instead; otherwise they can paste the exact `pairingUri`. After they pair, retry `get_wallets`.
 
-To switch wallets or force a fresh WalletConnect proposal, call `get_pairing_uri` with `forceNewSession: true` and show the returned QR/URI. The local QR page can also force a fresh URI at `/qr?force=true`.
+To switch wallets or force a fresh proposal on the current transport, call `get_pairing_uri` with `forceNewSession: true` and show the returned QR/URI. To switch transports on the fly, include `walletTransport: "metamask-connect"` or `walletTransport: "walletconnect"` with `forceNewSession: true`. The local QR page can also force a fresh URI at `/qr?force=true`.
 
-If a wallet action returns `status: "needs_pairing"` or `errorCode: "walletconnect_disconnected"`, the WalletConnect session was closed or lost. Show the returned `pairingUrl` or `pairingUri` if present, otherwise call `get_pairing_uri`; use the QR image too when the client displays one. After the user pairs again, retry the wallet action; if `reprepareRequired` is true, refresh calldata first.
+If a wallet action returns `status: "needs_pairing"` or `errorCode: "walletconnect_disconnected"`, the wallet session was closed or lost. Show the returned `pairingUrl` or `pairingUri` if present, otherwise call `get_pairing_uri`; use the QR image too when the client displays one. After the user pairs again, retry the wallet action; if `reprepareRequired` is true, refresh calldata first.
 
 Tell the user to approve in WalletChan, then call `get_request_status` when a request ID is returned. If the paired wallet does not support ERC-5792 batching, `send_calls`, `send_prepared_calls`, `swap`, and `bridge` still work by sending each call as an individual transaction and waiting for each receipt before the next prompt.
 

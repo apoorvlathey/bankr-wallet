@@ -12,6 +12,7 @@ export interface WalletChanRpcHealth {
   connected: boolean;
   accounts?: string[];
   batching?: WalletChanRpcBatching;
+  transport?: "walletconnect" | "metamask-connect";
   activeChainId: number;
   chains: RuntimeChainSummary[];
 }
@@ -27,6 +28,7 @@ export interface WalletChanRpcBatching {
 export interface WalletChanRpcSession {
   connected: boolean;
   batching?: WalletChanRpcBatching;
+  transport?: "walletconnect" | "metamask-connect";
   activeChainId: number;
   chains: string;
   session: {
@@ -44,6 +46,8 @@ export interface WalletChanRpcPairing {
   accounts?: string[];
   pairingUri: string | null;
   pairingUrl?: string;
+  pairingLabel?: string;
+  transport?: "walletconnect" | "metamask-connect";
   batching?: WalletChanRpcBatching;
   activeChainId: number;
   chains: RuntimeChainSummary[];
@@ -118,10 +122,21 @@ export class WalletChanRpcClient {
     return this.fetchJson<WalletChanRpcSession>("/session");
   }
 
-  async pairing(args: { forceNewSession?: boolean } = {}): Promise<WalletChanRpcPairing> {
-    return this.fetchJson<WalletChanRpcPairing>(
-      args.forceNewSession ? "/pairing?force=true" : "/pairing",
-    );
+  async pairing(
+    args: {
+      account?: string;
+      forceRequest?: boolean;
+      forceNewSession?: boolean;
+      walletTransport?: "walletconnect" | "metamask-connect";
+    } = {},
+  ): Promise<WalletChanRpcPairing> {
+    const params = new URLSearchParams();
+    if (args.account) params.set("account", args.account);
+    if (args.forceRequest) params.set("forceRequest", "true");
+    if (args.forceNewSession) params.set("force", "true");
+    if (args.walletTransport) params.set("transport", args.walletTransport);
+    const query = params.toString();
+    return this.fetchJson<WalletChanRpcPairing>(query ? `/pairing?${query}` : "/pairing");
   }
 
   async accounts(): Promise<string[]> {
@@ -185,7 +200,7 @@ export class WalletChanRpcClient {
         ? health.batching?.supported
           ? "WalletChan RPC is paired and has approved accounts. The wallet supports ERC-5792 batching."
           : "WalletChan RPC is paired and has approved accounts. The wallet does not support ERC-5792 batching, so send_calls will use sequential transaction fallback."
-        : "WalletChan RPC is running, but WalletConnect is not paired or has no approved accounts. Call get_pairing_uri before sending wallet requests.",
+        : `WalletChan RPC is running, but ${formatTransportLabel(health.transport)} is not paired or has no approved accounts. Call get_pairing_uri before sending wallet requests.`,
     };
   }
 
@@ -345,6 +360,10 @@ export class WalletChanRpcClient {
   }
 }
 
+function formatTransportLabel(value: unknown): string {
+  return value === "metamask-connect" ? "MetaMask Connect" : "WalletConnect";
+}
+
 function normalizeAccounts(accounts: unknown): string[] {
   return Array.isArray(accounts)
     ? accounts
@@ -416,6 +435,9 @@ export function isWalletConnectionError(error: unknown): boolean {
     /WalletConnect session .*closed/i.test(message) ||
     /WalletConnect session .*expired/i.test(message) ||
     /WalletConnect session .*removed/i.test(message) ||
+    /MetaMask Connect session is not connected/i.test(message) ||
+    /MetaMask Connect session .*disconnected/i.test(message) ||
+    /MetaMask Connect session .*closed/i.test(message) ||
     /session topic/i.test(message) ||
     /No matching key/i.test(message);
 }

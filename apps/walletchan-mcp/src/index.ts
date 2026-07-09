@@ -8,6 +8,7 @@ import { AgentX402Client } from "./agentX402.js";
 import { BasePluginCliRunner } from "./basePluginCli.js";
 import { parseCli } from "./cli.js";
 import { McpServer } from "./mcpServer.js";
+import { NameResolver } from "./nameResolver.js";
 import { OneShotRelayer } from "./oneShotRelayer.js";
 import { ProtocolRegistry } from "./protocols/registry.js";
 import { RemoteMcpRegistry } from "./remoteMcp.js";
@@ -31,6 +32,7 @@ try {
       rpcOverrides: config.rpcOverrides,
       forceNewSession: config.forceNewSession,
       includeBatching: config.includeBatching,
+      walletTransport: config.walletTransport,
       walletConnectProjectId: config.walletConnectProjectId,
       requestTimeoutSeconds: config.requestTimeoutSeconds,
       upstreamTimeoutMs: config.upstreamTimeoutMs,
@@ -51,6 +53,7 @@ try {
     aerodromeRpcUrl: config.aerodromeRpcUrl,
   });
   const walletchanActions = new WalletChanActionBuilder(walletchanApi, rpc);
+  const nameResolver = new NameResolver(config.rpcOverrides);
   const remoteMcp = new RemoteMcpRegistry();
   const agentWallets = new AgentWalletStore();
   const agentDelegation = new AgentDelegationManager(agentWallets);
@@ -82,6 +85,7 @@ try {
     webRequest,
     basePluginCli,
     walletchanActions,
+    nameResolver,
     remoteMcp,
     protocols,
     agentWallets,

@@ -2,7 +2,7 @@
 
 Local Ethereum JSON-RPC server for WalletChan approvals.
 
-WalletChan RPC gives scripts, CLIs, and AI agents a standard local RPC endpoint while keeping transaction and signature approval inside the user's connected wallet. Tools send normal Ethereum JSON-RPC to `localhost`; [WalletChan](https://walletchan.com) receives the request over WalletConnect and asks the user to approve it.
+WalletChan RPC gives scripts, CLIs, and AI agents a standard local RPC endpoint while keeping transaction and signature approval inside the user's connected wallet. Tools send normal Ethereum JSON-RPC to `localhost`; the paired wallet receives the request over WalletConnect or MetaMask Connect and asks the user to approve it.
 
 > Agent skill: [SKILL.md](https://raw.githubusercontent.com/apoorvlathey/walletchan/master/apps/walletchan-rpc/SKILL.md)
 
@@ -13,6 +13,11 @@ Use it for:
 - User-approved sends, signatures, and `wallet_sendCalls` call sets with ERC-5792 batching or sequential fallback
 - Any EVM chain when you provide its numeric chain ID and upstream RPC URL
 - WalletConnect-compatible wallets, including [WalletChan](https://walletchan.com) and many mobile wallets
+- MetaMask Mobile through MetaMask Connect
+
+## Requirements
+
+- Node.js 20.19.0 or newer.
 
 ## Usage
 
@@ -32,15 +37,21 @@ yarn dlx @walletchan/rpc --chain base
 bunx @walletchan/rpc --chain base
 ```
 
+Use MetaMask Connect instead of WalletConnect:
+
+```bash
+npx @walletchan/rpc --chain base --wallet-transport metamask-connect
+```
+
 From this repo:
 
 ```bash
 pnpm dev:walletchan-rpc --chain base
 ```
 
-On first use, the CLI copies the `wc:` URI to your clipboard, then prints a terminal QR code, raw URI, and browser QR URL.
+On first use, the CLI copies the pairing URI to your clipboard when possible, then prints a terminal QR code, raw URI, and browser QR URL.
 
-- Wallet app: scan the QR code or paste the WalletConnect URI.
+- Wallet app: scan the QR code or paste the pairing URI.
 - Browser QR page: open `http://127.0.0.1:4209/qr`, then scan the QR or copy the URI.
 
 The local RPC, `SKILL.md`, and `/qr` endpoints start immediately at `http://127.0.0.1:4209` by default. Wallet requests become available after the wallet session is approved.
@@ -61,7 +72,20 @@ curl http://127.0.0.1:4209/SKILL.md
 
 The live skill includes the current RPC URL, approved account, active chain, and batching state.
 
-If the wallet connection is revoked, the RPC treats the session as disconnected once the WalletConnect session is deleted, expires, or updates to zero approved accounts. In an interactive terminal, the CLI prints the disconnect reason and waits for Enter before generating a fresh WalletConnect URI. Non-interactive callers can call `http://127.0.0.1:4209/pairing` to get a fresh URI without restarting the RPC process, or show `http://127.0.0.1:4209/qr` so the user can scan the browser QR page.
+If the wallet connection is revoked, the RPC treats the selected transport session as disconnected once the wallet deletes/expires the session or reports no approved accounts. In an interactive terminal, the CLI prints the disconnect reason and waits for Enter before generating a fresh URI. Non-interactive callers can call `http://127.0.0.1:4209/pairing` to get a fresh URI without restarting the RPC process, or show `http://127.0.0.1:4209/qr` so the user can scan the browser QR page.
+
+To switch transports while the RPC is already running:
+
+```bash
+curl "http://127.0.0.1:4209/pairing?transport=metamask-connect&force=true"
+curl "http://127.0.0.1:4209/pairing?transport=walletconnect&force=true"
+```
+
+The browser QR page also supports fresh pairing URIs and updates in place. MetaMask Connect account reads refresh from MetaMask Connect's selected account; if MetaMask Mobile does not report the account switch, request it explicitly:
+
+```bash
+curl "http://127.0.0.1:4209/pairing?transport=metamask-connect&account=0xYourAddress&forceRequest=true"
+```
 
 ## Chains
 
@@ -142,7 +166,7 @@ Repeat `--chain` to expose multiple chains. Requests can target a configured cha
 
 ## Batching
 
-ERC-5792 batching is enabled by default. The WalletConnect proposal includes:
+ERC-5792 batching is enabled by default for WalletConnect. The WalletConnect proposal includes:
 
 - `wallet_getCapabilities`
 - `wallet_sendCalls`
@@ -155,7 +179,7 @@ If the paired wallet does not approve those ERC-5792 methods, WalletChan RPC sti
 
 ## JSON-RPC Behavior
 
-Wallet requests are sent through WalletConnect:
+Wallet requests are sent through the selected wallet transport:
 
 - `eth_sendTransaction`
 - `personal_sign`
@@ -184,7 +208,7 @@ Rejected methods:
 
 ## Session Lifecycle
 
-WalletConnect sessions persist across CLI restarts by default. If a compatible stored session exists for the same host and port, the CLI reuses it and skips the QR/paste flow.
+WalletConnect sessions persist across CLI restarts by default. If a compatible stored session exists for the same host and port, the CLI reuses it and skips the QR/paste flow. MetaMask Connect uses the MetaMask Connect client session and exposes the same local pairing, account, and request surfaces.
 
 During a running process, stale or manually revoked sessions are invalidated automatically. Interactive CLI sessions prompt for Enter before generating a new URI; a fresh pairing URI is also available from `/pairing`. The browser QR page at `/qr` polls the local process and updates automatically when a new URI is issued. `/uri` remains available as a compatibility alias.
 
@@ -194,11 +218,13 @@ To discard stored sessions and force a fresh pairing:
 walletchan-rpc --chain base --force-new-session
 ```
 
-Use `--force-new-session` when switching wallets, changing to a wallet that supports different methods, or intentionally revoking stale local session state.
+Use `--force-new-session` when switching wallets, changing to a wallet that supports different methods, or intentionally revoking stale local session state. Use `/pairing?transport=...&force=true` when you want to switch between WalletConnect and MetaMask Connect without restarting the process.
 
 ## Environment
 
 `WALLETCONNECT_PROJECT_ID` is optional. If omitted, the CLI uses WalletChan's default public WalletConnect project ID.
+
+`WALLETCHAN_RPC_WALLET_TRANSPORT` sets the startup transport. Accepted values are `walletconnect` and `metamask-connect`.
 
 `WALLETCHAN_RPC_HOST` sets the default bind host.
 

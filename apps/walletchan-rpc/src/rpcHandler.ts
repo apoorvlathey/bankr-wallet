@@ -16,7 +16,7 @@ import {
   type JsonRpcResponse,
 } from "./rpcTypes.js";
 import { forwardToUpstream } from "./upstream.js";
-import type { WalletConnectBridge } from "./walletConnect.js";
+import type { SessionInfo, WalletBridge, WalletTransport } from "./walletBridge.js";
 
 export interface LocalCallBundleCall {
   index: number;
@@ -54,7 +54,11 @@ export interface RpcContext {
   sequentialReceiptTimeoutMs: number;
   setActiveChain: (chain: RuntimeChain) => void;
   upstreamTimeoutMs: number;
-  wallet: WalletConnectBridge;
+  wallet: WalletBridge;
+  switchWalletTransport?: (
+    transport: WalletTransport,
+    options?: { forceNewSession?: boolean; account?: string; forceRequest?: boolean },
+  ) => Promise<SessionInfo | null>;
 }
 
 const UNSUPPORTED_WALLET_METHODS = new Set([
@@ -516,7 +520,7 @@ async function sendWalletRequest(
       getParamsArray(request),
     );
   } catch (error) {
-    if (isWalletConnectDisconnectedError(error)) {
+    if (isWalletBridgeDisconnectedError(error)) {
       throw walletDisconnectedError(error instanceof Error ? error.message : String(error));
     }
     throw error;
@@ -642,7 +646,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function walletDisconnectedError(reason?: string): RpcError {
   return new RpcError(
     4900,
-    "WalletConnect session is disconnected. Pair a wallet again using /pairing or WalletChan MCP get_pairing_uri.",
+    "Wallet session is disconnected. Pair a wallet again using /pairing or WalletChan MCP get_pairing_uri.",
     {
       code: "walletconnect_disconnected",
       needsPairing: true,
@@ -651,10 +655,12 @@ function walletDisconnectedError(reason?: string): RpcError {
   );
 }
 
-function isWalletConnectDisconnectedError(error: unknown): boolean {
+function isWalletBridgeDisconnectedError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /WalletConnect session is not connected/i.test(message) ||
     /WalletConnect session .*disconnected/i.test(message) ||
+    /MetaMask Connect session is not connected/i.test(message) ||
+    /MetaMask Connect session .*disconnected/i.test(message) ||
     /session .*expired/i.test(message) ||
     /session .*removed/i.test(message) ||
     /session topic/i.test(message) ||
