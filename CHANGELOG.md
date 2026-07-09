@@ -10,7 +10,23 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **Biometric/passkey unlock.** Users can wrap the existing vault key with a local WebAuthn PRF credential, set it up from Security settings or the unlock screen, and unlock Bankr API, Private Key, and Seed Phrase accounts without typing the master password each time.
+
+### Changed
+
+- Security settings now place Auto-Lock immediately after Change Password and Agent Password at the bottom.
+
+### Fixed
+
+- Passkey setup reuses the PRF output from credential creation when available, avoiding an unnecessary second biometric prompt.
+- Closing and reopening the popup after a manual lock once again auto-prompts for biometric unlock, while already-open wallet surfaces remain suppressed.
+
+### Security
+
+- Passkey payloads and stored wrappers now fail closed on malformed cryptographic sizes, stale WebAuthn ceremonies cannot overwrite newer auth state, and auth mutations/session restoration are serialized so lock, password rotation, reset, and factor changes win deterministically.
+- Passkey unlock hydrates the same vault-key-backed caches used by all three wallet types without storing the master password or exposing WebAuthn-derived material outside extension pages.
 
 ## [3.19.0] - 2026-07-08
 

@@ -13,6 +13,7 @@
     "dev:extension:firefox": "pnpm --filter @walletchan/extension dev:firefox",
     "build:website": "pnpm --filter @walletchan/website build",
     "lint": "pnpm --filter @walletchan/extension lint",
+    "test:extension-passkey": "pnpm --filter @walletchan/extension test:passkey",
     "zip": "pnpm --filter @walletchan/extension zip",
     "zip:cws": "pnpm --filter @walletchan/extension zip:cws",
     "zip:firefox": "pnpm --filter @walletchan/extension zip:firefox",

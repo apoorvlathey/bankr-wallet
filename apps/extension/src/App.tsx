@@ -348,6 +348,8 @@ function App() {
   >(null);
   const [isWalletUnlocked, setIsWalletUnlocked] = useState(false);
   const [passwordType, setPasswordType] = useState<PasswordType | null>(null);
+  const [suppressPasskeyAutoPrompt, setSuppressPasskeyAutoPrompt] =
+    useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
   const [settingsAccount, setSettingsAccount] = useState<Account | null>(null);
@@ -955,7 +957,7 @@ function App() {
         }
       }
 
-      // Establish keepalive connection to pause auto-lock while UI is open
+      // Establish keepalive connection so the service worker can track UI close time
       // Use the robust reconnection mechanism
       establishKeepalivePort();
 
@@ -1593,6 +1595,7 @@ function App() {
     // Mark wallet as unlocked
     isWalletUnlockedRef.current = true;
     setIsWalletUnlocked(true);
+    setSuppressPasskeyAutoPrompt(false);
 
     const unlockReturnTarget = unlockReturnTargetRef.current;
     if (unlockReturnTarget) {
@@ -1674,7 +1677,7 @@ function App() {
   }, [isWalletUnlocked]);
   useEffect(() => {
     const handler = (
-      message: { type?: string },
+      message: { type?: string; suppressPasskeyAutoPrompt?: boolean },
       _sender: chrome.runtime.MessageSender,
       sendResponse: (response?: unknown) => void,
     ) => {
@@ -1683,6 +1686,9 @@ function App() {
         unlockRouteHandledRef.current = false;
         setIsWalletUnlocked(false);
         setPasswordType(null);
+        setSuppressPasskeyAutoPrompt(
+          message.suppressPasskeyAutoPrompt === true,
+        );
         setView("unlock");
         sendResponse({ ok: true });
       } else if (message?.type === "walletUnlockedExternal") {
@@ -2201,6 +2207,7 @@ function App() {
         >
           <UnlockScreen
             onUnlock={handleUnlock}
+            suppressPasskeyAutoPrompt={suppressPasskeyAutoPrompt}
             pendingTxCount={pendingRequests.length}
             pendingSignatureCount={pendingSignatureRequests.length}
             pendingBatchCount={pendingBatchRequests.length}
@@ -3527,6 +3534,7 @@ function App() {
                   chrome.runtime.sendMessage({ type: "lockWallet" }, () => {
                     setIsWalletUnlocked(false);
                     setPasswordType(null);
+                    setSuppressPasskeyAutoPrompt(true);
                     setView("unlock");
                   });
                 }}

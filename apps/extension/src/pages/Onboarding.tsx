@@ -172,7 +172,7 @@ function Onboarding() {
       }
       setIsCheckingSetup(false);
 
-      // Establish keepalive connection to pause auto-lock while onboarding is open
+      // Establish keepalive connection so the service worker can track UI close time
       if (!keepAlivePortRef.current) {
         try {
           keepAlivePortRef.current = chrome.runtime.connect({

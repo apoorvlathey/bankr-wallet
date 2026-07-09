@@ -24,6 +24,7 @@
     "build:background": "vite build -c vite.config.background.ts",
     "watch": "pnpm build:web --watch && concurrently 'pnpm build:inpage --watch' 'pnpm build:inject --watch' 'pnpm build:background --watch'",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "test:passkey": "tsx --test tests/authTransition.test.ts tests/sessionRestoreRace.test.ts tests/passkeyValidation.test.ts tests/passkeyWalletTypes.test.ts tests/passkeyWebAuthn.test.ts",
     "chrome:run": "web-ext run --source-dir build --target chromium",
     "firefox:run": "web-ext run --source-dir build-firefox --browser-console",
     "build:firefox": "BROWSER=firefox pnpm build && node scripts/swap-manifest.mjs build-firefox",

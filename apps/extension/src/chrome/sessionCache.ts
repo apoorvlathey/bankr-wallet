@@ -12,6 +12,10 @@ import {
   setSessionItems,
   clearSession,
 } from "./sessionStorage";
+import {
+  invalidateAuthCeremonies,
+  runSerializedAuthTransition,
+} from "./authTransition";
 
 // Session cache for decrypted API key and password (cleared on restart/suspend)
 let cachedApiKey: string | null = null;
@@ -37,7 +41,9 @@ let authCacheTimestamp: number = 0;
 let currentSessionId: string | null = null;
 
 // UI connection tracking for auto-lock
-// While any popup/sidepanel is connected, the cache never expires
+// When the last popup/sidepanel disconnects, timestamps reset so the idle
+// countdown starts from close time. A new UI connection must not revive an
+// already-expired cache.
 let activeUIConnections = 0;
 
 // Auto-lock timeout configuration
@@ -59,7 +65,6 @@ export const VALID_AUTO_LOCK_TIMEOUTS = new Set([
 function isCacheEntryValid(timestamp: number): boolean {
   const timeout = cachedAutoLockTimeout ?? DEFAULT_AUTO_LOCK_TIMEOUT;
   return (
-    activeUIConnections > 0 ||
     timeout === 0 ||
     (timestamp > 0 && Date.now() - timestamp < timeout)
   );
@@ -252,7 +257,8 @@ export function setCachedPasswordType(type: PasswordType | null): void {
  * guard before later restore logic re-populates the agent type.
  */
 export async function resolvePasswordType(
-  unlockFn: (password: string) => Promise<{ success: boolean; passwordType?: PasswordType }>
+  unlockFn: (password: string) => Promise<{ success: boolean; passwordType?: PasswordType }>,
+  authTransitionAlreadySerialized = false,
 ): Promise<PasswordType | null> {
   const cached = getPasswordType();
   if (cached !== null) return cached;
@@ -260,7 +266,11 @@ export async function resolvePasswordType(
   const timeout = await getAutoLockTimeout();
   if (timeout !== 0) return null;
 
-  await tryRestoreSession(unlockFn);
+  if (authTransitionAlreadySerialized) {
+    await tryRestoreSessionAlreadySerialized(unlockFn);
+  } else {
+    await tryRestoreSession(unlockFn);
+  }
   return getPasswordType();
 }
 
@@ -379,7 +389,7 @@ export async function clearSessionStorage(): Promise<void> {
  *
  * @param unlockFn - The unlock function to call with the stored password
  */
-export async function tryRestoreSession(
+async function restoreSessionWithinAuthTransition(
   unlockFn: (password: string) => Promise<{ success: boolean; passwordType?: PasswordType }>
 ): Promise<boolean> {
   const session = await getSessionItems<unknown>([
@@ -405,7 +415,7 @@ export async function tryRestoreSession(
     // Try to unlock with the stored password
     const result = await unlockFn(password);
     if (!result.success) {
-      await clearSessionStorage();
+      await clearAllAuthState();
       return false;
     }
 
@@ -421,13 +431,41 @@ export async function tryRestoreSession(
     await storeSessionPassword(password);
     await storeSessionMetadata(session.sessionId, true, session.passwordType as PasswordType);
 
+    invalidateAuthCeremonies();
     console.log("Session restored successfully after service worker restart");
     return true;
   } catch (error) {
     console.error("Failed to restore session:", error);
-    await clearSessionStorage();
+    await clearAllAuthState().catch(() => {
+      clearInMemoryAuthCache();
+    });
     return false;
   }
+}
+
+/**
+ * Attempts to restore a persisted "Never" session while holding the shared
+ * auth-transition queue. This prevents an in-flight restore from committing
+ * decrypted credentials after a manual lock, password rotation, or factor
+ * removal that arrived concurrently.
+ */
+export function tryRestoreSession(
+  unlockFn: (password: string) => Promise<{ success: boolean; passwordType?: PasswordType }>
+): Promise<boolean> {
+  return runSerializedAuthTransition(() =>
+    restoreSessionWithinAuthTransition(unlockFn),
+  );
+}
+
+/**
+ * Re-entrant variant for auth handlers that are already executing inside
+ * runSerializedAuthTransition. Calling the queued wrapper from those handlers
+ * would wait on itself.
+ */
+export function tryRestoreSessionAlreadySerialized(
+  unlockFn: (password: string) => Promise<{ success: boolean; passwordType?: PasswordType }>
+): Promise<boolean> {
+  return restoreSessionWithinAuthTransition(unlockFn);
 }
 
 /**

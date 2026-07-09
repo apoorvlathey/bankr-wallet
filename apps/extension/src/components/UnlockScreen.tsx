@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, memo } from "react";
+import { useState, useEffect, useRef, memo, useCallback } from "react";
 import {
   Box,
   VStack,
@@ -33,6 +33,13 @@ import { TWITTER_URL } from "@/constants/externalUrls";
 import { Decorator, useTheme } from "@/theme";
 import { closeSidePanelForWindow } from "@/lib/sidePanelControls";
 import { clearPortfolioHoldingsLocalMirror } from "@/chrome/portfolioHoldingsCache";
+import BiometricUnlockSetup from "@/components/BiometricUnlockSetup";
+import {
+  getPasskeyErrorMessage,
+  getPasskeyUnlockPrfOutput,
+  isPasskeyUnlockSupported,
+} from "@/lib/passkeyWebAuthn";
+import { FingerprintIcon } from "@/components/Settings/icons";
 
 // Sidepanel icon
 const SidePanelIcon = (props: any) => (
@@ -56,14 +63,24 @@ const FullScreenIcon = (props: any) => (
 
 interface UnlockScreenProps {
   onUnlock: () => void;
+  suppressPasskeyAutoPrompt?: boolean;
   pendingTxCount: number;
   pendingSignatureCount: number;
   pendingBatchCount?: number;
   pendingPermissionCount?: number;
 }
 
+interface PasskeyUnlockStatus {
+  configured: boolean;
+  rpId: string;
+  authCeremonyEpoch?: string;
+  credentialId?: string;
+  prfSalt?: string;
+}
+
 function UnlockScreen({
   onUnlock,
+  suppressPasskeyAutoPrompt = false,
   pendingTxCount,
   pendingSignatureCount,
   pendingBatchCount = 0,
@@ -80,6 +97,11 @@ function UnlockScreen({
   const [isInSidePanel, setIsInSidePanel] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isAgentPasswordEnabled, setIsAgentPasswordEnabled] = useState(false);
+  const [mode, setMode] = useState<"unlock" | "setupBiometric">("unlock");
+  const [passkeyStatus, setPasskeyStatus] = useState<PasskeyUnlockStatus | null>(null);
+  const [passkeySupported, setPasskeySupported] = useState(false);
+  const [isPasskeyUnlocking, setIsPasskeyUnlocking] = useState(false);
+  const [hasAutoPromptedPasskey, setHasAutoPromptedPasskey] = useState(false);
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const {
     isOpen: isResetModalOpen,
@@ -118,6 +140,17 @@ function UnlockScreen({
       });
     };
 
+    const checkPasskeyStatus = async () => {
+      return new Promise<PasskeyUnlockStatus>((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: "getPasskeyUnlockStatus" },
+          (response) => {
+            resolve(response || { configured: false, rpId: "extension" });
+          },
+        );
+      });
+    };
+
     const init = async () => {
       const supported = await checkSidePanelSupport();
       setSidePanelSupported(supported);
@@ -141,6 +174,13 @@ function UnlockScreen({
       // Check if agent password is enabled
       const agentEnabled = await checkAgentPasswordEnabled();
       setIsAgentPasswordEnabled(agentEnabled);
+
+      const [biometricSupported, biometricStatus] = await Promise.all([
+        isPasskeyUnlockSupported(),
+        checkPasskeyStatus(),
+      ]);
+      setPasskeySupported(biometricSupported);
+      setPasskeyStatus(biometricStatus);
     };
 
     init();
@@ -226,6 +266,81 @@ function UnlockScreen({
     }
   };
 
+  const handlePasskeyUnlock = useCallback(
+    async (autoPrompt = false) => {
+      if (
+        !passkeyStatus?.configured ||
+        !passkeyStatus.authCeremonyEpoch ||
+        !passkeyStatus.credentialId ||
+        !passkeyStatus.prfSalt
+      ) {
+        return;
+      }
+
+      setIsPasskeyUnlocking(true);
+      if (!autoPrompt) setError("");
+
+      try {
+        const prfKeyMaterial = await getPasskeyUnlockPrfOutput(
+          passkeyStatus.credentialId,
+          passkeyStatus.prfSalt,
+        );
+
+        const result = await new Promise<{ success: boolean; error?: string }>((resolve) => {
+          chrome.runtime.sendMessage(
+            {
+              type: "unlockWithPasskey",
+              credentialId: passkeyStatus.credentialId,
+              prfSalt: passkeyStatus.prfSalt,
+              prfKeyMaterial,
+              authCeremonyEpoch: passkeyStatus.authCeremonyEpoch,
+            },
+            resolve,
+          );
+        });
+
+        if (result.success) {
+          onUnlock();
+          return;
+        }
+
+        setError(result.error || "Biometric unlock failed");
+      } catch (passkeyError) {
+        if (!autoPrompt) {
+          setError(getPasskeyErrorMessage(passkeyError));
+        }
+      } finally {
+        setIsPasskeyUnlocking(false);
+      }
+    },
+    [onUnlock, passkeyStatus],
+  );
+
+  useEffect(() => {
+    if (
+      mode !== "unlock" ||
+      hasAutoPromptedPasskey ||
+      !passkeySupported ||
+      !passkeyStatus?.configured ||
+      suppressPasskeyAutoPrompt ||
+      !passkeyStatus.authCeremonyEpoch ||
+      !passkeyStatus.credentialId ||
+      !passkeyStatus.prfSalt
+    ) {
+      return;
+    }
+
+    setHasAutoPromptedPasskey(true);
+    void handlePasskeyUnlock(true);
+  }, [
+    handlePasskeyUnlock,
+    hasAutoPromptedPasskey,
+    mode,
+    passkeyStatus,
+    passkeySupported,
+    suppressPasskeyAutoPrompt,
+  ]);
+
   const handleUnlock = async () => {
     if (!password) {
       setError("Password is required");
@@ -277,6 +392,15 @@ function UnlockScreen({
       }
     });
   };
+
+  if (mode === "setupBiometric") {
+    return (
+      <BiometricUnlockSetup
+        onCancel={() => setMode("unlock")}
+        onComplete={onUnlock}
+      />
+    );
+  }
 
   return (
     <Box
@@ -508,9 +632,38 @@ function UnlockScreen({
               onClick={handleUnlock}
               isLoading={isUnlocking}
               loadingText="Unlocking..."
+              isDisabled={isPasskeyUnlocking}
             >
               Unlock
             </Button>
+
+            {passkeySupported && passkeyStatus?.configured && (
+              <>
+                <HStack w="full" spacing={3} py={1}>
+                  <Box flex="1" h="1px" bg="border.subtle" />
+                  <Text
+                    fontSize="xs"
+                    fontWeight="800"
+                    color="text.tertiary"
+                    textTransform="uppercase"
+                  >
+                    or
+                  </Text>
+                  <Box flex="1" h="1px" bg="border.subtle" />
+                </HStack>
+                <Button
+                  variant="secondary"
+                  w="full"
+                  leftIcon={<FingerprintIcon boxSize={5} />}
+                  onClick={() => handlePasskeyUnlock(false)}
+                  isLoading={isPasskeyUnlocking}
+                  loadingText="Verifying..."
+                  isDisabled={isUnlocking}
+                >
+                  Use Biometric Unlock
+                </Button>
+              </>
+            )}
           </VStack>
         </Box>
 
@@ -523,6 +676,28 @@ function UnlockScreen({
           >
             Master or Agent password accepted
           </Text>
+        )}
+
+        {passkeySupported && passkeyStatus && !passkeyStatus.configured && (
+          <Link
+            display="inline-flex"
+            alignItems="center"
+            justifyContent="center"
+            gap={2}
+            fontSize="sm"
+            color="accent.secondary"
+            fontWeight="800"
+            textAlign="center"
+            _hover={{ color: "accent.primary", textDecoration: "underline" }}
+            onClick={() => {
+              setError("");
+              setMode("setupBiometric");
+            }}
+            cursor="pointer"
+          >
+            <FingerprintIcon boxSize={4} />
+            Set up biometric unlock
+          </Link>
         )}
       </VStack>
 

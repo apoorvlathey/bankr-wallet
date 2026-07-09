@@ -9,7 +9,7 @@
  * - sidepanelManager.ts: Side panel detection and mode management
  */
 
-import { encryptWithVaultKey } from "./crypto";
+import { encryptWithVaultKey, tryDecryptVaultKey } from "./crypto";
 import {
   getAccounts,
   getAccountById,
@@ -178,6 +178,19 @@ import {
   handleSaveApiKeyWithCachedPassword,
   handleChangePasswordWithCachedPassword,
 } from "./authHandlers";
+import {
+  handleCanSetupPasskeyUnlock,
+  handleGetPasskeyUnlockStatus,
+  handleRemovePasskeyUnlock,
+  handleSetupPasskeyUnlock,
+  handleSetupPasskeyUnlockWithPassword,
+  handleUnlockWithPasskey,
+  handleVerifyPasskeySetupPassword,
+} from "./passkeyUnlock";
+import {
+  invalidateAuthCeremonies,
+  runSerializedAuthTransition,
+} from "./authTransition";
 
 // Transaction handlers
 import {
@@ -435,6 +448,20 @@ function isExtensionPage(sender: chrome.runtime.MessageSender): boolean {
   return !!sender.url?.startsWith(EXTENSION_ORIGIN_PREFIX);
 }
 
+async function verifyExplicitMasterPassword(password: string): Promise<boolean> {
+  if (!password) return false;
+
+  const { encryptedVaultKeyMaster } = await chrome.storage.local.get(
+    "encryptedVaultKeyMaster",
+  );
+  if (encryptedVaultKeyMaster) {
+    return !!(await tryDecryptVaultKey(encryptedVaultKeyMaster, password));
+  }
+
+  // Legacy fallback for users who have not migrated to vault-key storage yet.
+  return getCachedPassword() === password;
+}
+
 const EXTERNAL_PROVIDER_RPC_MESSAGES_BLOCKED_DURING_ERC7715 = new Set([
   "addEthereumChain",
   "dappChainSwitchNotification",
@@ -583,6 +610,7 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
 
 // Clear cache when service worker suspends
 self.addEventListener("suspend", () => {
+  invalidateAuthCeremonies();
   clearInMemoryAuthCache();
 });
 
@@ -856,7 +884,8 @@ chrome.runtime.onConnect.addListener((port) => {
     // Just acknowledge the connection - the popup is waking us up
     console.log("Service worker woken up by popup");
   } else if (port.name === "ui-keepalive") {
-    // UI view (popup/sidepanel/onboarding) connected - pause auto-lock timer
+    // UI view connected; disconnect resets idle timestamps, but cache getters
+    // still enforce the configured auto-lock timeout.
     incrementUIConnections();
     port.onDisconnect.addListener(() => {
       decrementUIConnections();
@@ -931,6 +960,13 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "removeAgentPassword",
   "isAgentPasswordEnabled",
   "getPasswordType",
+  "getPasskeyUnlockStatus",
+  "canSetupPasskeyUnlock",
+  "verifyPasskeySetupPassword",
+  "setupPasskeyUnlock",
+  "setupPasskeyUnlockWithPassword",
+  "unlockWithPasskey",
+  "removePasskeyUnlock",
   // Sensitive reads (pending request details)
   "getPendingTxRequests",
   "getPendingBatchTxRequests",
@@ -1775,33 +1811,144 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "clearApiKeyCache": {
-      (async () => {
+      runSerializedAuthTransition(async () => {
+        invalidateAuthCeremonies();
         await clearAllAuthState();
         chrome.runtime.sendMessage({ type: "walletLockedExternal" }).catch(() => {});
-        sendResponse({ success: true });
-      })();
+        return { success: true };
+      })
+        .then(sendResponse)
+        .catch((error) => {
+          console.error("Failed to clear authentication cache:", error);
+          sendResponse({ success: false, error: "Failed to lock wallet" });
+        });
       return true;
     }
 
     case "unlockWallet": {
-      handleUnlockWallet(message.password).then((result) => {
-        if (result.success) {
-          // Broadcast so any other open UI surface (sidepanel + full-screen
-          // tab simultaneously) auto-unlocks. The message carries no secrets;
-          // each surface re-queries its own state from the SW cache.
-          chrome.runtime.sendMessage({ type: "walletUnlockedExternal" }).catch(() => {});
-        }
-        sendResponse(result);
-      });
+      runSerializedAuthTransition(async () => {
+        const result = await handleUnlockWallet(message.password);
+        if (result.success) invalidateAuthCeremonies();
+        return result;
+      })
+        .then((result) => {
+          if (result.success) {
+            // Broadcast so any other open UI surface (sidepanel + full-screen
+            // tab simultaneously) auto-unlocks. The message carries no secrets;
+            // each surface re-queries its own state from the SW cache.
+            chrome.runtime.sendMessage({ type: "walletUnlockedExternal" }).catch(() => {});
+          }
+          sendResponse(result);
+        })
+        .catch((error) => {
+          console.error("Failed to unlock wallet:", error);
+          sendResponse({ success: false, error: "Failed to unlock wallet" });
+        });
+      return true;
+    }
+
+    case "getPasskeyUnlockStatus": {
+      handleGetPasskeyUnlockStatus()
+        .then(sendResponse)
+        .catch((error) => {
+          console.error("Failed to load biometric unlock status:", error);
+          sendResponse({ success: false, configured: false, error: "Failed to load biometric unlock status" });
+        });
+      return true;
+    }
+
+    case "canSetupPasskeyUnlock": {
+      handleCanSetupPasskeyUnlock()
+        .then(sendResponse)
+        .catch((error) => {
+          console.error("Failed to preflight biometric setup:", error);
+          sendResponse({ success: false, error: "Failed to verify biometric setup" });
+        });
+      return true;
+    }
+
+    case "verifyPasskeySetupPassword": {
+      handleVerifyPasskeySetupPassword(message.masterPassword || "")
+        .then(sendResponse)
+        .catch((error) => {
+          console.error("Failed to verify biometric setup password:", error);
+          sendResponse({ success: false, error: "Failed to verify master password" });
+        });
+      return true;
+    }
+
+    case "setupPasskeyUnlock": {
+      runSerializedAuthTransition(() => handleSetupPasskeyUnlock(message))
+        .then(sendResponse)
+        .catch((error) => {
+          console.error("Failed to set up biometric unlock:", error);
+          sendResponse({ success: false, error: "Failed to set up biometric unlock" });
+        });
+      return true;
+    }
+
+    case "setupPasskeyUnlockWithPassword": {
+      runSerializedAuthTransition(() =>
+        handleSetupPasskeyUnlockWithPassword(
+          message,
+          message.masterPassword || "",
+        ),
+      )
+        .then((result) => {
+          if (result.success) {
+            chrome.runtime.sendMessage({ type: "walletUnlockedExternal" }).catch(() => {});
+          }
+          sendResponse(result);
+        })
+        .catch((error) => {
+          console.error("Failed to set up biometric unlock:", error);
+          sendResponse({ success: false, error: "Failed to set up biometric unlock" });
+        });
+      return true;
+    }
+
+    case "unlockWithPasskey": {
+      runSerializedAuthTransition(() => handleUnlockWithPasskey(message))
+        .then((result) => {
+          if (result.success) {
+            chrome.runtime.sendMessage({ type: "walletUnlockedExternal" }).catch(() => {});
+          }
+          sendResponse(result);
+        })
+        .catch((error) => {
+          console.error("Failed to unlock with biometrics:", error);
+          sendResponse({ success: false, error: "Biometric unlock failed" });
+        });
+      return true;
+    }
+
+    case "removePasskeyUnlock": {
+      runSerializedAuthTransition(() =>
+        handleRemovePasskeyUnlock(message.masterPassword || ""),
+      )
+        .then(sendResponse)
+        .catch((error) => {
+          console.error("Failed to remove biometric unlock:", error);
+          sendResponse({ success: false, error: "Failed to remove biometric unlock" });
+        });
       return true;
     }
 
     case "lockWallet": {
-      (async () => {
+      runSerializedAuthTransition(async () => {
+        invalidateAuthCeremonies();
         await clearAllAuthState();
-        chrome.runtime.sendMessage({ type: "walletLockedExternal" }).catch(() => {});
-        sendResponse({ success: true });
-      })();
+        chrome.runtime.sendMessage({
+          type: "walletLockedExternal",
+          suppressPasskeyAutoPrompt: true,
+        }).catch(() => {});
+        return { success: true };
+      })
+        .then(sendResponse)
+        .catch((error) => {
+          console.error("Failed to lock wallet:", error);
+          sendResponse({ success: false, error: "Failed to lock wallet" });
+        });
       return true; // async response
     }
 
@@ -2433,21 +2580,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         try {
           const { seedGroupId, password } = message;
 
-          if (!getCachedPassword()) {
-            const autoLockTimeout = await getAutoLockTimeout();
-            if (autoLockTimeout === 0) {
-              await tryRestoreSession(handleUnlockWallet);
-            }
-          }
-
-          const cachedPwd = getCachedPassword();
-          if (!cachedPwd) {
-            sendResponse({ success: false, error: "Wallet is locked" });
-            return;
-          }
-
           // SECURITY: Block when unlocked with agent password.
-          // Session was already restored above, so resolvePasswordType reads the cached value.
           const seedRevealPasswordType = await resolvePasswordType(handleUnlockWallet);
           if (seedRevealPasswordType === "agent") {
             sendResponse({
@@ -2457,13 +2590,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
             return;
           }
+          if (seedRevealPasswordType !== "master") {
+            sendResponse({ success: false, error: "Wallet is locked" });
+            return;
+          }
 
-          if (password !== cachedPwd) {
+          if (!(await verifyExplicitMasterPassword(password))) {
             sendResponse({ success: false, error: "Invalid password" });
             return;
           }
 
-          const mnemonic = await getMnemonic(seedGroupId, cachedPwd);
+          const mnemonic = await getMnemonic(seedGroupId, password);
           if (!mnemonic) {
             sendResponse({ success: false, error: "Seed phrase not found" });
             return;
@@ -2603,21 +2740,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         try {
           const { accountId, password } = message;
 
-          if (!getCachedPassword()) {
-            const autoLockTimeout = await getAutoLockTimeout();
-            if (autoLockTimeout === 0) {
-              await tryRestoreSession(handleUnlockWallet);
-            }
-          }
-
-          const cachedPwd = getCachedPassword();
-          if (!cachedPwd) {
-            sendResponse({ success: false, error: "Wallet is locked" });
-            return;
-          }
-
           // SECURITY: Block private key reveal when unlocked with agent password.
-          // Session was already restored above, so resolvePasswordType reads the cached value.
           const pkRevealPasswordType = await resolvePasswordType(handleUnlockWallet);
           if (pkRevealPasswordType === "agent") {
             sendResponse({
@@ -2627,8 +2750,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
             return;
           }
+          if (pkRevealPasswordType !== "master") {
+            sendResponse({ success: false, error: "Wallet is locked" });
+            return;
+          }
 
-          if (password !== cachedPwd) {
+          if (!(await verifyExplicitMasterPassword(password))) {
             sendResponse({ success: false, error: "Invalid password" });
             return;
           }
@@ -2636,7 +2763,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // Try cached vault first
           let privateKey = getPrivateKeyFromCache(accountId);
           if (!privateKey) {
-            const vault = await decryptAllKeys(cachedPwd);
+            const cachedVaultKey = getCachedVaultKey();
+            const vault = cachedVaultKey
+              ? await (async () => {
+                  const { decryptAllKeysWithVaultKey } = await import("./authHandlers");
+                  return decryptAllKeysWithVaultKey(cachedVaultKey);
+                })()
+              : await decryptAllKeys(password);
             if (!vault) {
               sendResponse({
                 success: false,
@@ -2779,6 +2912,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "isWalletUnlocked": {
       (async () => {
+        await getAutoLockTimeout();
         let unlocked = isWalletUnlocked();
         if (!unlocked) {
           const autoLockTimeout = await getAutoLockTimeout();
@@ -2889,11 +3023,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "changePasswordWithCachedPassword": {
-      handleChangePasswordWithCachedPassword(message.newPassword).then(
-        (result) => {
-          sendResponse(result);
-        },
-      );
+      runSerializedAuthTransition(async () => {
+        const result = await handleChangePasswordWithCachedPassword(
+          message.newPassword,
+        );
+        if (result.success) invalidateAuthCeremonies();
+        return result;
+      })
+        .then(sendResponse)
+        .catch((error) => {
+          console.error("Failed to change password:", error);
+          sendResponse({ success: false, error: "Failed to change password" });
+        });
       return true;
     }
 
@@ -2925,16 +3066,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "setAgentPassword": {
-      handleSetAgentPassword(message.agentPassword).then((result) => {
-        sendResponse(result);
-      });
+      runSerializedAuthTransition(async () => {
+        const result = await handleSetAgentPassword(message.agentPassword);
+        if (result.success) invalidateAuthCeremonies();
+        return result;
+      })
+        .then(sendResponse)
+        .catch((error) => {
+          console.error("Failed to set agent password:", error);
+          sendResponse({ success: false, error: "Failed to set agent password" });
+        });
       return true;
     }
 
     case "removeAgentPassword": {
-      handleRemoveAgentPassword(message.masterPassword).then((result) => {
-        sendResponse(result);
-      });
+      runSerializedAuthTransition(async () => {
+        const result = await handleRemoveAgentPassword(message.masterPassword);
+        if (result.success) invalidateAuthCeremonies();
+        return result;
+      })
+        .then(sendResponse)
+        .catch((error) => {
+          console.error("Failed to remove agent password:", error);
+          sendResponse({ success: false, error: "Failed to remove agent password" });
+        });
       return true;
     }
 
@@ -2949,8 +3104,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "getPasswordType": {
-      sendResponse({ passwordType: getPasswordType() });
-      return false;
+      resolvePasswordType(handleUnlockWallet).then((passwordType) => {
+        sendResponse({ passwordType });
+      });
+      return true;
     }
 
     case "rpcRequest": {
@@ -3524,45 +3681,45 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "resetExtension": {
-      (async () => {
+      runSerializedAuthTransition(async () => {
         // SECURITY: Block extension reset when unlocked with agent password.
         // Resolve via session restore so post-SW-restart agent sessions are caught.
-        const passwordType = await resolvePasswordType(handleUnlockWallet);
+        const passwordType = await resolvePasswordType(handleUnlockWallet, true);
         if (passwordType === "agent") {
-          sendResponse({
+          return {
             success: false,
             error: "Extension reset requires master password",
-          });
-          return;
+          };
         }
 
-        try {
-          // SECURITY: Perform full auth cleanup first (before async storage operations)
-          await clearAllAuthState();
+        invalidateAuthCeremonies();
+        // SECURITY: Perform full auth cleanup first (before async storage operations)
+        await clearAllAuthState();
 
-          await performSecurityReset();
+        await performSecurityReset();
 
-          const allLocalStorage = await chrome.storage.local.get(null);
-          const localKeys = getWalletLocalStorageKeysToRemove(allLocalStorage);
+        const allLocalStorage = await chrome.storage.local.get(null);
+        const localKeys = getWalletLocalStorageKeysToRemove(allLocalStorage);
 
-          await Promise.all([
-            chrome.storage.local.remove(localKeys),
-            chrome.storage.sync.remove([...WALLET_SYNC_STORAGE_KEYS]),
-          ]);
+        await Promise.all([
+          chrome.storage.local.remove(localKeys),
+          chrome.storage.sync.remove([...WALLET_SYNC_STORAGE_KEYS]),
+        ]);
 
-          await chrome.action.setBadgeText({ text: "" });
+        await chrome.action.setBadgeText({ text: "" });
 
-          const notifications = await chrome.notifications.getAll();
-          for (const notificationId of Object.keys(notifications)) {
-            chrome.notifications.clear(notificationId);
-          }
+        const notifications = await chrome.notifications.getAll();
+        for (const notificationId of Object.keys(notifications)) {
+          chrome.notifications.clear(notificationId);
+        }
 
-          sendResponse({ success: true });
-        } catch (error) {
+        return { success: true };
+      })
+        .then(sendResponse)
+        .catch((error) => {
           console.error("Failed to reset extension:", error);
           sendResponse({ success: false, error: "Failed to reset extension" });
-        }
-      })();
+        });
       return true;
     }
 

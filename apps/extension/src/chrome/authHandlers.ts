@@ -35,6 +35,7 @@ import {
   setCachedVaultKey,
   setCachedPasswordType,
   resolvePasswordType,
+  tryRestoreSessionAlreadySerialized,
   setCurrentSessionId,
   getAutoLockTimeout,
   storeSessionMetadata,
@@ -67,6 +68,108 @@ export async function handleUnlockWallet(password: string): Promise<{ success: b
 export async function checkHasVaultKeySystem(): Promise<boolean> {
   const { encryptedVaultKeyMaster } = await chrome.storage.local.get("encryptedVaultKeyMaster");
   return !!encryptedVaultKeyMaster;
+}
+
+interface HydrateAuthSessionOptions {
+  password?: string | null;
+  persistPasswordSession?: boolean;
+  migrateLegacyPrivateKeys?: boolean;
+}
+
+/**
+ * Hydrates the normal unlocked session caches from raw vault-key bytes.
+ * Password unlocks pass `password`; passkey unlocks intentionally pass null.
+ */
+export async function hydrateAuthSessionFromVaultKeyBytes(
+  vaultKeyBytes: Uint8Array,
+  passwordType: PasswordType,
+  options: HydrateAuthSessionOptions = {},
+): Promise<{ success: boolean; error?: string }> {
+  await getAutoLockTimeout();
+
+  let vaultKey: CryptoKey;
+  try {
+    vaultKey = await importVaultKey(vaultKeyBytes);
+  } catch {
+    return { success: false, error: "Failed to import vault key" };
+  }
+
+  let apiKey: string | null = null;
+  const { encryptedApiKeyVault } = await chrome.storage.local.get("encryptedApiKeyVault");
+  if (encryptedApiKeyVault) {
+    apiKey = await decryptWithVaultKey(vaultKey, encryptedApiKeyVault);
+    if (!apiKey) {
+      return { success: false, error: "Failed to decrypt API key" };
+    }
+  }
+
+  let decryptedVault: import("./types").DecryptedEntry[] | null = null;
+  const hasVault = await hasVaultEntries();
+  if (hasVault) {
+    if (options.migrateLegacyPrivateKeys && options.password) {
+      const vault = await loadVault();
+      const needsMigration = vault?.entries.some(e => !isVaultKeyEncrypted(e.keystore));
+
+      if (needsMigration) {
+        await migratePrivateKeysToVaultKey(options.password, vaultKey);
+      }
+    }
+
+    decryptedVault = await decryptAllKeysWithVaultKey(
+      vaultKey,
+      options.password ?? null,
+    );
+    if (!decryptedVault && passwordType === "agent") {
+      // SECURITY (H-5): Agent unlock cannot decrypt password-encrypted
+      // legacy keystores. If the vault still has any non-vault-key entries,
+      // surface a clear error and tear down the partial unlock so the user
+      // doesn't end up with a silently empty cached vault that fails opaquely
+      // when signing.
+      const fullVault = await loadVault();
+      const hasLegacyEntries = fullVault?.entries.some(e => !isVaultKeyEncrypted(e.keystore));
+      if (hasLegacyEntries) {
+        return {
+          success: false,
+          error: "Unlock with master password once to migrate legacy private keys",
+        };
+      }
+    } else if (!decryptedVault) {
+      return { success: false, error: "Failed to decrypt vault" };
+    }
+  }
+
+  let persistedSessionId: string | null = null;
+  if (options.persistPasswordSession && options.password) {
+    const autoLockTimeout = await getAutoLockTimeout();
+    if (autoLockTimeout === 0) {
+      persistedSessionId = crypto.randomUUID();
+      // Persist before committing in-memory credentials. If either storage
+      // write fails, callers receive an error while the cache remains in its
+      // previous state instead of becoming silently unlocked.
+      await storeSessionAtomic(
+        persistedSessionId,
+        true,
+        passwordType,
+        options.password,
+      );
+    }
+  }
+
+  // Commit the prepared session synchronously only after every fallible
+  // decrypt/migration/persistence step has completed.
+  setCachedVaultKey(vaultKey);
+  setCachedPasswordType(passwordType);
+  setCachedPasswordDirect(options.password ?? null);
+  if (persistedSessionId) setCurrentSessionId(persistedSessionId);
+
+  if (apiKey) {
+    setCachedApiKey(apiKey);
+  }
+  if (decryptedVault) {
+    setCachedVault(decryptedVault);
+  }
+
+  return { success: true };
 }
 
 /**
@@ -108,67 +211,13 @@ async function unlockWithVaultKeySystem(password: string): Promise<{ success: bo
     return { success: false, error: "Invalid password" };
   }
 
-  // Import the vault key
-  const vaultKey = await importVaultKey(vaultKeyBytes);
-  setCachedVaultKey(vaultKey);
-  setCachedPasswordType(passwordType);
-
-  // Always cache the password for session management
-  setCachedPasswordDirect(password);
-
-  // Decrypt API key using vault key (if exists)
-  const { encryptedApiKeyVault } = await chrome.storage.local.get("encryptedApiKeyVault");
-  if (encryptedApiKeyVault) {
-    const apiKey = await decryptWithVaultKey(vaultKey, encryptedApiKeyVault);
-    if (apiKey) {
-      setCachedApiKeyDirect(apiKey);
-    }
-  }
-
-  // Decrypt vault entries (private keys) using the vault key
-  const hasVault = await hasVaultEntries();
-  if (hasVault) {
-    // Check if private keys need migration (only possible with master password)
-    if (passwordType === "master") {
-      const { loadVault, isVaultKeyEncrypted } = await import("./vaultCrypto");
-      const vault = await loadVault();
-      const needsMigration = vault?.entries.some(e => !isVaultKeyEncrypted(e.keystore));
-
-      if (needsMigration) {
-        // Migrate private keys to vault-key encryption
-        await migratePrivateKeysToVaultKey(password, vaultKey);
-      }
-    }
-
-    const vault = await decryptAllKeysWithVaultKey(vaultKey);
-    if (vault) {
-      setCachedVault(vault);
-    } else if (passwordType === "agent") {
-      // SECURITY (H-5): Agent unlock cannot decrypt password-encrypted
-      // legacy keystores. If the vault still has any non-vault-key entries,
-      // surface a clear error and tear down the partial unlock so the user
-      // doesn't end up with a silently empty cached vault that fails opaquely
-      // when signing.
-      const fullVault = await loadVault();
-      const hasLegacyEntries = fullVault?.entries.some(e => !isVaultKeyEncrypted(e.keystore));
-      if (hasLegacyEntries) {
-        await clearAllAuthState();
-        return {
-          success: false,
-          error: "Unlock with master password once to migrate legacy private keys",
-        };
-      }
-    }
-  }
-
-  // Store session data for restoration if auto-lock is "Never".
-  // SECURITY (M-3): single atomic write so a handler running between awaits
-  // cannot observe a half-populated session record.
-  const autoLockTimeout = await getAutoLockTimeout();
-  if (autoLockTimeout === 0) {
-    const sessionId = crypto.randomUUID();
-    setCurrentSessionId(sessionId);
-    await storeSessionAtomic(sessionId, true, passwordType, password);
+  const hydrated = await hydrateAuthSessionFromVaultKeyBytes(vaultKeyBytes, passwordType, {
+    password,
+    persistPasswordSession: true,
+    migrateLegacyPrivateKeys: passwordType === "master",
+  });
+  if (!hydrated.success) {
+    return hydrated;
   }
 
   return { success: true, passwordType };
@@ -179,54 +228,64 @@ async function unlockWithVaultKeySystem(password: string): Promise<{ success: bo
  * Also migrates to vault key system after successful unlock
  */
 async function unlockWithLegacySystem(password: string): Promise<{ success: boolean; error?: string; passwordType?: PasswordType }> {
-  // Try to decrypt API key (if exists)
-  const hasApiKey = await hasEncryptedApiKey();
-  let apiKey: string | null = null;
+  try {
+    // Try to decrypt API key (if exists)
+    const hasApiKey = await hasEncryptedApiKey();
+    let apiKey: string | null = null;
 
-  if (hasApiKey) {
-    apiKey = await loadDecryptedApiKey(password);
-    if (!apiKey) {
-      return { success: false, error: "Invalid password" };
-    }
-    setCachedApiKey(apiKey, password);
-  }
-
-  // Try to decrypt vault (if exists)
-  const hasVault = await hasVaultEntries();
-  if (hasVault) {
-    const vault = await decryptAllKeys(password);
-    if (!vault) {
-      // If we already decrypted API key but vault fails, password is wrong
-      // This shouldn't happen if passwords are in sync
-      if (!hasApiKey) {
+    if (hasApiKey) {
+      apiKey = await loadDecryptedApiKey(password);
+      if (!apiKey) {
         return { success: false, error: "Invalid password" };
       }
-    } else {
-      setCachedVault(vault);
+      setCachedApiKey(apiKey, password);
     }
+
+    // Try to decrypt vault (if exists)
+    const hasVault = await hasVaultEntries();
+    if (hasVault) {
+      const vault = await decryptAllKeys(password);
+      if (!vault) {
+        // If we already decrypted API key but vault fails, password is wrong
+        // This shouldn't happen if passwords are in sync
+        if (!hasApiKey) {
+          return { success: false, error: "Invalid password" };
+        }
+      } else {
+        setCachedVault(vault);
+      }
+    }
+
+    // If we have neither API key nor vault, password can't be verified
+    if (!hasApiKey && !hasVault) {
+      return { success: false, error: "No encrypted data found" };
+    }
+
+    // Migration: Create vault key system
+    await migrateToVaultKeySystem(password, apiKey);
+
+    // Set password type to master (legacy system only has master password)
+    setCachedPasswordType("master");
+    setCachedPasswordDirect(password);
+
+    // Store session data for restoration if auto-lock is "Never"
+    const autoLockTimeout = await getAutoLockTimeout();
+    if (autoLockTimeout === 0) {
+      const sessionId = crypto.randomUUID();
+      setCurrentSessionId(sessionId);
+      await storeSessionMetadata(sessionId, true, "master");
+      await storeSessionPassword(password);
+    }
+
+    return { success: true, passwordType: "master" };
+  } catch (error) {
+    // Legacy unlock mutates caches while it performs the one-time migration.
+    // If later persistence fails, tear everything down so callers cannot see
+    // an error while decrypted credentials remain active.
+    await clearAllAuthState().catch(() => undefined);
+    console.error("[authHandlers] Legacy unlock failed:", error);
+    return { success: false, error: "Failed to unlock wallet" };
   }
-
-  // If we have neither API key nor vault, password can't be verified
-  if (!hasApiKey && !hasVault) {
-    return { success: false, error: "No encrypted data found" };
-  }
-
-  // Migration: Create vault key system
-  await migrateToVaultKeySystem(password, apiKey);
-
-  // Set password type to master (legacy system only has master password)
-  setCachedPasswordType("master");
-
-  // Store session data for restoration if auto-lock is "Never"
-  const autoLockTimeout = await getAutoLockTimeout();
-  if (autoLockTimeout === 0) {
-    const sessionId = crypto.randomUUID();
-    setCurrentSessionId(sessionId);
-    await storeSessionMetadata(sessionId, true, "master");
-    await storeSessionPassword(password);
-  }
-
-  return { success: true, passwordType: "master" };
 }
 
 /**
@@ -324,7 +383,10 @@ async function migrateToVaultKeySystem(password: string, apiKey: string | null):
  * Decrypts all private keys using the vault key
  * Supports both vault-key and password-encrypted entries for backward compatibility
  */
-export async function decryptAllKeysWithVaultKey(vaultKey: CryptoKey): Promise<import("./types").DecryptedEntry[] | null> {
+export async function decryptAllKeysWithVaultKey(
+  vaultKey: CryptoKey,
+  fallbackPassword?: string | null,
+): Promise<import("./types").DecryptedEntry[] | null> {
   const { loadVault, isVaultKeyEncrypted, decryptPrivateKeyWithVaultKey, decryptPrivateKey } = await import("./vaultCrypto");
 
   const vault = await loadVault();
@@ -345,7 +407,7 @@ export async function decryptAllKeysWithVaultKey(vaultKey: CryptoKey): Promise<i
         decrypted.push({ id: entry.id, privateKey });
       } else {
         // Legacy format: need password (fallback during transition)
-        const password = getCachedPassword();
+        const password = fallbackPassword ?? getCachedPassword();
         if (!password) {
           throw new Error("Password required for legacy keystore format");
         }
@@ -368,7 +430,7 @@ export async function handleSetAgentPassword(agentPassword: string): Promise<{ s
   // Must be unlocked with master password to set agent password.
   // Use resolvePasswordType so post-SW-restart agent sessions don't fall
   // through a stale-null cachedPasswordType (M-6).
-  if ((await resolvePasswordType(handleUnlockWallet)) !== "master") {
+  if ((await resolvePasswordType(handleUnlockWallet, true)) !== "master") {
     return { success: false, error: "Must be unlocked with master password to set agent password" };
   }
 
@@ -393,7 +455,7 @@ export async function handleSetAgentPassword(agentPassword: string): Promise<{ s
     if (!password) {
       const autoLockTimeout = await getAutoLockTimeout();
       if (autoLockTimeout === 0) {
-        const restored = await tryRestoreSession(handleUnlockWallet);
+        const restored = await tryRestoreSessionAlreadySerialized(handleUnlockWallet);
         if (restored) {
           password = getCachedPassword();
         }
@@ -548,7 +610,7 @@ export async function handleChangePasswordWithCachedPassword(
 ): Promise<{ success: boolean; error?: string }> {
   // SECURITY: Block password changes when unlocked with agent password.
   // Resolve via session restore so post-SW-restart agent sessions are caught.
-  const passwordType = await resolvePasswordType(handleUnlockWallet);
+  const passwordType = await resolvePasswordType(handleUnlockWallet, true);
   if (passwordType === "agent") {
     return { success: false, error: "Password changes require master password" };
   }
@@ -559,7 +621,7 @@ export async function handleChangePasswordWithCachedPassword(
   if (!currentPassword) {
     const autoLockTimeout = await getAutoLockTimeout();
     if (autoLockTimeout === 0) {
-      const restored = await tryRestoreSession(handleUnlockWallet);
+      const restored = await tryRestoreSessionAlreadySerialized(handleUnlockWallet);
       if (restored) {
         currentPassword = getCachedPassword();
       }
@@ -612,6 +674,7 @@ export async function handleChangePasswordWithCachedPassword(
         encryptedVaultKeyMaster: newEncryptedVaultKeyMaster,
         encryptedVaultKeyAgent: null,
         agentPasswordEnabled: false,
+        passkeyUnlock: null,
       };
       if (newMnemonicVault) {
         storageUpdate.mnemonicVault = newMnemonicVault;

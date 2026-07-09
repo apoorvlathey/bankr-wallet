@@ -388,8 +388,11 @@ src/
 │   ├── dappRpcForwarding.ts # Page-local dapp RPC discovery + safe read-only forwarding
 │   ├── inject.ts            # Content script - message bridge
 │   ├── background.ts        # Service worker - message router + Chrome event listeners
+│   ├── authTransition.ts    # Serialized auth mutations + WebAuthn ceremony invalidation
 │   ├── sessionCache.ts      # Credential caching, session persistence, auto-lock
 │   ├── authHandlers.ts      # Wallet unlock, vault key system, password management
+│   ├── passkeyUnlock.ts     # PRF-wrapped vault key setup/unlock/removal
+│   ├── passkeyUnlockCrypto.ts # Passkey record validation + AES-GCM wrapping helpers
 │   ├── txHandlers.ts        # Transaction/signature handlers, notifications
 │   ├── erc7715PermissionHandlers.ts # ERC-7715 delegated permission methods
 │   ├── erc7715PermissionPreflight.ts # ERC-7715 request/account/delegate policy checks
@@ -2023,6 +2026,59 @@ Decrypt Sensitive Data:
 
 **Security Note**: Private keys are ONLY decrypted in the service worker (background.ts) and NEVER exposed to content scripts, inpage scripts, or the UI layer. See [PK_ACCOUNTS.md](./PK_ACCOUNTS.md) for detailed security architecture.
 
+### Passkey/Biometric Unlock
+
+Passkey unlock is an optional local wrapper around the same vault key:
+
+```
+WebAuthn PRF output
+      │
+      ▼
+AES-GCM decrypt passkeyUnlock.wrappedVaultKey
+      │
+      ▼
+Vault Key (32-byte AES)
+      │
+      ▼
+Hydrate normal master session caches
+```
+
+- V1 is Chrome + platform authenticator + WebAuthn PRF only. WebAuthn omits
+  explicit `rp.id` / `rpId`, so Chrome uses the extension origin as the
+  relying party and native prompts show `chrome-extension://...`.
+- `passkeyUnlock` lives only in `chrome.storage.local`; it is not synced.
+- Passkey unlock sets `passwordType` to `"master"` but does not cache or store the master password.
+- Passkey setup stores the local wrapper only after backend master-session
+  validation and hydration succeed.
+- Passkey creation requests the wrapping PRF output during the user-verifying
+  registration ceremony and uses it directly when the authenticator returns
+  it, avoiding a second biometric prompt. Authenticators that omit
+  creation-time PRF results fall back to one assertion to obtain the output.
+- Passkey unlock loads the configured `autoLockTimeout` before hydrating
+  in-memory credentials so timed auto-lock applies to biometric sessions.
+- Normal transaction/signature confirmations use the hydrated API key/private-key vault caches.
+- Stored mnemonics remain master-password encrypted. Seed-phrase accounts sign
+  through their derived private keys in `pkVault`; revealing the mnemonic or
+  deriving additional accounts still requires explicit master password entry.
+- Secret reveal, master password changes, and passkey removal still require explicit master password verification.
+- Master password change and wallet reset clear the passkey wrapper.
+- `authTransition.ts` serializes session restoration plus
+  lock/unlock/setup/removal/agent-factor/password/reset mutations across open
+  views. Each WebAuthn ceremony carries a random
+  per-service-worker epoch; any newer lock, password change, reset, factor
+  removal, successful unlock, or worker restart makes the older result stale.
+- Passkey payloads and stored wrappers are decoded and length-checked before
+  cryptographic use (32-byte PRF input/output, 12-byte GCM IV, 48-byte wrapped
+  vault key, and WebAuthn credential IDs capped at 1023 bytes).
+- Updating `lastUsedAt` is best-effort after successful hydration. Storage
+  metadata failure cannot leave the UI reporting failure while caches remain
+  silently unlocked, and every router branch returns a structured error.
+- Explicit `lockWallet` broadcasts `suppressPasskeyAutoPrompt: true` after
+  clearing auth state. Each UI surface that was already open keeps that flag
+  only in renderer memory, so its unlock page skips the automatic prompt while
+  retaining the manual biometric button. Closing and reopening the popup
+  creates a fresh surface and auto-prompts again.
+
 ### Session Caching (Wallet Lock/Unlock)
 
 Wallet lock flow for secure credential management:
@@ -2097,7 +2153,7 @@ Users can optionally configure an **agent password** that allows AI agents to un
 2. Encrypts vault key with master password → saved to `encryptedVaultKeyMaster`
 3. Re-encrypts API key with vault key → saved to `encryptedApiKeyVault`
 4. Re-encrypts all private keys with vault key → `pkVault` entries updated (v1.3.0+)
-5. Re-encrypts all seed phrases with vault key → `mnemonicVault` entries updated (v1.3.0+)
+5. Keeps seed phrases master-password encrypted in `mnemonicVault`; their derived private keys in `pkVault` are migrated for routine signing
 
 **Partial Migration Detection**: If vault key system exists but private keys are still password-encrypted (e.g., upgraded from v1.2.0 to v1.3.0), the system automatically detects this on next master password unlock and completes the migration. Agent password unlock will fail with "Failed to decrypt vault" until migration is complete. 4. Legacy `encryptedApiKey` is kept but no longer read after migration
 
@@ -2118,8 +2174,9 @@ Users can optionally configure an **agent password** that allows AI agents to un
 
 **Seed Phrases**:
 
-- Same pattern as private keys using `encryptMnemonicWithVaultKey()` or `encryptMnemonic()`
-- Saved to `mnemonicVault` with appropriate salt indicator
+- Always encrypted with the master password using PBKDF2 + AES-256-GCM
+- Saved to `mnemonicVault`; biometric/agent sessions use derived keys from `pkVault`
+- Reveal, address preview for an existing group, and new derivation require the master password
 
 **Security Invariants**:
 
@@ -2192,7 +2249,9 @@ Chrome MV3 service workers are frequently suspended/restarted to save resources.
 │       - sessionId: unique session identifier                                │
 │       - sessionStartedAt: timestamp                                         │
 │       - autoLockNever: true                                                 │
-│       - encryptedSessionPassword: { data, key, iv }                         │
+│       - encryptedSessionPassword: { data, iv }                              │
+│       - passwordType: "master" or "agent"                                  │
+│    4. Store the random AES key separately as local.sessionEncKey            │
 │                                                                             │
 │  On Service Worker Restart (credentials lost):                              │
 │    1. Handler checks: getCachedApiKey() === null                            │
@@ -2207,7 +2266,8 @@ Chrome MV3 service workers are frequently suspended/restarted to save resources.
 │  On Manual Lock:                                                            │
 │    1. clearSessionStorage() is called                                       │
 │    2. All session data is removed                                           │
-│    3. Session cannot be restored until next unlock                          │
+│    3. Open UI surfaces suppress their biometric auto-prompt in local state  │
+│    4. Session cannot be restored until next unlock                          │
 │                                                                             │
 │  On Auto-Lock Setting Change:                                               │
 │    - "Never" → timed: Clear session storage (no more restoration)           │
@@ -2221,7 +2281,12 @@ Chrome MV3 service workers are frequently suspended/restarted to save resources.
 - `chrome.storage.session` is cleared when the browser closes
 - Session storage is not synced across devices
 - Session storage is only accessible to the background service worker
-- Manual lock always clears session storage
+- Restoration runs through the same serialized auth-transition queue as
+  manual lock and factor/password changes. A lock that arrives during restore
+  executes immediately afterward and clears the restored state; a restore
+  arriving after lock sees no session to recover.
+- Manual lock always clears session storage. Biometric auto-prompt suppression
+  is renderer-local UI state and is not persisted.
 
 **Handlers with Session Restoration**:
 
@@ -2305,6 +2370,12 @@ The UI (App.tsx) maintains a keepalive port to the service worker. When the serv
 3. After 100ms delay, `establishKeepalivePort()` reconnects
 4. This ensures `activeUIConnections` tracking remains accurate
 
+The port does not make expired credentials valid. Cache getters still enforce
+`autoLockTimeout`; reconnecting the sidepanel after the timeout has elapsed
+must route to unlock, not revive the previous session. When the last UI port
+disconnects, the cache timestamps are reset so the idle countdown starts from
+close time.
+
 **See**: `src/App.tsx` → `establishKeepalivePort()` for the automatic reconnection implementation.
 
 #### Password Caching for API Key Changes
@@ -2331,21 +2402,19 @@ When changing the wallet password (Settings → Change Password):
 
 1. Decrypt vault key with cached (old) password to get raw bytes
 2. Compute re-encrypted vault key with new password (in memory)
-3. **Only re-encrypt legacy entries** (if any exist):
-   - Check if `pkVault` entries have `salt !== ""` (legacy password encryption)
-   - If yes: re-encrypt with new password via `computeReEncryptedVault()` (in memory)
-   - If no (vault-key encrypted): skip re-encryption
-   - Same check for `mnemonicVault` entries
+3. Compute a replacement password-derived `mnemonicVault` in memory
 4. **Single atomic `chrome.storage.local.set()`** writes all re-encrypted data at once
 5. **Vault-key encrypted data stays unchanged**:
    - API key (in `encryptedApiKeyVault`) unchanged
    - Private keys (in `pkVault` with `salt: ""`) unchanged
-   - Seed phrases (in `mnemonicVault` with `salt: ""`) unchanged
+   - Seed phrases are written from the in-memory re-encrypted `mnemonicVault`
 6. **Agent password is cleared** - `encryptedVaultKeyAgent` is removed and must be set again after the master password changes
 
 **Why atomic**: If any re-encryption step fails (OOM, crypto error), no storage writes happen. Without atomicity, the vault key could be updated to the new password while legacy entries remain encrypted with the old password, making data inaccessible.
 
-**Note (v1.3.0+)**: After migration, `pkVault` and `mnemonicVault` entries are encrypted with the vault key (indicated by `salt: ""`), NOT with the user's password. Only legacy entries (pre-migration) need re-encryption during password change.
+**Note (v1.3.0+)**: After migration, `pkVault` entries are encrypted with the
+vault key (`salt: ""`). `mnemonicVault` remains master-password encrypted and
+must be re-encrypted during every master password change.
 
 **Legacy System** (pre-vault key migration):
 
@@ -2518,6 +2587,13 @@ content script only for provider initialization address correction.
 | `getPendingTransaction`            | Get specific tx details                                                                         |
 | `isApiKeyCached`                   | Check if password needed                                                                        |
 | `unlockWallet`                     | Unlock wallet with password                                                                     |
+| `getPasskeyUnlockStatus`           | Get local passkey wrapper status and WebAuthn credential metadata                                |
+| `canSetupPasskeyUnlock`            | Preflight Settings passkey setup before opening the platform credential prompt                   |
+| `verifyPasskeySetupPassword`       | Verify explicit master password before creating an unlock-screen passkey credential              |
+| `setupPasskeyUnlock`               | Store passkey wrapper from an active master-password session                                     |
+| `setupPasskeyUnlockWithPassword`   | Verify master password, store passkey wrapper, and unlock from the unlock-screen setup flow      |
+| `unlockWithPasskey`                | Hydrate a master session from WebAuthn PRF-unwrapped vault key                                   |
+| `removePasskeyUnlock`              | Remove local passkey wrapper after explicit master password verification                         |
 | `lockWallet`                       | Lock wallet (clear cached credentials)                                                          |
 | `resetExtension`                   | Reset wallet identity state using `walletResetStorage.ts`; clears secrets, accounts, pending requests, WalletConnect routing, cross-dapp batches, tx history, wallet portfolio state, transient result keys, and session auth state |
 | `confirmTransaction`               | User approved tx (sync, waits)                                                                  |
@@ -2578,7 +2654,7 @@ content script only for provider initialization address correction.
 | `newPendingTxRequest`        | Notifies views of new pending transaction       |
 | `newPendingSignatureRequest` | Notifies views of new pending signature request |
 | `accountsUpdated`            | Notifies views that accounts list changed       |
-| `walletLockedExternal`       | Force-lock signal (password rotation, agent removal, manual lock) — all surfaces route to unlock screen |
+| `walletLockedExternal`       | Force-lock signal (password rotation, agent removal, manual lock) — all surfaces route to unlock screen. Manual lock adds `suppressPasskeyAutoPrompt: true` so only already-open surfaces skip their automatic biometric prompt. |
 | `walletUnlockedExternal`     | Unlock-sync signal — sibling surfaces (sidepanel + full-screen tab) auto-unlock by re-running their post-unlock flow against the SW credential cache |
 | `ping`                       | Check if any extension view is open             |
 

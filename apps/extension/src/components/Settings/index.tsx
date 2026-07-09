@@ -31,6 +31,7 @@ import Chains from "./Chains";
 import ChangePassword from "./ChangePassword";
 import AutoLockSettings from "./AutoLockSettings";
 import AgentPasswordSettings from "./AgentPasswordSettings";
+import BiometricUnlockSettings from "./BiometricUnlockSettings";
 import AppearanceSettings from "./AppearanceSettings";
 import ClearSigningSettings from "./ClearSigningSettings";
 import EnsBrowsingSettings from "./EnsBrowsingSettings";
@@ -59,6 +60,7 @@ export type SettingsTab =
   | "changePassword"
   | "autoLock"
   | "agentPassword"
+  | "biometricUnlock"
   | "appearance"
   | "ensBrowsing"
   | "clearSigning"
@@ -89,6 +91,7 @@ function Settings({
 }: SettingsProps) {
   const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [isAgentPasswordEnabled, setIsAgentPasswordEnabled] = useState(false);
+  const [isPasskeyUnlockEnabled, setIsPasskeyUnlockEnabled] = useState(false);
   const [passwordType, setPasswordType] = useState<"master" | "agent" | null>(null);
   const [query, setQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -125,6 +128,7 @@ function Settings({
 
   useEffect(() => {
     checkAgentPassword();
+    checkPasskeyUnlock();
     checkPasswordType();
   }, []);
 
@@ -143,6 +147,13 @@ function Settings({
       chrome.runtime.sendMessage({ type: "isAgentPasswordEnabled" }, resolve);
     });
     setIsAgentPasswordEnabled(response.enabled);
+  };
+
+  const checkPasskeyUnlock = async () => {
+    const response = await new Promise<{ configured: boolean }>((resolve) => {
+      chrome.runtime.sendMessage({ type: "getPasskeyUnlockStatus" }, resolve);
+    });
+    setIsPasskeyUnlockEnabled(!!response?.configured);
   };
 
   const checkPasswordType = async () => {
@@ -172,6 +183,7 @@ function Settings({
     chainStripFg: chainStrip.fg,
     passwordType,
     isAgentPasswordEnabled,
+    isPasskeyUnlockEnabled,
     onNavigate: navigateToLeaf,
     onAction: fireAction,
   };
@@ -221,6 +233,17 @@ function Settings({
       <AgentPasswordSettings
         onComplete={() => {
           checkAgentPassword();
+          setTab("main");
+        }}
+        onCancel={() => setTab("main")}
+        onSessionExpired={handleSessionExpired}
+      />
+    );
+  } else if (tab === "biometricUnlock") {
+    body = (
+      <BiometricUnlockSettings
+        onComplete={() => {
+          checkPasskeyUnlock();
           setTab("main");
         }}
         onCancel={() => setTab("main")}

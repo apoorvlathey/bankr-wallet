@@ -49,9 +49,10 @@ read-time TTL checks.
 | `encryptedVaultKeyMaster` | `{ ciphertext, iv, salt }` (base64) | Vault key encrypted with the master password. Presence of this key means vault key system is active.                                | v1.0.0     |
 | `encryptedVaultKeyAgent`  | `{ ciphertext, iv, salt }` (base64) | Vault key encrypted with the agent password. Only exists when agent password is enabled.                                            | v1.0.0     |
 | `agentPasswordEnabled`    | `boolean`                           | Whether agent password is set up.                                                                                                   | v1.0.0     |
+| `passkeyUnlock`           | `{ version: 1, rpId: "extension", credentialId, prfSalt, wrappedVaultKey: { ciphertext, iv }, createdAt, lastUsedAt? }` or `null` | Optional local-only passkey/biometric unlock wrapper. WebAuthn PRF output encrypts the raw vault key; the master password is not stored. `rpId` is an internal marker; WebAuthn itself uses the extension origin by default. Cleared on reset, passkey removal, and master password change. | next       |
 | `sessionEncKey`           | `string` (base64 32-byte AES key)   | Local half of "Never" auto-lock session restoration. Pairs with `chrome.storage.session.encryptedSessionPassword`; removed on lock/session clear/reset. | v1.0.0     |
 
-**Encryption chain (current):** password → PBKDF2 → decrypts `encryptedVaultKeyMaster` → vault key → decrypts `encryptedApiKeyVault`, `pkVault`, `mnemonicVault`
+**Encryption chain (current):** password → PBKDF2 → decrypts `encryptedVaultKeyMaster` → vault key → decrypts `encryptedApiKeyVault` and `pkVault`. Optional passkey unlock uses WebAuthn PRF output → decrypts `passkeyUnlock.wrappedVaultKey` → same vault key. `mnemonicVault` remains separately encrypted with PBKDF2 + AES-256-GCM under the master password, so biometric unlock alone cannot reveal or derive from the stored seed phrase.
 
 ### Accounts
 
@@ -60,7 +61,7 @@ read-time TTL checks.
 | `accounts`      | `Account[]` — `{ id, type, address, displayName?, createdAt }` | All account metadata. Types: `bankr`, `privateKey`, `seedPhrase`, `impersonator`.                                                                                                                                                    | v1.0.0     |
 | `seedGroups`    | `SeedGroup[]` — `{ id, name, createdAt, accountCount }`        | Metadata for imported BIP39 seed phrase groups.                                                                                                                                                                                      | v1.0.0     |
 | `pkVault`       | `{ version: 1, entries: [{ id, keystore }] }`                  | Encrypted private keys. `id` matches account ID. Keystore is AES-256-GCM encrypted with vault key (`salt === ""`) or password (`salt !== ""`). Migration to vault key format happens on first unlock with master password (v1.3.0+). | v1.0.0     |
-| `mnemonicVault` | `{ version: 1, entries: [{ id, keystore }] }`                  | Encrypted seed phrases. `id` matches seed group ID. AES-256-GCM encrypted with vault key (`salt === ""`) or password (`salt !== ""`). Migration to vault key format happens on first unlock with master password (v1.3.0+).          | v1.0.0     |
+| `mnemonicVault` | `{ version: 1, entries: [{ id, keystore: { ciphertext, iv, salt } }] }` | Encrypted seed phrases. `id` matches seed group ID. Always PBKDF2 + AES-256-GCM encrypted with the master password; biometric/agent sessions use the separately cached derived private keys for routine signing and cannot decrypt the original mnemonic. | v1.0.0     |
 
 ### Transaction & Request State
 
@@ -241,11 +242,10 @@ New keys:
 Modified keys (dual-format support):
 
 - `pkVault` entries now support vault-key encryption (`salt === ""`) in addition to password encryption (`salt !== ""`)
-- `mnemonicVault` entries now support vault-key encryption (same dual-format pattern)
 
 Migration from v1.0.0+:
 
-- Private keys and seed phrases migrated from password encryption to vault-key encryption on first unlock with master password
+- Private keys migrated from password encryption to vault-key encryption on first unlock with master password; seed phrases remain master-password encrypted
 - Migration is idempotent and checks format before re-encrypting
 - Both formats continue to work (backward compatible)
 - Agent password can sign transactions after migration completes
@@ -280,6 +280,7 @@ New keys:
 - `chrome.storage.local.recentlyReceivedTokens` (optional portfolio freshness overlay)
 - `chrome.storage.local.portfolioHoldingsCache` (optional Holdings first-paint cache; absence refetches)
 - `chrome.storage.local.sessionEncKey` (session-restore key half for "Never" auto-lock)
+- `chrome.storage.local.passkeyUnlock` (optional local WebAuthn PRF-wrapped vault key; absence means biometric unlock is disabled)
 - `chrome.storage.local.swapTokenList:{chainId}` (optional cache; absence refetches)
 - `chrome.storage.local.bungeeChains` and `bungeeTokens:{chainId}` (optional bridge metadata caches; absence refetches)
 - Transient local prefixes: `addChainResult:`, `watchAssetResult:`, `batchTxAck:`,
@@ -300,4 +301,4 @@ Modified keys:
 
 Migration from any prior version:
 
-- No migration required. Missing `walletConnectPendingRequests` resolves to an empty map, missing `walletConnectChainId` falls back to the current global chain or first visible chain, missing `hiddenPortfolioTokens` resolves to no hidden tokens, missing cache keys are lazily refetched, missing `portfolioHoldingsCache` just shows the normal skeleton while live portfolio data loads, legacy per-address hidden-token records are flattened lazily to the global list, and old pending request entries without `walletConnect` metadata follow the injected-provider result path unchanged.
+- No migration required. Missing `passkeyUnlock` means biometric unlock is not configured; the key is created only after explicit master authorization and successful WebAuthn setup. Missing `walletConnectPendingRequests` resolves to an empty map, missing `walletConnectChainId` falls back to the current global chain or first visible chain, missing `hiddenPortfolioTokens` resolves to no hidden tokens, missing cache keys are lazily refetched, missing `portfolioHoldingsCache` just shows the normal skeleton while live portfolio data loads, legacy per-address hidden-token records are flattened lazily to the global list, and old pending request entries without `walletConnect` metadata follow the injected-provider result path unchanged.

@@ -160,6 +160,9 @@ apps/extension/src/
 ├── chrome/
 │   ├── background.ts        # Service worker (message router)
 │   ├── authHandlers.ts      # Unlock, password change, vault key migration
+│   ├── authTransition.ts    # Serialized auth mutations + WebAuthn ceremony invalidation
+│   ├── passkeyUnlock.ts     # Biometric/passkey vault-key wrapper handlers
+│   ├── passkeyUnlockCrypto.ts # Passkey record validation + PRF vault-key wrapping
 │   ├── sessionCache.ts      # Credential caching, auto-lock, session restore
 │   ├── txHandlers.ts        # Transaction/signature handling, account mgmt
 │   ├── chatHandlers.ts      # Bankr AI chat prompt handling

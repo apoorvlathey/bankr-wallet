@@ -15,9 +15,10 @@ This document is the security reference for the WalletChan Chrome extension. It 
 | Master password | Never stored (except encrypted session restore for "Never" auto-lock)                            | `cachedPassword` in `sessionCache.ts`              |
 | Agent password  | Never stored directly (encrypts vault key)                                                       | Not cached separately (same `cachedPassword` slot) |
 | Password type   | `chrome.storage.session` (for session restoration)                                               | `cachedPasswordType` in `sessionCache.ts`          |
+| Passkey PRF output | Never stored. Produced by WebAuthn in a trusted extension page and sent over extension-internal runtime messaging for immediate service-worker wrap/unwrap; never forwarded to content scripts, webpages, or inpage code | Not cached after use |
 | Bankr API key   | `encryptedApiKeyVault` (AES-256-GCM via vault key) or `encryptedApiKey` (legacy, password-based) | `cachedApiKey` in `sessionCache.ts`                |
 | Private keys    | `pkVault` entries (AES-256-GCM via vault key or password, indicated by `salt` field)             | `cachedVault` array in `sessionCache.ts`           |
-| Seed phrases    | `mnemonicVault` entries (AES-256-GCM via vault key or password)                                  | Not cached (retrieved on-demand for signing)       |
+| Seed phrases    | `mnemonicVault` entries (PBKDF2 + AES-256-GCM via master password)                               | Not cached; explicit master password is required for reveal/derivation |
 | Vault key       | `encryptedVaultKeyMaster` / `encryptedVaultKeyAgent` (PBKDF2-wrapped)                            | `cachedVaultKey` as CryptoKey in `sessionCache.ts` |
 
 ### Trust Boundaries
@@ -63,12 +64,19 @@ WalletChan uses a **two-tier encryption** system (vault key wrapping) to enable 
 ```
 Master Password → PBKDF2 (600k) → Decrypt encryptedVaultKeyMaster → Vault Key (256-bit)
 Agent Password  → PBKDF2 (600k) → Decrypt encryptedVaultKeyAgent  → Same Vault Key
+Passkey PRF     → AES-GCM       → Decrypt passkeyUnlock wrapper    → Same Vault Key
                                          ↓
                           Vault Key → AES-256-GCM → Decrypt:
                                     - encryptedApiKeyVault
                                     - pkVault entries (salt === "")
-                                    - mnemonicVault entries (salt === "")
+
+Master Password → PBKDF2 (600k) → AES-256-GCM → mnemonicVault entries
 ```
+
+Passkey setup requests PRF evaluation as part of the user-verifying WebAuthn
+registration ceremony. When registration returns `prf.results.first`, that
+output is used directly to wrap the vault key; otherwise setup performs a
+user-verifying assertion to obtain the same credential-bound PRF output.
 
 ### Storage Format Detection
 
@@ -94,7 +102,7 @@ Agent Password  → PBKDF2 (600k) → Decrypt encryptedVaultKeyAgent  → Same V
 3. Encrypt vault key with master password → save to `encryptedVaultKeyMaster`
 4. Re-encrypt API key with vault key → save to `encryptedApiKeyVault`
 5. Re-encrypt all private keys with vault key → update `pkVault` entries (`salt: ""`)
-6. Re-encrypt all seed phrases with vault key → update `mnemonicVault` entries (`salt: ""`)
+6. Keep seed phrases master-password encrypted in `mnemonicVault`; password rotation re-encrypts them atomically with the new master password
 
 **Partial migration detection**: If vault key system exists (`encryptedVaultKeyMaster` present) but private keys are still password-encrypted (`salt !== ""`), migration is completed on next master password unlock via `migratePrivateKeysToVaultKey()`.
 
@@ -104,7 +112,7 @@ To maintain agent password access control guards across service worker restarts:
 
 **Storage**: `chrome.storage.session.passwordType` (stored alongside session password)
 
-**Restoration**: When `tryRestoreSession()` succeeds, `passwordType` is restored to `cachedPasswordType`, ensuring operations remain blocked for agent password sessions even after restart.
+**Restoration**: When `tryRestoreSession()` succeeds, `passwordType` is restored to `cachedPasswordType`, ensuring operations remain blocked for agent password sessions even after restart. Restoration shares the serialized auth-transition queue with manual lock and factor/password mutations, so an in-flight restore cannot resurrect credentials after a newer lock.
 
 **Critical**: Without password type persistence, agent password users could temporarily bypass guards (reveal private keys, change settings) after service worker restart until manual lock/unlock. This is now mitigated in v1.3.0+.
 
@@ -135,6 +143,7 @@ The agent password model restricts what operations are available when the wallet
 | Initiate token transfer          | Yes    | Yes         | `txHandlers.ts` - creates PendingTxRequest                                     |
 | Reset extension                  | Yes    | **BLOCKED** | `background.ts` - `resetExtension` case                                        |
 | Set/remove agent password        | Yes    | **BLOCKED** | `authHandlers.ts` - `handleSetAgentPassword()` / `handleRemoveAgentPassword()` |
+| Set/remove passkey unlock        | Yes    | **BLOCKED** | `passkeyUnlock.ts` - master session or explicit master password required       |
 
 ### How Guards Work
 
@@ -169,7 +178,7 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | `saveApiKeyWithCachedPassword`     | Overwrites encrypted API key                                                                                                 | Agent password blocked                     |
 | `saveBankrApiKeyAndAddress`        | Overwrites encrypted API key and updates the Bankr account address in `accounts[]` after duplicate-address validation        | Agent password blocked via API-key save    |
-| `changePasswordWithCachedPassword` | Atomically re-encrypts vault key, pkVault entries, and mnemonicVault entries with new master password (single storage write) | Agent password blocked                     |
+| `changePasswordWithCachedPassword` | Atomically re-wraps the vault key and re-encrypts password-derived `mnemonicVault` entries with the new master password (single storage write); vault-key-encrypted `pkVault` entries remain unchanged | Agent password blocked                     |
 | `addBankrAccount`                  | Can overwrite encrypted API key (when `message.apiKey` provided)                                                             | Agent password blocked when apiKey present |
 | `addPrivateKeyAccount`             | Adds new entry to encrypted private key vault                                                                                | Agent password blocked                     |
 
@@ -187,7 +196,7 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 | Handler          | Effect                      | Guard                                         |
 | ---------------- | --------------------------- | --------------------------------------------- |
 | `resetExtension` | Wipes wallet identity state, pending queues, WalletConnect routing, cross-dapp batches, tx history, wallet portfolio state, transient result keys, and session auth state via `walletResetStorage.ts` | Agent password blocked |
-| `lockWallet`     | Clears all in-memory caches | None needed (user-initiated, non-destructive) |
+| `lockWallet`     | Clears all in-memory caches and restorable session auth; tells currently open UI surfaces to suppress their biometric auto-prompt in renderer memory | None needed (user-initiated, non-destructive) |
 | `clearTxHistory` | Deletes transaction history | `EXTENSION_ONLY_MESSAGES`                     |
 
 ### Extension-Only UI Reads and Actions
@@ -224,6 +233,25 @@ not forward an inpage message for it.
 | `unlockWallet`        | Tries master password first, then agent. Sets `passwordType` accordingly |
 | `setAgentPassword`    | Requires `getPasswordType() === "master"`                                |
 | `removeAgentPassword` | Requires explicit master password verification (not just cached)         |
+| `canSetupPasskeyUnlock` | Preflights Settings setup so agent/expired sessions fail before platform credential creation. |
+| `setupPasskeyUnlock` / `setupPasskeyUnlockWithPassword` | Requires master session or explicit master-password verification, then stores a local WebAuthn PRF-wrapped vault key only after backend hydration succeeds. |
+| `unlockWithPasskey`   | Decrypts `passkeyUnlock`, transactionally hydrates a master session, and does not cache/store the master password. |
+| `removePasskeyUnlock` | Requires explicit master password verification before clearing the local passkey wrapper. |
+
+All mutating unlock/lock/factor/password/reset handlers and persisted-session
+restoration run through `authTransition.ts`. The queue makes cache/storage
+commits linearizable across simultaneously open extension views, including
+agent-password creation versus master-password rotation. WebAuthn
+preflight/status responses also carry a random per-service-worker ceremony
+epoch; lock, password change, reset, factor removal, successful unlock, and
+worker suspension rotate it so an older native prompt cannot commit after a
+newer security action or service-worker restart.
+
+`chrome.runtime.sendMessage()` is extension-wide, so sibling trusted extension
+pages may observe internal messages even though only the service worker handles
+the passkey command. The security boundary is therefore all packaged extension
+pages—not content scripts or webpages. No passkey-derived material may be logged,
+persisted, or forwarded outside that boundary.
 
 ### Pending Transaction Edit Handlers
 
@@ -537,12 +565,12 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 ### chrome.storage.session (session-scoped, cleared on browser close)
 
 | Key                        | Contains Secrets | Description                                                      |
-| -------------------------- | ---------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| -------------------------- | ---------------- | ---------------------------------------------------------------- |
 | `encryptedSessionPassword` | Yes (encrypted)  | Password for "Never" auto-lock restore (AES-GCM with random key) |
 | `sessionId`                | No               | Session identifier (UUID)                                        |
 | `sessionStartedAt`         | No               | Session timestamp (milliseconds since epoch)                     |
 | `autoLockNever`            | No               | Boolean flag indicating "Never" auto-lock mode                   |
-| `passwordType`             | No               | `"master"                                                        | "agent"` - Which password was used to unlock. Restored to maintain agent password access control guards after service worker restart (v1.3.0+) |
+| `passwordType`             | No               | `"master" \| "agent"` - which password was used to unlock. Restored to maintain agent password access control guards after service worker restart (v1.3.0+) |
 
 ### chrome.storage.sync (synced, no secrets)
 
@@ -598,7 +626,7 @@ These must always hold true. Violations indicate a security bug.
 
 10. **Secret-returning handlers verify sender origin** - Handlers like `getCachedApiKey`, `revealPrivateKey`, `revealSeedPhrase`, and `generateMnemonic` check `isExtensionPage(sender)` to ensure the request comes from an extension page, not a content script on a web page.
 
-11. **Password change re-encrypts all password-derived vaults atomically** - `handleChangePasswordWithCachedPassword` computes all new encrypted values in memory first (`encryptedVaultKeyMaster`, `pkVault`, `mnemonicVault`), then writes them in a single `chrome.storage.local.set()` call. This prevents partial-write corruption where the vault key is updated but private key/mnemonic vaults remain encrypted with the old password.
+11. **Password change updates all password-derived wrappers atomically** - `handleChangePasswordWithCachedPassword` computes the new `encryptedVaultKeyMaster` and password-derived `mnemonicVault` in memory, then writes them together in one `chrome.storage.local.set()` call. Vault-key-encrypted `pkVault` entries do not change. This prevents partial-write corruption where the vault-key wrapper changes while seed phrases remain encrypted with the old password.
 
 12. **Duplicate-only seed imports do not persist secrets** - `addSeedPhraseGroup` validates that at least one selected derivation index can be imported or converted before creating `seedGroups` metadata or writing the encrypted mnemonic to `mnemonicVault`.
 
@@ -641,8 +669,9 @@ When reviewing or making changes to extension code, verify the following:
 ### If you modified session/cache logic:
 
 - [ ] Is auto-lock still enforced (cache expiry checked in getters)?
+- [ ] Does opening/reopening popup or sidepanel after timeout keep the wallet locked instead of reviving expired caches?
 - [ ] Does the `suspend` event still clear all caches?
-- [ ] Does manual lock (`lockWallet`) still clear all caches and session storage?
+- [ ] Does manual lock (`lockWallet`) still clear all caches and restorable session storage?
 - [ ] Does session restore still require `autoLockTimeout === 0`?
 
 ### If you added a new message handler that uses getCachedPassword() or getCachedApiKey():

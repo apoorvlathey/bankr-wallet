@@ -4,6 +4,7 @@ import {
   PaletteIcon,
   LockIcon,
   AgentIcon,
+  FingerprintIcon,
   ClockIcon,
   LinkChainIcon,
   TrashIcon,
@@ -17,6 +18,7 @@ export type LeafId =
   | "appearance"
   | "changePassword"
   | "agentPassword"
+  | "biometricUnlock"
   | "autoLock"
   | "chains"
   | "ensBrowsing"
@@ -51,17 +53,17 @@ export const LEAF_ENTRIES: readonly LeafEntry[] = [
     group: "security",
   },
   {
-    id: "agentPassword",
-    title: "Agent Password",
-    subtitle: "Allow AI agents to unlock wallet",
-    keywords: ["agent", "ai", "password", "unlock", "security"],
-    group: "security",
-  },
-  {
     id: "autoLock",
     title: "Auto-Lock",
     subtitle: "Configure wallet lock timeout",
     keywords: ["auto", "lock", "timeout", "idle", "security"],
+    group: "security",
+  },
+  {
+    id: "biometricUnlock",
+    title: "Biometric Unlock",
+    subtitle: "Unlock this device with a passkey",
+    keywords: ["biometric", "passkey", "fingerprint", "face", "unlock", "security"],
     group: "security",
   },
   {
@@ -97,6 +99,13 @@ export const LEAF_ENTRIES: readonly LeafEntry[] = [
     title: "Clear Signing",
     subtitle: "Show human-readable summaries for known contracts",
     keywords: ["clear", "signing", "erc-7730", "descriptor", "privacy", "human", "readable"],
+    group: "security",
+  },
+  {
+    id: "agentPassword",
+    title: "Agent Password",
+    subtitle: "Allow AI agents to unlock wallet",
+    keywords: ["agent", "ai", "password", "unlock", "security"],
     group: "security",
   },
   {
@@ -136,6 +145,7 @@ export type NavigableLeafId =
   | "appearance"
   | "changePassword"
   | "agentPassword"
+  | "biometricUnlock"
   | "autoLock"
   | "chains"
   | "ensBrowsing"
@@ -150,6 +160,7 @@ export interface RowContext {
   chainStripFg: string;
   passwordType: "master" | "agent" | null;
   isAgentPasswordEnabled: boolean;
+  isPasskeyUnlockEnabled: boolean;
   onNavigate: (id: NavigableLeafId) => void;
   onAction: (id: ActionLeafId) => void;
 }
@@ -211,6 +222,47 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
           title="Agent Password"
           subtitle="Allow AI agents to unlock wallet"
           icon={<AgentIcon boxSize={5} />}
+          iconBg={tileBg}
+          iconColor={tileFg}
+          cornerAccent="secondary"
+          showChevron
+          onClick={() => ctx.onNavigate(id)}
+          badge={
+            <Badge
+              bg={tileBg}
+              color={tileFg}
+              border="2px solid"
+              borderColor="border.default"
+              fontSize="xs"
+              fontWeight="700"
+            >
+              {on ? "ON" : "OFF"}
+            </Badge>
+          }
+        />
+      );
+    }
+
+    case "biometricUnlock": {
+      if (ctx.passwordType === "agent") return null;
+
+      const on = ctx.isPasskeyUnlockEnabled;
+      const tileBg = on
+        ? "accent.secondary"
+        : ctx.isDarkTheme
+          ? "border.strong"
+          : "surface.sunken";
+      const tileFg = on
+        ? "accentFg.secondary"
+        : ctx.isDarkTheme
+          ? "fg.primary"
+          : "fg.muted";
+      return (
+        <SettingsRow
+          key={id}
+          title="Biometric Unlock"
+          subtitle="Unlock this device with a passkey"
+          icon={<FingerprintIcon boxSize={5} />}
           iconBg={tileBg}
           iconColor={tileFg}
           cornerAccent="secondary"

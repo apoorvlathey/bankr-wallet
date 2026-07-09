@@ -202,6 +202,23 @@ function responseForMessage(message: any): unknown {
       return { enabled: true };
     case "getPasswordType":
       return { passwordType: "master" };
+    case "getPasskeyUnlockStatus":
+      return {
+        configured: false,
+        rpId: "extension",
+        authCeremonyEpoch: "preview-auth-ceremony",
+      };
+    case "canSetupPasskeyUnlock":
+    case "verifyPasskeySetupPassword":
+      return {
+        success: true,
+        authCeremonyEpoch: "preview-auth-ceremony",
+      };
+    case "setupPasskeyUnlock":
+    case "setupPasskeyUnlockWithPassword":
+    case "unlockWithPasskey":
+    case "removePasskeyUnlock":
+      return { success: true };
     case "unlockWallet":
       return { success: true };
     case "resetExtension":

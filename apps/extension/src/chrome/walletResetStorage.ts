@@ -11,6 +11,7 @@ export const WALLET_LOCAL_STORAGE_KEYS = [
   "encryptedVaultKeyMaster",
   "encryptedVaultKeyAgent",
   "agentPasswordEnabled",
+  "passkeyUnlock",
   "pkVault",
   "mnemonicVault",
   "accounts",

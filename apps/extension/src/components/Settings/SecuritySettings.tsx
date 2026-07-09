@@ -38,7 +38,7 @@ function SecuritySettings({ onBack, ctx }: Props) {
       </HStack>
 
       <Text fontSize="sm" color="text.secondary" fontWeight="500">
-        Password, agent access, and auto-lock timeout.
+        Password, biometric unlock, agent access, and auto-lock timeout.
       </Text>
 
       {entries.map((e) => renderLeafRow(e.id, ctx))}
