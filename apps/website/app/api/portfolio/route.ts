@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SUPPORTED_CHAIN_IDS } from "./chains";
 import { alchemyProvider } from "./providers/alchemy";
 import { duneSimProvider } from "./providers/dune";
+import { zerionProvider } from "./providers/zerion";
 // Octav is intentionally not in the active chain — re-enable by importing and
 // adding `octavProvider` to PROVIDERS below. See ./providers/octav.ts.
 // import { octavProvider } from "./providers/octav";
@@ -20,7 +21,11 @@ import {
  * To swap providers: reorder this array, add a new provider, or comment one
  * out. Each provider is a self-contained module under ./providers/.
  */
-const PROVIDERS: PortfolioProvider[] = [duneSimProvider, alchemyProvider];
+const PROVIDERS: PortfolioProvider[] = [
+  zerionProvider,
+  duneSimProvider,
+  alchemyProvider,
+];
 
 const BASE_RPC_URL =
   process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://mainnet.base.org";

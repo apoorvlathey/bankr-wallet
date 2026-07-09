@@ -1379,11 +1379,19 @@ out terminal status updates to multiple source `wallet_sendCalls` bundle IDs.
 
 ### Portfolio API
 
-Token holdings are fetched via a website API route that wraps the Octav API:
+Token holdings are fetched via a provider-agnostic website API route:
 
 - **Website route**: `apps/website/app/api/portfolio/route.ts` (GET `/api/portfolio?address=0x...`)
 - **Extension client**: `portfolioApi.ts` fetches from `https://walletchan.eth.sh/api/portfolio`
-- **Response format**: Provider-agnostic `PortfolioResponse` with `tokens[]` and `totalValueUsd`
+- **Response format**: Provider-agnostic `PortfolioResponse` with `tokens[]`, `defiPositions[]`, and `totalValueUsd`
+- **Provider order**: Zerion primary, Dune SIM temporary fallback, Alchemy final token-only fallback
+
+Zerion is queried without `filter[chain_ids]` so balances and DeFi positions on
+new Zerion-supported EVM chains can appear without changing the WalletChan API.
+The provider resolves Zerion string chain IDs to numeric EVM chain IDs using the
+Zerion `/v1/chains/` endpoint plus static fallbacks for known slugs; positions
+that cannot be represented as a numeric EVM `chainId` are skipped because the
+public `PortfolioResponse` contract uses numeric chain IDs.
 
 ### Onchain Balance Verification
 

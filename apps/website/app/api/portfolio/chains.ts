@@ -1,10 +1,16 @@
 /**
- * Single source of truth for portfolio API chain support and per-provider
- * addressing. Edit this file (and only this file) when adding/removing chains.
+ * Single source of truth for portfolio fallback-provider chain support and
+ * per-provider addressing. Zerion is the primary provider and is intentionally
+ * queried without a chain filter.
  *
  * Provider docs — re-verify periodically (providers add chains regularly):
+ * - Zerion:    https://developers.zerion.io/supported-blockchains
+ *              live JSON at https://api.zerion.io/v1/chains/
+ *              (primary provider; queried without a chain filter so new
+ *              Zerion-supported EVM chains can appear automatically)
  * - Dune Sim:  https://docs.sim.dune.com/evm/supported-chains
  *              live JSON at https://api.sim.dune.com/v1/evm/supported-chains
+ *              (temporary fallback only)
  * - Alchemy:   https://www.alchemy.com/docs/reference/get-tokens-by-address
  *              full chain list at https://dashboard.alchemy.com/chains
  *              (some chains gated behind paid plans — see `alchemyRequiresPaidPlan`)

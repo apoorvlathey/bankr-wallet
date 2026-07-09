@@ -14,6 +14,12 @@ Don't push anything to github though. Make sure to auto compact your context whe
       Use `.agents/skills/walletchan-chain-research/SKILL.md` for the support
       audit.
 
+## Portfolio API Follow-Ups
+
+- [ ] Remove `duneSimProvider` completely from the `/api/portfolio` provider
+      chain after Zerion has proven stable in production. It is currently kept
+      only as a temporary rollback/fallback path for the Dune SIM migration.
+
 ## ERC-7710 / ERC-7715 Delegated Permissions
 
 Design principle: raw ERC-7710 typed-data signing is not a dapp API. Dapps
