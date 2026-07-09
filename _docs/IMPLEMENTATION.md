@@ -1014,6 +1014,9 @@ instead; WalletChan-generated delegation signing must stay on an internal path.
 
 - Sign button (yellow): Signs via `/wallet/sign` API
 - Reject button (white/secondary): Cancels the request
+- Before forwarding EIP-712 typed data, `bankrApi.ts` normalizes a decimal or
+  hexadecimal string `domain.chainId` to the positive safe JSON number required
+  by Bankr. Invalid or out-of-range chain IDs are rejected locally.
 
 **For Private Key / Seed Phrase Accounts:**
 
