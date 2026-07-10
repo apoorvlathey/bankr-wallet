@@ -2,6 +2,9 @@ import { useRef, useState } from "react";
 import {
   Box,
   Button,
+  FormControl,
+  FormErrorMessage,
+  FormLabel,
   HStack,
   IconButton,
   Input,
@@ -11,12 +14,10 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import {
-  CloseIcon,
   ViewIcon,
   ViewOffIcon,
   WarningTwoIcon,
 } from "@chakra-ui/icons";
-import { Decorator, useTheme } from "@/theme";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import {
   createPasskeyUnlockCredential,
@@ -24,6 +25,12 @@ import {
   isPasskeyPromptCancelled,
 } from "@/lib/passkeyWebAuthn";
 import { FingerprintIcon } from "@/components/Settings/icons";
+import {
+  AppHeader,
+  AppScreen,
+  ScreenBody,
+  StickyActionBar,
+} from "@/components/ui";
 
 interface BiometricUnlockSetupProps {
   onCancel: () => void;
@@ -34,7 +41,6 @@ function BiometricUnlockSetup({
   onCancel,
   onComplete,
 }: BiometricUnlockSetupProps) {
-  const { tokens } = useTheme();
   const toast = useThemedToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [password, setPassword] = useState("");
@@ -113,84 +119,58 @@ function BiometricUnlockSetup({
   };
 
   return (
-    <Box
-      h="100%"
-      bg="surface.base"
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      py={10}
-      px={6}
-      position="relative"
-    >
-      <IconButton
-        aria-label="Close biometric setup"
-        icon={<CloseIcon />}
-        variant="ghost"
-        size="sm"
-        onClick={onCancel}
-        position="absolute"
-        top={4}
-        right={4}
-      />
-
-      <VStack spacing={5} w="full" maxW="300px" mx="auto">
-        <HStack spacing={3} w="full" justify="center" align="center">
+    <AppScreen>
+      <AppHeader title="Set up biometric unlock" onBack={onCancel} />
+      <ScreenBody pt={5} pb={6}>
+        <VStack spacing={5} w="full" align="stretch">
+          <HStack spacing={3} align="center">
           <Box
             p={2}
-            bg="accent.secondary"
-            border="2px solid"
-            borderColor="border.default"
-            borderRadius={tokens.radii.badge}
+            bg="status.info.bg"
+            borderWidth="1px"
+            borderColor="status.info.border"
+            borderRadius="lg"
             display="flex"
             alignItems="center"
             justifyContent="center"
             flexShrink={0}
           >
-            <FingerprintIcon boxSize={5} color="accentFg.secondary" />
+            <FingerprintIcon boxSize={5} color="status.info.fg" />
           </Box>
-          <Text
-            fontSize="lg"
-            fontWeight="900"
-            color="text.primary"
-            textTransform="uppercase"
-            letterSpacing="tight"
-            lineHeight="1.1"
-          >
-            Set up Biometric Unlock
-          </Text>
-        </HStack>
+          <Box>
+            <Text fontSize="md" fontWeight="600" color="fg.primary">
+              Unlock securely on this device
+            </Text>
+            <Text mt={0.5} fontSize="sm" color="fg.secondary">
+              Your master password verifies the one-time setup.
+            </Text>
+          </Box>
+          </HStack>
 
         <Box
           w="full"
           p={4}
           bg="surface.raised"
-          border="4px solid"
+          borderWidth="1px"
           borderColor="border.default"
           borderRadius="lg"
-          boxShadow="cardHover"
-          position="relative"
         >
-          <Decorator corner="top-right" accent="secondary" />
-
           <VStack spacing={3} align="stretch">
-            <Text fontSize="sm" color="text.secondary" fontWeight="600">
-              Enter your master password to add biometric unlock on this device.
-            </Text>
-
-            <InputGroup>
+            <FormControl isInvalid={!!error}>
+              <FormLabel>Master password</FormLabel>
+              <InputGroup>
               <Input
                 ref={inputRef}
                 type={showPassword ? "text" : "password"}
-                placeholder="Master password"
+                name="masterPassword"
+                autoComplete="current-password"
+                placeholder="Enter master password"
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
                   if (error) setError("");
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSubmit();
-                }}
+                onKeyDown={(e) => e.key === "Enter" && void handleSubmit()}
                 isDisabled={isSubmitting}
                 isInvalid={!!error}
                 autoFocus
@@ -206,38 +186,31 @@ function BiometricUnlockSetup({
                   tabIndex={-1}
                 />
               </InputRightElement>
-            </InputGroup>
-
-            {error && (
-              <Box
-                w="full"
-                bg="accent.primary"
-                border="2px solid"
-                borderColor="border.default"
-                borderRadius={tokens.radii.card}
-                p={2}
-              >
-                <HStack>
-                  <WarningTwoIcon color="accentFg.primary" boxSize={4} />
-                  <Text color="accentFg.primary" fontSize="sm" fontWeight="700">
-                    {error}
-                  </Text>
-                </HStack>
-              </Box>
-            )}
-
-            <Button
-              variant="primary"
-              onClick={handleSubmit}
-              isLoading={isSubmitting}
-              loadingText="Setting up..."
-            >
-              Continue
-            </Button>
+              </InputGroup>
+              {error && (
+                <FormErrorMessage alignItems="flex-start">
+                  <WarningTwoIcon mt={0.5} mr={2} />
+                  {error}
+                </FormErrorMessage>
+              )}
+            </FormControl>
           </VStack>
         </Box>
-      </VStack>
-    </Box>
+        </VStack>
+      </ScreenBody>
+      <StickyActionBar
+        primaryAction={
+          <Button
+            variant="primary"
+            onClick={() => void handleSubmit()}
+            isLoading={isSubmitting}
+            loadingText="Setting up…"
+          >
+            Continue
+          </Button>
+        }
+      />
+    </AppScreen>
   );
 }
 

@@ -1,0 +1,355 @@
+.walletchan-mascot {
+  --mascot-intensity: 0.25;
+  --mascot-gaze-x: 0;
+  --mascot-gaze-y: 0;
+  position: relative;
+  display: block;
+  width: min(100%, 380px);
+  aspect-ratio: 1;
+  transform-origin: 50% 78%;
+}
+
+.mascot-character-root,
+.mascot-expression-layer,
+.mascot-effect-layer,
+.mascot-art-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.mascot-character-root {
+  transform-origin: 50% 82%;
+  will-change: transform;
+  animation: mascot-breathe 3.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.mascot-art-layer {
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.mascot-eye,
+.mascot-mouth,
+.mascot-effect {
+  opacity: 0;
+}
+
+.mascot-eye--left-open,
+.mascot-eye--right-open,
+.mascot-mouth--idle {
+  opacity: 1;
+}
+
+/* Natural blink: swap the approved open and closed raster layers briefly. */
+.walletchan-mascot--idle .mascot-eye--left-open,
+.walletchan-mascot--idle .mascot-eye--right-open,
+.walletchan-mascot--attentive .mascot-eye--left-open,
+.walletchan-mascot--attentive .mascot-eye--right-open,
+.walletchan-mascot--thinking .mascot-eye--left-open,
+.walletchan-mascot--thinking .mascot-eye--right-open {
+  animation: mascot-open-eye-blink 5.4s steps(1, end) infinite;
+}
+
+.walletchan-mascot--idle .mascot-eye--left-closed,
+.walletchan-mascot--idle .mascot-eye--right-closed,
+.walletchan-mascot--attentive .mascot-eye--left-closed,
+.walletchan-mascot--attentive .mascot-eye--right-closed,
+.walletchan-mascot--thinking .mascot-eye--left-closed,
+.walletchan-mascot--thinking .mascot-eye--right-closed {
+  animation: mascot-closed-eye-blink 5.4s steps(1, end) infinite;
+}
+
+.walletchan-mascot--success .mascot-eye--right-open,
+.walletchan-mascot--success .mascot-mouth--idle,
+.walletchan-mascot--error .mascot-mouth--idle,
+.walletchan-mascot--sleeping .mascot-eye--left-open,
+.walletchan-mascot--sleeping .mascot-eye--right-open,
+.walletchan-mascot--sleeping .mascot-mouth--idle {
+  opacity: 0;
+  animation: none;
+}
+
+.walletchan-mascot--success .mascot-eye--right-closed,
+.walletchan-mascot--success .mascot-mouth--success,
+.walletchan-mascot--error .mascot-mouth--concerned,
+.walletchan-mascot--sleeping .mascot-eye--left-closed,
+.walletchan-mascot--sleeping .mascot-eye--right-closed,
+.walletchan-mascot--sleeping .mascot-mouth--sleep {
+  opacity: 1;
+}
+
+.walletchan-mascot--attentive .mascot-character-root {
+  animation: mascot-notice 700ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.walletchan-mascot--thinking .mascot-character-root {
+  animation: mascot-thinking 2.6s ease-in-out infinite;
+}
+
+.walletchan-mascot--success .mascot-character-root {
+  animation: mascot-cheer 820ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.walletchan-mascot--success .mascot-effect--success-sparkle {
+  animation: mascot-success-sparkle 920ms steps(4, end) var(--sparkle-delay) both;
+}
+
+.walletchan-mascot--error .mascot-character-root {
+  animation: mascot-recoil 500ms cubic-bezier(0.77, 0, 0.175, 1) both;
+}
+
+.walletchan-mascot--error .mascot-effect--anger-manpu {
+  animation: mascot-manpu-pop 720ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.walletchan-mascot--sleeping .mascot-character-root {
+  animation: mascot-sleep 4.6s ease-in-out infinite;
+}
+
+.walletchan-mascot--sleeping .mascot-effect--sleep-z {
+  --sleep-z-x: 0%;
+  --sleep-z-y: 0%;
+  --sleep-z-scale: 0.46;
+  transform-origin: center;
+  animation: mascot-sleep-z-rise 2.8s steps(4, end) infinite;
+}
+
+.walletchan-mascot--sleeping .mascot-effect--sleep-z-small {
+  --sleep-z-x: 38%;
+  --sleep-z-y: -5%;
+}
+
+.walletchan-mascot--sleeping .mascot-effect--sleep-z-medium {
+  --sleep-z-x: 38%;
+  --sleep-z-y: -14%;
+  animation-delay: 560ms;
+}
+
+.walletchan-mascot--sleeping .mascot-effect--sleep-z-large {
+  --sleep-z-x: 37%;
+  --sleep-z-y: -20%;
+  animation-delay: 1120ms;
+}
+
+.walletchan-mascot--reduced *,
+.walletchan-mascot--reduced *::before,
+.walletchan-mascot--reduced *::after {
+  animation: none !important;
+  transition-duration: 0.01ms !important;
+}
+
+.walletchan-mascot--reduced .mascot-character-root {
+  transform: none;
+}
+
+.walletchan-mascot--reduced.walletchan-mascot--error .mascot-effect--anger-manpu {
+  opacity: 1;
+}
+
+.walletchan-mascot--reduced.walletchan-mascot--success .mascot-effect--success-sparkle {
+  opacity: 0.76;
+}
+
+.walletchan-mascot--reduced.walletchan-mascot--sleeping .mascot-effect--sleep-z {
+  opacity: 0.88;
+  transform: translate(var(--sleep-z-x), var(--sleep-z-y)) scale(var(--sleep-z-scale));
+}
+
+@keyframes mascot-open-eye-blink {
+  0%,
+  91%,
+  94%,
+  100% {
+    opacity: 1;
+  }
+  92%,
+  93% {
+    opacity: 0;
+  }
+}
+
+@keyframes mascot-closed-eye-blink {
+  0%,
+  91%,
+  94%,
+  100% {
+    opacity: 0;
+  }
+  92%,
+  93% {
+    opacity: 1;
+  }
+}
+
+@keyframes mascot-breathe {
+  0%,
+  100% {
+    transform: translate(
+      calc(var(--mascot-gaze-x) * 2px),
+      calc(var(--mascot-gaze-y) * 1px)
+    ) scale(1);
+  }
+  50% {
+    transform: translate(
+      calc(var(--mascot-gaze-x) * 4px),
+      calc(var(--mascot-intensity) * -8px + var(--mascot-gaze-y) * 2px)
+    ) scale(1.006);
+  }
+}
+
+@keyframes mascot-notice {
+  0% {
+    transform: translateY(0) scale(1) rotate(0);
+  }
+  48% {
+    transform: translateY(-10px) scale(1.025) rotate(-1.5deg);
+  }
+  100% {
+    transform: translate(
+      calc(var(--mascot-gaze-x) * 5px),
+      calc(-4px + var(--mascot-gaze-y) * 3px)
+    ) scale(1.012) rotate(0);
+  }
+}
+
+@keyframes mascot-thinking {
+  0%,
+  100% {
+    transform: translate(-2px, 1px) rotate(-0.7deg);
+  }
+  50% {
+    transform: translate(3px, -5px) rotate(1deg);
+  }
+}
+
+@keyframes mascot-cheer {
+  0% {
+    transform: translateY(0) scale(1) rotate(0);
+  }
+  30% {
+    transform: translateY(calc(var(--mascot-intensity) * -24px)) scale(1.045) rotate(-2deg);
+  }
+  56% {
+    transform: translateY(3px) scale(0.985) rotate(1.5deg);
+  }
+  78% {
+    transform: translateY(-5px) scale(1.012) rotate(-0.5deg);
+  }
+  100% {
+    transform: translateY(0) scale(1) rotate(0);
+  }
+}
+
+@keyframes mascot-recoil {
+  0% {
+    transform: translateX(0) scale(1);
+  }
+  24% {
+    transform: translateX(-9px) scale(0.98);
+  }
+  46% {
+    transform: translateX(7px) scale(0.985);
+  }
+  68% {
+    transform: translateX(-4px) scale(0.995);
+  }
+  84% {
+    transform: translateX(2px) scale(1);
+  }
+  100% {
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes mascot-success-sparkle {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  38% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--sparkle-x), var(--sparkle-y));
+  }
+}
+
+@keyframes mascot-manpu-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.48) rotate(-8deg);
+  }
+  36% {
+    opacity: 1;
+    transform: scale(1.12) rotate(3deg);
+  }
+  58%,
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes mascot-sleep {
+  0%,
+  100% {
+    transform: translateY(4px) rotate(-1.2deg) scale(0.992);
+  }
+  50% {
+    transform: translateY(-2px) rotate(0.5deg) scale(1);
+  }
+}
+
+@keyframes mascot-sleep-z-rise {
+  0% {
+    opacity: 0;
+    transform: translate(
+      var(--sleep-z-x),
+      calc(var(--sleep-z-y) + 8px)
+    ) scale(var(--sleep-z-scale));
+  }
+  18%,
+  64% {
+    opacity: 0.9;
+    transform: translate(var(--sleep-z-x), var(--sleep-z-y)) scale(var(--sleep-z-scale));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(
+      calc(var(--sleep-z-x) + 1%),
+      calc(var(--sleep-z-y) - 18px)
+    ) scale(var(--sleep-z-scale));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .walletchan-mascot *,
+  .walletchan-mascot *::before,
+  .walletchan-mascot *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .walletchan-mascot--error .mascot-effect--anger-manpu {
+    opacity: 1;
+  }
+
+  .walletchan-mascot--success .mascot-effect--success-sparkle {
+    opacity: 0.76;
+  }
+
+  .walletchan-mascot--sleeping .mascot-effect--sleep-z {
+    opacity: 0.88;
+    transform: translate(var(--sleep-z-x), var(--sleep-z-y)) scale(var(--sleep-z-scale));
+  }
+}

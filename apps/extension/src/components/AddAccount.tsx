@@ -15,7 +15,6 @@ import {
   Radio,
   RadioGroup,
   Badge,
-  Divider,
   Image,
   Spinner,
 } from "@chakra-ui/react";
@@ -25,8 +24,6 @@ import SeedAddressPicker from "@/components/SeedAddressPicker";
 import {
   ViewIcon,
   ViewOffIcon,
-  ArrowBackIcon,
-  AddIcon,
   CopyIcon,
   CheckIcon,
   ExternalLinkIcon,
@@ -43,6 +40,20 @@ import PrivateKeyInput from "@/components/shared/PrivateKeyInput";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { isResolvableName } from "@/lib/ensUtils";
+import {
+  AppHeader,
+  AppScreen,
+  ListItem,
+  ListItemActions,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
+  ListItemTitle,
+  ListSurface,
+  ScreenBody,
+  ScreenSection,
+  StickyActionBar,
+} from "@/components/ui";
 
 type AccountType = "bankr" | "privateKey" | "seedPhrase" | "impersonator";
 
@@ -424,10 +435,9 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
         intro={
           <Box
             bg="surface.raised"
-            border="2px solid"
-            borderColor="border.default"
-            borderRadius="lg"
-            boxShadow="card"
+            border="1px solid"
+            borderColor="border.subtle"
+            borderRadius="md"
             p={3}
           >
             <Text fontSize="xs" color="text.secondary" fontWeight="500">
@@ -441,122 +451,98 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
   }
 
   return (
-    <Box p={4} h="100%" overflowY="auto" bg="surface.base">
-      <VStack spacing={4} align="stretch">
-        {/* Header */}
-        <HStack spacing={3}>
-          <IconButton
-            aria-label="Back"
-            icon={<ArrowBackIcon />}
-            variant="ghost"
-            size="sm"
-            onClick={onBack}
-          />
-          <Text
-            fontWeight="900"
-            fontSize="lg"
-            color="text.primary"
-            textTransform="uppercase"
-            letterSpacing="wide"
+    <AppScreen>
+      <AppHeader title="Add account" onBack={onBack} />
+      <ScreenBody pt={5}>
+        <VStack spacing={6} align="stretch">
+          <ScreenSection
+            title="Choose an account type"
+            description="You can sign locally, connect Bankr, or follow an address without signing."
           >
-            Add Account
-          </Text>
-        </HStack>
-
-        {/* Account Type Selection */}
-        <Box
-          bg="surface.raised"
-          border="2px solid"
-          borderColor="border.default"
-          borderRadius="lg"
-          boxShadow="card"
-          p={4}
-        >
-          <Text
-            fontSize="xs"
-            color="text.secondary"
-            fontWeight="700"
-            textTransform="uppercase"
-            mb={3}
-          >
-            Account Type
-          </Text>
           <RadioGroup
             value={accountType}
             onChange={(val) => setAccountType(val as AccountType)}
           >
-            <VStack spacing={3} align="stretch">
-              <Box
+            <ListSurface as="div" role="radiogroup">
+              <HStack
                 as="label"
-                p={3}
-                bg={accountType === "privateKey" ? "surface.sunken" : "transparent"}
-                border="2px solid"
-                borderColor="border.default"
-                borderRadius="md"
+                minH="64px"
+                px={4}
+                py={3}
+                spacing={3}
+                bg={accountType === "privateKey" ? "surface.raisedHover" : "transparent"}
+                borderBottom="1px solid"
+                borderColor="border.subtle"
                 cursor="pointer"
                 _hover={{ bg: "surface.raisedHover" }}
               >
                 <HStack spacing={3}>
                   <Radio value="privateKey" />
                   <Box
-                    bg="accent.highlight"
-                    border="2px solid"
-                    borderColor="border.default"
-                    borderRadius="sm"
-                    p={1}
+                    w="32px"
+                    h="32px"
+                    display="grid"
+                    placeItems="center"
+                    bg="status.warning.bg"
+                    borderRadius="md"
                   >
-                    <KeyIcon boxSize="16px" color="accentFg.highlight" />
+                    <KeyIcon boxSize="17px" color="status.warning.fg" />
                   </Box>
                   <VStack align="start" spacing={0}>
-                    <Text fontSize="sm" fontWeight="700" color="text.primary">
-                      Private Key
+                    <Text fontSize="md" fontWeight="600" color="fg.primary">
+                      Private key
                     </Text>
-                    <Text fontSize="xs" color="text.secondary">
+                    <Text fontSize="sm" color="fg.secondary">
                       Sign transactions locally
                     </Text>
                   </VStack>
                 </HStack>
-              </Box>
+              </HStack>
 
-              <Box
+              <HStack
                 as="label"
-                p={3}
-                bg={accountType === "seedPhrase" ? "surface.sunken" : "transparent"}
-                border="2px solid"
-                borderColor="border.default"
-                borderRadius="md"
+                minH="64px"
+                px={4}
+                py={3}
+                spacing={3}
+                bg={accountType === "seedPhrase" ? "surface.raisedHover" : "transparent"}
+                borderBottom="1px solid"
+                borderColor="border.subtle"
                 cursor="pointer"
                 _hover={{ bg: "surface.raisedHover" }}
               >
                 <HStack spacing={3}>
                   <Radio value="seedPhrase" />
                   <Box
-                    bg="accent.primary"
-                    border="2px solid"
-                    borderColor="border.default"
-                    borderRadius="sm"
-                    p={1}
+                    w="32px"
+                    h="32px"
+                    display="grid"
+                    placeItems="center"
+                    bg="surface.sunken"
+                    borderRadius="md"
                   >
-                    <SeedIcon boxSize="16px" color="accentFg.primary" />
+                    <SeedIcon boxSize="17px" color="accent.primary" />
                   </Box>
                   <VStack align="start" spacing={0}>
-                    <Text fontSize="sm" fontWeight="700" color="text.primary">
-                      Seed Phrase
+                    <Text fontSize="md" fontWeight="600" color="fg.primary">
+                      Seed phrase
                     </Text>
-                    <Text fontSize="xs" color="text.secondary">
-                      12-word mnemonic (BIP39)
+                    <Text fontSize="sm" color="fg.secondary">
+                      Import or create a 12-word phrase
                     </Text>
                   </VStack>
                 </HStack>
-              </Box>
+              </HStack>
 
-              <Box
+              <HStack
                 as="label"
-                p={3}
-                bg={accountType === "bankr" ? "surface.sunken" : "transparent"}
-                border="2px solid"
-                borderColor="border.default"
-                borderRadius="md"
+                minH="64px"
+                px={4}
+                py={3}
+                spacing={3}
+                bg={accountType === "bankr" ? "surface.raisedHover" : "transparent"}
+                borderBottom="1px solid"
+                borderColor="border.subtle"
                 cursor={hasBankrAccount ? "not-allowed" : "pointer"}
                 opacity={hasBankrAccount ? 0.5 : 1}
                 _hover={hasBankrAccount ? {} : { bg: "surface.raisedHover" }}
@@ -573,73 +559,70 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                     isDisabled={hasBankrAccount}
                   />
                   <Box
-                    bg="accent.secondary"
-                    border="2px solid"
-                    borderColor="border.default"
-                    borderRadius="sm"
-                    p={1}
+                    w="32px"
+                    h="32px"
+                    display="grid"
+                    placeItems="center"
+                    bg="surface.sunken"
+                    borderRadius="md"
                   >
-                    <RobotIcon boxSize="16px" color="accentFg.secondary" />
+                    <RobotIcon boxSize="17px" color="accent.primary" />
                   </Box>
                   <VStack align="start" spacing={0}>
-                    <Text fontSize="sm" fontWeight="700" color="text.primary">
-                      BankrAPI
+                    <Text fontSize="md" fontWeight="600" color="fg.primary">
+                      Bankr API
                     </Text>
-                    <Text fontSize="xs" color="text.secondary">
-                      Use Bankr API for transactions
+                    <Text fontSize="sm" color="fg.secondary">
+                      Use Bankr to execute transactions
                     </Text>
                     {hasBankrAccount && (
-                      <Text fontSize="xs" color="chart.negative" fontWeight="700">
-                        BankrAPI already added
+                      <Text fontSize="xs" color="status.error.fg" fontWeight="600">
+                        Already added
                       </Text>
                     )}
                   </VStack>
                 </HStack>
-              </Box>
-              <Box
+              </HStack>
+              <HStack
                 as="label"
-                p={3}
-                bg={accountType === "impersonator" ? "surface.sunken" : "transparent"}
-                border="2px solid"
-                borderColor="border.default"
-                borderRadius="md"
+                minH="64px"
+                px={4}
+                py={3}
+                spacing={3}
+                bg={accountType === "impersonator" ? "surface.raisedHover" : "transparent"}
                 cursor="pointer"
                 _hover={{ bg: "surface.raisedHover" }}
               >
                 <HStack spacing={3}>
                   <Radio value="impersonator" />
                   <Box
-                    bg="chart.positive"
-                    border="2px solid"
-                    borderColor="border.default"
-                    borderRadius="sm"
-                    p={1}
+                    w="32px"
+                    h="32px"
+                    display="grid"
+                    placeItems="center"
+                    bg="status.success.bg"
+                    borderRadius="md"
                   >
-                    <EyeIcon boxSize="16px" color="fg.inverse" />
+                    <EyeIcon boxSize="17px" color="status.success.fg" />
                   </Box>
                   <VStack align="start" spacing={0}>
-                    <Text fontSize="sm" fontWeight="700" color="text.primary">
-                      Impersonator
+                    <Text fontSize="md" fontWeight="600" color="fg.primary">
+                      View-only
                     </Text>
-                    <Text fontSize="xs" color="text.secondary">
-                      View-only, no signing
+                    <Text fontSize="sm" color="fg.secondary">
+                      Follow an address without signing
                     </Text>
                   </VStack>
                 </HStack>
-              </Box>
-            </VStack>
+              </HStack>
+            </ListSurface>
           </RadioGroup>
-        </Box>
+          </ScreenSection>
 
-        {/* Private Key Input */}
-        {accountType === "privateKey" && (
-          <Box
-            bg="surface.raised"
-            border="2px solid"
-            borderColor="border.default"
-            borderRadius="lg"
-            boxShadow="card"
-            p={4}
+          {accountType === "privateKey" && (
+          <ScreenSection
+            title="Import private key"
+            description="The key is encrypted before it is stored locally on this device."
           >
             <PrivateKeyInput
               privateKey={privateKey}
@@ -650,126 +633,63 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                 setErrors((prev) => ({ ...prev, privateKey: undefined }))
               }
             />
-          </Box>
+            <Box mt={3} p={3} bg="status.warning.bg" border="1px solid" borderColor="status.warning.border" borderRadius="md">
+              <Text fontSize="sm" color="status.warning.fg" fontWeight="600">
+                Never share this key. WalletChan support will never ask for it.
+              </Text>
+            </Box>
+          </ScreenSection>
         )}
 
-        {/* Seed Phrase: Existing Groups + Derive */}
-        {accountType === "seedPhrase" && seedGroups.length > 0 && (
-          <Box
-            bg="surface.raised"
-            border="2px solid"
-            borderColor="border.default"
-            borderRadius="lg"
-            boxShadow="card"
-            p={4}
+          {accountType === "seedPhrase" && seedGroups.length > 0 && (
+          <ScreenSection
+            title="Existing seed phrases"
+            description="Derive another address from a phrase already stored in this wallet."
           >
-            <Text
-              fontSize="xs"
-              color="text.secondary"
-              fontWeight="700"
-              textTransform="uppercase"
-              mb={3}
-            >
-              Existing Seed Phrases
-            </Text>
-            <VStack spacing={3} align="stretch">
+            <ListSurface>
               {seedGroups.map((group) => (
-                <Box
-                  key={group.id}
-                  p={3}
-                  border="2px solid"
-                  borderColor="border.default"
-                  borderRadius="md"
-                  bg="surface.sunken"
-                >
-                  <HStack justify="space-between" align="center">
+                <ListItem key={group.id}>
+                  <ListItemMedia>
+                    <SeedIcon boxSize="18px" color="accent.primary" />
+                  </ListItemMedia>
+                  <ListItemContent>
                     <HStack spacing={2}>
-                      <Box
-                        bg="accent.primary"
-                        border="2px solid"
-                        borderColor="border.default"
-                        borderRadius="sm"
-                        p={1}
-                      >
-                        <SeedIcon boxSize="14px" color="accentFg.primary" />
-                      </Box>
-                      <Text fontSize="sm" fontWeight="700" color="text.primary">
-                        {group.name}
-                      </Text>
-                      <Badge
-                        bg="fg.primary"
-                        color="surface.raised"
-                        fontSize="xs"
-                        fontWeight="700"
-                        px={2}
-                      >
-                        {group.accountCount}{" "}
-                        {group.accountCount === 1 ? "account" : "accounts"}
+                      <ListItemTitle>{group.name}</ListItemTitle>
+                      <Badge variant="subtle" fontSize="xs">
+                        {group.accountCount} {group.accountCount === 1 ? "account" : "accounts"}
                       </Badge>
                     </HStack>
-                  </HStack>
+                    <ListItemDescription>Stored seed phrase</ListItemDescription>
+                  </ListItemContent>
+                  <ListItemActions>
                   <Button
                     size="sm"
-                    variant="primary"
-                    mt={2}
-                    w="full"
-                    leftIcon={<AddIcon boxSize="10px" />}
+                    variant="secondary"
                     onClick={() => setPickingGroupId(group.id)}
                   >
-                    Derive Addresses
+                    Derive
                   </Button>
-                </Box>
+                  </ListItemActions>
+                </ListItem>
               ))}
-            </VStack>
-
-            <HStack my={4} align="center">
-              <Divider borderColor="border.default" />
-              <Text
-                fontSize="xs"
-                color="text.secondary"
-                fontWeight="700"
-                whiteSpace="nowrap"
-                px={2}
-              >
-                OR
-              </Text>
-              <Divider borderColor="border.default" />
-            </HStack>
-
-            <Button
-              variant="outline"
-              w="full"
-              size="sm"
-              border="2px solid"
-              borderColor="border.default"
-              fontWeight="700"
-              onClick={() => setShowSeedSetup(true)}
-            >
-              Add New Seed Phrase
-            </Button>
-          </Box>
+            </ListSurface>
+          </ScreenSection>
         )}
 
-        {/* Impersonator Address Input */}
-        {accountType === "impersonator" && (
-          <Box
-            bg="surface.raised"
-            border="2px solid"
-            borderColor="border.default"
-            borderRadius="lg"
-            boxShadow="card"
-            p={4}
+          {accountType === "impersonator" && (
+          <ScreenSection
+            title="Address to follow"
+            description="Balances and activity are visible, but this account can never sign or send."
           >
             <FormControl isInvalid={!!errors.impersonatorAddress}>
               <HStack justify="space-between" align="center" mb={1}>
                 <FormLabel
                   fontSize="xs"
-                  color="text.secondary"
-                  fontWeight="700"
-                  textTransform="uppercase"
+                  color="fg.secondary"
+                  fontWeight="600"
                   mb={0}
                 >
-                  Address to Impersonate
+                  Address or name
                 </FormLabel>
                 {/* Resolution status */}
                 {impersonatorAddress &&
@@ -918,40 +838,27 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
             </FormControl>
             <Box
               mt={3}
-              p={2}
+              p={3}
               bg="status.warning.bg"
-              border="2px solid"
+              border="1px solid"
               borderColor="status.warning.border"
               borderRadius="md"
             >
-              <Text fontSize="xs" color="status.warning.fg" fontWeight="700">
-                View-only mode: You can view transactions and signatures but
-                cannot sign or send.
+              <Text fontSize="sm" color="status.warning.fg" fontWeight="600">
+                View-only accounts cannot approve transactions or signatures.
               </Text>
             </Box>
-          </Box>
+          </ScreenSection>
         )}
 
-        {/* Bankr API Key and Address Input */}
-        {accountType === "bankr" && (
-          <Box
-            bg="surface.raised"
-            border="2px solid"
-            borderColor="border.default"
-            borderRadius="lg"
-            boxShadow="card"
-            p={4}
+          {accountType === "bankr" && (
+          <ScreenSection
+            title="Connect Bankr"
+            description="Your API key is encrypted locally and used only for Bankr account actions."
           >
             <VStack spacing={4} align="stretch">
               <FormControl isInvalid={!!errors.bankrApiKey}>
-                <FormLabel
-                  fontSize="xs"
-                  color="text.secondary"
-                  fontWeight="700"
-                  textTransform="uppercase"
-                >
-                  Bankr API Key
-                </FormLabel>
+                <FormLabel>Bankr API key</FormLabel>
                 <InputGroup>
                   <Input
                     type={showBankrApiKey ? "text" : "password"}
@@ -987,14 +894,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
               </FormControl>
 
               <FormControl isInvalid={!!errors.bankrAddress}>
-                <FormLabel
-                  fontSize="xs"
-                  color="text.secondary"
-                  fontWeight="700"
-                  textTransform="uppercase"
-                >
-                  BankrAPI Address
-                </FormLabel>
+                <FormLabel>Bankr wallet address</FormLabel>
                 <Input
                   placeholder="0x..."
                   value={bankrAddress}
@@ -1013,66 +913,35 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
                 </FormErrorMessage>
               </FormControl>
             </VStack>
-          </Box>
+          </ScreenSection>
         )}
 
-        {/* Display Name (Optional) - not shown for seed phrase */}
-        {accountType !== "seedPhrase" && (
-          <Box
-            bg="surface.raised"
-            border="2px solid"
-            borderColor="border.default"
-            borderRadius="lg"
-            boxShadow="card"
-            p={4}
-          >
+          {accountType !== "seedPhrase" && (
+          <ScreenSection title="Name this account" description="Optional. You can change this later.">
             <FormControl>
-              <FormLabel
-                fontSize="xs"
-                color="text.secondary"
-                fontWeight="700"
-                textTransform="uppercase"
-              >
-                Display Name (Optional)
-              </FormLabel>
+              <FormLabel>Display name</FormLabel>
               <Input
-                placeholder="My Wallet"
+                placeholder="My wallet"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
               />
             </FormControl>
-          </Box>
+          </ScreenSection>
         )}
+        </VStack>
+      </ScreenBody>
 
-        {/* Security Warning for PK */}
-        {accountType === "privateKey" && (
-          <Box
-            bg="status.warning.bg"
-            border="2px solid"
-            borderColor="status.warning.border"
-            borderRadius="lg"
-            boxShadow="card"
-            p={3}
-          >
-            <Text fontSize="sm" color="status.warning.fg" fontWeight="700">
-              Your private key will be encrypted and stored locally. Never share
-              it with anyone.
-            </Text>
-          </Box>
-        )}
-
-        {/* Submit Button - hidden when seed groups exist (actions are inline above) */}
-        {!(accountType === "seedPhrase" && seedGroups.length > 0) && (
+      <StickyActionBar
+        primaryAction={
           <Button
             variant="primary"
-            w="full"
             onClick={
               accountType === "seedPhrase"
                 ? () => setShowSeedSetup(true)
                 : handleSubmit
             }
             isLoading={isSubmitting}
-            loadingText="Adding..."
+            loadingText="Adding…"
             isDisabled={
               (accountType === "privateKey" && !derivedAddress) ||
               (accountType === "bankr" &&
@@ -1082,12 +951,14 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
             }
           >
             {accountType === "seedPhrase"
-              ? "Set Up Seed Phrase"
-              : "Add Account"}
+              ? seedGroups.length > 0
+                ? "Add another seed phrase"
+                : "Set up seed phrase"
+              : "Add account"}
           </Button>
-        )}
-      </VStack>
-    </Box>
+        }
+      />
+    </AppScreen>
   );
 }
 

@@ -1,16 +1,29 @@
 import {
   Box,
-  VStack,
-  HStack,
-  Text,
-  Flex,
-  IconButton,
   Button,
-  Tooltip,
+  HStack,
+  IconButton,
+  Text,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, AddIcon, ChatIcon, DeleteIcon, StarIcon } from "@chakra-ui/icons";
+import { AddIcon, ChatIcon, DeleteIcon, StarIcon } from "@chakra-ui/icons";
 import { Conversation } from "@/chrome/chatStorage";
-import { useStripTokens } from "@/theme";
+import {
+  AppHeader,
+  AppScreen,
+  EmptyState,
+  EmptyStateActions,
+  EmptyStateDescription,
+  EmptyStateHeader,
+  EmptyStateMedia,
+  EmptyStateTitle,
+  ListItem,
+  ListItemActions,
+  ListItemContent,
+  ListItemDescription,
+  ListItemTitle,
+  ListSurface,
+  ScreenBody,
+} from "@/components/ui";
 import { formatRelativeTime } from "@/lib/timeFormatUtils";
 
 interface ChatListProps {
@@ -32,227 +45,126 @@ export function ChatList({
   onDeleteConversation,
   onToggleFavorite,
 }: ChatListProps) {
-  // Same dark-strip pair used by ChatHeader and other inverted bars across
-  // the extension — see useStripTokens.
-  const { bg: stripBg, fg: stripFg } = useStripTokens();
-
   return (
-    <Box h="100%" display="flex" flexDirection="column" bg="surface.base">
-      {/* Header */}
-      <Flex
-        py={2}
-        px={3}
-        bg={stripBg}
-        alignItems="center"
-        position="relative"
-      >
-        <Box
-          position="absolute"
-          bottom="0"
-          left="0"
-          right="0"
-          h="2px"
-          bg="accent.highlight"
-        />
+    <AppScreen>
+      <AppHeader
+        title="Chat history"
+        onBack={onBack}
+        backLabel="Back from chat history"
+        trailing={
+          <IconButton
+            aria-label="Start a new chat"
+            icon={<AddIcon boxSize={4} />}
+            variant="ghost"
+            minW="44px"
+            w="44px"
+            h="44px"
+            onClick={onNewChat}
+          />
+        }
+      />
 
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          variant="ghost"
-          size="sm"
-          color={stripFg}
-          _hover={{ bg: "whiteAlpha.200" }}
-          onClick={onBack}
-          mr={2}
-        />
-
-        <Text
-          fontWeight="700"
-          color={stripFg}
-          fontSize="sm"
-          flex="1"
-          textTransform="uppercase"
-          letterSpacing="wide"
-        >
-          Chat History
-        </Text>
-
-        <IconButton
-          aria-label="New chat"
-          icon={<AddIcon />}
-          size="sm"
-          bg="accent.highlight"
-          color="accentFg.highlight"
-          border="2px solid"
-          borderColor="border.default"
-          borderRadius="md"
-          _hover={{
-            bg: "accent.highlight",
-            transform: "translateY(-1px)",
-          }}
-          _active={{
-            transform: "translate(1px, 1px)",
-          }}
-          onClick={onNewChat}
-        />
-      </Flex>
-
-      {/* Conversation List */}
-      <Box flex="1" overflowY="auto" p={3}>
+      <ScreenBody pt={4}>
         {conversations.length === 0 ? (
-          <VStack spacing={4} py={8}>
-            <Box
-              w="50px"
-              h="50px"
-              border="3px solid"
-              borderColor="border.default"
-              bg="accent.secondary"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              boxShadow="card"
-            >
-              <ChatIcon color="accentFg.secondary" boxSize={6} />
-            </Box>
-            <Text
-              color="text.secondary"
-              fontSize="sm"
-              fontWeight="700"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              textAlign="center"
-            >
-              No conversations yet
-            </Text>
-            <Button
-              onClick={onNewChat}
-              bg="accent.highlight"
-              color="accentFg.highlight"
-              border="3px solid"
-              borderColor="border.default"
-              boxShadow="card"
-              borderRadius="md"
-              fontWeight="700"
-              textTransform="uppercase"
-              letterSpacing="wide"
-              _hover={{
-                transform: "translateY(-2px)",
-                boxShadow: "cardHover",
-              }}
-              _active={{
-                transform: "translate(2px, 2px)",
-                boxShadow: "none",
-              }}
-            >
-              Start New Chat
-            </Button>
-          </VStack>
+          <EmptyState minH="100%">
+            <EmptyStateHeader>
+              <EmptyStateMedia>
+                <ChatIcon boxSize={7} />
+              </EmptyStateMedia>
+              <EmptyStateTitle>No conversations yet</EmptyStateTitle>
+              <EmptyStateDescription>
+                Ask Bankr to check balances, plan a swap, or explain a DeFi action.
+              </EmptyStateDescription>
+            </EmptyStateHeader>
+            <EmptyStateActions>
+              <Button variant="primary" onClick={onNewChat}>
+                Start a new chat
+              </Button>
+            </EmptyStateActions>
+          </EmptyState>
         ) : (
-          <VStack spacing={2} align="stretch">
-            {conversations.map((conv) => (
-              <HStack
-                key={conv.id}
-                spacing={0}
-                bg="surface.raised"
-                border="3px solid"
-                borderColor="border.default"
-                borderRadius="md"
-                boxShadow="card"
-                position="relative"
-                transition="all 0.2s ease-out"
-                _hover={{
-                  transform: "translateY(-2px)",
-                  boxShadow: "cardHover",
-                }}
-              >
-                {/* Star/Favorite Button - Top Left Corner */}
-                <Tooltip
-                  label={conv.favorite ? "Unfavorite" : "Favorite"}
-                  placement="top"
-                  hasArrow
-                >
+          <Box as="section" aria-labelledby="conversation-list-title">
+            <Text
+              id="conversation-list-title"
+              as="h2"
+              color="fg.secondary"
+              fontSize="sm"
+              fontWeight={600}
+              mb={3}
+            >
+              Recent conversations
+            </Text>
+
+            <ListSurface>
+              {conversations.map((conversation) => (
+                <ListItem key={conversation.id}>
                   <IconButton
-                    aria-label={conv.favorite ? "Remove from favorites" : "Add to favorites"}
-                    icon={<StarIcon boxSize={3} />}
-                    position="absolute"
-                    top="-8px"
-                    left="-8px"
-                    size="xs"
-                    minW="20px"
-                    h="20px"
-                    bg={conv.favorite ? "accent.highlight" : "surface.raised"}
-                    color={conv.favorite ? "accentFg.highlight" : "text.tertiary"}
-                    border="2px solid"
-                    borderColor="border.default"
-                    borderRadius="sm"
-                    zIndex={1}
-                    _hover={{
-                      bg: "accent.highlight",
-                      color: "accentFg.highlight",
-                      transform: "scale(1.1)",
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleFavorite(conv.id);
-                    }}
+                    aria-label={
+                      conversation.favorite
+                        ? `Remove ${conversation.title} from favorites`
+                        : `Add ${conversation.title} to favorites`
+                    }
+                    aria-pressed={conversation.favorite || false}
+                    icon={<StarIcon boxSize={4} />}
+                    variant="ghost"
+                    minW="44px"
+                    w="44px"
+                    h="44px"
+                    flexShrink={0}
+                    color={conversation.favorite ? "accent.highlight" : "fg.muted"}
+                    onClick={() => onToggleFavorite(conversation.id)}
                   />
-                </Tooltip>
 
-                {/* Main Content - Clickable */}
-                <Box
-                  flex="1"
-                  minW={0}
-                  p={3}
-                  pl={4}
-                  cursor="pointer"
-                  overflow="hidden"
-                  onClick={() => onSelectConversation(conv.id)}
-                  _active={{
-                    transform: "translate(1px, 1px)",
-                  }}
-                >
-                  <Text
-                    fontWeight="700"
-                    fontSize="sm"
-                    color="text.primary"
-                    noOfLines={1}
-                    mb={1}
+                  <HStack
+                    as="button"
+                    type="button"
+                    flex="1 1 auto"
+                    minW={0}
+                    minH="56px"
+                    align="center"
+                    textAlign="start"
+                    borderRadius="md"
+                    px={1}
+                    py={2}
+                    transitionProperty="background-color"
+                    transitionDuration="fast"
+                    _hover={{ bg: "surface.raisedHover" }}
+                    _active={{ bg: "surface.sunken" }}
+                    _focus={{ outline: "none" }}
+                    _focusVisible={{ boxShadow: "focus" }}
+                    onClick={() => onSelectConversation(conversation.id)}
                   >
-                    {conv.title}
-                  </Text>
-                  <Text
-                    fontSize="xs"
-                    color="text.tertiary"
-                    fontWeight="500"
-                  >
-                    {formatTimestamp(conv.updatedAt)}
-                  </Text>
-                </Box>
+                    <ListItemContent>
+                      <ListItemTitle noOfLines={1}>
+                        {conversation.title}
+                      </ListItemTitle>
+                      <ListItemDescription>
+                        {formatTimestamp(conversation.updatedAt)}
+                        {conversation.favorite ? " · Favorite" : ""}
+                      </ListItemDescription>
+                    </ListItemContent>
+                  </HStack>
 
-                {/* Delete Button */}
-                <IconButton
-                  aria-label="Delete conversation"
-                  icon={<DeleteIcon />}
-                  size="sm"
-                  variant="ghost"
-                  color="text.tertiary"
-                  borderRadius="md"
-                  h="full"
-                  minW="36px"
-                  _hover={{
-                    color: "chart.negative",
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteConversation(conv.id);
-                  }}
-                />
-              </HStack>
-            ))}
-          </VStack>
+                  <ListItemActions>
+                    <IconButton
+                      aria-label={`Delete ${conversation.title}`}
+                      icon={<DeleteIcon boxSize={4} />}
+                      variant="ghost"
+                      minW="44px"
+                      w="44px"
+                      h="44px"
+                      color="fg.muted"
+                      _hover={{ color: "chart.negative", bg: "status.error.bg" }}
+                      onClick={() => onDeleteConversation(conversation.id)}
+                    />
+                  </ListItemActions>
+                </ListItem>
+              ))}
+            </ListSurface>
+          </Box>
         )}
-      </Box>
-    </Box>
+      </ScreenBody>
+    </AppScreen>
   );
 }
 

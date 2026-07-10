@@ -95,8 +95,8 @@ break the moment a theme decided red wasn't the right CTA color.
 ### Accent (action colors — INTENT-named)
 | Token | Purpose |
 |---|---|
-| `accent.primary` | Main CTA — primary actions (Bauhaus = red, Midnight = indigo) |
-| `accent.secondary` | Secondary actions, links (Bauhaus = blue, Midnight = cyan) |
+| `accent.primary` | Main CTA — primary actions (Bauhaus = red, Midnight = financial blue) |
+| `accent.secondary` | Secondary actions, links (Bauhaus = blue, Midnight = light blue) |
 | `accent.highlight` | Attention, callouts (Bauhaus = yellow, Midnight = amber) |
 | `accentFg.primary` / `secondary` / `highlight` | Contrast text colors paired with each accent |
 
@@ -190,6 +190,77 @@ fix the preview layout first if it drifts from `App.tsx`.
 
 The full architecture, phased rollout history, and design decisions are in
 `_docs/THEMING_PRD.md`.
+
+## Midnight V2 Foundation
+
+Midnight follows the durable product direction in `DESIGN.md`: warm financial
+confidence, mobile-first hierarchy, and a blue transactional action family. Its neutral
+surface ramp is `#09090B` → `#111113` → `#18181B`; violet is not a general
+action/focus color. Resting cards and buttons are shadowless. Elevation comes
+from surface lightness, hairline borders, and a neutral shadow only on genuine
+floating overlays.
+
+Chakra recipes live under `theme/recipes/`; `createTheme.ts` only assembles
+semantic colors, radii, shadows, globals, and component recipes. Midnight uses:
+
+- 8px controls, 12px cards, 16px floating dialogs, and pills only where the
+  shape communicates status/filter/identity.
+- 44px preferred action and form targets with 16px field text.
+- Blue focus rings and distinct red invalid rings.
+- Explicit property transitions rather than `transition: all`.
+- Sentence-case labels and weights 400–700; weight 900 remains a Bauhaus tool.
+- Alpha status washes with foreground pairs verified at WCAG AA.
+- The `brand` Button variant is the deliberate amber exception. Reserve it for
+  product-entry and mascot-led brand commitment actions such as Unlock; normal
+  transactions, confirmations, focus, and selection remain blue.
+
+`tests/themeContrast.test.ts` protects the core text, action, and status pairs.
+Use `/preview/components` for the interactive state matrix and the production
+routes for composition checks.
+
+Explicit WalletChan logo/name lockups are a deliberate brand exception to the
+product type system. Use the shared `BrandWordmark` component, which consumes
+the `fonts.brand` token (self-hosted Anton) and renders `WalletChan` in
+uppercase. This applies to the app header, unlock header, onboarding header,
+and About identity block. Keep ordinary product-name mentions, screen headings,
+body copy, controls, and technical content in the product typeface until the
+Warm Midnight screen-by-screen review approves any broader use.
+
+## Mobile Application Primitives
+
+Application-level layout primitives live in `components/ui/`; they are
+separate from `theme/primitives`, which owns token-driven visual surfaces.
+Import public app primitives from `@/components/ui` only.
+
+- `AppScreen` is the full-height non-scrolling screen boundary.
+- `AppHeader` provides a 56px Back/title/trailing-action header and a focusable
+  screen heading.
+- `ScreenBody` is the sole scroll owner and retains the standard 16px gutter.
+- `ScreenSection` groups by spacing and semantics, not an automatic card.
+- `StickyActionBar` owns one primary and at most one secondary bottom action.
+- `ListSurface` owns one outer edge; `ListItem` owns row separators and exposes
+  media/content/title/description/meta/action slots.
+- `FullScreenPicker` is used for searchable or long choices. It is never a
+  Modal.
+- `ActionSheet` is restricted to two through six single-step contextual
+  choices.
+- `EmptyState` and `SkeletonRow` make empty/loading geometry reusable.
+
+`ScreenStack` uses horizontal hierarchy motion. Forward destinations push
+from the right; Back exits to the right; root/auth replacement fades. Covered
+layers are inert. The new screen heading receives focus after a push, while
+Back restores the prior scroll owner and focus path. Reduced motion uses a
+short opacity transition instead of viewport travel.
+
+Review these contracts at `/preview/mobile-primitives` in `journey`, `picker`,
+and `sheet` scenarios before migrating a production destination.
+
+Transaction-like decisions use `ConfirmationScreen` with a fixed reading
+order: `OutcomeCard`, financial impact (`AssetDeltaRow`), request context, then
+`InlineDisclosure` for advanced technical detail. Outcome Card is the only
+deliberately emphasized content surface. Asset direction always has a text
+label and icon in addition to semantic color. Review default, long-number, and
+disabled/error states at `/preview/decision-primitives`.
 
 ---
 

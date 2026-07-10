@@ -7,7 +7,7 @@
  * component instance renders correctly under any theme.
  *
  * Variants:
- *   - "default" — surface.raised + standard card shadow (most common)
+ *   - "default" — surface.raised + theme-default elevation (most common)
  *   - "raised"  — surface.raised + elevated cardHover shadow (modal-like)
  *   - "sunken"  — surface.sunken, no shadow (recessed input/list rows)
  *
@@ -16,8 +16,9 @@
  *   - "medium" — 3px in Bauhaus, 1px in Midnight (Settings rows, account list)
  *   - "thick"  — 4px in Bauhaus, 1px in Midnight (modals, hero containers)
  *
- * Pass `interactive` to opt into hover/active motion (transform + shadow swap).
- * Use this for clickable cards (account rows, app tiles).
+ * Pass `interactive` to opt into hover/active/focus styling. The caller must
+ * still supply native button/link semantics through `as` or wrap the card in a
+ * native interactive element; visual interactivity is not a semantic role.
  */
 
 import { forwardRef } from "react";
@@ -39,6 +40,7 @@ export const ThemedCard = forwardRef<HTMLDivElement, ThemedCardProps>(
     ref,
   ) {
     const { tokens } = useTheme();
+    const isDarkTheme = tokens.colorMode === "dark";
 
     const surfaceBg = variant === "sunken" ? "surface.sunken" : "surface.raised";
     const baseShadow =
@@ -53,12 +55,18 @@ export const ThemedCard = forwardRef<HTMLDivElement, ThemedCardProps>(
           cursor: "pointer",
           transition: tokens.motion.transitionBase,
           _hover: {
+            bg: "surface.raisedHover",
+            borderColor: "border.default",
             transform: tokens.motion.hover.transform,
             boxShadow: tokens.motion.hover.shadowOverride ?? tokens.shadows.cardHover,
           },
           _active: {
             transform: tokens.motion.press.transform,
             boxShadow: tokens.motion.press.shadowOverride ?? baseShadow,
+          },
+          _focusVisible: {
+            boxShadow: tokens.shadows.focus,
+            outline: "none",
           },
         }
       : {};
@@ -68,7 +76,9 @@ export const ThemedCard = forwardRef<HTMLDivElement, ThemedCardProps>(
         ref={ref}
         bg={surfaceBg}
         border={tokens.borders[weight]}
-        borderColor="border.default"
+        borderColor={
+          isDarkTheme && variant !== "raised" ? "border.subtle" : "border.default"
+        }
         borderRadius={tokens.radii.card}
         boxShadow={baseShadow}
         p={3}

@@ -71,10 +71,12 @@ export default function DelegatedPermissionsSection({
       (response: GrantsResponse) => {
         setIsLoading(false);
         const runtimeError = chrome.runtime.lastError?.message;
+        const responseError =
+          response && !response.success ? response.error : undefined;
         if (runtimeError || !response?.success) {
           setError(
             runtimeError ||
-              response?.error ||
+              responseError ||
               "Failed to load delegated permissions",
           );
           return;
@@ -129,10 +131,12 @@ export default function DelegatedPermissionsSection({
       ) => {
         setQueueingRevokeId(null);
         const runtimeError = chrome.runtime.lastError?.message;
+        const responseError =
+          response && !response.success ? response.error : undefined;
         if (runtimeError || !response?.success) {
           toast({
             title: "Failed to queue revoke",
-            description: runtimeError || response?.error || "Unknown error",
+            description: runtimeError || responseError || "Unknown error",
             status: "error",
             duration: 4000,
           });

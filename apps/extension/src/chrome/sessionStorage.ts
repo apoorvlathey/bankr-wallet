@@ -40,7 +40,16 @@ export async function getSessionItems<T = unknown>(
   if (NATIVE) {
     // `null` reads the entire session storage area.
     const arg = keys === null ? null : keys;
-    return (await chrome.storage.session.get(arg as any)) as Record<string, T>;
+    return new Promise<Record<string, T>>((resolve, reject) => {
+      chrome.storage.session.get(arg, (items) => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          reject(new Error(error.message));
+          return;
+        }
+        resolve(items);
+      });
+    });
   }
   if (keys === null) {
     const all = await chrome.storage.local.get(null);

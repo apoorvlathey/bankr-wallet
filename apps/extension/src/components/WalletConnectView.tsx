@@ -3,12 +3,11 @@ import {
   Box,
   Button,
   HStack,
-  IconButton,
   Text,
   Textarea,
   VStack,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, LinkIcon } from "@chakra-ui/icons";
+import { LinkIcon } from "@chakra-ui/icons";
 import AccountNetworkControls from "@/components/AccountNetworkControls";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
 import {
@@ -20,7 +19,13 @@ import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import type { Account } from "@/chrome/types";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import type { ResolvedChain } from "@/lib/chains";
-import { isDarkThemeId, ThemedCard, useTheme } from "@/theme";
+import { ThemedCard } from "@/theme";
+import {
+  AppHeader,
+  AppScreen,
+  ScreenBody,
+  ScreenSection,
+} from "@/components/ui";
 import type {
   WalletConnectAddChainContext,
   WalletConnectProposalRejection,
@@ -80,8 +85,6 @@ export default function WalletConnectView({
   onDismissRetryNotice,
 }: WalletConnectViewProps) {
   const toast = useThemedToast();
-  const { tokens, themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
   const [uri, setUri] = useState("");
   const uriInputRef = useRef<HTMLTextAreaElement>(null);
   const [sessions, setSessions] = useState<WalletConnectSessionSummary[]>([]);
@@ -208,36 +211,10 @@ export default function WalletConnectView({
   };
 
   return (
-    <Box
-      p={4}
-      h="100%"
-      minH={0}
-      overflowY="auto"
-      overflowX="hidden"
-      bg="surface.base"
-    >
+    <AppScreen>
+      <AppHeader title="Connected apps" onBack={onBack} />
+      <ScreenBody pb={6}>
       <VStack spacing={4} align="stretch">
-        <HStack spacing={2} justify="space-between">
-          <HStack spacing={2} minW={0} flex={1}>
-            <IconButton
-              aria-label="Back"
-              icon={<ArrowBackIcon />}
-              variant="ghost"
-              size="sm"
-              onClick={onBack}
-            />
-            <Text
-              fontSize="lg"
-              fontWeight="900"
-              color="text.primary"
-              textTransform="uppercase"
-              noOfLines={1}
-            >
-              WalletConnect
-            </Text>
-          </HStack>
-        </HStack>
-
         <AccountNetworkControls
           accounts={accounts}
           activeAccount={activeAccount}
@@ -250,13 +227,23 @@ export default function WalletConnectView({
           onAddChain={onAddChain}
         />
 
-        <ThemedCard weight="medium">
+        <ScreenSection
+          title="Connect a new app"
+          description="Paste a WalletConnect URI. Valid links can connect immediately when pasted."
+        >
+        <Box
+          bg="surface.raised"
+          borderWidth="1px"
+          borderColor="border.subtle"
+          borderRadius="lg"
+          p={3}
+        >
           <VStack align="stretch" spacing={3}>
             <HStack spacing={3}>
               <Box
-                bg="accent.secondary"
-                color="accentFg.secondary"
-                borderRadius={isDarkTheme ? "md" : undefined}
+                bg="surface.accentTint"
+                color="accent.secondary"
+                borderRadius="md"
                 p={2}
                 flexShrink={0}
               >
@@ -266,11 +253,10 @@ export default function WalletConnectView({
                 <Text
                   color="text.primary"
                   fontSize="sm"
-                  fontWeight="900"
+                  fontWeight="650"
                   lineHeight="1.1"
-                  textTransform="uppercase"
                 >
-                  Connect Dapp
+                  WalletConnect
                 </Text>
                 <Text color="text.secondary" fontSize="xs" fontWeight="600">
                   WalletConnect URI
@@ -297,31 +283,21 @@ export default function WalletConnectView({
               fontFamily="mono"
               bg="surface.raised"
               color="fg.primary"
-              border={tokens.borders.thin}
-              borderColor="border.default"
-              borderRadius={tokens.radii.input}
-              _placeholder={{ color: "fg.muted" }}
-              _hover={{ bg: "surface.raised", borderColor: "border.default" }}
-              _focus={{
-                bg: "surface.raised",
-                borderColor: "border.focus",
-                boxShadow: "focus",
-              }}
+              aria-label="WalletConnect URI"
             />
             <Button
               leftIcon={<LinkIcon />}
               onClick={() => void connect()}
               isLoading={isConnecting}
               isDisabled={!canConnect}
-              bg="accent.secondary"
-              color="accentFg.secondary"
-              _hover={{ bg: "accent.secondary" }}
+              variant="primary"
               w="100%"
             >
               Connect
             </Button>
           </VStack>
-        </ThemedCard>
+        </Box>
+        </ScreenSection>
 
         {initError && (
           <ThemedCard weight="thin">
@@ -358,6 +334,7 @@ export default function WalletConnectView({
           }}
         />
       </VStack>
-    </Box>
+      </ScreenBody>
+    </AppScreen>
   );
 }

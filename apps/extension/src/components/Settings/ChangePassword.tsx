@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  Box,
   VStack,
   HStack,
   Text,
@@ -12,11 +11,11 @@ import {
   InputGroup,
   InputRightElement,
   IconButton,
-  Spacer,
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { ViewIcon, ViewOffIcon, ArrowBackIcon, InfoIcon } from "@chakra-ui/icons";
-import { isDarkThemeId, ThemedCard, useTheme } from "@/theme";
+import { ViewIcon, ViewOffIcon, InfoIcon, WarningIcon } from "@chakra-ui/icons";
+import { ScreenSection } from "@/components/ui";
+import { SettingsScreenFrame } from "./SettingsScreenFrame";
 
 interface ChangePasswordProps {
   onComplete: () => void;
@@ -48,8 +47,6 @@ function ChangePassword({ onComplete, onCancel, onSessionExpired }: ChangePasswo
   }, []);
 
   const toast = useThemedToast();
-  const { themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
   const intervalRef = useRef<number | null>(null);
 
   // Check session on mount and periodically
@@ -155,126 +152,103 @@ function ChangePassword({ onComplete, onCancel, onSessionExpired }: ChangePasswo
   };
 
   return (
-    <VStack spacing={4} align="stretch">
-      {/* Header */}
-      <HStack>
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          variant="ghost"
-          size="sm"
-          onClick={onCancel}
-        />
-        <Text fontSize="lg" fontWeight="900" color="text.primary" textTransform="uppercase" letterSpacing="tight">
-          Change Password
-        </Text>
-        <Spacer />
-      </HStack>
-
-      <Text fontSize="sm" color="text.secondary" fontWeight="500">
-        Choose a new password to secure your wallet.
-      </Text>
-
-      {agentEnabled && (
-        <Box
-          bg="status.warning.tint"
-          color="status.warning.fg"
-          border="1px solid"
-          borderColor="status.warning.border"
-          borderRadius="md"
-          p={3}
-        >
-          <Text fontSize="sm" fontWeight="500" lineHeight="1.5">
-            <Text as="span" fontWeight="700">
-              Heads up:
-            </Text>{" "}
-            This also clears your agent password. Set a new one from Settings →
-            Security afterward.
-          </Text>
-        </Box>
-      )}
-
-      <FormControl isInvalid={!!errors.newPassword}>
-        <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-          New Password
-        </FormLabel>
-        <InputGroup>
-          <Input
-            type={showNewPassword ? "text" : "password"}
-            placeholder="Enter new password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-            pr="3rem"
-            autoFocus
-          />
-          <InputRightElement>
-            <IconButton
-              aria-label={showNewPassword ? "Hide" : "Show"}
-              icon={showNewPassword ? <ViewOffIcon /> : <ViewIcon />}
-              size="sm"
-              variant="ghost"
-              onClick={() => setShowNewPassword(!showNewPassword)}
-              color="text.secondary"
-              tabIndex={-1}
-            />
-          </InputRightElement>
-        </InputGroup>
-        <FormErrorMessage color="accent.primary" fontWeight="700">
-          {errors.newPassword}
-        </FormErrorMessage>
-      </FormControl>
-
-      <FormControl isInvalid={!!errors.confirmPassword}>
-        <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-          Confirm New Password
-        </FormLabel>
-        <Input
-          type={showNewPassword ? "text" : "password"}
-          placeholder="Confirm new password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-        />
-        <FormErrorMessage color="accent.primary" fontWeight="700">
-          {errors.confirmPassword}
-        </FormErrorMessage>
-      </FormControl>
-
-      <ThemedCard
-        weight="medium"
-        p={3}
-        bg="accent.secondary"
-        borderColor="border.default"
-      >
-        <HStack spacing={2}>
-          {isDarkTheme ? (
-            <InfoIcon color="accentFg.secondary" boxSize={5} />
-          ) : (
-            <Box p={1} bg="border.default">
-              <InfoIcon color="accentFg.secondary" boxSize={4} />
-            </Box>
-          )}
-          <Text color="accentFg.secondary" fontSize="sm" fontWeight="700">
-            You will need to unlock again after changing your password.
-          </Text>
-        </HStack>
-      </ThemedCard>
-
-      <Box display="flex" gap={2} pt={2}>
-        <Button variant="secondary" onClick={onCancel} minW="100px">
-          Cancel
-        </Button>
+    <SettingsScreenFrame
+      title="Change password"
+      onBack={onCancel}
+      primaryAction={
         <Button
           variant="primary"
-          flex={1}
           onClick={handleSubmit}
           isLoading={isSubmitting}
         >
-          Change Password
+          Change password
         </Button>
-      </Box>
-    </VStack>
+      }
+      secondaryAction={
+        <Button variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+      }
+    >
+      <VStack spacing={6} align="stretch">
+        <ScreenSection
+          title="Choose a new password"
+          description="Use a password you do not reuse elsewhere. It protects the wallet data stored in this browser."
+        >
+          <VStack spacing={4} align="stretch">
+            <FormControl isInvalid={!!errors.newPassword}>
+              <FormLabel>New password</FormLabel>
+              <InputGroup>
+                <Input
+                  type={showNewPassword ? "text" : "password"}
+                  placeholder="At least 6 characters"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                  pr="3rem"
+                  autoComplete="new-password"
+                  autoFocus
+                />
+                <InputRightElement w="44px" h="44px">
+                  <IconButton
+                    aria-label={showNewPassword ? "Hide password" : "Show password"}
+                    icon={showNewPassword ? <ViewOffIcon /> : <ViewIcon />}
+                    minW="40px"
+                    h="40px"
+                    variant="ghost"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    color="fg.secondary"
+                  />
+                </InputRightElement>
+              </InputGroup>
+              <FormErrorMessage>{errors.newPassword}</FormErrorMessage>
+            </FormControl>
+
+            <FormControl isInvalid={!!errors.confirmPassword}>
+              <FormLabel>Confirm new password</FormLabel>
+              <Input
+                type={showNewPassword ? "text" : "password"}
+                placeholder="Enter it again"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                autoComplete="new-password"
+              />
+              <FormErrorMessage>{errors.confirmPassword}</FormErrorMessage>
+            </FormControl>
+          </VStack>
+        </ScreenSection>
+
+        <VStack align="stretch" spacing={3}>
+          {agentEnabled && (
+            <HStack
+              align="start"
+              spacing={3}
+              bg="status.warning.tint"
+              color="status.warning.fg"
+              border="1px solid"
+              borderColor="status.warning.border"
+              borderRadius="md"
+              p={3}
+            >
+              <WarningIcon mt={0.5} flexShrink={0} />
+              <Text fontSize="sm" lineHeight="1.5">
+                Changing your password also clears the agent password. You can
+                create another one from Security afterward.
+              </Text>
+            </HStack>
+          )}
+
+          <HStack align="start" spacing={3} color="fg.secondary">
+            <InfoIcon mt={0.5} flexShrink={0} />
+            <Text fontSize="sm" lineHeight="1.5">
+              The wallet will lock after this change. Unlock it again with your
+              new password.
+            </Text>
+          </HStack>
+        </VStack>
+      </VStack>
+    </SettingsScreenFrame>
   );
 }
 

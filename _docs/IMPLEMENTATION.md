@@ -22,7 +22,7 @@ This document describes the core architecture and transaction handling implement
 
 As of v3.2.0 the extension ships a token-driven theme engine. Current themes:
 **Bauhaus** (light, geometric, primary colors, hard shadows), **Midnight**
-(dark, modern, soft luminous shadows, rounded corners). Users select a theme
+(dark, neutral financial surfaces, blue action focus, quiet elevation). Users select a theme
 from Settings → Appearance; the choice persists in
 `chrome.storage.local` and does NOT sync across devices.
 
@@ -31,8 +31,9 @@ from Settings → Appearance; the choice persists in
 ```
 apps/extension/src/theme/
 ├── tokens.ts                # ThemeTokens interface — every theme satisfies this contract
-├── createTheme.ts           # Factory: tokens → Chakra extendTheme config (Button/Input/
-│                            #   Modal/Menu/Popover/Slider/Tooltip baseStyles)
+├── createTheme.ts           # Orchestrator: tokens → Chakra extendTheme config
+├── recipes/                 # Internal Chakra recipes: actions, fields, selection,
+│                            #   content, feedback, and overlays
 ├── ThemeProvider.tsx        # React context + ChakraProvider wrapper, switches at runtime
 ├── useThemeSelection.ts     # chrome.storage.local read/write; missing selection falls back to Bauhaus
 ├── useStripTokens.ts        # Shared dark CTA strip color pair (used in 8+ places)
@@ -64,6 +65,21 @@ For dark-theme-specific behavior, use `isDarkThemeId(themeId)` or
 `tokens.colorMode === "dark"` instead of comparing directly to `"midnight"`.
 This keeps future dark variants on the same contrast/ornament rules.
 
+### Mobile screen layer
+
+`apps/extension/src/components/ui/` is the public, domain-free mobile
+application layer. It contains the screen/header/body/sticky-action shell,
+separator-based list slots, empty/loading states, a full-screen picker, and a
+bottom action sheet. These components accept renderable content and callbacks;
+they never own wallet, transaction, message, storage, or signing state.
+
+`components/ScreenTransition.tsx` remains the production screen-stack owner.
+Hierarchy transitions move horizontally, root/auth replacement fades, covered
+layers are inert, and the shared `data-screen-scroll-owner` /
+`data-screen-heading` hooks support scroll and focus restoration. See
+`_docs/STYLING.md` for component anatomy and `_docs/IMPROVE_UI.md` for the
+frozen Phase 2 contract.
+
 ## Extension Preview Harness
 
 The extension includes a Vite preview harness for fast theme iteration without
@@ -74,10 +90,25 @@ pnpm dev:extension-preview
 ```
 
 Open `http://localhost:4317/preview/all` to compare the key popup screens in
-fixed popup/sidepanel frames. The harness lives in `apps/extension/src/preview/`
-and mounts real confirmation/settings/unlock components with deterministic
-fixtures plus a preview-only Chrome API shim. See `_docs/EXTENSION_PREVIEW.md`
-for the workflow and rules for adding preview screens.
+fixed popup/sidepanel frames. Each frame is an isolated iframe document, so
+viewport units, Chakra breakpoints, portals, focus, body mode classes, and
+scroll ownership use the real target dimensions rather than the outer gallery
+viewport.
+
+The harness lives in `apps/extension/src/preview/` and mounts production
+controllers/components against deterministic URL-selected fixtures. Home uses
+the production `App`; Settings and Portfolio use their production roots;
+transaction detail, Swap/Bridge, standalone Swap picker, and confirmation
+screens use their production components. A fail-closed Chrome and network
+adapter supplies public fixture state, blocks real Bankr/RPC/API calls,
+and reports unknown read dependencies instead of silently returning success.
+Preview state is reproducible with `theme`, `frame`, `scenario`, and `wallet`
+query parameters. See `_docs/EXTENSION_PREVIEW.md` for the workflow and rules
+for adding preview screens.
+
+The composed `/preview/mobile-primitives` route exercises the shared mobile
+interaction grammar before individual production destinations adopt it. It is
+not a synthetic replacement for any product screen.
 
 See `_docs/STYLING.md` for the full token vocabulary and authoring rules.
 See `_docs/THEMING_PRD.md` for the engine architecture and phased rollout history.
@@ -2078,6 +2109,26 @@ Hydrate normal master session caches
   only in renderer memory, so its unlock page skips the automatic prompt while
   retaining the manual biometric button. Closing and reopening the popup
   creates a fresh surface and auto-prompts again.
+- Automatic and manual biometric unlock share a renderer-local single-flight
+  prompt gate. Starting either ceremony consumes that Unlock screen's automatic
+  prompt. This prevents a successful manual unlock from scheduling a second
+  WebAuthn prompt while the old Unlock screen remains mounted for its fade to
+  Home; failed or cancelled ceremonies can still be retried explicitly.
+- The unlock mascot is presentation-only and observes existing UI lifecycle
+  state. Empty password remains sleeping even when focused; typing or an active
+  password/passkey check becomes attentive; incorrect credentials become
+  invalid; passkey cancellation falls back to sleeping/password mode; and a
+  successful unlock commits one visual frame before the existing root fade.
+  The mascot never starts, retries, cancels, or timer-gates authentication. The
+  success frame is signaled at App's shared unlock-routing boundary because the
+  secret-free cross-surface unlock broadcast can beat the originating callback.
+  That committed success state also closes the outgoing Unlock screen's
+  automatic passkey-prompt window before App clears renderer-local suppression
+  for the next session, preventing a biometric prompt from appearing over Home
+  after password unlock. Visible surfaces hold the completed success pose for
+  500ms before the existing root fade so the sparkle reaction is legible;
+  reduced-motion surfaces use a short 120ms static acknowledgment, and hidden
+  sibling extension pages route immediately.
 
 ### Session Caching (Wallet Lock/Unlock)
 

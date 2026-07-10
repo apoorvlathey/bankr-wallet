@@ -7,7 +7,7 @@ import {
   ModalBody,
   ModalCloseButton,
   VStack,
-  HStack,
+  Button,
   Text,
   Box,
 } from "@chakra-ui/react";
@@ -33,35 +33,30 @@ export function QRCodeModal({ isOpen, onClose, address }: QRCodeModalProps) {
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="sm">
       <ModalOverlay bg="surface.overlay" />
       <ModalContent mx={4}>
-        {/* Header + body are intentionally dark in BOTH themes. The QR tile is a
-            "physical viewing surface" — Bauhaus puts a stark black panel under it
-            for high contrast; Midnight wants the same on-its-own-island feel.
-            Using literals here (vs an intent token) keeps both themes consistent. */}
         <ModalHeader
-          bg="black"
-          color="white"
-          fontWeight="900"
+          color="fg.primary"
+          fontWeight="600"
           fontSize="md"
-          textTransform="uppercase"
-          letterSpacing="wider"
-          py={2}
-          borderBottom="3px solid"
-          borderColor="border.default"
+          py={4}
+          borderBottomWidth="1px"
+          borderColor="border.subtle"
         >
           Receive
         </ModalHeader>
-        <ModalCloseButton color="white" top={1} />
-        <ModalBody bg="black" py={5} px={4}>
+        <ModalCloseButton />
+        <ModalBody py={5} px={4}>
           <VStack spacing={4}>
             {/* QR Code with logo overlay — kept on a literal white tile so the
                 code stays scannable regardless of theme. */}
             <Box
-              border="3px solid"
-              borderColor="border.default"
-              p={3}
+              borderWidth="1px"
+              borderColor="border.subtle"
+              borderRadius="lg"
+              p={3.5}
               bg="white"
             >
               <QRCodeSVG
+                title="Wallet address QR code"
                 value={address}
                 size={200}
                 level="H"
@@ -78,39 +73,31 @@ export function QRCodeModal({ isOpen, onClose, address }: QRCodeModalProps) {
             <Text
               fontFamily="mono"
               fontSize="sm"
-              fontWeight="700"
-              color="whiteAlpha.500"
+              fontWeight="500"
+              color="fg.secondary"
               wordBreak="break-all"
               textAlign="center"
               lineHeight="tall"
             >
-              <Text as="span" color="white">
+              <Text as="span" color="fg.primary" fontWeight="600">
                 {address.slice(0, 6)}
               </Text>
               {address.slice(6, -4)}
-              <Text as="span" color="white">
+              <Text as="span" color="fg.primary" fontWeight="600">
                 {address.slice(-4)}
               </Text>
             </Text>
 
             {/* Copy address button */}
-            <HStack
-              as="button"
-              spacing={1}
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handleCopy}
-              color={copied ? "accent.highlight" : "accent.secondary"}
-              cursor="pointer"
-              _hover={{ opacity: 0.8 }}
+              color={copied ? "status.success.fg" : "accent.secondary"}
+              leftIcon={copied ? <CheckIcon /> : <CopyIcon />}
             >
-              <Text fontSize="sm" fontWeight="700">
-                {copied ? "Copied!" : "Copy address"}
-              </Text>
-              {copied ? (
-                <CheckIcon boxSize="12px" />
-              ) : (
-                <CopyIcon boxSize="12px" />
-              )}
-            </HStack>
+              {copied ? "Copied" : "Copy address"}
+            </Button>
           </VStack>
         </ModalBody>
       </ModalContent>

@@ -135,9 +135,10 @@ async function importPrfKey(prfKeyMaterial: string): Promise<CryptoKey | null> {
   try {
     const bytes = decodeBase64Url(prfKeyMaterial);
     if (bytes?.byteLength !== PASSKEY_PRF_BYTE_LENGTH) return null;
+    const rawKey = new Uint8Array(bytes).buffer;
     return await crypto.subtle.importKey(
       "raw",
-      bytes,
+      rawKey,
       { name: "AES-GCM", length: 256 },
       false,
       ["encrypt", "decrypt"],

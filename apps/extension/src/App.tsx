@@ -8,78 +8,29 @@ import { useState,
 } from "react";
 import {
   useUpdateEffect,
-  Flex,
-  Spacer,
   Container,
   Text,
   HStack,
   Box,
   Button,
   Image,
-  IconButton,
   VStack,
-  Tooltip,
-  Icon,
   Link,
   Spinner,
   useDisclosure,
 } from "@chakra-ui/react";
 
 import {
-  SettingsIcon,
-  CopyIcon,
-  CheckIcon,
-  ExternalLinkIcon,
-  LockIcon,
   WarningIcon,
   InfoIcon,
-  ChatIcon,
 } from "@chakra-ui/icons";
 
-import { isDarkThemeId, useTheme, useStripTokens } from "@/theme";
+import { isDarkThemeId, useTheme } from "@/theme";
 import { closeSidePanelForWindow } from "@/lib/sidePanelControls";
 import TransactionConfirmationErrorBoundary from "@/components/TransactionConfirmationErrorBoundary";
 import AccountNetworkControls from "@/components/AccountNetworkControls";
-
-// Sidepanel icon
-const SidePanelIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" {...props}>
-    <path
-      fill="currentColor"
-      d="M3 3h18a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm12 2v14h5V5h-5zM4 5v14h10V5H4z"
-    />
-  </Icon>
-);
-
-// Fullscreen icon (two diagonal arrows pointing outward)
-const FullscreenIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" {...props}>
-    <path
-      fill="currentColor"
-      d="M14 3v2h3.59l-4.3 4.29 1.42 1.42L19 6.41V10h2V3h-7zM5 17.59V14H3v7h7v-2H6.41l4.3-4.29-1.42-1.42L5 17.59z"
-    />
-  </Icon>
-);
-
-// Swap icon (two vertical arrows)
-const SwapIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" {...props}>
-    <path
-      fill="currentColor"
-      d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"
-    />
-  </Icon>
-);
-
-// More icon (four app tiles)
-const MoreIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" {...props}>
-    <path
-      fill="currentColor"
-      d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z"
-    />
-  </Icon>
-);
+import AppHeaderBar from "@/components/AppHeaderBar";
+import HomeQuickActions from "@/components/HomeQuickActions";
 
 /**
  * Detects if we're running in Arc browser using CSS variable
@@ -133,6 +84,7 @@ const HiddenPortfolioTokensView = lazy(
 const WalletConnectView = lazy(() => import("@/components/WalletConnectView"));
 const WatchAssetConfirmation = lazy(() => import("@/components/WatchAssetConfirmation"));
 const AddChain = lazy(() => import("@/components/Settings/AddChain"));
+const TxDetailScreen = lazy(() => import("@/components/TxDetailScreen"));
 
 // Preload every lazy screen chunk on idle. Without this, the Suspense
 // fallback renders mid-slide when the user navigates for the first time —
@@ -165,6 +117,7 @@ if (typeof window !== "undefined") {
     void import("@/components/WalletConnectView");
     void import("@/components/WatchAssetConfirmation");
     void import("@/components/Settings/AddChain");
+    void import("@/components/TxDetailScreen");
   });
 }
 
@@ -177,9 +130,7 @@ import type {
   BankrConfigDraft,
 } from "@/components/AccountSettings";
 import PendingTxBanner from "@/components/PendingTxBanner";
-import WalletConnectBanner from "@/components/WalletConnectBanner";
 import PortfolioTabs from "@/components/PortfolioTabs";
-import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
 import { useNetworks } from "@/contexts/NetworksContext";
 import ChainIcon from "@/components/ChainIcon";
 import { hasEncryptedApiKey } from "@/chrome/crypto";
@@ -195,12 +146,13 @@ import { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
 import { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import type { Account, PasswordType } from "@/chrome/types";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
+import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import type {
   WalletConnectAddChainContext,
   WalletConnectRetryNotice,
   WalletConnectSessionSummary,
 } from "@/types/walletConnect";
-import { TWITTER_URL, WALLETCHAN_ICON_URL, WALLETCHAN_OS_URL } from "@/constants/externalUrls";
+import { TWITTER_URL, WALLETCHAN_OS_URL } from "@/constants/externalUrls";
 import {
   getDefaultChainName,
   getResolvedChainById,
@@ -226,6 +178,9 @@ type UnlockReturnTarget =
   | { view: "settingsAddChain" }
   | { view: "accountSettings"; subView: AccountSettingsSubView };
 
+const UNLOCK_SUCCESS_HOLD_MS = 500;
+const UNLOCK_SUCCESS_REDUCED_MOTION_HOLD_MS = 120;
+
 // Helper to combine and sort requests by timestamp.
 // The cross-dapp batch (when present) is always prepended as the FIRST element
 // so it has a dedicated, prominent slot in the carousel.
@@ -237,7 +192,7 @@ export function getCombinedRequests(
   crossDappBatch?: CrossDappBatch | null,
   permissionRequests: PendingErc7715PermissionRequest[] = [],
 ): CombinedRequest[] {
-  const rest: CombinedRequest[] = [
+  const rest: Array<Exclude<CombinedRequest, { type: "crossDappBatch" }>> = [
     ...txRequests.map((r) => ({ type: "tx" as const, request: r })),
     ...sigRequests.map((r) => ({ type: "sig" as const, request: r })),
     ...permissionRequests.map((r) => ({
@@ -269,10 +224,8 @@ const LoadingFallback = () => (
 );
 
 function App() {
-  const { themeId, tokens } = useTheme();
+  const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
-  const stripTokens = useStripTokens();
-  const addressPillTokens = useStripTokens("elevated");
   const { networksInfo, reloadRequired, setReloadRequired } = useNetworks();
   const [view, setView] = useState<AppView>("main");
   const [isLoading, setIsLoading] = useState(true);
@@ -285,6 +238,8 @@ function App() {
   );
   const [selectedTxRequest, setSelectedTxRequest] =
     useState<PendingTxRequest | null>(null);
+  const [selectedCompletedTx, setSelectedCompletedTx] =
+    useState<CompletedTransaction | null>(null);
   const [pendingSignatureRequests, setPendingSignatureRequests] = useState<
     PendingSignatureRequest[]
   >([]);
@@ -321,7 +276,6 @@ function App() {
   // would otherwise cause a second transition after the pre-nav).
   const preNavigatedRef = useRef(false);
 
-  const [copied, setCopied] = useState(false);
   const [sidePanelSupported, setSidePanelSupported] = useState(false);
   const [sidePanelMode, setSidePanelMode] = useState(false);
   const [isInSidePanel, setIsInSidePanel] = useState(false);
@@ -349,6 +303,8 @@ function App() {
   const [isWalletUnlocked, setIsWalletUnlocked] = useState(false);
   const [passwordType, setPasswordType] = useState<PasswordType | null>(null);
   const [suppressPasskeyAutoPrompt, setSuppressPasskeyAutoPrompt] =
+    useState(false);
+  const [showUnlockMascotSuccess, setShowUnlockMascotSuccess] =
     useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
@@ -1592,6 +1548,31 @@ function App() {
     if (unlockRouteHandledRef.current) return;
     unlockRouteHandledRef.current = true;
 
+    // Commit the success pose before root navigation starts. The background
+    // unlock broadcast can reach this surface before the originating callback,
+    // so the presentation signal belongs at this shared routing boundary. One
+    // committed frame lets ScreenStack capture it, then visible surfaces hold
+    // briefly so the approved success burst can read before the root fade.
+    // Authentication is already complete; hidden sibling surfaces never wait
+    // on presentation timing.
+    setShowUnlockMascotSuccess(true);
+    if (document.visibilityState === "visible") {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+      const prefersReducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      await new Promise<void>((resolve) => {
+        window.setTimeout(
+          resolve,
+          prefersReducedMotion
+            ? UNLOCK_SUCCESS_REDUCED_MOTION_HOLD_MS
+            : UNLOCK_SUCCESS_HOLD_MS,
+        );
+      });
+    }
+
     // Mark wallet as unlocked
     isWalletUnlockedRef.current = true;
     setIsWalletUnlocked(true);
@@ -1673,6 +1654,7 @@ function App() {
     isWalletUnlockedRef.current = isWalletUnlocked;
     if (!isWalletUnlocked) {
       unlockRouteHandledRef.current = false;
+      setShowUnlockMascotSuccess(false);
     }
   }, [isWalletUnlocked]);
   useEffect(() => {
@@ -1684,6 +1666,7 @@ function App() {
       if (message?.type === "walletLockedExternal") {
         isWalletUnlockedRef.current = false;
         unlockRouteHandledRef.current = false;
+        setShowUnlockMascotSuccess(false);
         setIsWalletUnlocked(false);
         setPasswordType(null);
         setSuppressPasskeyAutoPrompt(
@@ -1704,16 +1687,6 @@ function App() {
       chrome.runtime.onMessage.removeListener(handler);
     };
   }, [handleUnlock]);
-
-  const handleCopyAddress = async () => {
-    try {
-      await navigator.clipboard.writeText(address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Ignore clipboard failures in restricted browser contexts.
-    }
-  };
 
   // Called by confirmation screens BEFORE they fire a reject message to the
   // background. Pre-switches the popup to the adjacent request in the combined
@@ -2177,21 +2150,19 @@ function App() {
         alignItems="center"
         justifyContent="center"
       >
-        <Text
-          color="text.secondary"
-          fontWeight="700"
-          textTransform="uppercase"
-          letterSpacing="wider"
-        >
-          Loading...
-        </Text>
+        <VStack spacing={3}>
+          <Spinner size="sm" color="accent.secondary" />
+          <Text color="fg.secondary" fontSize="sm">
+            Loading WalletChan…
+          </Text>
+        </VStack>
       </Box>
     );
   }
 
   // Render the current screen's JSX — wrapped in ScreenStack below so each
-  // view transitions smoothly (slide for hierarchical nav, sheet-up for dapp
-  // confirmations, fade for unlock). See components/ScreenTransition.tsx.
+  // view transitions smoothly (horizontal push/Back for hierarchy and fade
+  // for root/auth replacement). See components/ScreenTransition.tsx.
   const screen: ReactNode = (() => {
   // Unlock screen
   if (view === "unlock") {
@@ -2207,6 +2178,7 @@ function App() {
         >
           <UnlockScreen
             onUnlock={handleUnlock}
+            showMascotSuccess={showUnlockMascotSuccess}
             suppressPasskeyAutoPrompt={suppressPasskeyAutoPrompt}
             pendingTxCount={pendingRequests.length}
             pendingSignatureCount={pendingSignatureRequests.length}
@@ -2271,22 +2243,21 @@ function App() {
 
             <VStack spacing={4}>
               <Box
-                bg="accent.highlight"
-                border="3px solid"
-                borderColor="border.default"
-                boxShadow="card"
+                bg={isDarkTheme ? "surface.raised" : "accent.highlight"}
+                border={isDarkTheme ? "1px solid" : "3px solid"}
+                borderColor={isDarkTheme ? "border.subtle" : "border.default"}
+                boxShadow={isDarkTheme ? "none" : "card"}
+                borderRadius={isDarkTheme ? "xl" : 0}
                 p={3}
               >
-                <Image src="walletchan-icon.png" w="3rem" />
+                <Image src="walletchan-icon.png" w="3rem" borderRadius="lg" />
               </Box>
               <Text
                 fontSize="lg"
-                fontWeight="900"
-                color="text.primary"
-                textTransform="uppercase"
-                letterSpacing="wider"
+                fontWeight="700"
+                color="fg.primary"
               >
-                Complete Setup
+                Complete setup
               </Text>
               <Text fontSize="sm" color="text.secondary" fontWeight="500">
                 Please complete the setup in the new tab that just opened.
@@ -2694,6 +2665,7 @@ function App() {
           <Suspense fallback={<LoadingFallback />}>
             <MoreActionsView
               fromAddress={address}
+              walletConnectSessionCount={walletConnectSessionCount}
               onBack={() => setView("main")}
               onWalletConnect={() => setView("walletConnect")}
               onHideTokens={() => setView("hideTokens")}
@@ -2782,6 +2754,35 @@ function App() {
               onAddChainRequest={openWalletConnectAddChain}
               retryNotice={walletConnectRetryNotice}
               onDismissRetryNotice={dismissWalletConnectRetryNotice}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
+  if (view === "txDetail" && selectedCompletedTx) {
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+          minH={0}
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <TxDetailScreen
+              tx={selectedCompletedTx}
+              onBack={() => {
+                setSelectedCompletedTx(null);
+                setActivityTabTrigger((current) =>
+                  Math.max(current + 1, holdingsTabTrigger + 1),
+                );
+                setView("main");
+              }}
             />
           </Suspense>
         </Box>
@@ -3404,12 +3405,30 @@ function App() {
   }
 
   // Main view
-  // Header bar — same dark CTA strip pair used by tx/sig confirmation badges,
-  // chat header, etc. (see useStripTokens). The hover overlay is the only
-  // non-shared bit so it stays inline.
-  const headerBg = stripTokens.bg;
-  const headerFg = stripTokens.fg;
-  const headerHoverBg = isDarkTheme ? "whiteAlpha.100" : "whiteAlpha.200";
+  const openWchanSwap = () => {
+    const baseName = getResolvedChainById(8453, networksInfo)?.name ?? "Base";
+    setChainName(baseName);
+    chrome.storage.sync.set({ chainName: baseName });
+    setSwapInitialBuyToken({
+      address: "0xBa5ED0000e1CA9136a695f0a848012A16008B032",
+      name: "WalletChan",
+      symbol: "WCHAN",
+      decimals: 18,
+      logoURI: "/walletchan-icon.png",
+    });
+    setSwapInitialSellToken({
+      symbol: "ETH",
+      name: "Ether",
+      contractAddress: "native",
+      chainId: 8453,
+      decimals: 18,
+      balance: "0",
+      balanceFormatted: "0",
+      priceUsd: 0,
+      valueUsd: 0,
+    });
+    setView("swap");
+  };
 
   return (
     <Box bg="surface.base" h="100%" display="flex" flexDirection="column">
@@ -3422,347 +3441,33 @@ function App() {
         display="flex"
         flexDirection="column"
       >
-        {/* Header */}
-        <Flex
-          py={3}
-          px={4}
-          bg={headerBg}
-          alignItems="center"
-          position="relative"
-        >
-          {/* Decorative stripe — Bauhaus paints a thick violet poster stripe;
-              Midnight uses a 1px subtle divider so the header doesn't shout. */}
-          <Box
-            position="absolute"
-            bottom="0"
-            left="0"
-            right="0"
-            h={isDarkTheme ? "1px" : "3px"}
-            bg={isDarkTheme ? "border.subtle" : "accent.primary"}
-          />
+        <AppHeaderBar
+          isAgentSession={passwordType === "agent"}
+          canChat={activeAccount?.type === "bankr"}
+          sidePanelSupported={sidePanelSupported}
+          sidePanelMode={sidePanelMode}
+          isFullscreenTab={isFullscreenTab}
+          onChat={() => {
+            setStartChatWithNew(false);
+            setView("chat");
+          }}
+          onLock={() => {
+            chrome.runtime.sendMessage({ type: "lockWallet" }, () => {
+              setIsWalletUnlocked(false);
+              setPasswordType(null);
+              setSuppressPasskeyAutoPrompt(true);
+              setView("unlock");
+            });
+          }}
+          onSettings={() => setView("settings")}
+          onToggleSidePanel={toggleSidePanelMode}
+          onOpenFullscreen={openInFullscreenTab}
+          onBuyWchan={openWchanSwap}
+          onOpenWalletChanOs={() => {
+            chrome.tabs.create({ url: WALLETCHAN_OS_URL });
+          }}
+        />
 
-          <HStack spacing={2}>
-            <Box
-              bg={isDarkTheme ? "white" : "surface.raised"}
-              p={0.5}
-              borderRadius={isDarkTheme ? "md" : undefined}
-              overflow="visible"
-              position="relative"
-            >
-              <Image
-                src="walletchan-icon-white-bg.png"
-                h="1.75rem"
-                borderRadius={isDarkTheme ? "md" : undefined}
-              />
-              {passwordType === "agent" && (
-                <Tooltip
-                  label="Agent session — limited permissions. Master-only actions (reveal keys, rotate API key, add/remove accounts) are blocked."
-                  placement="bottom"
-                  hasArrow
-                >
-                  <Box
-                    position="absolute"
-                    bottom="-6px"
-                    right="-8px"
-                    p="3px"
-                    borderRadius="full"
-                    bg={headerBg}
-                    border="1.5px solid"
-                    borderColor={headerFg}
-                    color={headerFg}
-                    cursor="help"
-                    aria-label="Agent session"
-                    lineHeight={0}
-                  >
-                    <Icon
-                      viewBox="0 0 24 24"
-                      boxSize="0.7rem"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2.25}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      display="block"
-                    >
-                      <path d="M12 8V4H8" />
-                      <rect width="16" height="12" x="4" y="8" rx="2" />
-                      <path d="M2 14h2" />
-                      <path d="M20 14h2" />
-                      <path d="M15 13v2" />
-                      <path d="M9 13v2" />
-                    </Icon>
-                  </Box>
-                </Tooltip>
-              )}
-            </Box>
-            <Text
-              fontWeight="900"
-              color={headerFg}
-              textTransform="uppercase"
-              letterSpacing="wider"
-            >
-              WalletChan
-            </Text>
-          </HStack>
-          <Spacer />
-          <HStack spacing={1}>
-            {activeAccount?.type === "bankr" && (
-              <Tooltip label="Chat History" placement="bottom">
-                <IconButton
-                  aria-label="Chat History"
-                  icon={<ChatIcon />}
-                  variant="ghost"
-                  size="sm"
-                  color={headerFg}
-                  _hover={{ bg: headerHoverBg }}
-                  onClick={() => {
-                    setStartChatWithNew(false);
-                    setView("chat");
-                  }}
-                />
-              </Tooltip>
-            )}
-            <Tooltip label="Lock wallet" placement="bottom">
-              <IconButton
-                aria-label="Lock wallet"
-                icon={<LockIcon />}
-                variant="ghost"
-                size="sm"
-                color={headerFg}
-                _hover={{ bg: headerHoverBg }}
-                onClick={() => {
-                  chrome.runtime.sendMessage({ type: "lockWallet" }, () => {
-                    setIsWalletUnlocked(false);
-                    setPasswordType(null);
-                    setSuppressPasskeyAutoPrompt(true);
-                    setView("unlock");
-                  });
-                }}
-              />
-            </Tooltip>
-            {sidePanelSupported && !isFullscreenTab && (
-              <Tooltip
-                label={sidePanelMode ? "Switch to popup" : "Switch to sidepanel"}
-                placement="bottom"
-              >
-                <IconButton
-                  aria-label={sidePanelMode ? "Switch to popup" : "Switch to sidepanel"}
-                  icon={<SidePanelIcon />}
-                  variant="ghost"
-                  size="sm"
-                  color={headerFg}
-                  _hover={{ bg: headerHoverBg }}
-                  onClick={toggleSidePanelMode}
-                />
-              </Tooltip>
-            )}
-            {!isFullscreenTab && (
-              <Tooltip label="Open in new tab" placement="bottom">
-                <IconButton
-                  aria-label="Open in new tab"
-                  icon={<FullscreenIcon />}
-                  variant="ghost"
-                  size="sm"
-                  color={headerFg}
-                  _hover={{ bg: headerHoverBg }}
-                  onClick={openInFullscreenTab}
-                />
-              </Tooltip>
-            )}
-            <IconButton
-              aria-label="Settings"
-              icon={<SettingsIcon />}
-              variant="ghost"
-              size="sm"
-              color={headerFg}
-              _hover={{ bg: headerHoverBg }}
-              onClick={() => setView("settings")}
-            />
-          </HStack>
-        </Flex>
-
-        {/* Top credits strip — shared constructivist two-color block across
-            both themes. Left half carries POWERED BY + $WCHAN in the amber
-            family; right half carries WalletChan OS in the navy family.
-            A dedicated 28px diagonal transition block between the two
-            halves gives the hard 45° hand-off. Each half is flex=1 with
-            minW=max-content on the left so content never wraps on narrow
-            popups but the split lands near center on wide viewports.
-            Bauhaus uses saturated poster colors; Midnight dims each to
-            a dark tint of the same hue so the geometry reads the same
-            but the aesthetic stays calm. */}
-        <HStack
-          spacing={0}
-          align="stretch"
-          borderBottom={isDarkTheme ? "1px solid" : "3px solid"}
-          borderColor={isDarkTheme ? "border.subtle" : "border.default"}
-        >
-          <HStack
-            flex="1"
-            minW="max-content"
-            bg={isDarkTheme ? "#2C1E06" : "accent.highlight"}
-            py={isDarkTheme ? 1.5 : 1}
-            pl={3}
-            pr={2}
-            spacing={2}
-          >
-            <Text
-              fontSize="xs"
-              fontWeight="700"
-              color={isDarkTheme ? "#C9B27D" : "accentFg.highlight"}
-              textTransform="uppercase"
-              letterSpacing="wider"
-              whiteSpace="nowrap"
-            >
-              Powered by
-            </Text>
-            {isDarkTheme ? (
-              <Link
-                color="accent.highlight"
-                fontWeight="800"
-                fontSize="xs"
-                textTransform="uppercase"
-                letterSpacing="wide"
-                px={1}
-                py={0}
-                border="1px solid transparent"
-                borderRadius="sm"
-                _hover={{
-                  bg: "accent.highlight",
-                  color: "accentFg.highlight",
-                  borderColor: "accent.highlight",
-                  textDecoration: "none",
-                }}
-                transition="all 0.15s ease-out"
-                cursor="pointer"
-                onClick={() => {
-                  const baseName = getResolvedChainById(8453, networksInfo)?.name ?? "Base";
-                  if (baseName) {
-                    setChainName(baseName);
-                    chrome.storage.sync.set({ chainName: baseName });
-                  }
-                  setSwapInitialBuyToken({
-                    address: "0xBa5ED0000e1CA9136a695f0a848012A16008B032",
-                    name: "WalletChan",
-                    symbol: "WCHAN",
-                    decimals: 18,
-                    logoURI: WALLETCHAN_ICON_URL,
-                  });
-                  // Auto-fill the sell side with native ETH on Base so the
-                  // user lands on a ready-to-quote pair. Balance/price are
-                  // hydrated by SwapView's onchain + price-fetch effects.
-                  setSwapInitialSellToken({
-                    symbol: "ETH",
-                    name: "Ether",
-                    contractAddress: "native",
-                    chainId: 8453,
-                    decimals: 18,
-                    balance: "0",
-                    balanceFormatted: "0",
-                    priceUsd: 0,
-                    valueUsd: 0,
-                  });
-                  setView("swap");
-                }}
-              >
-                $WCHAN
-              </Link>
-            ) : (
-              <Link
-                bg="accent.secondary"
-                color="accentFg.secondary"
-                px={2}
-                py={0.5}
-                fontWeight="900"
-                fontSize="xs"
-                textTransform="uppercase"
-                letterSpacing="wide"
-                border="2px solid"
-                borderColor="border.default"
-                _hover={{
-                  bg: "accent.primary",
-                  color: "accentFg.primary",
-                }}
-                transition="all 0.2s ease-out"
-                cursor="pointer"
-                onClick={() => {
-                  const baseName = getResolvedChainById(8453, networksInfo)?.name ?? "Base";
-                  if (baseName) {
-                    setChainName(baseName);
-                    chrome.storage.sync.set({ chainName: baseName });
-                  }
-                  setSwapInitialBuyToken({
-                    address: "0xBa5ED0000e1CA9136a695f0a848012A16008B032",
-                    name: "WalletChan",
-                    symbol: "WCHAN",
-                    decimals: 18,
-                    logoURI: WALLETCHAN_ICON_URL,
-                  });
-                  // Auto-fill the sell side with native ETH on Base so the
-                  // user lands on a ready-to-quote pair. Balance/price are
-                  // hydrated by SwapView's onchain + price-fetch effects.
-                  setSwapInitialSellToken({
-                    symbol: "ETH",
-                    name: "Ether",
-                    contractAddress: "native",
-                    chainId: 8453,
-                    decimals: 18,
-                    balance: "0",
-                    balanceFormatted: "0",
-                    priceUsd: 0,
-                    valueUsd: 0,
-                  });
-                  setView("swap");
-                }}
-              >
-                $WCHAN
-              </Link>
-            )}
-          </HStack>
-          <Box
-            w="28px"
-            alignSelf="stretch"
-            bgGradient={
-              isDarkTheme
-                ? "linear(110deg, #2C1E06 50%, #141833 50%)"
-                : "linear(110deg, #F0C020 50%, #1a1a2e 50%)"
-            }
-            flexShrink={0}
-          />
-          <HStack
-            flex="1"
-            bg={isDarkTheme ? "#141833" : undefined}
-            bgGradient={
-              isDarkTheme
-                ? undefined
-                : "linear(90deg, #1a1a2e 0%, #16213e 60%, #1a1a2e 100%)"
-            }
-            py={isDarkTheme ? 1.5 : 1}
-            pl={2}
-            pr={3}
-            spacing={1}
-            justify="flex-end"
-            cursor="pointer"
-            role="group"
-            minW={0}
-            onClick={() => {
-              chrome.tabs.create({ url: WALLETCHAN_OS_URL });
-            }}
-          >
-            <Text
-              fontSize="xs"
-              fontWeight={isDarkTheme ? "800" : "900"}
-              color="accent.highlight"
-              textTransform="uppercase"
-              letterSpacing="wide"
-              whiteSpace="nowrap"
-              _groupHover={{ textDecoration: "underline" }}
-            >
-              WalletChan OS
-            </Text>
-            <ExternalLinkIcon boxSize={3} color="accent.highlight" />
-          </HStack>
-        </HStack>
 
         <Container
           pt={3}
@@ -3776,27 +3481,27 @@ function App() {
             {/* Failed Transaction Error */}
             {failedTxError && (
               <Box
-                bg="accent.primary"
-                border="3px solid"
-                borderColor="border.default"
-                boxShadow="card"
+                bg="status.error.bg"
+                border="1px solid"
+                borderColor="status.error.border"
+                borderRadius="lg"
+                boxShadow="none"
                 p={3}
                 position="relative"
               >
                 <HStack w="full" justify="space-between" mb={2}>
                   <HStack>
-                    <Box p={1} bg="border.default">
-                      <WarningIcon color="accent.primary" boxSize={4} />
+                    <Box display="flex" color="status.error.fg">
+                      <WarningIcon boxSize={4} />
                     </Box>
-                    <Text fontSize="sm" color="accentFg.primary" fontWeight="700">
-                      Transaction Failed
+                    <Text fontSize="sm" color="status.error.fg" fontWeight="600">
+                      Transaction failed
                     </Text>
                   </HStack>
                   <Button
                     size="xs"
                     variant="ghost"
-                    color="accentFg.primary"
-                    _hover={{ bg: "whiteAlpha.200" }}
+                    color="status.error.fg"
                     onClick={() => setFailedTxError(null)}
                   >
                     Dismiss
@@ -3804,13 +3509,13 @@ function App() {
                 </HStack>
                 <Text
                   fontSize="xs"
-                  color="whiteAlpha.800"
+                  color="fg.secondary"
                   mb={1}
                   fontWeight="500"
                 >
                   {failedTxError.origin}
                 </Text>
-                <Text fontSize="sm" color="accentFg.primary" fontWeight="500">
+                <Text fontSize="sm" color="status.error.fg" fontWeight="500">
                   {failedTxError.error}
                 </Text>
               </Box>
@@ -3879,11 +3584,6 @@ function App() {
                   setView("crossDappBatchConfirm");
                 }
               }}
-            />
-
-            <WalletConnectBanner
-              sessionCount={walletConnectSessionCount}
-              onClick={() => setView("walletConnect")}
             />
 
             {visibleRpcIssueChainIds.length > 0 && (
@@ -4027,261 +3727,35 @@ function App() {
               onAddChain={() => openSettingsAddChain()}
             />
 
-            {/* Address Bar — compact utility row.
-                Uses the `elevated` strip variant so Bauhaus keeps its stark
-                black band while Midnight gets a framed raised card (sunken
-                was too close to the page wash and blended in). Both per-theme
-                details live in `useStripTokens`. */}
-            {address && (
-              <HStack spacing={2} align="center">
-                {/* Address pill */}
-                <HStack
-                  bg={addressPillTokens.bg}
-                  color={addressPillTokens.fg}
-                  border="1px solid"
-                  borderColor={addressPillTokens.border}
-                  borderRadius="md"
-                  px={2}
-                  py={1}
-                  spacing={2}
-                  flex={1}
-                  minW={0}
-                >
-                  <MiddleTruncatedAddress address={address} />
-                  <IconButton
-                    aria-label="Show QR code"
-                    icon={
-                      <Icon viewBox="0 0 24 24" boxSize="14px">
-                        <path
-                          fill="currentColor"
-                          fillRule="evenodd"
-                          clipRule="evenodd"
-                          d="M3 4.875C3 3.83947 3.83947 3 4.875 3H9.375C10.4105 3 11.25 3.83947 11.25 4.875V9.375C11.25 10.4105 10.4105 11.25 9.375 11.25H4.875C3.83947 11.25 3 10.4105 3 9.375V4.875ZM4.875 4.5C4.66789 4.5 4.5 4.66789 4.5 4.875V9.375C4.5 9.58211 4.66789 9.75 4.875 9.75H9.375C9.58211 9.75 9.75 9.58211 9.75 9.375V4.875C9.75 4.66789 9.58211 4.5 9.375 4.5H4.875ZM12.75 4.875C12.75 3.83947 13.5895 3 14.625 3H19.125C20.1605 3 21 3.83947 21 4.875V9.375C21 10.4105 20.1605 11.25 19.125 11.25H14.625C13.5895 11.25 12.75 10.4105 12.75 9.375V4.875ZM14.625 4.5C14.4179 4.5 14.25 4.66789 14.25 4.875V9.375C14.25 9.58211 14.4179 9.75 14.625 9.75H19.125C19.3321 9.75 19.5 9.58211 19.5 9.375V4.875C19.5 4.66789 19.3321 4.5 19.125 4.5H14.625ZM6 6.75C6 6.33579 6.33579 6 6.75 6H7.5C7.91421 6 8.25 6.33579 8.25 6.75V7.5C8.25 7.91421 7.91421 8.25 7.5 8.25H6.75C6.33579 8.25 6 7.91421 6 7.5V6.75ZM15.75 6.75C15.75 6.33579 16.0858 6 16.5 6H17.25C17.6642 6 18 6.33579 18 6.75V7.5C18 7.91421 17.6642 8.25 17.25 8.25H16.5C16.0858 8.25 15.75 7.91421 15.75 7.5V6.75ZM3 14.625C3 13.5895 3.83947 12.75 4.875 12.75H9.375C10.4105 12.75 11.25 13.5895 11.25 14.625V19.125C11.25 20.1605 10.4105 21 9.375 21H4.875C3.83947 21 3 20.1605 3 19.125V14.625ZM4.875 14.25C4.66789 14.25 4.5 14.4179 4.5 14.625V19.125C4.5 19.3321 4.66789 19.5 4.875 19.5H9.375C9.58211 19.5 9.75 19.3321 9.75 19.125V14.625C9.75 14.4179 9.58211 14.25 9.375 14.25H4.875ZM12.75 13.5C12.75 13.0858 13.0858 12.75 13.5 12.75H14.25C14.6642 12.75 15 13.0858 15 13.5V14.25C15 14.6642 14.6642 15 14.25 15H13.5C13.0858 15 12.75 14.6642 12.75 14.25V13.5ZM18.75 13.5C18.75 13.0858 19.0858 12.75 19.5 12.75H20.25C20.6642 12.75 21 13.0858 21 13.5V14.25C21 14.6642 20.6642 15 20.25 15H19.5C19.0858 15 18.75 14.6642 18.75 14.25V13.5ZM6 16.5C6 16.0858 6.33579 15.75 6.75 15.75H7.5C7.91421 15.75 8.25 16.0858 8.25 16.5V17.25C8.25 17.6642 7.91421 18 7.5 18H6.75C6.33579 18 6 17.6642 6 17.25V16.5ZM15.75 16.5C15.75 16.0858 16.0858 15.75 16.5 15.75H17.25C17.6642 15.75 18 16.0858 18 16.5V17.25C18 17.6642 17.6642 18 17.25 18H16.5C16.0858 18 15.75 17.6642 15.75 17.25V16.5ZM12.75 19.5C12.75 19.0858 13.0858 18.75 13.5 18.75H14.25C14.6642 18.75 15 19.0858 15 19.5V20.25C15 20.6642 14.6642 21 14.25 21H13.5C13.0858 21 12.75 20.6642 12.75 20.25V19.5ZM18.75 19.5C18.75 19.0858 19.0858 18.75 19.5 18.75H20.25C20.6642 18.75 21 19.0858 21 19.5V20.25C21 20.6642 20.6642 21 20.25 21H19.5C19.0858 21 18.75 20.6642 18.75 20.25V19.5Z"
-                        />
-                      </Icon>
-                    }
-                    size="xs"
-                    variant="ghost"
-                    color="inherit"
-                    onClick={onQROpen}
-                    _hover={{ color: "accent.highlight" }}
-                    minW="auto"
-                    h="auto"
-                    p={0}
-                  />
-                  <IconButton
-                    aria-label="Copy address"
-                    icon={copied ? <CheckIcon /> : <CopyIcon />}
-                    size="xs"
-                    variant="ghost"
-                    color={copied ? "accent.highlight" : "inherit"}
-                    onClick={handleCopyAddress}
-                    _hover={{ color: "accent.highlight" }}
-                    minW="auto"
-                    h="auto"
-                    p={0}
-                  />
-                  {selectedChain && (() => {
-                    const explorer = selectedChain.explorer;
-                    return explorer ? (
-                      <IconButton
-                        aria-label="View on explorer"
-                        icon={<ExternalLinkIcon />}
-                        size="xs"
-                        variant="ghost"
-                        color="inherit"
-                        onClick={() => {
-                          chrome.tabs.create({
-                            url: `${explorer}/address/${address}`,
-                          });
-                        }}
-                        _hover={{ color: "accent.highlight" }}
-                        minW="auto"
-                        h="auto"
-                        p={0}
-                      />
-                    ) : null;
-                  })()}
-                </HStack>
-                {/* Explorer shortcuts */}
-                <HStack spacing={1} flexShrink={0} justify="flex-end">
-                  {[
-                    {
-                      name: "Octav",
-                      icon: "octav-icon.png",
-                      url: `https://pro.octav.fi/?addresses=${address}`,
-                    },
-                    {
-                      name: "DeBank",
-                      icon: "debank-icon.ico",
-                      url: `https://debank.com/profile/${address}`,
-                    },
-                    {
-                      name: "Zapper",
-                      icon: "zapper-icon.png",
-                      url: `https://zapper.xyz/account/${address}`,
-                    },
-                    {
-                      name: "Nansen",
-                      icon: "nansen-icon.png",
-                      url: `https://app.nansen.ai/address/${address}`,
-                    },
-                  ].map((site) => (
-                    <Box
-                      key={site.name}
-                      as="button"
-                      bg="surface.raised"
-                      border={tokens.borders.thin}
-                      borderColor="border.default"
-                      borderRadius="sm"
-                      boxShadow="card"
-                      p={0.5}
-                      cursor="pointer"
-                      transition="all 0.15s ease-out"
-                      _hover={{
-                        transform: "translateY(-1px)",
-                        boxShadow: "cardHover",
-                      }}
-                      _active={{
-                        transform: "translate(2px, 2px)",
-                        boxShadow: "none",
-                      }}
-                      onClick={() => {
-                        chrome.tabs.create({ url: site.url });
-                      }}
-                      title={`View on ${site.name}`}
-                    >
-                      <Image src={site.icon} boxSize="18px" />
-                    </Box>
-                  ))}
-                </HStack>
-              </HStack>
-            )}
-
-            {/* Swap + Send + More Buttons */}
-            {address && activeAccount?.type !== "impersonator" && (
-              <Box
-                display="grid"
-                gridTemplateColumns={
-                  "minmax(0, 1.55fr) minmax(0, 1fr) minmax(0, 1fr)"
-                }
-                columnGap={2}
-                alignItems="stretch"
-              >
-                <Button
-                  w="100%"
-                  minW={0}
-                  bg="accent.secondary"
-                  color="accentFg.secondary"
-                  border="3px solid"
-                  borderColor="border.default"
-                  boxShadow="card"
-                  fontWeight="800"
-                  fontSize="xs"
-                  textTransform="uppercase"
-                  letterSpacing="normal"
-                  iconSpacing={1.5}
-                  px={1.5}
-                  whiteSpace="nowrap"
-                  leftIcon={<SwapIcon boxSize={4} />}
-                  onClick={() => {
-                    setSwapInitialBuyToken(undefined);
-                    setView("swap");
-                  }}
-                  _hover={{
-                    bg: "accent.secondary",
-                    transform: "translateY(-2px)",
-                    boxShadow: "cardHover",
-                  }}
-                  _active={{
-                    transform: "translate(2px, 2px)",
-                    boxShadow: "none",
-                  }}
-                >
-                  Swap / Bridge
-                </Button>
-                <Button
-                  w="100%"
-                  minW={0}
-                  bg={isDarkTheme ? "accent.primary" : "accent.highlight"}
-                  color={
-                    isDarkTheme ? "accentFg.primary" : "accentFg.highlight"
-                  }
-                  border="3px solid"
-                  borderColor="border.default"
-                  boxShadow="card"
-                  fontWeight="800"
-                  fontSize="xs"
-                  textTransform="uppercase"
-                  letterSpacing="normal"
-                  iconSpacing={1.5}
-                  px={1.5}
-                  whiteSpace="nowrap"
-                  leftIcon={
-                    <Icon viewBox="0 0 24 24" boxSize={4}>
-                      <path
-                        fill="currentColor"
-                        d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"
-                      />
-                    </Icon>
-                  }
-                  onClick={() => {
-                    setTransferToken(null);
-                    setView("transfer");
-                  }}
-                  _hover={{
-                    bg: isDarkTheme ? "accent.primary" : "accent.highlight",
-                    opacity: 0.9,
-                    transform: "translateY(-2px)",
-                    boxShadow: "cardHover",
-                  }}
-                  _active={{
-                    transform: "translate(2px, 2px)",
-                    boxShadow: "none",
-                  }}
-                >
-                  Send
-                </Button>
-                <Button
-                  w="100%"
-                  bg="surface.raised"
-                  color="text.primary"
-                  border="3px solid"
-                  borderColor="border.default"
-                  boxShadow="card"
-                  fontWeight="800"
-                  fontSize="xs"
-                  textTransform="uppercase"
-                  letterSpacing="normal"
-                  iconSpacing={1.5}
-                  px={1.5}
-                  minW={0}
-                  whiteSpace="nowrap"
-                  leftIcon={<MoreIcon boxSize={4} />}
-                  onClick={() => setView("more")}
-                  _hover={{
-                    bg: "surface.raisedHover",
-                    transform: "translateY(-2px)",
-                    boxShadow: "cardHover",
-                  }}
-                  _active={{
-                    transform: "translate(2px, 2px)",
-                    boxShadow: "none",
-                  }}
-                >
-                  More
-                </Button>
-              </Box>
-            )}
-
-            {/* Portfolio Tabs (Holdings + Activity) */}
+            {/* Portfolio balance, primary actions, assets, positions, and activity */}
             {address && (
               <PortfolioTabs
                 address={address}
+                quickActions={
+                  activeAccount?.type !== "impersonator" ? (
+                    <HomeQuickActions
+                      hasConnectedApps={walletConnectSessionCount > 0}
+                      onReceive={onQROpen}
+                      onSend={() => {
+                        setTransferToken(null);
+                        setView("transfer");
+                      }}
+                      onSwap={() => {
+                        setSwapInitialBuyToken(undefined);
+                        setView("swap");
+                      }}
+                      onMore={() => setView("more")}
+                    />
+                  ) : undefined
+                }
                 activityTabTrigger={activityTabTrigger}
                 holdingsTabTrigger={holdingsTabTrigger}
                 refreshTrigger={portfolioRefreshTrigger}
                 onRpcIssuesChange={handleRpcIssuesChange}
+                onTransactionClick={(tx) => {
+                  setSelectedCompletedTx(tx);
+                  setView("txDetail");
+                }}
                 onTokenClick={(token) => {
                   const tokenChain = getResolvedChainById(token.chainId, networksInfo);
                   if (tokenChain && tokenChain.name !== chainName) {
@@ -4306,29 +3780,29 @@ function App() {
             {/* Reload Required Alert */}
             {reloadRequired && (
               <Box
-                bg="accent.highlight"
-                border="3px solid"
-                borderColor="border.default"
-                boxShadow="card"
+                bg="status.warning.bg"
+                border="1px solid"
+                borderColor="status.warning.border"
+                borderRadius="lg"
+                boxShadow="none"
                 p={3}
               >
                 <HStack justify="space-between">
                   <HStack spacing={2}>
-                    <Box p={1} bg="border.default">
-                      <InfoIcon color="accent.highlight" boxSize={4} />
+                    <Box display="flex" color="status.warning.fg">
+                      <InfoIcon boxSize={4} />
                     </Box>
                     <Box>
                       <Text
                         fontSize="sm"
-                        color="accentFg.highlight"
-                        fontWeight="700"
+                        color="status.warning.fg"
+                        fontWeight="600"
                       >
                         Reload page required
                       </Text>
                       <Text
                         fontSize="xs"
-                        color="accentFg.highlight"
-                        opacity={0.8}
+                        color="fg.secondary"
                         fontWeight="500"
                       >
                         To apply changes on the current site
@@ -4337,10 +3811,7 @@ function App() {
                   </HStack>
                   <Button
                     size="sm"
-                    bg="border.default"
-                    color="accent.highlight"
-                    _hover={{ opacity: 0.9 }}
-                    _active={{ transform: "translate(2px, 2px)" }}
+                    variant="secondary"
                     onClick={async () => {
                       const tab = await currentTab();
                       const url = tab.url!;
@@ -4357,93 +3828,6 @@ function App() {
           </VStack>
         </Container>
 
-        {/* Sticky Footer - only show for Bankr accounts */}
-        {activeAccount?.type === "bankr" && (
-          <Box
-            position="sticky"
-            bottom={0}
-            bg="surface.base"
-            borderTop="3px solid"
-            borderColor="border.default"
-            p={3}
-          >
-            <Box position="relative">
-              {/* Geometric flourishes — circle, diamond, triangle. These are
-                  pure Bauhaus exuberance; Midnight stays restrained, so we hide
-                  the whole group when the corner ornament token is absent. */}
-              {!isDarkTheme && (
-                <>
-                  <Box
-                    position="absolute"
-                    top="-8px"
-                    left="10px"
-                    w="12px"
-                    h="12px"
-                    bg="accent.primary"
-                    borderRadius="full"
-                    border="2px solid"
-                    borderColor="border.default"
-                    zIndex={1}
-                  />
-                  <Box
-                    position="absolute"
-                    top="-6px"
-                    right="12px"
-                    w="10px"
-                    h="10px"
-                    bg="accent.secondary"
-                    transform="rotate(45deg)"
-                    border="2px solid"
-                    borderColor="border.default"
-                    zIndex={1}
-                  />
-                  <Box
-                    position="absolute"
-                    bottom="-8px"
-                    right="40px"
-                    w={0}
-                    h={0}
-                    borderLeft="7px solid transparent"
-                    borderRight="7px solid transparent"
-                    borderBottom="12px solid"
-                    borderBottomColor="status.success.fg"
-                    zIndex={1}
-                  />
-                </>
-              )}
-
-              <Button
-                w="full"
-                bg="accent.highlight"
-                color="accentFg.highlight"
-                border="3px solid"
-                borderColor="border.default"
-                boxShadow="card"
-                fontWeight="900"
-                textTransform="uppercase"
-                letterSpacing="wider"
-                py={6}
-                _hover={{
-                  bg: "accent.highlight",
-                  opacity: 0.9,
-                  transform: "translateY(-2px)",
-                  boxShadow: "cardHover",
-                }}
-                _active={{
-                  transform: "translate(2px, 2px)",
-                  boxShadow: "none",
-                }}
-                onClick={() => {
-                  setStartChatWithNew(true);
-                  setView("chat");
-                }}
-                leftIcon={<ChatIcon />}
-              >
-                Chat with Bankr
-              </Button>
-            </Box>
-          </Box>
-        )}
       </Box>
       {/* End fullscreen centered wrapper */}
     </Box>

@@ -7,22 +7,23 @@ import {
   HStack,
   Text,
   IconButton,
-  Spacer,
   FormControl,
   FormLabel,
   InputGroup,
   InputRightElement,
   Spinner,
   Tooltip,
+  Alert,
 } from "@chakra-ui/react";
 import {
-  ArrowBackIcon,
   DeleteIcon,
   ViewIcon,
   ViewOffIcon,
   WarningTwoIcon,
 } from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
+import { InlineDisclosure } from "@/components/ui";
+import { SettingsScreenFrame } from "./SettingsScreenFrame";
 
 /** Fetch chainId from an RPC endpoint via eth_chainId. */
 async function fetchChainId(rpcUrl: string): Promise<number | null> {
@@ -64,8 +65,8 @@ function EditChain({
   const currentCurrencyDecimals = currentEntry?.nativeCurrency?.decimals;
 
   const [newChainName, setNewChainName] = useState<string>(chainName);
-  const [chainId, setChainId] = useState<string>();
-  const [rpc, setRpc] = useState<string>();
+  const [chainId, setChainId] = useState<string>("");
+  const [rpc, setRpc] = useState<string>("");
   const [explorer, setExplorer] = useState<string>("");
   const [currencySymbol, setCurrencySymbol] = useState<string>("ETH");
   const [currencyDecimals, setCurrencyDecimals] = useState<string>("18");
@@ -201,218 +202,213 @@ function EditChain({
     currentCurrencyDecimals,
   ]);
 
+  const headerActions = (
+    <HStack spacing={0}>
+      {currentEntry && onToggleHidden && (
+        <Tooltip label={currentEntry.hidden ? "Show network" : "Hide network"} hasArrow>
+          <IconButton
+            aria-label={currentEntry.hidden ? "Show network" : "Hide network"}
+            icon={currentEntry.hidden ? <ViewOffIcon /> : <ViewIcon />}
+            variant="ghost"
+            minW="44px"
+            h="44px"
+            onClick={() => onToggleHidden(!currentEntry.hidden)}
+          />
+        </Tooltip>
+      )}
+      {isCustom && onDelete && (
+        <Tooltip label="Delete network" hasArrow>
+          <IconButton
+            aria-label="Delete network"
+            icon={<DeleteIcon />}
+            variant="ghost"
+            minW="44px"
+            h="44px"
+            color="chart.negative"
+            onClick={onDelete}
+          />
+        </Tooltip>
+      )}
+    </HStack>
+  );
+
   return (
-    <VStack spacing={4} align="stretch">
-      {/* Header */}
-      <HStack>
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          variant="ghost"
-          size="sm"
-          onClick={back}
-        />
-        <Text fontSize="lg" fontWeight="900" color="text.primary" textTransform="uppercase" letterSpacing="tight">
-          Edit Chain
-        </Text>
-        <Spacer />
-        {currentEntry && onToggleHidden && (
-          <Tooltip label={currentEntry.hidden ? "Show chain" : "Hide chain"} hasArrow>
-            <IconButton
-              aria-label={currentEntry.hidden ? "Show chain" : "Hide chain"}
-              icon={currentEntry.hidden ? <ViewOffIcon /> : <ViewIcon />}
-              variant="ghost"
-              size="sm"
-              onClick={() => onToggleHidden(!currentEntry.hidden)}
-            />
-          </Tooltip>
-        )}
-        {isCustom && onDelete && (
-          <Tooltip label="Delete chain" hasArrow>
-            <IconButton
-              aria-label="Delete chain"
-              icon={<DeleteIcon />}
-              variant="ghost"
-              size="sm"
-              color="chart.negative"
-              onClick={onDelete}
-            />
-          </Tooltip>
-        )}
-      </HStack>
-
-      <FormControl>
-        <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-          Name
-        </FormLabel>
-        <Input
-          placeholder="Chain name"
-          value={newChainName}
-          onChange={(e) => {
-            setNewChainName(e.target.value);
-            if (isChainNameNotUnique) {
-              setIsChainNameNotUnique(false);
-            }
-          }}
-          isInvalid={isChainNameNotUnique}
-          isReadOnly={!isCustom}
-          bg={!isCustom ? "surface.sunken" : undefined}
-          color={!isCustom ? "text.tertiary" : undefined}
-          cursor={!isCustom ? "not-allowed" : undefined}
-          opacity={!isCustom ? 0.7 : 1}
-        />
-        {!isCustom && (
-          <Text fontSize="xs" color="text.tertiary" mt={1} fontWeight="500">
-            Built-in chain names aren't editable.
-          </Text>
-        )}
-        {isChainNameNotUnique && (
-          <Text fontSize="xs" color="accent.primary" mt={1} fontWeight="700">
-            Chain name already exists
-          </Text>
-        )}
-      </FormControl>
-
-      <FormControl>
-        <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-          RPC URL
-        </FormLabel>
-        <HStack>
-          <Input
-            placeholder="https://..."
-            value={rpc}
-            onChange={(e) => {
-              setRpc(e.target.value.trim());
-              setRpcWarning("");
-              setForceAllowed(false);
-            }}
-          />
-          {isValidating && <Spinner size="sm" />}
-        </HStack>
-      </FormControl>
-
-      <FormControl>
-        <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-          Chain ID
-        </FormLabel>
-        <InputGroup>
-          <Input
-            placeholder="Chain ID"
-            value={chainId}
-            isReadOnly
-            bg="surface.sunken"
-            color="text.tertiary"
-            cursor="not-allowed"
-            opacity={0.7}
-            pr={chainIdHex ? "5.75rem" : undefined}
-          />
-          {chainIdHex && (
-            <InputRightElement width="5.5rem" pointerEvents="none">
-              <VStack spacing={0} align="flex-end" lineHeight="1">
-                <Text
-                  as="span"
-                  color="text.tertiary"
-                  fontSize="2xs"
-                  fontWeight="700"
-                  textTransform="uppercase"
-                  opacity={0.75}
-                >
-                  hex:
-                </Text>
-                <Text
-                  as="span"
-                  color="text.tertiary"
-                  fontFamily="mono"
-                  fontSize="xs"
-                  fontWeight="700"
-                >
-                  {chainIdHex}
-                </Text>
-              </VStack>
-            </InputRightElement>
-          )}
-        </InputGroup>
-        <Text fontSize="xs" color="text.tertiary" mt={1} fontWeight="500">
-          Chain ID cannot be changed
-        </Text>
-      </FormControl>
-
-      {/* Extra fields for custom chains */}
-      {isCustom && (
-        <>
-          <FormControl>
-            <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-              Block Explorer URL
-            </FormLabel>
-            <Input
-              placeholder="https://explorer.example.com"
-              value={explorer}
-              onChange={(e) => setExplorer(e.target.value.trim())}
-            />
-          </FormControl>
-
-          <HStack spacing={3}>
-            <FormControl flex={2}>
-              <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-                Native Token Symbol
-              </FormLabel>
-              <Input
-                value={currencySymbol}
-                onChange={(e) => setCurrencySymbol(e.target.value.trim())}
-              />
-            </FormControl>
-            <FormControl flex={1}>
-              <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-                Decimals
-              </FormLabel>
-              <Input
-                type="number"
-                value={currencyDecimals}
-                onChange={(e) => setCurrencyDecimals(e.target.value)}
-              />
-            </FormControl>
-          </HStack>
-        </>
-      )}
-
-      {rpcWarning && (
-        <HStack
-          align="flex-start"
-          spacing={2}
-          bg="status.warning.bg"
-          border="2px solid"
-          borderColor="status.warning.border"
-          borderRadius="md"
-          py={2}
-          px={3}
-        >
-          <WarningTwoIcon color="status.warning.fg" mt="2px" flexShrink={0} />
-          <Text fontSize="xs" fontWeight="600" color="status.warning.fg">
-            {rpcWarning}
-          </Text>
-        </HStack>
-      )}
-
-      <Box display="flex" gap={2} pt={2}>
-        <Button variant="secondary" flex={1} onClick={back}>
+    <SettingsScreenFrame
+      title="Edit network"
+      onBack={back}
+      trailing={headerActions}
+      secondaryAction={
+        <Button variant="secondary" onClick={back}>
           Cancel
         </Button>
-        {forceAllowed ? (
-          <Button variant="highlight" flex={1} onClick={forceSave}>
-            Force Save
+      }
+      primaryAction={
+        forceAllowed ? (
+          <Button variant="highlight" onClick={forceSave}>
+            Save anyway
           </Button>
         ) : (
           <Button
             variant="primary"
-            flex={1}
             onClick={saveChain}
-            isLoading={isBtnLoading}
+            isLoading={isBtnLoading || isValidating}
+            loadingText={isValidating ? "Checking" : "Saving"}
           >
-            Save
+            Save changes
           </Button>
+        )
+      }
+    >
+      <VStack spacing={5} align="stretch">
+        <Box>
+          <Text color="fg.primary" fontSize="md" fontWeight="600">
+            {chainName}
+          </Text>
+          <Text mt={1} color="fg.secondary" fontSize="sm" lineHeight="1.45">
+            WalletChan verifies a changed RPC endpoint before saving it.
+          </Text>
+        </Box>
+
+        <VStack
+          spacing={4}
+          align="stretch"
+          p={4}
+          bg="surface.raised"
+          borderWidth="1px"
+          borderColor="border.subtle"
+          borderRadius="lg"
+        >
+          <FormControl isInvalid={isChainNameNotUnique}>
+            <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
+              Network name
+            </FormLabel>
+            <Input
+              placeholder="Network name"
+              value={newChainName}
+              onChange={(event) => {
+                setNewChainName(event.target.value);
+                if (isChainNameNotUnique) {
+                  setIsChainNameNotUnique(false);
+                }
+              }}
+              isReadOnly={!isCustom}
+              bg={!isCustom ? "surface.sunken" : undefined}
+              color={!isCustom ? "fg.muted" : undefined}
+              cursor={!isCustom ? "not-allowed" : undefined}
+            />
+            {!isCustom && (
+              <Text mt={1} color="fg.secondary" fontSize="xs">
+                Built-in network names cannot be changed.
+              </Text>
+            )}
+            {isChainNameNotUnique && (
+              <Text mt={1} color="chart.negative" fontSize="xs" fontWeight="600">
+                Chain name already exists
+              </Text>
+            )}
+          </FormControl>
+
+          <FormControl>
+            <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
+              RPC URL
+            </FormLabel>
+            <HStack>
+              <Input
+                placeholder="https://rpc.example.com"
+                value={rpc}
+                onChange={(event) => {
+                  setRpc(event.target.value.trim());
+                  setRpcWarning("");
+                  setForceAllowed(false);
+                }}
+              />
+              {isValidating && <Spinner size="sm" flexShrink={0} />}
+            </HStack>
+            <Text mt={1} color="fg.secondary" fontSize="xs">
+              The endpoint must report the same chain ID shown below.
+            </Text>
+          </FormControl>
+
+          <FormControl>
+            <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
+              Chain ID
+            </FormLabel>
+            <InputGroup>
+              <Input
+                placeholder="Chain ID"
+                value={chainId}
+                isReadOnly
+                bg="surface.sunken"
+                color="fg.muted"
+                cursor="not-allowed"
+                pr={chainIdHex ? "5.75rem" : undefined}
+              />
+              {chainIdHex && (
+                <InputRightElement width="5.5rem" pointerEvents="none">
+                  <Text color="fg.muted" fontFamily="mono" fontSize="xs">
+                    {chainIdHex}
+                  </Text>
+                </InputRightElement>
+              )}
+            </InputGroup>
+            <Text mt={1} color="fg.secondary" fontSize="xs">
+              Chain ID cannot be changed.
+            </Text>
+          </FormControl>
+
+          {isCustom && (
+            <InlineDisclosure
+              label="Advanced network details"
+              description="Explorer and native currency metadata"
+            >
+              <VStack spacing={4} align="stretch" pt={2}>
+                <FormControl>
+                  <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
+                    Block explorer URL
+                  </FormLabel>
+                  <Input
+                    placeholder="https://explorer.example.com"
+                    value={explorer}
+                    onChange={(event) => setExplorer(event.target.value.trim())}
+                  />
+                </FormControl>
+
+                <HStack spacing={3} align="flex-start">
+                  <FormControl flex={2}>
+                    <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
+                      Native token symbol
+                    </FormLabel>
+                    <Input
+                      value={currencySymbol}
+                      onChange={(event) => setCurrencySymbol(event.target.value.trim())}
+                    />
+                  </FormControl>
+                  <FormControl flex={1}>
+                    <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
+                      Decimals
+                    </FormLabel>
+                    <Input
+                      type="number"
+                      value={currencyDecimals}
+                      onChange={(event) => setCurrencyDecimals(event.target.value)}
+                    />
+                  </FormControl>
+                </HStack>
+              </VStack>
+            </InlineDisclosure>
+          )}
+        </VStack>
+
+        {rpcWarning && (
+          <Alert status="warning" py={2} px={3}>
+            <WarningTwoIcon mr={2} color="status.warning.fg" flexShrink={0} />
+            <Text color="status.warning.fg" fontSize="xs" fontWeight="600">
+              {rpcWarning}
+            </Text>
+          </Alert>
         )}
-      </Box>
-    </VStack>
+      </VStack>
+    </SettingsScreenFrame>
   );
 }
 

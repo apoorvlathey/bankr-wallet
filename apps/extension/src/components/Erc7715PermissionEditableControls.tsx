@@ -17,9 +17,8 @@ import type {
   Erc7715PermissionRequest,
   PendingErc7715PermissionRequest,
 } from "@/chrome/pendingErc7715PermissionStorage";
-import { Erc7715PermissionTokenCard } from "@/components/Erc7715PermissionTokenCard";
 import { UtcDateTimePicker } from "@/components/UtcDateTimePicker";
-import { useErc7715PermissionAsset } from "@/components/useErc7715PermissionAsset";
+import type { Erc7715PermissionAsset } from "@/components/useErc7715PermissionAsset";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import {
   enabledApprovalRevocationMethods,
@@ -35,10 +34,8 @@ import {
   getErc7715PermissionMaxAmount,
   getErc7715PermissionPeriodDuration,
   getErc7715PermissionStartTime,
-  getErc7715PermissionTokenAddress,
   isErc7715StreamPermissionType,
   isErc7715UnlimitedMaxAmount,
-  isErc7715NativePermissionType,
   isErc7715PeriodicPermissionType,
   isErc7715TokenApprovalRevocationPermissionType,
   withErc7715PermissionAmountPerSecond,
@@ -49,7 +46,6 @@ import {
   withErc7715PermissionPeriodDuration,
   withErc7715PermissionStartTime,
 } from "@/lib/erc7715PermissionEditing";
-import { useTheme } from "@/theme";
 
 const DAY_SECONDS = 24 * 60 * 60;
 
@@ -188,8 +184,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 type Erc7715PermissionEditableControlsProps = {
   permissionRequest: PendingErc7715PermissionRequest;
   editedRequest: Erc7715PermissionRequest;
-  explorer?: string;
-  nativeSymbol: string;
+  asset: Erc7715PermissionAsset;
   onEditedRequestChange: (request: Erc7715PermissionRequest) => void;
   onValidationErrorChange: (error: string | null) => void;
 };
@@ -200,7 +195,6 @@ function Erc7715ApprovalRevocationControls({
   onEditedRequestChange,
   onValidationErrorChange,
 }: Erc7715PermissionEditableControlsProps) {
-  const { tokens } = useTheme();
   const canEdit = editedRequest.permission.isAdjustmentAllowed;
   const editedExpiry = getErc7715PermissionExpiry(editedRequest);
   const methods = enabledApprovalRevocationMethods(editedRequest.permission.data);
@@ -239,9 +233,10 @@ function Erc7715ApprovalRevocationControls({
     <VStack align="stretch" spacing={3}>
       <Box
         bg="surface.raised"
-        border={tokens.borders.thin}
+        borderWidth="1px"
+        borderStyle="solid"
         borderColor="border.default"
-        borderRadius={tokens.radii.input}
+        borderRadius="md"
         p={3}
       >
         <VStack align="stretch" spacing={2}>
@@ -252,9 +247,10 @@ function Erc7715ApprovalRevocationControls({
             <Box
               key={method.field}
               bg="surface.sunken"
-              border={tokens.borders.thin}
+              borderWidth="1px"
+              borderStyle="solid"
               borderColor="border.subtle"
-              borderRadius={tokens.radii.input}
+              borderRadius="md"
               p={2.5}
             >
               <VStack align="stretch" spacing={0.5}>
@@ -273,9 +269,10 @@ function Erc7715ApprovalRevocationControls({
       {hasPermit2 && (
         <Box
           bg="status.warning.tint"
-          border={tokens.borders.thin}
+          borderWidth="1px"
+          borderStyle="solid"
           borderColor="status.warning.border"
-          borderRadius={tokens.radii.input}
+          borderRadius="md"
           p={3}
         >
           <Text fontSize="xs" color="status.warning.fg" fontWeight="800">
@@ -304,13 +301,10 @@ function Erc7715ApprovalRevocationControls({
 function Erc7715TokenPermissionEditableControls({
   permissionRequest,
   editedRequest,
-  explorer,
-  nativeSymbol,
+  asset,
   onEditedRequestChange,
   onValidationErrorChange,
 }: Erc7715PermissionEditableControlsProps) {
-  const { tokens } = useTheme();
-  const tokenAddress = getErc7715PermissionTokenAddress(editedRequest);
   const [amountInput, setAmountInput] = useState("");
   const [initialInput, setInitialInput] = useState("");
   const [maxInput, setMaxInput] = useState("");
@@ -321,9 +315,6 @@ function Erc7715TokenPermissionEditableControls({
   const editedExpiry = getErc7715PermissionExpiry(editedRequest);
   const editedPeriodDuration =
     getErc7715PermissionPeriodDuration(editedRequest);
-  const isNative = isErc7715NativePermissionType(
-    permissionRequest.permissionType,
-  );
   const isPeriodic = isErc7715PeriodicPermissionType(
     permissionRequest.permissionType,
   );
@@ -332,14 +323,6 @@ function Erc7715TokenPermissionEditableControls({
   );
   const canEditTerms = editedRequest.permission.isAdjustmentAllowed;
   const canEditExpiry = canEditTerms || !isStream;
-  const asset = useErc7715PermissionAsset({
-    permissionRequest,
-    editedRequest,
-    explorer,
-    nativeSymbol,
-    tokenAddress,
-    isNative,
-  });
   const hasVerifiedDecimals = typeof asset.decimals === "number";
   const decimals = asset.decimals ?? 18;
   const metadataError =
@@ -363,29 +346,13 @@ function Erc7715TokenPermissionEditableControls({
     !FREQUENCY_OPTIONS.some(
       (option) => option.seconds === editedPeriodDuration,
     );
-  const amountLabelColor = tokens.colorMode === "dark" ? "fg.primary" : "text.primary";
-  const amountEstimateColor =
-    tokens.colorMode === "dark" ? "accent.highlight" : "chart.numeric";
+  const amountLabelColor = "fg.primary";
+  const amountEstimateColor = "chart.numeric";
   const amountInputStyles = {
-    bg: "surface.accentTint",
-    borderColor: "accent.highlight",
-    boxShadow:
-      tokens.colorMode === "dark"
-        ? "0 0 0 1px var(--chakra-colors-accent-highlight)"
-        : undefined,
     fontSize: "md",
-    fontWeight: "900",
-    _hover: {
-      bg: "surface.accentTint",
-      borderColor: "accent.highlight",
-    },
-    _focus: {
-      bg: "surface.accentTint",
-      borderColor: "border.focus",
-      boxShadow: "focus",
-    },
+    fontWeight: "600",
+    sx: { fontVariantNumeric: "tabular-nums" },
     _disabled: {
-      opacity: 0.65,
       cursor: "not-allowed",
     },
   } as const;
@@ -614,12 +581,6 @@ function Erc7715TokenPermissionEditableControls({
 
   return (
     <VStack align="stretch" spacing={3}>
-      <Erc7715PermissionTokenCard
-        asset={asset}
-        chainId={permissionRequest.chainId}
-        isNative={isNative}
-      />
-
       {metadataError && (
         <Box
           bg="status.warning.tint"

@@ -25,32 +25,18 @@
 import type { ThemeTokens } from "../tokens";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Raw Midnight palette — v3.2.1 retune
+// Raw Midnight palette — V2 foundation.
 //
-// Design direction: modern web3 (Phantom / Uniswap / Rainbow) — violet-forward,
-// deep navy-black base with subtle cool cast, clearly layered surfaces,
-// saturated-but-not-neon accents, subtle violet tint in focus/modal shadows.
-//
-// Changes from the initial Phase 3 palette:
-//   - Base/raised lifted from flat near-black greys to cool navy-blacks so
-//     cards read as clearly elevated above the page (#0A0C10 → #0B0E17,
-//     #111419 → #131826).
-//   - Primary swapped from soft indigo (#7C8BFF) to electric violet (#7C5CFF)
-//     — more saturated, reads as a striking CTA instead of washed pastel.
-//   - Secondary swapped from flat cyan (#00D4E6) to vibrant cyan (#22D3EE) —
-//     cleaner, crisper, less dated.
-//   - Highlight swapped from pastel mustard (#F6C86E) to rich amber (#F5B544)
-//     — less washed out, still warm, contrasts strongly on navy surfaces.
-//   - Text lifted from harsh #F5F7FA to softer #E8ECF4 so the page feels
-//     calmer without losing legibility.
-//   - Modal/focus shadows now carry a subtle violet glow matching the primary.
+// Direction: neutral financial tooling rather than violet-forward web3 UI.
+// Elevation comes from a quiet zinc lightness ramp, action/focus uses one
+// trustworthy blue family, and semantic colors use translucent washes.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SURFACE_BASE = "#0B0E17";
-const SURFACE_RAISED = "#131826";
-const SURFACE_RAISED_HOVER = "#1A2033";
-const SURFACE_SUNKEN = "#070911";
-const SURFACE_OVERLAY = "rgba(5, 7, 14, 0.82)";
+const SURFACE_BASE = "#09090B";
+const SURFACE_RAISED = "#111113";
+const SURFACE_RAISED_HOVER = "#18181B";
+const SURFACE_SUNKEN = "#0A0A0B";
+const SURFACE_OVERLAY = "rgba(0, 0, 0, 0.72)";
 
 // Foreground steps — retuned for legibility on navy surfaces.
 //   primary:   main text (was #E8ECF4, kept)
@@ -61,65 +47,62 @@ const SURFACE_OVERLAY = "rgba(5, 7, 14, 0.82)";
 //              Lifted from #525A6E (~2.6:1, fails WCAG AA) → #8891A8 (~4.6:1,
 //              passes AA for normal text) so the USD price column next to
 //              balances stops fading into the background.
-const FG_PRIMARY = "#E8ECF4";
-const FG_SECONDARY = "#B8C0D4";
-const FG_MUTED = "#8891A8";
-const FG_INVERSE = "#0B0E17";
+const FG_PRIMARY = "#F4F4F5";
+const FG_SECONDARY = "#A1A1AA";
+const FG_MUTED = "#85858F";
+const FG_INVERSE = "#09090B";
 
 // BORDER_SUBTLE is the hairline divider inside cards — a *slight* grey lift
 // off SURFACE_RAISED that reads as a quiet rule line, not a bright slash. If
 // you make this brighter, row dividers inside the tx confirmation info card
 // start looking like white marker strokes. The frame weights (default/strong)
 // progress up from here so outlines still have presence.
-const BORDER_SUBTLE = "#1E2437";
-const BORDER_DEFAULT = "#2A3147";
-const BORDER_STRONG = "#3B4460";
-const BORDER_FOCUS = "#7C5CFF";
+const BORDER_SUBTLE = "rgba(255, 255, 255, 0.06)";
+const BORDER_DEFAULT = "rgba(255, 255, 255, 0.10)";
+const BORDER_STRONG = "rgba(255, 255, 255, 0.16)";
+const BORDER_FOCUS = "#3B82F6";
 
-const ACCENT_PRIMARY = "#7C5CFF"; // Electric violet — main CTA
-const ACCENT_SECONDARY = "#3B82F6"; // Classic tech blue — secondary / links
-const ACCENT_HIGHLIGHT = "#F5B544"; // Rich amber — attention / highlights
+const ACCENT_PRIMARY = "#2563EB";
+const ACCENT_SECONDARY = "#60A5FA";
+const ACCENT_HIGHLIGHT = "#F59E0B";
 
-const SUCCESS_FG = "#34D399";
-const SUCCESS_BG = "#052E1C";
-const SUCCESS_BORDER = "#1B5E3F";
+const SUCCESS_FG = "#4ADE80";
+const SUCCESS_BG = "rgba(34, 197, 94, 0.10)";
+const SUCCESS_BORDER = "rgba(34, 197, 94, 0.28)";
 
 const WARNING_FG = "#FBBF24";
-const WARNING_BG = "#291B03";
-const WARNING_BORDER = "#5F3E0E";
+const WARNING_BG = "rgba(245, 158, 11, 0.10)";
+const WARNING_BORDER = "rgba(245, 158, 11, 0.28)";
 
 const ERROR_FG = "#F87171";
-const ERROR_BG = "#2A0D10";
-const ERROR_BORDER = "#5A1D23";
+const ERROR_BG = "rgba(239, 68, 68, 0.10)";
+const ERROR_BORDER = "rgba(239, 68, 68, 0.28)";
 
 // Informational surfaces should feel calm and explanatory, not branded or
 // cautionary. Keep them out of the primary violet family so permission/revoke
 // callouts do not read as warnings.
-const INFO_FG = "#7DD3FC";
-const INFO_BG = "#0B2230";
-const INFO_BORDER = "#1E5A74";
+const INFO_FG = "#60A5FA";
+const INFO_BG = "rgba(59, 130, 246, 0.10)";
+const INFO_BORDER = "rgba(59, 130, 246, 0.28)";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shadow strings — declared as constants so motion.hover can re-reference the
-// cardHover value without duplicating its definition. Modal and focus shadows
-// carry a subtle violet tint matching ACCENT_PRIMARY so the luminous depth
-// feels coherent with the palette instead of pure grayscale.
+// Resting surfaces are shadowless. Only floating/hovered surfaces receive
+// neutral elevation; focus is the sole blue shadow.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SHADOW_CARD =
-  "0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px rgba(0,0,0,0.55)";
-const SHADOW_CARD_HOVER =
-  "0 1px 0 rgba(255,255,255,0.06) inset, 0 12px 32px rgba(0,0,0,0.65)";
-const SHADOW_MODAL =
-  "0 24px 64px rgba(0,0,0,0.72), 0 0 0 1px rgba(124, 92, 255, 0.14)";
-const SHADOW_FOCUS = "0 0 0 3px rgba(124, 92, 255, 0.38)";
-const SHADOW_BUTTON =
-  "0 1px 0 rgba(255,255,255,0.08) inset, 0 4px 12px rgba(0,0,0,0.5)";
+const SHADOW_CARD = "none";
+const SHADOW_CARD_HOVER = "0 4px 12px rgba(0, 0, 0, 0.24)";
+const SHADOW_MODAL = "0 20px 48px rgba(0, 0, 0, 0.52)";
+const SHADOW_FOCUS = "0 0 0 3px rgba(59, 130, 246, 0.28)";
+const SHADOW_ERROR_FOCUS = "0 0 0 3px rgba(239, 68, 68, 0.20)";
+const SHADOW_BUTTON = "none";
 
 // Snappier transition curve than Bauhaus's ease-out — feels more like
 // Linear / Arc / Superhuman.
-const TRANSITION_BASE = "all 0.16s cubic-bezier(0.2, 0.6, 0.2, 1)";
-const TRANSITION_SMOOTH = "all 0.24s cubic-bezier(0.2, 0.6, 0.2, 1)";
+const TRANSITION_BASE =
+  "background-color 150ms cubic-bezier(0.2, 0.6, 0.2, 1), border-color 150ms cubic-bezier(0.2, 0.6, 0.2, 1), color 150ms cubic-bezier(0.2, 0.6, 0.2, 1), opacity 150ms cubic-bezier(0.2, 0.6, 0.2, 1), transform 150ms cubic-bezier(0.2, 0.6, 0.2, 1)";
+const TRANSITION_SMOOTH =
+  "background-color 220ms cubic-bezier(0.2, 0.6, 0.2, 1), border-color 220ms cubic-bezier(0.2, 0.6, 0.2, 1), opacity 220ms cubic-bezier(0.2, 0.6, 0.2, 1), transform 220ms cubic-bezier(0.2, 0.6, 0.2, 1)";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tokens
@@ -144,14 +127,7 @@ export const midnightTokens: ThemeTokens = {
       raisedHover: SURFACE_RAISED_HOVER,
       sunken: SURFACE_SUNKEN,
       overlay: SURFACE_OVERLAY,
-      // Whitish lift one step *above* `surface.raised` (#131826) — clearly
-      // distinguishable as the most elevated card without any violet cast that
-      // would compete with the CTA. Kept neutral grey-blue so it reads as
-      // "premium elevated surface" instead of "tinted alert". Used by the
-      // clear-signing card to draw the eye to the human-readable intent;
-      // should be more prominent than the standard raised cards (e.g. the
-      // ERC20 approval display) that sit on `surface.raised`.
-      accentTint: "#1F2638",
+      accentTint: "rgba(37, 99, 235, 0.08)",
     },
     fg: {
       primary: FG_PRIMARY,
@@ -171,12 +147,8 @@ export const midnightTokens: ThemeTokens = {
       highlight: ACCENT_HIGHLIGHT,
     },
     accentFg: {
-      // Electric violet and classic tech blue are both mid-value saturated
-      // colors — they need WHITE text for legibility (near-black text reads
-      // as a muddy smudge on them). Amber is bright enough to pair with
-      // near-black text and still pop.
       primary: "#FFFFFF",
-      secondary: "#FFFFFF",
+      secondary: FG_INVERSE,
       highlight: FG_INVERSE,
     },
     status: {
@@ -188,7 +160,7 @@ export const midnightTokens: ThemeTokens = {
         bg: WARNING_BG,
         fg: WARNING_FG,
         border: WARNING_BORDER,
-        tint: SURFACE_SUNKEN,
+        tint: "rgba(245, 158, 11, 0.05)",
       },
       error: { bg: ERROR_BG, fg: ERROR_FG, border: ERROR_BORDER },
       info: { bg: INFO_BG, fg: INFO_FG, border: INFO_BORDER },
@@ -200,17 +172,18 @@ export const midnightTokens: ThemeTokens = {
       // Warm amber matches the Bauhaus dark-goldenrod intent — emphasizes
       // numeric values without competing with the cool indigo/cyan accents.
       numeric: ACCENT_HIGHLIGHT,
-      series: [ACCENT_PRIMARY, ACCENT_SECONDARY, ACCENT_HIGHLIGHT, SUCCESS_FG, ERROR_FG],
+      series: ["#3B82F6", "#22C55E", ACCENT_HIGHLIGHT, "#A78BFA", ERROR_FG],
     },
   },
 
   // Typography — title case headings, sentence case labels. No uppercase.
   // Bauhaus uppercase would feel "yelly" against Midnight's restrained surfaces.
   fonts: {
+    brand: "'Anton', 'Arial Narrow', Impact, sans-serif",
     heading:
-      "Outfit, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     body:
-      "Outfit, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     mono: "'JetBrains Mono', 'Fira Code', Consolas, monospace",
   },
   headingStyle: {
@@ -227,9 +200,9 @@ export const midnightTokens: ThemeTokens = {
 
   // Modest, modern radii. Still deliberate — never fully pill, never sharp.
   radii: {
-    button: "10px",
-    input: "10px",
-    card: "14px",
+    button: "8px",
+    input: "8px",
+    card: "12px",
     modal: "16px",
     badge: "6px",
     pill: "9999px",
@@ -239,7 +212,7 @@ export const midnightTokens: ThemeTokens = {
   // luminous shadows, not from thick strokes — so all three weights collapse
   // to 1px and only the color shifts.
   borders: {
-    thin: `1px solid ${BORDER_DEFAULT}`,
+    thin: `1px solid ${BORDER_SUBTLE}`,
     medium: `1px solid ${BORDER_DEFAULT}`,
     thick: `1px solid ${BORDER_STRONG}`,
     hairline: `1px solid ${BORDER_SUBTLE}`,
@@ -251,6 +224,7 @@ export const midnightTokens: ThemeTokens = {
     cardHover: SHADOW_CARD_HOVER,
     modal: SHADOW_MODAL,
     focus: SHADOW_FOCUS,
+    errorFocus: SHADOW_ERROR_FOCUS,
     button: SHADOW_BUTTON,
     // null = factory leaves boxShadow alone on press; combined with the
     // scale(0.98) transform this gives a depress without a shadow swap.
@@ -260,17 +234,17 @@ export const midnightTokens: ThemeTokens = {
 
   motion: {
     press: {
-      transform: "scale(0.98)",
+      transform: "scale(0.985)",
       shadowOverride: null,
     },
     hover: {
-      transform: "translateY(-1px)",
+      transform: "none",
       shadowOverride: SHADOW_CARD_HOVER,
     },
     transitionBase: TRANSITION_BASE,
     transitionSmooth: TRANSITION_SMOOTH,
-    screenDuration: 0.2,
-    screenEase: [0.2, 0.6, 0.2, 1],
+    screenDuration: 0.22,
+    screenEase: [0.32, 0.72, 0, 1],
   },
 
   // No corner ornaments, no thick dividers. Midnight's personality is in

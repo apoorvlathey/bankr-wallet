@@ -6,10 +6,11 @@ import {
   Collapse,
   HStack,
   IconButton,
+  Button,
   Image,
-  Link,
   Text,
   VStack,
+  usePrefersReducedMotion,
 } from "@chakra-ui/react";
 import { ChevronDownIcon, ExternalLinkIcon } from "@chakra-ui/icons";
 
@@ -74,8 +75,7 @@ function DetailRow({
       <Text
         fontSize="xs"
         color="text.secondary"
-        fontWeight="800"
-        textTransform="uppercase"
+        fontWeight="600"
         flexShrink={0}
       >
         {label}
@@ -104,18 +104,21 @@ function AccountWithActions({
       <HStack spacing={0} flexShrink={0}>
         <CopyButton value={address} />
         {explorer && (
-          <Link href={`${explorer}/address/${address}`} isExternal>
-            <IconButton
-              aria-label="View SIWE account on explorer"
-              icon={<ExternalLinkIcon boxSize="10px" />}
-              size="xs"
-              variant="ghost"
-              minW="20px"
-              h="20px"
-              color="text.secondary"
-              _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-            />
-          </Link>
+          <IconButton
+            as="a"
+            href={`${explorer}/address/${address}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="View SIWE account on explorer"
+            icon={<ExternalLinkIcon boxSize="10px" />}
+            size="xs"
+            variant="ghost"
+            minW="24px"
+            w="24px"
+            h="24px"
+            color="text.secondary"
+            _hover={{ color: "accent.secondary", bg: "bg.muted" }}
+          />
         )}
       </HStack>
     </HStack>
@@ -132,7 +135,7 @@ function ChainValue({
   return (
     <HStack spacing={1.5} justify="flex-end">
       <ChainIcon chainId={chainId} chainName={chainName} size="16px" withChip />
-      <Text fontSize="xs" color="text.primary" fontWeight="800">
+      <Text fontSize="xs" color="text.primary" fontWeight="600">
         {chainName}
       </Text>
     </HStack>
@@ -148,6 +151,7 @@ export default function SiweMessageDisplay({
 }: SiweMessageDisplayProps) {
   const { tokens } = useTheme();
   const [rawOpen, setRawOpen] = useState(false);
+  const prefersReducedMotion = usePrefersReducedMotion();
   const status = getStatusLabel(analysis);
   const fields = analysis.fields;
   const displayDomain = fields.domain || analysis.originHost || "Unknown site";
@@ -205,7 +209,7 @@ export default function SiweMessageDisplay({
                   )}
                   <Text
                     fontSize="lg"
-                    fontWeight="900"
+                    fontWeight="700"
                     color="text.primary"
                     lineHeight="1.1"
                     wordBreak="break-word"
@@ -220,7 +224,7 @@ export default function SiweMessageDisplay({
                   border="1px solid"
                   borderColor="border.default"
                   fontSize="2xs"
-                  fontWeight="900"
+                  fontWeight="700"
                   px={2}
                   py={1}
                   flexShrink={0}
@@ -241,7 +245,7 @@ export default function SiweMessageDisplay({
           </Box>
 
           <DetailRow label="Site">
-            <Text fontSize="xs" color="text.primary" fontWeight="800" wordBreak="break-word">
+            <Text fontSize="xs" color="text.primary" fontWeight="600" wordBreak="break-word">
               {displayDomain}
             </Text>
             {analysis.originHost && analysis.originHost !== displayDomain.toLowerCase() && (
@@ -329,36 +333,48 @@ export default function SiweMessageDisplay({
 
       <Box
         bg="surface.raised"
-        border={tokens.borders.thin}
+        border="1px solid"
         borderColor="border.default"
         borderRadius="lg"
         overflow="hidden"
       >
-        <HStack
-          p={2}
-          cursor="pointer"
-          onClick={() => setRawOpen((open) => !open)}
-          _hover={{ bg: "bg.muted" }}
-        >
-          <ChevronDownIcon
-            transform={rawOpen ? "rotate(180deg)" : "rotate(0deg)"}
-            transition="transform 0.15s ease"
-            color="text.secondary"
-          />
-          <Text fontSize="xs" fontWeight="900" color="text.primary" textTransform="uppercase">
-            Raw SIWE Message
-          </Text>
-          <Box flex="1" />
-          <Box onClick={(event) => event.stopPropagation()}>
-            <CopyButton value={analysis.rawMessage} />
-          </Box>
+        <HStack spacing={1} pr={2}>
+          <Button
+            type="button"
+            variant="unstyled"
+            display="flex"
+            flex={1}
+            minH="44px"
+            h="auto"
+            px={2}
+            justifyContent="flex-start"
+            gap={2}
+            onClick={() => setRawOpen((open) => !open)}
+            aria-expanded={rawOpen}
+            aria-controls="raw-siwe-message"
+            borderRadius={0}
+            fontWeight="inherit"
+            textTransform="none"
+            _hover={{ bg: "surface.raisedHover" }}
+          >
+            <ChevronDownIcon
+              transform={rawOpen ? "rotate(180deg)" : "rotate(0deg)"}
+              transition={prefersReducedMotion ? "none" : "transform 150ms cubic-bezier(0.23, 1, 0.32, 1)"}
+              color="text.secondary"
+              aria-hidden
+            />
+            <Text fontSize="xs" fontWeight="600" color="text.primary">
+              Raw SIWE message
+            </Text>
+          </Button>
+          <CopyButton value={analysis.rawMessage} />
         </HStack>
-        <Collapse in={rawOpen} animateOpacity>
+        <Collapse id="raw-siwe-message" in={rawOpen} animateOpacity={!prefersReducedMotion}>
           <Box
             p={3}
             bg="status.info.bg"
-            borderTop={tokens.borders.thin}
-            borderColor="border.default"
+            borderTop="1px solid"
+            borderColor="border.subtle"
             maxH="180px"
             overflowY="auto"
           >

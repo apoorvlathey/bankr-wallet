@@ -1,23 +1,12 @@
-import { useEffect, useState } from "react";
-import {
-  Badge,
-  Box,
-  HStack,
-  IconButton,
-  Modal,
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalHeader,
-  ModalOverlay,
-  Text,
-  VStack,
-} from "@chakra-ui/react";
+import { useEffect, useRef, useState } from "react";
+import { Box, HStack, IconButton, Text, VStack } from "@chakra-ui/react";
 import { ExternalLinkIcon } from "@chakra-ui/icons";
 
 import CalldataDecoder from "@/components/CalldataDecoder";
 import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
 import { CopyButton } from "@/components/CopyButton";
+import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
+import { AppHeader, AppScreen, ScreenBody } from "@/components/ui";
 import { getChainConfig } from "@/constants/chainConfig";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
@@ -31,6 +20,11 @@ interface NativeCalldataDecodeModalProps {
   chainId: number;
 }
 
+/**
+ * Kept under the legacy export name for compatibility, but rendered as a
+ * pushed mobile screen because clear-signing and calldata are scrollable
+ * technical destinations rather than a focused confirmation dialog.
+ */
 export function NativeCalldataDecodeModal({
   isOpen,
   onClose,
@@ -42,87 +36,60 @@ export function NativeCalldataDecodeModal({
   const { networksInfo } = useNetworks();
   const resolvedChain = getResolvedChainById(chainId, networksInfo);
   const explorer = resolvedChain?.explorer || getChainConfig(chainId).explorer;
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const [clearSigningStatus, setClearSigningStatus] = useState<
     "loading" | "matched" | "absent"
   >("loading");
 
   useEffect(() => {
-    if (isOpen) setClearSigningStatus("loading");
+    if (!isOpen) return;
+    setClearSigningStatus("loading");
+    const frame = window.requestAnimationFrame(() => headingRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
   }, [isOpen, calldata, to, chainId]);
+
+  if (!isOpen) return null;
 
   const clearSigningMatched = clearSigningStatus === "matched";
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      isCentered
-      scrollBehavior="inside"
-      size="md"
-    >
-      <ModalOverlay bg="surface.overlay" />
-      <ModalContent mx={4} overflow="hidden" maxH="calc(100vh - 2rem)">
-        <ModalHeader
-          color="text.primary"
-          fontSize="md"
-          fontWeight="900"
-          pb={2}
-          textTransform="uppercase"
-          letterSpacing="wider"
-          borderBottom="3px solid"
-          borderColor="border.default"
-        >
-          Decode Calldata
-        </ModalHeader>
-        <ModalCloseButton top={2} />
-        <ModalBody px={4} py={3}>
-          <VStack spacing={3} align="stretch">
-            <Box
-              bg="surface.raised"
-              border="1px solid"
-              borderColor="border.default"
-              borderRadius="md"
-              px={3}
-              py={2}
-            >
-              <HStack spacing={2} justify="space-between" minW={0}>
-                <Text
-                  fontSize="2xs"
-                  color="text.secondary"
-                  fontWeight="800"
-                  textTransform="uppercase"
-                  letterSpacing="wide"
-                  flexShrink={0}
-                >
-                  Recipient
-                </Text>
-                <HStack spacing={1} minW={0}>
-                  <Badge
-                    bg="surface.base"
-                    color="text.primary"
-                    border="1px solid"
-                    borderColor="border.default"
-                    fontFamily="mono"
-                    fontSize="2xs"
-                    px={1.5}
-                    py={0.5}
-                    maxW="190px"
-                    isTruncated
-                  >
-                    {to.slice(0, 6)}...{to.slice(-4)}
-                  </Badge>
+    <FullScreenPickerLayer>
+      <AppScreen aria-labelledby="calldata-screen-title">
+        <AppHeader
+          title="Transaction data"
+          headingId="calldata-screen-title"
+          headingRef={headingRef}
+          onBack={onClose}
+          backLabel="Back to send"
+        />
+        <ScreenBody>
+          <VStack spacing={4} align="stretch">
+            <Box>
+              <Text fontSize="sm" color="fg.secondary" lineHeight="1.5">
+                Review how WalletChan understands the contract interaction.
+                Raw calldata remains available in advanced details.
+              </Text>
+            </Box>
+
+            <Box py={3} borderBottom="1px solid" borderColor="border.subtle">
+              <HStack spacing={3} justify="space-between" minW={0} align="center">
+                <Box minW={0}>
+                  <Text fontSize="xs" color="fg.secondary">Recipient</Text>
+                  <Text mt={0.5} fontFamily="mono" fontSize="sm" isTruncated>
+                    {to.slice(0, 8)}…{to.slice(-6)}
+                  </Text>
+                </Box>
+                <HStack spacing={1} flexShrink={0}>
                   <CopyButton value={to} />
                   {explorer && (
                     <IconButton
                       aria-label="View recipient on explorer"
-                      icon={<ExternalLinkIcon boxSize="10px" />}
-                      size="xs"
+                      icon={<ExternalLinkIcon />}
+                      size="sm"
                       variant="ghost"
-                      minW="18px"
-                      h="18px"
-                      color="text.tertiary"
+                      minW="32px"
+                      h="32px"
                       onClick={() => window.open(`${explorer}/address/${to}`, "_blank")}
-                      _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                     />
                   )}
                 </HStack>
@@ -149,8 +116,8 @@ export function NativeCalldataDecodeModal({
               />
             )}
           </VStack>
-        </ModalBody>
-      </ModalContent>
-    </Modal>
+        </ScreenBody>
+      </AppScreen>
+    </FullScreenPickerLayer>
   );
 }

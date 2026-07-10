@@ -25,6 +25,7 @@ import {
   toHex,
   type PublicClient,
   type Address,
+  type AccessList,
 } from "viem";
 import { getRpcUrl } from "./txHandlers";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
@@ -1978,7 +1979,7 @@ export async function simulateBatchAssetChanges(
 
     // Try full-batch access list first; fall back to per-call if it fails
     // (e.g. if the account isn't an ERC-7821 smart account onchain yet)
-    let accessListEntries: { address: string }[] = [];
+    let accessListEntries: AccessList = [];
     try {
       const batchAL = await client.createAccessList({
         account: from,
@@ -2005,7 +2006,7 @@ export async function simulateBatchAssetChanges(
             return res;
           }).catch((err2) => {
             console.log(`[batchSim] AccessList call ${i} FAILED:`, err2.shortMessage || err2.message);
-            return { accessList: [] as { address: string }[] };
+            return { accessList: [] as AccessList };
           }),
         ),
       );

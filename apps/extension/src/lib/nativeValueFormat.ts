@@ -6,7 +6,12 @@ export type ParsedNativeAmount =
   | { ok: false };
 
 function normalizeDecimals(decimals?: number): number {
-  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
+  if (
+    typeof decimals !== "number" ||
+    !Number.isInteger(decimals) ||
+    decimals < 0 ||
+    decimals > 36
+  ) {
     return DEFAULT_NATIVE_DECIMALS;
   }
   return decimals;

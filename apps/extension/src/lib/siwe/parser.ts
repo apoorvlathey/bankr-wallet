@@ -1,6 +1,8 @@
 import type { ParsedSiweMessage, SiweIssue, SiweMessageFields } from "./types";
 
-const REQUIRED_FIELDS: Array<keyof SiweMessageFields> = [
+type SiweScalarField = Exclude<keyof SiweMessageFields, "resources">;
+
+const REQUIRED_FIELDS: readonly SiweScalarField[] = [
   "domain",
   "address",
   "uri",
@@ -10,7 +12,10 @@ const REQUIRED_FIELDS: Array<keyof SiweMessageFields> = [
   "issuedAt",
 ];
 
-const FIELD_PREFIXES: Array<{ prefix: string; field: keyof SiweMessageFields }> = [
+const FIELD_PREFIXES: readonly {
+  prefix: string;
+  field: SiweScalarField;
+}[] = [
   { prefix: "URI: ", field: "uri" },
   { prefix: "Version: ", field: "version" },
   { prefix: "Chain ID: ", field: "chainId" },
@@ -18,7 +23,10 @@ const FIELD_PREFIXES: Array<{ prefix: string; field: keyof SiweMessageFields }> 
   { prefix: "Issued At: ", field: "issuedAt" },
 ];
 
-const OPTIONAL_PREFIXES: Array<{ prefix: string; field: keyof SiweMessageFields }> = [
+const OPTIONAL_PREFIXES: readonly {
+  prefix: string;
+  field: SiweScalarField;
+}[] = [
   { prefix: "Expiration Time: ", field: "expirationTime" },
   { prefix: "Not Before: ", field: "notBefore" },
   { prefix: "Request ID: ", field: "requestId" },

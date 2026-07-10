@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { HStack, Box, Text } from "@chakra-ui/react";
+import { HStack, Box, Text, usePrefersReducedMotion } from "@chakra-ui/react";
 import { BellIcon, ChevronRightIcon } from "@chakra-ui/icons";
 import { isDarkThemeId, useTheme } from "@/theme";
 
@@ -31,6 +31,7 @@ function PendingTxBanner({
 }: PendingTxBannerProps) {
   const { tokens, themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
+  const prefersReducedMotion = usePrefersReducedMotion();
   const totalCount =
     txCount + signatureCount + permissionCount + batchCount + crossDappBatchCount;
   if (totalCount === 0) return null;
@@ -71,6 +72,11 @@ function PendingTxBanner({
 
   return (
     <Box
+      as="button"
+      type="button"
+      w="full"
+      appearance="none"
+      fontFamily="inherit"
       bg="accent.highlight"
       border={tokens.borders.thin}
       borderColor="border.default"
@@ -79,6 +85,7 @@ function PendingTxBanner({
       px={3}
       py={1.5}
       cursor="pointer"
+      textAlign="start"
       onClick={handleClick}
       _hover={{
         transform: tokens.motion.hover.transform,
@@ -100,9 +107,26 @@ function PendingTxBanner({
           justifyContent="center"
           flexShrink={0}
         >
-          <BellIcon boxSize={3} color="accent.highlight" sx={{ animation: "bell-ring 1.5s ease-in-out infinite", transformOrigin: "top center" }} />
+          <BellIcon
+            boxSize={3}
+            color="accent.highlight"
+            sx={{
+              animation: prefersReducedMotion
+                ? undefined
+                : "bell-ring 1.5s ease-in-out infinite",
+              transformOrigin: "top center",
+            }}
+          />
         </Box>
-        <Text flex="1" textAlign="center" fontSize="xs" fontWeight="700" color="accentFg.highlight" textTransform="uppercase" letterSpacing="wider">
+        <Text
+          flex="1"
+          textAlign="center"
+          fontSize="xs"
+          fontWeight="600"
+          color="accentFg.highlight"
+          textTransform={isDarkTheme ? "none" : "uppercase"}
+          letterSpacing={isDarkTheme ? "normal" : "wider"}
+        >
           {getLabel()}
         </Text>
         {isDarkTheme ? (

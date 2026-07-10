@@ -1,28 +1,9 @@
-/**
- * ThemeSwitcher — compact icon button + dropdown for switching themes.
- *
- * Enumerates every registered theme via `themeList`, so adding a new theme
- * file automatically shows up here with no edits. Each menu row shows a
- * mini swatch (rendered with that theme's raw preview colors), the theme
- * name, and a check mark on the active theme. Selecting a row calls
- * `setThemeId` which persists the choice and triggers an immediate
- * re-render across the popup.
- */
+/** Compact theme trigger backed by a mobile-style action sheet. */
 
-import {
-  Box,
-  HStack,
-  IconButton,
-  Menu,
-  MenuButton,
-  MenuItem,
-  MenuList,
-  Text,
-  type IconButtonProps,
-} from "@chakra-ui/react";
-import { CheckIcon } from "@chakra-ui/icons";
-import { themeList, useTheme } from "@/theme";
-import type { ThemeTokens } from "@/theme";
+import { Box, HStack, IconButton, useDisclosure, type IconButtonProps } from "@chakra-ui/react";
+import { useRef } from "react";
+import { themeList, useTheme, type ThemeTokens } from "@/theme";
+import { ActionSheet } from "@/components/ui";
 
 interface ThemeSwitcherProps {
   size?: IconButtonProps["size"];
@@ -50,109 +31,66 @@ function PaletteIcon() {
   );
 }
 
+function ThemeSwatch({ theme }: { theme: ThemeTokens }) {
+  return (
+    <Box
+      w="24px"
+      h="24px"
+      bg={theme.preview.bg}
+      border="1px solid"
+      borderColor="border.default"
+      borderRadius="sm"
+      display="flex"
+      alignItems="flex-end"
+      p="3px"
+    >
+      <HStack spacing="2px">
+        {theme.preview.accents.map((swatch, index) => (
+          <Box key={`${swatch}-${index}`} boxSize="4px" bg={swatch} borderRadius="full" />
+        ))}
+      </HStack>
+    </Box>
+  );
+}
+
 export default function ThemeSwitcher({
   size = "sm",
   ariaLabel = "Switch theme",
 }: ThemeSwitcherProps) {
   const { themeId, setThemeId } = useTheme();
-
-  const handleSelect = (theme: ThemeTokens) => {
-    if (theme.id === themeId) return;
-    void setThemeId(theme.id);
-  };
+  const sheet = useDisclosure();
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <Menu placement="bottom-end" autoSelect={false}>
-      <MenuButton
-        as={IconButton}
+    <>
+      <IconButton
+        ref={triggerRef}
         aria-label={ariaLabel}
         icon={<PaletteIcon />}
         variant="ghost"
         size={size}
         color="text.secondary"
+        onClick={sheet.onOpen}
       />
-      <MenuList
-        bg="surface.raised"
-        border="2px solid"
-        borderColor="border.default"
-        boxShadow="card"
-        p={1}
-        minW="auto"
-        w="auto"
-        zIndex={20}
-      >
-        {themeList.map((theme) => {
-          const isActive = theme.id === themeId;
-          return (
-            <MenuItem
-              key={theme.id}
-              onClick={() => handleSelect(theme)}
-              bg="transparent"
-              _hover={{ bg: "surface.raisedHover" }}
-              _focus={{ bg: "surface.raisedHover" }}
-              px={2}
-              py={2}
-              borderRadius="md"
-            >
-              <HStack spacing={2.5}>
-                {/* Mini swatch — uses theme's raw preview colors so each row
-                    shows its own theme regardless of the active theme. */}
-                <Box
-                  w="24px"
-                  h="24px"
-                  bg={theme.preview.bg}
-                  border="1px solid"
-                  borderColor="border.default"
-                  borderRadius="sm"
-                  flexShrink={0}
-                  display="flex"
-                  flexDirection="column"
-                  justifyContent="space-between"
-                  p="2px"
-                >
-                  <Text
-                    fontSize="7px"
-                    fontWeight="900"
-                    color={theme.preview.fg}
-                    lineHeight="1"
-                  >
-                    Aa
-                  </Text>
-                  <HStack spacing="1px">
-                    {theme.preview.accents.map((swatch, i) => (
-                      <Box
-                        key={i}
-                        w="4px"
-                        h="4px"
-                        bg={swatch}
-                        borderRadius="sm"
-                      />
-                    ))}
-                  </HStack>
-                </Box>
-
-                <Text
-                  fontSize="sm"
-                  fontWeight="700"
-                  color="text.primary"
-                  lineHeight="1.2"
-                >
-                  {theme.name}
-                </Text>
-
-                {isActive && (
-                  <CheckIcon
-                    boxSize={3}
-                    color="accent.secondary"
-                    flexShrink={0}
-                    ml={1}
-                  />
-                )}
-              </HStack>
-            </MenuItem>
-          );
-        })}
-      </MenuList>
-    </Menu>
+      <ActionSheet
+        isOpen={sheet.isOpen}
+        onClose={sheet.onClose}
+        finalFocusRef={triggerRef}
+        title="Choose appearance"
+        description="Change WalletChan's visual style. Your accounts and wallet data are unaffected."
+        choices={themeList.map((theme) => ({
+          id: theme.id,
+          label: theme.name,
+          description: theme.description,
+          isSelected: theme.id === themeId,
+          icon: <ThemeSwatch theme={theme} />,
+        }))}
+        onSelect={(id) => {
+          if (id === themeId) return;
+          const selected = themeList.find((theme) => theme.id === id);
+          if (selected) void setThemeId(selected.id);
+        }}
+      />
+    </>
   );
 }

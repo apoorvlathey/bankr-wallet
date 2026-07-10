@@ -3,6 +3,8 @@ import {
   Box,
   Button,
   Collapse,
+  FormControl,
+  FormLabel,
   HStack,
   Icon,
   IconButton,
@@ -11,11 +13,11 @@ import {
   Spinner,
   Switch,
   Text,
+  usePrefersReducedMotion,
   VStack,
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import {
-  ArrowBackIcon,
   ArrowForwardIcon,
   CheckIcon,
   ChevronDownIcon,
@@ -32,6 +34,7 @@ import {
   setEnsBrowsingSetting,
   type EnsBrowsingSettings as Settings,
 } from "@/chrome/ensBrowsing/settingsStorage";
+import { SettingsScreenFrame } from "./SettingsScreenFrame";
 
 interface EnsBrowsingSettingsProps {
   onBack: () => void;
@@ -54,6 +57,7 @@ type BoolKey = "enabled" | "useLocalGateway" | "pinOnchainHtml";
 
 export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps) {
   const { tokens } = useTheme();
+  const prefersReducedMotion = usePrefersReducedMotion();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [pending, setPending] = useState<keyof Settings | null>(null);
   const [kuboStatus, setKuboStatus] = useState<KuboStatus>("checking");
@@ -225,19 +229,11 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
   );
 
   return (
-    <VStack align="stretch" spacing={3} p={3}>
-      <HStack>
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          size="sm"
-          onClick={onBack}
-          variant="ghost"
-        />
-        <Text fontSize="md" fontWeight="800" color="fg.primary" textTransform="uppercase">
-          dapp3 - ENS Browsing
+    <SettingsScreenFrame title="dapp3 · ENS browsing" onBack={onBack}>
+      <VStack align="stretch" spacing={4}>
+        <Text fontSize="sm" color="fg.secondary">
+          Open .eth and .gwei sites from the address bar, with an optional local IPFS gateway.
         </Text>
-      </HStack>
 
       <ThemedCard p={3}>
         <VStack align="stretch" spacing={2}>
@@ -318,7 +314,7 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
                 <Icon
                   as={RepeatIcon}
                   animation={
-                    kuboStatus === "checking"
+                    kuboStatus === "checking" && !prefersReducedMotion
                       ? `${spin} 0.9s linear infinite`
                       : undefined
                   }
@@ -420,7 +416,7 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
                   <Icon
                     as={RepeatIcon}
                     animation={
-                      kuboApiStatus === "checking"
+                      kuboApiStatus === "checking" && !prefersReducedMotion
                         ? `${spin} 0.9s linear infinite`
                         : undefined
                     }
@@ -571,16 +567,9 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
                   /
                 </Box>
 
-                <HStack spacing={2} align="end">
-                  <VStack align="stretch" spacing={1} flex={1} minW={0}>
-                    <Text
-                      fontSize="xs"
-                      fontWeight={700}
-                      color="fg.muted"
-                      letterSpacing="0.04em"
-                    >
-                      HOST
-                    </Text>
+                <HStack spacing={2} align="start">
+                  <FormControl flex={1} minW={0}>
+                    <FormLabel mb={1.5} fontSize="sm">Host</FormLabel>
                     <Input
                       value={hostDraft}
                       onChange={(e) => setHostDraft(e.target.value)}
@@ -589,16 +578,9 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
                       fontFamily="mono"
                       isDisabled={pending !== null}
                     />
-                  </VStack>
-                  <VStack align="stretch" spacing={1} w="90px">
-                    <Text
-                      fontSize="xs"
-                      fontWeight={700}
-                      color="fg.muted"
-                      letterSpacing="0.04em"
-                    >
-                      PORT
-                    </Text>
+                  </FormControl>
+                  <FormControl w="96px">
+                    <FormLabel mb={1.5} fontSize="sm">Port</FormLabel>
                     <Input
                       value={portDraft}
                       onChange={(e) => setPortDraft(e.target.value)}
@@ -609,7 +591,7 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
                       inputMode="numeric"
                       isDisabled={pending !== null}
                     />
-                  </VStack>
+                  </FormControl>
                 </HStack>
 
                 {!portValid && portDraft.trim().length > 0 && (
@@ -675,6 +657,7 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
           WalletChan resolves the contenthash via your mainnet RPC.
         </Text>
       </Box>
-    </VStack>
+      </VStack>
+    </SettingsScreenFrame>
   );
 }

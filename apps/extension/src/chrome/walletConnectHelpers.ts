@@ -118,7 +118,8 @@ export function getSessionMetadata(session: any): {
 }
 
 export function getSessionAccounts(session: any, chainId?: number): string[] {
-  const accounts = session?.namespaces?.eip155?.accounts || [];
+  const rawAccounts = session?.namespaces?.eip155?.accounts;
+  const accounts: unknown[] = Array.isArray(rawAccounts) ? rawAccounts : [];
   return accounts
     .filter((entry: unknown): entry is string => typeof entry === "string")
     .filter((entry) => !chainId || entry.startsWith(`eip155:${chainId}:`))
@@ -143,7 +144,7 @@ export async function resolveSessionSigningAccount(
   const account = (await getAccounts()).find(
     (entry) => entry.address.toLowerCase() === address.toLowerCase(),
   );
-  if (!isSigningAccount(account || null)) {
+  if (!account || !isSigningAccount(account)) {
     throw new Error("No signing account found for this session");
   }
   return account;
@@ -167,10 +168,15 @@ export function summarizeWalletConnectSession(
 ): WalletConnectSessionSummary {
   const metadata = getSessionMetadata(session);
   const accounts = getSessionAccounts(session);
+  const rawNamespaceAccounts = session?.namespaces?.eip155?.accounts;
+  const namespaceAccounts: unknown[] = Array.isArray(rawNamespaceAccounts)
+    ? rawNamespaceAccounts
+    : [];
   const chains = Array.from(
     new Set(
-      (session?.namespaces?.eip155?.accounts || [])
-        .map((entry: string) => chainIdFromCaip2(entry))
+      namespaceAccounts
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => chainIdFromCaip2(entry))
         .filter((chainId: number | null): chainId is number => chainId !== null),
     ),
   );

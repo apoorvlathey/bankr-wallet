@@ -1,21 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Box,
   Button,
   FormControl,
+  FormErrorMessage,
   FormLabel,
-  HStack,
   IconButton,
   Input,
   InputGroup,
   InputRightElement,
-  Spacer,
   Text,
   VStack,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { ViewIcon, ViewOffIcon, WarningIcon } from "@chakra-ui/icons";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { isDarkThemeId, useTheme } from "@/theme";
+import { SettingsScreenFrame } from "./SettingsScreenFrame";
 
 interface BiometricUnlockRemoveProps {
   onBack: () => void;
@@ -32,8 +30,6 @@ export function BiometricUnlockRemove({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const masterPasswordInputRef = useRef<HTMLInputElement>(null);
   const toast = useThemedToast();
-  const { themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
 
   useEffect(() => {
     const focusTimer = setTimeout(
@@ -79,85 +75,86 @@ export function BiometricUnlockRemove({
   };
 
   return (
-    <VStack spacing={4} align="stretch">
-      <HStack>
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          variant="ghost"
-          size="sm"
-          onClick={onBack}
-        />
-        <Text fontSize="lg" fontWeight="900" color="text.primary" textTransform="uppercase" letterSpacing="tight">
-          Remove
-        </Text>
-        <Spacer />
-      </HStack>
-
-      <FormControl isInvalid={!!removeError}>
-        <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-          Master Password
-        </FormLabel>
-        <InputGroup>
-          <Input
-            ref={masterPasswordInputRef}
-            type={showMasterPassword ? "text" : "password"}
-            placeholder="Verify to remove"
-            value={masterPassword}
-            onChange={(event) => {
-              setMasterPassword(event.target.value);
-              setRemoveError("");
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") void handleRemove();
-            }}
-            pr="3rem"
-          />
-          <InputRightElement>
-            <IconButton
-              aria-label={showMasterPassword ? "Hide" : "Show"}
-              icon={showMasterPassword ? <ViewOffIcon /> : <ViewIcon />}
-              size="sm"
-              variant="ghost"
-              onClick={() => setShowMasterPassword((visible) => !visible)}
-              color="text.secondary"
-              tabIndex={-1}
-            />
-          </InputRightElement>
-        </InputGroup>
-        {removeError && (
-          <Text color="chart.negative" fontSize="sm" fontWeight="700" mt={2}>
-            {removeError}
-          </Text>
-        )}
-      </FormControl>
-
-      <Box
-        bg="accent.primary"
-        border="2px solid"
-        borderColor="border.default"
-        borderRadius={isDarkTheme ? "md" : undefined}
-        p={2}
-      >
-        <Text color="accentFg.primary" fontSize="xs" fontWeight="700">
-          This device will go back to password unlock only.
-        </Text>
-      </Box>
-
-      <HStack spacing={2} pt={1}>
-        <Button variant="secondary" onClick={onBack} size="sm">
-          Cancel
-        </Button>
+    <SettingsScreenFrame
+      title="Remove biometric unlock"
+      onBack={onBack}
+      primaryAction={
         <Button
           variant="danger"
-          flex={1}
-          size="sm"
           onClick={handleRemove}
           isLoading={isSubmitting}
         >
-          Remove
+          Remove biometric unlock
         </Button>
-      </HStack>
-    </VStack>
+      }
+      secondaryAction={
+        <Button variant="secondary" onClick={onBack}>
+          Cancel
+        </Button>
+      }
+    >
+      <VStack spacing={6} align="stretch">
+        <VStack align="stretch" spacing={1}>
+          <Text fontSize="lg" fontWeight="600">
+            Confirm with your master password
+          </Text>
+          <Text fontSize="sm" color="fg.secondary" lineHeight="1.5">
+            This removes the biometric credential from this browser. Your
+            wallet and accounts are not deleted.
+          </Text>
+        </VStack>
+
+        <FormControl isInvalid={!!removeError}>
+          <FormLabel>Master password</FormLabel>
+          <InputGroup>
+            <Input
+              ref={masterPasswordInputRef}
+              type={showMasterPassword ? "text" : "password"}
+              placeholder="Enter master password"
+              value={masterPassword}
+              onChange={(event) => {
+                setMasterPassword(event.target.value);
+                setRemoveError("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void handleRemove();
+              }}
+              pr="3rem"
+              autoComplete="current-password"
+            />
+            <InputRightElement w="44px" h="44px">
+              <IconButton
+                aria-label={showMasterPassword ? "Hide password" : "Show password"}
+                icon={showMasterPassword ? <ViewOffIcon /> : <ViewIcon />}
+                minW="40px"
+                h="40px"
+                variant="ghost"
+                onClick={() => setShowMasterPassword((visible) => !visible)}
+                color="fg.secondary"
+              />
+            </InputRightElement>
+          </InputGroup>
+          <FormErrorMessage>{removeError}</FormErrorMessage>
+        </FormControl>
+
+        <VStack
+          align="stretch"
+          spacing={1}
+          bg="status.warning.tint"
+          color="status.warning.fg"
+          border="1px solid"
+          borderColor="status.warning.border"
+          borderRadius="md"
+          p={3}
+        >
+          <Text fontSize="sm" fontWeight="600">
+            <WarningIcon mr={2} />Password unlock remains available
+          </Text>
+          <Text fontSize="sm" lineHeight="1.5">
+            After removal, this device returns to password-only unlock.
+          </Text>
+        </VStack>
+      </VStack>
+    </SettingsScreenFrame>
   );
 }

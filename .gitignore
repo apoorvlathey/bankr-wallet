@@ -19,9 +19,12 @@ node_modules
 
 # testing
 /coverage
+apps/extension/preview-qa/
+apps/extension/extension-*-qa/
 
 # production builds
 build
+preview-build
 build-firefox
 dist
 zip

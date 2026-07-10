@@ -1,0 +1,205 @@
+# DESIGN.md - WalletChan
+
+## Context (from discovery)
+
+- Artifact type: mobile-first browser wallet and financial application.
+- Positioning: trustworthy consumer finance with expert transaction tooling.
+- Audience: crypto newcomers and power users. Primary action: understand and safely approve the next wallet action.
+- Adjectives: trustworthy, precise, approachable, spirited.
+- Visual word translations:
+  - Trustworthy: stable hierarchy, explicit outcomes, restrained financial blue.
+  - Precise: aligned amounts, tabular numerals, hairline rules, consistent geometry.
+  - Approachable: plain-language labels, one primary action per screen, progressive disclosure.
+  - Spirited: mascot-led identity moments and warm amber used with restraint.
+- Aesthetic essence: warm financial confidence.
+- Single-minded proposition: WalletChan makes powerful wallet actions easy to understand before the user commits.
+- Archetype: Sage with an Everyman interaction model.
+- References: Rabby for wallet information hierarchy and full-screen mobile flows; WalletChan's Swiss Knife project for restrained Chakra composition; shadcn/ui for semantic recipes and complete state discipline. Transpose behavior and restraint, not default visuals.
+- Avoid: violet-forward web3 styling, thick outlines around every region, card-in-card stacks, desktop dropdowns squeezed into the popup.
+- Mode: both. Midnight is the default and receives the restrained product language; Bauhaus remains an intentionally expressive alternate theme.
+- Density: balanced on root screens, dense but zoned on transaction details.
+- Constraints: React 18, Chakra UI 2, browser popup/window/sidepanel, WCAG 2.2 AA, no wallet logic or storage changes during visual phases.
+
+## Aesthetic
+
+- Direction: Warm Midnight, a precise financial dark interface made unmistakably WalletChan through its pixel mascot, condensed wordmark, and selective amber warmth.
+- Defining trait: structure comes from proximity, alignment, surface lightness, and hairline rules instead of repeated bordered cards.
+- Signature move: the Mascot Spotlight. WalletChan appears at product-entry, onboarding, empty, and reassurance moments; amber marks brand commitment actions, while financial blue remains the transactional decision and focus color. Financial gain/loss keeps semantic green/red.
+
+## Typography
+
+- Brand wordmark: Anton Regular, rendered uppercase through the shared
+  `BrandWordmark` component for explicit logo/name lockups in the app header,
+  unlock screen, onboarding, and About identity block. It is self-hosted
+  through `@fontsource/anton` and is not used for screen headings, body copy,
+  controls, technical content, or ordinary product-name mentions.
+- Display: Inter/system UI for Midnight; Outfit for the expressive Bauhaus theme.
+- Body: Inter/system UI for Midnight; Outfit remains a Bauhaus-only brand face.
+- Mono: JetBrains Mono, SIL Open Font License, for addresses, hashes, calldata, and aligned technical values.
+- Scale: Major Second 1.125, compact for a 360px application viewport.
+
+| Step | Size | Line height | Use |
+| --- | ---: | ---: | --- |
+| page | 24px | 1.2 | screen title |
+| section | 20px | 1.25 | major section |
+| title | 18px | 1.3 | card or row title |
+| body | 16px | 1.5 | controls and primary copy |
+| small | 14px | 1.45 | secondary copy |
+| caption | 12px | 1.4 | metadata only |
+
+- Weights: 400, 500, 600, 700. Avoid 900 in Midnight.
+- Tracking: -0.01em on titles, normal body, 0.01em on captions. Midnight labels use sentence case.
+- Numbers: `font-variant-numeric: tabular-nums` for balances, prices, fees, timestamps, and transaction values.
+
+## Color
+
+- Strategy: a neutral graphite elevation ramp with trustworthy financial blue and a sharp WalletChan amber. Blue replaces generic web3 violet for transactions and focus; amber is reserved for mascot-led identity, brand commitment actions, and small moments of warmth.
+- Distribution: roughly 75 percent neutral surfaces, 20 percent text and structure, 5 percent blue/amber action and status accents.
+- Midnight palette:
+  - base: `oklch(0.145 0.004 286)` | `#09090B`
+  - raised: `oklch(0.178 0.004 286)` | `#111113`
+  - raised-hover: `oklch(0.218 0.004 286)` | `#18181B`
+  - sunken: `oklch(0.159 0.004 286)` | `#0A0A0B`
+  - fg: `oklch(0.970 0.002 286)` | `#F4F4F5`
+  - secondary: `oklch(0.705 0.015 286)` | `#A1A1AA`
+  - muted: `oklch(0.620 0.015 286)` | `#85858F`
+  - border: `rgba(255,255,255,0.10)`
+  - action: `oklch(0.546 0.215 263)` | `#2563EB`
+  - action-soft: `oklch(0.714 0.143 255)` | `#60A5FA`
+  - highlight: `oklch(0.769 0.165 70)` | `#F59E0B`
+  - success: `oklch(0.792 0.184 151)` | `#4ADE80`
+  - warning: `oklch(0.837 0.164 84)` | `#FBBF24`
+  - error: `oklch(0.711 0.166 22)` | `#F87171`
+- Approved foreground pairs: white on action blue is 5.17:1; near-black on action-soft blue is 7.83:1; primary text on raised is 17.16:1; muted text on raised is 5.16:1.
+- Bauhaus palette remains defined in its theme implementation. Components consume intent tokens only.
+
+## Spacing, radius, shadow
+
+- Spacing base: 4px, with 4/8/12/16/24/32px as the main relationship scale.
+- Radius: 8px for controls and small elements; 12px for cards and top-level surfaces. Pills are reserved for statuses, filters, and avatars. Modals may use 16px because they are true floating surfaces.
+- Shadow approach: elevation by surface lightness. Resting cards and controls are shadowless. Only floating overlays receive a neutral soft shadow.
+
+## Layout and composition
+
+- Grid: single-column mobile stack with 16px gutters; two-column rows only where comparison benefits.
+- Spacing rhythm: 4 to 8px within a text/value group, 12 to 16px within a section, 24px between sections.
+- Signature layout move: each screen reads as a short decision path: context, outcome, details, action.
+- Density: balanced. Use unboxed sections and one outer surface owner rather than nested cards.
+- Scanning: F pattern with primary identity and outcome top-left and numeric values right-aligned.
+- Responsive: mobile-first. Popup 360x600, window 480x720, sidepanel 420x760 are first-class viewports.
+
+## Components and states
+
+- Button hierarchy: one filled primary, neutral secondary, quiet tertiary. Destructive red is loud only inside a destructive confirmation.
+- States: default, hover, pressed, focus-visible, disabled, loading, invalid/error, and selected where applicable. Weight never changes between states.
+- Inputs: visible labels, 44px minimum touch height, 16px input text, inline corrective errors, retained values.
+- Lists and financial data: light row separators, aligned columns, tabular numerals, no heavy cell grid.
+- Overlays: popovers for small contextual choices; action sheets for 2 to 6 choices; full screens for search, selection, configuration, and transaction detail; dialogs only for blocking decisions.
+- Empty/loading/error: actionable empty copy, geometry-matching skeletons, recoverable errors with a next step.
+- Focus ring: blue 3px outer ring with sufficient contrast and no layout shift.
+
+## Motion
+
+- Duration: instant 100ms, fast 150ms, normal 200ms, slow 300ms, sheet 420ms.
+- Easing: enter `cubic-bezier(0.23, 1, 0.32, 1)`; movement `cubic-bezier(0.77, 0, 0.175, 1)`; sheet `cubic-bezier(0.32, 0.72, 0, 1)`.
+- Animate only transform and opacity for spatial transitions. Color-state transitions explicitly list color properties.
+- High-frequency wallet actions stay nearly instant. Full-screen push/back motion communicates hierarchy.
+- Reduced motion: replace translation and scale with an opacity-only state change.
+
+## Iconography
+
+- Set: existing Chakra/custom icons, normalized to a 20 or 24px grid with approximately 2px strokes and rounded joins.
+- Icons inherit `currentColor`. Interactive icon targets remain at least 40px, preferably 44px.
+- Network, token, and dapp marks retain their real identity inside quiet neutral containers.
+
+## Imagery and illustration
+
+- Mode: real token, network, dapp, and account imagery. The WalletChan character is brand identity, not general decoration.
+- Rules: local deterministic assets in previews; circular crops only for identity; no ornamental image treatments inside trust-critical flows.
+- Avoid: generic web3 gradients, glowing orbs, stock illustrations, and decorative glassmorphism.
+
+## Dark mode
+
+- Base is near-black rather than pure black. Elevation steps increase lightness from base to raised to floating.
+- Foreground is off-white rather than pure white. Secondary and muted text remain WCAG AA.
+- Action blue is controlled and status colors are desaturated enough for dark surfaces.
+- Borders are lighter than adjacent surfaces. Shadows are neutral and limited to floating overlays.
+
+## Accessibility
+
+- Contrast: WCAG 2.2 AA in both themes; 4.5:1 normal text and 3:1 controls/focus boundaries.
+- Focus: visible, managed, restored after overlays, and not hidden by sticky action bars.
+- Keyboard: all controls operable with native semantics and conventional key behavior.
+- Targets: 24px minimum, 44px preferred for mobile wallet actions.
+- Color independence: statuses pair color with labels/icons; gains and losses include signs and text.
+- Reduced motion: respected. Verify at 200 percent zoom and 320px reflow.
+
+## Tokens (source of truth)
+
+```css
+:root[data-theme="midnight"] {
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --color-bg: #09090b;
+  --color-surface: #111113;
+  --color-surface-hover: #18181b;
+  --color-fg: #f4f4f5;
+  --color-muted: #85858f;
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-accent: #2563eb;
+  --color-accent-fg: #ffffff;
+  --radius-control: 8px;
+  --radius-surface: 12px;
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+```
+
+- Adapter: Chakra UI semantic intent tokens through `ThemeTokens` and `createChakraTheme`.
+- Implementation references: `_docs/STYLING.md`, `apps/extension/src/theme/tokens.ts`, and `apps/extension/src/theme/themes/*.ts`.
+
+## Cards and surfaces
+
+- Cards use surface lightness plus an optional hairline border, never a border and resting shadow together.
+- Lists own one outer edge and use separators between rows.
+- Avoid panel-card nesting. Use spacing, headings, and dividers for inner groups.
+
+## Slop audit
+
+- Date: 2026-07-10.
+- Result: Phase 1 foundation passes after fixing seven system-level tells: violet
+  action styling, colored focus/modal glow, resting shadows, `transition: all`,
+  competing filled button ranks, incomplete component states, and a looping
+  bounce on an error-recovery action.
+- Deliberate exceptions: Outfit remains the established Bauhaus brand face;
+  Midnight uses Inter/system UI and JetBrains Mono supplies the technical contrast. The compact 1.125 type scale
+  fits a 360px financial application. Financial blue is category-appropriate
+  and contrast-tested, not the prior violet web3 default.
+- The screen-level audit is complete: production destinations now use the
+  mobile screen/list grammar, quiet Midnight surfaces, sentence-case copy, and
+  explicit dialog/sheet/screen exceptions recorded in `_docs/IMPROVE_UI.md`.
+- Packaged runtime QA subsequently caught and fixed a stale `inert` navigation
+  layer, an undersized explorer target, and an empty financial-impact state.
+  Manual WebAuthn, screen-reader, and successful onchain smoke remain release
+  checks rather than design-system work.
+
+## Changelog
+
+- 2026-07-10: established the durable mobile-wallet direction and Midnight V2 foundation before production UI changes.
+- 2026-07-10: implemented Midnight V2 recipes, quiet theme primitives, contrast tests, and the production component-state lab.
+- 2026-07-10: added the mobile screen/list/picker/action-sheet grammar, horizontal navigation, and restoration-aware interaction preview.
+- 2026-07-10: migrated primary, trust-critical, settings, account, token, and chat destinations; added the 235-state preview matrix and packaged all-wallet runtime QA.
+- 2026-07-10: began the Warm Midnight brand pass with a self-hosted Anton wordmark, then consolidated every explicit extension logo/name lockup into the shared `BrandWordmark` component; product typography remains unchanged pending screen-by-screen review.
+- 2026-07-10: simplified unlock to the essential credential actions; password rejection now uses a stable inline label, a reduced-motion-safe input shake, and reveals recovery without shifting surrounding controls.
+- 2026-07-10: established Warm Midnight on the unlock screen with a mascot-led identity composition and a dedicated amber `brand` action; transactional actions remain blue.
+- 2026-07-10: replaced the unlock form's generic side label with a centered, larger “Enter password to unlock” instruction beneath the mascot while preserving the fixed-position error treatment.
+- 2026-07-10: connected the approved layered WalletChan mascot pilot to the
+  real unlock lifecycle: sleeping while empty, attentive on typing or passkey
+  verification, concerned with Manpu on invalid credentials, and a transient
+  success/sparkle reaction captured by the existing auth fade. Passkey
+  cancellation returns to the password-mode presentation without changing
+  authentication semantics. Visible surfaces hold success for 500ms before the
+  fade (120ms with reduced motion); hidden sibling surfaces never wait on the
+  presentation.

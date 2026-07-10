@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">USDC preview mark</title>
+  <circle cx="32" cy="32" r="30" fill="#2775CA"/>
+  <path d="M25 18h10.5a9 9 0 0 1 0 18H29a3.5 3.5 0 1 0 0 7H40v6H35v5h-6v-5h-5.5v-6H35a3 3 0 1 0 0-6h-6a9.5 9.5 0 1 1 0-19h0v-5h6v5z" fill="#fff"/>
+  <path d="M18 17a21 21 0 0 0 0 30M46 17a21 21 0 0 1 0 30" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".9"/>
+</svg>

@@ -211,6 +211,7 @@ export default function SmartAccountSection({ accountId, accountAddress }: Props
         textAlign="left"
         w="full"
         cursor="pointer"
+        aria-expanded={isExpanded}
         _hover={{ "& > .chevron": { color: "text.primary" } }}
       >
         <HStack spacing={1} align="center">
@@ -229,10 +230,8 @@ export default function SmartAccountSection({ accountId, accountAddress }: Props
           )}
           <Text
             fontSize="2xs"
-            fontWeight="700"
+            fontWeight="600"
             color="text.tertiary"
-            textTransform="uppercase"
-            letterSpacing="wider"
           >
             Smart Account (EIP-7702)
           </Text>
@@ -264,7 +263,7 @@ export default function SmartAccountSection({ accountId, accountAddress }: Props
               spacing={2}
               p={2}
               bg="surface.raised"
-              border="1.5px solid"
+              borderWidth="1px"
               borderColor="border.subtle"
               borderRadius="md"
               align="center"
@@ -279,7 +278,7 @@ export default function SmartAccountSection({ accountId, accountAddress }: Props
                 withChip
               />
               <VStack spacing={0} align="flex-start" flex="1" minW={0}>
-                <Text fontSize="xs" fontWeight="800" color="text.primary">
+                <Text fontSize="xs" fontWeight="600" color="text.primary">
                   {displayName}
                 </Text>
                 {status?.loading || !status ? (

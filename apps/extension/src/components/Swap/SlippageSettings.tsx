@@ -1,18 +1,27 @@
-import { useState, useRef } from "react";
+import { useRef, useState } from "react";
 import {
+  Button,
+  Drawer,
+  DrawerBody,
+  DrawerCloseButton,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerOverlay,
+  FormControl,
+  FormHelperText,
+  FormLabel,
   HStack,
-  Text,
-  Input,
-  Flex,
   Icon,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-  PopoverBody,
+  Input,
+  InputGroup,
+  InputRightElement,
+  Text,
   VStack,
   useDisclosure,
 } from "@chakra-ui/react";
 import { SLIPPAGE_PRESETS } from "@/chrome/swapApi";
+import { useTheme } from "@/theme";
 
 function GearIcon(props: React.ComponentProps<typeof Icon>) {
   return (
@@ -34,127 +43,124 @@ export default function SlippageSettings({
   slippageBps,
   onSlippageChange,
 }: SlippageSettingsProps) {
-  const { isOpen, onToggle, onClose } = useDisclosure();
-  const [customValue, setCustomValue] = useState("");
+  const { tokens } = useTheme();
+  const sheet = useDisclosure();
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [customValue, setCustomValue] = useState("");
 
-  const isPreset = SLIPPAGE_PRESETS.includes(slippageBps);
   const displayPercent = (slippageBps / 100).toFixed(
     slippageBps % 100 === 0 ? 0 : 1,
   );
+  const isHighRisk = slippageBps > 1000;
 
   const handlePresetClick = (bps: number) => {
     onSlippageChange(bps);
-    setCustomValue("");
-    onClose();
+    setCustomValue((bps / 100).toString());
   };
 
-  const handleCustomChange = (val: string) => {
-    if (val === "" || /^\d*\.?\d*$/.test(val)) {
-      setCustomValue(val);
-      const num = parseFloat(val);
-      if (!isNaN(num) && num > 0 && num <= 50) {
-        onSlippageChange(Math.round(num * 100));
-      }
+  const handleCustomChange = (value: string) => {
+    if (value !== "" && !/^\d*\.?\d*$/.test(value)) return;
+    setCustomValue(value);
+    const amount = Number.parseFloat(value);
+    if (Number.isFinite(amount) && amount > 0 && amount <= 50) {
+      onSlippageChange(Math.round(amount * 100));
     }
   };
 
   return (
-    <Popover
-      isOpen={isOpen}
-      onClose={onClose}
-      placement="bottom-end"
-      initialFocusRef={inputRef}
-    >
-      <PopoverTrigger>
-        <HStack
-          as="button"
-          spacing={0.5}
-          onClick={onToggle}
-          cursor="pointer"
-          _hover={{ opacity: 0.7 }}
+    <>
+      <Button
+        ref={triggerRef}
+        type="button"
+        aria-label={`Slippage settings, currently ${displayPercent}%`}
+        variant="ghost"
+        size="sm"
+        minH="36px"
+        px={2}
+        color="fg.secondary"
+        fontSize="xs"
+        fontWeight="600"
+        rightIcon={<GearIcon boxSize={3.5} />}
+        onClick={() => {
+          setCustomValue((slippageBps / 100).toString());
+          sheet.onOpen();
+        }}
+      >
+        {displayPercent}% slippage
+      </Button>
+
+      <Drawer
+        isOpen={sheet.isOpen}
+        onClose={sheet.onClose}
+        placement="bottom"
+        finalFocusRef={triggerRef}
+        initialFocusRef={inputRef}
+        returnFocusOnClose
+      >
+        <DrawerOverlay />
+        <DrawerContent
+          borderTop={tokens.borders.thin}
+          borderColor="border.default"
+          borderTopRadius={tokens.radii.modal}
         >
-          <Text fontSize="2xs" fontWeight="bold" color="text.tertiary">
-            {displayPercent}% slippage
-          </Text>
-          <GearIcon boxSize={3} color="text.tertiary" />
-        </HStack>
-      </PopoverTrigger>
-      {/* Popover baseStyle (createTheme.ts) paints
-          bg/border/borderColor/borderRadius/boxShadow from theme tokens. */}
-      <PopoverContent w="200px">
-        <PopoverBody p={3}>
-          <VStack spacing={2} align="stretch">
-            <HStack spacing={1}>
-              {SLIPPAGE_PRESETS.map((bps) => {
-                const pct = bps / 100;
-                const isActive = slippageBps === bps;
-                return (
-                  <Flex
-                    key={bps}
-                    as="button"
-                    flex={1}
-                    justify="center"
-                    py={1}
-                    // Active preset uses the cool secondary accent
-                    // (Bauhaus blue → Midnight cyan); idle uses the recessed
-                    // surface for a subtle inset look in either palette.
-                    bg={isActive ? "accent.secondary" : "surface.sunken"}
-                    color={isActive ? "accentFg.secondary" : "text.primary"}
-                    fontWeight="bold"
-                    fontSize="xs"
-                    border="2px solid"
-                    borderColor={
-                      isActive ? "accent.secondary" : "border.default"
-                    }
-                    _hover={{
-                      bg: isActive ? "accent.secondary" : "surface.raisedHover",
-                    }}
-                    onClick={() => handlePresetClick(bps)}
-                  >
-                    {pct}%
-                  </Flex>
-                );
-              })}
-            </HStack>
+          <DrawerCloseButton aria-label="Close slippage settings" boxSize="44px" />
+          <DrawerHeader px={4} pt={5} pb={1} pr={16}>
+            <Text as="h2" fontSize="lg">Slippage tolerance</Text>
+          </DrawerHeader>
+          <DrawerBody px={4} pt={2}>
+            <Text color="fg.secondary" fontSize="sm" lineHeight="1.45" mb={4}>
+              Your swap can complete at this percentage away from the quoted price.
+            </Text>
+            <VStack align="stretch" spacing={4}>
+              <HStack spacing={2}>
+                {SLIPPAGE_PRESETS.map((bps) => {
+                  const isSelected = slippageBps === bps;
+                  return (
+                    <Button
+                      key={bps}
+                      type="button"
+                      flex={1}
+                      variant={isSelected ? "primary" : "outline"}
+                      aria-pressed={isSelected}
+                      onClick={() => handlePresetClick(bps)}
+                    >
+                      {bps / 100}%
+                    </Button>
+                  );
+                })}
+              </HStack>
 
-            <HStack
-              border="2px solid"
-              borderColor={
-                !isPreset && slippageBps > 0
-                  ? "accent.secondary"
-                  : "border.default"
-              }
-              px={2}
-              py={1}
-              spacing={1}
-            >
-              <Input
-                ref={inputRef}
-                placeholder="Custom"
-                value={customValue || (slippageBps / 100).toString()}
-                onChange={(e) => handleCustomChange(e.target.value)}
-                border="none"
-                _focus={{ boxShadow: "none" }}
-                fontSize="xs"
-                fontWeight="bold"
-                p={0}
-                h="auto"
-                flex={1}
-              />
-              <Text fontSize="xs" fontWeight="bold" color="text.tertiary">
-                %
-              </Text>
-            </HStack>
-
-            {slippageBps > 1000 && (
-              <Text fontSize="2xs" color="chart.negative" fontWeight="bold">
-                High slippage — front-run risk
-              </Text>
-            )}
-          </VStack>
-        </PopoverBody>
-      </PopoverContent>
-    </Popover>
+              <FormControl isInvalid={isHighRisk}>
+                <FormLabel>Custom tolerance</FormLabel>
+                <InputGroup>
+                  <Input
+                    ref={inputRef}
+                    inputMode="decimal"
+                    value={customValue}
+                    onChange={(event) => handleCustomChange(event.target.value)}
+                    aria-describedby="slippage-guidance"
+                  />
+                  <InputRightElement color="fg.secondary">%</InputRightElement>
+                </InputGroup>
+                <FormHelperText
+                  id="slippage-guidance"
+                  color={isHighRisk ? "status.error.fg" : "fg.secondary"}
+                >
+                  {isHighRisk
+                    ? "High tolerance increases front-running and unfavorable price risk."
+                    : "Choose between 0.01% and 50%."}
+                </FormHelperText>
+              </FormControl>
+            </VStack>
+          </DrawerBody>
+          <DrawerFooter px={4} pb="calc(16px + env(safe-area-inset-bottom, 0px))">
+            <Button w="full" variant="primary" onClick={sheet.onClose}>
+              Done
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    </>
   );
 }

@@ -3708,8 +3708,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         await chrome.action.setBadgeText({ text: "" });
 
-        const notifications = await chrome.notifications.getAll();
-        for (const notificationId of Object.keys(notifications)) {
+        const notificationIds = await new Promise<string[]>((resolve) =>
+          chrome.notifications.getAll((notifications) =>
+            resolve(Object.keys(notifications)),
+          ),
+        );
+        for (const notificationId of notificationIds) {
           chrome.notifications.clear(notificationId);
         }
 

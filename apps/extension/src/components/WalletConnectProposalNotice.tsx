@@ -93,7 +93,7 @@ function DappLogo({
     <Box
       boxSize={size}
       minW={size}
-      border="2px solid"
+      borderWidth="1px"
       borderColor="border.default"
       borderRadius={isDarkTheme ? "lg" : "0"}
       bg="accent.secondary"
@@ -123,8 +123,9 @@ function RequestedChainRow({ chain }: { chain: WalletConnectRequestedChain }) {
     <HStack
       spacing={3}
       bg="surface.sunken"
-      border="1.5px solid"
+      borderWidth="1px"
       borderColor="border.default"
+      borderRadius="lg"
       px={3}
       py={2.5}
       minW={0}
@@ -139,13 +140,13 @@ function RequestedChainRow({ chain }: { chain: WalletConnectRequestedChain }) {
         <Text
           color="text.primary"
           fontSize="sm"
-          fontWeight="900"
+          fontWeight="600"
           lineHeight="1.1"
           noOfLines={1}
         >
           {getChainName(chain)}
         </Text>
-        <Text color="text.secondary" fontSize="xs" fontWeight="700">
+        <Text color="text.secondary" fontSize="xs" fontWeight="400">
           {getChainSubtitle(chain)}
         </Text>
       </Box>
@@ -178,7 +179,7 @@ export function WalletConnectProposalNotice({
                 right="-6px"
                 bottom="-6px"
                 bg="surface.raised"
-                border="2px solid"
+                borderWidth="1px"
                 borderColor="border.default"
                 borderRadius="full"
                 p="2px"
@@ -196,16 +197,15 @@ export function WalletConnectProposalNotice({
             <Text
               color="text.primary"
               fontSize="sm"
-              fontWeight="900"
-              textTransform="uppercase"
+              fontWeight="600"
               lineHeight="1.1"
             >
-              Chain Needed
+              Network needed
             </Text>
             <Text
               color="text.secondary"
               fontSize="xs"
-              fontWeight="700"
+              fontWeight="400"
               noOfLines={2}
             >
               {rejection.name} wants{" "}
@@ -226,7 +226,7 @@ export function WalletConnectProposalNotice({
           <RequestedChainRow key={chain.chainId} chain={chain} />
         ))}
 
-        <Text color="text.secondary" fontSize="xs" fontWeight="700">
+        <Text color="text.secondary" fontSize="xs" fontWeight="400">
           {rejection.error}
         </Text>
 
@@ -263,7 +263,7 @@ export function WalletConnectRetryNoticeCard({
           <Box
             boxSize="34px"
             minW="34px"
-            border="2px solid"
+            borderWidth="1px"
             borderColor="status.success.border"
             bg="status.success.bg"
             color="status.success.fg"
@@ -279,11 +279,10 @@ export function WalletConnectRetryNoticeCard({
             <Text
               color="text.primary"
               fontSize="sm"
-              fontWeight="900"
-              textTransform="uppercase"
+              fontWeight="600"
               lineHeight="1.1"
             >
-              Chain Added
+              Network added
             </Text>
             <HStack spacing={2} mt={1} minW={0}>
               <ChainIcon
@@ -295,7 +294,7 @@ export function WalletConnectRetryNoticeCard({
               <Text
                 color="text.secondary"
                 fontSize="xs"
-                fontWeight="700"
+                fontWeight="400"
                 noOfLines={1}
               >
                 {notice.chainName} is ready
@@ -311,7 +310,7 @@ export function WalletConnectRetryNoticeCard({
             flexShrink={0}
           />
         </HStack>
-        <Text color="text.secondary" fontSize="xs" fontWeight="700">
+        <Text color="text.secondary" fontSize="xs" fontWeight="400">
           Try connecting{notice.dappName ? ` ${notice.dappName}` : " the dapp"}{" "}
           again from the dapp. The previous WalletConnect request was rejected
           before this chain was available.

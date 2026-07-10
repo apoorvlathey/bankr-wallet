@@ -13,7 +13,7 @@
  * surface so it doesn't have to re-implement that plumbing.
  */
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   Box,
   VStack,
@@ -23,12 +23,12 @@ import {
   IconButton,
   Spacer,
   Image,
-  Icon,
   Collapse,
+  Button,
+  usePrefersReducedMotion,
 } from "@chakra-ui/react";
 import {
   ChevronDownIcon,
-  ChevronUpIcon,
   ExternalLinkIcon,
 } from "@chakra-ui/icons";
 import { parseApproveCalldata } from "@/lib/erc20Approve";
@@ -44,8 +44,7 @@ import { useErc20InlineSummary } from "@/hooks/useErc20InlineSummary";
 import { CopyButton } from "@/components/CopyButton";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
-import { getResolvedChainById } from "@/lib/chains";
-import { useTheme } from "@/theme";
+import { getNativeAssetMeta } from "@/lib/chains";
 import NativeValueAmount from "@/components/NativeValueAmount";
 
 // Per-call accent rotation. The three intent slots (primary/secondary/highlight)
@@ -196,19 +195,17 @@ export function CallCard({
       })()
     : null;
   const { networksInfo } = useNetworks();
-  const { tokens } = useTheme();
+  const prefersReducedMotion = usePrefersReducedMotion();
   const accent = CALL_ACCENTS[index % CALL_ACCENTS.length];
   const accentFg = CALL_ACCENT_FGS[index % CALL_ACCENT_FGS.length];
   const config = getChainConfig(chainId);
-  const resolvedChain = getResolvedChainById(chainId, networksInfo);
-  const nativeCurrency =
-    resolvedChain?.nativeCurrency ?? config.nativeCurrency;
+  const nativeAsset = getNativeAssetMeta(chainId, networksInfo);
   const hasCalldata = call.data && call.data !== "0x";
   const hasValue =
     call.value && call.value !== "0x0" && call.value !== "0x";
 
-  const sym = nativeCurrency?.symbol || "ETH";
-  const nativeDecimals = nativeCurrency?.decimals ?? 18;
+  const sym = nativeAsset?.symbol ?? "ETH";
+  const nativeDecimals = nativeAsset?.decimals ?? 18;
 
   // Unified inline summary — covers ERC-20 transfer ("Send 100 USDC to
   // vitalik.eth"), approve ("Approve unlimited USDC to uniswap-router"),
@@ -235,26 +232,37 @@ export function CallCard({
 
   return (
     <Box
-      border={tokens.borders.thin}
+      border="1px solid"
       borderColor="border.default"
       borderRadius="lg"
       bg="surface.raised"
       overflow="hidden"
     >
       {/* Collapsed header */}
-      <HStack
+      <Button
+        type="button"
+        variant="unstyled"
+        display="flex"
+        w="full"
+        minH="44px"
+        h="auto"
         px={3}
         py={2}
-        cursor="pointer"
+        gap={2}
         onClick={onToggle}
-        _hover={{ bg: "bg.muted" }}
-        transition="background 0.1s"
+        aria-expanded={isExpanded}
+        aria-controls={`batch-call-${index}-details`}
+        borderRadius={0}
+        fontWeight="inherit"
+        textTransform="none"
+        textAlign="left"
+        _hover={{ bg: "surface.raisedHover" }}
       >
         <Badge
           bg={accent}
           color={accentFg}
           fontSize="2xs"
-          fontWeight="800"
+          fontWeight="700"
           px={1.5}
           py={0}
           border="1px solid"
@@ -377,16 +385,17 @@ export function CallCard({
               {call.to.slice(0, 6)}...{call.to.slice(-4)}
             </Text>
           )}
-        <Icon
+        <ChevronDownIcon
           className="call-chevron"
-          as={isExpanded ? ChevronUpIcon : ChevronDownIcon}
           boxSize={4}
           color="text.secondary"
-          transition="opacity 0.12s ease-out"
+          transform={isExpanded ? "rotate(180deg)" : "rotate(0deg)"}
+          transition={prefersReducedMotion ? "none" : "transform 150ms cubic-bezier(0.23, 1, 0.32, 1)"}
+          aria-hidden
         />
-      </HStack>
+      </Button>
 
-      <Collapse in={isExpanded} animateOpacity>
+      <Collapse id={`batch-call-${index}-details`} in={isExpanded} animateOpacity={!prefersReducedMotion}>
         {hasCalldata &&
         call.to &&
         isGenericBuiltinCalldataCall(chainId, call.to, call.data) ? (
@@ -414,7 +423,6 @@ export function CallCard({
                   fontSize="xs"
                   color="text.secondary"
                   fontWeight="700"
-                  textTransform="uppercase"
                 >
                   To
                 </Text>
@@ -442,8 +450,9 @@ export function CallCard({
                       icon={<ExternalLinkIcon boxSize="10px" />}
                       size="xs"
                       variant="ghost"
-                      minW="18px"
-                      h="18px"
+                      minW="24px"
+                      w="24px"
+                      h="24px"
                       color="text.tertiary"
                       onClick={() =>
                         window.open(
@@ -472,7 +481,6 @@ export function CallCard({
                   fontSize="xs"
                   color="text.secondary"
                   fontWeight="700"
-                  textTransform="uppercase"
                 >
                   Value
                 </Text>
@@ -543,8 +551,9 @@ function BuiltinExpandedContent({
     newData: string,
   ) => Promise<{ success: boolean; error?: string }>;
 }) {
-  const { tokens } = useTheme();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const detailsId = useId();
 
   const approve = useMemo(
     () => (call.data ? parseApproveCalldata(call.data) : null),
@@ -585,29 +594,33 @@ function BuiltinExpandedContent({
           w="full"
           maxW="100%"
           bg="surface.raised"
-          border={tokens.borders.thin}
+          border="1px solid"
           borderColor="border.default"
           borderRadius="lg"
-          boxShadow="card"
+          boxShadow="none"
           overflow="hidden"
         >
-          <HStack
-            as="button"
+          <Button
+            type="button"
+            variant="unstyled"
+            display="flex"
             w="full"
+            minH="44px"
+            h="auto"
             py={2}
             px={3}
-            spacing={2}
+            gap={2}
             onClick={() => setDetailsOpen((v) => !v)}
-            _hover={{ bg: "bg.muted" }}
-            cursor="pointer"
-            role="button"
-            aria-label={detailsOpen ? "Hide calldata" : "Show calldata"}
+            aria-expanded={detailsOpen}
+            aria-controls={detailsId}
+            borderRadius={0}
+            fontWeight="inherit"
+            textTransform="none"
+            _hover={{ bg: "surface.raisedHover" }}
           >
             <Text
               fontSize="xs"
-              fontWeight="800"
-              textTransform="uppercase"
-              letterSpacing="wide"
+              fontWeight="600"
               color="text.secondary"
             >
               Calldata
@@ -615,25 +628,26 @@ function BuiltinExpandedContent({
             <Spacer />
             <Text
               fontSize="2xs"
-              fontWeight="700"
+              fontWeight="600"
               color="text.tertiary"
-              textTransform="uppercase"
             >
               {detailsOpen ? "Hide" : "Show"}
             </Text>
-            <Icon
-              as={detailsOpen ? ChevronUpIcon : ChevronDownIcon}
+            <ChevronDownIcon
               boxSize={3}
               color="text.tertiary"
+              transform={detailsOpen ? "rotate(180deg)" : "rotate(0deg)"}
+              transition={prefersReducedMotion ? "none" : "transform 150ms cubic-bezier(0.23, 1, 0.32, 1)"}
+              aria-hidden
             />
-          </HStack>
+          </Button>
 
-          <Collapse in={detailsOpen} animateOpacity>
+          <Collapse id={detailsId} in={detailsOpen} animateOpacity={!prefersReducedMotion}>
             <VStack
               spacing={0}
               align="stretch"
-              borderTop={tokens.borders.thin}
-              borderColor="border.default"
+              borderTop="1px solid"
+              borderColor="border.subtle"
             >
               {call.to && (
                 <HStack w="full" py={1.5} px={3} justify="space-between">
@@ -641,7 +655,6 @@ function BuiltinExpandedContent({
                     fontSize="xs"
                     color="text.secondary"
                     fontWeight="700"
-                    textTransform="uppercase"
                   >
                     To
                   </Text>
@@ -669,8 +682,9 @@ function BuiltinExpandedContent({
                         icon={<ExternalLinkIcon boxSize="10px" />}
                         size="xs"
                         variant="ghost"
-                        minW="18px"
-                        h="18px"
+                        minW="24px"
+                        w="24px"
+                        h="24px"
                         color="text.tertiary"
                         onClick={() =>
                           window.open(
@@ -698,7 +712,6 @@ function BuiltinExpandedContent({
                     fontSize="xs"
                     color="text.secondary"
                     fontWeight="700"
-                    textTransform="uppercase"
                   >
                     Value
                   </Text>

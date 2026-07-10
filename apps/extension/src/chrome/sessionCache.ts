@@ -399,8 +399,15 @@ async function restoreSessionWithinAuthTransition(
     "passwordType",
   ]);
 
+  const sessionId =
+    typeof session.sessionId === "string" ? session.sessionId : null;
+  const passwordType =
+    session.passwordType === "master" || session.passwordType === "agent"
+      ? session.passwordType
+      : undefined;
+
   // Check if we have a valid session to restore
-  if (!session.sessionId || !session.autoLockNever || !session.encryptedSessionPassword) {
+  if (!sessionId || session.autoLockNever !== true || !session.encryptedSessionPassword) {
     return false;
   }
 
@@ -420,16 +427,16 @@ async function restoreSessionWithinAuthTransition(
     }
 
     // Restore session ID
-    currentSessionId = session.sessionId;
+    currentSessionId = sessionId;
 
     // Restore password type (maintains agent password guards after restart)
-    if (session.passwordType) {
-      setCachedPasswordType(session.passwordType as PasswordType);
+    if (passwordType) {
+      setCachedPasswordType(passwordType);
     }
 
     // Re-store the session password and metadata for future restarts
     await storeSessionPassword(password);
-    await storeSessionMetadata(session.sessionId, true, session.passwordType as PasswordType);
+    await storeSessionMetadata(sessionId, true, passwordType);
 
     invalidateAuthCeremonies();
     console.log("Session restored successfully after service worker restart");

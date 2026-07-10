@@ -1,17 +1,23 @@
-import { type KeyboardEvent, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import {
   Box,
   Checkbox,
-  HStack,
   IconButton,
   Image,
   Text,
-  VStack,
 } from "@chakra-ui/react";
 import { ExternalLinkIcon } from "@chakra-ui/icons";
 
 import ChainIcon from "@/components/ChainIcon";
 import { CopyButton } from "@/components/CopyButton";
+import {
+  ListItem,
+  ListItemActions,
+  ListItemContent,
+  ListItemMedia,
+  ListItemMeta,
+  ListItemTitle,
+} from "@/components/ui";
 import { getChainConfig } from "@/constants/chainConfig";
 import { getResolvedChainById } from "@/lib/chains";
 import type { NetworksInfo } from "@/types";
@@ -57,53 +63,36 @@ export default function PortfolioTokenManageRow({
     `Chain ${token.chainId}`;
   const explorer = (resolvedChain?.explorer || fallbackChain.explorer || "")
     .replace(/\/+$/, "");
-  const canOpenContract =
-    ERC20_ADDRESS_REGEX.test(token.contractAddress) &&
-    token.contractAddress.toLowerCase() !== ZERO_ADDRESS &&
-    !!explorer;
-  const canCopyContract =
+  const isContractAddress =
     ERC20_ADDRESS_REGEX.test(token.contractAddress) &&
     token.contractAddress.toLowerCase() !== ZERO_ADDRESS;
-  const isSelectable = !!onToggle;
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!onToggle) return;
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    onToggle();
-  };
+  const canOpenContract = isContractAddress && !!explorer;
 
   return (
-    <HStack
-      bg="surface.raised"
-      border="2px solid"
-      borderColor={isSelected ? "accent.secondary" : "border.default"}
-      borderRadius="md"
-      p={2.5}
-      spacing={3}
-      cursor={isSelectable ? "pointer" : "default"}
-      role={isSelectable ? "button" : undefined}
-      tabIndex={isSelectable ? 0 : undefined}
-      onClick={onToggle}
-      onKeyDown={onKeyDown}
-      _hover={isSelectable ? { bg: "surface.raisedHover" } : undefined}
-      transition="background 0.15s, border-color 0.15s"
-    >
-      {isSelectable && (
-        <Checkbox
-          isChecked={isSelected}
-          onChange={onToggle}
-          pointerEvents="none"
+    <ListItem isSelected={isSelected}>
+      {onToggle && (
+        <Box
+          minW="44px"
+          minH="44px"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          ml={-2}
           flexShrink={0}
-        />
+        >
+          <Checkbox
+            aria-label={`${isSelected ? "Deselect" : "Select"} ${symbol}`}
+            isChecked={isSelected}
+            onChange={onToggle}
+          />
+        </Box>
       )}
 
-      <Box position="relative" flexShrink={0}>
+      <ListItemMedia position="relative">
         <Box
-          bg="bg.muted"
+          bg="surface.sunken"
           borderRadius="full"
-          w="32px"
-          h="32px"
+          boxSize="36px"
           display="flex"
           alignItems="center"
           justifyContent="center"
@@ -112,17 +101,17 @@ export default function PortfolioTokenManageRow({
           {logoSrc ? (
             <Image
               src={logoSrc}
-              alt={symbol}
-              boxSize="32px"
+              alt=""
+              boxSize="36px"
               borderRadius="full"
               fallback={
-                <Text fontSize="9px" fontWeight="800" color="text.secondary">
+                <Text fontSize="xs" fontWeight={600} color="fg.secondary">
                   {symbol.slice(0, 3).toUpperCase()}
                 </Text>
               }
             />
           ) : (
-            <Text fontSize="9px" fontWeight="800" color="text.secondary">
+            <Text fontSize="xs" fontWeight={600} color="fg.secondary">
               {symbol.slice(0, 3).toUpperCase()}
             </Text>
           )}
@@ -132,11 +121,11 @@ export default function PortfolioTokenManageRow({
           bottom="-2px"
           right="-4px"
           border="1.5px solid"
-          borderColor="surface.base"
+          borderColor="surface.raised"
           borderRadius="full"
-          bg="surface.base"
+          bg="surface.raised"
+          boxSize="16px"
           overflow="hidden"
-          boxSize="14px"
           display="flex"
           alignItems="center"
           justifyContent="center"
@@ -144,69 +133,50 @@ export default function PortfolioTokenManageRow({
           <ChainIcon
             chainId={token.chainId}
             chainName={chainName}
-            size="14px"
+            size="16px"
             withChip
           />
         </Box>
-      </Box>
+      </ListItemMedia>
 
-      <VStack align="start" spacing={0} flex={1} minW={0}>
-        <HStack spacing={1.5} minW={0}>
-          <Text
-            fontSize="sm"
-            fontWeight="800"
-            color="text.primary"
-            noOfLines={1}
-            textTransform="uppercase"
-          >
-            {symbol}
-          </Text>
-          {(canCopyContract || canOpenContract) && (
-            <HStack
-              spacing={0}
-              onClick={(event) => event.stopPropagation()}
-              onMouseDown={(event) => event.stopPropagation()}
-              flexShrink={0}
-            >
-              {canCopyContract && <CopyButton value={token.contractAddress} />}
-              {canOpenContract && (
-                <IconButton
-                  aria-label="View token contract"
-                  icon={<ExternalLinkIcon />}
-                  size="xs"
-                  variant="ghost"
-                  color="text.secondary"
-                  onClick={() => {
-                    chrome.tabs.create({
-                      url: `${explorer}/address/${token.contractAddress}`,
-                    });
-                  }}
-                  _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-                />
-              )}
-            </HStack>
-          )}
-        </HStack>
-        <Text fontSize="11px" color="text.tertiary" fontWeight="600" noOfLines={1}>
+      <ListItemContent>
+        <ListItemTitle fontSize="sm">{symbol}</ListItemTitle>
+        <Text
+          as="span"
+          fontSize="xs"
+          color="fg.secondary"
+          fontWeight={400}
+          noOfLines={1}
+        >
           {subtitle || token.name || chainName}
         </Text>
-      </VStack>
+      </ListItemContent>
 
       {valueLabel && (
-        <Text fontSize="xs" fontWeight="800" color="text.primary" flexShrink={0}>
+        <ListItemMeta color="fg.primary" fontWeight={600} whiteSpace="nowrap">
           {valueLabel}
-        </Text>
+        </ListItemMeta>
       )}
 
-      {rightSlot && (
-        <Box
-          flexShrink={0}
-          onClick={(event) => event.stopPropagation()}
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          {rightSlot}
-        </Box>
-      )}
-    </HStack>
+      <ListItemActions>
+        {isContractAddress && <CopyButton value={token.contractAddress} />}
+        {canOpenContract && (
+          <IconButton
+            aria-label={`View ${symbol} contract`}
+            icon={<ExternalLinkIcon />}
+            size="xs"
+            variant="ghost"
+            color="fg.secondary"
+            onClick={() => {
+              chrome.tabs.create({
+                url: `${explorer}/address/${token.contractAddress}`,
+              });
+            }}
+            _hover={{ color: "accent.secondary", bg: "surface.raisedHover" }}
+          />
+        )}
+        {rightSlot}
+      </ListItemActions>
+    </ListItem>
   );
 }

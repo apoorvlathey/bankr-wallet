@@ -47,6 +47,11 @@ pnpm build:walletchan-mcp # Build WalletChan MCP CLI only
 pnpm zip                # Build + zip (for GitHub Releases)
 pnpm zip:cws            # Build + zip (strips `key` defensively, for CWS upload)
 pnpm lint               # Lint extension code
+pnpm typecheck:extension:ui # Strict semantic check for shared UI/theme primitives
+pnpm typecheck:extension    # Full strict extension source gate
+pnpm typecheck:extension:qa # Strict check for Playwright/axe QA scripts
+pnpm --filter @walletchan/extension qa:preview # 235-state visual/a11y matrix
+pnpm qa:extension           # Build + packaged Chrome runtime matrix
 
 # Firefox build (separate output dir: apps/extension/build-firefox/)
 pnpm build:extension:firefox   # Production Firefox build
@@ -90,6 +95,36 @@ The entire `WALLETCHAN_API_BASE` constant in `apps/extension/src/constants/exter
 Note: `import.meta.env.DEV` is **not** the right toggle — it's only true under the `vite` dev-server, not under `vite build`, so a `dev:extension` build would otherwise look like prod. Always gate on `MODE === "development"`.
 
 ## Testing Extension Changes
+
+### TypeScript checks
+
+`pnpm typecheck:extension:ui` is the green, strict semantic gate for the shared
+mobile UI primitives, theme implementation, copy control, and full-screen
+portal layer. Its boundary is explicit in `apps/extension/tsconfig.ui.json` and
+keeps fast UI iteration available.
+
+`pnpm typecheck:extension` runs strict TypeScript across all extension source,
+including background, signing, storage, swap, and preview code. It is a required
+green gate. Do not weaken strictness or add blanket suppressions to make it pass.
+
+`pnpm typecheck:extension:qa` checks the Playwright/axe scripts under
+`apps/extension/scripts/*-qa.ts`. Keep this green whenever preview or packaged
+extension coverage changes.
+
+### Packaged extension QA
+
+`pnpm qa:extension` builds every manifest target, loads that exact production
+package into fresh Chromium profiles, and runs the transaction, signature,
+view-only/batch, daily-use, and authentication suites. The matrix covers Bankr,
+private-key, and seed-phrase accounts. It uses a local dapp and rejects every
+transaction/signature/batch request, so it never signs or broadcasts test work.
+
+The packaged checks include pending-request persistence across UI close/reopen,
+keyboard rejection, exactly-once EIP-1193 responses, view-only restrictions,
+home actions under failed portfolio/RPC traffic, account/network switching,
+manual lock, master/agent unlock, and agent-session secret restrictions. Real
+WebAuthn ceremonies, assistive-technology smoke, and successful onchain sends
+remain manual release checks.
 
 1. `pnpm dev:extension` (for local testing against `pnpm dev:website`) or `pnpm build:extension` (production-mode build)
 2. Go to `chrome://extensions`

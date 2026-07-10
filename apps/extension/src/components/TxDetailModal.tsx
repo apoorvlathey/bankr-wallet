@@ -8,12 +8,6 @@ import {
   Button,
   Code,
   IconButton,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
   Image,
   Spacer,
   Collapse,
@@ -23,7 +17,6 @@ import {
   CheckCircleIcon,
   WarningIcon,
   ExternalLinkIcon,
-  CloseIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   RepeatIcon,
@@ -68,11 +61,18 @@ import {
 import { hasDefaultDelegateForChain } from "@/utils/delegationResolution";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import LoadingDots from "@/components/LoadingDots";
+import TxDetailView, {
+  type TxDetailPresentation,
+} from "@/components/TxDetailView";
 
 interface TxDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   tx: CompletedTransaction;
+}
+
+export interface TxDetailControllerProps extends TxDetailModalProps {
+  presentation?: TxDetailPresentation;
 }
 
 function formatValue(value: string | undefined, symbol = "ETH"): string {
@@ -391,10 +391,12 @@ function renderErc20Row(
       justify="space-between"
       align="flex-start"
       spacing={2}
+      w="full"
+      minW={0}
     >
       <HStack spacing={2} minW={0} flex="1">
         <TokenLogo logoUrl={t.logoUrl} symbol={t.symbol} alt={sym} />
-        <VStack spacing={0} align="flex-start" minW={0}>
+        <VStack spacing={0} align="flex-start" minW={0} flex="1">
           <Text
             fontSize="xs"
             fontWeight="800"
@@ -415,9 +417,10 @@ function renderErc20Row(
               onClick={() => chrome.tabs.create({ url: cpLink })}
               rightIcon={<ExternalLinkIcon boxSize={2.5} />}
               _hover={{ bg: "bg.muted", color: "text.secondary" }}
-              px={1}
-              h="14px"
-              minH="14px"
+              px={1.5}
+              h="24px"
+              minH="24px"
+              maxW="full"
             >
               {isNegative ? "to" : "from"} {cpShort}
             </Button>
@@ -428,12 +431,14 @@ function renderErc20Row(
           )}
         </VStack>
       </HStack>
-      <VStack spacing={0} align="flex-end">
+      <VStack spacing={0} align="flex-end" minW={0} maxW="52%">
         <Text
           fontSize="xs"
           fontWeight="800"
           color={isNegative ? "chart.negative" : "chart.positive"}
           fontFamily="mono"
+          textAlign="right"
+          overflowWrap="anywhere"
         >
           {formatted} {t.symbol ?? ""}
         </Text>
@@ -500,8 +505,8 @@ function AssetChangesCard({
   })();
 
   const nativeRow = nativeData ? (
-    <HStack justify="space-between" align="flex-start">
-      <HStack spacing={2}>
+    <HStack justify="space-between" align="flex-start" spacing={2} minW={0}>
+      <HStack spacing={2} minW={0} flex="1">
         <TokenLogo
           nativeChainId={chainId}
           symbol={nativeSym}
@@ -511,12 +516,14 @@ function AssetChangesCard({
           {nativeSym}
         </Text>
       </HStack>
-      <VStack spacing={0} align="flex-end">
+      <VStack spacing={0} align="flex-end" minW={0} maxW="58%">
         <Text
           fontSize="xs"
           fontWeight="800"
           color={nativeData.isNegative ? "chart.negative" : "chart.positive"}
           fontFamily="mono"
+          textAlign="right"
+          overflowWrap="anywhere"
         >
           {nativeData.formatted} {nativeSym}
         </Text>
@@ -563,6 +570,7 @@ function AssetChangesCard({
         align="flex-start"
         spacing={2}
         w="full"
+        minW={0}
       >
         {cpLink ? (
           <Button
@@ -575,9 +583,11 @@ function AssetChangesCard({
             onClick={() => chrome.tabs.create({ url: cpLink })}
             rightIcon={<ExternalLinkIcon boxSize={2.5} />}
             _hover={{ bg: "bg.muted", color: "text.secondary" }}
-            px={1}
-            h="14px"
-            minH="14px"
+            px={1.5}
+            h="24px"
+            minH="24px"
+            minW={0}
+            maxW="52%"
           >
             {isNegative ? "to" : "from"} {cpShort}
           </Button>
@@ -586,12 +596,14 @@ function AssetChangesCard({
             {isNegative ? "to" : "from"} {cpShort}
           </Text>
         )}
-        <VStack spacing={0} align="flex-end">
+        <VStack spacing={0} align="flex-end" minW={0} maxW="48%">
           <Text
             fontSize="2xs"
             fontWeight="800"
             color={isNegative ? "chart.negative" : "chart.positive"}
             fontFamily="mono"
+            textAlign="right"
+            overflowWrap="anywhere"
           >
             {formatted} {t.symbol ?? ""}
           </Text>
@@ -660,6 +672,8 @@ function AssetChangesCard({
           aria-expanded={expanded}
           _hover={{ bg: "surface.raisedHover" }}
           borderRadius="md"
+          minH="44px"
+          py={1}
         >
           <HStack justify="space-between" align="flex-start" spacing={2}>
             <HStack spacing={2} minW={0} flex="1">
@@ -668,7 +682,7 @@ function AssetChangesCard({
                 symbol={group.symbol}
                 alt={sym}
               />
-              <VStack spacing={0} align="flex-start" minW={0}>
+              <VStack spacing={0} align="flex-start" minW={0} flex="1">
                 <Text
                   fontSize="xs"
                   fontWeight="800"
@@ -698,12 +712,14 @@ function AssetChangesCard({
                 </HStack>
               </VStack>
             </HStack>
-            <VStack spacing={0} align="flex-end">
+            <VStack spacing={0} align="flex-end" minW={0} maxW="52%">
               <Text
                 fontSize="xs"
                 fontWeight="800"
                 color={isNegative ? "chart.negative" : "chart.positive"}
                 fontFamily="mono"
+                textAlign="right"
+                overflowWrap="anywhere"
               >
                 {group.totalFormatted} {group.symbol ?? ""}
               </Text>
@@ -737,17 +753,15 @@ function AssetChangesCard({
   return (
     <Box
       bg="surface.sunken"
-      border="2px solid"
-      borderColor="border.default"
+      border="1px solid"
+      borderColor="border.subtle"
       borderRadius="lg"
-      p={2.5}
+      p={3}
     >
       <Text
         fontSize="2xs"
-        fontWeight="800"
-        textTransform="uppercase"
-        color="text.tertiary"
-        letterSpacing="wide"
+        fontWeight="600"
+        color="text.secondary"
         mb={2}
       >
         {label}
@@ -892,7 +906,12 @@ function ForceInclusionSteps({
   );
 }
 
-function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
+export function TxDetailController({
+  isOpen,
+  onClose,
+  tx,
+  presentation = "modal",
+}: TxDetailControllerProps) {
   const { networksInfo } = useNetworks();
   const resolvedChain = getResolvedChainById(tx.chainId, networksInfo);
   const config = getChainConfig(tx.chainId);
@@ -1392,45 +1411,20 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
   })();
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} scrollBehavior="inside" isCentered>
-      <ModalOverlay bg="surface.overlay" />
-      <ModalContent
-        mx={3}
-        my={3}
-        maxH="calc(100vh - 24px)"
-      >
-        <ModalHeader
-          color="text.primary"
-          fontSize="md"
-          pb={2}
-          textTransform="uppercase"
-          letterSpacing="wider"
-          borderBottom="3px solid"
-          borderColor="border.default"
-          display="flex"
-          alignItems="center"
-          justifyContent="space-between"
-        >
-          Transaction Details
-          <IconButton
-            aria-label="Close"
-            icon={<CloseIcon boxSize="10px" />}
-            size="sm"
-            variant="ghost"
-            onClick={onClose}
-            _hover={{ bg: "bg.muted" }}
-          />
-        </ModalHeader>
-
-        <ModalBody px={4} py={3}>
-          <VStack spacing={3} align="stretch">
+    <TxDetailView
+      presentation={presentation}
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Transaction details"
+    >
+      <VStack spacing={3} align="stretch">
             {/* Status + Chain row */}
             <HStack spacing={2} flexWrap="wrap">
               <Badge
                 fontSize="xs"
                 bg={chainBadgeStyle.bg}
                 color={chainBadgeStyle.fg}
-                border="2px solid"
+                borderWidth="1px"
                 borderColor={chainBadgeStyle.border}
                 px={2}
                 py={0.5}
@@ -1784,10 +1778,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                         when the buy token is the destination chain's native. */}
                     {buySymbol && (() => {
                       const destNativeSym =
-                        destChain?.nativeCurrency.symbol ??
-                        getChainConfig(tx.bridge!.destinationChainId)
-                          .nativeCurrency?.symbol ??
-                        "ETH";
+                        destChain?.nativeCurrency.symbol ?? "ETH";
                       const buyAmount = pickAssetChangeAmount(
                         destinationAssetChanges,
                         "in",
@@ -1863,7 +1854,7 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 record={sourceAssetChanges}
                 chainId={tx.chainId}
                 nativeSym={nativeSym}
-                label="Token Changes"
+                label="Token changes"
                 formatUsd={formatTokenAmountUsd}
               />
             )}
@@ -1872,8 +1863,10 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 record={destinationAssetChanges}
                 chainId={tx.bridge.destinationChainId}
                 nativeSym={
-                  getChainConfig(tx.bridge.destinationChainId).nativeCurrency
-                    ?.symbol ?? "ETH"
+                  getResolvedChainById(
+                    tx.bridge.destinationChainId,
+                    networksInfo,
+                  )?.nativeCurrency.symbol ?? "ETH"
                 }
                 label={`On ${tx.bridge.destinationChainName}`}
                 formatUsd={formatTokenAmountUsd}
@@ -2189,16 +2182,26 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 do?"); default expanded for everything else so non-clear-
                 signed txs render the same shape they did before. */}
             <HStack
+              as="button"
+              type="button"
+              w="full"
+              appearance="none"
+              bg="transparent"
+              border={0}
+              fontFamily="inherit"
               cursor="pointer"
+              aria-expanded={rawDetailsExpanded}
               onClick={() => setRawDetailsExpanded(!rawDetailsExpanded)}
               _hover={{ bg: "bg.muted" }}
               borderRadius="md"
               px={1}
               py={1}
               justify="space-between"
+              textAlign="start"
+              _focusVisible={{ outline: "none", boxShadow: "focus" }}
             >
-              <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-                Transaction Details
+              <Text fontSize="sm" color="text.secondary" fontWeight="600">
+                Transaction details
               </Text>
               {rawDetailsExpanded
                 ? <ChevronUpIcon boxSize={4} color="text.tertiary" />
@@ -2674,18 +2677,13 @@ function TxDetailModal({ isOpen, onClose, tx }: TxDetailModalProps) {
                 </Box>
               );
             })()}
-
-          </VStack>
-        </ModalBody>
-
-        <ModalFooter borderTop="3px solid" borderColor="border.default" pt={3} pb={4}>
-          <Button variant="secondary" size="sm" onClick={onClose} w="full">
-            Close
-          </Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+      </VStack>
+    </TxDetailView>
   );
+}
+
+function TxDetailModal(props: TxDetailModalProps) {
+  return <TxDetailController {...props} presentation="modal" />;
 }
 
 export default memo(TxDetailModal);

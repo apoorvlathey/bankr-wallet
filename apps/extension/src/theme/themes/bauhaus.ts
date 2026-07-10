@@ -109,6 +109,7 @@ export const bauhausTokens: ThemeTokens = {
   },
 
   fonts: {
+    brand: "'Anton', 'Arial Narrow', Impact, sans-serif",
     heading:
       "Outfit, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     body:
@@ -146,6 +147,7 @@ export const bauhausTokens: ThemeTokens = {
     cardHover: `6px 6px 0px 0px ${BLACK}`,
     modal: `8px 8px 0px 0px ${BLACK}`,
     focus: `3px 3px 0px 0px ${BLUE}`,
+    errorFocus: `3px 3px 0px 0px ${RED}`,
     button: `4px 4px 0px 0px ${BLACK}`,
     buttonPressed: "none",
     pressed: "none",

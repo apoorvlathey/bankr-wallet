@@ -13,19 +13,13 @@ import {
   Image,
   Icon,
   Tooltip,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-  PopoverBody,
-  PopoverArrow,
-  Portal,
   Switch,
   Collapse,
+  usePrefersReducedMotion,
 } from "@chakra-ui/react";
 
 import { keyframes } from "@emotion/react";
 import {
-  ArrowBackIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CopyIcon,
@@ -57,6 +51,7 @@ import { parseApproveCalldata } from "@/lib/erc20Approve";
 import { getAddressBoundCalldataDescriptor } from "@/lib/clearSigning/builtinDescriptors";
 import { detectAbiEncodingError } from "@/lib/calldataValidation";
 import { MalformedCalldataBanner } from "@/components/MalformedCalldataBanner";
+import NativeValueAmount from "@/components/NativeValueAmount";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { isDarkThemeId, useTheme, useStripTokens, useChainBadgeStyle, useIconChipBg } from "@/theme";
@@ -69,6 +64,12 @@ import {
   FORCE_INCLUSION_CHAINS,
 } from "@/constants/chainRegistry";
 import ForceInclusionProgress from "@/components/ForceInclusionProgress";
+import {
+  AssetDeltaRow,
+  ConfirmationScreen,
+  InlineDisclosure,
+  OutcomeCard,
+} from "@/components/ui";
 
 // Success animation keyframes
 const scaleIn = keyframes`
@@ -136,22 +137,6 @@ function parseTransactionValueWei(value: string | undefined): ParsedTransactionV
   } catch {
     return { ok: false, raw: value };
   }
-}
-
-function formatNativeValueExact(wei: bigint, symbol: string): string {
-  const whole = wei / WEI_PER_NATIVE_UNIT;
-  const fractional = wei % WEI_PER_NATIVE_UNIT;
-
-  if (fractional === 0n) {
-    return `${whole.toString()} ${symbol}`;
-  }
-
-  const fractionalText = fractional
-    .toString()
-    .padStart(18, "0")
-    .replace(/0+$/, "");
-
-  return `${whole.toString()}.${fractionalText} ${symbol}`;
 }
 
 function formatNativeValueCompact(wei: bigint, symbol: string): string {
@@ -324,6 +309,7 @@ function TransactionConfirmation({
   const { networksInfo } = useNetworks();
   const { themeId, tokens } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
+  const prefersReducedMotion = usePrefersReducedMotion();
   // Bauhaus paints the count badge as a stark black strip with white text;
   // Midnight uses a recessed dark surface — see useStripTokens.
   const { bg: stripBg, fg: stripFg } = useStripTokens();
@@ -702,15 +688,11 @@ function TransactionConfirmation({
     if (!parsedTxValue.ok) {
       return {
         compact: "Invalid value",
-        exact: null,
-        showExact: false,
       };
     }
 
     return {
       compact: formatNativeValueCompact(parsedTxValue.wei, nativeSym),
-      exact: formatNativeValueExact(parsedTxValue.wei, nativeSym),
-      showExact: parsedTxValue.wei > 0n,
     };
   }, [nativeSym, parsedTxValue]);
 
@@ -803,7 +785,7 @@ function TransactionConfirmation({
           display="flex"
           alignItems="center"
           justifyContent="center"
-          animation={`${scaleIn} 0.4s ease-out`}
+          animation={prefersReducedMotion ? undefined : `${scaleIn} 0.4s ease-out`}
           mb={6}
         >
           <Icon viewBox="0 0 24 24" w="50px" h="50px" color="accentFg.highlight">
@@ -817,17 +799,19 @@ function TransactionConfirmation({
               style={{
                 strokeDasharray: 50,
                 strokeDashoffset: 0,
-                animation: `${checkmarkDraw} 0.4s ease-out 0.2s backwards`,
+                animation: prefersReducedMotion
+                  ? undefined
+                  : `${checkmarkDraw} 0.4s ease-out 0.2s backwards`,
               }}
             />
           </Icon>
         </Box>
         <Text
           fontSize="2xl"
-          fontWeight="900"
+          fontWeight={isDarkTheme ? "700" : "900"}
           color="text.primary"
           mb={2}
-          textTransform="uppercase"
+          textTransform={isDarkTheme ? "none" : "uppercase"}
           letterSpacing="tight"
         >
           Transaction Sent
@@ -844,13 +828,192 @@ function TransactionConfirmation({
     );
   }
 
+  const screenTitle = is7702Revoke
+    ? "Revoke smart account"
+    : is7702SetDelegate
+      ? "Set smart account"
+      : parsedApproval
+        ? "Token approval"
+        : "Review transaction";
+
+  const outcomeText = is7702Revoke
+    ? `Remove smart-account access on ${txRequest.chainName}`
+    : is7702SetDelegate
+      ? `Enable smart-account access on ${txRequest.chainName}`
+      : parsedApproval
+        ? "Allow this app to spend your tokens"
+        : !tx.to
+          ? "Deploy a smart contract"
+          : decodedFunctionName
+            ? `${decodedFunctionName} on ${originHostname}`
+            : parsedTxValue.ok && parsedTxValue.wei > 0n
+              ? `Send ${nativeValueDisplay.compact}`
+              : `Submit a transaction to ${originHostname}`;
+
+  // Keep the existing disable precedence exactly as-is. The view only moves
+  // this explanation into the standard sticky confirmation action bar.
+  const confirmDisabledReason = isRejecting
+    ? "Reject in progress"
+    : state === "error"
+      ? "Fix the error above before retrying"
+      : isCalldataMalformed
+        ? "Calldata is malformed — signing blocked"
+        : isValueMalformed
+          ? "Transaction value is malformed — signing blocked"
+          : !splitState.ready
+            ? splitState.label || "Waiting for prior transaction to land"
+            : !gasValid
+              ? "Set a valid gas fee — fee fields can't be empty / max fee must cover base + priority"
+              : null;
+
+  const requestStatus = (
+    <VStack spacing={2} align="stretch">
+      {error && state === "error" && (
+        <Box
+          bg="status.error.bg"
+          border="1px solid"
+          borderColor="status.error.border"
+          borderRadius="lg"
+          p={3}
+        >
+          <Text color="status.error.fg" fontSize="sm" fontWeight="700">
+            {error}
+          </Text>
+        </Box>
+      )}
+
+      {state === "submitting" && (
+        <HStack
+          justify="center"
+          py={3}
+          bg="accent.secondary"
+          border="1px solid"
+          borderColor="border.default"
+          borderRadius="lg"
+        >
+          <Spinner size="sm" color="accentFg.secondary" />
+          <Text fontSize="sm" color="accentFg.secondary" fontWeight="700">
+            Submitting transaction…
+          </Text>
+        </HStack>
+      )}
+
+      {accountType === "impersonator" && (
+        <Box
+          bg="accent.highlight"
+          border="1px solid"
+          borderColor="border.default"
+          borderRadius="lg"
+          p={3}
+        >
+          <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
+            Connected via an impersonated account. Signing is disabled.
+          </Text>
+        </Box>
+      )}
+
+      {(!splitState.ready ||
+        (txRequest.parentBundleId &&
+          txRequest.bundleIndex !== undefined &&
+          txRequest.bundleIndex > 0 &&
+          !gasValid)) &&
+        state !== "submitting" && (
+          <HStack
+            justify="center"
+            py={3}
+            bg="bg.muted"
+            border="1px solid"
+            borderColor="border.default"
+            borderRadius="lg"
+          >
+            {!splitState.ready && <Spinner size="sm" color="text.secondary" />}
+            <Text fontSize="sm" color="text.secondary" fontWeight="700">
+              {!splitState.ready
+                ? splitState.label
+                : "Estimating gas with new chain state…"}
+            </Text>
+          </HStack>
+        )}
+
+      {confirmDisabledReason && state !== "submitting" && (
+        <Text
+          role="status"
+          color="text.secondary"
+          fontSize="xs"
+          lineHeight="short"
+        >
+          Confirm unavailable: {confirmDisabledReason}
+        </Text>
+      )}
+    </VStack>
+  );
+
   return (
-    <Box pt="clamp(1.25rem, calc(8vh - 36px), 3rem)" px={3} pb={3} h="100%" overflowY="auto" bg="surface.base" css={{
-      "&::-webkit-scrollbar": { width: "4px" },
-      "&::-webkit-scrollbar-track": { background: "transparent" },
-      "&::-webkit-scrollbar-thumb": { background: "var(--chakra-colors-border-strong)", borderRadius: "2px" },
-    }}>
-      <VStack spacing={2} align="stretch" minH="100%">
+    <ConfirmationScreen
+      title={screenTitle}
+      onBack={onBack}
+      trailing={
+        <CopyButton
+          label="Copy transaction JSON"
+          value={JSON.stringify(
+            {
+              to: tx.to || null,
+              value: parsedTxValue.ok
+                ? parsedTxValue.wei.toString()
+                : String(tx.value ?? ""),
+              data: tx.data || "0x",
+            },
+            null,
+            2,
+          )}
+        />
+      }
+      outcome={
+        <OutcomeCard
+          outcome={outcomeText}
+          context={`Requested by ${originHostname} on ${txRequest.chainName}`}
+          status={
+            simulationReverted ? (
+              <Badge variant="error">Likely to fail</Badge>
+            ) : simulationUnavailable ? (
+              <Badge variant="warning">Not simulated</Badge>
+            ) : null
+          }
+        />
+      }
+      financialImpact={
+        <VStack spacing={0} align="stretch">
+          {parsedTxValue.ok && parsedTxValue.wei > 0n && (
+            <AssetDeltaRow
+              direction="send"
+              asset={nativeSym}
+              amount={nativeValueDisplay.compact}
+              meta="Native token value included with this request"
+            />
+          )}
+          {tx.to && !isValueMalformed && (
+            <AssetChangesDisplay
+              txRequest={txRequest}
+              onRevertedChange={setSimulationReverted}
+              onSimulationUnavailableChange={setSimulationUnavailable}
+            />
+          )}
+          {!tx.to && isValueZero && (
+            <Text color="text.secondary" fontSize="sm">
+              No token transfer is expected. Contract deployment costs are
+              shown with the network fee below.
+            </Text>
+          )}
+          {isValueMalformed && (
+            <Text color="status.error.fg" fontSize="sm" fontWeight="600">
+              Financial impact cannot be calculated because the transaction
+              value is malformed.
+            </Text>
+          )}
+        </VStack>
+      }
+      context={
+        <VStack spacing={3} align="stretch">
         {/* Top row — navigation centered + Reject All on right, only when
             multiple pending requests are queued. chart.negative is the only
             token that's RED in BOTH themes — status.error.fg is WHITE in
@@ -868,8 +1031,9 @@ function TransactionConfirmation({
                 onClick={() => onNavigate("prev")}
                 color="text.secondary"
                 _hover={{ color: "text.primary", bg: "bg.muted" }}
-                minW="auto"
-                p={1}
+                minW="32px"
+                h="32px"
+                p={0}
               />
               <Badge
                 bg={stripBg}
@@ -890,8 +1054,9 @@ function TransactionConfirmation({
                 onClick={() => onNavigate("next")}
                 color="text.secondary"
                 _hover={{ color: "text.primary", bg: "bg.muted" }}
-                minW="auto"
-                p={1}
+                minW="32px"
+                h="32px"
+                p={0}
               />
             </HStack>
             <Button
@@ -909,84 +1074,6 @@ function TransactionConfirmation({
             </Button>
           </Flex>
         )}
-
-        {/* Header row — back + title pill + copy, all inline.
-            Title pill: approve uses highlight (amber/yellow) accent, normal
-            txs use the secondary (cyan/blue) accent. The corner ornament is
-            a Bauhaus exuberance and is hidden under Midnight. `mb` only
-            kicks in once the viewport is tall enough (~700px+); popup
-            windows stay tight against the info card. */}
-        <HStack spacing={2} align="center" mb="clamp(0px, calc(8vh - 56px), 3rem)">
-          <IconButton
-            aria-label="Back"
-            icon={<ArrowBackIcon />}
-            variant="ghost"
-            size="md"
-            px={2}
-            onClick={onBack}
-            flexShrink={0}
-          />
-
-          <Box
-            flex="1"
-            minW={0}
-            bg={parsedApproval ? "accent.highlight" : "accent.secondary"}
-            border={tokens.borders.medium}
-            borderColor="border.default"
-            borderRadius="lg"
-            boxShadow="card"
-            py={1.5}
-            px={3}
-            position="relative"
-          >
-            {!isDarkTheme && (
-              <Box
-                position="absolute"
-                top="-3px"
-                right="-3px"
-                w="8px"
-                h="8px"
-                bg={parsedApproval ? "accent.secondary" : "accent.highlight"}
-                border="2px solid"
-                borderColor="border.default"
-              />
-            )}
-            <Text
-              fontWeight="900"
-              fontSize="sm"
-              color={parsedApproval ? "accentFg.highlight" : "accentFg.secondary"}
-              textAlign="center"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              noOfLines={1}
-            >
-              {is7702Revoke
-                ? "Revoke Smart Account"
-                : is7702SetDelegate
-                  ? "Set Smart Account"
-                  : parsedApproval
-                    ? "Token Approval Request"
-                    : "Transaction Request"}
-            </Text>
-          </Box>
-
-          <Box flexShrink={0}>
-            <CopyButton
-              label="Copy tx JSON"
-              value={JSON.stringify(
-                {
-                  to: tx.to || null,
-                  value: parsedTxValue.ok
-                    ? parsedTxValue.wei.toString()
-                    : String(tx.value ?? ""),
-                  data: tx.data || "0x",
-                },
-                null,
-                2,
-              )}
-            />
-          </Box>
-        </HStack>
 
         {/* Split-mode step indicator. Shown when this confirmation is one
             slice of a user-split wallet_sendCalls bundle. Helps the user
@@ -1216,11 +1303,12 @@ function TransactionConfirmation({
                     return explorer ? (
                       <IconButton
                         aria-label="View on explorer"
-                        icon={<ExternalLinkIcon boxSize="10px" />}
+                        icon={<ExternalLinkIcon boxSize="12px" />}
                         size="xs"
                         variant="ghost"
-                        minW="18px"
-                        h="18px"
+                        minW="24px"
+                        w="24px"
+                        h="24px"
                         color="text.tertiary"
                         onClick={() =>
                           window.open(
@@ -1600,11 +1688,12 @@ function TransactionConfirmation({
                         return explorer ? (
                           <IconButton
                             aria-label="View on explorer"
-                            icon={<ExternalLinkIcon boxSize="10px" />}
+                            icon={<ExternalLinkIcon boxSize="12px" />}
                             size="xs"
                             variant="ghost"
-                            minW="18px"
-                            h="18px"
+                            minW="24px"
+                            w="24px"
+                            h="24px"
                             color="text.tertiary"
                             onClick={() =>
                               window.open(
@@ -1674,71 +1763,22 @@ function TransactionConfirmation({
                 >
                   Value
                 </Text>
-                {nativeValueDisplay.showExact ? (
-                  <Popover
-                    trigger="hover"
-                    placement="top-end"
-                    openDelay={150}
-                    closeDelay={100}
-                  >
-                    <PopoverTrigger>
-                      <Text
-                        fontSize="xs"
-                        fontWeight="700"
-                        color="text.primary"
-                        cursor="help"
-                        maxW="210px"
-                        isTruncated
-                        textAlign="right"
-                        tabIndex={0}
-                      >
-                        {nativeValueDisplay.compact}
-                      </Text>
-                    </PopoverTrigger>
-                    <Portal>
-                      <PopoverContent maxW="260px" w="max-content" zIndex="popover">
-                        <PopoverArrow />
-                        <PopoverBody p={3}>
-                          <VStack align="stretch" spacing={1}>
-                            <Text
-                              fontSize="2xs"
-                              color="text.secondary"
-                              fontWeight="800"
-                              textTransform="uppercase"
-                            >
-                              Full precision
-                            </Text>
-                            <Text
-                              fontSize="xs"
-                              color="text.primary"
-                              fontWeight="700"
-                              wordBreak="break-all"
-                            >
-                              {nativeValueDisplay.exact}
-                            </Text>
-                          </VStack>
-                        </PopoverBody>
-                      </PopoverContent>
-                    </Portal>
-                  </Popover>
-                ) : (
-                  <Text fontSize="xs" fontWeight="700" color="text.primary">
-                    {nativeValueDisplay.compact}
-                  </Text>
-                )}
+                <NativeValueAmount
+                  value={tx.value}
+                  symbol={nativeSym}
+                  fontSize="xs"
+                  fontWeight="700"
+                />
               </HStack>
             )}
           </VStack>
         </Box>
-
-        {/* Asset Changes (simulation) */}
-        {tx.to && !isValueMalformed && (
-          <AssetChangesDisplay
-            txRequest={txRequest}
-            onRevertedChange={setSimulationReverted}
-            onSimulationUnavailableChange={setSimulationUnavailable}
-          />
-        )}
+        {requestStatus}
+        </VStack>
+      }
+      advancedDetails={
+        <InlineDisclosure label="Advanced details">
+          <VStack spacing={3} align="stretch" pt={3}>
 
         {/* Gas Estimate. The `key` includes the split-resolution counter so
             the component remounts after the prior split tx lands, forcing a
@@ -1820,21 +1860,6 @@ function TransactionConfirmation({
           </Box>
         )}
 
-        {/* Pinned bottom section — `mt="auto"` keeps it at the bottom when
-            content is shorter than the viewport; `position:sticky` keeps it
-            visible while scrolling long calldata. */}
-        <Box
-          mt="auto"
-          position="sticky"
-          bottom={-3}
-          bg="surface.base"
-          pt={1}
-          pb={1}
-          mx={-3}
-          px={3}
-          zIndex={1}
-        >
-        <VStack spacing={2} align="stretch">
         {/* ERC-8213: Calldata Digest */}
         {tx.data && tx.data !== "0x" && (
           <CalldataDigestDisplay calldata={tx.data} />
@@ -1867,21 +1892,22 @@ function TransactionConfirmation({
             >
               <CopyButton value={tenderlyUrl} label="Copy Tenderly URL" />
               <HStack
+                as="button"
+                type="button"
                 spacing={2}
                 cursor="pointer"
+                minH="32px"
+                appearance="none"
+                bg="transparent"
+                border={0}
+                color="inherit"
                 onClick={() => {
                   chrome.tabs.create({ url: tenderlyUrl });
                 }}
               >
-                <Image
-                  src={googleFaviconUrl("tenderly.co")}
-                  boxSize="14px"
-                />
                 <Text
-                  fontWeight="700"
+                  fontWeight="600"
                   fontSize="xs"
-                  textTransform="uppercase"
-                  letterSpacing="wide"
                 >
                   Simulate on Tenderly
                 </Text>
@@ -1910,15 +1936,15 @@ function TransactionConfirmation({
                  */}
                 <Flex alignSelf="stretch" flexShrink={0}>
                   <Button
-                    variant="highlight"
+                    variant="outline"
                     onClick={handleAddToBatch}
                     isDisabled={!!addToBatchDisabledReason || isAddingToBatch}
                     isLoading={isAddingToBatch}
                     aria-label="Add to batch"
-                    fontWeight="800"
-                    textTransform="uppercase"
-                    letterSpacing="wide"
-                    fontSize="2xs"
+                    fontWeight="600"
+                    textTransform="none"
+                    letterSpacing="normal"
+                    fontSize="xs"
                     px={2.5}
                     h="full"
                     minH={8}
@@ -1931,159 +1957,48 @@ function TransactionConfirmation({
           );
         })()}
 
-        {/* Error Display */}
-        {error && state === "error" && (
-          <Box
-            bg="status.error.bg"
-            border={tokens.borders.medium}
-            borderColor="status.error.border"
-            borderRadius="lg"
-            boxShadow="card"
-            p={3}
+          </VStack>
+        </InlineDisclosure>
+      }
+      confirmAction={
+        accountType === "impersonator" ? (
+          <Button
+            variant="secondary"
+            w="full"
+            onClick={handleReject}
+            isLoading={isRejecting}
+            isDisabled={state === "submitting"}
+            spinner={<Spinner size="sm" sx={{ animationDirection: "reverse" }} />}
           >
-            <Text color="status.error.fg" fontSize="sm" fontWeight="700">
-              {error}
-            </Text>
-          </Box>
-        )}
-
-        {/* Status Messages */}
-        {state === "submitting" && (
-          <HStack
-            justify="center"
-            py={3}
-            bg="accent.secondary"
-            border={tokens.borders.medium}
-            borderColor="border.default"
-            borderRadius="lg"
+            Reject
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            w="full"
+            onClick={handleConfirm}
+            isDisabled={!!confirmDisabledReason || state === "submitting"}
+            isLoading={state === "submitting"}
           >
-            <Spinner size="sm" color="accentFg.secondary" />
-            <Text
-              fontSize="sm"
-              color="accentFg.secondary"
-              fontWeight="700"
-              textTransform="uppercase"
-            >
-              Submitting transaction...
-            </Text>
-          </HStack>
-        )}
-
-        {/* Impersonator Info Box */}
-        {accountType === "impersonator" && (
-          <Box
-            bg="accent.highlight"
-            border={tokens.borders.medium}
-            borderColor="border.default"
-            borderRadius="lg"
-            boxShadow="card"
-            p={3}
+            Confirm
+          </Button>
+        )
+      }
+      rejectAction={
+        accountType === "impersonator" ? undefined : (
+          <Button
+            variant="secondary"
+            w="full"
+            onClick={handleReject}
+            isLoading={isRejecting}
+            isDisabled={state === "submitting"}
+            spinner={<Spinner size="sm" sx={{ animationDirection: "reverse" }} />}
           >
-            <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
-              Connected via Impersonated account — signing is disabled.
-            </Text>
-          </Box>
-        )}
-
-        {/* Split-mode status banner. Shown when this confirmation is part of
-            a user-split bundle and we're either waiting for the prior call
-            to confirm onchain or re-estimating gas against the new state. */}
-        {(!splitState.ready ||
-          (txRequest.parentBundleId && txRequest.bundleIndex !== undefined &&
-           txRequest.bundleIndex > 0 && !gasValid)) && state !== "submitting" && (
-          <HStack
-            justify="center"
-            py={3}
-            bg="bg.muted"
-            border={tokens.borders.medium}
-            borderColor="border.default"
-            borderRadius="lg"
-          >
-            {splitState.ready ? null : (
-              <Spinner size="sm" color="text.secondary" />
-            )}
-            <Text
-              fontSize="sm"
-              color="text.secondary"
-              fontWeight="700"
-              textTransform="uppercase"
-            >
-              {!splitState.ready
-                ? splitState.label
-                : "Estimating gas with new chain state…"}
-            </Text>
-          </HStack>
-        )}
-
-        {/* Action Buttons */}
-        {state !== "submitting" && (() => {
-          // Surface why Confirm is disabled so users on chains with broken
-          // RPCs (typical when first delegating on a freshly-added custom
-          // chain — fee estimation fails and validForBroadcast stays false)
-          // know what to act on. Ordered worst-first so the most actionable
-          // reason wins when multiple conditions fire at once.
-          const confirmDisabledReason = isRejecting
-            ? "Reject in progress"
-            : state === "error"
-              ? "Fix the error above before retrying"
-              : isCalldataMalformed
-                ? "Calldata is malformed — signing blocked"
-                : isValueMalformed
-                  ? "Transaction value is malformed — signing blocked"
-                  : !splitState.ready
-                    ? splitState.label || "Waiting for prior transaction to land"
-                    : !gasValid
-                      ? "Set a valid gas fee — fee fields can't be empty / max fee must cover base + priority"
-                      : null;
-          return (
-            <HStack spacing={3} pb={1}>
-              <Button
-                variant="secondary"
-                flex={1}
-                onClick={handleReject}
-                isLoading={isRejecting}
-                spinner={
-                  <Spinner size="sm" sx={{ animationDirection: "reverse" }} />
-                }
-              >
-                Reject
-              </Button>
-              {accountType !== "impersonator" && (
-                <Box
-                  flex={1}
-                  // Chakra's Tooltip with shouldWrapChildren wraps the
-                  // disabled Button in a <span style="display:inline-block">
-                  // which won't stretch to fill flex={1} on its own — force
-                  // it to block / full-width so the Confirm button sits
-                  // flush with Reject.
-                  sx={{ "& > span": { display: "block", w: "full" } }}
-                >
-                  <Tooltip
-                    label={confirmDisabledReason ?? ""}
-                    isDisabled={!confirmDisabledReason}
-                    hasArrow
-                    fontSize="xs"
-                    placement="top"
-                    shouldWrapChildren
-                  >
-                    <Button
-                      variant="highlight"
-                      w="full"
-                      onClick={handleConfirm}
-                      isDisabled={!!confirmDisabledReason}
-                    >
-                      Confirm
-                    </Button>
-                  </Tooltip>
-                </Box>
-              )}
-            </HStack>
-          );
-        })()}
-        </VStack>
-        </Box>
-      </VStack>
-    </Box>
+            Reject
+          </Button>
+        )
+      }
+    />
   );
 }
 

@@ -16,16 +16,24 @@
 import {
   Box,
   HStack,
-  IconButton,
-  Spacer,
   Text,
+  VisuallyHidden,
   VStack,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, CheckIcon } from "@chakra-ui/icons";
+import { CheckIcon } from "@chakra-ui/icons";
 import { themeList, useTheme } from "@/theme";
-import { ThemedCard, Decorator } from "@/theme";
 import type { ThemeTokens } from "@/theme";
 import { useThemedToast } from "@/hooks/useThemedToast";
+import {
+  ListItem,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
+  ListItemMeta,
+  ListItemTitle,
+  ListSurface,
+} from "@/components/ui";
+import { SettingsScreenFrame } from "./SettingsScreenFrame";
 
 interface AppearanceSettingsProps {
   onCancel: () => void;
@@ -51,131 +59,78 @@ function AppearanceSettings({ onCancel }: AppearanceSettingsProps) {
   };
 
   return (
-    <VStack spacing={4} align="stretch">
-      {/* Header */}
-      <HStack>
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          variant="ghost"
-          size="sm"
-          onClick={onCancel}
-        />
-        <Text
-          fontSize="lg"
-          fontWeight="900"
-          color="text.primary"
-          textTransform="uppercase"
-          letterSpacing="tight"
-        >
-          Appearance
+    <SettingsScreenFrame title="Appearance" onBack={onCancel}>
+      <VStack spacing={6} align="stretch">
+        <Text fontSize="sm" color="fg.secondary" lineHeight="1.5">
+          Choose the visual style for WalletChan. Your selection is saved in
+          this browser and applies immediately.
         </Text>
-        <Spacer />
-      </HStack>
 
-      <Text fontSize="sm" color="text.secondary" fontWeight="500">
-        Choose how the wallet looks. Your selection persists across browser sessions.
-      </Text>
-
-      {/* Theme picker grid */}
-      <VStack spacing={3} align="stretch">
-        {themeList.map((theme) => {
-          const isActive = theme.id === themeId;
-          return (
-            <ThemedCard
-              key={theme.id}
-              weight="medium"
-              interactive
-              p={4}
-              position="relative"
-              onClick={() => handleSelect(theme)}
-              borderColor={isActive ? "accent.secondary" : "border.default"}
-            >
-              <Decorator
-                corner="top-right"
-                accent={isActive ? "secondary" : "highlight"}
-              />
-
-              <HStack spacing={3} align="center">
-                {/* Mini swatch preview — uses raw theme.preview values so each
-                    card always shows its own theme colors regardless of the
-                    currently active theme. */}
-                <Box
-                  w="56px"
-                  h="56px"
-                  bg={theme.preview.bg}
-                  border="2px solid"
-                  borderColor="border.default"
-                  flexShrink={0}
-                  display="flex"
-                  flexDirection="column"
-                  justifyContent="space-between"
-                  p={1.5}
-                >
-                  <Text
-                    fontSize="2xs"
-                    fontWeight="900"
-                    color={theme.preview.fg}
-                    lineHeight="1"
+        <ListSurface aria-label="Wallet themes">
+          {themeList.map((theme) => {
+            const isActive = theme.id === themeId;
+            return (
+              <ListItem
+                key={theme.id}
+                interactive
+                isSelected={isActive}
+                onClick={() => handleSelect(theme)}
+                aria-pressed={isActive}
+                py={3}
+              >
+                <ListItemMedia>
+                  <Box
+                    aria-hidden="true"
+                    w="52px"
+                    h="52px"
+                    bg={theme.preview.bg}
+                    border="1px solid"
+                    borderColor="border.default"
+                    borderRadius="md"
+                    display="flex"
+                    flexDirection="column"
+                    justifyContent="space-between"
+                    p={2}
                   >
-                    Aa
-                  </Text>
-                  <HStack spacing={0.5}>
-                    {theme.preview.accents.map((swatch, i) => (
-                      <Box
-                        key={i}
-                        w="10px"
-                        h="10px"
-                        bg={swatch}
-                        border="1px solid"
-                        borderColor="border.default"
-                      />
-                    ))}
-                  </HStack>
-                </Box>
-
-                <VStack spacing={0.5} align="flex-start" flex={1} minW={0}>
-                  <HStack spacing={2}>
                     <Text
-                      fontWeight="900"
-                      color="text.primary"
-                      fontSize="md"
-                      textTransform="uppercase"
+                      fontSize="xs"
+                      fontWeight="700"
+                      color={theme.preview.fg}
+                      lineHeight="1"
                     >
-                      {theme.name}
+                      Aa
                     </Text>
-                    {isActive && (
-                      <HStack
-                        spacing={1}
-                        bg="accent.secondary"
-                        color="accentFg.secondary"
-                        border="2px solid"
-                        borderColor="border.default"
-                        px={1.5}
-                        py={0}
-                        fontSize="2xs"
-                        fontWeight="900"
-                      >
-                        <CheckIcon boxSize={2.5} />
-                        <Text>ACTIVE</Text>
-                      </HStack>
-                    )}
-                  </HStack>
-                  <Text
-                    fontSize="xs"
-                    color="text.secondary"
-                    fontWeight="500"
-                    noOfLines={2}
-                  >
+                    <HStack spacing={1}>
+                      {theme.preview.accents.map((swatch, index) => (
+                        <Box
+                          key={index}
+                          w="8px"
+                          h="8px"
+                          bg={swatch}
+                          borderRadius="full"
+                        />
+                      ))}
+                    </HStack>
+                  </Box>
+                </ListItemMedia>
+                <ListItemContent>
+                  <ListItemTitle>{theme.name}</ListItemTitle>
+                  <ListItemDescription noOfLines={2}>
                     {theme.description}
-                  </Text>
-                </VStack>
-              </HStack>
-            </ThemedCard>
-          );
-        })}
+                  </ListItemDescription>
+                </ListItemContent>
+                {isActive && (
+                  <ListItemMeta color="accent.secondary" flex="0 0 auto">
+                    <CheckIcon boxSize={4} aria-hidden="true" />
+                    <VisuallyHidden>Active theme</VisuallyHidden>
+                  </ListItemMeta>
+                )}
+              </ListItem>
+            );
+          })}
+        </ListSurface>
       </VStack>
-    </VStack>
+    </SettingsScreenFrame>
   );
 }
 

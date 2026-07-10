@@ -1,23 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Box,
   HStack,
   VStack,
   Text,
   Button,
   Checkbox,
   Image,
-  IconButton,
-  Spacer,
-  Spinner,
 } from "@chakra-ui/react";
-import { ArrowBackIcon } from "@chakra-ui/icons";
+import { TimeIcon } from "@chakra-ui/icons";
 import { blo } from "blo";
 
 import type { Account } from "@/chrome/types";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import { truncateAddress } from "@/lib/addressUtils";
 import { useThemedToast } from "@/hooks/useThemedToast";
+import {
+  EmptyState,
+  EmptyStateDescription,
+  EmptyStateHeader,
+  EmptyStateMedia,
+  EmptyStateTitle,
+  ListItem,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
+  ListItemMeta,
+  ListItemTitle,
+  ListSurface,
+  SkeletonRow,
+} from "@/components/ui";
+import { SettingsScreenFrame } from "./SettingsScreenFrame";
 
 interface Props {
   onBack: () => void;
@@ -129,195 +141,116 @@ function ClearTxHistoryScreen({ onBack }: Props) {
   };
 
   return (
-    <VStack spacing={4} align="stretch" flex="1">
-      <HStack>
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          variant="ghost"
-          size="sm"
-          onClick={onBack}
-          isDisabled={submitting}
-        />
-        <Text
-          fontSize="lg"
-          fontWeight="900"
-          color="text.primary"
-          textTransform="uppercase"
-          letterSpacing="tight"
-        >
-          Clear Transaction History
-        </Text>
-        <Spacer />
-      </HStack>
-
-      <Text fontSize="sm" color="text.secondary" fontWeight="500">
-        Select the accounts whose transaction history you want to delete. This
-        action cannot be undone.
-      </Text>
-
-      {loading ? (
-        <HStack justify="center" py={6}>
-          <Spinner size="md" color="accent.primary" />
-        </HStack>
-      ) : accounts.length === 0 ? (
-        <Text fontSize="sm" color="text.tertiary" fontWeight="500" py={4}>
-          No accounts found.
-        </Text>
-      ) : (
-        <VStack spacing={2} align="stretch">
-          <HStack
-            bg="surface.sunken"
-            border="2px solid"
-            borderColor={allSelected ? "accent.primary" : "border.default"}
-            borderRadius="md"
-            px={3}
-            py={2}
-            spacing={3}
-            cursor="pointer"
-            onClick={toggleAll}
-          >
-            <Checkbox
-              isChecked={allSelected}
-              isIndeterminate={someSelected}
-              onChange={toggleAll}
-              pointerEvents="none"
-            />
-            <Text
-              fontSize="sm"
-              fontWeight="800"
-              color="text.primary"
-              textTransform="uppercase"
-              letterSpacing="wide"
-              flex={1}
-            >
-              Select all
-            </Text>
-            <Text fontSize="xs" color="text.tertiary" fontWeight="700">
-              {selectedIds.size}/{accounts.length} selected
-            </Text>
-          </HStack>
-
-          {accounts.map((account) => {
-            const checked = selectedIds.has(account.id);
-            const count = txCounts.get(account.address.toLowerCase()) ?? 0;
-            const primary =
-              account.displayName || truncateAddress(account.address);
-            const showAddrLine = !!account.displayName;
-            const blockieSrc = blo(account.address as `0x${string}`);
-            return (
-              <HStack
-                key={account.id}
-                bg="surface.raised"
-                border="2px solid"
-                borderColor={checked ? "accent.primary" : "border.default"}
-                borderRadius="md"
-                p={2.5}
-                spacing={3}
-                cursor="pointer"
-                onClick={() => toggleOne(account.id)}
-              >
-                <Checkbox
-                  isChecked={checked}
-                  onChange={() => toggleOne(account.id)}
-                  pointerEvents="none"
-                />
-                <Image
-                  src={blockieSrc}
-                  alt="Account avatar"
-                  w="24px"
-                  h="24px"
-                  minW="24px"
-                  borderRadius="sm"
-                  border="2px solid"
-                  borderColor="border.default"
-                />
-                <VStack align="start" spacing={0} flex={1} minW={0}>
-                  <Text
-                    fontSize="sm"
-                    fontWeight="700"
-                    color="text.primary"
-                    fontFamily={account.displayName ? undefined : "mono"}
-                    noOfLines={1}
-                    title={`${primary} · ${account.address}`}
-                  >
-                    {primary}
-                  </Text>
-                  <HStack spacing={1.5} align="center">
-                    <Text
-                      fontSize="10px"
-                      color="text.tertiary"
-                      fontWeight="700"
-                      textTransform="uppercase"
-                      letterSpacing="wide"
-                    >
-                      {accountTypeLabel(account)}
-                    </Text>
-                    {showAddrLine && (
-                      <Text
-                        fontSize="10px"
-                        color="text.tertiary"
-                        fontFamily="mono"
-                        fontWeight="600"
-                      >
-                        {truncateAddress(account.address)}
-                      </Text>
-                    )}
-                  </HStack>
-                </VStack>
-                <HStack
-                  spacing={1}
-                  align="baseline"
-                  bg={count > 0 ? "accent.secondary" : "surface.sunken"}
-                  color={count > 0 ? "accentFg.secondary" : "text.tertiary"}
-                  border="2px solid"
-                  borderColor="border.default"
-                  borderRadius="md"
-                  px={2}
-                  py={0.5}
-                  flexShrink={0}
-                >
-                  <Text fontSize="md" fontWeight="900" lineHeight={1}>
-                    {count}
-                  </Text>
-                  <Text
-                    fontSize="9px"
-                    fontWeight="800"
-                    textTransform="uppercase"
-                    letterSpacing="wide"
-                    lineHeight={1}
-                  >
-                    txs
-                  </Text>
-                </HStack>
-              </HStack>
-            );
-          })}
-        </VStack>
-      )}
-
-      <Box
-        mt="auto"
-        position="sticky"
-        bottom={0}
-        bg="surface.base"
-        pt={3}
-        pb={2}
-      >
+    <SettingsScreenFrame
+      title="Clear transaction history"
+      onBack={() => {
+        if (!submitting) onBack();
+      }}
+      primaryAction={
         <Button
           variant="danger"
-          w="full"
           onClick={handleDelete}
           isDisabled={selectedIds.size === 0 || loading}
           isLoading={submitting}
           loadingText="Deleting..."
         >
           {selectedIds.size > 0
-            ? `Clear History for ${selectedIds.size} Account${selectedIds.size === 1 ? "" : "s"}`
-            : "Clear History"}
+            ? `Clear history for ${selectedIds.size} account${selectedIds.size === 1 ? "" : "s"}`
+            : "Clear history"}
         </Button>
-      </Box>
-    </VStack>
+      }
+    >
+      <VStack spacing={5} align="stretch">
+        <Text fontSize="sm" color="fg.secondary" lineHeight="1.5">
+          Select the accounts whose local activity you want to delete. This
+          does not affect transactions onchain and cannot be undone.
+        </Text>
+
+        {loading ? (
+          <ListSurface aria-label="Loading accounts">
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+          </ListSurface>
+        ) : accounts.length === 0 ? (
+          <EmptyState>
+            <EmptyStateMedia>
+              <TimeIcon boxSize={6} />
+            </EmptyStateMedia>
+            <EmptyStateHeader>
+              <EmptyStateTitle>No accounts found</EmptyStateTitle>
+              <EmptyStateDescription>
+                Add an account before managing its transaction history.
+              </EmptyStateDescription>
+            </EmptyStateHeader>
+          </EmptyState>
+        ) : (
+          <ListSurface aria-label="Accounts with transaction history">
+            <ListItem density="compact" bg="surface.sunken">
+              <Checkbox
+                isChecked={allSelected}
+                isIndeterminate={someSelected}
+                onChange={toggleAll}
+                flex="1"
+              >
+                <HStack w="full" justify="space-between" spacing={3}>
+                  <Text fontSize="sm" fontWeight="600">
+                    Select all accounts
+                  </Text>
+                  <Text fontSize="xs" color="fg.muted" sx={{ fontVariantNumeric: "tabular-nums" }}>
+                    {selectedIds.size}/{accounts.length}
+                  </Text>
+                </HStack>
+              </Checkbox>
+            </ListItem>
+
+            {accounts.map((account) => {
+              const checked = selectedIds.has(account.id);
+              const count = txCounts.get(account.address.toLowerCase()) ?? 0;
+              const primary = account.displayName || truncateAddress(account.address);
+              const showAddrLine = !!account.displayName;
+              const blockieSrc = blo(account.address as `0x${string}`);
+
+              return (
+                <ListItem key={account.id} isSelected={checked}>
+                  <Checkbox
+                    aria-label={`Select ${primary}`}
+                    isChecked={checked}
+                    onChange={() => toggleOne(account.id)}
+                  />
+                  <ListItemMedia>
+                    <Image
+                      src={blockieSrc}
+                      alt=""
+                      w="32px"
+                      h="32px"
+                      minW="32px"
+                      borderRadius="md"
+                    />
+                  </ListItemMedia>
+                  <ListItemContent>
+                    <ListItemTitle
+                      fontFamily={account.displayName ? undefined : "mono"}
+                      noOfLines={1}
+                      title={`${primary} · ${account.address}`}
+                    >
+                      {primary}
+                    </ListItemTitle>
+                    <ListItemDescription noOfLines={1}>
+                      {accountTypeLabel(account)}
+                      {showAddrLine ? ` · ${truncateAddress(account.address)}` : ""}
+                    </ListItemDescription>
+                  </ListItemContent>
+                  <ListItemMeta whiteSpace="nowrap">
+                    {count} tx
+                  </ListItemMeta>
+                </ListItem>
+              );
+            })}
+          </ListSurface>
+        )}
+      </VStack>
+    </SettingsScreenFrame>
   );
 }
 

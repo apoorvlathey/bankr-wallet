@@ -652,17 +652,22 @@ const OP_STACK_VIEM_CHAINS = [
   worldchain, worldchainSepolia,
 ];
 
+function getL1ChainName(sourceId: number): string {
+  if (sourceId === 1) return "Ethereum";
+  if (sourceId === 11155111) return "Sepolia";
+  return `Chain ${sourceId}`;
+}
+
+function hasPortalContract(contracts: Chain["contracts"]): boolean {
+  return !!contracts && "portal" in contracts && contracts.portal !== undefined;
+}
+
 for (const chain of OP_STACK_VIEM_CHAINS) {
-  if (chain.sourceId && (chain.contracts as any)?.portal) {
+  if (chain.sourceId && hasPortalContract(chain.contracts)) {
     FORCE_INCLUSION_CHAINS.set(chain.id, {
-      viemChain: chain as Chain,
+      viemChain: chain,
       l1ChainId: chain.sourceId,
-      l1ChainName:
-        chain.sourceId === 1
-          ? "Ethereum"
-          : chain.sourceId === 11155111
-            ? "Sepolia"
-            : `Chain ${chain.sourceId}`,
+      l1ChainName: getL1ChainName(chain.sourceId),
     });
   }
 }

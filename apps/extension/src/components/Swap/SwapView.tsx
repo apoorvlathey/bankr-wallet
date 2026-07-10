@@ -18,7 +18,7 @@ import {
   SliderThumb,
   SliderMark,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, TimeIcon } from "@chakra-ui/icons";
+import { ChevronDownIcon, CopyIcon, CheckIcon, ExternalLinkIcon, TimeIcon } from "@chakra-ui/icons";
 import LoadingDots from "@/components/LoadingDots";
 import { parseEther, parseUnits, formatUnits } from "viem";
 import { useThemedToast } from "@/hooks/useThemedToast";
@@ -49,13 +49,14 @@ import {
 import { useNetworks } from "@/contexts/NetworksContext";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
 import type { ERC5792Call } from "@/chrome/erc5792Types";
-import type { SwapTxEntry } from "@/chrome/txHandlers";
 import BridgeChainTokenModal from "./BridgeChainTokenModal";
 import { TokenSymbolFallback } from "./TokenSymbolFallback";
 import SwapQuoteDisplay from "./SwapQuoteDisplay";
 import BridgeQuoteDisplay from "./BridgeQuoteDisplay";
 import SlippageSettings from "./SlippageSettings";
-import SwapConfirmation from "./SwapConfirmation";
+import SwapConfirmation, {
+  type PreparedSwapTxEntry,
+} from "./SwapConfirmation";
 import {
   getExecutableBridgeRoute,
   getExecutableBridgeRouteSelection,
@@ -68,6 +69,12 @@ import {
 } from "@walletchan/shared/bungee";
 import { getCachedBungeeTokens } from "@/chrome/bridgeApi";
 import { getBungeeChain } from "@/lib/bungeeChainCache";
+import {
+  AppHeader,
+  AppScreen,
+  ScreenBody,
+  StickyActionBar,
+} from "@/components/ui";
 
 // Swap direction arrow icon
 const SwapArrowIcon = (props: React.ComponentProps<typeof Icon>) => (
@@ -193,7 +200,7 @@ function SwapView({
   const [, setHoldings] = useState<PortfolioToken[]>([]);
   const [, setHoldingsLoading] = useState(true);
   // Cross-chain catalog — drives chain portfolio totals + Your Tokens in the
-  // chain+token modal (BridgeChainTokenModal). Filled by the same effect that
+  // nested chain/token picker. Filled by the same effect that
   // populates `holdings`, so it's free.
   const [holdingsAllChains, setHoldingsAllChains] = useState<PortfolioToken[]>([]);
 
@@ -214,13 +221,9 @@ function SwapView({
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
   const [isMaxMode, setIsMaxMode] = useState(false);
 
-  // BridgeChainTokenModal — single dropdown opened by either the sell or the
-  // buy trigger. Mode tracks which side is being edited so the dropdown can
-  // pick source vs destination chains + commit the result to the right piece
-  // of state. `chainTokenTriggerEl` anchors the dropdown directly below
-  // whichever trigger was clicked.
+  // Nested chain/token picker opened by either side. SwapView retains all form
+  // state, so Back simply unmounts the picker and preserves the current value.
   const [chainTokenModalSide, setChainTokenModalSide] = useState<"sell" | "buy" | null>(null);
-  const [chainTokenTriggerEl, setChainTokenTriggerEl] = useState<HTMLElement | null>(null);
 
   // Quote (same-chain via 0x)
   const [quote, setQuote] = useState<SwapQuoteResponse | null>(null);
@@ -264,7 +267,9 @@ function SwapView({
 
   // Confirmation step
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [preparedTransactions, setPreparedTransactions] = useState<SwapTxEntry[] | null>(null);
+  const [preparedTransactions, setPreparedTransactions] = useState<
+    PreparedSwapTxEntry[] | null
+  >(null);
   const [preparedBatchTx, setPreparedBatchTx] = useState<{ to: string; data: string; value: string } | null>(null);
   const [preparedAccountLock, setPreparedAccountLock] = useState<{
     accountId: string;
@@ -1049,7 +1054,7 @@ function SwapView({
         buyTokenLogo: buyTokenLogoURI || null,
       };
 
-      const transactions: SwapTxEntry[] = [];
+      const transactions: PreparedSwapTxEntry[] = [];
 
       // 4a. Approval (if Bungee says we need one and current allowance < amount)
       if (built_approval && sellToken.contractAddress !== "native") {
@@ -1120,7 +1125,7 @@ function SwapView({
       const isBankrBatchSupported =
         accountType === "bankr" && BANKR_SUPPORTED_CHAIN_IDS.has(sellChainId);
       let batchTx: { to: string; data: string; value: string } | null = null;
-      let pkAtomic: { delegate: `0x${string}`; needsAuth: boolean } | null = null;
+      let pkAtomic: Awaited<ReturnType<typeof resolveSwapDelegate>> = null;
       if (transactions.length > 1) {
         if (isBankrBatchSupported) {
           const calls: ERC5792Call[] = transactions.map((t) => ({
@@ -1271,7 +1276,7 @@ function SwapView({
       }
 
       // 3. Build transaction list (approval + swap)
-      const transactions: SwapTxEntry[] = [];
+      const transactions: PreparedSwapTxEntry[] = [];
 
       const swapMeta = {
         sellTokenSymbol: sellToken.symbol,
@@ -1394,17 +1399,17 @@ function SwapView({
       });
 
       // 4. Decide atomicity path.
-      //   - Bankr / impersonator on Bankr-supported chains: batch via Bankr API.
+      //   - Bankr accounts on Bankr-supported chains: batch via Bankr API.
       //   - PK / Seed where the resolver returns a usable 7702 delegate
       //     (Pectra-supported chain default OR a user-configured custom
       //     delegate): batch atomically via EIP-7702 + ERC-7821.
       //   - Otherwise: fall back to sequential broadcasts (existing behavior).
       const isBankrBatchSupported =
-        (accountType === "bankr" || accountType === "impersonator") &&
+        accountType === "bankr" &&
         BANKR_SUPPORTED_CHAIN_IDS.has(chainId);
 
       let batchTx: { to: string; data: string; value: string } | null = null;
-      let pkAtomic: { delegate: `0x${string}`; needsAuth: boolean } | null = null;
+      let pkAtomic: Awaited<ReturnType<typeof resolveSwapDelegate>> = null;
 
       if (transactions.length > 1) {
         if (isBankrBatchSupported) {
@@ -1728,39 +1733,57 @@ function SwapView({
     );
   }
 
+  if (chainTokenModalSide) {
+    return (
+      <BridgeChainTokenModal
+        isOpen
+        onClose={() => setChainTokenModalSide(null)}
+        mode={chainTokenModalSide}
+        accountType={accountType}
+        initialChainId={chainTokenModalSide === "buy" ? buyChainId : sellChainId}
+        selectedTokenAddress={
+          chainTokenModalSide === "buy"
+            ? buyTokenAddress || undefined
+            : sellToken
+              ? sellToken.contractAddress === "native"
+                ? NATIVE_TOKEN_ADDRESS
+                : sellToken.contractAddress
+              : undefined
+        }
+        selectedTokenChainId={
+          chainTokenModalSide === "buy" ? buyChainId : sellChainId
+        }
+        excludeAddress={
+          chainTokenModalSide === "buy"
+            ? sellToken
+              ? sellToken.contractAddress === "native"
+                ? NATIVE_TOKEN_ADDRESS
+                : sellToken.contractAddress
+              : undefined
+            : buyTokenAddress || undefined
+        }
+        excludeChainId={
+          chainTokenModalSide === "buy" ? sellChainId : buyChainId
+        }
+        onSelect={handleChainTokenModalSelect}
+        fromAddress={fromAddress}
+        holdingsAllChains={holdingsAllChains}
+      />
+    );
+  }
+
   // -----------------------------------------------------------------------
   // Render — frame renders immediately; holdings fill in as they arrive.
   // -----------------------------------------------------------------------
   return (
-    <Box p={4} minH="100%" bg="surface.base">
-      <VStack spacing={3} align="stretch">
-        {/* Header — no top-right chain selector; chain is picked per side
-            (sell + receive) below. The global chain that dapps reference is
-            unaffected by selections made here. */}
-        <HStack spacing={2} justify="space-between">
-          <HStack spacing={2} minW={0} flex={1}>
-            <IconButton
-              aria-label="Back"
-              icon={<ArrowBackIcon />}
-              variant="ghost"
-              size="sm"
-              onClick={onBack}
-            />
-            <Text
-              fontWeight="900"
-              fontSize="lg"
-              color="text.primary"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              noOfLines={1}
-            >
-              Swap / Bridge
-            </Text>
-          </HStack>
-          {/* Active account on the right — same avatar + display-name rules
-              as the rest of the wallet (ENS avatar → Bankr icon → blockie). */}
-          {fromAddress && <FromAccountDisplay address={fromAddress} />}
-        </HStack>
+    <AppScreen>
+      <AppHeader
+        title="Swap or bridge"
+        onBack={onBack}
+        trailing={fromAddress ? <FromAccountDisplay address={fromAddress} /> : undefined}
+      />
+      <ScreenBody pb={4}>
+      <VStack spacing={4} align="stretch">
 
         {/* You Sell */}
         <Box
@@ -1778,11 +1801,10 @@ function SwapView({
           <HStack justify="space-between" mb={2} align="center">
             <Text
               fontSize="xs"
-              fontWeight="700"
-              color="text.secondary"
-              textTransform="uppercase"
+              fontWeight="600"
+              color="fg.secondary"
             >
-              You Sell
+              You sell
             </Text>
             {sellToken && hasPrice && (
               <HStack spacing={1}>
@@ -1815,15 +1837,10 @@ function SwapView({
             <TokenChainTrigger
               token={sellToken}
               chainId={sellChainId}
-              onClick={(e) => {
-                // Toggle: clicking again on the same trigger closes the open
-                // dropdown. Capturing currentTarget anchors positioning below
-                // this specific trigger.
+              onClick={() => {
                 if (chainTokenModalSide === "sell") {
                   setChainTokenModalSide(null);
-                  setChainTokenTriggerEl(null);
                 } else {
-                  setChainTokenTriggerEl(e.currentTarget);
                   setChainTokenModalSide("sell");
                 }
               }}
@@ -2002,16 +2019,14 @@ function SwapView({
         >
           <Text
             fontSize="xs"
-            fontWeight="700"
-            color="text.secondary"
-            textTransform="uppercase"
+            fontWeight="600"
+            color="fg.secondary"
             mb={2}
           >
-            You Receive
+            You receive
           </Text>
-          {/* Token+chain pick — same two-pane modal as the sell trigger, in
-              "buy" mode (destination chains, including Bungee-only chains the
-              extension can't sign on). */}
+          {/* Token+chain pick uses the same nested screen as the sell trigger,
+              in destination mode (including Bungee-only receive chains). */}
           <HStack spacing={2} position="relative">
             <TokenChainTrigger
               token={
@@ -2036,12 +2051,10 @@ function SwapView({
                   : null
               }
               chainId={buyChainId}
-              onClick={(e) => {
+              onClick={() => {
                 if (chainTokenModalSide === "buy") {
                   setChainTokenModalSide(null);
-                  setChainTokenTriggerEl(null);
                 } else {
-                  setChainTokenTriggerEl(e.currentTarget);
                   setChainTokenModalSide("buy");
                 }
               }}
@@ -2263,7 +2276,7 @@ function SwapView({
             buyTokenPriceUsd={buyTokenPriceUsd}
             slippageBps={slippageBps}
             sourceNativeSymbol={
-              sellChainConfig.nativeCurrency?.symbol ?? "ETH"
+              getNativeAssetMeta(sellChainId, networksInfo)?.symbol ?? "ETH"
             }
             sourceNativePriceUsd={
               holdingsAllChains.find(
@@ -2314,97 +2327,34 @@ function SwapView({
           </Box>
         )}
 
-        {/* Action button — sticky when content overflows. Primary CTA uses
-            the warm primary accent (Bauhaus red / Midnight indigo). */}
-        <Box
-          position="sticky"
-          bottom={-4}
-          bg="surface.base"
-          pt={2}
-          pb={8}
-          mx={-4}
-          px={4}
-          zIndex={1}
-        >
+      </VStack>
+      </ScreenBody>
+      <StickyActionBar
+        primaryAction={
           <Button
             w="100%"
+            variant="primary"
             onClick={handlePrepareSwap}
             isLoading={isSubmitting}
-            loadingText="Preparing..."
+            loadingText="Preparing…"
             isDisabled={!canSwap}
-            bg="accent.primary"
-            color="accentFg.primary"
-            border="2px solid"
-            borderColor="border.default"
-            boxShadow="card"
-            fontWeight="700"
-            _hover={{
-              transform: "translateY(-2px)",
-              boxShadow: "cardHover",
-            }}
-            _active={{
-              transform: "translate(2px, 2px)",
-              boxShadow: "none",
-            }}
           >
             {sellAmountNum <= 0
-              ? "Enter Amount"
+              ? "Enter an amount"
               : isBridge
-                ? "Bridge"
-                : "Swap"}
+                ? "Review bridge"
+                : "Review swap"}
           </Button>
-        </Box>
-      </VStack>
-
-      {/* Unified chain+token picker. Renders as a dropdown anchored to
-          whichever trigger was clicked (sell or buy). Mode decides which
-          chain set to surface and where the picked (chain, token) lands. */}
-      <BridgeChainTokenModal
-        isOpen={chainTokenModalSide !== null}
-        onClose={() => {
-          setChainTokenModalSide(null);
-          setChainTokenTriggerEl(null);
-        }}
-        triggerEl={chainTokenTriggerEl}
-        mode={chainTokenModalSide ?? "sell"}
-        accountType={accountType}
-        initialChainId={chainTokenModalSide === "buy" ? buyChainId : sellChainId}
-        selectedTokenAddress={
-          chainTokenModalSide === "buy"
-            ? buyTokenAddress || undefined
-            : sellToken
-              ? sellToken.contractAddress === "native"
-                ? NATIVE_TOKEN_ADDRESS
-                : sellToken.contractAddress
-              : undefined
         }
-        selectedTokenChainId={
-          chainTokenModalSide === "buy" ? buyChainId : sellChainId
-        }
-        excludeAddress={
-          chainTokenModalSide === "buy"
-            ? sellToken
-              ? sellToken.contractAddress === "native"
-                ? NATIVE_TOKEN_ADDRESS
-                : sellToken.contractAddress
-              : undefined
-            : buyTokenAddress || undefined
-        }
-        excludeChainId={
-          chainTokenModalSide === "buy" ? sellChainId : buyChainId
-        }
-        onSelect={handleChainTokenModalSelect}
-        fromAddress={fromAddress}
-        holdingsAllChains={holdingsAllChains}
       />
-    </Box>
+    </AppScreen>
   );
 }
 
 /**
  * Compact "select token" pill rendered in the YOU SELL / YOU RECEIVE rows.
- * Click opens the BridgeChainTokenModal (chains on the left, tokens on the
- * right). When a token is selected, the pill shows the token logo + symbol;
+ * Click opens the nested chain/token picker. When a token is selected, the
+ * pill shows the token logo + symbol;
  * an unselected pill reads "SELECT".
  *
  * A small chain badge in the corner of the token logo lets the user see at a
@@ -2426,7 +2376,7 @@ function TokenChainTrigger({
 }: {
   token: PortfolioToken | null;
   chainId: number;
-  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  onClick: () => void;
 }) {
   return (
     <HStack

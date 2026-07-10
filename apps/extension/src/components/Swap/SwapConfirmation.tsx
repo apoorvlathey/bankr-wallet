@@ -11,11 +11,11 @@ import {
   Image,
   Icon,
   Collapse,
+  usePrefersReducedMotion,
 } from "@chakra-ui/react";
 import {
   ArrowBackIcon,
   ChevronDownIcon,
-  ChevronUpIcon,
   ExternalLinkIcon,
 } from "@chakra-ui/icons";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
@@ -41,8 +41,16 @@ import { getNativeAssetMeta } from "@/lib/chains";
 // either palette (Bauhaus red/blue/yellow, Midnight indigo/cyan/amber).
 import { CALL_ACCENTS, CALL_ACCENT_FGS } from "@/components/BatchCallsList";
 
+export type PreparedSwapTxEntry = Omit<SwapTxEntry, "tx"> & {
+  tx: Omit<SwapTxEntry["tx"], "to" | "data" | "value"> & {
+    to: string;
+    data: string;
+    value: string;
+  };
+};
+
 interface SwapConfirmationProps {
-  transactions: SwapTxEntry[];
+  transactions: PreparedSwapTxEntry[];
   sellToken: PortfolioToken;
   sellAmount: string;
   sellUsd: number;
@@ -180,14 +188,13 @@ function SwapConfirmation({
   const sellLogoSrc = cachedSellLogo || sellToken.logoUrl;
   const buyLogoSrc = cachedBuyLogo || buyTokenLogoURI;
   const { themeId } = useTheme();
+  const prefersReducedMotion = usePrefersReducedMotion();
   const { networksInfo } = useNetworks();
   const isDarkTheme = isDarkThemeId(themeId);
   const [expandedCalls, setExpandedCalls] = useState<Set<number>>(new Set());
   const [decodedFunctionNames, setDecodedFunctionNames] = useState<Record<number, string>>({});
   const sourceNativeSymbol =
-    getNativeAssetMeta(chainId, networksInfo)?.symbol ??
-    config.nativeCurrency?.symbol ??
-    "ETH";
+    getNativeAssetMeta(chainId, networksInfo)?.symbol ?? "ETH";
 
   const toggleCall = (index: number) => {
     setExpandedCalls((prev) => {
@@ -311,7 +318,7 @@ function SwapConfirmation({
             pattern used by BatchTransactionConfirmation. */}
         <Box
           bg="accent.secondary"
-          border="2px solid"
+          border="1px solid"
           borderColor="border.default"
           borderRadius="lg"
           boxShadow="card"
@@ -327,17 +334,15 @@ function SwapConfirmation({
               w="8px"
               h="8px"
               bg="accent.highlight"
-              border="2px solid"
+              border="1px solid"
               borderColor="border.default"
             />
           )}
           <HStack justify="center" spacing={2}>
             <Text
-              fontWeight="900"
+              fontWeight="700"
               fontSize="sm"
               color="accentFg.secondary"
-              textTransform="uppercase"
-              letterSpacing="wider"
             >
               {titleLabel}
             </Text>
@@ -348,7 +353,7 @@ function SwapConfirmation({
                 border="1.5px solid"
                 borderColor="border.default"
                 fontSize="2xs"
-                fontWeight="900"
+                fontWeight="700"
                 px={1.5}
               >
                 ATOMIC
@@ -360,7 +365,7 @@ function SwapConfirmation({
         {/* Swap summary card */}
         <Box
           bg="surface.raised"
-          border="2px solid"
+          border="1px solid"
           borderColor="border.default"
           borderRadius="lg"
           boxShadow="card"
@@ -393,10 +398,10 @@ function SwapConfirmation({
               />
             )}
             <VStack spacing={0} align="flex-start" flex={1} minW={0}>
-              <Text fontSize="xs" color="text.tertiary" fontWeight="700" textTransform="uppercase">
+              <Text fontSize="xs" color="text.tertiary" fontWeight="600">
                 You sell
               </Text>
-              <Text fontSize="md" fontWeight="900" color="text.primary" noOfLines={1}>
+              <Text fontSize="md" fontWeight="700" color="text.primary" noOfLines={1}>
                 {formatTokenAmount(sellAmount, { thousandsSeparator: true })} {sellToken.symbol.toUpperCase()}
               </Text>
             </VStack>
@@ -431,7 +436,7 @@ function SwapConfirmation({
               display="flex"
               alignItems="center"
               justifyContent="center"
-              border="2px solid"
+              border="1px solid"
               borderColor="border.default"
               zIndex={1}
             >
@@ -474,10 +479,10 @@ function SwapConfirmation({
               />
             )}
             <VStack spacing={0} align="flex-start" flex={1} minW={0}>
-              <Text fontSize="xs" color="text.tertiary" fontWeight="700" textTransform="uppercase">
+              <Text fontSize="xs" color="text.tertiary" fontWeight="600">
                 You receive (est.)
               </Text>
-              <Text fontSize="md" fontWeight="900" color="text.primary" noOfLines={1}>
+              <Text fontSize="md" fontWeight="700" color="text.primary" noOfLines={1}>
                 {formatOutputAmount(buyAmount, buyTokenDecimals)} {buyTokenInfo.symbol.toUpperCase()}
               </Text>
             </VStack>
@@ -497,7 +502,7 @@ function SwapConfirmation({
             borderTop="1px solid"
             borderColor="border.subtle"
           >
-            <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
+            <Text fontSize="xs" color="text.secondary" fontWeight="600">
               {isBridge ? "Route" : "Network"}
             </Text>
             <HStack spacing={1.5}>
@@ -628,7 +633,7 @@ function SwapConfirmation({
 
         {/* Transaction list — expandable cards with calldata */}
         <VStack spacing={1.5} align="stretch">
-          <Text fontSize="xs" fontWeight="700" color="text.secondary" textTransform="uppercase" px={1}>
+          <Text fontSize="xs" fontWeight="600" color="text.secondary" px={1}>
             Transactions{isBatched ? " (batched)" : ""}
           </Text>
 
@@ -644,26 +649,37 @@ function SwapConfirmation({
             return (
               <Box
                 key={i}
-                border="2px solid"
+                border="1px solid"
                 borderColor="border.default"
                 borderRadius="lg"
                 bg="surface.raised"
                 overflow="hidden"
               >
                 {/* Collapsed header */}
-                <HStack
+                <Button
+                  type="button"
+                  variant="unstyled"
+                  display="flex"
+                  w="full"
+                  minH="44px"
+                  h="auto"
                   px={3}
                   py={2}
-                  cursor="pointer"
+                  gap={2}
                   onClick={() => toggleCall(i)}
+                  aria-expanded={isExpanded}
+                  aria-controls={`swap-call-${i}-details`}
+                  borderRadius={0}
+                  fontWeight="inherit"
+                  textTransform="none"
+                  textAlign="left"
                   _hover={{ bg: "surface.raisedHover" }}
-                  transition="background 0.1s"
                 >
                   <Badge
                     bg={accent}
                     color={accentFg}
                     fontSize="2xs"
-                    fontWeight="800"
+                    fontWeight="700"
                     px={1.5}
                     py={0}
                     border="1px solid"
@@ -679,16 +695,18 @@ function SwapConfirmation({
                   <Text fontSize="2xs" fontFamily="mono" color="text.tertiary">
                     {entry.tx.to.slice(0, 6)}...{entry.tx.to.slice(-4)}
                   </Text>
-                  <Icon
-                    as={isExpanded ? ChevronUpIcon : ChevronDownIcon}
+                  <ChevronDownIcon
                     boxSize={4}
                     color="text.secondary"
+                    transform={isExpanded ? "rotate(180deg)" : "rotate(0deg)"}
+                    transition={prefersReducedMotion ? "none" : "transform 150ms cubic-bezier(0.23, 1, 0.32, 1)"}
+                    aria-hidden
                   />
-                </HStack>
+                </Button>
 
                 {/* Expanded content — explicit borderTop per row so dividers
                     don't inherit currentColor via Chakra's `divider` prop. */}
-                <Collapse in={isExpanded} animateOpacity>
+                <Collapse id={`swap-call-${i}-details`} in={isExpanded} animateOpacity={!prefersReducedMotion}>
                   <VStack
                     spacing={0}
                     align="stretch"
@@ -697,7 +715,7 @@ function SwapConfirmation({
                   >
                     {/* To */}
                     <HStack w="full" py={1.5} px={3} justify="space-between">
-                      <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
+                      <Text fontSize="xs" color="text.secondary" fontWeight="600">
                         To
                       </Text>
                       <HStack
@@ -719,8 +737,9 @@ function SwapConfirmation({
                             icon={<ExternalLinkIcon boxSize="10px" />}
                             size="xs"
                             variant="ghost"
-                            minW="18px"
-                            h="18px"
+                            minW="24px"
+                            w="24px"
+                            h="24px"
                             color="text.tertiary"
                             onClick={() =>
                               window.open(`${config.explorer}/address/${entry.tx.to}`, "_blank")
@@ -741,7 +760,7 @@ function SwapConfirmation({
                         borderTop="1px solid"
                         borderColor="border.subtle"
                       >
-                        <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
+                        <Text fontSize="xs" color="text.secondary" fontWeight="600">
                           Value
                         </Text>
                         <Text fontSize="xs" fontWeight="700" color="text.primary">
@@ -823,12 +842,12 @@ function SwapConfirmation({
               justify="center"
               py={3}
               bg="accent.secondary"
-              border="2px solid"
+              border="1px solid"
               borderColor="border.default"
               borderRadius="lg"
             >
               <Spinner size="sm" color="accentFg.secondary" />
-              <Text fontSize="sm" color="accentFg.secondary" fontWeight="700" textTransform="uppercase">
+              <Text fontSize="sm" color="accentFg.secondary" fontWeight="600">
                 {isBridge ? "Bridging..." : "Submitting swap..."}
               </Text>
             </HStack>

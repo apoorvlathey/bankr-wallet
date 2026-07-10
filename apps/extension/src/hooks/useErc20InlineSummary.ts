@@ -36,7 +36,6 @@ import { getNativeCurrency } from "@/chrome/txSimulation";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
-import { getChainConfig } from "@/constants/chainConfig";
 import {
   getCachedTokenMetadataSync,
   resolveTokenMetadataClient,
@@ -220,7 +219,6 @@ export function useErc20InlineSummary(
     () => getResolvedChainById(chainId, networksInfo),
     [chainId, networksInfo],
   );
-  const fallbackConfig = useMemo(() => getChainConfig(chainId), [chainId]);
 
   // Token metadata + logo goes through the same resolver as tx history,
   // clear-signing, portfolio stubs, and swap surfaces. That resolver fans in
@@ -233,8 +231,7 @@ export function useErc20InlineSummary(
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(() => {
     if (!decoded) return null;
     if (decoded.isNative) {
-      const native =
-        resolvedChain?.nativeCurrency ?? fallbackConfig?.nativeCurrency;
+      const native = resolvedChain?.nativeCurrency;
       const builtin = getNativeCurrency(chainId);
       return {
         symbol: native?.symbol || builtin.symbol,
@@ -263,8 +260,7 @@ export function useErc20InlineSummary(
       //   simulation panel on the same screen — ETH → ethereum.svg on all
       //   ETH-native chains, otherwise the chain's own icon (Polygon → POL,
       //   BNB Chain → BNB, etc.).
-      const native =
-        resolvedChain?.nativeCurrency ?? fallbackConfig?.nativeCurrency;
+      const native = resolvedChain?.nativeCurrency;
       const builtin = getNativeCurrency(chainId);
       const symbol = native?.symbol || builtin.symbol;
       const decimals =
@@ -303,7 +299,7 @@ export function useErc20InlineSummary(
     return () => {
       cancelled = true;
     };
-  }, [decoded, to, chainId, resolvedChain, fallbackConfig]);
+  }, [decoded, to, chainId, resolvedChain]);
 
   // Image-bytes cache for the token logo — same chrome.storage data-URL cache
   // used by ENS avatars and every other token icon in the UI.

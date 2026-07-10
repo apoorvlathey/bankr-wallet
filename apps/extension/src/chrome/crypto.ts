@@ -222,9 +222,10 @@ export async function tryDecryptVaultKey(
  * Imports a raw vault key bytes as a CryptoKey for encryption/decryption
  */
 export async function importVaultKey(vaultKeyBytes: Uint8Array): Promise<CryptoKey> {
+  const rawKey = new Uint8Array(vaultKeyBytes).buffer;
   return crypto.subtle.importKey(
     "raw",
-    vaultKeyBytes,
+    rawKey,
     { name: "AES-GCM", length: 256 },
     false,
     ["encrypt", "decrypt"]

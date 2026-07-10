@@ -1,14 +1,9 @@
-import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
-  Box,
-  VStack,
   HStack,
   Text,
   Image,
-  Input,
-  Wrap,
-  WrapItem,
-  Spinner,
+  Button,
 } from "@chakra-ui/react";
 import { ChevronDownIcon } from "@chakra-ui/icons";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
@@ -16,10 +11,9 @@ import type { TokenListEntry } from "@/chrome/swapApi";
 import { getNativeAssetMeta } from "@/lib/chains";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
-import { truncateAddress } from "@/lib/addressUtils";
-import { formatTokenBalance } from "@/lib/tokenFormatUtils";
-import { formatUsd } from "@/lib/currencyFormatUtils";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
+import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
+import { TokenPickerContent } from "@/components/Swap/TokenPickerContent";
 
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
@@ -76,9 +70,8 @@ interface TokenSelectorProps {
   customTokenError?: string | null;
   /** Chain name shown in empty state */
   chainName?: string;
-  /** Which edge of the trigger the dropdown anchors to. Defaults to "left"
-   *  (swap UI). Send UI passes "right" so the dropdown opens leftward into
-   *  the available popup space. */
+  /** @deprecated Kept for caller compatibility. The selector is now a
+   *  full-screen mobile destination, so trigger alignment no longer applies. */
   dropdownAlign?: "left" | "right";
   /** Holdings are still being fetched (portfolio API + onchain balances).
    *  When true and no holdings are present yet, the dropdown shows a spinner
@@ -102,7 +95,6 @@ export default function TokenSelector({
   customTokenLoading,
   customTokenError,
   chainName,
-  dropdownAlign = "left",
   isLoadingHoldings = false,
   onOpenChange,
 }: TokenSelectorProps) {
@@ -110,85 +102,47 @@ export default function TokenSelector({
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(60);
-  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const lastSubmittedRef = useRef("");
 
   const searchTerm = search.trim().toLowerCase();
   const excludeLower = excludeAddress?.toLowerCase();
 
-  const closeDropdown = useCallback(() => {
+  const closeDropdown = useCallback((restoreFocus = true) => {
     setIsOpen(false);
     setSearch("");
     onOpenChange?.(false);
+    if (restoreFocus) {
+      requestAnimationFrame(() => triggerRef.current?.focus());
+    }
   }, [onOpenChange]);
 
   const handleTriggerClick = () => {
-    const next = !isOpen;
-    setIsOpen(next);
-    onOpenChange?.(next);
+    setIsOpen(true);
+    onOpenChange?.(true);
   };
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
-        closeDropdown();
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [closeDropdown]);
 
   useEffect(() => {
     if (isOpen) {
       setVisibleCount(60);
       lastSubmittedRef.current = "";
-      setTimeout(() => inputRef.current?.focus(), 50);
+      const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 50);
+      return () => window.clearTimeout(focusTimer);
     }
   }, [isOpen]);
 
-  // Fixed-positioned dropdown: anchor to the trigger, but clamp horizontally
-  // when the viewport is narrower than the desired dropdown width. Keeps Swap
-  // anchored left and Send anchored right without drifting across fullscreen
-  // layouts.
-  useLayoutEffect(() => {
-    if (!isOpen) {
-      setDropdownPos(null);
-      return;
-    }
-    const compute = () => {
-      const trigger = triggerRef.current;
-      if (!trigger) return;
-      const rect = trigger.getBoundingClientRect();
-      const padding = 8;
-      const viewportW = document.documentElement.clientWidth;
-      const desiredW = 280;
-      const width = Math.min(desiredW, viewportW - padding * 2);
-      let left: number;
-      if (dropdownAlign === "right") {
-        left = rect.right - width;
-      } else {
-        // Anchor to trigger's left edge; flip if it would overflow right.
-        left = rect.left;
-        if (left + width > viewportW - padding) left = rect.right - width;
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDropdown();
       }
-      if (left < padding) left = padding;
-      setDropdownPos({ top: rect.bottom, left, width });
     };
-    compute();
-    window.addEventListener("resize", compute);
-    window.addEventListener("scroll", compute, true);
-    return () => {
-      window.removeEventListener("resize", compute);
-      window.removeEventListener("scroll", compute, true);
-    };
-  }, [isOpen, dropdownAlign]);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [closeDropdown, isOpen]);
 
   useEffect(() => {
     setVisibleCount(60);
@@ -344,14 +298,6 @@ export default function TokenSelector({
   const resolveLogo = (url: string | undefined): string | undefined =>
     (url && cachedLogoMap.get(url)) || url;
 
-  const handleScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 50) {
-      setVisibleCount((c) => Math.min(c + 60, filteredRest.length));
-    }
-  };
-
   const handleSelectHolding = (h: PortfolioToken) => {
     onSelect(h);
     closeDropdown();
@@ -381,473 +327,80 @@ export default function TokenSelector({
   const isAddressSearch = /^0x[a-fA-F0-9]{40}$/.test(search.trim());
 
   return (
-    <Box ref={containerRef} position="relative">
-      {/* Trigger */}
-      <Box
+    <>
+      <Button
         ref={triggerRef}
-        cursor="pointer"
-        border="2px solid"
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        variant="outline"
+        h="44px"
+        minW={0}
+        px={3}
+        borderWidth="1px"
         borderColor="border.default"
-        borderRadius="md"
-        bg="surface.base"
-        px={2}
-        py={1.5}
-        _hover={{ borderColor: "accent.secondary" }}
-        display="flex"
-        alignItems="center"
+        bg="surface.raised"
+        justifyContent="flex-start"
+        _hover={{ bg: "surface.raisedHover", borderColor: "border.strong" }}
         onClick={handleTriggerClick}
       >
-        <HStack spacing={2}>
+        <HStack minW={0} spacing={2}>
           {selectedToken &&
             (selectedToken.logoUrl ? (
               <Image
                 src={resolveLogo(selectedToken.logoUrl)}
-                alt={selectedToken.symbol}
-                boxSize="20px"
+                alt=""
+                boxSize="22px"
                 borderRadius="full"
                 fallback={
-                  <TokenSymbolFallback
-                    symbol={selectedToken.symbol}
-                    size="20px"
-                  />
+                  <TokenSymbolFallback symbol={selectedToken.symbol} size="22px" />
                 }
               />
             ) : (
-              <TokenSymbolFallback
-                symbol={selectedToken.symbol}
-                size="20px"
-              />
+              <TokenSymbolFallback symbol={selectedToken.symbol} size="22px" />
             ))}
-          <Text fontWeight="700" fontSize="sm" textTransform="uppercase">
-            {selectedToken?.symbol || "Select"}
+          <Text minW={0} fontWeight="600" fontSize="md" noOfLines={1}>
+            {selectedToken?.symbol || "Select token"}
           </Text>
-          <ChevronDownIcon />
+          <ChevronDownIcon flexShrink={0} color="fg.muted" />
         </HStack>
-      </Box>
+      </Button>
 
-      {/* Dropdown */}
-      {isOpen && dropdownPos && (
-        <Box
-          position="fixed"
-          top={`${dropdownPos.top - 4}px`}
-          left={`${dropdownPos.left}px`}
-          w={`${dropdownPos.width}px`}
-          bg="surface.sunken"
-          border="2px solid"
-          borderColor="border.default"
-          borderRadius="lg"
-          boxShadow="cardHover"
-          zIndex={20}
-        >
-          {/* Search */}
-          <Box p={2} borderBottom="2px solid" borderColor="border.default">
-            <Input
-              ref={inputRef}
-              placeholder="Search or paste address"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.stopPropagation()}
-              fontSize="sm"
-              border="2px solid"
-              borderColor="border.default"
-              bg="surface.raised"
-              _focus={{ borderColor: "accent.secondary", boxShadow: "none" }}
-              size="sm"
-            />
-          </Box>
-
-          {/* Popular tokens chips */}
-          {popularTokens.length > 0 && (
-            <Box
-              px={2}
-              py={2}
-              borderBottom="2px solid"
-              borderColor="border.default"
-            >
-              <Wrap spacing={1.5}>
-                {popularTokens.map((t) => {
-                  const addr =
-                    t.contractAddress === "native"
-                      ? NATIVE_TOKEN_ADDRESS
-                      : t.contractAddress;
-                  return (
-                    <WrapItem key={addr}>
-                      <HStack
-                        as="button"
-                        spacing={1}
-                        px={2}
-                        py={1}
-                        border="2px solid"
-                        borderColor={
-                          isSelectedAddr(addr)
-                            ? "accent.secondary"
-                            : "border.default"
-                        }
-                        borderRadius="md"
-                        bg={
-                          isSelectedAddr(addr)
-                            ? "surface.raisedHover"
-                            : "surface.raised"
-                        }
-                        _hover={{ borderColor: "accent.secondary" }}
-                        onClick={() => handleSelectPortfolio(t)}
-                      >
-                        {t.logoUrl ? (
-                          <Image
-                            src={resolveLogo(t.logoUrl)}
-                            alt={t.symbol}
-                            boxSize="16px"
-                            borderRadius="full"
-                            fallback={
-                              <TokenSymbolFallback
-                                symbol={t.symbol}
-                                size="16px"
-                              />
-                            }
-                          />
-                        ) : (
-                          <TokenSymbolFallback
-                            symbol={t.symbol}
-                            size="16px"
-                          />
-                        )}
-                        <Text
-                          fontWeight="700"
-                          fontSize="xs"
-                          textTransform="uppercase"
-                        >
-                          {t.symbol}
-                        </Text>
-                        {/* USD value chip — only when the user actually
-                            holds the token. Mirrors the holdings-row USD
-                            line so users can spot "I have $X of this"
-                            from the popular pills without scrolling. */}
-                        {t.valueUsd > 0 && (
-                          <Text
-                            fontSize="2xs"
-                            fontWeight="700"
-                            color="text.tertiary"
-                            lineHeight="short"
-                          >
-                            {formatUsd(t.valueUsd)}
-                          </Text>
-                        )}
-                      </HStack>
-                    </WrapItem>
-                  );
-                })}
-              </Wrap>
-            </Box>
-          )}
-
-          {/* Scrollable list */}
-          <Box
-            ref={scrollRef}
-            maxH="220px"
-            overflowY="auto"
-            onScroll={handleScroll}
-          >
-            <VStack spacing={0} align="stretch">
-              {/* Loading state for custom address resolution */}
-              {customTokenLoading && isAddressSearch && (
-                <HStack px={3} py={3} spacing={2} justify="center">
-                  <Spinner size="xs" color="accent.secondary" />
-                  <Text fontSize="xs" fontWeight="700" color="text.tertiary">
-                    Loading token...
-                  </Text>
-                </HStack>
-              )}
-
-              {/* Error state for custom token */}
-              {customTokenError && !customTokenLoading && isAddressSearch && (
-                <Box px={3} py={2}>
-                  <Text fontSize="xs" fontWeight="700" color="chart.negative">
-                    {customTokenError}
-                  </Text>
-                </Box>
-              )}
-
-              {/* Resolved custom token — warm highlight to draw the eye. */}
-              {resolvedCustomToken &&
-                !customTokenLoading &&
-                onSelectCustomToken &&
-                isAddressSearch && (
-                  <HStack
-                    px={3}
-                    py={2}
-                    cursor="pointer"
-                    bg="accent.highlight"
-                    color="accentFg.highlight"
-                    _hover={{ filter: "brightness(0.85)" }}
-                    onClick={() => {
-                      onSelectCustomToken(resolvedCustomToken);
-                      closeDropdown();
-                    }}
-                    spacing={2}
-                  >
-                    {resolvedCustomToken.logoUrl ? (
-                      <Image
-                        src={resolveLogo(resolvedCustomToken.logoUrl)}
-                        alt={resolvedCustomToken.symbol}
-                        boxSize="20px"
-                        borderRadius="full"
-                        fallback={
-                          <TokenSymbolFallback
-                            symbol={resolvedCustomToken.symbol}
-                            size="20px"
-                          />
-                        }
-                      />
-                    ) : (
-                      <TokenSymbolFallback
-                        symbol={resolvedCustomToken.symbol}
-                        size="20px"
-                      />
-                    )}
-                    <Box flex={1} minW={0}>
-                      <Text
-                        fontWeight="700"
-                        fontSize="sm"
-                        textTransform="uppercase"
-                        isTruncated
-                        lineHeight="short"
-                      >
-                        {resolvedCustomToken.symbol}
-                      </Text>
-                      <Text
-                        fontSize="2xs"
-                        color="accentFg.highlight"
-                        opacity={0.75}
-                        fontFamily="mono"
-                        isTruncated
-                        lineHeight="short"
-                      >
-                        {formatTokenBalance(resolvedCustomToken.balance)}
-                      </Text>
-                    </Box>
-                    <Text
-                      fontSize="xs"
-                      color="accentFg.highlight"
-                      fontWeight="700"
-                    >
-                      Choose
-                    </Text>
-                  </HStack>
-                )}
-
-              {/* Your Tokens */}
-              {filteredHoldings.length > 0 && (
-                <>
-                  <Text
-                    fontSize="2xs"
-                    fontWeight="800"
-                    color="text.tertiary"
-                    textTransform="uppercase"
-                    px={3}
-                    pt={2}
-                    pb={1}
-                  >
-                    Your Tokens
-                  </Text>
-                  {filteredHoldings.map((h) => {
-                    const addr =
-                      h.contractAddress === "native"
-                        ? NATIVE_TOKEN_ADDRESS
-                        : h.contractAddress;
-                    return (
-                      <HStack
-                        key={`held-${h.contractAddress}`}
-                        px={3}
-                        py={1.5}
-                        cursor="pointer"
-                        bg={
-                          isSelectedAddr(addr)
-                            ? "surface.sunken"
-                            : "transparent"
-                        }
-                        _hover={{ bg: "surface.raisedHover" }}
-                        onClick={() => handleSelectHolding(h)}
-                        spacing={2}
-                      >
-                        {h.logoUrl ? (
-                          <Image
-                            src={resolveLogo(h.logoUrl)}
-                            alt={h.symbol}
-                            boxSize="20px"
-                            borderRadius="full"
-                            fallback={
-                              <TokenSymbolFallback
-                                symbol={h.symbol}
-                                size="20px"
-                              />
-                            }
-                          />
-                        ) : (
-                          <TokenSymbolFallback
-                            symbol={h.symbol}
-                            size="20px"
-                          />
-                        )}
-                        <Box flex={1} minW={0}>
-                          <Text
-                            fontWeight="700"
-                            fontSize="sm"
-                            textTransform="uppercase"
-                            isTruncated
-                            lineHeight="short"
-                          >
-                            {h.symbol}
-                          </Text>
-                          <Text
-                            fontSize="2xs"
-                            color="text.tertiary"
-                            fontFamily="mono"
-                            isTruncated
-                            lineHeight="short"
-                          >
-                            {h.contractAddress === "native"
-                              ? h.name
-                              : truncateAddress(h.contractAddress)}
-                          </Text>
-                        </Box>
-                        <Box textAlign="right" flexShrink={0}>
-                          <Text
-                            fontSize="xs"
-                            fontWeight="600"
-                            lineHeight="short"
-                          >
-                            {formatTokenBalance(h.balance)}
-                          </Text>
-                          {h.valueUsd > 0 && (
-                            <Text
-                              fontSize="2xs"
-                              color="text.tertiary"
-                              lineHeight="short"
-                            >
-                              ${h.valueUsd.toFixed(2)}
-                            </Text>
-                          )}
-                        </Box>
-                      </HStack>
-                    );
-                  })}
-                  {visibleRest.length > 0 && (
-                    <Box
-                      borderBottom="2px solid"
-                      borderColor="border.subtle"
-                      mx={3}
-                      my={1}
-                    />
-                  )}
-                </>
-              )}
-
-              {/* All tokens (from token list, minus holdings) */}
-              {visibleRest.map((token) => (
-                <HStack
-                  key={token.address}
-                  px={3}
-                  py={1.5}
-                  cursor="pointer"
-                  bg={
-                    isSelectedAddr(token.address)
-                      ? "surface.sunken"
-                      : "transparent"
+      {isOpen && (
+        <FullScreenPickerLayer>
+          <TokenPickerContent
+            inputRef={inputRef}
+            search={search}
+            onSearchChange={setSearch}
+            onBack={() => closeDropdown()}
+            popularTokens={popularTokens}
+            filteredHoldings={filteredHoldings}
+            visibleRest={visibleRest}
+            remainingRestCount={Math.max(0, filteredRest.length - visibleRest.length)}
+            onShowMore={() => setVisibleCount((count) => count + 60)}
+            onSelectHolding={handleSelectHolding}
+            onSelectListEntry={handleSelectListEntry}
+            onSelectPortfolio={handleSelectPortfolio}
+            isSelectedAddress={isSelectedAddr}
+            resolveLogo={resolveLogo}
+            customTokenLoading={customTokenLoading}
+            customTokenError={customTokenError}
+            resolvedCustomToken={resolvedCustomToken}
+            onSelectResolvedCustomToken={
+              resolvedCustomToken && onSelectCustomToken
+                ? () => {
+                    onSelectCustomToken(resolvedCustomToken);
+                    closeDropdown();
                   }
-                  _hover={{ bg: "surface.raisedHover" }}
-                  onClick={() => handleSelectListEntry(token)}
-                  spacing={2}
-                >
-                  {token.logoURI ? (
-                    <Image
-                      src={resolveLogo(token.logoURI)}
-                      alt={token.symbol}
-                      boxSize="20px"
-                      borderRadius="full"
-                      fallback={
-                        <TokenSymbolFallback
-                          symbol={token.symbol}
-                          size="20px"
-                        />
-                      }
-                    />
-                  ) : (
-                    <TokenSymbolFallback
-                      symbol={token.symbol}
-                      size="20px"
-                    />
-                  )}
-                  <Box flex={1} minW={0}>
-                    <Text
-                      fontWeight="700"
-                      fontSize="sm"
-                      textTransform="uppercase"
-                      isTruncated
-                      lineHeight="short"
-                    >
-                      {token.symbol}
-                    </Text>
-                    <Text
-                      fontSize="2xs"
-                      color="text.tertiary"
-                      isTruncated
-                      lineHeight="short"
-                    >
-                      {token.name}
-                    </Text>
-                  </Box>
-                  <Text
-                    fontSize="2xs"
-                    color="text.tertiary"
-                    fontFamily="mono"
-                    flexShrink={0}
-                  >
-                    {truncateAddress(token.address)}
-                  </Text>
-                </HStack>
-              ))}
-
-              {/* Loading holdings — shown instead of the empty state while
-                  the portfolio API + onchain balance fetch are in flight.
-                  Searching by address still takes the custom-token branch
-                  above, so suppress this when the user is searching to avoid
-                  competing with that loader. */}
-              {!hasResults &&
-                isLoadingHoldings &&
-                !customTokenLoading &&
-                !resolvedCustomToken &&
-                !customTokenError &&
-                !searchTerm && (
-                  <HStack px={3} py={4} spacing={2} justify="center">
-                    <Spinner size="xs" color="accent.secondary" />
-                    <Text fontSize="xs" fontWeight="700" color="text.tertiary">
-                      Loading balances...
-                    </Text>
-                  </HStack>
-                )}
-
-              {/* Empty state */}
-              {!hasResults &&
-                !isLoadingHoldings &&
-                !customTokenLoading &&
-                !resolvedCustomToken &&
-                !customTokenError && (
-                  <Box px={3} py={4}>
-                    <Text
-                      fontSize="sm"
-                      color="text.tertiary"
-                      textAlign="center"
-                    >
-                      {searchTerm
-                        ? "No tokens found"
-                        : `No tokens${chainName ? ` on ${chainName}` : ""}`}
-                    </Text>
-                  </Box>
-                )}
-            </VStack>
-          </Box>
-        </Box>
+                : undefined
+            }
+            isAddressSearch={isAddressSearch}
+            isLoadingHoldings={isLoadingHoldings}
+            hasResults={hasResults}
+            chainName={chainName}
+          />
+        </FullScreenPickerLayer>
       )}
-    </Box>
+    </>
   );
 }

@@ -8,6 +8,7 @@ import {
   Spacer,
   Code,
   IconButton,
+  Button,
 } from "@chakra-ui/react";
 import { ChevronDownIcon, ChevronRightIcon } from "@chakra-ui/icons";
 import { CopyButton } from "@/components/CopyButton";
@@ -128,7 +129,7 @@ function isAbiDecodeBetter(
   return false;
 }
 
-function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollapsed = false, flat = false }: CalldataDecoderProps) {
+function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollapsed = false }: CalldataDecoderProps) {
   const { themeId, tokens } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
   // Selected tab strip uses an inverted contrast (Bauhaus paints it black with
@@ -249,29 +250,28 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollaps
         w="full"
         maxW="100%"
         bg="surface.raised"
-        border={tokens.borders.thin}
+        border="1px solid"
         borderColor="border.default"
         borderRadius="lg"
-        boxShadow={flat ? "none" : "card"}
+        boxShadow="none"
         overflow="hidden"
       >
         <HStack
           as="button"
+          type="button"
           w="full"
+          minH="44px"
           py={2}
           px={3}
           spacing={2}
           onClick={() => setExpanded(true)}
           _hover={{ bg: "bg.muted" }}
-          cursor="pointer"
-          role="button"
+          aria-expanded={false}
           aria-label="Show calldata"
         >
           <Text
             fontSize="xs"
-            fontWeight="800"
-            textTransform="uppercase"
-            letterSpacing="wide"
+            fontWeight="600"
             color="text.secondary"
           >
             Calldata
@@ -293,7 +293,7 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollaps
             </Code>
           )}
           <Spacer />
-          <Text fontSize="2xs" fontWeight="700" color="text.tertiary" textTransform="uppercase">
+          <Text fontSize="2xs" fontWeight="600" color="text.tertiary">
             Show
           </Text>
           <ChevronRightIcon boxSize={3} color="text.tertiary" />
@@ -307,55 +307,65 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollaps
       w="full"
       maxW="100%"
       bg="surface.raised"
-      border={tokens.borders.medium}
+      border="1px solid"
       borderColor="border.default"
       borderRadius="lg"
-      boxShadow={flat ? "none" : "card"}
+      boxShadow="none"
       overflow="hidden"
     >
       {/* Tab header */}
-      <HStack p={0} borderBottom={tokens.borders.thin} borderColor="border.default" spacing={0}>
-        <Box
+      <HStack role="group" aria-label="Calldata view" p={0} borderBottom="1px solid" borderColor="border.subtle" spacing={0}>
+        <Button
+          type="button"
+          aria-pressed={tab === "decoded"}
+          variant="unstyled"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
           flex={1}
-          py={2}
+          minH="44px"
           px={3}
-          cursor="pointer"
           bg={tab === "decoded" ? tabActiveBg : "transparent"}
           onClick={() => setTab("decoded")}
+          borderRadius={0}
+          _hover={{ bg: tab === "decoded" ? tabActiveBg : "surface.raisedHover" }}
         >
           <HStack spacing={1.5} justify="center">
             <Text
               fontSize="xs"
-              fontWeight="800"
-              textTransform="uppercase"
-              letterSpacing="wide"
+              fontWeight="600"
               color={tab === "decoded" ? tabActiveFg : "text.secondary"}
             >
               Decoded
             </Text>
             {showSpinner && <ShapesLoader size="6px" />}
           </HStack>
-        </Box>
-        <Box w="2px" bg="border.default" alignSelf="stretch" />
-        <Box
+        </Button>
+        <Box w="1px" bg="border.subtle" alignSelf="stretch" />
+        <Button
+          type="button"
+          aria-pressed={tab === "raw"}
+          variant="unstyled"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
           flex={1}
-          py={2}
+          minH="44px"
           px={3}
-          cursor="pointer"
           bg={tab === "raw" ? tabActiveBg : "transparent"}
           onClick={() => setTab("raw")}
+          borderRadius={0}
+          _hover={{ bg: tab === "raw" ? tabActiveBg : "surface.raisedHover" }}
         >
           <Text
             fontSize="xs"
-            fontWeight="800"
-            textTransform="uppercase"
-            letterSpacing="wide"
+            fontWeight="600"
             textAlign="center"
             color={tab === "raw" ? tabActiveFg : "text.secondary"}
           >
             Raw
           </Text>
-        </Box>
+        </Button>
         <Spacer />
         <Box pr={1}>
           <CopyButton value={copyValue} />

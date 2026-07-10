@@ -209,6 +209,7 @@ apps/extension/src/
 │   ├── AssetChangesDisplay.tsx    # Simulated token flow display
 │   ├── SignatureRequestConfirmation.tsx
 │   ├── UnlockScreen.tsx
+│   ├── passkeyPromptGate.ts # Renderer-local single-flight gate for biometric prompts
 │   └── Settings/
 ├── pages/
 │   └── Onboarding.tsx

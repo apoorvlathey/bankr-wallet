@@ -1,16 +1,14 @@
 import { useState, useEffect } from "react";
 import {
-  Box,
   VStack,
   HStack,
   Text,
   Select,
-  IconButton,
-  Spacer,
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { ArrowBackIcon, TimeIcon } from "@chakra-ui/icons";
-import { ThemedCard } from "@/theme";
+import { TimeIcon, WarningIcon } from "@chakra-ui/icons";
+import { ScreenSection } from "@/components/ui";
+import { SettingsScreenFrame } from "./SettingsScreenFrame";
 
 interface AutoLockSettingsProps {
   onComplete: () => void;
@@ -63,53 +61,24 @@ function AutoLockSettings({ onCancel }: AutoLockSettingsProps) {
   };
 
   return (
-    <VStack spacing={4} align="stretch">
-      {/* Header */}
-      <HStack>
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          variant="ghost"
-          size="sm"
-          onClick={onCancel}
-        />
-        <Text fontSize="lg" fontWeight="900" color="text.primary" textTransform="uppercase" letterSpacing="tight">
-          Auto-Lock
-        </Text>
-        <Spacer />
-      </HStack>
-
-      <Text fontSize="sm" color="text.secondary" fontWeight="500">
-        Choose how long the wallet stays unlocked after entering your password.
-      </Text>
-
-      <ThemedCard weight="medium" p={4}>
-        <VStack spacing={3} align="stretch">
-          <HStack spacing={3}>
-            <Box p={2} bg="accent.secondary" color="accentFg.secondary">
-              <TimeIcon boxSize={4} />
-            </Box>
-            <Box>
-              <Text fontWeight="700" color="text.primary">
-                Lock Wallet After
-              </Text>
-              <Text fontSize="xs" color="text.secondary" fontWeight="500">
-                Wallet locks after this idle time
-              </Text>
-            </Box>
+    <SettingsScreenFrame title="Auto-lock" onBack={onCancel}>
+      <VStack spacing={6} align="stretch">
+        <ScreenSection
+          title="Lock after inactivity"
+          description="Choose how long WalletChan stays unlocked after you stop using it. Changes are saved immediately."
+        >
+          <HStack color="fg.secondary" spacing={2} mb={3}>
+            <TimeIcon boxSize={4} />
+            <Text as="label" htmlFor="auto-lock-timeout" fontSize="sm" fontWeight="600">
+              Inactivity period
+            </Text>
           </HStack>
-
           <Select
+            id="auto-lock-timeout"
             value={timeout}
             onChange={(e) => handleTimeoutChange(Number(e.target.value))}
             isDisabled={isLoading}
-            bg="surface.raised"
-            border="3px solid"
-            borderColor="border.default"
-            color="fg.primary"
-            fontWeight="700"
-            _hover={{ borderColor: "border.default" }}
-            _focus={{ borderColor: "border.focus", boxShadow: "none" }}
+            aria-describedby={timeout === 0 ? "auto-lock-warning" : undefined}
           >
             {TIMEOUT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -117,22 +86,29 @@ function AutoLockSettings({ onCancel }: AutoLockSettingsProps) {
               </option>
             ))}
           </Select>
-        </VStack>
-      </ThemedCard>
+        </ScreenSection>
 
-      {timeout === 0 && (
-        <ThemedCard
-          weight="medium"
-          p={3}
-          bg="accent.highlight"
-          borderColor="border.default"
-        >
-          <Text color="accentFg.highlight" fontSize="sm" fontWeight="700">
-            ⚠️ Your wallet will stay unlocked until you manually lock it or close the browser.
-          </Text>
-        </ThemedCard>
-      )}
-    </VStack>
+        {timeout === 0 && (
+          <HStack
+            id="auto-lock-warning"
+            align="start"
+            spacing={3}
+            bg="status.warning.tint"
+            color="status.warning.fg"
+            border="1px solid"
+            borderColor="status.warning.border"
+            borderRadius="md"
+            p={3}
+          >
+            <WarningIcon mt={0.5} flexShrink={0} />
+            <Text fontSize="sm" lineHeight="1.5">
+              WalletChan will stay unlocked until you lock it manually or close
+              the browser.
+            </Text>
+          </HStack>
+        )}
+      </VStack>
+    </SettingsScreenFrame>
   );
 }
 

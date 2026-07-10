@@ -1,17 +1,7 @@
 import { useState, useEffect, useRef, memo } from "react";
 import {
-  HStack,
-  VStack,
   Text,
-  Link,
-  Box,
   Button,
-  IconButton,
-  Spacer,
-  Input,
-  InputGroup,
-  InputLeftElement,
-  InputRightElement,
   Modal,
   ModalOverlay,
   ModalContent,
@@ -21,11 +11,9 @@ import {
   useDisclosure,
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { ArrowBackIcon, Search2Icon, SmallCloseIcon } from "@chakra-ui/icons";
 import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 
 import { clearChatHistory } from "@/chrome/chatStorage";
-import { TWITTER_URL } from "@/constants/externalUrls";
 import { isDarkThemeId, useStripTokens, useTheme } from "@/theme";
 import Chains from "./Chains";
 import ChangePassword from "./ChangePassword";
@@ -37,12 +25,15 @@ import ClearSigningSettings from "./ClearSigningSettings";
 import EnsBrowsingSettings from "./EnsBrowsingSettings";
 import SecuritySettings from "./SecuritySettings";
 import DataSettings from "./DataSettings";
+import AboutSettings from "./AboutSettings";
 import ClearTxHistoryScreen from "./ClearTxHistoryScreen";
+import { SettingsMain } from "./SettingsMain";
 import { SettingsRow } from "./SettingsRow";
 import {
   LEAF_ENTRIES,
   filterLeaves,
   renderLeafRow,
+  type LeafId,
   type NavigableLeafId,
   type ActionLeafId,
   type RowContext,
@@ -50,10 +41,12 @@ import {
 import {
   ShieldIcon,
   DatabaseIcon,
+  LinkChainIcon,
 } from "./icons";
 
 export type SettingsTab =
   | "main"
+  | "about"
   | "security"
   | "data"
   | "chains"
@@ -74,6 +67,7 @@ interface SettingsProps {
   initialChainsTab?: "list" | "add";
   initialAddChainRequest?: PendingAddChainRequest;
   initialEditChainName?: string;
+  initialQuery?: string;
   onChainSaved?: (chain: { chainName: string; chainId: number }) => void;
   onInitialAddChainCancelled?: () => void;
 }
@@ -86,6 +80,7 @@ function Settings({
   initialChainsTab = "list",
   initialAddChainRequest,
   initialEditChainName,
+  initialQuery = "",
   onChainSaved,
   onInitialAddChainCancelled,
 }: SettingsProps) {
@@ -93,12 +88,11 @@ function Settings({
   const [isAgentPasswordEnabled, setIsAgentPasswordEnabled] = useState(false);
   const [isPasskeyUnlockEnabled, setIsPasskeyUnlockEnabled] = useState(false);
   const [passwordType, setPasswordType] = useState<"master" | "agent" | null>(null);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const toast = useThemedToast();
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
-  const currentVersion = chrome.runtime.getManifest().version;
   // Reused for the Chain RPCs chip — same recessed strip pattern as the
   // chevron, so the row reads as a "system" tile in both themes.
   const chainStrip = useStripTokens();
@@ -213,6 +207,13 @@ function Settings({
         onInitialAddChainCancelled={onInitialAddChainCancelled}
       />
     );
+  } else if (tab === "about") {
+    body = (
+      <AboutSettings
+        themeName={themeId === "midnight" ? "Midnight" : "Bauhaus"}
+        onBack={() => setTab("main")}
+      />
+    );
   } else if (tab === "changePassword") {
     body = (
       <ChangePassword
@@ -266,140 +267,75 @@ function Settings({
     const trimmedQuery = query.trim();
     const matches = trimmedQuery ? filterLeaves(trimmedQuery) : [];
 
-    body = (
-      <VStack spacing={4} align="stretch" flex="1">
-        {/* Header */}
-        <HStack>
-          {showBackButton && (
-            <IconButton
-              aria-label="Back"
-              icon={<ArrowBackIcon />}
-              variant="ghost"
-              size="sm"
-              onClick={close}
-            />
-          )}
-          <Text fontSize="lg" fontWeight="900" color="text.primary" textTransform="uppercase" letterSpacing="tight">
-            Settings
-          </Text>
-          <Spacer />
-        </HStack>
-
-        {/* Search */}
-        <InputGroup>
-          <InputLeftElement pointerEvents="none">
-            <Search2Icon color="fg.muted" />
-          </InputLeftElement>
-          <Input
-            ref={searchInputRef}
-            placeholder="Search settings..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            autoFocus
+    const renderRootLeaf = (id: LeafId) => {
+      if (id === "chains") {
+        return (
+          <SettingsRow
+            key={id}
+            title="Network connections"
+            subtitle="Configure network RPC endpoints"
+            icon={<LinkChainIcon boxSize={5} />}
+            iconBg={isDarkTheme ? "border.strong" : chainStrip.bg}
+            iconColor={isDarkTheme ? "fg.primary" : chainStrip.fg}
+            showChevron
+            onClick={() => navigateToLeaf(id)}
           />
-          {query && (
-            <InputRightElement>
-              <IconButton
-                aria-label="Clear search"
-                icon={<SmallCloseIcon />}
-                size="xs"
-                variant="ghost"
-                onClick={() => {
-                  setQuery("");
-                  searchInputRef.current?.focus();
-                }}
-              />
-            </InputRightElement>
-          )}
-        </InputGroup>
+        );
+      }
 
-        {trimmedQuery ? (
-          matches.length > 0 ? (
-            <>{matches.map((e) => renderLeafRow(e.id, rowCtx))}</>
-          ) : (
-            <Box py={6} textAlign="center">
-              <Text fontSize="sm" color="text.secondary" fontWeight="500">
-                No settings match &ldquo;{trimmedQuery}&rdquo;
-              </Text>
-            </Box>
-          )
-        ) : (
-          <>
-            {/* Appearance — first row, themed picker entry */}
-            {renderLeafRow("appearance", rowCtx)}
+      return renderLeafRow(id, rowCtx);
+    };
 
-            {/* Security group */}
-            <SettingsRow
-              title="Security"
-              subtitle="Password, agent access, auto-lock"
-              icon={<ShieldIcon boxSize={5} />}
-              iconBg="accent.highlight"
-              iconColor="accentFg.highlight"
-              cornerAccent="highlight"
-              showChevron
-              onClick={() => setTab("security")}
-            />
+    const defaultRows = [
+      renderRootLeaf("appearance"),
+      <SettingsRow
+        key="security"
+        title="Security"
+        subtitle="Password, agent access, and auto-lock"
+        icon={<ShieldIcon boxSize={5} />}
+        iconBg="accent.highlight"
+        iconColor="accentFg.highlight"
+        cornerAccent="highlight"
+        showChevron
+        onClick={() => setTab("security")}
+      />,
+      renderRootLeaf("chains"),
+      renderRootLeaf("ensBrowsing"),
+      <SettingsRow
+        key="data"
+        title="Data"
+        subtitle="Clear history and reset the nonce cache"
+        icon={<DatabaseIcon boxSize={5} />}
+        iconBg="accent.primary"
+        iconColor="accentFg.primary"
+        cornerAccent="primary"
+        showChevron
+        onClick={() => setTab("data")}
+      />,
+      renderRootLeaf("about"),
+    ];
 
-            {/* Chain RPCs — top-level single entry */}
-            {renderLeafRow("chains", rowCtx)}
+    const searchRows = matches
+      .map((entry) => renderRootLeaf(entry.id))
+      .filter((row) => row != null);
+    const rows = trimmedQuery ? searchRows : defaultRows;
 
-            {/* ENS Browsing — top-level single entry */}
-            {renderLeafRow("ensBrowsing", rowCtx)}
+    const clearSearch = () => {
+      setQuery("");
+      searchInputRef.current?.focus();
+    };
 
-            {/* Data group */}
-            <SettingsRow
-              title="Data"
-              subtitle="Clear history, reset nonce cache"
-              icon={<DatabaseIcon boxSize={5} />}
-              iconBg="accent.primary"
-              iconColor="accentFg.primary"
-              cornerAccent="primary"
-              showChevron
-              onClick={() => setTab("data")}
-            />
-          </>
-        )}
-
-        {/* Spacer to push footer to bottom */}
-        <Box flex="1" />
-
-        <Box h="3px" bg="border.default" w="full" />
-
-        <VStack spacing={1} align="center">
-          <Text fontSize="xs" color="fg.muted" fontWeight="700">
-            Version {currentVersion}
-          </Text>
-          <HStack spacing={1} justify="center">
-            <Text fontSize="sm" color="text.tertiary" fontWeight="500">
-              Built by
-            </Text>
-            <Link
-              display="flex"
-              alignItems="center"
-              gap={1}
-              color="accent.secondary"
-              fontWeight="700"
-              _hover={{ color: "accent.primary" }}
-              onClick={() => {
-                chrome.tabs.create({ url: TWITTER_URL });
-              }}
-            >
-              <Box
-                as="svg"
-                viewBox="0 0 24 24"
-                w="14px"
-                h="14px"
-                fill="currentColor"
-              >
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-              </Box>
-              <Text fontSize="sm" textDecor="underline">
-                @apoorveth
-              </Text>
-            </Link>
-          </HStack>
-        </VStack>
-      </VStack>
+    body = (
+      <SettingsMain
+        showBackButton={showBackButton}
+        onBack={close}
+        query={query}
+        onQueryChange={setQuery}
+        onClearQuery={clearSearch}
+        searchInputRef={searchInputRef}
+        rows={rows}
+        hasResults={rows.length > 0}
+      />
     );
   }
 
@@ -413,16 +349,16 @@ function Settings({
         <ModalContent mx={4}>
           <ModalHeader
             color="fg.primary"
-            fontWeight="900"
+            fontWeight="600"
             fontSize="md"
             borderBottomWidth="1px"
             borderColor="border.subtle"
           >
-            Clear Chat History?
+            Clear chat history?
           </ModalHeader>
           <ModalBody py={4}>
             <Text color="text.secondary" fontSize="sm" fontWeight="500">
-              This will permanently delete all chat conversations. This action cannot be undone.
+              This permanently deletes every chat conversation. This action cannot be undone.
             </Text>
           </ModalBody>
           <ModalFooter gap={2} borderTopWidth="1px" borderColor="border.subtle">

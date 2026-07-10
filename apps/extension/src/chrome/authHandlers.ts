@@ -411,6 +411,9 @@ export async function decryptAllKeysWithVaultKey(
         if (!password) {
           throw new Error("Password required for legacy keystore format");
         }
+        if (!isLegacyEncryptedKeystore(keystore)) {
+          throw new Error("Invalid legacy keystore format");
+        }
         const privateKey = await decryptPrivateKey(keystore, password);
         decrypted.push({ id: entry.id, privateKey });
       }
@@ -420,6 +423,24 @@ export async function decryptAllKeysWithVaultKey(
     console.error("Failed to decrypt vault with vault key:", error);
     return null;
   }
+}
+
+interface LegacyEncryptedKeystore {
+  ciphertext: string;
+  iv: string;
+  salt: string;
+}
+
+function isLegacyEncryptedKeystore(
+  value: object,
+): value is LegacyEncryptedKeystore {
+  const candidate = value as Partial<LegacyEncryptedKeystore>;
+  return (
+    typeof candidate.ciphertext === "string" &&
+    typeof candidate.iv === "string" &&
+    typeof candidate.salt === "string" &&
+    candidate.salt.length > 0
+  );
 }
 
 /**

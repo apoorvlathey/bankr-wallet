@@ -9,6 +9,10 @@ import {
 import { Box } from "@chakra-ui/react";
 import { motion, useReducedMotion, type Transition } from "framer-motion";
 import { useTheme } from "@/theme";
+import {
+  getScreenTransitionPlan,
+  type ScreenTransitionKind,
+} from "./screenTransitionModel";
 
 // True once the surrounding screen's entry animation has settled.
 // Stable / exit layers always read `true`. Entering layers start at `false`
@@ -44,17 +48,16 @@ export type AppView =
   | "hiddenTokens"
   | "walletConnect"
   | "batchTxConfirm"
-  | "crossDappBatchConfirm";
-
-type TransitionKind = "slide" | "fade";
+  | "crossDappBatchConfirm"
+  | "txDetail";
 
 interface ScreenMeta {
-  kind: TransitionKind;
+  kind: ScreenTransitionKind;
   depth: number;
 }
 
-// Depth drives slide direction. Anything deeper than `main` slides up when
-// entering and down when exiting back.
+// Depth drives hierarchy direction. Anything deeper than `main` pushes in
+// from the right and exits back to the right.
 // eslint-disable-next-line react-refresh/only-export-components
 export const SCREEN_META: Record<AppView, ScreenMeta> = {
   main: { kind: "slide", depth: 0 },
@@ -70,6 +73,7 @@ export const SCREEN_META: Record<AppView, ScreenMeta> = {
   chat: { kind: "slide", depth: 1 },
   addAccount: { kind: "slide", depth: 1 },
   pendingTxList: { kind: "slide", depth: 1 },
+  txDetail: { kind: "slide", depth: 2 },
   txConfirm: { kind: "slide", depth: 1 },
   batchTxConfirm: { kind: "slide", depth: 1 },
   crossDappBatchConfirm: { kind: "slide", depth: 1 },
@@ -109,7 +113,7 @@ interface AboveLayer {
   view: AppView;
   children: ReactNode;
   role: "enter" | "exit";
-  kind: TransitionKind;
+  kind: ScreenTransitionKind;
   key: number;
 }
 
@@ -142,6 +146,11 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
   }));
   const lastViewRef = useRef(view);
   const keyCounter = useRef(1);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const navigationStateRef = useRef(
+    new Map<AppView, { scrollTop: number; focusPath: number[] | null }>(),
+  );
+  const pendingBackRestoreRef = useRef<AppView | null>(null);
   // Set of layer keys whose entry animation has already settled. Layers
   // listed here read `true` from ScreenEnteredContext; layers absent read
   // `false`. The first/initial layer (key=0) is considered entered.
@@ -177,10 +186,41 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
 
     const prevMeta = SCREEN_META[prevView];
     const nextMeta = SCREEN_META[view];
-    const forward = nextMeta.depth > prevMeta.depth;
-    const useFade =
-      nextMeta.kind === "fade" || prevMeta.kind === "fade";
-    const kind: TransitionKind = useFade ? "fade" : "slide";
+    const plan = getScreenTransitionPlan(prevMeta, nextMeta);
+    const forward = plan.direction === "forward";
+    const useFade = plan.kind === "fade";
+    const kind = plan.kind;
+
+    const container = containerRef.current;
+    if (container) {
+      const scrollOwner = container.querySelector<HTMLElement>(
+        "[data-screen-scroll-owner]",
+      );
+      const activeElement = document.activeElement;
+      let focusPath: number[] | null = null;
+
+      if (
+        activeElement instanceof HTMLElement &&
+        container.contains(activeElement)
+      ) {
+        const path: number[] = [];
+        let node: Element | null = activeElement;
+        while (node && node !== container) {
+          const parent: Element | null = node.parentElement;
+          if (!parent) break;
+          path.unshift(Array.from(parent.children).indexOf(node));
+          node = parent;
+        }
+        if (node === container) focusPath = path;
+      }
+
+      navigationStateRef.current.set(prevView, {
+        scrollTop: scrollOwner?.scrollTop ?? 0,
+        focusPath,
+      });
+    }
+
+    pendingBackRestoreRef.current = forward ? null : view;
 
     setState((s) => {
       // The currently-visible snapshot (and its key). If we were already
@@ -244,7 +284,45 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
     });
   }, [view, children]);
 
-  const onAboveSettled = (completedKey: number) => {
+  const restoreDestinationState = (destination: AppView) => {
+    const root = containerRef.current;
+    if (!root) return;
+
+    const saved = navigationStateRef.current.get(destination);
+    const scrollOwner = root.querySelector<HTMLElement>(
+      "[data-screen-scroll-owner]",
+    );
+    if (scrollOwner && saved) scrollOwner.scrollTop = saved.scrollTop;
+
+    let target: HTMLElement | null = null;
+    if (saved?.focusPath) {
+      let node: Element = root;
+      for (const index of saved.focusPath) {
+        const next = node.children.item(index);
+        if (!next) {
+          node = root;
+          break;
+        }
+        node = next;
+      }
+      if (node instanceof HTMLElement && node !== root) target = node;
+    }
+
+    target ??= root.querySelector<HTMLElement>("[data-screen-heading]");
+    target?.focus({ preventScroll: true });
+  };
+
+  const focusEnteredHeading = () => {
+    containerRef.current
+      ?.querySelector<HTMLElement>("[data-screen-heading]")
+      ?.focus({ preventScroll: true });
+  };
+
+  const onAboveSettled = (
+    completedKey: number,
+    completedRole: "enter" | "exit",
+    completedKind: ScreenTransitionKind,
+  ) => {
     setState((s) => {
       if (s.phase !== "transitioning") return s;
       if (s.above.key !== completedKey) return s;
@@ -270,6 +348,15 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
       next.add(completedKey);
       return next;
     });
+
+    requestAnimationFrame(() => {
+      if (completedRole === "exit" && pendingBackRestoreRef.current) {
+        restoreDestinationState(pendingBackRestoreRef.current);
+        pendingBackRestoreRef.current = null;
+      } else if (completedRole === "enter" && completedKind === "slide") {
+        focusEnteredHeading();
+      }
+    });
   };
 
   // Prune entered keys that no longer correspond to a live layer so the set
@@ -290,7 +377,9 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
     });
   }, [state]);
 
-  const duration = prefersReduced ? 0 : tokens.motion.screenDuration;
+  const duration = prefersReduced
+    ? Math.min(0.12, tokens.motion.screenDuration)
+    : tokens.motion.screenDuration;
   const transition: Transition = {
     duration,
     ease: tokens.motion.screenEase,
@@ -308,6 +397,8 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
     key: number;
     children: ReactNode;
     role: Role;
+    transitionRole?: "enter" | "exit";
+    transitionKind?: ScreenTransitionKind;
   }
   const layers: RenderLayer[] = [];
   if (state.phase === "idle") {
@@ -334,14 +425,22 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
       key: state.above.key,
       children: state.above.children,
       role: aboveRole,
+      transitionRole: state.above.role,
+      transitionKind: state.above.kind,
     });
   }
 
   return (
-    <Box position="relative" h="100%" w="100%" overflow="hidden">
+    <Box
+      ref={containerRef}
+      position="relative"
+      h="100%"
+      w="100%"
+      overflow="hidden"
+    >
       {layers.map((layer) => {
-        let initial: { y?: string; opacity?: number } | undefined;
-        let animate: { y?: string; opacity?: number };
+        let initial: { x?: string; opacity?: number } | undefined;
+        let animate: { x?: string; opacity?: number };
         let zIndex: number;
         let willChange: string;
         const animating = layer.role !== "stable";
@@ -349,21 +448,21 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
         switch (layer.role) {
           case "stable":
             initial = undefined; // framer uses animate as the resting pose
-            animate = { y: "0%", opacity: 1 };
+            animate = { x: "0%", opacity: 1 };
             zIndex = 1;
             willChange = "auto";
             break;
           case "enter-slide":
-            initial = { y: "100%" };
-            animate = { y: "0%" };
+            initial = prefersReduced ? { opacity: 0 } : { x: "100%" };
+            animate = prefersReduced ? { opacity: 1 } : { x: "0%" };
             zIndex = 2;
             willChange = "transform";
             break;
           case "exit-slide":
             // No explicit initial — the motion.div was previously the stable
-            // layer at y=0%, so framer tweens from its current position.
+            // layer at x=0%, so framer tweens from its current position.
             initial = undefined;
-            animate = { y: "100%" };
+            animate = prefersReduced ? { opacity: 0 } : { x: "100%" };
             zIndex = 2;
             willChange = "transform";
             break;
@@ -382,15 +481,30 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
         }
 
         const layerEntered = enteredKeys.has(layer.key);
+        const isCovered =
+          state.phase === "transitioning" && layer.key === state.beneathKey;
+        // React 18's DOM typings predate the `inert` attribute. A declarative
+        // string attribute still keeps it synchronized when a Framer layer is
+        // reused, unlike the previous callback-ref mutation.
+        const inertProps = isCovered ? ({ inert: "" } as const) : {};
 
         return (
           <motion.div
             key={layer.key}
+            {...inertProps}
+            aria-hidden={isCovered || undefined}
             initial={initial}
             animate={animate}
             transition={transition}
             onAnimationComplete={
-              animating ? () => onAboveSettled(layer.key) : undefined
+              animating && layer.transitionRole && layer.transitionKind
+                ? () =>
+                    onAboveSettled(
+                      layer.key,
+                      layer.transitionRole!,
+                      layer.transitionKind!,
+                    )
+                : undefined
             }
             style={{
               position: "absolute",
@@ -399,6 +513,7 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
               flexDirection: "column",
               zIndex,
               willChange,
+              pointerEvents: isCovered ? "none" : "auto",
             }}
           >
             <ScreenEnteredContext.Provider value={layerEntered}>

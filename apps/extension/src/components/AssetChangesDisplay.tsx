@@ -5,6 +5,7 @@ import {
   HStack,
   Text,
   Collapse,
+  Button,
   IconButton,
   Tooltip,
   Image,
@@ -14,10 +15,10 @@ import {
   ModalBody,
   ModalCloseButton,
   useDisclosure,
+  usePrefersReducedMotion,
 } from "@chakra-ui/react";
 import {
   ChevronDownIcon,
-  ChevronUpIcon,
   CopyIcon,
   CheckIcon,
   ExternalLinkIcon,
@@ -274,7 +275,6 @@ function NftMediaSandbox({
   return (
     <Box
       as="iframe"
-      // @ts-expect-error -- Chakra forwards unknown props to the DOM
       sandbox=""
       srcDoc={srcDoc}
       title={alt}
@@ -324,7 +324,7 @@ function NftFullscreenModal({
         <ModalBody p={4}>
           <VStack spacing={3} align="stretch">
             <Box pr={6}>
-              <Text fontSize="sm" fontWeight="800" color="text.primary" noOfLines={2}>
+              <Text fontSize="sm" fontWeight="600" color="text.primary" noOfLines={2}>
                 {title}
               </Text>
               {subtitle && (
@@ -364,7 +364,6 @@ function NftFullscreenModal({
 /** Compact NFT preview card shown in the SEND/RECEIVE rows. */
 function NftPreview({ change }: { change: AssetChange }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const { tokens } = useTheme();
   if (!change.nft) return null;
   const meta = change.nft.metadata;
   const loading = !!change.nft.metadataLoading;
@@ -379,10 +378,11 @@ function NftPreview({ change }: { change: AssetChange }) {
   return (
     <>
       <Box
+        as={isClickable ? "button" : "div"}
         w="64px"
         h="64px"
         minW="64px"
-        border={tokens.borders.thin}
+        border="1px solid"
         borderColor="border.default"
         borderRadius="md"
         // Literal white tile (physical sticker) — same rationale as the
@@ -396,15 +396,15 @@ function NftPreview({ change }: { change: AssetChange }) {
         cursor={isClickable ? "pointer" : "default"}
         onClick={
           isClickable
-            ? (e) => {
+            ? (e: React.MouseEvent<HTMLElement>) => {
                 e.stopPropagation();
                 onOpen();
               }
             : undefined
         }
-        role={isClickable ? "button" : undefined}
         aria-label={isClickable ? `View ${altText}` : undefined}
         _hover={isClickable ? { borderColor: "accent.secondary" } : undefined}
+        _focusVisible={isClickable ? { boxShadow: "focus" } : undefined}
         transition="border-color 0.1s"
       >
         {showImage ? (
@@ -477,7 +477,7 @@ function AssetRow({
       w="full"
       py={1.5}
       pl={2.5}
-      borderLeft="3px solid"
+      borderLeft="1px solid"
       borderLeftColor={dirColor}
     >
       <HStack spacing={2.5} align={isNft ? "flex-start" : "center"}>
@@ -526,8 +526,9 @@ function AssetRow({
                     icon={copied ? <CheckIcon /> : <CopyIcon />}
                     size="xs"
                     variant="ghost"
-                    minW="16px"
-                    h="16px"
+                    minW="24px"
+                    w="24px"
+                    h="24px"
                     color={copied ? "accent.highlight" : "text.tertiary"}
                     onClick={handleCopy}
                     _hover={{ color: "accent.secondary", bg: "transparent" }}
@@ -540,8 +541,9 @@ function AssetRow({
                       icon={<ExternalLinkIcon boxSize="9px" />}
                       size="xs"
                       variant="ghost"
-                      minW="16px"
-                      h="16px"
+                      minW="24px"
+                      w="24px"
+                      h="24px"
                       color="text.tertiary"
                       onClick={() =>
                         window.open(`${explorerUrl}/address/${change.address}`, "_blank")
@@ -597,6 +599,7 @@ function AssetChangesDisplay({
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   // Stable signature of the calls list — re-fires simulation when the user
   // edits the bundle (e.g. removes a call from a dapp-initiated batch).
@@ -697,6 +700,7 @@ function AssetChangesDisplay({
 
     let cancelled = false;
     let attempt = 0;
+    const tokenChanges = result.tokenChanges;
 
     function scheduleRetry() {
       if (cancelled || attempt >= MAX_RETRIES) return;
@@ -709,7 +713,7 @@ function AssetChangesDisplay({
           {
             type: "retryTokenMetadata",
             chainId: txRequest.tx.chainId,
-            tokenChanges: result.tokenChanges,
+            tokenChanges,
             accountAddress: txRequest.tx.from,
           },
           (response: TokenMetadataResult) => {
@@ -762,9 +766,8 @@ function AssetChangesDisplay({
             fontSize="xs"
             color="text.secondary"
             fontWeight="700"
-            textTransform="uppercase"
           >
-            Simulating...
+            Simulating…
           </Text>
         </HStack>
       </Box>
@@ -781,7 +784,13 @@ function AssetChangesDisplay({
   // The "simulated transaction reverted" banner used to live here, but is now
   // hoisted to the top of the confirmation surface via `onRevertedChange` so
   // it lands in the user's field of view before they read anything else.
-  if (allChanges.length === 0) return null;
+  if (allChanges.length === 0) {
+    return (
+      <Text color="fg.secondary" fontSize="sm" lineHeight="1.45">
+        No additional asset changes were detected.
+      </Text>
+    );
+  }
 
   const outChanges = allChanges.filter((c) => c.direction === "out");
   const inChanges = allChanges.filter((c) => c.direction === "in");
@@ -800,31 +809,40 @@ function AssetChangesDisplay({
   return (
     <VStack align="stretch" spacing={2}>
       <Box
-      border={tokens.borders.medium}
-      borderColor="border.default"
-      borderRadius="lg"
-      bg="surface.raised"
-      boxShadow="card"
-      position="relative"
-      overflow="hidden"
-    >
+        border="1px solid"
+        borderColor="border.default"
+        borderRadius="lg"
+        bg="surface.raised"
+        boxShadow="none"
+        position="relative"
+        overflow="hidden"
+      >
       {/* Header */}
-      <HStack
+      <Button
+        type="button"
+        variant="unstyled"
+        display="flex"
+        w="full"
+        minH="44px"
+        h="auto"
         px={3}
         py={2.5}
-        cursor="pointer"
         onClick={() => setExpanded(!expanded)}
-        _hover={{ bg: "bg.muted" }}
-        justify="space-between"
+        aria-expanded={expanded}
+        aria-controls="asset-changes-details"
+        borderRadius={0}
+        fontWeight="inherit"
+        textTransform="none"
+        _hover={{ bg: "surface.raisedHover" }}
+        justifyContent="space-between"
       >
         <HStack spacing={1} flexShrink={0}>
           <Text
             fontSize="xs"
             color="text.secondary"
             fontWeight="700"
-            textTransform="uppercase"
           >
-            Asset Changes
+            Asset changes
           </Text>
           <Tooltip
             label="This is an estimation. Actual onchain transfers may differ based on updated contract state."
@@ -847,16 +865,18 @@ function AssetChangesDisplay({
               {summaryParts.join(", ")}
             </Text>
           )}
-          {expanded ? (
-            <ChevronUpIcon boxSize={4} color="text.tertiary" />
-          ) : (
-            <ChevronDownIcon boxSize={4} color="text.tertiary" />
-          )}
+          <ChevronDownIcon
+            boxSize={4}
+            color="text.tertiary"
+            transform={expanded ? "rotate(180deg)" : "rotate(0deg)"}
+            transition={prefersReducedMotion ? "none" : "transform 150ms cubic-bezier(0.23, 1, 0.32, 1)"}
+            aria-hidden
+          />
         </HStack>
-      </HStack>
+      </Button>
 
       {/* Expanded details */}
-      <Collapse in={expanded} animateOpacity>
+      <Collapse id="asset-changes-details" in={expanded} animateOpacity={!prefersReducedMotion}>
         <VStack align="stretch" spacing={0} px={3} pb={3} pt={1}>
           <Box h="1px" bg="border.subtle" />
 
@@ -867,7 +887,6 @@ function AssetChangesDisplay({
                 fontSize="2xs"
                 fontWeight="700"
                 color="chart.negative"
-                textTransform="uppercase"
                 pt={2}
                 pb={1}
               >
@@ -892,7 +911,6 @@ function AssetChangesDisplay({
                 fontSize="2xs"
                 fontWeight="700"
                 color="chart.positive"
-                textTransform="uppercase"
                 pt={outChanges.length > 0 ? 2.5 : 2}
                 pb={1}
               >

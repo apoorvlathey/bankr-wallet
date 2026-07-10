@@ -18,28 +18,24 @@ import {
   InputGroup,
   InputRightElement,
   IconButton,
-  Spacer,
   Alert,
   AlertIcon,
-  Tooltip,
   Divider,
   Image,
+  Badge,
 } from "@chakra-ui/react";
 import {
-  SettingsIcon,
   DeleteIcon,
   ViewIcon,
   WarningTwoIcon,
   EditIcon,
   ViewOffIcon,
-  ArrowBackIcon,
   RepeatIcon,
   ExternalLinkIcon,
   CheckIcon,
 } from "@chakra-ui/icons";
 import { blo } from "blo";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { isDarkThemeId, useTheme, IconBox } from "@/theme";
 import type { Account, PasswordType, SeedGroup } from "@/chrome/types";
 import { resolveNameToAddress, isResolvableName } from "@/lib/ensUtils";
 import { isAddress } from "@ethersproject/address";
@@ -54,6 +50,19 @@ import RevealPrivateKey from "./RevealPrivateKey";
 import RevealSeedPhrase from "./RevealSeedPhrase";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { truncateAddress } from "@/lib/addressUtils";
+import {
+  AppHeader,
+  AppScreen,
+  ListItem,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
+  ListItemTitle,
+  ListSurface,
+  ScreenBody,
+  ScreenSection,
+  StickyActionBar,
+} from "@/components/ui";
 
 interface AccountSettingsProps {
   account: Account | null;
@@ -93,8 +102,6 @@ function AccountSettings({
   onApiKeyDraftChange,
 }: AccountSettingsProps) {
   const toast = useThemedToast();
-  const { themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
   const [view, setView] = useState<AccountSettingsSubView>(initialView);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -532,25 +539,11 @@ function AccountSettings({
   if (!account) return null;
 
   if (view === "revealPrivateKey") {
-    return (
-      <Box flex="1" overflowY="auto" minH={0} px={4} py={4}>
-        <RevealPrivateKey
-          account={account}
-          onBack={() => setView("settings")}
-        />
-      </Box>
-    );
+    return <RevealPrivateKey account={account} onBack={() => setView("settings")} />;
   }
 
   if (view === "revealSeedPhrase") {
-    return (
-      <Box flex="1" overflowY="auto" minH={0} px={4} py={4}>
-        <RevealSeedPhrase
-          account={account}
-          onBack={() => setView("settings")}
-        />
-      </Box>
-    );
+    return <RevealSeedPhrase account={account} onBack={() => setView("settings")} />;
   }
 
   // Change API Key sub-screen (Bankr accounts)
@@ -558,73 +551,42 @@ function AccountSettings({
     const isAgentSession = passwordType === "agent";
 
     return (
-      <Box flex="1" overflowY="auto" minH={0} px={4} py={4}>
-      <VStack spacing={4} align="stretch">
-        <HStack>
-          <IconButton
-            aria-label="Back"
-            icon={<ArrowBackIcon />}
-            variant="ghost"
-            size="sm"
-            onClick={closeApiKeyForm}
-          />
-          <Text
-            fontSize="lg"
-            fontWeight="900"
-            color="text.primary"
-            textTransform="uppercase"
-            letterSpacing="tight"
-          >
-            Change API Key & Address
-          </Text>
-          <Spacer />
-        </HStack>
-
-        {isAgentSession ? (
-          <VStack spacing={3} align="stretch">
+      <AppScreen>
+        <AppHeader title="Change Bankr connection" onBack={closeApiKeyForm} />
+        <ScreenBody pt={5}>
+          {isAgentSession ? (
+            <VStack spacing={5} align="stretch">
+              <ScreenSection
+                title="Master password required"
+                description="API key and wallet address changes are blocked during an agent session."
+              >
             <Box
               w="full"
               p={3}
               bg="status.warning.bg"
-              border="2px solid"
+              border="1px solid"
               borderColor="status.warning.border"
               borderRadius="md"
             >
               <HStack spacing={2}>
                 <WarningTwoIcon color="status.warning.fg" />
-                <Text color="status.warning.fg" fontSize="sm" fontWeight="700">
-                  Unlock with master password to access
+                <Text color="status.warning.fg" fontSize="sm" fontWeight="600">
+                  Lock WalletChan, then unlock with your master password.
                 </Text>
               </HStack>
             </Box>
-            <Text color="text.secondary" fontSize="sm" fontWeight="500">
-              API key changes are only available when unlocked with your
-              master password.
-            </Text>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={closeApiKeyForm}
-              alignSelf="flex-start"
-            >
-              Back
-            </Button>
-          </VStack>
-        ) : (
-          <VStack spacing={4} align="stretch">
-            <Text fontSize="sm" color="text.secondary">
-              Update your API key and wallet address.
-            </Text>
+              </ScreenSection>
+            </VStack>
+          ) : (
+            <VStack spacing={6} align="stretch">
+              <ScreenSection
+                title="Bankr credentials"
+                description="Update the encrypted API key and wallet address used for this account."
+              >
+                <VStack spacing={4} align="stretch">
 
             <FormControl isInvalid={!!apiKeyErrors.apiKey}>
-              <FormLabel
-                fontSize="xs"
-                fontWeight="700"
-                color="text.primary"
-                textTransform="uppercase"
-              >
-                Bankr API Key
-              </FormLabel>
+              <FormLabel>Bankr API key</FormLabel>
               <InputGroup>
                 <Input
                   type={showApiKey ? "text" : "password"}
@@ -656,14 +618,7 @@ function AccountSettings({
             </FormControl>
 
             <FormControl isInvalid={!!apiKeyErrors.walletAddress}>
-              <FormLabel
-                fontSize="xs"
-                fontWeight="700"
-                color="text.primary"
-                textTransform="uppercase"
-              >
-                Wallet Address
-              </FormLabel>
+              <FormLabel>Wallet address</FormLabel>
               <Input
                 placeholder="0x... or name (e.g., vitalik.eth, name.mega)"
                 value={walletAddress}
@@ -682,14 +637,7 @@ function AccountSettings({
             {needsPassword && (
               <>
                 <FormControl isInvalid={!!apiKeyErrors.password}>
-                  <FormLabel
-                    fontSize="xs"
-                    fontWeight="700"
-                    color="text.primary"
-                    textTransform="uppercase"
-                  >
-                    Master Password
-                  </FormLabel>
+                  <FormLabel>Master password</FormLabel>
                   <InputGroup>
                     <Input
                       type={showPassword ? "text" : "password"}
@@ -721,7 +669,7 @@ function AccountSettings({
                 <Alert
                   status="warning"
                   bg="status.warning.bg"
-                  border="2px solid"
+                  border="1px solid"
                   borderColor="status.warning.border"
                   borderRadius="md"
                   fontSize="sm"
@@ -734,28 +682,32 @@ function AccountSettings({
               </>
             )}
 
-            <HStack spacing={2} justify="flex-end" pt={2}>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={closeApiKeyForm}
-              >
-                Cancel
-              </Button>
+                </VStack>
+              </ScreenSection>
+            </VStack>
+          )}
+        </ScreenBody>
+
+        {isAgentSession ? (
+          <StickyActionBar
+            primaryAction={<Button variant="secondary" onClick={closeApiKeyForm}>Back</Button>}
+          />
+        ) : (
+          <StickyActionBar
+            secondaryAction={<Button variant="secondary" onClick={closeApiKeyForm}>Cancel</Button>}
+            primaryAction={
               <Button
                 variant="primary"
-                size="sm"
                 onClick={handleSaveApiKey}
                 isLoading={isSubmittingApiKey || isResolvingAddress}
-                loadingText={isResolvingAddress ? "Resolving..." : "Saving..."}
+                loadingText={isResolvingAddress ? "Resolving…" : "Saving…"}
               >
-                Save
+                Save changes
               </Button>
-            </HStack>
-          </VStack>
+            }
+          />
         )}
-      </VStack>
-      </Box>
+      </AppScreen>
     );
   }
 
@@ -773,22 +725,6 @@ function AccountSettings({
         : account.type === "impersonator"
           ? "View-Only"
           : "Bankr";
-  const accountTypeAccent =
-    account.type === "privateKey"
-      ? "accent.highlight"
-      : account.type === "seedPhrase"
-        ? "accent.primary"
-        : account.type === "impersonator"
-          ? "status.success.fg"
-          : "accent.secondary";
-  const accountTypeAccentFg =
-    account.type === "privateKey"
-      ? "accentFg.highlight"
-      : account.type === "seedPhrase"
-        ? "accentFg.primary"
-        : account.type === "impersonator"
-          ? "status.success.bg"
-          : "accentFg.secondary";
   const headerName =
     account.displayName || ensIdentity.name || truncateAddress(account.address);
   const canReveal =
@@ -797,92 +733,41 @@ function AccountSettings({
 
   return (
     <>
-      <Box display="flex" flexDirection="column" flex="1" minH={0} w="100%">
-        {/* Sticky header — back button + heading + identity card. Stays
-            pinned to the top so users always know where they are while
-            scrolling through long forms below. */}
-        <Box
-          flexShrink={0}
-          bg="bg.base"
-          px={4}
-          pt={4}
-          pb={3}
-          borderBottom="1px solid"
-          borderColor="border.subtle"
-        >
-          <VStack spacing={3} align="stretch">
-            <HStack>
-              <IconButton
-                aria-label="Back"
-                icon={<ArrowBackIcon />}
-                variant="ghost"
-                size="sm"
-                onClick={onClose}
-              />
-              <HStack spacing={2}>
-                <IconBox size="32px" bg="accent.secondary" noShadow>
-                  <SettingsIcon color="accentFg.secondary" />
-                </IconBox>
-                <Text
-                  fontSize="lg"
-                  fontWeight="900"
-                  color="text.primary"
-                  textTransform="uppercase"
-                  letterSpacing="tight"
-                >
-                  Account Settings
-                </Text>
-              </HStack>
-              <Spacer />
-            </HStack>
-
-            {/* Identity card — avatar + name + address (with copy + explorer) + type pill */}
+      <AppScreen>
+        <AppHeader title="Account settings" onBack={onClose} />
+        <ScreenBody pt={5}>
+          <VStack spacing={6} align="stretch">
             <Box
-              p={3}
-              bg="surface.sunken"
-              border={isDarkTheme ? "1px solid" : "2px solid"}
-              borderColor="border.default"
-              borderRadius="md"
+              pb={5}
+              borderBottom="1px solid"
+              borderColor="border.subtle"
             >
               <HStack spacing={3} align="center">
                 <AccountAvatar
                   account={account}
                   ensAvatar={ensIdentity.avatar}
                 />
-                <VStack spacing={1} align="stretch" flex={1} minW={0}>
+                <VStack spacing={1.5} align="stretch" flex={1} minW={0}>
                   <HStack spacing={2} minW={0}>
                     <Text
-                      fontSize="sm"
-                      fontWeight="800"
-                      color="text.primary"
+                      fontSize="lg"
+                      fontWeight="600"
+                      color="fg.primary"
                       noOfLines={1}
                       flex={1}
                       minW={0}
                     >
                       {headerName}
                     </Text>
-                    <Box
-                      bg={accountTypeAccent}
-                      color={accountTypeAccentFg}
-                      border={isDarkTheme ? "1px solid" : "2px solid"}
-                      borderColor="border.default"
-                      borderRadius="sm"
-                      px={1.5}
-                      py={0}
-                      fontSize="2xs"
-                      fontWeight="800"
-                      textTransform="uppercase"
-                      letterSpacing="wide"
-                      flexShrink={0}
-                    >
+                    <Badge variant="subtle" fontSize="xs" flexShrink={0}>
                       {accountTypeLabel}
-                    </Box>
+                    </Badge>
                   </HStack>
                   <HStack spacing={1} minW={0}>
                     <Text
                       fontSize="xs"
                       fontFamily="mono"
-                      color="text.tertiary"
+                      color="fg.secondary"
                       noOfLines={1}
                       flex={1}
                       minW={0}
@@ -907,130 +792,90 @@ function AccountSettings({
                 </VStack>
               </HStack>
             </Box>
-          </VStack>
-        </Box>
 
-        {/* Scrollable body — everything below the identity card */}
-        <Box flex="1" overflowY="auto" minH={0} px={4} pt={4} pb={4}>
-          <VStack spacing={5} align="stretch">
-        {/* Display Name — Save appears inline only when dirty */}
-        <FormControl>
-          <FormLabel
-            fontSize="xs"
-            fontWeight="700"
-            color="text.primary"
-            textTransform="uppercase"
-            letterSpacing="wider"
-          >
-            Display Name
-          </FormLabel>
-          <HStack spacing={2}>
-            <Input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Enter a name..."
-              size="md"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && displayNameDirty && !isSaving) {
-                  handleSaveDisplayName();
-                }
-              }}
-            />
-            {displayNameDirty && (
-              <Button
-                variant="primary"
-                size="md"
-                onClick={handleSaveDisplayName}
-                isLoading={isSaving}
-                minW="70px"
-                leftIcon={<CheckIcon />}
+            <ScreenSection title="Account name" description="Shown throughout WalletChan.">
+              <FormControl>
+                <FormLabel>Display name</FormLabel>
+                <HStack spacing={2}>
+                  <Input
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Enter a name"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && displayNameDirty && !isSaving) {
+                        handleSaveDisplayName();
+                      }
+                    }}
+                  />
+                  {displayNameDirty && (
+                    <Button
+                      variant="primary"
+                      onClick={handleSaveDisplayName}
+                      isLoading={isSaving}
+                      minW="76px"
+                      leftIcon={<CheckIcon />}
+                    >
+                      Save
+                    </Button>
+                  )}
+                </HStack>
+              </FormControl>
+            </ScreenSection>
+
+            {account.type === "seedPhrase" && (
+              <ScreenSection
+                title="Seed group"
+                description="This name is shared by every account derived from the phrase."
               >
-                Save
-              </Button>
+                <FormControl>
+                  <FormLabel>Group name</FormLabel>
+                  <HStack spacing={2}>
+                    <Input
+                      value={seedGroupName}
+                      onChange={(e) => setSeedGroupName(e.target.value)}
+                      placeholder="Main seed"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && seedGroupDirty && !isSavingSeedGroup) {
+                          handleSaveSeedGroupName();
+                        }
+                      }}
+                    />
+                    {seedGroupDirty && (
+                      <Button
+                        variant="primary"
+                        onClick={handleSaveSeedGroupName}
+                        isLoading={isSavingSeedGroup}
+                        minW="76px"
+                        leftIcon={<CheckIcon />}
+                      >
+                        Save
+                      </Button>
+                    )}
+                  </HStack>
+                </FormControl>
+              </ScreenSection>
             )}
-          </HStack>
-        </FormControl>
 
-        {/* Seed Group Name — same inline-save pattern */}
-        {account.type === "seedPhrase" && (
-          <FormControl>
-            <FormLabel
-              fontSize="xs"
-              fontWeight="700"
-              color="text.primary"
-              textTransform="uppercase"
-              letterSpacing="wider"
-            >
-              Seed Group Name
-            </FormLabel>
-            <HStack spacing={2}>
-              <Input
-                value={seedGroupName}
-                onChange={(e) => setSeedGroupName(e.target.value)}
-                placeholder="e.g. Main Seed"
-                size="md"
-                onKeyDown={(e) => {
-                  if (
-                    e.key === "Enter" &&
-                    seedGroupDirty &&
-                    !isSavingSeedGroup
-                  ) {
-                    handleSaveSeedGroupName();
-                  }
-                }}
-              />
-              {seedGroupDirty && (
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={handleSaveSeedGroupName}
-                  isLoading={isSavingSeedGroup}
-                  minW="70px"
-                  leftIcon={<CheckIcon />}
-                >
-                  Save
-                </Button>
-              )}
-            </HStack>
-          </FormControl>
-        )}
-
-        {/* Utilities — quiet, low-stakes actions */}
-        <VStack spacing={2} align="stretch">
-          <Text
-            fontSize="2xs"
-            fontWeight="700"
-            color="text.tertiary"
-            textTransform="uppercase"
-            letterSpacing="wider"
-          >
-            Utilities
-          </Text>
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={<RepeatIcon />}
-            onClick={handleRefreshEns}
-            isLoading={isRefreshingEns}
-            loadingText="Resolving..."
-            justifyContent="flex-start"
-            w="full"
-          >
-            Refresh ENS Data
-          </Button>
-          {account.type === "bankr" && (
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<EditIcon />}
-              onClick={() => setView("changeApiKey")}
-              justifyContent="flex-start"
-              w="full"
-            >
-              Change API Key & Address
-            </Button>
-          )}
-        </VStack>
+            <ScreenSection title="Account tools">
+              <ListSurface>
+                <ListItem interactive onClick={handleRefreshEns} isDisabled={isRefreshingEns}>
+                  <ListItemMedia><RepeatIcon boxSize={5} /></ListItemMedia>
+                  <ListItemContent>
+                    <ListItemTitle>{isRefreshingEns ? "Refreshing identity…" : "Refresh ENS data"}</ListItemTitle>
+                    <ListItemDescription>Update this account’s name and avatar</ListItemDescription>
+                  </ListItemContent>
+                </ListItem>
+                {account.type === "bankr" && (
+                  <ListItem interactive onClick={() => setView("changeApiKey")}>
+                    <ListItemMedia><EditIcon boxSize={5} /></ListItemMedia>
+                    <ListItemContent>
+                      <ListItemTitle>Change Bankr connection</ListItemTitle>
+                      <ListItemDescription>Update API key and wallet address</ListItemDescription>
+                    </ListItemContent>
+                  </ListItem>
+                )}
+              </ListSurface>
+            </ScreenSection>
 
         {(account.type === "privateKey" || account.type === "seedPhrase") && (
           <>
@@ -1044,96 +889,51 @@ function AccountSettings({
           </>
         )}
 
-        <Divider borderColor="border.subtle" />
-
-        {/* Danger zone — reveals + destructive actions grouped together */}
-        <VStack spacing={2} align="stretch">
-          <Text
-            fontSize="2xs"
-            fontWeight="700"
-            color="chart.negative"
-            textTransform="uppercase"
-            letterSpacing="wider"
-          >
-            Danger Zone
-          </Text>
-          {canReveal && (
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<ViewIcon color="status.warning.fg" />}
-              onClick={handleRevealKey}
-              justifyContent="flex-start"
-              color="status.warning.fg"
-              fontWeight="700"
-              borderColor="status.warning.border"
-              _hover={{
-                bg: "status.warning.bg",
-                borderColor: "status.warning.border",
-              }}
-              w="full"
+            <ScreenSection
+              title="Sensitive actions"
+              description="These actions require extra care and may require your master password."
             >
-              Reveal Private Key
-            </Button>
-          )}
-          {account.type === "seedPhrase" && (
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<ViewIcon color="status.warning.fg" />}
-              onClick={handleRevealSeedPhrase}
-              justifyContent="flex-start"
-              color="status.warning.fg"
-              fontWeight="700"
-              borderColor="status.warning.border"
-              _hover={{
-                bg: "status.warning.bg",
-                borderColor: "status.warning.border",
-              }}
-              w="full"
-            >
-              Reveal Seed Phrase
-            </Button>
-          )}
-          <Tooltip
-            label="Cannot remove the last account"
-            isDisabled={!removeDisabled}
-            placement="top"
-            hasArrow
-          >
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={
-                <DeleteIcon
-                  color={removeDisabled ? "fg.muted" : "chart.negative"}
-                />
-              }
-              onClick={() => setIsDeleteOpen(true)}
-              justifyContent="flex-start"
-              color={removeDisabled ? "fg.muted" : "chart.negative"}
-              fontWeight="700"
-              borderColor={
-                removeDisabled ? "border.default" : "status.error.border"
-              }
-              _hover={
-                !removeDisabled
-                  ? {
-                      bg: "status.error.bg",
-                      borderColor: "status.error.border",
-                    }
-                  : undefined
-              }
-              w="full"
-              isDisabled={removeDisabled}
-            >
-              Remove Account
-            </Button>
-          </Tooltip>
-        </VStack>
+              <ListSurface>
+                {canReveal && (
+                  <ListItem interactive onClick={handleRevealKey}>
+                    <ListItemMedia><ViewIcon color="status.warning.fg" boxSize={5} /></ListItemMedia>
+                    <ListItemContent>
+                      <ListItemTitle>Reveal private key</ListItemTitle>
+                      <ListItemDescription>View the secret key for this account</ListItemDescription>
+                    </ListItemContent>
+                  </ListItem>
+                )}
+                {account.type === "seedPhrase" && (
+                  <ListItem interactive onClick={handleRevealSeedPhrase}>
+                    <ListItemMedia><ViewIcon color="status.warning.fg" boxSize={5} /></ListItemMedia>
+                    <ListItemContent>
+                      <ListItemTitle>Reveal seed phrase</ListItemTitle>
+                      <ListItemDescription>View all 12 recovery words</ListItemDescription>
+                    </ListItemContent>
+                  </ListItem>
+                )}
+                <ListItem
+                  interactive
+                  onClick={() => setIsDeleteOpen(true)}
+                  isDisabled={removeDisabled}
+                >
+                  <ListItemMedia>
+                    <DeleteIcon color={removeDisabled ? "fg.muted" : "status.error.fg"} boxSize={5} />
+                  </ListItemMedia>
+                  <ListItemContent>
+                    <ListItemTitle color={removeDisabled ? "fg.muted" : "status.error.fg"}>
+                      Remove account
+                    </ListItemTitle>
+                    <ListItemDescription>
+                      {removeDisabled ? "You cannot remove your last account" : "Remove this account from WalletChan"}
+                    </ListItemDescription>
+                  </ListItemContent>
+                </ListItem>
+              </ListSurface>
+            </ScreenSection>
           </VStack>
-        </Box>
-      </Box>
+        </ScreenBody>
+      </AppScreen>
 
       {/* Delete-confirmation popup — small modal because it's a confirmation,
           not a destination screen. Keeps the user in their place on cancel. */}
@@ -1145,23 +945,22 @@ function AccountSettings({
         <ModalOverlay bg="surface.overlay" />
         <ModalContent mx={4}>
           <ModalHeader
-            color="text.primary"
-            fontSize="md"
+            color="fg.primary"
+            fontSize="lg"
             pb={2}
-            textTransform="uppercase"
-            letterSpacing="wider"
           >
             <Box display="flex" alignItems="center" gap={2}>
-              <IconBox
-                size="32px"
-                bg={isDarkTheme ? "status.error.fg" : "accent.primary"}
-                noShadow
+              <Box
+                w="32px"
+                h="32px"
+                display="grid"
+                placeItems="center"
+                bg="status.error.bg"
+                borderRadius="md"
               >
-                <WarningTwoIcon
-                  color={isDarkTheme ? "fg.inverse" : "accentFg.primary"}
-                />
-              </IconBox>
-              Remove Account?
+                <WarningTwoIcon color="status.error.fg" />
+              </Box>
+              Remove account?
             </Box>
           </ModalHeader>
 
@@ -1174,7 +973,7 @@ function AccountSettings({
               <Box
                 p={3}
                 bg="surface.sunken"
-                border={isDarkTheme ? "1px solid" : "2px solid"}
+                border="1px solid"
                 borderColor="border.default"
                 borderRadius="md"
               >
@@ -1192,14 +991,14 @@ function AccountSettings({
                   w="full"
                   p={3}
                   bg="status.error.bg"
-                  border={isDarkTheme ? "1px solid" : "2px solid"}
+                  border="1px solid"
                   borderColor="status.error.border"
                   borderRadius="md"
                 >
                   <Text color="status.error.fg" fontSize="sm" fontWeight="700">
                     {account.type === "seedPhrase"
-                      ? "Make sure you have backed up your seed phrase before removing this account!"
-                      : "Make sure you have backed up your private key before removing this account!"}
+                      ? "Make sure you have backed up your seed phrase before removing this account."
+                      : "Make sure you have backed up your private key before removing this account."}
                   </Text>
                 </Box>
               )}
@@ -1220,9 +1019,9 @@ function AccountSettings({
               size="sm"
               onClick={handleDeleteAccount}
               isLoading={isDeleting}
-              loadingText="Removing..."
+              loadingText="Removing…"
             >
-              Remove Account
+              Remove account
             </Button>
           </ModalFooter>
         </ModalContent>
@@ -1252,7 +1051,7 @@ function AccountAvatar({
         boxSize={`${size}px`}
         minW={`${size}px`}
         borderRadius="full"
-        border="2px solid"
+        border="1px solid"
         borderColor="border.default"
         objectFit="cover"
       />
@@ -1266,7 +1065,7 @@ function AccountAvatar({
         boxSize={`${size}px`}
         minW={`${size}px`}
         borderRadius="sm"
-        border="2px solid"
+        border="1px solid"
         borderColor="border.default"
       />
     );
@@ -1278,7 +1077,7 @@ function AccountAvatar({
       boxSize={`${size}px`}
       minW={`${size}px`}
       borderRadius="sm"
-      border="2px solid"
+      border="1px solid"
       borderColor="border.default"
     />
   );

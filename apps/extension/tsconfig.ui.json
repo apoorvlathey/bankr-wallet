@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": [
+    "src/components/ui/**/*.ts",
+    "src/components/ui/**/*.tsx",
+    "src/theme/**/*.ts",
+    "src/theme/**/*.tsx",
+    "src/components/CopyButton.tsx",
+    "src/components/FullScreenPickerLayer.tsx"
+  ],
+  "exclude": [
+    "src/preview",
+    "src/chrome",
+    "src/theme/index.ts",
+    "src/theme/useChainBadgeStyle.ts",
+    "src/components/ui/index.ts",
+    "src/components/ui/ActionSheet.tsx"
+  ]
+}

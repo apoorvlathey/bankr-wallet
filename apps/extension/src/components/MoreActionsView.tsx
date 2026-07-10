@@ -1,20 +1,12 @@
 import { Badge,
   Box,
-  HStack,
   Icon,
-  IconButton,
-  SimpleGrid,
-  Spacer,
-  Text,
-  VStack,
 } from "@chakra-ui/react";
 import {
-  ArrowBackIcon,
   ChevronRightIcon,
   ExternalLinkIcon,
   ViewOffIcon,
 } from "@chakra-ui/icons";
-import { isDarkThemeId, ThemedCard, useStripTokens, useTheme } from "@/theme";
 import {
   REVOKE_CASH_URL,
   revokeCashAddressUrl,
@@ -26,12 +18,26 @@ import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
 import { GlobeIcon } from "@/components/Settings/icons";
 import { useEffect, useState } from "react";
+import {
+  AppHeader,
+  AppScreen,
+  ListItem,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
+  ListItemMeta,
+  ListItemTitle,
+  ListSurface,
+  ScreenBody,
+  ScreenSection,
+} from "@/components/ui";
 
 interface MoreActionsViewProps {
   onBack: () => void;
   onWalletConnect: () => void;
   onHideTokens: () => void;
   fromAddress: string;
+  walletConnectSessionCount?: number;
 }
 
 interface MoreAction {
@@ -41,6 +47,7 @@ interface MoreAction {
   iconBg: string;
   iconColor: string;
   badge?: string;
+  highlighted?: boolean;
   external?: boolean;
   onClick?: () => void;
 }
@@ -115,125 +122,38 @@ function ActionBadge({ children }: { children: string }) {
   );
 }
 
-function ActionTile({ action }: { action: MoreAction }) {
-  const { themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
-
+function ActionListRow({ action }: { action: MoreAction }) {
   return (
-    <ThemedCard
-      as="button"
-      type="button"
-      weight="medium"
+    <ListItem
       interactive
-      h="104px"
-      minW={0}
-      cursor="pointer"
-      textAlign="left"
+      tone={action.highlighted ? "highlight" : "default"}
       onClick={action.onClick}
     >
-      <VStack align="stretch" spacing={3} h="100%">
-        <HStack justify="space-between" align="flex-start">
-          <Box
-            bg={action.iconBg}
-            color={action.iconColor}
-            borderRadius={isDarkTheme ? "md" : undefined}
-            p={2}
-          >
-            {action.icon}
-          </Box>
-          {action.badge ? (
-            <ActionBadge>{action.badge}</ActionBadge>
-          ) : (
-            <ExternalLinkIcon color="text.secondary" boxSize={3.5} />
-          )}
-        </HStack>
-        <Box mt="auto" minW={0}>
-          <Text
-            color="text.primary"
-            fontSize="sm"
-            fontWeight="900"
-            lineHeight="1.1"
-            textTransform="uppercase"
-          >
-            {action.title}
-          </Text>
-          <Text
-            color="text.secondary"
-            fontSize="2xs"
-            fontWeight="700"
-            lineHeight="1.2"
-            noOfLines={1}
-          >
-            {action.detail}
-          </Text>
-        </Box>
-      </VStack>
-    </ThemedCard>
-  );
-}
-
-function ActionRow({ action }: { action: MoreAction }) {
-  const strip = useStripTokens();
-  const { themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
-  const isExternal = action.external !== false;
-
-  return (
-    <ThemedCard
-      as="button"
-      type="button"
-      weight="thin"
-      interactive
-      w="100%"
-      cursor="pointer"
-      textAlign="left"
-      onClick={action.onClick}
-    >
-      <HStack spacing={3} minW={0}>
-        <Box
-          bg={action.iconBg}
-          color={action.iconColor}
-          borderRadius={isDarkTheme ? "md" : undefined}
-          p={2}
-          flexShrink={0}
-        >
+      <ListItemMedia>
+        <Box bg={action.iconBg} color={action.iconColor} borderRadius="md" p={2}>
           {action.icon}
         </Box>
-        <Box minW={0}>
-          <Text
-            color="text.primary"
-            fontWeight="800"
-            fontSize="sm"
-            lineHeight="1.1"
-            noOfLines={1}
-          >
-            {action.title}
-          </Text>
-          <Text
-            color="text.secondary"
-            fontSize="xs"
-            fontWeight="600"
-            noOfLines={1}
-          >
-            {action.detail}
-          </Text>
-        </Box>
-        <Spacer />
-        <Box
-          bg={isDarkTheme ? "transparent" : strip.bg}
-          color={isDarkTheme ? "text.secondary" : strip.fg}
-          borderRadius={isDarkTheme ? "md" : undefined}
-          p={isDarkTheme ? 0 : 1}
-          flexShrink={0}
+      </ListItemMedia>
+      <ListItemContent>
+        <ListItemTitle>{action.title}</ListItemTitle>
+        <ListItemDescription
+          color={action.highlighted ? "accentFg.highlight" : undefined}
         >
-          {isExternal ? (
-            <ExternalLinkIcon boxSize={3} />
-          ) : (
-            <ChevronRightIcon boxSize={4} />
-          )}
-        </Box>
-      </HStack>
-    </ThemedCard>
+          {action.detail}
+        </ListItemDescription>
+      </ListItemContent>
+      <ListItemMeta
+        color={action.highlighted ? "accentFg.highlight" : undefined}
+      >
+        {action.badge ? (
+          <ActionBadge>{action.badge}</ActionBadge>
+        ) : action.external === false ? (
+          <ChevronRightIcon aria-hidden="true" />
+        ) : (
+          <ExternalLinkIcon aria-hidden="true" />
+        )}
+      </ListItemMeta>
+    </ListItem>
   );
 }
 
@@ -242,6 +162,7 @@ export default function MoreActionsView({
   onWalletConnect,
   onHideTokens,
   fromAddress,
+  walletConnectSessionCount = 0,
 }: MoreActionsViewProps) {
   const [stakeApy, setStakeApy] = useState<number | null>(null);
   const isFirefox =
@@ -279,7 +200,7 @@ export default function MoreActionsView({
       onClick: () => openExternal(WALLETCHAN_STAKE_URL),
     },
     {
-      title: "Migrate Tokens",
+      title: "Migrate tokens",
       detail: "walletchan.eth.sh/migrate",
       icon: <MigrateIcon />,
       iconBg: "accent.secondary",
@@ -291,17 +212,24 @@ export default function MoreActionsView({
   const secondaryActions: MoreAction[] = [
     {
       title: "WalletConnect",
-      detail: "Connect dapps by URI",
+      detail:
+        walletConnectSessionCount > 0
+          ? `${walletConnectSessionCount} active ${walletConnectSessionCount === 1 ? "session" : "sessions"}`
+          : "Connect dapps by URI",
       icon: <WalletConnectLogoIcon />,
-      iconBg: "accent.secondary",
-      iconColor: "accentFg.secondary",
+      iconBg: walletConnectSessionCount > 0 ? "surface.base" : "accent.secondary",
+      iconColor:
+        walletConnectSessionCount > 0
+          ? "accent.highlight"
+          : "accentFg.secondary",
+      highlighted: walletConnectSessionCount > 0,
       external: false,
       onClick: onWalletConnect,
     },
     ...(!isFirefox
       ? [
           {
-            title: "dapp3 Browser",
+            title: "dapp3 browser",
             detail: "ENS, IPFS, onchain HTML",
             icon: <GlobeIcon boxSize={5} />,
             iconBg: "chart.positive",
@@ -311,7 +239,7 @@ export default function MoreActionsView({
         ]
       : []),
     {
-      title: "Revoke Approvals",
+      title: "Revoke approvals",
       detail: "revoke.cash",
       icon: <RevokeIcon />,
       iconBg: "accent.highlight",
@@ -322,7 +250,7 @@ export default function MoreActionsView({
         ),
     },
     {
-      title: "Hide Tokens",
+      title: "Hide tokens",
       detail: "Hide spam tokens from portfolio",
       icon: <ViewOffIcon boxSize={5} />,
       iconBg: "surface.sunken",
@@ -333,49 +261,28 @@ export default function MoreActionsView({
   ];
 
   return (
-    <Box
-      p={4}
-      h="100%"
-      minH={0}
-      overflowY="auto"
-      overflowX="hidden"
-      bg="surface.base"
-    >
-      <VStack spacing={4} align="stretch">
-        <HStack spacing={2} justify="space-between">
-          <HStack spacing={2} minW={0} flex={1}>
-            <IconButton
-              aria-label="Back"
-              icon={<ArrowBackIcon />}
-              variant="ghost"
-              size="sm"
-              onClick={onBack}
-            />
-            <Text
-              fontSize="lg"
-              fontWeight="900"
-              color="text.primary"
-              textTransform="uppercase"
-              noOfLines={1}
-            >
-              More
-            </Text>
-          </HStack>
-          {fromAddress && <FromAccountDisplay address={fromAddress} />}
-        </HStack>
-
-        <SimpleGrid columns={2} spacing={2}>
-          {primaryActions.map((action) => (
-            <ActionTile key={action.title} action={action} />
-          ))}
-        </SimpleGrid>
-
-        <VStack align="stretch" spacing={2}>
-          {secondaryActions.map((action) => (
-            <ActionRow key={action.title} action={action} />
-          ))}
-        </VStack>
-      </VStack>
-    </Box>
+    <AppScreen>
+      <AppHeader
+        title="More"
+        onBack={onBack}
+        trailing={fromAddress ? <FromAccountDisplay address={fromAddress} /> : undefined}
+      />
+      <ScreenBody pb={6}>
+        <ScreenSection title="WalletChan">
+          <ListSurface>
+            {primaryActions.map((action) => (
+              <ActionListRow key={action.title} action={action} />
+            ))}
+          </ListSurface>
+        </ScreenSection>
+        <ScreenSection title="Tools" mt={5}>
+          <ListSurface>
+            {secondaryActions.map((action) => (
+              <ActionListRow key={action.title} action={action} />
+            ))}
+          </ListSurface>
+        </ScreenSection>
+      </ScreenBody>
+    </AppScreen>
   );
 }

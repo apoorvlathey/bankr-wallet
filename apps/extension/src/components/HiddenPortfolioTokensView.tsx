@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Box,
   Button,
   HStack,
   IconButton,
-  Spinner,
-  Text,
-  VStack,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, RepeatIcon } from "@chakra-ui/icons";
+import { RepeatIcon, ViewIcon } from "@chakra-ui/icons";
 
 import {
   getHiddenPortfolioTokens,
@@ -19,6 +15,20 @@ import {
 import { recordCurrentPortfolioSnapshot } from "@/chrome/portfolioSnapshotRefresh";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import PortfolioTokenManageRow from "@/components/PortfolioTokenManageRow";
+import {
+  AppHeader,
+  AppScreen,
+  EmptyState,
+  EmptyStateActions,
+  EmptyStateDescription,
+  EmptyStateHeader,
+  EmptyStateMedia,
+  EmptyStateTitle,
+  ListSurface,
+  ScreenBody,
+  ScreenSection,
+  SkeletonRow,
+} from "@/components/ui";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 
@@ -88,73 +98,63 @@ export default function HiddenPortfolioTokensView({
   };
 
   return (
-    <Box
-      p={4}
-      h="100%"
-      minH={0}
-      overflowY="auto"
-      overflowX="hidden"
-      bg="surface.base"
-    >
-      <VStack spacing={4} align="stretch" minH="100%">
-        <HStack spacing={2} justify="space-between">
-          <HStack spacing={2} minW={0} flex={1}>
-            <IconButton
-              aria-label="Back"
-              icon={<ArrowBackIcon />}
-              variant="ghost"
-              size="sm"
-              onClick={onBack}
-              isDisabled={!!updatingKey}
-            />
-            <Text
-              fontSize="lg"
-              fontWeight="900"
-              color="text.primary"
-              textTransform="uppercase"
-              noOfLines={1}
-            >
-              Currently Hidden
-            </Text>
-          </HStack>
-          {address && <FromAccountDisplay address={address} />}
-        </HStack>
+    <AppScreen>
+      <AppHeader
+        title="Hidden tokens"
+        onBack={onBack}
+        trailing={address ? <FromAccountDisplay address={address} /> : undefined}
+      />
 
-        <HStack justify="space-between">
-          <Box minW={0}>
-            <Text fontSize="sm" color="text.secondary" fontWeight="700">
-              {tokenCountLabel}
-            </Text>
-            <Text fontSize="xs" color="text.tertiary" fontWeight="600">
-              Unhiding a token makes it visible in every portfolio again.
-            </Text>
-          </Box>
+      <ScreenBody pt={4}>
+        <ScreenSection
+          title={tokenCountLabel}
+          description="Restoring a token makes it visible in every wallet portfolio."
+          headingProps={{ fontSize: "lg" }}
+        >
+          <HStack justify="flex-end" mb={2}>
           <IconButton
             aria-label="Refresh hidden tokens"
             icon={<RepeatIcon />}
             size="sm"
             variant="ghost"
-            color="text.secondary"
+            color="fg.secondary"
             onClick={loadData}
             isDisabled={loading || !!updatingKey}
-            _hover={{ color: "accent.secondary" }}
           />
-        </HStack>
+          </HStack>
 
         {loading ? (
-          <HStack justify="center" py={8}>
-            <Spinner size="md" color="accent.secondary" />
-          </HStack>
+          <ListSurface aria-label="Loading hidden tokens">
+            {Array.from({ length: 4 }, (_, index) => (
+              <SkeletonRow key={index} />
+            ))}
+          </ListSurface>
         ) : error ? (
-          <Text fontSize="sm" color="chart.negative" fontWeight="700" py={4}>
-            {error}
-          </Text>
+          <EmptyState>
+            <EmptyStateHeader>
+              <EmptyStateTitle>Hidden tokens could not be loaded</EmptyStateTitle>
+              <EmptyStateDescription>{error}</EmptyStateDescription>
+            </EmptyStateHeader>
+            <EmptyStateActions>
+              <Button variant="secondary" onClick={loadData}>
+                Try again
+              </Button>
+            </EmptyStateActions>
+          </EmptyState>
         ) : tokens.length === 0 ? (
-          <Text fontSize="sm" color="text.tertiary" fontWeight="600" py={4}>
-            No hidden tokens.
-          </Text>
+          <EmptyState>
+            <EmptyStateMedia>
+              <ViewIcon boxSize={6} />
+            </EmptyStateMedia>
+            <EmptyStateHeader>
+              <EmptyStateTitle>Every token is visible</EmptyStateTitle>
+              <EmptyStateDescription>
+                Tokens hidden from any portfolio will appear here.
+              </EmptyStateDescription>
+            </EmptyStateHeader>
+          </EmptyState>
         ) : (
-          <VStack spacing={2} align="stretch">
+          <ListSurface>
             {tokens.map((token) => {
               const key = getPortfolioTokenKey(
                 token.chainId,
@@ -166,31 +166,28 @@ export default function HiddenPortfolioTokensView({
                 <PortfolioTokenManageRow
                   key={key}
                   token={token}
-                  networksInfo={networksInfo}
+                  networksInfo={networksInfo ?? {}}
                   logoSrc={logoSrc}
                   subtitle={token.name}
                   rightSlot={
                     <Button
                       size="xs"
-                      bg="accent.secondary"
-                      color="accentFg.secondary"
-                      border="2px solid"
-                      borderColor="border.default"
+                      variant="secondary"
                       isLoading={updatingKey === key}
                       loadingText="Unhiding..."
                       isDisabled={!!updatingKey && updatingKey !== key}
                       onClick={() => handleUnhideToken(token)}
-                      _hover={{ bg: "accent.secondary", opacity: 0.9 }}
                     >
-                      Unhide
+                      Restore
                     </Button>
                   }
                 />
               );
             })}
-          </VStack>
+          </ListSurface>
         )}
-      </VStack>
-    </Box>
+        </ScreenSection>
+      </ScreenBody>
+    </AppScreen>
   );
 }

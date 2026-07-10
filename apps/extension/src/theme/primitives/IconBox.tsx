@@ -11,8 +11,8 @@
  * `status.success.bg`, etc.).
  *
  * The shadow scales with the active theme's `shadows.card` so a Bauhaus
- * IconBox renders with a hard offset and a Midnight one renders with a soft
- * glow — no per-component change required.
+ * IconBox renders with a hard offset in Bauhaus and a quiet hairline with no
+ * resting shadow in Midnight.
  */
 
 import { forwardRef } from "react";
@@ -32,6 +32,7 @@ export const IconBox = forwardRef<HTMLDivElement, IconBoxProps>(
     ref,
   ) {
     const { tokens } = useTheme();
+    const isDarkTheme = tokens.colorMode === "dark";
 
     return (
       <Box
@@ -39,7 +40,7 @@ export const IconBox = forwardRef<HTMLDivElement, IconBoxProps>(
         boxSize={size}
         bg={bg}
         border={tokens.borders.thin}
-        borderColor="border.default"
+        borderColor={isDarkTheme ? "border.subtle" : "border.default"}
         borderRadius={tokens.radii.badge}
         boxShadow={noShadow ? "none" : tokens.shadows.card}
         display="flex"

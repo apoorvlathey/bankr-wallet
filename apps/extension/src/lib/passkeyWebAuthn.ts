@@ -115,8 +115,10 @@ async function runPasskeyPrompt<T>(
   const controller =
     typeof AbortController !== "undefined" ? new AbortController() : null;
   let settled = false;
-  let recoveryTimer: ReturnType<typeof window.setTimeout> | null = null;
-  let hardTimeout: ReturnType<typeof window.setTimeout> | null = null;
+  // These prompts only run in extension pages, so use the browser timer
+  // handle rather than Node's globally-merged `Timeout` type.
+  let recoveryTimer: number | null = null;
+  let hardTimeout: number | null = null;
   let rejectCancelled: ((error: Error) => void) | null = null;
 
   const cancelPromise = new Promise<never>((_, reject) => {

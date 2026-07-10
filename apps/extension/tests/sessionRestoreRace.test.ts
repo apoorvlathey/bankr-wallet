@@ -27,8 +27,16 @@ test("manual lock cannot be overtaken by an in-flight session restore", async ()
   const session: StorageRecord = {};
 
   const storageArea = (storage: StorageRecord) => ({
-    async get(keys?: string | string[] | StorageRecord | null) {
-      return selectStorageValues(storage, keys);
+    get(
+      keys?: string | string[] | StorageRecord | null,
+      callback?: (values: StorageRecord) => void,
+    ) {
+      const values = selectStorageValues(storage, keys);
+      if (callback) {
+        callback(values);
+        return;
+      }
+      return Promise.resolve(values);
     },
     async set(values: StorageRecord) {
       Object.assign(storage, values);
@@ -49,6 +57,7 @@ test("manual lock cannot be overtaken by an in-flight session restore", async ()
         sync: storageArea(sync),
         session: storageArea(session),
       },
+      runtime: { lastError: undefined },
     },
   });
 

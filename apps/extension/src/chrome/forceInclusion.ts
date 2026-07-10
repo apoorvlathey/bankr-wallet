@@ -17,6 +17,7 @@ import {
   type PublicClient,
   type Hash,
   type TransactionReceipt,
+  type Chain,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet, sepolia } from "viem/chains";
@@ -285,7 +286,11 @@ export async function processForceInclusionBankr(
 
   // Snapshot the original L2 intent (pending.tx) so the force-inclusion row
   // shows what the user actually meant to do, not just "Force Inclusion".
-  attachClearSignedMetaToHistory(txId, pending.tx, pending.tx.chainId);
+  attachClearSignedMetaToHistory(
+    txId,
+    { ...pending.tx, to: pending.tx.to ?? undefined },
+    pending.tx.chainId,
+  );
 
   try {
     // Stage 1: Build deposit tx
@@ -404,7 +409,11 @@ export async function processForceInclusionLocal(
 
   // Snapshot the original L2 intent (pending.tx) so the force-inclusion row
   // shows what the user actually meant to do, not just "Force Inclusion".
-  attachClearSignedMetaToHistory(txId, pending.tx, pending.tx.chainId);
+  attachClearSignedMetaToHistory(
+    txId,
+    { ...pending.tx, to: pending.tx.to ?? undefined },
+    pending.tx.chainId,
+  );
 
   try {
     // Stage 1: Build deposit tx
@@ -451,7 +460,7 @@ export async function processForceInclusionLocal(
     // Stage 2: Submit to L1
     await progress("submitting");
     const l1RpcUrl = await getL1RpcUrl(info.l1ChainId);
-    const l1Chain = getL1Chain(info.l1ChainId);
+    const l1Chain: Chain = getL1Chain(info.l1ChainId);
     const viemAccount = privateKeyToAccount(privateKey);
 
     const l1WalletClient = createWalletClient({
@@ -464,7 +473,6 @@ export async function processForceInclusionLocal(
       ...depositArgs,
       account: viemAccount, // Must override — depositArgs.account is an address string, not the local signer
       chain: l1Chain,
-      targetChain: info.viemChain,
       // Apply user-edited L1 gas/fees from GasEstimateDisplay if present.
       // viem's depositTransaction has a top-level `gas` (L1 gas limit) and
       // accepts `maxFeePerGas`/`maxPriorityFeePerGas` from the underlying

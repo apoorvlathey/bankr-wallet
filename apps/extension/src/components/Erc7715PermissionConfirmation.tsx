@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import {
   Box,
   Button,
+  Grid,
   HStack,
   IconButton,
-  Image,
   Spinner,
   Text,
   VStack,
@@ -13,9 +13,8 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@chakra-ui/icons";
 
 import type { PendingErc7715PermissionRequest } from "@/chrome/pendingErc7715PermissionStorage";
 import { Erc7715PermissionReview } from "@/components/Erc7715PermissionReview";
+import { ConfirmationScreen } from "@/components/ui";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { displayPermissionOrigin } from "@/lib/erc7715PermissionDisplay";
-import { useTheme } from "@/theme";
 
 interface Erc7715PermissionConfirmationProps {
   permissionRequest: PendingErc7715PermissionRequest;
@@ -31,11 +30,50 @@ interface Erc7715PermissionConfirmationProps {
   onNavigate: (direction: "prev" | "next") => void;
 }
 
+function PermissionQueueNavigation({
+  currentIndex,
+  totalCount,
+  onNavigate,
+}: Pick<
+  Erc7715PermissionConfirmationProps,
+  "currentIndex" | "totalCount" | "onNavigate"
+>) {
+  if (totalCount <= 1) return null;
+
+  return (
+    <HStack spacing={1} aria-label="Permission request queue">
+      <IconButton
+        aria-label="Previous request"
+        icon={<ChevronLeftIcon />}
+        size="sm"
+        variant="ghost"
+        onClick={() => onNavigate("prev")}
+      />
+      <Text
+        minW="34px"
+        textAlign="center"
+        fontSize="xs"
+        fontWeight="600"
+        color="fg.secondary"
+        sx={{ fontVariantNumeric: "tabular-nums" }}
+      >
+        {currentIndex + 1}/{totalCount}
+      </Text>
+      <IconButton
+        aria-label="Next request"
+        icon={<ChevronRightIcon />}
+        size="sm"
+        variant="ghost"
+        onClick={() => onNavigate("next")}
+      />
+    </HStack>
+  );
+}
+
 export default function Erc7715PermissionConfirmation({
   permissionRequest,
   currentIndex,
   totalCount,
-  isInSidePanel,
   accountType,
   onBack,
   onConfirmed,
@@ -44,13 +82,11 @@ export default function Erc7715PermissionConfirmation({
   onBeforeCancel,
   onNavigate,
 }: Erc7715PermissionConfirmationProps) {
-  const { tokens } = useTheme();
   const toast = useThemedToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
   const [editedRequest, setEditedRequest] = useState(permissionRequest.request);
   const [draftError, setDraftError] = useState<string | null>(null);
-  const displayOrigin = displayPermissionOrigin(permissionRequest);
   const isLocalSigner =
     accountType === "privateKey" || accountType === "seedPhrase";
 
@@ -113,129 +149,81 @@ export default function Erc7715PermissionConfirmation({
     onCancelled();
   };
 
+  const actions = isLocalSigner ? (
+    <VStack align="stretch" spacing={2} w="full">
+      <Grid templateColumns="repeat(2, minmax(0, 1fr))" gap={3}>
+        <Button
+          variant="secondary"
+          onClick={handleCancel}
+          isDisabled={isSubmitting}
+          isLoading={isRejecting}
+          spinner={<Spinner size="sm" sx={{ animationDirection: "reverse" }} />}
+        >
+          Reject
+        </Button>
+        <Button
+          variant="primary"
+          onClick={handleConfirm}
+          isDisabled={isRejecting || Boolean(draftError)}
+          isLoading={isSubmitting}
+          loadingText="Granting..."
+        >
+          Grant permission
+        </Button>
+      </Grid>
+      {totalCount > 1 && (
+        <Button variant="ghost" size="sm" onClick={onCancelAll}>
+          Reject all {totalCount} requests
+        </Button>
+      )}
+    </VStack>
+  ) : (
+    <Button
+      variant="danger"
+      w="full"
+      onClick={handleCancel}
+      isLoading={isRejecting}
+    >
+      Reject
+    </Button>
+  );
+
   return (
     <Box
+      h="100%"
+      minH={0}
       bg="surface.base"
-      minH={isInSidePanel ? "100vh" : "600px"}
-      display="flex"
-      flexDirection="column"
     >
-      <Box p={3} borderBottom={tokens.borders.thick} borderColor="border.default">
-        <HStack justify="space-between" spacing={2}>
-          <HStack spacing={2} minW={0}>
-            <IconButton
-              aria-label="Back"
-              icon={<ChevronLeftIcon />}
-              size="sm"
-              variant="ghost"
-              onClick={onBack}
-            />
-            {permissionRequest.favicon && (
-              <Image
-                src={permissionRequest.favicon}
-                alt=""
-                w="24px"
-                h="24px"
-                border={tokens.borders.thin}
-                borderColor="border.default"
-                borderRadius={tokens.radii.input}
-              />
-            )}
-            <Box minW={0}>
-              <Text fontSize="md" fontWeight="900" color="text.primary" noOfLines={1}>
-                Delegated Permission
-              </Text>
-              <Text fontSize="xs" color="text.secondary" fontWeight="700" noOfLines={1}>
-                {displayOrigin}
-              </Text>
-            </Box>
-          </HStack>
-
-          {totalCount > 1 && (
-            <HStack spacing={1}>
-              <IconButton
-                aria-label="Previous request"
-                icon={<ChevronLeftIcon />}
-                size="xs"
-                variant="outline"
-                onClick={() => onNavigate("prev")}
-              />
-              <Text fontSize="xs" fontWeight="900" color="text.secondary">
-                {currentIndex + 1}/{totalCount}
-              </Text>
-              <IconButton
-                aria-label="Next request"
-                icon={<ChevronRightIcon />}
-                size="xs"
-                variant="outline"
-                onClick={() => onNavigate("next")}
-              />
-            </HStack>
-          )}
-        </HStack>
-      </Box>
-
-      <Box p={3} flex="1" overflowY="auto">
-        <Erc7715PermissionReview
-          permissionRequest={permissionRequest}
-          editedRequest={editedRequest}
-          onEditedRequestChange={setEditedRequest}
-          onValidationErrorChange={setDraftError}
-        />
-      </Box>
-
-      <Box
-        p={3}
-        borderTop={tokens.borders.thick}
-        borderColor="border.default"
-        bg="surface.base"
+      <Erc7715PermissionReview
+        permissionRequest={permissionRequest}
+        editedRequest={editedRequest}
+        validationError={draftError}
+        onEditedRequestChange={setEditedRequest}
+        onValidationErrorChange={setDraftError}
       >
-        {isLocalSigner ? (
-          <VStack align="stretch" spacing={2}>
-            {draftError && (
-              <Text fontSize="xs" fontWeight="800" color="chart.negative">
-                {draftError}
-              </Text>
-            )}
-            <HStack spacing={3}>
-              <Button
-                variant="secondary"
-                flex={1}
-                onClick={handleCancel}
-                isDisabled={isSubmitting}
-                isLoading={isRejecting}
-                spinner={<Spinner size="sm" sx={{ animationDirection: "reverse" }} />}
-              >
-                Reject
-              </Button>
-              <Button
-                variant="highlight"
-                flex={1}
-                onClick={handleConfirm}
-                isDisabled={isRejecting || Boolean(draftError)}
-                isLoading={isSubmitting}
-                loadingText="Granting..."
-              >
-                Grant
-              </Button>
-            </HStack>
-            {totalCount > 1 && (
-              <Button variant="ghost" size="sm" onClick={onCancelAll}>
-                Reject All
-              </Button>
-            )}
-          </VStack>
-        ) : (
-          <Button
-            variant="danger"
-            w="full"
-            onClick={handleCancel}
-            isLoading={isRejecting}
-          >
-            Reject
-          </Button>
+        {({ outcome, financialImpact, context, advancedDetails }) => (
+          <ConfirmationScreen
+            title="Permission"
+            onBack={onBack}
+            backLabel="Back from permission request"
+            trailing={
+              <PermissionQueueNavigation
+                currentIndex={currentIndex}
+                totalCount={totalCount}
+                onNavigate={onNavigate}
+              />
+            }
+            outcome={outcome}
+            financialImpact={financialImpact}
+            financialImpactTitle="Permission limits"
+            context={context}
+            contextTitle="Who can use this permission"
+            advancedDetails={advancedDetails}
+            advancedLabel="Technical permission details"
+            confirmAction={actions}
+          />
         )}
-      </Box>
+      </Erc7715PermissionReview>
     </Box>
   );
 }

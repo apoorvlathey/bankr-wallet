@@ -1,7 +1,6 @@
 import { useState, KeyboardEvent } from "react";
-import { HStack, Input, IconButton, Box } from "@chakra-ui/react";
+import { HStack, Input, IconButton, FormLabel } from "@chakra-ui/react";
 import { ArrowForwardIcon } from "@chakra-ui/icons";
-import { isDarkThemeId, useTheme } from "@/theme";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -15,8 +14,6 @@ export function ChatInput({
   placeholder = "Ask Bankr...",
 }: ChatInputProps) {
   const [input, setInput] = useState("");
-  const { themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
 
   const handleSend = () => {
     const trimmed = input.trim();
@@ -34,64 +31,36 @@ export function ChatInput({
   };
 
   return (
-    <Box
-      bg={isDarkTheme ? "transparent" : "surface.raised"}
-      border={isDarkTheme ? "none" : "2px solid"}
-      borderColor="border.default"
-      boxShadow={isDarkTheme ? "none" : "card"}
-      p={isDarkTheme ? 0 : 1.5}
-    >
-      <HStack spacing={2}>
-        <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          disabled={isLoading}
-          border="2px solid"
-          borderColor="border.default"
-          borderRadius="md"
-          bg="surface.base"
-          _hover={{ borderColor: "accent.secondary" }}
-          _focus={{
-            borderColor: "accent.secondary",
-            boxShadow: "none",
-          }}
-          _disabled={{
-            opacity: 0.6,
-            cursor: "not-allowed",
-          }}
-          fontWeight="500"
-          fontSize="sm"
-        />
-        <IconButton
-          aria-label="Send message"
-          icon={<ArrowForwardIcon />}
-          onClick={handleSend}
-          isDisabled={!input.trim() || isLoading}
-          bg="accent.secondary"
-          color="accentFg.secondary"
-          border="2px solid"
-          borderColor="border.default"
-          borderRadius="md"
-          _hover={{
-            // Bauhaus shifts blue → red on hover (accent.secondary →
-            // accent.primary). In Midnight that becomes cyan → indigo, which
-            // reads as the same "warm up on hover" beat in either palette.
-            bg: "accent.primary",
-            transform: "translateY(-1px)",
-          }}
-          _active={{
-            transform: "translate(2px, 2px)",
-          }}
-          _disabled={{
-            opacity: 0.5,
-            cursor: "not-allowed",
-            _hover: { bg: "accent.secondary", transform: "none" },
-          }}
-        />
-      </HStack>
-    </Box>
+    <HStack as="form" spacing={2} onSubmit={(event) => {
+      event.preventDefault();
+      handleSend();
+    }}>
+      <FormLabel htmlFor="bankr-chat-message" srOnly m={0}>
+        Message Bankr
+      </FormLabel>
+      <Input
+        id="bankr-chat-message"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        disabled={isLoading}
+        minH="44px"
+        fontWeight="500"
+        fontSize="16px"
+        autoComplete="off"
+      />
+      <IconButton
+        type="submit"
+        aria-label={isLoading ? "Bankr is responding" : "Send message"}
+        icon={<ArrowForwardIcon boxSize={5} />}
+        variant="primary"
+        minW="44px"
+        w="44px"
+        h="44px"
+        isDisabled={!input.trim() || isLoading}
+      />
+    </HStack>
   );
 }
 

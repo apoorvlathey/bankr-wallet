@@ -173,6 +173,8 @@ export interface ThemeColors {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ThemeFonts {
+  /** Display face reserved for the WalletChan brand wordmark. */
+  brand: string;
   heading: string;
   body: string;
   mono: string;
@@ -229,6 +231,8 @@ export interface ThemeShadows {
   modal: string;
   /** Focus ring shadow */
   focus: string;
+  /** Invalid-field focus ring, kept distinct from the normal action focus */
+  errorFocus: string;
   /** Default button shadow */
   button: string;
   /** Button shadow when pressed (null = no swap) */

@@ -21,6 +21,7 @@ const CHAIN_BY_ID_TX = new Map(CHAIN_REGISTRY.map((c) => [c.chainId, c]));
 import { CHAIN_CONFIG } from "../constants/chainConfig";
 import { getStoredResolvedChainById, getStoredRpcUrl } from "@/lib/chains";
 import type { Account } from "./types";
+import type { WalletGetCallsStatusResult } from "./erc5792Types";
 import {
   getActiveAccount,
   getAccountById,
@@ -61,7 +62,11 @@ import {
   isRawErc7710DelegationSignatureRequest,
   RAW_ERC7710_DELEGATION_SIGNATURE_ERROR,
 } from "./eip712Validator";
-import { pinnedTxRequest, pinnedSignatureRequest } from "./pinnedRequest";
+import {
+  isRequestSigningAccount,
+  pinnedTxRequest,
+  pinnedSignatureRequest,
+} from "./pinnedRequest";
 import { validateSiwePersonalSignRequest } from "@/lib/siwe";
 import {
   addTxToHistory,
@@ -120,7 +125,12 @@ export interface SignatureResult {
  */
 export async function writeResultToStorage(
   key: string,
-  result: TransactionResult | SignatureResult | Record<string, unknown>,
+  result:
+    | TransactionResult
+    | SignatureResult
+    | WalletGetCallsStatusResult
+    | { error: string; code: number }
+    | Record<string, unknown>,
 ): Promise<void> {
   await chrome.storage.local.set({ [key]: { result, timestamp: Date.now() } });
   try {
@@ -146,7 +156,10 @@ export const activeAbortControllers = new Map<string, AbortController>();
  */
 export async function resolvePinnedAccount(
   pending: { accountId?: string; accountAddress?: string },
-): Promise<{ ok: true; account: Account } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; account: Exclude<Account, { type: "impersonator" }> }
+  | { ok: false; error: string }
+> {
   if (!pending.accountId) {
     return { ok: false, error: "Pending request is no longer valid" };
   }
@@ -160,7 +173,7 @@ export async function resolvePinnedAccount(
   ) {
     return { ok: false, error: "Pending request is no longer valid" };
   }
-  if (account.type === "impersonator") {
+  if (!isRequestSigningAccount(account)) {
     return {
       ok: false,
       error: "View-only accounts cannot send transactions",
@@ -1031,7 +1044,11 @@ async function processTransactionInBackground(
   // Snapshot clear-signed summary so the Activity tab can render
   // "Approved 100 USDC to Uniswap V3 Router" without re-fetching at render
   // time. Fire-and-forget so a slow eth.sh / ENS lookup doesn't delay submit.
-  attachClearSignedMetaToHistory(txId, pending.tx, pending.tx.chainId);
+  attachClearSignedMetaToHistory(
+    txId,
+    { ...pending.tx, to: pending.tx.to ?? undefined },
+    pending.tx.chainId,
+  );
 
   try {
     const result = await submitTransactionDirect(
@@ -1230,7 +1247,11 @@ async function processLocalTransactionInBackground(
   }
 
   // Snapshot clear-signed summary. See processTransactionInBackground for rationale.
-  attachClearSignedMetaToHistory(txId, pending.tx, pending.tx.chainId);
+  attachClearSignedMetaToHistory(
+    txId,
+    { ...pending.tx, to: pending.tx.to ?? undefined },
+    pending.tx.chainId,
+  );
 
   try {
     const resolvedChain = await getStoredResolvedChainById(pending.tx.chainId);
@@ -1251,13 +1272,20 @@ async function processLocalTransactionInBackground(
     const baseTx = gasOverrides
       ? {
           ...pending.tx,
+          data: pending.tx.data ?? "0x",
+          value: pending.tx.value ?? "0x0",
           nonce,
           gas: gasOverrides.gasLimit,
           maxFeePerGas: gasOverrides.maxFeePerGas,
           maxPriorityFeePerGas: gasOverrides.maxPriorityFeePerGas,
           gasPrice: undefined,
         }
-      : { ...pending.tx, nonce };
+      : {
+          ...pending.tx,
+          data: pending.tx.data ?? "0x",
+          value: pending.tx.value ?? "0x0",
+          nonce,
+        };
 
     // EIP-7702 set-delegate / revoke: sign the authorization tuple here (nonce
     // = txNonce + 1 because this same EOA both broadcasts the tx and bumps its
@@ -2230,7 +2258,11 @@ export async function handleExecuteSwapDirect(
     // and detail modal render the human-readable line instead of falling
     // back to the bare functionName. Fire-and-forget — slow eth.sh / ENS
     // lookups must not block the broadcast loop.
-    attachClearSignedMetaToHistory(txId, entry.tx, chainId);
+    attachClearSignedMetaToHistory(
+      txId,
+      { ...entry.tx, to: entry.tx.to ?? undefined },
+      chainId,
+    );
 
     prepared.push({ txId, pending, nonce, functionName: entry.functionName, swapMeta: entry.swapMeta });
   }
@@ -2315,7 +2347,11 @@ async function processSwapTxBankr(
   // Snapshot the clear-signed summary so internal swap/bridge approve calls
   // ("Approved 500 USDC to SocketGateway") render the same human-readable
   // line as dapp-initiated approves. Fire-and-forget.
-  attachClearSignedMetaToHistory(txId, pending.tx, pending.tx.chainId);
+  attachClearSignedMetaToHistory(
+    txId,
+    { ...pending.tx, to: pending.tx.to ?? undefined },
+    pending.tx.chainId,
+  );
 
   try {
     const result = await submitTransactionDirect(
@@ -2403,13 +2439,20 @@ async function broadcastSwapTxLocal(
     const txForSigning = gasOverrides
       ? {
           ...pending.tx,
+          data: pending.tx.data ?? "0x",
+          value: pending.tx.value ?? "0x0",
           nonce,
           gas: gasOverrides.gasLimit,
           maxFeePerGas: gasOverrides.maxFeePerGas,
           maxPriorityFeePerGas: gasOverrides.maxPriorityFeePerGas,
           gasPrice: undefined,
         }
-      : { ...pending.tx, nonce };
+      : {
+          ...pending.tx,
+          data: pending.tx.data ?? "0x",
+          value: pending.tx.value ?? "0x0",
+          nonce,
+        };
 
     const result = await signAndBroadcastTransaction(
       privateKey,

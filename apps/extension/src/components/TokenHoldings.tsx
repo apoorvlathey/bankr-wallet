@@ -10,23 +10,17 @@ import {
 } from "react";
 import {
   Box,
+  Button,
   Collapse,
-  VStack,
+  Flex,
   HStack,
   Text,
-  Image,
   Skeleton,
   IconButton,
   Tooltip,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  Portal,
-  Icon,
   Spinner,
 } from "@chakra-ui/react";
-import { CheckIcon, ChevronDownIcon, CopyIcon, ExternalLinkIcon, RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { ChevronDownIcon, RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 import { useDisclosure } from "@chakra-ui/react";
 import { PortfolioToken, DefiPosition } from "@/chrome/portfolioApi";
 import { fetchOnchainBalances } from "@/chrome/onchainBalances";
@@ -43,11 +37,25 @@ import {
   type PortfolioHoldingsCacheSnapshot,
 } from "@/chrome/portfolioHoldingsCache";
 import { recordSnapshot } from "@/chrome/portfolioSnapshotStorage";
-import { getChainConfig } from "@/constants/chainConfig";
-import { getChainEnvironmentLabel } from "@/lib/chainIcons";
 import EditCustomTokenModal from "@/components/EditCustomTokenModal";
 import HideTokenModal from "@/components/HideTokenModal";
-import ChainIcon from "@/components/ChainIcon";
+import {
+  DefiPositionRow,
+  PortfolioTokenRow,
+} from "@/components/PortfolioHoldingRows";
+import {
+  EmptyState,
+  EmptyStateActions,
+  EmptyStateDescription,
+  EmptyStateHeader,
+  EmptyStateTitle,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMeta,
+  ListItemTitle,
+  ListSurface,
+  SkeletonRow,
+} from "@/components/ui";
 import {
   LOW_VALUE_TOKEN_THRESHOLD_USD,
   getDefiTotal,
@@ -60,8 +68,7 @@ import {
   sortTokensByValue,
 } from "@/components/tokenHoldingsUtils";
 import { useNetworks } from "@/contexts/NetworksContext";
-import { getResolvedChainById, getVisibleChains } from "@/lib/chains";
-import { Decorator } from "@/theme";
+import { getVisibleChains } from "@/lib/chains";
 import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import type { NetworksInfo } from "@/types";
@@ -181,11 +188,6 @@ function collectTokenLogoUrls(
   urls: Array<string | null | undefined>,
 ): void {
   urls.push(token.logoUrl);
-  for (const pos of token.defiPositions ?? []) {
-    urls.push(pos.protocolLogo);
-    for (const asset of pos.assets ?? []) urls.push(asset.logoUrl);
-    for (const asset of pos.rewardAssets ?? []) urls.push(asset.logoUrl);
-  }
 }
 
 function mergeTokenEnrichment(
@@ -241,6 +243,7 @@ interface TokenHoldingsProps {
   onRpcIssuesChange?: (chainIds: number[]) => void;
   filterChainId?: number | null;
   onSnapshotsChanged?: () => void;
+  view?: "all" | "assets" | "positions";
   onStateChange?: (state: {
     totalValueUsd: number;
     loading: boolean;
@@ -261,21 +264,8 @@ interface LoadPortfolioOptions {
   suppressSkeleton?: boolean;
 }
 
-const ERC20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-
-const EllipsisHorizontalIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" fill="none" {...props}>
-    <circle cx="5" cy="12" r="1.75" fill="currentColor" />
-    <circle cx="12" cy="12" r="1.75" fill="currentColor" />
-    <circle cx="19" cy="12" r="1.75" fill="currentColor" />
-  </Icon>
-);
-
 interface TokenRowProps {
   token: PortfolioToken;
-  rowKey: string;
-  hasBottomBorder: boolean;
   customTokenKeys: Set<string>;
   networksInfo: NetworksInfo;
   onTokenClick?: (token: PortfolioToken) => void;
@@ -291,8 +281,6 @@ interface TokenRowProps {
 
 function TokenRow({
   token,
-  rowKey,
-  hasBottomBorder,
   customTokenKeys,
   networksInfo,
   onTokenClick,
@@ -305,316 +293,26 @@ function TokenRow({
   hideValue,
   formatUsd,
 }: TokenRowProps) {
-  const tokenKey = getPortfolioTokenKey(token.chainId, token.contractAddress);
-  const isCustom = customTokenKeys.has(tokenKey);
-  const resolvedChain = getResolvedChainById(token.chainId, networksInfo);
-  const canSwap = !!onSwapClick && resolvedChain?.isSwapSupported === true;
-  const canHide =
-    ERC20_ADDRESS_REGEX.test(token.contractAddress) &&
-    token.contractAddress.toLowerCase() !== ZERO_ADDRESS;
-  const hasHover = !!(onTokenClick || canSwap || isCustom || canHide);
-  const copiedKey = `${token.chainId}-${token.contractAddress}`;
-
   return (
-    <HStack
-      key={rowKey}
-      w="full"
-      p={2.5}
-      px={3}
-      borderBottom={hasBottomBorder ? "1px solid" : "none"}
-      borderColor="border.subtle"
-      cursor={hasHover ? "pointer" : "default"}
-      _hover={{
-        bg: "bg.muted",
-        "& > .hover-actions": { opacity: 1 },
-        "& > .value-col": { opacity: 0 },
-        "& .copy-addr-btn": { opacity: 1 },
-      }}
-      onClick={(e) => {
-        const target = e.target as HTMLElement;
-        if (target.closest("[data-token-menu-action]")) return;
-        onTokenClick?.(token);
-      }}
-      transition="background 0.15s"
-      position="relative"
-    >
-      {hasHover && (
-        <HStack
-          className="hover-actions"
-          position="absolute"
-          right={3}
-          top="50%"
-          transform="translateY(-50%)"
-          spacing={3}
-          bg="bg.muted"
-          pl={2}
-          opacity={0}
-          transition="opacity 0.15s"
-          pointerEvents="none"
-          zIndex={2}
-          sx={{ "& > *": { pointerEvents: "auto" } }}
-        >
-          {canSwap && (
-            <Text
-              fontSize="10px"
-              fontWeight="800"
-              color="accent.highlight"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              cursor="pointer"
-              _hover={{ textDecoration: "underline" }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSwapClick?.(token);
-              }}
-            >
-              Swap
-            </Text>
-          )}
-          {onTokenClick && (
-            <Text
-              fontSize="10px"
-              fontWeight="800"
-              color="accent.secondary"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              pointerEvents="none"
-            >
-              Send
-            </Text>
-          )}
-          {isCustom && (
-            <Text
-              fontSize="10px"
-              fontWeight="800"
-              color="accent.primary"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              cursor="pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEditToken(token);
-              }}
-              _hover={{ textDecoration: "underline" }}
-            >
-              Edit
-            </Text>
-          )}
-          {canHide && (
-            <Box
-              data-token-menu-action
-              onPointerDown={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Menu placement="bottom-end">
-                <MenuButton
-                  as={IconButton}
-                  aria-label={`More actions for ${token.symbol}`}
-                  icon={<EllipsisHorizontalIcon boxSize="16px" />}
-                  size="xs"
-                  variant="ghost"
-                  color="text.tertiary"
-                  minW="28px"
-                  h="28px"
-                  p={0}
-                  _hover={{
-                    color: "accent.secondary",
-                    bg: "surface.raisedHover",
-                  }}
-                />
-                <Portal>
-                  <MenuList minW="150px" zIndex="popover">
-                    <MenuItem
-                      fontWeight="800"
-                      fontSize="xs"
-                      color="text.primary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onHideToken(token);
-                      }}
-                    >
-                      <HStack spacing={2}>
-                        <Box
-                          bg="bg.muted"
-                          borderRadius="full"
-                          w="18px"
-                          h="18px"
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                          overflow="hidden"
-                          flexShrink={0}
-                        >
-                          <ViewOffIcon
-                            boxSize="12px"
-                            color="text.secondary"
-                          />
-                        </Box>
-                        <Text>Hide token</Text>
-                      </HStack>
-                    </MenuItem>
-                  </MenuList>
-                </Portal>
-              </Menu>
-            </Box>
-          )}
-        </HStack>
-      )}
-
-      <Box position="relative">
-        <Box
-          bg="bg.muted"
-          borderRadius="full"
-          w="28px"
-          h="28px"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          overflow="hidden"
-        >
-          {token.logoUrl ? (
-            <Image
-              src={resolveLogo(token.logoUrl)}
-              alt={token.symbol}
-              boxSize="28px"
-              borderRadius="full"
-              fallback={
-                <Text fontSize="9px" fontWeight="800" color="text.secondary">
-                  {token.symbol.slice(0, 3)}
-                </Text>
-              }
-            />
-          ) : (
-            <Text fontSize="9px" fontWeight="800" color="text.secondary">
-              {token.symbol.slice(0, 3)}
-            </Text>
-          )}
-        </Box>
-        {(() => {
-          const chainName =
-            resolvedChain?.name ??
-            getChainConfig(token.chainId).name ??
-            `Chain ${token.chainId}`;
-          return (
-            <Box
-              position="absolute"
-              bottom="-2px"
-              right="-4px"
-              border="1.5px solid"
-              borderColor="surface.base"
-              borderRadius="full"
-              bg="surface.base"
-              overflow="hidden"
-              boxSize="14px"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <ChainIcon
-                chainId={token.chainId}
-                chainName={chainName}
-                size="14px"
-                withChip
-              />
-            </Box>
-          );
-        })()}
-      </Box>
-
-      <VStack align="start" spacing={0} flex={1} minW={0}>
-        <HStack spacing={1.5}>
-          <Text
-            fontSize="xs"
-            fontWeight="700"
-            color="text.primary"
-            noOfLines={1}
-            textTransform="uppercase"
-          >
-            {token.symbol}
-          </Text>
-          {token.contractAddress &&
-            token.contractAddress !== ZERO_ADDRESS &&
-            token.contractAddress !== "native" && (
-              <IconButton
-                className="copy-addr-btn"
-                aria-label="Copy token address"
-                icon={copiedAddr === copiedKey ? <CheckIcon /> : <CopyIcon />}
-                size="xs"
-                variant="ghost"
-                color={
-                  copiedAddr === copiedKey ? "accent.highlight" : "text.tertiary"
-                }
-                opacity={copiedAddr === copiedKey ? 1 : 0}
-                transition="opacity 0.15s"
-                minW="auto"
-                h="auto"
-                p={0}
-                fontSize="10px"
-                _hover={{ color: "accent.secondary" }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigator.clipboard.writeText(token.contractAddress);
-                  setCopiedAddr(copiedKey);
-                  setTimeout(
-                    () =>
-                      setCopiedAddr((prev) =>
-                        prev === copiedKey ? null : prev,
-                      ),
-                    2000,
-                  );
-                }}
-              />
-            )}
-        </HStack>
-        <Text fontSize="10px" color="text.tertiary" fontWeight="500" noOfLines={1}>
-          {hideValue ? "****" : token.balanceFormatted}
-          {resolvedChain?.name &&
-            getChainEnvironmentLabel(token.chainId, resolvedChain.name) ===
-              "TESTNET" && (
-              <>
-                {" · "}
-                <Text
-                  as="span"
-                  fontSize="9px"
-                  textTransform="uppercase"
-                  letterSpacing="wider"
-                  fontWeight="700"
-                >
-                  {resolvedChain.name}
-                </Text>
-              </>
-            )}
-        </Text>
-      </VStack>
-
-      <VStack
-        align="end"
-        spacing={0}
-        minW="50px"
-        className={hasHover ? "value-col" : undefined}
-        transition="opacity 0.15s"
-        pointerEvents={hasHover ? "none" : undefined}
-      >
-        <Text fontSize="xs" fontWeight="700" color="text.primary">
-          {formatUsd(token.valueUsd)}
-        </Text>
-        {!hideValue && token.priceUsd > 0 && (
-          <Text fontSize="10px" color="text.tertiary" fontWeight="500">
-            $
-            {token.priceUsd < 0.01
-              ? "<0.01"
-              : token.priceUsd.toLocaleString("en-US", {
-                  maximumFractionDigits: 2,
-                })}
-          </Text>
-        )}
-      </VStack>
-    </HStack>
+    <PortfolioTokenRow
+      token={token}
+      tokenKey={getPortfolioTokenKey(token.chainId, token.contractAddress)}
+      customTokenKeys={customTokenKeys}
+      networksInfo={networksInfo}
+      onTokenClick={onTokenClick}
+      onSwapClick={onSwapClick}
+      onEditToken={onEditToken}
+      onHideToken={onHideToken}
+      resolveLogo={resolveLogo}
+      copiedAddr={copiedAddr}
+      setCopiedAddr={setCopiedAddr}
+      hideValue={hideValue}
+      formatUsd={formatUsd}
+    />
   );
 }
 
-function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCard, onRpcIssuesChange, filterChainId, onSnapshotsChanged, onStateChange }: TokenHoldingsProps) {
+function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCard, onRpcIssuesChange, filterChainId, onSnapshotsChanged, onStateChange, view = "all" }: TokenHoldingsProps) {
   const { networksInfo } = useNetworks();
   const chainReloadKey = useMemo(
     () =>
@@ -1234,366 +932,226 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
   };
 
   if (error && tokens.length === 0) {
-    const errorContent = (
-      <HStack justify="space-between" p={hideCard ? 0 : 3}>
-        <Text fontSize="sm" color="text.tertiary" fontWeight="700">
-          Portfolio unavailable
-        </Text>
-        <IconButton
-          aria-label="Retry"
-          icon={<RepeatIcon />}
-          size="xs"
-          variant="ghost"
-          onClick={() => loadPortfolio(true)}
-        />
-      </HStack>
-    );
-    if (hideCard) return errorContent;
     return (
-      <Box
-        bg="surface.raised"
-        border="3px solid"
-        borderColor="border.default"
-        boxShadow="card"
-        p={0}
-      >
-        <Box p={3}>{errorContent}</Box>
-      </Box>
+      <EmptyState minH="144px">
+        <EmptyStateHeader>
+          <EmptyStateTitle>Portfolio unavailable</EmptyStateTitle>
+          <EmptyStateDescription>
+            WalletChan could not load your balances. Your wallet is still safe.
+          </EmptyStateDescription>
+        </EmptyStateHeader>
+        <EmptyStateActions>
+          <Button
+            leftIcon={<RepeatIcon />}
+            variant="secondary"
+            onClick={() => loadPortfolio(true)}
+          >
+            Try again
+          </Button>
+        </EmptyStateActions>
+      </EmptyState>
     );
   }
 
+  const showAssets = view !== "positions";
+  const showPositions = view !== "assets";
+  const hasVisibleAssets =
+    showAssets && (primaryTokens.length > 0 || lowValueTokens.length > 0);
+  const hasVisiblePositions =
+    showPositions && filteredDefiPositions.length > 0;
+  const hasVisibleRows = hasVisibleAssets || hasVisiblePositions;
+
   const tokenList = (
-    <VStack spacing={0}>
+    <ListSurface
+      borderWidth={hideCard ? 0 : "1px"}
+      borderRadius={hideCard ? 0 : "lg"}
+      bg={hideCard ? "transparent" : "surface.raised"}
+    >
       {loading && tokens.length === 0 ? (
-        // Loading skeletons
-        Array.from({ length: 3 }).map((_, i) => (
-          <HStack key={i} w="full" p={2.5} px={3} borderBottom="1px solid" borderColor="border.subtle">
-            <Skeleton boxSize="24px" borderRadius="sm" />
-            <VStack align="start" spacing={0} flex={1}>
-              <Skeleton h="14px" w="60px" />
-              <Skeleton h="12px" w="40px" mt={1} />
-            </VStack>
-            <VStack align="end" spacing={0}>
-              <Skeleton h="14px" w="50px" />
-              <Skeleton h="12px" w="30px" mt={1} />
-            </VStack>
-          </HStack>
+        Array.from({ length: 3 }).map((_, index) => (
+          <SkeletonRow key={index} density="default" />
         ))
-      ) : primaryTokens.length === 0 && lowValueTokens.length === 0 && filteredDefiPositions.length === 0 ? (
-        <Box p={3} minH="140px" display="flex" alignItems="center" justifyContent="center">
-          <Text fontSize="sm" color="text.tertiary" textAlign="center">
-            No tokens found
-          </Text>
+      ) : !hasVisibleRows ? (
+        <Box as="li" listStyleType="none">
+          <EmptyState minH="144px">
+            <EmptyStateHeader>
+              <EmptyStateTitle>
+                {view === "positions"
+                  ? "No DeFi positions"
+                  : view === "assets"
+                    ? "No assets found"
+                    : "No assets or positions"}
+              </EmptyStateTitle>
+              <EmptyStateDescription>
+                {view === "positions"
+                  ? "Positions from supported protocols will appear here."
+                  : "Tokens with a balance will appear here."}
+              </EmptyStateDescription>
+            </EmptyStateHeader>
+          </EmptyState>
         </Box>
       ) : (
         <>
-          {primaryTokens.map((token, i) => (
-            <TokenRow
-              key={`${token.chainId}-${token.contractAddress}-${i}`}
-              rowKey={`${token.chainId}-${token.contractAddress}-${i}`}
-              token={token}
-              hasBottomBorder={
-                i < primaryTokens.length - 1 ||
-                lowValueTokens.length > 0 ||
-                filteredDefiPositions.length > 0
-              }
-              customTokenKeys={customTokenKeys}
-              networksInfo={networksInfo}
-              onTokenClick={onTokenClick}
-              onSwapClick={onSwapClick}
-              onEditToken={(nextToken) => {
-                setEditingToken(nextToken);
-                editModal.onOpen();
-              }}
-              onHideToken={openHideTokenModal}
-              resolveLogo={resolveLogo}
-              copiedAddr={copiedAddr}
-              setCopiedAddr={setCopiedAddr}
-              hideValue={hideValue}
-              formatUsd={formatUsd}
-            />
-          ))}
+          {showAssets &&
+            primaryTokens.map((token, index) => (
+              <TokenRow
+                key={`${token.chainId}-${token.contractAddress}-${index}`}
+                token={token}
+                customTokenKeys={customTokenKeys}
+                networksInfo={networksInfo ?? {}}
+                onTokenClick={onTokenClick}
+                onSwapClick={onSwapClick}
+                onEditToken={(nextToken) => {
+                  setEditingToken(nextToken);
+                  editModal.onOpen();
+                }}
+                onHideToken={openHideTokenModal}
+                resolveLogo={resolveLogo}
+                copiedAddr={copiedAddr}
+                setCopiedAddr={setCopiedAddr}
+                hideValue={hideValue}
+                formatUsd={formatUsd}
+              />
+            ))}
 
-          {lowValueTokens.length > 0 && (
-            <Box w="full">
-              <HStack
+          {showAssets && lowValueTokens.length > 0 && (
+            <Box
+              as="li"
+              w="full"
+              listStyleType="none"
+              borderBottomWidth={hasVisiblePositions ? "1px" : 0}
+              borderBottomColor="border.subtle"
+            >
+              <Flex
+                as="button"
+                type="button"
+                aria-expanded={showLowValueTokens}
                 w="full"
-                px={3}
-                py={2}
-                bg="bg.muted"
-                borderBottom={
-                  showLowValueTokens || filteredDefiPositions.length > 0
-                    ? "1px solid"
-                    : "none"
-                }
-                borderColor="border.subtle"
-                justify="space-between"
+                minH="52px"
+                px={4}
+                py={2.5}
+                gap={3}
+                align="center"
+                textAlign="start"
+                color="fg.primary"
+                bg="transparent"
+                border={0}
                 cursor="pointer"
+                transitionProperty="background-color, box-shadow"
+                transitionDuration="fast"
+                _hover={{ bg: "surface.raisedHover" }}
+                _active={{ bg: "surface.sunken" }}
+                _focus={{ outline: "none" }}
+                _focusVisible={{
+                  boxShadow:
+                    "inset 0 0 0 2px var(--chakra-colors-border-focus)",
+                }}
                 onClick={() => setShowLowValueTokens((open) => !open)}
-                _hover={{ bg: "bg.hover" }}
               >
-                <HStack spacing={1.5} minW={0}>
-                  <ChevronDownIcon
-                    boxSize="14px"
-                    color="text.secondary"
-                    transform={
-                      showLowValueTokens ? "rotate(0deg)" : "rotate(-90deg)"
-                    }
-                    transition="transform 0.15s"
-                    flexShrink={0}
-                  />
+                <ChevronDownIcon
+                  boxSize="18px"
+                  flexShrink={0}
+                  color="fg.secondary"
+                  transform={
+                    showLowValueTokens ? "rotate(0deg)" : "rotate(-90deg)"
+                  }
+                  transitionProperty="transform"
+                  transitionDuration="fast"
+                />
+                <ListItemContent>
+                  <HStack spacing={2}>
+                    <ListItemTitle fontSize="sm">Low-value assets</ListItemTitle>
+                    {lowValueLoading && (
+                      <Spinner
+                        thickness="2px"
+                        speed="0.65s"
+                        color="fg.secondary"
+                        boxSize="12px"
+                      />
+                    )}
+                  </HStack>
+                  <ListItemDescription>
+                    Assets worth less than $0.10 each
+                  </ListItemDescription>
+                </ListItemContent>
+                <ListItemMeta flex="0 0 auto">
                   <Text
-                    fontSize="10px"
-                    fontWeight="800"
-                    color="text.secondary"
-                    textTransform="uppercase"
-                    letterSpacing="wider"
-                    noOfLines={1}
+                    as="span"
+                    display="block"
+                    color="fg.primary"
+                    fontSize="sm"
+                    fontWeight={600}
                   >
-                    Under $0.10
+                    {formatUsd(lowValueTotalUsd)}
                   </Text>
-                  {lowValueLoading && (
-                    <Spinner
-                      thickness="2px"
-                      speed="0.65s"
-                      color="text.secondary"
-                      boxSize="12px"
-                      flexShrink={0}
-                    />
-                  )}
-                </HStack>
-                <Text
-                  fontSize="10px"
-                  fontWeight="700"
-                  color="text.tertiary"
-                  noOfLines={1}
-                >
-                  {lowValueTokens.length}{" "}
-                  {lowValueTokens.length === 1 ? "token" : "tokens"} ·{" "}
-                  {formatUsd(lowValueTotalUsd)}
-                </Text>
-                </HStack>
-                <Collapse in={showLowValueTokens} animateOpacity>
-                  {showLowValueTokens ? (
-                    <VStack spacing={0} w="full">
-                      {lowValueTokens.map((token, i) => (
-                        <TokenRow
-                          key={`low-${token.chainId}-${token.contractAddress}-${i}`}
-                          rowKey={`low-${token.chainId}-${token.contractAddress}-${i}`}
-                          token={token}
-                          hasBottomBorder={
-                            i < lowValueTokens.length - 1 ||
-                            filteredDefiPositions.length > 0
-                          }
-                          customTokenKeys={customTokenKeys}
-                          networksInfo={networksInfo}
-                          onTokenClick={onTokenClick}
-                          onSwapClick={onSwapClick}
-                          onEditToken={(nextToken) => {
-                            setEditingToken(nextToken);
-                            editModal.onOpen();
-                          }}
-                          onHideToken={openHideTokenModal}
-                          resolveLogo={resolveLogo}
-                          copiedAddr={copiedAddr}
-                          setCopiedAddr={setCopiedAddr}
-                          hideValue={hideValue}
-                          formatUsd={formatUsd}
-                        />
-                      ))}
-                    </VStack>
-                  ) : null}
-                </Collapse>
-              </Box>
-            )}
-
-          {/* DeFi Positions */}
-          {filteredDefiPositions.length > 0 && (
-            <>
-              <HStack
-                w="full"
-                px={3}
-                py={2}
-                bg="bg.muted"
-                borderBottom="1px solid"
-                borderColor="border.subtle"
-              >
-                <Text fontSize="10px" fontWeight="800" color="text.secondary" textTransform="uppercase" letterSpacing="wider">
-                  DeFi Positions
-                </Text>
-              </HStack>
-              {filteredDefiPositions.map((pos, i) => {
-                const chainConfig = getChainConfig(pos.chainId);
-                return (
-                  <Box
-                    key={`defi-${pos.protocol}-${pos.name}-${i}`}
-                    w="full"
-                    borderBottom={i < filteredDefiPositions.length - 1 ? "1px solid" : "none"}
-                    borderColor="border.subtle"
+                  <Text as="span" display="block" fontSize="xs">
+                    {lowValueTokens.length}{" "}
+                    {lowValueTokens.length === 1 ? "asset" : "assets"}
+                  </Text>
+                </ListItemMeta>
+              </Flex>
+              <Collapse in={showLowValueTokens} animateOpacity>
+                {showLowValueTokens && (
+                  <ListSurface
+                    borderWidth={0}
+                    borderRadius={0}
+                    bg="surface.sunken"
                   >
-                    {/* Position header */}
-                    <HStack w="full" p={2.5} px={3} spacing={2}>
-                      <Box position="relative">
-                        <Box
-                          bg="bg.muted"
-                          borderRadius="6px"
-                          w="28px"
-                          h="28px"
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                          overflow="hidden"
-                        >
-                          {pos.protocolLogo ? (
-                            <Image
-                              src={resolveLogo(pos.protocolLogo)}
-                              alt={pos.protocol}
-                              boxSize="28px"
-                              borderRadius="6px"
-                              fallback={
-                                <Text fontSize="8px" fontWeight="800" color="text.secondary">
-                                  {pos.protocol.slice(0, 3).toUpperCase()}
-                                </Text>
-                              }
-                            />
-                          ) : (
-                            <Text fontSize="8px" fontWeight="800" color="text.secondary">
-                              {pos.protocol.slice(0, 3).toUpperCase()}
-                            </Text>
-                          )}
-                        </Box>
-                        <Box
-                          position="absolute"
-                          bottom="-2px"
-                          right="-4px"
-                          border="1.5px solid"
-                          borderColor="surface.base"
-                          borderRadius="full"
-                          bg="surface.base"
-                        >
-                          <ChainIcon
-                            chainId={pos.chainId}
-                            chainName={chainConfig.name}
-                            size="14px"
-                            withChip
-                          />
-                        </Box>
-                      </Box>
-                      <VStack align="start" spacing={0} flex={1} minW={0}>
-                        <HStack spacing={1}>
-                          <Text fontSize="xs" fontWeight="700" color="text.primary" noOfLines={1} textTransform="uppercase">
-                            {pos.protocol}
-                          </Text>
-                          {pos.siteUrl && (
-                            <IconButton
-                              aria-label="Open in app"
-                              icon={<ExternalLinkIcon />}
-                              size="xs"
-                              variant="ghost"
-                              color="text.tertiary"
-                              minW="auto"
-                              h="auto"
-                              p={0}
-                              fontSize="10px"
-                              _hover={{ color: "accent.secondary" }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                window.open(pos.siteUrl, "_blank");
-                              }}
-                            />
-                          )}
-                        </HStack>
-                        <Text fontSize="10px" color="text.tertiary" fontWeight="500" noOfLines={1}>
-                          {pos.type === pos.name ? pos.type : `${pos.type} · ${pos.name}`}
-                        </Text>
-                      </VStack>
-                      <Text fontSize="xs" fontWeight="700" color="text.primary">
-                        {formatUsd(pos.valueUsd)}
-                      </Text>
-                    </HStack>
-
-                    {/* Position assets */}
-                    <VStack spacing={0} pl={9} pr={3} pb={1.5}>
-                      {pos.assets.map((asset, j) => (
-                        <HStack key={`asset-${j}`} w="full" py={0.5} justify="space-between">
-                          <HStack spacing={1.5}>
-                            <Box
-                              bg="bg.muted"
-                              borderRadius="full"
-                              w="16px"
-                              h="16px"
-                              display="flex"
-                              alignItems="center"
-                              justifyContent="center"
-                              overflow="hidden"
-                              flexShrink={0}
-                            >
-                              {asset.logoUrl ? (
-                                <Image src={resolveLogo(asset.logoUrl)} alt={asset.symbol} boxSize="13px" fallback={
-                                  <Text fontSize="7px" fontWeight="800" color="text.tertiary">{asset.symbol.slice(0, 2).toUpperCase()}</Text>
-                                } />
-                              ) : (
-                                <Text fontSize="7px" fontWeight="800" color="text.tertiary">{asset.symbol.slice(0, 2).toUpperCase()}</Text>
-                              )}
-                            </Box>
-                            <Text fontSize="10px" color="text.tertiary" fontWeight="600" textTransform="uppercase">
-                              {hideValue ? "****" : asset.balanceFormatted} {asset.symbol}
-                            </Text>
-                          </HStack>
-                          <Text fontSize="10px" color="text.tertiary" fontWeight="500">
-                            {formatUsd(asset.valueUsd)}
-                          </Text>
-                        </HStack>
-                      ))}
-                      {pos.rewardAssets.length > 0 && (
-                        <>
-                          <Text fontSize="9px" color="text.tertiary" fontWeight="700" textTransform="uppercase" alignSelf="start" mt={0.5} opacity={0.6}>
-                            Rewards
-                          </Text>
-                          {pos.rewardAssets.map((asset, j) => (
-                            <HStack key={`reward-${j}`} w="full" py={0.5} justify="space-between">
-                              <HStack spacing={1.5}>
-                                <Box
-                                  bg="bg.muted"
-                                  border="1.5px solid"
-                                  borderColor="border.subtle"
-                                  borderRadius="full"
-                                  w="16px"
-                                  h="16px"
-                                  display="flex"
-                                  alignItems="center"
-                                  justifyContent="center"
-                                  overflow="hidden"
-                                  flexShrink={0}
-                                >
-                                  {asset.logoUrl ? (
-                                    <Image src={resolveLogo(asset.logoUrl)} alt={asset.symbol} boxSize="13px" fallback={
-                                      <Text fontSize="7px" fontWeight="800" color="text.tertiary">{asset.symbol.slice(0, 2).toUpperCase()}</Text>
-                                    } />
-                                  ) : (
-                                    <Text fontSize="7px" fontWeight="800" color="text.tertiary">{asset.symbol.slice(0, 2).toUpperCase()}</Text>
-                                  )}
-                                </Box>
-                                <Text fontSize="10px" color="text.tertiary" fontWeight="600" textTransform="uppercase">
-                                  {asset.balanceFormatted} {asset.symbol}
-                                </Text>
-                              </HStack>
-                              <Text fontSize="10px" color="text.tertiary" fontWeight="500">
-                                {formatUsd(asset.valueUsd)}
-                              </Text>
-                            </HStack>
-                          ))}
-                        </>
-                      )}
-                    </VStack>
-                  </Box>
-                );
-              })}
-            </>
+                    {lowValueTokens.map((token, index) => (
+                      <TokenRow
+                        key={`low-${token.chainId}-${token.contractAddress}-${index}`}
+                        token={token}
+                        customTokenKeys={customTokenKeys}
+                        networksInfo={networksInfo ?? {}}
+                        onTokenClick={onTokenClick}
+                        onSwapClick={onSwapClick}
+                        onEditToken={(nextToken) => {
+                          setEditingToken(nextToken);
+                          editModal.onOpen();
+                        }}
+                        onHideToken={openHideTokenModal}
+                        resolveLogo={resolveLogo}
+                        copiedAddr={copiedAddr}
+                        setCopiedAddr={setCopiedAddr}
+                        hideValue={hideValue}
+                        formatUsd={formatUsd}
+                      />
+                    ))}
+                  </ListSurface>
+                )}
+              </Collapse>
+            </Box>
           )}
+
+          {hasVisiblePositions && view === "all" && (
+            <Box
+              as="li"
+              px={4}
+              pt={4}
+              pb={2}
+              listStyleType="none"
+              borderBottomWidth="1px"
+              borderBottomColor="border.subtle"
+            >
+              <Text color="fg.secondary" fontSize="sm" fontWeight={600}>
+                DeFi positions
+              </Text>
+            </Box>
+          )}
+
+          {hasVisiblePositions &&
+            filteredDefiPositions.map((position, index) => (
+              <DefiPositionRow
+                key={`defi-${position.protocol}-${position.name}-${index}`}
+                position={position}
+                hideValue={hideValue}
+                formatUsd={formatUsd}
+                resolveLogo={resolveLogo}
+              />
+            ))}
         </>
       )}
-    </VStack>
+    </ListSurface>
   );
 
   const editModalEl = (
@@ -1617,26 +1175,21 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
   if (hideCard) return <>{tokenList}{editModalEl}</>;
 
   return (
-    <Box
-      bg="surface.raised"
-      border="3px solid"
-      borderColor="border.default"
-      boxShadow="card"
-      position="relative"
-    >
-      {/* Corner decoration — Bauhaus only; Decorator renders nothing in Midnight */}
-      <Decorator corner="top-right" accent="highlight" />
-
-      {/* Header */}
+    <Box position="relative">
       {!hideHeader && (
-        <HStack p={3} borderBottom="2px solid" borderColor="border.default" justify="space-between">
+        <HStack px={1} pb={3} justify="space-between">
           <HStack spacing={2}>
-            <Text fontSize="sm" fontWeight="700" color="text.secondary" textTransform="uppercase">
-              Holdings
+            <Text fontSize="md" fontWeight={600} color="fg.primary">
+              {view === "positions" ? "Positions" : "Assets"}
             </Text>
             {loading && <Skeleton h="14px" w="60px" />}
             {!loading && (
-              <Text fontSize="sm" fontWeight="900" color="text.primary">
+              <Text
+                fontSize="sm"
+                fontWeight={500}
+                color="fg.secondary"
+                sx={{ fontVariantNumeric: "tabular-nums" }}
+              >
                 {formatUsd(totalValueUsd)}
               </Text>
             )}
@@ -1646,24 +1199,20 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
               <IconButton
                 aria-label={hideValue ? "Show values" : "Hide values"}
                 icon={hideValue ? <ViewOffIcon /> : <ViewIcon />}
-                size="xs"
+                size="sm"
                 variant="ghost"
-                color="text.secondary"
+                color="fg.secondary"
                 onClick={toggleHideValue}
-                _hover={{ color: "accent.secondary" }}
-                minW="auto"
               />
             </Tooltip>
             <Tooltip label="Refresh" hasArrow>
               <IconButton
                 aria-label="Refresh portfolio"
                 icon={<RepeatIcon />}
-                size="xs"
+                size="sm"
                 variant="ghost"
-                color="text.secondary"
+                color="fg.secondary"
                 onClick={() => loadPortfolio(true)}
-                _hover={{ color: "accent.secondary" }}
-                minW="auto"
                 isDisabled={loading}
               />
             </Tooltip>

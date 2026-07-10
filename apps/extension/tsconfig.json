@@ -1,13 +1,13 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["chrome"],
+    "types": ["chrome", "vite/client"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     },
-    "moduleResolution": "node",
-    "noEmit": false,
+    "moduleResolution": "bundler",
+    "noEmit": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },

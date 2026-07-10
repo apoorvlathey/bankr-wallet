@@ -6,14 +6,15 @@ import {
   Text,
   Spinner,
   Collapse,
+  Button,
   Input,
   IconButton,
   Tooltip,
   Icon,
+  usePrefersReducedMotion,
 } from "@chakra-ui/react";
 import {
   ChevronDownIcon,
-  ChevronUpIcon,
   WarningIcon,
   ExternalLinkIcon,
 } from "@chakra-ui/icons";
@@ -47,7 +48,14 @@ const PencilIcon = (props: any) => (
 );
 
 interface TxGasInput {
-  tx: { from: string; to: string; data: string; value: string; chainId: number };
+  tx: {
+    from: string;
+    to: string;
+    data: string;
+    value: string;
+    chainId: number;
+    gas?: string;
+  };
   label: string;
 }
 
@@ -194,7 +202,7 @@ function EditableGasLimitInput({
       borderRadius={tokens.radii.input}
       bg={bg}
       px={2}
-      h="22px"
+      h="24px"
       _focus={{
         borderColor: isInvalid ? "chart.negative" : "accent.secondary",
         boxShadow: "none",
@@ -231,6 +239,7 @@ function MultiTxGasEstimateDisplay({
   eip7702Delegate,
 }: MultiTxGasEstimateDisplayProps) {
   const { tokens } = useTheme();
+  const prefersReducedMotion = usePrefersReducedMotion();
   // Display estimates — what the user sees
   //   Normal batch: from estimateBatchGasSequential (L2 gas + L2 fees)
   //   Force inclusion: from estimateForceInclusionGas per call (L1 gas + L1 fees)
@@ -936,16 +945,16 @@ function MultiTxGasEstimateDisplay({
   if (loading) {
     return (
       <Box
-        border={tokens.borders.medium}
+        border="1px solid"
         borderColor="border.default"
         borderRadius="lg"
         bg="surface.raised"
-        boxShadow="card"
+        boxShadow="none"
       >
         <HStack px={3} py={3} justify="center">
           <Spinner size="xs" color="accent.secondary" />
-          <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-            Estimating gas...
+          <Text fontSize="xs" color="text.secondary" fontWeight="600">
+            Estimating gas…
           </Text>
         </HStack>
       </Box>
@@ -992,7 +1001,7 @@ function MultiTxGasEstimateDisplay({
           spacing={2}
         >
           <WarningIcon color="status.error.fg" boxSize={3.5} flexShrink={0} />
-          <Text fontSize="xs" color="status.error.fg" fontWeight="700" textTransform="uppercase">
+          <Text fontSize="xs" color="status.error.fg" fontWeight="600">
             One or more transactions may revert
           </Text>
         </HStack>
@@ -1011,7 +1020,7 @@ function MultiTxGasEstimateDisplay({
           spacing={2}
         >
           <WarningIcon color="status.warning.fg" boxSize={3.5} />
-          <Text fontSize="xs" color="status.warning.fg" fontWeight="700" textTransform="uppercase">
+          <Text fontSize="xs" color="status.warning.fg" fontWeight="600">
             Insufficient balance for gas
           </Text>
         </HStack>
@@ -1035,7 +1044,7 @@ function MultiTxGasEstimateDisplay({
         >
           <HStack spacing={2}>
             <WarningIcon color="status.warning.fg" boxSize={3.5} flexShrink={0} />
-            <Text fontSize="xs" color="status.warning.fg" fontWeight="900" textTransform="uppercase">
+            <Text fontSize="xs" color="status.warning.fg" fontWeight="700">
               Couldn&apos;t estimate {fallbackIndices.length} call{fallbackIndices.length > 1 ? "s" : ""} — using 500k default
             </Text>
           </HStack>
@@ -1059,7 +1068,7 @@ function MultiTxGasEstimateDisplay({
           py={1.5}
           spacing={2}
         >
-          <Text fontSize="xs" color="status.info.fg" fontWeight="700" textTransform="uppercase">
+          <Text fontSize="xs" color="status.info.fg" fontWeight="600">
             Gas estimated for L1 deposit
           </Text>
         </HStack>
@@ -1079,16 +1088,26 @@ function MultiTxGasEstimateDisplay({
         position="relative"
       >
         {/* Collapsed header */}
-        <HStack
+        <Button
+          type="button"
+          variant="unstyled"
+          display="flex"
+          w="full"
+          minH="44px"
+          h="auto"
           px={3}
           py={2.5}
-          cursor="pointer"
           onClick={() => setExpanded(!expanded)}
-          _hover={{ bg: "bg.muted" }}
-          justify="space-between"
+          aria-expanded={expanded}
+          aria-controls="multi-transaction-gas-details"
+          borderRadius={0}
+          fontWeight="inherit"
+          textTransform="none"
+          _hover={{ bg: "surface.raisedHover" }}
+          justifyContent="space-between"
         >
-          <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" flexShrink={0}>
-            Gas Fee
+          <Text fontSize="xs" color="text.secondary" fontWeight="600" flexShrink={0}>
+            Gas fee
           </Text>
           <HStack spacing={1} minW={0}>
             <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono" noOfLines={1}>
@@ -1099,14 +1118,18 @@ function MultiTxGasEstimateDisplay({
                 ({usdDisplay})
               </Text>
             )}
-            {expanded
-              ? <ChevronUpIcon boxSize={4} color="text.tertiary" />
-              : <ChevronDownIcon boxSize={4} color="text.tertiary" />}
+            <ChevronDownIcon
+              boxSize={4}
+              color="text.tertiary"
+              transform={expanded ? "rotate(180deg)" : "rotate(0deg)"}
+              transition={prefersReducedMotion ? "none" : "transform 150ms cubic-bezier(0.23, 1, 0.32, 1)"}
+              aria-hidden
+            />
           </HStack>
-        </HStack>
+        </Button>
 
         {/* Expanded details */}
-        <Collapse in={expanded} animateOpacity>
+        <Collapse id="multi-transaction-gas-details" in={expanded} animateOpacity={!prefersReducedMotion}>
           <VStack align="stretch" spacing={1.5} px={3} pb={3} pt={1}>
             <Box h="1px" bg="border.subtle" />
 
@@ -1176,18 +1199,21 @@ function MultiTxGasEstimateDisplay({
                         hasArrow
                         openDelay={300}
                       >
-                        <HStack
-                          as="button"
-                          type="button"
-                          onClick={handleRelinkMaxFee}
+                          <HStack
+                            as="button"
+                            type="button"
+                            aria-label="Auto-link Max Fee to Priority Fee"
+                            onClick={handleRelinkMaxFee}
                           spacing={1}
                           px={1.5}
-                          py={0.5}
+                            py={0.5}
+                            minH="24px"
                           borderRadius="md"
                           bg="accent.highlight"
                           cursor="pointer"
                           _hover={{ filter: "brightness(0.95)" }}
-                          _focus={{ outline: "none", boxShadow: "none" }}
+                            _focus={{ outline: "none" }}
+                            _focusVisible={{ boxShadow: "focus" }}
                           transition="filter 100ms ease-out"
                         >
                           <PencilIcon boxSize="9px" color="accentFg.highlight" />
@@ -1383,8 +1409,9 @@ function MultiTxGasEstimateDisplay({
                               icon={<ExternalLinkIcon boxSize="10px" />}
                               size="xs"
                               variant="ghost"
-                              minW="16px"
-                              h="16px"
+                              minW="24px"
+                              w="24px"
+                              h="24px"
                               color="text.tertiary"
                               _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                               onClick={() =>

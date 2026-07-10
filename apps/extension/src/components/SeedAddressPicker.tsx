@@ -21,6 +21,13 @@ import { fetchPortfolio } from "@/chrome/portfolioApi";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import { truncateAddress } from "@/lib/addressUtils";
 import { CopyButton } from "./CopyButton";
+import {
+  AppHeader,
+  AppScreen,
+  ListSurface,
+  ScreenBody,
+  StickyActionBar,
+} from "@/components/ui";
 
 export type PickerSource =
   | { kind: "mnemonic"; mnemonic: string }
@@ -65,7 +72,7 @@ function EnsAvatarImg({ src }: { src: string }) {
       h="24px"
       minW="24px"
       borderRadius="full"
-      border="2px solid"
+      border="1px solid"
       borderColor="border.default"
       objectFit="cover"
     />
@@ -81,8 +88,8 @@ function BlockieAvatarImg({ address }: { address: string }) {
       w="24px"
       h="24px"
       minW="24px"
-      borderRadius="sm"
-      border="2px solid"
+      borderRadius="full"
+      border="1px solid"
       borderColor="border.default"
     />
   );
@@ -112,19 +119,32 @@ function AddressRow({
 
   return (
     <HStack
-      bg="surface.raised"
-      border="2px solid"
-      borderColor={checked ? "accent.primary" : "border.default"}
-      borderRadius="lg"
-      boxShadow="card"
-      p={3}
+      minH="68px"
+      bg={checked && !locked ? "surface.raisedHover" : "transparent"}
+      borderBottom="1px solid"
+      borderColor="border.subtle"
+      _last={{ borderBottomWidth: 0 }}
+      px={3}
+      py={3}
       spacing={3}
       align="center"
       opacity={locked ? 0.6 : 1}
       cursor={locked ? "not-allowed" : "pointer"}
+      role="checkbox"
+      aria-checked={checked}
+      aria-disabled={locked || undefined}
+      tabIndex={locked ? -1 : 0}
       onClick={() => {
         if (!locked) onToggle();
       }}
+      onKeyDown={(event) => {
+        if (!locked && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onToggle();
+        }
+      }}
+      _hover={locked ? undefined : { bg: "surface.raisedHover" }}
+      _focusVisible={{ boxShadow: "inset 0 0 0 2px var(--chakra-colors-border-focus)" }}
     >
       <Checkbox
         isChecked={checked}
@@ -441,56 +461,22 @@ function SeedAddressPicker({
 
   const labelFor = submitLabel
     ? submitLabel(newSelectedIndices.length)
-    : `Import ${newSelectedIndices.length} Account${newSelectedIndices.length === 1 ? "" : "s"}`;
+    : `Import ${newSelectedIndices.length} account${newSelectedIndices.length === 1 ? "" : "s"}`;
 
-  const Wrapper = ({ children }: { children: React.ReactNode }) =>
-    variant === "onboarding" ? (
-      <VStack spacing={6} w="full" maxW="400px" align="stretch">
-        {children}
-      </VStack>
-    ) : (
-      <Box p={4} h="100%" overflowY="auto" bg="surface.base">
-        <VStack spacing={4} align="stretch">{children}</VStack>
-      </Box>
-    );
-
-  return (
-    <Wrapper>
-      <HStack spacing={3}>
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          variant="ghost"
-          size="sm"
-          onClick={onBack}
-          isDisabled={isSubmitting}
-        />
-        <Text
-          fontWeight="900"
-          fontSize={variant === "onboarding" ? "md" : "lg"}
-          color="text.primary"
-          textTransform="uppercase"
-          letterSpacing="wide"
-          flex={1}
-          textAlign={variant === "onboarding" ? "center" : "left"}
-        >
-          {title}
-        </Text>
-        {variant === "onboarding" && <Box w="32px" flexShrink={0} />}
-      </HStack>
-
+  const pickerBody = (
+    <VStack spacing={4} align="stretch">
       {intro}
 
       {isInitialLoading ? (
-        <HStack justify="center" py={6}>
+        <HStack justify="center" py={8}>
           <Spinner size="md" color="accent.primary" />
         </HStack>
       ) : (
-        <VStack spacing={2} align="stretch">
+        <ListSurface as="div" role="group" aria-label="Derived addresses">
           {items.map((item) => {
             const lower = item.address.toLowerCase();
             const ens = identities.get(lower);
-            const locked = item.exists; // either pre-existing or just-added
+            const locked = item.exists;
             const checked = selected.has(item.index) || locked;
             const port =
               portfolio.get(lower) ?? {
@@ -511,7 +497,7 @@ function SeedAddressPicker({
               />
             );
           })}
-        </VStack>
+        </ListSurface>
       )}
 
       {!isInitialLoading && (
@@ -520,54 +506,83 @@ function SeedAddressPicker({
           w="full"
           onClick={handleLoadMore}
           isLoading={isLoadingMore}
-          loadingText="Loading..."
+          loadingText="Loading…"
           isDisabled={isSubmitting}
         >
-          Show {LOAD_MORE_PAGE_SIZE} More
+          Show {LOAD_MORE_PAGE_SIZE} more
         </Button>
       )}
+    </VStack>
+  );
 
-      {/* Sticky bottom CTA — pinned via the same pattern as the tx confirmation
-          buttons (mt:auto + position:sticky + extended bg) so the action stays
-          reachable when the user has scrolled through 10+ addresses. */}
-      <Box
-        mt="auto"
-        position="sticky"
-        bottom={variant === "panel" ? -4 : 0}
-        bg="surface.base"
-        pt={2}
-        pb={2}
-        mx={variant === "panel" ? -4 : 0}
-        px={variant === "panel" ? 4 : 0}
-        zIndex={1}
+  const action = (
+    <VStack spacing={2} align="stretch">
+      {error && (
+        <Box
+          bg="status.error.bg"
+          border="1px solid"
+          borderColor="status.error.border"
+          borderRadius="md"
+          p={3}
+        >
+          <Text fontSize="sm" color="status.error.fg" fontWeight="600" aria-live="polite">
+            {error}
+          </Text>
+        </Box>
+      )}
+      <Button
+        variant="primary"
+        w="full"
+        onClick={handleSubmit}
+        isLoading={isSubmitting}
+        loadingText="Importing…"
+        isDisabled={newSelectedIndices.length === 0 || isInitialLoading}
       >
-        <VStack spacing={2} align="stretch">
-          {error && (
-            <Box
-              bg="status.error.bg"
-              border="2px solid"
-              borderColor="status.error.border"
-              borderRadius="md"
-              p={2}
-            >
-              <Text fontSize="xs" color="status.error.fg" fontWeight="700">
-                {error}
-              </Text>
-            </Box>
-          )}
-          <Button
-            variant="primary"
-            w="full"
-            onClick={handleSubmit}
-            isLoading={isSubmitting}
-            loadingText="Importing..."
-            isDisabled={newSelectedIndices.length === 0 || isInitialLoading}
-          >
-            {labelFor}
-          </Button>
-        </VStack>
-      </Box>
-    </Wrapper>
+        {labelFor}
+      </Button>
+    </VStack>
+  );
+
+  if (variant === "onboarding") {
+    return (
+      <VStack spacing={6} w="full" maxW="400px" align="stretch">
+        <HStack spacing={3}>
+        <IconButton
+          aria-label="Back"
+          icon={<ArrowBackIcon />}
+          variant="ghost"
+          size="sm"
+          onClick={onBack}
+          isDisabled={isSubmitting}
+        />
+        <Text
+          fontWeight="700"
+          fontSize="md"
+          color="fg.primary"
+          flex={1}
+          textAlign="center"
+        >
+          {title}
+        </Text>
+        <Box w="32px" flexShrink={0} />
+        </HStack>
+        {pickerBody}
+        {action}
+      </VStack>
+    );
+  }
+
+  return (
+    <AppScreen>
+      <AppHeader
+        title={title}
+        onBack={() => {
+          if (!isSubmitting) onBack();
+        }}
+      />
+      <ScreenBody pt={5}>{pickerBody}</ScreenBody>
+      <StickyActionBar primaryAction={action} />
+    </AppScreen>
   );
 }
 

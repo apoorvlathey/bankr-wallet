@@ -226,8 +226,7 @@ export async function handleSponsoredTransfer(message: {
     chainName: "Base",
     chainId: 8453,
     createdAt: Date.now(),
-    accountType:
-      account.type === "impersonator" ? "bankr" : account.type,
+    accountType: account.type,
     functionName: "transferWithAuthorization",
     txHash,
     transferMeta: {

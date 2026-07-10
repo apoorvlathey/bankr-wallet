@@ -1,4 +1,4 @@
-import { Box, HStack } from "@chakra-ui/react";
+import { Box, HStack, usePrefersReducedMotion } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 
 const dotBounce = keyframes`
@@ -9,6 +9,7 @@ const dotBounce = keyframes`
 /** Three bouncing dots used wherever we render an inline "pending /
  *  awaiting" placeholder (quote loaders, bridge destination tx hash, etc.). */
 export default function LoadingDots() {
+  const prefersReducedMotion = usePrefersReducedMotion();
   return (
     <HStack spacing="3px" aria-label="Loading">
       {[0, 1, 2].map((i) => (
@@ -20,8 +21,9 @@ export default function LoadingDots() {
           h="4px"
           borderRadius="full"
           bg="text.tertiary"
-          animation={`${dotBounce} 1.1s ease-in-out infinite`}
-          style={{ animationDelay: `${i * 0.16}s` }}
+          animation={prefersReducedMotion ? undefined : `${dotBounce} 1.1s ease-in-out infinite`}
+          opacity={prefersReducedMotion ? 0.7 : undefined}
+          style={prefersReducedMotion ? undefined : { animationDelay: `${i * 0.16}s` }}
         />
       ))}
     </HStack>

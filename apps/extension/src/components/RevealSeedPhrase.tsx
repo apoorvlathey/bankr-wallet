@@ -6,11 +6,13 @@ import {
   Text,
   Input,
   Button,
+  FormControl,
+  FormLabel,
   InputGroup,
   InputRightElement,
   IconButton,
   Code,
-  Spacer,
+  SimpleGrid,
 } from "@chakra-ui/react";
 import {
   ViewIcon,
@@ -18,11 +20,16 @@ import {
   CopyIcon,
   CheckIcon,
   LockIcon,
-  ArrowBackIcon,
 } from "@chakra-ui/icons";
-import { isDarkThemeId, useTheme } from "@/theme";
 import type { Account, PasswordType } from "@/chrome/types";
 import { truncateAddress } from "@/lib/addressUtils";
+import {
+  AppHeader,
+  AppScreen,
+  ScreenBody,
+  ScreenSection,
+  StickyActionBar,
+} from "@/components/ui";
 
 interface Props {
   account: Account | null;
@@ -30,8 +37,6 @@ interface Props {
 }
 
 function RevealSeedPhrase({ account, onBack }: Props) {
-  const { themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showPhrase, setShowPhrase] = useState(false);
@@ -100,234 +105,210 @@ function RevealSeedPhrase({ account, onBack }: Props) {
   };
 
   const revealed = !!mnemonic;
+  const words = mnemonic.split(" ");
 
   return (
-    <VStack spacing={4} align="stretch">
-      <HStack>
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          variant="ghost"
-          size="sm"
-          onClick={onBack}
-        />
-        <Text
-          fontSize="lg"
-          fontWeight="900"
-          color="text.primary"
-          textTransform="uppercase"
-          letterSpacing="tight"
-        >
-          Reveal Seed Phrase
-        </Text>
-        <Spacer />
-      </HStack>
+    <AppScreen>
+      <AppHeader title="Reveal seed phrase" onBack={onBack} />
+      <ScreenBody pt={5}>
+        {isCheckingSession ? (
+          <Text color="fg.secondary" fontSize="sm" aria-live="polite">
+            Checking your session…
+          </Text>
+        ) : passwordType === "agent" ? (
+          <VStack spacing={5} align="stretch">
+            <ScreenSection
+              title="Master password required"
+              description="Seed phrases cannot be revealed while WalletChan is unlocked with an agent password."
+            >
+              <Box
+                w="full"
+                p={3}
+                bg="status.warning.bg"
+                border="1px solid"
+                borderColor="status.warning.border"
+                borderRadius="md"
+              >
+                <HStack spacing={2} align="start">
+                  <LockIcon mt={0.5} color="status.warning.fg" />
+                  <Text color="status.warning.fg" fontSize="sm" fontWeight="600">
+                    Your agent session stays active, but secret access is blocked.
+                  </Text>
+                </HStack>
+              </Box>
+            </ScreenSection>
 
-      {isCheckingSession ? (
-        <Text color="text.secondary" fontSize="sm" fontWeight="500">
-          Checking session...
-        </Text>
-      ) : passwordType === "agent" ? (
-        <VStack spacing={3} align="stretch">
-          <Box
-            w="full"
-            p={3}
-            bg="status.warning.bg"
-            border={isDarkTheme ? "1px solid" : "2px solid"}
-            borderColor="status.warning.border"
-            borderRadius={isDarkTheme ? "md" : undefined}
-          >
-            <HStack spacing={2}>
-              <LockIcon color="status.warning.fg" />
-              <Text color="status.warning.fg" fontSize="sm" fontWeight="700">
-                You are unlocked with an agent password.
+            <ScreenSection title="To continue">
+              <VStack align="stretch" spacing={2} color="fg.secondary" fontSize="sm">
+                <Text>1. Lock your wallet.</Text>
+                <Text>2. Unlock with your master password.</Text>
+                <Text>3. Open this account and reveal the phrase again.</Text>
+              </VStack>
+            </ScreenSection>
+          </VStack>
+        ) : !revealed ? (
+          <VStack spacing={5} align="stretch">
+            <Box
+              w="full"
+              p={3}
+              bg="status.error.bg"
+              border="1px solid"
+              borderColor="status.error.border"
+              borderRadius="md"
+            >
+              <Text color="status.error.fg" fontSize="sm" fontWeight="600">
+                Never share your seed phrase. Anyone with it has full control of
+                every account derived from it.
               </Text>
-            </HStack>
-          </Box>
+            </Box>
 
-          <Text color="text.secondary" fontSize="sm" fontWeight="500">
-            Seed phrase reveal is only available when unlocked with your{" "}
-            <Text as="span" fontWeight="700">
-              master password
-            </Text>
-            .
-          </Text>
-
-          <Text color="text.secondary" fontSize="sm" fontWeight="500">
-            To reveal the seed phrase:
-          </Text>
-          <Box pl={4} borderLeft="4px solid" borderColor="accent.secondary">
-            <Text color="text.secondary" fontSize="sm">
-              1. Lock your wallet
-            </Text>
-            <Text color="text.secondary" fontSize="sm">
-              2. Unlock with your master password
-            </Text>
-            <Text color="text.secondary" fontSize="sm">
-              3. Try revealing the seed phrase again
-            </Text>
-          </Box>
-
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onBack}
-            alignSelf="flex-start"
-          >
-            Back
-          </Button>
-        </VStack>
-      ) : !revealed ? (
-        <VStack spacing={3} align="stretch">
-          <Box
-            w="full"
-            p={3}
-            bg="status.error.bg"
-            border={isDarkTheme ? "1px solid" : "2px solid"}
-            borderColor="status.error.border"
-            borderRadius={isDarkTheme ? "md" : undefined}
-          >
-            <Text color="status.error.fg" fontSize="sm" fontWeight="700">
-              Never share your seed phrase. Anyone with it has full control of
-              all derived accounts.
-            </Text>
-          </Box>
-
-          <Text color="text.secondary" fontSize="sm" fontWeight="500">
-            Enter your{" "}
-            {isAgentPasswordEnabled && (
-              <Text as="span" fontWeight="700">
-                Master{" "}
-              </Text>
-            )}
-            password to reveal the seed phrase for{" "}
-            <Text as="span" fontWeight="700" color="text.primary">
-              {account?.displayName || truncateAddress(account?.address || "")}
-            </Text>
-          </Text>
-
-          <InputGroup>
-            <Input
-              ref={passwordInputRef}
-              type={showPassword ? "text" : "password"}
-              placeholder={
-                isAgentPasswordEnabled ? "Master Password" : "Password"
+            <ScreenSection
+              title="Verify it’s you"
+              description={
+                <>
+                  Enter your {isAgentPasswordEnabled ? "master " : ""}password
+                  to reveal the phrase for{" "}
+                  <Text as="span" color="fg.primary" fontWeight="600">
+                    {account?.displayName || truncateAddress(account?.address || "")}
+                  </Text>
+                  .
+                </>
               }
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                setError("");
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleReveal();
-              }}
-              isInvalid={!!error}
-            />
-            <InputRightElement>
-              <IconButton
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                icon={showPassword ? <ViewOffIcon /> : <ViewIcon />}
-                size="sm"
-                variant="ghost"
-                onClick={() => setShowPassword(!showPassword)}
-                color="text.secondary"
-              />
-            </InputRightElement>
-          </InputGroup>
+            >
+              <FormControl isInvalid={!!error}>
+                <FormLabel>Password</FormLabel>
+                <InputGroup>
+                  <Input
+                    ref={passwordInputRef}
+                    type={showPassword ? "text" : "password"}
+                    placeholder={
+                      isAgentPasswordEnabled ? "Enter master password" : "Enter password"
+                    }
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setError("");
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleReveal();
+                    }}
+                    isInvalid={!!error}
+                  />
+                  <InputRightElement>
+                    <IconButton
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      icon={showPassword ? <ViewOffIcon /> : <ViewIcon />}
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setShowPassword(!showPassword)}
+                      color="fg.secondary"
+                    />
+                  </InputRightElement>
+                </InputGroup>
+                {error && (
+                  <Text mt={2} color="status.error.fg" fontSize="sm" fontWeight="600" aria-live="polite">
+                    {error}
+                  </Text>
+                )}
+              </FormControl>
+            </ScreenSection>
+          </VStack>
+        ) : (
+          <VStack spacing={5} align="stretch">
+            <Box
+              w="full"
+              p={3}
+              bg="status.error.bg"
+              border="1px solid"
+              borderColor="status.error.border"
+              borderRadius="md"
+            >
+              <Text color="status.error.fg" fontSize="sm" fontWeight="600">
+                Keep these words private and in order. Anyone who has them can
+                recover every account in this seed group.
+              </Text>
+            </Box>
 
-          {error && (
-            <Text color="chart.negative" fontSize="sm" fontWeight="600">
-              {error}
-            </Text>
-          )}
+            <ScreenSection title="Recovery phrase">
+              <Box
+                w="full"
+                p={3}
+                bg="surface.sunken"
+                border="1px solid"
+                borderColor="border.default"
+                borderRadius="lg"
+              >
+                <SimpleGrid columns={2} spacing={2}>
+                  {words.map((word, index) => (
+                    <HStack key={index} spacing={2} minW={0}>
+                      <Text minW="20px" color="fg.muted" fontSize="xs" textAlign="end">
+                        {index + 1}
+                      </Text>
+                      <Code
+                        bg="transparent"
+                        color="fg.primary"
+                        fontFamily="mono"
+                        fontSize="sm"
+                        fontWeight="500"
+                        noOfLines={1}
+                      >
+                        {showPhrase ? word : "••••"}
+                      </Code>
+                    </HStack>
+                  ))}
+                </SimpleGrid>
+              </Box>
 
-          <HStack spacing={2} justify="flex-end" pt={2}>
-            <Button variant="secondary" size="sm" onClick={onBack}>
-              Cancel
-            </Button>
+              <HStack spacing={2} mt={3}>
+                <Button
+                  variant="secondary"
+                  leftIcon={showPhrase ? <ViewOffIcon /> : <ViewIcon />}
+                  onClick={() => setShowPhrase(!showPhrase)}
+                  flex={1}
+                >
+                  {showPhrase ? "Hide" : "Show"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  leftIcon={copied ? <CheckIcon /> : <CopyIcon />}
+                  onClick={handleCopy}
+                  flex={1}
+                >
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+              </HStack>
+            </ScreenSection>
+          </VStack>
+        )}
+      </ScreenBody>
+
+      {!isCheckingSession && passwordType === "agent" && (
+        <StickyActionBar
+          primaryAction={<Button variant="secondary" onClick={onBack}>Back</Button>}
+        />
+      )}
+      {!isCheckingSession && passwordType !== "agent" && !revealed && (
+        <StickyActionBar
+          secondaryAction={<Button variant="secondary" onClick={onBack}>Cancel</Button>}
+          primaryAction={
             <Button
               variant="primary"
-              size="sm"
               onClick={handleReveal}
               isLoading={isLoading}
-              loadingText="Verifying..."
+              loadingText="Verifying…"
               isDisabled={!password}
             >
-              Reveal
+              Reveal phrase
             </Button>
-          </HStack>
-        </VStack>
-      ) : (
-        <VStack spacing={3} align="stretch">
-          <Box
-            w="full"
-            p={3}
-            bg="status.error.bg"
-            border={isDarkTheme ? "1px solid" : "2px solid"}
-            borderColor="status.error.border"
-            borderRadius={isDarkTheme ? "md" : undefined}
-          >
-            <Text color="status.error.fg" fontSize="sm" fontWeight="700">
-              Do not share this seed phrase. Anyone with it can steal your
-              funds.
-            </Text>
-          </Box>
-
-          <Box
-            w="full"
-            p={3}
-            bg="surface.sunken"
-            border={isDarkTheme ? "1px solid" : "2px solid"}
-            borderColor="border.default"
-            borderRadius={isDarkTheme ? "md" : undefined}
-            position="relative"
-          >
-            <Code
-              fontSize="xs"
-              fontFamily="mono"
-              wordBreak="break-all"
-              bg="transparent"
-              color="text.primary"
-              fontWeight="600"
-            >
-              {showPhrase
-                ? mnemonic
-                : mnemonic.split(" ").map(() => "****").join(" ")}
-            </Code>
-          </Box>
-
-          <HStack spacing={2}>
-            <Button
-              size="sm"
-              variant="secondary"
-              leftIcon={showPhrase ? <ViewOffIcon /> : <ViewIcon />}
-              onClick={() => setShowPhrase(!showPhrase)}
-              flex={1}
-            >
-              {showPhrase ? "Hide" : "Show"}
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              leftIcon={copied ? <CheckIcon /> : <CopyIcon />}
-              onClick={handleCopy}
-              flex={1}
-            >
-              {copied ? "Copied!" : "Copy"}
-            </Button>
-          </HStack>
-
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onBack}
-            alignSelf="flex-end"
-          >
-            Done
-          </Button>
-        </VStack>
+          }
+        />
       )}
-    </VStack>
+      {revealed && (
+        <StickyActionBar
+          primaryAction={<Button variant="primary" onClick={onBack}>Done</Button>}
+        />
+      )}
+    </AppScreen>
   );
 }
 

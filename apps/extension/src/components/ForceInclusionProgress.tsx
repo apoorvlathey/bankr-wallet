@@ -11,6 +11,7 @@ import {
   Text,
   Spinner,
   IconButton,
+  usePrefersReducedMotion,
 } from "@chakra-ui/react";
 import { ExternalLinkIcon, CheckIcon } from "@chakra-ui/icons";
 import { getChainConfig } from "@/constants/chainConfig";
@@ -51,6 +52,7 @@ function ForceInclusionProgress({
   );
   const [elapsed, setElapsed] = useState(0);
   const completeFired = useRef(false);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   const l1Config = getChainConfig(l1ChainId);
   const l2Config = getChainConfig(l2ChainId);
@@ -109,33 +111,21 @@ function ForceInclusionProgress({
 
   return (
     <VStack spacing={3} align="stretch" p={3}>
-      {/* Title */}
-      <Box
-        bg="accent.secondary"
-        border="3px solid"
-        borderColor="border.default"
-        boxShadow="card"
-        py={1.5}
-        px={3}
-      >
-        <Text
-          fontWeight="900"
-          fontSize="sm"
-          color="accentFg.secondary"
-          textAlign="center"
-          textTransform="uppercase"
-          letterSpacing="wider"
-        >
-          Force Inclusion in Progress
+      <Box px={1}>
+        <Text fontWeight="600" fontSize="md" color="fg.primary">
+          Force inclusion in progress
+        </Text>
+        <Text mt={0.5} fontSize="xs" color="fg.secondary">
+          Sending the transaction through Ethereum L1 for guaranteed inclusion.
         </Text>
       </Box>
 
       {/* Steps */}
       <Box
         bg="surface.raised"
-        border="2px solid"
+        borderWidth="1px"
         borderColor="border.default"
-        boxShadow="card"
+        borderRadius="lg"
         p={3}
       >
         <VStack spacing={3} align="stretch">
@@ -151,8 +141,9 @@ function ForceInclusionProgress({
                   w="24px"
                   h="24px"
                   flexShrink={0}
-                  border="2px solid"
+                  borderWidth="1px"
                   borderColor="border.default"
+                  borderRadius="full"
                   bg={
                     isDone
                       ? "accent.highlight"
@@ -166,12 +157,14 @@ function ForceInclusionProgress({
                 >
                   {isDone ? (
                     <CheckIcon boxSize={3} color="accentFg.highlight" />
-                  ) : isActive && !isError ? (
+                  ) : isActive && !isError && !prefersReducedMotion ? (
                     <Spinner size="xs" color="accentFg.secondary" />
+                  ) : isActive && !isError ? (
+                    <Box boxSize="6px" borderRadius="full" bg="accentFg.secondary" />
                   ) : (
                     <Text
                       fontSize="xs"
-                      fontWeight="900"
+                      fontWeight="600"
                       color={isPending ? "fg.muted" : "accentFg.secondary"}
                     >
                       {idx + 1}
@@ -183,11 +176,10 @@ function ForceInclusionProgress({
                 <VStack spacing={0.5} align="flex-start" flex={1} minW={0}>
                   <Text
                     fontSize="xs"
-                    fontWeight="700"
+                    fontWeight="600"
                     color={
                       isPending ? "text.tertiary" : "text.primary"
                     }
-                    textTransform="uppercase"
                   >
                     {stage.label}
                   </Text>
@@ -281,9 +273,9 @@ function ForceInclusionProgress({
       {isError && progress?.error && (
         <Box
           bg="status.error.bg"
-          border="3px solid"
+          borderWidth="1px"
           borderColor="status.error.border"
-          boxShadow="card"
+          borderRadius="lg"
           p={3}
         >
           <Text color="status.error.fg" fontSize="sm" fontWeight="700">
@@ -295,15 +287,17 @@ function ForceInclusionProgress({
       {/* Info text */}
       {!isError && progress?.stage !== "complete" && (
         <Box
-          border="2px solid"
-          borderColor="border.default"
+          bg="status.info.bg"
+          borderWidth="1px"
+          borderColor="status.info.border"
+          borderRadius="lg"
           px={3}
           py={2}
         >
           <Text
             fontSize="2xs"
-            color="text.secondary"
-            fontWeight="600"
+            color="status.info.fg"
+            fontWeight="500"
           >
             Your transaction is being submitted via L1 deposit. The L2 is
             required to include it within ~10 minutes.

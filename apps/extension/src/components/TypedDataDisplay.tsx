@@ -6,8 +6,10 @@ import {
   Text,
   Code,
   IconButton,
+  Button,
   Spacer,
   Collapse,
+  usePrefersReducedMotion,
 } from "@chakra-ui/react";
 import { CopyIcon, CheckIcon, ExternalLinkIcon, ChevronDownIcon } from "@chakra-ui/icons";
 
@@ -40,6 +42,9 @@ function CopyBtn({ value }: { value: string }) {
       aria-label="Copy"
       icon={copied ? <CheckIcon /> : <CopyIcon />}
       size="xs"
+      minW="24px"
+      w="24px"
+      h="24px"
       variant="ghost"
       color={copied ? "accent.highlight" : "text.secondary"}
       onClick={async () => {
@@ -95,8 +100,9 @@ function AddressValue({ address, chainId }: { address: string; chainId?: number 
         icon={copied ? <CheckIcon boxSize="10px" /> : <CopyIcon boxSize="10px" />}
         size="xs"
         variant="ghost"
-        minW="18px"
-        h="18px"
+        minW="24px"
+        w="24px"
+        h="24px"
         color={copied ? "accent.highlight" : "text.tertiary"}
         onClick={async () => {
           await navigator.clipboard.writeText(address);
@@ -111,8 +117,9 @@ function AddressValue({ address, chainId }: { address: string; chainId?: number 
           icon={<ExternalLinkIcon boxSize="10px" />}
           size="xs"
           variant="ghost"
-          minW="18px"
-          h="18px"
+          minW="24px"
+          w="24px"
+          h="24px"
           color="text.tertiary"
           onClick={() => window.open(explorerUrl, "_blank")}
           _hover={{ color: "accent.secondary", bg: "bg.muted" }}
@@ -189,7 +196,7 @@ function MessageField({
         <Text fontSize="xs" color="text.secondary" fontWeight="700">
           {name}:
         </Text>
-        <VStack align="start" spacing={1} pl={3} borderLeft="2px solid" borderColor="border.default">
+        <VStack align="start" spacing={1} pl={3} borderLeft="1px solid" borderColor="border.subtle">
           {Object.entries(value).map(([k, v]) => (
             <MessageField key={k} name={k} value={v} depth={0} chainId={chainId} numericColor={numericColor} />
           ))}
@@ -205,7 +212,7 @@ function MessageField({
         <Text fontSize="xs" color="text.secondary" fontWeight="700">
           {name}: [{value.length}]
         </Text>
-        <VStack align="start" spacing={1} pl={3} borderLeft="2px solid" borderColor="border.default">
+        <VStack align="start" spacing={1} pl={3} borderLeft="1px solid" borderColor="border.subtle">
           {value.map((item, i) => (
             <MessageField key={i} name={`[${i}]`} value={item} depth={0} chainId={chainId} numericColor={numericColor} />
           ))}
@@ -243,6 +250,7 @@ function TypedDataDisplay({ typedData, rawData, defaultCollapsed = false, connec
   const [tab, setTab] = useState<"structured" | "raw">("structured");
   const [typesOpen, setTypesOpen] = useState(false);
   const [expanded, setExpanded] = useState(!defaultCollapsed);
+  const prefersReducedMotion = usePrefersReducedMotion();
   const domain = typedData?.domain;
   const message = typedData?.message;
   const primaryType = typedData?.primaryType;
@@ -258,79 +266,99 @@ function TypedDataDisplay({ typedData, rawData, defaultCollapsed = false, connec
 
   if (!expanded) {
     return (
-      <Box
+      <Button
+        type="button"
+        variant="unstyled"
+        display="flex"
+        w="full"
+        minH="44px"
+        h="auto"
         bg="surface.raised"
-        border={tokens.borders.thin}
+        border="1px solid"
         borderColor="border.default"
         borderRadius="lg"
-        boxShadow="card"
+        boxShadow="none"
         overflow="hidden"
         p={2}
-        cursor="pointer"
         onClick={() => setExpanded(true)}
-        _hover={{ bg: "surface.sunken" }}
+        aria-expanded={false}
+        aria-label="Show raw typed data"
+        fontWeight="inherit"
+        textTransform="none"
+        textAlign="left"
+        _hover={{ bg: "surface.raisedHover" }}
       >
-        <HStack>
-          <Text fontSize="xs" color="fg.secondary" fontWeight="700" textTransform="uppercase">
+        <HStack w="full">
+          <Text fontSize="xs" color="fg.secondary" fontWeight="600">
             Show raw typed data
           </Text>
           <Spacer />
           <ChevronDownIcon color="fg.muted" />
         </HStack>
-      </Box>
+      </Button>
     );
   }
 
   return (
     <Box
       bg="surface.raised"
-      border={tokens.borders.thin}
+      border="1px solid"
       borderColor="border.default"
       borderRadius="lg"
-      boxShadow="card"
+      boxShadow="none"
       overflow="hidden"
     >
       {/* Tab header */}
-      <HStack p={0} borderBottom={tokens.borders.thin} borderColor="border.default" spacing={0}>
-        <Box
+      <HStack role="group" aria-label="Typed data view" p={0} borderBottom="1px solid" borderColor="border.subtle" spacing={0}>
+        <Button
+          type="button"
+          aria-pressed={tab === "structured"}
+          variant="unstyled"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
           flex={1}
-          py={2}
+          minH="44px"
           px={3}
-          cursor="pointer"
           bg={tab === "structured" ? tabActiveBg : "transparent"}
           onClick={() => setTab("structured")}
+          borderRadius={0}
+          _hover={{ bg: tab === "structured" ? tabActiveBg : "surface.raisedHover" }}
         >
           <Text
             fontSize="xs"
-            fontWeight="800"
-            textTransform="uppercase"
-            letterSpacing="wide"
+            fontWeight="600"
             textAlign="center"
             color={tab === "structured" ? tabActiveFg : "text.secondary"}
           >
             Structured
           </Text>
-        </Box>
-        <Box w="2px" bg="border.default" alignSelf="stretch" />
-        <Box
+        </Button>
+        <Box w="1px" bg="border.subtle" alignSelf="stretch" />
+        <Button
+          type="button"
+          aria-pressed={tab === "raw"}
+          variant="unstyled"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
           flex={1}
-          py={2}
+          minH="44px"
           px={3}
-          cursor="pointer"
           bg={tab === "raw" ? tabActiveBg : "transparent"}
           onClick={() => setTab("raw")}
+          borderRadius={0}
+          _hover={{ bg: tab === "raw" ? tabActiveBg : "surface.raisedHover" }}
         >
           <Text
             fontSize="xs"
-            fontWeight="800"
-            textTransform="uppercase"
-            letterSpacing="wide"
+            fontWeight="600"
             textAlign="center"
             color={tab === "raw" ? tabActiveFg : "text.secondary"}
           >
             Raw
           </Text>
-        </Box>
+        </Button>
         <Spacer />
         <Box pr={1}>
           <CopyBtn value={rawData} />
@@ -365,11 +393,10 @@ function TypedDataDisplay({ typedData, rawData, defaultCollapsed = false, connec
                   fontSize="10px"
                   bg="accent.primary"
                   color="accentFg.primary"
-                  fontWeight="800"
+                  fontWeight="700"
                   border={tokens.borders.thin}
                   borderColor="border.default"
                   borderRadius="md"
-                  textTransform="uppercase"
                 >
                   Domain
                 </Code>
@@ -434,11 +461,19 @@ function TypedDataDisplay({ typedData, rawData, defaultCollapsed = false, connec
             {/* Types section (collapsible) */}
             {types && Object.keys(types).length > 0 && (
               <Box w="full">
-                <HStack
-                  spacing={1}
-                  cursor="pointer"
+                <Button
+                  type="button"
+                  variant="unstyled"
+                  display="flex"
+                  minH="32px"
+                  h="auto"
+                  gap={1}
                   onClick={() => setTypesOpen(!typesOpen)}
-                  _hover={{ opacity: 0.8 }}
+                  aria-expanded={typesOpen}
+                  aria-controls="typed-data-types"
+                  fontWeight="inherit"
+                  textTransform="none"
+                  _hover={{ bg: "surface.raisedHover" }}
                 >
                   <Code
                     px={2}
@@ -446,11 +481,10 @@ function TypedDataDisplay({ typedData, rawData, defaultCollapsed = false, connec
                     fontSize="10px"
                     bg="accent.highlight"
                     color="accentFg.highlight"
-                    fontWeight="800"
+                    fontWeight="700"
                     border={tokens.borders.thin}
                     borderColor="border.default"
                     borderRadius="md"
-                    textTransform="uppercase"
                   >
                     Types
                   </Code>
@@ -458,20 +492,21 @@ function TypedDataDisplay({ typedData, rawData, defaultCollapsed = false, connec
                     boxSize="14px"
                     color="text.secondary"
                     transform={typesOpen ? "rotate(180deg)" : "rotate(0deg)"}
-                    transition="transform 0.2s ease-out"
+                    transition={prefersReducedMotion ? "none" : "transform 150ms cubic-bezier(0.23, 1, 0.32, 1)"}
+                    aria-hidden
                   />
                   <Text fontSize="10px" color="text.tertiary" fontWeight="600">
                     {Object.keys(types).length} type{Object.keys(types).length !== 1 ? "s" : ""}
                   </Text>
-                </HStack>
-                <Collapse in={typesOpen} animateOpacity>
+                </Button>
+                <Collapse id="typed-data-types" in={typesOpen} animateOpacity={!prefersReducedMotion}>
                   <VStack align="start" spacing={1.5} mt={2} pl={1}>
                     {Object.entries(types).map(([typeName, typeFields]) => (
                       <VStack key={typeName} align="start" spacing={0.5} w="full">
                         <Text fontSize="xs" color="text.primary" fontWeight="700">
                           {typeName}
                         </Text>
-                        <VStack align="start" spacing={0} pl={3} borderLeft="2px solid" borderColor="border.default">
+                        <VStack align="start" spacing={0} pl={3} borderLeft="1px solid" borderColor="border.subtle">
                           {Array.isArray(typeFields) && typeFields.map((field: any, i: number) => (
                             <HStack key={i} spacing={1}>
                               <Text fontSize="10px" fontFamily="mono" color="accent.secondary" fontWeight="600">

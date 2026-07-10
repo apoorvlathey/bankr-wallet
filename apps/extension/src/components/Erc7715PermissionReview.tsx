@@ -1,18 +1,15 @@
-import { useMemo, useState } from "react";
+import { useMemo, type ReactNode } from "react";
+import { formatUnits } from "viem";
 import {
   Badge,
   Box,
-  Collapse,
   HStack,
   IconButton,
+  Image,
   Text,
   VStack,
 } from "@chakra-ui/react";
-import {
-  ChevronDownIcon,
-  ExternalLinkIcon,
-  InfoOutlineIcon,
-} from "@chakra-ui/icons";
+import { ExternalLinkIcon } from "@chakra-ui/icons";
 
 import type {
   Erc7715PermissionRequest,
@@ -22,54 +19,76 @@ import { buildErc7715PermissionCaveats } from "@/chrome/erc7715PermissionCaveats
 import { CopyButton } from "@/components/CopyButton";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { Erc7715PermissionEditableControls } from "@/components/Erc7715PermissionEditableControls";
+import { Erc7715PermissionTokenCard } from "@/components/Erc7715PermissionTokenCard";
+import { useErc7715PermissionAsset } from "@/components/useErc7715PermissionAsset";
 import ChainIcon from "@/components/ChainIcon";
+import TokenLogo from "@/components/TokenLogo";
+import {
+  AssetDeltaRow,
+  InlineDisclosure,
+  ListItem,
+  ListItemContent,
+  ListItemDescription,
+  ListSurface,
+  OutcomeCard,
+} from "@/components/ui";
 import { getChainConfig } from "@/constants/chainConfig";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
 import { truncateAddress } from "@/lib/addressUtils";
-import { useTheme } from "@/theme";
+import { formatUsd } from "@/lib/currencyFormatUtils";
+import {
+  displayPermissionOrigin,
+  formatApprovalRevocationMethods,
+  formatDateTime,
+  permissionTitle,
+} from "@/lib/erc7715PermissionDisplay";
+import {
+  getErc7715PermissionAmount,
+  getErc7715PermissionAmountPerSecond,
+  getErc7715PermissionExpiry,
+  getErc7715PermissionPeriodDuration,
+  getErc7715PermissionTokenAddress,
+  isErc7715NativePermissionType,
+  isErc7715PeriodicPermissionType,
+  isErc7715StreamPermissionType,
+  isErc7715TokenApprovalRevocationPermissionType,
+} from "@/lib/erc7715PermissionEditing";
 
 const DELEGATION_MANAGER = "0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3";
+const DAY_SECONDS = 24 * 60 * 60;
 
-function permissionTitle(type: string): string {
-  switch (type) {
-    case "native-token-allowance":
-      return "Native Token Allowance";
-    case "native-token-periodic":
-      return "Native Periodic Allowance";
-    case "native-token-stream":
-      return "Native Stream Allowance";
-    case "erc20-token-allowance":
-      return "ERC-20 Token Allowance";
-    case "erc20-token-periodic":
-      return "ERC-20 Periodic Allowance";
-    case "erc20-token-stream":
-      return "ERC-20 Stream Allowance";
-    case "token-approval-revocation":
-      return "Token Approval Revocation";
-    default:
-      return type;
-  }
+export interface Erc7715PermissionReviewSections {
+  outcome: ReactNode;
+  financialImpact: ReactNode;
+  context: ReactNode;
+  advancedDetails: ReactNode;
+}
+
+interface Erc7715PermissionReviewProps {
+  permissionRequest: PendingErc7715PermissionRequest;
+  editedRequest: Erc7715PermissionRequest;
+  validationError: string | null;
+  onEditedRequestChange: (request: Erc7715PermissionRequest) => void;
+  onValidationErrorChange: (error: string | null) => void;
+  children: (sections: Erc7715PermissionReviewSections) => ReactNode;
 }
 
 function permissionIntent(type: string): string {
   switch (type) {
     case "native-token-allowance":
-      return "Spend native tokens";
-    case "native-token-periodic":
-      return "Spend native tokens over time";
-    case "native-token-stream":
-      return "Stream native tokens over time";
     case "erc20-token-allowance":
-      return "Spend ERC-20 tokens";
+      return "Delegate a spending limit";
+    case "native-token-periodic":
     case "erc20-token-periodic":
-      return "Spend ERC-20 tokens over time";
+      return "Delegate a recurring spending limit";
+    case "native-token-stream":
     case "erc20-token-stream":
-      return "Stream ERC-20 tokens over time";
+      return "Delegate a continuous token stream";
     case "token-approval-revocation":
-      return "Revoke token approvals";
+      return "Delegate token approval cleanup";
     default:
-      return "Use delegated permission";
+      return "Delegate a wallet permission";
   }
 }
 
@@ -77,7 +96,7 @@ function permissionDescription(type: string): string {
   if (type === "token-approval-revocation") {
     return "The delegate can only clear the selected approval types until expiry.";
   }
-  return "The delegate can act until the listed limit or expiry is hit.";
+  return "The delegate can act only within the amount, timing, and technical caveats shown below.";
 }
 
 function delegationNonceFromCaveats(
@@ -96,32 +115,38 @@ function delegationNonceFromCaveats(
   }
 }
 
-function InfoRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <HStack align="start" justify="space-between" spacing={3} w="full">
-      <Text
-        fontSize="xs"
-        color="text.secondary"
-        fontWeight="900"
-        textTransform="uppercase"
-        flexShrink={0}
-      >
-        {label}
-      </Text>
-      <Box minW={0} textAlign="right">
-        {children}
-      </Box>
-    </HStack>
-  );
+function compactDecimal(value: string): string {
+  const [whole, fraction = ""] = value.split(".");
+  const compactFraction = fraction.slice(0, 6).replace(/0+$/u, "");
+  return compactFraction ? `${whole}.${compactFraction}` : whole;
 }
 
-function AddressRow({
+function frequencyLabel(seconds: number | null): string {
+  switch (seconds) {
+    case 60 * 60:
+      return "hour";
+    case 24 * 60 * 60:
+      return "day";
+    case 7 * 24 * 60 * 60:
+      return "week";
+    case 14 * 24 * 60 * 60:
+      return "2 weeks";
+    case 30 * 24 * 60 * 60:
+      return "month";
+    case 365 * 24 * 60 * 60:
+      return "year";
+    default:
+      return seconds ? `${seconds} seconds` : "period";
+  }
+}
+
+function explorerAddressUrl(explorer: string | undefined, address: string) {
+  return explorer
+    ? `${explorer.replace(/\/+$/, "")}/address/${address}`
+    : null;
+}
+
+function AddressValue({
   label,
   address,
   explorer,
@@ -130,57 +155,52 @@ function AddressRow({
   address: string;
   explorer?: string;
 }) {
-  const explorerUrl = explorer
-    ? `${explorer.replace(/\/+$/, "")}/address/${address}`
-    : null;
+  const explorerUrl = explorerAddressUrl(explorer, address);
 
   return (
-    <InfoRow label={label}>
-      <HStack spacing={1} justify="flex-end">
-        <Text fontSize="xs" fontFamily="mono" fontWeight="800" color="text.primary">
-          {truncateAddress(address)}
-        </Text>
-        <CopyButton value={address} />
-        {explorerUrl && (
-          <IconButton
-            aria-label={`View ${label.toLowerCase()} on explorer`}
-            icon={<ExternalLinkIcon boxSize="11px" />}
-            size="xs"
-            variant="ghost"
-            color="text.secondary"
-            onClick={() => window.open(explorerUrl, "_blank")}
-            _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-          />
-        )}
-      </HStack>
-    </InfoRow>
+    <HStack spacing={1} minW={0}>
+      <Text fontSize="sm" fontFamily="mono" color="fg.primary">
+        {truncateAddress(address)}
+      </Text>
+      <CopyButton value={address} />
+      {explorerUrl && (
+        <IconButton
+          aria-label={`View ${label.toLowerCase()} on explorer`}
+          icon={<ExternalLinkIcon boxSize={3} />}
+          size="xs"
+          variant="ghost"
+          color="fg.secondary"
+          onClick={() => window.open(explorerUrl, "_blank")}
+        />
+      )}
+    </HStack>
   );
 }
 
-export function Erc7715PermissionReview({
-  permissionRequest,
-  editedRequest,
-  onEditedRequestChange,
-  onValidationErrorChange,
+function ContextRow({
+  label,
+  children,
 }: {
-  permissionRequest: PendingErc7715PermissionRequest;
-  editedRequest: Erc7715PermissionRequest;
-  onEditedRequestChange: (request: Erc7715PermissionRequest) => void;
-  onValidationErrorChange: (error: string | null) => void;
+  label: string;
+  children: ReactNode;
 }) {
-  const { tokens } = useTheme();
-  const { networksInfo } = useNetworks();
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  return (
+    <ListItem density="compact">
+      <ListItemContent>
+        <ListItemDescription>{label}</ListItemDescription>
+        <Box color="fg.primary" fontSize="sm" minW={0} overflowWrap="anywhere">
+          {children}
+        </Box>
+      </ListItemContent>
+    </ListItem>
+  );
+}
 
-  const resolvedChain =
-    getResolvedChainById(permissionRequest.chainId, networksInfo) ||
-    getChainConfig(permissionRequest.chainId);
-  const explorer = resolvedChain?.explorer;
-  const nativeSymbol =
-    resolvedChain?.nativeCurrency?.symbol ||
-    getChainConfig(permissionRequest.chainId).nativeCurrency?.symbol ||
-    "ETH";
-  const displayedCaveats = useMemo(() => {
+function useDisplayedCaveats(
+  permissionRequest: PendingErc7715PermissionRequest,
+  editedRequest: Erc7715PermissionRequest,
+) {
+  return useMemo(() => {
     try {
       const delegationNonce = delegationNonceFromCaveats(
         permissionRequest.caveats,
@@ -196,178 +216,392 @@ export function Erc7715PermissionReview({
       return permissionRequest.caveats;
     }
   }, [editedRequest, permissionRequest.caveats]);
+}
 
-  return (
-    <VStack align="stretch" spacing={3}>
-      <Box
-        bg="status.info.bg"
-        border={tokens.borders.medium}
-        borderColor="status.info.border"
-        borderRadius={tokens.radii.card}
-        boxShadow="card"
-        p={3}
-      >
-        <HStack spacing={2} align="start">
-          <InfoOutlineIcon color="status.info.fg" mt={0.5} />
-          <VStack align="start" spacing={1}>
-            <Text fontSize="sm" fontWeight="900" color="status.info.fg">
-              {permissionIntent(permissionRequest.permissionType)}
-            </Text>
-            <Text fontSize="xs" fontWeight="700" color="status.info.fg">
-              {permissionDescription(permissionRequest.permissionType)}
-            </Text>
-          </VStack>
-        </HStack>
-      </Box>
+function PermissionReviewContent({
+  permissionRequest,
+  editedRequest,
+  validationError,
+  onEditedRequestChange,
+  onValidationErrorChange,
+  asset,
+  explorer,
+  isNative,
+  displayedCaveats,
+  children,
+}: Erc7715PermissionReviewProps & {
+  asset: ReturnType<typeof useErc7715PermissionAsset>;
+  explorer?: string;
+  isNative: boolean;
+  displayedCaveats: PendingErc7715PermissionRequest["caveats"];
+}) {
+  const displayOrigin = displayPermissionOrigin(permissionRequest);
+  const permissionType = permissionRequest.permissionType;
+  const isRevocation =
+    isErc7715TokenApprovalRevocationPermissionType(permissionType);
+  const isPeriodic = isErc7715PeriodicPermissionType(permissionType);
+  const isStream = isErc7715StreamPermissionType(permissionType);
+  const expiry = getErc7715PermissionExpiry(editedRequest);
+  const expiryLabel = formatDateTime(expiry);
+  const expiryPhrase = expiry === null ? "with no expiration" : `until ${expiryLabel}`;
+  const periodDuration = getErc7715PermissionPeriodDuration(editedRequest);
+  const rawAmount = isRevocation
+    ? 0n
+    : isStream
+      ? getErc7715PermissionAmountPerSecond(editedRequest) *
+        BigInt(DAY_SECONDS)
+      : getErc7715PermissionAmount(editedRequest);
+  const amountLabel = isRevocation
+    ? formatApprovalRevocationMethods(editedRequest.permission.data)
+    : typeof asset.decimals === "number"
+      ? `${compactDecimal(formatUnits(rawAmount, asset.decimals))} ${asset.symbol}`
+      : `${rawAmount.toString()} base units`;
+  const amountWithFrequency = isPeriodic
+    ? `${amountLabel} per ${frequencyLabel(periodDuration)}`
+    : isStream
+      ? `${amountLabel} per day`
+      : amountLabel;
+  const formattedAmount =
+    !isRevocation && typeof asset.decimals === "number"
+      ? Number(formatUnits(rawAmount, asset.decimals))
+      : 0;
+  const fiatEstimate =
+    Number.isFinite(formattedAmount) &&
+    formattedAmount > 0 &&
+    asset.priceUsd > 0
+      ? `~${formatUsd(formattedAmount * asset.priceUsd)}`
+      : undefined;
+  const outcomeText = isRevocation
+    ? `Allow ${displayOrigin} to revoke ${amountLabel} ${expiryPhrase}`
+    : `Allow ${displayOrigin} to use up to ${amountWithFrequency} ${expiryPhrase}`;
+  const rawRequest = JSON.stringify(editedRequest, null, 2);
+  const accountExplorerUrl = explorerAddressUrl(explorer, editedRequest.from);
 
-      <Box
-        border={tokens.borders.thick}
-        borderColor="border.default"
-        borderRadius={tokens.radii.card}
-        bg="surface.sunken"
-        boxShadow="card"
-        p={3}
-      >
-        <VStack align="stretch" spacing={3}>
-          <HStack justify="space-between">
-            <Badge
-              variant="solid"
-              bg="accent.secondary"
-              color="accentFg.secondary"
-              borderRadius={tokens.radii.badge}
-            >
-              {permissionTitle(permissionRequest.permissionType)}
-            </Badge>
-            <HStack spacing={1}>
-              <ChainIcon chainId={permissionRequest.chainId} size={18} />
-              <Text fontSize="xs" fontWeight="900" color="text.primary">
-                {permissionRequest.chainName}
-              </Text>
-            </HStack>
-          </HStack>
-
-          <InfoRow label="From">
-            <HStack justify="flex-end">
-              <FromAccountDisplay address={editedRequest.from} />
-            </HStack>
-          </InfoRow>
-          <AddressRow
-            label="Delegate"
-            address={editedRequest.to}
-            explorer={explorer}
-          />
-          <Box
-            bg="surface.raised"
-            border={tokens.borders.thin}
+  const outcome = (
+    <OutcomeCard
+      label={permissionIntent(permissionType)}
+      outcome={outcomeText}
+      media={
+        permissionRequest.favicon ? (
+          <Image
+            src={permissionRequest.favicon}
+            alt=""
+            boxSize="36px"
+            borderRadius="md"
+            borderWidth="1px"
+            borderStyle="solid"
             borderColor="border.default"
-            borderRadius={tokens.radii.input}
-            p={3}
-          >
-            <VStack align="stretch" spacing={1}>
-              <Text
-                fontSize="xs"
-                color="text.secondary"
-                fontWeight="900"
-                textTransform="uppercase"
-              >
-                Justification
-              </Text>
-              <Text
-                fontSize="xs"
-                color={
-                  editedRequest.permission.justification
-                    ? "text.primary"
-                    : "text.secondary"
-                }
-                fontStyle={
-                  editedRequest.permission.justification ? "normal" : "italic"
-                }
-                fontWeight={
-                  editedRequest.permission.justification ? "700" : "600"
-                }
-                whiteSpace="pre-wrap"
-                wordBreak="break-word"
-                overflowWrap="anywhere"
-              >
-                {editedRequest.permission.justification ||
-                  "No justification was provided for the permission"}
-              </Text>
-            </VStack>
-          </Box>
-          <Erc7715PermissionEditableControls
-            permissionRequest={permissionRequest}
-            editedRequest={editedRequest}
-            explorer={explorer}
-            nativeSymbol={nativeSymbol}
-            onEditedRequestChange={onEditedRequestChange}
-            onValidationErrorChange={onValidationErrorChange}
           />
-        </VStack>
-      </Box>
+        ) : undefined
+      }
+      context={permissionDescription(permissionType)}
+      status={<Badge variant="outline">{permissionTitle(permissionType)}</Badge>}
+    />
+  );
 
-      <Box
-        border={tokens.borders.medium}
-        borderColor="border.default"
-        borderRadius={tokens.radii.card}
-        bg="surface.base"
-        overflow="hidden"
-      >
-        <HStack
-          as="button"
-          type="button"
-          w="full"
-          justify="space-between"
-          p={3}
-          onClick={() => setAdvancedOpen((open) => !open)}
-          textAlign="left"
+  const financialImpact = (
+    <VStack align="stretch" spacing={4}>
+      <AssetDeltaRow
+        direction={isRevocation ? "neutral" : "send"}
+        directionLabel={
+          isRevocation ? "Revocation scope" : "Delegated spending limit"
+        }
+        asset={isRevocation ? "Approval types" : asset.symbol}
+        amount={amountWithFrequency}
+        fiat={fiatEstimate}
+        meta={
+          isRevocation
+            ? "Only the selected approval methods can be revoked"
+            : isStream
+            ? "Continuous rate shown as daily exposure"
+            : isPeriodic
+              ? `Renews every ${frequencyLabel(periodDuration)}`
+              : "Maximum delegated exposure"
+        }
+        media={
+          isRevocation ? undefined : (
+            <TokenLogo
+              symbol={asset.symbol}
+              logoUrl={asset.logoUrl}
+              nativeChainId={isNative ? permissionRequest.chainId : undefined}
+              size="36px"
+            />
+          )
+        }
+      />
+
+      {!isRevocation && (
+        <Erc7715PermissionTokenCard
+          asset={asset}
+          chainId={permissionRequest.chainId}
+          isNative={isNative}
+        />
+      )}
+
+      <Erc7715PermissionEditableControls
+        permissionRequest={permissionRequest}
+        editedRequest={editedRequest}
+        asset={asset}
+        onEditedRequestChange={onEditedRequestChange}
+        onValidationErrorChange={onValidationErrorChange}
+      />
+
+      {validationError && (
+        <Box
+          role="alert"
+          bg="status.error.bg"
+          color="status.error.fg"
+          borderWidth="1px"
+          borderStyle="solid"
+          borderColor="status.error.border"
+          borderRadius="md"
+          px={3}
+          py={2.5}
+          fontSize="sm"
+          fontWeight="600"
         >
-          <Text fontSize="xs" fontWeight="900" color="text.primary" textTransform="uppercase">
-            Advanced Details
-          </Text>
-          <ChevronDownIcon
-            transform={advancedOpen ? "rotate(180deg)" : "rotate(0deg)"}
-            transition="transform 0.15s ease"
-          />
-        </HStack>
-        <Collapse in={advancedOpen} animateOpacity>
-          <VStack align="stretch" spacing={2} px={3} pb={3}>
-            <AddressRow label="Manager" address={DELEGATION_MANAGER} explorer={explorer} />
-            {displayedCaveats.map((caveat, index) => (
-              <Box
-                key={`${caveat.enforcer}-${index}`}
-                bg="bg.muted"
-                border={tokens.borders.thin}
-                borderColor="border.default"
-                borderRadius={tokens.radii.input}
-                p={2}
-              >
-                <VStack align="stretch" spacing={2}>
-                  <InfoRow label="Caveat">
-                    <Text fontSize="xs" fontWeight="900" color="text.primary">
-                      {caveat.enforcerName}
-                    </Text>
-                  </InfoRow>
-                  <AddressRow label="Enforcer" address={caveat.enforcer} explorer={explorer} />
-                  <InfoRow label="Terms">
-                    <HStack spacing={1} justify="flex-end" minW={0}>
-                      <Text
-                        fontSize="xs"
-                        fontFamily="mono"
-                        color="text.secondary"
-                        fontWeight="700"
-                        noOfLines={1}
-                      >
-                        {caveat.terms}
-                      </Text>
-                      <CopyButton value={caveat.terms} />
-                    </HStack>
-                  </InfoRow>
-                </VStack>
-              </Box>
-            ))}
-          </VStack>
-        </Collapse>
-      </Box>
+          {validationError}
+        </Box>
+      )}
     </VStack>
   );
+
+  const context = (
+    <ListSurface aria-label="Permission context">
+      <ContextRow label="Requesting app">
+        <HStack spacing={2}>
+          {permissionRequest.favicon && (
+            <Image
+              src={permissionRequest.favicon}
+              alt=""
+              boxSize="24px"
+              borderRadius="md"
+            />
+          )}
+          <Text fontSize="sm" fontWeight="600" overflowWrap="anywhere">
+            {displayOrigin}
+          </Text>
+        </HStack>
+      </ContextRow>
+      <ContextRow label="Delegate">
+        <AddressValue label="Delegate" address={editedRequest.to} explorer={explorer} />
+      </ContextRow>
+      <ContextRow label="Account">
+        <HStack spacing={1} flexWrap="wrap">
+          <FromAccountDisplay address={editedRequest.from} />
+          <CopyButton value={editedRequest.from} />
+          {accountExplorerUrl && (
+            <IconButton
+              aria-label="View account on explorer"
+              icon={<ExternalLinkIcon boxSize={3} />}
+              size="xs"
+              variant="ghost"
+              color="fg.secondary"
+              onClick={() => window.open(accountExplorerUrl, "_blank")}
+            />
+          )}
+        </HStack>
+      </ContextRow>
+      <ContextRow label="Network">
+        <HStack spacing={2}>
+          <ChainIcon chainId={permissionRequest.chainId} size="20px" />
+          <Text fontSize="sm" fontWeight="600">
+            {permissionRequest.chainName}
+          </Text>
+        </HStack>
+      </ContextRow>
+      <ContextRow label="Justification">
+        <Text
+          fontSize="sm"
+          color={
+            editedRequest.permission.justification
+              ? "fg.primary"
+              : "fg.secondary"
+          }
+          fontStyle={
+            editedRequest.permission.justification ? "normal" : "italic"
+          }
+          whiteSpace="pre-wrap"
+          overflowWrap="anywhere"
+        >
+          {editedRequest.permission.justification ||
+            "No justification was provided for the permission"}
+        </Text>
+      </ContextRow>
+    </ListSurface>
+  );
+
+  const advancedDetails = (
+    <InlineDisclosure
+      label="Technical details"
+      description={`${displayedCaveats.length} WalletChan-derived caveats and the raw request`}
+    >
+      <VStack align="stretch" spacing={3} pt={2}>
+        <Box>
+          <Text fontSize="xs" color="fg.secondary" mb={1}>
+            Delegation manager
+          </Text>
+          <AddressValue
+            label="Delegation manager"
+            address={DELEGATION_MANAGER}
+            explorer={explorer}
+          />
+        </Box>
+
+        {displayedCaveats.map((caveat, index) => (
+          <Box
+            key={`${caveat.enforcer}-${index}`}
+            bg="surface.sunken"
+            borderWidth="1px"
+            borderStyle="solid"
+            borderColor="border.subtle"
+            borderRadius="md"
+            p={3}
+          >
+            <VStack align="stretch" spacing={2}>
+              <Text fontSize="sm" fontWeight="600" color="fg.primary">
+                {caveat.enforcerName}
+              </Text>
+              <Box>
+                <Text fontSize="xs" color="fg.secondary" mb={1}>
+                  Enforcer
+                </Text>
+                <AddressValue
+                  label="Enforcer"
+                  address={caveat.enforcer}
+                  explorer={explorer}
+                />
+              </Box>
+              <Box>
+                <Text fontSize="xs" color="fg.secondary" mb={1}>
+                  Terms
+                </Text>
+                <HStack spacing={1} minW={0}>
+                  <Text
+                    fontSize="xs"
+                    fontFamily="mono"
+                    color="fg.secondary"
+                    noOfLines={1}
+                    minW={0}
+                  >
+                    {caveat.terms}
+                  </Text>
+                  <CopyButton value={caveat.terms} />
+                </HStack>
+              </Box>
+            </VStack>
+          </Box>
+        ))}
+
+        <Box>
+          <HStack justify="space-between" mb={2}>
+            <Text fontSize="sm" fontWeight="600" color="fg.primary">
+              Raw permission request
+            </Text>
+            <CopyButton value={rawRequest} />
+          </HStack>
+          <Box
+            as="pre"
+            m={0}
+            p={3}
+            maxH="240px"
+            overflow="auto"
+            whiteSpace="pre-wrap"
+            wordBreak="break-word"
+            bg="surface.sunken"
+            borderWidth="1px"
+            borderStyle="solid"
+            borderColor="border.subtle"
+            borderRadius="md"
+            color="fg.secondary"
+            fontFamily="mono"
+            fontSize="xs"
+          >
+            {rawRequest}
+          </Box>
+        </Box>
+      </VStack>
+    </InlineDisclosure>
+  );
+
+  return children({ outcome, financialImpact, context, advancedDetails });
+}
+
+function TokenPermissionReview(props: Erc7715PermissionReviewProps) {
+  const { permissionRequest, editedRequest } = props;
+  const { networksInfo } = useNetworks();
+  const displayedCaveats = useDisplayedCaveats(permissionRequest, editedRequest);
+  const resolvedChain = getResolvedChainById(
+    permissionRequest.chainId,
+    networksInfo,
+  );
+  const explorer =
+    resolvedChain?.explorer || getChainConfig(permissionRequest.chainId).explorer;
+  const nativeSymbol =
+    resolvedChain?.nativeCurrency.symbol || "ETH";
+  const tokenAddress = getErc7715PermissionTokenAddress(editedRequest);
+  const isNative = isErc7715NativePermissionType(
+    permissionRequest.permissionType,
+  );
+  const asset = useErc7715PermissionAsset({
+    permissionRequest,
+    editedRequest,
+    explorer,
+    nativeSymbol,
+    tokenAddress,
+    isNative,
+  });
+
+  return (
+    <PermissionReviewContent
+      {...props}
+      asset={asset}
+      explorer={explorer}
+      isNative={isNative}
+      displayedCaveats={displayedCaveats}
+    />
+  );
+}
+
+function ApprovalRevocationReview(props: Erc7715PermissionReviewProps) {
+  const { permissionRequest, editedRequest } = props;
+  const { networksInfo } = useNetworks();
+  const displayedCaveats = useDisplayedCaveats(permissionRequest, editedRequest);
+  const resolvedChain =
+    getResolvedChainById(permissionRequest.chainId, networksInfo) ||
+    getChainConfig(permissionRequest.chainId);
+  const explorer = resolvedChain?.explorer;
+  const asset = {
+    symbol: "Approvals",
+    name: "Token approval methods",
+    decimals: null,
+    decimalsStatus: "verified" as const,
+    priceUsd: 0,
+    balanceLabel: "",
+    balanceUsdLabel: "",
+    tokenExplorerUrl: null,
+    tokenAddress: null,
+  };
+
+  return (
+    <PermissionReviewContent
+      {...props}
+      asset={asset}
+      explorer={explorer}
+      isNative={false}
+      displayedCaveats={displayedCaveats}
+    />
+  );
+}
+
+export function Erc7715PermissionReview(props: Erc7715PermissionReviewProps) {
+  if (
+    isErc7715TokenApprovalRevocationPermissionType(
+      props.permissionRequest.permissionType,
+    )
+  ) {
+    return <ApprovalRevocationReview {...props} />;
+  }
+
+  return <TokenPermissionReview {...props} />;
 }

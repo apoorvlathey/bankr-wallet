@@ -9,6 +9,7 @@ import {
   http,
   type PublicClient,
   type Address,
+  type StateOverride,
 } from "viem";
 import { getRpcUrl } from "./txHandlers";
 import {
@@ -318,8 +319,8 @@ export async function estimateGas(
     fetchNativePrice(tx.chainId),
   ]);
 
-  const stateOverride = delegateCode
-    ? ([{ address: from, code: delegateCode }] as const)
+  const stateOverride: StateOverride | undefined = delegateCode
+    ? [{ address: from, code: delegateCode }]
     : undefined;
 
   if (dappGas) {

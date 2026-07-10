@@ -1,4 +1,4 @@
-import { Box, HStack } from "@chakra-ui/react";
+import { Box, HStack, usePrefersReducedMotion } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { isDarkThemeId, useTheme } from "@/theme";
 
@@ -7,20 +7,24 @@ interface ShapesLoaderProps {
 }
 
 /**
- * Bauhaus loader: three colored shapes (red circle, blue square, green
- * triangle) bounce in sequence. Reads as the constructivist mark on every
- * pending message bubble.
+ * Bauhaus loader: three colored shapes pulse in sequence. It keeps the
+ * constructivist identity without drawing attention away from live tool text.
  */
-function BauhausShapesLoader({ size }: { size: string }) {
+function BauhausShapesLoader({
+  size,
+  reduceMotion,
+}: {
+  size: string;
+  reduceMotion: boolean;
+}) {
   const sizeNum = parseInt(size);
-  const bounceDistance = Math.round(sizeNum * 0.67);
 
-  const bounce = keyframes`
+  const pulse = keyframes`
     0%, 100% {
-      transform: translateY(0);
+      opacity: 0.35;
     }
     50% {
-      transform: translateY(-${bounceDistance}px);
+      opacity: 1;
     }
   `;
 
@@ -28,14 +32,14 @@ function BauhausShapesLoader({ size }: { size: string }) {
     <HStack spacing={1} justify="center">
       {/* Circle - Red */}
       <Box
-        animation={`${bounce} 0.6s ease-in-out infinite`}
+        animation={reduceMotion ? undefined : `${pulse} 1s ease-in-out infinite`}
         sx={{ animationDelay: "0ms" }}
       >
         <Box w={size} h={size} borderRadius="full" bg="accent.primary" />
       </Box>
       {/* Square - Blue */}
       <Box
-        animation={`${bounce} 0.6s ease-in-out infinite`}
+        animation={reduceMotion ? undefined : `${pulse} 1s ease-in-out infinite`}
         sx={{ animationDelay: "150ms" }}
       >
         <Box
@@ -47,7 +51,7 @@ function BauhausShapesLoader({ size }: { size: string }) {
       </Box>
       {/* Triangle - Green */}
       <Box
-        animation={`${bounce} 0.6s ease-in-out infinite`}
+        animation={reduceMotion ? undefined : `${pulse} 1s ease-in-out infinite`}
         sx={{ animationDelay: "300ms" }}
       >
         <Box
@@ -69,7 +73,13 @@ function BauhausShapesLoader({ size }: { size: string }) {
  * dark mode aesthetic where the loader should sit quietly while the model
  * thinks rather than dance.
  */
-function MidnightDotPulseLoader({ size }: { size: string }) {
+function MidnightDotPulseLoader({
+  size,
+  reduceMotion,
+}: {
+  size: string;
+  reduceMotion: boolean;
+}) {
   const pulse = keyframes`
     0%, 80%, 100% {
       opacity: 0.25;
@@ -90,7 +100,7 @@ function MidnightDotPulseLoader({ size }: { size: string }) {
           h={size}
           borderRadius="full"
           bg="accent.primary"
-          animation={`${pulse} 1.2s ease-in-out infinite`}
+          animation={reduceMotion ? undefined : `${pulse} 1.2s ease-in-out infinite`}
           sx={{ animationDelay: `${i * 160}ms` }}
         />
       ))}
@@ -101,11 +111,12 @@ function MidnightDotPulseLoader({ size }: { size: string }) {
 export function ShapesLoader({ size = "10px" }: ShapesLoaderProps) {
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   return isDarkTheme ? (
-    <MidnightDotPulseLoader size={size} />
+    <MidnightDotPulseLoader size={size} reduceMotion={prefersReducedMotion} />
   ) : (
-    <BauhausShapesLoader size={size} />
+    <BauhausShapesLoader size={size} reduceMotion={prefersReducedMotion} />
   );
 }
 

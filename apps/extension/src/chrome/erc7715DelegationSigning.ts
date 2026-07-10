@@ -12,7 +12,7 @@ import type {
   Hex,
 } from "./pendingErc7715PermissionStorage";
 
-const ERC7710_DELEGATION_TYPES = {
+const ERC7710_DELEGATION_TYPES: Erc7710DelegationTypedData["types"] = {
   EIP712Domain: [
     { name: "name", type: "string" },
     { name: "version", type: "string" },
@@ -30,7 +30,7 @@ const ERC7710_DELEGATION_TYPES = {
     { name: "enforcer", type: "address" },
     { name: "terms", type: "bytes" },
   ],
-} as const;
+};
 
 const ERC7710_DELEGATION_TYPEHASH =
   "0x88c1d2ecf185adf710588203a5f263f0ff61be0d33da39792cde19ba9aa4331e" as const;

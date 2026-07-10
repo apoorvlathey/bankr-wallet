@@ -18,23 +18,13 @@ import {
   SliderMark,
   Spinner,
   Skeleton,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
   Checkbox,
   Tooltip,
   Textarea,
   Collapse,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-  PopoverBody,
-  PopoverArrow,
-  Portal,
   useDisclosure,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, ChevronDownIcon, ChevronRightIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon, SettingsIcon, WarningTwoIcon } from "@chakra-ui/icons";
+import { ChevronDownIcon, ChevronRightIcon, CopyIcon, CheckIcon, ExternalLinkIcon, Search2Icon, SettingsIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import { blo } from "blo";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { useTheme } from "@/theme";
@@ -66,6 +56,23 @@ import {
   getVisibleChains,
   getNativeAssetMeta,
 } from "@/lib/chains";
+import {
+  AppHeader,
+  AppScreen,
+  FullScreenPicker,
+  FullScreenPickerEmpty,
+  FullScreenPickerGroup,
+  FullScreenPickerSearch,
+  ListItem,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
+  ListItemMeta,
+  ListItemTitle,
+  ScreenBody,
+  StickyActionBar,
+  ActionSheet,
+} from "@/components/ui";
 
 /** USDC on Base (ERC-3009 transferWithAuthorization) */
 const BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
@@ -76,17 +83,11 @@ function formatTokenAmount(value: number): string {
   return parseFloat(value.toPrecision(6)).toString();
 }
 
-function getAccountTypePillStyles(account: Account) {
-  if (account.type === "bankr") {
-    return { label: "Bankr", bg: "accent.secondary", color: "accentFg.secondary" };
-  }
-  if (account.type === "privateKey") {
-    return { label: "Private Key", bg: "accent.highlight", color: "accentFg.highlight" };
-  }
-  if (account.type === "seedPhrase") {
-    return { label: "Seed Phrase", bg: "accent.primary", color: "accentFg.primary" };
-  }
-  return { label: "View Only", bg: "status.success.fg", color: "status.success.bg" };
+function getAccountTypeLabel(account: Account) {
+  if (account.type === "bankr") return "Bankr";
+  if (account.type === "privateKey") return "Private Key";
+  if (account.type === "seedPhrase") return "Seed Phrase";
+  return "View Only";
 }
 
 /**
@@ -122,7 +123,7 @@ function AdaptiveBalance({
       : null;
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLSpanElement>(null);
+  const measureRef = useRef<HTMLParagraphElement>(null);
   const [showCompact, setShowCompact] = useState(false);
 
   useLayoutEffect(() => {
@@ -147,10 +148,8 @@ function AdaptiveBalance({
     <HStack spacing={2} align="center" w="full" minW={0}>
       <Text
         fontSize="2xs"
-        fontWeight="800"
-        color="text.tertiary"
-        textTransform="uppercase"
-        letterSpacing="0.06em"
+        fontWeight="500"
+        color="fg.secondary"
         lineHeight="1"
         flexShrink={0}
       >
@@ -189,8 +188,8 @@ function AdaptiveBalance({
         >
           <Text
             fontSize="sm"
-            fontWeight="800"
-            color="text.primary"
+            fontWeight="600"
+            color="fg.primary"
             whiteSpace="nowrap"
             overflow="hidden"
             textOverflow="ellipsis"
@@ -202,8 +201,8 @@ function AdaptiveBalance({
       {usdLabel && (
         <Text
           fontSize="xs"
-          fontWeight="700"
-          color="text.tertiary"
+          fontWeight="500"
+          color="fg.secondary"
           lineHeight="1"
           flexShrink={0}
         >
@@ -667,7 +666,8 @@ function TokenTransfer({
   const [chainSearch, setChainSearch] = useState("");
   const chainSearchInputRef = useRef<HTMLInputElement>(null);
   const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
-  const [highlightedChainIndex, setHighlightedChainIndex] = useState(0);
+  const [isRecipientPickerOpen, setIsRecipientPickerOpen] = useState(false);
+  const [recipientSearch, setRecipientSearch] = useState("");
   const normalizedChainSearch = chainSearch.trim().toLowerCase();
   const filteredChains = normalizedChainSearch
     ? allChains.filter((cId) => {
@@ -688,9 +688,6 @@ function TokenTransfer({
     }, 30);
     return () => window.clearTimeout(timeoutId);
   }, [isChainMenuOpen]);
-  useEffect(() => {
-    setHighlightedChainIndex(0);
-  }, [chainSearch, isChainMenuOpen]);
 
   // Other wallet accounts (excluding current sender) for recipient picker
   const otherAccounts = useMemo(
@@ -718,18 +715,26 @@ function TokenTransfer({
     return truncateAddress(account.address);
   }, [otherAccountIdentities]);
 
-  const hasSecondaryAddressLine = useCallback((account: Account): boolean => {
-    if (account.displayName) return true;
-    const ens = otherAccountIdentities.get(account.address.toLowerCase());
-    return !!ens?.name;
-  }, [otherAccountIdentities]);
-
   const getAccountAvatar = useCallback((account: Account): string => {
     const ensAvatar = otherAccountIdentities.get(account.address.toLowerCase())?.avatar;
     if (ensAvatar) return cachedOtherAccountAvatars.get(ensAvatar) || ensAvatar;
     if (account.type === "bankr") return "/bankr-icon.png";
     return blo(account.address as `0x${string}`);
   }, [otherAccountIdentities, cachedOtherAccountAvatars]);
+
+  const filteredRecipientAccounts = useMemo(() => {
+    const query = recipientSearch.trim().toLowerCase();
+    if (!query) return otherAccounts;
+    return otherAccounts.filter((account) => {
+      const identity = otherAccountIdentities.get(account.address.toLowerCase());
+      return (
+        getAccountDisplayName(account).toLowerCase().includes(query) ||
+        account.address.toLowerCase().includes(query) ||
+        account.type.toLowerCase().includes(query) ||
+        identity?.name?.toLowerCase().includes(query)
+      );
+    });
+  }, [getAccountDisplayName, otherAccountIdentities, otherAccounts, recipientSearch]);
 
   // Compute the token amount that will actually be sent. When the user has
   // attached valid hex calldata to a native send, a 0-value tx is a real use
@@ -1007,86 +1012,193 @@ function TokenTransfer({
     }
   };
 
-  return (
-    <Box
-      p={4}
-      h="100%"
-      maxH="100%"
-      flex="1"
-      minH={0}
-      overflowY="auto"
-      overflowX="hidden"
-      bg="surface.base"
-      css={{
-        WebkitOverflowScrolling: "touch",
-        overscrollBehaviorY: "contain",
-      }}
-    >
-      <VStack spacing={3} align="stretch">
-        {/* Header */}
-        <HStack spacing={2} justify="space-between" align="flex-start">
-          <HStack spacing={2}>
-            <IconButton
-              aria-label="Back"
-              icon={<ArrowBackIcon />}
-              variant="ghost"
-              size="sm"
-              onClick={onBack}
-            />
-            <Text fontWeight="900" fontSize="lg" color="text.primary" textTransform="uppercase" letterSpacing="wider">
-              Send
-            </Text>
-          </HStack>
-          {/* Right side — active account chip on top, "Swap instead?" below
-              when applicable. Matches the Swap/Bridge header treatment so
-              the user always sees which account will sign. */}
-          <VStack align="flex-end" spacing={1} minW={0}>
-            {fromAddress && <FromAccountDisplay address={fromAddress} />}
-            {onSwapInstead && selectedToken && SWAP_SUPPORTED_CHAIN_IDS.has(selectedChainId) && (
-              <Text
-                fontSize="xs"
-                fontWeight="700"
-                color="accent.secondary"
-                cursor="pointer"
-                onClick={() => onSwapInstead(selectedToken)}
-                _hover={{ textDecoration: "underline" }}
-              >
-                Swap instead?
-              </Text>
-            )}
-          </VStack>
-        </HStack>
+  if (isChainMenuOpen) {
+    return (
+      <FullScreenPicker
+        title="Choose network"
+        onBack={() => {
+          setIsChainMenuOpen(false);
+          setChainSearch("");
+        }}
+        controls={(
+          <FullScreenPickerSearch
+            ref={chainSearchInputRef}
+            label="Search networks"
+            value={chainSearch}
+            onChange={(event) => setChainSearch(event.target.value)}
+            placeholder="Network name or chain ID"
+          />
+        )}
+      >
+        {filteredChains.length > 0 ? (
+          <FullScreenPickerGroup
+            label="Available networks"
+            description="The transfer will be prepared on the network you choose."
+          >
+            {filteredChains.map((candidateChainId) => {
+              const candidateName = getChainName(candidateChainId);
+              const environment = getChainEnvironmentLabel(candidateChainId, candidateName);
+              const isSelected = candidateChainId === selectedChainId;
+              return (
+                <ListItem
+                  key={candidateChainId}
+                  interactive
+                  isSelected={isSelected}
+                  onClick={() => {
+                    handleChainChange(candidateChainId);
+                    setIsChainMenuOpen(false);
+                    setChainSearch("");
+                  }}
+                >
+                  <ListItemMedia>
+                    <ChainIcon
+                      chainId={candidateChainId}
+                      chainName={candidateName}
+                      size="28px"
+                      withChip
+                    />
+                  </ListItemMedia>
+                  <ListItemContent>
+                    <ListItemTitle>{candidateName}</ListItemTitle>
+                    <ListItemDescription>
+                      {environment || `Chain ID ${candidateChainId}`}
+                    </ListItemDescription>
+                  </ListItemContent>
+                  <ListItemMeta color={isSelected ? "accent.secondary" : "fg.muted"}>
+                    {isSelected ? <CheckIcon aria-label="Selected" /> : candidateChainId}
+                  </ListItemMeta>
+                </ListItem>
+              );
+            })}
+          </FullScreenPickerGroup>
+        ) : (
+          <FullScreenPickerEmpty
+            title="No networks found"
+            description={`No network matches “${chainSearch.trim()}”.`}
+          />
+        )}
+      </FullScreenPicker>
+    );
+  }
 
-        {/* Non-premium upsell (compact, top of page) */}
+  if (isRecipientPickerOpen) {
+    return (
+      <FullScreenPicker
+        title="Choose a wallet"
+        onBack={() => {
+          setIsRecipientPickerOpen(false);
+          setRecipientSearch("");
+        }}
+        controls={(
+          <FullScreenPickerSearch
+            label="Search your wallets"
+            value={recipientSearch}
+            onChange={(event) => setRecipientSearch(event.target.value)}
+            placeholder="Name or address"
+          />
+        )}
+      >
+        {filteredRecipientAccounts.length > 0 ? (
+          <FullScreenPickerGroup
+            label="Your wallets"
+            description="Choose another WalletChan account as the recipient."
+          >
+            {filteredRecipientAccounts.map((account) => {
+              const avatarSrc = getAccountAvatar(account);
+              const isSelected = recipient.toLowerCase() === account.address.toLowerCase();
+              return (
+                <ListItem
+                  key={account.id}
+                  interactive
+                  isSelected={isSelected}
+                  onClick={() => {
+                    setRecipient(account.address);
+                    setIsRecipientPickerOpen(false);
+                    setRecipientSearch("");
+                  }}
+                >
+                  <ListItemMedia>
+                    <Image
+                      src={avatarSrc}
+                      alt=""
+                      boxSize="32px"
+                      borderRadius={avatarSrc === "/bankr-icon.png" ? "sm" : "full"}
+                    />
+                  </ListItemMedia>
+                  <ListItemContent>
+                    <ListItemTitle>{getAccountDisplayName(account)}</ListItemTitle>
+                    <ListItemDescription fontFamily="mono">
+                      {truncateAddress(account.address)}
+                    </ListItemDescription>
+                  </ListItemContent>
+                  <ListItemMeta color={isSelected ? "accent.secondary" : "fg.secondary"}>
+                    {isSelected ? <CheckIcon aria-label="Selected" /> : getAccountTypeLabel(account)}
+                  </ListItemMeta>
+                </ListItem>
+              );
+            })}
+          </FullScreenPickerGroup>
+        ) : (
+          <FullScreenPickerEmpty
+            title="No wallets found"
+            description={`No wallet matches “${recipientSearch.trim()}”.`}
+          />
+        )}
+      </FullScreenPicker>
+    );
+  }
+
+  return (
+    <AppScreen stickyActionClearance={4}>
+      <AppHeader
+        title="Send"
+        onBack={onBack}
+        trailing={fromAddress ? <FromAccountDisplay address={fromAddress} /> : undefined}
+      />
+      <ScreenBody pt={4} pb={4}>
+        <VStack spacing={5} align="stretch">
+        {onSwapInstead && selectedToken && SWAP_SUPPORTED_CHAIN_IDS.has(selectedChainId) && (
+          <Button
+            alignSelf="flex-start"
+            size="sm"
+            variant="ghost"
+            color="accent.secondary"
+            px={0}
+            minH="32px"
+            onClick={() => onSwapInstead(selectedToken)}
+          >
+            Swap {selectedToken.symbol.toUpperCase()} instead
+          </Button>
+        )}
+
+        {/* Optional sponsorship eligibility is contextual, not a competing CTA. */}
         {isUsdcOnBase && !premiumLoading && premiumStatus && !premiumStatus.isPremium && accountType !== "impersonator" && (
           <HStack
-            spacing={2}
-            px={2.5}
-            py={1.5}
-            bg="accent.highlight"
-            border={tokens.borders.thin}
-            borderColor="border.default"
-            borderRadius="md"
+            spacing={3}
+            px={3}
+            py={2.5}
+            bg="status.info.bg"
+            borderWidth="1px"
+            borderColor="status.info.border"
+            borderRadius="lg"
             justify="space-between"
           >
             <Box>
-              <Text fontSize="2xs" color="accentFg.highlight" fontWeight="700">
-                ✨ Stake 20M+ sWCHAN for gas-free USDC sends
+              <Text fontSize="sm" color="fg.primary" fontWeight="600">
+                Gas-free USDC sends
               </Text>
-              <Text fontSize="2xs" color="accentFg.highlight" opacity={0.7} fontWeight="600">
-                and other pro features!
+              <Text fontSize="xs" color="fg.secondary">
+                Available to eligible sWCHAN stakers.
               </Text>
             </Box>
             <Button
               size="xs"
-              h="22px"
-              px={2}
-              variant="highlight"
-              fontSize="2xs"
+              variant="ghost"
+              color="accent.secondary"
               onClick={() => window.open(WALLETCHAN_STAKE_URL, "_blank")}
               flexShrink={0}
             >
-              STAKE
+              Learn more
             </Button>
           </HStack>
         )}
@@ -1094,189 +1206,51 @@ function TokenTransfer({
         {/* Token selector card */}
         <Box
             bg="surface.raised"
-            border={tokens.borders.medium}
-            borderColor="border.default"
+            border={tokens.borders.thin}
+            borderColor="border.subtle"
             borderRadius="lg"
-            boxShadow="card"
             p={3}
           >
-            <HStack spacing={3} align="center">
+            <HStack spacing={2} align="center" minW={0}>
               {/* Chain selector + (optional) testnet pill stacked below it.
                   Stacking instead of inlining the pill gives the chain name
                   more horizontal room on custom chains without sacrificing
                   the row-level "this is a testnet" safety signal. */}
-              <VStack align="flex-start" spacing={1} flexShrink={0} minW={0}>
-              <Menu
-                isOpen={isChainMenuOpen}
-                initialFocusRef={chainSearchInputRef}
-                onOpen={() => {
-                  setIsChainMenuOpen(true);
-                  setHighlightedChainIndex(0);
-                }}
-                onClose={() => {
-                  setIsChainMenuOpen(false);
-                  setChainSearch("");
-                  setHighlightedChainIndex(0);
-                }}
+              <VStack align="flex-start" spacing={1} flex="1 1 0" minW={0}>
+              <Button
+                variant="ghost"
+                minH="44px"
+                h="auto"
+                px={1}
+                w="full"
+                minW={0}
+                justifyContent="flex-start"
+                rightIcon={<ChevronRightIcon color="fg.muted" />}
+                onClick={() => setIsChainMenuOpen(true)}
               >
-                <MenuButton
-                  as={Box}
-                  cursor="pointer"
-                  flexShrink={0}
-                  minW={0}
-                  _hover={{ opacity: 0.7 }}
-                  transition="opacity 0.15s"
-                >
-                  <HStack spacing={1.5} minW={0}>
-                    <ChainIcon
-                      chainId={selectedChainId}
-                      chainName={chainName}
-                      size="24px"
-                      withChip
-                    />
-                    {/* Chain name shown beside the icon for every chain so
-                        the user can read it at a glance — not just custom
-                        chains. Truncated with a tooltip so a name longer
-                        than the available space doesn't push the SELECT
-                        button off-screen. */}
+                <HStack spacing={2} minW={0}>
+                  <ChainIcon
+                    chainId={selectedChainId}
+                    chainName={chainName}
+                    size="24px"
+                    withChip
+                  />
+                  <VStack align="flex-start" spacing={0} minW={0}>
+                    <Text fontSize="xs" fontWeight="500" color="fg.secondary">
+                      Network
+                    </Text>
                     <Text
                       fontSize="sm"
-                      fontWeight="800"
-                      color="text.primary"
-                      maxW="180px"
+                      fontWeight="600"
+                      color="fg.primary"
                       noOfLines={1}
-                      title={chainName}
+                      maxW="clamp(92px, 30vw, 140px)"
                     >
                       {triggerChainLabel}
                     </Text>
-                    <Box
-                      bg="surface.raised"
-                      border="1.5px solid"
-                      borderColor="border.default"
-                      borderRadius="md"
-                      minW="18px"
-                      h="18px"
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="center"
-                      boxShadow="card"
-                      flexShrink={0}
-                    >
-                      <ChevronDownIcon boxSize="12px" />
-                    </Box>
-                  </HStack>
-                </MenuButton>
-                <MenuList
-                  bg="surface.raised"
-                  border={tokens.borders.medium}
-                  borderColor="border.default"
-                  borderRadius="lg"
-                  boxShadow="card"
-                  p={0}
-                  zIndex={10}
-                >
-                  <Box p={2} borderBottom={tokens.borders.thin} borderColor="border.default">
-                    <InputGroup size="sm">
-                      <InputLeftElement pointerEvents="none">
-                        <Search2Icon color="text.tertiary" boxSize={3} />
-                      </InputLeftElement>
-                      <Input
-                        ref={chainSearchInputRef}
-                        value={chainSearch}
-                        onChange={(e) => setChainSearch(e.target.value)}
-                        placeholder="Search chains"
-                        fontWeight="600"
-                        pl={9}
-                        onKeyDown={(e) => {
-                          if (e.key === "ArrowDown") {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (filteredChains.length > 0) {
-                              setHighlightedChainIndex((prev) =>
-                                Math.min(prev + 1, filteredChains.length - 1),
-                              );
-                            }
-                            return;
-                          }
-                          if (e.key === "ArrowUp") {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (filteredChains.length > 0) {
-                              setHighlightedChainIndex((prev) => Math.max(prev - 1, 0));
-                            }
-                            return;
-                          }
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const highlighted = filteredChains[highlightedChainIndex];
-                            if (highlighted !== undefined) {
-                              handleChainChange(highlighted);
-                              setIsChainMenuOpen(false);
-                              setChainSearch("");
-                            }
-                            return;
-                          }
-                          e.stopPropagation();
-                        }}
-                      />
-                    </InputGroup>
-                  </Box>
-                  <Box maxH="200px" overflowY="auto">
-                    {filteredChains.map((cId, index) => (
-                      <MenuItem
-                        key={cId}
-                        onClick={() => {
-                          handleChainChange(cId);
-                          setIsChainMenuOpen(false);
-                          setChainSearch("");
-                        }}
-                        onMouseEnter={() => setHighlightedChainIndex(index)}
-                        bg={
-                          index === highlightedChainIndex || cId === selectedChainId
-                            ? "bg.muted"
-                            : "transparent"
-                        }
-                        _hover={{ bg: "bg.hover" }}
-                        px={3}
-                        py={2}
-                      >
-                        <HStack spacing={2}>
-                          <ChainIcon chainId={cId} chainName={getChainName(cId)} size="18px" withChip />
-                          <HStack spacing={1.5}>
-                            <Text fontWeight="700" fontSize="sm">{getChainName(cId)}</Text>
-                            {getChainEnvironmentLabel(cId, getChainName(cId)) && (
-                              <Text
-                                fontSize="8px"
-                                fontWeight="900"
-                                letterSpacing="0.08em"
-                                textTransform="uppercase"
-                                px={1.5}
-                                py={0.5}
-                                bg="accent.highlight"
-                                color="accentFg.highlight"
-                                border="1px solid"
-                                borderColor="border.default"
-                                borderRadius={tokens.radii.badge}
-                                lineHeight="1"
-                              >
-                                Testnet
-                              </Text>
-                            )}
-                          </HStack>
-                        </HStack>
-                      </MenuItem>
-                    ))}
-                    {filteredChains.length === 0 && (
-                      <Box px={3} py={3}>
-                        <Text fontSize="sm" fontWeight="700" color="text.secondary">
-                          No chains match "{chainSearch.trim()}".
-                        </Text>
-                      </Box>
-                    )}
-                  </Box>
-                </MenuList>
-              </Menu>
+                  </VStack>
+                </HStack>
+              </Button>
 
               {/* Testnet pill — only on non-mainnet chains. Sits directly
                   beneath the chain selector and is centered against the
@@ -1288,9 +1262,8 @@ function TokenTransfer({
                 <Text
                   alignSelf="center"
                   fontSize="8px"
-                  fontWeight="900"
+                  fontWeight="700"
                   letterSpacing="0.08em"
-                  textTransform="uppercase"
                   px={1.5}
                   py={0.5}
                   bg="accent.highlight"
@@ -1310,7 +1283,7 @@ function TokenTransfer({
                   chain names on the left can grow up to the SELECT trigger
                   without fighting the balance row (now a row of its own
                   below). */}
-              <Box ml="auto" flexShrink={0}>
+              <Box ml="auto" flex="0 1 auto" minW={0} maxW="132px">
                 <TokenSelector
                   holdings={holdings}
                   tokenList={tokenList}
@@ -1356,11 +1329,10 @@ function TokenTransfer({
             "no recipient" semantics are visible at a glance. */}
         {isContractDeployment && (
           <Box
-            border={tokens.borders.medium}
-            borderColor="accent.secondary"
+            border={tokens.borders.thin}
+            borderColor="border.default"
             borderRadius="lg"
             bg="surface.raised"
-            boxShadow="card"
             px={3}
             py={2.5}
           >
@@ -1382,92 +1354,22 @@ function TokenTransfer({
         <Box>
           <HStack justify="space-between" align="center" mb={1}>
             <HStack spacing={1}>
-              <Text fontSize="sm" fontWeight="700" color="text.secondary" textTransform="uppercase">
+              <Text fontSize="sm" fontWeight="600" color="fg.secondary">
                 Recipient
               </Text>
               {otherAccounts.length > 0 && (
-                <Menu placement="bottom-start">
-                  <MenuButton
-                    as={Button}
-                    size="xs"
-                    variant="ghost"
-                    rightIcon={<ChevronDownIcon boxSize="14px" />}
-                    fontWeight="800"
-                    fontSize="10px"
-                    color="accent.secondary"
-                    textTransform="uppercase"
-                    letterSpacing="wide"
-                    px={1}
-                    h="20px"
-                    iconSpacing={0.5}
-                    _hover={{ bg: "bg.muted" }}
-                  >
-                    My Wallets
-                  </MenuButton>
-                  <MenuList
-                    bg="surface.raised"
-                    border={tokens.borders.medium}
-                    borderColor="border.default"
-                    borderRadius="lg"
-                    boxShadow="card"
-                    py={1}
-                    maxH="200px"
-                    overflowY="auto"
-                    zIndex={10}
-                    minW="220px"
-                  >
-                    {otherAccounts.map((account) => (
-                      <MenuItem
-                        key={account.id}
-                        onClick={() => setRecipient(account.address)}
-                        bg="transparent"
-                        _hover={{ bg: "bg.muted" }}
-                        py={1.5}
-                        px={3}
-                      >
-                        <HStack spacing={2} align="start">
-                          <Image
-                            src={getAccountAvatar(account)}
-                            alt="avatar"
-                            boxSize="20px"
-                            minW="20px"
-                            borderRadius={getAccountAvatar(account) === "/bankr-icon.png" ? "sm" : "full"}
-                            border="2px solid"
-                            borderColor="border.default"
-                          />
-                          <VStack align="start" spacing={0.5}>
-                            <Text fontSize="xs" fontWeight="700" color="text.primary" noOfLines={1}>
-                              {getAccountDisplayName(account)}
-                            </Text>
-                            {hasSecondaryAddressLine(account) && (
-                              <Text fontSize="2xs" fontFamily="mono" color="text.tertiary">
-                                {truncateAddress(account.address)}
-                              </Text>
-                            )}
-                            <Box
-                              bg={getAccountTypePillStyles(account).bg}
-                              px={1.5}
-                              py={0}
-                              borderRadius="sm"
-                              border="1px solid"
-                              borderColor="border.default"
-                            >
-                              <Text
-                                fontSize="8px"
-                                color={getAccountTypePillStyles(account).color}
-                                fontWeight="800"
-                                textTransform="uppercase"
-                                letterSpacing="wide"
-                              >
-                                {getAccountTypePillStyles(account).label}
-                              </Text>
-                            </Box>
-                          </VStack>
-                        </HStack>
-                      </MenuItem>
-                    ))}
-                  </MenuList>
-                </Menu>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  color="accent.secondary"
+                  minH="32px"
+                  h="32px"
+                  px={2}
+                  rightIcon={<ChevronRightIcon />}
+                  onClick={() => setIsRecipientPickerOpen(true)}
+                >
+                  Choose my wallet
+                </Button>
               )}
             </HStack>
             {/* Resolution status - top right */}
@@ -1550,11 +1452,10 @@ function TokenTransfer({
           {isRecipientContract && (
             <Box
               mt={2}
-              border={tokens.borders.medium}
+              border={tokens.borders.thin}
               borderColor="status.warning.border"
               borderRadius="lg"
               bg="status.warning.bg"
-              boxShadow="card"
               px={3}
               py={2.5}
             >
@@ -1611,10 +1512,10 @@ function TokenTransfer({
         {/* Amount input */}
         <Box>
           <HStack justify="space-between" align="center" mb={1}>
-            <Text fontSize="sm" fontWeight="700" color="text.secondary" textTransform="uppercase">
+            <Text fontSize="sm" fontWeight="600" color="fg.secondary">
               Amount
             </Text>
-            {hasPrice && (
+            {token && hasPrice && (
               <Button
                 size="xs"
                 variant="ghost"
@@ -1665,7 +1566,7 @@ function TokenTransfer({
             </InputRightElement>
           </InputGroup>
           {/* Conversion display */}
-          {amount && parseFloat(amount) > 0 && hasPrice && (
+          {token && amount && parseFloat(amount) > 0 && hasPrice && (
             <Text fontSize="xs" color="text.tertiary" fontWeight="700" mt={1}>
               {isUsdMode
                 ? `${formatTokenAmount(parseFloat(amount) / token.priceUsd)} ${token.symbol.toUpperCase()}`
@@ -1675,8 +1576,9 @@ function TokenTransfer({
           )}
           {/* Percentage slider */}
           {balanceNum > 0 && (
-            <Box px={2} pt={2} pb={6}>
+            <Box px={3} pt={2} pb={6} minW={0}>
               <Slider
+                aria-label="Percentage of balance to send"
                 min={0}
                 max={100}
                 step={1}
@@ -1700,7 +1602,13 @@ function TokenTransfer({
                     fontWeight="800"
                     color={sliderValue >= pct ? "accent.secondary" : "fg.muted"}
                     whiteSpace="nowrap"
-                    transform="translateX(-50%)"
+                    transform={
+                      pct === 0
+                        ? "translateX(0)"
+                        : pct === 100
+                          ? "translateX(-100%)"
+                          : "translateX(-50%)"
+                    }
                   >
                     {pct}%
                   </SliderMark>
@@ -1750,20 +1658,17 @@ function TokenTransfer({
               )}
               <Text
                 fontSize="sm"
-                fontWeight="700"
-                color="text.secondary"
-                textTransform="uppercase"
+                fontWeight="600"
+                color="fg.secondary"
               >
-                Hex Data
+                Advanced transaction data
               </Text>
               <Text
                 fontSize="2xs"
-                fontWeight="700"
-                color="text.tertiary"
-                textTransform="uppercase"
-                letterSpacing="wide"
+                fontWeight="500"
+                color="fg.muted"
               >
-                (optional)
+                Optional
               </Text>
               {/* Only surface the invalid state when collapsed so the user
                   isn't told "hey, you typed something" for the happy path —
@@ -1772,10 +1677,8 @@ function TokenTransfer({
                 <Text
                   ml="auto"
                   fontSize="2xs"
-                  fontWeight="800"
+                  fontWeight="600"
                   color="chart.negative"
-                  textTransform="uppercase"
-                  letterSpacing="wide"
                 >
                   Invalid
                 </Text>
@@ -1789,126 +1692,58 @@ function TokenTransfer({
                 {(canShowDeployToggle || !isContractDeployment) && (
                   <HStack justify="flex-end" spacing={1.5} mb={1}>
                     {canShowDeployToggle ? (
-                      <Popover
-                        isOpen={deployToggle.isOpen}
-                        onOpen={deployToggle.onOpen}
-                        onClose={deployToggle.onClose}
-                        placement="bottom-end"
-                      >
-                        <PopoverTrigger>
-                          {/* When deploy is active, the trigger expands to
-                              include the "Deploy Contract" label so the whole
-                              group (gear + text) is one tap target. Otherwise
-                              it stays a compact icon-only button. */}
-                          {isContractDeployment ? (
-                            <Button
-                              aria-label="Advanced hex data settings"
-                              size="xs"
-                              variant="ghost"
-                              h="22px"
-                              px={1.5}
-                              leftIcon={<SettingsIcon boxSize="12px" />}
-                              iconSpacing={1.5}
-                              color="accent.secondary"
-                              fontSize="2xs"
-                              fontWeight="800"
-                              textTransform="uppercase"
-                              letterSpacing="0.06em"
-                              _hover={{ bg: "bg.muted" }}
-                            >
-                              Deploy Contract
-                            </Button>
-                          ) : (
-                            <IconButton
-                              aria-label="Advanced hex data settings"
-                              icon={<SettingsIcon boxSize="12px" />}
-                              size="xs"
-                              variant="ghost"
-                              minW="22px"
-                              h="22px"
-                              color="text.tertiary"
-                              _hover={{ bg: "bg.muted" }}
-                            />
-                          )}
-                        </PopoverTrigger>
-                        <Portal>
-                          <PopoverContent
-                            bg="surface.raised"
-                            border={tokens.borders.medium}
-                            borderColor="border.default"
-                            borderRadius="lg"
-                            boxShadow="card"
-                            w="240px"
-                            zIndex="popover"
-                            _focus={{ outline: "none", boxShadow: "card" }}
+                      <>
+                        {isContractDeployment ? (
+                          <Button
+                            aria-label="Advanced transaction mode"
+                            size="sm"
+                            variant="ghost"
+                            minH="32px"
+                            px={2}
+                            leftIcon={<SettingsIcon boxSize="14px" />}
+                            color="accent.secondary"
+                            fontSize="xs"
+                            onClick={deployToggle.onOpen}
                           >
-                            <PopoverArrow bg="surface.raised" />
-                            <PopoverBody p={3}>
-                              <VStack align="stretch" spacing={2}>
-                                <Text
-                                  fontSize="2xs"
-                                  fontWeight="800"
-                                  color="text.tertiary"
-                                  textTransform="uppercase"
-                                  letterSpacing="0.06em"
-                                >
-                                  Advanced
-                                </Text>
-                                {/* Whole card is the tap target so users can
-                                    click anywhere — checkbox, heading, or
-                                    description — to toggle. The Checkbox below
-                                    is pointer-event-disabled so it never fights
-                                    the Box's onClick; the Box owns toggling. */}
-                                <Box
-                                  bg="surface.base"
-                                  border={tokens.borders.thin}
-                                  borderColor="border.default"
-                                  borderRadius="md"
-                                  px={2.5}
-                                  py={2}
-                                  opacity={hasNativeCalldata ? 1 : 0.55}
-                                  cursor={hasNativeCalldata ? "pointer" : "not-allowed"}
-                                  role={hasNativeCalldata ? "button" : undefined}
-                                  aria-pressed={isContractDeployment}
-                                  onClick={() => {
-                                    if (!hasNativeCalldata) return;
-                                    setIsContractDeployment((prev) => !prev);
-                                    deployToggle.onClose();
-                                  }}
-                                  _hover={hasNativeCalldata ? { bg: "bg.muted" } : undefined}
-                                  transition="background 0.15s"
-                                >
-                                  <Checkbox
-                                    isChecked={isContractDeployment}
-                                    isDisabled={!hasNativeCalldata}
-                                    pointerEvents="none"
-                                    size="sm"
-                                    sx={{
-                                      "& .chakra-checkbox__control": {
-                                        borderWidth: "2px",
-                                        borderColor: "border.default",
-                                        bg: "surface.base",
-                                      },
-                                      "& .chakra-checkbox__label": {
-                                        fontSize: "xs",
-                                        fontWeight: 800,
-                                        color: "text.primary",
-                                      },
-                                    }}
-                                  >
-                                    Deploy contract
-                                  </Checkbox>
-                                  <Text fontSize="2xs" color="text.tertiary" fontWeight="600" mt={1}>
-                                    {hasNativeCalldata
-                                      ? "Send as a contract deployment. Recipient is set to null and the bytes below are treated as the deployment bytecode."
-                                      : "Add valid hex data to enable. The bytes below will be the deployment bytecode."}
-                                  </Text>
-                                </Box>
-                              </VStack>
-                            </PopoverBody>
-                          </PopoverContent>
-                        </Portal>
-                      </Popover>
+                            Contract deployment
+                          </Button>
+                        ) : (
+                          <IconButton
+                            aria-label="Advanced transaction mode"
+                            icon={<SettingsIcon boxSize="14px" />}
+                            size="sm"
+                            variant="ghost"
+                            minW="32px"
+                            h="32px"
+                            color="text.tertiary"
+                            onClick={deployToggle.onOpen}
+                          />
+                        )}
+                        <ActionSheet
+                          isOpen={deployToggle.isOpen}
+                          onClose={deployToggle.onClose}
+                          title="Transaction mode"
+                          description="Choose how WalletChan should use the transaction data below."
+                          choices={[
+                            {
+                              id: "transfer",
+                              label: "Standard transfer",
+                              description: "Send to the recipient and include the bytes as transaction data.",
+                              isSelected: !isContractDeployment,
+                            },
+                            {
+                              id: "deployment",
+                              label: "Contract deployment",
+                              description: hasNativeCalldata
+                                ? "Treat the bytes as deployment bytecode and omit the recipient."
+                                : "Add valid transaction data to enable contract deployment.",
+                              isSelected: isContractDeployment,
+                              isDisabled: !hasNativeCalldata,
+                            },
+                          ]}
+                          onSelect={(mode) => setIsContractDeployment(mode === "deployment")}
+                        />
+                      </>
                     ) : (
                       <Tooltip
                         label={decodeCalldataDisabledReason || "Decode calldata"}
@@ -1926,9 +1761,7 @@ function TokenTransfer({
                             iconSpacing={1.5}
                             color="accent.secondary"
                             fontSize="2xs"
-                            fontWeight="800"
-                            textTransform="uppercase"
-                            letterSpacing="0.06em"
+                            fontWeight="600"
                             isDisabled={!canOpenCalldataDecoder}
                             onClick={calldataDecodeModal.onOpen}
                             _hover={{ bg: "bg.muted" }}
@@ -1982,18 +1815,17 @@ function TokenTransfer({
         {/* Sponsored USDC banner */}
         {isUsdcOnBase && !premiumLoading && premiumStatus?.isPremium && accountType !== "impersonator" && (
           <Box
-            bg="accent.secondary"
-            border={tokens.borders.medium}
-            borderColor="border.default"
+            bg="status.success.bg"
+            borderWidth="1px"
+            borderColor="status.success.border"
             borderRadius="lg"
-            boxShadow="card"
             p={3}
           >
-            <Text fontSize="md" color="accentFg.secondary" fontWeight="900" textTransform="uppercase" textAlign="center">
-              Gas Sponsored by us!
+            <Text fontSize="sm" color="status.success.fg" fontWeight="600">
+              Network fee covered
             </Text>
-            <Text fontSize="xs" color="accentFg.secondary" opacity={0.8} fontWeight="700" textAlign="center" mt={0.5}>
-              Free USDC transfer for sWCHAN stakers
+            <Text fontSize="xs" color="fg.secondary" mt={0.5}>
+              WalletChan will sponsor this USDC transfer.
             </Text>
           </Box>
         )}
@@ -2005,16 +1837,15 @@ function TokenTransfer({
         {sponsoredFailed && (
           <Box
             bg="status.error.bg"
-            border={tokens.borders.medium}
+            border={tokens.borders.thin}
             borderColor="status.error.border"
             borderRadius="lg"
-            boxShadow="card"
             p={3}
           >
-            <Text fontSize="xs" color="status.error.fg" fontWeight="800">
-              ⚠️ Gas-free transfer is temporarily unavailable.
+            <Text fontSize="xs" color="status.error.fg" fontWeight="600">
+              Gas-free transfer is temporarily unavailable.
             </Text>
-            <Text fontSize="xs" color="status.error.fg" opacity={0.8} fontWeight="700" mt={1}>
+            <Text fontSize="xs" color="fg.secondary" mt={1}>
               You can still send by paying gas yourself.
             </Text>
             <Button
@@ -2025,17 +1856,8 @@ function TokenTransfer({
               fontSize="xs"
               isLoading={isSubmitting}
               onClick={handleFallbackSend}
-              animation="fallbackBounce 1.5s ease-in-out infinite"
-              sx={{
-                "@keyframes fallbackBounce": {
-                  "0%, 100%": { transform: "translateY(0)" },
-                  "50%": { transform: "translateY(-3px)" },
-                },
-              }}
-              _hover={{ animation: "none", opacity: 0.9 }}
-              _active={{ animation: "none" }}
             >
-              ⛽ Send (Pay Gas)
+              Send and pay gas
             </Button>
           </Box>
         )}
@@ -2044,10 +1866,9 @@ function TokenTransfer({
         {accountType === "impersonator" && (
           <Box
             bg="accent.highlight"
-            border={tokens.borders.medium}
-            borderColor="border.default"
+            border={tokens.borders.thin}
+            borderColor="border.subtle"
             borderRadius="lg"
-            boxShadow="card"
             p={3}
           >
             <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
@@ -2056,52 +1877,32 @@ function TokenTransfer({
           </Box>
         )}
 
-        {/* Action buttons — sticky when the form content exceeds the viewport.
-            This mirrors the confirmation screens while remaining in normal
-            document flow when the form is short. */}
-        <Box
-          position="sticky"
-          bottom={0}
-          bg="surface.base"
-          pt={2}
-          pb={4}
-          mx={-4}
-          px={4}
-          zIndex={1}
-        >
-          <HStack spacing={3}>
-            <Button
-              variant="secondary"
-              flex={1}
-              onClick={onBack}
-              isDisabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              flex={1}
-              onClick={handleSubmit}
-              isLoading={isSubmitting}
-              isDisabled={!canSubmit || accountType === "impersonator"}
-              bg="accent.secondary"
-              color="accentFg.secondary"
-              border={tokens.borders.medium}
-              borderColor="border.default"
-              boxShadow="card"
-              fontWeight="700"
-              fontSize={isSponsoredFlow ? "xs" : undefined}
-              _hover={{
-                bg: "accent.secondary",
-                opacity: 0.9,
-                boxShadow: "cardHover",
-              }}
-            >
-              {isSponsoredFlow ? "Sign (Gas-Free)" : "Send"}
-            </Button>
-          </HStack>
-        </Box>
+        </VStack>
+      </ScreenBody>
 
-        {canOpenCalldataDecoder && resolvedAddress && (
+      <StickyActionBar
+        secondaryAction={(
+          <Button
+            variant="secondary"
+            onClick={onBack}
+            isDisabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+        )}
+        primaryAction={(
+          <Button
+            onClick={handleSubmit}
+            isLoading={isSubmitting}
+            isDisabled={!canSubmit || accountType === "impersonator"}
+            fontSize={isSponsoredFlow ? "sm" : undefined}
+          >
+            {isSponsoredFlow ? "Sign gas-free transfer" : "Review send"}
+          </Button>
+        )}
+      />
+
+      {canOpenCalldataDecoder && resolvedAddress && (
           <NativeCalldataDecodeModal
             isOpen={calldataDecodeModal.isOpen}
             onClose={calldataDecodeModal.onClose}
@@ -2110,9 +1911,8 @@ function TokenTransfer({
             to={resolvedAddress}
             chainId={selectedChainId}
           />
-        )}
-      </VStack>
-    </Box>
+      )}
+    </AppScreen>
   );
 }
 

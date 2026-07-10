@@ -1,20 +1,15 @@
 import { useEffect, useState } from "react";
 import {
   Badge,
-  Box,
   Button,
   HStack,
-  IconButton,
-  Spacer,
   Text,
   VStack,
 } from "@chakra-ui/react";
 import {
-  ArrowBackIcon,
   CheckIcon,
   WarningIcon,
 } from "@chakra-ui/icons";
-import { ThemedCard } from "@/theme";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import {
   createPasskeyUnlockCredential,
@@ -24,6 +19,16 @@ import {
 } from "@/lib/passkeyWebAuthn";
 import { FingerprintIcon } from "./icons";
 import { BiometricUnlockRemove } from "./BiometricUnlockRemove";
+import {
+  ListItem,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
+  ListItemTitle,
+  ListSurface,
+  SkeletonRow,
+} from "@/components/ui";
+import { SettingsScreenFrame } from "./SettingsScreenFrame";
 
 interface BiometricUnlockSettingsProps {
   onComplete: () => void;
@@ -158,22 +163,11 @@ function BiometricUnlockSettings({
 
   if (isLoading) {
     return (
-      <VStack spacing={4} align="stretch">
-        <HStack>
-          <IconButton
-            aria-label="Back"
-            icon={<ArrowBackIcon />}
-            variant="ghost"
-            size="sm"
-            onClick={onCancel}
-          />
-          <Text fontSize="lg" fontWeight="900" color="text.primary" textTransform="uppercase" letterSpacing="tight">
-            Biometric Unlock
-          </Text>
-          <Spacer />
-        </HStack>
-        <Text color="text.secondary" fontWeight="500">Loading...</Text>
-      </VStack>
+      <SettingsScreenFrame title="Biometric unlock" onBack={onCancel}>
+        <ListSurface aria-label="Loading biometric unlock status">
+          <SkeletonRow />
+        </ListSurface>
+      </SettingsScreenFrame>
     );
   }
 
@@ -187,149 +181,124 @@ function BiometricUnlockSettings({
   }
 
   return (
-    <VStack spacing={4} align="stretch">
-      <HStack>
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          variant="ghost"
-          size="sm"
-          onClick={onCancel}
-        />
-        <Text fontSize="lg" fontWeight="900" color="text.primary" textTransform="uppercase" letterSpacing="tight">
-          Biometric Unlock
-        </Text>
-        <Spacer />
+    <SettingsScreenFrame
+      title="Biometric unlock"
+      onBack={onCancel}
+      trailing={
         <Badge
-          bg={isConfigured ? "accent.secondary" : "surface.sunken"}
-          color={isConfigured ? "accentFg.secondary" : "fg.muted"}
-          border="2px solid"
-          borderColor="border.default"
+          colorScheme={isConfigured ? "green" : undefined}
+          bg={isConfigured ? "status.success.bg" : "surface.sunken"}
+          color={isConfigured ? "status.success.fg" : "fg.muted"}
+          border="1px solid"
+          borderColor={isConfigured ? "status.success.border" : "border.default"}
+          borderRadius="full"
           fontSize="xs"
-          fontWeight="700"
-          px={2}
+          fontWeight="600"
+          px={2.5}
+          py={1}
         >
-          {isConfigured ? "ON" : "OFF"}
+          {isConfigured ? "Enabled" : "Off"}
         </Badge>
-      </HStack>
+      }
+      primaryAction={
+        !isAgentSession && isSupported ? (
+          <Button
+            variant={isConfigured ? "danger" : "primary"}
+            onClick={() => {
+              if (isConfigured) setViewMode("remove");
+              else handleEnable();
+            }}
+            isLoading={isSubmitting}
+            loadingText={isConfigured ? "Removing..." : "Setting up..."}
+          >
+            {isConfigured ? "Remove biometric unlock" : "Enable biometric unlock"}
+          </Button>
+        ) : undefined
+      }
+    >
+      <VStack spacing={5} align="stretch">
+        <Text fontSize="sm" color="fg.secondary" lineHeight="1.5">
+          Unlock WalletChan on this device with your fingerprint, face, or
+          system passkey prompt.
+        </Text>
 
-      {isAgentSession && (
-        <ThemedCard
-          weight="medium"
-          p={3}
-          bg="accent.highlight"
-          borderColor="border.default"
-        >
-          <HStack spacing={2}>
-            <WarningIcon color="accentFg.highlight" boxSize={4} />
-            <Text color="accentFg.highlight" fontSize="sm" fontWeight="700">
-              Unlock with master password to manage settings
+        {isAgentSession && (
+          <HStack
+            align="start"
+            spacing={3}
+            bg="status.warning.tint"
+            color="status.warning.fg"
+            border="1px solid"
+            borderColor="status.warning.border"
+            borderRadius="md"
+            p={3}
+          >
+            <WarningIcon mt={0.5} flexShrink={0} />
+            <Text fontSize="sm" lineHeight="1.5">
+              Unlock with the master password to manage biometric unlock.
             </Text>
           </HStack>
-        </ThemedCard>
-      )}
+        )}
 
-      {!isSupported && (
-        <ThemedCard
-          weight="medium"
-          p={3}
-          bg="status.warning.tint"
-          borderColor="status.warning.border"
-        >
-          <Text color="status.warning.fg" fontSize="sm" fontWeight="700">
-            Biometric unlock is not available in this browser.
-          </Text>
-        </ThemedCard>
-      )}
-
-      <ThemedCard weight="medium" p={0} position="relative" overflow="hidden">
-        <Box
-          position="absolute"
-          top={0}
-          right={0}
-          w="60px"
-          h="60px"
-          bg={isConfigured ? "accent.secondary" : "surface.sunken"}
-          clipPath="polygon(100% 0, 0 0, 100% 100%)"
-        />
-
-        <VStack spacing={4} align="stretch" p={4}>
-          <HStack spacing={3}>
-            <Box
-              p={3}
-              bg={isConfigured ? "accent.secondary" : "surface.sunken"}
-              border="2px solid"
-              borderColor="border.default"
-              borderRadius="md"
-            >
-              <FingerprintIcon
-                boxSize={5}
-                color={isConfigured ? "accentFg.secondary" : "fg.muted"}
-              />
-            </Box>
-            <Box flex={1}>
-              <Text fontWeight="800" color="text.primary" textTransform="uppercase" fontSize="sm">
-                {isConfigured ? "Configured" : "Not Set"}
-              </Text>
-              <Text fontSize="xs" color="text.secondary" fontWeight="500">
-                {isConfigured
-                  ? "This device can unlock with biometrics"
-                  : "Use master password to add this device"}
-              </Text>
-            </Box>
+        {!isSupported && (
+          <HStack
+            align="start"
+            spacing={3}
+            bg="status.warning.tint"
+            color="status.warning.fg"
+            border="1px solid"
+            borderColor="status.warning.border"
+            borderRadius="md"
+            p={3}
+          >
+            <WarningIcon mt={0.5} flexShrink={0} />
+            <Text fontSize="sm" lineHeight="1.5">
+              Biometric unlock is not available in this browser.
+            </Text>
           </HStack>
+        )}
 
-          <Box borderTop="2px solid" borderColor="border.subtle" pt={3}>
-            <HStack spacing={2} flexWrap="wrap">
-              <HStack
-                spacing={1}
-                bg="status.success.bg"
-                border="2px solid"
-                borderColor="status.success.border"
-                borderRadius="md"
-                px={2}
-                py={1}
-              >
-                <CheckIcon boxSize={3} color="status.success.fg" />
-                <Text fontSize="xs" fontWeight="700" color="status.success.fg">
-                  Master Session
-                </Text>
-              </HStack>
-              <HStack
-                spacing={1}
-                bg="surface.sunken"
-                border="2px solid"
-                borderColor="border.default"
-                borderRadius="md"
-                px={2}
-                py={1}
-              >
-                <WarningIcon boxSize={3} color="fg.muted" />
-                <Text fontSize="xs" fontWeight="700" color="fg.muted">
-                  Local Device
-                </Text>
-              </HStack>
-            </HStack>
-          </Box>
-
-          {!isAgentSession && isSupported && (
-            <Button
-              variant={isConfigured ? "danger" : "primary"}
-              size="sm"
-              w="full"
-              onClick={() => {
-                if (isConfigured) setViewMode("remove");
-                else handleEnable();
-              }}
-              isLoading={isSubmitting}
-              loadingText={isConfigured ? "Removing..." : "Setting up..."}
-            >
-              {isConfigured ? "Remove" : "Enable"}
-            </Button>
-          )}
-        </VStack>
-      </ThemedCard>
-    </VStack>
+        <ListSurface aria-label="Biometric unlock details">
+          <ListItem>
+            <ListItemMedia>
+              <FingerprintIcon boxSize={5} />
+            </ListItemMedia>
+            <ListItemContent>
+              <ListItemTitle>
+                {isConfigured ? "Ready on this device" : "Not configured"}
+              </ListItemTitle>
+              <ListItemDescription>
+                {isConfigured
+                  ? "The system prompt can open a full master session."
+                  : "Set it up while unlocked with the master password."}
+              </ListItemDescription>
+            </ListItemContent>
+          </ListItem>
+          <ListItem density="compact">
+            <ListItemMedia>
+              <CheckIcon boxSize={4} color="status.success.fg" />
+            </ListItemMedia>
+            <ListItemContent>
+              <ListItemTitle fontSize="sm">Master-session access</ListItemTitle>
+              <ListItemDescription>
+                Biometric unlock has the same access as your master password.
+              </ListItemDescription>
+            </ListItemContent>
+          </ListItem>
+          <ListItem density="compact">
+            <ListItemMedia>
+              <WarningIcon boxSize={4} />
+            </ListItemMedia>
+            <ListItemContent>
+              <ListItemTitle fontSize="sm">Stored for this device</ListItemTitle>
+              <ListItemDescription>
+                Other browsers and devices need their own setup.
+              </ListItemDescription>
+            </ListItemContent>
+          </ListItem>
+        </ListSurface>
+      </VStack>
+    </SettingsScreenFrame>
   );
 }
 

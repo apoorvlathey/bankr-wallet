@@ -6,14 +6,15 @@ import {
   Text,
   Spinner,
   Collapse,
+  Button,
   Input,
   IconButton,
   Tooltip,
   Icon,
+  usePrefersReducedMotion,
 } from "@chakra-ui/react";
 import {
   ChevronDownIcon,
-  ChevronUpIcon,
   WarningIcon,
   CopyIcon,
   CheckIcon,
@@ -179,7 +180,7 @@ function RevertWarning({ shortError, fullError }: { shortError: string; fullErro
       spacing={2}
     >
       <WarningIcon color="status.error.fg" boxSize={3.5} flexShrink={0} />
-      <Text fontSize="xs" color="status.error.fg" fontWeight="700" textTransform="uppercase" flex="1" noOfLines={2}>
+      <Text fontSize="xs" color="status.error.fg" fontWeight="600" flex="1" noOfLines={2}>
         TX may revert: {shortError}
       </Text>
       <Tooltip label="Copy full error" fontSize="xs" hasArrow>
@@ -187,6 +188,9 @@ function RevertWarning({ shortError, fullError }: { shortError: string; fullErro
           aria-label="Copy full error"
           icon={copied ? <CheckIcon /> : <CopyIcon />}
           size="xs"
+          minW="24px"
+          w="24px"
+          h="24px"
           variant="ghost"
           color={copied ? "accent.highlight" : "status.error.fg"}
           onClick={handleCopy}
@@ -210,6 +214,7 @@ function GasEstimateDisplay({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   // Tier picker state. Lives across estimate refreshes (e.g., when forceInclusion
   // toggles) so the user's choice doesn't reset under their feet.
@@ -506,16 +511,16 @@ function GasEstimateDisplay({
   if (loading) {
     return (
       <Box
-        border={tokens.borders.medium}
+        border="1px solid"
         borderColor="border.default"
         borderRadius="lg"
         bg="surface.raised"
-        boxShadow="card"
+        boxShadow="none"
       >
         <HStack px={3} py={3} justify="center">
           <Spinner size="xs" color="accent.secondary" />
-          <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-            Estimating gas...
+          <Text fontSize="xs" color="text.secondary" fontWeight="600">
+            Estimating gas…
           </Text>
         </HStack>
       </Box>
@@ -569,7 +574,7 @@ function GasEstimateDisplay({
           spacing={2}
         >
           <WarningIcon color="accentFg.highlight" boxSize={3.5} />
-          <Text fontSize="xs" color="accentFg.highlight" fontWeight="700" textTransform="uppercase">
+          <Text fontSize="xs" color="accentFg.highlight" fontWeight="600">
             Insufficient balance for gas
           </Text>
         </HStack>
@@ -585,7 +590,7 @@ function GasEstimateDisplay({
           px={3}
           py={1.5}
         >
-          <Text fontSize="2xs" color="accentFg.secondary" fontWeight="700" textTransform="uppercase">
+          <Text fontSize="2xs" color="accentFg.secondary" fontWeight="600">
             Gas estimated for L1 deposit transaction
           </Text>
         </Box>
@@ -606,16 +611,26 @@ function GasEstimateDisplay({
         position="relative"
       >
         {/* Collapsed header */}
-        <HStack
+        <Button
+          type="button"
+          variant="unstyled"
+          display="flex"
+          w="full"
+          minH="44px"
+          h="auto"
           px={3}
           py={2.5}
-          cursor="pointer"
           onClick={() => setExpanded(!expanded)}
-          _hover={{ bg: "bg.muted" }}
-          justify="space-between"
+          aria-expanded={expanded}
+          aria-controls="gas-fee-details"
+          borderRadius={0}
+          fontWeight="inherit"
+          textTransform="none"
+          _hover={{ bg: "surface.raisedHover" }}
+          justifyContent="space-between"
         >
-          <Text fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase" flexShrink={0}>
-            Gas Fee
+          <Text fontSize="xs" color="text.secondary" fontWeight="600" flexShrink={0}>
+            Gas fee
           </Text>
           <HStack spacing={1} minW={0}>
             <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono" noOfLines={1}>
@@ -626,14 +641,18 @@ function GasEstimateDisplay({
                 ({usdDisplay})
               </Text>
             )}
-            {expanded
-              ? <ChevronUpIcon boxSize={4} color="text.tertiary" />
-              : <ChevronDownIcon boxSize={4} color="text.tertiary" />}
+            <ChevronDownIcon
+              boxSize={4}
+              color="text.tertiary"
+              transform={expanded ? "rotate(180deg)" : "rotate(0deg)"}
+              transition={prefersReducedMotion ? "none" : "transform 150ms cubic-bezier(0.23, 1, 0.32, 1)"}
+              aria-hidden
+            />
           </HStack>
-        </HStack>
+        </Button>
 
         {/* Expanded details */}
-        <Collapse in={expanded} animateOpacity>
+        <Collapse id="gas-fee-details" in={expanded} animateOpacity={!prefersReducedMotion}>
           <VStack align="stretch" spacing={1.5} px={3} pb={3} pt={1}>
             <Box h="1px" bg="border.subtle" />
 
@@ -685,15 +704,18 @@ function GasEstimateDisplay({
                           <HStack
                             as="button"
                             type="button"
+                            aria-label="Auto-link Max Fee to Priority Fee"
                             onClick={handleRelinkMaxFee}
                             spacing={1}
                             px={1.5}
                             py={0.5}
+                            minH="24px"
                             borderRadius="md"
                             bg="accent.highlight"
                             cursor="pointer"
                             _hover={{ filter: "brightness(0.95)" }}
-                            _focus={{ outline: "none", boxShadow: "none" }}
+                            _focus={{ outline: "none" }}
+                            _focusVisible={{ boxShadow: "focus" }}
                             transition="filter 100ms ease-out"
                           >
                             <PencilIcon boxSize="9px" color="accentFg.highlight" />

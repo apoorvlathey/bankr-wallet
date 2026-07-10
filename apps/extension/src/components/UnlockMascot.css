@@ -1,0 +1,235 @@
+.unlock-mascot-art {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+}
+
+.unlock-mascot-character,
+.unlock-mascot-effects,
+.unlock-mascot-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.unlock-mascot-character {
+  transform-origin: 50% 82%;
+  will-change: transform;
+}
+
+.unlock-mascot-layer {
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.unlock-mascot-eye,
+.unlock-mascot-mouth,
+.unlock-mascot-effect {
+  opacity: 0;
+}
+
+.unlock-mascot-art--sleeping .unlock-mascot-eye--left-closed,
+.unlock-mascot-art--sleeping .unlock-mascot-eye--right-closed,
+.unlock-mascot-art--sleeping .unlock-mascot-mouth--sleep,
+.unlock-mascot-art--attentive .unlock-mascot-eye--left-open,
+.unlock-mascot-art--attentive .unlock-mascot-eye--right-open,
+.unlock-mascot-art--attentive .unlock-mascot-mouth--idle,
+.unlock-mascot-art--invalid .unlock-mascot-eye--left-open,
+.unlock-mascot-art--invalid .unlock-mascot-eye--right-open,
+.unlock-mascot-art--invalid .unlock-mascot-mouth--invalid,
+.unlock-mascot-art--success .unlock-mascot-eye--left-open,
+.unlock-mascot-art--success .unlock-mascot-eye--right-closed,
+.unlock-mascot-art--success .unlock-mascot-mouth--success {
+  opacity: 1;
+}
+
+.unlock-mascot-art--sleeping .unlock-mascot-character {
+  animation: unlock-mascot-sleep 4.6s ease-in-out infinite;
+}
+
+.unlock-mascot-art--attentive .unlock-mascot-character {
+  animation: unlock-mascot-attentive 2.8s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+}
+
+.unlock-mascot-art--invalid .unlock-mascot-character {
+  animation: unlock-mascot-recoil 440ms cubic-bezier(0.77, 0, 0.175, 1) both;
+}
+
+.unlock-mascot-art--invalid .unlock-mascot-effect--manpu {
+  animation: unlock-mascot-manpu-pop 620ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.unlock-mascot-art--success .unlock-mascot-character {
+  animation: unlock-mascot-cheer 620ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.unlock-mascot-art--success .unlock-mascot-effect--success-sparkle {
+  animation: unlock-mascot-success-sparkle 500ms steps(4, end) var(--unlock-sparkle-delay) both;
+}
+
+.unlock-mascot-art--sleeping .unlock-mascot-effect--sleep-z {
+  --unlock-sleep-z-x: 0%;
+  --unlock-sleep-z-y: 0%;
+  --unlock-sleep-z-scale: 0.46;
+  transform-origin: center;
+  animation: unlock-mascot-sleep-z-rise 2.8s steps(4, end) infinite;
+}
+
+.unlock-mascot-art--sleeping .unlock-mascot-effect--sleep-z-small {
+  --unlock-sleep-z-x: 38%;
+  --unlock-sleep-z-y: -5%;
+}
+
+.unlock-mascot-art--sleeping .unlock-mascot-effect--sleep-z-medium {
+  --unlock-sleep-z-x: 38%;
+  --unlock-sleep-z-y: -14%;
+  animation-delay: 560ms;
+}
+
+.unlock-mascot-art--sleeping .unlock-mascot-effect--sleep-z-large {
+  --unlock-sleep-z-x: 37%;
+  --unlock-sleep-z-y: -20%;
+  animation-delay: 1120ms;
+}
+
+@keyframes unlock-mascot-sleep {
+  0%,
+  100% {
+    transform: translateY(2px) rotate(-1.2deg) scale(0.992);
+  }
+  50% {
+    transform: translateY(-1px) rotate(0.5deg) scale(1);
+  }
+}
+
+@keyframes unlock-mascot-attentive {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  18% {
+    transform: translateY(-3px) scale(1.018);
+  }
+  50% {
+    transform: translateY(-1px) scale(1.008);
+  }
+}
+
+@keyframes unlock-mascot-recoil {
+  0% {
+    transform: translateX(0) scale(1);
+  }
+  24% {
+    transform: translateX(-5px) scale(0.98);
+  }
+  48% {
+    transform: translateX(4px) scale(0.985);
+  }
+  72% {
+    transform: translateX(-2px) scale(0.995);
+  }
+  100% {
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes unlock-mascot-manpu-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.48) rotate(-8deg);
+  }
+  36% {
+    opacity: 1;
+    transform: scale(1.1) rotate(3deg);
+  }
+  58%,
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes unlock-mascot-cheer {
+  0% {
+    transform: translateY(0) scale(1) rotate(0);
+  }
+  32% {
+    transform: translateY(-7px) scale(1.045) rotate(-2deg);
+  }
+  62% {
+    transform: translateY(1px) scale(0.99) rotate(1deg);
+  }
+  100% {
+    transform: translateY(0) scale(1) rotate(0);
+  }
+}
+
+@keyframes unlock-mascot-success-sparkle {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  18%,
+  62% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--unlock-sparkle-x), var(--unlock-sparkle-y));
+  }
+}
+
+@keyframes unlock-mascot-sleep-z-rise {
+  0% {
+    opacity: 0;
+    transform: translate(
+      var(--unlock-sleep-z-x),
+      calc(var(--unlock-sleep-z-y) + 4px)
+    ) scale(var(--unlock-sleep-z-scale));
+  }
+  18%,
+  64% {
+    opacity: 0.88;
+    transform: translate(
+      var(--unlock-sleep-z-x),
+      var(--unlock-sleep-z-y)
+    ) scale(var(--unlock-sleep-z-scale));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(
+      calc(var(--unlock-sleep-z-x) + 1%),
+      calc(var(--unlock-sleep-z-y) - 8px)
+    ) scale(var(--unlock-sleep-z-scale));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .unlock-mascot-art *,
+  .unlock-mascot-art *::before,
+  .unlock-mascot-art *::after {
+    animation: none !important;
+  }
+
+  .unlock-mascot-art--invalid .unlock-mascot-effect--manpu {
+    opacity: 1;
+  }
+
+  .unlock-mascot-art--success .unlock-mascot-effect--success-sparkle {
+    opacity: 0.7;
+  }
+
+  .unlock-mascot-art--sleeping .unlock-mascot-effect--sleep-z {
+    opacity: 0.82;
+    transform: translate(
+      var(--unlock-sleep-z-x),
+      var(--unlock-sleep-z-y)
+    ) scale(var(--unlock-sleep-z-scale));
+  }
+}

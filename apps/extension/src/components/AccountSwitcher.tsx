@@ -1,772 +1,356 @@
-import { memo, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
-import { layout, prepare } from "@chenglou/pretext";
 import {
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  MenuDivider,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
   Button,
+  Flex,
   HStack,
-  VStack,
-  Text,
-  Box,
-  Image,
   IconButton,
-  Tooltip,
+  Text,
+  VStack,
 } from "@chakra-ui/react";
-import { ChevronDownIcon, AddIcon, SettingsIcon, CopyIcon, CheckIcon } from "@chakra-ui/icons";
-import { blo } from "blo";
+import {
+  AddIcon,
+  CheckIcon,
+  ChevronRightIcon,
+  ExternalLinkIcon,
+  SettingsIcon,
+} from "@chakra-ui/icons";
 import type { Account, SeedGroup } from "@/chrome/types";
+import { AccountAvatar } from "@/components/AccountIdentity";
+import { getWalletTypeLabel } from "@/components/accountIdentityLabels";
+import { CopyButton } from "@/components/CopyButton";
+import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
+import {
+  FullScreenPicker,
+  FullScreenPickerEmpty,
+  FullScreenPickerGroup,
+  FullScreenPickerSearch,
+  ListItem,
+  ListItemActions,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
+  ListItemTitle,
+} from "@/components/ui";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
-import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
-import { isDarkThemeId, useTheme } from "@/theme";
 import { truncateAddress } from "@/lib/addressUtils";
-
-// Blockies avatar for PK accounts using blo
-function BlockieAvatar({
-  address,
-  size = 20,
-}: {
-  address: string;
-  size?: number;
-}) {
-  const bloAvatar = blo(address as `0x${string}`);
-  return (
-    <Image
-      src={bloAvatar}
-      alt="Account avatar"
-      w={`${size}px`}
-      h={`${size}px`}
-      borderRadius="sm"
-      border="2px solid"
-      borderColor="border.default"
-    />
-  );
-}
-
-// Bankr icon for Bankr API accounts
-function BankrAvatar({ size = 20 }: { size?: number }) {
-  return (
-    <Image
-      src="/bankr-icon.png"
-      alt="Bankr account"
-      w={`${size}px`}
-      h={`${size}px`}
-      borderRadius="sm"
-      border="2px solid"
-      borderColor="border.default"
-    />
-  );
-}
-
-// Resolved ENS/Basename avatar (circular, slightly larger to match blockie visual weight)
-function EnsAvatar({ src, size = 20 }: { src: string; size?: number }) {
-  const adjustedSize = size + 4;
-  const cachedSrc = useCachedAvatarSrc(src);
-  return (
-    <Image
-      src={cachedSrc || src}
-      alt="ENS avatar"
-      w={`${adjustedSize}px`}
-      h={`${adjustedSize}px`}
-      minW={`${adjustedSize}px`}
-      borderRadius="full"
-      border="2px solid"
-      borderColor="border.default"
-      objectFit="cover"
-    />
-  );
-}
-
-// Picks the right avatar based on ENS data, account type, and address
-function AccountAvatar({
-  account,
-  ensAvatar,
-  size = 24,
-}: {
-  account: Account;
-  ensAvatar: string | null | undefined;
-  size?: number;
-}) {
-  if (ensAvatar) return <EnsAvatar src={ensAvatar} size={size} />;
-  if (account.type === "bankr") return <BankrAvatar size={size} />;
-  return <BlockieAvatar address={account.address} size={size} />;
-}
 
 interface AccountSwitcherProps {
   accounts: Account[];
   activeAccount: Account | null;
+  explorerUrl?: string;
   onAccountSelect: (account: Account) => void;
   onAddAccount: () => void;
   onAccountSettings: (account: Account) => void;
 }
 
-function getSeedLabel(
-  account: Account,
-  seedGroupMap: Map<string, string>,
-): string | null {
-  if (account.type !== "seedPhrase") return null;
-  const groupName = seedGroupMap.get(account.seedGroupId) || "Seed";
-  return `${groupName} · #${account.derivationIndex}`;
-}
-
 function AccountSwitcher({
   accounts,
   activeAccount,
+  explorerUrl,
   onAccountSelect,
   onAddAccount,
   onAccountSettings,
 }: AccountSwitcherProps) {
-  const [seedGroupMap, setSeedGroupMap] = useState<Map<string, string>>(
-    new Map(),
-  );
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [containerWidth, setContainerWidth] = useState(0);
-  const [nameFont, setNameFont] = useState("");
-
-  // Under midnight, the Private Key tag swaps from loud amber (which competes
-  // with the holdings total) to a muted cyan info chip. Bauhaus keeps the
-  // original amber for poster-style emphasis.
-  const { themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
-  const pkTagBg = isDarkTheme ? "status.info.bg" : "accent.highlight";
-  const pkTagFg = isDarkTheme ? "status.info.fg" : "accentFg.highlight";
-  const pkTagBorder = isDarkTheme ? "status.info.border" : "border.default";
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [seedGroupMap, setSeedGroupMap] = useState<Map<string, string>>(new Map());
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const accountAddresses = useMemo(
-    () => accounts.map((a) => a.address),
+    () => accounts.map((account) => account.address),
     [accounts],
   );
   const { identities } = useEnsIdentities(accountAddresses);
 
-  // Measure container width with ResizeObserver
   useEffect(() => {
-    const node = containerRef.current;
-    if (!node) return;
-    const measure = () => setContainerWidth(node.clientWidth);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
+    if (!accounts.some((account) => account.type === "seedPhrase")) return;
 
-  // Capture font from the name text element
-  const nameFontRef = useRef<HTMLParagraphElement | null>(null);
-  useEffect(() => {
-    const node = nameFontRef.current;
-    if (!node) return;
-    const computed = window.getComputedStyle(node);
-    setNameFont(
-      [computed.fontStyle, computed.fontVariant, computed.fontWeight, computed.fontSize, computed.fontFamily]
-        .filter(Boolean)
-        .join(" "),
-    );
-  }, []);
-
-  useEffect(() => {
-    const hasSeedAccounts = accounts.some((a) => a.type === "seedPhrase");
-    if (!hasSeedAccounts) return;
     chrome.runtime.sendMessage(
       { type: "getSeedGroups" },
       (groups: SeedGroup[] | null) => {
         if (groups) {
-          setSeedGroupMap(new Map(groups.map((g) => [g.id, g.name])));
+          setSeedGroupMap(new Map(groups.map((group) => [group.id, group.name])));
         }
       },
     );
   }, [accounts]);
 
-  // Get display name with priority: displayName > ENS name > truncated address
-  function getAccountDisplayName(account: Account): string {
-    if (account.displayName) return account.displayName;
-    const ens = identities.get(account.address.toLowerCase());
-    if (ens?.name) return ens.name;
-    return truncateAddress(account.address);
-  }
+  const getEnsName = useCallback(
+    (account: Account) =>
+      identities.get(account.address.toLowerCase())?.name ?? null,
+    [identities],
+  );
 
-  // Whether to show secondary truncated address line
-  function hasResolvedName(account: Account): boolean {
-    if (account.displayName) return true;
-    const ens = identities.get(account.address.toLowerCase());
-    return !!ens?.name;
-  }
+  const getEnsAvatar = useCallback(
+    (account: Account) =>
+      identities.get(account.address.toLowerCase())?.avatar ?? null,
+    [identities],
+  );
 
-  function getEnsName(account: Account): string | null {
-    return identities.get(account.address.toLowerCase())?.name ?? null;
-  }
+  const getDisplayName = useCallback(
+    (account: Account) =>
+      account.displayName || getEnsName(account) || truncateAddress(account.address),
+    [getEnsName],
+  );
 
-  function getEnsAvatar(account: Account): string | null {
-    return identities.get(account.address.toLowerCase())?.avatar ?? null;
-  }
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredAccounts = useMemo(() => {
+    if (!normalizedQuery) return accounts;
 
-  // Center the active MenuItem on open AND every time async data (ENS
-  // identities, seed group names) settles while the menu is open. A one-shot
-  // scroll on open misses the late layout shift when identities resolve after
-  // the menu has already mounted — items grow taller (extra ENS line, more
-  // badges) and the active row slides out of view.
-  //
-  // lastAutoScrollTopRef preserves manual scrolling: we only re-center if the
-  // scrollable parent is still at the position we last set it to. The moment
-  // the user scrolls, the values diverge and async data updates stop yanking.
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const activeItemRef = useRef<HTMLElement | null>(null);
-  const menuListRef = useRef<HTMLDivElement | null>(null);
-  const lastAutoScrollTopRef = useRef<number | null>(null);
-  const userScrolledMenuRef = useRef(false);
+    return accounts.filter((account) => {
+      const identity = identities.get(account.address.toLowerCase());
+      return [
+        account.displayName,
+        identity?.name,
+        account.address,
+        getWalletTypeLabel(account, seedGroupMap),
+      ].some((value) => value?.toLowerCase().includes(normalizedQuery));
+    });
+  }, [accounts, identities, normalizedQuery, seedGroupMap]);
 
-  const getScrollableMenu = useCallback((node: HTMLElement) => {
-    if (menuListRef.current) return menuListRef.current;
-
-    let parent: HTMLElement | null = node.parentElement;
-    while (parent) {
-      const overflowY = window.getComputedStyle(parent).overflowY;
-      if (overflowY === "auto" || overflowY === "scroll") return parent;
-      parent = parent.parentElement;
+  const closePicker = useCallback((restoreFocus = true) => {
+    setIsPickerOpen(false);
+    setQuery("");
+    if (restoreFocus) {
+      requestAnimationFrame(() => triggerRef.current?.focus());
     }
-    return null;
   }, []);
 
-  const scrollActiveItemIntoView = useCallback(() => {
-    const node = activeItemRef.current;
-    if (!node) return;
+  useEffect(() => {
+    if (!isPickerOpen) return;
 
-    const parent = getScrollableMenu(node);
-    if (!parent || parent.clientHeight === 0) return;
-    if (userScrolledMenuRef.current) return;
-
-    // If the user has manually scrolled since our last auto-scroll, stop
-    // overriding them.
-    if (
-      lastAutoScrollTopRef.current !== null &&
-      Math.abs(parent.scrollTop - lastAutoScrollTopRef.current) > 1
-    ) {
-      return;
-    }
-
-    const parentRect = parent.getBoundingClientRect();
-    const nodeRect = node.getBoundingClientRect();
-    if (parentRect.height === 0 || nodeRect.height === 0) return;
-
-    const relativeTop = nodeRect.top - parentRect.top + parent.scrollTop;
-    const maxScrollTop = Math.max(0, parent.scrollHeight - parent.clientHeight);
-    const target = Math.min(
-      maxScrollTop,
-      Math.max(0, relativeTop - (parent.clientHeight - node.offsetHeight) / 2),
-    );
-
-    parent.scrollTop = target;
-    lastAutoScrollTopRef.current = parent.scrollTop;
-  }, [getScrollableMenu]);
-
-  useLayoutEffect(() => {
-    if (!isMenuOpen) {
-      lastAutoScrollTopRef.current = null;
-      userScrolledMenuRef.current = false;
-      return;
-    }
-
-    // Chakra animates and positions MenuList after mount. Run across the first
-    // few frames and once after the transition so the initial open uses final
-    // dimensions, including avatar/image and ENS line layout shifts.
-    let cancelled = false;
-    const rafIds: number[] = [];
-    const timeoutIds: number[] = [];
-    const run = () => {
-      if (!cancelled) scrollActiveItemIntoView();
+    const focusFrame = requestAnimationFrame(() => {
+      pickerRef.current
+        ?.querySelector<HTMLElement>("[data-screen-heading]")
+        ?.focus();
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closePicker();
+      }
     };
-    const queueFrame = (remaining: number) => {
-      const raf = requestAnimationFrame(() => {
-        run();
-        if (remaining > 1) queueFrame(remaining - 1);
-      });
-      rafIds.push(raf);
-    };
-
-    queueFrame(3);
-    timeoutIds.push(window.setTimeout(run, 80));
-    timeoutIds.push(window.setTimeout(run, 220));
+    document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      cancelled = true;
-      rafIds.forEach(cancelAnimationFrame);
-      timeoutIds.forEach(clearTimeout);
+      cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [
-    isMenuOpen,
-    accounts.length,
-    activeAccount?.id,
-    identities,
-    scrollActiveItemIntoView,
-    seedGroupMap,
-  ]);
+  }, [closePicker, isPickerOpen]);
 
-  // Check if the display name would overflow when rendered next to the avatar
-  // Avatar (20px) + gap (6px) + padding-right for chevron (20px) + container padding (12+20=32px)
-  const avatarInlineOverhead = 20 + 6 + 20 + 32;
-  const displayName = activeAccount ? getAccountDisplayName(activeAccount) : "";
-  const nameOverflows = useMemo(() => {
-    if (!activeAccount || !hasResolvedName(activeAccount) || !nameFont || containerWidth <= 0) return false;
-    const availableForName = containerWidth - avatarInlineOverhead;
-    if (availableForName <= 0) return true;
-    const prepared = prepare(displayName, nameFont);
-    return layout(prepared, availableForName, 16).lineCount > 1;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayName, nameFont, containerWidth]);
+  const openExplorer = (account: Account) =>
+    explorerUrl ? `${explorerUrl}/address/${account.address}` : null;
+
+  const selectAccount = (account: Account) => {
+    onAccountSelect(account);
+    closePicker();
+  };
+
+  const openAccountSettings = (account: Account) => {
+    onAccountSettings(account);
+    closePicker(false);
+  };
+
+  const addAccount = () => {
+    onAddAccount();
+    closePicker(false);
+  };
 
   return (
-    <Menu
-      matchWidth
-      isLazy
-      lazyBehavior="unmount"
-      autoSelect={false}
-      isOpen={isMenuOpen}
-      onOpen={() => {
-        userScrolledMenuRef.current = false;
-        setIsMenuOpen(true);
-      }}
-      onClose={() => {
-        lastAutoScrollTopRef.current = null;
-        userScrolledMenuRef.current = false;
-        setIsMenuOpen(false);
-      }}
-    >
-      <MenuButton
-        as={Button}
-        w="full"
+    <>
+      <Button
+        ref={triggerRef}
+        aria-haspopup="listbox"
+        aria-expanded={isPickerOpen}
+        aria-label="Choose account"
         variant="ghost"
-        bg="surface.raised"
-        border="3px solid"
-        borderColor="border.default"
-        boxShadow="card"
-        _hover={{
-          transform: "translateY(-2px)",
-          boxShadow: "cardHover",
-        }}
-        _active={{
-          transform: "translate(2px, 2px)",
-          boxShadow: "none",
-        }}
-        textAlign="left"
-        fontWeight="700"
+        w="full"
+        minH="64px"
         h="auto"
-        minH="full"
-        py={2}
         px={3}
-        pr={5}
-        overflow="hidden"
-        position="relative"
+        py={2.5}
+        justifyContent="flex-start"
+        borderRadius={0}
+        textAlign="start"
+        _hover={{ bg: "surface.raisedHover" }}
+        _active={{ bg: "surface.sunken" }}
+        onClick={() => setIsPickerOpen(true)}
       >
-        {/* Hidden probe to measure name font — rendered once, invisible */}
-        <Text
-          ref={nameFontRef}
-          fontSize="sm"
-          fontWeight="700"
-          position="absolute"
-          visibility="hidden"
-          pointerEvents="none"
-          aria-hidden="true"
-        >
-          X
-        </Text>
-        <Box ref={containerRef} minW={0} flex={1}>
-        <ChevronDownIcon
-          position="absolute"
-          bottom="6px"
-          right="6px"
-          boxSize="14px"
-          color="text.secondary"
-        />
         {activeAccount ? (
-          nameOverflows ? (
-          /* Long name layout: name full width on top, avatar + address below */
-          <VStack align="start" spacing="3px" minW={0} flex={1}>
-            <Text
-              fontSize={isDarkTheme ? "md" : "sm"}
-              color="text.primary"
-              fontWeight="700"
-              noOfLines={1}
-              maxW="full"
-              lineHeight="1.2"
-              alignSelf="stretch"
-              textAlign="center"
-            >
-              {getAccountDisplayName(activeAccount)}
-            </Text>
-            <HStack spacing="6px" minW={0} align="center">
-              <Box flexShrink={0}>
-                <AccountAvatar
-                  account={activeAccount}
-                  ensAvatar={getEnsAvatar(activeAccount)}
-                  size={isDarkTheme ? 20 : 18}
-                />
-              </Box>
+          <HStack w="full" spacing={3} minW={0}>
+            <AccountAvatar
+              account={activeAccount}
+              ensAvatar={getEnsAvatar(activeAccount)}
+              size={36}
+            />
+            <VStack align="stretch" spacing={0.5} minW={0} flex={1}>
               <Text
-                fontSize={isDarkTheme ? "sm" : "xs"}
-                color="text.tertiary"
-                fontFamily="mono"
+                color="fg.primary"
+                fontSize="md"
+                fontWeight="600"
+                lineHeight="1.3"
                 noOfLines={1}
-                lineHeight="1.2"
               >
-                {truncateAddress(activeAccount.address)}
+                {getDisplayName(activeAccount)}
               </Text>
-            </HStack>
-            <HStack spacing={1} flexWrap="wrap" ml="24px">
-              {activeAccount.displayName && getEnsName(activeAccount) && (
-                <Box bg="gray.600" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
-                  <Text fontSize="8px" color="white" fontWeight="800" letterSpacing="wide" noOfLines={1}>
-                    {getEnsName(activeAccount)}
-                  </Text>
-                </Box>
-              )}
-              {activeAccount.type === "bankr" && (
-                <Box bg="accent.secondary" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
-                  <Text fontSize="8px" color="accentFg.secondary" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Bankr</Text>
-                </Box>
-              )}
-              {activeAccount.type === "privateKey" && (
-                <Box bg={pkTagBg} px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor={pkTagBorder}>
-                  <Text fontSize="8px" color={pkTagFg} fontWeight="800" textTransform="uppercase" letterSpacing="wide">Private Key</Text>
-                </Box>
-              )}
-              {activeAccount.type === "seedPhrase" && (
-                <Box bg="accent.primary" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
-                  <Text fontSize="8px" color="accentFg.primary" fontWeight="800" textTransform="uppercase" letterSpacing="wide">{getSeedLabel(activeAccount, seedGroupMap) || "Seed"}</Text>
-                </Box>
-              )}
-              {activeAccount.type === "impersonator" && (
-                <Box bg="status.success.fg" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
-                  <Text fontSize="8px" color="white" fontWeight="800" textTransform="uppercase" letterSpacing="wide">View Only</Text>
-                </Box>
-              )}
-            </HStack>
-          </VStack>
-          ) : (
-          /* Short/no name layout: avatar on left, name + address + badges stacked right */
-          <HStack spacing="6px" minW={0} flex={1} align="start">
-            <Box flexShrink={0} mt={hasResolvedName(activeAccount) ? "2px" : 0}>
-              <AccountAvatar
-                account={activeAccount}
-                ensAvatar={getEnsAvatar(activeAccount)}
-                size={hasResolvedName(activeAccount) ? 20 : 22}
-              />
-            </Box>
-            <VStack align="start" spacing="2px" minW={0} flex={1}>
-              {hasResolvedName(activeAccount) && (
-                <Text
-                  fontSize={isDarkTheme ? "md" : "sm"}
-                  color="text.primary"
-                  fontWeight="700"
-                  noOfLines={1}
-                  maxW="full"
-                  lineHeight="1.2"
-                >
-                  {getAccountDisplayName(activeAccount)}
-                </Text>
-              )}
-              <Text
-                fontSize={isDarkTheme ? "sm" : "xs"}
-                color={hasResolvedName(activeAccount) ? "text.tertiary" : "text.primary"}
-                fontFamily="mono"
-                fontWeight={hasResolvedName(activeAccount) ? "400" : "700"}
-                noOfLines={1}
-                lineHeight="1.2"
-              >
-                {truncateAddress(activeAccount.address)}
+              <Text color="fg.secondary" fontSize="sm" fontWeight="400" noOfLines={1}>
+                {getWalletTypeLabel(activeAccount, seedGroupMap)}
               </Text>
-              <HStack spacing={1} flexWrap="wrap">
-              {activeAccount.displayName && getEnsName(activeAccount) && (
-                <Box bg="gray.600" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
-                  <Text fontSize="8px" color="white" fontWeight="800" letterSpacing="wide" noOfLines={1}>
-                    {getEnsName(activeAccount)}
-                  </Text>
-                </Box>
-              )}
-              {activeAccount.type === "bankr" && (
-                <Box bg="accent.secondary" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
-                  <Text fontSize="8px" color="accentFg.secondary" fontWeight="800" textTransform="uppercase" letterSpacing="wide">Bankr</Text>
-                </Box>
-              )}
-              {activeAccount.type === "privateKey" && (
-                <Box bg={pkTagBg} px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor={pkTagBorder}>
-                  <Text fontSize="8px" color={pkTagFg} fontWeight="800" textTransform="uppercase" letterSpacing="wide">Private Key</Text>
-                </Box>
-              )}
-              {activeAccount.type === "seedPhrase" && (
-                <Box bg="accent.primary" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
-                  <Text fontSize="8px" color="accentFg.primary" fontWeight="800" textTransform="uppercase" letterSpacing="wide">{getSeedLabel(activeAccount, seedGroupMap) || "Seed"}</Text>
-                </Box>
-              )}
-              {activeAccount.type === "impersonator" && (
-                <Box bg="status.success.fg" px={1.5} py={0} borderRadius="sm" border="1px solid" borderColor="border.default">
-                  <Text fontSize="8px" color="white" fontWeight="800" textTransform="uppercase" letterSpacing="wide">View Only</Text>
-                </Box>
-              )}
-            </HStack>
             </VStack>
+            <ChevronRightIcon boxSize={5} color="fg.muted" flexShrink={0} />
           </HStack>
-          )
         ) : (
-          <Text color="text.tertiary">Select Account</Text>
-        )}
-        </Box>
-      </MenuButton>
-      <MenuList
-        ref={menuListRef}
-        bg="surface.raised"
-        border="3px solid"
-        borderColor="border.default"
-        boxShadow="card"
-        py={0}
-        maxH="300px"
-        overflowY="auto"
-        onScroll={(event) => {
-          const { scrollTop } = event.currentTarget;
-          if (lastAutoScrollTopRef.current === null) {
-            if (scrollTop > 0) userScrolledMenuRef.current = true;
-            return;
-          }
-          if (Math.abs(scrollTop - lastAutoScrollTopRef.current) > 1) {
-            userScrolledMenuRef.current = true;
-          }
-        }}
-      >
-        {accounts.map((account, i) => (
-          <MenuItem
-            key={account.id}
-            ref={
-              account.id === activeAccount?.id
-                ? (node: HTMLElement | null) => {
-                    activeItemRef.current = node;
-                  }
-                : undefined
-            }
-            bg={account.id === activeAccount?.id ? "surface.raisedHover" : "surface.raised"}
-            _hover={{ bg: "bg.muted" }}
-            borderBottom={i < accounts.length - 1 ? "2px solid" : "none"}
-            borderColor="border.default"
-            py={3}
-            onClick={() => onAccountSelect(account)}
-          >
-            <HStack spacing={3} w="full">
-              <AccountAvatar
-                account={account}
-                ensAvatar={getEnsAvatar(account)}
-                size={24}
-              />
-              <VStack align="start" spacing={0} flex={1} minW={0}>
-                <HStack spacing={0.5} align="center">
-                  <Text
-                    fontSize="sm"
-                    color="text.primary"
-                    fontWeight="700"
-                    noOfLines={1}
-                  >
-                    {getAccountDisplayName(account)}
-                  </Text>
-                  {!hasResolvedName(account) && (
-                    <>
-                      <IconButton
-                        aria-label="Copy address"
-                        icon={copiedId === account.id ? <CheckIcon boxSize="10px" /> : <CopyIcon boxSize="10px" />}
-                        size="xs"
-                        variant="ghost"
-                        minW="16px"
-                        h="16px"
-                        color={copiedId === account.id ? "status.success.fg" : "text.tertiary"}
-                        _hover={{ color: "accent.secondary", bg: "transparent" }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigator.clipboard.writeText(account.address);
-                          setCopiedId(account.id);
-                          setTimeout(() => setCopiedId(null), 2000);
-                        }}
-                      />
-                      {account.id === activeAccount?.id && (
-                        <Box w="8px" h="8px" flexShrink={0} bg="status.success.fg" borderRadius="full" border="2px solid" borderColor="border.default" />
-                      )}
-                    </>
-                  )}
-                </HStack>
-                {hasResolvedName(account) && (
-                  <HStack spacing={0.5} align="center">
-                    <Text fontSize="xs" color="text.tertiary" fontFamily="mono">
-                      {truncateAddress(account.address)}
-                    </Text>
-                    <IconButton
-                      aria-label="Copy address"
-                      icon={copiedId === account.id ? <CheckIcon boxSize="10px" /> : <CopyIcon boxSize="10px" />}
-                      size="xs"
-                      variant="ghost"
-                      minW="16px"
-                      h="16px"
-                      color={copiedId === account.id ? "status.success.fg" : "text.tertiary"}
-                      _hover={{ color: "accent.secondary", bg: "transparent" }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigator.clipboard.writeText(account.address);
-                        setCopiedId(account.id);
-                        setTimeout(() => setCopiedId(null), 2000);
-                      }}
-                    />
-                    {account.id === activeAccount?.id && (
-                      <Box w="8px" h="8px" flexShrink={0} bg="status.success.fg" borderRadius="full" border="2px solid" borderColor="border.default" />
-                    )}
-                  </HStack>
-                )}
-                <HStack spacing={1} flexWrap="wrap">
-                  {account.displayName && getEnsName(account) && (
-                    <Box
-                      bg="gray.600"
-                      px={1.5}
-                      py={0}
-                      borderRadius="sm"
-                      border="1px solid"
-                      borderColor="border.default"
-                      mt={0.5}
-                    >
-                      <Text
-                        fontSize="8px"
-                        color="white"
-                        fontWeight="800"
-                        letterSpacing="wide"
-                        noOfLines={1}
-                      >
-                        {getEnsName(account)}
-                      </Text>
-                    </Box>
-                  )}
-                  {account.type === "bankr" && (
-                    <Box
-                      bg="accent.secondary"
-                      px={1.5}
-                      py={0}
-                      borderRadius="sm"
-                      border="1px solid"
-                      borderColor="border.default"
-                      mt={0.5}
-                    >
-                      <Text
-                        fontSize="8px"
-                        color="accentFg.secondary"
-                        fontWeight="800"
-                        textTransform="uppercase"
-                        letterSpacing="wide"
-                      >
-                        Bankr
-                      </Text>
-                    </Box>
-                  )}
-
-                  {account.type === "privateKey" && (
-                    <Box
-                      bg={pkTagBg}
-                      px={1.5}
-                      py={0}
-                      borderRadius="sm"
-                      border="1px solid"
-                      borderColor={pkTagBorder}
-                      mt={0.5}
-                    >
-                      <Text
-                        fontSize="8px"
-                        color={pkTagFg}
-                        fontWeight="800"
-                        textTransform="uppercase"
-                        letterSpacing="wide"
-                      >
-                        Private Key
-                      </Text>
-                    </Box>
-                  )}
-                  {account.type === "seedPhrase" && (
-                    <Box
-                      bg="accent.primary"
-                      px={1.5}
-                      py={0}
-                      borderRadius="sm"
-                      border="1px solid"
-                      borderColor="border.default"
-                      mt={0.5}
-                    >
-                      <Text
-                        fontSize="8px"
-                        color="accentFg.primary"
-                        fontWeight="800"
-                        textTransform="uppercase"
-                        letterSpacing="wide"
-                      >
-                        {getSeedLabel(account, seedGroupMap) || "Seed"}
-                      </Text>
-                    </Box>
-                  )}
-                  {account.type === "impersonator" && (
-                    <Box
-                      bg="status.success.fg"
-                      px={1.5}
-                      py={0}
-                      borderRadius="sm"
-                      border="1px solid"
-                      borderColor="border.default"
-                      mt={0.5}
-                    >
-                      <Text
-                        fontSize="8px"
-                        color="white"
-                        fontWeight="800"
-                        textTransform="uppercase"
-                        letterSpacing="wide"
-                      >
-                        View Only
-                      </Text>
-                    </Box>
-                  )}
-                </HStack>
-              </VStack>
-              <Tooltip label="Account Settings" hasArrow placement="top">
-                <IconButton
-                  aria-label="Account Settings"
-                  icon={<SettingsIcon boxSize="12px" />}
-                  size="xs"
-                  variant="ghost"
-                  color="text.secondary"
-                  _hover={{ color: "accent.secondary", bg: "transparent" }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAccountSettings(account);
-                  }}
-                />
-              </Tooltip>
-            </HStack>
-          </MenuItem>
-        ))}
-        <MenuDivider m={0} borderColor="border.default" borderWidth="2px" />
-        <MenuItem
-          bg="surface.raised"
-          _hover={{ bg: "bg.muted" }}
-          py={3}
-          onClick={onAddAccount}
-        >
-          <HStack spacing={3}>
-            <Box
-              bg="accent.primary"
-              border="2px solid"
-              borderColor="border.default"
-              p={1}
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <AddIcon boxSize="14px" color="accentFg.primary" />
-            </Box>
-            <Text fontSize="sm" color="text.primary" fontWeight="700">
-              Add Account
-            </Text>
+          <HStack w="full" justify="space-between">
+            <Text color="fg.secondary" fontWeight="600">Choose account</Text>
+            <ChevronRightIcon boxSize={5} color="fg.muted" />
           </HStack>
-        </MenuItem>
-      </MenuList>
-    </Menu>
+        )}
+      </Button>
+
+      {isPickerOpen && (
+        <FullScreenPickerLayer>
+          <FullScreenPicker
+            ref={pickerRef}
+            title="Choose account"
+            onBack={() => closePicker()}
+            controls={
+              <FullScreenPickerSearch
+                label="Search accounts"
+                placeholder="Name, address, or wallet type"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            }
+          >
+            {filteredAccounts.length > 0 ? (
+              <FullScreenPickerGroup
+                label="Accounts"
+                description={`${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`}
+              >
+                {filteredAccounts.map((account) => {
+                  const ensName = getEnsName(account);
+                  const explorerHref = openExplorer(account);
+                  const secondaryIdentity =
+                    account.displayName && ensName
+                      ? `${ensName} · ${truncateAddress(account.address)}`
+                      : truncateAddress(account.address);
+
+                  return (
+                    <ListItem
+                      key={account.id}
+                      px={0}
+                      py={0}
+                      gap={0}
+                      isSelected={account.id === activeAccount?.id}
+                    >
+                      <Flex
+                        as="button"
+                        type="button"
+                        minW={0}
+                        flex={1}
+                        minH="64px"
+                        px={3}
+                        py={2.5}
+                        gap={3}
+                        align="center"
+                        textAlign="start"
+                        _hover={{ bg: "surface.raisedHover" }}
+                        _focus={{ outline: "none" }}
+                        _focusVisible={{ boxShadow: "inset 0 0 0 2px var(--chakra-colors-border-focus)" }}
+                        onClick={() => selectAccount(account)}
+                      >
+                        <ListItemMedia>
+                          <AccountAvatar
+                            account={account}
+                            ensAvatar={getEnsAvatar(account)}
+                            size={36}
+                          />
+                        </ListItemMedia>
+                        <ListItemContent>
+                          <HStack spacing={1.5} minW={0}>
+                            <ListItemTitle noOfLines={1}>
+                              {getDisplayName(account)}
+                            </ListItemTitle>
+                            {account.id === activeAccount?.id && (
+                              <CheckIcon boxSize={3} color="accent.secondary" flexShrink={0} />
+                            )}
+                          </HStack>
+                          <ListItemDescription fontFamily="mono" noOfLines={1}>
+                            {secondaryIdentity}
+                          </ListItemDescription>
+                          <Text as="span" color="fg.muted" fontSize="xs" lineHeight="1.4">
+                            {getWalletTypeLabel(account, seedGroupMap)}
+                          </Text>
+                        </ListItemContent>
+                      </Flex>
+                      <ListItemActions pr={2}>
+                        <CopyButton value={account.address} />
+                        {explorerHref && (
+                          <IconButton
+                            as="a"
+                            href={explorerHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="View address on explorer"
+                            icon={<ExternalLinkIcon />}
+                            size="xs"
+                            variant="ghost"
+                          />
+                        )}
+                        <IconButton
+                          aria-label={`Settings for ${getDisplayName(account)}`}
+                          icon={<SettingsIcon />}
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => openAccountSettings(account)}
+                        />
+                      </ListItemActions>
+                    </ListItem>
+                  );
+                })}
+              </FullScreenPickerGroup>
+            ) : (
+              <FullScreenPickerEmpty
+                title="No accounts found"
+                description={`No account matches “${query.trim()}”. Try a name, address, or wallet type.`}
+              />
+            )}
+
+            <FullScreenPickerGroup label="Manage">
+              <ListItem interactive onClick={addAccount}>
+                <ListItemMedia>
+                  <Flex
+                    boxSize="32px"
+                    align="center"
+                    justify="center"
+                    bg="surface.sunken"
+                    borderRadius="md"
+                    color="accent.secondary"
+                  >
+                    <AddIcon boxSize={3.5} />
+                  </Flex>
+                </ListItemMedia>
+                <ListItemContent>
+                  <ListItemTitle>Add account</ListItemTitle>
+                  <ListItemDescription>
+                    Import a wallet or add a view-only address
+                  </ListItemDescription>
+                </ListItemContent>
+                <ChevronRightIcon boxSize={5} color="fg.muted" />
+              </ListItem>
+            </FullScreenPickerGroup>
+          </FullScreenPicker>
+        </FullScreenPickerLayer>
+      )}
+    </>
   );
 }
 

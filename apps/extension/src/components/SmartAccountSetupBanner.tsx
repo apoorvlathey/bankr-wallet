@@ -78,10 +78,15 @@ export default function SmartAccountSetupBanner({
       py={2}
     >
       <HStack
+        as="button"
+        type="button"
+        w="full"
         spacing={2}
         align="center"
         justify="space-between"
         cursor="pointer"
+        textAlign="start"
+        aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
       >
         <HStack spacing={2} flex={1} minW={0}>
@@ -90,7 +95,7 @@ export default function SmartAccountSetupBanner({
           </Text>
           <Text
             fontSize="xs"
-            fontWeight="800"
+            fontWeight="600"
             color="text.primary"
             noOfLines={1}
           >
@@ -100,7 +105,7 @@ export default function SmartAccountSetupBanner({
           </Text>
         </HStack>
         <HStack spacing={1} flexShrink={0}>
-          <Text fontSize="2xs" color="text.tertiary" fontWeight="700">
+          <Text fontSize="xs" color="text.secondary" fontWeight="500">
             Details
           </Text>
           <Icon
@@ -167,13 +172,13 @@ export default function SmartAccountSetupBanner({
               <Box
                 bg="accent.highlight"
                 color="accentFg.highlight"
-                border="1.5px solid"
+                borderWidth="1px"
                 borderColor="border.default"
                 borderRadius={tokens.radii.badge}
                 px={1.5}
                 py={0.5}
                 fontSize="9px"
-                fontWeight="900"
+                fontWeight="700"
                 textTransform="uppercase"
                 letterSpacing="wider"
                 lineHeight="1"

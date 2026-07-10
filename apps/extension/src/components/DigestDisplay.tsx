@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   Box,
   HStack,
@@ -8,6 +8,8 @@ import {
   Collapse,
   SimpleGrid,
   Spacer,
+  Button,
+  usePrefersReducedMotion,
 } from "@chakra-ui/react";
 import { ChevronDownIcon } from "@chakra-ui/icons";
 import { CopyButton } from "@/components/CopyButton";
@@ -86,6 +88,8 @@ function DigestBox({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [tab, setTab] = useState<DigestTab>(defaultTab);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const disclosureId = useId();
   const tabOrder: readonly DigestTab[] = ["hex", "emoji"];
   const { tokens, themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
@@ -112,11 +116,19 @@ function DigestBox({
   return (
     <Box w="full">
       <HStack spacing={1.5}>
-        <HStack
-          spacing={1}
-          cursor="pointer"
+        <Button
+          type="button"
+          variant="unstyled"
+          display="flex"
+          minH="32px"
+          h="auto"
+          gap={1}
           onClick={() => setOpen(!open)}
-          _hover={{ opacity: 0.8 }}
+          aria-expanded={open}
+          aria-controls={disclosureId}
+          fontWeight="inherit"
+          textTransform="none"
+          _hover={{ bg: "surface.raisedHover" }}
         >
           <Code
             px={2}
@@ -124,11 +136,10 @@ function DigestBox({
             fontSize="10px"
             bg={labelBg}
             color={labelColor}
-            fontWeight="800"
+            fontWeight="700"
             border={tokens.borders.thin}
             borderColor="border.default"
             borderRadius="sm"
-            textTransform="uppercase"
             flexShrink={0}
           >
             {label}
@@ -137,41 +148,45 @@ function DigestBox({
             boxSize="16px"
             color="text.secondary"
             transform={open ? "rotate(180deg)" : "rotate(0deg)"}
-            transition="transform 0.2s ease-out"
+            transition={prefersReducedMotion ? "none" : "transform 150ms cubic-bezier(0.23, 1, 0.32, 1)"}
+            aria-hidden
           />
-        </HStack>
+        </Button>
         {open && (
           <>
             {/* Tabs */}
             <HStack
               spacing={0}
-              border={tokens.borders.thin}
+              border="1px solid"
               borderColor="border.default"
               borderRadius="sm"
               overflow="hidden"
-              h="20px"
+              minH="24px"
+              role="group"
+              aria-label={`${label} representation`}
             >
               {tabOrder.map((t, idx) => {
                 const active = tab === t;
                 return (
-                  <Box
+                  <Button
                     key={t}
-                    as="button"
+                    type="button"
+                    aria-pressed={active}
+                    variant="unstyled"
                     px={2}
-                    h="full"
+                    minH="24px"
                     fontSize="10px"
-                    fontWeight="800"
+                    fontWeight="700"
                     textTransform="uppercase"
                     bg={active ? "accent.primary" : "transparent"}
                     color={active ? "accentFg.primary" : "text.secondary"}
-                    borderRight={idx === 0 ? tokens.borders.thin : undefined}
-                    borderColor="border.default"
+                    borderRight={idx === 0 ? "1px solid" : undefined}
+                    borderColor="border.subtle"
                     onClick={() => setTab(t)}
-                    cursor="pointer"
                     _hover={active ? {} : { bg: "bg.muted" }}
                   >
                     {t}
-                  </Box>
+                  </Button>
                 );
               })}
             </HStack>
@@ -181,7 +196,7 @@ function DigestBox({
         )}
       </HStack>
 
-      <Collapse in={open} animateOpacity>
+      <Collapse id={disclosureId} in={open} animateOpacity={!prefersReducedMotion}>
         <Box mt={1}>
           {tab === "hex" ? (
             <Box
@@ -296,6 +311,8 @@ export function CalldataDigestDisplay({ calldata }: { calldata: string }) {
 /** ERC-8213: EIP-712 Digest display for signature confirmation */
 export function Eip712DigestDisplay({ typedData }: { typedData: any }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const detailsId = useId();
 
   const { digest, domainHash, messageHash } = useMemo(() => {
     return {
@@ -318,29 +335,38 @@ export function Eip712DigestDisplay({ typedData }: { typedData: any }) {
 
       {(domainHash || messageHash) && (
         <Box w="full">
-          <HStack
-            spacing={1}
-            cursor="pointer"
+          <Button
+            type="button"
+            variant="unstyled"
+            display="flex"
+            minH="32px"
+            h="auto"
+            gap={1}
             onClick={() => setDetailsOpen(!detailsOpen)}
-            _hover={{ opacity: 0.8 }}
+            aria-expanded={detailsOpen}
+            aria-controls={detailsId}
+            fontWeight="inherit"
+            textTransform="none"
+            _hover={{ bg: "surface.raisedHover" }}
           >
             <Text
               fontSize="10px"
               color="text.tertiary"
               fontWeight="700"
-              textTransform="uppercase"
+              textTransform="none"
             >
-              Hash Details
+              Hash details
             </Text>
             <ChevronDownIcon
               boxSize="14px"
               color="text.secondary"
               transform={detailsOpen ? "rotate(180deg)" : "rotate(0deg)"}
-              transition="transform 0.2s ease-out"
+              transition={prefersReducedMotion ? "none" : "transform 150ms cubic-bezier(0.23, 1, 0.32, 1)"}
+              aria-hidden
             />
-          </HStack>
-          <Collapse in={detailsOpen} animateOpacity>
-            <VStack align="start" spacing={2} mt={1.5} pl={2} borderLeft="2px solid" borderColor="bauhaus.black">
+          </Button>
+          <Collapse id={detailsId} in={detailsOpen} animateOpacity={!prefersReducedMotion}>
+            <VStack align="start" spacing={2} mt={1.5} pl={2} borderLeft="1px solid" borderColor="border.subtle">
               {domainHash && (
                 <DigestBox
                   label="Domain Hash"

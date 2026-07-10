@@ -1,6 +1,15 @@
 import { useEffect, useRef } from "react";
-import { Box, VStack, Text } from "@chakra-ui/react";
+import { ChatIcon } from "@chakra-ui/icons";
+import { usePrefersReducedMotion, VStack } from "@chakra-ui/react";
 import { Message } from "@/chrome/chatStorage";
+import {
+  EmptyState,
+  EmptyStateDescription,
+  EmptyStateHeader,
+  EmptyStateMedia,
+  EmptyStateTitle,
+  ScreenBody,
+} from "@/components/ui";
 import MessageBubble from "./MessageBubble";
 
 interface MessageListProps {
@@ -13,83 +22,48 @@ interface MessageListProps {
   onResend?: (content: string) => void;
 }
 
-export function MessageList({ messages, isLoading, statusUpdateText, isWalletUnlocked, onUnlock, onRetry, onResend }: MessageListProps) {
+export function MessageList({
+  messages,
+  isLoading,
+  statusUpdateText,
+  isWalletUnlocked,
+  onUnlock,
+  onRetry,
+  onResend,
+}: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
-  // Auto-scroll to bottom when messages change
+  // Keep the newest message and Bankr status in view as the job progresses.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+    bottomRef.current?.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "end",
+    });
+  }, [messages, isLoading, prefersReducedMotion]);
 
   if (messages.length === 0) {
     return (
-      <Box
-        flex="1"
-        display="flex"
-        alignItems="center"
-        justifyContent="center"
-        p={4}
-      >
-        <VStack spacing={3}>
-          <Box
-            w="40px"
-            h="40px"
-            border="3px solid"
-            borderColor="border.default"
-            bg="accent.highlight"
-            color="accentFg.highlight"
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-          >
-            <Text fontSize="xl" fontWeight="900">
-              ?
-            </Text>
-          </Box>
-          <Text
-            color="text.secondary"
-            fontSize="sm"
-            fontWeight="700"
-            textTransform="uppercase"
-            letterSpacing="wider"
-            textAlign="center"
-          >
-            Start a conversation
-          </Text>
-          <Text
-            color="text.tertiary"
-            fontSize="xs"
-            textAlign="center"
-            maxW="200px"
-          >
-            Ask Bankr to check balances, swap tokens, or help with DeFi
-          </Text>
-        </VStack>
-      </Box>
+      <ScreenBody display="flex" alignItems="center" justifyContent="center">
+        <EmptyState>
+          <EmptyStateHeader>
+            <EmptyStateMedia>
+              <ChatIcon boxSize={7} />
+            </EmptyStateMedia>
+            <EmptyStateTitle>What can Bankr help with?</EmptyStateTitle>
+            <EmptyStateDescription>
+              Ask about your balances, a token swap, or a DeFi action. Wallet
+              approvals still happen in WalletChan before anything is signed.
+            </EmptyStateDescription>
+          </EmptyStateHeader>
+        </EmptyState>
+      </ScreenBody>
     );
   }
 
   return (
-    <Box
-      flex="1"
-      w="100%"
-      overflowY="auto"
-      px={2}
-      py={2}
-      css={{
-        "&::-webkit-scrollbar": {
-          width: "6px",
-        },
-        "&::-webkit-scrollbar-track": {
-          background: "transparent",
-        },
-        "&::-webkit-scrollbar-thumb": {
-          background: "var(--chakra-colors-border-strong)",
-          borderRadius: "0",
-        },
-      }}
-    >
-      <VStack spacing={0} align="stretch">
+    <ScreenBody px={4} py={0}>
+      <VStack as="section" aria-label="Conversation" spacing={0} align="stretch">
         {messages.map((message) => (
           <MessageBubble
             key={message.id}
@@ -103,7 +77,7 @@ export function MessageList({ messages, isLoading, statusUpdateText, isWalletUnl
         ))}
         <div ref={bottomRef} />
       </VStack>
-    </Box>
+    </ScreenBody>
   );
 }
 

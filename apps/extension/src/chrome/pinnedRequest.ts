@@ -9,10 +9,9 @@
  * factories — or otherwise fails to set `accountId` / `accountAddress` /
  * `accountType` — is a TypeScript error.
  *
- * Tx and signature factories statically exclude impersonator accounts;
- * impersonator is view-only and cannot produce signing requests. The batch
- * factory keeps impersonator in its union to match the existing batch type
- * (impersonator is rejected at confirm time there).
+ * Tx and signature factories accept impersonator accounts because their
+ * requests are queued for Reject-only review. Actual signer resolution and
+ * signing helpers continue to exclude impersonators at confirm time.
  */
 
 import type { Account } from "./types";
@@ -23,7 +22,13 @@ import type {
 } from "./pendingSignatureStorage";
 import type { PinnedBatchTxRequest, PendingBatchTxRequest } from "./erc5792Types";
 
-type SigningAccount = Exclude<Account, { type: "impersonator" }>;
+export type SigningAccount = Exclude<Account, { type: "impersonator" }>;
+
+export function isRequestSigningAccount(
+  account: Account,
+): account is SigningAccount {
+  return account.type !== "impersonator";
+}
 
 type TxBase = Omit<
   PendingTxRequest,
@@ -39,7 +44,7 @@ type BatchBase = Omit<
 >;
 
 export function pinnedTxRequest(
-  account: SigningAccount,
+  account: Account,
   base: TxBase,
 ): PinnedTxRequest {
   return {
@@ -51,7 +56,7 @@ export function pinnedTxRequest(
 }
 
 export function pinnedSignatureRequest(
-  account: SigningAccount,
+  account: Account,
   base: SigBase,
 ): PinnedSignatureRequest {
   return {

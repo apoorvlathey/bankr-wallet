@@ -6,6 +6,7 @@ import {
   Text,
   Spinner,
   Image,
+  Button,
   IconButton,
   Tooltip,
 } from "@chakra-ui/react";
@@ -27,6 +28,13 @@ import { googleFaviconUrl } from "@/constants/externalUrls";
 import ChainIcon from "@/components/ChainIcon";
 import { isDarkThemeId, useIconChipBg, useTheme } from "@/theme";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
+import {
+  EmptyState,
+  EmptyStateDescription,
+  EmptyStateHeader,
+  EmptyStateTitle,
+  ListSurface,
+} from "@/components/ui";
 
 interface TxStatusListProps {
   maxItems?: number;
@@ -34,6 +42,8 @@ interface TxStatusListProps {
   hideHeader?: boolean;
   hideCard?: boolean;
   filterChainId?: number | null;
+  /** When provided, the parent owns screen-level transaction detail navigation. */
+  onSelectTx?: (tx: CompletedTransaction) => void;
 }
 
 /** Group transactions by date label */
@@ -46,8 +56,14 @@ function groupByDate(
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
-  const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-  const toDateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const fmt = (d: Date) =>
+    d.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  const toDateKey = (d: Date) =>
+    `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
   const todayKey = toDateKey(today);
   const yesterdayKey = toDateKey(yesterday);
@@ -73,6 +89,7 @@ function TxStatusList({
   hideHeader,
   hideCard,
   filterChainId,
+  onSelectTx,
 }: TxStatusListProps) {
   const [allHistory, setAllHistory] = useState<CompletedTransaction[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -170,7 +187,7 @@ function TxStatusList({
   const resolveLogo = (url: string | undefined): string | undefined =>
     (url && cachedLogoMap.get(url)) || url;
 
-  const modal = selectedTx && (
+  const modal = !onSelectTx && selectedTx && (
     <TxDetailModal
       isOpen={!!selectedTx}
       onClose={() => setSelectedTx(null)}
@@ -179,23 +196,27 @@ function TxStatusList({
   );
 
   const expandButton = hasMore && (
-    <IconButton
-      aria-label={isExpanded ? "Show less" : "Show more"}
-      icon={isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
+    <Button
       size="xs"
       variant="ghost"
+      rightIcon={isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
       onClick={() => setIsExpanded(!isExpanded)}
-    />
+    >
+      {isExpanded ? "Show less" : `Show all ${history.length}`}
+    </Button>
   );
 
   if (history.length === 0) {
     return (
       <Box pt={hideCard ? 0 : 4}>
-        <Box p={4} textAlign="center">
-          <Text fontSize="sm" color="text.tertiary" fontWeight="500">
-            No recent transactions
-          </Text>
-        </Box>
+        <EmptyState minH="152px">
+          <EmptyStateHeader>
+            <EmptyStateTitle>No activity yet</EmptyStateTitle>
+            <EmptyStateDescription>
+              Transactions from this account will appear here.
+            </EmptyStateDescription>
+          </EmptyStateHeader>
+        </EmptyState>
         {modal}
       </Box>
     );
@@ -205,42 +226,42 @@ function TxStatusList({
     <Box pt={hideCard ? 0 : 4}>
       {!hideHeader && (
         <HStack justify="space-between" mb={2}>
-          <Text
-            fontSize="sm"
-            fontWeight="900"
-            color="text.primary"
-            textTransform="uppercase"
-            letterSpacing="wider"
-          >
+          <Text fontSize="sm" fontWeight="600" color="fg.primary">
             Activity
           </Text>
           {expandButton}
         </HStack>
       )}
 
-      <VStack spacing={0} align="stretch">
+      <VStack spacing={4} align="stretch">
         {dateGroups.map((group) => (
-          <Box key={group.label}>
+          <Box as="section" key={group.label} aria-label={group.label}>
             <Text
-              fontSize="2xs"
-              fontWeight="700"
-              color="text.tertiary"
-              textTransform="uppercase"
-              letterSpacing="wider"
+              fontSize="xs"
+              fontWeight="600"
+              color="fg.secondary"
               px={1}
-              pt={2}
-              pb={1}
+              mb={2}
             >
               {group.label}
             </Text>
-            {group.txs.map((tx) => (
-              <TxStatusItem
-                key={tx.id}
-                tx={tx}
-                onClick={() => setSelectedTx(tx)}
-                resolveLogo={resolveLogo}
-              />
-            ))}
+            <ListSurface
+              bg={hideCard ? "transparent" : "surface.raised"}
+              borderWidth={hideCard ? 0 : "1px"}
+            >
+              {group.txs.map((tx) => (
+                <TxStatusItem
+                  key={tx.id}
+                  tx={tx}
+                  onClick={() => {
+                    if (onSelectTx) onSelectTx(tx);
+                    else setSelectedTx(tx);
+                  }}
+                  resolveLogo={resolveLogo}
+                  flush={hideCard}
+                />
+              ))}
+            </ListSurface>
           </Box>
         ))}
       </VStack>
@@ -314,84 +335,55 @@ function getCounterpartyDisplay(meta: ClearSignedMeta): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-/**
- * Render the Activity row's clear-signed summary line. Reads only from the
- * snapshot taken at submission time — no RPC, eth.sh, or ENS calls happen
- * here. When fields are missing the row gracefully degrades (no token logo,
- * shortened address as counterparty, etc.).
- */
-function ClearSignedSummary({
-  meta,
-  resolveLogo,
-}: {
-  meta: ClearSignedMeta;
-  resolveLogo: (url: string | undefined) => string | undefined;
-}) {
-  const counterparty = getCounterpartyDisplay(meta);
-  const logoSrc = meta.tokenLogo ? resolveLogo(meta.tokenLogo) : undefined;
-
-  // Compose the verb+amount+symbol fragment per kind. Approve with isInfinite
-  // collapses the amount slot to the "Unlimited" word so the row reads
-  // "Approve Unlimited USDC → ..." rather than the raw 2^256-1. Revoke
-  // (approve with amount === 0) collapses the amount slot entirely and
-  // re-words the connector from "→" to "from" so the row reads
-  // "Revoke USDC approval from ...".
-  let action: string;
-  let connector = " → ";
+/** Build the plain-language intent captured with a clear-signed transaction. */
+function getClearSignedIntent(meta: ClearSignedMeta): string {
   if (meta.kind === "approve") {
     if (meta.isRevoke) {
-      action = ["Revoke", meta.tokenSymbol, "approval"]
-        .filter(Boolean)
-        .join(" ");
-      connector = " from ";
-    } else {
-      const amountWord = meta.isInfinite
-        ? "Unlimited"
-        : meta.amount
-          ? formatActivityAmount(meta.amount)
-          : "";
-      action = ["Approve", amountWord, meta.tokenSymbol]
+      return ["Revoke", meta.tokenSymbol, "approval"]
         .filter(Boolean)
         .join(" ");
     }
-  } else if (meta.kind === "transfer" || meta.kind === "nativeSend") {
-    const amountWord = meta.amount ? formatActivityAmount(meta.amount) : "";
-    action = ["Send", amountWord, meta.tokenSymbol].filter(Boolean).join(" ");
-  } else {
-    // erc7730 — the descriptor's intent string already reads as a verb.
-    action = meta.intent || meta.contractName || "";
+    return ["Approve", meta.tokenSymbol].filter(Boolean).join(" ");
   }
 
-  return (
-    <HStack spacing={1.5} minW={0} align="center">
-      {logoSrc && (
-        <Image
-          src={logoSrc}
-          alt={meta.tokenSymbol || ""}
-          boxSize="14px"
-          borderRadius="full"
-          flexShrink={0}
-        />
-      )}
-      <Text
-        fontSize="xs"
-        color="text.secondary"
-        fontWeight="600"
-        noOfLines={1}
-        minW={0}
-      >
-        {action}
-        {counterparty && (
-          <>
-            <Text as="span" color="text.tertiary" fontWeight="500">
-              {connector}
-            </Text>
-            {counterparty}
-          </>
-        )}
-      </Text>
-    </HStack>
-  );
+  if (meta.kind === "transfer" || meta.kind === "nativeSend") {
+    return ["Send", meta.tokenSymbol].filter(Boolean).join(" ");
+  }
+
+  // ERC-7730 intent strings are already human-readable verbs.
+  return meta.intent || meta.contractName || "Contract interaction";
+}
+
+function getActivityValue(tx: CompletedTransaction): string | null {
+  if (tx.transferMeta) {
+    return `−${formatActivityAmount(tx.transferMeta.amount)} ${tx.transferMeta.symbol}`;
+  }
+
+  const meta = tx.clearSignedMeta;
+  if (!meta || !meta.tokenSymbol) return null;
+  if (meta.kind === "erc7730" || meta.isRevoke) return null;
+  if (meta.isInfinite) return `Unlimited ${meta.tokenSymbol}`;
+  if (!meta.amount) return null;
+
+  const prefix =
+    meta.kind === "transfer" || meta.kind === "nativeSend" ? "−" : "";
+  return `${prefix}${formatActivityAmount(meta.amount)} ${meta.tokenSymbol}`;
+}
+
+function getClearSignedContext(meta: ClearSignedMeta): string | null {
+  const counterparty = getCounterpartyDisplay(meta);
+  if (!counterparty) return null;
+  if (meta.kind === "approve") {
+    return meta.isRevoke
+      ? `Approval from ${counterparty}`
+      : `Spending limit for ${counterparty}`;
+  }
+  if (meta.kind === "transfer" || meta.kind === "nativeSend") {
+    return `To ${counterparty}`;
+  }
+  return meta.contractName && meta.contractName !== meta.intent
+    ? meta.contractName
+    : counterparty;
 }
 
 function getInternalSendSymbol(tx: CompletedTransaction): string | null {
@@ -410,13 +402,16 @@ function ActivityIcon({
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const internalSendSymbol = getInternalSendSymbol(tx);
-  const fallbackLabel = (internalSendSymbol || tx.origin || "?").slice(0, 3).toUpperCase();
+  const fallbackLabel = (internalSendSymbol || tx.origin || "?")
+    .slice(0, 3)
+    .toUpperCase();
   const imageSrc =
     tx.origin === "WalletChan" ||
     tx.origin === "BankrWallet" ||
     tx.origin === "Cross-Dapp Batch"
       ? "/walletchan-icon.png"
-      : tx.favicon || (originHostname ? googleFaviconUrl(originHostname) : undefined);
+      : tx.favicon ||
+        (originHostname ? googleFaviconUrl(originHostname) : undefined);
 
   if (!imageSrc || imageFailed) {
     return (
@@ -453,10 +448,12 @@ function TxStatusItem({
   tx,
   onClick,
   resolveLogo,
+  flush,
 }: {
   tx: CompletedTransaction;
   onClick: () => void;
   resolveLogo: (url: string | undefined) => string | undefined;
+  flush: boolean | undefined;
 }) {
   const { networksInfo } = useNetworks();
   const iconChipBg = useIconChipBg();
@@ -469,14 +466,13 @@ function TxStatusItem({
     "";
   const originHostname = getOriginHostname(tx.origin);
 
-  // Whether Row 2 will render. Both functionName and clearSignedMeta drive the
-  // detail row; when either is present we hide the inline status on Row 1 so
-  // status only renders once.
-  const hasDetailRow = !!tx.functionName || !!tx.clearSignedMeta;
-
   const isForceInclusion = !!tx.forceInclusionMeta;
-  const isForcePendingL2 = tx.status === "pending" && isForceInclusion && !tx.forceInclusionMeta!.l2Confirmed;
-  const isForcePendingL1 = tx.status === "processing" && isForceInclusion;
+  const isForcePendingL2 =
+    tx.status === "pending" &&
+    isForceInclusion &&
+    !tx.forceInclusionMeta!.l2Confirmed;
+  const isForcePendingL1 =
+    tx.status === "processing" && isForceInclusion;
 
   // Cross-chain bridge: source tx confirmed but destination leg still polling.
   // We piggyback on the existing "L1 Confirmed / L2 Pending" visual language —
@@ -509,11 +505,13 @@ function TxStatusItem({
   // Bridge destination link. Use the same runtime chain resolver as source
   // links so user-added destination chains (e.g. Avalanche) can surface their
   // stored explorer even when they are not built into CHAIN_REGISTRY.
-  const destExplorerBase = isBridge && tx.bridge?.destinationChainId
-    ? getResolvedChainById(tx.bridge.destinationChainId, networksInfo)?.explorer ||
-      getChainConfig(tx.bridge.destinationChainId).explorer ||
-      ""
-    : "";
+  const destExplorerBase =
+    isBridge && tx.bridge?.destinationChainId
+      ? getResolvedChainById(tx.bridge.destinationChainId, networksInfo)
+          ?.explorer ||
+        getChainConfig(tx.bridge.destinationChainId).explorer ||
+        ""
+      : "";
   const hasBridgeDestLink = !!(
     isBridge && tx.bridge?.destinationTxHash && destExplorerBase
   );
@@ -570,7 +568,7 @@ function TxStatusItem({
       return (
         <VStack spacing={0} align="flex-end">
           <Text fontSize="2xs" color="chart.positive" fontWeight="600">
-            Source Confirmed
+            Source confirmed
           </Text>
           <HStack spacing={1}>
             <Spinner size="xs" color="accent.secondary" boxSize="10px" />
@@ -584,7 +582,7 @@ function TxStatusItem({
     if (isBridge && bridgeFulfilled) {
       return (
         <Text fontSize="2xs" color="chart.positive" fontWeight="600">
-          Bridge Complete
+          Bridge complete
         </Text>
       );
     }
@@ -603,7 +601,7 @@ function TxStatusItem({
         <HStack spacing={1}>
           <WarningIcon boxSize={2.5} color="chart.negative" />
           <Text fontSize="2xs" color="chart.negative" fontWeight="600">
-            {bridgeCode === 5 ? "Bridge Expired" : "Bridge Cancelled"}
+            {bridgeCode === 5 ? "Bridge expired" : "Bridge cancelled"}
           </Text>
         </HStack>
       );
@@ -615,7 +613,7 @@ function TxStatusItem({
         <HStack spacing={1}>
           <Spinner size="xs" color="accent.secondary" boxSize="10px" />
           <Text fontSize="2xs" color="accent.secondary" fontWeight="600">
-            L1 Pending
+            L1 pending
           </Text>
         </HStack>
       );
@@ -626,12 +624,12 @@ function TxStatusItem({
       return (
         <VStack spacing={0} align="flex-end">
           <Text fontSize="2xs" color="chart.positive" fontWeight="600">
-            L1 Confirmed
+            L1 confirmed
           </Text>
           <HStack spacing={1}>
             <Spinner size="xs" color="accent.secondary" boxSize="10px" />
             <Text fontSize="2xs" color="accent.secondary" fontWeight="600">
-              L2 Pending
+              L2 pending
             </Text>
           </HStack>
         </VStack>
@@ -653,7 +651,7 @@ function TxStatusItem({
           <HStack spacing={1}>
             <Spinner size="xs" color="accent.secondary" />
             <Text fontSize="xs" color="accent.secondary" fontWeight="600">
-              Pending...
+              Pending
             </Text>
           </HStack>
         );
@@ -722,404 +720,348 @@ function TxStatusItem({
     }
     return null;
   })();
-  const originDisplay = bridgeOriginParts ? (
-    <VStack spacing={0} align="flex-start" minW={0}>
-      <Text
-        fontSize="sm"
-        fontWeight="600"
-        color="text.primary"
-        noOfLines={1}
-      >
-        {bridgeOriginParts.head}
-      </Text>
-      <Text
-        fontSize="sm"
-        fontWeight="600"
-        color="text.primary"
-        noOfLines={1}
-      >
-        {bridgeOriginParts.tail}
-      </Text>
-    </VStack>
+  const intent = tx.clearSignedMeta
+    ? getClearSignedIntent(tx.clearSignedMeta)
+    : tx.transferMeta
+      ? `Send ${tx.transferMeta.symbol}`
+      : bridgeOriginParts
+        ? `${bridgeOriginParts.head} ${bridgeOriginParts.tail}`
+        : tx.swapMeta
+          ? `Swap ${tx.swapMeta.sellTokenSymbol} → ${tx.swapMeta.buyTokenSymbol}`
+          : originHostname && tx.functionName
+            ? tx.functionName
+            : tx.origin;
+
+  const contextParts: string[] = [];
+  const clearSignedContext = tx.clearSignedMeta
+    ? getClearSignedContext(tx.clearSignedMeta)
+    : null;
+  if (clearSignedContext) contextParts.push(clearSignedContext);
+  if (originHostname) contextParts.push(originHostname);
+  if (!originHostname && tx.functionName && tx.functionName !== intent) {
+    contextParts.push(tx.functionName);
+  }
+  if (contextParts.length === 0 && tx.chainName) {
+    contextParts.push(tx.chainName);
+  }
+  const context = contextParts.join(" · ");
+  const value = getActivityValue(tx);
+
+  const sourceExplorerLabel =
+    isBridge && hasBridgeDestLink
+      ? `View on ${tx.chainName || "source chain"} explorer`
+      : "View on explorer";
+
+  const sourceExplorerIcon = isBridge && hasBridgeDestLink ? (
+    <HStack spacing="2px" aria-hidden="true">
+      <ChainIcon chainId={tx.chainId} chainName={tx.chainName} size="11px" />
+      <ExternalLinkIcon boxSize={3} />
+    </HStack>
   ) : (
-    <Text
-      fontSize="sm"
-      fontWeight="600"
-      color="text.primary"
-      noOfLines={1}
-    >
-      {tx.origin}
-    </Text>
-  );
-
-  // For bridges with BOTH a source link and a destination link, the two
-  // [ChainIcon + ExternalLinkIcon] chips crowd the inline status row and
-  // start to truncate the origin / status text. Push them to their own row
-  // below the status when both exist; keep the single source-only icon
-  // inline for non-bridges and bridges whose destination chain isn't in
-  // the user's explorer registry.
-  const moveLinksBelow = isBridge && hasBridgeDestLink;
-
-  // Explorer links rendered next to statusElement. Bridges get TWO icons —
-  // source chain + destination chain — each with a tiny chain icon prefix so
-  // it's obvious which click goes where. The destination icon is only
-  // rendered once we have both a destination tx hash and a known explorer
-  // for that chain (most exotic destinations the user hasn't added to
-  // their wallet won't satisfy that — we silently degrade to source-only).
-  // Tooltip on each so it's accessible.
-  const linkIcons = (
-    <>
-      {hasViewableTx && (
-        <Tooltip
-          label={
-            isBridge && hasBridgeDestLink
-              ? `View on ${tx.chainName || "source chain"} explorer`
-              : "View on explorer"
-          }
-          fontSize="2xs"
-          openDelay={300}
-          hasArrow
-        >
-          <HStack
-            as="button"
-            spacing="2px"
-            onClick={handleViewTx}
-            cursor="pointer"
-            _hover={{ color: "accent.secondary" }}
-            color="text.tertiary"
-          >
-            {isBridge && hasBridgeDestLink && (
-              <ChainIcon chainId={tx.chainId} chainName={tx.chainName} size="10px" />
-            )}
-            <ExternalLinkIcon boxSize={2.5} />
-          </HStack>
-        </Tooltip>
-      )}
-      {hasBridgeDestLink && (
-        <Tooltip
-          label={`View on ${tx.bridge!.destinationChainName} explorer`}
-          fontSize="2xs"
-          openDelay={300}
-          hasArrow
-        >
-          <HStack
-            as="button"
-            spacing="2px"
-            onClick={handleViewBridgeDest}
-            cursor="pointer"
-            _hover={{ color: "accent.secondary" }}
-            color="text.tertiary"
-          >
-            <ChainIcon
-              chainId={tx.bridge!.destinationChainId}
-              chainName={tx.bridge!.destinationChainName}
-              size="10px"
-            />
-            <ExternalLinkIcon boxSize={2.5} />
-          </HStack>
-        </Tooltip>
-      )}
-    </>
+    <ExternalLinkIcon boxSize={3.5} />
   );
 
   return (
     <Box
-      py={2.5}
-      px={1}
-      cursor="pointer"
-      onClick={onClick}
-      _hover={{ bg: "bg.muted" }}
-      borderBottom="1px solid"
-      borderColor="border.subtle"
-      transition="background 0.15s"
+      as="li"
+      w="full"
+      m={0}
+      p={0}
+      listStyleType="none"
+      borderBottomWidth="1px"
+      borderBottomStyle="solid"
+      borderBottomColor="border.subtle"
+      _last={{ borderBottomWidth: 0 }}
     >
-      <HStack spacing={3} align="center">
-        {/* Icon area */}
-        {tx.swapMeta ? (
-          /* Swap: overlapping sell→buy token icons with chain badge */
-          <Box position="relative" flexShrink={0} w="42px" h="36px">
-            {/* Sell token (back) */}
-            <Box
-              position="absolute"
-              left={0}
-              top={0}
-              bg="bg.muted"
-              borderRadius="full"
-              w="28px"
-              h="28px"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              overflow="hidden"
-              border="2px solid"
-              borderColor="surface.raised"
-              zIndex={1}
-            >
-              {tx.swapMeta.sellTokenLogo ? (
-                <Image src={resolveLogo(tx.swapMeta.sellTokenLogo)} alt={tx.swapMeta.sellTokenSymbol} boxSize="20px" />
-              ) : (
-                <Text fontSize="2xs" fontWeight="700">{tx.swapMeta.sellTokenSymbol.slice(0, 2)}</Text>
-              )}
-            </Box>
-            {/* Buy token (front, overlapping) */}
-            <Box
-              position="absolute"
-              left="14px"
-              top={0}
-              bg="bg.muted"
-              borderRadius="full"
-              w="28px"
-              h="28px"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              overflow="hidden"
-              border="2px solid"
-              borderColor="surface.raised"
-              zIndex={2}
-            >
-              {tx.swapMeta.buyTokenLogo ? (
-                <Image src={resolveLogo(tx.swapMeta.buyTokenLogo)} alt={tx.swapMeta.buyTokenSymbol} boxSize="20px" />
-              ) : (
-                <Text fontSize="2xs" fontWeight="700">{tx.swapMeta.buyTokenSymbol.slice(0, 2)}</Text>
-              )}
-            </Box>
-            <Box
-              position="absolute"
-              bottom="-2px"
-              right="-2px"
-              w="16px"
-              h="16px"
-              borderRadius="full"
-              bg={iconChipBg}
-              border="1.5px solid"
-              borderColor="border.subtle"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              zIndex={3}
-            >
-              <ChainIcon chainId={tx.chainId} chainName={tx.chainName} size="11px" />
-            </Box>
-          </Box>
-        ) : (
-          /* Standard: single favicon with chain icon overlay */
-          <Box position="relative" flexShrink={0} w="36px" h="36px">
-            <Box
-              bg={isDarkTheme ? "whiteAlpha.800" : iconChipBg}
-              borderRadius="full"
-              w="36px"
-              h="36px"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              overflow="hidden"
-              border={isDarkTheme ? "1px solid" : undefined}
-              borderColor={isDarkTheme ? "border.default" : undefined}
-            >
-              <ActivityIcon tx={tx} originHostname={originHostname} />
-            </Box>
-            <Box
-              position="absolute"
-              bottom="-2px"
-              right="-2px"
-              w="16px"
-              h="16px"
-              borderRadius="full"
-              bg={iconChipBg}
-              border="1.5px solid"
-              borderColor="border.subtle"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <ChainIcon chainId={tx.chainId} chainName={tx.chainName} size="11px" />
-            </Box>
-          </Box>
-        )}
-
-        {/* Content. When a detail row exists, surface whichever line is
-            the most informative as the prominent (top) line and demote the
-            other to a smaller line underneath:
-            - Dapp-initiated txs (origin is a parsable URL → `originHostname`
-              is non-null): the tx detail wins ("Approve 2 USDC →…" beats
-              "localhost" for at-a-glance scanning).
-            - Wallet-initiated txs (origin is a hand-crafted description
-              like "Approve USDC for bridge" or "Send USDC"): the origin
-              description IS the most informative line, so it goes on top
-              and the raw function name is demoted below.
-            When no detail row exists, the domain/origin stays as the only
-            line. */}
-        <Box flex={1} minW={0}>
-          {hasDetailRow ? (
-            originHostname ? (
-              <>
-                {/* Dapp-initiated: detail on top, domain demoted */}
-                <HStack justify="space-between" spacing={2} align="center">
-                  <Box flex={1} minW={0}>
-                    {tx.clearSignedMeta ? (
-                      <ClearSignedSummary
-                        meta={tx.clearSignedMeta}
-                        resolveLogo={resolveLogo}
-                      />
-                    ) : (
-                      <Text
-                        fontSize="sm"
-                        fontWeight="600"
-                        color="text.primary"
-                        noOfLines={1}
-                      >
-                        {tx.functionName}
-                      </Text>
-                    )}
-                  </Box>
-                  <HStack spacing={1} flexShrink={0}>
-                    {statusElement}
-                    {!moveLinksBelow && linkIcons}
-                  </HStack>
-                </HStack>
-                <HStack justify="space-between" spacing={2} mt={0.5} align="center">
-                  <Text
-                    fontSize="xs"
-                    color="text.tertiary"
-                    fontWeight="500"
-                    noOfLines={1}
-                  >
-                    {originHostname}
-                  </Text>
-                  <Text
-                    fontSize="2xs"
-                    color="text.tertiary"
-                    fontWeight="500"
-                    flexShrink={0}
-                  >
-                    {formatTimeAgo(tx.createdAt)}
-                  </Text>
-                </HStack>
-              </>
-            ) : (
-              <>
-                {/* Wallet-initiated: origin description on top, detail demoted */}
-                <HStack justify="space-between" spacing={2} align="flex-start">
-                  <Box flex={1} minW={0}>
-                    {originDisplay}
-                  </Box>
-                  <VStack spacing={1} flexShrink={0} align="flex-end">
-                    <HStack spacing={1}>
-                      {statusElement}
-                      {!moveLinksBelow && linkIcons}
-                    </HStack>
-                    {moveLinksBelow && (
-                      <HStack spacing={2}>{linkIcons}</HStack>
-                    )}
-                  </VStack>
-                </HStack>
-                <HStack justify="space-between" spacing={2} mt={0.5} align="center">
-                  <Box flex={1} minW={0}>
-                    {tx.clearSignedMeta ? (
-                      <ClearSignedSummary
-                        meta={tx.clearSignedMeta}
-                        resolveLogo={resolveLogo}
-                      />
-                    ) : (
-                      <Text
-                        fontSize="xs"
-                        color="text.tertiary"
-                        fontFamily="mono"
-                        noOfLines={1}
-                      >
-                        {tx.functionName}
-                      </Text>
-                    )}
-                  </Box>
-                  <Text
-                    fontSize="2xs"
-                    color="text.tertiary"
-                    fontWeight="500"
-                    flexShrink={0}
-                  >
-                    {formatTimeAgo(tx.createdAt)}
-                  </Text>
-                </HStack>
-              </>
-            )
-          ) : (
-            <HStack
-              justify="space-between"
-              spacing={2}
-              minH={bridgeOriginParts ? undefined : "36px"}
-              align={bridgeOriginParts ? "flex-start" : "center"}
-            >
-              <Box flex={1} minW={0}>
-                {bridgeOriginParts ? (
-                  originDisplay
+      <HStack spacing={0} align="stretch">
+        <HStack
+          as="button"
+          type="button"
+          flex="1 1 auto"
+          minW={0}
+          minH="72px"
+          spacing={3}
+          align="center"
+          py={3}
+          pl={flush ? 1 : 3}
+          pr={hasViewableTx || hasBridgeDestLink ? 2 : flush ? 1 : 3}
+          textAlign="start"
+          color="fg.primary"
+          bg="transparent"
+          borderWidth={0}
+          cursor="pointer"
+          aria-label={`Open transaction details for ${intent}`}
+          onClick={onClick}
+          transitionProperty="background-color, box-shadow"
+          transitionDuration="fast"
+          _hover={{ bg: "surface.raisedHover" }}
+          _active={{ bg: "surface.sunken" }}
+          _focus={{ outline: "none" }}
+          _focusVisible={{
+            zIndex: 1,
+            boxShadow:
+              "inset 0 0 0 2px var(--chakra-colors-border-focus)",
+          }}
+        >
+          {/* Icon area */}
+          {tx.swapMeta ? (
+            /* Swap: overlapping sell→buy token icons with chain badge */
+            <Box position="relative" flexShrink={0} w="42px" h="36px">
+              {/* Sell token (back) */}
+              <Box
+                position="absolute"
+                left={0}
+                top={0}
+                bg="bg.muted"
+                borderRadius="full"
+                w="28px"
+                h="28px"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                overflow="hidden"
+                border="2px solid"
+                borderColor="surface.raised"
+                zIndex={1}
+              >
+                {tx.swapMeta.sellTokenLogo ? (
+                  <Image
+                    src={resolveLogo(tx.swapMeta.sellTokenLogo)}
+                    alt={tx.swapMeta.sellTokenSymbol}
+                    boxSize="20px"
+                  />
                 ) : (
-                  <Text
-                    fontSize="sm"
-                    fontWeight="600"
-                    color="text.primary"
-                    noOfLines={1}
-                  >
-                    {originHostname || tx.origin}
+                  <Text fontSize="2xs" fontWeight="700">
+                    {tx.swapMeta.sellTokenSymbol.slice(0, 2)}
                   </Text>
                 )}
               </Box>
-              <VStack spacing={1} flexShrink={0} align="flex-end">
-                {isBridgePendingDest ? (
-                  <>
-                    {/* Bridge pending status spans two lines on its own; stack
-                        the timestamp above so it lines up with the top row
-                        instead of floating vertically centered against the
-                        two-line label. */}
-                    <HStack spacing={1}>
-                      <Text
-                        fontSize="2xs"
-                        color="text.tertiary"
-                        fontWeight="500"
-                        flexShrink={0}
-                      >
-                        {formatTimeAgo(tx.createdAt)}
-                      </Text>
-                      {!moveLinksBelow && linkIcons}
-                    </HStack>
-                    {statusElement}
-                  </>
+              {/* Buy token (front, overlapping) */}
+              <Box
+                position="absolute"
+                left="14px"
+                top={0}
+                bg="bg.muted"
+                borderRadius="full"
+                w="28px"
+                h="28px"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                overflow="hidden"
+                border="2px solid"
+                borderColor="surface.raised"
+                zIndex={2}
+              >
+                {tx.swapMeta.buyTokenLogo ? (
+                  <Image
+                    src={resolveLogo(tx.swapMeta.buyTokenLogo)}
+                    alt={tx.swapMeta.buyTokenSymbol}
+                    boxSize="20px"
+                  />
                 ) : (
-                  <HStack spacing={1}>
-                    <Text
-                      fontSize="2xs"
-                      color="text.tertiary"
-                      fontWeight="500"
-                      flexShrink={0}
-                    >
-                      {formatTimeAgo(tx.createdAt)}
-                    </Text>
-                    <Text fontSize="2xs" color="text.tertiary" fontWeight="500">|</Text>
-                    {statusElement}
-                    {!moveLinksBelow && linkIcons}
-                  </HStack>
+                  <Text fontSize="2xs" fontWeight="700">
+                    {tx.swapMeta.buyTokenSymbol.slice(0, 2)}
+                  </Text>
                 )}
-                {moveLinksBelow && (
-                  <HStack spacing={2}>{linkIcons}</HStack>
-                )}
-              </VStack>
-            </HStack>
+              </Box>
+              <Box
+                position="absolute"
+                bottom="-2px"
+                right="-2px"
+                w="16px"
+                h="16px"
+                borderRadius="full"
+                bg={iconChipBg}
+                border="1.5px solid"
+                borderColor="border.subtle"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                zIndex={3}
+              >
+                <ChainIcon
+                  chainId={tx.chainId}
+                  chainName={tx.chainName}
+                  size="11px"
+                />
+              </Box>
+            </Box>
+          ) : (
+            /* Standard: single favicon with chain icon overlay */
+            <Box position="relative" flexShrink={0} w="36px" h="36px">
+              <Box
+                bg={isDarkTheme ? "whiteAlpha.800" : iconChipBg}
+                borderRadius="full"
+                w="36px"
+                h="36px"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                overflow="hidden"
+                border={isDarkTheme ? "1px solid" : undefined}
+                borderColor={isDarkTheme ? "border.default" : undefined}
+              >
+                <ActivityIcon tx={tx} originHostname={originHostname} />
+              </Box>
+              <Box
+                position="absolute"
+                bottom="-2px"
+                right="-2px"
+                w="16px"
+                h="16px"
+                borderRadius="full"
+                bg={iconChipBg}
+                border="1.5px solid"
+                borderColor="border.subtle"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <ChainIcon
+                  chainId={tx.chainId}
+                  chainName={tx.chainName}
+                  size="11px"
+                />
+              </Box>
+            </Box>
           )}
-        </Box>
-      </HStack>
 
-      {/* Error message for failed txs */}
-      {tx.status === "failed" && tx.error && (
-        <Text
-          fontSize="2xs"
-          color="text.tertiary"
-          noOfLines={1}
-          mt={1}
-          ml="48px"
-        >
-          {tx.error}
-        </Text>
-      )}
+          <Box flex="1 1 auto" minW={0}>
+            <HStack spacing={1.5} minW={0}>
+              {tx.clearSignedMeta?.tokenLogo && (
+                <Image
+                  src={resolveLogo(tx.clearSignedMeta.tokenLogo)}
+                  alt=""
+                  boxSize="16px"
+                  borderRadius="full"
+                  flexShrink={0}
+                />
+              )}
+              <Text
+                fontSize="sm"
+                fontWeight="600"
+                color="fg.primary"
+                lineHeight="1.35"
+                noOfLines={1}
+              >
+                {intent}
+              </Text>
+            </HStack>
+            {context && (
+              <Text
+                mt={0.5}
+                fontSize="xs"
+                color="fg.secondary"
+                lineHeight="1.35"
+                noOfLines={1}
+              >
+                {context}
+              </Text>
+            )}
+            {tx.status === "failed" && tx.error && (
+              <Text
+                mt={0.5}
+                fontSize="xs"
+                color="chart.negative"
+                lineHeight="1.35"
+                noOfLines={1}
+              >
+                {tx.error}
+              </Text>
+            )}
+          </Box>
+
+          <VStack
+            spacing={0.5}
+            flex="0 1 auto"
+            minW={0}
+            maxW="46%"
+            align="flex-end"
+          >
+            {value && (
+              <Text
+                fontSize="sm"
+                fontWeight="600"
+                color="fg.primary"
+                lineHeight="1.35"
+                textAlign="end"
+                sx={{ fontVariantNumeric: "tabular-nums" }}
+                noOfLines={1}
+              >
+                {value}
+              </Text>
+            )}
+            {statusElement}
+            <Text
+              fontSize="2xs"
+              color="fg.muted"
+              fontWeight="500"
+              lineHeight="1.3"
+              sx={{ fontVariantNumeric: "tabular-nums" }}
+              flexShrink={0}
+            >
+              {formatTimeAgo(tx.createdAt)}
+            </Text>
+          </VStack>
+        </HStack>
+
+        {(hasViewableTx || hasBridgeDestLink) && (
+          <VStack
+            flex="0 0 auto"
+            spacing={0}
+            justify="center"
+            px={1}
+            borderLeftWidth="1px"
+            borderLeftStyle="solid"
+            borderLeftColor="border.subtle"
+          >
+            {hasViewableTx && (
+              <Tooltip
+                label={sourceExplorerLabel}
+                fontSize="2xs"
+                openDelay={300}
+                hasArrow
+              >
+                <IconButton
+                  aria-label={sourceExplorerLabel}
+                  icon={sourceExplorerIcon}
+                  size="sm"
+                  variant="ghost"
+                  color="fg.secondary"
+                  onClick={handleViewTx}
+                />
+              </Tooltip>
+            )}
+            {hasBridgeDestLink && (
+              <Tooltip
+                label={`View on ${tx.bridge!.destinationChainName} explorer`}
+                fontSize="2xs"
+                openDelay={300}
+                hasArrow
+              >
+                <IconButton
+                  aria-label={`View on ${tx.bridge!.destinationChainName} explorer`}
+                  icon={
+                    <HStack spacing="2px" aria-hidden="true">
+                      <ChainIcon
+                        chainId={tx.bridge!.destinationChainId}
+                        chainName={tx.bridge!.destinationChainName}
+                        size="11px"
+                      />
+                      <ExternalLinkIcon boxSize={3} />
+                    </HStack>
+                  }
+                  size="sm"
+                  variant="ghost"
+                  color="fg.secondary"
+                  onClick={handleViewBridgeDest}
+                />
+              </Tooltip>
+            )}
+          </VStack>
+        )}
+      </HStack>
     </Box>
   );
 }

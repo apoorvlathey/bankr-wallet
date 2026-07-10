@@ -208,7 +208,7 @@ export function getSupportedExecutionPermissions(): SupportedExecutionPermission
       permissionType,
       {
         chainIds,
-        ruleTypes: ERC7715_SUPPORTED_RULE_TYPES,
+        ruleTypes: [...ERC7715_SUPPORTED_RULE_TYPES],
       },
     ]),
   );

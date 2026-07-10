@@ -1,13 +1,13 @@
 /**
  * ThemedPanel — larger sibling of ThemedCard.
  *
- * Same API as ThemedCard but with bigger default padding, intended for the
- * "section container" pattern: gas estimate panel, asset changes panel,
- * settings sub-page wrappers. The visual treatment otherwise matches
- * ThemedCard so the two compose cleanly.
+ * Same API as ThemedCard but with bigger default padding, intended for a
+ * section that genuinely needs one enclosing surface. Prefer spacing,
+ * headings, and dividers for the content inside it instead of nesting more
+ * cards by default.
  *
- * Use ThemedPanel for sections that own multiple rows / sub-cards.
- * Use ThemedCard for the rows / sub-cards themselves.
+ * Use ThemedPanel for sections that own multiple related rows. Let inner rows
+ * share the panel edge and use separators.
  */
 
 import { forwardRef } from "react";
@@ -27,6 +27,7 @@ export const ThemedPanel = forwardRef<HTMLDivElement, ThemedPanelProps>(
     ref,
   ) {
     const { tokens } = useTheme();
+    const isDarkTheme = tokens.colorMode === "dark";
 
     const surfaceBg = variant === "sunken" ? "surface.sunken" : "surface.raised";
     const baseShadow =
@@ -41,12 +42,18 @@ export const ThemedPanel = forwardRef<HTMLDivElement, ThemedPanelProps>(
           cursor: "pointer",
           transition: tokens.motion.transitionBase,
           _hover: {
+            bg: "surface.raisedHover",
+            borderColor: "border.default",
             transform: tokens.motion.hover.transform,
             boxShadow: tokens.motion.hover.shadowOverride ?? tokens.shadows.cardHover,
           },
           _active: {
             transform: tokens.motion.press.transform,
             boxShadow: tokens.motion.press.shadowOverride ?? baseShadow,
+          },
+          _focusVisible: {
+            boxShadow: tokens.shadows.focus,
+            outline: "none",
           },
         }
       : {};
@@ -56,7 +63,9 @@ export const ThemedPanel = forwardRef<HTMLDivElement, ThemedPanelProps>(
         ref={ref}
         bg={surfaceBg}
         border={tokens.borders[weight]}
-        borderColor="border.default"
+        borderColor={
+          isDarkTheme && variant !== "raised" ? "border.subtle" : "border.default"
+        }
         borderRadius={tokens.radii.card}
         boxShadow={baseShadow}
         p={4}

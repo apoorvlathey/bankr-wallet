@@ -1,4 +1,5 @@
 import { Badge } from "@chakra-ui/react";
+import { InfoOutlineIcon } from "@chakra-ui/icons";
 import { SettingsRow } from "./SettingsRow";
 import {
   PaletteIcon,
@@ -15,6 +16,7 @@ import {
 } from "./icons";
 
 export type LeafId =
+  | "about"
   | "appearance"
   | "changePassword"
   | "agentPassword"
@@ -38,6 +40,13 @@ export interface LeafEntry {
 }
 
 export const LEAF_ENTRIES: readonly LeafEntry[] = [
+  {
+    id: "about",
+    title: "About",
+    subtitle: "Version, security model, and WalletChan links",
+    keywords: ["about", "version", "author", "support", "website", "theme"],
+    group: null,
+  },
   {
     id: "appearance",
     title: "Appearance",
@@ -142,6 +151,7 @@ export function filterLeaves(query: string): LeafEntry[] {
 }
 
 export type NavigableLeafId =
+  | "about"
   | "appearance"
   | "changePassword"
   | "agentPassword"
@@ -167,6 +177,20 @@ export interface RowContext {
 
 export function renderLeafRow(id: LeafId, ctx: RowContext) {
   switch (id) {
+    case "about":
+      return (
+        <SettingsRow
+          key={id}
+          title="About"
+          subtitle="Version, security model, and links"
+          icon={<InfoOutlineIcon boxSize={5} />}
+          iconBg="surface.accentTint"
+          iconColor="accent.secondary"
+          showChevron
+          onClick={() => ctx.onNavigate(id)}
+        />
+      );
+
     case "appearance":
       return (
         <SettingsRow

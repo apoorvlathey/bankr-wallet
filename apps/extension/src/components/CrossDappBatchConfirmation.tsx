@@ -10,19 +10,15 @@ import type { GasEstimate } from "@/chrome/gasEstimation";
 import BatchTransactionConfirmation from "@/components/BatchTransactionConfirmation";
 
 /**
- * Thin wrapper around BatchTransactionConfirmation that adapts a user-assembled
- * cross-dapp batch (built up via the "Add to Batch" action on individual tx
- * requests) into the synthetic PendingBatchTxRequest shape that the existing
- * batch confirmation UI consumes.
+ * Domain adapter for a user-assembled cross-dapp batch.
  *
- * Adds two cross-dapp-only behaviors via the new optional props on
- * BatchTransactionConfirmation:
- *   - onRemoveCall: trash icon to the LEFT of each call (outside the collapse)
- *   - originPerCall: per-call origin/favicon chip in the collapsed header
+ * BatchTransactionConfirmation owns the mobile confirmation composition
+ * (OutcomeCard, financial impact, request context, disclosures, and sticky
+ * actions). This wrapper only converts persisted cross-dapp entries into that
+ * presentation model and supplies the cross-dapp message handlers.
  *
- * Confirm/reject route through dedicated background messages
- * (`confirmCrossDappBatch` / `rejectCrossDappBatch`) instead of the
- * dapp-initiated batch handlers.
+ * Every action remains attributable to its source dapp through
+ * `originPerCall`; execution order is never changed for visual grouping.
  */
 
 interface CrossDappBatchConfirmationProps {
@@ -49,10 +45,23 @@ function CrossDappBatchConfirmation({
   onNavigate,
 }: CrossDappBatchConfirmationProps) {
   const toast = useToast();
-  // Cross-dapp batch screen tints the page background so it's instantly
-  // distinguishable from a regular dapp batch confirmation. Sourced from
-  // status.warning.tint — Bauhaus = cornsilk wash, Midnight = recessed surface.
-  const pageBgColor = "status.warning.tint";
+
+  // Count source applications without reordering the entries. The original
+  // call order is execution-critical, while the per-call source labels make
+  // origin boundaries visible inside the Actions disclosure.
+  const sourceCount = useMemo(
+    () =>
+      new Set(
+        batch.entries.map((entry) => {
+          try {
+            return new URL(entry.origin).origin;
+          } catch {
+            return entry.origin;
+          }
+        }),
+      ).size,
+    [batch.entries],
+  );
 
   // Build a synthetic PendingBatchTxRequest so we can reuse the existing batch
   // confirmation UI without forking it. The id and origin are placeholders —
@@ -201,12 +210,12 @@ function CrossDappBatchConfirmation({
       onRemoveCall={handleRemoveCall}
       onEditCallData={handleEditCallData}
       originPerCall={originPerCall}
-      titleOverride={`Cross-Dapp Batch (${batch.entries.length} call${batch.entries.length === 1 ? "" : "s"})`}
+      titleOverride={`Review ${sourceCount === 1 ? "app" : `${sourceCount}-app`} batch (${batch.entries.length} action${batch.entries.length === 1 ? "" : "s"})`}
       customConfirmHandler={handleCustomConfirm}
       customRejectHandler={handleCustomReject}
-      // Soft yellow tint so the cross-dapp batch screen is instantly
-      // distinguishable from the standard dapp batch confirmation screen.
-      pageBgColor={pageBgColor}
+      // Cross-dapp identity is communicated by the title and per-action dapp
+      // attribution, not by a warning-colored page tint.
+      pageBgColor="surface.base"
     />
   );
 }

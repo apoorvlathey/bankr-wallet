@@ -1,26 +1,33 @@
 import { useState } from "react";
-import { Box, Text, Link, Button, HStack, IconButton } from "@chakra-ui/react";
-import { LockIcon, RepeatIcon, CopyIcon, CheckIcon } from "@chakra-ui/icons";
+import {
+  Box,
+  Button,
+  HStack,
+  IconButton,
+  Link,
+  Text,
+  VStack,
+} from "@chakra-ui/react";
+import {
+  CheckIcon,
+  CopyIcon,
+  LockIcon,
+  RepeatIcon,
+  WarningTwoIcon,
+} from "@chakra-ui/icons";
 import { Message } from "@/chrome/chatStorage";
-import { isDarkThemeId, useTheme } from "@/theme";
 import ShapesLoader from "./ShapesLoader";
 
-
-// URL regex pattern
 const URL_REGEX = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g;
 
-/**
- * Parse text and convert URLs to clickable links
- */
 function parseContentWithLinks(
   content: string,
-  linkColor: string
+  linkColor: string,
 ): React.ReactNode[] {
   const parts = content.split(URL_REGEX);
 
   return parts.map((part, index) => {
     if (URL_REGEX.test(part)) {
-      // Reset regex lastIndex since we're reusing it
       URL_REGEX.lastIndex = 0;
       return (
         <Link
@@ -29,10 +36,12 @@ function parseContentWithLinks(
           isExternal
           color={linkColor}
           textDecoration="underline"
+          textUnderlineOffset="2px"
           fontWeight="600"
+          overflowWrap="anywhere"
           _hover={{ opacity: 0.8 }}
-          onClick={(e) => {
-            e.preventDefault();
+          onClick={(event) => {
+            event.preventDefault();
             chrome.tabs.create({ url: part });
           }}
         >
@@ -53,222 +62,202 @@ interface MessageBubbleProps {
   onResend?: (content: string) => void;
 }
 
-export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock, onRetry, onResend }: MessageBubbleProps) {
-  const { themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
+interface MessageFrameProps {
+  label: string;
+  timestamp: number;
+  isUser?: boolean;
+  isError?: boolean;
+  children: React.ReactNode;
+}
+
+function MessageFrame({
+  label,
+  timestamp,
+  isUser = false,
+  isError = false,
+  children,
+}: MessageFrameProps) {
+  return (
+    <Box
+      as="article"
+      py={4}
+      borderBottom="1px solid"
+      borderColor="border.subtle"
+      _last={{ borderBottomWidth: 0 }}
+    >
+      <VStack
+        align={isUser ? "flex-end" : "stretch"}
+        spacing={2}
+        maxW={isUser ? "88%" : "full"}
+        ml={isUser ? "auto" : 0}
+      >
+        <HStack
+          w="full"
+          justify={isUser ? "flex-end" : "space-between"}
+          spacing={3}
+        >
+          {!isUser && (
+            <HStack spacing={2} minW={0}>
+              {isError && <WarningTwoIcon color="status.error.fg" boxSize={4} />}
+              <Text fontSize="sm" fontWeight={600} color="fg.primary">
+                {label}
+              </Text>
+            </HStack>
+          )}
+          <Text
+            fontSize="xs"
+            color="fg.muted"
+            sx={{ fontVariantNumeric: "tabular-nums" }}
+            flexShrink={0}
+          >
+            {new Date(timestamp).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </Text>
+          {isUser && (
+            <Text fontSize="sm" fontWeight={600} color="fg.primary">
+              {label}
+            </Text>
+          )}
+        </HStack>
+        {children}
+      </VStack>
+    </Box>
+  );
+}
+
+export function MessageBubble({
+  message,
+  statusText,
+  isWalletUnlocked,
+  onUnlock,
+  onRetry,
+  onResend,
+}: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === "user";
   const isPending = message.status === "pending";
   const isError = message.status === "error";
 
-  // User bubble — secondary accent (Bauhaus blue / Midnight cyan). Reads as
-  // the "cool / your input" half of the cool–warm pair with the assistant.
-  const userStyles = {
-    bg: "accent.secondary",
-    color: "accentFg.secondary",
-  };
-
-  // Assistant bubble — highlight accent (Bauhaus yellow / Midnight amber).
-  // The "warm / response" half of the pair.
-  const assistantStyles = {
-    bg: "accent.highlight",
-    color: "accentFg.highlight",
-  };
-
-  // Error bubble — semantic status. Bauhaus paints saturated red/white;
-  // Midnight uses the recessed dark error tint with bright error foreground.
-  const errorStyles = {
-    bg: "status.error.bg",
-    color: "status.error.fg",
-  };
-
-  const styles = isError ? errorStyles : isUser ? userStyles : assistantStyles;
-
-  // Compact loader for pending state
   if (isPending) {
     return (
-      <Box
-        display="flex"
-        justifyContent="flex-start"
-        mb={2}
-      >
-        <Box
-          bg="accent.highlight"
-          border="2px solid"
-          borderColor="border.default"
-          borderRadius="md"
-          boxShadow="card"
+      <MessageFrame label="Bankr" timestamp={message.timestamp}>
+        <HStack
+          role="status"
+          aria-live="polite"
+          minH="44px"
           px={3}
           py={2}
+          spacing={3}
+          bg="surface.raised"
+          border="1px solid"
+          borderColor="border.default"
+          borderRadius="lg"
         >
-          <HStack spacing={2}>
-            <ShapesLoader size="10px" />
-            {statusText && (
-              <Text
-                fontSize="xs"
-                fontWeight="600"
-                color="accentFg.highlight"
-                opacity={0.8}
-                fontStyle="italic"
-              >
-                {statusText}
-              </Text>
-            )}
-          </HStack>
-        </Box>
-      </Box>
+          <ShapesLoader size="7px" />
+          <VStack align="stretch" spacing={0} minW={0}>
+            <Text fontSize="sm" fontWeight={600} color="fg.primary">
+              Bankr is working
+            </Text>
+            <Text fontSize="xs" color="fg.secondary" noOfLines={2}>
+              {statusText || "Preparing a response…"}
+            </Text>
+          </VStack>
+        </HStack>
+      </MessageFrame>
     );
   }
 
-  // Show "Send message to Bankr" button when wallet is unlocked after a lock error
   if (isError && message.isWalletLockedError && isWalletUnlocked) {
     return (
-      <Box
-        display="flex"
-        justifyContent="flex-start"
-        mb={2}
-      >
+      <MessageFrame label="Bankr" timestamp={message.timestamp}>
         <Box
-          bg="accent.highlight"
-          border="2px solid"
-          borderColor="border.default"
-          borderRadius="md"
-          boxShadow="card"
+          role="status"
+          bg="status.info.bg"
+          color="status.info.fg"
+          border="1px solid"
+          borderColor="status.info.border"
+          borderRadius="lg"
           p={3}
-          position="relative"
         >
-          {/* Bauhaus geometric decoration — a tiny red square in the corner.
-              Midnight skips ornaments entirely (decorators field omitted). */}
-          {!isDarkTheme && (
-            <Box
-              position="absolute"
-              top="-4px"
-              left="-4px"
-              w="8px"
-              h="8px"
-              bg="accent.primary"
-              border="1.5px solid"
-              borderColor="border.default"
-            />
-          )}
-
+          <Text fontSize="sm" lineHeight="1.5" mb={3}>
+            Your wallet is unlocked. Send the last message to Bankr again.
+          </Text>
           <Button
-            bg="surface.raised"
-            color="fg.primary"
-            border="2px solid"
-            borderColor="border.default"
-            boxShadow="card"
-            borderRadius="md"
-            fontWeight="700"
-            textTransform="uppercase"
-            letterSpacing="wider"
-            fontSize="sm"
-            px={4}
-            py={3}
-            h="auto"
+            variant="primary"
+            minH="44px"
             leftIcon={<RepeatIcon boxSize={4} />}
-            transition="all 0.15s ease-out"
-            _hover={{
-              // Bauhaus inverts to black-on-white on hover; Midnight inverts
-              // to its light fg-on-dark inverse, same swap intent.
-              bg: "fg.primary",
-              color: "fg.inverse",
-              transform: "translateY(-1px)",
-              boxShadow: "cardHover",
-            }}
-            _active={{
-              transform: "translate(2px, 2px)",
-              boxShadow: "none",
-            }}
             onClick={onRetry}
           >
-            Send message to Bankr
+            Send message again
           </Button>
         </Box>
-      </Box>
+      </MessageFrame>
     );
   }
 
+  const messageSurface = isError
+    ? {
+        bg: "status.error.bg",
+        color: "status.error.fg",
+        borderColor: "status.error.border",
+      }
+    : isUser
+      ? {
+          bg: "surface.accentTint",
+          color: "fg.primary",
+          borderColor: "border.default",
+        }
+      : {
+          bg: "transparent",
+          color: "fg.primary",
+          borderColor: "transparent",
+        };
+
   return (
-    <Box
-      display="flex"
-      justifyContent={isUser ? "flex-end" : "flex-start"}
-      mb={2}
+    <MessageFrame
+      label={isUser ? "You" : isError ? "Bankr couldn’t finish" : "Bankr"}
+      timestamp={message.timestamp}
+      isUser={isUser}
+      isError={isError}
     >
       <Box
-        maxW="90%"
-        bg={styles.bg}
-        color={styles.color}
-        border="2px solid"
-        borderColor="border.default"
-        borderRadius="md"
-        boxShadow="card"
-        p={2}
-        position="relative"
-        role="group"
+        w="full"
+        bg={messageSurface.bg}
+        color={messageSurface.color}
+        border={isUser || isError ? "1px solid" : "none"}
+        borderColor={messageSurface.borderColor}
+        borderRadius={isUser || isError ? "lg" : 0}
+        px={isUser || isError ? 3 : 0}
+        py={isUser || isError ? 3 : 0}
+        role={isError ? "alert" : undefined}
       >
-        {/* Bauhaus geometric corner ornament — red square (assistant) or red
-            circle (user). Midnight omits ornaments. */}
-        {!isDarkTheme && (
-          <Box
-            position="absolute"
-            top="-4px"
-            right={isUser ? "-4px" : "auto"}
-            left={isUser ? "auto" : "-4px"}
-            w="8px"
-            h="8px"
-            bg="accent.primary"
-            borderRadius={isUser ? "full" : 0}
-            border="1.5px solid"
-            borderColor="border.default"
-          />
-        )}
-
         <Text
-          fontWeight="500"
+          fontWeight="400"
           fontSize="sm"
-          lineHeight="1.5"
+          lineHeight="1.55"
           whiteSpace="pre-wrap"
           wordBreak="break-word"
         >
           {parseContentWithLinks(
             message.content,
-            // Cross-tint links: on the cool user bubble use the warm
-            // highlight; on the warm assistant bubble use the cool secondary.
-            // Same crossover in either palette (blue↔yellow / cyan↔amber).
-            isUser ? "accent.highlight" : "accent.secondary"
+            isError ? "status.error.fg" : "accent.secondary",
           )}
         </Text>
 
-        <HStack justify="space-between" align="center" mt={2}>
+        <HStack justify="space-between" align="center" mt={3} spacing={2}>
           <HStack spacing={1}>
-            <Text
-              fontSize="xs"
-              opacity={0.7}
-              fontWeight="700"
-              textTransform="uppercase"
-              letterSpacing="wider"
-            >
-              {new Date(message.timestamp).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </Text>
-
-            {/* Copy button - visible on hover */}
             {message.content && (
               <IconButton
-                aria-label="Copy message"
-                icon={copied ? <CheckIcon /> : <CopyIcon />}
+                aria-label={copied ? "Message copied" : "Copy message"}
+                icon={copied ? <CheckIcon boxSize={3.5} /> : <CopyIcon boxSize={4} />}
+                minW="32px"
+                w="32px"
+                h="32px"
                 size="xs"
                 variant="ghost"
-                color={copied ? "accent.highlight" : styles.color}
-                opacity={copied ? 0.7 : 0}
-                _groupHover={{ opacity: 0.7 }}
-                _hover={{ opacity: "1 !important" }}
-                minW="auto"
-                h="auto"
-                p={0.5}
+                color={copied ? "accent.highlight" : "fg.secondary"}
                 onClick={async () => {
                   await navigator.clipboard.writeText(message.content);
                   setCopied(true);
@@ -277,72 +266,35 @@ export function MessageBubble({ message, statusText, isWalletUnlocked, onUnlock,
               />
             )}
 
-            {/* Resend button - only on user messages, visible on hover */}
             {isUser && onResend && (
               <IconButton
-                aria-label="Resend message"
-                icon={<RepeatIcon />}
+                aria-label="Send this message again"
+                icon={<RepeatIcon boxSize={4} />}
+                minW="32px"
+                w="32px"
+                h="32px"
                 size="xs"
                 variant="ghost"
-                color={styles.color}
-                opacity={0}
-                _groupHover={{ opacity: 0.7 }}
-                _hover={{ opacity: "1 !important" }}
-                minW="auto"
-                h="auto"
-                p={0.5}
+                color="fg.secondary"
                 onClick={() => onResend(message.content)}
               />
             )}
           </HStack>
 
-          {/* Show Unlock/Retry button for wallet locked errors */}
           {isError && message.isWalletLockedError && (
-            isWalletUnlocked ? (
-              <Button
-                size="xs"
-                bg="surface.raised"
-                color="fg.primary"
-                border="2px solid"
-                borderColor="border.default"
-                borderRadius="md"
-                fontWeight="700"
-                textTransform="uppercase"
-                fontSize="xs"
-                leftIcon={<RepeatIcon />}
-                _hover={{
-                  bg: "accent.highlight",
-                  color: "accentFg.highlight",
-                }}
-                onClick={onRetry}
-              >
-                Retry
-              </Button>
-            ) : (
-              <Button
-                size="xs"
-                bg="surface.raised"
-                color="fg.primary"
-                border="2px solid"
-                borderColor="border.default"
-                borderRadius="md"
-                fontWeight="700"
-                textTransform="uppercase"
-                fontSize="xs"
-                leftIcon={<LockIcon />}
-                _hover={{
-                  bg: "accent.highlight",
-                  color: "accentFg.highlight",
-                }}
-                onClick={onUnlock}
-              >
-                Unlock
-              </Button>
-            )
+            <Button
+              size="sm"
+              minH="40px"
+              variant="secondary"
+              leftIcon={isWalletUnlocked ? <RepeatIcon /> : <LockIcon />}
+              onClick={isWalletUnlocked ? onRetry : onUnlock}
+            >
+              {isWalletUnlocked ? "Retry" : "Unlock wallet"}
+            </Button>
           )}
         </HStack>
       </Box>
-    </Box>
+    </MessageFrame>
   );
 }
 

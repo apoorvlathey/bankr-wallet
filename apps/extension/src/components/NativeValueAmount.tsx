@@ -1,13 +1,5 @@
-import {
-  Popover,
-  PopoverArrow,
-  PopoverBody,
-  PopoverContent,
-  PopoverTrigger,
-  Portal,
-  Text,
-  VStack,
-} from "@chakra-ui/react";
+import { Box, Button, Text } from "@chakra-ui/react";
+import { useId, useState } from "react";
 import {
   formatNativeValueCompact,
   formatNativeValueExact,
@@ -35,6 +27,8 @@ export default function NativeValueAmount({
   maxW?: string;
   textAlign?: "left" | "center" | "right";
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const detailsId = useId();
   const parsed = parseNativeAmount(value);
 
   if (!parsed.ok) {
@@ -68,47 +62,44 @@ export default function NativeValueAmount({
   }
 
   return (
-    <Popover trigger="hover" placement="top-end" openDelay={150} closeDelay={100}>
-      <PopoverTrigger>
+    <Box minW={0} maxW={isExpanded ? "100%" : maxW} textAlign={textAlign}>
+      <Button
+        type="button"
+        variant="unstyled"
+        display="inline-flex"
+        alignItems="center"
+        minH="24px"
+        h="auto"
+        maxW="100%"
+        p={0}
+        fontSize={fontSize}
+        fontWeight={fontWeight}
+        color={color}
+        fontFamily={fontFamily}
+        textAlign={textAlign}
+        textDecoration="underline"
+        textDecorationStyle="dotted"
+        textUnderlineOffset="3px"
+        aria-expanded={isExpanded}
+        aria-controls={detailsId}
+        aria-label={`${compact}. ${isExpanded ? "Hide" : "Show"} full precision`}
+        onClick={() => setIsExpanded((expanded) => !expanded)}
+      >
+        <Text as="span" isTruncated>{compact}</Text>
+      </Button>
+      {isExpanded && (
         <Text
-          fontSize={fontSize}
-          fontWeight={fontWeight}
-          color={color}
-          fontFamily={fontFamily}
-          cursor="help"
-          maxW={maxW}
-          isTruncated
-          textAlign={textAlign}
-          tabIndex={0}
+          id={detailsId}
+          mt={1}
+          fontSize="xs"
+          color="fg.secondary"
+          fontWeight="500"
+          lineHeight="1.4"
+          wordBreak="break-all"
         >
-          {compact}
+          {exact}
         </Text>
-      </PopoverTrigger>
-      <Portal>
-        <PopoverContent maxW="260px" w="max-content" zIndex="popover">
-          <PopoverArrow />
-          <PopoverBody p={3}>
-            <VStack align="stretch" spacing={1}>
-              <Text
-                fontSize="2xs"
-                color="text.secondary"
-                fontWeight="800"
-                textTransform="uppercase"
-              >
-                Full precision
-              </Text>
-              <Text
-                fontSize="xs"
-                color="text.primary"
-                fontWeight="700"
-                wordBreak="break-all"
-              >
-                {exact}
-              </Text>
-            </VStack>
-          </PopoverBody>
-        </PopoverContent>
-      </Portal>
-    </Popover>
+      )}
+    </Box>
   );
 }

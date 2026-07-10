@@ -1,15 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Box,
-  HStack,
-  Spacer,
-  VStack,
-  Text,
   IconButton,
   Badge,
   Button,
   Input,
   InputGroup,
   InputLeftElement,
+  FormControl,
+  FormLabel,
   AlertDialog,
   AlertDialogBody,
   AlertDialogFooter,
@@ -19,8 +17,6 @@ import { Box,
   useDisclosure,
 } from "@chakra-ui/react";
 import {
-  ArrowBackIcon,
-  ChevronRightIcon,
   ViewIcon,
   ViewOffIcon,
   DeleteIcon,
@@ -31,11 +27,25 @@ import { useNetworks } from "@/contexts/NetworksContext";
 import { NetworksInfo } from "@/types";
 import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { getChainConfig } from "@/constants/chainConfig";
 import ChainIcon from "@/components/ChainIcon";
-import { isDarkThemeId, ThemedCard, Decorator, useIconChipBg, useTheme } from "@/theme";
 import EditChain from "./EditChain";
 import AddChain from "./AddChain";
+import {
+  AppHeader,
+  AppScreen,
+  EmptyState,
+  EmptyStateDescription,
+  EmptyStateHeader,
+  EmptyStateTitle,
+  ListItem,
+  ListItemActions,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
+  ListItemTitle,
+  ListSurface,
+  ScreenBody,
+} from "@/components/ui";
 
 function getRpcDisplay(rpcUrl: string): string {
   try {
@@ -61,156 +71,49 @@ function Chain({
   onToggleHidden: () => void;
   onDelete?: () => void;
   }) {
-  const config = getChainConfig(network.chainId);
   const rpcDisplay = getRpcDisplay(network.rpcUrl);
-  const iconChipBg = useIconChipBg();
-  const { themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
 
   return (
-    <ThemedCard
-      weight="medium"
-      variant={network.hidden ? "sunken" : "default"}
-      p={2.5}
+    <ListItem
       opacity={network.hidden ? 0.72 : 1}
-      position="relative"
     >
-      {/* Corner decoration — accent depends on chain type */}
-      <Decorator
-        corner="top-right"
-        accent={network.isCustom ? "highlight" : "secondary"}
-        {...(!network.isCustom && config.bg ? { bg: config.bg } : {})}
-      />
-
-      <VStack align="stretch" spacing={2}>
-        <HStack
-          spacing={3}
-          align="start"
-          cursor="pointer"
-          onClick={openEditChain}
-          _hover={{ opacity: 0.88 }}
-        >
-          <Box
-            bg={iconChipBg}
-            border="2px solid"
-            borderColor="border.default"
-            borderRadius={isDarkTheme ? "md" : undefined}
-            p={1.5}
-            flexShrink={0}
-          >
-            <ChainIcon chainId={network.chainId} chainName={chainName} size="22px" />
-          </Box>
-          <VStack align="start" spacing={1} flex={1} minW={0}>
-            <HStack spacing={1.5} flexWrap="wrap">
-              <Text fontWeight="800" color="text.primary" noOfLines={1} fontSize="sm">
-                {chainName}
-              </Text>
-              <Badge
-                fontSize="2xs"
-                bg="fg.primary"
-                color="surface.raised"
-                border="1px solid"
-                borderColor="border.default"
-                fontWeight="700"
-                px={1.5}
-              >
-                ID {network.chainId}
-              </Badge>
-              {isActive && (
-                <Badge
-                  fontSize="2xs"
-                  bg="accent.secondary"
-                  color="accentFg.secondary"
-                  border="1px solid"
-                  borderColor="border.default"
-                  fontWeight="700"
-                  px={1.5}
-                >
-                  ACTIVE
-                </Badge>
-              )}
-              {network.isCustom && (
-                <Badge
-                  fontSize="2xs"
-                  bg="accent.highlight"
-                  color="accentFg.highlight"
-                  border="1px solid"
-                  borderColor="border.default"
-                  fontWeight="700"
-                  px={1.5}
-                >
-                  CUSTOM
-                </Badge>
-              )}
-              {network.hidden && (
-                <Badge
-                  fontSize="2xs"
-                  bg="surface.raised"
-                  color="text.secondary"
-                  border="1px solid"
-                  borderColor="border.default"
-                  fontWeight="700"
-                  px={1.5}
-                >
-                  HIDDEN
-                </Badge>
-              )}
-            </HStack>
-            <Text
-              fontSize="xs"
-              color="text.tertiary"
-              noOfLines={1}
-              fontWeight="600"
-              title={network.rpcUrl}
-            >
-              {rpcDisplay}
-            </Text>
-          </VStack>
-        </HStack>
-
-        <HStack justify="space-between" spacing={2}>
-          <HStack spacing={1.5}>
-            <IconButton
-              aria-label={network.hidden ? "Show chain" : "Hide chain"}
-              icon={network.hidden ? <ViewOffIcon /> : <ViewIcon />}
-              size="xs"
-              variant="ghost"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleHidden();
-              }}
-            />
-            <Text fontSize="2xs" color="text.tertiary" fontWeight="700" textTransform="uppercase" letterSpacing="wide">
-              {network.hidden ? "Hidden in selector" : "Visible in selector"}
-            </Text>
-          </HStack>
-          <HStack spacing={1}>
-            {network.isCustom && onDelete && (
-              <IconButton
-                aria-label="Delete chain"
-                icon={<DeleteIcon />}
-                size="xs"
-                variant="ghost"
-                color="accent.primary"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-              />
-            )}
-            <Button
-              size="xs"
-              variant="secondary"
-              onClick={openEditChain}
-              px={2.5}
-              rightIcon={<ChevronRightIcon />}
-            >
-              Edit
-            </Button>
-          </HStack>
-        </HStack>
-      </VStack>
-    </ThemedCard>
+      <ListItemMedia>
+        <ChainIcon chainId={network.chainId} chainName={chainName} size="28px" withChip />
+      </ListItemMedia>
+      <ListItemContent>
+        <ListItemTitle>{chainName}</ListItemTitle>
+        <ListItemDescription title={network.rpcUrl}>
+          Chain ID {network.chainId} · {rpcDisplay}
+        </ListItemDescription>
+        <Box mt={1} display="flex" gap={1} flexWrap="wrap">
+          {isActive && <Badge colorScheme="blue">Active</Badge>}
+          {network.isCustom && <Badge>Custom</Badge>}
+          {network.hidden && <Badge>Hidden</Badge>}
+        </Box>
+      </ListItemContent>
+      <ListItemActions>
+        <IconButton
+          aria-label={network.hidden ? `Show ${chainName}` : `Hide ${chainName}`}
+          title={network.hidden ? "Show network" : "Hide network"}
+          icon={network.hidden ? <ViewOffIcon /> : <ViewIcon />}
+          size="sm"
+          variant="ghost"
+          onClick={onToggleHidden}
+        />
+        {network.isCustom && onDelete && (
+          <IconButton
+            aria-label={`Delete ${chainName}`}
+            title="Delete network"
+            icon={<DeleteIcon />}
+            size="sm"
+            variant="ghost"
+            color="status.error.fg"
+            onClick={onDelete}
+          />
+        )}
+        <Button size="sm" variant="ghost" onClick={openEditChain}>Edit</Button>
+      </ListItemActions>
+    </ListItem>
   );
 }
 
@@ -499,56 +402,43 @@ function Chains({
   }
 
   return (
-    <VStack spacing={4} align="stretch">
-      {/* Header */}
-      <HStack>
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          variant="ghost"
-          size="sm"
-          onClick={close}
+    <>
+    <Box flex="1 1 auto" minH={0} mx={-4} my={-4} w="calc(100% + 2rem)" h="calc(100% + 2rem)">
+      <AppScreen>
+        <AppHeader
+          title="Network connections"
+          onBack={close}
+          trailing={
+            <IconButton
+              aria-label="Add network"
+              title="Add network"
+              icon={<AddIcon />}
+              variant="ghost"
+              minW="44px"
+              h="44px"
+              onClick={() => setTab(<AddChain back={() => setTab(undefined)} />)}
+            />
+          }
         />
-        <Text fontSize="lg" fontWeight="900" color="text.primary" textTransform="uppercase" letterSpacing="tight">
-          Chains
-        </Text>
-        <Spacer />
-      </HStack>
+        <ScreenBody pb={6}>
+          <FormControl mb={4}>
+            <FormLabel htmlFor="network-search">Search networks</FormLabel>
+            <InputGroup>
+              <InputLeftElement pointerEvents="none">
+                <Search2Icon color="fg.muted" />
+              </InputLeftElement>
+              <Input
+                id="network-search"
+                ref={searchInputRef}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Name, chain ID, or RPC host"
+                pl={10}
+              />
+            </InputGroup>
+          </FormControl>
 
-      <Text fontSize="sm" color="text.secondary" fontWeight="500">
-        Manage networks, edit RPC endpoints, and add custom chains.
-      </Text>
-
-      <InputGroup size="sm">
-        <InputLeftElement pointerEvents="none">
-          <Search2Icon color="text.tertiary" boxSize={3.5} />
-        </InputLeftElement>
-        <Input
-          ref={searchInputRef}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search chains"
-          fontWeight="600"
-          pl={10}
-        />
-      </InputGroup>
-
-      {/* Add Chain button */}
-      <Button
-        variant="primary"
-        size="sm"
-        leftIcon={<AddIcon />}
-        onClick={() =>
-          setTab(<AddChain back={() => setTab(undefined)} />)
-        }
-        fontWeight="700"
-        justifyContent="center"
-      >
-        Add Custom Chain
-      </Button>
-
-      {/* Chain List */}
-      <VStack spacing={3} align="stretch">
+          <ListSurface aria-label="Networks">
         {filteredChainEntries.map(([chainName, network]) => (
             <Chain
               key={chainName}
@@ -560,24 +450,28 @@ function Chains({
               }
               onToggleHidden={() => toggleHidden(chainName)}
               onDelete={
-                networksInfo[chainName].isCustom
+                network.isCustom
                   ? () => confirmDelete(chainName)
                   : undefined
               }
             />
           ))}
-        {filteredChainEntries.length === 0 && (
-          <ThemedCard weight="medium" px={4} py={5}>
-            <Text fontSize="sm" fontWeight="700" color="text.secondary" textAlign="center">
-              No chains match "{search.trim()}".
-            </Text>
-          </ThemedCard>
-        )}
-      </VStack>
-
-      {/* Delete confirmation dialog */}
-      {deleteDialog}
-    </VStack>
+          </ListSurface>
+          {filteredChainEntries.length === 0 && (
+            <EmptyState mt={4}>
+              <EmptyStateHeader>
+                <EmptyStateTitle>No matching networks</EmptyStateTitle>
+                <EmptyStateDescription>
+                  Try another network name, chain ID, or RPC host.
+                </EmptyStateDescription>
+              </EmptyStateHeader>
+            </EmptyState>
+          )}
+        </ScreenBody>
+      </AppScreen>
+    </Box>
+    {deleteDialog}
+    </>
   );
 }
 

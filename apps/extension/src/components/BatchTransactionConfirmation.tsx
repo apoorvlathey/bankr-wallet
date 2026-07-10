@@ -21,10 +21,10 @@ import {
   ModalBody,
   ModalFooter,
   useDisclosure,
+  usePrefersReducedMotion,
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import {
-  ArrowBackIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   DeleteIcon,
@@ -66,9 +66,15 @@ import {
 import { isForceInclusionSupportedForAccount, FORCE_INCLUSION_CHAINS } from "@/constants/chainRegistry";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
-import { getResolvedChainById } from "@/lib/chains";
+import { getNativeAssetMeta, getResolvedChainById } from "@/lib/chains";
 import { isDarkThemeId, useTheme, useStripTokens, useChainBadgeStyle, useIconChipBg } from "@/theme";
 import { normalizeTransactionValue } from "@/chrome/transactionValidation";
+import {
+  AssetDeltaRow,
+  ConfirmationScreen,
+  InlineDisclosure,
+  OutcomeCard,
+} from "@/components/ui";
 
 const scaleIn = keyframes`
   0% { transform: scale(0) rotate(-10deg); opacity: 0; }
@@ -201,6 +207,7 @@ function BatchTransactionConfirmation({
 }: BatchTransactionConfirmationProps) {
   const { themeId, tokens } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
+  const prefersReducedMotion = usePrefersReducedMotion();
   // Same theme-aware count badge pattern as Phase 5/8 — see useStripTokens.
   const { bg: stripBg, fg: stripFg } = useStripTokens();
   const iconChipBg = useIconChipBg();
@@ -256,10 +263,9 @@ function BatchTransactionConfirmation({
   const { params, origin, chainName, favicon, chainId } = batchRequest;
   const calls = params.calls;
   const hasDeploymentCall = calls.some((call) => !call.to);
-  const nativeCurrency =
-    resolvedChain?.nativeCurrency ?? chainBadgeConfig.nativeCurrency;
-  const nativeSymbol = nativeCurrency?.symbol || "ETH";
-  const nativeDecimals = nativeCurrency?.decimals ?? 18;
+  const nativeAsset = getNativeAssetMeta(chainId, networksInfo);
+  const nativeSymbol = nativeAsset?.symbol ?? "ETH";
+  const nativeDecimals = nativeAsset?.decimals ?? 18;
 
   const malformedValueInfo = useMemo(() => {
     for (let i = 0; i < calls.length; i++) {
@@ -700,7 +706,7 @@ function BatchTransactionConfirmation({
           display="flex"
           alignItems="center"
           justifyContent="center"
-          animation={`${scaleIn} 0.4s ease-out`}
+          animation={prefersReducedMotion ? undefined : `${scaleIn} 0.4s ease-out`}
           mb={6}
         >
           <Icon viewBox="0 0 24 24" w="50px" h="50px" color="accentFg.highlight">
@@ -714,17 +720,19 @@ function BatchTransactionConfirmation({
               style={{
                 strokeDasharray: 50,
                 strokeDashoffset: 0,
-                animation: `${checkmarkDraw} 0.4s ease-out 0.2s backwards`,
+                animation: prefersReducedMotion
+                  ? undefined
+                  : `${checkmarkDraw} 0.4s ease-out 0.2s backwards`,
               }}
             />
           </Icon>
         </Box>
         <Text
           fontSize="2xl"
-          fontWeight="900"
+          fontWeight={isDarkTheme ? "700" : "900"}
           color="text.primary"
           mb={2}
-          textTransform="uppercase"
+          textTransform={isDarkTheme ? "none" : "uppercase"}
           letterSpacing="tight"
         >
           Batch Sent
@@ -736,24 +744,158 @@ function BatchTransactionConfirmation({
     );
   }
 
+  const screenTitle = titleOverride
+    ? titleOverride.replace(/\s*\([^)]*\)\s*$/, "")
+    : calls.length === 1
+      ? "Review transaction"
+      : "Review batch";
+  const canConfirmBatch = !!customConfirmHandler || accountType !== "impersonator";
+  const confirmDisabledReason = isRejecting
+    ? "Reject in progress"
+    : state === "error"
+      ? "Fix the error above before retrying"
+      : isValueMalformed
+        ? "Transaction value is malformed — signing blocked"
+        : encodingError
+          ? "Unsafe batch — signing blocked"
+          : isCalldataMalformed
+            ? "Calldata is malformed — signing blocked"
+            : isLocalSigningAccount && batchPlan.strategy === "loading"
+              ? "Checking smart account support"
+              : !gasValid
+                ? "Set a valid gas fee — fee fields can't be empty / max fee must cover base + priority"
+                : null;
+
+  const requestStatus = (
+    <VStack spacing={2} align="stretch">
+      {error && state === "error" && (
+        <Box
+          bg="status.error.bg"
+          border="1px solid"
+          borderColor="status.error.border"
+          borderRadius="lg"
+          p={3}
+        >
+          <Text color="status.error.fg" fontSize="sm" fontWeight="700">
+            {error}
+          </Text>
+        </Box>
+      )}
+      {state === "submitting" && (
+        <HStack
+          justify="center"
+          py={3}
+          bg="status.info.bg"
+          border="1px solid"
+          borderColor="status.info.border"
+          borderRadius="lg"
+        >
+          <Spinner size="sm" color="status.info.fg" />
+          <Text color="status.info.fg" fontSize="sm" fontWeight="700">
+            Submitting batch…
+          </Text>
+        </HStack>
+      )}
+      {accountType === "impersonator" && !customConfirmHandler && (
+        <Box
+          bg="accent.highlight"
+          border="1px solid"
+          borderColor="border.default"
+          borderRadius="lg"
+          p={3}
+        >
+          <Text color="accentFg.highlight" fontSize="sm" fontWeight="700">
+            Connected via an impersonated account. Signing is disabled.
+          </Text>
+        </Box>
+      )}
+      {canConfirmBatch && confirmDisabledReason && state !== "submitting" && (
+        <Text role="status" color="text.secondary" fontSize="xs">
+          Confirm unavailable: {confirmDisabledReason}
+        </Text>
+      )}
+    </VStack>
+  );
+
   return (
-    <Box
-      pt="clamp(1.25rem, calc(8vh - 36px), 3rem)"
-      px={3}
-      pb={3}
-      h="100%"
-      overflowY="auto"
-      bg={pageBgColor ?? "surface.base"}
-      css={{
-        "&::-webkit-scrollbar": { width: "4px" },
-        "&::-webkit-scrollbar-track": { background: "transparent" },
-        "&::-webkit-scrollbar-thumb": {
-          background: "var(--chakra-colors-border-strong)",
-          borderRadius: "2px",
-        },
-      }}
-    >
-      <VStack spacing={2} align="stretch" minH="100%">
+    <>
+      <ConfirmationScreen
+        title={screenTitle}
+        onBack={onBack}
+        bg={pageBgColor ?? "surface.base"}
+        trailing={
+          <CopyButton
+            label="Copy batch JSON"
+            value={JSON.stringify(
+              calls.map((call) => ({
+                to: call.to || null,
+                value: call.value && call.value !== "0x0" ? call.value : "0",
+                data: call.data || "0x",
+              })),
+              null,
+              2,
+            )}
+          />
+        }
+        outcome={
+          <OutcomeCard
+            outcome={
+              calls.length === 1
+                ? "Execute 1 action"
+                : `Execute ${calls.length} actions together`
+            }
+            context={
+              <VStack align="stretch" spacing={2}>
+                <Text fontSize="sm">
+                  Requested by {originHostname || origin} on{" "}
+                  {resolvedChain?.name ?? chainName}
+                </Text>
+                <HStack spacing={1.5} flexWrap="wrap">
+                <Badge variant={isNonAtomic ? "warning" : "info"}>
+                  {isNonAtomic ? "Sequential" : "Atomic"}
+                </Badge>
+                {simulationReverted && <Badge variant="error">Likely to fail</Badge>}
+                {simulationUnavailable && !simulationReverted && (
+                  <Badge variant="warning">Not simulated</Badge>
+                )}
+                </HStack>
+              </VStack>
+            }
+          />
+        }
+        financialImpact={
+          <VStack spacing={0} align="stretch">
+            {totalValueWei > 0n && (
+              <AssetDeltaRow
+                direction="send"
+                asset={nativeSymbol}
+                amount={
+                  <NativeValueAmount
+                    value={totalValueWei}
+                    symbol={nativeSymbol}
+                    decimals={nativeDecimals}
+                    fontSize="md"
+                    fontWeight="600"
+                  />
+                }
+                meta={`Total native value across ${calls.length} ${calls.length === 1 ? "action" : "actions"}`}
+              />
+            )}
+            <AssetChangesDisplay
+              txRequest={syntheticTxRequest}
+              batchCalls={calls.map((call) => ({
+                to: call.to,
+                data: call.data,
+                value: call.value,
+              }))}
+              isNonAtomic={isNonAtomic}
+              onRevertedChange={setSimulationReverted}
+              onSimulationUnavailableChange={setSimulationUnavailable}
+            />
+          </VStack>
+        }
+        context={
+          <VStack spacing={3} align="stretch">
         {/* Top row — navigation centered + Reject All on right, only when
             multiple pending requests. chart.negative is the only token that's
             RED in both themes (status.error.fg is white in Bauhaus). */}
@@ -769,8 +911,9 @@ function BatchTransactionConfirmation({
                 onClick={() => onNavigate("prev")}
                 color="text.secondary"
                 _hover={{ color: "text.primary", bg: "bg.muted" }}
-                minW="auto"
-                p={1}
+                minW="32px"
+                h="32px"
+                p={0}
               />
               <Badge
                 bg={stripBg}
@@ -791,8 +934,9 @@ function BatchTransactionConfirmation({
                 onClick={() => onNavigate("next")}
                 color="text.secondary"
                 _hover={{ color: "text.primary", bg: "bg.muted" }}
-                minW="auto"
-                p={1}
+                minW="32px"
+                h="32px"
+                p={0}
               />
             </HStack>
             <Button
@@ -810,125 +954,6 @@ function BatchTransactionConfirmation({
             </Button>
           </Flex>
         )}
-
-        {/* Header row — back + title banner + copy, all inline.
-            `mb` only kicks in once the viewport is tall enough (~700px+);
-            popup windows stay tight against the info card. */}
-        <HStack spacing={2} align="center" mb="clamp(0px, calc(8vh - 56px), 3rem)">
-          <IconButton
-            aria-label="Back"
-            icon={<ArrowBackIcon />}
-            variant="ghost"
-            size="md"
-            px={2}
-            onClick={onBack}
-            flexShrink={0}
-          />
-
-          <Box
-            flex="1"
-            minW={0}
-            bg="accent.secondary"
-            border={tokens.borders.medium}
-            borderColor="border.default"
-            borderRadius="lg"
-            boxShadow="card"
-            py={1.5}
-            px={3}
-            position="relative"
-          >
-            {!isDarkTheme && (
-              <Box
-                position="absolute"
-                top="-3px"
-                right="-3px"
-                w="8px"
-                h="8px"
-                bg="accent.highlight"
-                border="2px solid"
-                borderColor="border.default"
-              />
-            )}
-            {(() => {
-              // Split "X (Y calls)" into a main title line and a count line
-              // so the pill can stack them vertically. titleOverride follows
-              // the same "main (count)" pattern as the default, so we parse
-              // rather than expanding the API to two separate props.
-              const fullTitle =
-                titleOverride ??
-                (calls.length === 1
-                  ? "Transaction Request"
-                  : `Batch Transaction (${calls.length} calls)`);
-              const openParen = fullTitle.lastIndexOf("(");
-              const hasCount = openParen > 0 && fullTitle.endsWith(")");
-              const titleMain = hasCount ? fullTitle.slice(0, openParen).trim() : fullTitle;
-              const titleCount = hasCount
-                ? fullTitle.slice(openParen + 1, -1).trim()
-                : null;
-              return (
-                <VStack spacing={0.5}>
-                  <Text
-                    fontWeight="900"
-                    fontSize="sm"
-                    color="accentFg.secondary"
-                    textAlign="center"
-                    textTransform="uppercase"
-                    letterSpacing="wider"
-                    noOfLines={1}
-                  >
-                    {titleMain}
-                  </Text>
-                  {(titleCount || (isNonAtomic && calls.length > 1)) && (
-                    <HStack spacing={1.5} justify="center">
-                      {titleCount && (
-                        <Text
-                          fontWeight="800"
-                          fontSize="2xs"
-                          color="accentFg.secondary"
-                          textTransform="uppercase"
-                          letterSpacing="wider"
-                          opacity={0.85}
-                        >
-                          ({titleCount})
-                        </Text>
-                      )}
-                      {isNonAtomic && calls.length > 1 && (
-                        <Badge
-                          bg="accent.highlight"
-                          color="accentFg.highlight"
-                          fontSize="9px"
-                          fontWeight="900"
-                          px={1.5}
-                          py={0.5}
-                          border="1.5px solid"
-                          borderColor="border.default"
-                          textTransform="uppercase"
-                          letterSpacing="wider"
-                        >
-                          Auto-Sequential
-                        </Badge>
-                      )}
-                    </HStack>
-                  )}
-                </VStack>
-              );
-            })()}
-          </Box>
-
-          <Box flexShrink={0}>
-            <CopyButton
-              value={JSON.stringify(
-                calls.map((c) => ({
-                  to: c.to || null,
-                  value: c.value && c.value !== "0x0" ? c.value : "0",
-                  data: c.data || "0x",
-                })),
-                null,
-                2,
-              )}
-            />
-          </Box>
-        </HStack>
 
         {/* Simulated-revert banner — top-of-screen warning so the user
             sees "this is likely to fail" before any other banner, the
@@ -1253,6 +1278,16 @@ function BatchTransactionConfirmation({
             )}
           </VStack>
         </Box>
+        {requestStatus}
+          </VStack>
+        }
+        advancedDetails={
+          <VStack spacing={3} align="stretch">
+            <InlineDisclosure
+              label={`Actions (${calls.length})`}
+              description="Review decoded calls, edit calldata, or remove eligible actions."
+            >
+              <VStack spacing={2} align="stretch" pt={3}>
 
         {/* Calls List */}
         <VStack spacing={1.5} align="stretch">
@@ -1337,23 +1372,14 @@ function BatchTransactionConfirmation({
               return <Box key={index}>{card}</Box>;
             }
 
-            // Cross-dapp batch only: tiny trash button absolutely positioned
-            // on the right edge of the call card. Hidden by default, fades in
-            // when hovering the call. Absolute positioning means it doesn't
-            // take up layout space, so calls don't shift on hover.
+            // Cross-dapp batch only: keep the remove action in the chevron's
+            // footprint so the card does not shift. It remains visible and
+            // keyboard/touch reachable instead of depending on hover.
             return (
               <Box
                 key={index}
                 position="relative"
-                sx={{
-                  // On hover: fade in the trash icon and fade out the chevron
-                  // so the two never visually compete in the same slot.
-                  "&:hover .delete-call-btn": {
-                    opacity: 1,
-                    pointerEvents: "auto",
-                  },
-                  "&:hover .call-chevron": { opacity: 0 },
-                }}
+                sx={{ "& .call-chevron": { opacity: 0 } }}
               >
                 {card}
                 <Box
@@ -1371,9 +1397,6 @@ function BatchTransactionConfirmation({
                   height={callOrigin?.origin ? "46px" : "32px"}
                   display="flex"
                   alignItems="center"
-                  opacity={0}
-                  pointerEvents="none"
-                  transition="opacity 0.12s ease-out"
                   zIndex={2}
                 >
                   <Box
@@ -1382,7 +1405,12 @@ function BatchTransactionConfirmation({
                     cursor="pointer"
                     bg="transparent"
                     border="none"
+                    minW="32px"
+                    h="32px"
                     p={0}
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
                     lineHeight={0}
                     color="chart.negative"
                     transition="color 0.12s ease-out, transform 0.12s ease-out, filter 0.12s ease-out"
@@ -1391,7 +1419,11 @@ function BatchTransactionConfirmation({
                       transform: "scale(1.15)",
                     }}
                     _active={{ transform: "scale(0.95)" }}
-                    onClick={(e) => {
+                    _focusVisible={{
+                      outline: "none",
+                      boxShadow: "focus",
+                    }}
+                    onClick={(e: React.MouseEvent<HTMLElement>) => {
                       e.stopPropagation();
                       onRemoveCall(index);
                     }}
@@ -1405,14 +1437,14 @@ function BatchTransactionConfirmation({
           })}
         </VStack>
 
-        {/* Asset Changes (simulate each call individually to avoid self-call issue) */}
-        <AssetChangesDisplay
-          txRequest={syntheticTxRequest}
-          batchCalls={calls.map((c) => ({ to: c.to, data: c.data, value: c.value }))}
-          isNonAtomic={isNonAtomic}
-          onRevertedChange={setSimulationReverted}
-          onSimulationUnavailableChange={setSimulationUnavailable}
-        />
+              </VStack>
+            </InlineDisclosure>
+
+            <InlineDisclosure
+              label="Advanced details"
+              description="Network fees, encoded calldata, simulation tools, and batching options."
+            >
+              <VStack spacing={3} align="stretch" pt={3}>
 
         {/* Gas Estimate */}
         <MultiTxGasEstimateDisplay
@@ -1477,18 +1509,7 @@ function BatchTransactionConfirmation({
             return `https://dashboard.tenderly.co/simulator/new?${tenderlyParams}`;
           })();
           return (
-            <Box
-              mt="auto"
-              position="sticky"
-              bottom={-3}
-              bg={pageBgColor ?? "surface.base"}
-              pt={1}
-              pb={1}
-              mx={-3}
-              px={3}
-              zIndex={1}
-            >
-              <VStack spacing={2} align="stretch">
+            <VStack spacing={2} align="stretch">
                 {/* ERC-8213: outer calldata digest for the actual ERC-7821
                     self-call signed by PK/SP atomic-7702 batches. Per-call
                     digests still live inside each CallCard. */}
@@ -1566,15 +1587,15 @@ function BatchTransactionConfirmation({
                           flexShrink={0}
                         >
                           <Button
-                            variant="highlight"
+                            variant="outline"
                             onClick={handleAddBundleToBatch}
                             isDisabled={!!addToBatchDisabledReason || isAddingToBatch}
                             isLoading={isAddingToBatch}
                             aria-label="Add to batch"
-                            fontWeight="800"
-                            textTransform="uppercase"
-                            letterSpacing="wide"
-                            fontSize="2xs"
+                            fontWeight="600"
+                            textTransform="none"
+                            letterSpacing="normal"
+                            fontSize="xs"
                             px={2.5}
                             h="full"
                             minH={8}
@@ -1589,144 +1610,52 @@ function BatchTransactionConfirmation({
                   </HStack>
                 )}
 
-                {/* Error Display */}
-                {error && state === "error" && (
-                  <Box
-                    bg="status.error.bg"
-                    border={tokens.borders.medium}
-                    borderColor="border.default"
-                    borderRadius="lg"
-                    boxShadow="card"
-                    p={3}
-                  >
-                    <Text color="status.error.fg" fontSize="sm" fontWeight="700">
-                      {error}
-                    </Text>
-                  </Box>
-                )}
-
-                {/* Submitting */}
-                {state === "submitting" && (
-                  <HStack
-                    justify="center"
-                    py={3}
-                    bg="status.info.bg"
-                    border={tokens.borders.medium}
-                    borderColor="border.default"
-                    borderRadius="lg"
-                  >
-                    <Spinner size="sm" color="status.info.fg" />
-                    <Text
-                      fontSize="sm"
-                      color="status.info.fg"
-                      fontWeight="700"
-                      textTransform="uppercase"
-                    >
-                      Submitting batch...
-                    </Text>
-                  </HStack>
-                )}
-
-                {/* Impersonator Info Box */}
-                {accountType === "impersonator" && !customConfirmHandler && (
-                  <Box
-                    bg="accent.highlight"
-                    border={tokens.borders.medium}
-                    borderColor="border.default"
-                    borderRadius="lg"
-                    boxShadow="card"
-                    p={3}
-                  >
-                    <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
-                      Connected via Impersonated account — signing is disabled.
-                    </Text>
-                  </Box>
-                )}
-
-                {/* Action Buttons */}
-                {state !== "submitting" && (
-                  <HStack spacing={3} pb={1}>
-                    <Button
-                      variant="secondary"
-                      flex={1}
-                      onClick={handleReject}
-                      isLoading={isRejecting}
-                      spinner={
-                        <Spinner
-                          size="sm"
-                          sx={{ animationDirection: "reverse" }}
-                        />
-                      }
-                    >
-                      Reject
-                    </Button>
-                    {/*
-                     * Cross-dapp batches always show Confirm (the user is on
-                     * a Bankr account by definition and the ship goes through
-                     * the Bankr API). For dapp-initiated batches, read-only
-                     * impersonator accounts can't sign, so we hide the button.
-                     */}
-                    {(customConfirmHandler || accountType !== "impersonator") && (() => {
-                      // Surface the actual reason the Confirm button is
-                      // disabled instead of leaving the user staring at a
-                      // greyed-out CTA. Order: most actionable first.
-                      const confirmDisabledReason = isRejecting
-                        ? "Reject in progress"
-                        : state === "error"
-                          ? "Fix the error above before retrying"
-                          : isValueMalformed
-                            ? "Transaction value is malformed — signing blocked"
-                            : encodingError
-                              ? "Unsafe batch — signing blocked"
-                              : isCalldataMalformed
-                                ? "Calldata is malformed — signing blocked"
-                                : isLocalSigningAccount &&
-                                    batchPlan.strategy === "loading"
-                                  ? "Checking smart account support"
-                                  : !gasValid
-                                    ? "Set a valid gas fee — fee fields can't be empty / max fee must cover base + priority"
-                                    : null;
-                      return (
-                        <Box
-                          flex={1}
-                          // Force the Tooltip's wrapping <span> (created by
-                          // shouldWrapChildren) to fill flex={1} so the
-                          // Confirm button sits flush with Reject instead of
-                          // shrinking to its content width.
-                          sx={{ "& > span": { display: "block", w: "full" } }}
-                        >
-                          <Tooltip
-                            label={confirmDisabledReason ?? ""}
-                            isDisabled={!confirmDisabledReason}
-                            hasArrow
-                            fontSize="xs"
-                            placement="top"
-                            shouldWrapChildren
-                          >
-                            <Button
-                              variant="highlight"
-                              w="full"
-                              onClick={handleConfirm}
-                              isDisabled={!!confirmDisabledReason}
-                              // "Confirm Batch" is longer than the default
-                              // "Confirm" — shrink the font so it sits
-                              // comfortably next to Reject without wrapping.
-                              fontSize={customConfirmHandler ? "sm" : undefined}
-                              px={customConfirmHandler ? 2 : undefined}
-                            >
-                              {customConfirmHandler ? "Confirm Batch" : "Confirm"}
-                            </Button>
-                          </Tooltip>
-                        </Box>
-                      );
-                    })()}
-                  </HStack>
-                )}
               </VStack>
-            </Box>
           );
         })()}
-      </VStack>
+              </VStack>
+            </InlineDisclosure>
+          </VStack>
+        }
+        confirmAction={
+          canConfirmBatch ? (
+            <Button
+              variant="primary"
+              w="full"
+              onClick={handleConfirm}
+              isDisabled={!!confirmDisabledReason || state === "submitting"}
+              isLoading={state === "submitting"}
+            >
+              {customConfirmHandler ? "Confirm batch" : "Confirm"}
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              w="full"
+              onClick={handleReject}
+              isLoading={isRejecting}
+              isDisabled={state === "submitting"}
+              spinner={<Spinner size="sm" sx={{ animationDirection: "reverse" }} />}
+            >
+              Reject
+            </Button>
+          )
+        }
+        rejectAction={
+          canConfirmBatch ? (
+            <Button
+              variant="secondary"
+              w="full"
+              onClick={handleReject}
+              isLoading={isRejecting}
+              isDisabled={state === "submitting"}
+              spinner={<Spinner size="sm" sx={{ animationDirection: "reverse" }} />}
+            >
+              Reject
+            </Button>
+          ) : undefined
+        }
+      />
 
       {/* Split-mode confirmation modal */}
       <Modal isOpen={isSplitModalOpen} onClose={onSplitModalClose} isCentered>
@@ -1829,7 +1758,7 @@ function BatchTransactionConfirmation({
           </ModalFooter>
         </ModalContent>
       </Modal>
-    </Box>
+    </>
   );
 }
 

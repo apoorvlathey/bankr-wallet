@@ -13,6 +13,7 @@ import {
   SimpleGrid,
   Spinner,
   Textarea,
+  type ButtonProps,
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import {
@@ -26,6 +27,19 @@ import {
 } from "@chakra-ui/icons";
 import { IconBox } from "@/theme";
 import SeedAddressPicker from "./SeedAddressPicker";
+import {
+  AppHeader,
+  AppScreen,
+  ListItem,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
+  ListItemTitle,
+  ListSurface,
+  ScreenBody,
+  ScreenSection,
+  StickyActionBar,
+} from "@/components/ui";
 
 type Mode = "choose" | "generate" | "import" | "pick";
 
@@ -44,77 +58,45 @@ interface SeedPhraseSetupProps {
 // Lifted to module scope so identity is stable across renders — otherwise
 // re-defining these on every render remounts the entire subtree on each
 // keystroke and kills focus on the name inputs.
-const Wrapper = ({
+const SetupFrame = ({
   isOnboarding,
+  title,
+  onBack,
+  action,
   children,
 }: {
   isOnboarding: boolean;
+  title: string;
+  onBack: () => void;
+  action?: React.ReactElement<ButtonProps>;
   children: React.ReactNode;
 }) =>
   isOnboarding ? (
     <VStack spacing={6} w="full" maxW="400px" align="stretch">
+      <HStack w="full" justify="space-between" align="center">
+        <IconButton
+          aria-label="Back"
+          icon={<ArrowBackIcon />}
+          variant="ghost"
+          size="sm"
+          onClick={onBack}
+        />
+        <Text fontWeight="700" fontSize="md" color="fg.primary" flex={1} textAlign="center" mx={2}>
+          {title}
+        </Text>
+        <Box w="32px" flexShrink={0} />
+      </HStack>
       {children}
+      {action}
     </VStack>
   ) : (
-    <Box p={4} h="100%" overflowY="auto" bg="surface.base">
-      <VStack spacing={4} align="stretch">
-        {children}
-      </VStack>
-    </Box>
-  );
-
-const Header = ({
-  isOnboarding,
-  title,
-  onBackClick,
-}: {
-  isOnboarding: boolean;
-  title: string;
-  onBackClick: () => void;
-}) =>
-  isOnboarding ? (
-    <HStack w="full" justify="space-between" align="center">
-      <IconButton
-        aria-label="Back"
-        icon={<ArrowBackIcon />}
-        variant="ghost"
-        size="sm"
-        onClick={onBackClick}
-      />
-      <Text
-        fontWeight="900"
-        fontSize="md"
-        color="text.primary"
-        textTransform="uppercase"
-        letterSpacing="wide"
-        noOfLines={1}
-        flex={1}
-        textAlign="center"
-        mx={2}
-      >
-        {title}
-      </Text>
-      <Box w="32px" flexShrink={0} />
-    </HStack>
-  ) : (
-    <HStack spacing={3}>
-      <IconButton
-        aria-label="Back"
-        icon={<ArrowBackIcon />}
-        variant="ghost"
-        size="sm"
-        onClick={onBackClick}
-      />
-      <Text
-        fontWeight="900"
-        fontSize="lg"
-        color="text.primary"
-        textTransform="uppercase"
-        letterSpacing="wide"
-      >
-        {title}
-      </Text>
-    </HStack>
+    <AppScreen>
+      <AppHeader title={title} onBack={onBack} />
+      <ScreenBody pt={5}>
+        <VStack spacing={6} align="stretch">{children}</VStack>
+      </ScreenBody>
+      {action && <StickyActionBar primaryAction={action} />}
+    </AppScreen>
   );
 
 function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps) {
@@ -266,42 +248,59 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   if (generatedMnemonic) {
     const words = generatedMnemonic.split(" ");
     return (
-      <Wrapper isOnboarding={isOnboarding}>
-          <Header
-            isOnboarding={isOnboarding}
-            title="Save Your Seed Phrase"
-            onBackClick={() => {
+      <SetupFrame
+        isOnboarding={isOnboarding}
+        title="Save your seed phrase"
+        onBack={() => {
               if (!confirmed) {
                 setGeneratedMnemonic(null);
                 setMode("choose");
               } else {
                 onComplete();
               }
+        }}
+        action={
+          <Button
+            variant="primary"
+            w="full"
+            onClick={() => {
+              setConfirmed(true);
+              if (onCollect) {
+                onCollect(
+                  generatedMnemonic,
+                  [0],
+                  displayName.trim() || undefined,
+                  accountDisplayName.trim() || undefined,
+                );
+              } else {
+                toast({
+                  title: "Account added",
+                  description: "Seed phrase account has been created",
+                  status: "success",
+                  duration: 2000,
+                });
+                onComplete();
+              }
             }}
-          />
+          >
+            I’ve saved my seed phrase
+          </Button>
+        }
+      >
 
           <Box
             bg="status.error.bg"
-            border="2px solid"
+            border="1px solid"
             borderColor="status.error.border"
-            borderRadius="lg"
-            boxShadow="card"
+            borderRadius="md"
             p={3}
           >
-            <Text fontSize="xs" color="status.error.fg" fontWeight="700">
-              Write down these 12 words in order. This is the ONLY way to recover your accounts. Never share your seed phrase!
+            <Text fontSize="sm" color="status.error.fg" fontWeight="600">
+              Write down these 12 words in order. They are the only way to recover these accounts. Never share them.
             </Text>
           </Box>
 
-          <Box
-            bg="surface.raised"
-            border="2px solid"
-            borderColor="border.default"
-            borderRadius="lg"
-            boxShadow="card"
-            p={4}
-            position="relative"
-          >
+          <ScreenSection title="Recovery phrase">
             <HStack justify="flex-end" mb={2}>
               <IconButton
                 aria-label={showMnemonic ? "Hide" : "Show"}
@@ -328,7 +327,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
                 <HStack
                   key={i}
                   bg="surface.sunken"
-                  border="2px solid"
+                  border="1px solid"
                   borderColor="border.default"
                   borderRadius="md"
                   px={2}
@@ -344,60 +343,23 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
                 </HStack>
               ))}
             </SimpleGrid>
-          </Box>
-
-          <Button
-            variant="primary"
-            w="full"
-            onClick={() => {
-              setConfirmed(true);
-              if (onCollect) {
-                // collectOnly mode: pass mnemonic back without saving.
-                // Generate flow only ever creates index 0 — picker is
-                // import-only since fresh mnemonics have nothing to discover.
-                onCollect(
-                  generatedMnemonic,
-                  [0],
-                  displayName.trim() || undefined,
-                  accountDisplayName.trim() || undefined
-                );
-              } else {
-                toast({
-                  title: "Account added",
-                  description: "Seed phrase account has been created",
-                  status: "success",
-                  duration: 2000,
-                });
-                onComplete();
-              }
-            }}
-          >
-            I've Saved My Seed Phrase
-          </Button>
-      </Wrapper>
+          </ScreenSection>
+      </SetupFrame>
     );
   }
 
   // Choose mode: generate or import
   if (mode === "choose") {
     return (
-      <Wrapper isOnboarding={isOnboarding}>
-          <Header isOnboarding={isOnboarding} title="Seed Phrase" onBackClick={onBack} />
-
-          <VStack spacing={3} align="stretch">
-            <Box
-              as="button"
-              w="full"
-              p={4}
-              bg="surface.raised"
-              border="2px solid"
-              borderColor="border.default"
-              borderRadius="lg"
-              boxShadow="card"
-              textAlign="left"
-              disabled={isSubmitting}
-              opacity={isSubmitting ? 0.6 : 1}
-              cursor={isSubmitting ? "not-allowed" : "pointer"}
+      <SetupFrame isOnboarding={isOnboarding} title="Seed phrase" onBack={onBack}>
+        <ScreenSection
+          title="Choose how to continue"
+          description="Create a new recovery phrase or import one you already control."
+        >
+          <ListSurface>
+            <ListItem
+              interactive
+              isDisabled={isSubmitting}
               onClick={() => {
                 if (onCollect) {
                   // Skip the intermediate "name your account" screen during
@@ -408,92 +370,83 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
                   setMode("generate");
                 }
               }}
-              _hover={isSubmitting ? {} : { bg: "surface.raisedHover" }}
             >
-              <HStack spacing={3} align="center">
+              <ListItemMedia>
                 <IconBox size="32px" bg="accent.primary" noShadow>
                   <AddIcon color="accentFg.primary" boxSize="14px" />
                 </IconBox>
-                <VStack align="start" spacing={1} flex={1}>
-                  <Text fontSize="sm" fontWeight="900" color="text.primary" textTransform="uppercase">
-                    Generate New
-                  </Text>
-                  <Text fontSize="xs" color="text.secondary" fontWeight="500">
-                    Create a new 12-word seed phrase and derive your first account
-                  </Text>
-                </VStack>
-                {isSubmitting && <Spinner size="sm" color="accent.primary" flexShrink={0} />}
-              </HStack>
-            </Box>
+              </ListItemMedia>
+              <ListItemContent>
+                <ListItemTitle>Generate new phrase</ListItemTitle>
+                <ListItemDescription>
+                  Create 12 recovery words and your first account
+                </ListItemDescription>
+              </ListItemContent>
+              {isSubmitting && <Spinner size="sm" color="accent.primary" flexShrink={0} />}
+            </ListItem>
 
-            <Box
-              as="button"
-              w="full"
-              p={4}
-              bg="surface.raised"
-              border="2px solid"
-              borderColor="border.default"
-              borderRadius="lg"
-              boxShadow="card"
-              textAlign="left"
-              disabled={isSubmitting}
-              opacity={isSubmitting ? 0.6 : 1}
-              cursor={isSubmitting ? "not-allowed" : "pointer"}
+            <ListItem
+              interactive
+              isDisabled={isSubmitting}
               onClick={() => setMode("import")}
-              _hover={isSubmitting ? {} : { bg: "surface.raisedHover" }}
             >
-              <HStack spacing={3} align="center">
+              <ListItemMedia>
                 <IconBox size="32px" bg="accent.secondary" noShadow>
                   <DownloadIcon color="accentFg.secondary" boxSize="14px" />
                 </IconBox>
-                <VStack align="start" spacing={1} flex={1}>
-                  <Text fontSize="sm" fontWeight="900" color="text.primary" textTransform="uppercase">
-                    Import Existing
-                  </Text>
-                  <Text fontSize="xs" color="text.secondary" fontWeight="500">
-                    Import a 12-word seed phrase from another wallet
-                  </Text>
-                </VStack>
-              </HStack>
-            </Box>
-          </VStack>
-      </Wrapper>
+              </ListItemMedia>
+              <ListItemContent>
+                <ListItemTitle>Import existing phrase</ListItemTitle>
+                <ListItemDescription>
+                  Add 12 recovery words from another wallet
+                </ListItemDescription>
+              </ListItemContent>
+            </ListItem>
+          </ListSurface>
+        </ScreenSection>
+      </SetupFrame>
     );
   }
 
   // Generate mode form (display name + generate button)
   if (mode === "generate") {
     return (
-      <Wrapper isOnboarding={isOnboarding}>
-          <Header isOnboarding={isOnboarding} title="Generate Seed Phrase" onBackClick={() => setMode("choose")} />
-
+      <SetupFrame
+        isOnboarding={isOnboarding}
+        title="Generate seed phrase"
+        onBack={() => setMode("choose")}
+        action={
+          <Button
+            variant="primary"
+            w="full"
+            onClick={handleGenerate}
+            isLoading={isSubmitting}
+            loadingText="Generating…"
+          >
+            Generate seed phrase
+          </Button>
+        }
+      >
           {onCollect ? (
             <Box
-              bg="surface.raised"
-              border="2px solid"
-              borderColor="border.default"
-              borderRadius="lg"
-              boxShadow="card"
-              p={4}
+              bg="surface.sunken"
+              border="1px solid"
+              borderColor="border.subtle"
+              borderRadius="md"
+              p={3}
             >
-              <Text fontSize="sm" color="text.secondary" fontWeight="500">
+              <Text fontSize="sm" color="fg.secondary">
                 A new 12-word recovery phrase will be generated for your wallet. You can name your account later from settings.
               </Text>
             </Box>
           ) : (
-            <Box
-              bg="surface.raised"
-              border="2px solid"
-              borderColor="border.default"
-              borderRadius="lg"
-              boxShadow="card"
-              p={4}
+            <ScreenSection
+              title="Name your seed group"
+              description="Both names are optional and can be changed later."
             >
               <VStack spacing={4} align="stretch">
                 <FormControl>
-                  <FormLabel fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-                    Group Name (Optional)
-                  </FormLabel>
+                  <FormLabel>Group name</FormLabel>
                   <Input
                     placeholder="e.g., My Seed Wallet"
                     value={displayName}
@@ -502,9 +455,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
                 </FormControl>
 
                 <FormControl>
-                  <FormLabel fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-                    Account Display Name (Optional)
-                  </FormLabel>
+                  <FormLabel>Account display name</FormLabel>
                   <Input
                     placeholder="e.g., Main Account"
                     value={accountDisplayName}
@@ -512,27 +463,17 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
                   />
                 </FormControl>
               </VStack>
-            </Box>
+            </ScreenSection>
           )}
 
           {error && (
-            <Box bg="status.error.bg" border="2px solid" borderColor="status.error.border" borderRadius="md" p={2}>
-              <Text fontSize="xs" color="status.error.fg" fontWeight="700">
+            <Box bg="status.error.bg" border="1px solid" borderColor="status.error.border" borderRadius="md" p={3}>
+              <Text fontSize="sm" color="status.error.fg" fontWeight="600">
                 {error}
               </Text>
             </Box>
           )}
-
-          <Button
-            variant="primary"
-            w="full"
-            onClick={handleGenerate}
-            isLoading={isSubmitting}
-            loadingText="Generating..."
-          >
-            Generate Seed Phrase
-          </Button>
-      </Wrapper>
+      </SetupFrame>
     );
   }
 
@@ -555,10 +496,9 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
         intro={
           <Box
             bg="surface.raised"
-            border="2px solid"
-            borderColor="border.default"
-            borderRadius="lg"
-            boxShadow="card"
+            border="1px solid"
+            borderColor="border.subtle"
+            borderRadius="md"
             p={3}
           >
             <Text fontSize="xs" color="text.secondary" fontWeight="500">
@@ -572,22 +512,30 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
 
   // Import mode form
   return (
-    <Wrapper isOnboarding={isOnboarding}>
-        <Header isOnboarding={isOnboarding} title="Import Seed Phrase" onBackClick={() => setMode("choose")} />
-
-        <Box
-          bg="surface.raised"
-          border="2px solid"
-          borderColor="border.default"
-          borderRadius="lg"
-          boxShadow="card"
-          p={4}
+    <SetupFrame
+      isOnboarding={isOnboarding}
+      title="Import seed phrase"
+      onBack={() => setMode("choose")}
+      action={
+        <Button
+          variant="primary"
+          w="full"
+          onClick={handleImport}
+          isLoading={isSubmitting}
+          loadingText="Deriving…"
+          isDisabled={!importedMnemonic.trim()}
+        >
+          Continue
+        </Button>
+      }
+    >
+        <ScreenSection
+          title="Enter your recovery phrase"
+          description="Use the exact 12 words in the original order."
         >
           <VStack spacing={4} align="stretch">
             <FormControl isInvalid={!!error}>
-              <FormLabel fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-                12-Word Seed Phrase
-              </FormLabel>
+              <FormLabel>12-word seed phrase</FormLabel>
               <Textarea
                 placeholder="Enter your 12-word seed phrase separated by spaces"
                 value={importedMnemonic}
@@ -608,9 +556,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
             {!onCollect && (
               <>
                 <FormControl>
-                  <FormLabel fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-                    Group Name (Optional)
-                  </FormLabel>
+                  <FormLabel>Group name</FormLabel>
                   <Input
                     placeholder="e.g., My Imported Seed"
                     value={displayName}
@@ -619,9 +565,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
                 </FormControl>
 
                 <FormControl>
-                  <FormLabel fontSize="xs" color="text.secondary" fontWeight="700" textTransform="uppercase">
-                    Account Display Name (Optional)
-                  </FormLabel>
+                  <FormLabel>Account display name</FormLabel>
                   <Input
                     placeholder="e.g., Main Account"
                     value={accountDisplayName}
@@ -631,32 +575,20 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               </>
             )}
           </VStack>
-        </Box>
+        </ScreenSection>
 
         <Box
           bg="status.warning.bg"
-          border="2px solid"
+          border="1px solid"
           borderColor="status.warning.border"
-          borderRadius="lg"
-          boxShadow="card"
+          borderRadius="md"
           p={3}
         >
-          <Text fontSize="sm" color="status.warning.fg" fontWeight="700">
+          <Text fontSize="sm" color="status.warning.fg" fontWeight="600">
             Your seed phrase will be encrypted and stored locally. Never share it with anyone.
           </Text>
         </Box>
-
-        <Button
-          variant="primary"
-          w="full"
-          onClick={handleImport}
-          isLoading={isSubmitting}
-          loadingText="Deriving..."
-          isDisabled={!importedMnemonic.trim()}
-        >
-          Continue
-        </Button>
-    </Wrapper>
+    </SetupFrame>
   );
 }
 

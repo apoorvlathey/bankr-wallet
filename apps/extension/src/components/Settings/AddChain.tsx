@@ -6,19 +6,19 @@ import {
   VStack,
   HStack,
   Text,
-  IconButton,
-  Spacer,
   FormControl,
   FormLabel,
   Alert,
   AlertIcon,
   Spinner,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, ExternalLinkIcon, WarningTwoIcon } from "@chakra-ui/icons";
+import { ExternalLinkIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
-import { isDarkThemeId, useTheme } from "@/theme";
 import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import { KNOWN_CHAINS } from "@/constants/knownChains.generated";
+import { InlineDisclosure } from "@/components/ui";
+import { AddChainConfirmationScreen } from "./AddChainConfirmationScreen";
+import { SettingsScreenFrame } from "./SettingsScreenFrame";
 
 interface AddChainProps {
   back: (options?: { added?: boolean }) => void;
@@ -57,8 +57,6 @@ function AddChain({
   onAdded,
 }: AddChainProps) {
   const { networksInfo, setReloadRequired } = useNetworks();
-  const { themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
 
   const defaultName = initialRequest?.chainName ?? "";
   const defaultChainId =
@@ -78,6 +76,7 @@ function AddChain({
   const [currencyDecimals, setCurrencyDecimals] = useState(defaultCurrencyDecimals);
   const [isBtnLoading, setIsBtnLoading] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
+  const [technicalOpen, setTechnicalOpen] = useState(!defaultRpc);
 
   // Validation states
   const [nameError, setNameError] = useState("");
@@ -184,6 +183,7 @@ function AddChain({
     setRpcWarning("");
 
     if (!chainName || !chainId || !rpc) {
+      if (!rpc) setTechnicalOpen(true);
       setIsBtnLoading(false);
       return;
     }
@@ -199,8 +199,10 @@ function AddChain({
     const detectedId = await fetchChainId(rpc);
     if (detectedId === null) {
       setRpcWarning("Could not verify RPC — endpoint may be down. Chain saved anyway.");
+      setTechnicalOpen(true);
     } else if (detectedId !== parseInt(chainId)) {
       setRpcWarning(`RPC returned chain ID ${detectedId}, but you entered ${chainId}. Please verify.`);
+      setTechnicalOpen(true);
       setIsBtnLoading(false);
       return;
     }
@@ -237,6 +239,7 @@ function AddChain({
 
       if (!result.success) {
         setRpcWarning(result.error || "Failed to add network.");
+        setTechnicalOpen(true);
         setIsBtnLoading(false);
         return;
       }
@@ -266,6 +269,7 @@ function AddChain({
 
     if (!result.success) {
       setRpcWarning(result.error || "Failed to add network.");
+      setTechnicalOpen(true);
       setIsBtnLoading(false);
       return;
     }
@@ -279,256 +283,259 @@ function AddChain({
     setIsBtnLoading(false);
   };
 
+  if (mode === "dapp") {
+    return (
+      <AddChainConfirmationScreen
+        chainName={chainName}
+        chainId={chainId}
+        requestedBy={requestedBy}
+        requestOrigin={initialRequest?.origin ?? ""}
+        nameError={nameError}
+        chainIdConflict={chainIdConflict}
+        knownChainName={knownChainForHint?.name}
+        rpc={rpc}
+        rpcError={rpcError}
+        rpcWarning={rpcWarning}
+        isDetecting={isDetecting}
+        explorer={explorer}
+        currencySymbol={currencySymbol}
+        currencyDecimals={currencyDecimals}
+        rawRequestData={
+          initialRequest
+            ? JSON.stringify(
+                {
+                  chainId: initialRequest.chainId,
+                  chainName: initialRequest.chainName,
+                  nativeCurrency: initialRequest.nativeCurrency,
+                  rpcUrls: initialRequest.rpcUrls,
+                  blockExplorerUrls: initialRequest.blockExplorerUrls,
+                },
+                null,
+                2,
+              )
+            : ""
+        }
+        technicalOpen={technicalOpen}
+        isSubmitting={isBtnLoading}
+        isApproveDisabled={!chainName || !chainId || !rpc || !!chainIdConflict}
+        onBack={() => back()}
+        onApprove={addChain}
+        onOpenChainlist={() =>
+          chrome.tabs.create({ url: "https://chainlist.org" })
+        }
+        onChainNameChange={(event) => {
+          setChainName(event.target.value);
+          if (nameError) setNameError("");
+        }}
+        onChainIdChange={(event) => {
+          setChainId(event.target.value);
+          checkChainIdConflict(event.target.value);
+          const parsed = parseInt(event.target.value, 10);
+          if (parsed && !Number.isNaN(parsed)) {
+            applyKnownChainPrefill(parsed);
+          }
+        }}
+        onRpcChange={(event) => handleRpcChange(event.target.value)}
+        onRpcPaste={handleRpcPaste}
+        onExplorerChange={(event) => setExplorer(event.target.value.trim())}
+        onCurrencySymbolChange={(event) =>
+          setCurrencySymbol(event.target.value.trim())
+        }
+        onCurrencyDecimalsChange={(event) =>
+          setCurrencyDecimals(event.target.value)
+        }
+        onTechnicalOpenChange={setTechnicalOpen}
+      />
+    );
+  }
+
   return (
-    <VStack spacing={4} align="stretch" px={2} pb={20}>
-      {/* Header */}
-      <HStack>
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
+    <SettingsScreenFrame
+      title="Add network"
+      onBack={() => back()}
+      trailing={
+        <Button
           variant="ghost"
           size="sm"
-          onClick={back}
-        />
-        <Text fontSize="lg" fontWeight="900" color="text.primary" textTransform="uppercase" letterSpacing="tight">
-          {mode === "dapp" ? "Add Network" : "Add Chain"}
-        </Text>
-        <Button
-          size="xs"
-          variant="ghost"
-          rightIcon={<ExternalLinkIcon boxSize={3} />}
-          color="accent.secondary"
-          fontWeight="800"
-          textTransform="uppercase"
-          letterSpacing="wide"
+          rightIcon={<ExternalLinkIcon boxSize={3.5} />}
           onClick={() => chrome.tabs.create({ url: "https://chainlist.org" })}
-          _hover={{ bg: "transparent", color: "accent.primary" }}
-          _active={{ bg: "transparent" }}
-          px={1}
         >
           Chainlist
         </Button>
-        <Spacer />
-      </HStack>
-
-      <Text fontSize="sm" color="text.secondary" fontWeight="500">
-        {mode === "dapp"
-          ? "Review and edit the requested network before adding it to your wallet."
-          : "Add a custom EVM network. Only available for Private Key and Seed Phrase accounts."}
-      </Text>
-
-      {mode === "dapp" && requestedBy && (
-        <Alert
-          status="info"
-          bg="accent.secondary"
-          color="accentFg.secondary"
-          borderRadius={isDarkTheme ? "md" : "0"}
-          border="2px solid"
-          borderColor="border.default"
-          py={2}
-          px={3}
-        >
-          <AlertIcon color="accentFg.secondary" />
-          <Text fontSize="xs" fontWeight="700" color="accentFg.secondary">
-            Requested by {requestedBy}
-          </Text>
-        </Alert>
-      )}
-
-      <FormControl>
-        <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-          RPC URL
-        </FormLabel>
-        <HStack>
-          <Input
-            placeholder="https://..."
-            value={rpc}
-            onChange={(e) => handleRpcChange(e.target.value)}
-            onPaste={handleRpcPaste}
-          />
-          {isDetecting && <Spinner size="sm" />}
-        </HStack>
-        <Text fontSize="xs" color="text.tertiary" mt={1} fontWeight="500">
-          Paste or type an RPC URL — chain ID is auto-detected
-        </Text>
-        {rpcError && (
-          <Text fontSize="xs" color="accent.primary" mt={1} fontWeight="700">
-            {rpcError}
-          </Text>
-        )}
-      </FormControl>
-
-      <FormControl>
-        <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-          Chain ID
-        </FormLabel>
-        <Input
-          placeholder="e.g., 43114"
-          type="number"
-          value={chainId}
-          onChange={(e) => {
-            setChainId(e.target.value);
-            checkChainIdConflict(e.target.value);
-            const parsed = parseInt(e.target.value, 10);
-            if (parsed && !Number.isNaN(parsed)) {
-              applyKnownChainPrefill(parsed);
-            }
-          }}
-        />
-        {chainIdConflict && (
-          <Alert
-            status="warning"
-            mt={2}
-            color="status.warning.fg"
-            py={2}
-            px={3}
-          >
-            <AlertIcon />
-            <Text fontSize="xs" fontWeight="600" color="status.warning.fg">
-              {chainIdConflict}
-            </Text>
-          </Alert>
-        )}
-        {knownChainForHint && !chainIdConflict && (
-          <Alert
-            status="info"
-            mt={2}
-            bg="status.info.bg"
-            color="status.info.fg"
-            border="1.5px solid"
-            borderColor="status.info.border"
-            borderRadius={isDarkTheme ? "md" : "0"}
-            py={2}
-            px={3}
-          >
-            <AlertIcon color="status.info.fg" />
-            <Text fontSize="xs" fontWeight="700" color="status.info.fg">
-              EIP-7702 atomic batching is enabled by default for{" "}
-              {knownChainForHint.name}; no manual delegate setup needed.
-            </Text>
-          </Alert>
-        )}
-      </FormControl>
-
-      <Box
-        bg={mode === "dapp" ? "status.info.bg" : "transparent"}
-        border={mode === "dapp" ? "2px solid" : "none"}
-        borderColor={mode === "dapp" ? "accent.secondary" : "transparent"}
-        borderRadius={mode === "dapp" && isDarkTheme ? "md" : undefined}
-        p={mode === "dapp" ? 3 : 0}
-      >
-        <FormControl>
-          <FormLabel
-            color={mode === "dapp" ? "accent.secondary" : "text.secondary"}
-            fontWeight="800"
-            textTransform="uppercase"
-            fontSize="xs"
-            mb={mode === "dapp" ? 1.5 : undefined}
-          >
-            Network Name
-          </FormLabel>
-          <Input
-            placeholder="e.g., Avalanche C-Chain"
-            value={chainName}
-            onChange={(e) => {
-              setChainName(e.target.value);
-              if (nameError) setNameError("");
-            }}
-            isInvalid={!!nameError}
-            borderColor={mode === "dapp" ? "accent.secondary" : undefined}
-            _focusVisible={
-              mode === "dapp"
-                ? {
-                    borderColor: "accent.secondary",
-                    boxShadow: "focus",
-                  }
-                : undefined
-            }
-          />
-          {mode === "dapp" && (
-            <Text fontSize="xs" color="text.tertiary" mt={1} fontWeight="600">
-              This is the name you&apos;ll see in the wallet.
-            </Text>
-          )}
-          {nameError && (
-            <Text fontSize="xs" color="accent.primary" mt={1} fontWeight="700">
-              {nameError}
-            </Text>
-          )}
-        </FormControl>
-      </Box>
-
-      <FormControl>
-        <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-          Block Explorer URL (optional)
-        </FormLabel>
-        <Input
-          placeholder="https://explorer.example.com"
-          value={explorer}
-          onChange={(e) => setExplorer(e.target.value.trim())}
-        />
-      </FormControl>
-
-      <HStack spacing={3}>
-        <FormControl flex={2}>
-          <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-            Native Token Symbol
-          </FormLabel>
-          <Input
-            placeholder="ETH"
-            value={currencySymbol}
-            onChange={(e) => setCurrencySymbol(e.target.value.trim())}
-          />
-        </FormControl>
-        <FormControl flex={1}>
-          <FormLabel color="text.secondary" fontWeight="700" textTransform="uppercase" fontSize="xs">
-            Decimals
-          </FormLabel>
-          <Input
-            type="number"
-            value={currencyDecimals}
-            onChange={(e) => setCurrencyDecimals(e.target.value)}
-          />
-        </FormControl>
-      </HStack>
-
-      {rpcWarning && (
-        <Alert
-          status="warning"
-          color="status.warning.fg"
-          py={2}
-          px={3}
-        >
-          <WarningTwoIcon mr={2} color="status.warning.fg" />
-          <Text fontSize="xs" fontWeight="600" color="status.warning.fg">
-            {rpcWarning}
-          </Text>
-        </Alert>
-      )}
-
-      <Box
-        display="flex"
-        gap={2}
-        pt={2}
-        position="sticky"
-        bottom={3}
-        bg="surface.base"
-        zIndex={1}
-      >
-        <Button variant="secondary" flex={1} onClick={back}>
-          {mode === "dapp" ? "Reject" : "Cancel"}
+      }
+      secondaryAction={
+        <Button variant="secondary" onClick={() => back()}>
+          Cancel
         </Button>
+      }
+      primaryAction={
         <Button
           variant="primary"
-          flex={1}
           onClick={addChain}
           isLoading={isBtnLoading}
+          loadingText="Adding"
           isDisabled={!chainName || !chainId || !rpc || !!chainIdConflict}
         >
-          {mode === "dapp" ? "Add Network" : "Add Chain"}
+          Add network
         </Button>
-      </Box>
-    </VStack>
+      }
+    >
+      <VStack spacing={5} align="stretch">
+        <Box>
+          <Text color="fg.primary" fontSize="md" fontWeight="600">
+            Connect a custom EVM network
+          </Text>
+          <Text mt={1} color="fg.secondary" fontSize="sm" lineHeight="1.45">
+            Enter a trusted RPC endpoint. WalletChan will check its chain ID
+            before saving the connection.
+          </Text>
+        </Box>
+
+        <VStack
+          spacing={4}
+          align="stretch"
+          p={4}
+          bg="surface.raised"
+          borderWidth="1px"
+          borderColor="border.subtle"
+          borderRadius="lg"
+        >
+          <FormControl isInvalid={!!rpcError}>
+            <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
+              RPC URL
+            </FormLabel>
+            <HStack>
+              <Input
+                placeholder="https://rpc.example.com"
+                value={rpc}
+                onChange={(event) => handleRpcChange(event.target.value)}
+                onPaste={handleRpcPaste}
+              />
+              {isDetecting && <Spinner size="sm" flexShrink={0} />}
+            </HStack>
+            <Text mt={1} color="fg.secondary" fontSize="xs">
+              Paste or enter an endpoint to detect its chain ID.
+            </Text>
+            {rpcError && (
+              <Text mt={1} color="chart.negative" fontSize="xs" fontWeight="600">
+                {rpcError}
+              </Text>
+            )}
+          </FormControl>
+
+          <FormControl isInvalid={!!chainIdConflict}>
+            <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
+              Chain ID
+            </FormLabel>
+            <Input
+              placeholder="e.g., 43114"
+              type="number"
+              value={chainId}
+              onChange={(event) => {
+                setChainId(event.target.value);
+                checkChainIdConflict(event.target.value);
+                const parsed = parseInt(event.target.value, 10);
+                if (parsed && !Number.isNaN(parsed)) {
+                  applyKnownChainPrefill(parsed);
+                }
+              }}
+            />
+            {chainIdConflict && (
+              <Alert status="warning" mt={2} py={2} px={3}>
+                <AlertIcon />
+                <Text color="status.warning.fg" fontSize="xs" fontWeight="600">
+                  {chainIdConflict}
+                </Text>
+              </Alert>
+            )}
+            {knownChainForHint && !chainIdConflict && (
+              <Alert status="info" mt={2} py={2} px={3}>
+                <AlertIcon />
+                <Text color="status.info.fg" fontSize="xs" fontWeight="600">
+                  EIP-7702 atomic batching is enabled by default for{" "}
+                  {knownChainForHint.name}; no manual delegate setup is needed.
+                </Text>
+              </Alert>
+            )}
+          </FormControl>
+
+          <FormControl isInvalid={!!nameError}>
+            <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
+              Network name
+            </FormLabel>
+            <Input
+              placeholder="e.g., Avalanche C-Chain"
+              value={chainName}
+              onChange={(event) => {
+                setChainName(event.target.value);
+                if (nameError) setNameError("");
+              }}
+            />
+            <Text mt={1} color="fg.secondary" fontSize="xs">
+              This is the name shown in WalletChan.
+            </Text>
+            {nameError && (
+              <Text mt={1} color="chart.negative" fontSize="xs" fontWeight="600">
+                {nameError}
+              </Text>
+            )}
+          </FormControl>
+
+          <InlineDisclosure
+            label="Advanced network details"
+            description="Explorer and native currency metadata"
+          >
+            <VStack spacing={4} align="stretch" pt={2}>
+              <FormControl>
+                <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
+                  Block explorer URL
+                </FormLabel>
+                <Input
+                  placeholder="https://explorer.example.com"
+                  value={explorer}
+                  onChange={(event) => setExplorer(event.target.value.trim())}
+                />
+                <Text mt={1} color="fg.secondary" fontSize="xs">
+                  Optional. Used for transaction and address links.
+                </Text>
+              </FormControl>
+
+              <HStack spacing={3} align="flex-start">
+                <FormControl flex={2}>
+                  <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
+                    Native token symbol
+                  </FormLabel>
+                  <Input
+                    placeholder="ETH"
+                    value={currencySymbol}
+                    onChange={(event) => setCurrencySymbol(event.target.value.trim())}
+                  />
+                </FormControl>
+                <FormControl flex={1}>
+                  <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
+                    Decimals
+                  </FormLabel>
+                  <Input
+                    type="number"
+                    value={currencyDecimals}
+                    onChange={(event) => setCurrencyDecimals(event.target.value)}
+                  />
+                </FormControl>
+              </HStack>
+            </VStack>
+          </InlineDisclosure>
+        </VStack>
+
+        {rpcWarning && (
+          <Alert status="warning" py={2} px={3}>
+            <WarningTwoIcon mr={2} color="status.warning.fg" />
+            <Text color="status.warning.fg" fontSize="xs" fontWeight="600">
+              {rpcWarning}
+            </Text>
+          </Alert>
+        )}
+      </VStack>
+    </SettingsScreenFrame>
   );
 }
 

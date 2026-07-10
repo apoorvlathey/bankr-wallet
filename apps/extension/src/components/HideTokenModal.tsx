@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   Box,
   Button,
-  HStack,
   IconButton,
   Modal,
   ModalBody,
@@ -13,15 +12,22 @@ import {
   ModalOverlay,
   Text,
   Tooltip,
-  VStack,
 } from "@chakra-ui/react";
 import { CheckIcon, CopyIcon, ExternalLinkIcon } from "@chakra-ui/icons";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import ChainIcon from "@/components/ChainIcon";
 import TokenLogo from "@/components/TokenLogo";
+import {
+  ListItem,
+  ListItemActions,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
+  ListItemTitle,
+  ListSurface,
+} from "@/components/ui";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
-import { useStripTokens, useTheme } from "@/theme";
 
 interface HideTokenModalProps {
   isOpen: boolean;
@@ -39,8 +45,6 @@ export default function HideTokenModal({
   onConfirm,
 }: HideTokenModalProps) {
   const { networksInfo } = useNetworks();
-  const headerStrip = useStripTokens();
-  const { tokens } = useTheme();
   const [copied, setCopied] = useState(false);
 
   const chain = token
@@ -69,30 +73,16 @@ export default function HideTokenModal({
     >
       <ModalOverlay bg="surface.overlay" />
       <ModalContent mx={4} overflow="hidden">
-        <ModalHeader
-          bg={headerStrip.bg}
-          color={headerStrip.fg}
-          fontWeight="900"
-          fontSize="md"
-          py={2}
-          borderBottomWidth="1px"
-          borderColor="border.subtle"
-        >
-          Hide Token
+        <ModalHeader as="h2" fontSize="lg" pr={14}>
+          Hide {symbol}?
         </ModalHeader>
-        <ModalCloseButton color={headerStrip.fg} top={1} />
+        <ModalCloseButton />
         <ModalBody py={4} px={4}>
           {token && (
-            <VStack spacing={4} align="stretch">
-              <HStack
-                spacing={3}
-                p={3}
-                border={tokens.borders.thin}
-                borderColor="border.default"
-                borderRadius={tokens.radii.card}
-                bg="surface.sunken"
-              >
-                <Box position="relative">
+            <>
+              <ListSurface mb={4}>
+                <ListItem>
+                  <ListItemMedia position="relative">
                   <TokenLogo
                     symbol={token.symbol}
                     logoUrl={token.logoUrl}
@@ -123,87 +113,70 @@ export default function HideTokenModal({
                       />
                     </Box>
                   )}
-                </Box>
-                <Box minW={0} flex={1}>
-                  <Text
-                    fontSize="md"
-                    fontWeight="900"
-                    color="text.primary"
-                    textTransform="uppercase"
-                    noOfLines={1}
-                  >
-                    {symbol}
-                  </Text>
-                  <Text
-                    fontSize="xs"
-                    fontWeight="600"
-                    color="text.secondary"
-                    noOfLines={1}
-                  >
+                  </ListItemMedia>
+                  <ListItemContent>
+                    <ListItemTitle>{symbol}</ListItemTitle>
+                    <ListItemDescription>
                     {chain?.name ?? `Chain ${token.chainId}`}
-                  </Text>
-                </Box>
-                {canCopyAddress && (
-                  <Tooltip label="Copy contract" hasArrow>
-                    <IconButton
-                      aria-label={`Copy ${symbol} contract`}
-                      icon={copied ? <CheckIcon /> : <CopyIcon />}
-                      size="sm"
-                      variant="ghost"
-                      color={copied ? "accent.highlight" : "text.secondary"}
-                      onClick={handleCopyAddress}
-                      _hover={{
-                        color: copied ? "accent.highlight" : "accent.secondary",
-                        bg: "surface.raisedHover",
-                      }}
-                    />
-                  </Tooltip>
-                )}
-                {explorerUrl && (
-                  <Tooltip label="View contract" hasArrow>
-                    <IconButton
-                      as="a"
-                      href={explorerUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`View ${symbol} contract`}
-                      icon={<ExternalLinkIcon />}
-                      size="sm"
-                      variant="ghost"
-                      color="text.secondary"
-                      _hover={{
-                        color: "accent.secondary",
-                        bg: "surface.raisedHover",
-                      }}
-                    />
-                  </Tooltip>
-                )}
-              </HStack>
+                    </ListItemDescription>
+                    <Text
+                      fontFamily="mono"
+                      color="fg.muted"
+                      fontSize="xs"
+                      noOfLines={1}
+                    >
+                      {token.contractAddress}
+                    </Text>
+                  </ListItemContent>
+                  <ListItemActions>
+                    {canCopyAddress && (
+                      <Tooltip label="Copy contract" hasArrow>
+                        <IconButton
+                          aria-label={`Copy ${symbol} contract`}
+                          icon={copied ? <CheckIcon /> : <CopyIcon />}
+                          size="xs"
+                          variant="ghost"
+                          color={copied ? "accent.highlight" : "fg.secondary"}
+                          onClick={handleCopyAddress}
+                        />
+                      </Tooltip>
+                    )}
+                    {explorerUrl && (
+                      <Tooltip label="View contract" hasArrow>
+                        <IconButton
+                          as="a"
+                          href={explorerUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`View ${symbol} contract`}
+                          icon={<ExternalLinkIcon />}
+                          size="xs"
+                          variant="ghost"
+                          color="fg.secondary"
+                        />
+                      </Tooltip>
+                    )}
+                  </ListItemActions>
+                </ListItem>
+              </ListSurface>
 
-              <VStack spacing={2} align="stretch">
-                <Text fontSize="sm" color="text.primary" fontWeight="700">
-                  Hide {symbol} from all portfolios?
-                </Text>
-                <Text fontSize="xs" color="text.secondary" fontWeight="600">
-                  This applies to every wallet address. You can add it back
-                  anytime from Add Token.
-                </Text>
-              </VStack>
-            </VStack>
+              <Text fontSize="sm" color="fg.secondary" lineHeight="1.5">
+                This hides the token from every wallet portfolio. You can restore
+                it at any time from Hidden tokens.
+              </Text>
+            </>
           )}
         </ModalBody>
         <ModalFooter gap={2} pt={0}>
-          <Button variant="ghost" onClick={onClose} isDisabled={isLoading}>
+          <Button variant="secondary" onClick={onClose} isDisabled={isLoading}>
             Cancel
           </Button>
           <Button
-            bg="accent.secondary"
-            color="accentFg.secondary"
-            _hover={{ bg: "accent.secondary", opacity: 0.9 }}
+            variant="danger"
             onClick={onConfirm}
             isLoading={isLoading}
           >
-            Hide Token
+            Hide token
           </Button>
         </ModalFooter>
       </ModalContent>

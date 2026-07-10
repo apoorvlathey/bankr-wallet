@@ -1,23 +1,42 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Box,
   Button,
+  Flex,
   HStack,
-  Input,
-  InputGroup,
-  InputLeftElement,
-  Menu,
-  MenuButton,
-  MenuDivider,
-  MenuItem,
-  MenuList,
+  IconButton,
   Text,
 } from "@chakra-ui/react";
-import { AddIcon, ChevronDownIcon, Search2Icon } from "@chakra-ui/icons";
+import {
+  AddIcon,
+  CheckIcon,
+  ChevronRightIcon,
+  ExternalLinkIcon,
+} from "@chakra-ui/icons";
 import type { Account } from "@/chrome/types";
 import AccountSwitcher from "@/components/AccountSwitcher";
 import ChainIcon from "@/components/ChainIcon";
-import { useIconChipBg } from "@/theme";
+import { CopyButton } from "@/components/CopyButton";
+import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
+import {
+  FullScreenPicker,
+  FullScreenPickerEmpty,
+  FullScreenPickerGroup,
+  FullScreenPickerSearch,
+  ListItem,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
+  ListItemTitle,
+} from "@/components/ui";
+import { truncateAddress } from "@/lib/addressUtils";
 import type { ResolvedChain } from "@/lib/chains";
 
 interface AccountNetworkControlsProps {
@@ -32,12 +51,6 @@ interface AccountNetworkControlsProps {
   onAddChain: () => void;
 }
 
-function getSelectedChainFontSize(chainName: string) {
-  if (chainName.length > 20) return "2xs";
-  if (chainName.length > 16) return "xs";
-  return "sm";
-}
-
 function AccountNetworkControls({
   accounts,
   activeAccount,
@@ -49,344 +62,319 @@ function AccountNetworkControls({
   onChainSelect,
   onAddChain,
 }: AccountNetworkControlsProps) {
-  const iconChipBg = useIconChipBg();
+  const [isNetworkPickerOpen, setIsNetworkPickerOpen] = useState(false);
   const [chainSearch, setChainSearch] = useState("");
-  const chainSearchInputRef = useRef<HTMLInputElement>(null);
-  const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
   const [highlightedChainIndex, setHighlightedChainIndex] = useState(0);
+  const networkTriggerRef = useRef<HTMLButtonElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const selectedChainItemRef = useRef<HTMLElement | null>(null);
-  const chainScrollRef = useRef<HTMLDivElement | null>(null);
-  const lastChainAutoScrollTopRef = useRef<number | null>(null);
-  const userScrolledChainMenuRef = useRef(false);
+
   const normalizedChainSearch = chainSearch.trim().toLowerCase();
-  const filteredVisibleChains = normalizedChainSearch
-    ? visibleChains.filter(
-        (chain) =>
-          chain.name.toLowerCase().includes(normalizedChainSearch) ||
-          String(chain.chainId).includes(normalizedChainSearch),
-      )
-    : visibleChains;
+  const filteredVisibleChains = useMemo(
+    () =>
+      normalizedChainSearch
+        ? visibleChains.filter(
+            (chain) =>
+              chain.name.toLowerCase().includes(normalizedChainSearch) ||
+              String(chain.chainId).includes(normalizedChainSearch) ||
+              chain.nativeCurrency.symbol
+                .toLowerCase()
+                .includes(normalizedChainSearch),
+          )
+        : visibleChains,
+    [normalizedChainSearch, visibleChains],
+  );
 
   useEffect(() => {
     setHighlightedChainIndex(0);
-  }, [chainSearch, isChainMenuOpen]);
+  }, [chainSearch, isNetworkPickerOpen]);
 
-  const scrollSelectedChainIntoView = useCallback(() => {
-    const node = selectedChainItemRef.current;
-    const parent = chainScrollRef.current;
-    if (!node || !parent || parent.clientHeight === 0) return;
-    if (userScrolledChainMenuRef.current) return;
-
-    if (
-      lastChainAutoScrollTopRef.current !== null &&
-      Math.abs(parent.scrollTop - lastChainAutoScrollTopRef.current) > 1
-    ) {
-      return;
+  const closeNetworkPicker = useCallback((restoreFocus = true) => {
+    setIsNetworkPickerOpen(false);
+    setChainSearch("");
+    setHighlightedChainIndex(0);
+    if (restoreFocus) {
+      requestAnimationFrame(() => networkTriggerRef.current?.focus());
     }
-
-    const parentRect = parent.getBoundingClientRect();
-    const nodeRect = node.getBoundingClientRect();
-    if (parentRect.height === 0 || nodeRect.height === 0) return;
-
-    const relativeTop = nodeRect.top - parentRect.top + parent.scrollTop;
-    const maxScrollTop = Math.max(0, parent.scrollHeight - parent.clientHeight);
-    const target = Math.min(
-      maxScrollTop,
-      Math.max(0, relativeTop - (parent.clientHeight - node.offsetHeight) / 2),
-    );
-
-    parent.scrollTop = target;
-    lastChainAutoScrollTopRef.current = parent.scrollTop;
   }, []);
 
-  useLayoutEffect(() => {
-    if (!isChainMenuOpen || normalizedChainSearch) {
-      lastChainAutoScrollTopRef.current = null;
-      userScrolledChainMenuRef.current = false;
-      return;
-    }
+  useEffect(() => {
+    if (!isNetworkPickerOpen) return;
 
-    let cancelled = false;
-    const rafIds: number[] = [];
-    const timeoutIds: number[] = [];
-    const run = () => {
-      if (!cancelled) scrollSelectedChainIntoView();
+    const focusFrame = requestAnimationFrame(() => {
+      pickerRef.current
+        ?.querySelector<HTMLElement>("[data-screen-heading]")
+        ?.focus();
+    });
+    const scrollTimer = window.setTimeout(() => {
+      if (!normalizedChainSearch) {
+        selectedChainItemRef.current?.scrollIntoView({ block: "center" });
+      }
+    }, 120);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeNetworkPicker();
+      }
     };
-    const queueFrame = (remaining: number) => {
-      const raf = requestAnimationFrame(() => {
-        run();
-        if (remaining > 1) queueFrame(remaining - 1);
-      });
-      rafIds.push(raf);
-    };
-
-    queueFrame(3);
-    timeoutIds.push(window.setTimeout(run, 80));
-    timeoutIds.push(window.setTimeout(run, 220));
+    document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      cancelled = true;
-      rafIds.forEach(cancelAnimationFrame);
-      timeoutIds.forEach(clearTimeout);
+      cancelAnimationFrame(focusFrame);
+      window.clearTimeout(scrollTimer);
+      document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [
-    filteredVisibleChains.length,
-    isChainMenuOpen,
-    normalizedChainSearch,
-    scrollSelectedChainIntoView,
-    selectedChain?.chainId,
-  ]);
+  }, [closeNetworkPicker, isNetworkPickerOpen, normalizedChainSearch]);
 
   const selectChain = (chainName: string) => {
     onChainSelect(chainName);
-    setIsChainMenuOpen(false);
-    setChainSearch("");
+    closeNetworkPicker();
   };
 
+  const addChain = () => {
+    onAddChain();
+    closeNetworkPicker(false);
+  };
+
+  const explorerHref =
+    activeAccount && selectedChain?.explorer
+      ? `${selectedChain.explorer}/address/${activeAccount.address}`
+      : null;
+
   return (
-    <HStack spacing={3} align="stretch">
-      {accounts.length > 0 && (
-        <Box flex={1} minW={0}>
+    <>
+      <Box
+        w="full"
+        overflow="hidden"
+        bg="surface.raised"
+        border="1px solid"
+        borderColor="border.default"
+        borderRadius="lg"
+      >
+        {accounts.length > 0 && (
           <AccountSwitcher
             accounts={accounts}
             activeAccount={activeAccount}
+            explorerUrl={selectedChain?.explorer}
             onAccountSelect={onAccountSelect}
             onAddAccount={onAddAccount}
             onAccountSettings={onAccountSettings}
           />
-        </Box>
-      )}
+        )}
 
-      <Box
-        alignSelf="stretch"
-        display="flex"
-        flexShrink={1}
-        minW="136px"
-        maxW="40%"
-      >
-        <Menu
-          isLazy
-          isOpen={isChainMenuOpen}
-          lazyBehavior="unmount"
-          initialFocusRef={chainSearchInputRef}
-          onOpen={() => {
-            lastChainAutoScrollTopRef.current = null;
-            userScrolledChainMenuRef.current = false;
-            setIsChainMenuOpen(true);
-            setHighlightedChainIndex(0);
-          }}
-          onClose={() => {
-            lastChainAutoScrollTopRef.current = null;
-            userScrolledChainMenuRef.current = false;
-            setIsChainMenuOpen(false);
-            setChainSearch("");
-            setHighlightedChainIndex(0);
-          }}
+        <HStack
+          minH="48px"
+          spacing={0}
+          align="stretch"
+          borderTop="1px solid"
+          borderColor="border.subtle"
         >
-          <MenuButton
-            as={Button}
+          {activeAccount ? (
+            <HStack minW={0} flex={1} spacing={0.5} px={3}>
+              <Text
+                minW={0}
+                flex={1}
+                color="fg.secondary"
+                fontFamily="mono"
+                fontSize="sm"
+                fontWeight="400"
+                noOfLines={1}
+              >
+                {truncateAddress(activeAccount.address)}
+              </Text>
+              <CopyButton value={activeAccount.address} />
+              {explorerHref && (
+                <IconButton
+                  as="a"
+                  href={explorerHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="View active address on explorer"
+                  icon={<ExternalLinkIcon />}
+                  size="xs"
+                  variant="ghost"
+                />
+              )}
+            </HStack>
+          ) : (
+            <Box flex={1} />
+          )}
+
+          <Button
+            ref={networkTriggerRef}
+            aria-haspopup="listbox"
+            aria-expanded={isNetworkPickerOpen}
+            aria-label="Choose network"
             variant="ghost"
-            bg="surface.raised"
-            border="3px solid"
-            borderColor="border.default"
-            boxShadow="card"
-            _hover={{
-              transform: "translateY(-2px)",
-              boxShadow: "cardHover",
-            }}
-            _active={{
-              transform: "translate(2px, 2px)",
-              boxShadow: "none",
-            }}
-            fontWeight="700"
-            w="full"
+            minW="128px"
+            maxW="48%"
             h="auto"
-            minH="full"
-            py={3}
+            minH="48px"
             px={3}
-            transition="all 0.2s ease-out"
-            overflow="hidden"
-            position="relative"
+            borderLeft="1px solid"
+            borderLeftColor="border.subtle"
+            borderRadius={0}
+            justifyContent="flex-start"
+            _hover={{ bg: "surface.raisedHover" }}
+            _active={{ bg: "surface.sunken" }}
+            onClick={() => setIsNetworkPickerOpen(true)}
           >
-            <ChevronDownIcon
-              position="absolute"
-              bottom="8px"
-              right="4px"
-              boxSize="14px"
-              color="text.secondary"
-            />
             {selectedChain ? (
-              <HStack spacing={2.5} minW={0} align="center" pr={3}>
+              <HStack w="full" minW={0} spacing={2}>
                 <ChainIcon
                   chainId={selectedChain.chainId}
                   chainName={selectedChain.name}
-                  size="18px"
-                  flexShrink={0}
-                  withChip
+                  size="20px"
                 />
                 <Text
-                  fontSize={getSelectedChainFontSize(selectedChain.name)}
-                  fontWeight="700"
-                  whiteSpace="normal"
-                  lineHeight="1.2"
-                  textAlign="left"
+                  minW={0}
+                  flex={1}
+                  color="fg.primary"
+                  fontSize="sm"
+                  fontWeight="600"
+                  textAlign="start"
+                  noOfLines={1}
                 >
                   {selectedChain.name}
                 </Text>
+                <ChevronRightIcon boxSize={4.5} color="fg.muted" flexShrink={0} />
               </HStack>
             ) : (
-              <Text color="text.tertiary" fontSize="sm">
-                Net
-              </Text>
+              <HStack w="full" justify="space-between">
+                <Text color="fg.secondary" fontSize="sm">Network</Text>
+                <ChevronRightIcon boxSize={4.5} color="fg.muted" />
+              </HStack>
             )}
-          </MenuButton>
-          <MenuList
-            bg="surface.raised"
-            border="3px solid"
-            borderColor="border.default"
-            boxShadow="card"
-            py={0}
-            minW="160px"
-            maxH="320px"
-            overflow="hidden"
-          >
-          <Box p={2} borderBottom="2px solid" borderColor="border.default">
-            <InputGroup size="sm">
-              <InputLeftElement pointerEvents="none">
-                <Search2Icon color="text.tertiary" boxSize={3} />
-              </InputLeftElement>
-              <Input
-                ref={chainSearchInputRef}
+          </Button>
+        </HStack>
+      </Box>
+
+      {isNetworkPickerOpen && (
+        <FullScreenPickerLayer>
+          <FullScreenPicker
+            ref={pickerRef}
+            title="Choose network"
+            onBack={() => closeNetworkPicker()}
+            controls={
+              <FullScreenPickerSearch
+                label="Search networks"
+                placeholder="Name, chain ID, or symbol"
                 value={chainSearch}
-                onChange={(e) => setChainSearch(e.target.value)}
-                placeholder="Search chains"
-                fontWeight="600"
-                pl={9}
-                onKeyDown={(e) => {
-                  if (e.key === "ArrowDown") {
-                    e.preventDefault();
-                    e.stopPropagation();
+                onChange={(event) => setChainSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
                     if (filteredVisibleChains.length > 0) {
-                      setHighlightedChainIndex((prev) =>
-                        Math.min(prev + 1, filteredVisibleChains.length - 1),
+                      setHighlightedChainIndex((current) =>
+                        Math.min(current + 1, filteredVisibleChains.length - 1),
                       );
                     }
-                    return;
-                  }
-                  if (e.key === "ArrowUp") {
-                    e.preventDefault();
-                    e.stopPropagation();
+                  } else if (event.key === "ArrowUp") {
+                    event.preventDefault();
                     if (filteredVisibleChains.length > 0) {
-                      setHighlightedChainIndex((prev) => Math.max(prev - 1, 0));
+                      setHighlightedChainIndex((current) => Math.max(current - 1, 0));
                     }
-                    return;
-                  }
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    e.stopPropagation();
+                  } else if (event.key === "Enter") {
                     const highlighted = filteredVisibleChains[highlightedChainIndex];
                     if (highlighted) {
+                      event.preventDefault();
                       selectChain(highlighted.name);
                     }
-                    return;
                   }
-                  e.stopPropagation();
                 }}
               />
-            </InputGroup>
-          </Box>
-          <Box
-            ref={chainScrollRef}
-            maxH={activeAccount?.type !== "bankr" ? "219px" : "268px"}
-            overflowY="auto"
-            onScroll={(event) => {
-              const { scrollTop } = event.currentTarget;
-              if (lastChainAutoScrollTopRef.current === null) {
-                if (scrollTop > 0) userScrolledChainMenuRef.current = true;
-                return;
-              }
-              if (Math.abs(scrollTop - lastChainAutoScrollTopRef.current) > 1) {
-                userScrolledChainMenuRef.current = true;
-              }
-            }}
+            }
           >
-            {filteredVisibleChains.map((chain, i, currentChains) => (
-              <MenuItem
-                key={chain.chainId}
-                ref={
-                  chain.chainId === selectedChain?.chainId
-                    ? (node: HTMLElement | null) => {
-                        selectedChainItemRef.current = node;
-                      }
-                    : undefined
-                }
-                bg={
-                  i === highlightedChainIndex ||
-                  chain.chainId === selectedChain?.chainId
-                    ? "surface.raisedHover"
-                    : "surface.raised"
-                }
-                _hover={{ bg: "surface.raisedHover" }}
-                borderBottom={i < currentChains.length - 1 ? "2px solid" : "none"}
-                borderColor="border.default"
-                py={3}
-                onMouseEnter={() => setHighlightedChainIndex(i)}
-                onClick={() => selectChain(chain.name)}
+            {filteredVisibleChains.length > 0 ? (
+              <FullScreenPickerGroup
+                label="Networks"
+                description={`${visibleChains.length} available`}
               >
-                <HStack spacing={2}>
-                  <Box
-                    bg={iconChipBg}
-                    border="2px solid"
-                    borderColor="border.default"
-                    borderRadius="md"
-                    p={0.5}
+                {filteredVisibleChains.map((chain, index) => (
+                  <ListItem
+                    key={chain.chainId}
+                    ref={
+                      chain.chainId === selectedChain?.chainId
+                        ? (node) => {
+                            selectedChainItemRef.current = node;
+                          }
+                        : undefined
+                    }
+                    interactive
+                    isSelected={chain.chainId === selectedChain?.chainId}
+                    onMouseEnter={() => setHighlightedChainIndex(index)}
+                    bg={
+                      index === highlightedChainIndex
+                        ? "surface.raisedHover"
+                        : undefined
+                    }
+                    onClick={() => selectChain(chain.name)}
                   >
-                    <ChainIcon chainId={chain.chainId} chainName={chain.name} size="18px" />
-                  </Box>
-                  <Text color="text.primary" fontWeight="700">
-                    {chain.name}
-                  </Text>
-                </HStack>
-              </MenuItem>
-            ))}
-            {filteredVisibleChains.length === 0 && (
-              <Box px={3} py={3}>
-                <Text fontSize="sm" fontWeight="700" color="text.secondary">
-                  No chains match "{chainSearch.trim()}".
-                </Text>
-              </Box>
+                    <ListItemMedia>
+                      <Flex
+                        boxSize="32px"
+                        align="center"
+                        justify="center"
+                        bg="surface.sunken"
+                        borderRadius="md"
+                      >
+                        <ChainIcon
+                          chainId={chain.chainId}
+                          chainName={chain.name}
+                          size="22px"
+                        />
+                      </Flex>
+                    </ListItemMedia>
+                    <ListItemContent>
+                      <ListItemTitle>{chain.name}</ListItemTitle>
+                      <ListItemDescription>
+                        Chain {chain.chainId} · {chain.nativeCurrency.symbol}
+                      </ListItemDescription>
+                    </ListItemContent>
+                    {chain.chainId === selectedChain?.chainId ? (
+                      <CheckIcon boxSize={4} color="accent.secondary" />
+                    ) : (
+                      <ChevronRightIcon boxSize={5} color="fg.muted" />
+                    )}
+                  </ListItem>
+                ))}
+              </FullScreenPickerGroup>
+            ) : (
+              <FullScreenPickerEmpty
+                title="No networks found"
+                description={`No network matches “${chainSearch.trim()}”. Try a name, chain ID, or currency symbol.`}
+              />
             )}
-          </Box>
-          {activeAccount?.type !== "bankr" && (
-            <>
-              <MenuDivider borderColor="border.default" m={0} />
-              <MenuItem
-                bg="surface.raised"
-                _hover={{ bg: "surface.raisedHover" }}
-                py={3}
-                onClick={onAddChain}
-              >
-                <HStack spacing={2}>
-                  <Box
-                    bg="border.default"
-                    p={0.5}
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    <AddIcon color="white" boxSize="14px" p="2px" />
-                  </Box>
-                  <Text color="text.secondary" fontWeight="700" fontSize="sm">
-                    Add Chain
-                  </Text>
-                </HStack>
-              </MenuItem>
-            </>
-          )}
-          </MenuList>
-        </Menu>
-      </Box>
-    </HStack>
+
+            {activeAccount?.type !== "bankr" && (
+              <FullScreenPickerGroup label="Manage">
+                <ListItem interactive onClick={addChain}>
+                  <ListItemMedia>
+                    <Flex
+                      boxSize="32px"
+                      align="center"
+                      justify="center"
+                      bg="surface.sunken"
+                      borderRadius="md"
+                      color="accent.secondary"
+                    >
+                      <AddIcon boxSize={3.5} />
+                    </Flex>
+                  </ListItemMedia>
+                  <ListItemContent>
+                    <ListItemTitle>Add network</ListItemTitle>
+                    <ListItemDescription>
+                      Configure a custom network connection
+                    </ListItemDescription>
+                  </ListItemContent>
+                  <ChevronRightIcon boxSize={5} color="fg.muted" />
+                </ListItem>
+              </FullScreenPickerGroup>
+            )}
+          </FullScreenPicker>
+        </FullScreenPickerLayer>
+      )}
+    </>
   );
 }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { Box, VStack } from "@chakra-ui/react";
+import { Box } from "@chakra-ui/react";
 import { useChat } from "@/hooks/useChat";
+import { AppScreen } from "@/components/ui";
 import ChatHeader from "./ChatHeader";
 import ChatList from "./ChatList";
 import MessageList from "./MessageList";
@@ -177,7 +178,7 @@ export function ChatView({ onBack, startWithNewChat = false, returnToConversatio
 
   // Chat view
   return (
-    <Box h="100%" display="flex" flexDirection="column" bg="surface.base">
+    <AppScreen stickyActionClearance={0}>
       <ChatHeader
         title={currentConversation?.title || "New Chat"}
         onBack={handleBackFromChat}
@@ -186,22 +187,30 @@ export function ChatView({ onBack, startWithNewChat = false, returnToConversatio
         showDelete={!!currentConversation && messages.length > 0}
       />
 
-      <VStack flex="1" spacing={0} overflow="hidden" w="100%" align="stretch">
-        <MessageList
-          messages={messages}
-          isLoading={isLoading}
-          statusUpdateText={statusUpdateText}
-          isWalletUnlocked={isWalletUnlocked}
-          onUnlock={handleUnlock}
-          onRetry={retryLastMessage}
-          onResend={sendMessage}
-        />
+      <MessageList
+        messages={messages}
+        isLoading={isLoading}
+        statusUpdateText={statusUpdateText}
+        isWalletUnlocked={isWalletUnlocked}
+        onUnlock={handleUnlock}
+        onRetry={retryLastMessage}
+        onResend={sendMessage}
+      />
 
-        <Box w="100%" p={2} borderTop="2px solid" borderColor="border.default">
-          <ChatInput onSend={sendMessage} isLoading={isLoading} />
-        </Box>
-      </VStack>
-    </Box>
+      <Box
+        as="footer"
+        w="full"
+        flexShrink={0}
+        bg="surface.raised"
+        borderTop="1px solid"
+        borderColor="border.subtle"
+        px={4}
+        pt={3}
+        pb="calc(12px + env(safe-area-inset-bottom, 0px))"
+      >
+        <ChatInput onSend={sendMessage} isLoading={isLoading} />
+      </Box>
+    </AppScreen>
   );
 }
 

@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
+  Drawer,
+  DrawerBody,
+  DrawerCloseButton,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerOverlay,
   HStack,
   Icon,
   IconButton,
-  Popover,
-  PopoverBody,
-  PopoverContent,
-  PopoverTrigger,
   Select,
   SimpleGrid,
   Text,
@@ -133,7 +136,8 @@ export function UtcDateTimePicker({
   onChange: (seconds: number) => void;
 }) {
   const { tokens } = useTheme();
-  const { isOpen, onClose, onToggle } = useDisclosure();
+  const { isOpen, onClose, onOpen } = useDisclosure();
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const selectedParts = valueSeconds === null ? null : toUtcParts(valueSeconds);
   const initialVisible = visibleMonthFromSeconds(valueSeconds);
   const [visibleYear, setVisibleYear] = useState(initialVisible.year);
@@ -204,18 +208,13 @@ export function UtcDateTimePicker({
   };
 
   return (
-    <Popover
-      isOpen={isOpen}
-      onClose={onClose}
-      placement="bottom-start"
-      closeOnBlur
-    >
-      <PopoverTrigger>
-        <Button
+    <>
+      <Button
+          ref={triggerRef}
           type="button"
           aria-label={label}
           isDisabled={disabled}
-          onClick={onToggle}
+          onClick={onOpen}
           variant="outline"
           w="full"
           h="46px"
@@ -228,14 +227,30 @@ export function UtcDateTimePicker({
           borderColor="border.default"
           borderRadius={tokens.radii.input}
           _hover={{ bg: "surface.raisedHover" }}
+      >
+        <Text noOfLines={1}>{formatUtcDisplay(valueSeconds)}</Text>
+        <CalendarGlyph />
+      </Button>
+      <Drawer
+        isOpen={isOpen}
+        onClose={onClose}
+        placement="bottom"
+        finalFocusRef={triggerRef}
+        returnFocusOnClose
+      >
+        <DrawerOverlay />
+        <DrawerContent
+          maxH="92dvh"
+          borderTop={tokens.borders.thin}
+          borderColor="border.default"
+          borderTopRadius={tokens.radii.modal}
         >
-          <Text noOfLines={1}>{formatUtcDisplay(valueSeconds)}</Text>
-          <CalendarGlyph />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent w="288px" maxW="calc(100vw - 24px)" zIndex="popover">
-        <PopoverBody p={2}>
-          <VStack align="stretch" spacing={2}>
+          <DrawerCloseButton aria-label="Close date and time picker" boxSize="44px" />
+          <DrawerHeader px={4} pt={5} pb={2} pr={16}>
+            <Text as="h2" fontSize="lg">{label}</Text>
+          </DrawerHeader>
+          <DrawerBody px={4} py={2} overflowY="auto">
+            <VStack align="stretch" spacing={3} maxW="320px" mx="auto">
             <HStack justify="space-between" px={0.5}>
               <IconButton
                 aria-label="Previous month"
@@ -383,17 +398,18 @@ export function UtcDateTimePicker({
               </HStack>
             </Box>
 
-            <HStack justify="space-between">
-              <Button size="sm" variant="ghost" onClick={selectToday}>
-                Today
+              <Button size="sm" variant="ghost" alignSelf="flex-start" onClick={selectToday}>
+                Use today
               </Button>
-              <Button size="sm" variant="secondary" onClick={onClose}>
-                Done
-              </Button>
-            </HStack>
-          </VStack>
-        </PopoverBody>
-      </PopoverContent>
-    </Popover>
+            </VStack>
+          </DrawerBody>
+          <DrawerFooter px={4} pb="calc(16px + env(safe-area-inset-bottom, 0px))">
+            <Button w="full" variant="primary" onClick={onClose}>
+              Done
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    </>
   );
 }
