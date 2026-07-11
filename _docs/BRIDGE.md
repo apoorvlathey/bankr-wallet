@@ -37,7 +37,7 @@ Uses **Socket Swap V3**. The default backend is `https://public-backend.socket.t
 | `/api/bridge/submit` | POST | none | Deprecated; returns 410 because V3 has no submit endpoint |
 | `/api/bridge/status` | GET | `/v3/swap/status?quoteId=` | Cross-chain status by quoteId, adapted to status codes 0–7 |
 | `/api/bridge/chains` | GET | `/v3/swap/supported-chains` | Cached 1h in-memory |
-| `/api/bridge/tokens` | GET | `/v3/swap/tokens/list?chainIds=&list=full` | Cached 1h in-memory |
+| `/api/bridge/tokens` | GET | `/v3/swap/tokens/list?chainIds=` | Cached 1h in-memory shortlisted token list |
 
 ### Headers (shared by every route)
 

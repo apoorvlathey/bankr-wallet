@@ -688,7 +688,6 @@ export function PreviewScreen({
           <MoreActionsView
             onBack={noop}
             onWalletConnect={noop}
-            onHideTokens={noop}
             fromAddress={account.address}
             walletConnectSessionCount={1}
           />
