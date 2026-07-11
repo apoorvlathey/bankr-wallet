@@ -168,6 +168,7 @@ import {
   getResolvedChainByName,
   getVisibleChains,
 } from "@/lib/chains";
+import { playInteractionSound } from "@/sounds/soundManager";
 
 // Combined request type for unified ordering
 export type CombinedRequest =
@@ -990,8 +991,21 @@ function App() {
       const addChainRequests = await loadPendingAddChainRequests();
       const dappConnectionRequests = await loadPendingDappConnectionRequests();
       await loadActiveDappContext();
-      await loadCrossDappBatch();
+      const loadedCrossDappBatch = await loadCrossDappBatch();
       await loadWalletConnectSessionCount();
+
+      if (
+        requests.length > 0 ||
+        sigRequests.length > 0 ||
+        permissionRequests.length > 0 ||
+        batchRequests.length > 0 ||
+        watchAssetRequests.length > 0 ||
+        addChainRequests.length > 0 ||
+        dappConnectionRequests.length > 0 ||
+        (loadedCrossDappBatch?.entries.length ?? 0) > 0
+      ) {
+        void playInteractionSound("requestReceived");
+      }
 
       // Load accounts
       let { accounts: loadedAccounts, activeAccount: loadedActive } =
@@ -1162,6 +1176,7 @@ function App() {
         return;
       }
       if (message.type === "newPendingTxRequest" && message.txRequest) {
+        void playInteractionSound("requestReceived");
         const txRequest = message.txRequest;
         // Don't append to pendingRequests here — the storage change listener
         // will sync the full list from chrome.storage.local, avoiding duplicates.
@@ -1179,6 +1194,7 @@ function App() {
         return;
       }
       if (message.type === "newPendingSignatureRequest" && message.sigRequest) {
+        void playInteractionSound("requestReceived");
         const sigRequest = message.sigRequest;
         // Don't append to pendingSignatureRequests here — the storage change listener
         // will sync the full list from chrome.storage.local, avoiding duplicates.
@@ -1196,6 +1212,7 @@ function App() {
         return;
       }
       if (message.type === "newPendingBatchTxRequest" && message.batchRequest) {
+        void playInteractionSound("requestReceived");
         const batchReq = message.batchRequest;
         (async () => {
           const isUnlocked = await checkLockState();
@@ -1213,6 +1230,7 @@ function App() {
         message.type === "newPendingErc7715PermissionRequest" &&
         message.request
       ) {
+        void playInteractionSound("requestReceived");
         const permissionRequest =
           message.request as PendingErc7715PermissionRequest;
         (async () => {
@@ -1228,6 +1246,7 @@ function App() {
         return;
       }
       if (message.type === "newPendingWatchAssetRequest" && message.request) {
+        void playInteractionSound("requestReceived");
         const watchRequest = message.request as PendingWatchAssetRequest;
         (async () => {
           const isUnlocked = await checkLockState();
@@ -1242,6 +1261,7 @@ function App() {
         return;
       }
       if (message.type === "newPendingAddChainRequest" && message.request) {
+        void playInteractionSound("requestReceived");
         const addChainReq = message.request as PendingAddChainRequest;
         (async () => {
           const isUnlocked = await checkLockState();
@@ -1259,6 +1279,7 @@ function App() {
         message.type === "newPendingDappConnectionRequest" &&
         message.request
       ) {
+        void playInteractionSound("requestReceived");
         const connectionRequest =
           message.request as PendingDappConnectionRequest;
         (async () => {

@@ -70,6 +70,7 @@ import {
   InlineDisclosure,
   OutcomeCard,
 } from "@/components/ui";
+import { playInteractionSound } from "@/sounds/soundManager";
 
 // Success animation keyframes
 const scaleIn = keyframes`
@@ -611,6 +612,7 @@ function TransactionConfirmation({
   }, [tx.to]);
 
   const handleConfirm = async () => {
+    void playInteractionSound("transactionConfirm");
     setState("submitting");
     setError("");
 

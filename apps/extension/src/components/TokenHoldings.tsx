@@ -79,6 +79,7 @@ import {
 } from "@/constants/canonicalTokens";
 import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
+import { playInteractionSound } from "@/sounds/soundManager";
 import type { NetworksInfo } from "@/types";
 
 // Module-level cache so navigating away and back to the homepage doesn't flash
@@ -390,6 +391,7 @@ function AggregatedAssetRow({
         _focusVisible={{
           boxShadow: "inset 0 0 0 2px var(--chakra-colors-border-focus)",
         }}
+        onMouseEnter={() => void playInteractionSound("portfolioTokenHover")}
         onClick={() => setIsExpanded((expanded) => !expanded)}
       >
         <ListItemMedia>

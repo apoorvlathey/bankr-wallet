@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Box, HStack, Text, Skeleton } from "@chakra-ui/react";
-import NumberFlow from "@number-flow/react";
+import NumberFlow, { type Format } from "@number-flow/react";
 import { getSnapshots } from "@/chrome/portfolioSnapshotStorage";
 import { isDarkThemeId, useTheme } from "@/theme";
 import { formatAbsoluteTimestamp } from "@/lib/timeFormatUtils";
 import PortfolioChartDither from "@/components/PortfolioChartDither";
 import { buildPortfolioChartPath } from "@/components/portfolioChartPath";
+import { playInteractionSound } from "@/sounds/soundManager";
 
 interface PortfolioChartProps {
   address: string;
@@ -22,7 +23,7 @@ const CHART_HEIGHT = 60;
 const CHART_PADDING_TOP = 4;
 const CHART_PADDING_BOTTOM = 4;
 
-const HOVER_VALUE_FORMAT: Intl.NumberFormatOptions = {
+const HOVER_VALUE_FORMAT: Format = {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 };
@@ -63,6 +64,8 @@ export default function PortfolioChart({
   const [loading, setLoading] = useState(true);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const hoverIndexRef = useRef<number | null>(null);
+  const isPointerDraggingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -144,12 +147,26 @@ export default function PortfolioChart({
           closest = i;
         }
       }
+      const previousIndex = hoverIndexRef.current;
+      if (closest === previousIndex) return;
+      hoverIndexRef.current = closest;
       setHoverIndex(closest);
+      const displayedValueChanged =
+        previousIndex === null ||
+        snapshots[previousIndex]?.totalValueUsd !==
+          snapshots[closest]?.totalValueUsd;
+      if (!hideValue && displayedValueChanged && !isPointerDraggingRef.current) {
+        void playInteractionSound("chartValueChange");
+      }
     },
-    [points]
+    [hideValue, points, snapshots]
   );
 
-  const handleMouseLeave = useCallback(() => setHoverIndex(null), []);
+  const handleMouseLeave = useCallback(() => {
+    hoverIndexRef.current = null;
+    isPointerDraggingRef.current = false;
+    setHoverIndex(null);
+  }, []);
 
   if (loading) {
     return (
@@ -262,6 +279,15 @@ export default function PortfolioChart({
         overflow="hidden"
         bg={isDarkTheme ? "surface.sunken" : "surface.raised"}
         cursor="crosshair"
+        onPointerDown={() => {
+          isPointerDraggingRef.current = true;
+        }}
+        onPointerUp={() => {
+          isPointerDraggingRef.current = false;
+        }}
+        onPointerCancel={() => {
+          isPointerDraggingRef.current = false;
+        }}
         onPointerMove={handleMouseMove}
         onPointerLeave={handleMouseLeave}
       >

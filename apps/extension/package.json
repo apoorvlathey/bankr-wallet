@@ -72,6 +72,7 @@
     "@walletconnect/core": "2.23.9",
     "@walletconnect/utils": "2.23.9",
     "blo": "^2.0.0",
+    "cuelume": "0.1.0",
     "ethers": "6",
     "framer-motion": "^11.18.2",
     "multiformats": "^13.4.2",

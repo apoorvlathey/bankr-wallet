@@ -109,3 +109,11 @@ export const DatabaseIcon = (props: any) => (
     <path d="M3 11v6c0 1.66 4.03 3 9 3s9-1.34 9-3v-6" />
   </Icon>
 );
+
+export const SpeakerIcon = (props: any) => (
+  <Icon {...lucideProps} {...props}>
+    <path d="M11 5 6 9H2v6h4l5 4V5z" />
+    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+  </Icon>
+);

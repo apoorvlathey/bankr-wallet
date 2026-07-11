@@ -111,6 +111,9 @@ importers:
       blo:
         specifier: ^2.0.0
         version: 2.0.0
+      cuelume:
+        specifier: 0.1.0
+        version: 0.1.0
       ethers:
         specifier: '6'
         version: 6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
@@ -3913,6 +3916,9 @@ packages:
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
 
+  cuelume@0.1.0:
+    resolution: {integrity: sha512-J2RRt92Gh1a0ztnjwLEyLfGnDIiWz14vC9aTmg7ZgxRkEk8vR+QxFOz+v1tqntFvl06n5G4si8QCQgHfWjnneA==}
+
   cuer@0.0.3:
     resolution: {integrity: sha512-f/UNxRMRCYtfLEGECAViByA3JNflZImOk11G9hwSd+44jvzrc99J35u5l+fbdQ2+ZG441GvOpaeGYBmWquZsbQ==}
     peerDependencies:
@@ -4461,7 +4467,7 @@ packages:
     hasBin: true
 
   esm-env@1.2.2:
-    resolution: {integrity: sha512-Epxrv+Nr/CaL4ZcFGPJIYLWFom+YeV1DqMLHJoEd9SYRxNbaFruBwfEX/kkHUJf55j2TUbmDcmuilbP1TmXHA==}
+    resolution: {integrity: sha512-Epxrv+Nr/CaL4ZcFGPJIYLWFom+YeV1DqMLHJoEd9SYRxNbaFruBwfEX/kkHUJf55j2+TUbmDcmuilbP1TmXHA==}
 
   espree@10.4.0:
     resolution: {integrity: sha512-j6PAQ2uUr79PZhBjP5C5fhl8e39FmRnOjsD5lGnWrFU8i2G776tBK7+nP8KuQUTTyAZUwfQqXAgrVH5MbH9CYQ==}
@@ -6597,6 +6603,7 @@ packages:
   tsconfck@3.1.6:
     resolution: {integrity: sha512-ks6Vjr/jEw0P1gmOVwutM3B7fWxoWBL2KRDb1JfqGVawBmO5UsvmWOQFGHBPl5yxYz4eERr19E6L7NMv+Fej4w==}
     engines: {node: ^18 || >=20}
+    deprecated: unmaintained
     hasBin: true
     peerDependencies:
       typescript: ^5.0.0
@@ -11840,6 +11847,8 @@ snapshots:
 
   csstype@3.2.3: {}
 
+  cuelume@0.1.0: {}
+
   cuer@0.0.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3):
     dependencies:
       qr: 0.5.4
@@ -12441,7 +12450,7 @@ snapshots:
 
   extension-port-stream@3.0.0:
     dependencies:
-      readable-stream: 3.6.2
+      readable-stream: 4.7.0
       webextension-polyfill: 0.10.0
 
   eyes@0.1.8: {}

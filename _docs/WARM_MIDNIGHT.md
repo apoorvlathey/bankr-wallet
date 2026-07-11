@@ -133,6 +133,36 @@ identity assets, and blue reserved for transactional/focus roles.
 - Hover-triggered content must remain open while the pointer moves from the
   trigger into the content. Keyboard and focus behavior must remain usable.
 
+### 4.1 Interaction sound contract
+
+- Sound is a small reinforcement for meaningful outcomes, never a continuous
+  soundtrack or a substitute for visible feedback.
+- Prefer brief cues for confirmation, incoming requests, action-sheet
+  transitions, and a few high-confidence state changes. Do not add audio to
+  routine navigation, typing, scrolling, transaction amounts, or every button
+  press. The approved hover exception is limited to portfolio token rows plus
+  Send, Swap, Shield, and More; those cues are fine-pointer-only and
+  rate-limited by the manager.
+- Product surfaces request semantic cues from `sounds/soundManager.ts`; they do
+  not import Cuelume or choose recipe names directly.
+- Settings → Sounds owns one global `soundsEnabled` preference. It defaults on,
+  is stored locally on the browser, and immediately applies across open
+  extension views. Every future cue must respect it.
+- Sound playback is enhancement-only. Authentication, confirmation, errors,
+  and accessibility must remain fully understandable when audio is blocked or
+  disabled.
+- High-frequency value feedback uses the WalletChan-owned value pulse: 520Hz
+  sine, 1500Hz low-pass, 5ms attack, and 45ms decay. The chart cue is limited
+  to one pulse per 26ms and tracks actual visible NumberFlow changes rather
+  than raw pointer events.
+- Sliders play a short custom tick for actual non-snap value changes, capped at
+  one per 26ms. Normalize into the 0/25/50/75/100 snap stops before playback,
+  discard repeats inside one snap band, and play Cuelume `release` once when
+  entering a different stop.
+- Portfolio token hover uses a shorter sibling of that voice: the same sine
+  and filter with a 2ms attack and 12ms decay. Keep its fine-pointer-only
+  behavior and 140ms cooldown so quickly crossing the list stays restrained.
+
 ## 5. Approved surface decisions
 
 ### 5.1 Unlock
@@ -158,7 +188,7 @@ Mascot lifecycle:
 - Empty password, including input focus: sleeping.
 - First typed character: attentive.
 - Correct password or successful biometric ceremony: brief success state with
-  sparkles, followed by the screen fade.
+  sparkles and one quiet sparkle cue, followed by the screen fade.
 - Incorrect password: invalid/concerned state with Manpu.
 - Automatic biometric prompt: attentive while the OS prompt is active.
 - Cancelled biometric prompt: return to the password-mode flow.
@@ -174,6 +204,7 @@ Relevant files:
 - `components/UnlockMascot.tsx`
 - `components/UnlockMascot.css`
 - `components/unlockMascotState.ts`
+- `sounds/soundManager.ts`
 
 ### 5.2 App header
 

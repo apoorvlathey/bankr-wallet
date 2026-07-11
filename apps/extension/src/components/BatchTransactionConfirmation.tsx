@@ -75,6 +75,7 @@ import {
   InlineDisclosure,
   OutcomeCard,
 } from "@/components/ui";
+import { playInteractionSound } from "@/sounds/soundManager";
 
 const scaleIn = keyframes`
   0% { transform: scale(0) rotate(-10deg); opacity: 0; }
@@ -433,6 +434,7 @@ function BatchTransactionConfirmation({
 
   const handleConfirmSplit = async () => {
     if (splitting) return;
+    void playInteractionSound("transactionConfirm");
     setSplitting(true);
     try {
       const result = await new Promise<{ success: boolean; error?: string }>(
@@ -479,6 +481,7 @@ function BatchTransactionConfirmation({
   }, [chainId, accountType, isAtomic7702]);
 
   const handleConfirm = async () => {
+    void playInteractionSound("transactionConfirm");
     setState("submitting");
     setError("");
 

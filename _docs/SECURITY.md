@@ -579,6 +579,7 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 | `chatHistory`              | No               | Chat conversation history                               |
 | `hiddenPortfolioTokens`    | No               | Global list of ERC-20 token keys the user hid from portfolio totals. Contains public token metadata only. |
 | `portfolioHoldingsCache`   | No               | Best-effort cached Holdings display snapshot (`tokens`, DeFi rows, totals, public token metadata, and RPC issue chain IDs). Optional and pruned; contains no credentials or signing material. Renderer localStorage mirror `walletchan:portfolioHoldingsCache:v1` stores the same public display shape for synchronous first paint. |
+| `soundsEnabled`           | No               | Browser-local global interaction-sound preference. Missing values default to enabled; it does not affect authentication or signing behavior. |
 | `cs:enabled`               | No               | Clear-signing descriptor fetch opt-out flag             |
 | `cs:desc:{chainId}:{address}:{kind}:{selector\|format}` | No | Clear-signing descriptor cache; public metadata only, schema-versioned |
 

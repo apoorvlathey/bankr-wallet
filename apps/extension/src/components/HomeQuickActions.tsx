@@ -1,5 +1,6 @@
 import { Box, Button, Grid, Icon, Text } from "@chakra-ui/react";
 import { isDarkThemeId, useTheme } from "@/theme";
+import { playInteractionSound } from "@/sounds/soundManager";
 
 interface HomeQuickActionsProps {
   onSend: () => void;
@@ -128,6 +129,7 @@ export default function HomeQuickActions({
               : action.label
           }
           onClick={handlers[action.id]}
+          onMouseEnter={() => void playInteractionSound("quickActionHover")}
           _hover={{ bg: "surface.raisedHover" }}
           _active={{ bg: "surface.sunken" }}
         >

@@ -75,6 +75,11 @@ import {
   ScreenBody,
   StickyActionBar,
 } from "@/components/ui";
+import {
+  BALANCE_SLIDER_SNAP_POINTS,
+  snapBalanceSliderValue,
+  useSliderValueSound,
+} from "@/sounds/useSliderValueSound";
 
 // Swap direction arrow icon
 const SwapArrowIcon = (props: React.ComponentProps<typeof Icon>) => (
@@ -195,6 +200,7 @@ function SwapView({
     getChainConfig(buyChainId).name;
   const isBridge = sellChainId !== buyChainId;
   const toast = useThemedToast();
+  const sliderSound = useSliderValueSound();
 
   // Holdings (filtered to the current sell chain)
   const [, setHoldings] = useState<PortfolioToken[]>([]);
@@ -1943,18 +1949,18 @@ function SwapView({
                 step={1}
                 value={sliderValue}
                 focusThumbOnChange={false}
+                onChangeStart={() => sliderSound.onChangeStart(sliderValue)}
+                onChangeEnd={(val) =>
+                  sliderSound.onChangeEnd(snapBalanceSliderValue(val))
+                }
                 onChange={(val) => {
-                  const SNAP_THRESHOLD = 3;
-                  const snaps = [0, 25, 50, 75, 100];
-                  const nearest = snaps.find(
-                    (s) => Math.abs(val - s) <= SNAP_THRESHOLD,
-                  );
-                  const snapped = nearest !== undefined ? nearest : val;
+                  const snapped = snapBalanceSliderValue(val);
+                  if (!sliderSound.onValueChange(snapped)) return;
                   setSliderValue(snapped);
                   setAmountFromSlider(snapped);
                 }}
               >
-                {[0, 25, 50, 75, 100].map((pct) => (
+                {BALANCE_SLIDER_SNAP_POINTS.map((pct) => (
                   <SliderMark
                     key={pct}
                     value={pct}

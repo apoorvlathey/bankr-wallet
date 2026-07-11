@@ -113,6 +113,66 @@ not a synthetic replacement for any product screen.
 See `_docs/STYLING.md` for the full token vocabulary and authoring rules.
 See `_docs/THEMING_PRD.md` for the engine architecture and phased rollout history.
 
+## Interaction Sounds
+
+The renderer uses `cuelume` plus one WalletChan-owned Web Audio voice for a
+deliberately small set of synthesized cues. Feature components never import
+the package or custom synthesizer directly. They call
+`playInteractionSound()` with a product-level cue from
+`src/sounds/soundManager.ts`, which owns the cue-to-recipe mapping and applies
+the global preference before playback.
+
+`chrome.storage.local.soundsEnabled` is the canonical preference. Missing or
+invalid values default to enabled, so this additive key needs no migration.
+The manager listens to `chrome.storage.onChanged`, keeping popup, sidepanel, and
+full-page extension views aligned. `useSoundsEnabled()` exposes the same state
+to Settings → Sounds. Cuelume failures or browser autoplay restrictions remain
+silent no-ops; sound never gates authentication or any other wallet behavior.
+
+Current semantic cues:
+
+| Cue | Cuelume recipe | Trigger |
+| --- | --- | --- |
+| `unlockSuccess` | `sparkle` | Successful password or biometric unlock |
+| `transactionConfirm` | `success` | User presses Confirm on a single, batch, or split transaction |
+| `requestReceived` | `chime` | A dapp connection, transaction, signature, permission, asset-watch, or chain-add request reaches the renderer |
+| `actionSheetTransition` | `bloom` | The shared `ActionSheet` opens or closes |
+| `chartValueChange` | Custom value pulse | Portfolio-chart NumberFlow value changes |
+| `sliderValueChange` | Short custom tick | Send/Swap slider moves through non-snap values |
+| `sliderSnap` | `release` | Send/Swap slider enters a different 0/25/50/75/100 snap stop |
+| `portfolioTokenHover` | Custom value click | Fine-pointer entry into a portfolio token row; rate-limited |
+| `quickActionHover` | `press` | Fine-pointer entry into Send, Swap, Shield, or More; rate-limited |
+
+The manager owns per-cue cooldowns and fine-pointer eligibility as well as the
+recipe mapping. A newly opened renderer plays `requestReceived` when it
+bootstraps with pending dapp work; an already-open renderer plays it from the
+corresponding `newPending*` runtime message.
+
+`customValueSound.ts` synthesizes the value sounds as a 520Hz sine routed
+through a 1500Hz low-pass filter. The chart retains its 5ms attack and 45ms
+decay; the slider uses a quieter 3ms attack and 18ms decay so adjacent movement
+ticks stay discrete. Both semantic cues can evolve independently. The chart cue
+is capped at one pulse per 26ms and plays only when the visible NumberFlow value
+changes, not on every raw pointer event.
+
+`useSliderValueSound()` normalizes raw slider input before state updates or
+playback. Values within three percentage points of 0/25/50/75/100 collapse to
+the same snap value, and repeated events for that normalized value return early
+without rewriting the amount or replaying audio. Entering a different snap
+stop plays Cuelume `release` once. Actual non-snap value changes play the short
+`sliderValueChange` tick, capped at one per 26ms. The hook uses
+Chakra's `onChangeStart`/`onChangeEnd` lifecycle rather than inferred pointer
+state, so mouse, touch, and keyboard input follow the same rules. Its initial
+0% value is seeded as the resting snap point, preventing Chakra's first value
+callback from playing `release` before the user has actually moved the slider.
+
+The same synthesizer exposes a portfolio-token value-click variant: the same
+520Hz sine and 1500Hz low-pass with a 2ms attack, 12ms decay, and 0.02 peak
+gain. It retains the token-hover cue's fine-pointer gating and 140ms cooldown.
+
+New cues should be added to the central mapping only after confirming they fit
+the restraint rules in `_docs/WARM_MIDNIGHT.md`.
+
 ## Account Types
 
 The extension supports four distinct account types that can be used simultaneously:
@@ -522,6 +582,11 @@ src/
 │   └── chainConfig.ts       # Re-exports chain UI config from chainRegistry
 ├── lib/
 │   └── siwe/                # EIP-4361 parser + validation shared by UI and signing handlers
+├── sounds/
+│   ├── customValueSound.ts  # WalletChan-owned Web Audio value-pulse synthesizer
+│   ├── soundManager.ts      # Semantic cue mapping, Cuelume playback, and local preference
+│   ├── useSliderValueSound.ts # Drag-aware slider sound lifecycle
+│   └── useSoundsEnabled.ts  # React subscription for the global sound preference
 ├── pages/
 │   └── Onboarding.tsx       # Full-page onboarding wizard for first-time setup
 ├── components/
@@ -540,7 +605,8 @@ src/
 │   │   ├── EditChain.tsx    # Edit existing chain
 │   │   ├── ChangePassword.tsx # Password change flow
 │   │   ├── AutoLockSettings.tsx # Auto-lock timeout configuration
-│   │   └── AgentPasswordSettings.tsx # Agent password set/remove (master only)
+│   │   ├── AgentPasswordSettings.tsx # Agent password set/remove (master only)
+│   │   └── SoundsSettings.tsx # Global interaction-sound preference
 │   ├── AccountSwitcher.tsx  # Account dropdown with ENS avatars/names, seed group labels
 │   ├── AccountSettingsModal.tsx # Account settings (rename, reveal key/seed, remove, change API key, refresh ENS)
 │   ├── RevealPrivateKeyModal.tsx # Password-protected private key reveal

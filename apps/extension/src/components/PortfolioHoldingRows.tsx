@@ -35,6 +35,7 @@ import { getChainConfig } from "@/constants/chainConfig";
 import { getChainEnvironmentLabel } from "@/lib/chainIcons";
 import { getResolvedChainById } from "@/lib/chains";
 import type { NetworksInfo } from "@/types";
+import { playInteractionSound } from "@/sounds/soundManager";
 
 const ERC20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -414,6 +415,7 @@ export function PortfolioTokenRow({
         density="default"
         aria-label={`Open actions for ${token.symbol}`}
         onClick={() => setIsActionsOpen(true)}
+        onMouseEnter={() => void playInteractionSound("portfolioTokenHover")}
       >
         {rowContent}
       </ListItem>

@@ -912,6 +912,30 @@ import { Circle, Square, Triangle, Check, ChevronDown } from "lucide-react";
 
 ## 8. Animation & Micro-Interactions
 
+### Interaction sounds
+
+Treat sound like motion: it should clarify or reinforce an outcome, not decorate
+every input. WalletChan uses short cues only for selected success/completion
+moments, action-sheet transitions, and rare, meaningful state changes. Routine
+navigation, typing, scrolling, and blanket press/release audio stay silent.
+Portfolio token rows and the Send, Swap, Shield, and More actions are the
+deliberate hover exception; their distinct cues must remain fine-pointer-only
+and centrally rate-limited.
+
+Feature components call semantic cues through `src/sounds/soundManager.ts` and
+must not import Cuelume directly. Every cue must remain understandable visually,
+respect Settings → Sounds, and fail silently when Web Audio is unavailable or
+blocked. See `_docs/WARM_MIDNIGHT.md` for the current product-level contract.
+
+The custom value pulse is reserved for values that visibly transition. The
+portfolio chart cue follows NumberFlow updates and is rate-limited to one pulse
+per 26ms. Slider movement uses a quieter 3ms attack / 18ms decay tick for actual
+non-snap value changes, also capped at one per 26ms. Normalize 0/25/50/75/100
+stops before playback, discard repeats within a stop, and use `release` once on
+stop entry.
+Portfolio token hover uses its 14ms value-click sibling rather than the longer
+pulse, while retaining fine-pointer gating and a 140ms cooldown.
+
 **Feel**: Mechanical, snappy, geometric (no soft organic movement)
 
 **Transition Props**:

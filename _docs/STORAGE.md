@@ -121,6 +121,7 @@ without re-reading the reusable signed delegation context.
 | Key               | Shape                       | Description                                                                                                      | Introduced |
 | ----------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------- |
 | `selectedThemeId` | `"bauhaus" \| "midnight"`   | Active theme ID. Absent or invalid value falls back to `"bauhaus"` to preserve existing installs. Fresh installs initialize this key to `"midnight"` from `background.ts`/`onboarding.tsx`. Canonical store is `chrome.storage.local`; mirrored to `window.localStorage` for synchronous pre-React boot (no flash). See `_docs/THEMING_PRD.md`. | v3.2.0 |
+| `soundsEnabled` | `boolean` | Global interaction-sound preference used by every extension renderer. Absent or invalid values default to `true`; Settings → Sounds writes the canonical local value and open views update through `chrome.storage.onChanged`. Additive and non-critical, so no migration is required. | next |
 
 These metadata/image cache keys are non-critical. Cache writes are best-effort
 and may be skipped if `chrome.storage.local` rejects the write; callers still use

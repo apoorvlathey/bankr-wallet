@@ -21,6 +21,7 @@ import AutoLockSettings from "./AutoLockSettings";
 import AgentPasswordSettings from "./AgentPasswordSettings";
 import BiometricUnlockSettings from "./BiometricUnlockSettings";
 import AppearanceSettings from "./AppearanceSettings";
+import SoundsSettings from "./SoundsSettings";
 import ClearSigningSettings from "./ClearSigningSettings";
 import EnsBrowsingSettings from "./EnsBrowsingSettings";
 import SecuritySettings from "./SecuritySettings";
@@ -55,6 +56,7 @@ export type SettingsTab =
   | "agentPassword"
   | "biometricUnlock"
   | "appearance"
+  | "sounds"
   | "ensBrowsing"
   | "clearSigning"
   | "clearTxHistory";
@@ -257,6 +259,8 @@ function Settings({
     );
   } else if (tab === "appearance") {
     body = <AppearanceSettings onCancel={() => setTab("main")} />;
+  } else if (tab === "sounds") {
+    body = <SoundsSettings onBack={() => setTab("main")} />;
   } else if (tab === "clearSigning") {
     body = (
       <ClearSigningSettings
@@ -326,6 +330,7 @@ function Settings({
         showChevron
         onClick={() => setTab("data")}
       />,
+      renderRootLeaf("sounds"),
       renderRootLeaf("about"),
     ];
 

@@ -73,6 +73,11 @@ import {
   StickyActionBar,
   ActionSheet,
 } from "@/components/ui";
+import {
+  BALANCE_SLIDER_SNAP_POINTS,
+  snapBalanceSliderValue,
+  useSliderValueSound,
+} from "@/sounds/useSliderValueSound";
 
 /** USDC on Base (ERC-3009 transferWithAuthorization) */
 const BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
@@ -237,6 +242,7 @@ function TokenTransfer({
   const toast = useThemedToast();
   const { tokens } = useTheme();
   const { networksInfo } = useNetworks();
+  const sliderSound = useSliderValueSound();
   const [selectedChainId, setSelectedChainId] = useState(initialToken?.chainId || chainId);
   const [selectedToken, setSelectedToken] = useState<PortfolioToken | null>(initialToken || null);
   const [allTokens, setAllTokens] = useState<PortfolioToken[]>([]);
@@ -1584,16 +1590,18 @@ function TokenTransfer({
                 step={1}
                 value={sliderValue}
                 focusThumbOnChange={false}
+                onChangeStart={() => sliderSound.onChangeStart(sliderValue)}
+                onChangeEnd={(val) =>
+                  sliderSound.onChangeEnd(snapBalanceSliderValue(val))
+                }
                 onChange={(val) => {
-                  const SNAP_THRESHOLD = 3;
-                  const snaps = [0, 25, 50, 75, 100];
-                  const nearest = snaps.find((s) => Math.abs(val - s) <= SNAP_THRESHOLD);
-                  const snapped = nearest !== undefined ? nearest : val;
+                  const snapped = snapBalanceSliderValue(val);
+                  if (!sliderSound.onValueChange(snapped)) return;
                   setSliderValue(snapped);
                   setAmountFromSlider(snapped);
                 }}
               >
-                {[0, 25, 50, 75, 100].map((pct) => (
+                {BALANCE_SLIDER_SNAP_POINTS.map((pct) => (
                   <SliderMark
                     key={pct}
                     value={pct}

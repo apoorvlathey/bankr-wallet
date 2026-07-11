@@ -17,6 +17,7 @@ import {
   createPasskeyPromptGate,
   finishPasskeyPrompt,
 } from "@/components/passkeyPromptGate";
+import { playInteractionSound } from "@/sounds/soundManager";
 
 interface UnlockScreenProps {
   onUnlock: () => void;
@@ -243,6 +244,7 @@ function UnlockScreen({
         });
 
         if (result.success) {
+          void playInteractionSound("unlockSuccess");
           onUnlock();
           return;
         }
@@ -301,6 +303,7 @@ function UnlockScreen({
       { type: "unlockWallet", password },
       (result: { success: boolean; error?: string }) => {
         if (result.success) {
+          void playInteractionSound("unlockSuccess");
           onUnlock();
         } else {
           setError(

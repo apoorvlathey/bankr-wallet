@@ -109,6 +109,36 @@
 - High-frequency wallet actions stay nearly instant. Full-screen push/back motion communicates hierarchy.
 - Reduced motion: replace translation and scale with an opacity-only state change.
 
+## Interaction sound
+
+- Character: tiny, warm, and precise. Sound reinforces a small set of meaningful
+  outcomes without making the wallet feel game-like or noisy.
+- Default: enabled, with one global Settings → Sounds switch. Audio is always
+  optional and never carries information that is missing visually.
+- Trigger discipline: confirmation presses, incoming dapp requests, action
+  sheet transitions, and a tiny set of deliberate hover targets only. No
+  routine navigation, typing, scrolling, or blanket button sounds. Hover cues
+  are fine-pointer-only and centrally rate-limited so sweeping a list does not
+  become a sound cascade.
+- Architecture: product code requests semantic cues from the shared sound
+  manager; Cuelume recipe choices and preference enforcement stay centralized.
+- Signature cue: successful unlock pairs the mascot sparkle pose with Cuelume's
+  short `sparkle` recipe for one coherent reassurance moment.
+- Current palette: `success` acknowledges a transaction Confirm press, `chime`
+  announces an incoming dapp request, `bloom` accompanies action-sheet opening
+  and closing, the custom value click marks portfolio token rows, and `press`
+  marks the Send, Swap, Shield, and More action targets.
+- Value pulse: a local Web Audio voice uses a 520Hz sine through a 1500Hz
+  low-pass filter. The chart retains its 5ms attack / 45ms decay pulse and is
+  capped at one pulse per 26ms.
+- Slider movement: actual non-snap value changes play a quieter 3ms attack /
+  18ms decay tick, also capped at one per 26ms so successive steps stay
+  discrete. Entering a new 0/25/50/75/100 snap stop plays Cuelume `release`
+  once; repeated raw values within the same snap band are discarded.
+- Value click: portfolio token hover uses the same oscillator/filter character
+  with a 2ms attack, 12ms decay, and slightly lower gain, producing a related
+  click rather than the pulse's sustained tail.
+
 ## Iconography
 
 - Set: existing Chakra/custom icons, normalized to a 20 or 24px grid with approximately 2px strokes and rounded joins.
@@ -226,3 +256,27 @@
   reserved supporting copy for the WalletChan OS destination.
 - 2026-07-11: increased action-sheet row height and vertical padding so
   single-line actions retain comfortable rhythm without supporting copy.
+- 2026-07-11: added the restrained interaction-sound contract, a browser-local
+  Sounds preference, and the first semantic cue: one sparkle after successful
+  password or biometric unlock.
+- 2026-07-12: extended the semantic sound palette to transaction confirmation,
+  incoming dapp requests, and rate-limited fine-pointer hover cues for
+  portfolio tokens and the four homepage actions.
+- 2026-07-12: paired the shared action sheet's opening and closing transitions
+  with the warm `bloom` cue at the component boundary.
+- 2026-07-12: added the custom value-pulse voice for slider changes and
+  portfolio-chart NumberFlow scrubbing, including 26ms rate limiting and
+  continuous-drag suppression.
+- 2026-07-12: derived a 14ms value-click variant for portfolio token hover so
+  list traversal shares the value-pulse character without its longer tail.
+- 2026-07-12: split chart and slider sound semantics, deduplicated sliders on
+  normalized snap values, and assigned one `release` cue per newly-entered 25%
+  stop to eliminate sustained snap-band playback.
+- 2026-07-12: restored continuous slider movement feedback with a shorter,
+  lower-gain pulse while preserving one-shot `release` cues at snap stops.
+- 2026-07-12: reduced the Sounds settings screen to one concise preference row,
+  removing repeated explanatory copy around the toggle.
+- 2026-07-12: extended the portfolio token-hover cue to aggregate asset rows so
+  grouped ETH, USDC, and USDT behave like regular token rows.
+- 2026-07-12: seeded amount-slider sound state at its initial 0% position so
+  first contact is silent and `release` remains reserved for real snap entry.

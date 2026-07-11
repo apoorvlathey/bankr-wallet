@@ -13,11 +13,13 @@ import {
   ChatBubbleIcon,
   ShieldIcon,
   GlobeIcon,
+  SpeakerIcon,
 } from "./icons";
 
 export type LeafId =
   | "about"
   | "appearance"
+  | "sounds"
   | "changePassword"
   | "agentPassword"
   | "biometricUnlock"
@@ -52,6 +54,13 @@ export const LEAF_ENTRIES: readonly LeafEntry[] = [
     title: "Appearance",
     subtitle: "Choose theme and visual style",
     keywords: ["theme", "color", "dark", "light", "bauhaus", "midnight", "style"],
+    group: null,
+  },
+  {
+    id: "sounds",
+    title: "Sounds",
+    subtitle: "Control subtle interaction sounds",
+    keywords: ["sound", "audio", "mute", "interaction", "feedback", "sparkle"],
     group: null,
   },
   {
@@ -153,6 +162,7 @@ export function filterLeaves(query: string): LeafEntry[] {
 export type NavigableLeafId =
   | "about"
   | "appearance"
+  | "sounds"
   | "changePassword"
   | "agentPassword"
   | "biometricUnlock"
@@ -202,6 +212,21 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
           iconBg="accent.secondary"
           iconColor="accentFg.secondary"
           cornerAccent="secondary"
+          showChevron
+          onClick={() => ctx.onNavigate(id)}
+        />
+      );
+
+    case "sounds":
+      return (
+        <SettingsRow
+          key={id}
+          title="Sounds"
+          subtitle="Control subtle interaction sounds"
+          icon={<SpeakerIcon boxSize={5} />}
+          iconBg="accent.highlight"
+          iconColor="accentFg.highlight"
+          cornerAccent="highlight"
           showChevron
           onClick={() => ctx.onNavigate(id)}
         />
