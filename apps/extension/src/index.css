@@ -30,13 +30,12 @@
 }
 
 html {
-  /* Chrome still opens the action popup at WalletChan's familiar 360x600
-     size, while narrower preview/reflow viewports can supply their actual
-     dimensions instead of being forced into a clipped fixed canvas. */
-  width: min(360px, 100vw);
-  height: min(600px, 100dvh);
-  min-width: min(320px, 100vw);
-  min-height: min(568px, 100dvh);
+  /* The Chrome action popup needs an intrinsic canvas. Using 100dvh here can
+     resolve against Chrome's provisional popup height and permanently clip
+     the app. Sidepanel, fullscreen, popup-window, and preview contexts each
+     override these dimensions explicitly below or in preview.css. */
+  width: 360px;
+  height: 600px;
 }
 
 body {

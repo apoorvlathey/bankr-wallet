@@ -1,0 +1,57 @@
+import { useEffect, useState } from "react";
+import { Box, Image, Text } from "@chakra-ui/react";
+import { isDarkThemeId, useTheme } from "@/theme";
+
+interface DappSiteIconProps {
+  src?: string | null;
+  label: string;
+  size?: string;
+  imageSize?: string;
+}
+
+/**
+ * Shared dapp favicon treatment. Midnight supplies a light canvas behind
+ * image-backed icons so transparent dark artwork remains visible.
+ */
+export default function DappSiteIcon({
+  src,
+  label,
+  size = "38px",
+  imageSize = "24px",
+}: DappSiteIconProps) {
+  const [failed, setFailed] = useState(false);
+  const { themeId } = useTheme();
+  const isDarkTheme = isDarkThemeId(themeId);
+  const showImage = !!src && !failed;
+
+  useEffect(() => setFailed(false), [src]);
+
+  return (
+    <Box
+      boxSize={size}
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      bg={showImage && isDarkTheme ? "whiteAlpha.900" : "surface.sunken"}
+      border="1px solid"
+      borderColor="border.subtle"
+      borderRadius="md"
+      overflow="hidden"
+      flexShrink={0}
+    >
+      {showImage ? (
+        <Image
+          src={src || undefined}
+          alt=""
+          boxSize={imageSize}
+          objectFit="contain"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <Text color="fg.primary" fontSize="sm" fontWeight="700">
+          {label.slice(0, 1).toUpperCase() || "@"}
+        </Text>
+      )}
+    </Box>
+  );
+}

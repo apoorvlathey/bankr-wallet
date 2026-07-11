@@ -83,7 +83,7 @@ export function AgentPasswordStatusView({
       }
       primaryAction={
         !agentSession ? (
-          <Button variant={enabled ? "danger" : "primary"} onClick={onManage}>
+          <Button variant={enabled ? "danger" : "brand"} onClick={onManage}>
             {enabled ? "Remove agent password" : "Set agent password"}
           </Button>
         ) : undefined

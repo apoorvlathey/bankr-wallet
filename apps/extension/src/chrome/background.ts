@@ -9,14 +9,17 @@
  * - sidepanelManager.ts: Side panel detection and mode management
  */
 
-import { encryptWithVaultKey, tryDecryptVaultKey } from "./crypto";
+import { tryDecryptVaultKey } from "./crypto";
 import {
   getAccounts,
   getAccountById,
   getActiveAccount,
   setActiveAccountId,
   getTabAccount,
+  getTabAccounts,
   setTabAccount,
+  activateTabAccount,
+  clearTabAccount,
   addBankrAccount,
   addImpersonatorAccount,
   addSeedPhraseAccount,
@@ -31,7 +34,7 @@ import {
   findNonImpersonatorAccountByAddress,
   convertToSeedPhraseAccount,
 } from "./accountStorage";
-import type { SeedPhraseAccount } from "./types";
+import type { Account, SeedPhraseAccount } from "./types";
 import { decryptAllKeys, addKeyToVault } from "./vaultCrypto";
 import {
   generateNewMnemonic,
@@ -151,7 +154,6 @@ import {
   AUTO_LOCK_STORAGE_KEY,
   updateCachedAutoLockTimeout,
   getCachedApiKey,
-  setCachedApiKeyDirect,
   getCachedPassword,
   setCachedVault,
   getCachedVaultKey,
@@ -176,7 +178,8 @@ import {
   handleSetAgentPassword,
   handleRemoveAgentPassword,
   handleSaveApiKeyWithCachedPassword,
-  handleChangePasswordWithCachedPassword,
+  handleChangePassword,
+  verifyMasterPassword,
 } from "./authHandlers";
 import {
   handleCanSetupPasskeyUnlock,
@@ -314,6 +317,17 @@ import {
   initWalletConnect,
 } from "./walletConnectHandlers";
 import { clearExpiredWalletConnectPendingRequests } from "./walletConnectStorage";
+import {
+  getDappPermissions,
+  getPendingDappConnectionRequests,
+  handleConfirmDappConnection,
+  handleGetDappAccounts,
+  handleGetDappConnectionContext,
+  handleRejectDappConnection,
+  handleRequestDappConnection,
+  handleRevokeDappPermission,
+} from "./dappConnectionHandlers";
+import { clearExpiredDappConnectionRequests } from "./dappPermissionStorage";
 
 // Handles RPC requests proxied from inpage script (to bypass page CSP)
 async function handleRpcRequest(
@@ -465,6 +479,7 @@ async function verifyExplicitMasterPassword(password: string): Promise<boolean> 
 const EXTERNAL_PROVIDER_RPC_MESSAGES_BLOCKED_DURING_ERC7715 = new Set([
   "addEthereumChain",
   "dappChainSwitchNotification",
+  "requestDappConnection",
   "rpcRequest",
   "sendTransaction",
   "signatureRequest",
@@ -552,6 +567,14 @@ function rejectExternalProviderRequestDuringErc7715Lock(
     case "walletExecutionPermissions":
       sendResponse({ success: false, error });
       return true;
+    case "requestDappConnection":
+      if (typeof message.requestId === "string") {
+        void writeResultToStorage(
+          `dappConnectionResult:${message.requestId}`,
+          { success: false, error, code: -32002 },
+        );
+      }
+      return true;
     case "walletShowCallsStatus":
     case "dappChainSwitchNotification":
       return true;
@@ -562,7 +585,7 @@ function rejectExternalProviderRequestDuringErc7715Lock(
 
 // ─── Chrome Event Listeners ──────────────────────────────────────────────────
 
-// Listen for storage changes to update cached timeout and broadcast address changes
+// Listen for storage changes to update cached timeout.
 chrome.storage.onChanged.addListener(async (changes, areaName) => {
   if (
     areaName === "local" &&
@@ -576,37 +599,39 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
       updateCachedAutoLockTimeout(changes[AUTO_LOCK_STORAGE_KEY].newValue);
     }
 
-    // Broadcast address changes to all tabs so dapps receive accountsChanged event
-    if (changes.address) {
-      const newAddress = changes.address.newValue;
-      const newDisplayAddress = changes.displayAddress?.newValue || newAddress;
-
-      if (newAddress) {
-        // Get all tabs and send setAddress message
-        const tabs = await chrome.tabs.query({});
-        for (const tab of tabs) {
-          if (
-            tab.id &&
-            tab.url &&
-            !tab.url.startsWith("chrome://") &&
-            !tab.url.startsWith("chrome-extension://") &&
-            !tab.url.startsWith("moz-extension://") &&
-            !tab.url.startsWith("about:")
-          ) {
-            chrome.tabs
-              .sendMessage(tab.id, {
-                type: "setAddress",
-                msg: { address: newAddress, displayAddress: newDisplayAddress },
-              })
-              .catch(() => {
-                // Ignore errors for tabs without content script
-              });
-          }
-        }
-      }
-    }
   }
 });
+
+// A tab snapshots the account that was current when it first becomes active.
+// Revisiting a tab restores its own selection and also makes that selection the
+// inheritance default for the next new tab.
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  void activateTabAccount(tabId).catch(() => {});
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void clearTabAccount(tabId).catch(() => {});
+});
+
+chrome.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
+  void (async () => {
+    const account = await getTabAccount(removedTabId);
+    if (account) await setTabAccount(addedTabId, account.id);
+    await clearTabAccount(removedTabId);
+  })().catch(() => {});
+});
+
+async function sendAccountToTab(tabId: number, account: Account): Promise<void> {
+  await chrome.tabs.sendMessage(tabId, {
+    type: "setAccount",
+    msg: {
+      address: account.address,
+      displayAddress: account.displayName || account.address,
+      accountId: account.id,
+      accountType: account.type,
+    },
+  }).catch(() => {});
+}
 
 // Clear cache when service worker suspends
 self.addEventListener("suspend", () => {
@@ -621,6 +646,7 @@ setInterval(() => {
   clearExpiredBatchTxRequests();
   clearExpiredErc7715PermissionRequests();
   clearExpiredWalletConnectPendingRequests();
+  clearExpiredDappConnectionRequests();
 }, 60000); // Every minute
 
 function pruneStorageCachesBestEffort(): void {
@@ -955,7 +981,8 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "clearApiKeyCache",
   "saveApiKeyWithCachedPassword",
   "getCachedPassword",
-  "changePasswordWithCachedPassword",
+  "verifyMasterPassword",
+  "changePassword",
   "setAgentPassword",
   "removeAgentPassword",
   "isAgentPasswordEnabled",
@@ -1029,6 +1056,13 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "walletConnectPair",
   "walletConnectDisconnectSession",
   "walletConnectSwitchChain",
+  // Injected dapp connection permission management
+  "getDappPermissions",
+  "getDappConnectionContext",
+  "getPendingDappConnectionRequests",
+  "confirmDappConnection",
+  "rejectDappConnection",
+  "revokeDappPermission",
   // Direct-execution / UI-only handlers (defense in depth)
   "executeSwapDirect",
   "executeSwapBatch",
@@ -1078,6 +1112,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   switch (message.type) {
+    case "getDappAccounts": {
+      handleGetDappAccounts(sender).then(sendResponse);
+      return true;
+    }
+
+    case "requestDappConnection": {
+      void handleRequestDappConnection(message, sender);
+      return false;
+    }
+
+    case "getDappPermissions": {
+      getDappPermissions().then((permissions) =>
+        sendResponse({ success: true, permissions: Object.values(permissions) }),
+      );
+      return true;
+    }
+
+    case "getDappConnectionContext": {
+      handleGetDappConnectionContext(Number(message.tabId)).then(sendResponse);
+      return true;
+    }
+
+    case "getPendingDappConnectionRequests": {
+      getPendingDappConnectionRequests().then(sendResponse);
+      return true;
+    }
+
+    case "confirmDappConnection": {
+      handleConfirmDappConnection(message.requestId || "").then(sendResponse);
+      return true;
+    }
+
+    case "rejectDappConnection": {
+      handleRejectDappConnection(message.requestId || "").then(sendResponse);
+      return true;
+    }
+
+    case "revokeDappPermission": {
+      handleRevokeDappPermission(message.origin || "").then(sendResponse);
+      return true;
+    }
+
     case "walletConnectGetSessions": {
       handleWalletConnectGetSessions().then((result) => {
         sendResponse(result);
@@ -1485,14 +1561,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // ── ERC-5792 Batch Transactions ──────────────────────────────────────────
     case "walletGetCapabilities": {
-      handleWalletGetCapabilities(message.address, message.chainIds).then(
-        async (result) => {
-          await writeResultToStorage(
-            `capabilitiesResult:${message.requestId}`,
-            result,
-          );
-        },
-      );
+      (async () => {
+        const account =
+          typeof sender.tab?.id === "number"
+            ? await getTabAccount(sender.tab.id)
+            : undefined;
+        const result = await handleWalletGetCapabilities(
+          message.address,
+          message.chainIds,
+          account ?? undefined,
+        );
+        await writeResultToStorage(
+          `capabilitiesResult:${message.requestId}`,
+          result,
+        );
+      })();
       return false;
     }
 
@@ -1961,7 +2044,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "getActiveAccount": {
-      getActiveAccount().then((account) => {
+      const accountPromise =
+        !isExtensionPage(sender) && typeof sender.tab?.id === "number"
+          ? getTabAccount(sender.tab.id)
+          : getActiveAccount();
+      accountPromise.then((account) => {
         sendResponse(account);
       });
       return true;
@@ -1984,9 +2071,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "getTabAccount": {
-      const tabId = message.tabId || sender.tab?.id;
-      if (tabId) {
-        getTabAccount(tabId).then((account) => {
+      const tabId =
+        typeof message.tabId === "number" ? message.tabId : sender.tab?.id;
+      if (typeof tabId === "number") {
+        const accountPromise = message.activate
+          ? activateTabAccount(tabId)
+          : getTabAccount(tabId);
+        accountPromise.then((account) => {
           sendResponse(account);
         });
       } else {
@@ -1998,11 +2089,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "setTabAccount": {
-      const tabId = message.tabId || sender.tab?.id;
-      if (tabId) {
-        setTabAccount(tabId, message.accountId).then(() => {
-          sendResponse({ success: true });
-        });
+      const tabId =
+        typeof message.tabId === "number" ? message.tabId : sender.tab?.id;
+      if (typeof tabId === "number") {
+        activateTabAccount(tabId, message.accountId)
+          .then((account) => {
+            sendResponse({ success: true, account });
+          })
+          .catch((error) => {
+            sendResponse({
+              success: false,
+              error: error instanceof Error ? error.message : "Failed to select account",
+            });
+          });
       } else {
         sendResponse({ success: false, error: "No tab ID" });
       }
@@ -2039,34 +2138,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
           // If apiKey is provided and wallet is unlocked, save it first
           if (message.apiKey) {
-            let password = getCachedPassword();
-
-            // If no cached password, try session restoration (for "Never" auto-lock mode)
-            if (!password) {
-              const autoLockTimeout = await getAutoLockTimeout();
-              if (autoLockTimeout === 0) {
-                const restored = await tryRestoreSession(handleUnlockWallet);
-                if (restored) {
-                  password = getCachedPassword();
-                }
-              }
-            }
-
-            if (password) {
-              const vaultKey = getCachedVaultKey();
-              if (vaultKey) {
-                const encrypted = await encryptWithVaultKey(
-                  vaultKey,
-                  message.apiKey,
-                );
-                await chrome.storage.local.set({
-                  encryptedApiKeyVault: encrypted,
-                });
-              } else {
-                const { saveEncryptedApiKey } = await import("./crypto");
-                await saveEncryptedApiKey(message.apiKey, password);
-              }
-              setCachedApiKeyDirect(message.apiKey);
+            const saveResult = await handleSaveApiKeyWithCachedPassword(
+              message.apiKey,
+            );
+            if (!saveResult.success) {
+              sendResponse(saveResult);
+              return;
             }
           }
 
@@ -2697,7 +2774,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         }
 
-        if (!password) {
+        if (!password && !getCachedVaultKey()) {
           sendResponse({ success: false, error: "Wallet is locked" });
           return;
         }
@@ -2724,7 +2801,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           });
           return;
         }
+        const tabAccounts = await getTabAccounts();
+        const affectedTabIds = Object.entries(tabAccounts)
+          .filter(([, accountId]) => accountId === message.accountId)
+          .map(([tabId]) => Number(tabId))
+          .filter(Number.isInteger);
         const result = await handleRemoveAccount(message.accountId);
+        if (result.success) {
+          for (const tabId of affectedTabIds) {
+            const fallback = await getTabAccount(tabId);
+            if (fallback) await sendAccountToTab(tabId, fallback);
+          }
+        }
         sendResponse(result);
       })();
       return true;
@@ -2978,6 +3066,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
           }
 
+          const tabAccounts = await getTabAccounts();
+          for (const [tabId, mappedAccountId] of Object.entries(tabAccounts)) {
+            if (mappedAccountId === updated.id) {
+              await sendAccountToTab(Number(tabId), updated);
+            }
+          }
+
           chrome.runtime
             .sendMessage({ type: "accountsUpdated" })
             .catch(() => {});
@@ -3022,9 +3117,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
-    case "changePasswordWithCachedPassword": {
+    case "verifyMasterPassword": {
+      verifyMasterPassword(message.masterPassword || "")
+        .then((valid) =>
+          sendResponse({
+            success: valid,
+            error: valid ? undefined : "Invalid master password",
+          }),
+        )
+        .catch((error) => {
+          console.error("Failed to verify master password:", error);
+          sendResponse({
+            success: false,
+            error: "Failed to verify master password",
+          });
+        });
+      return true;
+    }
+
+    case "changePassword": {
       runSerializedAuthTransition(async () => {
-        const result = await handleChangePasswordWithCachedPassword(
+        const result = await handleChangePassword(
+          message.currentPassword || "",
           message.newPassword,
         );
         if (result.success) invalidateAuthCeremonies();

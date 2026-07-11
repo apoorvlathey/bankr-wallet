@@ -38,11 +38,13 @@ export type AppView =
   | "erc7715PermissionConfirm"
   | "watchAssetConfirm"
   | "addChainConfirm"
+  | "dappConnectionConfirm"
   | "waitingForOnboarding"
   | "chat"
   | "addAccount"
   | "transfer"
   | "swap"
+  | "shield"
   | "more"
   | "hideTokens"
   | "hiddenTokens"
@@ -65,6 +67,7 @@ export const SCREEN_META: Record<AppView, ScreenMeta> = {
   settingsAddChain: { kind: "slide", depth: 2 },
   accountSettings: { kind: "slide", depth: 1 },
   swap: { kind: "slide", depth: 1 },
+  shield: { kind: "slide", depth: 1 },
   transfer: { kind: "slide", depth: 1 },
   more: { kind: "slide", depth: 1 },
   hideTokens: { kind: "slide", depth: 2 },
@@ -81,6 +84,7 @@ export const SCREEN_META: Record<AppView, ScreenMeta> = {
   erc7715PermissionConfirm: { kind: "slide", depth: 1 },
   watchAssetConfirm: { kind: "slide", depth: 1 },
   addChainConfirm: { kind: "slide", depth: 1 },
+  dappConnectionConfirm: { kind: "slide", depth: 1 },
   unlock: { kind: "fade", depth: 0 },
   waitingForOnboarding: { kind: "fade", depth: 0 },
 };

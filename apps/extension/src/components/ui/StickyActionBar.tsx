@@ -30,7 +30,11 @@ export const StickyActionBar = forwardRef<HTMLDivElement, StickyActionBarProps>(
         pb="calc(12px + env(safe-area-inset-bottom, 0px))"
       >
         <Grid
-          templateColumns={secondaryAction ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)"}
+          templateColumns={
+            secondaryAction
+              ? "repeat(auto-fit, minmax(min(180px, 100%), 1fr))"
+              : "minmax(0, 1fr)"
+          }
           gap={3}
           alignItems="stretch"
         >

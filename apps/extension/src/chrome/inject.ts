@@ -181,21 +181,22 @@ const init = async () => {
       // @ts-ignore
       this.remove();
 
-      // initialize web3 provider (window.ethereum)
-      const { address } = (await chrome.storage.sync.get("address")) as {
-        address: string | undefined;
-      };
-      const { displayAddress } = (await chrome.storage.sync.get(
-        "displayAddress"
-      )) as {
-        displayAddress: string | undefined;
-      };
-      let { chainName } = (await chrome.storage.sync.get("chainName")) as {
-        chainName: string | undefined;
-      };
-      const { networksInfo } = (await chrome.storage.sync.get(
-        "networksInfo"
-      )) as { networksInfo: NetworksInfo | undefined };
+      // Resolve account identity from the sender-bound tab mapping before the
+      // provider is announced. Global address fields are legacy fallbacks only.
+      const [account, syncState] = await Promise.all([
+        chrome.runtime.sendMessage({ type: "getActiveAccount" }).catch(() => null),
+        chrome.storage.sync.get([
+          "address",
+          "displayAddress",
+          "chainName",
+          "networksInfo",
+        ]),
+      ]);
+      const address = account?.address || syncState.address;
+      const displayAddress =
+        account?.displayName || account?.address || syncState.displayAddress || address;
+      const chainName = syncState.chainName as string | undefined;
+      const networksInfo = syncState.networksInfo as NetworksInfo | undefined;
 
       if (
         networksInfo &&
@@ -208,8 +209,8 @@ const init = async () => {
           address,
           displayAddress,
           chainName,
-          accountId: "",
-          accountType: "",
+          accountId: account?.id || "",
+          accountType: account?.type || "",
         };
 
         window.postMessage(
@@ -223,32 +224,6 @@ const init = async () => {
           },
           "*"
         );
-
-        // Verify with background that we have the correct active account address
-        // This ensures the address matches the active account even if storage was stale
-        chrome.runtime.sendMessage({ type: "getActiveAccount" }, (account) => {
-          if (chrome.runtime.lastError) {
-            // Extension context invalidated, ignore
-            return;
-          }
-          if (account && account.address && account.address.toLowerCase() !== address.toLowerCase()) {
-            // Active account address differs from storage - update
-            store.address = account.address;
-            store.displayAddress = account.displayName || account.address;
-            store.accountId = account.id;
-            store.accountType = account.type;
-
-            // Emit accountsChanged to sync dapp with correct address
-            window.postMessage({
-              type: "accountsChanged",
-              msg: { address: account.address },
-            }, "*");
-          } else if (account) {
-            // Address matches, just update account metadata
-            store.accountId = account.id;
-            store.accountType = account.type;
-          }
-        });
       }
     };
     document.head
@@ -273,16 +248,24 @@ chrome.runtime.onMessage.addListener((msgObj, sender, sendResponse) => {
         store.address = address;
         store.displayAddress = displayAddress;
 
-        // Emit accountsChanged so dapps know the address updated
-        if (addressChanged && address) {
-          window.postMessage({
-            type: "accountsChanged",
-            msg: { address },
-          }, "*");
-        }
-
-        // Forward to inpage script for provider state update
-        window.postMessage(msgObj, "*");
+        chrome.runtime.sendMessage({ type: "getDappAccounts" }).then((result) => {
+          window.postMessage(
+            {
+              ...msgObj,
+              msg: {
+                ...msgObj.msg,
+                emitAccountsChanged:
+                  addressChanged && address && result?.accounts?.length > 0,
+              },
+            },
+            "*",
+          );
+        }).catch(() => {
+          window.postMessage(
+            { ...msgObj, msg: { ...msgObj.msg, emitAccountsChanged: false } },
+            "*",
+          );
+        });
         break;
       }
       case "setChainId": {
@@ -306,16 +289,24 @@ chrome.runtime.onMessage.addListener((msgObj, sender, sendResponse) => {
         store.accountId = accountId;
         store.accountType = accountType;
 
-        // Forward to inpage script to emit accountsChanged
-        window.postMessage({
-          type: "accountsChanged",
-          msg: { address },
-        }, "*");
+        chrome.runtime.sendMessage({ type: "getDappAccounts" }).then((result) => {
+          window.postMessage({
+            type: "setAddress",
+            msg: {
+              address,
+              emitAccountsChanged: result?.accounts?.length > 0,
+            },
+          }, "*");
+        }).catch(() => {});
         break;
       }
       case "getInfo": {
         sendResponse(store);
 
+        break;
+      }
+      case "dappPermissionRevoked": {
+        window.postMessage({ type: "accountsChanged", msg: { accounts: [] } }, "*");
         break;
       }
       // All other message types (e.g., newPendingTxRequest, accountsUpdated,
@@ -337,6 +328,64 @@ window.addEventListener("message", async (e) => {
   }
 
   switch (e.data.type) {
+    case "i_dappAccounts": {
+      const { id, method } = e.data.msg as {
+        id: string;
+        method: "eth_accounts" | "eth_requestAccounts";
+      };
+      if (method !== "eth_accounts" && method !== "eth_requestAccounts") {
+        break;
+      }
+
+      if (method === "eth_accounts") {
+        chrome.runtime.sendMessage({ type: "getDappAccounts" }).then((result) => {
+          window.postMessage({
+            type: "dappAccountsResult",
+            msg: {
+              id,
+              success: result?.success === true,
+              accounts: result?.accounts || [],
+              error: result?.error,
+              code: result?.code,
+            },
+          }, "*");
+        }).catch((error) => {
+          window.postMessage({
+            type: "dappAccountsResult",
+            msg: { id, success: false, error: error?.message || "Account request failed" },
+          }, "*");
+        });
+        break;
+      }
+
+      const requestId = crypto.randomUUID();
+      waitForStorageResult<{
+        success: boolean;
+        accounts?: string[];
+        error?: string;
+        code?: number;
+      }>(`dappConnectionResult:${requestId}`, 5 * 60 * 1000)
+        .then((result) => {
+          window.postMessage({
+            type: "dappAccountsResult",
+            msg: { id, ...result },
+          }, "*");
+        })
+        .catch((error) => {
+          window.postMessage({
+            type: "dappAccountsResult",
+            msg: { id, success: false, error: error?.message || "Connection request timed out" },
+          }, "*");
+        });
+
+      chrome.runtime.sendMessage({
+        type: "requestDappConnection",
+        requestId,
+        title: document.title?.trim().slice(0, 120) || undefined,
+        favicon: getFaviconUrl(),
+      });
+      break;
+    }
     case "i_switchEthereumChain": {
       const chainId = e.data.msg.chainId as number;
       const { networksInfo } = (await chrome.storage.sync.get(

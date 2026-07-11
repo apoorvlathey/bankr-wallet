@@ -64,11 +64,22 @@ export async function processForceInclusionBatchBankr(
       ...extra,
     });
 
-  // Get account address for ERC-7821 encoding (self-call target)
-  const { getActiveAccount } = await import("./accountStorage");
-  const account = await getActiveAccount();
-  if (!account) {
-    await handleBatchForceInclusionFailure(bundleId, pending, "No active account");
+  // Resolve the account pinned when the dapp created the batch. A later tab or
+  // account switch must never redirect force inclusion to another wallet.
+  const { getAccountById } = await import("./accountStorage");
+  const account = pending.accountId
+    ? await getAccountById(pending.accountId)
+    : null;
+  if (
+    !account ||
+    !pending.accountAddress ||
+    account.address.toLowerCase() !== pending.accountAddress.toLowerCase()
+  ) {
+    await handleBatchForceInclusionFailure(
+      bundleId,
+      pending,
+      "Pending request account is no longer available",
+    );
     return;
   }
 

@@ -234,7 +234,13 @@ export const ListItem = forwardRef<HTMLElement, ListItemProps>(
         borderBottomWidth="1px"
         borderBottomStyle="solid"
         borderBottomColor="border.subtle"
-        _last={{ borderBottomWidth: 0 }}
+        _first={{
+          "& > *": { borderTopRadius: "lg" },
+        }}
+        _last={{
+          borderBottomWidth: 0,
+          "& > *": { borderBottomRadius: "lg" },
+        }}
       >
         {control}
       </Box>
@@ -339,7 +345,6 @@ export const ListItemMeta = forwardRef<HTMLElement, ListItemMetaProps>(
         ref={ref}
         as="span"
         data-list-item-slot="meta"
-        {...rest}
         minW={0}
         flex="0 1 auto"
         color="fg.secondary"
@@ -349,6 +354,7 @@ export const ListItemMeta = forwardRef<HTMLElement, ListItemMetaProps>(
         textAlign="end"
         sx={{ fontVariantNumeric: "tabular-nums" }}
         overflowWrap="anywhere"
+        {...rest}
       >
         {children}
       </Text>

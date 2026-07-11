@@ -163,9 +163,14 @@ function Settings({
     setTab(id);
   };
 
+  const returnFromLeaf = (id: NavigableLeafId) => {
+    const parent = LEAF_ENTRIES.find((entry) => entry.id === id)?.group;
+    setTab(parent ?? "main");
+  };
+
   const fireAction = (id: ActionLeafId) => {
-    // After firing, drop the search query so the user lands back on the
-    // default main list (clean state) once any modal closes / toast fires.
+    // Actions stay on their current category screen; clear any root-search
+    // query that may have been used to reach them.
     setQuery("");
     if (id === "clearChatHistory") onChatDeleteModalOpen();
     else if (id === "resetNonce") handleResetNonce();
@@ -186,7 +191,8 @@ function Settings({
     if (onSessionExpired) {
       onSessionExpired(tab);
     } else {
-      setTab("main");
+      const parent = LEAF_ENTRIES.find((entry) => entry.id === tab)?.group;
+      setTab(parent ?? "main");
     }
   };
 
@@ -217,16 +223,15 @@ function Settings({
   } else if (tab === "changePassword") {
     body = (
       <ChangePassword
-        onComplete={() => setTab("main")}
-        onCancel={() => setTab("main")}
-        onSessionExpired={handleSessionExpired}
+        onComplete={() => returnFromLeaf("changePassword")}
+        onCancel={() => returnFromLeaf("changePassword")}
       />
     );
   } else if (tab === "autoLock") {
     body = (
       <AutoLockSettings
-        onComplete={() => setTab("main")}
-        onCancel={() => setTab("main")}
+        onComplete={() => returnFromLeaf("autoLock")}
+        onCancel={() => returnFromLeaf("autoLock")}
       />
     );
   } else if (tab === "agentPassword") {
@@ -234,9 +239,9 @@ function Settings({
       <AgentPasswordSettings
         onComplete={() => {
           checkAgentPassword();
-          setTab("main");
+          returnFromLeaf("agentPassword");
         }}
-        onCancel={() => setTab("main")}
+        onCancel={() => returnFromLeaf("agentPassword")}
         onSessionExpired={handleSessionExpired}
       />
     );
@@ -245,16 +250,19 @@ function Settings({
       <BiometricUnlockSettings
         onComplete={() => {
           checkPasskeyUnlock();
-          setTab("main");
+          returnFromLeaf("biometricUnlock");
         }}
-        onCancel={() => setTab("main")}
-        onSessionExpired={handleSessionExpired}
+        onCancel={() => returnFromLeaf("biometricUnlock")}
       />
     );
   } else if (tab === "appearance") {
     body = <AppearanceSettings onCancel={() => setTab("main")} />;
   } else if (tab === "clearSigning") {
-    body = <ClearSigningSettings onBack={() => setTab("main")} />;
+    body = (
+      <ClearSigningSettings
+        onBack={() => returnFromLeaf("clearSigning")}
+      />
+    );
   } else if (tab === "ensBrowsing") {
     body = <EnsBrowsingSettings onBack={() => setTab("main")} />;
   } else if (tab === "security") {
@@ -262,7 +270,11 @@ function Settings({
   } else if (tab === "data") {
     body = <DataSettings onBack={() => setTab("main")} ctx={rowCtx} />;
   } else if (tab === "clearTxHistory") {
-    body = <ClearTxHistoryScreen onBack={() => setTab("main")} />;
+    body = (
+      <ClearTxHistoryScreen
+        onBack={() => returnFromLeaf("clearTxHistory")}
+      />
+    );
   } else {
     const trimmedQuery = query.trim();
     const matches = trimmedQuery ? filterLeaves(trimmedQuery) : [];
@@ -277,6 +289,7 @@ function Settings({
             icon={<LinkChainIcon boxSize={5} />}
             iconBg={isDarkTheme ? "border.strong" : chainStrip.bg}
             iconColor={isDarkTheme ? "fg.primary" : chainStrip.fg}
+            iconHoverColor="fg.primary"
             showChevron
             onClick={() => navigateToLeaf(id)}
           />
@@ -308,6 +321,7 @@ function Settings({
         icon={<DatabaseIcon boxSize={5} />}
         iconBg="accent.primary"
         iconColor="accentFg.primary"
+        iconHoverColor="chart.negative"
         cornerAccent="primary"
         showChevron
         onClick={() => setTab("data")}

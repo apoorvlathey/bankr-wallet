@@ -2,15 +2,20 @@ import { useState, useCallback, useEffect, useRef, useMemo, type ReactNode } fro
 import {
   Box,
   HStack,
+  Icon,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  InputRightElement,
   Text,
   IconButton,
-  Tooltip,
   Skeleton,
   useDisclosure,
   Button,
   VStack,
+  type IconProps,
 } from "@chakra-ui/react";
-import { AddIcon, ChevronDownIcon, RepeatIcon, ViewIcon, ViewOffIcon, WarningTwoIcon } from "@chakra-ui/icons";
+import { AddIcon, ChevronDownIcon, CloseIcon, RepeatIcon, SearchIcon, ViewIcon, ViewOffIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import TxStatusList from "@/components/TxStatusList";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
@@ -26,6 +31,8 @@ import {
   FullScreenPickerEmpty,
   FullScreenPickerGroup,
   FullScreenPickerSearch,
+  ActionSheet,
+  type ActionSheetChoice,
   ListItem,
   ListItemContent,
   ListItemDescription,
@@ -44,6 +51,7 @@ interface HoldingsState {
   allTokenKeys: Set<string>;
   hiddenTokenKeys: Set<string>;
   apiUnavailable: boolean;
+  chainTotals: ReadonlyMap<number, number>;
 }
 
 interface PortfolioTabsProps {
@@ -56,12 +64,25 @@ interface PortfolioTabsProps {
   onRpcIssuesChange?: (chainIds: number[]) => void;
   onTransactionClick?: (tx: CompletedTransaction) => void;
   quickActions?: ReactNode;
+  onChainBalancesChange?: (
+    totals: ReadonlyMap<number, number>,
+    hidden: boolean,
+  ) => void;
+  onHideTokens?: () => void;
 }
+
+const PortfolioMenuIcon = (props: IconProps) => (
+  <Icon viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <circle cx="12" cy="5" r="1.75" />
+    <circle cx="12" cy="12" r="1.75" />
+    <circle cx="12" cy="19" r="1.75" />
+  </Icon>
+);
 
 /** Delay before refreshing balances after onchain tx confirmation (ms) */
 const POST_CONFIRM_REFRESH_DELAY = 3000;
 
-export default function PortfolioTabs({ address, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, quickActions }: PortfolioTabsProps) {
+export default function PortfolioTabs({ address, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, quickActions, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
   // On (re)mount, default to whichever tab was most recently requested by the parent.
   // activityTabTrigger increments after a tx is initiated; holdingsTabTrigger
   // increments when the user backs out of send/swap without submitting.
@@ -71,6 +92,8 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
   holdingsStateRef.current = holdingsState;
   const [chartRefreshNonce, setChartRefreshNonce] = useState(0);
   const addTokenModal = useDisclosure();
+  const portfolioActions = useDisclosure();
+  const portfolioActionsButtonRef = useRef<HTMLButtonElement>(null);
   const { networksInfo } = useNetworks();
   const visibleChains = getVisibleChains(networksInfo);
   const [filterChainId, setFilterChainId] = useState<number | null>(null);
@@ -78,6 +101,9 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
   const [chainSearch, setChainSearch] = useState("");
   const chainSearchInputRef = useRef<HTMLInputElement>(null);
   const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
+  const [isAssetSearchOpen, setIsAssetSearchOpen] = useState(false);
+  const [assetSearchQuery, setAssetSearchQuery] = useState("");
+  const assetSearchInputRef = useRef<HTMLInputElement>(null);
 
   // "All Networks" is index 0, chains start at index 1
   const filteredChains = useMemo(() => {
@@ -115,6 +141,12 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
     }
   }, [holdingsTabTrigger]);
 
+  useEffect(() => {
+    if (tabIndex === 0) return;
+    setIsAssetSearchOpen(false);
+    setAssetSearchQuery("");
+  }, [tabIndex]);
+
   // Listen for balance-relevant tx updates from background and auto-refresh
   // balances. Bridge status polling also writes tx history every few seconds;
   // those updates only change `bridge` progress and should not fan out into
@@ -126,9 +158,30 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
     const handleMessage = (message: {
       type: string;
       changedKeys?: string[];
+      updatedTx?: CompletedTransaction;
     }) => {
       if (message.type !== "txHistoryUpdated") return;
+      const updated = message.updatedTx;
+      if (
+        updated &&
+        updated.tx?.from?.toLowerCase?.() !== address.toLowerCase() &&
+        updated.bridge?.receiverAddress?.toLowerCase?.() !==
+          address.toLowerCase()
+      ) {
+        return;
+      }
       const changedKeys = message.changedKeys;
+      const hasAssetChanges = changedKeys?.some((key) =>
+        ["assetChanges", "destAssetChanges"].includes(key),
+      );
+      if (hasAssetChanges) {
+        // TokenHoldings owns this message: it immediately refreshes the exact
+        // receipt tokens (including collapsed low-value rows). Do not let a
+        // delayed generic load cancel that authoritative RPC pass.
+        if (refreshTimer) clearTimeout(refreshTimer);
+        refreshTimer = null;
+        return;
+      }
       const shouldRefreshBalances =
         !changedKeys ||
         changedKeys.some((key) =>
@@ -136,8 +189,6 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
             "status",
             "txHash",
             "completedAt",
-            "assetChanges",
-            "destAssetChanges",
           ].includes(key),
         );
       if (!shouldRefreshBalances) return;
@@ -157,11 +208,12 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
       chrome.runtime.onMessage.removeListener(handleMessage);
       if (refreshTimer) clearTimeout(refreshTimer);
     };
-  }, []);
+  }, [address]);
 
   const handleStateChange = useCallback((state: HoldingsState) => {
     setHoldingsState(state);
-  }, []);
+    onChainBalancesChange?.(state.chainTotals, state.hideValue);
+  }, [onChainBalancesChange]);
 
   const handleSnapshotsChanged = useCallback(() => {
     setChartRefreshNonce((n) => n + 1);
@@ -170,18 +222,176 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
   const formatUsd = (value: number): string =>
     formatUsdShared(value, { hide: holdingsState?.hideValue });
 
+  const portfolioActionChoices: ActionSheetChoice[] = [
+    {
+      id: "refresh",
+      label: "Refresh portfolio",
+      description: "Fetch the latest balances and positions",
+      icon: <RepeatIcon boxSize="18px" />,
+      isDisabled: holdingsState?.loading,
+    },
+    {
+      id: "add-token",
+      label: "Add custom token",
+      description: "Add a token using its contract address",
+      icon: <AddIcon boxSize="16px" />,
+    },
+    ...(onHideTokens
+      ? [{
+          id: "hide-tokens",
+          label: "Hide tokens",
+          description: "Remove spam or unwanted tokens from your portfolio",
+          icon: <ViewOffIcon boxSize="18px" />,
+        }]
+      : []),
+  ];
+
+  const handlePortfolioAction = (choiceId: string) => {
+    if (choiceId === "refresh") void holdingsState?.refresh();
+    else if (choiceId === "add-token") addTokenModal.onOpen();
+    else if (choiceId === "hide-tokens") onHideTokens?.();
+  };
+
+  const portfolioControls = (
+    <VStack align="stretch" spacing={2} mt={tabIndex === 0 ? 1 : 0} mb={2}>
+      <HStack justify="space-between" align="center" minH="36px">
+        <Button
+          variant="ghost"
+          size="sm"
+          minH="36px"
+          h="36px"
+          px={2.5}
+          color="fg.primary"
+          _hover={{ bg: "surface.raisedHover" }}
+          _active={{ transform: "none", bg: "surface.raisedHover" }}
+          leftIcon={
+            selectedChain ? (
+              <ChainIcon
+                chainId={selectedChain.chainId}
+                chainName={selectedChain.name}
+                size="16px"
+                withChip
+              />
+            ) : undefined
+          }
+          rightIcon={<ChevronDownIcon />}
+          onClick={() => setIsChainMenuOpen(true)}
+        >
+          {selectedChain?.name ?? "All networks"}
+        </Button>
+
+        {tabIndex < 2 && holdingsState && (
+          <HStack spacing={0} align="center">
+            {tabIndex === 0 && !isAssetSearchOpen && (
+              <IconButton
+                aria-label="Search assets"
+                icon={<SearchIcon boxSize="16px" />}
+                size="sm"
+                variant="ghost"
+                color="fg.secondary"
+                _hover={{ color: "fg.primary", bg: "surface.raisedHover" }}
+                _active={{ color: "fg.primary", bg: "surface.sunken" }}
+                onClick={() => {
+                  setIsAssetSearchOpen(true);
+                  window.requestAnimationFrame(() => assetSearchInputRef.current?.focus());
+                }}
+              />
+            )}
+            <IconButton
+              ref={portfolioActionsButtonRef}
+              aria-label="Open portfolio options"
+              icon={<PortfolioMenuIcon boxSize="18px" />}
+              size="sm"
+              variant="ghost"
+              color="fg.secondary"
+              _hover={{ color: "fg.primary", bg: "surface.raisedHover" }}
+              _active={{ color: "fg.primary", bg: "surface.sunken" }}
+              onClick={portfolioActions.onOpen}
+            />
+          </HStack>
+        )}
+      </HStack>
+
+      {tabIndex === 0 && isAssetSearchOpen && (
+        <InputGroup size="md" h="44px">
+          <InputLeftElement h="full" pointerEvents="none" color="fg.secondary">
+            <SearchIcon boxSize="16px" />
+          </InputLeftElement>
+          <Input
+            ref={assetSearchInputRef}
+            aria-label="Search assets by token name or symbol"
+            placeholder="Search token name or symbol"
+            value={assetSearchQuery}
+            h="full"
+            pr="44px"
+            onChange={(event) => setAssetSearchQuery(event.target.value)}
+          />
+          <InputRightElement h="full">
+            <IconButton
+              aria-label="Close asset search"
+              icon={<CloseIcon boxSize="10px" />}
+              size="sm"
+              variant="ghost"
+              color="fg.secondary"
+              _hover={{ color: "fg.primary", bg: "transparent" }}
+              _active={{ color: "fg.primary", bg: "transparent" }}
+              onClick={() => {
+                setAssetSearchQuery("");
+                setIsAssetSearchOpen(false);
+              }}
+            />
+          </InputRightElement>
+        </InputGroup>
+      )}
+
+      {holdingsState?.apiUnavailable && tabIndex < 2 && (
+        <HStack
+          role="status"
+          spacing={2.5}
+          px={3}
+          py={2.5}
+          bg="status.warning.bg"
+          borderWidth="1px"
+          borderColor="status.warning.border"
+          borderRadius="md"
+        >
+          <WarningTwoIcon color="status.warning.fg" flexShrink={0} />
+          <Box flex={1} minW={0}>
+            <Text fontSize="sm" fontWeight="600" color="status.warning.fg">
+              Onchain balances loaded
+            </Text>
+            <Text fontSize="xs" color="status.warning.fg">
+              The portfolio service is unavailable. Some prices or positions may be missing.
+            </Text>
+          </Box>
+          <IconButton
+            aria-label="Retry portfolio"
+            icon={<RepeatIcon />}
+            size="sm"
+            variant="ghost"
+            color="status.warning.fg"
+            onClick={() => holdingsState.refresh()}
+            isDisabled={holdingsState.loading}
+          />
+        </HStack>
+      )}
+    </VStack>
+  );
+
   return (
     <>
-      <VStack align="stretch" spacing={4}>
+      <VStack align="stretch" spacing={2}>
         <Box px={1}>
           <Text fontSize="sm" color="fg.secondary" fontWeight="500">
             Portfolio balance
           </Text>
           <HStack mt={0.5} spacing={2} align="center">
-            {holdingsState?.loading && !holdingsState.totalValueUsd ? (
+            {!holdingsState ||
+            (holdingsState.loading && !holdingsState.totalValueUsd) ? (
               <Skeleton h="34px" w="150px" />
             ) : (
               <Text
+                data-testid="portfolio-balance"
                 fontSize="3xl"
                 lineHeight="1.15"
                 fontWeight="700"
@@ -204,6 +414,12 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
           </HStack>
         </Box>
 
+        <PortfolioChart
+          address={address}
+          hideValue={holdingsState?.hideValue}
+          refreshTrigger={refreshTrigger + chartRefreshNonce}
+        />
+
         {quickActions}
 
         <HStack
@@ -212,9 +428,10 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
           spacing={0}
           borderBottomWidth="1px"
           borderColor="border.subtle"
+          px={1}
         >
-            {["Assets", "Positions", "Activity"].map((label, index, labels) => (
-              <Button
+          {["Assets", "Positions", "Activity"].map((label, index, labels) => (
+            <Button
                 key={label}
                 id={`portfolio-tab-${index}`}
                 role="tab"
@@ -227,13 +444,30 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
                 h="44px"
                 px={2}
                 py={2}
-                fontSize="sm"
+                fontSize="15px"
                 fontWeight="600"
                 color={tabIndex === index ? "fg.primary" : "fg.secondary"}
-                borderBottomWidth="2px"
-                borderColor={tabIndex === index ? "accent.primary" : "transparent"}
+                bg="transparent"
+                border="none"
                 borderRadius={0}
-                mb="-1px"
+                position="relative"
+                _after={{
+                  content: '""',
+                  position: "absolute",
+                  left: "50%",
+                  bottom: "-1px",
+                  w: tabIndex === index ? "28px" : 0,
+                  h: "3px",
+                  bg: "accent.highlight",
+                  borderTopRadius: "full",
+                  transform: "translateX(-50%)",
+                  transition: "width 150ms cubic-bezier(0.2, 0.6, 0.2, 1)",
+                }}
+                _hover={{
+                  color: "fg.primary",
+                  bg: "surface.raisedHover",
+                }}
+                _active={{ transform: "none" }}
                 onClick={() => setTabIndex(index)}
                 onKeyDown={(event) => {
                   let next = index;
@@ -248,90 +482,9 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
                 }}
               >
                 {label}
-              </Button>
-            ))}
+            </Button>
+          ))}
         </HStack>
-
-        <HStack justify="space-between" minH="36px">
-          <Button
-            variant="ghost"
-            size="sm"
-            h="36px"
-            px={2}
-            leftIcon={
-              selectedChain ? (
-                <ChainIcon
-                  chainId={selectedChain.chainId}
-                  chainName={selectedChain.name}
-                  size="16px"
-                  withChip
-                />
-              ) : undefined
-            }
-            rightIcon={<ChevronDownIcon />}
-            onClick={() => setIsChainMenuOpen(true)}
-          >
-            {selectedChain?.name ?? "All networks"}
-          </Button>
-
-          {tabIndex < 2 && holdingsState && (
-            <HStack spacing={1}>
-              {tabIndex === 0 && (
-                <Tooltip label="Add token" hasArrow>
-                  <IconButton
-                    aria-label="Add token"
-                    icon={<AddIcon boxSize="12px" />}
-                    size="sm"
-                    variant="ghost"
-                    onClick={addTokenModal.onOpen}
-                  />
-                </Tooltip>
-              )}
-              <Tooltip label="Refresh portfolio" hasArrow>
-                <IconButton
-                  aria-label="Refresh portfolio"
-                  icon={<RepeatIcon />}
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => holdingsState.refresh()}
-                  isDisabled={holdingsState.loading}
-                />
-              </Tooltip>
-            </HStack>
-          )}
-        </HStack>
-
-        {holdingsState?.apiUnavailable && tabIndex < 2 && (
-          <HStack
-            role="status"
-            spacing={2.5}
-            px={3}
-            py={2.5}
-            bg="status.warning.bg"
-            borderWidth="1px"
-            borderColor="status.warning.border"
-            borderRadius="md"
-          >
-            <WarningTwoIcon color="status.warning.fg" flexShrink={0} />
-            <Box flex={1} minW={0}>
-              <Text fontSize="sm" fontWeight="600" color="status.warning.fg">
-                Onchain balances loaded
-              </Text>
-              <Text fontSize="xs" color="status.warning.fg">
-                The portfolio service is unavailable. Some prices or positions may be missing.
-              </Text>
-            </Box>
-            <IconButton
-              aria-label="Retry portfolio"
-              icon={<RepeatIcon />}
-              size="sm"
-              variant="ghost"
-              color="status.warning.fg"
-              onClick={() => holdingsState.refresh()}
-              isDisabled={holdingsState.loading}
-            />
-          </HStack>
-        )}
 
         <Box
           id={`portfolio-panel-${tabIndex}`}
@@ -339,15 +492,16 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
           aria-labelledby={`portfolio-tab-${tabIndex}`}
           tabIndex={0}
         >
-          {tabIndex === 0 && (
-            <PortfolioChart
-              address={address}
-              hideValue={holdingsState?.hideValue}
-              refreshTrigger={refreshTrigger + chartRefreshNonce}
-            />
-          )}
+          {portfolioControls}
 
-          {tabIndex < 2 && (
+          {/*
+            TokenHoldings owns portfolio loading and the state displayed by the
+            balance above. Keep that owner mounted on Activity as well; only
+            hide its rows. This is especially important when returning from a
+            transaction detail screen, where PortfolioTabs remounts directly
+            onto Activity.
+          */}
+          <Box display={tabIndex < 2 ? "block" : "none"} aria-hidden={tabIndex >= 2}>
             <TokenHoldings
               key={`${address}:${refreshTrigger}`}
               address={address}
@@ -359,9 +513,10 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
               hideCard
               onStateChange={handleStateChange}
               filterChainId={filterChainId}
+              searchQuery={tabIndex === 0 ? assetSearchQuery : ""}
               onSnapshotsChanged={handleSnapshotsChanged}
             />
-          )}
+          </Box>
 
           {tabIndex === 2 && (
             <TxStatusList
@@ -386,6 +541,15 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
         existingTokenKeys={holdingsState?.tokenKeys ?? new Set()}
         allTokenKeys={holdingsState?.allTokenKeys ?? new Set()}
         hiddenTokenKeys={holdingsState?.hiddenTokenKeys ?? new Set()}
+      />
+
+      <ActionSheet
+        isOpen={portfolioActions.isOpen}
+        onClose={portfolioActions.onClose}
+        title="Portfolio options"
+        choices={portfolioActionChoices}
+        onSelect={handlePortfolioAction}
+        finalFocusRef={portfolioActionsButtonRef}
       />
 
       {isChainMenuOpen && (

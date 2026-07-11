@@ -709,7 +709,8 @@ export function responseForPreviewMessage(
     case "clearNonceCache":
     case "clearTxHistory":
     case "clearTxHistoryForAddresses":
-    case "changePasswordWithCachedPassword":
+    case "verifyMasterPassword":
+    case "changePassword":
     case "setAgentPassword":
     case "removeAgentPassword":
     case "saveBankrApiKeyAndAddress":

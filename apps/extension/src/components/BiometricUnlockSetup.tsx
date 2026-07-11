@@ -1,16 +1,14 @@
-import { useRef, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import {
   Box,
   Button,
   FormControl,
   FormErrorMessage,
   FormLabel,
-  HStack,
   IconButton,
   Input,
   InputGroup,
   InputRightElement,
-  Text,
   VStack,
 } from "@chakra-ui/react";
 import {
@@ -24,11 +22,11 @@ import {
   getPasskeyErrorMessage,
   isPasskeyPromptCancelled,
 } from "@/lib/passkeyWebAuthn";
-import { FingerprintIcon } from "@/components/Settings/icons";
 import {
   AppHeader,
   AppScreen,
   ScreenBody,
+  ScreenSection,
   StickyActionBar,
 } from "@/components/ui";
 
@@ -122,87 +120,68 @@ function BiometricUnlockSetup({
     <AppScreen>
       <AppHeader title="Set up biometric unlock" onBack={onCancel} />
       <ScreenBody pt={5} pb={6}>
-        <VStack spacing={5} w="full" align="stretch">
-          <HStack spacing={3} align="center">
-          <Box
-            p={2}
-            bg="status.info.bg"
-            borderWidth="1px"
-            borderColor="status.info.border"
-            borderRadius="lg"
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            flexShrink={0}
+        <VStack spacing={6} w="full" align="stretch">
+          <ScreenSection
+            title="Verify password"
+            description="Enter your master password to continue."
           >
-            <FingerprintIcon boxSize={5} color="status.info.fg" />
-          </Box>
-          <Box>
-            <Text fontSize="md" fontWeight="600" color="fg.primary">
-              Unlock securely on this device
-            </Text>
-            <Text mt={0.5} fontSize="sm" color="fg.secondary">
-              Your master password verifies the one-time setup.
-            </Text>
-          </Box>
-          </HStack>
-
-        <Box
-          w="full"
-          p={4}
-          bg="surface.raised"
-          borderWidth="1px"
-          borderColor="border.default"
-          borderRadius="lg"
-        >
-          <VStack spacing={3} align="stretch">
-            <FormControl isInvalid={!!error}>
-              <FormLabel>Master password</FormLabel>
-              <InputGroup>
-              <Input
-                ref={inputRef}
-                type={showPassword ? "text" : "password"}
-                name="masterPassword"
-                autoComplete="current-password"
-                placeholder="Enter master password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (error) setError("");
-                }}
-                onKeyDown={(e) => e.key === "Enter" && void handleSubmit()}
-                isDisabled={isSubmitting}
-                isInvalid={!!error}
-                autoFocus
-              />
-              <InputRightElement>
-                <IconButton
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  icon={showPassword ? <ViewOffIcon /> : <ViewIcon />}
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setShowPassword(!showPassword)}
-                  color="text.secondary"
-                  tabIndex={-1}
-                />
-              </InputRightElement>
-              </InputGroup>
-              {error && (
-                <FormErrorMessage alignItems="flex-start">
-                  <WarningTwoIcon mt={0.5} mr={2} />
-                  {error}
-                </FormErrorMessage>
-              )}
-            </FormControl>
-          </VStack>
-        </Box>
+            <Box
+              as="form"
+              id="biometric-setup-password-form"
+              onSubmit={(event: FormEvent<HTMLDivElement>) => {
+                event.preventDefault();
+                void handleSubmit();
+              }}
+            >
+              <FormControl isInvalid={!!error}>
+                <FormLabel>Master password</FormLabel>
+                <InputGroup>
+                  <Input
+                    ref={inputRef}
+                    aria-label="Master password"
+                    type={showPassword ? "text" : "password"}
+                    name="masterPassword"
+                    autoComplete="current-password"
+                    placeholder="Master password"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (error) setError("");
+                    }}
+                    isDisabled={isSubmitting}
+                    isInvalid={!!error}
+                    autoFocus
+                  />
+                  <InputRightElement h="full" w="44px">
+                    <IconButton
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      icon={showPassword ? <ViewOffIcon /> : <ViewIcon />}
+                      minW="40px"
+                      h="40px"
+                      variant="ghost"
+                      onClick={() => setShowPassword(!showPassword)}
+                      color="fg.secondary"
+                      tabIndex={-1}
+                    />
+                  </InputRightElement>
+                </InputGroup>
+                {error && (
+                  <FormErrorMessage alignItems="flex-start">
+                    <WarningTwoIcon mt={0.5} mr={2} />
+                    {error}
+                  </FormErrorMessage>
+                )}
+              </FormControl>
+            </Box>
+          </ScreenSection>
         </VStack>
       </ScreenBody>
       <StickyActionBar
         primaryAction={
           <Button
-            variant="primary"
-            onClick={() => void handleSubmit()}
+            variant="brand"
+            type="submit"
+            form="biometric-setup-password-form"
             isLoading={isSubmitting}
             loadingText="Setting up…"
           >

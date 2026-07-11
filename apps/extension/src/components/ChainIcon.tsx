@@ -50,7 +50,14 @@ export default function ChainIcon({
         />
       )}
       {meta.iconSrc ? (
-        <Image src={meta.iconSrc} alt={altText} boxSize={size} position="relative" />
+        <Image
+          src={meta.iconSrc}
+          alt={altText}
+          boxSize={size}
+          position="relative"
+          borderRadius={withChip ? "full" : undefined}
+          objectFit="contain"
+        />
       ) : (
         <Box
           bg={fallbackBg}

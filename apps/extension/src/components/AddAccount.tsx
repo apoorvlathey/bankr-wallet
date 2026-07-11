@@ -180,25 +180,9 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
         // Use the normalized key from validation (already has 0x prefix)
         const normalizedKey = result.normalizedKey;
 
-        // Get cached password
-        const { hasCachedPassword } = await new Promise<{
-          hasCachedPassword: boolean;
-        }>((resolve) => {
-          chrome.runtime.sendMessage({ type: "getCachedPassword" }, resolve);
-        });
-
-        if (!hasCachedPassword) {
-          toast({
-            title: "Wallet locked",
-            description: "Please unlock your wallet first",
-            status: "error",
-            duration: 3000,
-          });
-          setIsSubmitting(false);
-          return;
-        }
-
-        // Add the private key account (background will encrypt with cached password)
+        // The background accepts either a password-backed master session or a
+        // biometric master session with the vault key cached. It remains the
+        // authority for master-vs-agent access control.
         const response = await new Promise<{
           success: boolean;
           error?: string;
@@ -296,25 +280,8 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
           return;
         }
 
-        // Check if wallet is unlocked (required to encrypt API key)
-        const { hasCachedPassword } = await new Promise<{
-          hasCachedPassword: boolean;
-        }>((resolve) => {
-          chrome.runtime.sendMessage({ type: "getCachedPassword" }, resolve);
-        });
-
-        if (!hasCachedPassword) {
-          toast({
-            title: "Wallet locked",
-            description: "Please unlock your wallet first",
-            status: "error",
-            duration: 3000,
-          });
-          setIsSubmitting(false);
-          return;
-        }
-
-        // Add bankr account (background will save the API key)
+        // The service worker verifies the active master session and encrypts
+        // with its cached vault key, including after biometric unlock.
         const response = await new Promise<{
           success: boolean;
           error?: string;

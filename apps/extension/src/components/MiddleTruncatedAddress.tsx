@@ -1,5 +1,5 @@
 import { Box, Flex, Text } from "@chakra-ui/react";
-import { layout, prepare } from "@chenglou/pretext";
+import { layoutNextLine, prepareWithSegments } from "@chenglou/pretext";
 import { useEffect, useRef, useState } from "react";
 
 const MIN_VISIBLE_HEX_CHARS_PER_SIDE = 2;
@@ -25,7 +25,6 @@ export default function MiddleTruncatedAddress({
   const textRef = useRef<HTMLParagraphElement | null>(null);
   const [availableWidth, setAvailableWidth] = useState(0);
   const [font, setFont] = useState("");
-  const [lineHeight, setLineHeight] = useState(16);
   const [display, setDisplay] = useState<TruncationState>({
     kind: "full",
     text: address,
@@ -60,13 +59,7 @@ export default function MiddleTruncatedAddress({
       .filter(Boolean)
       .join(" ");
 
-    const fontSize = Number.parseFloat(computed.fontSize) || 16;
-    const nextLineHeight = computed.lineHeight.endsWith("px")
-      ? Number.parseFloat(computed.lineHeight)
-      : fontSize * 1.2;
-
     setFont(nextFont);
-    setLineHeight(nextLineHeight);
   }, []);
 
   useEffect(() => {
@@ -88,8 +81,15 @@ export default function MiddleTruncatedAddress({
       return;
     }
 
-    const fits = (text: string) =>
-      layout(prepare(text, font), availableWidth, lineHeight).lineCount === 1;
+    const fits = (text: string) => {
+      const prepared = prepareWithSegments(text, font);
+      const measured = layoutNextLine(
+        prepared,
+        { segmentIndex: 0, graphemeIndex: 0 },
+        Number.MAX_SAFE_INTEGER,
+      );
+      return (measured?.width ?? 0) <= availableWidth;
+    };
 
     if (fits(normalized)) {
       setDisplay({ kind: "full", text: normalized });
@@ -123,8 +123,33 @@ export default function MiddleTruncatedAddress({
       return;
     }
 
-    const leftVisible = hex.slice(0, best);
-    const rightVisible = hex.slice(-best);
+    let leftVisibleCount = best;
+    let rightVisibleCount = best;
+
+    // The symmetric search above grows by two characters at a time. Use any
+    // remaining one-character slot so the address ends close to its actions.
+    if (
+      leftVisibleCount + rightVisibleCount < hex.length &&
+      fits(
+        `0x${hex.slice(0, leftVisibleCount + 1)}${ELLIPSIS}${hex.slice(
+          -rightVisibleCount,
+        )}`,
+      )
+    ) {
+      leftVisibleCount += 1;
+    } else if (
+      leftVisibleCount + rightVisibleCount < hex.length &&
+      fits(
+        `0x${hex.slice(0, leftVisibleCount)}${ELLIPSIS}${hex.slice(
+          -(rightVisibleCount + 1),
+        )}`,
+      )
+    ) {
+      rightVisibleCount += 1;
+    }
+
+    const leftVisible = hex.slice(0, leftVisibleCount);
+    const rightVisible = hex.slice(-rightVisibleCount);
     const leftEmphasisCount = Math.min(
       EMPHASIZED_HEX_CHARS_PER_SIDE,
       leftVisible.length,
@@ -141,7 +166,7 @@ export default function MiddleTruncatedAddress({
       rightMuted: rightVisible.slice(0, rightVisible.length - rightEmphasisCount),
       rightEmphasis: rightVisible.slice(-rightEmphasisCount),
     });
-  }, [address, availableWidth, font, lineHeight]);
+  }, [address, availableWidth, font]);
 
   return (
     <Flex
@@ -162,6 +187,8 @@ export default function MiddleTruncatedAddress({
         whiteSpace="nowrap"
         overflow="hidden"
         display="block"
+        w="full"
+        textAlign="start"
       >
         {display.kind === "full" ? (
           display.text

@@ -62,6 +62,12 @@ export function createChakraTheme(tokens: ThemeTokens) {
     shadows: buildShadows(tokens),
     styles: {
       global: {
+        "*": {
+          scrollbarWidth: "none",
+        },
+        "*::-webkit-scrollbar": {
+          display: "none",
+        },
         body: {
           bg: "surface.base",
           color: "fg.primary",

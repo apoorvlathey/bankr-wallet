@@ -1,8 +1,11 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Box, HStack, Text, Skeleton } from "@chakra-ui/react";
+import NumberFlow from "@number-flow/react";
 import { getSnapshots } from "@/chrome/portfolioSnapshotStorage";
 import { isDarkThemeId, useTheme } from "@/theme";
 import { formatAbsoluteTimestamp } from "@/lib/timeFormatUtils";
+import PortfolioChartDither from "@/components/PortfolioChartDither";
+import { buildPortfolioChartPath } from "@/components/portfolioChartPath";
 
 interface PortfolioChartProps {
   address: string;
@@ -19,40 +22,32 @@ const CHART_HEIGHT = 60;
 const CHART_PADDING_TOP = 4;
 const CHART_PADDING_BOTTOM = 4;
 
-function formatUsdCompact(val: number): string {
-  if (val === 0) return "$0.00";
-  if (val < 0.01) return "<$0.01";
-  return `$${val.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
+const HOVER_VALUE_FORMAT: Intl.NumberFormatOptions = {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+};
 
-/**
- * Convert a `#rrggbb` (or rgb()) hex string to an rgba() string for SVG fill.
- * The chart series colors come from theme tokens which may use either form, so
- * we tolerate both — falling back to the input string when we can't parse.
- */
-function hexToRgba(input: string, alpha: number): string {
-  if (input.startsWith("#")) {
-    const cleaned = input.slice(1);
-    const expanded =
-      cleaned.length === 3
-        ? cleaned
-            .split("")
-            .map((c) => c + c)
-            .join("")
-        : cleaned;
-    if (expanded.length === 6) {
-      const r = parseInt(expanded.substring(0, 2), 16);
-      const g = parseInt(expanded.substring(2, 4), 16);
-      const b = parseInt(expanded.substring(4, 6), 16);
-      if (![r, g, b].some(Number.isNaN)) {
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-      }
-    }
-  }
-  return input;
+const HOVER_VALUE_TIMING = {
+  duration: 220,
+  easing: "cubic-bezier(0.23, 1, 0.32, 1)",
+};
+
+function AnimatedUsdValue({ value }: { value: number }) {
+  const isBelowDisplayThreshold = value > 0 && value < 0.01;
+
+  return (
+    <NumberFlow
+      value={isBelowDisplayThreshold ? 0.01 : value}
+      locales="en-US"
+      format={HOVER_VALUE_FORMAT}
+      prefix={isBelowDisplayThreshold ? "<$" : "$"}
+      transformTiming={HOVER_VALUE_TIMING}
+      spinTiming={HOVER_VALUE_TIMING}
+      opacityTiming={{ duration: 120, easing: "ease-out" }}
+      willChange
+      style={{ fontVariantNumeric: "tabular-nums" }}
+    />
+  );
 }
 
 const formatTimestamp = (ts: number): string => formatAbsoluteTimestamp(ts);
@@ -113,9 +108,7 @@ export default function PortfolioChart({
       return { x, y };
     });
 
-    const path = points
-      .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
-      .join(" ");
+    const path = buildPortfolioChartPath(points);
 
     const areaPath =
       path +
@@ -137,7 +130,7 @@ export default function PortfolioChart({
   }, [snapshots]);
 
   const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
+    (e: React.PointerEvent<HTMLDivElement>) => {
       if (!containerRef.current || points.length === 0) return;
       const rect = containerRef.current.getBoundingClientRect();
       const xPercent = ((e.clientX - rect.left) / rect.width) * 100;
@@ -160,7 +153,7 @@ export default function PortfolioChart({
 
   if (loading) {
     return (
-      <Box px={3} pt={2} pb={1}>
+      <Box pt={2} pb={1}>
         <Skeleton h="60px" />
       </Box>
     );
@@ -172,7 +165,6 @@ export default function PortfolioChart({
   const lineColor = isPositive
     ? tokens.colors.chart.positive
     : tokens.colors.chart.negative;
-  const fillColor = hexToRgba(lineColor, 0.1);
   const crosshairColor = tokens.colors.border.default;
   const dotBorderColor = tokens.colors.border.default;
 
@@ -200,15 +192,40 @@ export default function PortfolioChart({
   const hoveredPoint = hoverIndex !== null ? points[hoverIndex] : null;
 
   return (
-    <Box px={3} pt={0} pb={1}>
+    <Box pt={0} pb={1}>
       {/* Header: change indicator or hover value */}
-      <HStack spacing={1.5} mb={1} minH="18px">
+      <HStack
+        spacing={1.5}
+        mb={1}
+        h="18px"
+        px={3}
+        overflow="hidden"
+        whiteSpace="nowrap"
+      >
         {hoveredSnap ? (
           <>
-            <Text fontSize="xs" fontWeight="700" color="text.primary">
-              {hideValue ? "$***" : formatUsdCompact(hoveredSnap.totalValueUsd)}
+            <Text
+              flexShrink={0}
+              fontSize="xs"
+              lineHeight="18px"
+              fontWeight="700"
+              color="text.primary"
+            >
+              {hideValue ? (
+                "$***"
+              ) : (
+                <AnimatedUsdValue value={hoveredSnap.totalValueUsd} />
+              )}
             </Text>
-            <Text fontSize="xs" fontWeight="500" color="text.secondary">
+            <Text
+              minW={0}
+              overflow="hidden"
+              textOverflow="ellipsis"
+              fontSize="xs"
+              lineHeight="18px"
+              fontWeight="500"
+              color="text.secondary"
+            >
               {formatTimestamp(hoveredSnap.timestamp)}
             </Text>
           </>
@@ -216,6 +233,7 @@ export default function PortfolioChart({
           <>
             <Text
               fontSize="xs"
+              lineHeight="18px"
               fontWeight="700"
               textTransform="uppercase"
               letterSpacing="wide"
@@ -223,11 +241,11 @@ export default function PortfolioChart({
             >
               {formatTimeRange()}
             </Text>
-            <HStack spacing={1}>
-              <Text fontSize="xs" fontWeight="700" color={lineColor}>
+            <HStack spacing={1} h="18px">
+              <Text fontSize="xs" lineHeight="18px" fontWeight="700" color={lineColor}>
                 {hideValue ? "+$***" : `${isPositive ? "+" : "-"}${formatChange(change)}`}
               </Text>
-              <Text fontSize="xs" fontWeight="700" color={lineColor}>
+              <Text fontSize="xs" lineHeight="18px" fontWeight="700" color={lineColor}>
                 {hideValue ? "(+**%)" : `(${isPositive ? "+" : ""}${changePercent.toFixed(2)}%)`}
               </Text>
             </HStack>
@@ -240,14 +258,19 @@ export default function PortfolioChart({
         ref={containerRef}
         position="relative"
         h={`${CHART_HEIGHT}px`}
-        border="1px solid"
-        borderColor="border.subtle"
         borderRadius={isDarkTheme ? "md" : undefined}
+        overflow="hidden"
         bg={isDarkTheme ? "surface.sunken" : "surface.raised"}
         cursor="crosshair"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
+        onPointerMove={handleMouseMove}
+        onPointerLeave={handleMouseLeave}
       >
+        <PortfolioChartDither
+          areaPath={areaPath}
+          color={lineColor}
+          height={CHART_HEIGHT}
+          isHovered={hoverIndex !== null}
+        />
         <svg
           width="100%"
           height={CHART_HEIGHT}
@@ -268,8 +291,6 @@ export default function PortfolioChart({
               vectorEffect="non-scaling-stroke"
             />
           ))}
-          {/* Area fill */}
-          <path d={areaPath} fill={fillColor} />
           {/* Line */}
           <path
             d={path}

@@ -14,6 +14,9 @@ signature, authentication, storage, message-passing, or crypto behavior.
 
 Companion references:
 
+- [`WARM_MIDNIGHT.md`](./WARM_MIDNIGHT.md): current screen-by-screen WalletChan
+  branding decisions, approval status, and fresh-session handoff. This takes
+  precedence over historical screen targets in this document.
 - [`STYLING.md`](./STYLING.md): current theme token contract and historical
   Bauhaus specification.
 - [`THEME.md`](./THEME.md): current Chakra theme engine and authoring rules.

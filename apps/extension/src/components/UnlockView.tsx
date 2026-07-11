@@ -281,7 +281,7 @@ export default function UnlockView({
                   leftIcon={<FingerprintIcon boxSize={5} />}
                   onClick={onPasskeyUnlock}
                   isLoading={isPasskeyUnlocking}
-                  loadingText="Verifying…"
+                  loadingText="Biometric verifying…"
                   isDisabled={isUnlocking}
                 >
                   Use biometric unlock

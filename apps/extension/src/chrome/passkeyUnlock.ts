@@ -1,11 +1,10 @@
 import {
-  hasEncryptedApiKey,
-  loadDecryptedApiKey,
   tryDecryptVaultKey,
 } from "./crypto";
 import {
   handleUnlockWallet,
   hydrateAuthSessionFromVaultKeyBytes,
+  verifyMasterPassword,
 } from "./authHandlers";
 import {
   clearAllAuthState,
@@ -17,12 +16,7 @@ import {
   invalidateAuthCeremonies,
   isCurrentAuthCeremonyEpoch,
 } from "./authTransition";
-import {
-  decryptAllKeys,
-  hasVaultEntries,
-  isVaultKeyEncrypted,
-  loadVault,
-} from "./vaultCrypto";
+import { isVaultKeyEncrypted, loadVault } from "./vaultCrypto";
 import {
   buildPasskeyRecord,
   isValidPasskeyCredentialPayload,
@@ -82,27 +76,6 @@ export async function handleGetPasskeyUnlockStatus(): Promise<PasskeyUnlockStatu
   };
 }
 
-async function verifyLegacyMasterPassword(password: string): Promise<boolean> {
-  if (!password) return false;
-
-  const [hasApiKey, hasVault] = await Promise.all([
-    hasEncryptedApiKey(),
-    hasVaultEntries(),
-  ]);
-
-  if (hasApiKey) {
-    const apiKey = await loadDecryptedApiKey(password);
-    if (!apiKey) return false;
-  }
-
-  if (hasVault) {
-    const vault = await decryptAllKeys(password);
-    if (!vault) return false;
-  }
-
-  return hasApiKey || hasVault;
-}
-
 async function hasLegacyPrivateKeyEntries(): Promise<boolean> {
   const vault = await loadVault();
   return vault?.entries.some((entry) => !isVaultKeyEncrypted(entry.keystore)) === true;
@@ -115,16 +88,7 @@ export async function handleVerifyPasskeySetupPassword(
   error?: string;
   authCeremonyEpoch?: string;
 }> {
-  const vaultKeyBytes = await getMasterVaultKeyBytes(masterPassword);
-  if (vaultKeyBytes) {
-    return { success: true, authCeremonyEpoch: getAuthCeremonyEpoch() };
-  }
-
-  const hasVaultKeySystem = !!(await chrome.storage.local.get(
-    "encryptedVaultKeyMaster",
-  )).encryptedVaultKeyMaster;
-
-  if (hasVaultKeySystem || !(await verifyLegacyMasterPassword(masterPassword))) {
+  if (!(await verifyMasterPassword(masterPassword))) {
     return { success: false, error: "Invalid master password" };
   }
 

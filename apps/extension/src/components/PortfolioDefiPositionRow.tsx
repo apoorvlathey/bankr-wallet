@@ -1,9 +1,9 @@
 import {
   Flex,
   HStack,
-  IconButton,
   Image,
   Text,
+  Tooltip,
   VStack,
 } from "@chakra-ui/react";
 import { ExternalLinkIcon } from "@chakra-ui/icons";
@@ -26,15 +26,45 @@ interface PositionAssetLineProps {
   resolveLogo: (url: string | undefined) => string | undefined;
 }
 
+const COMPACT_BALANCE_THRESHOLD = 1_000_000;
+const compactBalanceFormatter = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  compactDisplay: "short",
+  maximumFractionDigits: 2,
+});
+
+function humanizePositionLabel(value: string): string {
+  const normalized = value.trim().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  if (!normalized) return "Position";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function formatCompactBalance(balance: string): string {
+  const numericBalance = Number(balance.replace(/,/g, "").trim());
+  if (
+    !Number.isFinite(numericBalance) ||
+    Math.abs(numericBalance) < COMPACT_BALANCE_THRESHOLD
+  ) {
+    return balance;
+  }
+
+  return compactBalanceFormatter.format(numericBalance);
+}
+
 function PositionAssetLine({
   asset,
   hideValue,
   formatUsd,
   resolveLogo,
 }: PositionAssetLineProps) {
+  const exactBalance = `${asset.balanceFormatted} ${asset.symbol}`;
+  const balanceLabel = hideValue
+    ? "••••"
+    : formatCompactBalance(asset.balanceFormatted);
+
   return (
-    <HStack w="full" minH="28px" spacing={2} justify="space-between">
-      <HStack minW={0} spacing={2}>
+    <HStack w="full" minH="28px" spacing={3} justify="space-between">
+      <HStack minW={0} flex="1 1 auto" spacing={2}>
         <Flex
           boxSize="20px"
           flexShrink={0}
@@ -61,16 +91,30 @@ function PositionAssetLine({
             </Text>
           )}
         </Flex>
-        <Text
-          minW={0}
-          color="fg.secondary"
+        <Tooltip
+          label={hideValue ? undefined : exactBalance}
           fontSize="xs"
-          fontWeight={500}
-          noOfLines={1}
-          sx={{ fontVariantNumeric: "tabular-nums" }}
+          openDelay={400}
+          isDisabled={hideValue || balanceLabel === asset.balanceFormatted}
         >
-          {hideValue ? "••••" : asset.balanceFormatted} {asset.symbol}
-        </Text>
+          <HStack
+            as="span"
+            minW={0}
+            spacing={1}
+            color="fg.secondary"
+            fontSize="xs"
+            fontWeight={500}
+            title={hideValue ? undefined : exactBalance}
+            sx={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            <Text as="span" minW={0} noOfLines={1}>
+              {balanceLabel}
+            </Text>
+            <Text as="span" flexShrink={0}>
+              {asset.symbol}
+            </Text>
+          </HStack>
+        </Tooltip>
       </HStack>
       <Text
         flexShrink={0}
@@ -98,14 +142,16 @@ export function DefiPositionRow({
   resolveLogo,
 }: DefiPositionRowProps) {
   const chainConfig = getChainConfig(position.chainId);
+  const typeLabel = humanizePositionLabel(position.type);
+  const nameLabel = humanizePositionLabel(position.name);
   const positionLabel =
-    position.type === position.name
-      ? position.type
-      : `${position.type} · ${position.name}`;
+    typeLabel.toLocaleLowerCase() === nameLabel.toLocaleLowerCase()
+      ? typeLabel
+      : `${typeLabel} · ${nameLabel}`;
 
   return (
     <ListItem align="stretch" px={4} py={3}>
-      <VStack w="full" align="stretch" spacing={3}>
+      <VStack w="full" align="stretch" spacing={2}>
         <HStack spacing={3} align="center">
           <ListItemMedia position="relative">
             <Flex
@@ -136,9 +182,9 @@ export function DefiPositionRow({
             </Flex>
             <Flex
               position="absolute"
-              right="-4px"
+              right="-2px"
               bottom="-2px"
-              boxSize="16px"
+              boxSize="14px"
               align="center"
               justify="center"
               bg="surface.raised"
@@ -147,29 +193,55 @@ export function DefiPositionRow({
               <ChainIcon
                 chainId={position.chainId}
                 chainName={chainConfig.name}
-                size="14px"
+                size="12px"
                 withChip
               />
             </Flex>
           </ListItemMedia>
           <ListItemContent>
-            <HStack spacing={1.5} minW={0}>
-              <ListItemTitle noOfLines={1}>{position.protocol}</ListItemTitle>
-              {position.siteUrl && (
-                <IconButton
-                  as="a"
-                  href={position.siteUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`Open ${position.protocol}`}
-                  icon={<ExternalLinkIcon />}
-                  size="xs"
-                  variant="ghost"
-                  color="fg.secondary"
+            {position.siteUrl ? (
+              <Flex
+                as="a"
+                minW={0}
+                maxW="full"
+                w="fit-content"
+                minH="32px"
+                mx={-1}
+                px={1}
+                align="center"
+                gap={1.5}
+                color="fg.primary"
+                borderRadius="sm"
+                textDecoration="none"
+                aria-label={`Open ${position.protocol} website`}
+                _hover={{ color: "accent.secondary" }}
+                _focus={{ outline: "none" }}
+                _focusVisible={{
+                  boxShadow:
+                    "0 0 0 2px var(--chakra-colors-border-focus)",
+                }}
+                href={position.siteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ListItemTitle noOfLines={1}>{position.protocol}</ListItemTitle>
+                <ExternalLinkIcon
+                  flexShrink={0}
+                  boxSize="14px"
+                  aria-hidden="true"
                 />
-              )}
-            </HStack>
-            <ListItemDescription noOfLines={1}>
+              </Flex>
+            ) : (
+              <ListItemTitle
+                minH="32px"
+                display="flex"
+                alignItems="center"
+                noOfLines={1}
+              >
+                {position.protocol}
+              </ListItemTitle>
+            )}
+            <ListItemDescription noOfLines={1} title={positionLabel}>
               {positionLabel}
             </ListItemDescription>
           </ListItemContent>
@@ -184,35 +256,41 @@ export function DefiPositionRow({
         </HStack>
 
         {(position.assets.length > 0 || position.rewardAssets.length > 0) && (
-          <VStack align="stretch" spacing={1} pl={12}>
-            {position.assets.map((asset, index) => (
-              <PositionAssetLine
-                key={`asset-${asset.chainId}-${asset.contractAddress}-${index}`}
-                asset={asset}
-                hideValue={hideValue}
-                formatUsd={formatUsd}
-                resolveLogo={resolveLogo}
-              />
-            ))}
+          <VStack align="stretch" spacing={0.5} pl={4}>
+            <VStack align="stretch" spacing={0.5}>
+              {position.assets.map((asset, index) => (
+                <PositionAssetLine
+                  key={`asset-${asset.chainId}-${asset.contractAddress}-${index}`}
+                  asset={asset}
+                  hideValue={hideValue}
+                  formatUsd={formatUsd}
+                  resolveLogo={resolveLogo}
+                />
+              ))}
+            </VStack>
             {position.rewardAssets.length > 0 && (
-              <Text
-                pt={1}
-                color="fg.muted"
-                fontSize="xs"
-                fontWeight={500}
+              <VStack
+                align="stretch"
+                spacing={0.5}
+                mt={1}
+                pt={2}
+                borderTopWidth="1px"
+                borderTopColor="border.subtle"
               >
-                Rewards
-              </Text>
+                <Text color="fg.muted" fontSize="2xs" fontWeight={600}>
+                  Rewards
+                </Text>
+                {position.rewardAssets.map((asset, index) => (
+                  <PositionAssetLine
+                    key={`reward-${asset.chainId}-${asset.contractAddress}-${index}`}
+                    asset={asset}
+                    hideValue={hideValue}
+                    formatUsd={formatUsd}
+                    resolveLogo={resolveLogo}
+                  />
+                ))}
+              </VStack>
             )}
-            {position.rewardAssets.map((asset, index) => (
-              <PositionAssetLine
-                key={`reward-${asset.chainId}-${asset.contractAddress}-${index}`}
-                asset={asset}
-                hideValue={hideValue}
-                formatUsd={formatUsd}
-                resolveLogo={resolveLogo}
-              />
-            ))}
           </VStack>
         )}
       </VStack>

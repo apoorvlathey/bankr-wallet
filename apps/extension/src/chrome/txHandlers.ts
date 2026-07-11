@@ -24,6 +24,7 @@ import type { Account } from "./types";
 import type { WalletGetCallsStatusResult } from "./erc5792Types";
 import {
   getActiveAccount,
+  getTabAccount,
   getAccountById,
   getAccounts,
   addPrivateKeyAccount as addPKAccountStorage,
@@ -221,9 +222,13 @@ export function handleTransactionRequest(
   (async () => {
     const chainName = CHAIN_NAMES[tx.chainId] || `Chain ${tx.chainId}`;
 
-    // SECURITY: snapshot the active account at arrival time so confirm-time
-    // account switches cannot redirect signing to a different account.
-    const activeAccount = await getActiveAccount();
+    // SECURITY: snapshot the requesting tab's selected account at arrival time
+    // so another tab's account switch cannot redirect signing. Non-tab callers
+    // retain the legacy global-account fallback.
+    const activeAccount =
+      typeof tabId === "number"
+        ? await getTabAccount(tabId)
+        : await getActiveAccount();
     if (!activeAccount) {
       await writeResultToStorage(`txResult:${txId}`, {
         success: false,
@@ -320,8 +325,12 @@ export function handleSignatureRequest(
     const chainName =
       CHAIN_NAMES[signature.chainId] || `Chain ${signature.chainId}`;
 
-    // SECURITY: snapshot the active account at arrival time.
-    const activeAccount = await getActiveAccount();
+    // SECURITY: snapshot the requesting tab's selected account at arrival time.
+    // Non-tab callers retain the legacy global-account fallback.
+    const activeAccount =
+      typeof tabId === "number"
+        ? await getTabAccount(tabId)
+        : await getActiveAccount();
     if (!activeAccount) {
       await writeResultToStorage(`sigResult:${sigId}`, {
         success: false,
@@ -1790,7 +1799,7 @@ export async function handleConfirmSignatureRequestBankr(
  */
 export async function handleAddPrivateKeyAccount(
   privateKey: `0x${string}`,
-  password: string,
+  password?: string,
   displayName?: string,
 ): Promise<{ success: boolean; account?: Account; error?: string }> {
   try {

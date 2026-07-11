@@ -7,6 +7,7 @@ import {
   type PublicClient,
 } from "viem";
 import { PortfolioToken } from "@/chrome/portfolioApi";
+import { getPortfolioTokenKey } from "@/chrome/hiddenPortfolioTokens";
 import { getStoredRpcUrl } from "@/lib/chains";
 
 /** Multicall3 is deployed at the same address on all supported chains */
@@ -60,7 +61,12 @@ export async function fetchOnchainBalances(
   address: string,
   tokens: PortfolioToken[],
   options?: { preserveZeroBalanceTokens?: boolean },
-): Promise<{ tokens: PortfolioToken[]; totalValueUsd: number; rpcIssueChainIds: number[] }> {
+): Promise<{
+  tokens: PortfolioToken[];
+  totalValueUsd: number;
+  rpcIssueChainIds: number[];
+  verifiedTokenKeys: Set<string>;
+}> {
   // Group tokens by chainId
   const byChain = new Map<number, { index: number; token: PortfolioToken }[]>();
   tokens.forEach((token, index) => {
@@ -72,6 +78,7 @@ export async function fetchOnchainBalances(
   // Clone tokens so we can mutate
   const updated = tokens.map((t) => ({ ...t }));
   const rpcIssueChainIds = new Set<number>();
+  const verifiedTokenKeys = new Set<string>();
 
   // Fetch balances per chain in parallel
   const chainPromises = Array.from(byChain.entries()).map(
@@ -134,6 +141,9 @@ export async function fetchOnchainBalances(
                 result.result as bigint,
                 chunk[j].token
               );
+              verifiedTokenKeys.add(
+                getPortfolioTokenKey(chainId, chunk[j].token.contractAddress),
+              );
             } else {
               const succeeded = await fetchSingleBalanceDirectly(
                 client,
@@ -142,12 +152,34 @@ export async function fetchOnchainBalances(
                 chunk[j].token,
                 addr,
               );
-              if (!succeeded) rpcIssueChainIds.add(chainId);
+              if (succeeded) {
+                verifiedTokenKeys.add(
+                  getPortfolioTokenKey(chainId, chunk[j].token.contractAddress),
+                );
+              } else {
+                rpcIssueChainIds.add(chainId);
+              }
             }
           }));
         } catch (err) {
-          const failed = await fetchChunkBalancesIndividually(client, updated, chunk, addr);
-          if (failed) rpcIssueChainIds.add(chainId);
+          const results = await fetchChunkBalancesIndividually(
+            client,
+            updated,
+            chunk,
+            addr,
+          );
+          results.forEach((succeeded, index) => {
+            if (succeeded) {
+              verifiedTokenKeys.add(
+                getPortfolioTokenKey(
+                  chainId,
+                  chunk[index].token.contractAddress,
+                ),
+              );
+            } else {
+              rpcIssueChainIds.add(chainId);
+            }
+          });
         }
       }
     }
@@ -163,7 +195,12 @@ export async function fetchOnchainBalances(
 
   const totalValueUsd = filtered.reduce((sum, t) => sum + t.valueUsd, 0);
 
-  return { tokens: filtered, totalValueUsd, rpcIssueChainIds: Array.from(rpcIssueChainIds) };
+  return {
+    tokens: filtered,
+    totalValueUsd,
+    rpcIssueChainIds: Array.from(rpcIssueChainIds),
+    verifiedTokenKeys,
+  };
 }
 
 async function fetchChunkBalancesIndividually(
@@ -171,13 +208,12 @@ async function fetchChunkBalancesIndividually(
   tokens: PortfolioToken[],
   chunk: { entryIndex: number; token: PortfolioToken; contract: any }[],
   address: Address,
-): Promise<boolean> {
-  const results = await Promise.all(
+): Promise<boolean[]> {
+  return Promise.all(
     chunk.map(({ entryIndex, token }) =>
       fetchSingleBalanceDirectly(client, tokens, entryIndex, token, address),
     ),
   );
-  return results.some((success) => !success);
 }
 
 async function fetchSingleBalanceDirectly(

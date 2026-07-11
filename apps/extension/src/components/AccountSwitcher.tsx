@@ -10,6 +10,7 @@ import {
   Button,
   Flex,
   HStack,
+  Icon,
   IconButton,
   Text,
   VStack,
@@ -23,9 +24,12 @@ import {
 } from "@chakra-ui/icons";
 import type { Account, SeedGroup } from "@/chrome/types";
 import { AccountAvatar } from "@/components/AccountIdentity";
+import AccountExplorerMenu from "@/components/AccountExplorerMenu";
+import { getDefaultAccountExplorerUrl } from "@/components/accountExplorerUtils";
 import { getWalletTypeLabel } from "@/components/accountIdentityLabels";
 import { CopyButton } from "@/components/CopyButton";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
+import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
 import {
   FullScreenPicker,
   FullScreenPickerEmpty,
@@ -40,29 +44,45 @@ import {
 } from "@/components/ui";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { truncateAddress } from "@/lib/addressUtils";
+import type { ResolvedChain } from "@/lib/chains";
 
 interface AccountSwitcherProps {
   accounts: Account[];
   activeAccount: Account | null;
-  explorerUrl?: string;
+  explorerChains: ResolvedChain[];
   onAccountSelect: (account: Account) => void;
   onAddAccount: () => void;
   onAccountSettings: (account: Account) => void;
+  onShowQr?: () => void;
 }
+
+const QrCodeIcon = () => (
+  <Icon viewBox="0 0 24 24" boxSize="14px" aria-hidden="true">
+    <path
+      d="M3 3h6v6H3V3Zm12 0h6v6h-6V3ZM3 15h6v6H3v-6Zm12 0h2v2h-2v-2Zm4 0h2v2h-2v-2Zm-4 4h2v2h-2v-2Zm4 0h2v2h-2v-2Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinejoin="round"
+    />
+  </Icon>
+);
 
 function AccountSwitcher({
   accounts,
   activeAccount,
-  explorerUrl,
+  explorerChains,
   onAccountSelect,
   onAddAccount,
   onAccountSettings,
+  onShowQr,
 }: AccountSwitcherProps) {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [seedGroupMap, setSeedGroupMap] = useState<Map<string, string>>(new Map());
   const triggerRef = useRef<HTMLButtonElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const activeAccountRowRef = useRef<HTMLElement>(null);
 
   const accountAddresses = useMemo(
     () => accounts.map((account) => account.address),
@@ -131,6 +151,10 @@ function AccountSwitcher({
       pickerRef.current
         ?.querySelector<HTMLElement>("[data-screen-heading]")
         ?.focus();
+      activeAccountRowRef.current?.scrollIntoView({
+        block: "start",
+        inline: "nearest",
+      });
     });
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -147,7 +171,7 @@ function AccountSwitcher({
   }, [closePicker, isPickerOpen]);
 
   const openExplorer = (account: Account) =>
-    explorerUrl ? `${explorerUrl}/address/${account.address}` : null;
+    getDefaultAccountExplorerUrl(account.address);
 
   const selectAccount = (account: Account) => {
     onAccountSelect(account);
@@ -166,26 +190,42 @@ function AccountSwitcher({
 
   return (
     <>
-      <Button
-        ref={triggerRef}
-        aria-haspopup="listbox"
-        aria-expanded={isPickerOpen}
-        aria-label="Choose account"
-        variant="ghost"
+      <Flex
         w="full"
         minH="64px"
-        h="auto"
-        px={3}
-        py={2.5}
-        justifyContent="flex-start"
-        borderRadius={0}
-        textAlign="start"
-        _hover={{ bg: "surface.raisedHover" }}
-        _active={{ bg: "surface.sunken" }}
-        onClick={() => setIsPickerOpen(true)}
+        position="relative"
+        align="center"
+        isolation="isolate"
       >
+        <Button
+          ref={triggerRef}
+          aria-haspopup="listbox"
+          aria-expanded={isPickerOpen}
+          aria-label="Choose account"
+          variant="ghost"
+          position="absolute"
+          inset={0}
+          zIndex={0}
+          w="full"
+          h="full"
+          p={0}
+          borderRadius={0}
+          _hover={{ bg: "surface.raisedHover" }}
+          _active={{ bg: "surface.sunken" }}
+          onClick={() => setIsPickerOpen(true)}
+        />
+
         {activeAccount ? (
-          <HStack w="full" spacing={3} minW={0}>
+          <HStack
+            position="relative"
+            zIndex={1}
+            w="full"
+            minW={0}
+            spacing={3}
+            px={3}
+            py={2.5}
+            pointerEvents="none"
+          >
             <AccountAvatar
               account={activeAccount}
               ensAvatar={getEnsAvatar(activeAccount)}
@@ -201,19 +241,59 @@ function AccountSwitcher({
               >
                 {getDisplayName(activeAccount)}
               </Text>
-              <Text color="fg.secondary" fontSize="sm" fontWeight="400" noOfLines={1}>
-                {getWalletTypeLabel(activeAccount, seedGroupMap)}
-              </Text>
+              <HStack minW={0} spacing={0} pe={6} color="fg.secondary">
+                <Flex
+                  minW={0}
+                  flex={1}
+                >
+                  <MiddleTruncatedAddress address={activeAccount.address} />
+                </Flex>
+                {onShowQr && (
+                  <IconButton
+                    aria-label="Show active address QR code"
+                    icon={<QrCodeIcon />}
+                    size="xs"
+                    minW="24px"
+                    w="24px"
+                    h="24px"
+                    variant="ghost"
+                    pointerEvents="auto"
+                    color="fg.secondary"
+                    onClick={onShowQr}
+                    _hover={{
+                      color: "accent.highlight",
+                      bg: "surface.raisedHover",
+                    }}
+                  />
+                )}
+                <Flex pointerEvents="auto" flexShrink={0}>
+                  <CopyButton
+                    value={activeAccount.address}
+                    label="Copy active address"
+                  />
+                </Flex>
+                <AccountExplorerMenu
+                  address={activeAccount.address}
+                  chains={explorerChains}
+                />
+              </HStack>
             </VStack>
             <ChevronRightIcon boxSize={5} color="fg.muted" flexShrink={0} />
           </HStack>
         ) : (
-          <HStack w="full" justify="space-between">
+          <HStack
+            position="relative"
+            zIndex={1}
+            w="full"
+            justify="space-between"
+            px={3}
+            pointerEvents="none"
+          >
             <Text color="fg.secondary" fontWeight="600">Choose account</Text>
             <ChevronRightIcon boxSize={5} color="fg.muted" />
           </HStack>
         )}
-      </Button>
+      </Flex>
 
       {isPickerOpen && (
         <FullScreenPickerLayer>
@@ -246,6 +326,7 @@ function AccountSwitcher({
                   return (
                     <ListItem
                       key={account.id}
+                      ref={account.id === activeAccount?.id ? activeAccountRowRef : undefined}
                       px={0}
                       py={0}
                       gap={0}

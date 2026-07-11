@@ -124,7 +124,7 @@ function AccountSettings({
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmittingApiKey, setIsSubmittingApiKey] = useState(false);
   const [isResolvingAddress, setIsResolvingAddress] = useState(false);
-  const [hasCachedPassword, setHasCachedPassword] = useState(false);
+  const [isWalletUnlocked, setIsWalletUnlocked] = useState(false);
   const [passwordType, setPasswordType] = useState<PasswordType | null>(null);
   const [apiKeyErrors, setApiKeyErrors] = useState<{
     apiKey?: string;
@@ -202,11 +202,11 @@ function AccountSettings({
       const draftForAccount =
         currentDraft?.accountId === account.id ? currentDraft : null;
       const hasDraftForAccount = !!draftForAccount;
-      chrome.runtime.sendMessage({ type: "getCachedPassword" }, (response) => {
+      chrome.runtime.sendMessage({ type: "isWalletUnlocked" }, (response) => {
         if (cancelled) return;
-        const hasPassword = response?.hasCachedPassword || false;
-        setHasCachedPassword(hasPassword);
-        if (!hasPassword && onSessionExpired) {
+        const unlocked = response === true;
+        setIsWalletUnlocked(unlocked);
+        if (!unlocked && onSessionExpired) {
           onSessionExpired("changeApiKey");
         }
       });
@@ -265,7 +265,7 @@ function AccountSettings({
     return null;
   };
 
-  const needsPassword = !hasCachedPassword;
+  const needsPassword = !isWalletUnlocked;
 
   const validateApiKeyForm = async (): Promise<boolean> => {
     const newErrors: typeof apiKeyErrors = {};
@@ -317,7 +317,7 @@ function AccountSettings({
         return;
       }
 
-      if (!hasCachedPassword) {
+      if (!isWalletUnlocked) {
         const unlockResult = await new Promise<{
           success: boolean;
           error?: string;

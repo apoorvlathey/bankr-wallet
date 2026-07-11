@@ -11,19 +11,16 @@ import {
   Button,
   Flex,
   HStack,
-  IconButton,
   Text,
 } from "@chakra-ui/react";
 import {
   AddIcon,
   CheckIcon,
   ChevronRightIcon,
-  ExternalLinkIcon,
 } from "@chakra-ui/icons";
 import type { Account } from "@/chrome/types";
 import AccountSwitcher from "@/components/AccountSwitcher";
 import ChainIcon from "@/components/ChainIcon";
-import { CopyButton } from "@/components/CopyButton";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
 import {
   FullScreenPicker,
@@ -36,7 +33,6 @@ import {
   ListItemMedia,
   ListItemTitle,
 } from "@/components/ui";
-import { truncateAddress } from "@/lib/addressUtils";
 import type { ResolvedChain } from "@/lib/chains";
 
 interface AccountNetworkControlsProps {
@@ -47,8 +43,10 @@ interface AccountNetworkControlsProps {
   onAccountSelect: (account: Account) => void;
   onAddAccount: () => void;
   onAccountSettings: (account: Account) => void;
+  onShowQr?: () => void;
   onChainSelect: (chainName: string) => void;
   onAddChain: () => void;
+  showNetworkSelector?: boolean;
 }
 
 function AccountNetworkControls({
@@ -59,8 +57,10 @@ function AccountNetworkControls({
   onAccountSelect,
   onAddAccount,
   onAccountSettings,
+  onShowQr,
   onChainSelect,
   onAddChain,
+  showNetworkSelector = true,
 }: AccountNetworkControlsProps) {
   const [isNetworkPickerOpen, setIsNetworkPickerOpen] = useState(false);
   const [chainSearch, setChainSearch] = useState("");
@@ -136,11 +136,6 @@ function AccountNetworkControls({
     closeNetworkPicker(false);
   };
 
-  const explorerHref =
-    activeAccount && selectedChain?.explorer
-      ? `${selectedChain.explorer}/address/${activeAccount.address}`
-      : null;
-
   return (
     <>
       <Box
@@ -155,101 +150,73 @@ function AccountNetworkControls({
           <AccountSwitcher
             accounts={accounts}
             activeAccount={activeAccount}
-            explorerUrl={selectedChain?.explorer}
+            explorerChains={visibleChains}
             onAccountSelect={onAccountSelect}
             onAddAccount={onAddAccount}
             onAccountSettings={onAccountSettings}
+            onShowQr={onShowQr}
           />
         )}
-
-        <HStack
-          minH="48px"
-          spacing={0}
-          align="stretch"
-          borderTop="1px solid"
-          borderColor="border.subtle"
-        >
-          {activeAccount ? (
-            <HStack minW={0} flex={1} spacing={0.5} px={3}>
-              <Text
-                minW={0}
-                flex={1}
-                color="fg.secondary"
-                fontFamily="mono"
-                fontSize="sm"
-                fontWeight="400"
-                noOfLines={1}
-              >
-                {truncateAddress(activeAccount.address)}
-              </Text>
-              <CopyButton value={activeAccount.address} />
-              {explorerHref && (
-                <IconButton
-                  as="a"
-                  href={explorerHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="View active address on explorer"
-                  icon={<ExternalLinkIcon />}
-                  size="xs"
-                  variant="ghost"
-                />
-              )}
-            </HStack>
-          ) : (
-            <Box flex={1} />
-          )}
-
-          <Button
-            ref={networkTriggerRef}
-            aria-haspopup="listbox"
-            aria-expanded={isNetworkPickerOpen}
-            aria-label="Choose network"
-            variant="ghost"
-            minW="128px"
-            maxW="48%"
-            h="auto"
-            minH="48px"
-            px={3}
-            borderLeft="1px solid"
-            borderLeftColor="border.subtle"
-            borderRadius={0}
-            justifyContent="flex-start"
-            _hover={{ bg: "surface.raisedHover" }}
-            _active={{ bg: "surface.sunken" }}
-            onClick={() => setIsNetworkPickerOpen(true)}
-          >
-            {selectedChain ? (
-              <HStack w="full" minW={0} spacing={2}>
-                <ChainIcon
-                  chainId={selectedChain.chainId}
-                  chainName={selectedChain.name}
-                  size="20px"
-                />
-                <Text
-                  minW={0}
-                  flex={1}
-                  color="fg.primary"
-                  fontSize="sm"
-                  fontWeight="600"
-                  textAlign="start"
-                  noOfLines={1}
-                >
-                  {selectedChain.name}
-                </Text>
-                <ChevronRightIcon boxSize={4.5} color="fg.muted" flexShrink={0} />
-              </HStack>
-            ) : (
-              <HStack w="full" justify="space-between">
-                <Text color="fg.secondary" fontSize="sm">Network</Text>
-                <ChevronRightIcon boxSize={4.5} color="fg.muted" />
-              </HStack>
-            )}
-          </Button>
-        </HStack>
       </Box>
 
-      {isNetworkPickerOpen && (
+      {showNetworkSelector && <Button
+        ref={networkTriggerRef}
+        aria-haspopup="listbox"
+        aria-expanded={isNetworkPickerOpen}
+        aria-label="Choose network"
+        variant="ghost"
+        w="full"
+        h="auto"
+        minH="48px"
+        mt={1}
+        px={2}
+        py={2}
+        borderRadius="md"
+        justifyContent="flex-start"
+        _hover={{ bg: "surface.raisedHover" }}
+        _active={{ bg: "surface.sunken" }}
+        onClick={() => setIsNetworkPickerOpen(true)}
+      >
+        {selectedChain ? (
+          <HStack w="full" minW={0} spacing={2}>
+            <ChainIcon
+              chainId={selectedChain.chainId}
+              chainName={selectedChain.name}
+              size="20px"
+            />
+            <Text
+              minW={0}
+              flex={1}
+              color="fg.primary"
+              fontSize="sm"
+              fontWeight="600"
+              lineHeight="1.25"
+              textAlign="start"
+              noOfLines={2}
+            >
+              {selectedChain.name}
+            </Text>
+            <ChevronRightIcon
+              boxSize={5}
+              color="fg.primary"
+              opacity={0.72}
+              flexShrink={0}
+            />
+          </HStack>
+        ) : (
+          <HStack w="full" justify="space-between">
+            <Text color="fg.secondary" fontSize="sm">Network</Text>
+            <ChevronRightIcon
+              boxSize={5}
+              color="fg.primary"
+              opacity={0.72}
+              flexShrink={0}
+            />
+          </HStack>
+        )}
+      </Button>}
+
+      {showNetworkSelector && isNetworkPickerOpen && (
         <FullScreenPickerLayer>
           <FullScreenPicker
             ref={pickerRef}

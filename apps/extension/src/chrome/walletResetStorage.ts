@@ -24,6 +24,8 @@ export const WALLET_LOCAL_STORAGE_KEYS = [
   "erc7715PermissionGrants",
   "pendingWatchAssetRequests",
   "pendingAddChainRequests",
+  "dappPermissions",
+  "pendingDappConnectionRequests",
   "walletConnectPendingRequests",
   "walletConnectChainId",
   "crossDappBatch",
@@ -66,6 +68,7 @@ export const WALLET_RESULT_STORAGE_PREFIXES = [
   "capabilitiesResult:",
   "callsStatusResult:",
   "erc7715PermissionResult:",
+  "dappConnectionResult:",
 ] as const;
 
 export const WALLET_ARTIFACT_STORAGE_PREFIXES = [

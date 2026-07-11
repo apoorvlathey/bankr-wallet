@@ -186,6 +186,7 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
           icon={<InfoOutlineIcon boxSize={5} />}
           iconBg="surface.accentTint"
           iconColor="accent.secondary"
+          iconHoverColor="accent.secondary"
           showChevron
           onClick={() => ctx.onNavigate(id)}
         />
@@ -336,6 +337,7 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
           icon={<LinkChainIcon boxSize={5} />}
           iconBg={ctx.isDarkTheme ? "border.strong" : ctx.chainStripBg}
           iconColor={ctx.isDarkTheme ? "fg.primary" : ctx.chainStripFg}
+          iconHoverColor="fg.primary"
           cornerBg="border.default"
           showChevron
           onClick={() => ctx.onNavigate(id)}
@@ -371,6 +373,7 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
           icon={<ShieldIcon boxSize={5} />}
           iconBg="accent.primary"
           iconColor="accentFg.primary"
+          iconHoverColor="chart.negative"
           cornerAccent="primary"
           showChevron
           onClick={() => ctx.onNavigate(id)}
@@ -386,6 +389,7 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
           icon={<TrashIcon boxSize={5} />}
           iconBg="accent.primary"
           iconColor="accentFg.primary"
+          iconHoverColor="chart.negative"
           cornerAccent="primary"
           showChevron
           onClick={() => ctx.onNavigate(id)}
@@ -415,6 +419,7 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
           icon={<ChatBubbleIcon boxSize={5} />}
           iconBg="accent.primary"
           iconColor="accentFg.primary"
+          iconHoverColor="chart.negative"
           cornerAccent="primary"
           borderRadiusFull
           onClick={() => ctx.onAction(id)}

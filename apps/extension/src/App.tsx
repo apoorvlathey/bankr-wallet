@@ -31,6 +31,9 @@ import TransactionConfirmationErrorBoundary from "@/components/TransactionConfir
 import AccountNetworkControls from "@/components/AccountNetworkControls";
 import AppHeaderBar from "@/components/AppHeaderBar";
 import HomeQuickActions from "@/components/HomeQuickActions";
+import HomeDappDock, {
+  type ActiveDappConnectionContext,
+} from "@/components/HomeDappDock";
 
 /**
  * Detects if we're running in Arc browser using CSS variable
@@ -59,6 +62,9 @@ const SignatureRequestConfirmation = lazy(
 const Erc7715PermissionConfirmation = lazy(
   () => import("@/components/Erc7715PermissionConfirmation"),
 );
+const DappConnectionConfirmation = lazy(
+  () => import("@/components/DappConnectionConfirmation"),
+);
 const PendingTxList = lazy(() => import("@/components/PendingTxList"));
 const BatchTransactionConfirmation = lazy(
   () => import("@/components/BatchTransactionConfirmation"),
@@ -76,6 +82,7 @@ const QRCodeModal = lazy(() =>
 );
 const TokenTransfer = lazy(() => import("@/components/TokenTransfer"));
 const SwapView = lazy(() => import("@/components/Swap/SwapView"));
+const ShieldView = lazy(() => import("@/components/ShieldView"));
 const MoreActionsView = lazy(() => import("@/components/MoreActionsView"));
 const HideTokensView = lazy(() => import("@/components/HideTokensView"));
 const HiddenPortfolioTokensView = lazy(
@@ -111,6 +118,7 @@ if (typeof window !== "undefined") {
     void import("@/components/QRCodeModal");
     void import("@/components/TokenTransfer");
     void import("@/components/Swap/SwapView");
+    void import("@/components/ShieldView");
     void import("@/components/MoreActionsView");
     void import("@/components/HideTokensView");
     void import("@/components/HiddenPortfolioTokensView");
@@ -144,6 +152,7 @@ import {
 } from "@/chrome/crossDappBatchStorage";
 import { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
 import { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
+import type { PendingDappConnectionRequest } from "@/chrome/dappPermissionStorage";
 import type { Account, PasswordType } from "@/chrome/types";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
@@ -255,6 +264,14 @@ function App() {
     useState<PendingWatchAssetRequest | null>(null);
   const [pendingAddChainRequest, setPendingAddChainRequest] =
     useState<PendingAddChainRequest | null>(null);
+  const [pendingDappConnectionRequest, setPendingDappConnectionRequest] =
+    useState<PendingDappConnectionRequest | null>(null);
+  const [activeDappContext, setActiveDappContext] =
+    useState<ActiveDappConnectionContext | null>(null);
+  const [homeChainBalances, setHomeChainBalances] = useState<
+    ReadonlyMap<number, number>
+  >(new Map());
+  const [homeChainBalancesHidden, setHomeChainBalancesHidden] = useState(false);
   const [rpcIssueChainIds, setRpcIssueChainIds] = useState<number[]>([]);
   const [dismissedRpcIssueChainIds, setDismissedRpcIssueChainIds] = useState<number[]>([]);
   const [pendingBatchRequests, setPendingBatchRequests] = useState<
@@ -361,18 +378,31 @@ function App() {
         : visibleChains[0];
 
   const currentTab = async () => {
-    const [tab] = await chrome.tabs.query({
+    const [current] = await chrome.tabs.query({
       active: true,
       currentWindow: true,
     });
-    return tab;
+    const isWebTab =
+      current?.id !== undefined &&
+      !current.url?.startsWith("chrome-extension://") &&
+      !current.url?.startsWith("moz-extension://");
+    if (isWebTab) return current;
+
+    // Detached confirmation windows are extension pages. Resolve the active
+    // tab in the last normal browser window instead of binding account state
+    // to the extension's own tab.
+    const normalWindow = await chrome.windows.getLastFocused({
+      populate: true,
+      windowTypes: ["normal"],
+    });
+    return normalWindow.tabs?.find((tab) => tab.active) || current;
   };
 
   /**
    * Try to wake up the service worker using chrome.runtime.connect
    * This is needed for browsers like Arc that don't auto-wake the service worker
    */
-  const wakeUpServiceWorker = async (): Promise<boolean> => {
+  const wakeUpServiceWorker = useCallback(async (): Promise<boolean> => {
     return new Promise((resolve) => {
       try {
         const port = chrome.runtime.connect({ name: "popup-wake" });
@@ -394,41 +424,44 @@ function App() {
         resolve(false);
       }
     });
-  };
+  }, []);
 
   /**
    * Send a message to the background script with retry logic
    * Some browsers (like Arc) may not wake up the service worker immediately
    */
-  const sendMessageWithRetry = async <T,>(
-    message: { type: string; [key: string]: any },
-    maxRetries = 5,
-    delay = 200,
-  ): Promise<T | null> => {
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const response = await new Promise<T | null>((resolve, reject) => {
-          chrome.runtime.sendMessage(message, (result) => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-            } else {
-              resolve(result);
-            }
+  const sendMessageWithRetry = useCallback(
+    async <T,>(
+      message: { type: string; [key: string]: any },
+      maxRetries = 5,
+      delay = 200,
+    ): Promise<T | null> => {
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const response = await new Promise<T | null>((resolve, reject) => {
+            chrome.runtime.sendMessage(message, (result) => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+              } else {
+                resolve(result);
+              }
+            });
           });
-        });
-        return response;
-      } catch (error) {
-        console.warn(`Message attempt ${attempt + 1} failed:`, error);
-        if (attempt < maxRetries - 1) {
-          // Try to wake up the service worker
-          await wakeUpServiceWorker();
-          // Wait before retrying, with exponential backoff
-          await new Promise((r) => setTimeout(r, delay * Math.pow(2, attempt)));
+          return response;
+        } catch (error) {
+          console.warn(`Message attempt ${attempt + 1} failed:`, error);
+          if (attempt < maxRetries - 1) {
+            // Try to wake up the service worker
+            await wakeUpServiceWorker();
+            // Wait before retrying, with exponential backoff
+            await new Promise((r) => setTimeout(r, delay * Math.pow(2, attempt)));
+          }
         }
       }
-    }
-    return null;
-  };
+      return null;
+    },
+    [wakeUpServiceWorker],
+  );
 
   /**
    * Establishes and maintains a keepalive port connection to the service worker.
@@ -521,6 +554,31 @@ function App() {
     return requests || [];
   };
 
+  const loadPendingDappConnectionRequests = async () => {
+    const requests = await sendMessageWithRetry<PendingDappConnectionRequest[]>({
+      type: "getPendingDappConnectionRequests",
+    });
+    return requests || [];
+  };
+
+  const loadActiveDappContext = useCallback(
+    async (knownTabId?: number) => {
+      const tabId = knownTabId ?? (await currentTab()).id;
+      if (typeof tabId !== "number") {
+        setActiveDappContext(null);
+        return null;
+      }
+      const response = await sendMessageWithRetry<{
+        success: boolean;
+        context?: ActiveDappConnectionContext;
+      }>({ type: "getDappConnectionContext", tabId });
+      const context = response?.success ? response.context || null : null;
+      setActiveDappContext(context);
+      return context;
+    },
+    [sendMessageWithRetry],
+  );
+
   const loadWalletConnectSessionCount = async () => {
     const response = await sendMessageWithRetry<{
       success: boolean;
@@ -577,9 +635,12 @@ function App() {
         : current,
     );
 
-    const active = await sendMessageWithRetry<Account | null>({
-      type: "getActiveAccount",
-    });
+    const tab = await currentTab();
+    const active = await sendMessageWithRetry<Account | null>(
+      typeof tab?.id === "number"
+        ? { type: "getTabAccount", tabId: tab.id, activate: true }
+        : { type: "getActiveAccount" },
+    );
     setActiveAccount(active);
 
     // Sync address/displayAddress to match active account
@@ -592,7 +653,6 @@ function App() {
       });
 
       // Notify content script about the account change
-      const tab = await currentTab();
       if (tab?.id) {
         chrome.tabs
           .sendMessage(tab.id, {
@@ -612,22 +672,24 @@ function App() {
   };
 
   const handleAccountSwitch = async (account: Account) => {
-    // Set as active account
-    await sendMessageWithRetry({
-      type: "setActiveAccount",
-      accountId: account.id,
-    });
+    const tab = await currentTab();
+    if (typeof tab?.id === "number") {
+      await sendMessageWithRetry({
+        type: "setTabAccount",
+        tabId: tab.id,
+        accountId: account.id,
+      });
+    } else {
+      await sendMessageWithRetry({
+        type: "setActiveAccount",
+        accountId: account.id,
+      });
+    }
     setActiveAccount(account);
 
     // Update address and displayAddress
     setAddress(account.address);
     setDisplayAddress(account.displayName || account.address);
-
-    // Update storage for backward compatibility
-    await chrome.storage.sync.set({
-      address: account.address,
-      displayAddress: account.displayName || account.address,
-    });
 
     // If switching to a Bankr account, ensure current chain is supported
     if (account.type === "bankr" && chainName && networksInfo) {
@@ -639,7 +701,6 @@ function App() {
     }
 
     // Notify content script about the account change
-    const tab = await currentTab();
     if (tab?.id) {
       chrome.tabs
         .sendMessage(tab.id, {
@@ -927,6 +988,8 @@ function App() {
       const batchRequests = await loadPendingBatchRequests();
       const watchAssetRequests = await loadPendingWatchAssetRequests();
       const addChainRequests = await loadPendingAddChainRequests();
+      const dappConnectionRequests = await loadPendingDappConnectionRequests();
+      await loadActiveDappContext();
       await loadCrossDappBatch();
       await loadWalletConnectSessionCount();
 
@@ -1038,6 +1101,17 @@ function App() {
           permissionRequests[permissionRequests.length - 1],
         );
         setView("erc7715PermissionConfirm");
+      } else if (dappConnectionRequests.length > 0) {
+        const request = dappConnectionRequests[dappConnectionRequests.length - 1];
+        setPendingDappConnectionRequest(request);
+        if (typeof request.tabId === "number") {
+          const requestAccount = await sendMessageWithRetry<Account | null>({
+            type: "getTabAccount",
+            tabId: request.tabId,
+          });
+          if (requestAccount) setActiveAccount(requestAccount);
+        }
+        setView("dappConnectionConfirm");
       } else if (sigRequests.length > 0) {
         // Auto-open newest (last) pending signature request
         setSelectedSignatureRequest(sigRequests[sigRequests.length - 1]);
@@ -1069,7 +1143,11 @@ function App() {
         type: string;
         txRequest?: PendingTxRequest;
         sigRequest?: PendingSignatureRequest;
-        request?: PendingErc7715PermissionRequest | PendingWatchAssetRequest | PendingAddChainRequest;
+        request?:
+          | PendingErc7715PermissionRequest
+          | PendingWatchAssetRequest
+          | PendingAddChainRequest
+          | PendingDappConnectionRequest;
         batchRequest?: PendingBatchTxRequest;
         sessions?: WalletConnectSessionSummary[];
         activeChainId?: number | null;
@@ -1177,6 +1255,31 @@ function App() {
         })();
         return;
       }
+      if (
+        message.type === "newPendingDappConnectionRequest" &&
+        message.request
+      ) {
+        const connectionRequest =
+          message.request as PendingDappConnectionRequest;
+        (async () => {
+          const isUnlocked = await checkLockState();
+          setIsWalletUnlocked(isUnlocked);
+          if (isUnlocked) {
+            if (typeof connectionRequest.tabId === "number") {
+              const requestAccount = await sendMessageWithRetry<Account | null>({
+                type: "getTabAccount",
+                tabId: connectionRequest.tabId,
+              });
+              if (requestAccount) setActiveAccount(requestAccount);
+            }
+            setPendingDappConnectionRequest(connectionRequest);
+            setView("dappConnectionConfirm");
+          } else {
+            setView("unlock");
+          }
+        })();
+        return;
+      }
       if (message.type === "onboardingComplete") {
         // Onboarding finished - reload to show unlock screen
         window.location.reload();
@@ -1198,6 +1301,10 @@ function App() {
         if (message.chainId) {
           setWalletConnectChainId(message.chainId);
         }
+        return;
+      }
+      if (message.type === "dappPermissionsChanged") {
+        void loadActiveDappContext();
         return;
       }
       // Return undefined for unrecognized messages — critical so this listener
@@ -1223,18 +1330,6 @@ function App() {
           const newChainName = changes.chainName.newValue;
           if (newChainName && newChainName !== chainName) {
             setChainName(newChainName);
-          }
-        }
-        if (changes.address) {
-          const newAddress = changes.address.newValue;
-          if (newAddress && newAddress !== address) {
-            setAddress(newAddress);
-          }
-        }
-        if (changes.displayAddress) {
-          const newDisplayAddress = changes.displayAddress.newValue;
-          if (newDisplayAddress && newDisplayAddress !== displayAddress) {
-            setDisplayAddress(newDisplayAddress);
           }
         }
       }
@@ -1457,9 +1552,23 @@ function App() {
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
   }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, selectedErc7715PermissionRequest, selectedBatchRequest, pendingWatchAssetRequest, pendingRequests, pendingBatchRequests, pendingSignatureRequests, pendingErc7715PermissionRequests, crossDappBatch, view, isInSidePanel, isFullscreenTab]);
 
-  // Listen for tab activation changes to update chain for current tab
+  // Keep the Home dapp context synchronized with both tab switches and
+  // same-tab navigations (for example New Tab -> app.aave.com).
   useEffect(() => {
+    let navigationRefreshTimer: number | null = null;
+
     const handleTabActivated = (activeInfo: chrome.tabs.TabActiveInfo) => {
+      void loadActiveDappContext(activeInfo.tabId);
+      void sendMessageWithRetry<Account | null>({
+        type: "getTabAccount",
+        tabId: activeInfo.tabId,
+        activate: true,
+      }).then((account) => {
+        if (!account) return;
+        setActiveAccount(account);
+        setAddress(account.address);
+        setDisplayAddress(account.displayName || account.address);
+      });
       // Query the newly active tab for its chain info
       chrome.tabs.sendMessage(
         activeInfo.tabId,
@@ -1480,9 +1589,41 @@ function App() {
       );
     };
 
+    const handleTabUpdated = (
+      tabId: number,
+      changeInfo: chrome.tabs.TabChangeInfo,
+    ) => {
+      if (
+        !changeInfo.url &&
+        !changeInfo.title &&
+        !changeInfo.favIconUrl &&
+        changeInfo.status !== "complete"
+      ) {
+        return;
+      }
+
+      if (navigationRefreshTimer !== null) {
+        window.clearTimeout(navigationRefreshTimer);
+      }
+      navigationRefreshTimer = window.setTimeout(() => {
+        void currentTab().then((activeTab) => {
+          if (activeTab.id === tabId) {
+            void loadActiveDappContext(tabId);
+          }
+        });
+      }, 75);
+    };
+
     chrome.tabs.onActivated.addListener(handleTabActivated);
-    return () => chrome.tabs.onActivated.removeListener(handleTabActivated);
-  }, []);
+    chrome.tabs.onUpdated.addListener(handleTabUpdated);
+    return () => {
+      chrome.tabs.onActivated.removeListener(handleTabActivated);
+      chrome.tabs.onUpdated.removeListener(handleTabUpdated);
+      if (navigationRefreshTimer !== null) {
+        window.clearTimeout(navigationRefreshTimer);
+      }
+    };
+  }, [loadActiveDappContext, sendMessageWithRetry]);
 
   useUpdateEffect(() => {
     const updateChainId = async () => {
@@ -1618,6 +1759,7 @@ function App() {
     const batchReqs = await loadPendingBatchRequests();
     const watchAssetRequests = await loadPendingWatchAssetRequests();
     const addChainReqs = await loadPendingAddChainRequests();
+    const dappConnectionReqs = await loadPendingDappConnectionRequests();
 
     if (requests.length > 0) {
       setSelectedTxRequest(requests[requests.length - 1]);
@@ -1630,6 +1772,17 @@ function App() {
         permissionRequests[permissionRequests.length - 1],
       );
       setView("erc7715PermissionConfirm");
+    } else if (dappConnectionReqs.length > 0) {
+      const request = dappConnectionReqs[dappConnectionReqs.length - 1];
+      setPendingDappConnectionRequest(request);
+      if (typeof request.tabId === "number") {
+        const requestAccount = await sendMessageWithRetry<Account | null>({
+          type: "getTabAccount",
+          tabId: request.tabId,
+        });
+        if (requestAccount) setActiveAccount(requestAccount);
+      }
+      setView("dappConnectionConfirm");
     } else if (sigRequests.length > 0) {
       setSelectedSignatureRequest(sigRequests[sigRequests.length - 1]);
       setView("signatureConfirm");
@@ -2059,6 +2212,14 @@ function App() {
     setRpcIssueChainIds(chainIds);
     setDismissedRpcIssueChainIds([]);
   }, []);
+
+  const handleHomeChainBalancesChange = useCallback(
+    (totals: ReadonlyMap<number, number>, hidden: boolean) => {
+      setHomeChainBalances(totals);
+      setHomeChainBalancesHidden(hidden);
+    },
+    [],
+  );
 
   const handleChainSaved = useCallback((chain: { chainName: string; chainId: number }) => {
     const returnTarget = settingsAddChainReturnTarget;
@@ -2546,6 +2707,13 @@ function App() {
             <AddAccount
               onBack={() => setView("main")}
               onAccountAdded={async () => {
+                // Account creation makes the new account the global default.
+                // Adopt it only in the tab where the user completed the flow;
+                // every other established tab keeps its own binding.
+                const addedAccount = await sendMessageWithRetry<Account | null>({
+                  type: "getActiveAccount",
+                });
+                if (addedAccount) await handleAccountSwitch(addedAccount);
                 await loadAccounts(true);
                 setView("main");
               }}
@@ -2650,6 +2818,26 @@ function App() {
     );
   }
 
+  // Shield placeholder view
+  if (view === "shield") {
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <ShieldView onBack={() => setView("main")} />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
   // More actions view
   if (view === "more") {
     return (
@@ -2668,7 +2856,6 @@ function App() {
               walletConnectSessionCount={walletConnectSessionCount}
               onBack={() => setView("main")}
               onWalletConnect={() => setView("walletConnect")}
-              onHideTokens={() => setView("hideTokens")}
             />
           </Suspense>
         </Box>
@@ -2690,7 +2877,7 @@ function App() {
           <Suspense fallback={<LoadingFallback />}>
             <HideTokensView
               address={address}
-              onBack={() => setView("more")}
+              onBack={() => setView("main")}
               onOpenHidden={() => setView("hiddenTokens")}
               onHiddenTokensChanged={handleHiddenTokensChanged}
             />
@@ -3364,6 +3551,38 @@ function App() {
     );
   }
 
+  if (
+    view === "dappConnectionConfirm" &&
+    pendingDappConnectionRequest &&
+    activeAccount
+  ) {
+    return (
+      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
+        <Box
+          maxW={isFullscreenTab ? "480px" : "100%"}
+          mx="auto"
+          w="100%"
+          h="100%"
+          display="flex"
+          flexDirection="column"
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <DappConnectionConfirmation
+              request={pendingDappConnectionRequest}
+              account={activeAccount}
+              onFinished={() => {
+                setPendingDappConnectionRequest(null);
+                void loadActiveDappContext();
+                if (isInSidePanel || isFullscreenTab) setView("main");
+                else window.close();
+              }}
+            />
+          </Suspense>
+        </Box>
+      </Box>
+    );
+  }
+
   if (view === "addChainConfirm" && pendingAddChainRequest) {
     return (
       <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
@@ -3723,19 +3942,22 @@ function App() {
                 setSettingsAccount(account);
                 setView("accountSettings");
               }}
+              onShowQr={onQROpen}
               onChainSelect={handleHomepageChainSelect}
               onAddChain={() => openSettingsAddChain()}
+              showNetworkSelector={false}
             />
 
             {/* Portfolio balance, primary actions, assets, positions, and activity */}
             {address && (
               <PortfolioTabs
                 address={address}
+                onChainBalancesChange={handleHomeChainBalancesChange}
+                onHideTokens={() => setView("hideTokens")}
                 quickActions={
                   activeAccount?.type !== "impersonator" ? (
                     <HomeQuickActions
                       hasConnectedApps={walletConnectSessionCount > 0}
-                      onReceive={onQROpen}
                       onSend={() => {
                         setTransferToken(null);
                         setView("transfer");
@@ -3744,6 +3966,7 @@ function App() {
                         setSwapInitialBuyToken(undefined);
                         setView("swap");
                       }}
+                      onShield={() => setView("shield")}
                       onMore={() => setView("more")}
                     />
                   ) : undefined
@@ -3827,6 +4050,21 @@ function App() {
             )}
           </VStack>
         </Container>
+
+        {activeDappContext?.connected && (
+          <HomeDappDock
+            context={activeDappContext}
+            selectedChain={selectedChain}
+            visibleChains={visibleChains}
+            chainBalances={homeChainBalances}
+            hideBalances={homeChainBalancesHidden}
+            onChainSelect={handleHomepageChainSelect}
+            onDisconnect={async (origin) => {
+              await sendMessageWithRetry({ type: "revokeDappPermission", origin });
+              await loadActiveDappContext();
+            }}
+          />
+        )}
 
       </Box>
       {/* End fullscreen centered wrapper */}

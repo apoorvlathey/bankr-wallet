@@ -78,6 +78,15 @@ const pendingRpcCallbacks = new Map<
   { resolve: (result: any) => void; reject: (error: Error) => void }
 >();
 
+const pendingAccountCallbacks = new Map<
+  string,
+  {
+    resolve: (accounts: string[]) => void;
+    reject: (error: Error) => void;
+    method: "eth_accounts" | "eth_requestAccounts";
+  }
+>();
+
 // Pending wallet_watchAsset callbacks
 const pendingWatchAssetCallbacks = new Map<
   string,
@@ -156,7 +165,7 @@ class ImpersonatorProvider extends EventEmitter {
   isImpersonator = true;
   isMetaMask = true;
 
-  private address: string;
+  #address: string;
   private rpcUrl: string;
   private chainId: number;
   private dappRpcForwarder = new DappRpcForwarder();
@@ -166,12 +175,16 @@ class ImpersonatorProvider extends EventEmitter {
 
     this.rpcUrl = rpcUrl;
     this.chainId = chainId;
-    this.address = address;
+    this.#address = address;
   }
 
-  setAddress = (address: string) => {
-    this.address = address;
-    this.emit("accountsChanged", [address]);
+  setAddress = (address: string, emitAccountsChanged = true) => {
+    this.#address = address;
+    if (emitAccountsChanged) this.emit("accountsChanged", [address]);
+  };
+
+  emitConnected = () => {
+    this.emit("connect", { chainId: hexValue(this.chainId) });
   };
 
   setChainId = (chainId: number, rpcUrl: string) => {
@@ -211,14 +224,20 @@ class ImpersonatorProvider extends EventEmitter {
 
     switch (method) {
       // modified methods
-      case "eth_requestAccounts": {
-        const accounts = [this.address];
-        // EIP-1193: Emit "connect" event when dapp connects
-        this.emit("connect", { chainId: hexValue(this.chainId) });
-        return accounts;
+      case "eth_requestAccounts":
+      case "eth_accounts": {
+        const id = crypto.randomUUID();
+        return new Promise<string[]>((resolve, reject) => {
+          pendingAccountCallbacks.set(id, { resolve, reject, method });
+          window.postMessage(
+            {
+              type: "i_dappAccounts",
+              msg: { id, method },
+            },
+            "*",
+          );
+        });
       }
-      case "eth_accounts":
-        return [this.address];
 
       case "net_version": {
         return this.chainId;
@@ -408,7 +427,7 @@ class ImpersonatorProvider extends EventEmitter {
       // ── ERC-5792 Batch Transaction Methods ──────────────────────────────
       case "wallet_getCapabilities": {
         const capId = crypto.randomUUID();
-        const address = params?.[0] || this.address;
+        const address = params?.[0] || this.#address;
         const chainIds = params?.[1]; // optional chain ID filter
 
         return new Promise<any>((resolve, reject) => {
@@ -591,7 +610,7 @@ class ImpersonatorProvider extends EventEmitter {
               type: "i_sendTransaction",
               msg: {
                 id: txId,
-                from: this.address,
+                from: this.#address,
                 to: txParams.to || null,
                 data: txParams.data || "0x",
                 value: txParams.value || "0x0",
@@ -766,7 +785,33 @@ window.addEventListener("message", (e: any) => {
       // Use providerInstance directly instead of window.ethereum
       // to avoid issues with other wallets claiming window.ethereum
       if (providerInstance) {
-        providerInstance.setAddress(address);
+        providerInstance.setAddress(
+          address,
+          e.data.msg.emitAccountsChanged !== false,
+        );
+      }
+      break;
+    }
+    case "dappAccountsResult": {
+      const id = e.data.msg.id as string;
+      const callbacks = pendingAccountCallbacks.get(id);
+      if (!callbacks) break;
+      pendingAccountCallbacks.delete(id);
+      if (e.data.msg.success) {
+        const accounts = Array.isArray(e.data.msg.accounts)
+          ? e.data.msg.accounts.filter((value: unknown): value is string =>
+              typeof value === "string",
+            )
+          : [];
+        if (callbacks.method === "eth_requestAccounts" && accounts.length > 0) {
+          providerInstance?.emitConnected();
+        }
+        callbacks.resolve(accounts);
+      } else {
+        const errorMessage = e.data.msg.error || "Account request failed";
+        callbacks.reject(
+          makeProviderError(errorMessage, Number(e.data.msg.code) || undefined),
+        );
       }
       break;
     }
@@ -777,6 +822,16 @@ window.addEventListener("message", (e: any) => {
       if (providerInstance) {
         providerInstance.setChainId(chainId, rpcUrl);
       }
+      break;
+    }
+    case "accountsChanged": {
+      if (!providerInstance) break;
+      const accounts = Array.isArray(e.data.msg.accounts)
+        ? e.data.msg.accounts
+        : e.data.msg.address
+          ? [e.data.msg.address]
+          : [];
+      providerInstance.emit("accountsChanged", accounts);
       break;
     }
     case "sendTransactionResult": {

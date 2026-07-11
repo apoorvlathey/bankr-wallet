@@ -1,22 +1,25 @@
-import { useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useRef, useState } from "react";
 import {
+  Box,
+  Button,
   Flex,
   Icon,
   IconButton,
   Image,
+  HStack,
   Text,
   type IconProps,
 } from "@chakra-ui/react";
 import {
-  CheckIcon,
-  CopyIcon,
+  EditIcon,
+  ExternalLinkIcon,
+  LinkIcon,
   ViewOffIcon,
 } from "@chakra-ui/icons";
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import ChainIcon from "@/components/ChainIcon";
 import {
   ListItem,
-  ListItemActions,
   ListItemContent,
   ListItemDescription,
   ListItemMedia,
@@ -25,6 +28,9 @@ import {
   ActionSheet,
   type ActionSheetChoice,
 } from "@/components/ui";
+import { CopyButton } from "@/components/CopyButton";
+import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
+import { isNativePortfolioToken } from "@/components/tokenHoldingsUtils";
 import { getChainConfig } from "@/constants/chainConfig";
 import { getChainEnvironmentLabel } from "@/lib/chainIcons";
 import { getResolvedChainById } from "@/lib/chains";
@@ -33,11 +39,27 @@ import type { NetworksInfo } from "@/types";
 const ERC20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-const EllipsisHorizontalIcon = (props: IconProps) => (
+const SendIcon = (props: IconProps) => (
   <Icon viewBox="0 0 24 24" fill="none" {...props}>
-    <circle cx="5" cy="12" r="1.75" fill="currentColor" />
-    <circle cx="12" cy="12" r="1.75" fill="currentColor" />
-    <circle cx="19" cy="12" r="1.75" fill="currentColor" />
+    <path
+      d="M7 17 17 7M10 7h7v7"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Icon>
+);
+
+const SwapIcon = (props: IconProps) => (
+  <Icon viewBox="0 0 24 24" fill="none" {...props}>
+    <path
+      d="M5 8h12m0 0-3-3m3 3-3 3M19 16H7m0 0 3 3m-3-3 3-3"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </Icon>
 );
 
@@ -51,7 +73,7 @@ function TokenIdentity({ token, chainName, resolveLogo }: TokenIdentityProps) {
   return (
     <ListItemMedia position="relative">
       <Flex
-        boxSize="36px"
+        boxSize="28px"
         align="center"
         justify="center"
         overflow="hidden"
@@ -62,7 +84,7 @@ function TokenIdentity({ token, chainName, resolveLogo }: TokenIdentityProps) {
           <Image
             src={resolveLogo(token.logoUrl)}
             alt=""
-            boxSize="36px"
+            boxSize="28px"
             borderRadius="full"
             fallback={
               <Text fontSize="2xs" fontWeight={700} color="fg.secondary">
@@ -80,7 +102,7 @@ function TokenIdentity({ token, chainName, resolveLogo }: TokenIdentityProps) {
         position="absolute"
         right="-4px"
         bottom="-2px"
-        boxSize="16px"
+        boxSize="12px"
         align="center"
         justify="center"
         overflow="hidden"
@@ -92,7 +114,7 @@ function TokenIdentity({ token, chainName, resolveLogo }: TokenIdentityProps) {
         <ChainIcon
           chainId={token.chainId}
           chainName={chainName}
-          size="14px"
+          size="10px"
           withChip
         />
       </Flex>
@@ -110,10 +132,9 @@ export interface PortfolioTokenRowProps {
   onEditToken: (token: PortfolioToken) => void;
   onHideToken: (token: PortfolioToken) => void;
   resolveLogo: (url: string | undefined) => string | undefined;
-  copiedAddr: string | null;
-  setCopiedAddr: Dispatch<SetStateAction<string | null>>;
   hideValue: boolean;
   formatUsd: (value: number) => string;
+  displayMode?: "token" | "chainBreakdown";
 }
 
 export function PortfolioTokenRow({
@@ -126,10 +147,9 @@ export function PortfolioTokenRow({
   onEditToken,
   onHideToken,
   resolveLogo,
-  copiedAddr,
-  setCopiedAddr,
   hideValue,
   formatUsd,
+  displayMode = "token",
 }: PortfolioTokenRowProps) {
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const actionsButtonRef = useRef<HTMLButtonElement>(null);
@@ -139,34 +159,44 @@ export function PortfolioTokenRow({
     resolvedChain?.name ??
     getChainConfig(token.chainId).name ??
     `Chain ${token.chainId}`;
+  const isNativeToken = isNativePortfolioToken(token);
   const canSwap = !!onSwapClick && resolvedChain?.isSwapSupported === true;
   const canHide =
+    !isNativeToken &&
     ERC20_ADDRESS_REGEX.test(token.contractAddress) &&
     token.contractAddress.toLowerCase() !== ZERO_ADDRESS;
   const canCopy =
-    !!token.contractAddress &&
-    token.contractAddress !== ZERO_ADDRESS &&
-    token.contractAddress !== "native";
-  const copiedKey = `${token.chainId}-${token.contractAddress}`;
+    !isNativeToken && ERC20_ADDRESS_REGEX.test(token.contractAddress);
+  const explorer = resolvedChain?.explorer ?? getChainConfig(token.chainId).explorer;
+  const tokenExplorerUrl = canCopy && explorer
+    ? `${explorer.replace(/\/$/, "")}/token/${token.contractAddress}`
+    : null;
   const isTestnet =
     !!resolvedChain?.name &&
     getChainEnvironmentLabel(token.chainId, resolvedChain.name) === "TESTNET";
   const actionChoices: ActionSheetChoice[] = [
     ...(onTokenClick
-      ? [{ id: "send", label: "Send", description: `Send ${token.symbol} to an address` }]
+      ? [{
+          id: "send",
+          label: "Send",
+          description: `Send ${token.symbol} to an address`,
+          icon: <SendIcon boxSize="18px" />,
+        }]
       : []),
     ...(canSwap
-      ? [{ id: "swap", label: "Swap", description: `Trade or bridge ${token.symbol}` }]
+      ? [{
+          id: "swap",
+          label: "Swap",
+          description: `Trade or bridge ${token.symbol}`,
+          icon: <SwapIcon boxSize="18px" />,
+        }]
       : []),
     ...(isCustom
-      ? [{ id: "edit", label: "Edit token", description: "Update local token details" }]
-      : []),
-    ...(canHide
       ? [{
-          id: "hide",
-          label: "Hide token",
-          description: "Remove this token from the portfolio view",
-          icon: <ViewOffIcon boxSize="18px" />,
+          id: "edit",
+          label: "Edit token",
+          description: "Update local token details",
+          icon: <EditIcon boxSize="18px" />,
         }]
       : []),
   ];
@@ -175,10 +205,9 @@ export function PortfolioTokenRow({
     if (choiceId === "send") onTokenClick?.(token);
     else if (choiceId === "swap") onSwapClick?.(token);
     else if (choiceId === "edit") onEditToken(token);
-    else if (choiceId === "hide") onHideToken(token);
   };
 
-  const rowContent = (
+  const rowContent = displayMode === "chainBreakdown" ? (
     <>
       <TokenIdentity
         token={token}
@@ -186,8 +215,35 @@ export function PortfolioTokenRow({
         resolveLogo={resolveLogo}
       />
       <ListItemContent>
-        <ListItemTitle noOfLines={1}>{token.symbol}</ListItemTitle>
-        <ListItemDescription noOfLines={1}>
+        <ListItemTitle fontSize="sm" noOfLines={1}>{chainName}</ListItemTitle>
+        <ListItemDescription fontSize="xs" noOfLines={1}>
+          {hideValue ? "••••" : `${token.balanceFormatted} ${token.symbol}`}
+        </ListItemDescription>
+      </ListItemContent>
+      <ListItemMeta flex="0 0 auto" minW="76px">
+        <Text
+          as="span"
+          display="block"
+          color="fg.primary"
+          fontSize="sm"
+          fontWeight={600}
+          sx={{ fontVariantNumeric: "tabular-nums" }}
+          noOfLines={1}
+        >
+          {formatUsd(token.valueUsd)}
+        </Text>
+      </ListItemMeta>
+    </>
+  ) : (
+    <>
+      <TokenIdentity
+        token={token}
+        chainName={chainName}
+        resolveLogo={resolveLogo}
+      />
+      <ListItemContent>
+        <ListItemTitle fontSize="sm" noOfLines={1}>{token.symbol}</ListItemTitle>
+        <ListItemDescription fontSize="xs" noOfLines={1}>
           {hideValue ? "••••" : token.balanceFormatted}
           {isTestnet ? ` · ${resolvedChain?.name}` : ""}
         </ListItemDescription>
@@ -217,100 +273,161 @@ export function PortfolioTokenRow({
     </>
   );
 
-  return (
-    <ListItem density="default" px={0} py={0} gap={0}>
-      {onTokenClick ? (
-        <Flex
-          as="button"
-          type="button"
-          aria-label={`Send ${token.symbol}`}
-          minW={0}
-          minH="44px"
-          flex="1 1 auto"
-          align="center"
-          gap={3}
-          px={0}
-          py={0}
-          textAlign="start"
-          bg="transparent"
-          color="fg.primary"
-          border={0}
-          cursor="pointer"
-          transitionProperty="background-color, box-shadow"
-          transitionDuration="fast"
-          _hover={{ bg: "surface.raisedHover" }}
-          _active={{ bg: "surface.sunken" }}
-          _focus={{ outline: "none" }}
-          _focusVisible={{
-            boxShadow:
-              "inset 0 0 0 2px var(--chakra-colors-border-focus)",
-          }}
-          onClick={() => onTokenClick(token)}
-        >
-          {rowContent}
-        </Flex>
-      ) : (
-        <Flex
-          minW={0}
-          minH="44px"
-          flex="1 1 auto"
-          align="center"
-          gap={3}
-          px={0}
-          py={0}
-        >
-          {rowContent}
-        </Flex>
+  const tokenTitle = (
+    <HStack spacing={2} minW={0}>
+      <Flex
+        boxSize="32px"
+        flexShrink={0}
+        align="center"
+        justify="center"
+        overflow="hidden"
+        bg="surface.sunken"
+        borderRadius="full"
+      >
+        {token.logoUrl ? (
+          <Image
+            src={resolveLogo(token.logoUrl)}
+            alt=""
+            boxSize="32px"
+            borderRadius="full"
+          />
+        ) : (
+          <Text fontSize="2xs" fontWeight="700" color="fg.secondary">
+            {token.symbol.slice(0, 3)}
+          </Text>
+        )}
+      </Flex>
+      <Text as="span" fontSize="lg" fontWeight="700" noOfLines={1}>
+        {token.symbol}
+      </Text>
+      <Text as="span" fontSize="sm" fontWeight="500" color="fg.muted">
+        on
+      </Text>
+      <ChainIcon
+        chainId={token.chainId}
+        chainName={chainName}
+        size="18px"
+        withChip
+      />
+      <Text as="span" fontSize="sm" fontWeight="600" color="fg.secondary" noOfLines={1}>
+        {chainName}
+      </Text>
+    </HStack>
+  );
+
+  const sheetFooter = (canCopy || canHide) ? (
+    <Box>
+      {canCopy && (
+        <HStack minH="52px" px={3} spacing={3}>
+          <Flex
+            boxSize="24px"
+            flexShrink={0}
+            align="center"
+            justify="center"
+            color="fg.secondary"
+          >
+            <LinkIcon boxSize="17px" />
+          </Flex>
+          <Box minW={0} flex={1}>
+            <HStack spacing={1.5}>
+              <Text fontSize="sm" fontWeight="600" color="fg.primary">
+                Address
+              </Text>
+              <CopyButton
+                value={token.contractAddress}
+                label={`Copy ${token.symbol} token address`}
+              />
+              {tokenExplorerUrl && (
+                <IconButton
+                  as="a"
+                  href={tokenExplorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`View ${token.symbol} on ${chainName} explorer`}
+                  icon={<ExternalLinkIcon boxSize="14px" />}
+                  size="xs"
+                  minW="24px"
+                  w="24px"
+                  h="24px"
+                  variant="ghost"
+                  color="fg.secondary"
+                  _hover={{ color: "accent.highlight", bg: "surface.raisedHover" }}
+                />
+              )}
+            </HStack>
+            <HStack minW={0} color="fg.secondary">
+              <MiddleTruncatedAddress address={token.contractAddress} />
+            </HStack>
+          </Box>
+        </HStack>
       )}
 
-      <ListItemActions pr={2}>
-        {canCopy && (
-          <IconButton
-            aria-label={`Copy ${token.symbol} token address`}
-            icon={copiedAddr === copiedKey ? <CheckIcon /> : <CopyIcon />}
-            size="sm"
-            variant="ghost"
-            color={
-              copiedAddr === copiedKey ? "accent.highlight" : "fg.secondary"
-            }
-            onClick={() => {
-              void navigator.clipboard.writeText(token.contractAddress);
-              setCopiedAddr(copiedKey);
-              window.setTimeout(
-                () =>
-                  setCopiedAddr((current) =>
-                    current === copiedKey ? null : current,
-                  ),
-                2000,
-              );
-            }}
-          />
-        )}
+      {canHide && (
+        <Button
+          type="button"
+          variant="ghost"
+          w="full"
+          minH="48px"
+          mt={3}
+          px={3}
+          justifyContent="flex-start"
+          color="chart.negative"
+          borderTopWidth="1px"
+          borderTopColor="border.subtle"
+          borderRadius={0}
+          _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
+          _active={{
+            bg: "status.error.bg",
+            color: "status.error.fg",
+            transform: "none",
+          }}
+          onClick={() => {
+            setIsActionsOpen(false);
+            onHideToken(token);
+          }}
+        >
+          <HStack w="full" spacing={3} align="center">
+            <Flex
+              boxSize="24px"
+              flexShrink={0}
+              align="center"
+              justify="center"
+            >
+              <ViewOffIcon boxSize="18px" />
+            </Flex>
+            <Text as="span" fontSize="md" fontWeight="600">
+              Hide token
+            </Text>
+          </HStack>
+        </Button>
+      )}
+    </Box>
+  ) : undefined;
 
-        {(onTokenClick || canSwap || isCustom || canHide) && (
-          <>
-            <IconButton
-              ref={actionsButtonRef}
-              aria-label={`More actions for ${token.symbol}`}
-              icon={<EllipsisHorizontalIcon boxSize="18px" />}
-              size="sm"
-              variant="ghost"
-              color="fg.secondary"
-              onClick={() => setIsActionsOpen(true)}
-            />
-            <ActionSheet
-              isOpen={isActionsOpen}
-              onClose={() => setIsActionsOpen(false)}
-              title={`${token.symbol} actions`}
-              description={chainName}
-              choices={actionChoices}
-              onSelect={handleAction}
-              finalFocusRef={actionsButtonRef}
-            />
-          </>
-        )}
-      </ListItemActions>
-    </ListItem>
+  return (
+    <>
+      <ListItem
+        ref={actionsButtonRef}
+        interactive
+        as="button"
+        type="button"
+        density="default"
+        aria-label={`Open actions for ${token.symbol}`}
+        onClick={() => setIsActionsOpen(true)}
+      >
+        {rowContent}
+      </ListItem>
+
+      <ActionSheet
+        isOpen={isActionsOpen}
+        onClose={() => setIsActionsOpen(false)}
+        title={tokenTitle}
+        choices={actionChoices}
+        onSelect={handleAction}
+        footer={sheetFooter}
+        finalFocusRef={actionsButtonRef}
+      />
+    </>
   );
 }
 

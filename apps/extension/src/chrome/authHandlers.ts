@@ -5,6 +5,7 @@
 
 import {
   encrypt,
+  decrypt,
   loadDecryptedApiKey,
   hasEncryptedApiKey,
   generateVaultKey,
@@ -18,6 +19,7 @@ import {
 import {
   decryptAllKeys,
   computeReEncryptedVault,
+  computeVaultKeyMigratedVault,
   hasVaultEntries,
   loadVault,
   isVaultKeyEncrypted,
@@ -68,6 +70,40 @@ export async function handleUnlockWallet(password: string): Promise<{ success: b
 export async function checkHasVaultKeySystem(): Promise<boolean> {
   const { encryptedVaultKeyMaster } = await chrome.storage.local.get("encryptedVaultKeyMaster");
   return !!encryptedVaultKeyMaster;
+}
+
+/**
+ * Verifies the master password without hydrating or changing the active
+ * session. Passkey sessions intentionally cannot supply this material.
+ */
+export async function verifyMasterPassword(password: string): Promise<boolean> {
+  if (!password) return false;
+
+  const { encryptedVaultKeyMaster } = await chrome.storage.local.get(
+    "encryptedVaultKeyMaster",
+  );
+  if (encryptedVaultKeyMaster) {
+    return (await tryDecryptVaultKey(encryptedVaultKeyMaster, password)) !== null;
+  }
+
+  const [{ encryptedApiKey }, hasVault] = await Promise.all([
+    chrome.storage.local.get("encryptedApiKey"),
+    hasVaultEntries(),
+  ]);
+
+  // Legacy verification must be independent of the active session cache.
+  // loadDecryptedApiKey() intentionally prefers a cached vault key, which
+  // would make it unsuitable as proof that this specific password is valid.
+  if (encryptedApiKey) {
+    try {
+      await decrypt(encryptedApiKey, password);
+    } catch {
+      return false;
+    }
+  }
+  if (hasVault && !(await decryptAllKeys(password))) return false;
+
+  return !!encryptedApiKey || hasVault;
 }
 
 interface HydrateAuthSessionOptions {
@@ -293,22 +329,17 @@ async function unlockWithLegacySystem(password: string): Promise<{ success: bool
  */
 async function migratePrivateKeysToVaultKey(password: string, vaultKey: CryptoKey): Promise<void> {
   try {
-    const { loadVault, saveVault, decryptPrivateKey, encryptPrivateKeyWithVaultKey } = await import("./vaultCrypto");
+    const { loadVault, saveVault } = await import("./vaultCrypto");
     const vault = await loadVault();
     if (!vault || vault.entries.length === 0) {
       return;
     }
 
-    const newEntries: any[] = [];
-    for (const entry of vault.entries) {
-      // Decrypt with password
-      const privateKey = await decryptPrivateKey(entry.keystore as any, password);
-      // Re-encrypt with vault key
-      const newKeystore = await encryptPrivateKeyWithVaultKey(privateKey, vaultKey);
-      newEntries.push({ id: entry.id, keystore: newKeystore });
+    const migratedVault = await computeVaultKeyMigratedVault(password, vaultKey);
+    if (!migratedVault) {
+      throw new Error("Failed to prepare private key migration");
     }
-    vault.entries = newEntries;
-    await saveVault(vault);
+    await saveVault(migratedVault);
 
     console.log("Private key migration to vault key completed");
   } catch (error) {
@@ -581,6 +612,7 @@ export async function handleSaveApiKeyWithCachedPassword(
     return { success: false, error: "API key changes require master password" };
   }
 
+  let vaultKey = getCachedVaultKey();
   let password = getCachedPassword();
 
   // If no cached password, try session restoration (for "Never" auto-lock mode)
@@ -590,17 +622,16 @@ export async function handleSaveApiKeyWithCachedPassword(
       const restored = await tryRestoreSession(handleUnlockWallet);
       if (restored) {
         password = getCachedPassword();
+        vaultKey = getCachedVaultKey();
       }
     }
   }
 
-  if (!password) {
+  if (!vaultKey && !password) {
     return { success: false, error: "Wallet is locked. Please unlock first." };
   }
 
   try {
-    // Check if vault key system is in use
-    const vaultKey = getCachedVaultKey();
     if (vaultKey) {
       // Encrypt API key with vault key and save to new location
       const encrypted = await encryptWithVaultKey(vaultKey, newApiKey);
@@ -608,7 +639,7 @@ export async function handleSaveApiKeyWithCachedPassword(
     } else {
       // Legacy system - encrypt with password
       const { saveEncryptedApiKey } = await import("./crypto");
-      await saveEncryptedApiKey(newApiKey, password);
+      await saveEncryptedApiKey(newApiKey, password!);
     }
     // Update the cached API key
     setCachedApiKeyDirect(newApiKey);
@@ -623,11 +654,13 @@ export async function handleSaveApiKeyWithCachedPassword(
 }
 
 /**
- * Changes the wallet password using the currently cached password
- * This is used when changing password while already unlocked
+ * Changes the wallet password after explicit master-password verification.
+ * This works for password and passkey sessions without ever treating the
+ * passkey-unwrapped vault key as the user's plaintext master password.
  */
-export async function handleChangePasswordWithCachedPassword(
-  newPassword: string
+export async function handleChangePassword(
+  currentPassword: string,
+  newPassword: string,
 ): Promise<{ success: boolean; error?: string }> {
   // SECURITY: Block password changes when unlocked with agent password.
   // Resolve via session restore so post-SW-restart agent sessions are caught.
@@ -636,21 +669,14 @@ export async function handleChangePasswordWithCachedPassword(
     return { success: false, error: "Password changes require master password" };
   }
 
-  let currentPassword = getCachedPassword();
-
-  // If no cached password, try session restoration (for "Never" auto-lock mode)
   if (!currentPassword) {
-    const autoLockTimeout = await getAutoLockTimeout();
-    if (autoLockTimeout === 0) {
-      const restored = await tryRestoreSessionAlreadySerialized(handleUnlockWallet);
-      if (restored) {
-        currentPassword = getCachedPassword();
-      }
-    }
+    return { success: false, error: "Current master password is required" };
   }
-
-  if (!currentPassword) {
-    return { success: false, error: "Session expired. Please unlock your wallet again." };
+  if (!newPassword || newPassword.length < 6) {
+    return { success: false, error: "New password must be at least 6 characters" };
+  }
+  if (newPassword === currentPassword) {
+    return { success: false, error: "New password must be different from the current password" };
   }
 
   try {
@@ -668,7 +694,7 @@ export async function handleChangePasswordWithCachedPassword(
       // Decrypt vault key with old password to get raw bytes
       const vaultKeyBytes = await tryDecryptVaultKey(encryptedVaultKeyMaster, currentPassword);
       if (!vaultKeyBytes) {
-        return { success: false, error: "Failed to decrypt vault key" };
+        return { success: false, error: "Invalid master password" };
       }
 
       // Step 1: Compute ALL new encrypted values in memory (no storage writes yet).
@@ -677,6 +703,36 @@ export async function handleChangePasswordWithCachedPassword(
       // when the master password changes — only the master wrapper does. The
       // mnemonic vault is still password-encrypted today, so it does.
       const newEncryptedVaultKeyMaster = await encryptVaultKey(vaultKeyBytes, newPassword);
+      const preparedVaultKeyBytes = await tryDecryptVaultKey(
+        newEncryptedVaultKeyMaster,
+        newPassword,
+      );
+      if (
+        !preparedVaultKeyBytes ||
+        preparedVaultKeyBytes.length !== vaultKeyBytes.length ||
+        !preparedVaultKeyBytes.every((byte, index) => byte === vaultKeyBytes[index])
+      ) {
+        return {
+          success: false,
+          error: "Failed to verify the new password wrapper",
+        };
+      }
+      const vaultKey = await importVaultKey(vaultKeyBytes);
+
+      // Partial migrations can leave legacy password-encrypted private-key
+      // entries beside modern vault-key entries. Migrate those entries before
+      // rotating the password or they would remain tied to the old password.
+      const currentVault = await loadVault();
+      let migratedVault = null;
+      if (currentVault?.entries.some((entry) => !isVaultKeyEncrypted(entry.keystore))) {
+        migratedVault = await computeVaultKeyMigratedVault(
+          currentPassword,
+          vaultKey,
+        );
+        if (!migratedVault) {
+          return { success: false, error: "Failed to migrate private key vault" };
+        }
+      }
 
       const hasMnemonicEntries = await hasMnemonics();
       let newMnemonicVault = null;
@@ -700,25 +756,19 @@ export async function handleChangePasswordWithCachedPassword(
       if (newMnemonicVault) {
         storageUpdate.mnemonicVault = newMnemonicVault;
       }
-      await chrome.storage.local.set(storageUpdate);
-
-      // SECURITY (H-7): Round-trip verify that the stored wrapper decrypts
-      // with the new password BEFORE we tear down the active session. If
-      // verification fails, the user can still recover with the old
-      // password (it was just overwritten — but on the off chance the write
-      // succeeded with corruption, a clean error is far better than a
-      // permanent lockout).
-      const { encryptedVaultKeyMaster: storedAfter } = await chrome.storage.local.get("encryptedVaultKeyMaster");
-      const verify = await tryDecryptVaultKey(storedAfter, newPassword);
-      if (!verify) {
-        console.error("[authHandlers] Password rotation verify FAILED. Stored wrapper does not decrypt with the new password.");
-        return { success: false, error: "Password change verification failed; rotation aborted" };
+      if (migratedVault) {
+        storageUpdate[VAULT_STORAGE_KEY] = migratedVault;
       }
+      await chrome.storage.local.set(storageUpdate);
     } else {
       // Legacy system: re-encrypt password-derived data directly with the
       // new password. Prepare every replacement in memory first, then write
       // once so API key, PK vault, and mnemonic vault cannot be split across
       // old/new passwords if the service worker dies mid-rotation.
+      if (!(await verifyMasterPassword(currentPassword))) {
+        return { success: false, error: "Invalid master password" };
+      }
+
       const storageUpdate: Record<string, unknown> = {};
 
       // Decrypt API key with cached password (if exists)
@@ -758,7 +808,13 @@ export async function handleChangePasswordWithCachedPassword(
     // SECURITY (C-1): Tear down ALL cached auth state and broadcast
     // walletLockedExternal so any open UI re-routes to the unlock screen.
     // The user must re-enter the new password.
-    await clearAllAuthState();
+    // The credential write is already committed. Clear memory synchronously
+    // and remove the restorable record best-effort; an old stored session
+    // password cannot decrypt the new master wrapper (and old agent/passkey
+    // wrappers were cleared in the same commit).
+    await clearAllAuthState().catch((error) => {
+      console.error("[authHandlers] Failed to clear persisted auth state after password rotation:", error);
+    });
     chrome.runtime.sendMessage({ type: "walletLockedExternal" }).catch(() => {});
 
     return { success: true };

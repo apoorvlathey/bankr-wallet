@@ -150,9 +150,19 @@ When importing a seed phrase whose derived address matches an existing private k
 
 - Users can configure one or both account types during onboarding
 - When both accounts are set up, the first account added becomes the default active account
-- Each browser tab maintains its own active account selection (similar to per-tab chain)
-- The popup/sidepanel shows the account for the currently active tab
-- Account switching emits `accountsChanged` events to connected dApps
+- Each browser tab maintains its own active account selection in `tabAccounts`
+  (similar to per-tab chain). The first account lookup for a tab snapshots the
+  current global/default account so later changes in other tabs cannot affect it.
+- Activating an existing tab restores its account and makes that account the
+  inheritance default for the next new tab. Selecting an account changes only
+  the active tab, while updating the global compatibility/default mirror.
+- The popup/sidepanel resolves the account for the currently active browser tab,
+  including when rendered from a detached extension popup.
+- Provider initialization, `eth_accounts`, connection approval, transaction and
+  signature intake, ERC-5792 capabilities/batches, and ERC-7715 all resolve the
+  sender tab's account. Pending signing requests remain pinned to that account.
+- Account switching emits `accountsChanged` only in that tab and only when its
+  top-level origin has a dapp permission grant. Closing a tab removes its map.
 
 ### Address Synchronization
 
@@ -160,10 +170,11 @@ The extension maintains address consistency between storage and the active accou
 
 1. **On Onboarding**: When both account types are configured, the first account's address (PK account) is saved to `chrome.storage.sync.address` since it becomes the active account.
 
-2. **On Account Switch**: When `setActiveAccount` is called, the background worker:
-   - Updates `activeAccountId` in storage
-   - Updates `address` and `displayAddress` in `chrome.storage.sync`
-   - The storage change listener broadcasts `setAddress` to all tabs
+2. **On Account Switch**: The extension calls `setTabAccount` for the active
+   browser tab. The background worker validates and stores that mapping, updates
+   `activeAccountId` / `address` / `displayAddress` only as the future-tab and
+   legacy compatibility mirror, and the UI sends `setAccount` only to the
+   selected tab. Global address writes are never broadcast to every tab.
 
 3. **On Bankr API Key & Address Change**: The Account Settings form calls
    `saveBankrApiKeyAndAddress`, which saves the new API key and updates the
@@ -171,12 +182,20 @@ The extension maintains address consistency between storage and the active accou
    background worker also syncs `chrome.storage.sync.address/displayAddress`
    and broadcasts `accountsUpdated`.
 
-4. **On Content Script Init**: The inject.ts script:
-   - Reads the initial address from `chrome.storage.sync`
-   - Verifies with background that the address matches the active account
-   - If mismatched (e.g., stale storage), emits `accountsChanged` with the correct address
+4. **On Content Script Init**: `inject.ts` asks the background for the
+   sender-bound tab account before announcing the provider. The global synced
+   address is used only as a legacy fallback if no account metadata is available.
 
-5. **On Address Change**: The inject.ts `setAddress` handler now emits `accountsChanged` when the address changes, ensuring dApps are notified of updates from any source.
+5. **On Address Change**: The inject.ts `setAddress` handler updates the provider's private address state for every tab, but emits `accountsChanged` only when the exact top-level site origin has a stored `dappPermissions` grant.
+
+### Injected dapp connection permissions
+
+- `eth_accounts` is a non-interactive privacy check. It returns `[]` until the exact trusted page origin has been approved.
+- The first `eth_requestAccounts` call crosses `impersonator.ts` → `inject.ts` → `background.ts`, persists a five-minute `pendingDappConnectionRequests` record, and opens the extension connection-confirmation screen.
+- Background derives the canonical `http(s)` origin, tab, and frame from `chrome.runtime.MessageSender`; page-provided origin values are never authorization inputs. Cross-origin/subframe requests currently fail closed and must connect from the top-level site.
+- Approval stores an origin-only `dappPermissions` grant and resolves the request through `dappConnectionResult:{id}`. Future visits reuse the grant without prompting and receive the account currently selected for that tab/fallback active account.
+- Account switches remain visible to an approved origin through `accountsChanged`; unapproved origins receive no account-change event. Revocation sends `accountsChanged([])` to matching open tabs.
+- Site title and favicon are bounded, display-only metadata. The canonical hostname is always the primary identity in confirmation and management UI.
 
 ### Transaction Routing
 
@@ -243,14 +262,33 @@ For detailed implementation of private key accounts, see [PK_ACCOUNTS.md](./PK_A
 
 The following chains are supported for transaction signing (listed in dropdown order):
 
-| Chain    | Chain ID | Default RPC                     | Bankr API | PK/Seed/Impersonator | OP Stack |
-| -------- | -------- | ------------------------------- | --------- | -------------------- | -------- |
-| Base     | 8453     | https://mainnet.base.org        | ✅        | ✅                   | ✅       |
-| Ethereum | 1        | https://eth.llamarpc.com        | ✅        | ✅                   |          |
-| MegaETH  | 4326     | https://mainnet.megaeth.com/rpc |           | ✅                   | ✅       |
-| Polygon  | 137      | https://polygon-rpc.com         | ✅        | ✅                   |          |
+| Chain | Chain ID | Default RPC | Bankr API | PK/Seed/Impersonator | OP Stack |
+| --- | ---: | --- | :---: | :---: | :---: |
+| Ethereum | 1 | https://eth.drpc.org | ✅ | ✅ | |
+| Abstract | 2741 | https://api.mainnet.abs.xyz | | ✅ | |
+| Arbitrum | 42161 | https://arb1.arbitrum.io/rpc | ✅ | ✅ | |
+| Avalanche | 43114 | https://api.avax.network/ext/bc/C/rpc | | ✅ | |
+| Base | 8453 | https://base.drpc.org | ✅ | ✅ | ✅ |
+| Berachain | 80094 | https://rpc.berachain.com | | ✅ | |
+| Blast | 81457 | https://rpc.blast.io | | ✅ | ✅ |
+| BNB Chain | 56 | https://bsc-dataseed.binance.org | ✅ | ✅ | |
+| HyperEVM | 999 | https://rpc.hyperliquid.xyz/evm | | ✅ | |
+| Ink | 57073 | https://rpc-gel.inkonchain.com | | ✅ | ✅ |
+| Linea | 59144 | https://rpc.linea.build | | ✅ | |
+| Mantle | 5000 | https://rpc.mantle.xyz | | ✅ | ✅ |
+| MegaETH | 4326 | https://mainnet.megaeth.com/rpc | | ✅ | ✅ |
+| Mode | 34443 | https://mainnet.mode.network | | ✅ | ✅ |
+| Monad | 143 | https://rpc.monad.xyz | | ✅ | |
+| Optimism | 10 | https://mainnet.optimism.io | | ✅ | ✅ |
+| Plasma | 9745 | https://rpc.plasma.to | | ✅ | |
+| Polygon | 137 | https://polygon.drpc.org | ✅ | ✅ | |
 | Robinhood Chain | 4663 | https://rpc.mainnet.chain.robinhood.com | ✅ | ✅ | |
-| Unichain | 130      | https://mainnet.unichain.org    | ✅        | ✅                   | ✅       |
+| Scroll | 534352 | https://rpc.scroll.io | | ✅ | |
+| Sonic | 146 | https://rpc.soniclabs.com | | ✅ | |
+| Tempo | 4217 | https://rpc.presto.tempo.xyz | | ✅ | |
+| Unichain | 130 | https://mainnet.unichain.org | ✅ | ✅ | ✅ |
+| World Chain | 480 | https://worldchain-mainnet.g.alchemy.com/public | | ✅ | ✅ |
+| ZKsync Era | 324 | https://mainnet.era.zksync.io | | ✅ | |
 
 These are configured in `src/constants/chainRegistry.ts` (the single source of truth for built-in chain data) and normalized into `networksInfo` by the service-worker bootstrap if storage is missing.
 
@@ -300,7 +338,7 @@ ERC-20 display metadata is centralized in `src/chrome/tokenMetadata.ts`.
 
 ### Per-Account-Type Chain Restrictions
 
-Not all chains are supported by all account types. The Bankr API only supports a subset of built-in chains (currently Ethereum, Arbitrum, Base, BNB Chain, Polygon, Unichain — see `isBankrSupported: true` in `chainRegistry.ts`). Newer chains like Optimism and MegaETH are available for PK, Seed Phrase, and Impersonator accounts only. PK / Seed / Impersonator accounts can additionally add arbitrary custom EVM chains via Settings → Chains; Bankr accounts cannot use custom chains.
+Not all chains are supported by all account types. The Bankr API only supports a subset of built-in chains (currently Ethereum, Arbitrum, Base, BNB Chain, Polygon, Robinhood Chain, and Unichain — see `isBankrSupported: true` in `chainRegistry.ts`). The remaining built-ins are available for PK, Seed Phrase, and Impersonator accounts only. PK / Seed / Impersonator accounts can additionally add arbitrary custom EVM chains via Settings → Chains; Bankr accounts cannot use custom chains.
 
 **Constants** (derived from `src/constants/chainRegistry.ts`, re-exported via `src/constants/networks.ts`):
 
@@ -1209,7 +1247,9 @@ After a tx confirms successfully, the receipt path fires-and-forgets `extractAnd
 
 **Bridge destination leg.** When `bridgeStatusPoller.checkAndApplyStatus` sees a destination `txHash` arrive for the first time (`!priorEntry?.bridge?.destinationTxHash`), it fires `extractAndStoreDestinationAssetChanges` against the destination chain's RPC (resolved via `getRpcUrl`). Same decoder, `payerForGas: false` (the receiver didn't pay gas on the dest chain), written to `destAssetChanges`. The modal renders a second `AssetChangesCard` titled "On {destChainName}".
 
-**Refresh wiring.** `updateTxInHistory()` broadcasts `txHistoryUpdated` with `updatedTx` and `changedKeys` (top-level fields from the update object). `TokenHoldings.tsx` listens for entries whose `from` or `bridge.receiverAddress` matches the displayed wallet AND that carry `assetChanges` or `destAssetChanges`, then force-reloads. ERC-20s from the receipt are passed through as forced refresh keys/stubs so they bypass the collapsed low-value-token RPC deferral and get immediate onchain balances even when the "Under $0.10" group is closed. `PortfolioTabs.tsx` also listens, but only refreshes balances for balance-relevant `changedKeys` (`status`, `txHash`, `completedAt`, `assetChanges`, `destAssetChanges`); bridge-only progress updates (`changedKeys: ["bridge"]`) must not trigger portfolio RPC sweeps across every visible chain.
+**Refresh wiring.** `updateTxInHistory()` broadcasts `txHistoryUpdated` with `updatedTx` and `changedKeys` (top-level fields from the update object). `TokenHoldings.tsx` listens for entries whose `from` or `bridge.receiverAddress` matches the displayed wallet AND that carry `assetChanges` or `destAssetChanges`, then force-reloads. ERC-20s from the receipt are passed through as forced refresh keys/stubs so they bypass the collapsed low-value-token RPC deferral and get immediate onchain balances even when the "Under $0.10" group is closed. `PortfolioTabs.tsx` keeps a delayed generic fallback for matching-account confirmation updates (`status`, `txHash`, or `completedAt`), but cancels that timer once `assetChanges`/`destAssetChanges` arrives because `TokenHoldings` owns the immediate targeted refresh. This prevents a delayed API-first load from cancelling the authoritative receipt-token RPC pass. Bridge-only progress updates (`changedKeys: ["bridge"]`) must not trigger portfolio RPC sweeps across every visible chain.
+
+Holdings keeps successful RPC balance reads (including zero-balance tombstones) authoritative across subsequent API revalidations. A lagging portfolio response may update token metadata and price, but it cannot overwrite a verified balance or resurrect a token that RPC already reported as zero. Failed per-token RPC reads are never marked authoritative, so a transient RPC error cannot freeze an API fallback as an onchain value. The same overlay is applied to the fast API paint and the detached enrichment pass, preventing either async stage from causing post-confirm balance flicker.
 
 **Failure surface.** Both extraction paths are wrapped in try/catch + `console.warn`. A failing RPC, malformed receipt, or transient storage error must never block the confirmation notification (source path) or the bridge state machine (destination path).
 
@@ -2088,11 +2128,26 @@ Hydrate normal master session caches
 - Passkey unlock loads the configured `autoLockTimeout` before hydrating
   in-memory credentials so timed auto-lock applies to biometric sessions.
 - Normal transaction/signature confirmations use the hydrated API key/private-key vault caches.
+- Master-authorized vault mutations that only need the vault key work after
+  biometric unlock without a cached plaintext password. This includes adding
+  private-key accounts and adding/updating Bankr API credentials. UI preflights
+  must check `isWalletUnlocked`, not `getCachedPassword`, for these operations.
 - Stored mnemonics remain master-password encrypted. Seed-phrase accounts sign
   through their derived private keys in `pkVault`; revealing the mnemonic or
   deriving additional accounts still requires explicit master password entry.
 - Secret reveal, master password changes, and passkey removal still require explicit master password verification.
 - Master password change and wallet reset clear the passkey wrapper.
+- Settings → Change Password uses an explicit two-step master-password flow:
+  verify the current password locally, then enter the replacement. It never
+  routes a biometric session through the generic unlock screen, because a
+  successful passkey assertion cannot recover the plaintext master password.
+  The serialized rotation verifies the current password again before writing.
+- Settings → Biometric Unlock uses the same in-Settings step-up pattern when
+  enabling the factor. The shared `BiometricUnlockSetup` screen collects the
+  explicit master password, calls `verifyPasskeySetupPassword`, then binds the
+  WebAuthn ceremony to `setupPasskeyUnlockWithPassword`. A biometric session
+  therefore stays in Settings instead of being routed through the generic
+  unlock screen. Cancelling returns to the biometric status screen.
 - `authTransition.ts` serializes session restoration plus
   lock/unlock/setup/removal/agent-factor/password/reset mutations across open
   views. Each WebAuthn ceremony carries a random
@@ -2215,13 +2270,18 @@ Users can optionally configure an **agent password** that allows AI agents to un
 - If `cachedVaultKey` exists → encrypt with vault key → save to `encryptedApiKeyVault`
 - If no vault key and no `encryptedVaultKeyMaster` exists (pre-migration setup/legacy) → encrypt with password → save to `encryptedApiKey`
 - `saveEncryptedApiKey()` refuses to write legacy `encryptedApiKey` once `encryptedVaultKeyMaster` exists, so post-migration callers must use the vault-key path
-- Handled automatically by `handleSaveApiKeyWithCachedPassword()` and `addBankrAccount` handler
+- Handled automatically by `handleSaveApiKeyWithCachedPassword()` and the
+  `addBankrAccount` handler. Despite its legacy name, the helper accepts either
+  a cached vault key (including biometric master sessions) or a cached password
+  for pre-migration wallets.
 
 **Private Keys**:
 
 - If `cachedVaultKey` exists → encrypt with vault key via `encryptPrivateKeyWithVaultKey()` → save to `pkVault` with `salt: ""`
 - If no vault key (legacy) → encrypt with password via `encryptPrivateKey()` → save to `pkVault` with `salt: "base64..."`
-- Handled automatically by `addKeyToVault()` in `vaultCrypto.ts`
+- Handled automatically by `addKeyToVault()` in `vaultCrypto.ts`; callers do
+  not need a plaintext password when a biometric master session has cached the
+  vault key.
 
 **Seed Phrases**:
 
@@ -2351,7 +2411,8 @@ The following message handlers attempt session restoration when auto-lock is "Ne
 | `submitChatPrompt`                 | Chat with Bankr AI                       |
 | `saveApiKeyWithCachedPassword`     | Update API key while unlocked            |
 | `saveBankrApiKeyAndAddress`        | Update Bankr API key and account address while unlocked |
-| `changePasswordWithCachedPassword` | Change wallet password while unlocked    |
+| `verifyMasterPassword`             | Verify an explicitly entered master password without changing session state |
+| `changePassword`                   | Rotate the master password after explicit current-password verification |
 | `addBankrAccount`                  | Add new Bankr account with API key       |
 | `addPrivateKeyAccount`             | Add new private key account              |
 | `addSeedPhraseGroup`               | Generate/import seed phrase              |
@@ -2442,24 +2503,39 @@ When changing the API key while the wallet is unlocked:
 
 When changing the wallet password (Settings → Change Password):
 
-- **No current password required**: User is already authenticated (wallet unlocked)
-- **Must be unlocked with master password**: Agent password sessions cannot change the password
-- **Session check**: Periodic check (every 30 seconds) ensures session hasn't expired
-- **Auto-redirect**: If session expires while on the form, user is redirected to unlock screen
+- **Explicit current password required**: A biometric session proves possession of
+  the vault key but does not contain the plaintext master password. The user must
+  enter the current master password before rotation.
+- **Two-step verification**: `verifyMasterPassword` advances the Settings UI,
+  while `changePassword` independently re-verifies the same password inside the
+  serialized mutation. The first check is never treated as authorization for the
+  second step.
+- **Agent sessions are blocked in the background**: The guard restores a persisted
+  "Never" session first, so a service-worker restart cannot turn an agent session
+  into an untyped session that bypasses the restriction.
 - **Cache cleared**: After password change, user must unlock with new password
 - Password handling stays entirely in background worker (never exposed to UI)
 
 **With Vault Key System** (current) — atomic write pattern:
 
-1. Decrypt vault key with cached (old) password to get raw bytes
+1. Decrypt the master vault-key wrapper with the explicitly entered current password
 2. Compute re-encrypted vault key with new password (in memory)
 3. Compute a replacement password-derived `mnemonicVault` in memory
-4. **Single atomic `chrome.storage.local.set()`** writes all re-encrypted data at once
-5. **Vault-key encrypted data stays unchanged**:
+4. If `pkVault` contains legacy password-encrypted entries from a partial
+   migration, migrate only those entries to the vault key in memory; existing
+   vault-key entries are preserved byte-for-byte
+5. Decrypt and byte-compare the prepared master wrapper before any storage
+   write, so a verification failure cannot be reported after rotation commits
+6. **Single atomic `chrome.storage.local.set()`** writes all changed encrypted data
+   and clears the agent/passkey wrappers together
+7. **Vault-key encrypted data stays unchanged**:
    - API key (in `encryptedApiKeyVault`) unchanged
    - Private keys (in `pkVault` with `salt: ""`) unchanged
    - Seed phrases are written from the in-memory re-encrypted `mnemonicVault`
-6. **Agent password is cleared** - `encryptedVaultKeyAgent` is removed and must be set again after the master password changes
+8. **Secondary factors are cleared** - `encryptedVaultKeyAgent` and
+   `passkeyUnlock` must be set up again after the master password changes
+9. In-memory credentials and the restorable session record are cleared, and all
+   open extension surfaces are told to route to unlock
 
 **Why atomic**: If any re-encryption step fails (OOM, crypto error), no storage writes happen. Without atomicity, the vault key could be updated to the new password while legacy entries remain encrypted with the old password, making data inaccessible.
 
@@ -2639,10 +2715,11 @@ content script only for provider initialization address correction.
 | `isApiKeyCached`                   | Check if password needed                                                                        |
 | `unlockWallet`                     | Unlock wallet with password                                                                     |
 | `getPasskeyUnlockStatus`           | Get local passkey wrapper status and WebAuthn credential metadata                                |
-| `canSetupPasskeyUnlock`            | Preflight Settings passkey setup before opening the platform credential prompt                   |
-| `verifyPasskeySetupPassword`       | Verify explicit master password before creating an unlock-screen passkey credential              |
+| `canSetupPasskeyUnlock`            | Preflight cached-master-session passkey setup before opening the platform credential prompt       |
+| `verifyPasskeySetupPassword`       | Verify explicit master password before creating a passkey credential from a step-up setup screen  |
+| `verifyMasterPassword`             | Verify an explicitly entered master password for sensitive Settings step-up flows                |
 | `setupPasskeyUnlock`               | Store passkey wrapper from an active master-password session                                     |
-| `setupPasskeyUnlockWithPassword`   | Verify master password, store passkey wrapper, and unlock from the unlock-screen setup flow      |
+| `setupPasskeyUnlockWithPassword`   | Verify master password, store passkey wrapper, and hydrate the master session from an explicit-password setup flow |
 | `unlockWithPasskey`                | Hydrate a master session from WebAuthn PRF-unwrapped vault key                                   |
 | `removePasskeyUnlock`              | Remove local passkey wrapper after explicit master password verification                         |
 | `lockWallet`                       | Lock wallet (clear cached credentials)                                                          |
@@ -2661,7 +2738,7 @@ content script only for provider initialization address correction.
 | `getCachedApiKey`                  | Get decrypted API key (if cached). **Sender-verified**: extension pages only                    |
 | `saveApiKeyWithCachedPassword`     | Save new API key using cached password                                                          |
 | `saveBankrApiKeyAndAddress`        | Save a Bankr account's API key and update that account's wallet address in `accounts[]`         |
-| `changePasswordWithCachedPassword` | Change password using cached password                                                           |
+| `changePassword`                   | Re-verify the explicit current master password, atomically rotate password-derived data, clear secondary unlock factors, and lock the wallet |
 | `isSidePanelSupported`             | Check if browser supports sidepanel                                                             |
 | `getSidePanelMode`                 | Get current sidepanel mode setting                                                              |
 | `setSidePanelMode`                 | Set sidepanel mode (true/false)                                                                 |
@@ -2920,12 +2997,13 @@ Origin favicons are displayed with a white background container to handle transp
 The main view (after unlock) shows:
 
 1. **Header**: Chat History button (Bankr accounts only), Lock button, Sidepanel toggle (if supported), Settings icon
-2. **Account Switcher**: Dropdown to switch between accounts (if multiple)
-3. **Wallet Address Section**:
-   - "Bankr Wallet Address" label
-   - Truncated address with copy button
+2. **Account Switcher**: Account avatar/name and a compact address utility row:
+   - Truncated active-account address
+   - QR button (opens the existing Receive modal)
+   - Copy button with inline icon feedback
    - Explorer link icon
-4. **Chain Selector**: Dropdown to select network
+3. **Primary Actions**: Send, Swap, Shield, and More. Shield currently opens a placeholder screen with the standard back-navigation header.
+4. **Chain Selector**: Dropdown to select network where the current surface exposes it
 5. **Pending Transaction Banner** (if any pending)
 6. **Recent Transactions** (TxStatusList):
    - Shows last 5 transactions by default (filtered by current account)

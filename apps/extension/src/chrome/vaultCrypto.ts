@@ -170,7 +170,7 @@ function createEmptyVault(): Vault {
 export async function addKeyToVault(
   accountId: string,
   privateKey: `0x${string}`,
-  password: string
+  password?: string,
 ): Promise<void> {
   let vault = await loadVault();
   if (!vault) {
@@ -193,6 +193,9 @@ export async function addKeyToVault(
     // Use vault key encryption (agent password compatible)
     keystore = await encryptPrivateKeyWithVaultKey(privateKey, vaultKey);
   } else {
+    if (!password) {
+      throw new Error("Wallet is locked. Please unlock first.");
+    }
     // Fall back to password encryption (legacy)
     keystore = await encryptPrivateKey(privateKey, password);
   }
@@ -341,6 +344,47 @@ export async function computeReEncryptedVault(
       newEntries.push({ id: entry.id, keystore: newKeystore });
     }
     return { ...vault, entries: newEntries };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Computes a vault where every entry is encrypted by the supplied vault key.
+ *
+ * A partially migrated wallet may contain both vault-key entries and legacy
+ * password entries. Existing vault-key entries are preserved byte-for-byte;
+ * only legacy entries are decrypted with the master password and migrated.
+ * Nothing is written until the caller persists the returned vault.
+ */
+export async function computeVaultKeyMigratedVault(
+  password: string,
+  vaultKey: CryptoKey,
+): Promise<Vault | null> {
+  const vault = await loadVault();
+  if (!vault || vault.entries.length === 0) {
+    return null;
+  }
+
+  try {
+    const entries = await Promise.all(
+      vault.entries.map(async (entry): Promise<VaultEntry> => {
+        if (isVaultKeyEncrypted(entry.keystore)) {
+          return entry;
+        }
+
+        const privateKey = await decryptPrivateKey(
+          entry.keystore as EncryptedKeystore,
+          password,
+        );
+        return {
+          id: entry.id,
+          keystore: await encryptPrivateKeyWithVaultKey(privateKey, vaultKey),
+        };
+      }),
+    );
+
+    return { ...vault, entries };
   } catch {
     return null;
   }

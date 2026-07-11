@@ -43,6 +43,8 @@ export interface ActionSheetProps {
   onClose: DrawerProps["onClose"];
   title: ReactNode;
   description?: ReactNode;
+  /** Optional non-choice utility content rendered beneath the actions. */
+  footer?: ReactNode;
   /**
    * Two through six simple choices. Longer, searchable, or grouped sets belong
    * in a full-screen picker. Kept as an array so mapped domain data needs no
@@ -70,6 +72,7 @@ export const ActionSheet = forwardRef<HTMLElement, ActionSheetProps>(
       onClose,
       title,
       description,
+      footer,
       choices,
       onSelect,
       finalFocusRef,
@@ -115,111 +118,125 @@ export const ActionSheet = forwardRef<HTMLElement, ActionSheetProps>(
         <DrawerContent
           ref={ref}
           maxH="min(80vh, 640px)"
-          borderTop={tokens.borders.thin}
-          borderColor="border.default"
-          borderTopRadius={tokens.radii.modal}
-          overflow="hidden"
+          bg="transparent"
+          boxShadow="none"
+          pointerEvents="none"
           motionProps={reducedMotionProps}
         >
-          <DrawerCloseButton
-            aria-label="Close action sheet"
-            top={2}
-            right={2}
-            boxSize="44px"
-          />
-
-          <DrawerHeader px={4} pt={5} pb={description ? 1 : 3} pr={16}>
-            <Text as="h2" fontSize="lg" lineHeight="1.3">
-              {title}
-            </Text>
-          </DrawerHeader>
-
-          <DrawerBody
-            px={4}
-            pt={description ? 2 : 1}
-            pb="calc(16px + env(safe-area-inset-bottom, 0px))"
-            overflowY="auto"
-            overscrollBehavior="contain"
+          <Box
+            position="relative"
+            display="flex"
+            flexDirection="column"
+            w="full"
+            maxW="prose"
+            maxH="min(80vh, 640px)"
+            mx="auto"
+            bg="surface.raised"
+            borderTop={tokens.borders.thin}
+            borderColor="border.default"
+            borderTopRadius={tokens.radii.modal}
+            overflow="hidden"
+            pointerEvents="auto"
           >
-            {description && (
-              <Text color="fg.secondary" fontSize="sm" lineHeight="1.45" mb={3}>
-                {description}
-              </Text>
-            )}
+            <DrawerCloseButton
+              aria-label="Close action sheet"
+              top={2}
+              right={2}
+              boxSize="44px"
+            />
 
-            <VStack as="ul" align="stretch" spacing={0} m={0} listStyleType="none">
-              {choices.map((choice, index) => (
-                <Box
-                  as="li"
-                  key={choice.id}
-                  borderBottomWidth={index < choices.length - 1 ? "1px" : "0"}
-                  borderColor="border.subtle"
-                >
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    w="full"
-                    h="auto"
-                    minH={choice.description ? "64px" : "56px"}
-                    px={3}
-                    py={3}
-                    justifyContent="flex-start"
-                    borderRadius={tokens.radii.button}
-                    color={choice.isDestructive ? "status.error.fg" : "fg.primary"}
-                    bg={
-                      choice.isDestructive && tokens.colorMode !== "dark"
-                        ? "status.error.bg"
-                        : choice.isSelected
-                          ? "surface.accentTint"
-                          : "transparent"
-                    }
-                    whiteSpace="normal"
-                    isDisabled={choice.isDisabled}
-                    data-selected={choice.isSelected ? "true" : undefined}
-                    data-destructive={choice.isDestructive ? "true" : undefined}
-                    _hover={{
-                      bg: choice.isDestructive
-                        ? "status.error.bg"
-                        : choice.isSelected
-                          ? "surface.accentTint"
-                          : "surface.raisedHover",
-                      color: choice.isDestructive ? "status.error.fg" : "fg.primary",
-                    }}
-                    _active={{
-                      bg: choice.isDestructive
-                        ? "status.error.bg"
-                        : choice.isSelected
-                          ? "surface.accentTint"
-                          : "surface.sunken",
-                      color: choice.isDestructive ? "status.error.fg" : "fg.primary",
-                    }}
-                    _focusVisible={{
-                      boxShadow: tokens.shadows.focus,
-                      outline: "none",
-                    }}
-                    _disabled={{
-                      color: choice.isDestructive ? "status.error.fg" : "fg.muted",
-                      cursor: "not-allowed",
-                      opacity: 0.55,
-                    }}
-                    onClick={() => {
-                      onSelect(choice.id);
-                      onClose();
-                    }}
+            <DrawerHeader px={4} pt={5} pb={description ? 1 : 3} pr={16}>
+              <Box as="h2" fontSize="lg" lineHeight="1.3">
+                {title}
+              </Box>
+            </DrawerHeader>
+
+            <DrawerBody
+              px={4}
+              pt={description ? 2 : 1}
+              pb="calc(16px + env(safe-area-inset-bottom, 0px))"
+              overflowY="auto"
+              overscrollBehavior="contain"
+            >
+              {description && (
+                <Box color="fg.secondary" fontSize="sm" lineHeight="1.45" mb={3}>
+                  {description}
+                </Box>
+              )}
+
+              <VStack as="ul" align="stretch" spacing={0} m={0} listStyleType="none">
+                {choices.map((choice, index) => (
+                  <Box
+                    as="li"
+                    key={choice.id}
+                    borderBottomWidth={index < choices.length - 1 ? "1px" : "0"}
+                    borderColor="border.subtle"
                   >
-                    <HStack w="full" spacing={3} align="center">
-                      {choice.icon && (
-                        <Box
-                          aria-hidden="true"
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                          boxSize="24px"
-                          flexShrink={0}
-                        >
-                          {choice.icon}
-                        </Box>
-                      )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      w="full"
+                      h="auto"
+                      minH={choice.description ? "64px" : "56px"}
+                      px={3}
+                      py={3}
+                      justifyContent="flex-start"
+                      borderRadius={tokens.radii.button}
+                      color={choice.isDestructive ? "status.error.fg" : "fg.primary"}
+                      bg={
+                        choice.isDestructive && tokens.colorMode !== "dark"
+                          ? "status.error.bg"
+                          : choice.isSelected
+                            ? "surface.accentTint"
+                            : "transparent"
+                      }
+                      whiteSpace="normal"
+                      isDisabled={choice.isDisabled}
+                      data-selected={choice.isSelected ? "true" : undefined}
+                      data-destructive={choice.isDestructive ? "true" : undefined}
+                      _hover={{
+                        bg: choice.isDestructive
+                          ? "status.error.bg"
+                          : choice.isSelected
+                            ? "surface.accentTint"
+                            : "surface.raisedHover",
+                        color: choice.isDestructive ? "status.error.fg" : "fg.primary",
+                      }}
+                      _active={{
+                        bg: choice.isDestructive
+                          ? "status.error.bg"
+                          : choice.isSelected
+                            ? "surface.accentTint"
+                            : "surface.sunken",
+                        color: choice.isDestructive ? "status.error.fg" : "fg.primary",
+                      }}
+                      _focusVisible={{
+                        boxShadow: tokens.shadows.focus,
+                        outline: "none",
+                      }}
+                      _disabled={{
+                        color: choice.isDestructive ? "status.error.fg" : "fg.muted",
+                        cursor: "not-allowed",
+                        opacity: 0.55,
+                      }}
+                      onClick={() => {
+                        onSelect(choice.id);
+                        onClose();
+                      }}
+                    >
+                      <HStack w="full" spacing={3} align="center">
+                        {choice.icon && (
+                          <Box
+                            aria-hidden="true"
+                            display="flex"
+                            alignItems="center"
+                            justifyContent="center"
+                            boxSize="24px"
+                            flexShrink={0}
+                          >
+                            {choice.icon}
+                          </Box>
+                        )}
 
                       <VStack flex={1} minW={0} align="stretch" spacing={0} textAlign="left">
                         <Text fontSize="md" lineHeight="1.5">
@@ -252,12 +269,19 @@ export const ActionSheet = forwardRef<HTMLElement, ActionSheetProps>(
                           <VisuallyHidden>Selected</VisuallyHidden>
                         </Box>
                       )}
-                    </HStack>
-                  </Button>
+                      </HStack>
+                    </Button>
+                  </Box>
+                ))}
+              </VStack>
+
+              {footer && (
+                <Box mt={3} pt={3} borderTopWidth="1px" borderColor="border.subtle">
+                  {footer}
                 </Box>
-              ))}
-            </VStack>
-          </DrawerBody>
+              )}
+            </DrawerBody>
+          </Box>
         </DrawerContent>
       </Drawer>
     );

@@ -1,42 +1,28 @@
 import { useEffect, useState } from "react";
 import {
   Badge,
+  Box,
   Button,
+  Divider,
   HStack,
   Text,
   VStack,
 } from "@chakra-ui/react";
-import {
-  CheckIcon,
-  WarningIcon,
-} from "@chakra-ui/icons";
-import { useThemedToast } from "@/hooks/useThemedToast";
-import {
-  createPasskeyUnlockCredential,
-  getPasskeyErrorMessage,
-  isPasskeyPromptCancelled,
-  isPasskeyUnlockSupported,
-} from "@/lib/passkeyWebAuthn";
+import { WarningIcon } from "@chakra-ui/icons";
+import { IconBox } from "@/theme";
+import { isPasskeyUnlockSupported } from "@/lib/passkeyWebAuthn";
+import BiometricUnlockSetup from "@/components/BiometricUnlockSetup";
 import { FingerprintIcon } from "./icons";
 import { BiometricUnlockRemove } from "./BiometricUnlockRemove";
-import {
-  ListItem,
-  ListItemContent,
-  ListItemDescription,
-  ListItemMedia,
-  ListItemTitle,
-  ListSurface,
-  SkeletonRow,
-} from "@/components/ui";
+import { ListSurface, SkeletonRow } from "@/components/ui";
 import { SettingsScreenFrame } from "./SettingsScreenFrame";
 
 interface BiometricUnlockSettingsProps {
   onComplete: () => void;
   onCancel: () => void;
-  onSessionExpired?: () => void;
 }
 
-type ViewMode = "status" | "remove";
+type ViewMode = "status" | "setup" | "remove";
 
 interface PasskeyUnlockStatus {
   configured: boolean;
@@ -45,15 +31,12 @@ interface PasskeyUnlockStatus {
 function BiometricUnlockSettings({
   onComplete,
   onCancel,
-  onSessionExpired,
 }: BiometricUnlockSettingsProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("status");
   const [isConfigured, setIsConfigured] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [passwordType, setPasswordType] = useState<"master" | "agent" | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const toast = useThemedToast();
 
   useEffect(() => {
     loadStatus();
@@ -80,85 +63,6 @@ function BiometricUnlockSettings({
     }
   };
 
-  const handleEnable = async () => {
-    setIsSubmitting(true);
-    try {
-      const preflight = await new Promise<{
-        success: boolean;
-        error?: string;
-        authCeremonyEpoch?: string;
-      }>((resolve) => {
-        chrome.runtime.sendMessage({ type: "canSetupPasskeyUnlock" }, resolve);
-      });
-
-      if (!preflight.success) {
-        if (preflight.error?.includes("required")) {
-          onSessionExpired?.();
-          return;
-        }
-        toast({
-          title: "Biometric setup failed",
-          description: preflight.error || "Unlock with master password first",
-          status: "error",
-          duration: 5000,
-          isClosable: true,
-        });
-        return;
-      }
-      if (!preflight.authCeremonyEpoch) {
-        throw new Error("Failed to start biometric setup securely");
-      }
-
-      const passkeyPayload = await createPasskeyUnlockCredential();
-      const response = await new Promise<{ success: boolean; error?: string }>((resolve) => {
-        chrome.runtime.sendMessage(
-          {
-            type: "setupPasskeyUnlock",
-            ...passkeyPayload,
-            authCeremonyEpoch: preflight.authCeremonyEpoch,
-          },
-          resolve,
-        );
-      });
-
-      if (!response.success) {
-        if (response.error?.includes("Master password")) {
-          onSessionExpired?.();
-          return;
-        }
-        toast({
-          title: "Biometric setup failed",
-          description: response.error || "Unknown error",
-          status: "error",
-          duration: 5000,
-          isClosable: true,
-        });
-        return;
-      }
-
-      toast({
-        title: "Biometric unlock enabled",
-        status: "success",
-        duration: 2500,
-        isClosable: true,
-      });
-      onComplete();
-    } catch (error) {
-      if (isPasskeyPromptCancelled(error)) {
-        return;
-      }
-      toast({
-        title: "Biometric setup failed",
-        description: getPasskeyErrorMessage(error),
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const isAgentSession = passwordType === "agent";
 
   if (isLoading) {
@@ -175,6 +79,15 @@ function BiometricUnlockSettings({
     return (
       <BiometricUnlockRemove
         onBack={() => setViewMode("status")}
+        onComplete={onComplete}
+      />
+    );
+  }
+
+  if (viewMode === "setup") {
+    return (
+      <BiometricUnlockSetup
+        onCancel={() => setViewMode("status")}
         onComplete={onComplete}
       />
     );
@@ -203,25 +116,18 @@ function BiometricUnlockSettings({
       primaryAction={
         !isAgentSession && isSupported ? (
           <Button
-            variant={isConfigured ? "danger" : "primary"}
+            variant={isConfigured ? "danger" : "brand"}
             onClick={() => {
               if (isConfigured) setViewMode("remove");
-              else handleEnable();
+              else setViewMode("setup");
             }}
-            isLoading={isSubmitting}
-            loadingText={isConfigured ? "Removing..." : "Setting up..."}
           >
             {isConfigured ? "Remove biometric unlock" : "Enable biometric unlock"}
           </Button>
         ) : undefined
       }
     >
-      <VStack spacing={5} align="stretch">
-        <Text fontSize="sm" color="fg.secondary" lineHeight="1.5">
-          Unlock WalletChan on this device with your fingerprint, face, or
-          system passkey prompt.
-        </Text>
-
+      <VStack spacing={6} align="stretch">
         {isAgentSession && (
           <HStack
             align="start"
@@ -258,45 +164,40 @@ function BiometricUnlockSettings({
           </HStack>
         )}
 
-        <ListSurface aria-label="Biometric unlock details">
-          <ListItem>
-            <ListItemMedia>
-              <FingerprintIcon boxSize={5} />
-            </ListItemMedia>
-            <ListItemContent>
-              <ListItemTitle>
-                {isConfigured ? "Ready on this device" : "Not configured"}
-              </ListItemTitle>
-              <ListItemDescription>
-                {isConfigured
-                  ? "The system prompt can open a full master session."
-                  : "Set it up while unlocked with the master password."}
-              </ListItemDescription>
-            </ListItemContent>
-          </ListItem>
-          <ListItem density="compact">
-            <ListItemMedia>
-              <CheckIcon boxSize={4} color="status.success.fg" />
-            </ListItemMedia>
-            <ListItemContent>
-              <ListItemTitle fontSize="sm">Master-session access</ListItemTitle>
-              <ListItemDescription>
-                Biometric unlock has the same access as your master password.
-              </ListItemDescription>
-            </ListItemContent>
-          </ListItem>
-          <ListItem density="compact">
-            <ListItemMedia>
-              <WarningIcon boxSize={4} />
-            </ListItemMedia>
-            <ListItemContent>
-              <ListItemTitle fontSize="sm">Stored for this device</ListItemTitle>
-              <ListItemDescription>
-                Other browsers and devices need their own setup.
-              </ListItemDescription>
-            </ListItemContent>
-          </ListItem>
-        </ListSurface>
+        <HStack align="flex-start" spacing={4}>
+          <IconBox
+            size="48px"
+            noShadow
+            bg={isConfigured ? "status.success.bg" : "surface.sunken"}
+            color={isConfigured ? "status.success.fg" : "fg.secondary"}
+            aria-hidden="true"
+          >
+            <FingerprintIcon boxSize={6} />
+          </IconBox>
+          <VStack align="flex-start" spacing={1} pt={0.5} minW={0}>
+            <Text fontSize="lg" fontWeight="600" lineHeight="1.3">
+              {isConfigured ? "Ready to unlock" : "Set up biometric unlock"}
+            </Text>
+            <Text fontSize="sm" color="fg.secondary" lineHeight="1.5">
+              Use your fingerprint, face, or device passkey prompt to unlock
+              WalletChan.
+            </Text>
+          </VStack>
+        </HStack>
+
+        <Divider />
+
+        <Box>
+          <Text fontSize="xs" fontWeight="600" color="fg.muted" mb={1}>
+            Access level
+          </Text>
+          <Text fontSize="md" fontWeight="600" mb={1}>
+            Full master session
+          </Text>
+          <Text fontSize="sm" color="fg.secondary" lineHeight="1.5">
+            Same access as unlocking with your master password.
+          </Text>
+        </Box>
       </VStack>
     </SettingsScreenFrame>
   );

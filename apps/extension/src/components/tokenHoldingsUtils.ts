@@ -17,6 +17,18 @@ export function hasPositiveBalance(token: PortfolioToken): boolean {
   return parseFloat(token.balance || "0") > 0;
 }
 
+/**
+ * Return the canonical decimal balance used for arithmetic.
+ *
+ * `balanceFormatted` is presentation-only and may contain threshold markers
+ * such as "<0.000001" or locale separators, so it must never be coerced into
+ * a number for portfolio totals.
+ */
+export function getPortfolioTokenBalance(token: PortfolioToken): number {
+  const balance = Number(token.balance);
+  return Number.isFinite(balance) && balance >= 0 ? balance : 0;
+}
+
 export function sortTokensByValue(tokens: PortfolioToken[]): PortfolioToken[] {
   return [...tokens].sort((a, b) => b.valueUsd - a.valueUsd);
 }
@@ -56,6 +68,45 @@ export function mergeTokenBalanceRefresh(
     if (refreshed) return [refreshed];
     if (refreshedKeys.has(key)) return [];
     return [token];
+  });
+
+  return sortTokensByValue(merged.filter(hasPositiveBalance));
+}
+
+/**
+ * Overlay balances that were successfully read from RPC onto a fresh API
+ * catalog. A verified key without a token is a zero-balance tombstone: the
+ * RPC pass removed it, so a lagging portfolio response must not add it back.
+ *
+ * Catalog metadata and prices stay fresh while the canonical decimal balance
+ * remains onchain-authoritative.
+ */
+export function mergeVerifiedTokenBalances(
+  catalogTokens: PortfolioToken[],
+  verifiedTokens: PortfolioToken[],
+  verifiedTokenKeys: Set<string>,
+): PortfolioToken[] {
+  const verifiedByKey = new Map(
+    verifiedTokens.map((token) => [
+      getPortfolioTokenKey(token.chainId, token.contractAddress),
+      token,
+    ]),
+  );
+
+  const merged = catalogTokens.flatMap((token) => {
+    const key = getPortfolioTokenKey(token.chainId, token.contractAddress);
+    if (!verifiedTokenKeys.has(key)) return [token];
+
+    const verified = verifiedByKey.get(key);
+    if (!verified) return [];
+
+    const balance = getPortfolioTokenBalance(verified);
+    return [{
+      ...token,
+      balance: verified.balance,
+      balanceFormatted: verified.balanceFormatted,
+      valueUsd: balance * token.priceUsd,
+    }];
   });
 
   return sortTokensByValue(merged.filter(hasPositiveBalance));

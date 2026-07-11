@@ -5,7 +5,7 @@ import { Badge,
 import {
   ChevronRightIcon,
   ExternalLinkIcon,
-  ViewOffIcon,
+  LinkIcon,
 } from "@chakra-ui/icons";
 import {
   REVOKE_CASH_URL,
@@ -15,6 +15,7 @@ import {
   WALLETCHAN_VAULT_DATA_API,
 } from "@/constants/externalUrls";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
+import ConnectedDappsView from "@/components/ConnectedDappsView";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
 import { GlobeIcon } from "@/components/Settings/icons";
 import { useEffect, useState } from "react";
@@ -35,7 +36,6 @@ import {
 interface MoreActionsViewProps {
   onBack: () => void;
   onWalletConnect: () => void;
-  onHideTokens: () => void;
   fromAddress: string;
   walletConnectSessionCount?: number;
 }
@@ -160,11 +160,11 @@ function ActionListRow({ action }: { action: MoreAction }) {
 export default function MoreActionsView({
   onBack,
   onWalletConnect,
-  onHideTokens,
   fromAddress,
   walletConnectSessionCount = 0,
 }: MoreActionsViewProps) {
   const [stakeApy, setStakeApy] = useState<number | null>(null);
+  const [showConnectedDapps, setShowConnectedDapps] = useState(false);
   const isFirefox =
     typeof navigator !== "undefined" && /Firefox/.test(navigator.userAgent);
 
@@ -211,6 +211,15 @@ export default function MoreActionsView({
 
   const secondaryActions: MoreAction[] = [
     {
+      title: "Connected dapps",
+      detail: "Manage approved sites",
+      icon: <LinkIcon boxSize={5} />,
+      iconBg: "accent.highlight",
+      iconColor: "accentFg.highlight",
+      external: false,
+      onClick: () => setShowConnectedDapps(true),
+    },
+    {
       title: "WalletConnect",
       detail:
         walletConnectSessionCount > 0
@@ -249,16 +258,11 @@ export default function MoreActionsView({
           fromAddress ? revokeCashAddressUrl(fromAddress) : REVOKE_CASH_URL,
         ),
     },
-    {
-      title: "Hide tokens",
-      detail: "Hide spam tokens from portfolio",
-      icon: <ViewOffIcon boxSize={5} />,
-      iconBg: "surface.sunken",
-      iconColor: "text.secondary",
-      external: false,
-      onClick: onHideTokens,
-    },
   ];
+
+  if (showConnectedDapps) {
+    return <ConnectedDappsView onBack={() => setShowConnectedDapps(false)} />;
+  }
 
   return (
     <AppScreen>

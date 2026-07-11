@@ -76,23 +76,30 @@ export async function getTabAccounts(): Promise<Record<number, string>> {
 }
 
 /**
- * Gets the account for a specific tab (or falls back to active account)
+ * Gets the account for a specific tab. The first lookup snapshots the current
+ * global account so later global/default changes cannot silently change an
+ * already-established tab.
  */
 export async function getTabAccount(tabId: number): Promise<Account | null> {
-  const tabAccounts = await getTabAccounts();
-  const accountId = tabAccounts[tabId];
+  return withStorageLock(TAB_ACCOUNTS_LOCK_KEY, async () => {
+    const tabAccounts = await getTabAccounts();
+    const accountId = tabAccounts[tabId];
 
-  if (accountId) {
-    const account = await getAccountById(accountId);
-    if (account) {
-      return account;
+    if (accountId) {
+      const account = await getAccountById(accountId);
+      if (account) return account;
+      delete tabAccounts[tabId];
     }
-    // Account was deleted, clear the tab mapping
-    await clearTabAccount(tabId);
-  }
 
-  // Fall back to active account
-  return getActiveAccount();
+    const fallback = await getActiveAccount();
+    if (fallback) {
+      tabAccounts[tabId] = fallback.id;
+      await chrome.storage.sync.set({ [TAB_ACCOUNTS_KEY]: tabAccounts });
+    } else if (accountId) {
+      await chrome.storage.sync.set({ [TAB_ACCOUNTS_KEY]: tabAccounts });
+    }
+    return fallback;
+  });
 }
 
 /**
@@ -102,11 +109,35 @@ export async function setTabAccount(
   tabId: number,
   accountId: string
 ): Promise<void> {
+  const account = await getAccountById(accountId);
+  if (!account) throw new Error("Account not found");
+
   await withStorageLock(TAB_ACCOUNTS_LOCK_KEY, async () => {
     const tabAccounts = await getTabAccounts();
     tabAccounts[tabId] = accountId;
     await chrome.storage.sync.set({ [TAB_ACCOUNTS_KEY]: tabAccounts });
   });
+}
+
+/**
+ * Marks a tab's account as the current navigation default. This is called when
+ * the browser activates a tab and when the user explicitly selects an account
+ * for that tab. The global fields remain compatibility/default mirrors only.
+ */
+export async function activateTabAccount(
+  tabId: number,
+  accountId?: string,
+): Promise<Account | null> {
+  if (accountId) await setTabAccount(tabId, accountId);
+  const account = await getTabAccount(tabId);
+  if (!account) return null;
+
+  await chrome.storage.sync.set({
+    [ACTIVE_ACCOUNT_ID_KEY]: account.id,
+    address: account.address,
+    displayAddress: account.displayName || account.address,
+  });
+  return account;
 }
 
 /**

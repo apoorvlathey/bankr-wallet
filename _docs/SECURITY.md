@@ -132,7 +132,7 @@ The agent password model restricts what operations are available when the wallet
 | Add/remove/confirm cross-dapp batch | Yes | Yes         | `crossDappBatchHandlers.ts` (no extra gating — same as single tx submission)   |
 | Reveal private key               | Yes    | **BLOCKED** | `background.ts` - `revealPrivateKey` case                                      |
 | Change API key                   | Yes    | **BLOCKED** | `authHandlers.ts` - `handleSaveApiKeyWithCachedPassword()`                     |
-| Change master password           | Yes    | **BLOCKED** | `authHandlers.ts` - `handleChangePasswordWithCachedPassword()`                 |
+| Change master password           | Yes    | **BLOCKED** | `authHandlers.ts` - `handleChangePassword()`                                   |
 | Add Bankr account (with API key) | Yes    | **BLOCKED** | `background.ts` - `addBankrAccount` case                                       |
 | Add private key account          | Yes    | **BLOCKED** | `background.ts` - `addPrivateKeyAccount` case                                  |
 | Add impersonator account         | Yes    | **BLOCKED** | `background.ts` - `addImpersonatorAccount` case                                |
@@ -148,6 +148,14 @@ The agent password model restricts what operations are available when the wallet
 ### How Guards Work
 
 Every blocked operation checks `getPasswordType() === "agent"` from `sessionCache.ts` and returns an error before executing any logic. These guards are **backend-enforced** (defense-in-depth), independent of UI-level hiding/disabling.
+
+Biometric unlock hydrates `passwordType: "master"` plus the cached vault key,
+but intentionally does not cache the plaintext master password. Operations
+whose cryptography only needs the vault key (private-key account import and
+Bankr API credential creation/update) must therefore accept the cached vault
+key as a valid master-session capability. Secret reveal, mnemonic derivation,
+master-password rotation, agent-password wrapping, and passkey removal still
+require explicit master-password material or verification by design.
 
 **Pattern**:
 
@@ -176,11 +184,11 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 
 | Handler                            | What It Modifies                                                                                                             | Guard                                      |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `saveApiKeyWithCachedPassword`     | Overwrites encrypted API key                                                                                                 | Agent password blocked                     |
+| `saveApiKeyWithCachedPassword`     | Overwrites encrypted API key using the cached vault key (including biometric master sessions), with cached-password fallback for legacy wallets | Agent password blocked                     |
 | `saveBankrApiKeyAndAddress`        | Overwrites encrypted API key and updates the Bankr account address in `accounts[]` after duplicate-address validation        | Agent password blocked via API-key save    |
-| `changePasswordWithCachedPassword` | Atomically re-wraps the vault key and re-encrypts password-derived `mnemonicVault` entries with the new master password (single storage write); vault-key-encrypted `pkVault` entries remain unchanged | Agent password blocked                     |
+| `changePassword`                   | Re-verifies an explicitly entered current master password, then atomically re-wraps the vault key, re-encrypts password-derived `mnemonicVault` entries, and migrates any residual password-encrypted `pkVault` entries to the vault key (single storage write); existing vault-key entries remain unchanged | Agent password blocked |
 | `addBankrAccount`                  | Can overwrite encrypted API key (when `message.apiKey` provided)                                                             | Agent password blocked when apiKey present |
-| `addPrivateKeyAccount`             | Adds new entry to encrypted private key vault                                                                                | Agent password blocked                     |
+| `addPrivateKeyAccount`             | Adds new entry to encrypted private key vault using the cached vault key after biometric/master unlock, or password fallback for legacy wallets | Agent password blocked                     |
 
 ### Account-Modifying Handlers
 
@@ -188,7 +196,7 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 | -------------------------- | ------------------------------------------------ | ---------------------------------- |
 | `removeAccount`            | Deletes account reference                        | Agent password blocked             |
 | `setActiveAccount`         | Changes active account + updates storage address | `EXTENSION_ONLY_MESSAGES`          |
-| `setTabAccount`            | Changes per-tab selected account                 | `EXTENSION_ONLY_MESSAGES`          |
+| `setTabAccount`            | Validates and changes one tab's selected account; updates only the legacy/new-tab default mirror | `EXTENSION_ONLY_MESSAGES`          |
 | `updateAccountDisplayName` | Changes display name                             | `EXTENSION_ONLY_MESSAGES`          |
 
 ### Destructive Handlers
@@ -233,10 +241,11 @@ not forward an inpage message for it.
 | `unlockWallet`        | Tries master password first, then agent. Sets `passwordType` accordingly |
 | `setAgentPassword`    | Requires `getPasswordType() === "master"`                                |
 | `removeAgentPassword` | Requires explicit master password verification (not just cached)         |
-| `canSetupPasskeyUnlock` | Preflights Settings setup so agent/expired sessions fail before platform credential creation. |
+| `canSetupPasskeyUnlock` | Preflights cached-master-session setup so agent/expired sessions fail before platform credential creation. The current Settings UI uses explicit-password step-up instead. |
 | `setupPasskeyUnlock` / `setupPasskeyUnlockWithPassword` | Requires master session or explicit master-password verification, then stores a local WebAuthn PRF-wrapped vault key only after backend hydration succeeds. |
 | `unlockWithPasskey`   | Decrypts `passkeyUnlock`, transactionally hydrates a master session, and does not cache/store the master password. |
 | `removePasskeyUnlock` | Requires explicit master password verification before clearing the local passkey wrapper. |
+| `verifyMasterPassword` | Verifies an explicitly entered master password without hydrating or mutating the active session. Used for sensitive Settings step-up flows. |
 
 All mutating unlock/lock/factor/password/reset handlers and persisted-session
 restoration run through `authTransition.ts`. The queue makes cache/storage
@@ -464,6 +473,15 @@ handleConfirmSignatureRequest*() → validateSiwePersonalSignRequest()
 
 ## Content Script Message Filtering
 
+Injected account discovery is origin-gated. `eth_accounts` returns an empty
+array unless `dappPermissions` contains the exact canonical origin attested by
+Chrome's `MessageSender`. The first top-level `eth_requestAccounts` call creates
+a persisted confirmation request; background ignores page-claimed origins,
+rejects subframe requests, and stores title/favicon only as hostile display
+metadata. Address updates always refresh the provider's private internal state,
+but `accountsChanged` is emitted only to approved origins. Revocation emits
+`accountsChanged([])` to matching open tabs.
+
 ### Inpage-to-Background Messages (via inject.ts)
 
 Only these inpage message types are accepted from the webpage by `inject.ts`:
@@ -548,6 +566,8 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 | `pendingSignatureRequests` | No               | Pending signature queue                                 |
 | `pendingErc7715PermissionRequests` | No        | Pending ERC-7715 delegated-permission prompts pinned to account/origin/chain. Contains requested public authority scope, not private keys. |
 | `erc7715PermissionGrants`  | No               | ERC-7715 grant records with returned context and signed ERC-7710 delegation. This is reusable public authority material and must stay origin/account/chain scoped in all listing UI/API paths. |
+| `dappPermissions`         | No               | Exact-origin grants allowing injected sites to read the current WalletChan account. Chrome-attested origin is authoritative; title/favicon are untrusted display metadata. |
+| `pendingDappConnectionRequests` | No          | Short-lived top-level `eth_requestAccounts` confirmations. Contains origin/tab/frame and public site metadata only; results use `dappConnectionResult:{id}`. |
 | `walletConnectPendingRequests` | No           | WalletConnect request routing metadata (`txId`/`sigId`/ERC-7715 permission id → session topic/request id) |
 | `walletConnectChainId`    | No               | WalletConnect-specific active chain ID |
 | `crossDappBatch`           | No               | User-assembled cross-dapp batch (Bankr or PK/SP EIP-7702). Single batch, locked to first entry's pinned account, `from`, and `chainId`. The original pending entries are removed when added; the dapp promises stay open until ship/reject and are resolved via `txResult:{txId}` or `bundleStatuses` fan-out. |
@@ -626,7 +646,7 @@ These must always hold true. Violations indicate a security bug.
 
 10. **Secret-returning handlers verify sender origin** - Handlers like `getCachedApiKey`, `revealPrivateKey`, `revealSeedPhrase`, and `generateMnemonic` check `isExtensionPage(sender)` to ensure the request comes from an extension page, not a content script on a web page.
 
-11. **Password change updates all password-derived wrappers atomically** - `handleChangePasswordWithCachedPassword` computes the new `encryptedVaultKeyMaster` and password-derived `mnemonicVault` in memory, then writes them together in one `chrome.storage.local.set()` call. Vault-key-encrypted `pkVault` entries do not change. This prevents partial-write corruption where the vault-key wrapper changes while seed phrases remain encrypted with the old password.
+11. **Password change re-verifies explicitly and updates all password-derived wrappers atomically** - `handleChangePassword` requires the explicitly entered current master password, verifies it again inside the serialized mutation, computes and validates the new `encryptedVaultKeyMaster` before any write, computes the password-derived `mnemonicVault` in memory, and migrates any partially migrated password-encrypted `pkVault` entries to the vault key before one `chrome.storage.local.set()` call. Existing vault-key-encrypted entries remain unchanged. The same write clears agent/passkey wrappers. No failure is reported after the credential write commits; post-commit session cleanup is best-effort and any old persisted password is invalid against the new wrapper. This prevents biometric sessions from being mistaken for plaintext-password sessions, prevents partial-write corruption where the vault-key wrapper changes while seed phrases remain encrypted with the old password, and prevents legacy private keys from being stranded under the old password.
 
 12. **Duplicate-only seed imports do not persist secrets** - `addSeedPhraseGroup` validates that at least one selected derivation index can be imported or converted before creating `seedGroups` metadata or writing the encrypted mnemonic to `mnemonicVault`.
 

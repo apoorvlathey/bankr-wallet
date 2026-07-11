@@ -23,11 +23,9 @@ import {
 import { CheckIcon } from "@chakra-ui/icons";
 import { themeList, useTheme } from "@/theme";
 import type { ThemeTokens } from "@/theme";
-import { useThemedToast } from "@/hooks/useThemedToast";
 import {
   ListItem,
   ListItemContent,
-  ListItemDescription,
   ListItemMedia,
   ListItemMeta,
   ListItemTitle,
@@ -39,31 +37,24 @@ interface AppearanceSettingsProps {
   onCancel: () => void;
 }
 
+const THEME_DISPLAY_NAMES: Record<ThemeTokens["id"], string> = {
+  midnight: "Dark Mode",
+  bauhaus: "Light Mode",
+};
+
 function AppearanceSettings({ onCancel }: AppearanceSettingsProps) {
   const { themeId, setThemeId } = useTheme();
-  const toast = useThemedToast();
 
   const handleSelect = async (next: ThemeTokens) => {
     if (next.id === themeId) return;
     await setThemeId(next.id);
-    toast({
-      title: `Switched to ${next.name}`,
-      status: "success",
-      duration: 1500,
-      isClosable: true,
-      // Force the toast to render in the theme we just switched TO — the
-      // closure captured pre-switch tokens and would otherwise flash the
-      // previous theme's styling.
-      themeOverride: next,
-    });
   };
 
   return (
     <SettingsScreenFrame title="Appearance" onBack={onCancel}>
       <VStack spacing={6} align="stretch">
         <Text fontSize="sm" color="fg.secondary" lineHeight="1.5">
-          Choose the visual style for WalletChan. Your selection is saved in
-          this browser and applies immediately.
+          Choose the visual style for WalletChan.
         </Text>
 
         <ListSurface aria-label="Wallet themes">
@@ -114,10 +105,7 @@ function AppearanceSettings({ onCancel }: AppearanceSettingsProps) {
                   </Box>
                 </ListItemMedia>
                 <ListItemContent>
-                  <ListItemTitle>{theme.name}</ListItemTitle>
-                  <ListItemDescription noOfLines={2}>
-                    {theme.description}
-                  </ListItemDescription>
+                  <ListItemTitle>{THEME_DISPLAY_NAMES[theme.id]}</ListItemTitle>
                 </ListItemContent>
                 {isActive && (
                   <ListItemMeta color="accent.secondary" flex="0 0 auto">

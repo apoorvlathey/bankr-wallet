@@ -1,5 +1,8 @@
 # DESIGN.md - WalletChan
 
+> Screen-by-screen implementation decisions and current review status live in
+> [`_docs/WARM_MIDNIGHT.md`](./_docs/WARM_MIDNIGHT.md).
+
 ## Context (from discovery)
 
 - Artifact type: mobile-first browser wallet and financial application.
@@ -184,6 +187,11 @@
   layer, an undersized explorer target, and an empty financial-impact state.
   Manual WebAuthn, screen-reader, and successful onchain smoke remain release
   checks rather than design-system work.
+- 2026-07-11 password-change step-up audit: passes the Settings grammar with
+  one primary action per step, native form submission, managed focus, visible
+  labels, retained inline errors, 40–44px icon/action targets, intent-token
+  colors, and text-plus-icon factor-removal warnings. Manual WebAuthn and
+  screen-reader verification remain release checks.
 
 ## Changelog
 
@@ -203,3 +211,18 @@
   authentication semantics. Visible surfaces hold success for 500ms before the
   fade (120ms with reduced motion); hidden sibling surfaces never wait on the
   presentation.
+- 2026-07-11: added `_docs/WARM_MIDNIGHT.md` as the durable surface-level
+  handoff for approved branding decisions, current implementation status, and
+  one-surface fresh-session workflow.
+- 2026-07-11: constrained portfolio-chart smoothing to each timestamp segment
+  so abrupt value changes remain precise instead of forming oversized curves.
+- 2026-07-11: changed password rotation into a two-step Settings flow that
+  explicitly verifies the current master password before collecting the new
+  one, explains why biometric unlock cannot substitute, and warns when the
+  rotation will remove biometric or agent unlock factors.
+- 2026-07-11: refined the About identity spacing and consolidated its links
+  around the WalletChan website and official social account.
+- 2026-07-11: simplified App options into concise action-first labels and
+  reserved supporting copy for the WalletChan OS destination.
+- 2026-07-11: increased action-sheet row height and vertical padding so
+  single-line actions retain comfortable rhythm without supporting copy.

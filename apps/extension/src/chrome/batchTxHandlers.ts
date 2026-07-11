@@ -21,7 +21,11 @@ import {
 import { getAllDelegatesForAccount } from "./delegationStorage";
 import { bumpGasForEip7702Auth } from "./gasEstimation";
 import { CHAIN_CONFIG } from "../constants/chainConfig";
-import { getActiveAccount, getAccountById } from "./accountStorage";
+import {
+  getActiveAccount,
+  getTabAccount,
+  getAccountById,
+} from "./accountStorage";
 import type { Account } from "./types";
 import {
   savePendingBatchTxRequest,
@@ -443,7 +447,11 @@ export function handleWalletSendCalls(
     // user can SEE what the dapp tried to send (banner + disabled Confirm in
     // BatchTransactionConfirmation.tsx); confirm-time signing is still
     // defended in handleConfirmBatchTransaction + resolvePinnedAccount.
-    const account = accountOverride ?? await getActiveAccount();
+    const account =
+      accountOverride ??
+      (typeof tabId === "number"
+        ? await getTabAccount(tabId)
+        : await getActiveAccount());
 
     const isBankrAccount = account?.type === "bankr";
     const isPKOrSP =

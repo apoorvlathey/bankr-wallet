@@ -5,8 +5,6 @@ import {
   useRef,
   useMemo,
   memo,
-  type Dispatch,
-  type SetStateAction,
 } from "react";
 import {
   Box,
@@ -14,11 +12,13 @@ import {
   Collapse,
   Flex,
   HStack,
+  Image,
   Text,
   Skeleton,
   IconButton,
   Tooltip,
   Spinner,
+  usePrefersReducedMotion,
 } from "@chakra-ui/react";
 import { ChevronDownIcon, RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 import { useDisclosure } from "@chakra-ui/react";
@@ -51,6 +51,7 @@ import {
   EmptyStateTitle,
   ListItemContent,
   ListItemDescription,
+  ListItemMedia,
   ListItemMeta,
   ListItemTitle,
   ListSurface,
@@ -63,18 +64,41 @@ import {
   getWalletTokenTotal,
   hasPositiveBalance,
   getReceiptTokenRefresh,
-  mergeTokenBalanceRefresh,
+  getPortfolioTokenBalance,
+  isNativePortfolioToken,
+  mergeVerifiedTokenBalances,
   shouldFetchOnInitialPortfolioLoad,
   sortTokensByValue,
 } from "@/components/tokenHoldingsUtils";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getVisibleChains } from "@/lib/chains";
+import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
+import {
+  CANONICAL_USDC_BY_CHAIN_ID,
+  CANONICAL_USDT_BY_CHAIN_ID,
+} from "@/constants/canonicalTokens";
 import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import type { NetworksInfo } from "@/types";
 
 // Module-level cache so navigating away and back to the homepage doesn't flash
 // a skeleton. We seed state from here on mount and refetch in the background.
+const MIN_PRIMARY_TOKEN_ROWS = 4;
+const BUILT_IN_ETH_MAINNET_CHAIN_IDS = new Set(
+  CHAIN_REGISTRY
+    .filter((chain) => chain.nativeCurrency.symbol === "ETH")
+    .map((chain) => chain.chainId),
+);
+
+type AssetDisplayRow =
+  | { kind: "token"; token: PortfolioToken; valueUsd: number }
+  | {
+      kind: "aggregate";
+      symbol: "ETH" | "USDC" | "USDT";
+      tokens: PortfolioToken[];
+      valueUsd: number;
+    };
+
 interface HoldingsSnapshot {
   tokens: PortfolioToken[];
   defiPositions: DefiPosition[];
@@ -242,6 +266,7 @@ interface TokenHoldingsProps {
   hideCard?: boolean;
   onRpcIssuesChange?: (chainIds: number[]) => void;
   filterChainId?: number | null;
+  searchQuery?: string;
   onSnapshotsChanged?: () => void;
   view?: "all" | "assets" | "positions";
   onStateChange?: (state: {
@@ -254,6 +279,7 @@ interface TokenHoldingsProps {
     allTokenKeys: Set<string>;
     hiddenTokenKeys: Set<string>;
     apiUnavailable: boolean;
+    chainTotals: ReadonlyMap<number, number>;
   }) => void;
 }
 
@@ -273,10 +299,9 @@ interface TokenRowProps {
   onEditToken: (token: PortfolioToken) => void;
   onHideToken: (token: PortfolioToken) => void;
   resolveLogo: (url: string | undefined) => string | undefined;
-  copiedAddr: string | null;
-  setCopiedAddr: Dispatch<SetStateAction<string | null>>;
   hideValue: boolean;
   formatUsd: (value: number) => string;
+  displayMode?: "token" | "chainBreakdown";
 }
 
 function TokenRow({
@@ -288,10 +313,9 @@ function TokenRow({
   onEditToken,
   onHideToken,
   resolveLogo,
-  copiedAddr,
-  setCopiedAddr,
   hideValue,
   formatUsd,
+  displayMode,
 }: TokenRowProps) {
   return (
     <PortfolioTokenRow
@@ -304,16 +328,175 @@ function TokenRow({
       onEditToken={onEditToken}
       onHideToken={onHideToken}
       resolveLogo={resolveLogo}
-      copiedAddr={copiedAddr}
-      setCopiedAddr={setCopiedAddr}
       hideValue={hideValue}
       formatUsd={formatUsd}
+      displayMode={displayMode}
     />
   );
 }
 
-function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCard, onRpcIssuesChange, filterChainId, onSnapshotsChanged, onStateChange, view = "all" }: TokenHoldingsProps) {
+interface AggregatedAssetRowProps
+  extends Omit<TokenRowProps, "token" | "displayMode"> {
+  symbol: "ETH" | "USDC" | "USDT";
+  tokens: PortfolioToken[];
+}
+
+function AggregatedAssetRow({
+  symbol,
+  tokens,
+  customTokenKeys,
+  networksInfo,
+  onTokenClick,
+  onSwapClick,
+  onEditToken,
+  onHideToken,
+  resolveLogo,
+  hideValue,
+  formatUsd,
+}: AggregatedAssetRowProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const totalBalance = tokens.reduce(
+    (sum, token) => sum + getPortfolioTokenBalance(token),
+    0,
+  );
+  const totalValueUsd = tokens.reduce((sum, token) => sum + token.valueUsd, 0);
+  const logoUrl = tokens.find((token) => token.logoUrl)?.logoUrl;
+  const sortedTokens = [...tokens].sort((a, b) => b.valueUsd - a.valueUsd);
+
+  return (
+    <Box as="li" listStyleType="none" borderBottomWidth="1px" borderBottomColor="border.subtle">
+      <Flex
+        as="button"
+        type="button"
+        role="group"
+        aria-expanded={isExpanded}
+        aria-label={`${isExpanded ? "Collapse" : "Expand"} ${symbol} balances across chains`}
+        w="full"
+        minH="56px"
+        px={4}
+        py={3}
+        gap={3}
+        align="center"
+        textAlign="start"
+        color="fg.primary"
+        bg="transparent"
+        border={0}
+        cursor="pointer"
+        transitionProperty="background-color, box-shadow"
+        transitionDuration="fast"
+        _hover={{ bg: "surface.raisedHover" }}
+        _active={{ bg: "surface.sunken" }}
+        _focus={{ outline: "none" }}
+        _focusVisible={{
+          boxShadow: "inset 0 0 0 2px var(--chakra-colors-border-focus)",
+        }}
+        onClick={() => setIsExpanded((expanded) => !expanded)}
+      >
+        <ListItemMedia>
+          <Flex
+            boxSize="28px"
+            align="center"
+            justify="center"
+            overflow="hidden"
+            bg="surface.sunken"
+            borderRadius="full"
+          >
+            {logoUrl ? (
+              <Image
+                src={resolveLogo(logoUrl)}
+                alt=""
+                boxSize="28px"
+                borderRadius="full"
+              />
+            ) : (
+              <Text fontSize="2xs" fontWeight={700} color="fg.secondary">
+                {symbol}
+              </Text>
+            )}
+          </Flex>
+        </ListItemMedia>
+        <ListItemContent>
+          <HStack spacing={1.5}>
+            <ListItemTitle fontSize="sm">{symbol}</ListItemTitle>
+            <Text as="span" fontSize="2xs" color="fg.muted" whiteSpace="nowrap">
+              {tokens.length} networks
+            </Text>
+            <Flex boxSize="18px" flexShrink={0} align="center" justify="center">
+              <ChevronDownIcon
+                boxSize="18px"
+                color="fg.secondary"
+                opacity={isExpanded ? 1 : 0}
+                transform={isExpanded ? "rotate(180deg)" : "rotate(0deg)"}
+                transitionProperty="opacity, transform"
+                transitionDuration="fast"
+                _groupHover={{ opacity: 1 }}
+                _groupFocusVisible={{ opacity: 1 }}
+              />
+            </Flex>
+          </HStack>
+          <ListItemDescription fontSize="xs" noOfLines={1}>
+            {hideValue ? "••••" : totalBalance.toLocaleString("en-US", {
+              maximumFractionDigits: 8,
+            })}
+          </ListItemDescription>
+        </ListItemContent>
+        <ListItemMeta flex="0 0 auto" minW="76px">
+          <Text
+            as="span"
+            display="block"
+            color="fg.primary"
+            fontSize="sm"
+            fontWeight={600}
+            sx={{ fontVariantNumeric: "tabular-nums" }}
+            noOfLines={1}
+          >
+            {formatUsd(totalValueUsd)}
+          </Text>
+        </ListItemMeta>
+      </Flex>
+      <Collapse in={isExpanded} animateOpacity>
+        {isExpanded && (
+          <Box
+            as="ul"
+            role="list"
+            w="full"
+            m={0}
+            p={0}
+            overflow="hidden"
+            listStyleType="none"
+            bg="surface.raisedHover"
+            borderRadius={0}
+            sx={{
+              "& > li:first-of-type > *": { borderTopRadius: 0 },
+              "& > li:last-of-type > *": { borderBottomRadius: 0 },
+            }}
+          >
+            {sortedTokens.map((token) => (
+              <TokenRow
+                key={`${symbol.toLowerCase()}-chain-${token.chainId}`}
+                token={token}
+                customTokenKeys={customTokenKeys}
+                networksInfo={networksInfo}
+                onTokenClick={onTokenClick}
+                onSwapClick={onSwapClick}
+                onEditToken={onEditToken}
+                onHideToken={onHideToken}
+                resolveLogo={resolveLogo}
+                hideValue={hideValue}
+                formatUsd={formatUsd}
+                displayMode="chainBreakdown"
+              />
+            ))}
+          </Box>
+        )}
+      </Collapse>
+    </Box>
+  );
+}
+
+function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCard, onRpcIssuesChange, filterChainId, searchQuery = "", onSnapshotsChanged, onStateChange, view = "all" }: TokenHoldingsProps) {
   const { networksInfo } = useNetworks();
+  const prefersReducedMotion = usePrefersReducedMotion();
   const chainReloadKey = useMemo(
     () =>
       getVisibleChains(networksInfo)
@@ -346,12 +529,14 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
   const [editingToken, setEditingToken] = useState<PortfolioToken | null>(null);
   const [tokenToHide, setTokenToHide] = useState<PortfolioToken | null>(null);
   const [hidingToken, setHidingToken] = useState(false);
-  const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
   const [showLowValueTokens, setShowLowValueTokens] = useState(false);
+  const lowValueExpandedRef = useRef<HTMLDivElement | null>(null);
   const [portfolioBalanceRefreshing, setPortfolioBalanceRefreshing] = useState(false);
   const [lowValueLoading, setLowValueLoading] = useState(false);
   const editModal = useDisclosure();
   const loadVersionRef = useRef(0);
+  const verifiedBalanceTokensRef = useRef(new Map<string, PortfolioToken>());
+  const verifiedBalanceKeysRef = useRef(new Set<string>());
 
   // Load hide preference
   useEffect(() => {
@@ -372,6 +557,19 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
 
   const applyHoldingsSnapshot = useCallback(
     (snapshot: HoldingsSnapshot) => {
+      verifiedBalanceKeysRef.current = new Set(snapshot.onchainFetchedTokenKeys);
+      verifiedBalanceTokensRef.current = new Map(
+        snapshot.tokens
+          .filter((token) =>
+            snapshot.onchainFetchedTokenKeys.has(
+              getPortfolioTokenKey(token.chainId, token.contractAddress),
+            ),
+          )
+          .map((token) => [
+            getPortfolioTokenKey(token.chainId, token.contractAddress),
+            token,
+          ]),
+      );
       setTokens(snapshot.tokens);
       setDefiPositions(snapshot.defiPositions);
       setTotalValueUsd(snapshot.totalValueUsd);
@@ -433,24 +631,33 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
           ...catalog.recentReceivedTokenKeys,
           ...(options.forceRefreshTokenKeys ?? []),
         ]);
+        const applyVerifiedBalances = (baseTokens: PortfolioToken[]) =>
+          mergeVerifiedTokenBalances(
+            baseTokens,
+            Array.from(verifiedBalanceTokensRef.current.values()),
+            verifiedBalanceKeysRef.current,
+          );
 
         setCustomTokenKeys(catalog.customTokenKeys);
         setAllTokenKeys(catalog.allTokenKeys);
         setHiddenTokenKeys(catalog.hiddenTokenKeys);
-        setOnchainFetchedTokenKeys(new Set());
+        setOnchainFetchedTokenKeys(new Set(verifiedBalanceKeysRef.current));
         setApiUnavailable(catalog.apiUnavailable);
 
         // Paint API-backed rows immediately. Zero-value native placeholders are
         // kept out until the detached RPC pass can replace them with real
         // balances.
-        const initialDisplayTokens = sortTokensByValue(
+        const initialDisplayTokens = applyVerifiedBalances(
           mergedTokens.filter(hasRenderablePortfolioToken),
         );
+        const initialTotal =
+          getWalletTokenTotal(initialDisplayTokens) +
+          getDefiTotal(catalog.defiPositions || []);
 
         // Show merged data immediately so user isn't stuck on skeleton loader
         setTokens(initialDisplayTokens);
         setDefiPositions(catalog.defiPositions || []);
-        setTotalValueUsd(catalog.totalValueUsd);
+        setTotalValueUsd(initialTotal);
         setLoading(false);
         const fetchedAt = Date.now();
         setLastFetched(fetchedAt);
@@ -469,9 +676,8 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
               ),
             });
             if (!isCurrentLoad()) return;
-            const enrichedTokens = mergeTokenEnrichment(
-              baseTokens,
-              enrichedCatalog.tokens,
+            const enrichedTokens = applyVerifiedBalances(
+              mergeTokenEnrichment(baseTokens, enrichedCatalog.tokens),
             );
             const enrichedTotal =
               getWalletTokenTotal(enrichedTokens) +
@@ -521,26 +727,28 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
           ) ||
           shouldFetchOnInitialPortfolioLoad(token, showLowValueTokens),
         );
-        const refreshedKeys = getTokenKeySet(tokensToRefresh);
-
         if (tokensToRefresh.length === 0) {
           setLoading(false);
           setPortfolioBalanceRefreshing(false);
           writeHoldingsSnapshot(cacheKey, {
             tokens: initialDisplayTokens,
             defiPositions: catalog.defiPositions || [],
-            totalValueUsd: catalog.totalValueUsd,
+            totalValueUsd: initialTotal,
             customTokenKeys: catalog.customTokenKeys,
             allTokenKeys: catalog.allTokenKeys,
             hiddenTokenKeys: catalog.hiddenTokenKeys,
-            onchainFetchedTokenKeys: new Set(),
+            onchainFetchedTokenKeys: new Set(verifiedBalanceKeysRef.current),
             rpcIssueChainIds: [],
             apiUnavailable: catalog.apiUnavailable,
             timestamp: fetchedAt,
           });
-          recordLoadedSnapshot(catalog.totalValueUsd);
+          recordLoadedSnapshot(initialTotal);
           schedulePortfolioBackgroundTask(() =>
-            applyEnrichedCatalog(initialDisplayTokens, new Set(), []),
+            applyEnrichedCatalog(
+              initialDisplayTokens,
+              new Set(verifiedBalanceKeysRef.current),
+              [],
+            ),
           );
           return;
         }
@@ -555,13 +763,23 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
             });
             if (!isCurrentLoad()) return;
             onRpcIssuesChange?.(onchain.rpcIssueChainIds);
-            const displayTokens = mergeTokenBalanceRefresh(
+            for (const token of onchain.tokens) {
+              const key = getPortfolioTokenKey(
+                token.chainId,
+                token.contractAddress,
+              );
+              if (!onchain.verifiedTokenKeys.has(key)) continue;
+              verifiedBalanceTokensRef.current.set(key, token);
+              verifiedBalanceKeysRef.current.add(key);
+            }
+            const verifiedKeys = new Set(verifiedBalanceKeysRef.current);
+            const displayTokens = mergeVerifiedTokenBalances(
               mergedTokens,
-              onchain.tokens,
-              refreshedKeys,
+              Array.from(verifiedBalanceTokensRef.current.values()),
+              verifiedKeys,
             );
             setTokens(displayTokens);
-            setOnchainFetchedTokenKeys(refreshedKeys);
+            setOnchainFetchedTokenKeys(verifiedKeys);
             setLoading(false);
             // Total = refreshed visible wallet tokens + deferred low-value API
             // values + DeFi positions.
@@ -576,7 +794,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
               customTokenKeys: catalog.customTokenKeys,
               allTokenKeys: catalog.allTokenKeys,
               hiddenTokenKeys: catalog.hiddenTokenKeys,
-              onchainFetchedTokenKeys: refreshedKeys,
+              onchainFetchedTokenKeys: verifiedKeys,
               rpcIssueChainIds: onchain.rpcIssueChainIds,
               apiUnavailable: catalog.apiUnavailable,
               timestamp: fetchedAt,
@@ -584,32 +802,33 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
             recordLoadedSnapshot(total);
             void applyEnrichedCatalog(
               displayTokens,
-              refreshedKeys,
+              verifiedKeys,
               onchain.rpcIssueChainIds,
             );
           } catch {
             if (!isCurrentLoad()) return;
             onRpcIssuesChange?.([]);
             setLoading(false);
-            setOnchainFetchedTokenKeys(new Set());
+            const verifiedKeys = new Set(verifiedBalanceKeysRef.current);
+            setOnchainFetchedTokenKeys(verifiedKeys);
             // RPC failed entirely — keep only the known non-zero tokens in
             // the cache too, so a refresh from cache doesn't bring back the
             // zero-balance placeholder rows we just suppressed.
             writeHoldingsSnapshot(cacheKey, {
               tokens: initialDisplayTokens,
               defiPositions: catalog.defiPositions || [],
-              totalValueUsd: catalog.totalValueUsd,
+              totalValueUsd: initialTotal,
               customTokenKeys: catalog.customTokenKeys,
               allTokenKeys: catalog.allTokenKeys,
               hiddenTokenKeys: catalog.hiddenTokenKeys,
-              onchainFetchedTokenKeys: new Set(),
+              onchainFetchedTokenKeys: verifiedKeys,
               rpcIssueChainIds: [],
               apiUnavailable: catalog.apiUnavailable,
               timestamp: fetchedAt,
             });
-            recordLoadedSnapshot(catalog.totalValueUsd);
+            recordLoadedSnapshot(initialTotal);
             schedulePortfolioBackgroundTask(() =>
-              applyEnrichedCatalog(initialDisplayTokens, new Set(), []),
+              applyEnrichedCatalog(initialDisplayTokens, verifiedKeys, []),
             );
           } finally {
             if (isCurrentLoad()) setPortfolioBalanceRefreshing(false);
@@ -632,6 +851,8 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
   // the list paints before the live API/RPC revalidation completes.
   useEffect(() => {
     let cancelled = false;
+    verifiedBalanceTokensRef.current.clear();
+    verifiedBalanceKeysRef.current.clear();
     const cacheKey = holdingsCacheKey(address, chainReloadKey);
     const cached = readCachedHoldingsSnapshot(cacheKey);
     if (cached) {
@@ -715,33 +936,113 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
     [tokens]
   );
 
-  // Apply network filter
-  const filteredTokens = useMemo(
-    () => filterChainId != null ? tokens.filter((t) => t.chainId === filterChainId) : tokens,
-    [tokens, filterChainId]
-  );
+  // Apply network and asset-search filters before building aggregate rows.
+  const filteredTokens = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+    return tokens.filter((token) => {
+      if (filterChainId != null && token.chainId !== filterChainId) return false;
+      if (!normalizedQuery) return true;
+      return (
+        token.name.toLocaleLowerCase().includes(normalizedQuery) ||
+        token.symbol.toLocaleLowerCase().includes(normalizedQuery)
+      );
+    });
+  }, [filterChainId, searchQuery, tokens]);
 
-  const { primaryTokens, lowValueTokens, lowValueTotalUsd } = useMemo(() => {
-    const primary: PortfolioToken[] = [];
-    const lowValue: PortfolioToken[] = [];
+  const { primaryAssetRows, lowValueAssetRows, lowValueTotalUsd } = useMemo(() => {
+    const ethTokens = filterChainId == null
+      ? filteredTokens.filter(
+          (token) =>
+            isNativePortfolioToken(token) &&
+            token.symbol.toUpperCase() === "ETH" &&
+            BUILT_IN_ETH_MAINNET_CHAIN_IDS.has(token.chainId),
+        )
+      : [];
+    const usdcTokens = filterChainId == null
+      ? filteredTokens.filter(
+          (token) =>
+            CANONICAL_USDC_BY_CHAIN_ID.get(token.chainId) ===
+            token.contractAddress.toLowerCase(),
+        )
+      : [];
+    const usdtTokens = filterChainId == null
+      ? filteredTokens.filter(
+          (token) =>
+            CANONICAL_USDT_BY_CHAIN_ID.get(token.chainId) ===
+            token.contractAddress.toLowerCase(),
+        )
+      : [];
+    const aggregateGroups = [
+      { symbol: "ETH" as const, tokens: ethTokens },
+      { symbol: "USDC" as const, tokens: usdcTokens },
+      { symbol: "USDT" as const, tokens: usdtTokens },
+    ].filter((group) => group.tokens.length > 1);
+    const aggregatedTokenKeys = new Set(
+      aggregateGroups.flatMap((group) =>
+        group.tokens.map((token) =>
+          getPortfolioTokenKey(token.chainId, token.contractAddress),
+        ),
+      ),
+    );
+    const displayRows: AssetDisplayRow[] = filteredTokens
+      .filter(
+        (token) =>
+          !aggregatedTokenKeys.has(
+            getPortfolioTokenKey(token.chainId, token.contractAddress),
+          ),
+      )
+      .map((token) => ({ kind: "token", token, valueUsd: token.valueUsd }));
 
-    for (const token of filteredTokens) {
-      if (token.valueUsd < LOW_VALUE_TOKEN_THRESHOLD_USD) {
-        lowValue.push(token);
+    for (const group of aggregateGroups) {
+      displayRows.push({
+        kind: "aggregate",
+        symbol: group.symbol,
+        tokens: group.tokens,
+        valueUsd: group.tokens.reduce((sum, token) => sum + token.valueUsd, 0),
+      });
+    }
+
+    displayRows.sort((a, b) => b.valueUsd - a.valueUsd);
+    const primary: AssetDisplayRow[] = [];
+    const lowValue: AssetDisplayRow[] = [];
+
+    for (const [index, row] of displayRows.entries()) {
+      const belongsInLowValueGroup =
+        displayRows.length > MIN_PRIMARY_TOKEN_ROWS &&
+        index >= MIN_PRIMARY_TOKEN_ROWS &&
+        row.valueUsd < LOW_VALUE_TOKEN_THRESHOLD_USD;
+
+      if (belongsInLowValueGroup) {
+        lowValue.push(row);
       } else {
-        primary.push(token);
+        primary.push(row);
       }
     }
 
     return {
-      primaryTokens: primary,
-      lowValueTokens: lowValue,
+      primaryAssetRows: primary,
+      lowValueAssetRows: lowValue,
       lowValueTotalUsd: lowValue.reduce(
-        (sum, token) => sum + token.valueUsd,
+        (sum, row) => sum + row.valueUsd,
         0,
       ),
     };
-  }, [filteredTokens]);
+  }, [filterChainId, filteredTokens]);
+
+  const primaryTokens = useMemo(
+    () =>
+      primaryAssetRows.flatMap((row) =>
+        row.kind === "token" ? [row.token] : row.tokens,
+      ),
+    [primaryAssetRows],
+  );
+  const lowValueTokens = useMemo(
+    () =>
+      lowValueAssetRows.flatMap((row) =>
+        row.kind === "token" ? [row.token] : row.tokens,
+      ),
+    [lowValueAssetRows],
+  );
 
   const refreshLowValueTokenBalances = useCallback(async () => {
     if (!address || portfolioBalanceRefreshing || lowValueLoading) return;
@@ -752,7 +1053,6 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
     });
     if (tokensToRefresh.length === 0) return;
 
-    const refreshedKeys = getTokenKeySet(tokensToRefresh);
     setLowValueLoading(true);
 
     try {
@@ -761,13 +1061,18 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       });
       onRpcIssuesChange?.(onchain.rpcIssueChainIds);
 
-      const nextTokens = mergeTokenBalanceRefresh(
+      for (const token of onchain.tokens) {
+        const key = getPortfolioTokenKey(token.chainId, token.contractAddress);
+        if (!onchain.verifiedTokenKeys.has(key)) continue;
+        verifiedBalanceTokensRef.current.set(key, token);
+        verifiedBalanceKeysRef.current.add(key);
+      }
+      const nextFetchedKeys = new Set(verifiedBalanceKeysRef.current);
+      const nextTokens = mergeVerifiedTokenBalances(
         tokens,
-        onchain.tokens,
-        refreshedKeys,
+        Array.from(verifiedBalanceTokensRef.current.values()),
+        nextFetchedKeys,
       );
-      const nextFetchedKeys = new Set(onchainFetchedTokenKeys);
-      refreshedKeys.forEach((key) => nextFetchedKeys.add(key));
       const total = getWalletTokenTotal(nextTokens) + getDefiTotal(defiPositions);
       const fetchedAt = Date.now();
       const cacheKey = holdingsCacheKey(address, chainReloadKey);
@@ -826,6 +1131,21 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
     showLowValueTokens,
   ]);
 
+  useEffect(() => {
+    if (!showLowValueTokens) return;
+
+    const scrollTimer = window.setTimeout(() => {
+      const firstTokenRow =
+        lowValueExpandedRef.current?.querySelector<HTMLElement>("li > button");
+      firstTokenRow?.scrollIntoView({
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+        block: "nearest",
+      });
+    }, prefersReducedMotion ? 0 : 180);
+
+    return () => window.clearTimeout(scrollTimer);
+  }, [prefersReducedMotion, showLowValueTokens]);
+
   const filteredDefiPositions = useMemo(
     () => filterChainId != null ? defiPositions.filter((p) => p.chainId === filterChainId) : defiPositions,
     [defiPositions, filterChainId]
@@ -858,6 +1178,22 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       (url && cachedLogoMap.get(url)) || url,
     [cachedLogoMap],
   );
+  const chainTotals = useMemo(() => {
+    const totals = new Map<number, number>();
+    for (const token of tokens) {
+      totals.set(
+        token.chainId,
+        (totals.get(token.chainId) ?? 0) + Math.max(0, token.valueUsd || 0),
+      );
+    }
+    for (const position of defiPositions) {
+      totals.set(
+        position.chainId,
+        (totals.get(position.chainId) ?? 0) + Math.max(0, position.valueUsd || 0),
+      );
+    }
+    return totals;
+  }, [defiPositions, tokens]);
   // Notify parent of state changes for tab header display
   const loadPortfolioRef = useRef(loadPortfolio);
   loadPortfolioRef.current = loadPortfolio;
@@ -874,6 +1210,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       allTokenKeys,
       hiddenTokenKeys,
       apiUnavailable,
+      chainTotals,
     });
   }, [
     totalValueUsd,
@@ -884,6 +1221,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
     allTokenKeys,
     hiddenTokenKeys,
     apiUnavailable,
+    chainTotals,
   ]);
 
   const formatUsd = (value: number): string =>
@@ -956,7 +1294,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
   const showAssets = view !== "positions";
   const showPositions = view !== "assets";
   const hasVisibleAssets =
-    showAssets && (primaryTokens.length > 0 || lowValueTokens.length > 0);
+    showAssets && (primaryAssetRows.length > 0 || lowValueAssetRows.length > 0);
   const hasVisiblePositions =
     showPositions && filteredDefiPositions.length > 0;
   const hasVisibleRows = hasVisibleAssets || hasVisiblePositions;
@@ -976,14 +1314,18 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
           <EmptyState minH="144px">
             <EmptyStateHeader>
               <EmptyStateTitle>
-                {view === "positions"
+                {view === "assets" && searchQuery.trim()
+                  ? "No matching assets"
+                  : view === "positions"
                   ? "No DeFi positions"
                   : view === "assets"
                     ? "No assets found"
                     : "No assets or positions"}
               </EmptyStateTitle>
               <EmptyStateDescription>
-                {view === "positions"
+                {view === "assets" && searchQuery.trim()
+                  ? "Try another token name or symbol."
+                  : view === "positions"
                   ? "Positions from supported protocols will appear here."
                   : "Tokens with a balance will appear here."}
               </EmptyStateDescription>
@@ -993,28 +1335,46 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
       ) : (
         <>
           {showAssets &&
-            primaryTokens.map((token, index) => (
-              <TokenRow
-                key={`${token.chainId}-${token.contractAddress}-${index}`}
-                token={token}
-                customTokenKeys={customTokenKeys}
-                networksInfo={networksInfo ?? {}}
-                onTokenClick={onTokenClick}
-                onSwapClick={onSwapClick}
-                onEditToken={(nextToken) => {
-                  setEditingToken(nextToken);
-                  editModal.onOpen();
-                }}
-                onHideToken={openHideTokenModal}
-                resolveLogo={resolveLogo}
-                copiedAddr={copiedAddr}
-                setCopiedAddr={setCopiedAddr}
-                hideValue={hideValue}
-                formatUsd={formatUsd}
-              />
-            ))}
+            primaryAssetRows.map((row, index) =>
+              row.kind === "aggregate" ? (
+                <AggregatedAssetRow
+                  key={`aggregated-${row.symbol.toLowerCase()}`}
+                  symbol={row.symbol}
+                  tokens={row.tokens}
+                  customTokenKeys={customTokenKeys}
+                  networksInfo={networksInfo ?? {}}
+                  onTokenClick={onTokenClick}
+                  onSwapClick={onSwapClick}
+                  onEditToken={(nextToken) => {
+                    setEditingToken(nextToken);
+                    editModal.onOpen();
+                  }}
+                  onHideToken={openHideTokenModal}
+                  resolveLogo={resolveLogo}
+                  hideValue={hideValue}
+                  formatUsd={formatUsd}
+                />
+              ) : (
+                <TokenRow
+                  key={`${row.token.chainId}-${row.token.contractAddress}-${index}`}
+                  token={row.token}
+                  customTokenKeys={customTokenKeys}
+                  networksInfo={networksInfo ?? {}}
+                  onTokenClick={onTokenClick}
+                  onSwapClick={onSwapClick}
+                  onEditToken={(nextToken) => {
+                    setEditingToken(nextToken);
+                    editModal.onOpen();
+                  }}
+                  onHideToken={openHideTokenModal}
+                  resolveLogo={resolveLogo}
+                  hideValue={hideValue}
+                  formatUsd={formatUsd}
+                />
+              ),
+            )}
 
-          {showAssets && lowValueTokens.length > 0 && (
+          {showAssets && lowValueAssetRows.length > 0 && (
             <Box
               as="li"
               w="full"
@@ -1070,9 +1430,6 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                       />
                     )}
                   </HStack>
-                  <ListItemDescription>
-                    Assets worth less than $0.10 each
-                  </ListItemDescription>
                 </ListItemContent>
                 <ListItemMeta flex="0 0 auto">
                   <Text
@@ -1084,40 +1441,60 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                   >
                     {formatUsd(lowValueTotalUsd)}
                   </Text>
-                  <Text as="span" display="block" fontSize="xs">
-                    {lowValueTokens.length}{" "}
-                    {lowValueTokens.length === 1 ? "asset" : "assets"}
+                  <Text as="span" display="block" fontSize="xs" whiteSpace="nowrap">
+                    {lowValueAssetRows.length}{" "}
+                    {lowValueAssetRows.length === 1 ? "asset" : "assets"}
                   </Text>
                 </ListItemMeta>
               </Flex>
               <Collapse in={showLowValueTokens} animateOpacity>
                 {showLowValueTokens && (
-                  <ListSurface
-                    borderWidth={0}
-                    borderRadius={0}
-                    bg="surface.sunken"
-                  >
-                    {lowValueTokens.map((token, index) => (
-                      <TokenRow
-                        key={`low-${token.chainId}-${token.contractAddress}-${index}`}
-                        token={token}
-                        customTokenKeys={customTokenKeys}
-                        networksInfo={networksInfo ?? {}}
-                        onTokenClick={onTokenClick}
-                        onSwapClick={onSwapClick}
-                        onEditToken={(nextToken) => {
-                          setEditingToken(nextToken);
-                          editModal.onOpen();
-                        }}
-                        onHideToken={openHideTokenModal}
-                        resolveLogo={resolveLogo}
-                        copiedAddr={copiedAddr}
-                        setCopiedAddr={setCopiedAddr}
-                        hideValue={hideValue}
-                        formatUsd={formatUsd}
-                      />
-                    ))}
-                  </ListSurface>
+                  <Box ref={lowValueExpandedRef}>
+                    <ListSurface
+                      borderWidth={0}
+                      borderRadius={0}
+                      bg="surface.sunken"
+                    >
+                      {lowValueAssetRows.map((row, index) =>
+                        row.kind === "aggregate" ? (
+                          <AggregatedAssetRow
+                            key={`low-aggregated-${row.symbol.toLowerCase()}`}
+                            symbol={row.symbol}
+                            tokens={row.tokens}
+                            customTokenKeys={customTokenKeys}
+                            networksInfo={networksInfo ?? {}}
+                            onTokenClick={onTokenClick}
+                            onSwapClick={onSwapClick}
+                            onEditToken={(nextToken) => {
+                              setEditingToken(nextToken);
+                              editModal.onOpen();
+                            }}
+                            onHideToken={openHideTokenModal}
+                            resolveLogo={resolveLogo}
+                            hideValue={hideValue}
+                            formatUsd={formatUsd}
+                          />
+                        ) : (
+                          <TokenRow
+                            key={`low-${row.token.chainId}-${row.token.contractAddress}-${index}`}
+                            token={row.token}
+                            customTokenKeys={customTokenKeys}
+                            networksInfo={networksInfo ?? {}}
+                            onTokenClick={onTokenClick}
+                            onSwapClick={onSwapClick}
+                            onEditToken={(nextToken) => {
+                              setEditingToken(nextToken);
+                              editModal.onOpen();
+                            }}
+                            onHideToken={openHideTokenModal}
+                            resolveLogo={resolveLogo}
+                            hideValue={hideValue}
+                            formatUsd={formatUsd}
+                          />
+                        ),
+                      )}
+                    </ListSurface>
+                  </Box>
                 )}
               </Collapse>
             </Box>

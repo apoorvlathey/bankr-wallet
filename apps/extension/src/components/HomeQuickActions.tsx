@@ -1,26 +1,13 @@
-import { Box, Button, HStack, Icon, Text } from "@chakra-ui/react";
+import { Box, Button, Grid, Icon, Text } from "@chakra-ui/react";
 import { isDarkThemeId, useTheme } from "@/theme";
 
 interface HomeQuickActionsProps {
-  onReceive: () => void;
   onSend: () => void;
   onSwap: () => void;
+  onShield: () => void;
   onMore: () => void;
   hasConnectedApps?: boolean;
 }
-
-const ReceiveIcon = () => (
-  <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true">
-    <path
-      d="M7 7v10h10M7 17 17 7"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </Icon>
-);
 
 const SendIcon = () => (
   <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true">
@@ -48,6 +35,35 @@ const SwapIcon = () => (
   </Icon>
 );
 
+const ShieldIcon = () => (
+  <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true">
+    <path
+      d="M14 18a2 2 0 0 0-4 0M19 11l-2.11-6.657a2 2 0 0 0-2.752-1.148l-1.276.61A2 2 0 0 1 12 4H8.5a2 2 0 0 0-1.925 1.456L5 11M2 11h20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle
+      cx="17"
+      cy="18"
+      r="3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    />
+    <circle
+      cx="7"
+      cy="18"
+      r="3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    />
+  </Icon>
+);
+
 const MoreIcon = () => (
   <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true">
     <path
@@ -61,37 +77,47 @@ const MoreIcon = () => (
 );
 
 const actions = [
-  { id: "receive", label: "Receive", icon: <ReceiveIcon /> },
   { id: "send", label: "Send", icon: <SendIcon /> },
   { id: "swap", label: "Swap", icon: <SwapIcon /> },
+  { id: "shield", label: "Shield", icon: <ShieldIcon /> },
   { id: "more", label: "More", icon: <MoreIcon /> },
 ] as const;
 
-/** Stable, mobile-style root actions with equal visual weight. */
+/** Stable, mobile-style root actions with equal spacing and bounded tap targets. */
 export default function HomeQuickActions({
-  onReceive,
   onSend,
   onSwap,
+  onShield,
   onMore,
   hasConnectedApps = false,
 }: HomeQuickActionsProps) {
   const { themeId } = useTheme();
   const isWarmMidnight = isDarkThemeId(themeId);
-  const handlers = { receive: onReceive, send: onSend, swap: onSwap, more: onMore };
+  const handlers = { send: onSend, swap: onSwap, shield: onShield, more: onMore };
 
   return (
-    <HStack as="nav" aria-label="Wallet actions" spacing={1} justify="space-between">
+    <Grid
+      as="nav"
+      aria-label="Wallet actions"
+      templateColumns="repeat(4, minmax(0, 1fr))"
+      columnGap={{ base: 1, sm: 2 }}
+      w="100%"
+      maxW="620px"
+      mx="auto"
+    >
       {actions.map((action) => (
         <Button
           key={action.id}
           type="button"
           variant="ghost"
-          flex="1"
+          w="100%"
+          maxW="88px"
+          justifySelf="center"
           minW={0}
           h="auto"
-          minH="72px"
-          px={1}
-          py={1}
+          minH="78px"
+          px={2}
+          py={1.5}
           borderRadius="md"
           flexDirection="column"
           gap={2}
@@ -112,14 +138,14 @@ export default function HomeQuickActions({
             boxSize="40px"
             borderRadius={isWarmMidnight ? "md" : "full"}
             bg={
-              action.id === "send"
+              action.id === "swap"
                 ? isWarmMidnight
                   ? "accent.highlight"
                   : "accent.primary"
                 : "surface.raised"
             }
             color={
-              action.id === "send"
+              action.id === "swap"
                 ? isWarmMidnight
                   ? "accentFg.highlight"
                   : "accentFg.primary"
@@ -127,7 +153,7 @@ export default function HomeQuickActions({
                   ? "accent.highlight"
                   : "fg.primary"
             }
-            borderWidth={action.id === "send" ? "0" : "1px"}
+            borderWidth={action.id === "swap" ? "0" : "1px"}
             borderColor="border.subtle"
             position="relative"
           >
@@ -151,6 +177,6 @@ export default function HomeQuickActions({
           </Text>
         </Button>
       ))}
-    </HStack>
+    </Grid>
   );
 }

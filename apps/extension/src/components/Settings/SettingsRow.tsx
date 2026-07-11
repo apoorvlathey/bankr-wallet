@@ -42,6 +42,8 @@ export interface SettingsRowProps {
   icon: ReactNode;
   iconBg: string;
   iconColor?: string;
+  /** Midnight-only glyph accent used while the interactive row is hovered. */
+  iconHoverColor?: string;
   cornerAccent?: DecoratorAccent;
   cornerBg?: string;
   showChevron?: boolean;
@@ -57,6 +59,7 @@ export function SettingsRow({
   icon,
   iconBg,
   iconColor = "fg.inverse",
+  iconHoverColor = iconBg,
   cornerAccent = "highlight",
   cornerBg,
   showChevron = false,
@@ -136,10 +139,13 @@ export function SettingsRow({
           flexShrink={0}
           bg={isDarkTheme ? "surface.sunken" : iconBg}
           color={isDarkTheme ? "fg.secondary" : iconColor}
+          transitionProperty="color"
+          transitionDuration="fast"
           borderWidth={isDarkTheme ? "1px" : "2px"}
           borderStyle="solid"
           borderColor={isDarkTheme ? "border.subtle" : "border.default"}
           borderRadius={isDarkTheme ? "md" : 0}
+          data-settings-row-icon=""
         >
           {icon}
         </Box>
@@ -163,7 +169,20 @@ export function SettingsRow({
 
   if (onClick) {
     return (
-      <ListItem interactive isDisabled={disabled} onClick={onClick}>
+      <ListItem
+        interactive
+        isDisabled={disabled}
+        onClick={onClick}
+        sx={
+          isDarkTheme && !disabled
+            ? {
+                "&:hover [data-settings-row-icon]": {
+                  color: iconHoverColor,
+                },
+              }
+            : undefined
+        }
+      >
         {content}
       </ListItem>
     );

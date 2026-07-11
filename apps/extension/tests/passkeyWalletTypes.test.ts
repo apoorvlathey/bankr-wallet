@@ -20,7 +20,7 @@ function selectStorageValues(
   );
 }
 
-test("passkey hydration populates Bankr, private-key, and seed signing caches", async () => {
+test("passkey hydration supports all wallet caches and vault-key mutations", async () => {
   const originalChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome");
   const local: StorageRecord = {};
   const sync: StorageRecord = { autoLockTimeout: 60_000 };
@@ -44,6 +44,9 @@ test("passkey hydration populates Bankr, private-key, and seed signing caches", 
   Object.defineProperty(globalThis, "chrome", {
     configurable: true,
     value: {
+      runtime: {
+        async sendMessage() {},
+      },
       storage: {
         local: storageArea(local),
         sync: storageArea(sync),
@@ -54,6 +57,7 @@ test("passkey hydration populates Bankr, private-key, and seed signing caches", 
 
   try {
     const cryptoModule = await import("../src/chrome/crypto");
+    const mnemonicModule = await import("../src/chrome/mnemonicStorage");
     const vaultModule = await import("../src/chrome/vaultCrypto");
     const authModule = await import("../src/chrome/authHandlers");
     const sessionModule = await import("../src/chrome/sessionCache");
@@ -125,6 +129,121 @@ test("passkey hydration populates Bankr, private-key, and seed signing caches", 
       sessionModule.getPrivateKeyFromCache("seed-account"),
       seedDerivedKey,
     );
+
+    // A biometric master session has no plaintext password, but it must still
+    // be able to add vault-key-backed private-key entries.
+    const addedPrivateKey = `0x${"33".repeat(32)}` as `0x${string}`;
+    await vaultModule.addKeyToVault(
+      "biometric-account",
+      addedPrivateKey,
+      undefined,
+    );
+    const addedKeystore = (
+      local.pkVault as {
+        entries: Array<{ id: string; keystore: { salt: string } }>;
+      }
+    ).entries.find((entry) => entry.id === "biometric-account")?.keystore;
+    assert.equal(addedKeystore?.salt, "");
+
+    // Bankr credential updates use the same cached vault-key capability.
+    const apiKeyResult = await authModule.handleSaveApiKeyWithCachedPassword(
+      "biometric-bankr-api-key",
+    );
+    assert.equal(apiKeyResult.success, true);
+    assert.equal(
+      await cryptoModule.decryptWithVaultKey(
+        vaultKey,
+        local.encryptedApiKeyVault as Parameters<
+          typeof cryptoModule.decryptWithVaultKey
+        >[1],
+      ),
+      "biometric-bankr-api-key",
+    );
+
+    // Password rotation from a biometric session requires the explicit old
+    // master password, preserves all three wallet data paths, and invalidates
+    // secondary unlock factors.
+    const oldPassword = "old-master-password";
+    const newPassword = "new-master-password";
+    local.encryptedVaultKeyMaster = await cryptoModule.encryptVaultKey(
+      vaultKeyBytes,
+      oldPassword,
+    );
+    local.encryptedVaultKeyAgent = await cryptoModule.encryptVaultKey(
+      vaultKeyBytes,
+      "agent-password",
+    );
+    local.agentPasswordEnabled = true;
+    local.passkeyUnlock = { configured: true };
+    const mnemonic = "test test test test test test test test test test test junk";
+    await mnemonicModule.storeMnemonic("seed-group", mnemonic, oldPassword);
+
+    assert.equal(await authModule.verifyMasterPassword(oldPassword), true);
+    assert.equal(await authModule.verifyMasterPassword("wrong-password"), false);
+
+    const passwordChangeResult = await authModule.handleChangePassword(
+      oldPassword,
+      newPassword,
+    );
+    assert.equal(passwordChangeResult.success, true);
+    assert.equal(
+      await cryptoModule.tryDecryptVaultKey(
+        local.encryptedVaultKeyMaster as Parameters<
+          typeof cryptoModule.tryDecryptVaultKey
+        >[0],
+        oldPassword,
+      ),
+      null,
+    );
+    assert.ok(
+      await cryptoModule.tryDecryptVaultKey(
+        local.encryptedVaultKeyMaster as Parameters<
+          typeof cryptoModule.tryDecryptVaultKey
+        >[0],
+        newPassword,
+      ),
+    );
+    assert.equal(
+      await mnemonicModule.getMnemonic("seed-group", newPassword),
+      mnemonic,
+    );
+    assert.equal(
+      await mnemonicModule.getMnemonic("seed-group", oldPassword),
+      null,
+    );
+    assert.equal(local.encryptedVaultKeyAgent, null);
+    assert.equal(local.agentPasswordEnabled, false);
+    assert.equal(local.passkeyUnlock, null);
+    assert.equal(
+      await cryptoModule.decryptWithVaultKey(
+        vaultKey,
+        local.encryptedApiKeyVault as Parameters<
+          typeof cryptoModule.decryptWithVaultKey
+        >[1],
+      ),
+      "biometric-bankr-api-key",
+    );
+    const rotatedVault = local.pkVault as {
+      entries: Array<{ id: string; keystore: { salt: string } }>;
+    };
+    assert.equal(
+      rotatedVault.entries.every((entry) => entry.keystore.salt === ""),
+      true,
+    );
+
+    // The vault key is not sufficient on its own for a restricted agent
+    // session: master-only credential mutation remains backend-enforced.
+    sessionModule.clearInMemoryAuthCache();
+    result = await authModule.hydrateAuthSessionFromVaultKeyBytes(
+      vaultKeyBytes,
+      "agent",
+      { password: null },
+    );
+    assert.equal(result.success, true);
+    const agentApiKeyResult =
+      await authModule.handleSaveApiKeyWithCachedPassword("blocked-agent-key");
+    assert.equal(agentApiKeyResult.success, false);
+    assert.match(agentApiKeyResult.error || "", /master password/i);
     sessionModule.clearInMemoryAuthCache();
   } finally {
     if (originalChrome) {
