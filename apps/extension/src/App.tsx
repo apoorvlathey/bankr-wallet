@@ -672,19 +672,30 @@ function App() {
     return { accounts: nextAccounts, activeAccount: active };
   };
 
-  const handleAccountSwitch = async (account: Account) => {
-    const tab = await currentTab();
-    if (typeof tab?.id === "number") {
-      await sendMessageWithRetry({
+  const handleAccountSwitch = async (account: Account, targetTabId?: number) => {
+    const tab = targetTabId === undefined ? await currentTab() : undefined;
+    const resolvedTabId = targetTabId ?? tab?.id;
+    let switchResult: { success?: boolean; error?: string } | null;
+    if (typeof resolvedTabId === "number") {
+      switchResult = await sendMessageWithRetry<{
+        success?: boolean;
+        error?: string;
+      }>({
         type: "setTabAccount",
-        tabId: tab.id,
+        tabId: resolvedTabId,
         accountId: account.id,
       });
     } else {
-      await sendMessageWithRetry({
+      switchResult = await sendMessageWithRetry<{
+        success?: boolean;
+        error?: string;
+      }>({
         type: "setActiveAccount",
         accountId: account.id,
       });
+    }
+    if (!switchResult || switchResult.success === false) {
+      throw new Error(switchResult?.error || "Failed to select account");
     }
     setActiveAccount(account);
 
@@ -702,9 +713,9 @@ function App() {
     }
 
     // Notify content script about the account change
-    if (tab?.id) {
+    if (typeof resolvedTabId === "number") {
       chrome.tabs
-        .sendMessage(tab.id, {
+        .sendMessage(resolvedTabId, {
           type: "setAccount",
           msg: {
             address: account.address,
@@ -3590,7 +3601,16 @@ function App() {
           <Suspense fallback={<LoadingFallback />}>
             <DappConnectionConfirmation
               request={pendingDappConnectionRequest}
+              accounts={accounts}
               account={activeAccount}
+              sidePanelSupported={sidePanelSupported}
+              sidePanelMode={sidePanelMode}
+              isFullscreenTab={isFullscreenTab}
+              onAccountSelect={(nextAccount) =>
+                handleAccountSwitch(nextAccount, pendingDappConnectionRequest.tabId)
+              }
+              onToggleSidePanel={toggleSidePanelMode}
+              onOpenFullscreen={openInFullscreenTab}
               onFinished={() => {
                 setPendingDappConnectionRequest(null);
                 void loadActiveDappContext();

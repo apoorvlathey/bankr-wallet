@@ -1,11 +1,9 @@
-import { useRef } from "react";
 import {
   Box,
   Button,
   FormControl,
   FormLabel,
   HStack,
-  Icon,
   IconButton,
   Input,
   InputGroup,
@@ -18,19 +16,17 @@ import {
   ModalOverlay,
   Text,
   VStack,
-  useDisclosure,
 } from "@chakra-ui/react";
 import {
   BellIcon,
-  ExternalLinkIcon,
-  HamburgerIcon,
   LockIcon,
   ViewIcon,
   ViewOffIcon,
   WarningTwoIcon,
 } from "@chakra-ui/icons";
 import BrandWordmark from "@/components/BrandWordmark";
-import { ActionSheet, AppScreen, ScreenBody } from "@/components/ui";
+import { AppScreen, ScreenBody } from "@/components/ui";
+import DisplayModeMenu from "@/components/DisplayModeMenu";
 import { FingerprintIcon } from "@/components/Settings/icons";
 import UnlockMascot from "@/components/UnlockMascot";
 import type { UnlockMascotState } from "@/components/unlockMascotState";
@@ -63,12 +59,6 @@ interface UnlockViewProps {
     onConfirm: () => void;
   };
 }
-
-const SidePanelIcon = () => (
-  <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true">
-    <path fill="currentColor" d="M3 3h18a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm12 2v14h5V5h-5zM4 5v14h10V5H4z" />
-  </Icon>
-);
 
 const UnlockMascotSpotlight = ({ state }: { state: UnlockMascotState }) => (
   <Box
@@ -133,8 +123,6 @@ export default function UnlockView({
   onToggleSidePanel,
   resetDialog,
 }: UnlockViewProps) {
-  const options = useDisclosure();
-  const optionsButtonRef = useRef<HTMLButtonElement>(null);
   const isIncorrectPassword = /^(invalid|incorrect) password$/i.test(error);
   const shouldShakePassword =
     isIncorrectPassword || error === "Password is required";
@@ -158,14 +146,11 @@ export default function UnlockView({
       >
         <Box w="44px" aria-hidden="true" />
         <BrandWordmark as="h1" flex={1} textAlign="center" />
-        <IconButton
-          ref={optionsButtonRef}
-          aria-label="App options"
-          icon={<HamburgerIcon />}
-          variant="ghost"
-          minW="44px"
-          h="44px"
-          onClick={options.onOpen}
+        <DisplayModeMenu
+          sidePanelSupported={sidePanelSupported}
+          sidePanelMode={sidePanelMode}
+          onToggleSidePanel={onToggleSidePanel}
+          onOpenFullscreen={onOpenFullscreen}
         />
       </HStack>
 
@@ -319,31 +304,6 @@ export default function UnlockView({
           )}
         </VStack>
       </ScreenBody>
-
-      <ActionSheet
-        isOpen={options.isOpen}
-        onClose={options.onClose}
-        finalFocusRef={optionsButtonRef}
-        title="App options"
-        choices={[
-          ...(sidePanelSupported
-            ? [{
-                id: "panel",
-                label: sidePanelMode ? "Switch to Popup" : "Switch to Side Panel",
-                icon: <SidePanelIcon />,
-              }]
-            : []),
-          {
-            id: "fullscreen",
-            label: "Open in fullscreen tab",
-            icon: <ExternalLinkIcon aria-hidden="true" />,
-          },
-        ]}
-        onSelect={(id) => {
-          if (id === "panel") onToggleSidePanel();
-          if (id === "fullscreen") onOpenFullscreen();
-        }}
-      />
 
       <Modal isOpen={resetDialog.isOpen} onClose={resetDialog.onClose} isCentered>
         <ModalOverlay />

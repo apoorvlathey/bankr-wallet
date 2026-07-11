@@ -134,9 +134,9 @@ Current semantic cues:
 | Cue | Cuelume recipe | Trigger |
 | --- | --- | --- |
 | `unlockSuccess` | `sparkle` | Successful password or biometric unlock |
-| `transactionConfirm` | `success` | User presses Confirm on a single, batch, or split transaction |
+| `transactionConfirm` | `sparkle` | User presses Confirm on a single, batch, or split transaction |
 | `requestReceived` | `chime` | A dapp connection, transaction, signature, permission, asset-watch, or chain-add request reaches the renderer |
-| `actionSheetTransition` | `bloom` | The shared `ActionSheet` opens or closes |
+| `actionSheetTransition` | `bloom` | A bottom action sheet or connected-site chain drawer opens or closes |
 | `chartValueChange` | Custom value pulse | Portfolio-chart NumberFlow value changes |
 | `sliderValueChange` | Short custom tick | Send/Swap slider moves through non-snap values |
 | `sliderSnap` | `release` | Send/Swap slider enters a different 0/25/50/75/100 snap stop |
@@ -254,6 +254,11 @@ The extension maintains address consistency between storage and the active accou
 - The first `eth_requestAccounts` call crosses `impersonator.ts` → `inject.ts` → `background.ts`, persists a five-minute `pendingDappConnectionRequests` record, and opens the extension connection-confirmation screen.
 - Background derives the canonical `http(s)` origin, tab, and frame from `chrome.runtime.MessageSender`; page-provided origin values are never authorization inputs. Cross-origin/subframe requests currently fail closed and must connect from the top-level site.
 - Approval stores an origin-only `dappPermissions` grant and resolves the request through `dappConnectionResult:{id}`. Future visits reuse the grant without prompting and receive the account currently selected for that tab/fallback active account.
+- A pending connection request sets the Chrome action badge to `1` only when
+  there are no pending transaction, signature, batch, ERC-7715 permission, or
+  cross-dapp batch approvals. Connection requests never increment or replace
+  the existing approval count; approving, rejecting, or expiring the request
+  refreshes the badge.
 - Account switches remain visible to an approved origin through `accountsChanged`; unapproved origins receive no account-change event. Revocation sends `accountsChanged([])` to matching open tabs.
 - Site title and favicon are bounded, display-only metadata. The canonical hostname is always the primary identity in confirmation and management UI.
 

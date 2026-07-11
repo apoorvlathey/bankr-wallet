@@ -26,6 +26,11 @@ const PERMISSIONS_LOCK = `local:${PERMISSIONS_KEY}`;
 const PENDING_LOCK = `local:${PENDING_KEY}`;
 const REQUEST_EXPIRY_MS = 5 * 60 * 1000;
 
+async function updatePendingRequestBadge(): Promise<void> {
+  const { updateBadge } = await import("./pendingTxStorage");
+  await updateBadge();
+}
+
 export function normalizeDappOrigin(value: string | undefined): string | null {
   if (!value) return null;
   try {
@@ -116,12 +121,13 @@ export async function savePendingDappConnectionRequest(
     requests.push(request);
     await chrome.storage.local.set({ [PENDING_KEY]: requests });
   });
+  await updatePendingRequestBadge();
 }
 
 export async function removePendingDappConnectionRequests(
   predicate: (request: PendingDappConnectionRequest) => boolean,
 ): Promise<PendingDappConnectionRequest[]> {
-  return withStorageLock(PENDING_LOCK, async () => {
+  const removed = await withStorageLock(PENDING_LOCK, async () => {
     const requests = await getPendingDappConnectionRequests();
     const removed = requests.filter(predicate);
     if (removed.length > 0) {
@@ -131,6 +137,8 @@ export async function removePendingDappConnectionRequests(
     }
     return removed;
   });
+  if (removed.length > 0) await updatePendingRequestBadge();
+  return removed;
 }
 
 export async function clearExpiredDappConnectionRequests(): Promise<void> {

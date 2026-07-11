@@ -19,7 +19,8 @@ const cuelume = (recipe: SoundName) => () => play(recipe);
 /** Product-level cues keep Cuelume recipes and restraint rules centralized. */
 const SOUND_DEFINITIONS = {
   unlockSuccess: { player: cuelume("sparkle") },
-  transactionConfirm: { player: cuelume("success"), cooldownMs: 250 },
+  transactionConfirm: { player: cuelume("sparkle"), cooldownMs: 250 },
+  dappConnectionConfirm: { player: cuelume("sparkle"), cooldownMs: 250 },
   requestReceived: { player: cuelume("chime"), cooldownMs: 500 },
   actionSheetTransition: { player: cuelume("bloom") },
   chartValueChange: { player: playCustomChartValueSound, cooldownMs: 26 },

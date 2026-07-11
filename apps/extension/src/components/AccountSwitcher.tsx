@@ -17,13 +17,17 @@ import {
 } from "@chakra-ui/react";
 import {
   AddIcon,
-  CheckIcon,
   ChevronRightIcon,
   ExternalLinkIcon,
   SettingsIcon,
 } from "@chakra-ui/icons";
-import type { Account, SeedGroup } from "@/chrome/types";
+import type { Account } from "@/chrome/types";
 import { AccountAvatar } from "@/components/AccountIdentity";
+import {
+  AccountPickerRow,
+  getAccountPickerDisplayName,
+  getAccountPickerSecondaryIdentity,
+} from "@/components/AccountPickerRow";
 import AccountExplorerMenu from "@/components/AccountExplorerMenu";
 import { getDefaultAccountExplorerUrl } from "@/components/accountExplorerUtils";
 import { getWalletTypeLabel } from "@/components/accountIdentityLabels";
@@ -36,14 +40,13 @@ import {
   FullScreenPickerGroup,
   FullScreenPickerSearch,
   ListItem,
-  ListItemActions,
   ListItemContent,
   ListItemDescription,
   ListItemMedia,
   ListItemTitle,
 } from "@/components/ui";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
-import { truncateAddress } from "@/lib/addressUtils";
+import { useSeedGroupMap } from "@/hooks/useSeedGroupMap";
 import type { ResolvedChain } from "@/lib/chains";
 
 interface AccountSwitcherProps {
@@ -79,7 +82,7 @@ function AccountSwitcher({
 }: AccountSwitcherProps) {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [seedGroupMap, setSeedGroupMap] = useState<Map<string, string>>(new Map());
+  const seedGroupMap = useSeedGroupMap(accounts);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
   const activeAccountRowRef = useRef<HTMLElement>(null);
@@ -89,19 +92,6 @@ function AccountSwitcher({
     [accounts],
   );
   const { identities } = useEnsIdentities(accountAddresses);
-
-  useEffect(() => {
-    if (!accounts.some((account) => account.type === "seedPhrase")) return;
-
-    chrome.runtime.sendMessage(
-      { type: "getSeedGroups" },
-      (groups: SeedGroup[] | null) => {
-        if (groups) {
-          setSeedGroupMap(new Map(groups.map((group) => [group.id, group.name])));
-        }
-      },
-    );
-  }, [accounts]);
 
   const getEnsName = useCallback(
     (account: Account) =>
@@ -116,8 +106,7 @@ function AccountSwitcher({
   );
 
   const getDisplayName = useCallback(
-    (account: Account) =>
-      account.displayName || getEnsName(account) || truncateAddress(account.address),
+    (account: Account) => getAccountPickerDisplayName(account, getEnsName(account)),
     [getEnsName],
   );
 
@@ -316,85 +305,50 @@ function AccountSwitcher({
                 description={`${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`}
               >
                 {filteredAccounts.map((account) => {
+                  const isActive = account.id === activeAccount?.id;
                   const ensName = getEnsName(account);
                   const explorerHref = openExplorer(account);
-                  const secondaryIdentity =
-                    account.displayName && ensName
-                      ? `${ensName} · ${truncateAddress(account.address)}`
-                      : truncateAddress(account.address);
+                  const secondaryIdentity = getAccountPickerSecondaryIdentity(
+                    account,
+                    ensName,
+                  );
 
                   return (
-                    <ListItem
+                    <AccountPickerRow
                       key={account.id}
-                      ref={account.id === activeAccount?.id ? activeAccountRowRef : undefined}
-                      px={0}
-                      py={0}
-                      gap={0}
-                      isSelected={account.id === activeAccount?.id}
-                    >
-                      <Flex
-                        as="button"
-                        type="button"
-                        minW={0}
-                        flex={1}
-                        minH="64px"
-                        px={3}
-                        py={2.5}
-                        gap={3}
-                        align="center"
-                        textAlign="start"
-                        _hover={{ bg: "surface.raisedHover" }}
-                        _focus={{ outline: "none" }}
-                        _focusVisible={{ boxShadow: "inset 0 0 0 2px var(--chakra-colors-border-focus)" }}
-                        onClick={() => selectAccount(account)}
-                      >
-                        <ListItemMedia>
-                          <AccountAvatar
-                            account={account}
-                            ensAvatar={getEnsAvatar(account)}
-                            size={36}
-                          />
-                        </ListItemMedia>
-                        <ListItemContent>
-                          <HStack spacing={1.5} minW={0}>
-                            <ListItemTitle noOfLines={1}>
-                              {getDisplayName(account)}
-                            </ListItemTitle>
-                            {account.id === activeAccount?.id && (
-                              <CheckIcon boxSize={3} color="accent.secondary" flexShrink={0} />
-                            )}
-                          </HStack>
-                          <ListItemDescription fontFamily="mono" noOfLines={1}>
-                            {secondaryIdentity}
-                          </ListItemDescription>
-                          <Text as="span" color="fg.muted" fontSize="xs" lineHeight="1.4">
-                            {getWalletTypeLabel(account, seedGroupMap)}
-                          </Text>
-                        </ListItemContent>
-                      </Flex>
-                      <ListItemActions pr={2}>
-                        <CopyButton value={account.address} />
-                        {explorerHref && (
+                      ref={isActive ? activeAccountRowRef : undefined}
+                      account={account}
+                      displayName={getDisplayName(account)}
+                      ensAvatar={getEnsAvatar(account)}
+                      secondaryIdentity={secondaryIdentity}
+                      walletTypeLabel={getWalletTypeLabel(account, seedGroupMap)}
+                      isSelected={isActive}
+                      onSelect={() => selectAccount(account)}
+                      actions={
+                        <>
+                          <CopyButton value={account.address} />
+                          {explorerHref && (
+                            <IconButton
+                              as="a"
+                              href={explorerHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label="View address on explorer"
+                              icon={<ExternalLinkIcon />}
+                              size="xs"
+                              variant="ghost"
+                            />
+                          )}
                           <IconButton
-                            as="a"
-                            href={explorerHref}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label="View address on explorer"
-                            icon={<ExternalLinkIcon />}
+                            aria-label={`Settings for ${getDisplayName(account)}`}
+                            icon={<SettingsIcon />}
                             size="xs"
                             variant="ghost"
+                            onClick={() => openAccountSettings(account)}
                           />
-                        )}
-                        <IconButton
-                          aria-label={`Settings for ${getDisplayName(account)}`}
-                          icon={<SettingsIcon />}
-                          size="xs"
-                          variant="ghost"
-                          onClick={() => openAccountSettings(account)}
-                        />
-                      </ListItemActions>
-                    </ListItem>
+                        </>
+                      }
+                    />
                   );
                 })}
               </FullScreenPickerGroup>

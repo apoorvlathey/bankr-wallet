@@ -84,7 +84,7 @@ export function BiometricUnlockRemove({
           onClick={handleRemove}
           isLoading={isSubmitting}
         >
-          Remove biometric unlock
+          Remove biometric
         </Button>
       }
       secondaryAction={

@@ -30,6 +30,7 @@ import type { ResolvedChain } from "@/lib/chains";
 import { useTheme } from "@/theme";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import DappSiteIcon from "@/components/DappSiteIcon";
+import { useSheetTransitionSound } from "@/sounds/useSheetTransitionSound";
 
 export interface ActiveDappConnectionContext {
   tabId: number;
@@ -90,6 +91,7 @@ export default function HomeDappDock({
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [isDisconnectHovered, setIsDisconnectHovered] = useState(false);
   const [chainSearch, setChainSearch] = useState("");
+  useSheetTransitionSound(sheet.isOpen);
 
   const rankedChains = useMemo(() => {
     const query = chainSearch.trim().toLowerCase();

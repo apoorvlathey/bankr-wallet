@@ -166,6 +166,9 @@ export async function updateBadge(): Promise<void> {
   const { getPendingSignatureRequests } = await import("./pendingSignatureStorage");
   const { getPendingBatchTxRequests } = await import("./pendingBatchTxStorage");
   const { getCrossDappBatch } = await import("./crossDappBatchStorage");
+  const { getPendingDappConnectionRequests } = await import(
+    "./dappPermissionStorage"
+  );
   const { getPendingErc7715PermissionRequests } = await import(
     "./pendingErc7715PermissionStorage"
   );
@@ -173,13 +176,17 @@ export async function updateBadge(): Promise<void> {
   const batchRequests = await getPendingBatchTxRequests();
   const permissionRequests = await getPendingErc7715PermissionRequests();
   const crossDappBatch = await getCrossDappBatch();
+  const dappConnectionRequests = await getPendingDappConnectionRequests();
   const crossDappBatchCount = crossDappBatch?.entries.length ? 1 : 0;
-  const count =
+  const approvalCount =
     txRequests.length +
     sigRequests.length +
     batchRequests.length +
     permissionRequests.length +
     crossDappBatchCount;
+  // A connection prompt should make an otherwise-idle extension noticeable,
+  // but it must never inflate or obscure the actionable approval count.
+  const count = approvalCount || (dappConnectionRequests.length > 0 ? 1 : 0);
 
   if (count > 0) {
     await chrome.action.setBadgeText({ text: count.toString() });

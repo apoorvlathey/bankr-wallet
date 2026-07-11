@@ -1,7 +1,5 @@
 import {
   forwardRef,
-  useEffect,
-  useRef,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -23,7 +21,7 @@ import {
   type DrawerProps,
 } from "@chakra-ui/react";
 import { useTheme } from "@/theme";
-import { playInteractionSound } from "@/sounds/soundManager";
+import { useSheetTransitionSound } from "@/sounds/useSheetTransitionSound";
 
 export interface ActionSheetChoice {
   /** Stable value passed to `onSelect`. */
@@ -86,13 +84,7 @@ export const ActionSheet = forwardRef<HTMLElement, ActionSheetProps>(
   ) {
     const { tokens } = useTheme();
     const prefersReducedMotion = usePrefersReducedMotion();
-    const previousIsOpen = useRef(false);
-
-    useEffect(() => {
-      if (isOpen === previousIsOpen.current) return;
-      previousIsOpen.current = isOpen;
-      void playInteractionSound("actionSheetTransition");
-    }, [isOpen]);
+    useSheetTransitionSound(isOpen);
 
     const reducedMotionProps = prefersReducedMotion
       ? {

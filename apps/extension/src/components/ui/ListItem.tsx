@@ -101,7 +101,6 @@ export const ListItem = forwardRef<HTMLElement, ListItemProps>(
     const selectedShadow = isSelected ? SELECTED_SHADOW : "none";
     const focusShadow = FOCUS_SHADOW;
     const controlProps: FlexProps = {
-      ...rest,
       w: "full",
       minH: density === "compact" ? "48px" : "56px",
       px: density === "compact" ? 3 : 4,
@@ -161,6 +160,7 @@ export const ListItem = forwardRef<HTMLElement, ListItemProps>(
               boxShadow: focusShadow,
             }
           : undefined,
+      ...rest,
     };
 
     const stateProps = {
