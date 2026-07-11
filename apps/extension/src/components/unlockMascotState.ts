@@ -25,9 +25,8 @@ export function getUnlockMascotState({
   const isBiometricCancellation =
     normalizedError.includes("biometric") &&
     (normalizedError.includes("cancelled") || normalizedError.includes("canceled"));
-  const isPasswordRequired = normalizedError === "password is required";
 
-  if (error && !isBiometricCancellation && !isPasswordRequired) {
+  if (error && !isBiometricCancellation) {
     return "invalid";
   }
 

@@ -136,6 +136,8 @@ export default function UnlockView({
   const options = useDisclosure();
   const optionsButtonRef = useRef<HTMLButtonElement>(null);
   const isIncorrectPassword = /^(invalid|incorrect) password$/i.test(error);
+  const shouldShakePassword =
+    isIncorrectPassword || error === "Password is required";
   const passwordErrorLabel = isIncorrectPassword
     ? "Incorrect password"
     : error === "Password is required"
@@ -205,7 +207,7 @@ export default function UnlockView({
               <FormControl isInvalid={!!error}>
                 <FormLabel
                   htmlFor="unlock-password"
-                  mb={4}
+                  mb={6}
                   color="fg.primary"
                   fontSize="lg"
                   fontWeight="600"
@@ -233,7 +235,7 @@ export default function UnlockView({
                     {passwordErrorLabel || "Password error"}
                   </Text>
                   <InputGroup
-                    className={isIncorrectPassword ? "unlock-password-shake" : undefined}
+                    className={shouldShakePassword ? "unlock-password-shake" : undefined}
                   >
                     <Input
                       id="unlock-password"

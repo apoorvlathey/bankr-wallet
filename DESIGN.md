@@ -233,6 +233,7 @@
 - 2026-07-10: simplified unlock to the essential credential actions; password rejection now uses a stable inline label, a reduced-motion-safe input shake, and reveals recovery without shifting surrounding controls.
 - 2026-07-10: established Warm Midnight on the unlock screen with a mascot-led identity composition and a dedicated amber `brand` action; transactional actions remain blue.
 - 2026-07-10: replaced the unlock form's generic side label with a centered, larger “Enter password to unlock” instruction beneath the mascot while preserving the fixed-position error treatment.
+- 2026-07-12: reserved a consistent 24px gap between the unlock instruction and password field so inline errors retain clear breathing room, and applied the same reduced-motion-safe field shake and concerned mascot state to empty submissions as incorrect passwords.
 - 2026-07-10: connected the approved layered WalletChan mascot pilot to the
   real unlock lifecycle: sleeping while empty, attentive on typing or passkey
   verification, concerned with Manpu on invalid credentials, and a transient

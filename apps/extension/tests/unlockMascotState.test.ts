@@ -47,14 +47,14 @@ test("biometric cancellation falls back to password-mode presentation", () => {
   );
 });
 
-test("incorrect credentials use invalid while required stays sleeping", () => {
+test("incorrect and missing credentials use the invalid state", () => {
   assert.equal(
     getUnlockMascotState({ ...baseInput, error: "Incorrect password" }),
     "invalid",
   );
   assert.equal(
     getUnlockMascotState({ ...baseInput, error: "Password is required" }),
-    "sleeping",
+    "invalid",
   );
 });
 
