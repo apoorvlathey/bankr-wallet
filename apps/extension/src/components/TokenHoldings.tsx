@@ -530,7 +530,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
   const [tokenToHide, setTokenToHide] = useState<PortfolioToken | null>(null);
   const [hidingToken, setHidingToken] = useState(false);
   const [showLowValueTokens, setShowLowValueTokens] = useState(false);
-  const lowValueExpandedRef = useRef<HTMLDivElement | null>(null);
+  const lowValueDisclosureRef = useRef<HTMLDivElement | null>(null);
   const [portfolioBalanceRefreshing, setPortfolioBalanceRefreshing] = useState(false);
   const [lowValueLoading, setLowValueLoading] = useState(false);
   const editModal = useDisclosure();
@@ -1131,19 +1131,13 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
     showLowValueTokens,
   ]);
 
-  useEffect(() => {
+  const scrollLowValueDisclosureIntoView = useCallback(() => {
     if (!showLowValueTokens) return;
 
-    const scrollTimer = window.setTimeout(() => {
-      const firstTokenRow =
-        lowValueExpandedRef.current?.querySelector<HTMLElement>("li > button");
-      firstTokenRow?.scrollIntoView({
-        behavior: prefersReducedMotion ? "auto" : "smooth",
-        block: "nearest",
-      });
-    }, prefersReducedMotion ? 0 : 180);
-
-    return () => window.clearTimeout(scrollTimer);
+    lowValueDisclosureRef.current?.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "start",
+    });
   }, [prefersReducedMotion, showLowValueTokens]);
 
   const filteredDefiPositions = useMemo(
@@ -1376,6 +1370,7 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
 
           {showAssets && lowValueAssetRows.length > 0 && (
             <Box
+              ref={lowValueDisclosureRef}
               as="li"
               w="full"
               listStyleType="none"
@@ -1447,9 +1442,13 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
                   </Text>
                 </ListItemMeta>
               </Flex>
-              <Collapse in={showLowValueTokens} animateOpacity>
+              <Collapse
+                in={showLowValueTokens}
+                animateOpacity
+                onAnimationComplete={scrollLowValueDisclosureIntoView}
+              >
                 {showLowValueTokens && (
-                  <Box ref={lowValueExpandedRef}>
+                  <Box>
                     <ListSurface
                       borderWidth={0}
                       borderRadius={0}
