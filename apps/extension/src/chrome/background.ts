@@ -303,6 +303,7 @@ import {
   isSidePanelSupportedAsync,
   getSidePanelMode,
   setSidePanelMode,
+  transitionSidePanelToPopup,
   initSidePanel,
   POPUP_PATH,
 } from "./sidepanelManager";
@@ -1022,6 +1023,7 @@ const EXTENSION_ONLY_MESSAGES = new Set([
   "clearFailedTxResult",
   // Settings that affect security
   "setSidePanelMode",
+  "switchSidePanelToPopup",
   "setAutoLockTimeout",
   "getAutoLockTimeout",
   "setArcBrowser",
@@ -3263,6 +3265,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       setSidePanelMode(message.enabled).then((success) => {
         sendResponse({ success, sidePanelWorks: success || !message.enabled });
       });
+      return true;
+    }
+
+    case "switchSidePanelToPopup": {
+      const windowId =
+        typeof message.windowId === "number" ? message.windowId : undefined;
+      transitionSidePanelToPopup(windowId, openPopupWindow).then(sendResponse);
       return true;
     }
 

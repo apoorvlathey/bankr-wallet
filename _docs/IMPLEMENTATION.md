@@ -2957,8 +2957,8 @@ When toggling from popup to sidepanel mode:
 When toggling from sidepanel to popup mode:
 
 - `chrome.action.setPopup({ popup: 'popup-init.html' })` restores the native popup
-- A popup window is opened
-- The sidepanel closes automatically
+- The service worker opens WalletChan's detached popup window before closing the sidepanel; native action popups cannot be used here because Chrome dismisses them during the sidepanel focus change
+- The sidepanel uses `sidePanel.close()` on Chrome 141+, with `window.close()` as the compatibility fallback after the detached popup is confirmed open
 
 ### Transaction Requests
 
@@ -2992,6 +2992,7 @@ When a dapp requests a transaction, the extension opens the appropriate UI:
 | `setArcBrowser`        | Views → Background | Notify background that Arc browser was detected |
 | `isSidePanelSupported` | Views → Background | Check if sidepanel is supported and verified    |
 | `setSidePanelMode`     | Views → Background | Enable/disable sidepanel mode                   |
+| `switchSidePanelToPopup` | Views → Background | Close sidepanel, then open the replacement popup |
 
 ### Key Design Decisions
 

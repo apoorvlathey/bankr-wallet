@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef, memo, useCallback } from "react";
 import { useDisclosure } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { closeSidePanelForWindow } from "@/lib/sidePanelControls";
+import {
+  closeSidePanelForWindow,
+  switchSidePanelToPopup,
+} from "@/lib/sidePanelControls";
 import { clearPortfolioHoldingsLocalMirror } from "@/chrome/portfolioHoldingsCache";
 import BiometricUnlockSetup from "@/components/BiometricUnlockSetup";
 import {
@@ -178,9 +181,11 @@ function UnlockScreen({
 
   const toggleSidePanelMode = async () => {
     if (sidePanelMode) {
-      // DISABLING: persist and close immediately
-      chrome.runtime.sendMessage({ type: "setSidePanelMode", enabled: false });
-      window.close();
+      // DISABLING: restore and immediately open the popup before closing the panel
+      const switched = await switchSidePanelToPopup();
+      if (!switched) {
+        console.warn("Failed to switch from sidepanel to popup mode");
+      }
     } else {
       // ENABLING: open sidepanel, persist, close popup — all fire-and-forget
       try {

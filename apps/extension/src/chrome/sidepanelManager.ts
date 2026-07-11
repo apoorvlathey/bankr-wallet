@@ -30,6 +30,15 @@ const IS_CHROMIUM_WITH_SIDEPANEL =
 
 export const POPUP_PATH = IS_CHROMIUM_WITH_SIDEPANEL ? "popup-init.html" : "";
 
+type SidePanelWithClose = typeof chrome.sidePanel & {
+  close?: (options: { windowId: number }) => Promise<void>;
+};
+
+export interface PopupTransitionResult {
+  success: boolean;
+  panelClosed: boolean;
+}
+
 /**
  * Checks if this is a non-Chrome Chromium browser (Arc, Brave, Opera, etc.)
  * Arc's sidePanel API is a "perfect phantom" — sidePanel.open() resolves,
@@ -143,6 +152,41 @@ export async function setSidePanelMode(enabled: boolean): Promise<boolean> {
     await chrome.action.setPopup({ popup: POPUP_PATH });
     return false;
   }
+}
+
+/**
+ * Atomically leaves sidepanel mode from the service worker. A detached popup
+ * is created before the panel closes so destroying the sidepanel document
+ * cannot interrupt the popup-opening operation. Native action popups are not
+ * used here because Chrome dismisses them when the sidepanel closes.
+ */
+export async function transitionSidePanelToPopup(
+  windowId: number | undefined,
+  openDetachedPopup: () => Promise<void>,
+): Promise<PopupTransitionResult> {
+  const modeSet = await setSidePanelMode(false);
+  if (!modeSet) {
+    return { success: false, panelClosed: false };
+  }
+
+  try {
+    await openDetachedPopup();
+  } catch (error) {
+    console.warn("Failed to open detached popup window:", error);
+    return { success: false, panelClosed: false };
+  }
+
+  let panelClosed = false;
+  const sidePanel = chrome.sidePanel as SidePanelWithClose | undefined;
+  if (windowId !== undefined && typeof sidePanel?.close === "function") {
+    try {
+      await sidePanel.close({ windowId });
+      panelClosed = true;
+    } catch (error) {
+      console.warn("Failed to close sidepanel after opening popup:", error);
+    }
+  }
+  return { success: true, panelClosed };
 }
 
 /**

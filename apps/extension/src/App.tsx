@@ -26,7 +26,10 @@ import {
 } from "@chakra-ui/icons";
 
 import { isDarkThemeId, useTheme } from "@/theme";
-import { closeSidePanelForWindow } from "@/lib/sidePanelControls";
+import {
+  closeSidePanelForWindow,
+  switchSidePanelToPopup,
+} from "@/lib/sidePanelControls";
 import TransactionConfirmationErrorBoundary from "@/components/TransactionConfirmationErrorBoundary";
 import AccountNetworkControls from "@/components/AccountNetworkControls";
 import AppHeaderBar from "@/components/AppHeaderBar";
@@ -919,9 +922,11 @@ function App() {
 
   const toggleSidePanelMode = async () => {
     if (sidePanelMode) {
-      // DISABLING: persist and close immediately
-      chrome.runtime.sendMessage({ type: "setSidePanelMode", enabled: false });
-      window.close();
+      // DISABLING: restore and immediately open the popup before closing the panel
+      const switched = await switchSidePanelToPopup();
+      if (!switched) {
+        console.warn("Failed to switch from sidepanel to popup mode");
+      }
     } else {
       // ENABLING: open sidepanel, persist, close popup — all fire-and-forget
       try {
