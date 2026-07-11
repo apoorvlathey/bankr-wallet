@@ -77,8 +77,8 @@ export const LEAF_ENTRIES: readonly LeafEntry[] = [
   },
   {
     id: "chains",
-    title: "Chain RPCs",
-    subtitle: "Configure network RPC endpoints",
+    title: "Chains",
+    subtitle: "Configure chain RPC endpoints",
     keywords: ["chain", "rpc", "network", "endpoint", "node"],
     group: null,
   },
@@ -134,7 +134,7 @@ export const LEAF_ENTRIES: readonly LeafEntry[] = [
   {
     id: "clearChatHistory",
     title: "Clear Chat History",
-    subtitle: "Remove all chat conversations",
+    subtitle: "Remove all Bankr chat conversations",
     keywords: ["clear", "chat", "history", "conversation", "data", "remove", "delete"],
     group: "data",
   },
@@ -331,8 +331,8 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
       return (
         <SettingsRow
           key={id}
-          title="Chain RPCs"
-          subtitle="Configure network RPC endpoints"
+          title="Chains"
+          subtitle="Configure chain RPC endpoints"
           icon={<LinkChainIcon boxSize={5} />}
           iconBg={ctx.isDarkTheme ? "border.strong" : ctx.chainStripBg}
           iconColor={ctx.isDarkTheme ? "fg.primary" : ctx.chainStripFg}
@@ -411,7 +411,7 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
         <SettingsRow
           key={id}
           title="Clear Chat History"
-          subtitle="Remove all chat conversations"
+          subtitle="Remove all Bankr chat conversations"
           icon={<ChatBubbleIcon boxSize={5} />}
           iconBg="accent.primary"
           iconColor="accentFg.primary"

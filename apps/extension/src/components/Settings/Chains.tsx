@@ -406,7 +406,7 @@ function Chains({
     <Box flex="1 1 auto" minH={0} mx={-4} my={-4} w="calc(100% + 2rem)" h="calc(100% + 2rem)">
       <AppScreen>
         <AppHeader
-          title="Network connections"
+          title="Chains"
           onBack={close}
           trailing={
             <IconButton

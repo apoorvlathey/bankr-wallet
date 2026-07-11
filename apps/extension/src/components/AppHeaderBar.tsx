@@ -77,7 +77,6 @@ export default function AppHeaderBar({
           {
             id: "chat",
             label: "Chat with WalletChan",
-            description: "Ask for wallet help or prepare an action.",
             icon: <ChatIcon boxSize="18px" aria-hidden="true" />,
           },
         ]
@@ -86,10 +85,7 @@ export default function AppHeaderBar({
       ? [
           {
             id: "panel",
-            label: sidePanelMode ? "Use popup" : "Use side panel",
-            description: sidePanelMode
-              ? "Open WalletChan as a compact popup."
-              : "Keep WalletChan open beside the current page.",
+            label: sidePanelMode ? "Switch to Popup" : "Switch to Side Panel",
             icon: <SidePanelIcon />,
           },
         ]
@@ -98,22 +94,20 @@ export default function AppHeaderBar({
       ? [
           {
             id: "fullscreen",
-            label: "Open in a new tab",
-            description: "Use a larger workspace without changing wallet state.",
+            label: "Open in fullscreen tab",
             icon: <FullscreenIcon />,
           },
         ]
       : []),
     {
       id: "wchan",
-      label: "Get WCHAN",
-      description: "Open a prefilled swap on Base.",
+      label: "Buy $WCHAN",
       icon: <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true"><path fill="currentColor" d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z" /></Icon>,
     },
     {
       id: "os",
       label: "WalletChan OS",
-      description: "Open the WalletChan ecosystem site.",
+      description: "Your Web3 Operating System",
       icon: <ExternalLinkIcon boxSize="18px" aria-hidden="true" />,
     },
   ];
@@ -223,7 +217,6 @@ export default function AppHeaderBar({
         onClose={options.onClose}
         finalFocusRef={optionsButtonRef}
         title="App options"
-        description="Display and ecosystem shortcuts"
         choices={choices}
         onSelect={(id) => {
           if (id === "chat") onChat();

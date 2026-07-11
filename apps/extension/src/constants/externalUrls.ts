@@ -60,6 +60,7 @@ export const BANKR_BOT_TERMINAL_PAGE = "https://bankr.bot/terminal";
 // Social Links
 // ---------------------------------------------------------------------------
 export const TWITTER_URL = "https://x.com/apoorveth";
+export const WALLETCHAN_TWITTER_URL = "https://x.com/WalletChan_";
 
 // ---------------------------------------------------------------------------
 // External APIs — Address Labels

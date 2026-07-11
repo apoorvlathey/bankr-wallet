@@ -327,17 +327,13 @@ export default function UnlockView({
           ...(sidePanelSupported
             ? [{
                 id: "panel",
-                label: sidePanelMode ? "Use popup" : "Use side panel",
-                description: sidePanelMode
-                  ? "Open WalletChan as a compact popup."
-                  : "Keep WalletChan open beside the current page.",
+                label: sidePanelMode ? "Switch to Popup" : "Switch to Side Panel",
                 icon: <SidePanelIcon />,
               }]
             : []),
           {
             id: "fullscreen",
-            label: "Open in a new tab",
-            description: "Use a larger workspace.",
+            label: "Open in fullscreen tab",
             icon: <ExternalLinkIcon aria-hidden="true" />,
           },
         ]}

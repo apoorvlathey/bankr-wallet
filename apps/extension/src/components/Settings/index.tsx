@@ -272,8 +272,8 @@ function Settings({
         return (
           <SettingsRow
             key={id}
-            title="Network connections"
-            subtitle="Configure network RPC endpoints"
+            title="Chains"
+            subtitle="Configure chain RPC endpoints"
             icon={<LinkChainIcon boxSize={5} />}
             iconBg={isDarkTheme ? "border.strong" : chainStrip.bg}
             iconColor={isDarkTheme ? "fg.primary" : chainStrip.fg}
@@ -291,7 +291,7 @@ function Settings({
       <SettingsRow
         key="security"
         title="Security"
-        subtitle="Password, agent access, and auto-lock"
+        subtitle="Password, auto-lock, and biometric"
         icon={<ShieldIcon boxSize={5} />}
         iconBg="accent.highlight"
         iconColor="accentFg.highlight"
@@ -354,7 +354,7 @@ function Settings({
             borderBottomWidth="1px"
             borderColor="border.subtle"
           >
-            Clear chat history?
+            Clear Bankr chat history?
           </ModalHeader>
           <ModalBody py={4}>
             <Text color="text.secondary" fontSize="sm" fontWeight="500">

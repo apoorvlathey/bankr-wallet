@@ -16,9 +16,8 @@ import {
 } from "@/components/ui";
 import BrandWordmark from "@/components/BrandWordmark";
 import {
-  TWITTER_URL,
-  WALLETCHAN_OS_URL,
   WALLETCHAN_SITE_URL,
+  WALLETCHAN_TWITTER_URL,
 } from "@/constants/externalUrls";
 
 interface AboutSettingsProps {
@@ -34,7 +33,7 @@ export default function AboutSettings({ themeName, onBack }: AboutSettingsProps)
       <AppHeader title="About" onBack={onBack} />
       <ScreenBody pb={6}>
         <VStack align="stretch" spacing={5}>
-          <VStack spacing={3} py={2}>
+          <VStack spacing={3} pt={6} pb={2}>
             <Image
               src="walletchan-icon-white-bg.png"
               alt="WalletChan"
@@ -79,17 +78,10 @@ export default function AboutSettings({ themeName, onBack }: AboutSettingsProps)
                 </ListItemContent>
                 <ListItemMeta><ExternalLinkIcon aria-hidden="true" /></ListItemMeta>
               </ListItem>
-              <ListItem interactive onClick={() => open(WALLETCHAN_OS_URL)}>
+              <ListItem interactive onClick={() => open(WALLETCHAN_TWITTER_URL)}>
                 <ListItemContent>
-                  <ListItemTitle>WalletChan OS</ListItemTitle>
-                  <ListItemDescription>Explore the wider ecosystem</ListItemDescription>
-                </ListItemContent>
-                <ListItemMeta><ExternalLinkIcon aria-hidden="true" /></ListItemMeta>
-              </ListItem>
-              <ListItem interactive onClick={() => open(TWITTER_URL)}>
-                <ListItemContent>
-                  <ListItemTitle>Built by @apoorveth</ListItemTitle>
-                  <ListItemDescription>Updates and contact</ListItemDescription>
+                  <ListItemTitle>Follow on Twitter: @WalletChan_</ListItemTitle>
+                  <ListItemDescription>Updates and announcements</ListItemDescription>
                 </ListItemContent>
                 <ListItemMeta><ExternalLinkIcon aria-hidden="true" /></ListItemMeta>
               </ListItem>
