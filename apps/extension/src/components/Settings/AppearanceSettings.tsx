@@ -26,6 +26,7 @@ import type { ThemeTokens } from "@/theme";
 import {
   ListItem,
   ListItemContent,
+  ListItemDescription,
   ListItemMedia,
   ListItemMeta,
   ListItemTitle,
@@ -40,6 +41,11 @@ interface AppearanceSettingsProps {
 const THEME_DISPLAY_NAMES: Record<ThemeTokens["id"], string> = {
   midnight: "Dark Mode",
   bauhaus: "Light Mode",
+};
+
+const THEME_DESCRIPTIONS: Record<ThemeTokens["id"], string> = {
+  midnight: "Midnight theme",
+  bauhaus: "Bauhaus theme",
 };
 
 function AppearanceSettings({ onCancel }: AppearanceSettingsProps) {
@@ -106,6 +112,9 @@ function AppearanceSettings({ onCancel }: AppearanceSettingsProps) {
                 </ListItemMedia>
                 <ListItemContent>
                   <ListItemTitle>{THEME_DISPLAY_NAMES[theme.id]}</ListItemTitle>
+                  <ListItemDescription>
+                    {THEME_DESCRIPTIONS[theme.id]}
+                  </ListItemDescription>
                 </ListItemContent>
                 {isActive && (
                   <ListItemMeta color="accent.secondary" flex="0 0 auto">
