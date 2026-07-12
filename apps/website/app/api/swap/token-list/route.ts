@@ -11,9 +11,23 @@ const PLATFORM_IDS: Record<number, string> = {
   8453: "base",
   56: "binance-smart-chain",
   137: "polygon-pos",
+  143: "monad",
+  146: "sonic",
   130: "unichain",
+  324: "zksync",
+  480: "world-chain",
+  999: "hyperevm",
+  2741: "abstract",
   4663: "robinhood",
+  5000: "mantle",
   43114: "avalanche",
+  9745: "plasma",
+  34443: "mode",
+  57073: "ink",
+  59144: "linea",
+  80094: "berachain",
+  81457: "blast",
+  534352: "scroll",
 };
 
 const SUPPORTED_CHAIN_IDS = new Set(Object.keys(PLATFORM_IDS).map(Number));
