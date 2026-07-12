@@ -56,6 +56,12 @@ interface HoldingsState {
 
 interface PortfolioTabsProps {
   address: string;
+  /**
+   * Chain selected by the active connected dapp, or null when there is no
+   * connected dapp. Changes reset the portfolio filter; users can still
+   * override the filter until the dapp context changes again.
+   */
+  connectedDappChainId?: number | null;
   activityTabTrigger?: number;
   holdingsTabTrigger?: number;
   refreshTrigger?: number;
@@ -82,7 +88,7 @@ const PortfolioMenuIcon = (props: IconProps) => (
 /** Delay before refreshing balances after onchain tx confirmation (ms) */
 const POST_CONFIRM_REFRESH_DELAY = 3000;
 
-export default function PortfolioTabs({ address, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, quickActions, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
+export default function PortfolioTabs({ address, connectedDappChainId = null, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, quickActions, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
   // On (re)mount, default to whichever tab was most recently requested by the parent.
   // activityTabTrigger increments after a tx is initiated; holdingsTabTrigger
   // increments when the user backs out of send/swap without submitting.
@@ -96,7 +102,9 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
   const portfolioActionsButtonRef = useRef<HTMLButtonElement>(null);
   const { networksInfo } = useNetworks();
   const visibleChains = getVisibleChains(networksInfo);
-  const [filterChainId, setFilterChainId] = useState<number | null>(null);
+  const [filterChainId, setFilterChainId] = useState<number | null>(
+    connectedDappChainId,
+  );
   const selectedChain = filterChainId !== null ? visibleChains.find((c) => c.chainId === filterChainId) : null;
   const [chainSearch, setChainSearch] = useState("");
   const chainSearchInputRef = useRef<HTMLInputElement>(null);
@@ -104,6 +112,12 @@ export default function PortfolioTabs({ address, activityTabTrigger = 0, holding
   const [isAssetSearchOpen, setIsAssetSearchOpen] = useState(false);
   const [assetSearchQuery, setAssetSearchQuery] = useState("");
   const assetSearchInputRef = useRef<HTMLInputElement>(null);
+
+  // The connected-dapp dock is authoritative only when its context changes.
+  // A manual portfolio selection remains in place between those changes.
+  useEffect(() => {
+    setFilterChainId(connectedDappChainId);
+  }, [connectedDappChainId]);
 
   // "All Networks" is index 0, chains start at index 1
   const filteredChains = useMemo(() => {

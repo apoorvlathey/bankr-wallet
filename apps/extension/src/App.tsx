@@ -3998,6 +3998,11 @@ function App() {
             {address && (
               <PortfolioTabs
                 address={address}
+                connectedDappChainId={
+                  activeDappContext?.connected
+                    ? selectedChain?.chainId ?? null
+                    : null
+                }
                 onChainBalancesChange={handleHomeChainBalancesChange}
                 onHideTokens={() => setView("hideTokens")}
                 quickActions={
