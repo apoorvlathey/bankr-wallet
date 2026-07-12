@@ -179,8 +179,8 @@ Syncs across Chrome profiles (if signed in). Persists across restarts.
 | `displayAddress`  | `string`                                        | Display-friendly compatibility/default mirror for `address`; not authoritative for established tabs. | v0.1.0     |
 | `chainName`       | `string` (e.g. `"Base"`)                        | Currently selected network. Per-tab via inject.ts, global default via popup.                    | v0.1.0     |
 | `networksInfo`    | `Record<string, { chainId, rpcUrl, hidden?, isCustom?, explorer?, nativeCurrency? }>` | Supported network runtime config. Built-ins are normalized from `chainRegistry`; this key stores RPC overrides, hidden flags, and user-added custom chains. Mutating writes are service-worker-owned via `networkStorage.ts`; `NetworksContext` mirrors storage changes and bootstraps missing defaults through `ensureNetworksInfo`. | v0.1.0     |
-| `activeAccountId` | `string` (UUID)                                 | Account inheritance default for new tabs and compatibility paths without tab context. Activating a tab updates it to that tab's account. | v1.0.0     |
-| `tabAccounts`     | `Record<number, string>` (tabId → accountId)    | Authoritative per-tab account binding. Snapshotted on first tab use, restored on tab activation, and cleaned up when tabs or accounts are removed. | v1.0.0     |
+| `activeAccountId` | `string` (UUID)                                 | Shared fallback for tabs without a connected dapp and compatibility paths without tab context. Activating or selecting an account in a connected dapp tab updates it to that scoped account without changing other dapp-tab overrides. | v1.0.0     |
+| `tabAccounts`     | `Record<number, string>` (tabId → accountId)    | Per-tab account binding only for approved or pending dapp connections. Snapshotted on first scoped use and cleared on ordinary navigation, rejection, disconnect, tab close, or account removal. | v1.0.0     |
 
 ### Settings
 

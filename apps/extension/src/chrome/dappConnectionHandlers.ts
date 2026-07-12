@@ -1,4 +1,8 @@
-import { getActiveAccount, getTabAccount } from "./accountStorage";
+import {
+  clearTabAccount,
+  getActiveAccount,
+  getTabAccount,
+} from "./accountStorage";
 import {
   getDappPermission,
   getDappPermissions,
@@ -15,6 +19,7 @@ import {
   openExtensionPopup,
   writeResultToStorage,
 } from "./txHandlers";
+import { tabHasDappAccountScope } from "./dappAccountScope";
 
 function trustedOrigin(sender: chrome.runtime.MessageSender): string | null {
   return normalizeDappOrigin(sender.origin || sender.url || sender.tab?.url);
@@ -195,6 +200,16 @@ export async function handleRejectDappConnection(requestId: string) {
       }),
     ),
   );
+  await Promise.all(
+    removed.map(async (request) => {
+      if (
+        typeof request.tabId === "number" &&
+        !(await tabHasDappAccountScope(request.tabId))
+      ) {
+        await clearTabAccount(request.tabId);
+      }
+    }),
+  );
   return { success: true };
 }
 
@@ -207,6 +222,7 @@ export async function handleRevokeDappPermission(origin: string) {
         if (!tab.id || normalizeDappOrigin(tab.url) !== normalizeDappOrigin(origin)) {
           return;
         }
+        await clearTabAccount(tab.id);
         await chrome.tabs
           .sendMessage(tab.id, { type: "dappPermissionRevoked" })
           .catch(() => {});

@@ -17,8 +17,6 @@ import {
   setActiveAccountId,
   getTabAccount,
   getTabAccounts,
-  setTabAccount,
-  activateTabAccount,
   clearTabAccount,
   addBankrAccount,
   addImpersonatorAccount,
@@ -329,6 +327,12 @@ import {
   handleRevokeDappPermission,
 } from "./dappConnectionHandlers";
 import { clearExpiredDappConnectionRequests } from "./dappPermissionStorage";
+import {
+  activateBrowserTabAccount,
+  replaceBrowserTabAccountScope,
+  resolveBrowserTabAccount,
+  selectBrowserTabAccount,
+} from "./tabAccountResolver";
 
 // Handles RPC requests proxied from inpage script (to bypass page CSP)
 async function handleRpcRequest(
@@ -603,11 +607,15 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
   }
 });
 
-// A tab snapshots the account that was current when it first becomes active.
-// Revisiting a tab restores its own selection and also makes that selection the
-// inheritance default for the next new tab.
+// Connected dapp tabs keep their own account. Ordinary tabs follow the shared
+// global account and shed any stale override when activated or navigated.
 chrome.tabs.onActivated.addListener(({ tabId }) => {
-  void activateTabAccount(tabId).catch(() => {});
+  void activateBrowserTabAccount(tabId).catch(() => {});
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (!changeInfo.url && changeInfo.status !== "complete") return;
+  void resolveBrowserTabAccount(tabId).catch(() => {});
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
@@ -615,11 +623,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 chrome.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
-  void (async () => {
-    const account = await getTabAccount(removedTabId);
-    if (account) await setTabAccount(addedTabId, account.id);
-    await clearTabAccount(removedTabId);
-  })().catch(() => {});
+  void replaceBrowserTabAccountScope(addedTabId, removedTabId).catch(() => {});
 });
 
 async function sendAccountToTab(tabId: number, account: Account): Promise<void> {
@@ -2048,7 +2052,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "getActiveAccount": {
       const accountPromise =
         !isExtensionPage(sender) && typeof sender.tab?.id === "number"
-          ? getTabAccount(sender.tab.id)
+          ? resolveBrowserTabAccount(sender.tab.id)
           : getActiveAccount();
       accountPromise.then((account) => {
         sendResponse(account);
@@ -2077,8 +2081,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         typeof message.tabId === "number" ? message.tabId : sender.tab?.id;
       if (typeof tabId === "number") {
         const accountPromise = message.activate
-          ? activateTabAccount(tabId)
-          : getTabAccount(tabId);
+          ? activateBrowserTabAccount(tabId)
+          : resolveBrowserTabAccount(tabId);
         accountPromise.then((account) => {
           sendResponse(account);
         });
@@ -2094,9 +2098,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const tabId =
         typeof message.tabId === "number" ? message.tabId : sender.tab?.id;
       if (typeof tabId === "number") {
-        activateTabAccount(tabId, message.accountId)
-          .then((account) => {
-            sendResponse({ success: true, account });
+        selectBrowserTabAccount(tabId, message.accountId)
+          .then(({ account, scope }) => {
+            if (scope === "global") {
+              chrome.runtime
+                .sendMessage({ type: "accountsUpdated" })
+                .catch(() => {});
+            }
+            sendResponse({ success: true, account, scope });
           })
           .catch((error) => {
             sendResponse({
@@ -2811,7 +2820,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const result = await handleRemoveAccount(message.accountId);
         if (result.success) {
           for (const tabId of affectedTabIds) {
-            const fallback = await getTabAccount(tabId);
+            const fallback = await resolveBrowserTabAccount(tabId);
             if (fallback) await sendAccountToTab(tabId, fallback);
           }
         }

@@ -196,7 +196,7 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 | -------------------------- | ------------------------------------------------ | ---------------------------------- |
 | `removeAccount`            | Deletes account reference                        | Agent password blocked             |
 | `setActiveAccount`         | Changes active account + updates storage address | `EXTENSION_ONLY_MESSAGES`          |
-| `setTabAccount`            | Validates and changes one tab's selected account; updates only the legacy/new-tab default mirror | `EXTENSION_ONLY_MESSAGES`          |
+| `setTabAccount`            | Validates account selection; connected/pending dapp tabs retain an override and refresh the shared fallback, while ordinary tabs update only that fallback and clear stale overrides | `EXTENSION_ONLY_MESSAGES`          |
 | `updateAccountDisplayName` | Changes display name                             | `EXTENSION_ONLY_MESSAGES`          |
 
 ### Destructive Handlers
@@ -603,7 +603,7 @@ The `isExtensionPage()` helper verifies `sender.url` starts with `chrome-extensi
 | `networksInfo`                                         | Runtime chain RPC/hidden/custom metadata; service-worker-owned mutations |
 | `activeAccountId`                                      | Active account ID                    |
 | `autoLockTimeout`                                      | Auto-lock timeout (ms)               |
-| `tabAccounts`                                          | Per-tab account overrides            |
+| `tabAccounts`                                          | Connected/pending-dapp-only per-tab account overrides |
 | `sidePanelMode` / `sidePanelVerified` / `isArcBrowser` | UI settings                          |
 | `hidePortfolioValue`                                   | Boolean - hide/show token USD values |
 

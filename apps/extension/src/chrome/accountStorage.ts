@@ -120,27 +120,6 @@ export async function setTabAccount(
 }
 
 /**
- * Marks a tab's account as the current navigation default. This is called when
- * the browser activates a tab and when the user explicitly selects an account
- * for that tab. The global fields remain compatibility/default mirrors only.
- */
-export async function activateTabAccount(
-  tabId: number,
-  accountId?: string,
-): Promise<Account | null> {
-  if (accountId) await setTabAccount(tabId, accountId);
-  const account = await getTabAccount(tabId);
-  if (!account) return null;
-
-  await chrome.storage.sync.set({
-    [ACTIVE_ACCOUNT_ID_KEY]: account.id,
-    address: account.address,
-    displayAddress: account.displayName || account.address,
-  });
-  return account;
-}
-
-/**
  * Clears the account override for a specific tab
  */
 export async function clearTabAccount(tabId: number): Promise<void> {

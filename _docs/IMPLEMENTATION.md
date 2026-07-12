@@ -210,12 +210,16 @@ When importing a seed phrase whose derived address matches an existing private k
 
 - Users can configure one or both account types during onboarding
 - When both accounts are set up, the first account added becomes the default active account
-- Each browser tab maintains its own active account selection in `tabAccounts`
-  (similar to per-tab chain). The first account lookup for a tab snapshots the
-  current global/default account so later changes in other tabs cannot affect it.
-- Activating an existing tab restores its account and makes that account the
-  inheritance default for the next new tab. Selecting an account changes only
-  the active tab, while updating the global compatibility/default mirror.
+- Only tabs whose current origin has an approved dapp connection (or an active
+  connection prompt) maintain an account selection in `tabAccounts`. Their
+  first scoped lookup snapshots the current global account so later global
+  changes cannot redirect that dapp.
+- Tabs without a connected dapp always resolve and update the shared global
+  account. Activating or navigating an ordinary tab clears any stale per-tab
+  override; rejecting/disconnecting a dapp does the same. Activating a connected
+  dapp tab promotes its scoped account to the shared global fallback, so the
+  next ordinary tab follows the most recently active connected account without
+  retaining an account of its own.
 - The popup/sidepanel resolves the account for the currently active browser tab,
   including when rendered from a detached extension popup.
 - Provider initialization, `eth_accounts`, connection approval, transaction and
@@ -230,11 +234,14 @@ The extension maintains address consistency between storage and the active accou
 
 1. **On Onboarding**: When both account types are configured, the first account's address (PK account) is saved to `chrome.storage.sync.address` since it becomes the active account.
 
-2. **On Account Switch**: The extension calls `setTabAccount` for the active
-   browser tab. The background worker validates and stores that mapping, updates
-   `activeAccountId` / `address` / `displayAddress` only as the future-tab and
-   legacy compatibility mirror, and the UI sends `setAccount` only to the
-   selected tab. Global address writes are never broadcast to every tab.
+2. **On Account Switch**: The extension asks the background worker to select
+   the account for the active browser tab. `tabAccountResolver.ts` stores a
+   `tabAccounts` override only when that tab has a connected/pending dapp;
+   otherwise it clears any stale override and updates the shared
+   `activeAccountId` / `address` / `displayAddress`. A connected-tab selection
+   also refreshes those global fallback fields while preserving every other
+   connected tab's override. The UI sends `setAccount` only to the selected tab.
+   Global address writes are never broadcast to every tab.
 
 3. **On Bankr API Key & Address Change**: The Account Settings form calls
    `saveBankrApiKeyAndAddress`, which saves the new API key and updates the
@@ -547,6 +554,8 @@ src/
 │   ├── types.ts             # Account and vault type definitions
 │   ├── localSigner.ts       # Transaction and message signing with viem
 │   ├── accountStorage.ts    # Account CRUD operations (includes seed groups, PK→seed conversion)
+│   ├── dappAccountScope.ts  # Approved/pending dapp tab scope check
+│   ├── tabAccountResolver.ts # Connected-dapp-only per-tab account scope
 │   ├── storageLock.ts       # Per-key serializer for chrome.storage read-modify-write helpers
 │   ├── networkStorage.ts    # Service-worker-owned networksInfo mutations + active-chain fallback
 │   ├── walletResetStorage.ts # Source of truth for reset-owned storage keys and transient prefixes

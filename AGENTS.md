@@ -185,6 +185,8 @@ apps/extension/src/
 │   ├── erc7715PermissionLock.ts     # MetaMask-style in-process request lock
 │   ├── pendingErc7715PermissionStorage.ts # Pending ERC-7715 prompts and grants
 │   ├── localAccountKeyResolver.ts # Session-restoring local signer key lookup
+│   ├── dappAccountScope.ts # Approved/pending dapp tab scope check
+│   ├── tabAccountResolver.ts # Connected-dapp-only per-tab account scope
 │   ├── walletConnectHandlers.ts # WalletConnect init, sessions, result bridge
 │   ├── walletConnectRequestHandlers.ts # WalletConnect request router
 │   ├── walletConnectBatchRequestHandlers.ts # WalletConnect ERC-5792 adapters
