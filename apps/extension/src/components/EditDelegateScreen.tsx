@@ -30,7 +30,10 @@ import {
 } from "@chakra-ui/icons";
 
 import { CopyButton } from "@/components/CopyButton";
+import AccountSettingsIdentity from "@/components/AccountSettingsIdentity";
+import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
+import type { Account } from "@/chrome/types";
 import {
   AppHeader,
   AppScreen,
@@ -48,7 +51,9 @@ import {
 type Choice = "default" | "custom";
 
 interface EditDelegateScreenProps {
-  accountAddress: string;
+  account: Account;
+  resolvedName: string | null;
+  resolvedAvatar: string | null;
   chainName: string;
   chainIcon?: string;
   explorer?: string;
@@ -115,7 +120,9 @@ function AddressActions({
 }
 
 export function EditDelegateScreen({
-  accountAddress,
+  account,
+  resolvedName,
+  resolvedAvatar,
   chainName,
   chainIcon,
   explorer,
@@ -149,6 +156,9 @@ export function EditDelegateScreen({
   const customExplorerUrl = explorer
     ? `${explorer.replace(/\/+$/, "")}/address/${customAddress.trim()}`
     : null;
+  const accountExplorerUrl = explorer
+    ? `${explorer.replace(/\/+$/, "")}/address/${account.address}`
+    : `https://etherscan.io/address/${account.address}`;
 
   useEffect(() => {
     returnFocusRef.current = document.activeElement as HTMLElement | null;
@@ -177,26 +187,26 @@ export function EditDelegateScreen({
         />
 
         <ScreenBody pt={4} pb={6}>
-          <VStack spacing={6} align="stretch">
+          <VStack spacing={5} align="stretch">
             <ScreenSection
-              title="Delegation status"
-              description={`Account and onchain delegate on ${chainName}.`}
+              title="EIP-7702 status"
               headingProps={{ fontSize: "lg" }}
             >
-              <ListSurface>
-                <ListItem density="compact">
-                  <ListItemContent>
-                    <ListItemTitle fontSize="sm">Account</ListItemTitle>
-                    <ListItemDescription fontFamily="mono" fontSize="xs" noOfLines={1}>
-                      {accountAddress}
-                    </ListItemDescription>
-                  </ListItemContent>
-                  <AddressActions address={accountAddress} explorer={explorer} label="account" />
-                </ListItem>
+              <VStack spacing={3} align="stretch">
+                <AccountSettingsIdentity
+                  account={account}
+                  resolvedName={resolvedName}
+                  resolvedAvatar={resolvedAvatar}
+                  explorerUrl={accountExplorerUrl}
+                />
+                <Text color="fg.secondary" fontSize="sm" lineHeight="1.45">
+                  Current delegation on {chainName}.
+                </Text>
+                <ListSurface>
                 <ListItem density="compact">
                   <ListItemContent>
                     <HStack spacing={2} minW={0}>
-                      <ListItemTitle fontSize="sm">Current delegate</ListItemTitle>
+                      <ListItemTitle fontSize="sm">Delegate</ListItemTitle>
                       {currentDelegateLabel && (
                         <Badge
                           bg="status.warning.tint"
@@ -214,27 +224,36 @@ export function EditDelegateScreen({
                         </Badge>
                       )}
                     </HStack>
-                    <ListItemDescription
-                      fontFamily={currentDelegate ? "mono" : "inherit"}
-                      fontSize="xs"
-                      noOfLines={1}
-                    >
-                      {currentDelegate ?? "Not delegated"}
-                    </ListItemDescription>
+                    {currentDelegate ? (
+                      <HStack color="fg.secondary" minW={0}>
+                        <MiddleTruncatedAddress address={currentDelegate} />
+                      </HStack>
+                    ) : (
+                      <ListItemDescription fontSize="xs">
+                        Not delegated
+                      </ListItemDescription>
+                    )}
                   </ListItemContent>
                   {currentDelegate && (
                     <AddressActions address={currentDelegate} explorer={explorer} label="delegate" />
                   )}
                 </ListItem>
-              </ListSurface>
+                </ListSurface>
+              </VStack>
             </ScreenSection>
 
             <ScreenSection
               title="Choose a delegate"
-              description="Changing this setting creates an onchain transaction for review."
+              description="Changes require an onchain transaction."
               headingProps={{ fontSize: "lg" }}
             >
-              <VStack spacing={4} align="stretch">
+              <Box
+                borderWidth="1px"
+                borderColor="border.default"
+                borderRadius="lg"
+                overflow="hidden"
+                bg="surface.raised"
+              >
                 {hasDefaultDelegate && (
                   <HStack
                     role="group"
@@ -242,9 +261,8 @@ export function EditDelegateScreen({
                     spacing={1}
                     p={1}
                     bg="surface.sunken"
-                    borderRadius="md"
-                    borderWidth="1px"
-                    borderColor="border.subtle"
+                    borderBottomWidth="1px"
+                    borderBottomColor="border.subtle"
                   >
                     {(["default", "custom"] as const).map((option) => (
                       <Button
@@ -263,44 +281,42 @@ export function EditDelegateScreen({
                   </HStack>
                 )}
 
-                {choice === "default" ? (
-                  <VStack spacing={3} align="stretch">
-                    <ListSurface>
-                      <ListItem>
-                        <ListItemContent>
-                          <ListItemTitle fontSize="sm">WalletChan default</ListItemTitle>
-                          <ListItemDescription>
+                <Box p={3}>
+                  {choice === "default" ? (
+                    <VStack spacing={3} align="stretch">
+                      <HStack align="center" spacing={3} minW={0}>
+                        <VStack spacing={1} align="stretch" flex={1} minW={0}>
+                          <Text fontSize="sm" fontWeight="600" color="fg.primary">
                             MetaMask EIP7702StatelessDeleGator v1.3
-                          </ListItemDescription>
-                          <ListItemDescription fontFamily="mono" fontSize="xs" noOfLines={1}>
-                            {defaultDelegate}
-                          </ListItemDescription>
-                        </ListItemContent>
+                          </Text>
+                          <HStack color="fg.secondary" minW={0}>
+                            <MiddleTruncatedAddress address={defaultDelegate} />
+                          </HStack>
+                        </VStack>
                         <AddressActions
                           address={defaultDelegate}
                           explorer={explorer}
                           label="WalletChan default delegate"
                         />
-                      </ListItem>
-                    </ListSurface>
-                    <Text fontSize="sm" color="fg.secondary" lineHeight="1.45">
-                      Delegates your account to WalletChan's verified default contract. Future
-                      atomic batches can reuse it without another setup transaction.
-                    </Text>
-                  </VStack>
-                ) : (
-                  <VStack spacing={3} align="stretch">
-                    <FormControl isInvalid={!!inlineError}>
-                      <Text
-                        as="label"
-                        display="block"
-                        htmlFor="custom-delegate-address"
-                        mb={2}
-                        fontSize="sm"
-                        fontWeight="600"
-                      >
-                        Custom contract
+                      </HStack>
+                      <Text fontSize="sm" color="fg.secondary" lineHeight="1.45">
+                        WalletChan's verified default. Future atomic batches can reuse it
+                        without another setup transaction.
                       </Text>
+                    </VStack>
+                  ) : (
+                    <VStack spacing={3} align="stretch">
+                      <FormControl isInvalid={!!inlineError}>
+                        <Text
+                          as="label"
+                          display="block"
+                          htmlFor="custom-delegate-address"
+                          mb={2}
+                          fontSize="sm"
+                          fontWeight="600"
+                        >
+                          Contract address
+                        </Text>
                       <InputGroup>
                         <Input
                           id="custom-delegate-address"
@@ -320,8 +336,7 @@ export function EditDelegateScreen({
                         )}
                       </InputGroup>
                       <FormHelperText fontSize="xs" color="fg.secondary">
-                        Must implement ERC-7821 batch execution. WalletChan checks support before
-                        preparing the transaction.
+                        Requires ERC-7821 batch execution. WalletChan verifies support first.
                       </FormHelperText>
                       {inlineError && (
                         <FormErrorMessage color="chart.negative" fontSize="xs">
@@ -334,36 +349,40 @@ export function EditDelegateScreen({
                           <Text fontSize="xs">ERC-7821 support confirmed.</Text>
                         </HStack>
                       )}
-                    </FormControl>
-                    <HStack
-                      align="flex-start"
-                      spacing={2.5}
-                      p={3}
-                      bg="status.warning.tint"
-                      borderWidth="1px"
-                      borderColor="status.warning.border"
-                      borderRadius="lg"
-                    >
-                      <WarningTwoIcon mt={0.5} boxSize={4} color="status.warning.fg" flexShrink={0} />
-                      <VStack spacing={1} align="stretch">
-                        <Text fontSize="sm" fontWeight="600" lineHeight="1.4">
-                          A custom delegate gains full control of this account.
+                      </FormControl>
+                      <HStack
+                        align="flex-start"
+                        spacing={2.5}
+                        p={3}
+                        bg="surface.sunken"
+                        borderRadius="md"
+                      >
+                        <WarningTwoIcon
+                          mt={0.5}
+                          boxSize={4}
+                          color="status.warning.fg"
+                          flexShrink={0}
+                        />
+                        <VStack spacing={1} align="stretch">
+                          <Text fontSize="sm" fontWeight="600" lineHeight="1.4">
+                            A custom delegate has full control of this account.
+                          </Text>
+                          <Text fontSize="xs" color="fg.secondary" lineHeight="1.45">
+                            Continue only if you have audited and trust the contract.
+                          </Text>
+                        </VStack>
+                      </HStack>
+                      {!hasDefaultDelegate && (
+                        <Text fontSize="sm" color="fg.secondary" lineHeight="1.45">
+                          WalletChan does not ship a default delegate for this custom EVM chain.
+                          Atomic batching activates after you set and authorize a compatible
+                          contract here.
                         </Text>
-                        <Text fontSize="xs" color="fg.secondary" lineHeight="1.45">
-                          Only continue if you have audited the contract and trust its deployer.
-                        </Text>
-                      </VStack>
-                    </HStack>
-                    {!hasDefaultDelegate && (
-                      <Text fontSize="sm" color="fg.secondary" lineHeight="1.45">
-                        WalletChan does not ship a default delegate for this custom EVM chain.
-                        Atomic batching activates after you set and authorize a compatible
-                        contract here.
-                      </Text>
-                    )}
-                  </VStack>
-                )}
-              </VStack>
+                      )}
+                    </VStack>
+                  )}
+                </Box>
+              </Box>
             </ScreenSection>
 
             <ScreenSection
@@ -407,7 +426,7 @@ export function EditDelegateScreen({
               )}
               <Button
                 w="full"
-                variant="primary"
+                variant="brand"
                 onClick={onSet}
                 isDisabled={setDisabled}
                 isLoading={submitting && choice === "default"}

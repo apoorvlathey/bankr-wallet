@@ -234,6 +234,9 @@
 - 2026-07-10: established Warm Midnight on the unlock screen with a mascot-led identity composition and a dedicated amber `brand` action; transactional actions remain blue.
 - 2026-07-10: replaced the unlock form's generic side label with a centered, larger “Enter password to unlock” instruction beneath the mascot while preserving the fixed-position error treatment.
 - 2026-07-12: reserved a consistent 24px gap between the unlock instruction and password field so inline errors retain clear breathing room, and applied the same reduced-motion-safe field shake and concerned mascot state to empty submissions as incorrect passwords.
+- 2026-07-12: clarified the destructive account-removal decision by removing the duplicate address label for unnamed accounts and showing a freshly loaded, tabular portfolio total alongside the account identity.
+- 2026-07-12: tightened the removal dialog identity card with measured Pretext middle truncation and a single-line portfolio summary, preventing address and label wrapping at popup widths.
+- 2026-07-12: added a distinct final-confirmation state before account deletion; the first step provides financial and backup context, while only the second step can execute removal and retains a clear cancel path.
 - 2026-07-10: connected the approved layered WalletChan mascot pilot to the
   real unlock lifecycle: sleeping while empty, attentive on typing or passkey
   verification, concerned with Manpu on invalid credentials, and a transient

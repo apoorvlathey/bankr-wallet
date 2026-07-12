@@ -12,6 +12,7 @@ import { useThemedToast } from "@/hooks/useThemedToast";
 import { getResolvedChainById } from "@/lib/chains";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { hasDefaultDelegateForChain } from "@/utils/delegationResolution";
+import type { Account } from "@/chrome/types";
 
 type Address = `0x${string}`;
 type Choice = "default" | "custom";
@@ -32,8 +33,10 @@ interface DelegationStatus {
 
 interface Props {
   isOpen: boolean;
+  account: Account;
   accountId: string;
-  accountAddress: Address;
+  resolvedName: string | null;
+  resolvedAvatar: string | null;
   chainId: number;
   currentStatus?: DelegationStatus;
   onClose: () => void;
@@ -45,8 +48,10 @@ interface Props {
  */
 export default function EditDelegateModal({
   isOpen,
+  account,
   accountId,
-  accountAddress,
+  resolvedName,
+  resolvedAvatar,
   chainId,
   currentStatus,
   onClose,
@@ -353,7 +358,9 @@ export default function EditDelegateModal({
 
   return (
     <EditDelegateScreen
-      accountAddress={accountAddress}
+      account={account}
+      resolvedName={resolvedName}
+      resolvedAvatar={resolvedAvatar}
       chainName={chainName}
       chainIcon={chainConfig?.icon}
       explorer={chainConfig?.explorer}

@@ -5,7 +5,6 @@ import {
   Collapse,
   HStack,
   IconButton,
-  Image,
   Modal,
   ModalBody,
   ModalContent,
@@ -24,7 +23,18 @@ import {
 } from "@chakra-ui/icons";
 
 import type { Erc7715PermissionGrant } from "@/chrome/pendingErc7715PermissionStorage";
+import type { Account } from "@/chrome/types";
 import DelegatedPermissionGrantCard from "@/components/DelegatedPermissionGrantCard";
+import DappSiteIcon from "@/components/DappSiteIcon";
+import {
+  EmptyState,
+  EmptyStateDescription,
+  EmptyStateHeader,
+  EmptyStateMedia,
+  EmptyStateTitle,
+  ListSurface,
+} from "@/components/ui";
+import { ShieldIcon } from "@/components/Settings/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
 import {
   groupGrantsByOrigin,
@@ -37,6 +47,7 @@ import {
   type TokenDisplayMetadata,
 } from "@/lib/tokenMetadataClient";
 import { useThemedToast } from "@/hooks/useThemedToast";
+import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { useTheme } from "@/theme";
 
 type GrantsResponse =
@@ -44,17 +55,28 @@ type GrantsResponse =
   | { success: false; error?: string }
   | undefined;
 
+function originLabel(origin: string): string {
+  try {
+    return new URL(origin).hostname || origin;
+  } catch {
+    return origin;
+  }
+}
+
 export default function DelegatedPermissionsSection({
   accountId,
+  standalone = false,
 }: {
   accountId: string;
+  standalone?: boolean;
 }) {
   const toast = useThemedToast();
   const { tokens } = useTheme();
   const { networksInfo } = useNetworks();
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(standalone);
   const [isLoading, setIsLoading] = useState(false);
   const [grants, setGrants] = useState<Erc7715PermissionGrant[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [queueingRevokeId, setQueueingRevokeId] = useState<string | null>(null);
   const [selectedGrant, setSelectedGrant] =
@@ -91,6 +113,25 @@ export default function DelegatedPermissionsSection({
   }, [isExpanded, loadGrants]);
 
   useEffect(() => {
+    const loadAccounts = () => {
+      chrome.runtime.sendMessage(
+        { type: "getAccounts" },
+        (response: Account[] | null | undefined) => {
+          if (chrome.runtime.lastError || !Array.isArray(response)) return;
+          setAccounts(response);
+        },
+      );
+    };
+    const handleMessage = (message: { type?: string }) => {
+      if (message.type === "accountsUpdated") loadAccounts();
+    };
+
+    loadAccounts();
+    chrome.runtime.onMessage.addListener(handleMessage);
+    return () => chrome.runtime.onMessage.removeListener(handleMessage);
+  }, [accountId]);
+
+  useEffect(() => {
     const requests = grants
       .map((grant) => ({
         chainId: grant.chainId,
@@ -113,6 +154,25 @@ export default function DelegatedPermissionsSection({
   }, [grants, metadata]);
 
   const groupedGrants = useMemo(() => groupGrantsByOrigin(grants), [grants]);
+  const accountsByAddress = useMemo(
+    () => new Map(accounts.map((account) => [account.address.toLowerCase(), account])),
+    [accounts],
+  );
+  const recognizedDelegateAddresses = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          grants
+            .map((grant) => grant.request.to)
+            .filter((address) => accountsByAddress.has(address.toLowerCase())),
+        ),
+      ),
+    [accountsByAddress, grants],
+  );
+  const { identities: delegateIdentities } = useEnsIdentities(
+    recognizedDelegateAddresses,
+  );
+  const activeSummary = `${grants.length} active permission${grants.length === 1 ? "" : "s"} · ${groupedGrants.length} site${groupedGrants.length === 1 ? "" : "s"}`;
 
   const handleOnchainRevoke = () => {
     if (!selectedGrant) return;
@@ -163,47 +223,42 @@ export default function DelegatedPermissionsSection({
 
   return (
     <VStack spacing={2} align="stretch">
-      <Box
-        as="button"
-        type="button"
-        onClick={() => setIsExpanded((value) => !value)}
-        textAlign="left"
-        w="full"
-        cursor="pointer"
-        _hover={{ "& > .chevron": { color: "text.primary" } }}
-      >
-        <HStack spacing={1} align="center">
-          {isExpanded ? (
-            <ChevronDownIcon
-              className="chevron"
-              boxSize="14px"
-              color="text.tertiary"
-            />
-          ) : (
-            <ChevronRightIcon
-              className="chevron"
-              boxSize="14px"
-              color="text.tertiary"
-            />
-          )}
-          <Text
-            fontSize="2xs"
-            fontWeight="700"
-            color="text.tertiary"
-            textTransform="uppercase"
-            letterSpacing="wider"
-          >
-            Delegated Permissions
-          </Text>
-        </HStack>
-      </Box>
+      {!standalone && (
+        <Box
+          as="button"
+          type="button"
+          onClick={() => setIsExpanded((value) => !value)}
+          textAlign="left"
+          w="full"
+          cursor="pointer"
+          _hover={{ "& > .chevron": { color: "text.primary" } }}
+        >
+          <HStack spacing={1} align="center">
+            {isExpanded ? (
+              <ChevronDownIcon
+                className="chevron"
+                boxSize="14px"
+                color="text.tertiary"
+              />
+            ) : (
+              <ChevronRightIcon
+                className="chevron"
+                boxSize="14px"
+                color="text.tertiary"
+              />
+            )}
+            <Text fontSize="2xs" fontWeight="600" color="text.tertiary">
+              Delegated permissions
+            </Text>
+          </HStack>
+        </Box>
+      )}
 
       <Collapse in={isExpanded} animateOpacity unmountOnExit>
-        <VStack spacing={2} align="stretch">
+        <VStack spacing={4} align="stretch">
           <HStack justify="space-between" align="center">
-            <Text fontSize="2xs" color="text.secondary" lineHeight="short">
-              Active ERC-7715 grants for this account, grouped by requesting
-              site.
+            <Text fontSize="sm" color="text.secondary" lineHeight="short">
+              {grants.length > 0 ? activeSummary : "Onchain app access"}
             </Text>
             <IconButton
               aria-label="Refresh delegated permissions"
@@ -211,63 +266,76 @@ export default function DelegatedPermissionsSection({
               size="xs"
               variant="ghost"
               color="text.secondary"
+              ml="auto"
               isLoading={isLoading}
               onClick={loadGrants}
+              _hover={{ color: "accent.highlight", bg: "surface.raisedHover" }}
             />
           </HStack>
 
           {isLoading && grants.length === 0 ? (
-            <HStack p={3} color="text.secondary">
+            <HStack minH="140px" justify="center" color="text.secondary">
               <Spinner size="sm" />
-              <Text fontSize="xs" fontWeight="700">
-                Loading permissions...
+              <Text fontSize="sm" fontWeight="600">
+                Loading permissions…
               </Text>
             </HStack>
           ) : error ? (
-            <Box
-              p={3}
+            <VStack
+              p={4}
+              align="stretch"
+              spacing={3}
               bg="status.error.bg"
               border={tokens.borders.thin}
               borderColor="status.error.border"
               borderRadius={tokens.radii.card}
             >
-              <Text fontSize="xs" fontWeight="700" color="status.error.fg">
+              <Text fontSize="sm" fontWeight="600" color="status.error.fg">
+                Permissions could not be loaded
+              </Text>
+              <Text fontSize="xs" color="text.secondary">
                 {error}
               </Text>
-            </Box>
+              <Button size="sm" variant="secondary" alignSelf="flex-start" onClick={loadGrants}>
+                Try again
+              </Button>
+            </VStack>
           ) : grants.length === 0 ? (
-            <Box
-              p={3}
-              bg="surface.raised"
-              border={tokens.borders.thin}
-              borderColor="border.subtle"
-              borderRadius={tokens.radii.card}
-            >
-              <Text fontSize="xs" color="text.secondary" fontWeight="700">
-                No active delegated permissions.
-              </Text>
-            </Box>
+            <EmptyState minH="190px">
+              <EmptyStateMedia>
+                <ShieldIcon boxSize="28px" color="accent.highlight" />
+              </EmptyStateMedia>
+              <EmptyStateHeader>
+                <EmptyStateTitle>No active permissions</EmptyStateTitle>
+                <EmptyStateDescription>
+                  Apps have no delegated access to this account.
+                </EmptyStateDescription>
+              </EmptyStateHeader>
+            </EmptyState>
           ) : (
-            <VStack spacing={3} align="stretch">
+            <VStack spacing={4} align="stretch">
               {groupedGrants.map(([origin, originGrants]) => (
-                <VStack key={origin} spacing={2} align="stretch">
-                  <HStack spacing={2} minW={0}>
-                    {originGrants[0]?.favicon ? (
-                      <Image
-                        src={originGrants[0].favicon}
-                        alt=""
-                        boxSize="18px"
-                        borderRadius="sm"
-                      />
-                    ) : null}
-                    <Text
-                      fontSize="xs"
-                      color="text.primary"
-                      fontWeight="900"
-                      noOfLines={1}
-                    >
-                      {origin}
-                    </Text>
+                <ListSurface key={origin} as="section">
+                  <HStack px={4} py={3} spacing={3} bg="surface.sunken">
+                    <DappSiteIcon
+                      src={originGrants[0]?.favicon}
+                      label={originLabel(origin)}
+                      size="36px"
+                      imageSize="24px"
+                    />
+                    <VStack spacing={0} align="start" minW={0}>
+                      <Text
+                        fontSize="sm"
+                        color="text.primary"
+                        fontWeight="700"
+                        noOfLines={1}
+                      >
+                        {originLabel(origin)}
+                      </Text>
+                      <Text fontSize="xs" color="text.tertiary">
+                        {originGrants.length} active permission{originGrants.length === 1 ? "" : "s"}
+                      </Text>
+                    </VStack>
                   </HStack>
 
                   {originGrants.map((grant) => {
@@ -279,6 +347,9 @@ export default function DelegatedPermissionsSection({
                     const tokenMetadata = tokenAddress
                       ? metadata[metadataKey(grant.chainId, tokenAddress)]
                       : null;
+                    const delegateAddress = grant.request.to.toLowerCase();
+                    const delegateAccount = accountsByAddress.get(delegateAddress);
+                    const delegateIdentity = delegateIdentities.get(delegateAddress);
 
                     return (
                       <DelegatedPermissionGrantCard
@@ -288,11 +359,15 @@ export default function DelegatedPermissionsSection({
                         explorer={chain?.explorer}
                         nativeSymbol={chain?.nativeCurrency?.symbol || "ETH"}
                         tokenMetadata={tokenMetadata}
+                        delegateAccount={delegateAccount}
+                        delegateName={delegateIdentity?.name || null}
+                        delegateAvatar={delegateIdentity?.avatar || null}
                         onRevoke={() => setSelectedGrant(grant)}
+                        hasDivider
                       />
                     );
                   })}
-                </VStack>
+                </ListSurface>
               ))}
             </VStack>
           )}
@@ -308,21 +383,17 @@ export default function DelegatedPermissionsSection({
       >
         <ModalOverlay bg="surface.overlay" />
         <ModalContent mx={4}>
-          <ModalHeader
-            color="text.primary"
-            fontSize="md"
-            textTransform="uppercase"
-          >
+          <ModalHeader color="text.primary" fontSize="md">
             <HStack>
               <WarningTwoIcon color="status.warning.fg" />
-              <Text>Revoke Permission?</Text>
+              <Text>Revoke permission?</Text>
             </HStack>
           </ModalHeader>
           <ModalBody>
             <VStack spacing={3} align="stretch">
-              <Text fontSize="sm" color="text.secondary" fontWeight="600">
-                Queue an onchain revoke for this permission. Once confirmed,
-                the delegate can no longer act with it.
+              <Text fontSize="sm" color="text.secondary">
+                This queues an onchain transaction. Once confirmed, the app can
+                no longer use this permission.
               </Text>
             </VStack>
           </ModalBody>
@@ -340,7 +411,7 @@ export default function DelegatedPermissionsSection({
               size="sm"
               onClick={handleOnchainRevoke}
               isLoading={!!queueingRevokeId}
-              loadingText="Queueing..."
+              loadingText="Queueing…"
             >
               Revoke
             </Button>

@@ -20,21 +20,18 @@ import {
   IconButton,
   Alert,
   AlertIcon,
-  Divider,
-  Image,
-  Badge,
+  Spinner,
 } from "@chakra-ui/react";
 import {
+  ChevronRightIcon,
   DeleteIcon,
   ViewIcon,
   WarningTwoIcon,
   EditIcon,
   ViewOffIcon,
   RepeatIcon,
-  ExternalLinkIcon,
   CheckIcon,
 } from "@chakra-ui/icons";
-import { blo } from "blo";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import type { Account, PasswordType, SeedGroup } from "@/chrome/types";
 import { resolveNameToAddress, isResolvableName } from "@/lib/ensUtils";
@@ -43,19 +40,18 @@ import {
   resolveAndCacheIdentity,
   getEnsIdentityCache,
 } from "@/lib/ensIdentityCache";
-import { CopyButton } from "./CopyButton";
+import AccountSettingsIdentity from "./AccountSettingsIdentity";
 import DelegatedPermissionsSection from "./DelegatedPermissionsSection";
 import SmartAccountSection from "./SmartAccountSection";
 import RevealPrivateKey from "./RevealPrivateKey";
 import RevealSeedPhrase from "./RevealSeedPhrase";
-import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
-import { truncateAddress } from "@/lib/addressUtils";
 import {
   AppHeader,
   AppScreen,
   ListItem,
   ListItemContent,
   ListItemDescription,
+  ListItemActions,
   ListItemMedia,
   ListItemTitle,
   ListSurface,
@@ -63,6 +59,10 @@ import {
   ScreenSection,
   StickyActionBar,
 } from "@/components/ui";
+import { BrainIcon, ShieldIcon } from "./Settings/icons";
+import { fetchPortfolio } from "@/chrome/portfolioApi";
+import { formatUsd } from "@/lib/currencyFormatUtils";
+import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
 
 interface AccountSettingsProps {
   account: Account | null;
@@ -79,7 +79,9 @@ export type AccountSettingsSubView =
   | "settings"
   | "changeApiKey"
   | "revealPrivateKey"
-  | "revealSeedPhrase";
+  | "revealSeedPhrase"
+  | "smartAccount"
+  | "delegatedPermissions";
 
 export interface BankrConfigDraft {
   accountId: string;
@@ -104,9 +106,14 @@ function AccountSettings({
   const toast = useThemedToast();
   const [view, setView] = useState<AccountSettingsSubView>(initialView);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<"review" | "final">("review");
   const [displayName, setDisplayName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deletePortfolio, setDeletePortfolio] = useState<{
+    status: "idle" | "loading" | "ready" | "error";
+    totalValueUsd: number | null;
+  }>({ status: "idle", totalValueUsd: null });
 
   // ENS refresh state
   const [isRefreshingEns, setIsRefreshingEns] = useState(false);
@@ -140,8 +147,8 @@ function AccountSettings({
     apiKeyDraftRef.current = apiKeyDraft;
   }, [apiKeyDraft]);
 
-  // Cached ENS identity for header avatar/name — refreshed when the screen
-  // mounts and whenever the user clicks "Refresh ENS Data".
+  // Cached onchain identity for header avatar/name — refreshed when the screen
+  // mounts and whenever the user clicks "Refresh onchain names".
   const [ensIdentity, setEnsIdentity] = useState<{
     name: string | null;
     avatar: string | null;
@@ -162,6 +169,31 @@ function AccountSettings({
       cancelled = true;
     };
   }, [account]);
+
+  useEffect(() => {
+    if (!isDeleteOpen || !account) {
+      setDeletePortfolio({ status: "idle", totalValueUsd: null });
+      return;
+    }
+
+    const controller = new AbortController();
+    setDeletePortfolio({ status: "loading", totalValueUsd: null });
+
+    void fetchPortfolio(account.address, controller.signal)
+      .then((portfolio) => {
+        if (controller.signal.aborted) return;
+        setDeletePortfolio({
+          status: "ready",
+          totalValueUsd: portfolio.totalValueUsd,
+        });
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setDeletePortfolio({ status: "error", totalValueUsd: null });
+      });
+
+    return () => controller.abort();
+  }, [account, isDeleteOpen]);
 
   // Initialize editable fields when account changes.
   useEffect(() => {
@@ -473,7 +505,7 @@ function AccountSettings({
       setEnsIdentity({ name: result.name, avatar: result.avatar });
       if (result.name) {
         toast({
-          title: "ENS data refreshed",
+          title: "Onchain names refreshed",
           description: result.name,
           status: "success",
           duration: 3000,
@@ -489,7 +521,7 @@ function AccountSettings({
       onAccountUpdated();
     } catch {
       toast({
-        title: "Failed to refresh ENS data",
+        title: "Failed to refresh onchain names",
         status: "error",
         duration: 3000,
       });
@@ -506,8 +538,19 @@ function AccountSettings({
     if (account) setView("revealSeedPhrase");
   };
 
+  const openDeleteModal = () => {
+    setDeleteStep("review");
+    setIsDeleteOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    if (isDeleting) return;
+    setIsDeleteOpen(false);
+    setDeleteStep("review");
+  };
+
   const handleDeleteAccount = async () => {
-    if (!account) return;
+    if (!account || deleteStep !== "final") return;
 
     setIsDeleting(true);
 
@@ -522,6 +565,7 @@ function AccountSettings({
             duration: 2000,
           });
           setIsDeleteOpen(false);
+          setDeleteStep("review");
           onAccountUpdated();
           onClose();
         } else {
@@ -544,6 +588,47 @@ function AccountSettings({
 
   if (view === "revealSeedPhrase") {
     return <RevealSeedPhrase account={account} onBack={() => setView("settings")} />;
+  }
+
+  if (view === "smartAccount") {
+    return (
+      <AppScreen>
+        <AppHeader title="Smart account" onBack={() => setView("settings")} />
+        <ScreenBody pt={5}>
+          <ScreenSection
+            title="Atomic transactions"
+            description="Choose the EIP-7702 smart contract this account uses for batched transactions on each network."
+          >
+            <SmartAccountSection
+              account={account}
+              accountId={account.id}
+              resolvedName={ensIdentity.name}
+              resolvedAvatar={ensIdentity.avatar}
+              standalone
+            />
+          </ScreenSection>
+        </ScreenBody>
+      </AppScreen>
+    );
+  }
+
+  if (view === "delegatedPermissions") {
+    return (
+      <AppScreen>
+        <AppHeader
+          title="Delegated permissions"
+          onBack={() => setView("settings")}
+        />
+        <ScreenBody pt={5}>
+          <ScreenSection
+            title="App permissions"
+            description="Review active access and revoke it onchain."
+          >
+            <DelegatedPermissionsSection accountId={account.id} standalone />
+          </ScreenSection>
+        </ScreenBody>
+      </AppScreen>
+    );
   }
 
   // Change API Key sub-screen (Bankr accounts)
@@ -717,19 +802,10 @@ function AccountSettings({
   const seedGroupDirty =
     !!seedGroupName.trim() &&
     seedGroupName.trim() !== originalSeedGroupName;
-  const accountTypeLabel =
-    account.type === "privateKey"
-      ? "Private Key"
-      : account.type === "seedPhrase"
-        ? `Seed · #${account.derivationIndex}`
-        : account.type === "impersonator"
-          ? "View-Only"
-          : "Bankr";
-  const headerName =
-    account.displayName || ensIdentity.name || truncateAddress(account.address);
   const canReveal =
     account.type === "privateKey" || account.type === "seedPhrase";
   const removeDisabled = totalAccounts <= 1;
+  const deleteAccountName = account.displayName?.trim() || ensIdentity.name;
 
   return (
     <>
@@ -742,62 +818,19 @@ function AccountSettings({
               borderBottom="1px solid"
               borderColor="border.subtle"
             >
-              <HStack spacing={3} align="center">
-                <AccountAvatar
-                  account={account}
-                  ensAvatar={ensIdentity.avatar}
-                />
-                <VStack spacing={1.5} align="stretch" flex={1} minW={0}>
-                  <HStack spacing={2} minW={0}>
-                    <Text
-                      fontSize="lg"
-                      fontWeight="600"
-                      color="fg.primary"
-                      noOfLines={1}
-                      flex={1}
-                      minW={0}
-                    >
-                      {headerName}
-                    </Text>
-                    <Badge variant="subtle" fontSize="xs" flexShrink={0}>
-                      {accountTypeLabel}
-                    </Badge>
-                  </HStack>
-                  <HStack spacing={1} minW={0}>
-                    <Text
-                      fontSize="xs"
-                      fontFamily="mono"
-                      color="fg.secondary"
-                      noOfLines={1}
-                      flex={1}
-                      minW={0}
-                    >
-                      {truncateAddress(account.address)}
-                    </Text>
-                    <CopyButton value={account.address} />
-                    <IconButton
-                      aria-label="View on explorer"
-                      icon={<ExternalLinkIcon />}
-                      size="xs"
-                      variant="ghost"
-                      color="text.secondary"
-                      _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-                      onClick={() =>
-                        chrome.tabs.create({
-                          url: `https://etherscan.io/address/${account.address}`,
-                        })
-                      }
-                    />
-                  </HStack>
-                </VStack>
-              </HStack>
+              <AccountSettingsIdentity
+                account={account}
+                resolvedName={ensIdentity.name}
+                resolvedAvatar={ensIdentity.avatar}
+                explorerUrl={`https://etherscan.io/address/${account.address}`}
+              />
             </Box>
 
             <ScreenSection title="Account name" description="Shown throughout WalletChan.">
               <FormControl>
-                <FormLabel>Display name</FormLabel>
                 <HStack spacing={2}>
                   <Input
+                    aria-label="Display name"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Enter a name"
@@ -809,7 +842,7 @@ function AccountSettings({
                   />
                   {displayNameDirty && (
                     <Button
-                      variant="primary"
+                      variant="brand"
                       onClick={handleSaveDisplayName}
                       isLoading={isSaving}
                       minW="76px"
@@ -861,8 +894,12 @@ function AccountSettings({
                 <ListItem interactive onClick={handleRefreshEns} isDisabled={isRefreshingEns}>
                   <ListItemMedia><RepeatIcon boxSize={5} /></ListItemMedia>
                   <ListItemContent>
-                    <ListItemTitle>{isRefreshingEns ? "Refreshing identity…" : "Refresh ENS data"}</ListItemTitle>
-                    <ListItemDescription>Update this account’s name and avatar</ListItemDescription>
+                    <ListItemTitle>
+                      {isRefreshingEns ? "Refreshing names…" : "Refresh onchain names"}
+                    </ListItemTitle>
+                    <ListItemDescription>
+                      Fetch ENS and other onchain names and avatars
+                    </ListItemDescription>
                   </ListItemContent>
                 </ListItem>
                 {account.type === "bankr" && (
@@ -877,22 +914,45 @@ function AccountSettings({
               </ListSurface>
             </ScreenSection>
 
-        {(account.type === "privateKey" || account.type === "seedPhrase") && (
-          <>
-            <Divider borderColor="border.subtle" />
-            <SmartAccountSection
-              accountId={account.id}
-              accountAddress={account.address}
-            />
-            <Divider borderColor="border.subtle" />
-            <DelegatedPermissionsSection accountId={account.id} />
-          </>
-        )}
+            {(account.type === "privateKey" || account.type === "seedPhrase") && (
+              <ScreenSection title="Account capabilities">
+                <ListSurface>
+                  <ListItem interactive onClick={() => setView("smartAccount")}>
+                    <ListItemMedia>
+                      <BrainIcon boxSize={5} />
+                    </ListItemMedia>
+                    <ListItemContent>
+                      <ListItemTitle>Smart account</ListItemTitle>
+                      <ListItemDescription>
+                        Configure EIP-7702 delegation
+                      </ListItemDescription>
+                    </ListItemContent>
+                    <ListItemActions>
+                      <ChevronRightIcon boxSize={5} />
+                    </ListItemActions>
+                  </ListItem>
+                  <ListItem
+                    interactive
+                    onClick={() => setView("delegatedPermissions")}
+                  >
+                    <ListItemMedia>
+                      <ShieldIcon boxSize={5} />
+                    </ListItemMedia>
+                    <ListItemContent>
+                      <ListItemTitle>Delegated permissions</ListItemTitle>
+                      <ListItemDescription>
+                        Review access granted to apps
+                      </ListItemDescription>
+                    </ListItemContent>
+                    <ListItemActions>
+                      <ChevronRightIcon boxSize={5} />
+                    </ListItemActions>
+                  </ListItem>
+                </ListSurface>
+              </ScreenSection>
+            )}
 
-            <ScreenSection
-              title="Sensitive actions"
-              description="These actions require extra care and may require your master password."
-            >
+            <ScreenSection title="Sensitive actions">
               <ListSurface>
                 {canReveal && (
                   <ListItem interactive onClick={handleRevealKey}>
@@ -914,11 +974,11 @@ function AccountSettings({
                 )}
                 <ListItem
                   interactive
-                  onClick={() => setIsDeleteOpen(true)}
+                  onClick={openDeleteModal}
                   isDisabled={removeDisabled}
                 >
                   <ListItemMedia>
-                    <DeleteIcon color={removeDisabled ? "fg.muted" : "status.error.fg"} boxSize={5} />
+                    <DeleteIcon color={removeDisabled ? "fg.muted" : "chart.negative"} boxSize={5} />
                   </ListItemMedia>
                   <ListItemContent>
                     <ListItemTitle color={removeDisabled ? "fg.muted" : "status.error.fg"}>
@@ -939,7 +999,7 @@ function AccountSettings({
           not a destination screen. Keeps the user in their place on cancel. */}
       <Modal
         isOpen={isDeleteOpen}
-        onClose={() => (isDeleting ? undefined : setIsDeleteOpen(false))}
+        onClose={closeDeleteModal}
         isCentered
       >
         <ModalOverlay bg="surface.overlay" />
@@ -960,56 +1020,123 @@ function AccountSettings({
               >
                 <WarningTwoIcon color="status.error.fg" />
               </Box>
-              Remove account?
+              {deleteStep === "review"
+                ? "Remove account?"
+                : "Are you absolutely sure?"}
             </Box>
           </ModalHeader>
 
           <ModalBody>
-            <VStack spacing={3} align="stretch">
-              <Text color="text.secondary" fontSize="sm" fontWeight="500">
-                Are you sure you want to remove this account?
-              </Text>
-
-              <Box
-                p={3}
-                bg="surface.sunken"
-                border="1px solid"
-                borderColor="border.default"
-                borderRadius="md"
-              >
-                <Text fontSize="sm" fontWeight="700" color="text.primary">
-                  {account.displayName || truncateAddress(account.address)}
+            {deleteStep === "review" ? (
+              <VStack spacing={3} align="stretch">
+                <Text color="text.secondary" fontSize="sm" fontWeight="500">
+                  Are you sure you want to remove this account?
                 </Text>
-                <Text fontSize="xs" fontFamily="mono" color="text.tertiary">
-                  {account.address}
-                </Text>
-              </Box>
 
-              {(account.type === "privateKey" ||
-                account.type === "seedPhrase") && (
                 <Box
-                  w="full"
+                  p={3}
+                  bg="surface.sunken"
+                  border="1px solid"
+                  borderColor="border.default"
+                  borderRadius="md"
+                >
+                  {deleteAccountName && (
+                    <Text fontSize="sm" fontWeight="700" color="fg.primary" mb={1}>
+                      {deleteAccountName}
+                    </Text>
+                  )}
+                  <Box color="fg.secondary">
+                    <MiddleTruncatedAddress address={account.address} />
+                  </Box>
+
+                  <HStack
+                    mt={3}
+                    pt={3}
+                    borderTop="1px solid"
+                    borderColor="border.subtle"
+                    justify="space-between"
+                    align="center"
+                  >
+                    <Text fontSize="sm" color="fg.secondary" fontWeight="600">
+                      Current portfolio
+                    </Text>
+                    <Box minW="104px" textAlign="right" aria-live="polite">
+                      {deletePortfolio.status === "loading" ? (
+                        <Spinner
+                          size="sm"
+                          color="fg.secondary"
+                          aria-label="Loading portfolio balance"
+                        />
+                      ) : deletePortfolio.status === "ready" ? (
+                        <Text
+                          fontSize="lg"
+                          lineHeight="short"
+                          color="fg.primary"
+                          fontWeight="700"
+                          sx={{ fontVariantNumeric: "tabular-nums" }}
+                        >
+                          {formatUsd(deletePortfolio.totalValueUsd ?? 0)}
+                        </Text>
+                      ) : (
+                        <Text fontSize="sm" color="fg.muted" fontWeight="600">
+                          Unavailable
+                        </Text>
+                      )}
+                    </Box>
+                  </HStack>
+                </Box>
+
+                {(account.type === "privateKey" ||
+                  account.type === "seedPhrase") && (
+                  <Box
+                    w="full"
+                    p={3}
+                    bg="status.error.bg"
+                    border="1px solid"
+                    borderColor="status.error.border"
+                    borderRadius="md"
+                  >
+                    <Text color="status.error.fg" fontSize="sm" fontWeight="700">
+                      {account.type === "seedPhrase"
+                        ? "Make sure you have backed up your seed phrase before removing this account."
+                        : "Make sure you have backed up your private key before removing this account."}
+                    </Text>
+                  </Box>
+                )}
+              </VStack>
+            ) : (
+              <VStack spacing={4} align="stretch">
+                <Text color="fg.secondary" fontSize="sm" fontWeight="500">
+                  This is your final confirmation.
+                </Text>
+                <Box
                   p={3}
                   bg="status.error.bg"
                   border="1px solid"
                   borderColor="status.error.border"
                   borderRadius="md"
                 >
-                  <Text color="status.error.fg" fontSize="sm" fontWeight="700">
-                    {account.type === "seedPhrase"
-                      ? "Make sure you have backed up your seed phrase before removing this account."
-                      : "Make sure you have backed up your private key before removing this account."}
-                  </Text>
+                  {deleteAccountName && (
+                    <Text color="status.error.fg" fontSize="sm" fontWeight="700" mb={1}>
+                      {deleteAccountName}
+                    </Text>
+                  )}
+                  <Box color="status.error.fg">
+                    <MiddleTruncatedAddress address={account.address} />
+                  </Box>
                 </Box>
-              )}
-            </VStack>
+                <Text color="fg.primary" fontSize="sm" fontWeight="700">
+                  Cancel now if you do not want to remove this account.
+                </Text>
+              </VStack>
+            )}
           </ModalBody>
 
           <ModalFooter gap={2}>
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setIsDeleteOpen(false)}
+              onClick={closeDeleteModal}
               isDisabled={isDeleting}
             >
               Cancel
@@ -1017,11 +1144,15 @@ function AccountSettings({
             <Button
               variant="danger"
               size="sm"
-              onClick={handleDeleteAccount}
+              onClick={
+                deleteStep === "review"
+                  ? () => setDeleteStep("final")
+                  : handleDeleteAccount
+              }
               isLoading={isDeleting}
               loadingText="Removing…"
             >
-              Remove account
+              {deleteStep === "review" ? "Remove account" : "Yes, remove account"}
             </Button>
           </ModalFooter>
         </ModalContent>
@@ -1030,57 +1161,5 @@ function AccountSettings({
   );
 }
 
-
-// Small identity avatar for the settings header — prefers a resolved ENS
-// avatar, then the Bankr mark for Bankr accounts, then a deterministic
-// blockie for everything else (PK / seed phrase / view-only).
-function AccountAvatar({
-  account,
-  ensAvatar,
-}: {
-  account: Account;
-  ensAvatar: string | null;
-}) {
-  const size = 40;
-  const cachedEnsSrc = useCachedAvatarSrc(ensAvatar || "");
-  if (ensAvatar) {
-    return (
-      <Image
-        src={cachedEnsSrc || ensAvatar}
-        alt="ENS avatar"
-        boxSize={`${size}px`}
-        minW={`${size}px`}
-        borderRadius="full"
-        border="1px solid"
-        borderColor="border.default"
-        objectFit="cover"
-      />
-    );
-  }
-  if (account.type === "bankr") {
-    return (
-      <Image
-        src="/bankr-icon.png"
-        alt="Bankr account"
-        boxSize={`${size}px`}
-        minW={`${size}px`}
-        borderRadius="sm"
-        border="1px solid"
-        borderColor="border.default"
-      />
-    );
-  }
-  return (
-    <Image
-      src={blo(account.address as `0x${string}`)}
-      alt="Account avatar"
-      boxSize={`${size}px`}
-      minW={`${size}px`}
-      borderRadius="sm"
-      border="1px solid"
-      borderColor="border.default"
-    />
-  );
-}
 
 export default memo(AccountSettings);

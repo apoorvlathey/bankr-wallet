@@ -24,7 +24,12 @@ import {
   Collapse,
   Box,
 } from "@chakra-ui/react";
-import { ChevronDownIcon, ChevronRightIcon } from "@chakra-ui/icons";
+import {
+  CheckCircleIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  EditIcon,
+} from "@chakra-ui/icons";
 import {
   CHAIN_REGISTRY,
   EIP7702_SUPPORTED_CHAIN_IDS,
@@ -34,6 +39,15 @@ import EditDelegateModal from "@/components/EditDelegateModal";
 import ChainIcon from "@/components/ChainIcon";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChains } from "@/lib/chains";
+import type { Account } from "@/chrome/types";
+import {
+  ListItem,
+  ListItemActions,
+  ListItemContent,
+  ListItemMedia,
+  ListItemTitle,
+  ListSurface,
+} from "@/components/ui";
 
 type Address = `0x${string}`;
 
@@ -117,7 +131,7 @@ function sourceLabel(status: DelegationStatus): string | null {
     return "External (set elsewhere)";
   }
   if (status.source === "default") {
-    return "Not delegated · default on next batch";
+    return "Default on next batch";
   }
   // Custom chains without a WalletChan default: the headline address line
   // already says "Not delegated", so don't repeat it on the second line.
@@ -125,17 +139,26 @@ function sourceLabel(status: DelegationStatus): string | null {
 }
 
 interface Props {
+  account: Account;
   accountId: string;
-  accountAddress: string;
+  resolvedName: string | null;
+  resolvedAvatar: string | null;
+  standalone?: boolean;
 }
 
-export default function SmartAccountSection({ accountId, accountAddress }: Props) {
+export default function SmartAccountSection({
+  account,
+  accountId,
+  resolvedName,
+  resolvedAvatar,
+  standalone = false,
+}: Props) {
   const { networksInfo } = useNetworks();
   const [statuses, setStatuses] = useState<Record<number, DelegationStatus>>({});
   const [editingChain, setEditingChain] = useState<number | null>(null);
   // Collapsed by default — most users won't touch this. The header row stays
   // visible so they know the feature exists, and the chain list expands on tap.
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(standalone);
 
   // The 8 built-in 7702 chains are always in the table. Every non-hidden
   // chain in the user's networksInfo joins them (covers custom EVM chains).
@@ -204,128 +227,132 @@ export default function SmartAccountSection({ accountId, accountAddress }: Props
 
   return (
     <VStack spacing={2} align="stretch">
-      <Box
-        as="button"
-        type="button"
-        onClick={() => setIsExpanded((v) => !v)}
-        textAlign="left"
-        w="full"
-        cursor="pointer"
-        aria-expanded={isExpanded}
-        _hover={{ "& > .chevron": { color: "text.primary" } }}
-      >
-        <HStack spacing={1} align="center">
-          {isExpanded ? (
-            <ChevronDownIcon
-              className="chevron"
-              boxSize="14px"
-              color="text.tertiary"
-            />
-          ) : (
-            <ChevronRightIcon
-              className="chevron"
-              boxSize="14px"
-              color="text.tertiary"
-            />
-          )}
-          <Text
-            fontSize="2xs"
-            fontWeight="600"
-            color="text.tertiary"
-          >
-            Smart Account (EIP-7702)
-          </Text>
-        </HStack>
-      </Box>
+      {!standalone && (
+        <Box
+          as="button"
+          type="button"
+          onClick={() => setIsExpanded((v) => !v)}
+          textAlign="left"
+          w="full"
+          cursor="pointer"
+          aria-expanded={isExpanded}
+          _hover={{ "& > .chevron": { color: "text.primary" } }}
+        >
+          <HStack spacing={1} align="center">
+            {isExpanded ? (
+              <ChevronDownIcon
+                className="chevron"
+                boxSize="14px"
+                color="text.tertiary"
+              />
+            ) : (
+              <ChevronRightIcon
+                className="chevron"
+                boxSize="14px"
+                color="text.tertiary"
+              />
+            )}
+            <Text fontSize="2xs" fontWeight="600" color="text.tertiary">
+              Smart Account (EIP-7702)
+            </Text>
+          </HStack>
+        </Box>
+      )}
 
       <Collapse in={isExpanded} animateOpacity unmountOnExit>
         <VStack spacing={2} align="stretch">
-          <Text fontSize="2xs" color="text.secondary" lineHeight="short">
-            Delegate to a smart contract so your account can execute atomic
-            batches. Configure once per chain; subsequent batches reuse it for
-            free.
-          </Text>
+          {!standalone && (
+            <Text fontSize="2xs" color="text.secondary" lineHeight="short">
+              Delegate to a smart contract so your account can execute atomic
+              batches. Configure once per chain; subsequent batches reuse it
+              for free.
+            </Text>
+          )}
 
-          <VStack spacing={1} align="stretch">
+          <ListSurface>
             {chainIds.map((chainId) => {
-          const status = statuses[chainId];
-          // Prefer the user's configured chain name (covers custom EVM
-          // chains, which CHAIN_REGISTRY doesn't carry). Falls back to the
-          // built-in registry, then a `Chain <id>` placeholder for chains
-          // that aren't in either source (leftover customDelegate cleanup).
-          const displayName =
-            chainNameById.get(chainId) ||
-            CHAIN_REGISTRY.find((c) => c.chainId === chainId)?.name ||
-            `Chain ${chainId}`;
-          return (
-            <HStack
-              key={chainId}
-              spacing={2}
-              p={2}
-              bg="surface.raised"
-              borderWidth="1px"
-              borderColor="border.subtle"
-              borderRadius="md"
-              align="center"
-            >
-              {/* ChainIcon paints a light chip behind dark-glyph SVGs in
-                  Midnight (MegaETH, Mantle, …) so they don't vanish on dark
-                  surfaces — matches every other chain-row in the app. */}
-              <ChainIcon
-                chainId={chainId}
-                chainName={displayName}
-                size="18px"
-                withChip
-              />
-              <VStack spacing={0} align="flex-start" flex="1" minW={0}>
-                <Text fontSize="xs" fontWeight="600" color="text.primary">
-                  {displayName}
-                </Text>
-                {status?.loading || !status ? (
-                  <Spinner size="2xs" />
-                ) : (
-                  <VStack spacing={0} align="flex-start" minW={0}>
-                    <Text
-                      fontSize="2xs"
-                      fontFamily="mono"
-                      color="text.secondary"
-                      noOfLines={1}
-                    >
-                      {shortAddress(status.onchainDelegate)}
-                    </Text>
-                    {sourceLabel(status) && (
-                      <Text
-                        fontSize="2xs"
-                        color="text.tertiary"
-                        lineHeight="short"
-                      >
-                        {sourceLabel(status)}
-                      </Text>
+              const status = statuses[chainId];
+              // Prefer the user's configured chain name (covers custom EVM
+              // chains, which CHAIN_REGISTRY doesn't carry). Falls back to the
+              // built-in registry, then a `Chain <id>` placeholder for chains
+              // that aren't in either source (leftover customDelegate cleanup).
+              const displayName =
+                chainNameById.get(chainId) ||
+                CHAIN_REGISTRY.find((c) => c.chainId === chainId)?.name ||
+                `Chain ${chainId}`;
+              const statusSource = status ? sourceLabel(status) : null;
+
+              return (
+                <ListItem key={chainId}>
+                  <ListItemMedia>
+                    <ChainIcon
+                      chainId={chainId}
+                      chainName={displayName}
+                      size="24px"
+                      withChip
+                    />
+                  </ListItemMedia>
+                  <ListItemContent>
+                    <ListItemTitle>{displayName}</ListItemTitle>
+                    {status?.loading || !status ? (
+                      <Spinner size="xs" alignSelf="flex-start" />
+                    ) : (
+                      <VStack spacing={0} align="flex-start" minW={0}>
+                        <HStack spacing={1.5} minW={0}>
+                          <Text
+                            fontSize="xs"
+                            fontFamily="mono"
+                            color="fg.secondary"
+                            noOfLines={1}
+                          >
+                            {shortAddress(status.onchainDelegate)}
+                          </Text>
+                          {status.onchainDelegate && (
+                            <CheckCircleIcon
+                              boxSize={3.5}
+                              color="chart.positive"
+                              flexShrink={0}
+                              aria-label="Delegated"
+                            />
+                          )}
+                        </HStack>
+                        {statusSource && (
+                          <Text
+                            fontSize="xs"
+                            color="fg.muted"
+                            lineHeight="1.4"
+                          >
+                            {statusSource}
+                          </Text>
+                        )}
+                      </VStack>
                     )}
-                  </VStack>
-                )}
-              </VStack>
-              <Button
-                size="xs"
-                variant="secondary"
-                onClick={() => setEditingChain(chainId)}
-                isDisabled={!status || status.loading}
-                flexShrink={0}
-              >
-                Edit
-              </Button>
-            </HStack>
-          );
-        })}
-          </VStack>
+                  </ListItemContent>
+                  <ListItemActions>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      leftIcon={<EditIcon boxSize={3.5} />}
+                      onClick={() => setEditingChain(chainId)}
+                      isDisabled={!status || status.loading}
+                    >
+                      Edit
+                    </Button>
+                  </ListItemActions>
+                </ListItem>
+              );
+            })}
+          </ListSurface>
         </VStack>
       </Collapse>
 
       {editingChain !== null && (
         <EditDelegateModal
           isOpen
+          account={account}
           accountId={accountId}
-          accountAddress={accountAddress as Address}
+          resolvedName={resolvedName}
+          resolvedAvatar={resolvedAvatar}
           chainId={editingChain}
           currentStatus={statuses[editingChain]}
           onClose={() => setEditingChain(null)}

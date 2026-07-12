@@ -1,16 +1,19 @@
 import {
-  Badge,
   Box,
   HStack,
   IconButton,
   Text,
   VStack,
 } from "@chakra-ui/react";
-import { DeleteIcon, ExternalLinkIcon } from "@chakra-ui/icons";
+import { ExternalLinkIcon } from "@chakra-ui/icons";
 
 import type { Erc7715PermissionGrant } from "@/chrome/pendingErc7715PermissionStorage";
+import type { Account } from "@/chrome/types";
+import { AccountAvatar } from "@/components/AccountIdentity";
 import ChainIcon from "@/components/ChainIcon";
 import { CopyButton } from "@/components/CopyButton";
+import { TrashIcon } from "@/components/Settings/icons";
+import TokenLogo from "@/components/TokenLogo";
 import {
   ZERO_ADDRESS,
   formatDateTime,
@@ -19,27 +22,39 @@ import {
   shortAddress,
   tokenAddressFromGrant,
 } from "@/lib/erc7715PermissionDisplay";
+import {
+  isErc7715NativePermissionType,
+  isErc7715TokenApprovalRevocationPermissionType,
+} from "@/lib/erc7715PermissionEditing";
 import type { TokenDisplayMetadata } from "@/lib/tokenMetadataClient";
-import { useTheme } from "@/theme";
 
 function AddressActions({
   address,
   explorer,
   label,
+  showAddress = true,
 }: {
   address: string;
   explorer?: string;
   label: string;
+  showAddress?: boolean;
 }) {
   const explorerUrl = explorer
     ? `${explorer.replace(/\/+$/u, "")}/address/${address}`
     : null;
 
   return (
-    <HStack spacing={1}>
-      <Text fontSize="2xs" fontFamily="mono" color="text.secondary">
-        {shortAddress(address)}
-      </Text>
+    <HStack spacing={1} flexShrink={0} justify="flex-end">
+      {showAddress && (
+        <Text
+          fontSize="xs"
+          fontFamily="mono"
+          color="text.secondary"
+          whiteSpace="nowrap"
+        >
+          {shortAddress(address)}
+        </Text>
+      )}
       <CopyButton value={address} />
       {explorerUrl && (
         <IconButton
@@ -49,9 +64,82 @@ function AddressActions({
           variant="ghost"
           color="text.secondary"
           onClick={() => chrome.tabs.create({ url: explorerUrl })}
-          _hover={{ color: "accent.secondary", bg: "bg.muted" }}
+          _hover={{ color: "accent.highlight", bg: "surface.raisedHover" }}
         />
       )}
+    </HStack>
+  );
+}
+
+function DelegateIdentity({
+  address,
+  account,
+  resolvedName,
+  resolvedAvatar,
+  explorer,
+}: {
+  address: string;
+  account?: Account;
+  resolvedName: string | null;
+  resolvedAvatar: string | null;
+  explorer?: string;
+}) {
+  if (!account) {
+    return <AddressActions address={address} explorer={explorer} label="delegate" />;
+  }
+
+  const displayName = account.displayName || resolvedName || shortAddress(address);
+
+  return (
+    <HStack
+      spacing={1.5}
+      flex="1"
+      minW={0}
+      justify="flex-end"
+      align="center"
+    >
+      <Box flexShrink={0}>
+        <AccountAvatar account={account} ensAvatar={resolvedAvatar} size={24} />
+      </Box>
+      <VStack
+        flex="0 1 auto"
+        w="fit-content"
+        minW={0}
+        maxW="140px"
+        spacing={0}
+        align="flex-end"
+      >
+        <Text
+          w="full"
+          fontSize="sm"
+          color="text.primary"
+          fontWeight="600"
+          lineHeight="1.2"
+          textAlign="right"
+          whiteSpace="nowrap"
+          overflow="hidden"
+          textOverflow="ellipsis"
+        >
+          {displayName}
+        </Text>
+        <Text
+          w="full"
+          fontSize="xs"
+          fontFamily="mono"
+          color="text.secondary"
+          lineHeight="1.25"
+          textAlign="right"
+          whiteSpace="nowrap"
+        >
+          {shortAddress(address)}
+        </Text>
+      </VStack>
+      <AddressActions
+        address={address}
+        explorer={explorer}
+        label="delegate"
+        showAddress={false}
+      />
     </HStack>
   );
 }
@@ -62,104 +150,152 @@ export default function DelegatedPermissionGrantCard({
   explorer,
   nativeSymbol,
   tokenMetadata,
+  delegateAccount,
+  delegateName,
+  delegateAvatar,
   onRevoke,
+  hasDivider = false,
 }: {
   grant: Erc7715PermissionGrant;
   chainName: string;
   explorer?: string;
   nativeSymbol: string;
   tokenMetadata: TokenDisplayMetadata | null | undefined;
+  delegateAccount?: Account;
+  delegateName: string | null;
+  delegateAvatar: string | null;
   onRevoke: () => void;
+  hasDivider?: boolean;
 }) {
-  const { tokens } = useTheme();
   const tokenAddress = tokenAddressFromGrant(grant);
+  const formattedAmount = formatGrantAmount(grant, tokenMetadata, nativeSymbol);
+  const isNative = isErc7715NativePermissionType(grant.permissionType);
+  const isApprovalRevocation =
+    isErc7715TokenApprovalRevocationPermissionType(grant.permissionType);
+  const tokenSymbol = isNative ? nativeSymbol : tokenMetadata?.symbol || null;
+  const symbolOffset = tokenSymbol
+    ? formattedAmount.indexOf(` ${tokenSymbol}`)
+    : -1;
+  const showTokenLogo =
+    !isApprovalRevocation &&
+    symbolOffset > 0 &&
+    (isNative || !!tokenMetadata?.logoUrl);
 
   return (
     <Box
-      p={3}
-      bg="surface.raised"
-      border={tokens.borders.thin}
-      borderColor="border.subtle"
-      borderRadius={tokens.radii.card}
+      px={4}
+      py={3.5}
+      borderTopWidth={hasDivider ? "1px" : "0"}
+      borderTopStyle="solid"
+      borderTopColor="border.default"
     >
-      <VStack spacing={2} align="stretch">
-        <HStack justify="space-between" align="start">
-          <VStack spacing={1} align="start" minW={0}>
-            <HStack spacing={2}>
-              <Badge
-                bg="accent.secondary"
-                color="accentFg.secondary"
-                borderRadius={tokens.radii.badge}
-              >
-                {permissionTitle(grant.permissionType)}
-              </Badge>
-              <HStack spacing={1}>
-                <ChainIcon
-                  chainId={grant.chainId}
-                  chainName={chainName}
-                  size="16px"
-                  withChip
+      <VStack spacing={3} align="stretch">
+        <HStack justify="space-between" align="start" spacing={3}>
+          <VStack spacing={0.5} align="start" minW={0}>
+            <Text fontSize="sm" color="text.primary" fontWeight="700">
+              {permissionTitle(grant.permissionType)}
+            </Text>
+            {showTokenLogo ? (
+              <HStack spacing={1.5} minW={0}>
+                <Text fontSize="md" color="text.primary" fontWeight="700">
+                  {formattedAmount.slice(0, symbolOffset)}
+                </Text>
+                <TokenLogo
+                  symbol={tokenSymbol}
+                  logoUrl={tokenMetadata?.logoUrl}
+                  nativeChainId={isNative ? grant.chainId : undefined}
+                  size="20px"
                 />
-                <Text
-                  fontSize="2xs"
-                  color="text.secondary"
-                  fontWeight="800"
-                >
-                  {chainName}
+                <Text fontSize="md" color="text.primary" fontWeight="700">
+                  {formattedAmount.slice(symbolOffset + 1)}
                 </Text>
               </HStack>
-            </HStack>
-            <Text fontSize="sm" color="text.primary" fontWeight="900">
-              {formatGrantAmount(grant, tokenMetadata, nativeSymbol)}
-            </Text>
+            ) : (
+              <Text fontSize="md" color="text.primary" fontWeight="700">
+                {formattedAmount}
+              </Text>
+            )}
           </VStack>
-          <IconButton
-            aria-label="Revoke delegated permission"
-            icon={<DeleteIcon />}
-            size="xs"
-            variant="ghost"
-            color="chart.negative"
-            onClick={onRevoke}
-          />
-        </HStack>
-
-        <HStack justify="space-between" spacing={2}>
-          <Text fontSize="2xs" color="text.secondary" fontWeight="800">
-            Delegate
-          </Text>
-          <AddressActions
-            address={grant.request.to}
-            explorer={explorer}
-            label="delegate"
-          />
-        </HStack>
-
-        {tokenAddress && tokenAddress !== ZERO_ADDRESS && (
-          <HStack justify="space-between" spacing={2}>
-            <Text fontSize="2xs" color="text.secondary" fontWeight="800">
-              Token
-            </Text>
-            <AddressActions
-              address={tokenAddress}
-              explorer={explorer}
-              label="token"
+          <HStack spacing={1} flexShrink={0}>
+            <HStack spacing={1.5} color="text.secondary">
+              <ChainIcon
+                chainId={grant.chainId}
+                chainName={chainName}
+                size="20px"
+                withChip
+              />
+              <Text fontSize="xs" fontWeight="600">
+                {chainName}
+              </Text>
+            </HStack>
+            <IconButton
+              aria-label="Revoke delegated permission"
+              icon={<TrashIcon boxSize="17px" />}
+              size="sm"
+              variant="ghost"
+              color="text.tertiary"
+              onClick={onRevoke}
+              _hover={{ color: "chart.negative", bg: "status.error.bg" }}
             />
           </HStack>
-        )}
-
-        <HStack justify="space-between">
-          <Text fontSize="2xs" color="text.secondary" fontWeight="800">
-            Expires
-          </Text>
-          <Text
-            fontSize="2xs"
-            color="text.primary"
-            fontWeight="800"
-            textAlign="right"
-          >
-            {formatDateTime(grant.expiresAt)}
-          </Text>
         </HStack>
+
+        <VStack spacing={1.5} align="stretch">
+          <HStack
+            justify="space-between"
+            align="center"
+            spacing={3}
+            minW={0}
+          >
+            <Text
+              fontSize="xs"
+              color="text.tertiary"
+              fontWeight="600"
+              flexShrink={0}
+            >
+            Delegate
+            </Text>
+            <DelegateIdentity
+              address={grant.request.to}
+              account={delegateAccount}
+              resolvedName={delegateName}
+              resolvedAvatar={delegateAvatar}
+              explorer={explorer}
+            />
+          </HStack>
+
+          {tokenAddress && tokenAddress !== ZERO_ADDRESS && (
+            <HStack justify="space-between" spacing={3} minW={0}>
+              <Text
+                fontSize="xs"
+                color="text.tertiary"
+                fontWeight="600"
+                flexShrink={0}
+              >
+                Token contract
+              </Text>
+              <AddressActions
+                address={tokenAddress}
+                explorer={explorer}
+                label="token"
+              />
+            </HStack>
+          )}
+
+          <HStack justify="space-between" spacing={3}>
+            <Text fontSize="xs" color="text.tertiary" fontWeight="600">
+              Expires
+            </Text>
+            <Text
+              fontSize="xs"
+              color="text.secondary"
+              fontWeight="600"
+              textAlign="right"
+            >
+              {formatDateTime(grant.expiresAt)}
+            </Text>
+          </HStack>
+        </VStack>
       </VStack>
     </Box>
   );
