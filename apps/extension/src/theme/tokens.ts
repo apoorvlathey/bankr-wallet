@@ -119,8 +119,11 @@ export interface AccentForegrounds {
 
 export interface StatusColor {
   bg: string;
+  /** Foreground with sufficient contrast when rendered on `bg`. */
   fg: string;
   border: string;
+  /** Semantic-colored text/icon rendered on a neutral application surface. */
+  emphasis: string;
   /**
    * Softer tinted variant of `bg` — used when the standard `bg` would be too
    * saturated for a full-screen wash or row highlight. Optional. If a theme

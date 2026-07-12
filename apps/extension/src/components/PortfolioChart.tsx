@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Box, HStack, Text, Skeleton } from "@chakra-ui/react";
-import NumberFlow, { type Format } from "@number-flow/react";
 import { getSnapshots } from "@/chrome/portfolioSnapshotStorage";
 import { isDarkThemeId, useTheme } from "@/theme";
 import { formatAbsoluteTimestamp } from "@/lib/timeFormatUtils";
@@ -12,6 +11,7 @@ interface PortfolioChartProps {
   address: string;
   hideValue?: boolean;
   refreshTrigger?: number;
+  onHoverValueChange?: (value: number | null) => void;
 }
 
 interface Snapshot {
@@ -23,40 +23,13 @@ const CHART_HEIGHT = 60;
 const CHART_PADDING_TOP = 4;
 const CHART_PADDING_BOTTOM = 4;
 
-const HOVER_VALUE_FORMAT: Format = {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-};
-
-const HOVER_VALUE_TIMING = {
-  duration: 220,
-  easing: "cubic-bezier(0.23, 1, 0.32, 1)",
-};
-
-function AnimatedUsdValue({ value }: { value: number }) {
-  const isBelowDisplayThreshold = value > 0 && value < 0.01;
-
-  return (
-    <NumberFlow
-      value={isBelowDisplayThreshold ? 0.01 : value}
-      locales="en-US"
-      format={HOVER_VALUE_FORMAT}
-      prefix={isBelowDisplayThreshold ? "<$" : "$"}
-      transformTiming={HOVER_VALUE_TIMING}
-      spinTiming={HOVER_VALUE_TIMING}
-      opacityTiming={{ duration: 120, easing: "ease-out" }}
-      willChange
-      style={{ fontVariantNumeric: "tabular-nums" }}
-    />
-  );
-}
-
 const formatTimestamp = (ts: number): string => formatAbsoluteTimestamp(ts);
 
 export default function PortfolioChart({
   address,
   hideValue,
   refreshTrigger = 0,
+  onHoverValueChange,
 }: PortfolioChartProps) {
   const { themeId, tokens } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
@@ -151,6 +124,7 @@ export default function PortfolioChart({
       if (closest === previousIndex) return;
       hoverIndexRef.current = closest;
       setHoverIndex(closest);
+      onHoverValueChange?.(snapshots[closest].totalValueUsd);
       const displayedValueChanged =
         previousIndex === null ||
         snapshots[previousIndex]?.totalValueUsd !==
@@ -159,14 +133,22 @@ export default function PortfolioChart({
         void playInteractionSound("chartValueChange");
       }
     },
-    [hideValue, points, snapshots]
+    [hideValue, onHoverValueChange, points, snapshots]
   );
 
   const handleMouseLeave = useCallback(() => {
     hoverIndexRef.current = null;
     isPointerDraggingRef.current = false;
     setHoverIndex(null);
-  }, []);
+    onHoverValueChange?.(null);
+  }, [onHoverValueChange]);
+
+  useEffect(
+    () => () => {
+      onHoverValueChange?.(null);
+    },
+    [address, onHoverValueChange],
+  );
 
   if (loading) {
     return (
@@ -210,43 +192,17 @@ export default function PortfolioChart({
 
   return (
     <Box pt={0} pb={1}>
-      {/* Header: change indicator or hover value */}
+      {/* One stable row: portfolio change normally, tracked timestamp on hover. */}
       <HStack
+        position="relative"
         spacing={1.5}
         mb={1}
-        h="18px"
+        h="24px"
         px={3}
         overflow="hidden"
         whiteSpace="nowrap"
       >
-        {hoveredSnap ? (
-          <>
-            <Text
-              flexShrink={0}
-              fontSize="xs"
-              lineHeight="18px"
-              fontWeight="700"
-              color="text.primary"
-            >
-              {hideValue ? (
-                "$***"
-              ) : (
-                <AnimatedUsdValue value={hoveredSnap.totalValueUsd} />
-              )}
-            </Text>
-            <Text
-              minW={0}
-              overflow="hidden"
-              textOverflow="ellipsis"
-              fontSize="xs"
-              lineHeight="18px"
-              fontWeight="500"
-              color="text.secondary"
-            >
-              {formatTimestamp(hoveredSnap.timestamp)}
-            </Text>
-          </>
-        ) : (
+        {!hoveredSnap && (
           <>
             <Text
               fontSize="xs"
@@ -268,6 +224,38 @@ export default function PortfolioChart({
             </HStack>
           </>
         )}
+        {hoveredSnap && hoveredPoint && (
+          <Text
+            position="absolute"
+            top={0}
+            left={`${hoveredPoint.x}%`}
+            maxW="calc(100% - 16px)"
+            px={2}
+            py={1}
+            borderRadius="md"
+            bg="surface.raised"
+            borderWidth="1px"
+            borderColor="border.subtle"
+            color="fg.secondary"
+            fontSize="10px"
+            lineHeight="14px"
+            fontWeight="600"
+            whiteSpace="nowrap"
+            overflow="hidden"
+            textOverflow="ellipsis"
+            sx={{ fontVariantNumeric: "tabular-nums" }}
+            transform={
+              hoveredPoint.x < 24
+                ? "translateX(4px)"
+                : hoveredPoint.x > 76
+                  ? "translateX(calc(-100% - 4px))"
+                  : "translateX(-50%)"
+            }
+            pointerEvents="none"
+          >
+            {formatTimestamp(hoveredSnap.timestamp)}
+          </Text>
+        )}
       </HStack>
 
       {/* SVG chart */}
@@ -277,7 +265,7 @@ export default function PortfolioChart({
         h={`${CHART_HEIGHT}px`}
         borderRadius={isDarkTheme ? "md" : undefined}
         overflow="hidden"
-        bg={isDarkTheme ? "surface.sunken" : "surface.raised"}
+        bg={isDarkTheme ? "surface.sunken" : "transparent"}
         cursor="crosshair"
         onPointerDown={() => {
           isPointerDraggingRef.current = true;
@@ -323,6 +311,8 @@ export default function PortfolioChart({
             fill="none"
             stroke={lineColor}
             strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
           />
         </svg>

@@ -900,8 +900,7 @@ function BatchTransactionConfirmation({
         context={
           <VStack spacing={3} align="stretch">
         {/* Top row — navigation centered + Reject All on right, only when
-            multiple pending requests. chart.negative is the only token that's
-            RED in both themes (status.error.fg is white in Bauhaus). */}
+            multiple pending requests. */}
         {totalCount > 1 && (
           <Flex align="center" justify="center" position="relative">
             <HStack spacing={0}>
@@ -947,7 +946,7 @@ function BatchTransactionConfirmation({
               right={0}
               size="xs"
               variant="ghost"
-              color="chart.negative"
+              color="status.error.emphasis"
               fontWeight="700"
               _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
               onClick={onRejectAll}

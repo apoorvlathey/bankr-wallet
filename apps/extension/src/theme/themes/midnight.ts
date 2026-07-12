@@ -152,7 +152,7 @@ export const midnightTokens: ThemeTokens = {
       highlight: FG_INVERSE,
     },
     status: {
-      success: { bg: SUCCESS_BG, fg: SUCCESS_FG, border: SUCCESS_BORDER },
+      success: { bg: SUCCESS_BG, fg: SUCCESS_FG, border: SUCCESS_BORDER, emphasis: SUCCESS_FG },
       // `tint` is the same recessed surface used for cross-dapp / fallback rows;
       // Bauhaus uses a literal cornsilk for parity, Midnight reuses surface.sunken
       // so the muted luminous shadows still read against it.
@@ -160,10 +160,11 @@ export const midnightTokens: ThemeTokens = {
         bg: WARNING_BG,
         fg: WARNING_FG,
         border: WARNING_BORDER,
+        emphasis: WARNING_FG,
         tint: "rgba(245, 158, 11, 0.05)",
       },
-      error: { bg: ERROR_BG, fg: ERROR_FG, border: ERROR_BORDER },
-      info: { bg: INFO_BG, fg: INFO_FG, border: INFO_BORDER },
+      error: { bg: ERROR_BG, fg: ERROR_FG, border: ERROR_BORDER, emphasis: ERROR_FG },
+      info: { bg: INFO_BG, fg: INFO_FG, border: INFO_BORDER, emphasis: INFO_FG },
     },
     chart: {
       positive: SUCCESS_FG,

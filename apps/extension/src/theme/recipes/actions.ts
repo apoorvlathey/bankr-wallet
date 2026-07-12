@@ -166,12 +166,13 @@ export function buildButton(t: ThemeTokens) {
       // Destructive actions stay quiet until a dedicated confirmation surface.
       danger: {
         bg: "transparent",
-        color: "status.error.fg",
+        color: "status.error.emphasis",
         border: t.borders.thin,
         borderColor: "status.error.border",
         boxShadow: "none",
         _hover: {
           bg: "status.error.bg",
+          color: "status.error.fg",
           _disabled: {
             bg: "transparent",
             borderColor: "border.subtle",
@@ -179,7 +180,11 @@ export function buildButton(t: ThemeTokens) {
             ...disabled,
           },
         },
-        _active: pressActive,
+        _active: {
+          ...pressActive,
+          bg: "status.error.bg",
+          color: "status.error.fg",
+        },
         _disabled: {
           bg: "transparent",
           borderColor: "border.subtle",

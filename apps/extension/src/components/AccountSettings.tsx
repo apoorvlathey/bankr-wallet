@@ -978,10 +978,10 @@ function AccountSettings({
                   isDisabled={removeDisabled}
                 >
                   <ListItemMedia>
-                    <DeleteIcon color={removeDisabled ? "fg.muted" : "chart.negative"} boxSize={5} />
+                    <DeleteIcon color={removeDisabled ? "fg.muted" : "status.error.emphasis"} boxSize={5} />
                   </ListItemMedia>
                   <ListItemContent>
-                    <ListItemTitle color={removeDisabled ? "fg.muted" : "status.error.fg"}>
+                    <ListItemTitle color={removeDisabled ? "fg.muted" : "status.error.emphasis"}>
                       Remove account
                     </ListItemTitle>
                     <ListItemDescription>

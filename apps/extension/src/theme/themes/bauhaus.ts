@@ -89,13 +89,13 @@ export const bauhausTokens: ThemeTokens = {
       highlight: BLACK,
     },
     status: {
-      success: { bg: YELLOW, fg: BLACK, border: BLACK },
+      success: { bg: YELLOW, fg: BLACK, border: BLACK, emphasis: GREEN },
       // Cornsilk/cream tint — used as a soft warning wash on the cross-dapp
       // batch page and the gas-estimate fallback row, where the saturated
       // YELLOW status bg would be too aggressive.
-      warning: { bg: YELLOW, fg: BLACK, border: BLACK, tint: "#FFF8DC" },
-      error: { bg: RED, fg: WHITE, border: BLACK },
-      info: { bg: BLUE, fg: WHITE, border: BLACK },
+      warning: { bg: YELLOW, fg: BLACK, border: BLACK, emphasis: "#8A6500", tint: "#FFF8DC" },
+      error: { bg: RED, fg: WHITE, border: BLACK, emphasis: RED },
+      info: { bg: BLUE, fg: WHITE, border: BLACK, emphasis: BLUE },
     },
     chart: {
       positive: GREEN,

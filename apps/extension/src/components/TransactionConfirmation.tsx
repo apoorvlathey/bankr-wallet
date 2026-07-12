@@ -1017,10 +1017,7 @@ function TransactionConfirmation({
       context={
         <VStack spacing={3} align="stretch">
         {/* Top row — navigation centered + Reject All on right, only when
-            multiple pending requests are queued. chart.negative is the only
-            token that's RED in BOTH themes — status.error.fg is WHITE in
-            Bauhaus (it pairs with the RED bg) and would render invisibly
-            on this surface. */}
+            multiple pending requests are queued. */}
         {totalCount > 1 && (
           <Flex align="center" justify="center" position="relative">
             <HStack spacing={0}>
@@ -1066,7 +1063,7 @@ function TransactionConfirmation({
               right={0}
               size="xs"
               variant="ghost"
-              color="chart.negative"
+              color="status.error.emphasis"
               fontWeight="700"
               _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
               onClick={onRejectAll}

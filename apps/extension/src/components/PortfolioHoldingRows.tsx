@@ -372,7 +372,7 @@ export function PortfolioTokenRow({
           mt={3}
           px={3}
           justifyContent="flex-start"
-          color="chart.negative"
+          color="status.error.emphasis"
           borderTopWidth="1px"
           borderTopColor="border.subtle"
           borderRadius={0}

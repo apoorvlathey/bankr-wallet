@@ -112,7 +112,7 @@ break the moment a theme decided red wasn't the right CTA color.
 | Token | Purpose |
 |---|---|
 | `chart.positive` | Up / received (RED in Bauhaus is wrong — uses GREEN) |
-| `chart.negative` | Down / sent — **the only RED-in-both-themes token** |
+| `chart.negative` | Down / sent values in charts and financial deltas |
 | `chart.neutral` | Unchanged |
 | `chart.numeric` | Numeric value emphasis in calldata/typed-data displays |
 | `chart.series[0..4]` | Multi-line chart series |
@@ -134,9 +134,12 @@ break the moment a theme decided red wasn't the right CTA color.
    They're banned in component code as of Phase 13. Use intent tokens.
 3. **`text.*` is permitted** as a permanent compat alias for `fg.*` (610+ existing
    call sites). New code should still prefer `fg.*` — it's the intent name.
-4. **`status.error.fg` is WHITE in Bauhaus.** It pairs with the RED bg. If you
-   want "red text on a neutral surface" (Reject All buttons, error labels),
-   use `chart.negative` — the only token that's RED in both themes.
+4. **Status foreground and emphasis are separate roles.** Use
+   `status.<kind>.fg` only for text/icons placed on `status.<kind>.bg`; it is
+   WHITE for Bauhaus error because that background is RED. Use
+   `status.<kind>.emphasis` for semantic-colored text/icons on neutral surfaces
+   (for example destructive rows, error labels, or animated gain/loss hints).
+   Do not use `chart.negative` as a generic error color.
 5. **For inverted "dark CTA strip" bars** (tx confirmation count badges, chat
    header, Add Token CTA), use the shared `useStripTokens()` hook from `@/theme`.
    Don't duplicate dark-theme ternaries inline.

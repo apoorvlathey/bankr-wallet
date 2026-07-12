@@ -40,6 +40,7 @@ import {
   ListItemTitle,
 } from "@/components/ui";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
+import NumberFlow, { type Format } from "@number-flow/react";
 
 interface HoldingsState {
   totalValueUsd: number;
@@ -88,6 +89,16 @@ const PortfolioMenuIcon = (props: IconProps) => (
 /** Delay before refreshing balances after onchain tx confirmation (ms) */
 const POST_CONFIRM_REFRESH_DELAY = 3000;
 
+const PORTFOLIO_VALUE_FORMAT: Format = {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+};
+
+const PORTFOLIO_VALUE_TIMING = {
+  duration: 220,
+  easing: "cubic-bezier(0.23, 1, 0.32, 1)",
+};
+
 export default function PortfolioTabs({ address, connectedDappChainId = null, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, quickActions, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
   // On (re)mount, default to whichever tab was most recently requested by the parent.
   // activityTabTrigger increments after a tx is initiated; holdingsTabTrigger
@@ -97,6 +108,12 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, ac
   const holdingsStateRef = useRef<HoldingsState | null>(null);
   holdingsStateRef.current = holdingsState;
   const [chartRefreshNonce, setChartRefreshNonce] = useState(0);
+  const [hoveredChartValue, setHoveredChartValue] = useState<number | null>(null);
+  const [balanceMotionDirection, setBalanceMotionDirection] = useState<
+    "up" | "down" | null
+  >(null);
+  const displayedBalanceRef = useRef<number | null>(null);
+  const balanceTintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const addTokenModal = useDisclosure();
   const portfolioActions = useDisclosure();
   const portfolioActionsButtonRef = useRef<HTMLButtonElement>(null);
@@ -233,8 +250,38 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, ac
     setChartRefreshNonce((n) => n + 1);
   }, []);
 
-  const formatUsd = (value: number): string =>
-    formatUsdShared(value, { hide: holdingsState?.hideValue });
+  const portfolioDisplayValue =
+    hoveredChartValue ?? holdingsState?.totalValueUsd ?? 0;
+  const isBelowDisplayThreshold =
+    portfolioDisplayValue > 0 && portfolioDisplayValue < 0.01;
+
+  const handleChartHoverValueChange = useCallback((value: number | null) => {
+    const nextValue = value ?? holdingsStateRef.current?.totalValueUsd ?? 0;
+    const previousValue =
+      displayedBalanceRef.current ?? holdingsStateRef.current?.totalValueUsd ?? 0;
+
+    setHoveredChartValue(value);
+    displayedBalanceRef.current = nextValue;
+
+    if (nextValue === previousValue) return;
+    setBalanceMotionDirection(nextValue > previousValue ? "up" : "down");
+    if (balanceTintTimerRef.current) {
+      clearTimeout(balanceTintTimerRef.current);
+    }
+    balanceTintTimerRef.current = setTimeout(() => {
+      balanceTintTimerRef.current = null;
+      setBalanceMotionDirection(null);
+    }, PORTFOLIO_VALUE_TIMING.duration + 80);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (balanceTintTimerRef.current) {
+        clearTimeout(balanceTintTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const portfolioActionChoices: ActionSheetChoice[] = [
     {
@@ -410,9 +457,30 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, ac
                 lineHeight="1.15"
                 fontWeight="700"
                 letterSpacing="-0.03em"
+                color={
+                  balanceMotionDirection === "up"
+                    ? "status.success.emphasis"
+                    : balanceMotionDirection === "down"
+                      ? "status.error.emphasis"
+                      : "fg.primary"
+                }
+                transition="color 160ms cubic-bezier(0.23, 1, 0.32, 1)"
                 sx={{ fontVariantNumeric: "tabular-nums" }}
               >
-                {formatUsd(holdingsState?.totalValueUsd ?? 0)}
+                {holdingsState.hideValue ? (
+                  formatUsdShared(portfolioDisplayValue, { hide: true })
+                ) : (
+                  <NumberFlow
+                    value={isBelowDisplayThreshold ? 0.01 : portfolioDisplayValue}
+                    locales="en-US"
+                    format={PORTFOLIO_VALUE_FORMAT}
+                    prefix={isBelowDisplayThreshold ? "<$" : "$"}
+                    transformTiming={PORTFOLIO_VALUE_TIMING}
+                    spinTiming={PORTFOLIO_VALUE_TIMING}
+                    opacityTiming={{ duration: 120, easing: "ease-out" }}
+                    willChange
+                  />
+                )}
               </Text>
             )}
             {holdingsState && (
@@ -432,6 +500,7 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, ac
           address={address}
           hideValue={holdingsState?.hideValue}
           refreshTrigger={refreshTrigger + chartRefreshNonce}
+          onHoverValueChange={handleChartHoverValueChange}
         />
 
         {quickActions}
