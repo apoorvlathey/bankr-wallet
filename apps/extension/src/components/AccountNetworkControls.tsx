@@ -47,6 +47,8 @@ interface AccountNetworkControlsProps {
   onChainSelect: (chainName: string) => void;
   onAddChain: () => void;
   showNetworkSelector?: boolean;
+  isAccountPickerOpen?: boolean;
+  onAccountPickerOpenChange?: (isOpen: boolean) => void;
 }
 
 function AccountNetworkControls({
@@ -61,6 +63,8 @@ function AccountNetworkControls({
   onChainSelect,
   onAddChain,
   showNetworkSelector = true,
+  isAccountPickerOpen,
+  onAccountPickerOpenChange,
 }: AccountNetworkControlsProps) {
   const [isNetworkPickerOpen, setIsNetworkPickerOpen] = useState(false);
   const [chainSearch, setChainSearch] = useState("");
@@ -155,6 +159,8 @@ function AccountNetworkControls({
             onAddAccount={onAddAccount}
             onAccountSettings={onAccountSettings}
             onShowQr={onShowQr}
+            isPickerOpen={isAccountPickerOpen}
+            onPickerOpenChange={onAccountPickerOpenChange}
           />
         )}
       </Box>

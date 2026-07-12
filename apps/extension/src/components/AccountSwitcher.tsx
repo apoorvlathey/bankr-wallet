@@ -57,6 +57,8 @@ interface AccountSwitcherProps {
   onAddAccount: () => void;
   onAccountSettings: (account: Account) => void;
   onShowQr?: () => void;
+  isPickerOpen?: boolean;
+  onPickerOpenChange?: (isOpen: boolean) => void;
 }
 
 const QrCodeIcon = () => (
@@ -79,8 +81,11 @@ function AccountSwitcher({
   onAddAccount,
   onAccountSettings,
   onShowQr,
+  isPickerOpen: controlledPickerOpen,
+  onPickerOpenChange,
 }: AccountSwitcherProps) {
-  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [uncontrolledPickerOpen, setUncontrolledPickerOpen] = useState(false);
+  const isPickerOpen = controlledPickerOpen ?? uncontrolledPickerOpen;
   const [query, setQuery] = useState("");
   const seedGroupMap = useSeedGroupMap(accounts);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -92,6 +97,16 @@ function AccountSwitcher({
     [accounts],
   );
   const { identities } = useEnsIdentities(accountAddresses);
+
+  const setPickerOpen = useCallback(
+    (isOpen: boolean) => {
+      if (controlledPickerOpen === undefined) {
+        setUncontrolledPickerOpen(isOpen);
+      }
+      onPickerOpenChange?.(isOpen);
+    },
+    [controlledPickerOpen, onPickerOpenChange],
+  );
 
   const getEnsName = useCallback(
     (account: Account) =>
@@ -126,12 +141,12 @@ function AccountSwitcher({
   }, [accounts, identities, normalizedQuery, seedGroupMap]);
 
   const closePicker = useCallback((restoreFocus = true) => {
-    setIsPickerOpen(false);
+    setPickerOpen(false);
     setQuery("");
     if (restoreFocus) {
       requestAnimationFrame(() => triggerRef.current?.focus());
     }
-  }, []);
+  }, [setPickerOpen]);
 
   useEffect(() => {
     if (!isPickerOpen) return;
@@ -201,7 +216,7 @@ function AccountSwitcher({
           borderRadius={0}
           _hover={{ bg: "surface.raisedHover" }}
           _active={{ bg: "surface.sunken" }}
-          onClick={() => setIsPickerOpen(true)}
+          onClick={() => setPickerOpen(true)}
         />
 
         {activeAccount ? (

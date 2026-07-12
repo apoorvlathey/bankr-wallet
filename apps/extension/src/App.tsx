@@ -330,6 +330,7 @@ function App() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
   const [settingsAccount, setSettingsAccount] = useState<Account | null>(null);
+  const [isAccountPickerOpen, setIsAccountPickerOpen] = useState(false);
   const [accountSettingsInitialView, setAccountSettingsInitialView] =
     useState<AccountSettingsSubView>("settings");
   const [accountSettingsApiKeyDraft, setAccountSettingsApiKeyDraft] =
@@ -2676,6 +2677,7 @@ function App() {
                 setSettingsAccount(null);
                 setAccountSettingsInitialView("settings");
                 setAccountSettingsApiKeyDraft(null);
+                setIsAccountPickerOpen(true);
                 setView("main");
               }}
               onAccountUpdated={loadAccounts}
@@ -3992,6 +3994,8 @@ function App() {
               onChainSelect={handleHomepageChainSelect}
               onAddChain={() => openSettingsAddChain()}
               showNetworkSelector={false}
+              isAccountPickerOpen={isAccountPickerOpen}
+              onAccountPickerOpenChange={setIsAccountPickerOpen}
             />
 
             {/* Portfolio balance, primary actions, assets, positions, and activity */}
