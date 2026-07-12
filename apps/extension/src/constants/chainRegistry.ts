@@ -62,6 +62,8 @@ export interface ChainEntry {
   border: string;
   text: string;
   nativeCurrency: { name: string; symbol: string; decimals: number };
+  /** Hidden until the user explicitly enables the chain in Settings. */
+  hiddenByDefault?: boolean;
   /** Whether this chain uses OP Stack (for L1 fee breakdown in gas display) */
   isOpStack: boolean;
   /**
@@ -273,6 +275,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     border: "rgba(252, 252, 3, 0.4)",
     text: "#FCFC03",
     nativeCurrency: ETH_CURRENCY,
+    hiddenByDefault: true,
     isOpStack: true,
     isBankrSupported: false,
     isSwapSupported: true,
@@ -368,6 +371,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     border: "rgba(101, 217, 206, 0.4)",
     text: "#65D9CE",
     nativeCurrency: { name: "MNT", symbol: "MNT", decimals: 18 },
+    hiddenByDefault: true,
     isOpStack: true,
     isBankrSupported: false,
     isSwapSupported: true,
@@ -431,6 +435,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     border: "rgba(223, 254, 0, 0.4)",
     text: "#DFFE00",
     nativeCurrency: ETH_CURRENCY,
+    hiddenByDefault: true,
     isOpStack: true,
     isBankrSupported: false,
     isSwapSupported: true,
@@ -527,6 +532,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     border: "rgba(235, 194, 142, 0.4)",
     text: "#EBC28E",
     nativeCurrency: ETH_CURRENCY,
+    hiddenByDefault: true,
     isOpStack: false,
     isBankrSupported: false,
     isSwapSupported: true,
@@ -546,6 +552,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     border: "rgba(53, 96, 255, 0.4)",
     text: "#3560FF",
     nativeCurrency: { name: "Sonic", symbol: "S", decimals: 18 },
+    hiddenByDefault: true,
     isOpStack: false,
     isBankrSupported: false,
     isSwapSupported: true,
@@ -665,7 +672,11 @@ export function getChainConfig(chainId: number): ChainConfig {
 
 export const DEFAULT_NETWORKS: NetworksInfo = {};
 for (const c of CHAIN_REGISTRY) {
-  DEFAULT_NETWORKS[c.name] = { chainId: c.chainId, rpcUrl: c.rpcUrl };
+  DEFAULT_NETWORKS[c.name] = {
+    chainId: c.chainId,
+    rpcUrl: c.rpcUrl,
+    hidden: c.hiddenByDefault ? true : undefined,
+  };
 }
 
 export const ALLOWED_CHAIN_IDS = new Set(CHAIN_REGISTRY.map((c) => c.chainId));

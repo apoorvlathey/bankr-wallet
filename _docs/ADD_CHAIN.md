@@ -23,6 +23,7 @@ Open `src/constants/chainRegistry.ts` and add a new object to the `CHAIN_REGISTR
   border: "rgba(R, G, B, 0.4)",    // brand color at 40% opacity
   text: "#RRGGBB",                  // brand color (solid)
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  hiddenByDefault: false,             // optional: hide until enabled in Settings
   isOpStack: false,                  // true if OP Stack L2 (enables L1 fee breakdown)
   isBankrSupported: false,           // true only if the Bankr API supports this chain
   isSwapSupported: true,             // true if 0x Swap API supports this chain (see ZEROX_SUPPORTED_CHAIN_IDS)
@@ -42,6 +43,7 @@ Open `src/constants/chainRegistry.ts` and add a new object to the `CHAIN_REGISTR
 | `icon` | yes | Path to SVG icon in `public/` |
 | `bg`, `border`, `text` | yes | UI brand colors for chain badge/selector |
 | `nativeCurrency` | yes | `{ name, symbol, decimals }` for the native token |
+| `hiddenByDefault` | no | When `true`, fresh installs and existing users without a stored entry do not query or display the chain until they enable it in Settings → Chains. An existing stored visibility choice wins over this default. |
 | `isOpStack` | yes | `true` for OP Stack L2s (shows L1 fee breakdown in gas estimation) |
 | `isBankrSupported` | yes | `true` if the Bankr API can execute transactions on this chain |
 | `isSwapSupported` | yes | `true` if the 0x Swap API supports this chain. Check `ZEROX_SUPPORTED_CHAIN_IDS` in `chainRegistry.ts` for the canonical list ([source](https://docs.0x.org/docs/introduction/supported-chains)). |

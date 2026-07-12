@@ -80,7 +80,9 @@ export function normalizeNetworksInfo(
     normalized[chain.name] = {
       chainId: chain.chainId,
       rpcUrl: stored?.rpcUrl ?? chain.rpcUrl,
-      hidden: stored?.hidden,
+      // A stored entry represents an existing user choice. Only apply the
+      // registry default when this built-in chain has never been persisted.
+      hidden: stored ? stored.hidden : chain.hiddenByDefault ? true : undefined,
     };
   }
 

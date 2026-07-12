@@ -59,14 +59,12 @@ function getRpcDisplay(rpcUrl: string): string {
 function Chain({
   chainName,
   network,
-  isActive,
   openEditChain,
   onToggleHidden,
   onDelete,
 }: {
   chainName: string;
   network: NetworksInfo[string];
-  isActive: boolean;
   openEditChain: () => void;
   onToggleHidden: () => void;
   onDelete?: () => void;
@@ -82,14 +80,16 @@ function Chain({
       </ListItemMedia>
       <ListItemContent>
         <ListItemTitle>{chainName}</ListItemTitle>
-        <ListItemDescription title={network.rpcUrl}>
-          Chain ID {network.chainId} · {rpcDisplay}
+        <ListItemDescription>Chain ID {network.chainId}</ListItemDescription>
+        <ListItemDescription title={network.rpcUrl} noOfLines={1}>
+          {rpcDisplay}
         </ListItemDescription>
-        <Box mt={1} display="flex" gap={1} flexWrap="wrap">
-          {isActive && <Badge colorScheme="blue">Active</Badge>}
-          {network.isCustom && <Badge>Custom</Badge>}
-          {network.hidden && <Badge>Hidden</Badge>}
-        </Box>
+        {(network.isCustom || network.hidden) && (
+          <Box mt={1} display="flex" gap={1} flexWrap="wrap">
+            {network.isCustom && <Badge>Custom</Badge>}
+            {network.hidden && <Badge>Hidden</Badge>}
+          </Box>
+        )}
       </ListItemContent>
       <ListItemActions>
         <IconButton
@@ -420,7 +420,7 @@ function Chains({
             />
           }
         />
-        <ScreenBody pb={6}>
+        <ScreenBody pt={4} pb={6}>
           <FormControl mb={4}>
             <FormLabel htmlFor="network-search">Search networks</FormLabel>
             <InputGroup>
@@ -444,7 +444,6 @@ function Chains({
               key={chainName}
               chainName={chainName}
               network={network}
-              isActive={activeChainName === chainName}
               openEditChain={() =>
                 openEditChain(chainName)
               }
