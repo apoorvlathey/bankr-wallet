@@ -316,9 +316,24 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
     target?.focus({ preventScroll: true });
   };
 
-  const focusEnteredHeading = () => {
-    containerRef.current
-      ?.querySelector<HTMLElement>("[data-screen-heading]")
+  const focusEnteredHeading = (enteredKey: number) => {
+    const enteredLayer = containerRef.current?.querySelector<HTMLElement>(
+      `[data-screen-layer="${enteredKey}"]`,
+    );
+    if (!enteredLayer) return;
+
+    // Some destinations intentionally focus their primary control on mount
+    // (for example, Settings focuses its search field). Preserve that focus
+    // instead of replacing it with the heading when the slide settles.
+    if (
+      document.activeElement instanceof HTMLElement &&
+      enteredLayer.contains(document.activeElement)
+    ) {
+      return;
+    }
+
+    enteredLayer
+      .querySelector<HTMLElement>("[data-screen-heading]")
       ?.focus({ preventScroll: true });
   };
 
@@ -358,7 +373,7 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
         restoreDestinationState(pendingBackRestoreRef.current);
         pendingBackRestoreRef.current = null;
       } else if (completedRole === "enter" && completedKind === "slide") {
-        focusEnteredHeading();
+        focusEnteredHeading(completedKey);
       }
     });
   };
@@ -495,6 +510,7 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
         return (
           <motion.div
             key={layer.key}
+            data-screen-layer={layer.key}
             {...inertProps}
             aria-hidden={isCovered || undefined}
             initial={initial}
