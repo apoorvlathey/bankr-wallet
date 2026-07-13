@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { isAddress } from "@ethersproject/address";
-import { hasEncryptedApiKey, saveEncryptedApiKey } from "@/chrome/crypto";
 import { isResolvableName, resolveNameToAddress } from "@/lib/ensUtils";
 import { validateAndDeriveAddress } from "@/utils/privateKeyUtils";
+import { newPasswordPolicyError } from "@/constants/securityPolicy";
 
 export type OnboardingStep =
   | "welcome"
@@ -34,6 +34,23 @@ function isArcBrowser(): boolean {
   }
 }
 
+const ONBOARDING_OWNER_SESSION_KEY = "walletchanOnboardingOwner";
+
+function getOrCreateOnboardingOwnerId(): string {
+  try {
+    const existing = sessionStorage.getItem(ONBOARDING_OWNER_SESSION_KEY);
+    if (existing) return existing;
+    const created = crypto.randomUUID();
+    sessionStorage.setItem(ONBOARDING_OWNER_SESSION_KEY, created);
+    return created;
+  } catch {
+    // A stable ID for this mounted controller is still enough when session
+    // storage is unavailable. A reload then treats the old marker as owned by
+    // an interrupted surface only after its TTL, never overwriting it.
+    return crypto.randomUUID();
+  }
+}
+
 export function useOnboardingController() {
   const [step, setStep] = useState<OnboardingStep>("welcome");
   const [isCheckingSetup, setIsCheckingSetup] = useState(true);
@@ -56,7 +73,11 @@ export function useOnboardingController() {
   const [seedGroupName, setSeedGroupName] = useState("");
   const [seedAccountDisplayName, setSeedAccountDisplayName] = useState("");
   const [errors, setErrors] = useState<OnboardingErrors>({});
+  const [setupRecoveryError, setSetupRecoveryError] = useState<string | null>(
+    null,
+  );
   const keepAlivePortRef = useRef<chrome.runtime.Port | null>(null);
+  const onboardingOwnerIdRef = useRef(getOrCreateOnboardingOwnerId());
 
   useEffect(() => {
     const checkExistingSetup = async () => {
@@ -70,8 +91,33 @@ export function useOnboardingController() {
         });
       }
 
-      if (await hasEncryptedApiKey()) setStep("success");
-      setIsCheckingSetup(false);
+      try {
+        const setupStatus = await chrome.runtime.sendMessage({
+          type: "getOnboardingInitializationStatus",
+          initializationId: onboardingOwnerIdRef.current,
+        });
+        if (setupStatus?.configured) {
+          setStep("success");
+        } else if (setupStatus?.setupInProgress) {
+          setSetupRecoveryError(
+            "Wallet setup is already in progress in another tab. Finish or close that setup before trying again.",
+          );
+        } else if (setupStatus?.recoveryRequired || setupStatus?.error) {
+          // Never overwrite unmarked data from an older extension version. It
+          // may contain the user's only encrypted key material and requires an
+          // explicit reset/recovery decision outside this setup flow.
+          setSetupRecoveryError(
+            setupStatus?.error ||
+              "Incomplete wallet data was found. Open WalletChan settings to reset only if you have safely backed up every key and recovery phrase.",
+          );
+        }
+      } catch {
+        setSetupRecoveryError(
+          "WalletChan could not verify the current wallet state. Reload the extension before continuing.",
+        );
+      } finally {
+        setIsCheckingSetup(false);
+      }
 
       if (!keepAlivePortRef.current) {
         try {
@@ -123,10 +169,8 @@ export function useOnboardingController() {
 
   const validatePassword = (): boolean => {
     const nextErrors: OnboardingErrors = {};
-    if (!password) nextErrors.password = "Password is required";
-    else if (password.length < 6) {
-      nextErrors.password = "Password must be at least 6 characters";
-    }
+    const passwordError = newPasswordPolicyError(password, "Password");
+    if (passwordError) nextErrors.password = passwordError;
     if (password !== confirmPassword) {
       nextErrors.confirmPassword = "Passwords do not match";
     }
@@ -185,8 +229,20 @@ export function useOnboardingController() {
         setStep("welcome");
         break;
       case "bankrSetup":
+        setStep("accountType");
+        break;
       case "privateKey":
+        // Do not retain imported/generated secret material after the user
+        // deliberately leaves this setup path.
+        setPrivateKey("");
+        setDerivedAddress(null);
+        setStep("accountType");
+        break;
       case "seedPhrase":
+        setCollectedMnemonic("");
+        setCollectedSeedIndices([0]);
+        setSeedGroupName("");
+        setSeedAccountDisplayName("");
         setStep("accountType");
         break;
       case "password":
@@ -199,13 +255,55 @@ export function useOnboardingController() {
 
   async function handleSubmit() {
     setIsSubmitting(true);
+    let initializationId: string | null = null;
     try {
       let finalAddress: string;
       let finalDisplayAddress: string;
+      let resolvedBankrAddress: string | null = null;
+
+      // Resolve and validate every input that does not mutate storage before
+      // opening the initialization transaction.
+      if (accountTypeChoice === "privateKey") {
+        const result = validateAndDeriveAddress(privateKey);
+        if (!result.valid || !result.address || !result.normalizedKey) {
+          throw new Error(result.error || "Invalid private key");
+        }
+      } else if (accountTypeChoice === "seedPhrase") {
+        if (!collectedMnemonic.trim()) {
+          throw new Error("Seed phrase is required");
+        }
+      } else {
+        resolvedBankrAddress = await resolveAddress(walletAddress.trim());
+        if (!resolvedBankrAddress) throw new Error("Invalid address or name");
+      }
+
+      const initialization = await chrome.runtime.sendMessage({
+        type: "beginOnboardingInitialization",
+        initializationId: onboardingOwnerIdRef.current,
+      });
+      if (!initialization?.success || !initialization.initializationId) {
+        throw new Error(
+          initialization?.error || "Failed to start wallet setup safely",
+        );
+      }
+      initializationId = initialization.initializationId;
+
+      const initializeCredential = async (credential: string) => {
+        const unlocked = await chrome.runtime.sendMessage({
+          type: "initializeOnboardingCredential",
+          initializationId,
+          credential,
+          password,
+        });
+        if (!unlocked?.success || unlocked.passwordType !== "master") {
+          throw new Error(
+            unlocked?.error || "Failed to verify the wallet password",
+          );
+        }
+      };
 
       if (accountTypeChoice === "seedPhrase") {
-        await saveEncryptedApiKey("pk-only-mode", password);
-        await chrome.runtime.sendMessage({ type: "unlockWallet", password });
+        await initializeCredential("pk-only-mode");
         const response = await new Promise<{
           success: boolean;
           error?: string;
@@ -224,31 +322,26 @@ export function useOnboardingController() {
           );
         });
         if (!response.success) {
-          setErrors({
-            password: response.error || "Failed to create seed phrase account",
-          });
-          setIsSubmitting(false);
-          return;
+          throw new Error(
+            response.error || "Failed to create seed phrase account",
+          );
         }
-        const accounts = await new Promise<any[]>((resolve) => {
-          chrome.runtime.sendMessage({ type: "getAccounts" }, resolve);
-        });
-        const account = accounts?.find((item: any) => item.type === "seedPhrase");
-        finalAddress = account?.address || accounts?.[0]?.address;
+        const account = response.account;
+        if (!account?.address) {
+          throw new Error("Seed phrase account was not committed safely");
+        }
+        finalAddress = account.address;
         finalDisplayAddress = account?.displayName || finalAddress;
       }
 
       if (accountTypeChoice === "privateKey") {
         const result = validateAndDeriveAddress(privateKey);
         if (!result.valid || !result.address || !result.normalizedKey) {
-          setErrors({ privateKey: result.error || "Invalid private key" });
-          setIsSubmitting(false);
-          return;
+          throw new Error(result.error || "Invalid private key");
         }
         finalAddress = result.address;
         finalDisplayAddress = pkDisplayName.trim() || result.address;
-        await saveEncryptedApiKey("pk-only-mode", password);
-        await chrome.runtime.sendMessage({ type: "unlockWallet", password });
+        await initializeCredential("pk-only-mode");
         const response = await new Promise<{ success: boolean; error?: string }>(
           (resolve) => {
             chrome.runtime.sendMessage(
@@ -262,33 +355,13 @@ export function useOnboardingController() {
           },
         );
         if (!response.success) {
-          setErrors({
-            privateKey: response.error || "Failed to add private key account",
-          });
-          setIsSubmitting(false);
-          return;
+          throw new Error(response.error || "Failed to add private key account");
         }
       }
 
       if (accountTypeChoice === "bankr") {
-        let resolvedAddress: string | null;
-        try {
-          resolvedAddress = await resolveAddress(walletAddress.trim());
-        } catch (error) {
-          setErrors({
-            walletAddress:
-              error instanceof Error ? error.message : "Failed to resolve name",
-          });
-          setIsSubmitting(false);
-          return;
-        }
-        if (!resolvedAddress) {
-          setErrors({ walletAddress: "Invalid address or name" });
-          setIsSubmitting(false);
-          return;
-        }
-        await saveEncryptedApiKey(apiKey.trim(), password);
-        await chrome.runtime.sendMessage({ type: "unlockWallet", password });
+        const resolvedAddress = resolvedBankrAddress!;
+        await initializeCredential(apiKey.trim());
         const displayName =
           bankrDisplayName.trim() ||
           (walletAddress.trim() !== resolvedAddress
@@ -307,11 +380,7 @@ export function useOnboardingController() {
           },
         );
         if (!response.success) {
-          setErrors({
-            walletAddress: response.error || "Failed to add Bankr account",
-          });
-          setIsSubmitting(false);
-          return;
+          throw new Error(response.error || "Failed to add Bankr account");
         }
         finalAddress = resolvedAddress;
         finalDisplayAddress = bankrDisplayName.trim() || walletAddress.trim();
@@ -322,6 +391,23 @@ export function useOnboardingController() {
         displayAddress: finalDisplayAddress!,
         chainName: "Base",
       });
+
+      const completion = await chrome.runtime.sendMessage({
+        type: "completeOnboardingInitialization",
+        initializationId,
+      });
+      if (!completion?.success) {
+        throw new Error(
+          completion?.error || "Wallet setup did not complete safely",
+        );
+      }
+      initializationId = null;
+      try {
+        sessionStorage.removeItem(ONBOARDING_OWNER_SESSION_KEY);
+      } catch {
+        // Session metadata is non-secret and best effort only.
+      }
+
       const { isArcBrowser: storedIsArc } = await chrome.storage.sync.get([
         "isArcBrowser",
       ]);
@@ -348,6 +434,14 @@ export function useOnboardingController() {
       setStep("success");
       chrome.runtime.sendMessage({ type: "onboardingComplete" });
     } catch (error) {
+      if (initializationId) {
+        await chrome.runtime
+          .sendMessage({
+            type: "rollbackOnboardingInitialization",
+            initializationId,
+          })
+          .catch(() => undefined);
+      }
       setErrors({
         password:
           error instanceof Error
@@ -368,5 +462,6 @@ export function useOnboardingController() {
     setShowPassword, isSubmitting, isResolvingAddress, setCollectedMnemonic,
     setCollectedSeedIndices, setSeedGroupName, setSeedAccountDisplayName,
     errors, setErrors, handleContinue, handleBack,
+    setupRecoveryError,
   };
 }

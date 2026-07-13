@@ -4,6 +4,8 @@ import {
   getTabAccount,
 } from "./accountStorage";
 import {
+  DAPP_CONNECTION_REQUEST_EXPIRY_MS,
+  DAPP_CONNECTION_TIMEOUT_ERROR,
   getDappPermission,
   getDappPermissions,
   getPendingDappConnectionRequests,
@@ -20,6 +22,12 @@ import {
   writeResultToStorage,
 } from "./txHandlers";
 import { tabHasDappAccountScope } from "./dappAccountScope";
+import { cancelPendingRequestsForDappOrigin } from "./pendingDappRequestLifecycle";
+import {
+  beginDappOriginRevocation,
+  finishDappOriginRevocation,
+} from "./pendingRequestLifecycle";
+import { withDappAccountBinding } from "./accountRemovalDappPrivacy";
 
 function trustedOrigin(sender: chrome.runtime.MessageSender): string | null {
   return normalizeDappOrigin(sender.origin || sender.url || sender.tab?.url);
@@ -149,12 +157,45 @@ export async function handleRequestDappConnection(
   await openExtensionPopup(sender.tab?.windowId);
 }
 
-export async function handleConfirmDappConnection(requestId: string) {
+async function confirmDappConnectionUnderBindingLock(requestId: string) {
   const pending = (await getPendingDappConnectionRequests()).find(
     (request) => request.id === requestId,
   );
   if (!pending) {
     return { success: false, error: "Connection request not found" };
+  }
+  if (
+    Date.now() - pending.timestamp >= DAPP_CONNECTION_REQUEST_EXPIRY_MS
+  ) {
+    await removePendingDappConnectionRequests(
+      (request) => request.id === pending.id,
+    );
+    await writeConnectionResult(pending, {
+      success: false,
+      error: DAPP_CONNECTION_TIMEOUT_ERROR,
+      code: -32000,
+    });
+    return { success: false, error: DAPP_CONNECTION_TIMEOUT_ERROR };
+  }
+
+  const requestTab =
+    typeof pending.tabId === "number"
+      ? await chrome.tabs.get(pending.tabId).catch(() => null)
+      : null;
+  if (
+    !requestTab ||
+    normalizeDappOrigin(requestTab.url) !== pending.origin ||
+    (pending.frameId !== undefined && pending.frameId !== 0)
+  ) {
+    await removePendingDappConnectionRequests(
+      (request) => request.id === pending.id,
+    );
+    await writeConnectionResult(pending, {
+      success: false,
+      error: "Connection request is no longer active",
+      code: 4100,
+    });
+    return { success: false, error: "Connection request is no longer active" };
   }
 
   const account = await accountForTab(pending.tabId);
@@ -187,10 +228,19 @@ export async function handleConfirmDappConnection(requestId: string) {
   return { success: true };
 }
 
+export async function handleConfirmDappConnection(requestId: string) {
+  return withDappAccountBinding(() =>
+    confirmDappConnectionUnderBindingLock(requestId),
+  );
+}
+
 export async function handleRejectDappConnection(requestId: string) {
   const removed = await removePendingDappConnectionRequests(
     (request) => request.id === requestId,
   );
+  if (removed.length === 0) {
+    return { success: false, error: "Connection request not found" };
+  }
   await Promise.all(
     removed.map((request) =>
       writeConnectionResult(request, {
@@ -214,12 +264,25 @@ export async function handleRejectDappConnection(requestId: string) {
 }
 
 export async function handleRevokeDappPermission(origin: string) {
-  const revoked = await revokeDappPermission(origin);
+  const normalizedOrigin = beginDappOriginRevocation(origin);
+  let revoked = false;
+  try {
+    revoked = normalizedOrigin
+      ? await revokeDappPermission(normalizedOrigin)
+      : false;
+    if (normalizedOrigin) {
+      // Deleting visibility alone is insufficient: confirmations already open
+      // in another surface must not remain signable under the old grant.
+      await cancelPendingRequestsForDappOrigin(normalizedOrigin);
+    }
+  } finally {
+    if (normalizedOrigin) finishDappOriginRevocation(normalizedOrigin);
+  }
   if (revoked) {
     const tabs = await chrome.tabs.query({});
     await Promise.all(
       tabs.map(async (tab) => {
-        if (!tab.id || normalizeDappOrigin(tab.url) !== normalizeDappOrigin(origin)) {
+        if (!tab.id || normalizeDappOrigin(tab.url) !== normalizedOrigin) {
           return;
         }
         await clearTabAccount(tab.id);
@@ -228,7 +291,7 @@ export async function handleRevokeDappPermission(origin: string) {
           .catch(() => {});
       }),
     );
-    broadcastPermissionsChanged(origin);
+    broadcastPermissionsChanged(normalizedOrigin || undefined);
   }
   return { success: true, revoked };
 }

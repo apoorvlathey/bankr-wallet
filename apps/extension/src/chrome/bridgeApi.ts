@@ -10,6 +10,7 @@
 
 import { WALLETCHAN_BRIDGE_API_BASE, WALLETCHAN_ICON_URL } from "@/constants/externalUrls";
 import { WCHAN_TOKEN_ADDRESS, BASE_CHAIN_ID } from "@walletchan/shared/contracts";
+import { fetchTextBounded } from "./boundedHttpResponse";
 import {
   BUNGEE_NATIVE_TOKEN,
   type BungeeChain,
@@ -22,8 +23,44 @@ import {
 
 const BRIDGE_API_BASE = WALLETCHAN_BRIDGE_API_BASE;
 const REQUEST_TIMEOUT = 15_000;
+const QUOTE_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
+const CATALOG_RESPONSE_MAX_BYTES = 8 * 1024 * 1024;
 const CHAINS_CACHE_TTL = 24 * 60 * 60 * 1000;
 const TOKENS_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+async function fetchBridgeJson<T>(
+  url: string,
+  maxBytes: number,
+): Promise<{ response: Response; data: T }> {
+  const { response, text } = await fetchTextBounded(
+    url,
+    { method: "GET" },
+    { timeoutMs: REQUEST_TIMEOUT, maxBytes },
+  );
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error("Bridge API returned invalid JSON");
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Bridge API returned an invalid response");
+  }
+  return { response, data: data as T };
+}
+
+function bridgeApiError(
+  data: { error?: unknown; reason?: unknown },
+  status: number,
+): string {
+  const remote =
+    typeof data.error === "string"
+      ? data.error
+      : typeof data.reason === "string"
+        ? data.reason
+        : `API error ${status}`;
+  return remote.slice(0, 1_000);
+}
 
 // ---------------------------------------------------------------------------
 // Quote / status
@@ -58,12 +95,11 @@ export async function fetchBridgeQuote(
   });
   if (params.slippage !== undefined) qs.set("slippage", String(params.slippage));
 
-  const res = await fetch(`${BRIDGE_API_BASE}/quote?${qs}`, {
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || data.reason || `API error ${res.status}`);
+  const { response, data } = await fetchBridgeJson<
+    BungeeQuoteResponse & { error?: string; reason?: string }
+  >(`${BRIDGE_API_BASE}/quote?${qs}`, QUOTE_RESPONSE_MAX_BYTES);
+  if (!response.ok) {
+    throw new Error(bridgeApiError(data, response.status));
   }
   return data;
 }
@@ -80,12 +116,11 @@ export async function fetchBridgeStatus(
   const qs = new URLSearchParams();
   if (params.requestHash) qs.set("requestHash", params.requestHash);
   if (params.txHash) qs.set("txHash", params.txHash);
-  const res = await fetch(`${BRIDGE_API_BASE}/status?${qs}`, {
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || data.reason || `API error ${res.status}`);
+  const { response, data } = await fetchBridgeJson<
+    BungeeStatusResponse & { error?: string; reason?: string }
+  >(`${BRIDGE_API_BASE}/status?${qs}`, QUOTE_RESPONSE_MAX_BYTES);
+  if (!response.ok) {
+    throw new Error(bridgeApiError(data, response.status));
   }
   return data;
 }
@@ -112,13 +147,13 @@ export async function getCachedBungeeChains(): Promise<BungeeChain[]> {
   if (inflightChains.p) return inflightChains.p;
   inflightChains.p = (async () => {
     try {
-      const res = await fetch(`${BRIDGE_API_BASE}/chains`, {
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT),
-      });
-      if (!res.ok) {
+      const { response, data } = await fetchBridgeJson<BungeeChainsResponse>(
+        `${BRIDGE_API_BASE}/chains`,
+        CATALOG_RESPONSE_MAX_BYTES,
+      );
+      if (!response.ok) {
         return cached?.chains ?? [];
       }
-      const data: BungeeChainsResponse = await res.json();
       const chains = data.result ?? [];
       await chrome.storage.local.set({
         [CHAINS_CACHE_KEY]: { chains, fetchedAt: Date.now() } satisfies CachedBungeeChains,
@@ -192,14 +227,13 @@ export async function getCachedBungeeTokens(
 
   const promise = (async () => {
     try {
-      const res = await fetch(
+      const { response, data } = await fetchBridgeJson<BungeeTokenListResponse>(
         `${BRIDGE_API_BASE}/tokens?chainId=${chainId}`,
-        { signal: AbortSignal.timeout(REQUEST_TIMEOUT) },
+        CATALOG_RESPONSE_MAX_BYTES,
       );
-      if (!res.ok) {
+      if (!response.ok) {
         return mergePinnedTokens(chainId, cached?.tokens ?? []);
       }
-      const data: BungeeTokenListResponse = await res.json();
       // Socket's /tokens/list is keyed by chainId string.
       const byChain = data.result ?? {};
       const tokens = byChain[String(chainId)] ?? [];

@@ -2,7 +2,6 @@ import { Box,
   Button,
   HStack,
   IconButton,
-  Image,
   Text,
   VStack,
 } from "@chakra-ui/react";
@@ -11,6 +10,7 @@ import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
 import type { AccountType } from "@/chrome/types";
 import ChainIcon from "@/components/ChainIcon";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
+import SafeImage from "@/components/SafeImage";
 import { isDarkThemeId, ThemedCard, useTheme } from "@/theme";
 import type {
   WalletConnectAddChainContext,
@@ -104,7 +104,7 @@ function DappLogo({
       flexShrink={0}
     >
       {icon ? (
-        <Image
+        <SafeImage
           src={icon}
           alt={name}
           boxSize="100%"

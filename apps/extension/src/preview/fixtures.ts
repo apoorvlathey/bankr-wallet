@@ -11,7 +11,7 @@ import type { HiddenPortfolioToken } from "@/chrome/hiddenPortfolioTokens";
 import {
   ERC7710_EMPTY_CAVEAT_ARGS,
   METAMASK_DELEGATOR_V1_3_CAVEAT_ENFORCERS,
-} from "@/chrome/erc7715PermissionCaveats";
+} from "@/chrome/erc7715/caveats";
 import { getVisibleChains, normalizeNetworksInfo } from "@/lib/chains";
 import { DEFAULT_NETWORKS } from "@/constants/networks";
 import { previewAssets } from "./previewAssets";

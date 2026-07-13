@@ -2,22 +2,23 @@
 
 import { Box, Flex, HStack, Icon as ChakraIcon, IconButton, Image, Spacer, Text, VStack } from "@chakra-ui/react";
 import { ArrowBackIcon, ChevronDownIcon, ChevronUpIcon, CopyIcon, ExternalLinkIcon, InfoOutlineIcon } from "@chakra-ui/icons";
+import { warmMockup } from "./design";
 
 const ui = {
-  bg: "#090b12",
-  raised: "#171b26",
-  raised2: "#1e2433",
-  sunken: "#10141f",
-  border: "rgba(146,158,195,0.23)",
-  borderStrong: "rgba(146,158,195,0.34)",
-  text: "#f7f7f4",
-  muted: "rgba(230,234,248,0.72)",
-  faint: "rgba(230,234,248,0.52)",
-  blue: "#5a81f3",
-  yellow: "#f5c15b",
-  green: "#61e6a6",
-  red: "#ff7d83",
-  purple: "#7d5af7",
+  bg: warmMockup.base,
+  raised: warmMockup.surface,
+  raised2: warmMockup.surfaceHover,
+  sunken: warmMockup.sunken,
+  border: warmMockup.border,
+  borderStrong: warmMockup.borderStrong,
+  text: warmMockup.text,
+  muted: warmMockup.secondary,
+  faint: warmMockup.muted,
+  blue: warmMockup.blue,
+  yellow: warmMockup.amber,
+  green: warmMockup.green,
+  red: warmMockup.red,
+  purple: warmMockup.blueSoft,
 };
 
 const preserve3d = { transformStyle: "preserve-3d" } as const;
@@ -26,7 +27,7 @@ type DepthFocus = "batching" | "signing";
 
 export function BatchTransactionPreview({ depthFocus = "batching" }: { depthFocus?: DepthFocus }) {
   return (
-    <VStack align="stretch" spacing={3} bg={ui.bg} color={ui.text} p={3.5} minH="680px" borderRadius="34px" overflow="visible" sx={preserve3d}>
+    <VStack align="stretch" spacing={3} bg={ui.bg} color={ui.text} p={3.5} minH="680px" borderRadius="22px" overflow="visible" sx={preserve3d}>
       <BatchHeader raised={depthFocus === "batching"} />
       <ClearSigningCard raised={depthFocus === "signing"} />
       <CallsList raised={depthFocus === "batching"} />
@@ -40,7 +41,7 @@ function BatchHeader({ raised }: { raised: boolean }) {
   return (
     <HStack spacing={2} align="center" sx={preserve3d}>
       <IconButton aria-label="Back" icon={<ArrowBackIcon boxSize={5} />} variant="ghost" color={ui.text} minW="30px" h="30px" borderRadius="10px" _hover={{ bg: "rgba(255,255,255,0.08)" }} />
-      <VStack flex={1} spacing={0.5} py={2} px={3} borderRadius="18px" bg={ui.blue} border="2px solid rgba(26,37,73,0.95)" boxShadow={raised ? "0 6px 0 rgba(0,0,0,0.28), 0 18px 30px rgba(0,0,0,0.22)" : "0 6px 0 rgba(0,0,0,0.24)"} transform={raised ? "translate3d(0,12px,76px)" : undefined}>
+      <VStack flex={1} spacing={0.5} py={2} px={3} borderRadius="10px" bg={ui.blue} border="1px solid" borderColor={ui.borderStrong} boxShadow={raised ? "0 14px 28px rgba(0,0,0,0.28)" : "0 8px 18px rgba(0,0,0,0.2)"} transform={raised ? "translate3d(0,12px,76px)" : undefined}>
         <Text fontSize="15px" lineHeight="1" fontWeight="900" letterSpacing="0" textTransform="uppercase">Batch Transaction</Text>
         <Text fontSize="10px" lineHeight="1" fontWeight="900" opacity={0.9} textTransform="uppercase">(2 calls)</Text>
       </VStack>
@@ -56,7 +57,7 @@ function ClearSigningCard({ raised }: { raised: boolean }) {
         <Text fontSize="11px" fontWeight="900" textTransform="uppercase" letterSpacing="0.04em" whiteSpace="nowrap">Call 2 of 2</Text>
         <Box h="1px" flex={1} bg={ui.borderStrong} />
       </HStack>
-      <Box bg={ui.raised2} border="1px solid" borderColor={ui.borderStrong} borderRadius="17px" p={3} boxShadow={raised ? "none" : "0 10px 0 rgba(0,0,0,0.17)"} transform={raised ? "translate3d(0,10px,104px)" : undefined}>
+      <Box bg={ui.raised2} border="1px solid" borderColor={ui.borderStrong} borderRadius="12px" p={3} boxShadow={raised ? "none" : "0 12px 24px rgba(0,0,0,0.2)"} transform={raised ? "translate3d(0,10px,104px)" : undefined}>
         <HStack align="center">
           <Text fontSize="18px" fontWeight="900">Swap</Text>
           <Spacer />
@@ -122,7 +123,7 @@ function AssetChangesCard({ raised }: { raised: boolean }) {
       bg={ui.raised}
       border="1px solid"
       borderColor={ui.borderStrong}
-      borderRadius="18px"
+      borderRadius="12px"
       p={3}
       boxShadow="none"
       overflow="hidden"
@@ -183,11 +184,11 @@ function FooterActions() {
           <Text fontSize="13px" fontWeight="900" textTransform="uppercase">Simulate on Tenderly</Text>
           <ExternalLinkIcon boxSize={3.5} />
         </HStack>
-        <Flex as="button" minH="42px" px={4} borderRadius="14px" bg={ui.yellow} color="#121212" align="center" justify="center" fontSize="13px" fontWeight="900" textTransform="uppercase">+ Batch</Flex>
+        <Flex as="button" minH="42px" px={4} borderRadius="10px" bg={ui.yellow} color={ui.bg} align="center" justify="center" fontSize="13px" fontWeight="700">+ Batch</Flex>
       </HStack>
       <HStack spacing={2}>
-        <Flex flex={1} minH="46px" borderRadius="14px" bg={ui.raised} border="1px solid" borderColor={ui.borderStrong} align="center" justify="center" fontSize="17px" fontWeight="900">Reject</Flex>
-        <Flex flex={1} minH="46px" borderRadius="14px" bg={ui.yellow} color="#121212" border="1px solid" borderColor={ui.borderStrong} align="center" justify="center" fontSize="17px" fontWeight="900">Confirm</Flex>
+        <Flex flex={1} minH="46px" borderRadius="10px" bg={ui.raised} border="1px solid" borderColor={ui.borderStrong} align="center" justify="center" fontSize="16px" fontWeight="600">Reject</Flex>
+        <Flex flex={1} minH="46px" borderRadius="10px" bg={ui.yellow} color={ui.bg} border="1px solid" borderColor={ui.yellow} align="center" justify="center" fontSize="16px" fontWeight="700">Confirm</Flex>
       </HStack>
     </VStack>
   );

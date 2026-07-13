@@ -53,8 +53,127 @@ import {
   removeWeb3CacheEntry,
 } from "./web3UrlCache";
 import type { ResolveKind, TabContext } from "./types";
+import { sanitizeUntrustedImageUrl } from "@/lib/remoteImagePolicy";
 
 const ERROR_PAGE = "ens-error.html";
+
+function extensionPagePath(sender: chrome.runtime.MessageSender): string | null {
+  const senderUrl = sender.url;
+  if (!senderUrl?.startsWith(chrome.runtime.getURL("/"))) return null;
+  try {
+    return new URL(senderUrl).pathname;
+  } catch {
+    return null;
+  }
+}
+
+function isExtensionPage(
+  sender: chrome.runtime.MessageSender,
+  page: string,
+): boolean {
+  return extensionPagePath(sender) === `/${page}`;
+}
+
+function isTopLevelExtensionPage(
+  sender: chrome.runtime.MessageSender,
+  page: string,
+): boolean {
+  if (sender.frameId !== 0 || !isExtensionPage(sender, page)) return false;
+
+  // A web-accessible extension page can be embedded by an arbitrary site.
+  // `frameId` is the primary boundary; checking the tab's top-level URL as
+  // well prevents a browser-specific/malformed sender from being mistaken for
+  // the visible extension page.
+  const tabUrl = sender.tab?.url;
+  if (!tabUrl) return false;
+  try {
+    return new URL(tabUrl).pathname === `/${page}` &&
+      tabUrl.startsWith(chrome.runtime.getURL("/"));
+  } catch {
+    return false;
+  }
+}
+
+function isTopLevelEnsGatewayContent(
+  sender: chrome.runtime.MessageSender,
+): boolean {
+  if (sender.frameId !== 0 || !sender.url || !sender.tab?.url) return false;
+  try {
+    const senderUrl = new URL(sender.url);
+    const tabUrl = new URL(sender.tab.url);
+    if (senderUrl.origin !== tabUrl.origin) return false;
+    if (senderUrl.protocol !== "http:" && senderUrl.protocol !== "https:") {
+      return false;
+    }
+    const host = senderUrl.hostname.toLowerCase().replace(/\.$/, "");
+    return (
+      /\.(?:ipfs|ipns)\.localhost$/.test(host) ||
+      /\.eth\.(?:limo|link)$/.test(host) ||
+      /\.gwei\.domains$/.test(host) ||
+      /\.w3eth\.io$/.test(host) ||
+      /^0x[a-f0-9]{40}\.1\.w3link\.io$/.test(host)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Authorizes each ENS-browser message at its real UI boundary. In particular,
+ * the web-accessible interstitial/error/setup pages may only exercise their
+ * privileged handler while they are the visible top-level tab, never while a
+ * hostile site embeds them as an iframe.
+ */
+export function isAuthorizedEnsBrowsingSender(
+  type: string,
+  sender: chrome.runtime.MessageSender,
+): boolean {
+  const extensionSender = extensionPagePath(sender) !== null;
+  if (!extensionSender) {
+    if (
+      type !== "ens-cache-metadata" &&
+      type !== "ens-get-tab-ctx" &&
+      type !== "ens-open-on-gateway" &&
+      type !== "ens-get-theme-tokens"
+    ) {
+      return false;
+    }
+    // These messages belong only to the top-frame banner/provider running on
+    // a recognized ENS/IPFS gateway. The global provider content script is
+    // installed on every site, so "non-extension sender" alone is not an
+    // authorization boundary.
+    return isTopLevelEnsGatewayContent(sender);
+  }
+
+  switch (type) {
+    case "ens-cache-check":
+    case "ens-resolve":
+      return isTopLevelExtensionPage(sender, "interstitial.html");
+    case "ens-open-on-gateway":
+      return isTopLevelExtensionPage(sender, ERROR_PAGE);
+    case "ens-probe-kubo":
+      return isExtensionPage(sender, "index.html");
+    case "ens-probe-kubo-api":
+      return (
+        isExtensionPage(sender, "index.html") ||
+        isTopLevelExtensionPage(sender, "setup-kubo.html")
+      );
+    case "ens-web3-list":
+      return (
+        isExtensionPage(sender, "index.html") ||
+        isTopLevelExtensionPage(sender, "browse.html")
+      );
+    case "ens-web3-evict":
+      return (
+        isExtensionPage(sender, "index.html") ||
+        isTopLevelExtensionPage(sender, "browse.html")
+      );
+    default:
+      // Metadata/tab-context/theme messages belong to content scripts, not a
+      // web-accessible extension document.
+      return false;
+  }
+}
 
 function errorPageUrl(
   ensName: string,
@@ -277,11 +396,36 @@ export function handleEnsBrowsingMessage(
 ): boolean {
   if (!msg || typeof msg !== "object") return false;
   const m = msg as Record<string, unknown>;
+  const type = typeof m.type === "string" ? m.type : "";
+  const recognizedTypes = new Set([
+    "ens-cache-metadata",
+    "ens-get-tab-ctx",
+    "ens-cache-check",
+    "ens-resolve",
+    "ens-open-on-gateway",
+    "ens-probe-kubo",
+    "ens-get-theme-tokens",
+    "ens-probe-kubo-api",
+    "ens-web3-list",
+    "ens-web3-evict",
+  ]);
+  if (!recognizedTypes.has(type)) return false;
+
+  if (!isAuthorizedEnsBrowsingSender(type, sender)) {
+    sendResponse({ ok: false, error: "Unauthorized" });
+    return true;
+  }
 
   if (m.type === "ens-cache-metadata") {
-    const name = String(m.name ?? "").toLowerCase();
-    const title = typeof m.title === "string" ? m.title : undefined;
-    const favicon = typeof m.favicon === "string" ? m.favicon : undefined;
+    const name = String(m.name ?? "").toLowerCase().slice(0, 255);
+    const title =
+      typeof m.title === "string"
+        ? m.title.trim().slice(0, 120) || undefined
+        : undefined;
+    const favicon =
+      typeof m.favicon === "string"
+        ? sanitizeUntrustedImageUrl(m.favicon) ?? undefined
+        : undefined;
     if (!/^(?:[a-z0-9-]+\.)+(?:eth|gwei)$/.test(name)) {
       sendResponse({ ok: false, error: "invalid name" });
       return true;
@@ -348,7 +492,7 @@ export function handleEnsBrowsingMessage(
   }
 
   if (m.type === "ens-cache-check") {
-    const tabId = sender.tab?.id ?? (m.tabId as number | undefined);
+    const tabId = sender.tab?.id;
     const name = String(m.name ?? "").toLowerCase();
     const path = String(m.path ?? "/");
     const search = String(m.search ?? "");
@@ -398,7 +542,7 @@ export function handleEnsBrowsingMessage(
   }
 
   if (m.type === "ens-resolve") {
-    const tabId = sender.tab?.id ?? (m.tabId as number | undefined);
+    const tabId = sender.tab?.id;
     const name = String(m.name);
     if (tabId == null) {
       sendResponse({ ok: false, error: "no tabId" });
@@ -422,7 +566,7 @@ export function handleEnsBrowsingMessage(
     // "Open on w3eth.io gateway" from the banner menu. Install per-tab ALLOW
     // rule(s) so our gateway-redirect rules don't rewrite the navigation
     // straight back to local, then navigate.
-    const tabId = sender.tab?.id ?? (m.tabId as number | undefined);
+    const tabId = sender.tab?.id;
     const url = m.url;
     if (tabId == null) {
       sendResponse({ ok: false, error: "no tabId" });

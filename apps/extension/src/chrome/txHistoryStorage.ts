@@ -162,6 +162,12 @@ export interface CompletedTransaction {
   createdAt: number;
   completedAt?: number;
   txHash?: string;
+  /**
+   * Signed bytes crossed the RPC boundary without an authoritative response.
+   * Keep polling this deterministic hash and do not classify repeated
+   * not-found reads as a definite drop until some RPC first observes it.
+   */
+  broadcastUncertain?: boolean;
   error?: string;
   jobId?: string;
   accountType?: "bankr" | "privateKey" | "seedPhrase";

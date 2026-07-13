@@ -282,7 +282,7 @@ function RevealPrivateKey({ account, onBack }: Props) {
           secondaryAction={<Button variant="secondary" onClick={onBack}>Cancel</Button>}
           primaryAction={
             <Button
-              variant="primary"
+              variant="brand"
               onClick={handleReveal}
               isLoading={isLoading}
               loadingText="Verifying…"
@@ -294,7 +294,7 @@ function RevealPrivateKey({ account, onBack }: Props) {
         />
       )}
       {revealed && (
-        <StickyActionBar primaryAction={<Button variant="primary" onClick={onBack}>Done</Button>} />
+        <StickyActionBar primaryAction={<Button variant="brand" onClick={onBack}>Done</Button>} />
       )}
     </AppScreen>
   );

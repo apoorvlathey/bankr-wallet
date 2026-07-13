@@ -1,6 +1,7 @@
-import { Box, HStack, IconButton, Image, Text } from "@chakra-ui/react";
+import { Box, HStack, IconButton, Text } from "@chakra-ui/react";
 import { CloseIcon, RepeatIcon } from "@chakra-ui/icons";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
+import SafeImage from "@/components/SafeImage";
 import {
   EmptyState,
   EmptyStateDescription,
@@ -83,11 +84,12 @@ export default function WalletConnectSessionsList({
                   overflow="hidden"
                 >
                   {session.icons[0] ? (
-                    <Image
+                    <SafeImage
                       src={session.icons[0]}
                       alt=""
                       boxSize="36px"
                       objectFit="cover"
+                      fallback={<WalletConnectLogoIcon />}
                     />
                   ) : (
                     <WalletConnectLogoIcon />

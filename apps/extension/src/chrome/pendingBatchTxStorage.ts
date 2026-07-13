@@ -4,11 +4,14 @@
  */
 
 import type { PendingBatchTxRequest, PinnedBatchTxRequest } from "./erc5792Types";
+import { bindPendingBankrCredential } from "./bankrCredentialBinding";
 import { withStorageLock } from "./storageLock";
 
 const STORAGE_KEY = "pendingBatchTxRequests";
 const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
 const TX_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
+const MAX_PENDING_BATCH_REQUESTS = 20;
+const MAX_PENDING_BATCH_REQUESTS_PER_ORIGIN = 5;
 
 export async function getPendingBatchTxRequests(): Promise<PendingBatchTxRequest[]> {
   const data = await chrome.storage.local.get(STORAGE_KEY);
@@ -18,9 +21,23 @@ export async function getPendingBatchTxRequests(): Promise<PendingBatchTxRequest
 export async function savePendingBatchTxRequest(
   request: PinnedBatchTxRequest,
 ): Promise<void> {
+  await clearExpiredBatchTxRequests();
+  const boundRequest = await bindPendingBankrCredential(request);
   await withStorageLock(STORAGE_LOCK_KEY, async () => {
     const requests = await getPendingBatchTxRequests();
-    requests.push(request);
+    if (requests.some((pending) => pending.id === request.id)) {
+      throw new Error("Batch request already exists");
+    }
+    if (requests.length >= MAX_PENDING_BATCH_REQUESTS) {
+      throw new Error("Too many pending batch requests");
+    }
+    if (
+      requests.filter((pending) => pending.origin === request.origin).length >=
+      MAX_PENDING_BATCH_REQUESTS_PER_ORIGIN
+    ) {
+      throw new Error("This site has too many pending batch requests");
+    }
+    requests.push(boundRequest);
     await chrome.storage.local.set({ [STORAGE_KEY]: requests });
   });
   const { updateBadge } = await import("./pendingTxStorage");
@@ -121,19 +138,21 @@ export async function removeCallFromPendingBatchTxRequest(
 }
 
 export async function clearExpiredBatchTxRequests(): Promise<void> {
-  let changed = false;
-  await withStorageLock(STORAGE_LOCK_KEY, async () => {
-    const requests = await getPendingBatchTxRequests();
-    const now = Date.now();
-    const valid = requests.filter((r) => now - r.timestamp < TX_EXPIRY_MS);
-
-    if (valid.length !== requests.length) {
-      await chrome.storage.local.set({ [STORAGE_KEY]: valid });
-      changed = true;
-    }
-  });
-  if (changed) {
-    const { updateBadge } = await import("./pendingTxStorage");
-    await updateBadge();
-  }
+  const expiredBefore = Date.now() - TX_EXPIRY_MS;
+  const expired = (await getPendingBatchTxRequests()).filter(
+    (request) => request.timestamp <= expiredBefore,
+  );
+  if (expired.length === 0) return;
+  const { expirePersistedPendingRequest } = await import(
+    "./pendingRequestExpiry"
+  );
+  await Promise.all(
+    expired.map((request) =>
+      expirePersistedPendingRequest(
+        "batchTransaction",
+        request.id,
+        expiredBefore,
+      ),
+    ),
+  );
 }

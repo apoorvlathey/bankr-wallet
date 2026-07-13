@@ -51,7 +51,7 @@ export function Erc7715PermissionTokenCard({
                 size="xs"
                 variant="ghost"
                 color="fg.secondary"
-                onClick={() => window.open(asset.tokenExplorerUrl!, "_blank")}
+                onClick={() => window.open(asset.tokenExplorerUrl!, "_blank", "noopener,noreferrer")}
               />
             )}
           </HStack>

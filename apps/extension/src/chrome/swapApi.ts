@@ -4,7 +4,6 @@
  */
 import {
   createPublicClient,
-  http,
   encodeFunctionData,
   erc20Abi,
   type Address,
@@ -16,6 +15,8 @@ import {
 } from "@/constants/externalUrls";
 import { getRpcUrl } from "./txHandlers";
 import { getStoredResolvedChainById } from "@/lib/chains";
+import { secureHttpTransport } from "./rpcHttpClient";
+import { fetchTextBounded } from "./boundedHttpResponse";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -29,6 +30,42 @@ export const SLIPPAGE_PRESETS = [100, 300, 500]; // 1%, 3%, 5%
 const SWAP_API_BASE = WALLETCHAN_SWAP_API_BASE;
 const RPC_TIMEOUT = 8_000;
 const TOKEN_LIST_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const SWAP_QUOTE_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
+const SWAP_CATALOG_RESPONSE_MAX_BYTES = 8 * 1024 * 1024;
+
+async function fetchSwapJson<T>(
+  url: string,
+  options: { timeoutMs: number; maxBytes: number },
+): Promise<{ response: Response; data: T }> {
+  const { response, text } = await fetchTextBounded(
+    url,
+    { method: "GET" },
+    options,
+  );
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error("Swap API returned invalid JSON");
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Swap API returned an invalid response");
+  }
+  return { response, data: data as T };
+}
+
+function swapApiError(
+  data: { error?: unknown; reason?: unknown },
+  status: number,
+): string {
+  const remote =
+    typeof data.error === "string"
+      ? data.error
+      : typeof data.reason === "string"
+        ? data.reason
+        : `API error ${status}`;
+  return remote.slice(0, 1_000);
+}
 
 // Native currency info per chain (for token info resolution)
 const NATIVE_CURRENCY_INFO: Record<
@@ -151,12 +188,13 @@ export async function fetchSwapPrice(
   if (params.slippageBps !== undefined)
     qs.set("slippageBps", params.slippageBps.toString());
 
-  const res = await fetch(`${SWAP_API_BASE}/price?${qs}`, {
-    signal: AbortSignal.timeout(15_000),
+  const { response, data } = await fetchSwapJson<
+    SwapQuoteResponse & { error?: unknown; reason?: unknown }
+  >(`${SWAP_API_BASE}/price?${qs}`, {
+    timeoutMs: 15_000,
+    maxBytes: SWAP_QUOTE_RESPONSE_MAX_BYTES,
   });
-  const data = await res.json();
-  if (!res.ok)
-    throw new Error(data.error || data.reason || `API error ${res.status}`);
+  if (!response.ok) throw new Error(swapApiError(data, response.status));
   return data;
 }
 
@@ -173,12 +211,13 @@ export async function fetchSwapQuote(
   if (params.slippageBps !== undefined)
     qs.set("slippageBps", params.slippageBps.toString());
 
-  const res = await fetch(`${SWAP_API_BASE}/quote?${qs}`, {
-    signal: AbortSignal.timeout(15_000),
+  const { response, data } = await fetchSwapJson<
+    SwapQuoteResponse & { error?: unknown; reason?: unknown }
+  >(`${SWAP_API_BASE}/quote?${qs}`, {
+    timeoutMs: 15_000,
+    maxBytes: SWAP_QUOTE_RESPONSE_MAX_BYTES,
   });
-  const data = await res.json();
-  if (!res.ok)
-    throw new Error(data.error || data.reason || `API error ${res.status}`);
+  if (!response.ok) throw new Error(swapApiError(data, response.status));
   return data;
 }
 
@@ -269,7 +308,7 @@ async function fetchTokenInfoOnchain(
   if (!rpcUrl) return null;
 
   const client = createPublicClient({
-    transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 0 }),
+    transport: secureHttpTransport(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 0 }),
   });
 
   try {
@@ -309,7 +348,7 @@ export async function getTokenBalanceWei(
   if (!rpcUrl) return 0n;
 
   const client = createPublicClient({
-    transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 0 }),
+    transport: secureHttpTransport(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 0 }),
   });
 
   try {
@@ -334,7 +373,7 @@ export async function checkTokenAllowance(
   if (!rpcUrl) return 0n;
 
   const client = createPublicClient({
-    transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 0 }),
+    transport: secureHttpTransport(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 0 }),
   });
 
   try {
@@ -490,12 +529,13 @@ export async function getCachedTokenList(
 
   // Fetch fresh
   try {
-    const res = await fetch(
+    const { response, data } = await fetchSwapJson<{
+      tokens?: TokenListEntry[];
+    }>(
       `${SWAP_API_BASE}/token-list?chainId=${chainId}`,
-      { signal: AbortSignal.timeout(15_000) },
+      { timeoutMs: 15_000, maxBytes: SWAP_CATALOG_RESPONSE_MAX_BYTES },
     );
-    if (!res.ok) return mergePinnedTokens(chainId, cached?.tokens ?? []);
-    const data = await res.json();
+    if (!response.ok) return mergePinnedTokens(chainId, cached?.tokens ?? []);
     const tokens: TokenListEntry[] = data.tokens ?? [];
 
     // Cache the raw API response — pinning happens at read time so changes
@@ -524,12 +564,11 @@ export async function fetchTokenPrice(
   tokenAddress: string,
 ): Promise<number> {
   try {
-    const res = await fetch(
+    const { response, data } = await fetchSwapJson<{ priceUsd?: unknown }>(
       `${SWAP_API_BASE}/token-price?chainId=${chainId}&address=${tokenAddress}`,
-      { signal: AbortSignal.timeout(10_000) },
+      { timeoutMs: 10_000, maxBytes: 64 * 1024 },
     );
-    if (res.ok) {
-      const data = await res.json();
+    if (response.ok) {
       const priceUsd = Number(data.priceUsd ?? 0);
       if (priceUsd > 0) return priceUsd;
     }
@@ -606,7 +645,7 @@ export async function checkPermit2Allowance(
   if (!rpcUrl) return { amount: 0n, expiration: 0 };
 
   const client = createPublicClient({
-    transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 0 }),
+    transport: secureHttpTransport(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 0 }),
   });
 
   try {

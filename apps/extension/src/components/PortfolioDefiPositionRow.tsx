@@ -18,6 +18,7 @@ import {
   ListItemTitle,
 } from "@/components/ui";
 import { getChainConfig } from "@/constants/chainConfig";
+import { sanitizeExternalNavigationUrl } from "@/lib/externalNavigation";
 
 interface PositionAssetLineProps {
   asset: DefiPosition["assets"][number];
@@ -148,6 +149,7 @@ export function DefiPositionRow({
     typeLabel.toLocaleLowerCase() === nameLabel.toLocaleLowerCase()
       ? typeLabel
       : `${typeLabel} · ${nameLabel}`;
+  const safeSiteUrl = sanitizeExternalNavigationUrl(position.siteUrl);
 
   return (
     <ListItem align="stretch" px={4} py={3}>
@@ -199,7 +201,7 @@ export function DefiPositionRow({
             </Flex>
           </ListItemMedia>
           <ListItemContent>
-            {position.siteUrl ? (
+            {safeSiteUrl ? (
               <Flex
                 as="a"
                 minW={0}
@@ -220,7 +222,7 @@ export function DefiPositionRow({
                   boxShadow:
                     "0 0 0 2px var(--chakra-colors-border-focus)",
                 }}
-                href={position.siteUrl}
+                href={safeSiteUrl}
                 target="_blank"
                 rel="noopener noreferrer"
               >

@@ -60,8 +60,6 @@ const ALLOWED_REQUEST_FAILURE_HOSTS = new Set([
   "eth.sh",
   "www.google.com",
   "t1.gstatic.com",
-  "fonts.googleapis.com",
-  "fonts.gstatic.com",
 ]);
 
 const ALLOWED_CONSOLE_ERROR_PATTERNS = [

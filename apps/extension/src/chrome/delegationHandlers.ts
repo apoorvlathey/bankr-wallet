@@ -6,9 +6,6 @@
  *     resolved delegate WalletChan would use on the next batch.
  *   - probeDelegateContract: ERC-7821 support check for custom-delegate
  *     address entry validation (called as the user types).
- *   - setCustomDelegate / removeCustomDelegate: pure storage writes for the
- *     `customDelegates` UI cache. Used internally by the post-broadcast cleanup
- *     in txHandlers — NOT by the UI flow (the UI broadcasts a Set tx instead).
  *   - initiateSetDelegation: enqueue a type-4 tx that sets the EOA's
  *     delegation to a chosen contract (WalletChan default or user-pasted
  *     custom). User confirms it on the standard tx-confirmation screen.
@@ -17,9 +14,9 @@
  *
  * Both Set and Revoke broadcast their own tx because the user is making an
  * onchain decision *outside* a normal batch — there's no dapp tx to piggyback
- * an authorization on. After the broadcast lands, txHandlers updates the
- * receipt poller updates `customDelegates` storage from `eth_getCode(EOA)` to
- * mirror the new onchain state.
+ * an authorization on. After the broadcast lands, the receipt poller updates
+ * `customDelegates` storage from `eth_getCode(EOA)` to mirror the new onchain
+ * state.
  *
  * Follows the established `*Handlers.ts` pattern and the session-restoration
  * block from _docs/IMPLEMENTATION.md so handlers work after a service-worker
@@ -31,15 +28,19 @@ import {
   resolveActiveDelegate,
   probeErc7821Support,
 } from "@/utils/delegationResolution";
-import {
-  setCustomDelegate,
-  removeCustomDelegate,
-} from "./delegationStorage";
 import { getAccountById } from "./accountStorage";
 import { getStoredResolvedChainById } from "@/lib/chains";
 import { savePendingTxRequest } from "./pendingTxStorage";
 import { pinnedTxRequest } from "./pinnedRequest";
 import { EIP_7702_DEFAULT_DELEGATE } from "@/constants/chainRegistry";
+import {
+  captureEip7702DelegationAuthorization,
+} from "./delegatedAuthorityPolicy";
+import {
+  WALLET_SECRET_OPERATION_LOCK_KEY,
+  withStorageLock,
+} from "./storageLock";
+import { STALE_MASTER_AUTHORIZATION_ERROR } from "./masterAuthorization";
 
 type Address = `0x${string}`;
 
@@ -107,53 +108,6 @@ export async function handleProbeDelegateContract(
   return { success: true, supports7821: probe.supports };
 }
 
-export async function handleSetCustomDelegate(
-  accountId: string,
-  chainId: number,
-  delegate: string,
-): Promise<{ success: boolean; error?: string }> {
-  if (!isAddress(delegate)) {
-    return { success: false, error: "Invalid delegate address" };
-  }
-  if (delegate.toLowerCase() === ZERO_ADDRESS) {
-    return {
-      success: false,
-      error: "Use Revoke to clear the delegation instead of setting it to 0x0",
-    };
-  }
-  const resolved = await getStoredResolvedChainById(chainId);
-  if (!resolved?.rpcUrl) {
-    return { success: false, error: "Chain has no RPC URL configured" };
-  }
-  // Re-probe at save time — the UI already does this for user feedback, but
-  // saving without a fresh probe risks persisting a stale "ok" if the
-  // contract was self-destructed or the chain reorged it out.
-  const probe = await probeErc7821Support(
-    resolved.rpcUrl,
-    chainId,
-    delegate.toLowerCase() as Address,
-  );
-  if (!probe.ok) {
-    return { success: false, error: `Couldn't probe contract: ${probe.error}` };
-  }
-  if (!probe.supports) {
-    return {
-      success: false,
-      error: "Contract does not implement ERC-7821 batch execution",
-    };
-  }
-  await setCustomDelegate(accountId, chainId, delegate as Address);
-  return { success: true };
-}
-
-export async function handleRemoveCustomDelegate(
-  accountId: string,
-  chainId: number,
-): Promise<{ success: boolean }> {
-  await removeCustomDelegate(accountId, chainId);
-  return { success: true };
-}
-
 /**
  * Initiate an EIP-7702 set-delegation by enqueueing a PendingTxRequest with
  * `kind: "setDelegate"`. Mirror of `handleInitiateRevokeDelegation` but with
@@ -191,6 +145,19 @@ export async function handleInitiateSetDelegation(
     return {
       success: false,
       error: "Use Revoke to clear the delegation instead of setting it to 0x0",
+    };
+  }
+
+  let expectedMasterAuthEpoch: string | undefined;
+  try {
+    expectedMasterAuthEpoch = await captureEip7702DelegationAuthorization({
+      targetDelegate: target,
+      kind: "setDelegate",
+    });
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Master unlock required",
     };
   }
 
@@ -239,13 +206,30 @@ export async function handleInitiateSetDelegation(
     favicon: null,
     chainName: resolved.name,
     timestamp: Date.now(),
+    trustedInternal: true,
     delegation7702Meta: {
       targetDelegate: target,
       kind: "setDelegate",
     },
   });
 
-  await savePendingTxRequest(request);
+  try {
+    if (expectedMasterAuthEpoch) {
+      await withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, () =>
+        savePendingTxRequest(request, expectedMasterAuthEpoch),
+      );
+    } else {
+      await savePendingTxRequest(request);
+    }
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === STALE_MASTER_AUTHORIZATION_ERROR
+    ) {
+      return { success: false, error: error.message };
+    }
+    throw error;
+  }
 
   chrome.runtime
     .sendMessage({ type: "newPendingTxRequest", txRequest: request })
@@ -306,6 +290,7 @@ export async function handleInitiateRevokeDelegation(
     favicon: null,
     chainName: resolved.name,
     timestamp: Date.now(),
+    trustedInternal: true,
     delegation7702Meta: {
       targetDelegate: ZERO_ADDRESS as Address,
       kind: "revoke",

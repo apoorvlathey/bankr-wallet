@@ -2,6 +2,7 @@ import { DEFAULT_NETWORKS } from "@/constants/networks";
 import type { GasEstimate } from "@/chrome/gasEstimation";
 import type { SimulationResult } from "@/chrome/txSimulation";
 import { SELECTED_THEME_STORAGE_KEY } from "@/theme";
+import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from "@/constants/securityPolicy";
 import extensionPackage from "../../package.json";
 import { previewAssets } from "./previewAssets";
 import { PREVIEW_EPOCH_MS } from "./fixtures";
@@ -238,8 +239,31 @@ export function responseForPreviewMessage(
       };
     case "getAccounts":
       return environment.accounts.map((account) => ({ ...account }));
+    case "reorderAccounts": {
+      const byId = new Map(environment.accounts.map((account) => [account.id, account]));
+      const accountIds = Array.isArray(message.accountIds) ? message.accountIds : [];
+      if (
+        accountIds.length !== environment.accounts.length ||
+        new Set(accountIds).size !== accountIds.length ||
+        accountIds.some((accountId: string) => !byId.has(accountId))
+      ) {
+        return { success: false, error: "Invalid account order" };
+      }
+      environment.accounts.splice(
+        0,
+        environment.accounts.length,
+        ...accountIds.map((accountId: string) => byId.get(accountId)!),
+      );
+      return { success: true, accounts: environment.accounts };
+    }
     case "getActiveAccount":
       return { ...activeAccount(environment) };
+    case "getTabAccount":
+      return { ...activeAccount(environment) };
+    case "getPendingDappConnectionRequests":
+      return [];
+    case "getDappConnectionContext":
+      return { success: true };
     case "getPendingTxRequests":
       return environment.pendingTxRequests;
     case "getPendingSignatureRequests":
@@ -279,7 +303,11 @@ export function responseForPreviewMessage(
     case "getCachedApiKey":
       return { apiKey: null };
     case "getAutoLockTimeout":
-      return { timeout: environment.storage.sync.autoLockTimeout ?? 0 };
+      return {
+        timeout:
+          environment.storage.sync.autoLockTimeout ??
+          DEFAULT_AUTO_LOCK_TIMEOUT_MS,
+      };
     case "getClearSigningEnabled":
       return { enabled: true };
     case "checkPremiumStatus":
@@ -288,6 +316,10 @@ export function responseForPreviewMessage(
         balance: "0",
         sponsoredTransfersEnabled: false,
       };
+    case "checkSponsoredTransferStatus":
+      return { success: true, hasUnresolved: false };
+    case "acknowledgeSponsoredTransfer":
+      return { success: true };
     case "getSeedGroups":
       return environment.seedGroups;
     case "generateMnemonic":
@@ -398,7 +430,8 @@ export function responseForPreviewMessage(
         sidePanelWorks: true,
       };
     case "setAutoLockTimeout":
-      environment.storage.sync.autoLockTimeout = message?.timeout ?? 0;
+      environment.storage.sync.autoLockTimeout =
+        message?.timeout ?? DEFAULT_AUTO_LOCK_TIMEOUT_MS;
       return { success: true };
     case "setClearSigningEnabled":
       return { success: true };
@@ -887,6 +920,10 @@ export function createPreviewChrome(
         return Promise.resolve(response);
       },
       onActivated: {
+        addListener: () => {},
+        removeListener: () => {},
+      },
+      onUpdated: {
         addListener: () => {},
         removeListener: () => {},
       },

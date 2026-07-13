@@ -27,6 +27,19 @@ export async function handleSubmitChatPrompt(
   messageId: string,
   prompt: string
 ): Promise<{ success: boolean; error?: string }> {
+  if (
+    typeof conversationId !== "string" ||
+    conversationId.length < 1 ||
+    conversationId.length > 256 ||
+    typeof messageId !== "string" ||
+    messageId.length < 1 ||
+    messageId.length > 256 ||
+    typeof prompt !== "string" ||
+    prompt.length < 1 ||
+    prompt.length > 10_000
+  ) {
+    return { success: false, error: "Invalid chat request" };
+  }
   // Get cached API key
   let apiKey = getCachedApiKey();
 

@@ -1,4 +1,4 @@
-import { forwardRef, type ReactNode } from "react";
+import { forwardRef, type CSSProperties, type ReactNode } from "react";
 import { Flex, HStack, Text } from "@chakra-ui/react";
 import { CheckIcon } from "@chakra-ui/icons";
 import type { Account } from "@/chrome/types";
@@ -23,6 +23,9 @@ interface AccountPickerRowProps {
   isDisabled?: boolean;
   statusLabel?: string;
   actions?: ReactNode;
+  leadingAction?: ReactNode;
+  isDragging?: boolean;
+  style?: CSSProperties;
   onSelect: () => void;
 }
 
@@ -55,6 +58,9 @@ export const AccountPickerRow = forwardRef<HTMLElement, AccountPickerRowProps>(
       isDisabled = false,
       statusLabel,
       actions,
+      leadingAction,
+      isDragging = false,
+      style,
       onSelect,
     },
     ref,
@@ -67,7 +73,18 @@ export const AccountPickerRow = forwardRef<HTMLElement, AccountPickerRowProps>(
         gap={0}
         isSelected={isSelected}
         isDisabled={isDisabled}
+        data-dragging={isDragging ? "" : undefined}
+        style={style}
+        zIndex={isDragging ? 2 : 0}
+        bg={isDragging ? "surface.raisedHover" : undefined}
+        boxShadow={isDragging ? "0 8px 20px rgba(0, 0, 0, 0.28)" : undefined}
+        transitionProperty="background-color, box-shadow"
+        transitionDuration="fast"
+        _hover={
+          isSelected || isDisabled ? undefined : { bg: "surface.raisedHover" }
+        }
       >
+        {leadingAction}
         <Flex
           as="button"
           type="button"
@@ -80,9 +97,6 @@ export const AccountPickerRow = forwardRef<HTMLElement, AccountPickerRowProps>(
           align="center"
           textAlign="start"
           disabled={isDisabled}
-          _hover={
-            isSelected || isDisabled ? undefined : { bg: "surface.raisedHover" }
-          }
           _focus={{ outline: "none" }}
           _focusVisible={{
             boxShadow: "inset 0 0 0 2px var(--chakra-colors-border-focus)",
@@ -108,7 +122,19 @@ export const AccountPickerRow = forwardRef<HTMLElement, AccountPickerRowProps>(
             </Text>
           </ListItemContent>
         </Flex>
-        {actions && <ListItemActions pr={2}>{actions}</ListItemActions>}
+        {actions && (
+          <ListItemActions
+            pr={2}
+            sx={{
+              "&& > *:hover": {
+                color: "accent.highlight",
+                bg: "surface.raisedHover",
+              },
+            }}
+          >
+            {actions}
+          </ListItemActions>
+        )}
       </ListItem>
     );
   },

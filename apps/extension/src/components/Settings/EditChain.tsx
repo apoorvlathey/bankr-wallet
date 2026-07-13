@@ -24,22 +24,7 @@ import {
 import { useNetworks } from "@/contexts/NetworksContext";
 import { InlineDisclosure } from "@/components/ui";
 import { SettingsScreenFrame } from "./SettingsScreenFrame";
-
-/** Fetch chainId from an RPC endpoint via eth_chainId. */
-async function fetchChainId(rpcUrl: string): Promise<number | null> {
-  try {
-    const res = await fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }),
-    });
-    const json = await res.json();
-    if (json.result) return Number(json.result);
-    return null;
-  } catch {
-    return null;
-  }
-}
+import { probeRpcChainId } from "@/chrome/rpcHttpClient";
 
 function EditChain({
   chainName,
@@ -95,7 +80,9 @@ function EditChain({
       const originalRpc = networksInfo[chainName]?.rpcUrl;
       if (rpc !== originalRpc) {
         setIsValidating(true);
-        const detectedId = await fetchChainId(rpc);
+        const detectedId = await probeRpcChainId(rpc, {
+          allowPrivateWithoutOrigin: true,
+        });
         setIsValidating(false);
 
         const expectedChainId = parseInt(chainId);

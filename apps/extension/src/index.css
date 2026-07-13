@@ -1,8 +1,11 @@
 /* Self-hosted display face for the WalletChan wordmark. */
 @import "@fontsource/anton/latin-400.css";
-
-/* Bauhaus Design System - Outfit geometric sans-serif font */
-@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap");
+@import "@fontsource/outfit/latin-400.css";
+@import "@fontsource/outfit/latin-500.css";
+@import "@fontsource/outfit/latin-700.css";
+@import "@fontsource/outfit/latin-900.css";
+@import "@fontsource/jetbrains-mono/latin-400.css";
+@import "@fontsource/jetbrains-mono/latin-700.css";
 
 /* Bell ringing animation for pending request banners */
 @keyframes bell-ring {

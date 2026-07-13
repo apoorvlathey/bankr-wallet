@@ -1665,7 +1665,7 @@ The 2026-07-10 Midnight V2 foundation implements the durable direction in
   their documentation no longer recommends default card-in-panel nesting.
 - `/preview/components` renders the production recipes and primitives under
   both themes. It is composed preview infrastructure, not a production UI fork.
-- `tests/themeContrast.test.ts` verifies core text, action, and composited
+- `tests/ui/themeContrast.test.ts` verifies core text, action, and composited
   status pairs at WCAG AA. Current minimum ratios include 5.16:1 muted text,
   5.17:1 white-on-primary action, and 7.83:1 inverse-on-secondary action.
 
@@ -1694,7 +1694,7 @@ without moving any wallet or request state:
   also registered for window and sidepanel review.
 - The primitive/API contract is frozen in Section 9.4. Domain controllers own
   search data, selection, callbacks, transaction state, and lifecycle timing.
-- `tests/screenTransitionModel.test.ts` protects hierarchy/fade decisions.
+- `tests/ui/screenTransitionModel.test.ts` protects hierarchy/fade decisions.
 - Signing routes accept a separate `wallet=viewOnly` fixture. It maps to the
   product's impersonated account type and verifies that signing is absent,
   Reject remains available, and the reason is visible; it is not counted as

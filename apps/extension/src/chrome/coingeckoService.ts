@@ -9,6 +9,11 @@ import {
   COINGECKO_TOKEN_PRICE_API,
   GECKOTERMINAL_TOKEN_PRICE_API,
 } from "@/constants/externalUrls";
+import { fetchJsonBounded } from "./boundedHttpResponse";
+
+const PRICE_RESPONSE_MAX_BYTES = 1024 * 1024;
+const SEARCH_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
+const MARKET_RESPONSE_MAX_BYTES = 4 * 1024 * 1024;
 
 const MARKET_CACHE_STORAGE_KEY = "coingeckoMarketCache";
 const SEARCH_CACHE_STORAGE_KEY = "coingeckoSearchCache";
@@ -269,17 +274,21 @@ class CoinGeckoService {
         const chunk = addresses.slice(i, i + GECKOTERMINAL_ERC20_PRICE_BATCH_SIZE);
         try {
           const url = `${GECKOTERMINAL_TOKEN_PRICE_API}/${gtNetwork}/token_price/${chunk.join(",")}`;
-          const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+          const { response: res, data } = await fetchJsonBounded(
+            url,
+            { method: "GET" },
+            { timeoutMs: 10_000, maxBytes: PRICE_RESPONSE_MAX_BYTES },
+          );
           if (res.status === 429) {
             this.marketBackoffUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
             rateLimited = true;
             break;
           }
           if (!res.ok) continue;
-          const data = (await res.json()) as {
+          const parsed = data as {
             data?: { attributes?: { token_prices?: Record<string, string> } };
           };
-          const prices = data?.data?.attributes?.token_prices ?? {};
+          const prices = parsed?.data?.attributes?.token_prices ?? {};
           for (const addr of chunk) {
             const raw = prices[addr.toLowerCase()];
             const price = raw ? Number(raw) : 0;
@@ -304,16 +313,20 @@ class CoinGeckoService {
         const chunk = unresolved.slice(i, i + COINGECKO_ERC20_PRICE_BATCH_SIZE);
         try {
           const url = `${COINGECKO_TOKEN_PRICE_API}/${platformId}?contract_addresses=${chunk.join(",")}&vs_currencies=usd`;
-          const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+          const { response: res, data } = await fetchJsonBounded(
+            url,
+            { method: "GET" },
+            { timeoutMs: 10_000, maxBytes: PRICE_RESPONSE_MAX_BYTES },
+          );
           if (res.status === 429) {
             this.marketBackoffUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
             rateLimited = true;
             break;
           }
           if (!res.ok) continue;
-          const data = (await res.json()) as Record<string, { usd?: number }>;
+          const parsed = data as Record<string, { usd?: number }>;
           for (const addr of chunk) {
-            const price = Number(data[addr.toLowerCase()]?.usd ?? 0);
+            const price = Number(parsed[addr.toLowerCase()]?.usd ?? 0);
             if (price > 0) priceByAddr.set(addr.toLowerCase(), price);
           }
         } catch {
@@ -391,9 +404,10 @@ class CoinGeckoService {
     }
 
     try {
-      const res = await fetch(
+      const { response: res, data } = await fetchJsonBounded(
         `${COINGECKO_SEARCH_API}?query=${encodeURIComponent(query)}`,
-        { signal: AbortSignal.timeout(5_000) },
+        { method: "GET" },
+        { timeoutMs: 5_000, maxBytes: SEARCH_RESPONSE_MAX_BYTES },
       );
       if (res.status === 429) {
         this.marketBackoffUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
@@ -401,8 +415,10 @@ class CoinGeckoService {
       }
       if (!res.ok) return cached?.coins ?? [];
 
-      const data = await res.json();
-      const coins: CoinGeckoSearchCoin[] = data.coins ?? [];
+      const coins: CoinGeckoSearchCoin[] =
+        data && typeof data === "object" && !Array.isArray(data)
+          ? ((data as { coins?: CoinGeckoSearchCoin[] }).coins ?? [])
+          : [];
       this.searchCache.set(normalizedQuery, { coins, fetchedAt: Date.now() });
       await this.persistSearchCache();
       return coins;
@@ -493,11 +509,12 @@ class CoinGeckoService {
     }
 
     try {
-      const res = await fetch(
+      const { response: res, data } = await fetchJsonBounded(
         `${COINGECKO_MARKETS_API}?vs_currency=usd&ids=${encodeURIComponent(
           ids.join(","),
         )}&sparkline=false&locale=en`,
-        { signal: AbortSignal.timeout(5_000) },
+        { method: "GET" },
+        { timeoutMs: 5_000, maxBytes: MARKET_RESPONSE_MAX_BYTES },
       );
 
       if (res.status === 429) {
@@ -517,11 +534,10 @@ class CoinGeckoService {
         return;
       }
 
-      const data = await res.json();
       const fetchedAt = Date.now();
       const byId = new Map<string, CachedMarketEntry>();
 
-      for (const coin of data as any[]) {
+      for (const coin of Array.isArray(data) ? data : []) {
         const entry: CachedMarketEntry = {
           priceUsd: coin.current_price ?? 0,
           logoUrl: coin.image,
@@ -630,10 +646,14 @@ export async function fetchCoinGeckoTokenPriceDirect(
   if (platformId) {
     try {
       const url = `${COINGECKO_TOKEN_PRICE_API}/${platformId}?contract_addresses=${addr}&vs_currencies=usd`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      const { response: res, data } = await fetchJsonBounded(
+        url,
+        { method: "GET" },
+        { timeoutMs: 10_000, maxBytes: PRICE_RESPONSE_MAX_BYTES },
+      );
       if (res.ok) {
-        const data = (await res.json()) as Record<string, { usd?: number }>;
-        const price = Number(data[addr]?.usd ?? 0);
+        const parsed = data as Record<string, { usd?: number }>;
+        const price = Number(parsed[addr]?.usd ?? 0);
         if (price > 0) return price;
       }
     } catch {
@@ -645,12 +665,16 @@ export async function fetchCoinGeckoTokenPriceDirect(
   if (gtNetwork) {
     try {
       const url = `${GECKOTERMINAL_TOKEN_PRICE_API}/${gtNetwork}/token_price/${addr}`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      const { response: res, data } = await fetchJsonBounded(
+        url,
+        { method: "GET" },
+        { timeoutMs: 10_000, maxBytes: PRICE_RESPONSE_MAX_BYTES },
+      );
       if (res.ok) {
-        const data = (await res.json()) as {
+        const parsed = data as {
           data?: { attributes?: { token_prices?: Record<string, string> } };
         };
-        const priceStr = data?.data?.attributes?.token_prices?.[addr];
+        const priceStr = parsed?.data?.attributes?.token_prices?.[addr];
         const price = priceStr ? Number(priceStr) : 0;
         if (price > 0) return price;
       }

@@ -24,10 +24,12 @@ interface EIP6963AnnounceProviderEvent extends CustomEvent {
 import { makeProviderError } from "./providerErrors";
 import { WALLET_ICON } from "./walletIcon";
 import { DappRpcForwarder, installDappRpcDiscovery } from "./dappRpcForwarding";
-import { ERC7715_PERMISSION_REQUEST_IN_PROGRESS_ERROR } from "./erc7715PermissionLock";
+import { ERC7715_PERMISSION_REQUEST_IN_PROGRESS_ERROR } from "./erc7715/requestLock";
+import { isSafeRpcForwardingMethod } from "./safeRpcForwarding";
 
 // Session UUID for EIP-6963 (generated once per page load)
 const SESSION_UUID = crypto.randomUUID();
+const UNCONNECTED_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 installDappRpcDiscovery();
 
@@ -133,7 +135,16 @@ const pendingExecutionPermissionCallbacks = new Map<
 let requestExecutionPermissionsInProgress = false;
 
 // Helper to make RPC calls through content script (to bypass page CSP)
-function rpcCall(rpcUrl: string, method: string, params: any[]): Promise<any> {
+function rpcCall(method: string, params: any[]): Promise<any> {
+  if (!isSafeRpcForwardingMethod(method)) {
+    return Promise.reject(
+      makeProviderError(
+        "RPC method is not supported by the WalletChan provider proxy",
+        -32601,
+      ),
+    );
+  }
+
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
     pendingRpcCallbacks.set(requestId, { resolve, reject });
@@ -143,7 +154,6 @@ function rpcCall(rpcUrl: string, method: string, params: any[]): Promise<any> {
         type: "i_rpcRequest",
         msg: {
           id: requestId,
-          rpcUrl,
           method,
           params,
         },
@@ -166,14 +176,12 @@ class ImpersonatorProvider extends EventEmitter {
   isMetaMask = true;
 
   #address: string;
-  private rpcUrl: string;
   private chainId: number;
   private dappRpcForwarder = new DappRpcForwarder();
 
-  constructor(chainId: number, rpcUrl: string, address: string) {
+  constructor(chainId: number, address: string) {
     super();
 
-    this.rpcUrl = rpcUrl;
     this.chainId = chainId;
     this.#address = address;
   }
@@ -187,9 +195,7 @@ class ImpersonatorProvider extends EventEmitter {
     this.emit("connect", { chainId: hexValue(this.chainId) });
   };
 
-  setChainId = (chainId: number, rpcUrl: string) => {
-    this.rpcUrl = rpcUrl;
-
+  setChainId = (chainId: number) => {
     if (this.chainId !== chainId) {
       this.chainId = chainId;
       this.emit("chainChanged", hexValue(chainId));
@@ -207,7 +213,7 @@ class ImpersonatorProvider extends EventEmitter {
       return dappRpcResult.result;
     }
 
-    return rpcCall(this.rpcUrl, method, params);
+    return rpcCall(method, params);
   }
 
   request(request: { method: string; params?: Array<any> }): Promise<any> {
@@ -280,7 +286,7 @@ class ImpersonatorProvider extends EventEmitter {
                 controller.abort();
                 if (msg.success) {
                   if (msg.shouldSwitch !== false) {
-                    this.setChainId(msg.chainId, msg.rpcUrl);
+                    this.setChainId(msg.chainId);
                   }
                   resolve(null);
                 } else {
@@ -333,8 +339,7 @@ class ImpersonatorProvider extends EventEmitter {
               switch (e.data.type) {
                 case "switchEthereumChain": {
                   const chainId = e.data.msg.chainId as number;
-                  const rpcUrl = e.data.msg.rpcUrl as string;
-                  this.setChainId(chainId, rpcUrl);
+                  this.setChainId(chainId);
                   // remove this listener as we already have a listener for "message" and don't want duplicates
                   controller.abort();
 
@@ -469,14 +474,6 @@ class ImpersonatorProvider extends EventEmitter {
             },
             "*",
           );
-
-          // 5-minute timeout (user needs time to review batch)
-          setTimeout(() => {
-            if (pendingBatchCallbacks.has(sendCallsId)) {
-              pendingBatchCallbacks.delete(sendCallsId);
-              reject(makeProviderError("wallet_sendCalls timeout"));
-            }
-          }, 5 * 60 * 1000);
         });
       }
 
@@ -566,12 +563,19 @@ class ImpersonatorProvider extends EventEmitter {
             "*",
           );
 
-          setTimeout(() => {
-            if (pendingExecutionPermissionCallbacks.has(requestId)) {
-              pendingExecutionPermissionCallbacks.delete(requestId);
-              reject(makeProviderError(`${method} timeout`));
-            }
-          }, timeoutMs);
+          // A permission request can cause a signature/onchain effect. Its
+          // content-script waiter performs a first-action-safe expiry
+          // handshake and emits a durable result; an independent page-world
+          // timeout could reject while the wallet still signs. Read-only
+          // permission queries retain their bounded timeout.
+          if (method !== "wallet_requestExecutionPermissions") {
+            setTimeout(() => {
+              if (pendingExecutionPermissionCallbacks.has(requestId)) {
+                pendingExecutionPermissionCallbacks.delete(requestId);
+                reject(makeProviderError(`${method} timeout`));
+              }
+            }, timeoutMs);
+          }
         });
 
         if (method === "wallet_requestExecutionPermissions") {
@@ -757,11 +761,9 @@ window.addEventListener("message", (e: any) => {
     case "init": {
       const address = e.data.msg.address as string;
       const chainId = e.data.msg.chainId as number;
-      const rpcUrl = e.data.msg.rpcUrl as string;
       try {
         const impersonatedProvider = new ImpersonatorProvider(
           chainId,
-          rpcUrl,
           address,
         );
 
@@ -803,6 +805,9 @@ window.addEventListener("message", (e: any) => {
               typeof value === "string",
             )
           : [];
+        if (accounts[0]) {
+          providerInstance?.setAddress(accounts[0], false);
+        }
         if (callbacks.method === "eth_requestAccounts" && accounts.length > 0) {
           providerInstance?.emitConnected();
         }
@@ -817,10 +822,9 @@ window.addEventListener("message", (e: any) => {
     }
     case "setChainId": {
       const chainId = e.data.msg.chainId as number;
-      const rpcUrl = e.data.msg.rpcUrl as string;
       // Use providerInstance directly instead of window.ethereum
       if (providerInstance) {
-        providerInstance.setChainId(chainId, rpcUrl);
+        providerInstance.setChainId(chainId);
       }
       break;
     }
@@ -831,6 +835,11 @@ window.addEventListener("message", (e: any) => {
         : e.data.msg.address
           ? [e.data.msg.address]
           : [];
+      if (accounts.length === 0) {
+        providerInstance.setAddress(UNCONNECTED_ADDRESS, false);
+      } else if (typeof accounts[0] === "string") {
+        providerInstance.setAddress(accounts[0], false);
+      }
       providerInstance.emit("accountsChanged", accounts);
       break;
     }
@@ -848,7 +857,12 @@ window.addEventListener("message", (e: any) => {
             errorMessage.toLowerCase().includes("rejected by user") ||
             errorMessage.toLowerCase().includes("user rejected") ||
             errorMessage.toLowerCase().includes("user denied");
-          const code = isUserRejection ? 4001 : undefined;
+          const responseCode = Number(e.data.msg.code);
+          const code = Number.isFinite(responseCode)
+            ? responseCode
+            : isUserRejection
+              ? 4001
+              : undefined;
           logProviderError("eth_sendTransaction", errorMessage, code);
           callbacks.reject(makeProviderError(errorMessage, code));
         }
@@ -874,7 +888,14 @@ window.addEventListener("message", (e: any) => {
           // Check if this is an EIP-712 schema validation error (JSON-RPC error code -32603)
           const isSchemaError = errorMessage.includes("EIP-712 schema");
 
-          const code = isUserRejection ? 4001 : isSchemaError ? -32603 : undefined;
+          const responseCode = Number(e.data.msg.code);
+          const code = Number.isFinite(responseCode)
+            ? responseCode
+            : isUserRejection
+              ? 4001
+              : isSchemaError
+                ? -32603
+                : undefined;
           logProviderError("signature request", errorMessage, code);
           callbacks.reject(makeProviderError(errorMessage, code));
         }

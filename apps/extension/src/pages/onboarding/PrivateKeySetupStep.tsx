@@ -1,3 +1,4 @@
+import { useCallback, useState } from "react";
 import { Box, Button, FormControl, FormLabel, Input, Text, VStack } from "@chakra-ui/react";
 import { WarningIcon } from "@chakra-ui/icons";
 import PrivateKeyInput from "@/components/shared/PrivateKeyInput";
@@ -24,12 +25,24 @@ export function PrivateKeySetupStep({
   onBack: () => void;
   onContinue: () => void;
 }) {
+  const [generatedBackupReady, setGeneratedBackupReady] = useState(true);
+  const canContinue = !!derivedAddress && generatedBackupReady;
+  const guardedContinue = useCallback(() => {
+    if (canContinue) onContinue();
+  }, [canContinue, onContinue]);
+  const handleGeneratedBackupStateChange = useCallback(
+    (isGenerated: boolean, isConfirmed: boolean) => {
+      setGeneratedBackupReady(!isGenerated || isConfirmed);
+    },
+    [],
+  );
+
   return (
     <OnboardingCanvas
       header={<OnboardingHeader onBack={onBack} step={1} />}
       footer={
         <OnboardingFooter>
-          <Button variant="primary" size="lg" w="full" onClick={onContinue} isDisabled={!derivedAddress}>
+          <Button variant="primary" size="lg" w="full" onClick={guardedContinue} isDisabled={!canContinue}>
             Continue
           </Button>
         </OnboardingFooter>
@@ -57,7 +70,9 @@ export function PrivateKeySetupStep({
             derivedAddress={derivedAddress}
             error={error}
             onClearError={onClearError}
-            onContinue={onContinue}
+            onContinue={guardedContinue}
+            requireGeneratedBackupConfirmation
+            onGeneratedBackupStateChange={handleGeneratedBackupStateChange}
             autoFocus
           />
         </Box>
@@ -71,7 +86,7 @@ export function PrivateKeySetupStep({
             placeholder="Trading wallet"
             onChange={(event) => onDisplayNameChange(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") onContinue();
+              if (event.key === "Enter") guardedContinue();
             }}
           />
         </FormControl>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Box,
   VStack,
@@ -12,11 +12,19 @@ import {
   InputGroup,
   InputRightElement,
   IconButton,
-  Code,
+  Checkbox,
 } from "@chakra-ui/react";
-import { ViewIcon, ViewOffIcon, CheckIcon, RepeatIcon, CopyIcon } from "@chakra-ui/icons";
+import {
+  ExternalLinkIcon,
+  ViewIcon,
+  ViewOffIcon,
+  CheckIcon,
+  RepeatIcon,
+  CopyIcon,
+} from "@chakra-ui/icons";
 import { generatePrivateKey } from "@/utils/privateKeyUtils";
-import { isDarkThemeId, useTheme } from "@/theme";
+import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
+import { CopyButton } from "@/components/CopyButton";
 
 type PkMode = "import" | "generate";
 
@@ -28,6 +36,12 @@ interface PrivateKeyInputProps {
   onClearError?: () => void;
   onContinue?: () => void;
   autoFocus?: boolean;
+  safetyNotice?: string;
+  requireGeneratedBackupConfirmation?: boolean;
+  onGeneratedBackupStateChange?: (
+    isGenerated: boolean,
+    isConfirmed: boolean,
+  ) => void;
 }
 
 export default function PrivateKeyInput({
@@ -38,116 +52,253 @@ export default function PrivateKeyInput({
   onClearError,
   onContinue,
   autoFocus,
+  safetyNotice,
+  requireGeneratedBackupConfirmation = false,
+  onGeneratedBackupStateChange,
 }: PrivateKeyInputProps) {
-  const { themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
   const [pkMode, setPkMode] = useState<PkMode>("import");
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [pkCopied, setPkCopied] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [showUpdateGlow, setShowUpdateGlow] = useState(false);
+  const [hasInteractedWithGeneratedKey, setHasInteractedWithGeneratedKey] =
+    useState(false);
+  const [generatedBackupConfirmed, setGeneratedBackupConfirmed] =
+    useState(false);
+  const regenerationTimerRef = useRef<number | null>(null);
+  const glowTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (regenerationTimerRef.current !== null) {
+        window.clearTimeout(regenerationTimerRef.current);
+      }
+      if (glowTimerRef.current !== null) {
+        window.clearTimeout(glowTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    onGeneratedBackupStateChange?.(
+      pkMode === "generate",
+      pkMode !== "generate" ||
+        (hasInteractedWithGeneratedKey && generatedBackupConfirmed),
+    );
+  }, [
+    generatedBackupConfirmed,
+    hasInteractedWithGeneratedKey,
+    onGeneratedBackupStateChange,
+    pkMode,
+  ]);
+
+  const markGeneratedValuesUpdated = () => {
+    if (glowTimerRef.current !== null) {
+      window.clearTimeout(glowTimerRef.current);
+    }
+    setShowUpdateGlow(true);
+    glowTimerRef.current = window.setTimeout(() => {
+      setShowUpdateGlow(false);
+      glowTimerRef.current = null;
+    }, 650);
+  };
+
+  const applyGeneratedKey = () => {
+    onPrivateKeyChange(generatePrivateKey());
+    setShowPrivateKey(false);
+    setPkCopied(false);
+    setHasInteractedWithGeneratedKey(false);
+    setGeneratedBackupConfirmed(false);
+    markGeneratedValuesUpdated();
+  };
+
+  const regenerateKey = () => {
+    if (isRegenerating) return;
+
+    setIsRegenerating(true);
+    setShowUpdateGlow(false);
+    regenerationTimerRef.current = window.setTimeout(() => {
+      applyGeneratedKey();
+      setIsRegenerating(false);
+      regenerationTimerRef.current = null;
+    }, 550);
+  };
 
   return (
     <>
-      {/* Import / Generate Toggle — active state uses fg.primary as a high-contrast
-          "selected" pill in either palette. */}
-      <HStack spacing={2} mb={4}>
+      <HStack
+        spacing={1}
+        mb={4}
+        p={1}
+        bg="surface.sunken"
+        border="1px solid"
+        borderColor="border.subtle"
+        borderRadius="md"
+      >
         <Button
+          flex={1}
           size="sm"
-          bg={pkMode === "import" ? "fg.primary" : "surface.raised"}
-          color={pkMode === "import" ? "surface.raised" : "text.primary"}
-          border="2px solid"
-          borderColor="border.default"
-          fontWeight="700"
-          textTransform="uppercase"
-          fontSize="xs"
+          variant="ghost"
+          bg={pkMode === "import" ? "surface.raisedHover" : "transparent"}
+          color={pkMode === "import" ? "fg.primary" : "fg.secondary"}
+          fontWeight="600"
           onClick={() => {
             setPkMode("import");
+            if (regenerationTimerRef.current !== null) {
+              window.clearTimeout(regenerationTimerRef.current);
+              regenerationTimerRef.current = null;
+            }
+            setIsRegenerating(false);
+            setShowUpdateGlow(false);
+            setHasInteractedWithGeneratedKey(false);
+            setGeneratedBackupConfirmed(false);
             onPrivateKeyChange("");
           }}
-          _hover={{ opacity: 0.9 }}
+          _hover={{ bg: "surface.raisedHover", color: "fg.primary" }}
         >
-          Import Existing
+          Import existing
         </Button>
         <Button
+          flex={1}
           size="sm"
-          bg={pkMode === "generate" ? "fg.primary" : "surface.raised"}
-          color={pkMode === "generate" ? "surface.raised" : "text.primary"}
-          border="2px solid"
-          borderColor="border.default"
-          fontWeight="700"
-          textTransform="uppercase"
-          fontSize="xs"
+          variant="ghost"
+          bg={pkMode === "generate" ? "surface.raisedHover" : "transparent"}
+          color={pkMode === "generate" ? "fg.primary" : "fg.secondary"}
+          fontWeight="600"
           onClick={() => {
             setPkMode("generate");
-            const newKey = generatePrivateKey();
-            onPrivateKeyChange(newKey);
-            setShowPrivateKey(false);
+            applyGeneratedKey();
           }}
-          _hover={{ opacity: 0.9 }}
+          _hover={{ bg: "surface.raisedHover", color: "fg.primary" }}
         >
-          Generate New
+          Generate new
         </Button>
       </HStack>
 
       {pkMode === "import" ? (
-        <FormControl isInvalid={!!error}>
-          <FormLabel color="text.secondary" fontSize="xs" fontWeight="700" textTransform="uppercase">
-            Private Key
-          </FormLabel>
-          <InputGroup>
-            <Input
-              type={showPrivateKey ? "text" : "password"}
-              placeholder="0x..."
-              value={privateKey}
-              autoFocus={autoFocus}
-              fontFamily="mono"
-              onChange={(e) => {
-                onPrivateKeyChange(e.target.value);
-                if (error) onClearError?.();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onContinue?.();
-              }}
-              pr="3rem"
-            />
-            <InputRightElement>
-              <IconButton
-                aria-label={showPrivateKey ? "Hide" : "Show"}
-                icon={showPrivateKey ? <ViewOffIcon /> : <ViewIcon />}
-                size="sm"
-                variant="ghost"
-                onClick={() => setShowPrivateKey(!showPrivateKey)}
-                color="text.secondary"
-                tabIndex={-1}
-              />
-            </InputRightElement>
-          </InputGroup>
-          <FormErrorMessage color="chart.negative" fontWeight="700">
-            {error}
-          </FormErrorMessage>
-        </FormControl>
-      ) : (
-        <VStack spacing={4} align="stretch">
+        <VStack spacing={3} align="stretch">
           <FormControl isInvalid={!!error}>
-            <FormLabel color="text.secondary" fontSize="xs" fontWeight="700" textTransform="uppercase">
-              Generated Private Key
+            <FormLabel color="fg.secondary" fontSize="sm" fontWeight="600">
+              Private key
             </FormLabel>
             <InputGroup>
               <Input
                 type={showPrivateKey ? "text" : "password"}
+                placeholder="0x..."
+                value={privateKey}
+                autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                autoFocus={autoFocus}
+                fontFamily="mono"
+                onChange={(e) => {
+                  onPrivateKeyChange(e.target.value);
+                  if (error) onClearError?.();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") onContinue?.();
+                }}
+                pr="3rem"
+              />
+              <InputRightElement>
+                <IconButton
+                  aria-label={showPrivateKey ? "Hide" : "Show"}
+                  icon={showPrivateKey ? <ViewOffIcon /> : <ViewIcon />}
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowPrivateKey(!showPrivateKey)}
+                  color="text.secondary"
+                  tabIndex={-1}
+                />
+              </InputRightElement>
+            </InputGroup>
+            <FormErrorMessage color="chart.negative" fontWeight="700">
+              {error}
+            </FormErrorMessage>
+          </FormControl>
+          {safetyNotice && (
+            <Box
+              p={3}
+              bg="status.warning.bg"
+              border="1px solid"
+              borderColor="status.warning.border"
+              borderRadius="md"
+            >
+              <Text fontSize="sm" color="status.warning.fg" fontWeight="600">
+                {safetyNotice}
+              </Text>
+            </Box>
+          )}
+        </VStack>
+      ) : (
+        <VStack spacing={4} align="stretch">
+          <FormControl isInvalid={!!error}>
+            <HStack justify="space-between" align="center" mb={2}>
+              <FormLabel
+                color="fg.primary"
+                fontSize="md"
+                fontWeight="700"
+                mb={0}
+              >
+                Generated private key
+              </FormLabel>
+              <Button
+                size="xs"
+                minW="116px"
+                variant="ghost"
+                leftIcon={<RepeatIcon boxSize="12px" />}
+                isLoading={isRegenerating}
+                onClick={regenerateKey}
+                flexShrink={0}
+                color="fg.secondary"
+                _hover={{ color: "accent.highlight", bg: "surface.raisedHover" }}
+              >
+                Generate again
+              </Button>
+            </HStack>
+            <InputGroup
+              borderRadius="md"
+              boxShadow={
+                showUpdateGlow
+                  ? "0 0 0 1px var(--chakra-colors-accent-highlight), 0 0 10px var(--chakra-colors-status-warning-border)"
+                  : "none"
+              }
+              transitionProperty="box-shadow"
+              transitionDuration="slow"
+            >
+              <Input
+                type={showPrivateKey ? "text" : "password"}
                 value={privateKey}
                 readOnly
+                autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 fontFamily="mono"
-                fontSize="xs"
+                fontSize="sm"
+                minH="56px"
                 pr="4.5rem"
+                bg={
+                  showUpdateGlow ? "status.warning.bg" : "status.warning.tint"
+                }
+                borderColor={
+                  showUpdateGlow ? "accent.highlight" : "status.warning.border"
+                }
+                transitionProperty="background-color, border-color"
+                transitionDuration="slow"
               />
-              <InputRightElement w="4.5rem">
+              <InputRightElement w="4.5rem" h="full">
                 <HStack spacing={0}>
                   <IconButton
                     aria-label={showPrivateKey ? "Hide" : "Show"}
                     icon={showPrivateKey ? <ViewOffIcon /> : <ViewIcon />}
                     size="xs"
                     variant="ghost"
-                    onClick={() => setShowPrivateKey(!showPrivateKey)}
+                    onClick={() => {
+                      setShowPrivateKey(!showPrivateKey);
+                      setHasInteractedWithGeneratedKey(true);
+                    }}
                     color="text.secondary"
                     tabIndex={-1}
                   />
@@ -159,10 +310,10 @@ export default function PrivateKeyInput({
                     onClick={async () => {
                       await navigator.clipboard.writeText(privateKey);
                       setPkCopied(true);
+                      setHasInteractedWithGeneratedKey(true);
                       setTimeout(() => setPkCopied(false), 2000);
                     }}
-                    color={pkCopied ? "chart.positive" : "text.secondary"}
-                    tabIndex={-1}
+                    color={pkCopied ? "accent.highlight" : "fg.secondary"}
                   />
                 </HStack>
               </InputRightElement>
@@ -170,82 +321,83 @@ export default function PrivateKeyInput({
             <FormErrorMessage color="chart.negative" fontWeight="700">
               {error}
             </FormErrorMessage>
-          </FormControl>
-
-          <HStack spacing={2} align="center">
-            <Text fontSize="xs" color="chart.negative" fontWeight="700" whiteSpace="nowrap">
-              Save this key — cannot be recovered!
-            </Text>
-            <Box flex={1} h="2px" bg="chart.negative" />
-            <HStack
-              as="button"
-              spacing={1}
-              onClick={() => {
-                const newKey = generatePrivateKey();
-                onPrivateKeyChange(newKey);
-                setShowPrivateKey(false);
-                setPkCopied(false);
-              }}
-              cursor="pointer"
-              opacity={0.5}
-              _hover={{ opacity: 1 }}
-              transition="opacity 0.15s"
-              flexShrink={0}
+            <Box
+              mt={3}
+              p={3}
+              bg="status.warning.bg"
+              border="1px solid"
+              borderColor="status.warning.border"
+              borderRadius="md"
             >
-              <RepeatIcon boxSize="10px" color="text.secondary" />
-              <Text fontSize="10px" color="text.secondary" fontWeight="700" textTransform="uppercase" letterSpacing="wider">
-                Regenerate
+              <Text
+                fontSize="sm"
+                color="status.warning.fg"
+                fontWeight="600"
+                lineHeight="1.45"
+              >
+                Store this key safely.
+                <br />
+                It cannot be recovered if lost.
+                <br />
+                Never share with anyone.
               </Text>
-            </HStack>
-          </HStack>
+            </Box>
+            {requireGeneratedBackupConfirmation && (
+              <Checkbox
+                mt={3}
+                isChecked={generatedBackupConfirmed}
+                isDisabled={!hasInteractedWithGeneratedKey}
+                onChange={(event) =>
+                  setGeneratedBackupConfirmed(event.target.checked)
+                }
+                colorScheme="yellow"
+              >
+                <Text fontSize="sm" color="fg.primary" fontWeight="600">
+                  I saved this private key
+                </Text>
+              </Checkbox>
+            )}
+          </FormControl>
         </VStack>
       )}
 
       {derivedAddress && (
-        <Box
-          mt={4}
-          p={3}
-          bg={isDarkTheme ? "status.success.bg" : "accent.highlight"}
-          border="2px solid"
-          borderColor={isDarkTheme ? "status.success.border" : "border.default"}
-          borderRadius="lg"
-          boxShadow="card"
-        >
-          <HStack spacing={2} align="center">
-            <Box
-              w="22px"
-              h="22px"
-              minW="22px"
-              bg={isDarkTheme ? "chart.positive" : "accent.secondary"}
-              border="2px solid"
-              borderColor={isDarkTheme ? "status.success.border" : "border.default"}
-              borderRadius="full"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <CheckIcon boxSize="10px" color={isDarkTheme ? "fg.inverse" : "accentFg.secondary"} />
+        <VStack mt={4} spacing={1.5} align="stretch">
+          <Text fontSize="sm" color="fg.secondary" fontWeight="600">
+            Account address
+          </Text>
+          <HStack
+            minH="48px"
+            spacing={2}
+            px={3}
+            py={2}
+            bg="surface.raised"
+            border="1px solid"
+            borderColor="border.subtle"
+            borderRadius="md"
+            color="fg.secondary"
+          >
+            <Box flex={1} minW={0}>
+              <MiddleTruncatedAddress address={derivedAddress} />
             </Box>
-            <Code
-              fontSize="10px"
-              bg={isDarkTheme ? "surface.sunken" : "surface.raised"}
-              color="text.primary"
-              fontFamily="mono"
-              fontWeight="700"
-              p={1.5}
-              border="2px solid"
-              borderColor={isDarkTheme ? "border.strong" : "border.default"}
-              borderRadius="md"
-              overflow="hidden"
-              textOverflow="ellipsis"
-              whiteSpace="nowrap"
-              title={derivedAddress}
-              flex={1}
-            >
-              {derivedAddress}
-            </Code>
+            <CopyButton value={derivedAddress} label="Copy account address" />
+            <IconButton
+              aria-label="View account on Etherscan"
+              icon={<ExternalLinkIcon boxSize="12px" />}
+              size="xs"
+              variant="ghost"
+              color="fg.secondary"
+              onClick={() =>
+                window.open(
+                  `https://etherscan.io/address/${derivedAddress}`,
+                  "_blank",
+                  "noopener,noreferrer",
+                )
+              }
+              _hover={{ color: "accent.highlight", bg: "surface.raisedHover" }}
+            />
           </HStack>
-        </Box>
+        </VStack>
       )}
     </>
   );

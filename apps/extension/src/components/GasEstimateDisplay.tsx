@@ -535,7 +535,7 @@ function GasEstimateDisplay({
         borderColor="border.default"
         borderRadius="lg"
         bg="surface.raised"
-        boxShadow="card"
+        boxShadow="none"
         px={3}
         py={2}
       >
@@ -598,7 +598,7 @@ function GasEstimateDisplay({
 
       {/* Gas estimate box */}
       <Box
-        border={tokens.borders.medium}
+        border={tokens.borders.thin}
         borderColor="border.default"
         borderRadius="lg"
         // overflow:hidden clips the header's hover bg to the card's rounded
@@ -607,7 +607,7 @@ function GasEstimateDisplay({
         // (most visible on Midnight, where the hover tint is most saturated).
         overflow="hidden"
         bg="surface.raised"
-        boxShadow="card"
+        boxShadow="none"
         position="relative"
       >
         {/* Collapsed header */}

@@ -26,7 +26,7 @@ export const WALLETCHAN_SITE_URL = `https://${WALLETCHAN_SITE_HOST}`;
 const WALLETCHAN_API_BASE_PROD = `${WALLETCHAN_SITE_URL}/api`;
 const WALLETCHAN_API_BASE_DEV = `http://localhost:${WALLETCHAN_DEV_PORT}/api`;
 export const WALLETCHAN_API_BASE =
-  import.meta.env.MODE === "development"
+  import.meta.env?.MODE === "development"
     ? WALLETCHAN_API_BASE_DEV
     : WALLETCHAN_API_BASE_PROD;
 

@@ -29,6 +29,9 @@ import {
   getAccountPickerSecondaryIdentity,
 } from "@/components/AccountPickerRow";
 import AccountExplorerMenu from "@/components/AccountExplorerMenu";
+import SortableAccountPickerRows, {
+  type SortableRenderState,
+} from "@/components/SortableAccountPickerRows";
 import { getDefaultAccountExplorerUrl } from "@/components/accountExplorerUtils";
 import { getWalletTypeLabel } from "@/components/accountIdentityLabels";
 import { CopyButton } from "@/components/CopyButton";
@@ -87,10 +90,11 @@ function AccountSwitcher({
   const [uncontrolledPickerOpen, setUncontrolledPickerOpen] = useState(false);
   const isPickerOpen = controlledPickerOpen ?? uncontrolledPickerOpen;
   const [query, setQuery] = useState("");
+  const [reorderError, setReorderError] = useState<string | null>(null);
   const seedGroupMap = useSeedGroupMap(accounts);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const activeAccountRowRef = useRef<HTMLElement>(null);
+  const activeAccountRowRef = useRef<HTMLElement | null>(null);
 
   const accountAddresses = useMemo(
     () => accounts.map((account) => account.address),
@@ -190,6 +194,73 @@ function AccountSwitcher({
   const addAccount = () => {
     onAddAccount();
     closePicker(false);
+  };
+
+  const persistAccountOrder = async (accountIds: string[]) => {
+    const response = await chrome.runtime.sendMessage({
+      type: "reorderAccounts",
+      accountIds,
+    });
+    if (!response?.success) {
+      throw new Error(response?.error || "Failed to reorder accounts");
+    }
+  };
+
+  const renderAccountRow = (
+    account: Account,
+    sortableState?: SortableRenderState,
+  ) => {
+    const isActive = account.id === activeAccount?.id;
+    const ensName = getEnsName(account);
+    const explorerHref = openExplorer(account);
+    const secondaryIdentity = getAccountPickerSecondaryIdentity(
+      account,
+      ensName,
+    );
+
+    return (
+      <AccountPickerRow
+        key={account.id}
+        ref={(node) => {
+          sortableState?.setNodeRef(node);
+          if (isActive) activeAccountRowRef.current = node;
+        }}
+        account={account}
+        displayName={getDisplayName(account)}
+        ensAvatar={getEnsAvatar(account)}
+        secondaryIdentity={secondaryIdentity}
+        walletTypeLabel={getWalletTypeLabel(account, seedGroupMap)}
+        isSelected={isActive}
+        isDragging={sortableState?.isDragging}
+        style={sortableState?.style}
+        leadingAction={sortableState?.dragHandle}
+        onSelect={() => selectAccount(account)}
+        actions={
+          <>
+            <CopyButton value={account.address} />
+            {explorerHref && (
+              <IconButton
+                as="a"
+                href={explorerHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="View address on explorer"
+                icon={<ExternalLinkIcon />}
+                size="xs"
+                variant="ghost"
+              />
+            )}
+            <IconButton
+              aria-label={`Settings for ${getDisplayName(account)}`}
+              icon={<SettingsIcon />}
+              size="xs"
+              variant="ghost"
+              onClick={() => openAccountSettings(account)}
+            />
+          </>
+        }
+      />
+    );
   };
 
   return (
@@ -305,6 +376,22 @@ function AccountSwitcher({
             ref={pickerRef}
             title="Choose account"
             onBack={() => closePicker()}
+            trailing={
+              <IconButton
+                aria-label="Add account"
+                icon={<AddIcon boxSize={4} />}
+                variant="ghost"
+                minW="44px"
+                w="44px"
+                h="44px"
+                color="fg.secondary"
+                onClick={addAccount}
+                _hover={{
+                  color: "accent.highlight",
+                  bg: "surface.raisedHover",
+                }}
+              />
+            }
             controls={
               <FullScreenPickerSearch
                 label="Search accounts"
@@ -315,58 +402,35 @@ function AccountSwitcher({
             }
           >
             {filteredAccounts.length > 0 ? (
-              <FullScreenPickerGroup
-                label="Accounts"
-                description={`${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`}
-              >
-                {filteredAccounts.map((account) => {
-                  const isActive = account.id === activeAccount?.id;
-                  const ensName = getEnsName(account);
-                  const explorerHref = openExplorer(account);
-                  const secondaryIdentity = getAccountPickerSecondaryIdentity(
-                    account,
-                    ensName,
-                  );
-
-                  return (
-                    <AccountPickerRow
-                      key={account.id}
-                      ref={isActive ? activeAccountRowRef : undefined}
-                      account={account}
-                      displayName={getDisplayName(account)}
-                      ensAvatar={getEnsAvatar(account)}
-                      secondaryIdentity={secondaryIdentity}
-                      walletTypeLabel={getWalletTypeLabel(account, seedGroupMap)}
-                      isSelected={isActive}
-                      onSelect={() => selectAccount(account)}
-                      actions={
-                        <>
-                          <CopyButton value={account.address} />
-                          {explorerHref && (
-                            <IconButton
-                              as="a"
-                              href={explorerHref}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              aria-label="View address on explorer"
-                              icon={<ExternalLinkIcon />}
-                              size="xs"
-                              variant="ghost"
-                            />
-                          )}
-                          <IconButton
-                            aria-label={`Settings for ${getDisplayName(account)}`}
-                            icon={<SettingsIcon />}
-                            size="xs"
-                            variant="ghost"
-                            onClick={() => openAccountSettings(account)}
-                          />
-                        </>
-                      }
-                    />
-                  );
-                })}
-              </FullScreenPickerGroup>
+              <>
+                {!normalizedQuery && accounts.length > 1 ? (
+                  <SortableAccountPickerRows
+                    accounts={accounts}
+                    label="Accounts"
+                    description={`${accounts.length} accounts · Drag the handle to reorder`}
+                    getDisplayName={getDisplayName}
+                    onReorder={persistAccountOrder}
+                    onReorderError={setReorderError}
+                    renderAccount={renderAccountRow}
+                  />
+                ) : (
+                  <FullScreenPickerGroup
+                    label="Accounts"
+                    description={
+                      normalizedQuery
+                        ? `${filteredAccounts.length} of ${accounts.length} accounts`
+                        : "1 account"
+                    }
+                  >
+                    {filteredAccounts.map((account) => renderAccountRow(account))}
+                  </FullScreenPickerGroup>
+                )}
+                {reorderError && (
+                  <Text role="alert" mt={2} px={1} color="chart.negative" fontSize="sm">
+                    {reorderError}
+                  </Text>
+                )}
+              </>
             ) : (
               <FullScreenPickerEmpty
                 title="No accounts found"

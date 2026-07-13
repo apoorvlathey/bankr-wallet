@@ -7,6 +7,7 @@ import type { PendingErc7715PermissionRequest } from "@/chrome/pendingErc7715Per
 import type { PortfolioResponse } from "@/chrome/portfolioApi";
 import { DEFAULT_NETWORKS } from "@/constants/networks";
 import { SELECTED_THEME_STORAGE_KEY } from "@/theme";
+import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from "@/constants/securityPolicy";
 import {
   PREVIEW_EPOCH_MS,
   createPreviewBatchScenario,
@@ -208,7 +209,7 @@ export function createPreviewEnvironment(href: string): PreviewEnvironment {
         chainName: "Base",
         activeAccountId: activeAccount.id,
         defaultGasTier: "standard",
-        autoLockTimeout: 0,
+        autoLockTimeout: DEFAULT_AUTO_LOCK_TIMEOUT_MS,
         hidePortfolioValue: false,
         sidePanelMode: parsed.state.frame === "sidepanel",
       },

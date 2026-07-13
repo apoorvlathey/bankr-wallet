@@ -4,19 +4,20 @@ import { useEffect, useState } from "react";
 import { Badge, Box, Flex, HStack, Icon as ChakraIcon, IconButton, Image, Spacer, Text, VStack } from "@chakra-ui/react";
 import { ArrowBackIcon, ChevronDownIcon, CopyIcon, ExternalLinkIcon, SettingsIcon } from "@chakra-ui/icons";
 import { keyframes } from "@emotion/react";
+import { warmMockup } from "./design";
 
 const ui = {
-  bg: "#090b12",
-  raised: "#171b26",
-  sunken: "#080b13",
-  border: "rgba(146,158,195,0.24)",
-  borderStrong: "rgba(146,158,195,0.38)",
-  text: "#f7f7f4",
-  muted: "rgba(230,234,248,0.74)",
-  faint: "rgba(230,234,248,0.52)",
-  blue: "#5a81f3",
-  yellow: "#f5c15b",
-  purple: "#7d5af7",
+  bg: warmMockup.base,
+  raised: warmMockup.surface,
+  sunken: warmMockup.sunken,
+  border: warmMockup.border,
+  borderStrong: warmMockup.borderStrong,
+  text: warmMockup.text,
+  muted: warmMockup.secondary,
+  faint: warmMockup.muted,
+  blue: warmMockup.blue,
+  yellow: warmMockup.amber,
+  purple: warmMockup.blueSoft,
 };
 
 const preserve3d = { transformStyle: "preserve-3d" } as const;
@@ -186,7 +187,7 @@ function SwapEntryScreen({ mode, isPressing }: { mode: "bridge" | "swap"; isPres
         raised
       />
       <Flex justify="center" my={-0.5} transform="translateZ(78px)">
-        <Flex w="38px" h="38px" borderRadius="14px" bg={ui.purple} border="3px solid rgba(49,56,82,0.95)" boxShadow="0 8px 0 rgba(0,0,0,0.26)" align="center" justify="center">
+        <Flex w="38px" h="38px" borderRadius="10px" bg={ui.purple} border="1px solid" borderColor={ui.borderStrong} boxShadow="0 8px 18px rgba(0,0,0,0.24)" align="center" justify="center">
           <SwapArrowIcon boxSize={5} />
         </Flex>
       </Flex>
@@ -227,11 +228,11 @@ function ConfirmScreen({ mode, isPressing }: { mode: "bridge" | "swap"; isPressi
         <IconButton aria-label="Back" icon={<ArrowBackIcon boxSize={5} />} variant="ghost" color={ui.text} minW="30px" h="30px" borderRadius="10px" _hover={{ bg: "rgba(255,255,255,0.08)" }} />
       </HStack>
       <TitleBanner title={isBridge ? "Confirm Bridge" : "Confirm Swap"} />
-      <Box mt={3} bg={ui.raised} border="2px solid" borderColor={ui.borderStrong} borderRadius="20px" overflow="hidden" boxShadow="0 20px 34px rgba(0,0,0,0.3)" transform="translateZ(92px)">
+      <Box mt={3} bg={ui.raised} border="1px solid" borderColor={ui.borderStrong} borderRadius="12px" overflow="hidden" boxShadow="0 20px 34px rgba(0,0,0,0.3)" transform="translateZ(92px)">
         <ConfirmAssetRow label="You Sell" token="USDC" icon="usdc" amount="100 USDC" usd="$100.01" />
         <Box position="relative" h="26px">
           <Box position="absolute" top="50%" left={0} right={0} h="1px" bg={ui.border} />
-          <Flex position="absolute" top="50%" left="50%" transform="translate(-50%, -50%)" w="30px" h="30px" borderRadius="full" bg={ui.blue} border="2px solid rgba(49,56,82,0.95)" align="center" justify="center">
+          <Flex position="absolute" top="50%" left="50%" transform="translate(-50%, -50%)" w="30px" h="30px" borderRadius="full" bg={ui.blue} border="1px solid" borderColor={ui.borderStrong} align="center" justify="center">
             <ArrowDownIcon boxSize={4} />
           </Flex>
         </Box>
@@ -258,13 +259,13 @@ function ConfirmScreen({ mode, isPressing }: { mode: "bridge" | "swap"; isPressi
       <TransactionsList mode={mode} />
       <GasFee amount={isBridge ? "0.00005790227490768 ETH (~$0.10)" : "0.000016567422892702 ETH (~$0.03)"} />
       <HStack spacing={2} pt={1} sx={preserve3d}>
-        <Flex flex={1} h="46px" borderRadius="15px" bg={ui.raised} border="1px solid" borderColor={ui.borderStrong} align="center" justify="center" fontSize="17px" fontWeight="900" transform="translateZ(28px)">
+        <Flex flex={1} h="46px" borderRadius="10px" bg={ui.raised} border="1px solid" borderColor={ui.borderStrong} align="center" justify="center" fontSize="16px" fontWeight="600" transform="translateZ(28px)">
           Cancel
         </Flex>
         <Flex
           flex={1}
           h="46px"
-          borderRadius="15px"
+          borderRadius="10px"
           bg={ui.yellow}
           color="#121212"
           border="1px solid"
@@ -328,7 +329,7 @@ function SwapAmountCard({
   raised?: boolean;
 }) {
   return (
-    <Box bg={ui.raised} border="2px solid" borderColor={ui.borderStrong} borderRadius="20px" p={3} boxShadow={raised ? "0 20px 34px rgba(0,0,0,0.3)" : "0 9px 0 rgba(0,0,0,0.2)"} transform={raised ? "translateZ(92px)" : undefined}>
+    <Box bg={ui.raised} border="1px solid" borderColor={ui.borderStrong} borderRadius="12px" p={3} boxShadow={raised ? "0 20px 34px rgba(0,0,0,0.3)" : "0 10px 22px rgba(0,0,0,0.22)"} transform={raised ? "translateZ(92px)" : undefined}>
       <HStack mb={2} justify="space-between">
         <Text fontSize="12px" color={ui.muted} fontWeight="900" textTransform="uppercase">{label}</Text>
         {topRight && (
@@ -341,7 +342,7 @@ function SwapAmountCard({
       </HStack>
       <HStack spacing={2}>
         <TokenButton token={token} icon={tokenIcon} chainIcon={chainIcon} />
-        <HStack flex={1} h="46px" px={3} borderRadius="14px" border="2px solid" borderColor={topRight ? ui.blue : ui.borderStrong} bg={ui.sunken}>
+        <HStack flex={1} h="46px" px={3} borderRadius="10px" border="1px solid" borderColor={topRight ? ui.blue : ui.borderStrong} bg={ui.sunken}>
           <Text fontFamily="mono" fontSize="18px" color={ui.text}>{amount}</Text>
           {topRight && <Spacer />}
           {topRight && <Text color={ui.blue} fontSize="14px" fontWeight="900">MAX</Text>}
@@ -361,7 +362,7 @@ function SwapAmountCard({
 
 function TokenButton({ token, icon, chainIcon }: { token: string; icon: TokenIconKind; chainIcon: string }) {
   return (
-    <HStack h="46px" minW="126px" px={2.5} borderRadius="14px" border="2px solid" borderColor={ui.borderStrong} bg={ui.sunken}>
+    <HStack h="46px" minW="126px" px={2.5} borderRadius="10px" border="1px solid" borderColor={ui.borderStrong} bg={ui.sunken}>
       <TokenIcon kind={icon} size="28px" chainBadge={chainIcon} />
       <Text fontSize="16px" fontWeight="900">{token}</Text>
       <ChevronDownIcon color={ui.muted} />
@@ -374,7 +375,7 @@ function SliderMock() {
     <Box px={1} pt={3} pb={1}>
       <Box position="relative" h="7px" borderRadius="full" bg={ui.sunken}>
         <Box position="absolute" left={0} top={0} bottom={0} w="34%" borderRadius="full" bg={ui.blue} />
-        <Box position="absolute" left="32%" top="50%" transform="translate(-50%, -50%)" boxSize="22px" borderRadius="full" bg={ui.blue} border="3px solid rgba(49,56,82,0.95)" />
+        <Box position="absolute" left="32%" top="50%" transform="translate(-50%, -50%)" boxSize="22px" borderRadius="full" bg={ui.blue} border="2px solid" borderColor={ui.raised} />
       </Box>
       <HStack justify="space-between" mt={2.5}>
         {["0%", "25%", "50%", "75%", "100%"].map((pct, index) => <Text key={pct} fontSize="11px" fontWeight="900" color={index < 2 ? ui.blue : ui.faint}>{pct}</Text>)}
@@ -385,7 +386,7 @@ function SliderMock() {
 
 function MinReceivedRow({ token, amount, usd }: { token: string; amount: string; usd: string }) {
   return (
-    <HStack mt={-5} bg={ui.sunken} border="2px solid" borderColor={ui.borderStrong} borderRadius="18px" px={3} py={2.5} justify="space-between" transform="translateZ(40px)">
+    <HStack mt={-5} bg={ui.sunken} border="1px solid" borderColor={ui.borderStrong} borderRadius="10px" px={3} py={2.5} justify="space-between" transform="translateZ(40px)">
       <Text fontSize="12px" color={ui.muted} fontWeight="900" textTransform="uppercase">Min. Received</Text>
       <VStack align="end" spacing={0}>
         <HStack spacing={1}><Text fontSize="15px" fontWeight="900">{amount} {token}</Text><ChevronDownIcon color={ui.muted} /></HStack>
@@ -401,7 +402,8 @@ function PrimaryAction({ label, isPressing }: { label: string; isPressing: boole
       h="50px"
       borderRadius="17px"
       bg={ui.purple}
-      border="2px solid rgba(49,56,82,0.95)"
+      border="1px solid"
+      borderColor={ui.borderStrong}
       align="center"
       justify="center"
       fontSize="18px"
@@ -417,7 +419,7 @@ function PrimaryAction({ label, isPressing }: { label: string; isPressing: boole
 
 function TitleBanner({ title }: { title: string }) {
   return (
-    <HStack justify="center" spacing={2} bg={ui.blue} color={ui.text} py={2} px={3} borderRadius="17px" border="2px solid rgba(49,56,82,0.95)" boxShadow="0 7px 0 rgba(0,0,0,0.24)" transform="translateZ(70px)">
+    <HStack justify="center" spacing={2} bg={ui.blue} color={ui.text} py={2} px={3} borderRadius="10px" border="1px solid" borderColor={ui.borderStrong} boxShadow="0 8px 20px rgba(0,0,0,0.24)" transform="translateZ(70px)">
       <Text fontSize="15px" fontWeight="900" textTransform="uppercase" letterSpacing="0.05em">{title}</Text>
       <Badge bg={ui.yellow} color="#121212" border="1.5px solid #121212" borderRadius="8px" fontSize="10px" fontWeight="900" px={2}>ATOMIC</Badge>
     </HStack>

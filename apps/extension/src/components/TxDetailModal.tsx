@@ -46,6 +46,7 @@ import {
 import { isDarkThemeId, useTheme, useChainBadgeStyle } from "@/theme";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
+import { fetchRpcResult } from "@/chrome/rpcHttpClient";
 import ClearSignedSummaryCard from "@/components/ClearSignedSummaryCard";
 import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
 import { BatchCallsList } from "@/components/BatchCallsList";
@@ -1338,11 +1339,9 @@ export function TxDetailController({
 
       try {
         const rpcCall = (method: string, params: any[]) =>
-          fetch(rpcUrl!, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-          }).then((r) => r.json()).then((r) => r.result);
+          fetchRpcResult(rpcUrl!, method, params, {
+            allowPrivateWithoutOrigin: true,
+          });
 
         const [txData, receipt] = await Promise.all([
           rpcCall("eth_getTransactionByHash", [tx.txHash!]),

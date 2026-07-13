@@ -89,7 +89,7 @@ export function NativeCalldataDecodeModal({
                       variant="ghost"
                       minW="32px"
                       h="32px"
-                      onClick={() => window.open(`${explorer}/address/${to}`, "_blank")}
+                      onClick={() => window.open(`${explorer}/address/${to}`, "_blank", "noopener,noreferrer")}
                     />
                   )}
                 </HStack>

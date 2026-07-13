@@ -8,7 +8,13 @@ import { palette } from "./design";
 
 export default function HomeV2Content() {
   return (
-    <Box bg={palette.ink} color={palette.white} minH="100vh" overflowX="clip">
+    <Box
+      bg={palette.ink}
+      color={palette.white}
+      minH="100vh"
+      overflowX="clip"
+      fontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    >
       <HeroStorySection />
       <StatBar />
       <FinalCta />

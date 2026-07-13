@@ -89,6 +89,8 @@ export function BankrSetupStep({
                 placeholder="Paste your API key"
                 autoFocus
                 autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
                 spellCheck={false}
                 onChange={(event) => onApiKeyChange(event.target.value)}
                 onKeyDown={submitOnEnter}

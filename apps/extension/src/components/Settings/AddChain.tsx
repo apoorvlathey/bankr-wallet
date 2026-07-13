@@ -19,28 +19,16 @@ import { KNOWN_CHAINS } from "@/constants/knownChains.generated";
 import { InlineDisclosure } from "@/components/ui";
 import { AddChainConfirmationScreen } from "./AddChainConfirmationScreen";
 import { SettingsScreenFrame } from "./SettingsScreenFrame";
+import {
+  assertRpcEndpointAllowedForOrigin,
+  probeRpcChainId,
+} from "@/chrome/rpcHttpClient";
 
 interface AddChainProps {
   back: (options?: { added?: boolean }) => void;
   initialRequest?: PendingAddChainRequest;
   mode?: "settings" | "dapp";
   onAdded?: (chainName: string, chainId: number) => void;
-}
-
-/** Fetch chainId from an RPC endpoint via eth_chainId. */
-async function fetchChainId(rpcUrl: string): Promise<number | null> {
-  try {
-    const res = await fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }),
-    });
-    const json = await res.json();
-    if (json.result) return Number(json.result);
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 type NetworkMutationResponse = {
@@ -96,6 +84,10 @@ function AddChain({
     if (!Number.isFinite(parsed)) return null;
     return KNOWN_CHAINS[parsed] ?? null;
   }, [chainId]);
+  const rpcProbeOptions =
+    mode === "dapp"
+      ? { requestOrigin: initialRequest?.origin }
+      : { allowPrivateWithoutOrigin: true };
 
   const checkChainIdConflict = (id: string) => {
     if (!id || !networksInfo) {
@@ -154,7 +146,7 @@ function AddChain({
     // Auto-detect chainId from RPC
     setIsDetecting(true);
     try {
-      const detectedId = await fetchChainId(trimmed);
+      const detectedId = await probeRpcChainId(trimmed, rpcProbeOptions);
       if (detectedId !== null) {
         setChainId(detectedId.toString());
         checkChainIdConflict(detectedId.toString());
@@ -196,7 +188,22 @@ function AddChain({
     }
 
     // Validate RPC returns expected chainId
-    const detectedId = await fetchChainId(rpc);
+    try {
+      assertRpcEndpointAllowedForOrigin(
+        rpc,
+        mode === "dapp" ? initialRequest?.origin : undefined,
+        { allowPrivateWithoutOrigin: mode !== "dapp" },
+      );
+    } catch (error) {
+      setRpcWarning(
+        error instanceof Error ? error.message : "This RPC URL is not allowed.",
+      );
+      setTechnicalOpen(true);
+      setIsBtnLoading(false);
+      return;
+    }
+
+    const detectedId = await probeRpcChainId(rpc, rpcProbeOptions);
     if (detectedId === null) {
       setRpcWarning("Could not verify RPC — endpoint may be down. Chain saved anyway.");
       setTechnicalOpen(true);

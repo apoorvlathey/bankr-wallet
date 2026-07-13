@@ -1,6 +1,5 @@
 import {
   createPublicClient,
-  http,
   formatUnits,
   erc20Abi,
   type Address,
@@ -9,6 +8,7 @@ import {
 import { PortfolioToken } from "@/chrome/portfolioApi";
 import { getPortfolioTokenKey } from "@/chrome/hiddenPortfolioTokens";
 import { getStoredRpcUrl } from "@/lib/chains";
+import { secureHttpTransport } from "./rpcHttpClient";
 
 /** Multicall3 is deployed at the same address on all supported chains */
 const MULTICALL3_ADDRESS: Address =
@@ -44,7 +44,7 @@ async function getClient(chainId: number): Promise<PublicClient | null> {
   }
 
   const client = createPublicClient({
-    transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 0 }),
+    transport: secureHttpTransport(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 0 }),
   });
   clientCache.set(chainId, { rpcUrl, client });
   return client;

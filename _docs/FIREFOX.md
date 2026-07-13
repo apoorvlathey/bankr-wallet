@@ -1,6 +1,6 @@
 # Firefox Port
 
-WalletChan ships to both Chrome Web Store and addons.mozilla.org (AMO) from a single codebase. This doc covers everything Firefox-specific: build pipeline, manifest divergence, the `storage.session` shim, the popup-only UX choice, and the AMO release flow.
+WalletChan ships to both Chrome Web Store and addons.mozilla.org (AMO) from a single codebase. This doc covers everything Firefox-specific: build pipeline, manifest divergence, the `storage.session` compatibility layer, the popup-only UX choice, and the AMO release flow.
 
 ## TL;DR
 
@@ -27,7 +27,10 @@ The same five Vite configs build both browsers. `process.env.BROWSER` is the gat
 
 ## Manifest divergence
 
-Both manifests share `name`, `version`, `description`, `icons`, `action`, `content_scripts`, `host_permissions`, `web_accessible_resources`, and the core `activeTab` / `storage` / `notifications` / `tabs` / `unlimitedStorage` permissions. The differences:
+Both manifests share `name`, `version`, `description`, `icons`, `action`,
+`content_scripts`, `host_permissions`, the provider/brand-asset
+`web_accessible_resources` group, and the core `activeTab` / `storage` /
+`notifications` / `tabs` / `unlimitedStorage` permissions. The differences:
 
 | Key | Chrome (`public/manifest.json`) | Firefox (`manifest.firefox.json`) |
 |---|---|---|
@@ -35,6 +38,7 @@ Both manifests share `name`, `version`, `description`, `icons`, `action`, `conte
 | `side_panel` | `{ "default_path": "index.html" }` | (absent) |
 | `permissions` includes `"sidePanel"` | yes | no |
 | `permissions` includes `"declarativeNetRequestWithHostAccess"` | yes | no |
+| ENS browsing HTML in `web_accessible_resources` | `browse.html`, `interstitial.html`, `ens-error.html`, `setup-kubo.html` | absent |
 | `browser_specific_settings.gecko.strict_min_version` | (irrelevant) | `"121.0"` |
 | `browser_specific_settings.gecko.data_collection_permissions` | (irrelevant) | `{ "required": ["none"] }` (AMO requirement since Nov 2025) |
 
@@ -97,19 +101,42 @@ Chrome path is **unchanged**: `default_popup: "popup-init.html"` in the Chrome m
 
 This is also why every direct `chrome.sidePanel.open()` call site has a `chrome.sidePanel?.open` guard — Firefox's `chrome.sidePanel` is undefined, so unguarded access throws and the user sees a noisy console error.
 
-## `chrome.storage.session` shim
+## `chrome.storage.session` compatibility layer
 
-Firefox MV3 does not implement `chrome.storage.session` ([Bugzilla 1687778](https://bugzilla.mozilla.org/show_bug.cgi?id=1687778)). All session storage in WalletChan now goes through `apps/extension/src/chrome/sessionStorage.ts`:
+Firefox added `storage.session` in Firefox 115. WalletChan's declared minimum
+is Firefox 121, so supported Firefox builds use the native memory-backed area.
+Wallet authentication/session records still go through
+`apps/extension/src/chrome/session/storage.ts` so the security behavior is
+explicit and other browser/fork environments without the API fail safely:
 
 ```ts
-import { getSessionItems, setSessionItems, removeSessionItems, clearSession } from "./sessionStorage";
+import { getSessionItems, setSessionItems, removeSessionItems, clearSession } from "./storage";
 ```
 
-On Chrome, every call passes through to `chrome.storage.session.*`. On Firefox, the shim reads/writes `chrome.storage.local` with a `__session__` key prefix and registers a `chrome.runtime.onStartup` listener that wipes those prefixed keys on browser restart — preserving the "cleared on browser close" guarantee that `storage.session` provides natively on Chrome.
+On supported Chrome and Firefox, every call passes through to native
+`chrome.storage.session.*`. If a browser/fork lacks that area, the fallback may
+read/write `chrome.storage.local` with a `__session__` key prefix for
+**non-secret** session metadata/context and registers a
+`chrome.runtime.onStartup` listener that wipes those prefixed keys on browser
+restart.
 
-**Security note:** on Firefox, the session ciphertext (`encryptedSessionPassword`) lives in `storage.local` alongside the AES key half (`sessionEncKey`). A profile-level attacker with access to a still-running Firefox can read both halves — which matches the Chrome threat model where a still-running browser with `storage.session` populated is similarly readable. After browser restart, both halves are gone (Firefox via the onStartup listener; Chrome via the native `storage.session` lifecycle).
+**Security note:** password-session restoration is deliberately disabled when
+native `chrome.storage.session` is unavailable. Those fallback environments
+keep Never-session credentials only in service-worker memory;
+`encryptedSessionPassword` and `sessionEncKey` are not written by the fallback.
+Current workers proactively remove either secret half left by an older
+fallback build. This cleanup also runs after a browser upgrade adds native
+`storage.session`: stale `__session__*` local records are removed, while an
+already-valid current native Never session is preserved. On supported Chrome and Firefox, the ciphertext half remains
+memory-backed in `storage.session` and disappears on browser close; only its
+random AES key half is in `storage.local`.
 
-**Rule:** direct `chrome.storage.session.*` calls are forbidden outside `sessionStorage.ts`. Grep enforces it: `grep -rn "chrome\.storage\.session\." apps/extension/src/` should only match `sessionStorage.ts` itself.
+**Rule:** credential/session-auth code must not call
+`chrome.storage.session.*` directly or send password material through the
+non-native local fallback. Keep the adapter in `session/storage.ts`, use it
+through `session/persistence.ts`, and retain the explicit
+`hasNativeSessionStorage()` gate there. Other non-secret feature
+state must independently handle browsers where the native area is absent.
 
 ## AMO release flow
 
@@ -147,7 +174,8 @@ Load the unpacked Firefox extension:
 4. SeedPhrase account: import, derive an account, sign an EIP-712 typed-data message
 5. Impersonator account: signing/execution paths are blocked (view-only)
 6. ERC-5792 batch tx flow works
-7. Auto-lock = "Never" survives browser restart only if `storage.session` clears as expected (i.e., it should NOT survive — should require unlock)
+7. Auto-lock = "Never" survives a Firefox event-page restart within the same
+   browser session, but closing/restarting the browser requires unlock
 8. EIP-6963 announcement: WalletChan appears in dapps' wallet picker (test on Aave / Uniswap)
 
 ## Known gaps (intentional, v1)
@@ -164,7 +192,7 @@ Load the unpacked Firefox extension:
 | `apps/extension/public/manifest.json` | Chrome manifest (unchanged from pre-Firefox era) |
 | `apps/extension/manifest.firefox.json` | Firefox manifest variant (outside public/ to avoid Chrome leak) |
 | `apps/extension/scripts/swap-manifest.mjs` | Post-build manifest swap for Firefox |
-| `apps/extension/src/chrome/sessionStorage.ts` | `chrome.storage.session` shim |
+| `apps/extension/src/chrome/session/storage.ts` | `chrome.storage.session` compatibility layer |
 | `apps/extension/vite.config.ts` | Defines per-browser `buildDir` |
 | `apps/extension/vite.config.background.ts` | Per-browser format gate (`es` ↔ `iife`) |
 | `apps/extension/package.json` | `build:firefox`, `dev:firefox`, `zip:firefox`, `sign:firefox` scripts |

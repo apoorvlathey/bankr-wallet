@@ -7,6 +7,7 @@ import {
   RemoveAgentPasswordView,
   SetAgentPasswordView,
 } from "./AgentPasswordViews";
+import { newPasswordPolicyError } from "@/constants/securityPolicy";
 
 interface AgentPasswordSettingsProps {
   onComplete: () => void;
@@ -79,12 +80,11 @@ function AgentPasswordSettings({
 
   const validateSetPassword = (): boolean => {
     const newErrors: typeof errors = {};
-
-    if (!agentPassword) {
-      newErrors.agentPassword = "Agent password is required";
-    } else if (agentPassword.length < 6) {
-      newErrors.agentPassword = "Password must be at least 6 characters";
-    }
+    const agentPasswordError = newPasswordPolicyError(
+      agentPassword,
+      "Agent password",
+    );
+    if (agentPasswordError) newErrors.agentPassword = agentPasswordError;
 
     if (agentPassword !== confirmPassword) {
       newErrors.confirmPassword = "Passwords do not match";

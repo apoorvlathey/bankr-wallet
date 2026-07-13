@@ -1,0 +1,29 @@
+import { updateBundleStatus } from "../bundleStatusStorage";
+import { BUNDLE_STATUS } from "../erc5792Types";
+import type { PendingBatchTxRequest } from "../erc5792Types";
+import { writeResultToStorage } from "../transactions/runtime";
+import { updateTxInHistory } from "../txHistoryStorage";
+import { showNotification } from "../txHandlers";
+
+export async function handleBatchFailure(
+  bundleId: string,
+  pending: PendingBatchTxRequest,
+  error: string,
+): Promise<void> {
+  await updateBundleStatus(bundleId, {
+    status: BUNDLE_STATUS.OFFCHAIN_FAILURE,
+    error,
+    completedAt: Date.now(),
+  });
+  await updateTxInHistory(bundleId, {
+    status: "failed",
+    error,
+    completedAt: Date.now(),
+  });
+  await showNotification(
+    `tx-failed-${bundleId}`,
+    "Batch Transaction Failed",
+    `Batch transaction on ${pending.chainName} failed: ${error}`,
+  );
+  await writeResultToStorage(`batchTxResult:${bundleId}`, { success: false, error });
+}

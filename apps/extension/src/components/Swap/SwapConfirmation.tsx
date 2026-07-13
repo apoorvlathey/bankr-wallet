@@ -742,7 +742,7 @@ function SwapConfirmation({
                             h="24px"
                             color="text.tertiary"
                             onClick={() =>
-                              window.open(`${config.explorer}/address/${entry.tx.to}`, "_blank")
+                              window.open(`${config.explorer}/address/${entry.tx.to}`, "_blank", "noopener,noreferrer")
                             }
                             _hover={{ color: "accent.secondary", bg: "surface.sunken" }}
                           />

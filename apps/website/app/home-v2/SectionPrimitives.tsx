@@ -12,7 +12,7 @@ export function StatBar() {
   ];
 
   return (
-    <Box borderY="1px solid rgba(255,255,255,0.12)" bg="rgba(255,255,255,0.035)">
+    <Box borderY="1px solid rgba(255,255,255,0.10)" bg={palette.ink2}>
       <Container maxW="7xl">
         <SimpleGrid columns={{ base: 2, md: 4 }} spacing={0}>
           {stats.map(([value, label], index) => (
@@ -31,7 +31,7 @@ export function StatBar() {
               <Text
                 color={palette.white}
                 fontSize={{ base: "34px", md: "46px" }}
-                fontWeight="900"
+                fontWeight="600"
                 letterSpacing="0"
                 lineHeight="1"
               >
@@ -40,9 +40,9 @@ export function StatBar() {
               <Text
                 color={palette.faint}
                 fontSize="12px"
-                fontWeight="800"
+                fontWeight="600"
                 textTransform="uppercase"
-                letterSpacing="0"
+                letterSpacing="0.04em"
               >
                 {label}
               </Text>

@@ -1,0 +1,177 @@
+import { hasEncryptedApiKey, loadDecryptedApiKey } from "../crypto";
+import { captureEip7702DelegationAuthorization } from "../delegatedAuthorityPolicy";
+import {
+  processLocalTransactionInBackground,
+  type GasOverrides,
+  type LocalSigningAccount,
+} from "./localExecution";
+import {
+  getPendingTxRequestById,
+  removePendingTxRequest,
+} from "../pendingTxStorage";
+import { enforcePendingRequestAuthorizationAtConfirmation } from "../pendingRequestLifecycle";
+import {
+  processingTxIds,
+  resolvePinnedAccount,
+  TX_EXPIRY_MS,
+} from "./runtime";
+import { beginPendingRequestEffectLease } from "../pendingRequestResolution";
+import {
+  getAutoLockTimeout,
+  getCachedVaultKey,
+  getPrivateKeyFromCache,
+  setCachedApiKey,
+  setCachedVault,
+  tryRestoreSession,
+} from "../sessionCache";
+import { decryptAllKeys } from "../vaultCrypto";
+
+type ConfirmationResult = { success: boolean; error?: string };
+
+async function resolveLocalTransactionKey(
+  account: LocalSigningAccount,
+  password: string,
+): Promise<
+  | { ok: true; privateKey: `0x${string}` }
+  | { ok: false; error: string }
+> {
+  let privateKey = getPrivateKeyFromCache(account.id);
+  if (privateKey) return { ok: true, privateKey };
+
+  if (!getCachedVaultKey()) {
+    const autoLockTimeout = await getAutoLockTimeout();
+    if (autoLockTimeout === 0) {
+      const { handleUnlockWallet } = await import("../authHandlers");
+      if (await tryRestoreSession(handleUnlockWallet)) {
+        privateKey = getPrivateKeyFromCache(account.id);
+      }
+    }
+  }
+  if (privateKey) return { ok: true, privateKey };
+
+  const cachedVaultKey = getCachedVaultKey();
+  const vault = cachedVaultKey
+    ? await (async () => {
+        const { decryptAllKeysWithVaultKey } = await import("../authHandlers");
+        return decryptAllKeysWithVaultKey(cachedVaultKey);
+      })()
+    : await decryptAllKeys(password);
+  if (!vault) return { ok: false, error: "Invalid password" };
+
+  setCachedVault(vault);
+  if (await hasEncryptedApiKey()) {
+    const apiKey = await loadDecryptedApiKey(password);
+    if (apiKey) setCachedApiKey(apiKey, password);
+  }
+  privateKey = getPrivateKeyFromCache(account.id);
+  return privateKey
+    ? { ok: true, privateKey }
+    : { ok: false, error: "Private key not found for account" };
+}
+
+/** Confirms a pinned private-key or seed-phrase transaction for background execution. */
+export async function handleConfirmTransactionAsyncPK(
+  txId: string,
+  password: string,
+  _tabId?: number,
+  functionName?: string,
+  gasOverrides?: GasOverrides,
+  forceInclusion?: boolean,
+): Promise<ConfirmationResult> {
+  if (processingTxIds.has(txId)) {
+    return { success: false, error: "Transaction already being processed" };
+  }
+
+  const pending = await getPendingTxRequestById(txId);
+  if (!pending || Date.now() - pending.timestamp > TX_EXPIRY_MS) {
+    if (pending) await removePendingTxRequest(txId);
+    return { success: false, error: "Transaction request expired" };
+  }
+  processingTxIds.add(txId);
+
+  const pinned = await resolvePinnedAccount(pending);
+  if (!pinned.ok) {
+    processingTxIds.delete(txId);
+    return { success: false, error: pinned.error };
+  }
+  const account = pinned.account;
+  if (account.type !== "privateKey" && account.type !== "seedPhrase") {
+    processingTxIds.delete(txId);
+    return { success: false, error: "Account does not support local signing" };
+  }
+  if (
+    typeof pending.tx.from === "string" &&
+    pending.tx.from.length > 0 &&
+    pending.tx.from.toLowerCase() !== account.address.toLowerCase()
+  ) {
+    processingTxIds.delete(txId);
+    return {
+      success: false,
+      error: "Transaction 'from' does not match active account",
+    };
+  }
+
+  let expectedDelegatedAuthorityAuthEpoch: string | undefined;
+  try {
+    expectedDelegatedAuthorityAuthEpoch =
+      await captureEip7702DelegationAuthorization(
+        pending.delegation7702Meta,
+      );
+  } catch (error) {
+    processingTxIds.delete(txId);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Master unlock required",
+    };
+  }
+
+  const key = await resolveLocalTransactionKey(account, password);
+  if (!key.ok) {
+    processingTxIds.delete(txId);
+    return { success: false, error: key.error };
+  }
+
+  const forceInclusionProcessor = forceInclusion
+    ? (await import("../forceInclusion/single")).processForceInclusionLocal
+    : null;
+  await removePendingTxRequest(txId);
+
+  const authorization =
+    await enforcePendingRequestAuthorizationAtConfirmation(
+      "transaction",
+      pending,
+    );
+  if (!authorization.authorized) {
+    processingTxIds.delete(txId);
+    return { success: false, error: authorization.error };
+  }
+
+  const effectLease = beginPendingRequestEffectLease("transaction", txId);
+  if (!effectLease) {
+    processingTxIds.delete(txId);
+    return { success: false, error: "Wallet reset is in progress" };
+  }
+
+  if (forceInclusionProcessor) {
+    void forceInclusionProcessor(
+      txId,
+      pending,
+      account,
+      key.privateKey,
+      gasOverrides,
+      effectLease,
+    );
+  } else {
+    void processLocalTransactionInBackground(
+      txId,
+      pending,
+      account,
+      key.privateKey,
+      functionName,
+      gasOverrides,
+      effectLease,
+      expectedDelegatedAuthorityAuthEpoch,
+    );
+  }
+  return { success: true };
+}

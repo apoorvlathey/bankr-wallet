@@ -3,6 +3,8 @@
  * Used by both crypto.ts (API key encryption) and vaultCrypto.ts (private key encryption)
  */
 
+import { isBoundedExistingPassword } from "@/constants/securityPolicy";
+
 export const PBKDF2_ITERATIONS = 600000;
 export const SALT_LENGTH = 16;
 export const IV_LENGTH = 12;
@@ -48,12 +50,64 @@ export function base64ToArrayBuffer(base64: string): ArrayBuffer {
 }
 
 /**
+ * Decode a fixed-size cryptographic field without first allowing an
+ * attacker-controlled storage value to allocate an arbitrary-sized buffer.
+ * All WalletChan writers use padded standard base64, so requiring the exact
+ * encoded and decoded lengths is backward compatible with every released
+ * record format.
+ */
+export function decodeBase64Exact(
+  value: unknown,
+  expectedByteLength: number,
+): Uint8Array | null {
+  if (
+    typeof value !== "string" ||
+    value.length !== Math.ceil(expectedByteLength / 3) * 4
+  ) {
+    return null;
+  }
+  try {
+    const decoded = base64ToUint8Array(value);
+    return decoded.byteLength === expectedByteLength ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Bounded decoder for authenticated ciphertext whose plaintext is variable. */
+export function decodeBase64Bounded(
+  value: unknown,
+  minimumByteLength: number,
+  maximumByteLength: number,
+): Uint8Array | null {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > Math.ceil(maximumByteLength / 3) * 4
+  ) {
+    return null;
+  }
+  try {
+    const decoded = base64ToUint8Array(value);
+    return decoded.byteLength >= minimumByteLength &&
+      decoded.byteLength <= maximumByteLength
+      ? decoded
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Derives an AES-256-GCM key from a password using PBKDF2
  */
 export async function deriveKey(
   password: string,
   salt: Uint8Array
 ): Promise<CryptoKey> {
+  if (!isBoundedExistingPassword(password)) {
+    throw new Error("Invalid password");
+  }
   const encoder = new TextEncoder();
   const passwordBuffer = encoder.encode(password);
 

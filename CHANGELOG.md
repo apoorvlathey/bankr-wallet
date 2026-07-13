@@ -17,16 +17,38 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 ### Changed
 
 - Security settings now place Auto-Lock immediately after Change Password and Agent Password at the bottom.
+- New and changed passwords now require at least 12 characters and reject a
+  small set of obviously guessable values; existing legacy passwords remain
+  unlockable.
+- Missing or invalid auto-lock settings now use a finite 15-minute default.
+  An existing explicit Never selection remains unchanged.
 
 ### Fixed
 
 - Passkey setup reuses the PRF output from credential creation when available, avoiding an unnecessary second biometric prompt.
 - Closing and reopening the popup after a manual lock once again auto-prompts for biometric unlock, while already-open wallet surfaces remain suppressed.
+- V2 biometric sessions can create, import, preview, and derive seed-phrase
+  accounts without caching the master password. Existing V1 passkeys and
+  password-encrypted phrase vaults remain compatible.
+- Ordered Bankr swap submissions stop after a failed, reverted, or
+  outcome-unknown leg instead of continuing with later transactions.
 
 ### Security
 
 - Passkey payloads and stored wrappers now fail closed on malformed cryptographic sizes, stale WebAuthn ceremonies cannot overwrite newer auth state, and auth mutations/session restoration are serialized so lock, password rotation, reset, and factor changes win deterministically.
 - Passkey unlock hydrates the same vault-key-backed caches used by all three wallet types without storing the master password or exposing WebAuthn-derived material outside extension pages.
+- Key/phrase reveal and account/permission mutations now recheck the exact
+  master session and pinned account at the final effect boundary; pending dapp
+  and WalletConnect work is origin-, account-, chain-, and lifecycle-bound.
+- WalletConnect reset rotates its SDK storage identity, browser fallbacks
+  without native session storage no longer persist Never-session password
+  recovery material, and stale fallback ciphertext/key halves are removed if a
+  later browser upgrade gains native session storage without disrupting a
+  valid current native session. Ambiguous sponsored ERC-3009 transfers retain one
+  encrypted authorization and require finalized dual-RPC reconciliation plus
+  trusted-UI result acknowledgment before another transfer is allowed.
+- Bankr/API/RPC responses, external navigation, and remote images now use
+  stricter origin, redirect, size, timeout, and raster-only boundaries.
 
 ## [3.19.0] - 2026-07-08
 
@@ -277,7 +299,9 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ### Added
 
-- **Firefox port** with a parallel AMO build pipeline, manifest variant, and a `chrome.storage.session` shim that falls back to `chrome.storage.local` on Firefox.
+- **Firefox port** with a parallel AMO build pipeline, manifest variant, and a
+  session-storage compatibility layer that uses native `storage.session` on
+  supported Firefox and a non-secret local fallback only when unavailable.
 - ERC-8213 raw calldata view and EIP-712 digest display on signature requests, so power users can verify exactly what they're signing.
 - Calldata digest display also surfaced on the swap confirmation screen.
 - Random spot-check highlighting on the emoji digest grid (makes side-by-side verification easier).

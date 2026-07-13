@@ -31,6 +31,7 @@ import {
   DEFAULT_GATEWAY_PORT,
   getEnsBrowsingSettings,
   isDefaultGatewayHost,
+  isValidGatewayHost,
   setEnsBrowsingSetting,
   type EnsBrowsingSettings as Settings,
 } from "@/chrome/ensBrowsing/settingsStorage";
@@ -173,7 +174,8 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
     !!settings &&
     (normalizedHost !== settings.gatewayHost ||
       (portValid && parsedPort !== settings.gatewayPort));
-  const canSave = isDirty && portValid && normalizedHost.length > 0;
+  const hostValid = isValidGatewayHost(normalizedHost);
+  const canSave = isDirty && portValid && hostValid;
 
   const [justSaved, setJustSaved] = useState(false);
   const [gatewayOpen, setGatewayOpen] = useState(false);

@@ -1,3 +1,5 @@
+import { fetchRpcResult } from "@/chrome/rpcHttpClient";
+
 /**
  * Wei/Gwei Name Service SDK
  * Resolve .wei and .gwei names with a single line of code
@@ -94,30 +96,15 @@ function decodeUint256(hex: string | null): bigint {
 
 // RPC call with fallback
 async function ethCall(data: string, contract: string): Promise<string> {
-  const body = JSON.stringify({
-    jsonrpc: "2.0",
-    id: 1,
-    method: "eth_call",
-    params: [{ to: contract, data }, "latest"],
-  });
-
   for (const rpc of RPC_ENDPOINTS) {
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-
-      const res = await fetch(rpc, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeout);
-      const json = await res.json();
-
-      if (json.error) continue;
-      return typeof json.result === "string" ? json.result : "0x";
+      const result = await fetchRpcResult(
+        rpc,
+        "eth_call",
+        [{ to: contract, data }, "latest"],
+        { timeoutMs: 5_000, allowPrivateWithoutOrigin: true },
+      );
+      return typeof result === "string" ? result : "0x";
     } catch {
       continue;
     }

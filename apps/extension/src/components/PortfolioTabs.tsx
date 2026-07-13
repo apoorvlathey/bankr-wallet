@@ -41,6 +41,13 @@ import {
 } from "@/components/ui";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
 import NumberFlow, { type Format } from "@number-flow/react";
+import {
+  createPortfolioChainFilterState,
+  manuallySelectPortfolioChain,
+  relinkPortfolioChain,
+  syncLinkedPortfolioChain,
+  type PortfolioChainRelinkRequest,
+} from "@/components/portfolioChainFilterState";
 
 interface HoldingsState {
   totalValueUsd: number;
@@ -59,10 +66,12 @@ interface PortfolioTabsProps {
   address: string;
   /**
    * Chain selected by the active connected dapp, or null when there is no
-   * connected dapp. Changes reset the portfolio filter; users can still
-   * override the filter until the dapp context changes again.
+   * connected dapp. It is followed while linked; manual filter selection
+   * detaches it until an explicit dapp/extension chain switch relinks it.
    */
   connectedDappChainId?: number | null;
+  connectedDappTabId?: number | null;
+  chainRelinkRequest?: PortfolioChainRelinkRequest | null;
   activityTabTrigger?: number;
   holdingsTabTrigger?: number;
   refreshTrigger?: number;
@@ -99,7 +108,7 @@ const PORTFOLIO_VALUE_TIMING = {
   easing: "cubic-bezier(0.23, 1, 0.32, 1)",
 };
 
-export default function PortfolioTabs({ address, connectedDappChainId = null, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, quickActions, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
+export default function PortfolioTabs({ address, connectedDappChainId = null, connectedDappTabId = null, chainRelinkRequest = null, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, quickActions, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
   // On (re)mount, default to whichever tab was most recently requested by the parent.
   // activityTabTrigger increments after a tx is initiated; holdingsTabTrigger
   // increments when the user backs out of send/swap without submitting.
@@ -119,9 +128,10 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, ac
   const portfolioActionsButtonRef = useRef<HTMLButtonElement>(null);
   const { networksInfo } = useNetworks();
   const visibleChains = getVisibleChains(networksInfo);
-  const [filterChainId, setFilterChainId] = useState<number | null>(
-    connectedDappChainId,
+  const [chainFilterState, setChainFilterState] = useState(() =>
+    createPortfolioChainFilterState(connectedDappChainId),
   );
+  const filterChainId = chainFilterState.filterChainId;
   const selectedChain = filterChainId !== null ? visibleChains.find((c) => c.chainId === filterChainId) : null;
   const [chainSearch, setChainSearch] = useState("");
   const chainSearchInputRef = useRef<HTMLInputElement>(null);
@@ -130,11 +140,27 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, ac
   const [assetSearchQuery, setAssetSearchQuery] = useState("");
   const assetSearchInputRef = useRef<HTMLInputElement>(null);
 
-  // The connected-dapp dock is authoritative only when its context changes.
-  // A manual portfolio selection remains in place between those changes.
+  // Follow active dapp context changes only while the filter is linked. A
+  // manual selection remains detached across browser-tab changes.
   useEffect(() => {
-    setFilterChainId(connectedDappChainId);
+    setChainFilterState((state) =>
+      syncLinkedPortfolioChain(state, connectedDappChainId),
+    );
   }, [connectedDappChainId]);
+
+  // A chain switch initiated by the dapp or the connected-site dock restores
+  // the automatic link, even after a prior manual portfolio override.
+  useEffect(() => {
+    setChainFilterState((state) =>
+      relinkPortfolioChain(state, chainRelinkRequest, connectedDappTabId),
+    );
+  }, [chainRelinkRequest, connectedDappTabId]);
+
+  const selectPortfolioChain = useCallback((chainId: number | null) => {
+    setChainFilterState((state) =>
+      manuallySelectPortfolioChain(state, chainId),
+    );
+  }, []);
 
   // "All Networks" is index 0, chains start at index 1
   const filteredChains = useMemo(() => {
@@ -661,7 +687,7 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, ac
                   as="button"
                   isSelected={filterChainId === null}
                   onClick={() => {
-                    setFilterChainId(null);
+                    selectPortfolioChain(null);
                     setIsChainMenuOpen(false);
                     setChainSearch("");
                   }}
@@ -679,7 +705,7 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, ac
                   as="button"
                   isSelected={filterChainId === chain.chainId}
                   onClick={() => {
-                    setFilterChainId(chain.chainId);
+                    selectPortfolioChain(chain.chainId);
                     setIsChainMenuOpen(false);
                     setChainSearch("");
                   }}

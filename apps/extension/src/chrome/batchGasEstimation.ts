@@ -21,12 +21,12 @@
 
 import {
   createPublicClient,
-  http,
   encodeFunctionData,
   decodeFunctionResult,
   type Address,
 } from "viem";
 import { getRpcUrl } from "./txHandlers";
+import { fetchRpcEnvelope, secureHttpTransport } from "./rpcHttpClient";
 import { getNativeCurrencySymbol, CHAIN_REGISTRY } from "@/constants/chainRegistry";
 
 const CHAIN_BY_ID_BATCH = new Map(CHAIN_REGISTRY.map((c) => [c.chainId, c]));
@@ -93,7 +93,7 @@ export async function estimateBatchGasSequential(
   }
 
   const client = createPublicClient({
-    transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
+    transport: secureHttpTransport(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
   });
 
   // Fetch fee params + balance + price in parallel with gas estimation.
@@ -194,44 +194,32 @@ async function tryEthSimulateV1(
   }));
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), RPC_TIMEOUT);
-
-    const response = await fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "eth_simulateV1",
-        params: [
-          {
-            blockStateCalls: [{
-              stateOverrides: {
-                [fromAddress]: { balance: "0x56BC75E2D63100000" }, // 100 ETH
-              },
-              calls: simulateCalls,
-            }],
-            traceTransfers: false,
-            validation: false,
+    const json = await fetchRpcEnvelope(rpcUrl, "eth_simulateV1", [
+      {
+        blockStateCalls: [{
+          stateOverrides: {
+            [fromAddress]: { balance: "0x56BC75E2D63100000" }, // 100 ETH
           },
-          "latest",
-        ],
-      }),
-      signal: controller.signal,
+          calls: simulateCalls,
+        }],
+        traceTransfers: false,
+        validation: false,
+      },
+      "latest",
+    ], {
+      timeoutMs: RPC_TIMEOUT,
+      allowPrivateWithoutOrigin: true,
     });
-    clearTimeout(timeout);
-
-    const json = await response.json();
 
     if (json.error) {
-      const errMsg = (json.error.message || "").toLowerCase();
+      const rpcError = json.error as Record<string, unknown>;
+      const errMsg = String(rpcError.message || "").toLowerCase();
       if (
         errMsg.includes("method not found") ||
         errMsg.includes("not supported") ||
         errMsg.includes("does not exist") ||
         errMsg.includes("unknown method") ||
-        json.error.code === -32601
+        rpcError.code === -32601
       ) {
         console.log(`[batchGas] eth_simulateV1 not supported on chain ${chainId}`);
         setSimV1Support(chainId, false);
@@ -242,13 +230,13 @@ async function tryEthSimulateV1(
       // to tier 2. Log the full error payload so we can diagnose what went
       // wrong (often a quirk in how a specific call decodes inside the sim).
       setSimV1Support(chainId, true);
-      console.log("[batchGas] eth_simulateV1 returned error, falling through to tier 2:", JSON.stringify(json.error));
+      console.log("[batchGas] eth_simulateV1 returned error, falling through to tier 2:", JSON.stringify(rpcError));
       return null;
     }
 
     setSimV1Support(chainId, true);
 
-    const blockResults = json.result;
+    const blockResults = json.result as any;
     if (!blockResults?.[0]?.calls) return null;
 
     const callResults = blockResults[0].calls;
@@ -355,7 +343,7 @@ async function tryBatchGasInjection(
 ): Promise<Array<{ gasLimit: bigint; fallbackUsed: boolean }> | null> {
   try {
     const client = createPublicClient({
-      transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
+      transport: secureHttpTransport(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
     });
 
     const encodedCalls = calls.map((c) => ({

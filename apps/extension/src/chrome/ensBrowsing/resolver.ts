@@ -16,7 +16,6 @@ import {
   createPublicClient,
   decodeFunctionResult,
   encodeFunctionData,
-  http,
   namehash,
   parseAbi,
   type Hex,
@@ -25,6 +24,7 @@ import {
 import { mainnet } from "viem/chains";
 import { decode as decodeContentHash, getCodec } from "@ensdomains/content-hash";
 import { getStoredRpcUrl } from "@/lib/chains";
+import { secureHttpTransport } from "../rpcHttpClient";
 import type { ResolveResponse } from "./types";
 import { fetchErc4804, Web3FetchError } from "./web3url";
 import {
@@ -71,7 +71,7 @@ function getDirectClient(url: string): PublicClient {
   }
   const client = createPublicClient({
     chain: mainnet,
-    transport: http(url, { retryCount: 0, timeout: 8_000 }),
+    transport: secureHttpTransport(url, { retryCount: 0, timeout: 8_000 }),
   });
   directClientCache = { url, client };
   return client;

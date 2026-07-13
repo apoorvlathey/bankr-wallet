@@ -72,6 +72,7 @@ walletchan/
 ├── _docs/                # LLM-facing documentation
 │   ├── IMPLEMENTATION.md  # Extension architecture and message flows
 │   ├── SECURITY.md        # Security audit guide, threat model, pre-commit checklists
+│   ├── SECURITY_ARCHITECTURE.md # Audit map and critical module boundaries
 │   ├── STYLING.md         # Bauhaus design system (colors, typography, components)
 │   ├── WEBSITE.md         # Website PRD and section specs
 │   ├── DEVELOPMENT.md     # Build and dev environment setup
@@ -159,34 +160,141 @@ For detailed architecture, message types, and flows, see `_docs/IMPLEMENTATION.m
 apps/extension/src/
 ├── chrome/
 │   ├── background.ts        # Service worker (message router)
-│   ├── authHandlers.ts      # Unlock, password change, vault key migration
+│   ├── background/          # Message transport audit domain (see README.md)
+│   │   ├── messageAccessPolicy.ts # Exhaustive wallet-UI/provider audience
+│   │   ├── authRouter.ts    # Wallet-UI auth/session delegation
+│   │   ├── onboardingRouter.ts # Fresh-wallet lifecycle transport
+│   │   ├── accountStateRouter.ts # Non-secret account state/selection
+│   │   ├── dappPermissionRouter.ts # Dapp connection/permission prompts
+│   │   ├── watchAssetRouter.ts # EIP-747 prompt transport
+│   │   ├── chainPromptRouter.ts # EIP-3085 and chain notices
+│   │   ├── signingRequestRouter.ts # Single tx/signature intake and decisions
+│   │   └── transactionStatusRouter.ts # History, processing, result, receipt transport
+│   ├── authHandlers.ts      # Stable factor/credential/password-management facade
+│   ├── auth/                # Authentication audit domain (see README.md)
+│   │   ├── walletUnlock.ts  # Modern master/agent and legacy unlock routing
+│   │   ├── sessionHydration.ts # Atomic credential/key cache hydration
+│   │   ├── legacyVaultKeyMigration.ts # Legacy general/private-key migration
+│   │   ├── masterPasswordVerification.ts # Side-effect-free current/legacy master proof
+│   │   ├── agentFactorHandlers.ts # Agent-password setup/removal policy and commits
+│   │   ├── bankrCredentialUpdate.ts # Prepared Bankr credential mutation boundary
+│   │   ├── masterPasswordRotation.ts # Atomic current/legacy password rotation
+│   │   └── sessionTermination.ts # Manual lock ordered with secret/account mutations
 │   ├── authTransition.ts    # Serialized auth mutations + WebAuthn ceremony invalidation
-│   ├── passkeyUnlock.ts     # Biometric/passkey vault-key wrapper handlers
-│   ├── passkeyUnlockCrypto.ts # Passkey record validation + PRF vault-key wrapping
-│   ├── sessionCache.ts      # Credential caching, auto-lock, session restore
-│   ├── txHandlers.ts        # Transaction/signature handling, account mgmt
+│   ├── secretRevealHandlers.ts # Epoch-bound master-only key/phrase reveal boundary
+│   ├── delegatedAuthorityPolicy.ts # Master-only ERC-7715/custom-7702 authority boundary
+│   ├── onboardingInitialization.ts # Stable fresh-wallet initialization facade
+│   ├── onboardingInitializationState.ts # Marker codec, completeness, and recovery state
+│   ├── onboardingInitializationLifecycle.ts # Begin/status/complete/rollback orchestration
+│   ├── onboardingCredentialInitialization.ts # First general-vault credential commit
+│   ├── legacyStorageMigration.ts # Serialized pre-multi-account migration
+│   ├── passkeyUnlock.ts     # Stable biometric orchestration facade
+│   ├── passkeyUnlockCrypto.ts # Compatibility facade for passkey record/crypto/storage APIs
+│   ├── passkey/             # WebAuthn-PRF audit domain (see README.md)
+│   │   ├── status.ts        # Status and explicit/cached-master preflight
+│   │   ├── setup.ts         # Atomic V1/V2 setup and mnemonic-vault commit
+│   │   ├── hydration.ts     # V1/V2 unwrap and master-session hydration
+│   │   ├── removal.ts       # Recovery proofs and factor removal
+│   │   ├── record.ts        # Passkey V1/V2 record types and bounded validation
+│   │   ├── keyWrapping.ts   # Purpose-separated PRF/HKDF key wrapping
+│   │   └── repository.ts    # Validated passkey record storage
+│   ├── mnemonicStorage.ts # Stable mnemonic-vault compatibility facade
+│   ├── mnemonic/            # Mnemonic/seed-account audit domain (see README.md)
+│   │   ├── record.ts        # Validated released/current V1/V2 record codec
+│   │   ├── crypto.ts        # Pure password/key/AAD/key-check transformations
+│   │   ├── repository.ts    # Locked mnemonicVault storage repository
+│   │   ├── operations.ts    # Store/read/remove coordination
+│   │   ├── recovery.ts      # V2 preparation, verification, and password rotation
+│   │   ├── derivation.ts    # Pure bounded BIP39/BIP44 operations
+│   │   ├── masterAccess.ts  # Master-only call-stack mnemonic capability
+│   │   ├── integrity.ts     # Master recovery + seed-account binding proof
+│   │   ├── addressPreview.ts # Secret-free public-address preview
+│   │   ├── accountPersistence.ts # Collision, compensation, and cache refresh
+│   │   └── accountHandlers.ts # Master-only add/derive orchestration
+│   ├── sessionCache.ts      # Stable auth-session facade and restore orchestration
+│   ├── session/             # Session-state audit domain (see README.md)
+│   │   ├── inMemoryCache.ts # Decrypted capability state + expiry timestamps
+│   │   ├── autoLockPolicy.ts # Timeout normalization and synced setting cache
+│   │   ├── persistence.ts   # Native Never-session encrypted envelope
+│   │   └── storage.ts       # Cross-browser session-storage adapter
+│   ├── txHandlers.ts        # Stable transaction/signature compatibility facade
+│   ├── transactions/        # Transaction coordinator audit domain (see README.md)
+│   │   ├── requestIntake.ts # Provider validation and pinned prompt intake
+│   │   ├── runtime.ts       # Results, expiry, pinned accounts, and process state
+│   │   ├── localConfirmation.ts # PK/seed preflight and key/session recovery
+│   │   ├── localExecution.ts # Sign-once preparation, final authority gate, and publication
+│   │   └── failure.ts       # Durable failure/history/notification publication
+│   ├── signatures/          # Signature confirmation audit domain (see README.md)
+│   │   ├── requestSigner.ts # Method-specific signer parameter selection
+│   │   ├── confirmationPolicy.ts # Shared expiry, signer, SIWE, and pinned-account preflight
+│   │   └── confirmationHandlers.ts # Local/Bankr orchestration and final release gate
 │   ├── chatHandlers.ts      # Bankr AI chat prompt handling
 │   ├── sidepanelManager.ts  # Sidepanel/popup mode, Arc browser detection
 │   ├── crypto.ts            # AES-256-GCM encryption for API keys
 │   ├── cryptoUtils.ts       # Shared crypto utilities (PBKDF2, base64)
 │   ├── vaultCrypto.ts       # Vault encryption for private keys
+│   ├── privateKeyVaultCrypto.ts # Pure password/vault-key private-key transforms
+│   ├── localSigner.ts       # Stable local-signing compatibility facade
+│   ├── localSigning/        # Local signer audit domain (see README.md)
+│   │   ├── messageSigner.ts # Personal-message and EIP-712 policy
+│   │   ├── transactionSigner.ts # Transaction and EIP-7702 preparation
+│   │   ├── transactionBroadcast.ts # Sign-once raw-RPC effect boundary
+│   │   └── client.ts       # Viem client and bounded RPC transport
+│   ├── eip712Validator.ts # Bounded typed-data validation orchestrator
+│   ├── eip712DelegationPolicy.ts # Raw ERC-7710 signature rejection
+│   ├── eip712SchemaValidation.ts # Pure graph/type/depth validation
+│   ├── eip712Sanitization.ts # Schema-only display/signing projection
 │   ├── bankrApi.ts          # Bankr API client
-│   ├── txSimulation.ts      # Asset change simulation (state override injection)
+│   ├── bankrApiResponse.ts  # Strict bounded Bankr response schemas
+│   ├── bankrCredentialBinding.ts # Pending-request API credential generation binding
+│   ├── bankrPendingAuthorization.ts # Final account/tag gate before Bankr submit
+│   ├── pendingSignatureRelease.ts # Post-sign authority recheck before capability release
+│   ├── boundedHttpResponse.ts # Shared response byte/deadline enforcement
+│   ├── txSimulation.ts      # Stable asset-change simulation coordinator/facade
+│   ├── simulation/          # Transaction simulation audit domain (see README.md)
+│   │   ├── types.ts         # Normalized asset-change and raw simulator shapes
+│   │   ├── constants.ts     # Shared gas caps and canonical infrastructure addresses
+│   │   ├── stateOverrides.ts # ERC-20/Permit2 retry override construction
+│   │   └── ethSimulateLogs.ts # Pure eth_simulateV1 transfer-log parser
 │   ├── gasEstimation.ts     # Gas estimation + native token price
 │   ├── transactionValidation.ts # Dapp transaction quantity validation/normalization
-│   ├── batchTxHandlers.ts   # ERC-5792 batch tx handlers + ERC-7821 encoding
+│   ├── rpcHttpClient.ts    # Shared bounded/redirect-safe configured RPC egress
+│   ├── batchTxHandlers.ts   # Stable ERC-5792 coordinator/facade (being decomposed)
+│   ├── batch/               # Focused ERC-5792 audit boundaries (see README.md)
 │   ├── erc5792Types.ts      # ERC-5792 type definitions
-│   ├── erc7715PermissionHandlers.ts # ERC-7715 delegated permission methods
-│   ├── erc7715PermissionPreflight.ts # ERC-7715 request/account/delegate policy checks
-│   ├── erc7715PermissionAddress.ts # ERC-7715 relaxed EVM address validation + checksum normalization
-│   ├── erc7715PermissionRegistry.ts # Supported permission/rule validation
-│   ├── erc7715PermissionCaveats.ts  # ERC-7715 -> DeleGator caveat mapping
-│   ├── erc7715DelegationSigning.ts  # WalletChan-owned ERC-7710 typed data/context encoding
-│   ├── erc7715PermissionLock.ts     # MetaMask-style in-process request lock
-│   ├── pendingErc7715PermissionStorage.ts # Pending ERC-7715 prompts and grants
+│   ├── erc7715PermissionHandlers.ts # Stable ERC-7715 permission facade
+│   ├── pendingErc7715PermissionStorage.ts # Stable ERC-7715 persistence facade
+│   ├── erc7715/             # ERC-7715/ERC-7710 audit domain (see README.md)
+│   │   ├── methods.ts       # Method recognition and capabilities
+│   │   ├── preflight.ts     # Stable preflight facade
+│   │   ├── preflightNormalization.ts # Pure request normalization
+│   │   ├── preflightRpc.ts  # Bounded public-chain reads
+│   │   ├── preflightEligibility.ts # Account/delegate policy orchestration
+│   │   ├── requestHandler.ts # Provider dispatch and durable prompt intake
+│   │   ├── confirmation.ts  # Master-only approval/rejection
+│   │   ├── revocation.ts    # Account-pinned revoke transaction intake
+│   │   ├── onchainStatus.ts # Live grant verification and revocation sync
+│   │   ├── registry.ts      # Stable validation facade
+│   │   ├── permissionValidation.ts # Bounded permission schemas
+│   │   ├── caveats.ts       # Stable caveat facade
+│   │   ├── caveatBuilder.ts # Permission-to-DeleGator mapping
+│   │   ├── delegationSigning.ts # WalletChan-owned ERC-7710 encoding
+│   │   ├── grantStorage.ts  # Master-authorized atomic grant commits
+│   │   ├── pendingRequestStorage.ts # Locked prompt repository
+│   │   └── resultStorage.ts # Injected/WalletConnect result bridge
 │   ├── localAccountKeyResolver.ts # Session-restoring local signer key lookup
+│   ├── localAccountEffectBoundary.ts # Final account binding before local irreversible effects
+│   ├── accountStorage.ts # Stable account-metadata compatibility facade
+│   ├── accounts/            # Account metadata audit domain (see README.md)
+│   │   ├── repository.ts    # accounts record, normalization, ordering, queries
+│   │   ├── selectionStorage.ts # Global/per-tab selection and stale-ID repair
+│   │   ├── bankrStorage.ts  # Atomic Bankr account + credential metadata
+│   │   ├── localStorage.ts  # Private-key/view-only metadata mutations
+│   │   ├── seedStorage.ts   # Seed-derived account metadata
+│   │   └── seedGroupStorage.ts # Non-secret recovery-group metadata
 │   ├── dappAccountScope.ts # Approved/pending dapp tab scope check
 │   ├── tabAccountResolver.ts # Connected-dapp-only per-tab account scope
+│   ├── accountRemovalDappPrivacy.ts # Disconnect-before-delete account privacy boundary
 │   ├── walletConnectHandlers.ts # WalletConnect init, sessions, result bridge
 │   ├── walletConnectRequestHandlers.ts # WalletConnect request router
 │   ├── walletConnectBatchRequestHandlers.ts # WalletConnect ERC-5792 adapters
@@ -194,6 +302,9 @@ apps/extension/src/
 │   ├── walletConnectProposal.ts # WalletConnect proposal normalization + rejection details
 │   ├── walletConnectChainState.ts # WalletConnect-specific active chain state
 │   ├── walletConnectStorage.ts # WalletConnect request routing/state storage
+│   ├── walletConnectReset.ts # SDK teardown and replacement-wallet namespace rotation
+│   ├── sponsoredTransferIntentStorage.ts # Encrypted ERC-3009 recovery/ACK records
+│   ├── sponsoredTransferReconciliation.ts # Finalized dual-RPC ERC-3009 status checks
 │   ├── pendingBatchTxStorage.ts  # Pending batch request persistence
 │   ├── bundleStatusStorage.ts    # Bundle status for getCallsStatus
 │   ├── storageCachePruner.ts # Best-effort pruning for non-critical storage caches
@@ -278,9 +389,44 @@ When working on features, refer to these docs:
 
 ### File Size & Modularity
 
-- **Keep files under ~400 lines.** If a file grows beyond that, split it into focused modules by responsibility.
-- **One concern per file.** Each module should have a clear, single purpose (e.g., `sessionCache.ts` owns all credential caching, `authHandlers.ts` owns all unlock/password logic).
+- **Keep implementation files under ~400 lines.** If a file approaches that
+  limit, split it before adding more behavior. Do not treat 400 lines as a
+  target. Generated data and frozen fixtures are the only routine exceptions.
+- **Oversized composition roots are ratchets.** Existing transitional roots
+  such as `background.ts`, `txHandlers.ts`, and `batchTxHandlers.ts` may remain
+  above the limit only while being decomposed. Every change to one must keep or
+  lower its enforced size budget and should extract policy rather than add more.
+- **One concern per file.** Each module should have a clear, single purpose (e.g., `session/inMemoryCache.ts` owns decrypted capability state, `auth/walletUnlock.ts` owns unlock routing, and `authHandlers.ts` coordinates factor/credential/password mutations behind stable exports).
 - **background.ts is a message router only.** It registers Chrome event listeners and delegates to handler modules. Never add business logic directly to it.
+
+### Extension Domain Folder Contract
+
+- **The `src/chrome/` root is not a general source directory.** Read
+  `src/chrome/README.md` before adding or moving service-worker logic. New root
+  files are allowed only for manifest/Vite entrypoints, documented compatibility
+  facades, or genuinely cross-domain primitives.
+- **Group related logic in a named domain folder.** If a feature has two or
+  more implementation files—or is likely to grow—create or reuse a folder such
+  as `auth/`, `mnemonic/`, `transactions/`, `walletConnect/`, or `bankr/`.
+  Do not add a new flat family of prefixed files to `src/chrome/`.
+- **Every domain folder needs a `README.md` audit map.** State each file's single
+  responsibility, dependency direction, storage/network effects, public facade,
+  and matching test folder. Keep this map current when files move.
+- **Facades contain no policy.** A compatibility facade may re-export types and
+  exact function identities so callers survive a move; it must not own storage,
+  cryptography, authorization decisions, network effects, or new business logic.
+- **Dependencies point inward.** Entry routers may depend on domain handlers;
+  handlers may depend on policy/repositories; repositories and cryptographic
+  transforms must not import routers. Use dependency injection for the rare
+  cross-domain callback instead of creating cycles.
+- **Mirror source domains under `tests/`.** Domain tests live in the matching
+  subfolder with their own short `README.md`; shared frozen records and harnesses
+  live only in `tests/fixtures/` and `tests/helpers/`. Keep the test root empty.
+  `scripts/run-security-tests.mjs` discovers tests recursively.
+- **Moves must be behavior-neutral.** Preserve message names, storage keys,
+  serialized shapes, export identities, and effect ordering. Add architecture
+  tests for facade identity, forbidden dependencies, and module-size budgets in
+  the same tranche as the move.
 
 ### Reuse Over Duplication
 
@@ -290,16 +436,21 @@ When working on features, refer to these docs:
 
 ### Naming & Organization
 
-- **Handler files**: `*Handlers.ts` (e.g., `authHandlers.ts`, `txHandlers.ts`, `chatHandlers.ts`)
+- **Handler files**: use `*Handlers.ts` for a stable multi-operation facade and
+  specific role names inside a domain (`requestIntake.ts`, `confirmation.ts`,
+  `repository.ts`, `statusRouter.ts`).
 - **State/cache files**: descriptive names (e.g., `sessionCache.ts`, `pendingTxStorage.ts`)
 - **Utility files**: `*Utils.ts` (e.g., `cryptoUtils.ts`)
-- **Keep related functions together** - if functions share state (like in-memory Maps), they belong in the same module.
+- **Keep related functions together** - if functions share state (like in-memory Maps), they belong in the same module, inside the owning domain folder.
 
 ### When Adding New Features
 
 - Place new message handlers in the appropriate `*Handlers.ts` file, not in `background.ts`.
 - Add the message routing case to the switch in `background.ts` (just a 1-3 line delegation).
-- If a feature doesn't fit existing modules, create a new focused module rather than growing an existing one.
+- If a feature doesn't fit an existing domain, create a focused domain folder
+  and audit map rather than growing an unrelated module or the `chrome/` root.
+- Before adding code to a file above 300 lines, identify the extraction seam
+  first. Reviewability and a linear security story take precedence over fewer files.
 - Update `_docs/IMPLEMENTATION.md` and this file's Key Extension Files section if you add new modules.
 
 ### When Adding New Handlers That Need Credentials

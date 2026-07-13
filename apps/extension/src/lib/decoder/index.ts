@@ -33,6 +33,7 @@ import {
   parseAbi,
 } from "viem";
 import { FOURBYTE_SOURCIFY_LOOKUP_URL, FOURBYTE_DIRECTORY_API_URL } from "@/constants/externalUrls";
+import { fetchJsonBounded } from "@/chrome/boundedHttpResponse";
 
 // Inline helper replacing swiss-knife's startHexWith0x
 function startHexWith0x(hexValue?: string): Hex {
@@ -535,18 +536,22 @@ async function fetchFunctionFromSourcify({ selector }: { selector: string }) {
       FOURBYTE_SOURCIFY_LOOKUP_URL
     );
     requestUrl.searchParams.append("function", selector);
-    const response = await fetch(requestUrl);
-    const data = await response.json();
+    const { response, data } = await fetchJsonBounded(
+      requestUrl,
+      { method: "GET" },
+      { timeoutMs: 5_000, maxBytes: 256 * 1024 },
+    );
+    if (!response.ok || !data || typeof data !== "object") return null;
+    const payload = data as any;
     // Runtime check replacing zod schema
     if (
-      !data ||
-      typeof data.ok !== "boolean" ||
-      !data.ok ||
-      !data.result?.function?.[selector]
+      typeof payload.ok !== "boolean" ||
+      !payload.ok ||
+      !payload.result?.function?.[selector]
     ) {
       return null;
     }
-    return data.result.function[selector] as Array<{ name: string; filtered: boolean }>;
+    return payload.result.function[selector] as Array<{ name: string; filtered: boolean }>;
   } catch {
     return null;
   }
@@ -558,13 +563,18 @@ async function fetchFunctionFrom4Bytes({ selector }: { selector: string }) {
       FOURBYTE_DIRECTORY_API_URL
     );
     requestUrl.searchParams.append("hex_signature", selector);
-    const response = await fetch(requestUrl);
-    const data = await response.json();
+    const { response, data } = await fetchJsonBounded(
+      requestUrl,
+      { method: "GET" },
+      { timeoutMs: 5_000, maxBytes: 256 * 1024 },
+    );
+    if (!response.ok || !data || typeof data !== "object") return null;
+    const payload = data as any;
     // Runtime check replacing zod schema
-    if (!data || typeof data.count !== "number" || data.count === 0 || !Array.isArray(data.results)) {
+    if (typeof payload.count !== "number" || payload.count === 0 || !Array.isArray(payload.results)) {
       return null;
     }
-    return data.results as Array<{ text_signature: string }>;
+    return payload.results as Array<{ text_signature: string }>;
   } catch {
     return null;
   }

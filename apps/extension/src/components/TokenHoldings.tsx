@@ -510,8 +510,9 @@ function TokenHoldings({ address, onTokenClick, onSwapClick, hideHeader, hideCar
         .join("|"),
     [networksInfo],
   );
-  // Hydrate synchronously from memory or the renderer localStorage mirror so a
-  // reopened popup can paint before async chrome.storage reads complete.
+  // Hydrate synchronously only from this renderer's in-memory cache. The
+  // reset-aware chrome.storage cache is loaded asynchronously; identity and
+  // balance data must never survive a wallet reset in DOM localStorage.
   const initialCacheKey = holdingsCacheKey(address, chainReloadKey);
   const initialSnapshot = readCachedHoldingsSnapshot(initialCacheKey);
   const [tokens, setTokens] = useState<PortfolioToken[]>(() => initialSnapshot?.tokens ?? []);

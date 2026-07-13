@@ -36,6 +36,7 @@ import { useCachedAvatarSrc, useCachedAvatarMap } from "@/hooks/useCachedAvatarS
 import { isResolvableName } from "@/lib/ensUtils";
 import { PortfolioToken } from "@/chrome/portfolioApi";
 import { fetchOnchainBalances } from "@/chrome/onchainBalances";
+import { secureHttpTransport } from "@/chrome/rpcHttpClient";
 import { loadPortfolioTokenCatalog } from "@/chrome/portfolioTokens";
 import { buildTransferTx } from "@/chrome/transferUtils";
 import { SWAP_SUPPORTED_CHAIN_IDS } from "@/constants/chainRegistry";
@@ -255,7 +256,15 @@ function TokenTransfer({
   const [isUsdMode, setIsUsdMode] = useState(false);
   const [sliderValue, setSliderValue] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [sponsoredFailed, setSponsoredFailed] = useState<string | null>(null);
+  const [sponsoredFailed, setSponsoredFailed] = useState<{
+    message: string;
+    outcomeUncertain: boolean;
+  } | null>(null);
+  const sponsoredIntentRef = useRef<{
+    fingerprint: string;
+    id: string;
+  } | null>(null);
+  const sponsoredStatusCheckedRef = useRef<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [customTokenLoading, setCustomTokenLoading] = useState(false);
   // Optional hex calldata appended to a native-token send. Collapsed by
@@ -366,9 +375,9 @@ function TokenTransfer({
       try {
         const rpcUrl = await getStoredRpcUrl(tokenChainId);
         if (!rpcUrl || cancelled) return;
-        const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
+        const { createPublicClient, erc20Abi, formatUnits } = await import("viem");
         const client = createPublicClient({
-          transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }),
+          transport: secureHttpTransport(rpcUrl, { timeout: 8000, retryCount: 0 }),
         });
         const isNative = tokenAddr === "native";
         const rawBalance = isNative
@@ -519,13 +528,13 @@ function TokenTransfer({
         addrLower === "0x0000000000000000000000000000000000000000" ||
         addrLower === NATIVE_TOKEN_ADDRESS.toLowerCase();
 
-      const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
+      const { createPublicClient, erc20Abi, formatUnits } = await import("viem");
       const rpcUrl = await getStoredRpcUrl(selectedChainId);
       if (!rpcUrl) {
         setCustomTokenError("No RPC for this chain");
         return;
       }
-      const client = createPublicClient({ transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }) });
+      const client = createPublicClient({ transport: secureHttpTransport(rpcUrl, { timeout: 8000, retryCount: 0 }) });
       const rawBalance = isNative
         ? await client.getBalance({ address: fromAddress as `0x${string}` })
         : await client.readContract({
@@ -630,6 +639,81 @@ function TokenTransfer({
   }, [isUsdcOnBase, fromAddress]);
 
   const isSponsoredFlow = isUsdcOnBase && premiumStatus?.isPremium && premiumStatus?.sponsoredTransfersEnabled && accountType !== "impersonator";
+
+  const acknowledgeSponsoredTransfer = useCallback(
+    (intentId: string): void => {
+      // The renderer already received the success before this point. Do not
+      // wait for the destructive ACK response: delivery may commit while its
+      // response is lost. If delivery itself fails, the retained record safely
+      // dedupes the next surface.
+      void chrome.runtime
+        .sendMessage({
+          type: "acknowledgeSponsoredTransfer",
+          intentId,
+          fromAddress,
+        })
+        .catch(() => undefined);
+    },
+    [fromAddress],
+  );
+
+  const checkSponsoredTransferStatus = useCallback(async () => {
+    setIsSubmitting(true);
+    try {
+      const result = await new Promise<{
+        success: boolean;
+        hasUnresolved: boolean;
+        completed?: boolean;
+        txId?: string;
+        intentId?: string;
+        error?: string;
+      }>((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: "checkSponsoredTransferStatus", fromAddress },
+          resolve,
+        );
+      });
+      if (result.completed) {
+        if (!result.intentId) {
+          setSponsoredFailed({
+            message:
+              "Transfer completed, but its recovery record is invalid. Check again.",
+            outcomeUncertain: true,
+          });
+          return;
+        }
+        acknowledgeSponsoredTransfer(result.intentId);
+        sponsoredIntentRef.current = null;
+        onTransferInitiated(true);
+        return;
+      }
+      if (result.hasUnresolved || !result.success) {
+        setSponsoredFailed({
+          message:
+            result.error ||
+            "Transfer outcome is still unknown. Check again before sending another transfer.",
+          outcomeUncertain: true,
+        });
+      } else {
+        setSponsoredFailed(null);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [acknowledgeSponsoredTransfer, fromAddress, onTransferInitiated]);
+
+  useEffect(() => {
+    if (!isUsdcOnBase || accountType === "impersonator") return;
+    const checkKey = `${fromAddress.toLowerCase()}:8453:usdc`;
+    if (sponsoredStatusCheckedRef.current === checkKey) return;
+    sponsoredStatusCheckedRef.current = checkKey;
+    void checkSponsoredTransferStatus();
+  }, [
+    accountType,
+    checkSponsoredTransferStatus,
+    fromAddress,
+    isUsdcOnBase,
+  ]);
 
   const { resolvedAddress, resolvedName, avatar, isResolving, isLoadingExtras, isValid: isRecipientValid, error: resolverError } =
     useAddressResolver(recipient);
@@ -879,7 +963,29 @@ function TokenTransfer({
     try {
       // Sponsored ERC-3009 flow for USDC on Base
       if (isSponsoredFlow) {
-        const result = await new Promise<{ success: boolean; txId?: string; error?: string }>(
+        const sponsoredIntentFingerprint = [
+          fromAddress.toLowerCase(),
+          resolvedAddress!.toLowerCase(),
+          tokenAmount,
+          String(token.decimals),
+        ].join(":");
+        if (
+          !sponsoredIntentRef.current ||
+          sponsoredIntentRef.current.fingerprint !== sponsoredIntentFingerprint
+        ) {
+          sponsoredIntentRef.current = {
+            fingerprint: sponsoredIntentFingerprint,
+            id: crypto.randomUUID(),
+          };
+        }
+        const result = await new Promise<{
+          success: boolean;
+          txId?: string;
+          error?: string;
+          outcomeUncertain?: boolean;
+          intentId?: string;
+          retryReady?: boolean;
+        }>(
           (resolve) => {
             chrome.runtime.sendMessage(
               {
@@ -888,6 +994,7 @@ function TokenTransfer({
                 amount: tokenAmount,
                 decimals: token.decimals,
                 fromAddress,
+                intentId: sponsoredIntentRef.current!.id,
               },
               resolve
             );
@@ -895,9 +1002,31 @@ function TokenTransfer({
         );
 
         if (result.success) {
+          if (!result.intentId) {
+            setSponsoredFailed({
+              message:
+                "WalletChan received an invalid transfer result. Check status before sending again.",
+              outcomeUncertain: true,
+            });
+            return;
+          }
+          acknowledgeSponsoredTransfer(result.intentId);
+          sponsoredIntentRef.current = null;
           onTransferInitiated(true);
+        } else if (result.retryReady) {
+          setSponsoredFailed(null);
+          toast({
+            title: "Ready to retry",
+            description: result.error,
+            status: "info",
+            duration: 3000,
+          });
         } else {
-          setSponsoredFailed(result.error || "Could not complete sponsored transfer");
+          setSponsoredFailed({
+            message:
+              result.error || "Could not complete sponsored transfer",
+            outcomeUncertain: result.outcomeUncertain === true,
+          });
         }
         return;
       }
@@ -1201,7 +1330,7 @@ function TokenTransfer({
               size="xs"
               variant="ghost"
               color="accent.secondary"
-              onClick={() => window.open(WALLETCHAN_STAKE_URL, "_blank")}
+              onClick={() => window.open(WALLETCHAN_STAKE_URL, "_blank", "noopener,noreferrer")}
               flexShrink={0}
             >
               Learn more
@@ -1432,7 +1561,7 @@ function TokenTransfer({
                     minW="18px"
                     h="18px"
                     color="text.tertiary"
-                    onClick={() => window.open(`${explorerUrl}/address/${resolvedAddress}`, "_blank")}
+                    onClick={() => window.open(`${explorerUrl}/address/${resolvedAddress}`, "_blank", "noopener,noreferrer")}
                     _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                   />
                 )}
@@ -1841,7 +1970,8 @@ function TokenTransfer({
           <Skeleton h="60px" />
         )}
 
-        {/* Sponsored transfer failed — fallback to normal send */}
+        {/* Sponsored transfer failed — never offer a second spend while the
+            relayer outcome is uncertain. */}
         {sponsoredFailed && (
           <Box
             bg="status.error.bg"
@@ -1851,10 +1981,14 @@ function TokenTransfer({
             p={3}
           >
             <Text fontSize="xs" color="status.error.fg" fontWeight="600">
-              Gas-free transfer is temporarily unavailable.
+              {sponsoredFailed.outcomeUncertain
+                ? "Transfer status is still pending."
+                : "Gas-free transfer is temporarily unavailable."}
             </Text>
             <Text fontSize="xs" color="fg.secondary" mt={1}>
-              You can still send by paying gas yourself.
+              {sponsoredFailed.outcomeUncertain
+                ? sponsoredFailed.message
+                : "You can still send by paying gas yourself."}
             </Text>
             <Button
               mt={2}
@@ -1863,9 +1997,15 @@ function TokenTransfer({
               variant="highlight"
               fontSize="xs"
               isLoading={isSubmitting}
-              onClick={handleFallbackSend}
+              onClick={
+                sponsoredFailed.outcomeUncertain
+                  ? checkSponsoredTransferStatus
+                  : handleFallbackSend
+              }
             >
-              Send and pay gas
+              {sponsoredFailed.outcomeUncertain
+                ? "Check status"
+                : "Send and pay gas"}
             </Button>
           </Box>
         )}

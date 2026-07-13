@@ -1,9 +1,7 @@
-import { useState } from "react";
 import {
   Badge,
   Box,
   Flex,
-  Image,
   Text,
 } from "@chakra-ui/react";
 import { ChevronRightIcon, RepeatIcon } from "@chakra-ui/icons";
@@ -15,6 +13,7 @@ import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import { getChainConfig } from "@/constants/chainConfig";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import ChainIcon from "@/components/ChainIcon";
+import SafeImage from "@/components/SafeImage";
 import {
   ListItem,
   ListItemActions,
@@ -75,8 +74,7 @@ interface OriginMarkProps {
 }
 
 function OriginMark({ origin, favicon }: OriginMarkProps) {
-  const [src, setSrc] = useState(() => getFaviconUrl(origin, favicon));
-  const [hasFailed, setHasFailed] = useState(false);
+  const src = getFaviconUrl(origin, favicon);
   const fallback = getFaviconUrl(origin, null);
   const initial = getOriginDisplay(origin).charAt(0).toUpperCase() || "?";
 
@@ -97,9 +95,10 @@ function OriginMark({ origin, favicon }: OriginMarkProps) {
       <Text as="span" color="fg.secondary" fontSize="sm" fontWeight={700}>
         {initial}
       </Text>
-      {src && !hasFailed && (
-        <Image
+      {src && (
+        <SafeImage
           src={src}
+          fallbackSrc={fallback}
           alt=""
           position="absolute"
           inset={0}
@@ -107,13 +106,7 @@ function OriginMark({ origin, favicon }: OriginMarkProps) {
           h="full"
           p={1.5}
           objectFit="contain"
-          onError={() => {
-            if (fallback && src !== fallback) {
-              setSrc(fallback);
-            } else {
-              setHasFailed(true);
-            }
-          }}
+          fallback={<Box position="absolute" inset={0} />}
         />
       )}
     </Box>

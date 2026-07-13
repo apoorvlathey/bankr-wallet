@@ -1,8 +1,15 @@
 import { NetworksInfo } from "../types";
 import { getResolvedChainById } from "@/lib/chains";
+import {
+  resolveProviderActiveChainId,
+  validateProviderChainBoundary,
+} from "./providerChainBoundary";
+import { sanitizeUntrustedImageUrl } from "@/lib/remoteImagePolicy";
+import { waitForStorageResult } from "./storageResultWaiter";
 
 const ERC7715_PERMISSION_RESULT_PREFIX = "erc7715PermissionResult:";
 const ERC7715_PERMISSION_TIMEOUT_MS = 5 * 60 * 1000;
+const UNCONNECTED_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 function isTopFrame(): boolean {
   try {
@@ -101,7 +108,7 @@ function getFaviconUrl(): string | null {
     'link[rel="icon"], link[rel="shortcut icon"]'
   ) as HTMLLinkElement | null;
   if (standardFavicon?.href) {
-    return standardFavicon.href;
+    return sanitizeUntrustedImageUrl(standardFavicon.href);
   }
 
   // Try Apple touch icon (usually higher quality)
@@ -109,48 +116,13 @@ function getFaviconUrl(): string | null {
     'link[rel="apple-touch-icon"], link[rel="apple-touch-icon-precomposed"]'
   ) as HTMLLinkElement | null;
   if (appleTouchIcon?.href) {
-    return appleTouchIcon.href;
+    return sanitizeUntrustedImageUrl(appleTouchIcon.href);
   }
 
   // Fallback to default /favicon.ico
-  return new URL("/favicon.ico", window.location.origin).href;
-}
-
-/**
- * Wait for a result to appear in chrome.storage.local under the given key.
- * Used to receive transaction/signature results from the background script
- * without keeping a long-lived message channel open (which is fragile in MV3).
- */
-function waitForStorageResult<T>(key: string, timeoutMs = 5 * 60 * 1000): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      chrome.storage.onChanged.removeListener(listener);
-      reject(new Error("Request timed out"));
-    }, timeoutMs);
-
-    // Check if result already exists (race: result written before listener attached)
-    chrome.storage.local.get(key).then((items) => {
-      if (items[key]?.result) {
-        clearTimeout(timeout);
-        chrome.storage.onChanged.removeListener(listener);
-        chrome.storage.local.remove(key);
-        resolve(items[key].result as T);
-      }
-    });
-
-    function listener(
-      changes: { [key: string]: chrome.storage.StorageChange },
-      areaName: string,
-    ) {
-      if (areaName !== "local" || !changes[key]?.newValue?.result) return;
-      clearTimeout(timeout);
-      chrome.storage.onChanged.removeListener(listener);
-      chrome.storage.local.remove(key);
-      resolve(changes[key].newValue.result as T);
-    }
-
-    chrome.storage.onChanged.addListener(listener);
-  });
+  return sanitizeUntrustedImageUrl(
+    new URL("/favicon.ico", window.location.origin).href,
+  );
 }
 
 let store = {
@@ -160,6 +132,13 @@ let store = {
   accountId: "",      // Current account ID
   accountType: "",    // "bankr" | "privateKey"
 };
+
+async function getAttestedProviderChainId(): Promise<number | null> {
+  const { networksInfo } = (await chrome.storage.sync.get(
+    "networksInfo",
+  )) as { networksInfo?: NetworksInfo };
+  return resolveProviderActiveChainId(store.chainName, networksInfo);
+}
 
 function notifyDappChainSwitch(chainId: number, chainName: string): void {
   chrome.runtime
@@ -183,7 +162,7 @@ const init = async () => {
 
       // Resolve account identity from the sender-bound tab mapping before the
       // provider is announced. Global address fields are legacy fallbacks only.
-      const [account, syncState] = await Promise.all([
+      const [account, syncState, dappAccounts] = await Promise.all([
         chrome.runtime.sendMessage({ type: "getActiveAccount" }).catch(() => null),
         chrome.storage.sync.get([
           "address",
@@ -191,6 +170,9 @@ const init = async () => {
           "chainName",
           "networksInfo",
         ]),
+        chrome.runtime
+          .sendMessage({ type: "getDappAccounts" })
+          .catch(() => ({ accounts: [] })),
       ]);
       const address = account?.address || syncState.address;
       const displayAddress =
@@ -217,9 +199,12 @@ const init = async () => {
           {
             type: "init",
             msg: {
-              address,
+              address:
+                Array.isArray(dappAccounts?.accounts) &&
+                typeof dappAccounts.accounts[0] === "string"
+                  ? dappAccounts.accounts[0]
+                  : UNCONNECTED_ADDRESS,
               chainId: networksInfo[chainName].chainId,
-              rpcUrl: networksInfo[chainName].rpcUrl,
             },
           },
           "*"
@@ -249,20 +234,33 @@ chrome.runtime.onMessage.addListener((msgObj, sender, sendResponse) => {
         store.displayAddress = displayAddress;
 
         chrome.runtime.sendMessage({ type: "getDappAccounts" }).then((result) => {
+          const exposedAddress =
+            Array.isArray(result?.accounts) &&
+            typeof result.accounts[0] === "string"
+              ? result.accounts[0]
+              : UNCONNECTED_ADDRESS;
           window.postMessage(
             {
               ...msgObj,
               msg: {
                 ...msgObj.msg,
+                address: exposedAddress,
                 emitAccountsChanged:
-                  addressChanged && address && result?.accounts?.length > 0,
+                  addressChanged && result?.accounts?.length > 0,
               },
             },
             "*",
           );
         }).catch(() => {
           window.postMessage(
-            { ...msgObj, msg: { ...msgObj.msg, emitAccountsChanged: false } },
+            {
+              ...msgObj,
+              msg: {
+                ...msgObj.msg,
+                address: UNCONNECTED_ADDRESS,
+                emitAccountsChanged: false,
+              },
+            },
             "*",
           );
         });
@@ -273,8 +271,15 @@ chrome.runtime.onMessage.addListener((msgObj, sender, sendResponse) => {
 
         store.chainName = chainName;
 
-        // Forward to inpage script for provider chain update
-        window.postMessage(msgObj, "*");
+        // Never expose extension-configured RPC URLs (which may contain API
+        // credentials) to page context.
+        window.postMessage(
+          {
+            type: "setChainId",
+            msg: { chainId: msgObj.msg.chainId },
+          },
+          "*",
+        );
         break;
       }
       case "setAccount": {
@@ -290,10 +295,15 @@ chrome.runtime.onMessage.addListener((msgObj, sender, sendResponse) => {
         store.accountType = accountType;
 
         chrome.runtime.sendMessage({ type: "getDappAccounts" }).then((result) => {
+          const exposedAddress =
+            Array.isArray(result?.accounts) &&
+            typeof result.accounts[0] === "string"
+              ? result.accounts[0]
+              : UNCONNECTED_ADDRESS;
           window.postMessage({
             type: "setAddress",
             msg: {
-              address,
+              address: exposedAddress,
               emitAccountsChanged: result?.accounts?.length > 0,
             },
           }, "*");
@@ -364,7 +374,16 @@ window.addEventListener("message", async (e) => {
         accounts?: string[];
         error?: string;
         code?: number;
-      }>(`dappConnectionResult:${requestId}`, 5 * 60 * 1000)
+      }>(
+        `dappConnectionResult:${requestId}`,
+        5 * 60 * 1000,
+        () =>
+          chrome.runtime.sendMessage({
+            type: "expireProviderRequest",
+            requestKind: "dappConnection",
+            requestId,
+          }),
+      )
         .then((result) => {
           window.postMessage({
             type: "dappAccountsResult",
@@ -388,6 +407,23 @@ window.addEventListener("message", async (e) => {
     }
     case "i_switchEthereumChain": {
       const chainId = e.data.msg.chainId as number;
+      const permission = await chrome.runtime
+        .sendMessage({ type: "getDappAccounts" })
+        .catch(() => null);
+      if (!Array.isArray(permission?.accounts) || permission.accounts.length === 0) {
+        window.postMessage(
+          {
+            type: "switchEthereumChainError",
+            msg: {
+              chainId,
+              error: "Connect this site before switching networks",
+              code: 4100,
+            },
+          },
+          "*",
+        );
+        break;
+      }
       const { networksInfo } = (await chrome.storage.sync.get(
         "networksInfo"
       )) as { networksInfo: NetworksInfo | undefined };
@@ -443,7 +479,6 @@ window.addEventListener("message", async (e) => {
           type: "switchEthereumChain",
           msg: {
             chainId,
-            rpcUrl,
           },
         },
         "*"
@@ -467,6 +502,25 @@ window.addEventListener("message", async (e) => {
         rpcUrls?: string[];
         blockExplorerUrls?: string[];
       };
+
+      const permission = await chrome.runtime
+        .sendMessage({ type: "getDappAccounts" })
+        .catch(() => null);
+      if (!Array.isArray(permission?.accounts) || permission.accounts.length === 0) {
+        window.postMessage(
+          {
+            type: "addEthereumChainResult",
+            msg: {
+              id,
+              success: false,
+              error: "Connect this site before adding networks",
+              code: 4100,
+            },
+          },
+          "*",
+        );
+        break;
+      }
 
       // Check if chain already exists in networksInfo
       const { networksInfo: nets } = (await chrome.storage.sync.get("networksInfo")) as {
@@ -494,7 +548,6 @@ window.addEventListener("message", async (e) => {
                   id,
                   success: true,
                   chainId,
-                  rpcUrl: nets[name].rpcUrl,
                   shouldSwitch,
                 },
               },
@@ -505,7 +558,7 @@ window.addEventListener("message", async (e) => {
               window.postMessage(
                 {
                   type: "switchEthereumChain",
-                  msg: { chainId, rpcUrl: nets[name].rpcUrl },
+                  msg: { chainId },
                 },
                 "*"
               );
@@ -521,12 +574,18 @@ window.addEventListener("message", async (e) => {
       // Chain doesn't exist — forward to background for user confirmation
       const addChainRequestId = crypto.randomUUID();
 
-      waitForStorageResult<{ success: boolean; error?: string; rpcUrl?: string; chainName?: string; shouldSwitch?: boolean }>(
+      waitForStorageResult<{ success: boolean; error?: string; code?: number; rpcUrl?: string; chainName?: string; shouldSwitch?: boolean }>(
         `addChainResult:${addChainRequestId}`,
-        5 * 60 * 1000
+        5 * 60 * 1000,
+        () =>
+          chrome.runtime.sendMessage({
+            type: "expireProviderRequest",
+            requestKind: "addChain",
+            requestId: addChainRequestId,
+          }),
       )
         .then((result) => {
-          if (result.success && result.rpcUrl && result.chainName) {
+          if (result.success && result.chainName) {
             if (result.shouldSwitch !== false) {
               store.chainName = result.chainName;
               chrome.storage.sync.set({ chainName: result.chainName }).catch(() => {});
@@ -538,7 +597,6 @@ window.addEventListener("message", async (e) => {
                   id,
                   success: true,
                   chainId,
-                  rpcUrl: result.rpcUrl,
                   shouldSwitch: result.shouldSwitch,
                 },
               },
@@ -548,7 +606,7 @@ window.addEventListener("message", async (e) => {
               window.postMessage(
                 {
                   type: "switchEthereumChain",
-                  msg: { chainId, rpcUrl: result.rpcUrl },
+                  msg: { chainId },
                 },
                 "*"
               );
@@ -562,9 +620,10 @@ window.addEventListener("message", async (e) => {
                   success: false,
                   error: result.error || "User rejected",
                   code:
-                    !result.error || /reject/i.test(result.error)
+                    result.code ??
+                    (!result.error || /reject/i.test(result.error)
                       ? 4001
-                      : undefined,
+                      : undefined),
                 },
               },
               "*"
@@ -609,15 +668,43 @@ window.addEventListener("message", async (e) => {
         maxPriorityFeePerGas?: string;
       };
 
+      const providerChainId = await getAttestedProviderChainId();
+      const chainBoundary = validateProviderChainBoundary(
+        chainId,
+        providerChainId,
+      );
+      if (!chainBoundary.valid) {
+        window.postMessage(
+          {
+            type: "sendTransactionResult",
+            msg: {
+              id,
+              success: false,
+              error: chainBoundary.error,
+              code: 4901,
+            },
+          },
+          "*",
+        );
+        break;
+      }
+
       // Generate txId here and watch storage — no sendMessage callback needed
       const txId = crypto.randomUUID();
 
       // Start watching for result BEFORE sending message (avoids race condition)
-      waitForStorageResult<{ success: boolean; txHash?: string; error?: string }>(
-        `txResult:${txId}`
+      waitForStorageResult<{ success: boolean; txHash?: string; error?: string; code?: number }>(
+        `txResult:${txId}`,
+        5 * 60 * 1000,
+        () =>
+          chrome.runtime.sendMessage({
+            type: "expireProviderRequest",
+            requestKind: "transaction",
+            requestId: txId,
+          }),
       ).then((result) => {
         window.postMessage(
-          { type: "sendTransactionResult", msg: { id, success: result.success, txHash: result.txHash, error: result.error } },
+          { type: "sendTransactionResult", msg: { id, success: result.success, txHash: result.txHash, error: result.error, code: result.code } },
           "*"
         );
       }).catch((err) => {
@@ -632,12 +719,13 @@ window.addEventListener("message", async (e) => {
         type: "sendTransaction",
         txId,
         tx: {
-          from, to, data, value, chainId,
+          from, to, data, value, chainId: chainBoundary.chainId,
           ...(gas ? { gas } : {}),
           ...(gasPrice ? { gasPrice } : {}),
           ...(maxFeePerGas ? { maxFeePerGas } : {}),
           ...(maxPriorityFeePerGas ? { maxPriorityFeePerGas } : {}),
         },
+        providerChainId: chainBoundary.chainId,
         origin: window.location.origin,
         favicon: getFaviconUrl(),
       });
@@ -652,15 +740,43 @@ window.addEventListener("message", async (e) => {
         chainId: number;
       };
 
+      const providerChainId = await getAttestedProviderChainId();
+      const chainBoundary = validateProviderChainBoundary(
+        chainId,
+        providerChainId,
+      );
+      if (!chainBoundary.valid) {
+        window.postMessage(
+          {
+            type: "signatureRequestResult",
+            msg: {
+              id,
+              success: false,
+              error: chainBoundary.error,
+              code: 4901,
+            },
+          },
+          "*",
+        );
+        break;
+      }
+
       // Generate sigId here and watch storage — no sendMessage callback needed
       const sigId = crypto.randomUUID();
 
       // Start watching for result BEFORE sending message (avoids race condition)
-      waitForStorageResult<{ success: boolean; signature?: string; error?: string }>(
-        `sigResult:${sigId}`
+      waitForStorageResult<{ success: boolean; signature?: string; error?: string; code?: number }>(
+        `sigResult:${sigId}`,
+        5 * 60 * 1000,
+        () =>
+          chrome.runtime.sendMessage({
+            type: "expireProviderRequest",
+            requestKind: "signature",
+            requestId: sigId,
+          }),
       ).then((result) => {
         window.postMessage(
-          { type: "signatureRequestResult", msg: { id, success: result.success, signature: result.signature, error: result.error } },
+          { type: "signatureRequestResult", msg: { id, success: result.success, signature: result.signature, error: result.error, code: result.code } },
           "*"
         );
       }).catch((err) => {
@@ -674,7 +790,8 @@ window.addEventListener("message", async (e) => {
       chrome.runtime.sendMessage({
         type: "signatureRequest",
         sigId,
-        signature: { method, params, chainId },
+        signature: { method, params, chainId: chainBoundary.chainId },
+        providerChainId: chainBoundary.chainId,
         origin: window.location.origin,
         favicon: getFaviconUrl(),
       });
@@ -688,14 +805,36 @@ window.addEventListener("message", async (e) => {
         chainId: number;
       };
 
+      const providerChainId = await getAttestedProviderChainId();
+      const chainBoundary = validateProviderChainBoundary(
+        chainId,
+        providerChainId,
+      );
+      if (!chainBoundary.valid) {
+        window.postMessage(
+          {
+            type: "watchAssetResult",
+            msg: { id, success: false, error: chainBoundary.error, code: 4901 },
+          },
+          "*",
+        );
+        break;
+      }
+
       const watchAssetId = crypto.randomUUID();
 
-      waitForStorageResult<{ success: boolean; error?: string }>(
+      waitForStorageResult<{ success: boolean; error?: string; code?: number }>(
         `watchAssetResult:${watchAssetId}`,
-        5 * 60 * 1000 // 5 minute timeout
+        5 * 60 * 1000,
+        () =>
+          chrome.runtime.sendMessage({
+            type: "expireProviderRequest",
+            requestKind: "watchAsset",
+            requestId: watchAssetId,
+          }),
       ).then((result) => {
         window.postMessage(
-          { type: "watchAssetResult", msg: { id, success: result.success, error: result.error } },
+          { type: "watchAssetResult", msg: { id, success: result.success, error: result.error, code: result.code } },
           "*"
         );
       }).catch((err) => {
@@ -709,7 +848,8 @@ window.addEventListener("message", async (e) => {
         type: "watchAsset",
         watchAssetId,
         asset,
-        chainId,
+        chainId: chainBoundary.chainId,
+        providerChainId: chainBoundary.chainId,
         origin: window.location.origin,
         favicon: getFaviconUrl(),
       });
@@ -719,7 +859,6 @@ window.addEventListener("message", async (e) => {
     case "i_rpcRequest": {
       const { id, method, params } = e.data.msg as {
         id: string;
-        rpcUrl: string; // ignored — resolved from extension state below
         method: string;
         params: any[];
       };
@@ -815,12 +954,40 @@ window.addEventListener("message", async (e) => {
         params: any;
       };
 
+      const providerChainId = await getAttestedProviderChainId();
+      const chainBoundary = validateProviderChainBoundary(
+        params?.chainId,
+        providerChainId,
+      );
+      if (!chainBoundary.valid) {
+        window.postMessage(
+          {
+            type: "walletSendCallsResult",
+            msg: {
+              id,
+              success: false,
+              error: chainBoundary.error,
+              code: 4901,
+            },
+          },
+          "*",
+        );
+        break;
+      }
+
       // Generate bundle ID in content script (not dapp-controlled)
       const bundleId = crypto.randomUUID();
 
       // Wait for acknowledgment (immediate — background writes this after saving pending request)
       waitForStorageResult<{ success: boolean; id?: string; error?: string; code?: number }>(
-        `batchTxAck:${bundleId}`, 15 * 1000
+        `batchTxAck:${bundleId}`,
+        15 * 1000,
+        () =>
+          chrome.runtime.sendMessage({
+            type: "expireProviderRequest",
+            requestKind: "batchTransaction",
+            requestId: bundleId,
+          }),
       ).then((result) => {
         if (result.success) {
           window.postMessage(
@@ -843,7 +1010,8 @@ window.addEventListener("message", async (e) => {
       chrome.runtime.sendMessage({
         type: "walletSendCalls",
         bundleId,
-        params,
+        params: { ...params, chainId: `0x${chainBoundary.chainId.toString(16)}` },
+        providerChainId: chainBoundary.chainId,
         origin: window.location.origin,
         favicon: getFaviconUrl(),
       });
@@ -904,6 +1072,27 @@ window.addEventListener("message", async (e) => {
         chainId: number;
       };
 
+      const providerChainId = await getAttestedProviderChainId();
+      const chainBoundary = validateProviderChainBoundary(
+        chainId,
+        providerChainId,
+      );
+      if (!chainBoundary.valid) {
+        window.postMessage(
+          {
+            type: "walletExecutionPermissionsResult",
+            msg: {
+              id,
+              success: false,
+              error: chainBoundary.error,
+              code: 4901,
+            },
+          },
+          "*",
+        );
+        break;
+      }
+
       try {
         if (method === "wallet_requestExecutionPermissions") {
           const permissionRequestId = crypto.randomUUID();
@@ -912,7 +1101,8 @@ window.addEventListener("message", async (e) => {
             requestId: permissionRequestId,
             method,
             params,
-            chainId,
+            chainId: chainBoundary.chainId,
+            providerChainId: chainBoundary.chainId,
             origin: window.location.origin,
             favicon: getFaviconUrl(),
           });
@@ -939,6 +1129,12 @@ window.addEventListener("message", async (e) => {
           }>(
             `${ERC7715_PERMISSION_RESULT_PREFIX}${permissionRequestId}`,
             ERC7715_PERMISSION_TIMEOUT_MS,
+            () =>
+              chrome.runtime.sendMessage({
+                type: "expireProviderRequest",
+                requestKind: "erc7715Permission",
+                requestId: permissionRequestId,
+              }),
           );
 
           window.postMessage(
@@ -963,7 +1159,8 @@ window.addEventListener("message", async (e) => {
           type: "walletExecutionPermissions",
           method,
           params,
-          chainId,
+          chainId: chainBoundary.chainId,
+          providerChainId: chainBoundary.chainId,
           origin: window.location.origin,
           favicon: getFaviconUrl(),
         });

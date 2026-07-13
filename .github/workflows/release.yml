@@ -31,6 +31,9 @@ jobs:
         id: version
         run: echo "version=$(node -p "require('./apps/extension/package.json').version")" >> $GITHUB_OUTPUT
 
+      - name: Run extension security tests
+        run: pnpm --filter @walletchan/extension test:security
+
       - name: Create Chrome zip
         run: pnpm zip
 

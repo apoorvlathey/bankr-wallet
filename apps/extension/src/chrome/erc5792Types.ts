@@ -57,6 +57,12 @@ export interface WalletGetCallsStatusResult {
 // Internal storage types
 // ---------------------------------------------------------------------------
 
+export interface WalletConnectRequestMetadata {
+  topic: string;
+  requestId: number;
+  method: string;
+}
+
 export interface PendingBatchTxRequest {
   id: string;
   params: WalletSendCallsParams;
@@ -67,6 +73,8 @@ export interface PendingBatchTxRequest {
   timestamp: number;
   /** Account type at time of request — determines atomic vs non-atomic path */
   accountType?: "bankr" | "impersonator" | "privateKey" | "seedPhrase";
+  /** Non-secret ciphertext-generation binding for Bankr signer requests. */
+  bankrCredentialTag?: string;
   // SECURITY: trusted context captured at request arrival. Optional on the
   // STORED shape for backward compat with entries written by older builds —
   // new requests must use `PinnedBatchTxRequest` (see below) so the compiler
@@ -77,6 +85,10 @@ export interface PendingBatchTxRequest {
   frameId?: number;
   senderOrigin?: string;
   requestChainId?: number;
+  /** Explicit service-worker-authored request; never accepted from a webpage. */
+  trustedInternal?: true;
+  /** Exact transport identity for session revocation and stale-request checks. */
+  walletConnect?: WalletConnectRequestMetadata;
 }
 
 /**
@@ -109,6 +121,8 @@ export interface BundleStatus {
   error?: string;
   /** Origin of the dapp that created this bundle — used to scope status lookups. Optional for backward compat with pre-fix entries. */
   origin?: string;
+  /** Preserved after the prompt is consumed so session cleanup remains exact. */
+  walletConnect?: WalletConnectRequestMetadata;
 
   // Split mode: user manually broke a dapp-pushed batch into N sequential
   // single-tx confirmations as an escape hatch for non-standard custom chains
@@ -141,6 +155,8 @@ export interface BundleStatus {
     frameId?: number;
     senderOrigin?: string;
     senderWindowId?: number;
+    walletConnect?: WalletConnectRequestMetadata;
+    trustedInternal?: true;
   };
 }
 

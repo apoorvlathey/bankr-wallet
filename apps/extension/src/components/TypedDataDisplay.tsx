@@ -121,7 +121,7 @@ function AddressValue({ address, chainId }: { address: string; chainId?: number 
           w="24px"
           h="24px"
           color="text.tertiary"
-          onClick={() => window.open(explorerUrl, "_blank")}
+          onClick={() => window.open(explorerUrl, "_blank", "noopener,noreferrer")}
           _hover={{ color: "accent.secondary", bg: "bg.muted" }}
         />
       )}

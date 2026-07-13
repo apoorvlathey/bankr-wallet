@@ -18,7 +18,7 @@ import { getChainConfig } from "@/constants/chainConfig";
 import type {
   ForceInclusionProgressData,
   ForceInclusionStage,
-} from "@/chrome/forceInclusion";
+} from "@/chrome/forceInclusion/single";
 
 interface ForceInclusionProgressProps {
   txId: string;
@@ -210,6 +210,7 @@ function ForceInclusionProgress({
                               window.open(
                                 `${l1Config.explorer}/tx/${progress.l1Hash}`,
                                 "_blank",
+                                "noopener,noreferrer",
                               )
                             }
                             _hover={{
@@ -252,6 +253,7 @@ function ForceInclusionProgress({
                             window.open(
                               `${l2Config.explorer}/tx/${progress.l2Hash}`,
                               "_blank",
+                              "noopener,noreferrer",
                             )
                           }
                           _hover={{

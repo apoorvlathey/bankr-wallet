@@ -78,7 +78,7 @@ function AddressValue({
             size="xs"
             variant="ghost"
             color="text.secondary"
-            onClick={() => window.open(explorerUrl, "_blank")}
+            onClick={() => window.open(explorerUrl, "_blank", "noopener,noreferrer")}
             _hover={{ color: "accent.secondary", bg: "bg.muted" }}
           />
         )}

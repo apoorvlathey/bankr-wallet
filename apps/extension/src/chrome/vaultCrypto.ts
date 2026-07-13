@@ -8,135 +8,30 @@
 
 import type { Vault, VaultEntry, DecryptedEntry } from "./types";
 import {
-  SALT_LENGTH,
-  IV_LENGTH,
-  arrayBufferToBase64,
-  base64ToUint8Array,
-  base64ToArrayBuffer,
-  deriveKey,
-} from "./cryptoUtils";
+  decryptPrivateKey,
+  decryptPrivateKeyWithVaultKey,
+  encryptPrivateKey,
+  encryptPrivateKeyWithVaultKey,
+  isVaultKeyEncrypted,
+  type PasswordEncryptedPrivateKey,
+  type VaultKeyEncryptedPrivateKey,
+} from "./privateKeyVaultCrypto";
+export {
+  decryptPrivateKey,
+  decryptPrivateKeyWithVaultKey,
+  encryptPrivateKey,
+  encryptPrivateKeyWithVaultKey,
+  isVaultKeyEncrypted,
+} from "./privateKeyVaultCrypto";
+import {
+  WALLET_SECRET_STORAGE_LOCK_KEY,
+  withStorageLock,
+} from "./storageLock";
+import { assertCurrentMasterAuthorization } from "./masterAuthorization";
+import { getAccounts } from "./accountStorage";
+import { retainValidLocalAccountKeys } from "./privateKeyIntegrity";
 
 export const VAULT_STORAGE_KEY = "pkVault";
-
-interface EncryptedKeystore {
-  ciphertext: string; // base64
-  iv: string; // base64
-  salt: string; // base64
-}
-
-/**
- * Vault-key encrypted format (no salt, uses vault key directly)
- */
-interface EncryptedKeystoreVault {
-  ciphertext: string; // base64
-  iv: string; // base64
-  salt: ""; // Empty salt indicates vault-key encryption
-}
-
-/**
- * Encrypts a private key using AES-256-GCM
- */
-export async function encryptPrivateKey(
-  privateKey: `0x${string}`,
-  password: string
-): Promise<EncryptedKeystore> {
-  const encoder = new TextEncoder();
-  const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
-  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
-
-  const key = await deriveKey(password, salt);
-
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv.buffer as ArrayBuffer },
-    key,
-    encoder.encode(privateKey)
-  );
-
-  return {
-    ciphertext: arrayBufferToBase64(ciphertext),
-    iv: arrayBufferToBase64(iv.buffer as ArrayBuffer),
-    salt: arrayBufferToBase64(salt.buffer as ArrayBuffer),
-  };
-}
-
-/**
- * Decrypts a keystore to get the private key
- * CRITICAL: Only call from background.ts
- */
-export async function decryptPrivateKey(
-  keystore: EncryptedKeystore,
-  password: string
-): Promise<`0x${string}`> {
-  const decoder = new TextDecoder();
-  const salt = base64ToUint8Array(keystore.salt);
-  const iv = base64ToUint8Array(keystore.iv);
-  const ciphertext = base64ToArrayBuffer(keystore.ciphertext);
-
-  const key = await deriveKey(password, salt);
-
-  const plaintext = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: iv.buffer as ArrayBuffer },
-    key,
-    ciphertext
-  );
-
-  return decoder.decode(plaintext) as `0x${string}`;
-}
-
-/**
- * Checks if a keystore is encrypted with vault key (empty salt)
- */
-export function isVaultKeyEncrypted(keystore: any): keystore is EncryptedKeystoreVault {
-  return keystore && keystore.salt === "";
-}
-
-/**
- * Encrypts a private key using vault key (no password derivation needed)
- */
-export async function encryptPrivateKeyWithVaultKey(
-  privateKey: `0x${string}`,
-  vaultKey: CryptoKey
-): Promise<EncryptedKeystoreVault> {
-  const encoder = new TextEncoder();
-  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
-
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv.buffer as ArrayBuffer },
-    vaultKey,
-    encoder.encode(privateKey)
-  );
-
-  return {
-    ciphertext: arrayBufferToBase64(ciphertext),
-    iv: arrayBufferToBase64(iv.buffer as ArrayBuffer),
-    salt: "", // Empty salt indicates vault-key encryption
-  };
-}
-
-/**
- * Decrypts a vault-key encrypted keystore to get the private key
- * CRITICAL: Only call from background.ts
- */
-export async function decryptPrivateKeyWithVaultKey(
-  keystore: EncryptedKeystoreVault,
-  vaultKey: CryptoKey
-): Promise<`0x${string}` | null> {
-  try {
-    const decoder = new TextDecoder();
-    const iv = base64ToUint8Array(keystore.iv);
-    const ciphertext = base64ToArrayBuffer(keystore.ciphertext);
-
-    const plaintext = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: iv.buffer as ArrayBuffer },
-      vaultKey,
-      ciphertext
-    );
-
-    return decoder.decode(plaintext) as `0x${string}`;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Loads the vault from chrome storage
@@ -171,91 +66,85 @@ export async function addKeyToVault(
   accountId: string,
   privateKey: `0x${string}`,
   password?: string,
+  expectedAuthEpoch?: string,
 ): Promise<void> {
-  let vault = await loadVault();
-  if (!vault) {
-    vault = createEmptyVault();
-  }
+  await withStorageLock(WALLET_SECRET_STORAGE_LOCK_KEY, async () => {
+    if (expectedAuthEpoch) {
+      assertCurrentMasterAuthorization(expectedAuthEpoch);
+    }
+    let vault = await loadVault();
+    if (!vault) {
+      vault = createEmptyVault();
+    }
 
   // Check if entry already exists
-  const existingIndex = vault.entries.findIndex((e) => e.id === accountId);
-  if (existingIndex !== -1) {
-    throw new Error("Account already exists in vault");
-  }
+    const existingIndex = vault.entries.findIndex((e) => e.id === accountId);
+    if (existingIndex !== -1) {
+      throw new Error("Account already exists in vault");
+    }
 
-  // Check if vault key system is active
-  const { getCachedVaultKey } = await import("./sessionCache");
-  const vaultKey = getCachedVaultKey();
+  // Check if vault key system is active. A migrated wallet must never create a
+  // new password-encrypted entry merely because its in-memory vault key
+  // expired between authorization and persistence. Mixed legacy entries are
+  // supported only for reading/migrating older storage.
+    const { getCachedVaultKey } = await import("./sessionCache");
+    const vaultKey = getCachedVaultKey();
+    const { encryptedVaultKeyMaster } = await chrome.storage.local.get(
+      "encryptedVaultKeyMaster",
+    );
 
   // Encrypt the private key
-  let keystore: EncryptedKeystore | EncryptedKeystoreVault;
-  if (vaultKey) {
-    // Use vault key encryption (agent password compatible)
-    keystore = await encryptPrivateKeyWithVaultKey(privateKey, vaultKey);
-  } else {
-    if (!password) {
-      throw new Error("Wallet is locked. Please unlock first.");
+    let keystore: PasswordEncryptedPrivateKey | VaultKeyEncryptedPrivateKey;
+    if (vaultKey) {
+      // Use vault key encryption (agent password compatible)
+      keystore = await encryptPrivateKeyWithVaultKey(privateKey, vaultKey);
+    } else {
+      if (encryptedVaultKeyMaster) {
+        throw new Error("Wallet is locked. Please unlock again.");
+      }
+      if (!password) {
+        throw new Error("Wallet is locked. Please unlock first.");
+      }
+      // Fall back to password encryption (legacy)
+      keystore = await encryptPrivateKey(privateKey, password);
     }
-    // Fall back to password encryption (legacy)
-    keystore = await encryptPrivateKey(privateKey, password);
-  }
 
   // Add to vault
-  const entry: VaultEntry = {
-    id: accountId,
-    keystore,
-  };
-  vault.entries.push(entry);
+    const entry: VaultEntry = {
+      id: accountId,
+      keystore,
+    };
+    vault.entries.push(entry);
 
-  await saveVault(vault);
+    if (expectedAuthEpoch) {
+      assertCurrentMasterAuthorization(expectedAuthEpoch);
+    }
+    await saveVault(vault);
+  });
 }
 
 /**
  * Removes a private key from the vault
  */
-export async function removeKeyFromVault(accountId: string): Promise<void> {
-  const vault = await loadVault();
-  if (!vault) {
-    return;
-  }
-
-  vault.entries = vault.entries.filter((e) => e.id !== accountId);
-  await saveVault(vault);
-}
-
-/**
- * Gets an encrypted keystore entry from the vault
- */
-export async function getKeystoreEntry(
-  accountId: string
-): Promise<VaultEntry | null> {
-  const vault = await loadVault();
-  if (!vault) {
-    return null;
-  }
-
-  return vault.entries.find((e) => e.id === accountId) || null;
-}
-
-/**
- * Decrypts a single private key from the vault
- * CRITICAL: Only call from background.ts
- */
-export async function getPrivateKey(
+export async function removeKeyFromVault(
   accountId: string,
-  password: string
-): Promise<`0x${string}` | null> {
-  const entry = await getKeystoreEntry(accountId);
-  if (!entry) {
-    return null;
-  }
+  expectedAuthEpoch?: string,
+): Promise<void> {
+  await withStorageLock(WALLET_SECRET_STORAGE_LOCK_KEY, async () => {
+    if (expectedAuthEpoch) {
+      assertCurrentMasterAuthorization(expectedAuthEpoch);
+    }
+    const vault = await loadVault();
+    if (!vault) {
+      return;
+    }
 
-  try {
-    return await decryptPrivateKey(entry.keystore as EncryptedKeystore, password);
-  } catch {
-    // Wrong password or corrupted keystore
-    return null;
-  }
+    vault.entries = vault.entries.filter((e) => e.id !== accountId);
+    if (expectedAuthEpoch) {
+      assertCurrentMasterAuthorization(expectedAuthEpoch);
+    }
+    await saveVault(vault);
+  });
 }
 
 /**
@@ -273,13 +162,13 @@ export async function decryptAllKeys(
   try {
     const decrypted: DecryptedEntry[] = [];
     for (const entry of vault.entries) {
-      const privateKey = await decryptPrivateKey(entry.keystore as EncryptedKeystore, password);
+      const privateKey = await decryptPrivateKey(entry.keystore as PasswordEncryptedPrivateKey, password);
       decrypted.push({
         id: entry.id,
         privateKey,
       });
     }
-    return decrypted;
+    return retainValidLocalAccountKeys(decrypted, await getAccounts());
   } catch {
     // Wrong password
     return null;
@@ -303,7 +192,7 @@ export async function reEncryptVault(
     const newEntries: VaultEntry[] = [];
     for (const entry of vault.entries) {
       // Decrypt with old password
-      const privateKey = await decryptPrivateKey(entry.keystore as EncryptedKeystore, oldPassword);
+      const privateKey = await decryptPrivateKey(entry.keystore as PasswordEncryptedPrivateKey, oldPassword);
       // Re-encrypt with new password
       const newKeystore = await encryptPrivateKey(privateKey, newPassword);
       newEntries.push({
@@ -339,7 +228,7 @@ export async function computeReEncryptedVault(
   try {
     const newEntries: VaultEntry[] = [];
     for (const entry of vault.entries) {
-      const privateKey = await decryptPrivateKey(entry.keystore as EncryptedKeystore, oldPassword);
+      const privateKey = await decryptPrivateKey(entry.keystore as PasswordEncryptedPrivateKey, oldPassword);
       const newKeystore = await encryptPrivateKey(privateKey, newPassword);
       newEntries.push({ id: entry.id, keystore: newKeystore });
     }
@@ -374,7 +263,7 @@ export async function computeVaultKeyMigratedVault(
         }
 
         const privateKey = await decryptPrivateKey(
-          entry.keystore as EncryptedKeystore,
+          entry.keystore as PasswordEncryptedPrivateKey,
           password,
         );
         return {

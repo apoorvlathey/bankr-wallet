@@ -19,8 +19,9 @@
  * lookup per call). Add when a real registry entry needs them.
  */
 
-import { createPublicClient, http, type PublicClient, type Hex } from "viem";
+import { createPublicClient, type PublicClient, type Hex } from "viem";
 import { getRpcUrl } from "@/chrome/txHandlers";
+import { secureHttpTransport } from "@/chrome/rpcHttpClient";
 
 /** EIP-1967 logic slot: `bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1)` */
 const EIP1967_IMPLEMENTATION_SLOT =
@@ -60,7 +61,7 @@ async function getClient(chainId: number): Promise<PublicClient | null> {
   const cached = clientCache.get(chainId);
   if (cached && cached.rpcUrl === rpcUrl) return cached.client;
   const client = createPublicClient({
-    transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
+    transport: secureHttpTransport(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
   });
   clientCache.set(chainId, { rpcUrl, client });
   return client;

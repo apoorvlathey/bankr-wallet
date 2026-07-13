@@ -5,7 +5,6 @@ import {
   Box,
   HStack,
   IconButton,
-  Image,
   Text,
   VStack,
 } from "@chakra-ui/react";
@@ -15,13 +14,14 @@ import type {
   Erc7715PermissionRequest,
   PendingErc7715PermissionRequest,
 } from "@/chrome/pendingErc7715PermissionStorage";
-import { buildErc7715PermissionCaveats } from "@/chrome/erc7715PermissionCaveats";
+import { buildErc7715PermissionCaveats } from "@/chrome/erc7715/caveats";
 import { CopyButton } from "@/components/CopyButton";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { Erc7715PermissionEditableControls } from "@/components/Erc7715PermissionEditableControls";
 import { Erc7715PermissionTokenCard } from "@/components/Erc7715PermissionTokenCard";
 import { useErc7715PermissionAsset } from "@/components/useErc7715PermissionAsset";
 import ChainIcon from "@/components/ChainIcon";
+import SafeImage from "@/components/SafeImage";
 import TokenLogo from "@/components/TokenLogo";
 import {
   AssetDeltaRow,
@@ -170,7 +170,7 @@ function AddressValue({
           size="xs"
           variant="ghost"
           color="fg.secondary"
-          onClick={() => window.open(explorerUrl, "_blank")}
+          onClick={() => window.open(explorerUrl, "_blank", "noopener,noreferrer")}
         />
       )}
     </HStack>
@@ -283,7 +283,7 @@ function PermissionReviewContent({
       outcome={outcomeText}
       media={
         permissionRequest.favicon ? (
-          <Image
+          <SafeImage
             src={permissionRequest.favicon}
             alt=""
             boxSize="36px"
@@ -371,7 +371,7 @@ function PermissionReviewContent({
       <ContextRow label="Requesting app">
         <HStack spacing={2}>
           {permissionRequest.favicon && (
-            <Image
+            <SafeImage
               src={permissionRequest.favicon}
               alt=""
               boxSize="24px"
@@ -397,7 +397,7 @@ function PermissionReviewContent({
               size="xs"
               variant="ghost"
               color="fg.secondary"
-              onClick={() => window.open(accountExplorerUrl, "_blank")}
+              onClick={() => window.open(accountExplorerUrl, "_blank", "noopener,noreferrer")}
             />
           )}
         </HStack>

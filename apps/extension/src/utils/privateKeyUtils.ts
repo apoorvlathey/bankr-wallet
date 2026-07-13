@@ -11,8 +11,21 @@ export interface ValidateResult {
  * Generates a cryptographically secure random private key
  */
 export function generatePrivateKey(): `0x${string}` {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
+  // A uniformly random 256-bit integer can (with vanishing probability) fall
+  // outside secp256k1's valid scalar range. Validate before returning so even
+  // that edge case can never show the user an unusable backup.
+  for (;;) {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    const privateKey = `0x${Array.from(bytes, (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("")}` as `0x${string}`;
+    try {
+      privateKeyToAccount(privateKey);
+      return privateKey;
+    } catch {
+      // Draw again for zero or a scalar outside the curve order.
+    }
+  }
 }
 
 /**

@@ -98,7 +98,7 @@ function RevokeAddressRow({
             size="xs"
             variant="ghost"
             color="text.secondary"
-            onClick={() => window.open(explorerUrl, "_blank")}
+            onClick={() => window.open(explorerUrl, "_blank", "noopener,noreferrer")}
             _hover={{ color: "accent.secondary", bg: "bg.muted" }}
           />
         )}
@@ -315,7 +315,7 @@ export default function Erc7715PermissionRevokeSummary({
                         size="xs"
                         variant="ghost"
                         color="text.secondary"
-                        onClick={() => window.open(tokenExplorerUrl, "_blank")}
+                        onClick={() => window.open(tokenExplorerUrl, "_blank", "noopener,noreferrer")}
                         _hover={{ color: "accent.secondary", bg: "bg.muted" }}
                       />
                     )}

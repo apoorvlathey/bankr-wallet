@@ -55,6 +55,18 @@ const { accessList } = await client.createAccessList({
 
 We extract all unique addresses as "token candidates" — the simulator will try `balanceOf` on each.
 
+If a chain RPC does not implement `eth_createAccessList`, WalletChan scans the
+full calldata (including nested `bytes` payloads such as Uniswap multicalls) for
+ABI-padded address words. It deduplicates and caps the result at 64 candidates,
+adds the transaction target, then runs one Multicall3 preflight containing
+`balanceOf(account)`, `name()`, `symbol()`, `decimals()`, and the ERC-1155
+interface probe for each candidate. Addresses that are neither account-balance
+assets nor ERC-1155 contracts are removed before the heavier bytecode-injection
+simulation. Successful ERC-20 metadata is retained in a bounded short-lived
+memory cache and reused during result enrichment, avoiding a second metadata
+multicall for tokens that produce a delta. If Multicall3 is unavailable, the
+preflight fails open to the original bounded candidate set.
+
 #### Step 2: Simulate via State Override (`eth_call`)
 
 The `TxSimulator.sol` contract:
@@ -93,10 +105,13 @@ For native currency (ETH/BNB/POL), metadata comes from `CHAIN_REGISTRY` and the 
 
 #### Step 4: Fetch USD Prices
 
-- **ERC-20 tokens**: `fetchTokenPrice(chainId, address)` via `walletchan.eth.sh/api/swap/token-price` (CoinGecko proxy)
-- **Native currency**: `fetchNativePrice(chainId)` from `gasEstimation.ts`, which now routes through the shared background `coingeckoService.ts` (batched markets fetch + persisted cache)
-
-All price fetches run in parallel with `Promise.all`.
+- **First choice — reset-aware portfolio cache**: the latest matching entry in
+  `chrome.storage.local.portfolioHoldingsCache` supplies ERC-20 and native
+  prices without a network request.
+- **ERC-20 fallback**: cache misses call `fetchTokenPrice(chainId, address)` via
+  `walletchan.eth.sh/api/swap/token-price`.
+- **Native fallback**: cache misses call `fetchNativePrice(chainId)` from
+  `gasEstimation.ts`, backed by the shared `coingeckoService.ts` cache.
 
 ## Rate Limit Handling (Metadata Retry)
 
@@ -104,22 +119,28 @@ The simulation makes 3+ RPC calls in quick succession (alongside gas estimation)
 
 ### Two-Phase Display
 
-**Phase 1** — Show results immediately with whatever metadata is available. The `SimulationResult` includes `metadataComplete: boolean`. If `false`, the UI schedules retries.
+**Phase 1** — Show standard ERC-20/native balance deltas immediately from the
+simulation response using metadata already collected by the candidate
+preflight. Logos and USD values are intentionally nullable at first. The
+`SimulationResult` includes `metadataComplete: boolean`; `false` starts
+enrichment without keeping the UI in its “Simulating…” state.
 
-**Phase 2** — `AssetChangesDisplay` detects `metadataComplete === false` and calls `retryTokenMetadata` after 2.5 seconds. This function:
+**Phase 2** — `AssetChangesDisplay` detects `metadataComplete === false` and
+calls `retryTokenMetadata` immediately. This function:
 
 1. Retries the token list lookup (may have cached since first attempt)
 2. Retries onchain multicall for tokens still showing address-like symbols
 3. Retries price fetches for tokens missing USD values
 4. Merges updates into existing results (recomputes formatted amounts if decimals changed)
 
-Up to 3 retries at 2.5s intervals. The UI updates reactively as metadata arrives.
+The first enrichment begins immediately; unresolved fields receive up to two
+more retries at 2.5s intervals. The UI updates reactively as metadata arrives.
 
 ```
 [0.0s] Simulation complete → show results (some tokens may show as "0x1234...abcd")
-[2.5s] Retry 1 → metadata fetched → UI updates with symbol, name, logo, price
-[5.0s] Retry 2 (if still incomplete)
-[7.5s] Retry 3 (final attempt)
+[0.0s] Enrichment 1 starts → cached portfolio prices may paint immediately
+[2.5s] Retry 2 (if still incomplete)
+[5.0s] Retry 3 (final attempt)
 ```
 
 ## Files
@@ -127,7 +148,11 @@ Up to 3 retries at 2.5s intervals. The UI updates reactively as metadata arrives
 | File | Purpose |
 |------|---------|
 | `apps/contracts/src/utils/TxSimulator.sol` | Solidity simulator (never deployed, bytecode-only) |
-| `apps/extension/src/chrome/txSimulation.ts` | Background: simulation + metadata + retry logic |
+| `apps/extension/src/chrome/txSimulation.ts` | Stable simulation coordinator: RPC calls, metadata enrichment, and public API |
+| `apps/extension/src/chrome/simulation/types.ts` | Normalized asset-change and raw simulator result shapes |
+| `apps/extension/src/chrome/simulation/constants.ts` | Shared single/batch gas caps and canonical Permit2 address |
+| `apps/extension/src/chrome/simulation/stateOverrides.ts` | Retry-only ERC-20 balance/approval and Permit2 state overrides |
+| `apps/extension/src/chrome/simulation/ethSimulateLogs.ts` | Pure `eth_simulateV1` status and transfer-log classification |
 | `apps/extension/src/components/AssetChangesDisplay.tsx` | UI: collapsible card with Send/Receive sections |
 | `apps/extension/src/chrome/background.ts` | Message routing: `simulateAssetChanges`, `retryTokenMetadata` |
 | `apps/extension/src/components/TransactionConfirmation.tsx` | Integration: mounts `AssetChangesDisplay` between TX info and gas |
@@ -238,6 +263,9 @@ If you modify `TxSimulator.sol`:
 - **Contract deployments**: Skipped (no `to` address for `createAccessList`)
 - **State changes between simulation and execution**: The simulation is a snapshot — chain state may change before the user confirms. A small disclaimer is shown if the simulated tx reverts.
 - **Exotic tokens**: Fee-on-transfer or rebasing tokens may show slightly different amounts than actual execution
-- **Chain support**: Requires `eth_createAccessList` (EIP-2930) and `eth_call` state overrides. Supported by all major EVM chains; newer chains (MegaETH) may have limited support — handled gracefully by hiding the section on failure.
+- **Chain support**: Requires `eth_call` state overrides. `eth_createAccessList`
+  improves candidate discovery when available; RPCs without it fall back to
+  bounded ABI-address extraction from calldata. Tokens encoded only in custom
+  packed formats without ABI-padded addresses may still be missed.
 - **`extcodesize` checks**: Since the user's address temporarily has code during simulation, contracts that check `extcodesize(msg.sender) == 0` may behave differently. This is rare in modern DeFi.
 - **ERC-7715 `redeemDelegations`**: The normal single-transaction simulator is skipped because redemption can depend on the delegator account's EIP-7702 smart-account code when the DelegationManager calls back into it. Injecting `TxSimulator` bytecode at the user's address would clobber that 7702 code and can produce a false "simulated revert" for transactions that succeed onchain. Instead, `txSimulation.ts` decodes supported single-default and batch-default redemption executions directly, nets direct native-value sends and canonical `ERC20.transfer(address,uint256)` token sends against the delegator encoded in the permission context, and previews those through the normal metadata/USD enrichment path. Unsupported modes, non-zero outer DelegationManager tx value, self-transfers with non-zero value/amount, or arbitrary calldata stay unavailable so the UI does not show a partial or misleading asset preview.

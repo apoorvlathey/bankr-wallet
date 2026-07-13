@@ -140,8 +140,8 @@ export function buildButton(t: ThemeTokens) {
           ...disabled,
         },
       },
-      // Warm Midnight identity action. Reserve amber for product-entry and
-      // mascot-led brand moments; transaction decisions remain primary blue.
+      // Warm Midnight commitment action. Amber marks product-entry, mascot-led
+      // brand moments, and the final single-transaction Confirm decision.
       brand: {
         bg: "accent.highlight",
         color: "accentFg.highlight",

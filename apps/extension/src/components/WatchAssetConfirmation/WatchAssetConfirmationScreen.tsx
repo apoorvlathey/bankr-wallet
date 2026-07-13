@@ -2,7 +2,6 @@ import {
   Box,
   HStack,
   IconButton,
-  Image,
   Text,
   VStack,
 } from "@chakra-ui/react";
@@ -11,6 +10,7 @@ import type { ReactNode } from "react";
 
 import ChainIcon from "@/components/ChainIcon";
 import { CopyButton } from "@/components/CopyButton";
+import SafeImage from "@/components/SafeImage";
 import {
   ConfirmationScreen,
   InlineDisclosure,
@@ -56,7 +56,7 @@ function TokenIcon({ symbol, imageUrl }: { symbol: string; imageUrl?: string }) 
   if (!imageUrl) return fallback;
 
   return (
-    <Image
+    <SafeImage
       src={imageUrl}
       alt={`${symbol} token`}
       boxSize="48px"
@@ -91,17 +91,13 @@ function OriginIdentity({
 }) {
   return (
     <HStack spacing={2} minW={0} justify="flex-end">
-      <Image
+      <SafeImage
         src={favicon}
+        fallbackSrc={fallbackFavicon}
         alt=""
         boxSize="20px"
         borderRadius="sm"
         objectFit="contain"
-        onError={(event) => {
-          if (event.currentTarget.src !== fallbackFavicon) {
-            event.currentTarget.src = fallbackFavicon;
-          }
-        }}
         fallback={<Box boxSize="20px" bg="surface.raisedHover" borderRadius="sm" />}
       />
       <Text color="fg.primary" fontSize="sm" fontWeight="600" overflowWrap="anywhere">
@@ -219,7 +215,7 @@ export function WatchAssetConfirmationScreen({
                     icon={<ExternalLinkIcon />}
                     variant="ghost"
                     size="xs"
-                    onClick={() => window.open(`${explorerUrl}/address/${address}`, "_blank")}
+                    onClick={() => window.open(`${explorerUrl}/address/${address}`, "_blank", "noopener,noreferrer")}
                   />
                 )}
               </HStack>

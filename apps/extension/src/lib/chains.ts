@@ -6,6 +6,7 @@ import {
   type ChainEntry,
 } from "@/constants/chainRegistry";
 import { resolveChainIconMeta } from "@/lib/chainIcons";
+import { sanitizeCustomExplorerUrl } from "@/lib/externalNavigation";
 
 export type ChainAccountType =
   | "bankr"
@@ -99,7 +100,9 @@ export function normalizeNetworksInfo(
       rpcUrl: entry.rpcUrl,
       isCustom: true,
       hidden: entry.hidden,
-      explorer: entry.explorer?.replace(/\/+$/, "") || undefined,
+      explorer:
+        sanitizeCustomExplorerUrl(entry.explorer)?.replace(/\/+$/, "") ||
+        undefined,
       nativeCurrency: entry.nativeCurrency ?? DEFAULT_NATIVE_CURRENCY,
     };
   }

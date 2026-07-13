@@ -1,6 +1,5 @@
 import {
   createPublicClient,
-  http,
   Hex,
   Address,
   encodePacked,
@@ -18,6 +17,7 @@ import {
   MEGAETH_CHAIN_ID,
 } from "@/utils/mega";
 import { getStoredRpcUrl } from "@/lib/chains";
+import { secureHttpTransport } from "@/chrome/rpcHttpClient";
 
 // ============================================================================
 // Constants
@@ -44,7 +44,7 @@ async function getMainnetClient() {
   const rpcUrl = await getUserRpcUrl(mainnet.id);
   return createPublicClient({
     chain: mainnet,
-    transport: http(rpcUrl),
+    transport: secureHttpTransport(rpcUrl, { timeout: 8_000, retryCount: 0 }),
   });
 }
 
@@ -52,7 +52,7 @@ async function getBaseClient() {
   const rpcUrl = await getUserRpcUrl(base.id);
   return createPublicClient({
     chain: base,
-    transport: http(rpcUrl),
+    transport: secureHttpTransport(rpcUrl, { timeout: 8_000, retryCount: 0 }),
   });
 }
 
@@ -65,7 +65,7 @@ async function getMegaEthClient() {
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       rpcUrls: { default: { http: [rpcUrl] } },
     },
-    transport: http(rpcUrl),
+    transport: secureHttpTransport(rpcUrl, { timeout: 8_000, retryCount: 0 }),
   });
 }
 

@@ -9,6 +9,10 @@ import {
   getAllBookmarks,
   type EnsBookmark,
 } from "@/chrome/ensBrowsing/bookmarks";
+import {
+  INERT_IMAGE_SRC,
+  useCachedAvatarSrc,
+} from "@/hooks/useCachedAvatarSrc";
 import "./Dapp3Browser.css";
 
 type ParsedTarget =
@@ -119,6 +123,29 @@ function defaultFaviconUrl(site: FaviconSource): string {
     return `https://${site.ensName}.domains/favicon.ico`;
   }
   return `https://${site.ensName}.limo/favicon.ico`;
+}
+
+function BrowserFavicon({
+  src,
+  label,
+  onError,
+}: {
+  src: string | null;
+  label: string;
+  onError: () => void;
+}) {
+  const safeSrc = useCachedAvatarSrc(src);
+  if (!safeSrc || safeSrc === INERT_IMAGE_SRC) {
+    return <span className="site-letter">{label}</span>;
+  }
+  return (
+    <img
+      className="site-favicon"
+      src={safeSrc}
+      alt=""
+      onError={onError}
+    />
+  );
 }
 
 export default function Dapp3Browser() {
@@ -320,18 +347,11 @@ export default function Dapp3Browser() {
                     }}
                   >
                     <span className="site-icon" aria-hidden="true">
-                      {faviconSrc ? (
-                        <img
-                          className="site-favicon"
-                          src={faviconSrc}
-                          alt=""
-                          onError={() => markFaviconFailed(key)}
-                        />
-                      ) : (
-                        <span className="site-letter">
-                          {bookmark.ensName.charAt(0).toUpperCase()}
-                        </span>
-                      )}
+                      <BrowserFavicon
+                        src={faviconSrc}
+                        label={bookmark.ensName.charAt(0).toUpperCase()}
+                        onError={() => markFaviconFailed(key)}
+                      />
                     </span>
                     <span className="site-name">
                       {bookmark.title?.trim() || bookmark.ensName}
@@ -367,18 +387,11 @@ export default function Dapp3Browser() {
                     }}
                   >
                     <span className="site-icon" aria-hidden="true">
-                      {faviconSrc ? (
-                        <img
-                          className="site-favicon"
-                          src={faviconSrc}
-                          alt=""
-                          onError={() => markFaviconFailed(site.ensName)}
-                        />
-                      ) : (
-                        <span className="site-letter">
-                          {site.ensName.charAt(0).toUpperCase()}
-                        </span>
-                      )}
+                      <BrowserFavicon
+                        src={faviconSrc}
+                        label={site.ensName.charAt(0).toUpperCase()}
+                        onError={() => markFaviconFailed(site.ensName)}
+                      />
                     </span>
                     <span className="site-name">{site.ensName}</span>
                     <span className="site-kind">{formatKind(site.kind)}</span>

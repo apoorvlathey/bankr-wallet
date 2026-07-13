@@ -59,7 +59,9 @@ async function requestTransaction(dapp: Page): Promise<void> {
         state.address = accounts[0];
         return state.provider.request({
           method: "eth_sendTransaction",
-          params: [{ to: accounts[0], value: "0x0", data: "0x" }],
+          // Exercise compatibility with dapps that encode zero as a padded
+          // byte-like hex value instead of a canonical JSON-RPC quantity.
+          params: [{ to: accounts[0], value: "0x00", data: "0x" }],
         });
       })
       .then((hash: string) => {

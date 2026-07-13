@@ -4,11 +4,14 @@
 
 import { BankrApiError, getJobStatus, pollJobUntilComplete, JobStatus } from "./bankrApi";
 import { BANKR_API_BASE } from "@/constants/externalUrls";
+import { fetchTextBounded } from "./boundedHttpResponse";
 
 const API_BASE_URL = BANKR_API_BASE;
 
 // Max prompt length for Bankr API
 const MAX_PROMPT_LENGTH = 10000;
+const CHAT_SUBMIT_TIMEOUT_MS = 30_000;
+const CHAT_RESPONSE_MAX_BYTES = 64 * 1024;
 
 export interface SubmitChatPromptResponse {
   jobId: string;
@@ -62,12 +65,21 @@ function extractPromptErrorMessage(value: unknown): string | undefined {
 
 function formatPromptSubmitError(text: string, status: number): string {
   const message = extractPromptErrorMessage(text);
-  if (message) return message;
+  if (message) return sanitizeRemoteError(message);
 
   const trimmed = text.trim();
-  if (trimmed) return trimmed;
+  if (trimmed) return sanitizeRemoteError(trimmed);
 
   return `Failed to submit chat prompt (${status})`;
+}
+
+function sanitizeRemoteError(value: string): string {
+  return (
+    value
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
+      .trim()
+      .slice(0, 1_000) || "Bankr chat request failed"
+  );
 }
 
 /**
@@ -78,20 +90,21 @@ export function formatConversationPrompt(
   messages: ChatMessage[],
   currentPrompt: string
 ): string {
+  const boundedCurrentPrompt = currentPrompt.slice(0, MAX_PROMPT_LENGTH);
   // If no history, just return the current prompt
   if (messages.length === 0) {
-    return currentPrompt;
+    return boundedCurrentPrompt;
   }
 
   // Build history string with role tags
   const historyParts: string[] = [];
 
-  for (const msg of messages) {
+  for (const msg of messages.slice(-100)) {
     // Skip empty messages or pending/error assistant messages
     if (!msg.content || msg.content.trim() === "") continue;
 
     const roleTag = msg.role === "user" ? "User" : "Assistant";
-    historyParts.push(`${roleTag}: ${msg.content}`);
+    historyParts.push(`${roleTag}: ${msg.content.slice(0, MAX_PROMPT_LENGTH)}`);
   }
 
   // If no valid history, just return the current prompt
@@ -101,17 +114,17 @@ export function formatConversationPrompt(
 
   // Format: history followed by current message
   const historyText = historyParts.join("\n\n");
-  const fullPrompt = `[Conversation history]\n${historyText}\n\n[Current message]\nUser: ${currentPrompt}`;
+  const fullPrompt = `[Conversation history]\n${historyText}\n\n[Current message]\nUser: ${boundedCurrentPrompt}`;
 
   // Truncate history if prompt exceeds max length
   // Keep current message intact, trim history from the beginning
   if (fullPrompt.length > MAX_PROMPT_LENGTH) {
-    const currentMsgSection = `\n\n[Current message]\nUser: ${currentPrompt}`;
+    const currentMsgSection = `\n\n[Current message]\nUser: ${boundedCurrentPrompt}`;
     const availableForHistory = MAX_PROMPT_LENGTH - currentMsgSection.length - "[Conversation history]\n".length - 50; // 50 char buffer
 
     if (availableForHistory < 100) {
       // Not enough room for history, just send current message
-      return currentPrompt;
+      return boundedCurrentPrompt;
     }
 
     // Truncate history from the beginning, keeping most recent messages
@@ -125,7 +138,7 @@ export function formatConversationPrompt(
 
     if (truncatedHistory.length > availableForHistory) {
       // Still too long, just send current message
-      return currentPrompt;
+      return boundedCurrentPrompt;
     }
 
     return `[Conversation history]\n${truncatedHistory}${currentMsgSection}`;
@@ -152,25 +165,42 @@ export async function submitChatPrompt(
     ? formatConversationPrompt(history, prompt)
     : prompt;
 
-  const response = await fetch(`${API_BASE_URL}/agent/prompt`, {
-    method: "POST",
-    headers: {
-      "X-API-Key": apiKey,
-      "Content-Type": "application/json",
+  const { response, text } = await fetchTextBounded(
+    `${API_BASE_URL}/agent/prompt`,
+    {
+      method: "POST",
+      headers: {
+        "X-API-Key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ prompt: formattedPrompt }),
+      signal,
+      redirect: "error",
     },
-    body: JSON.stringify({ prompt: formattedPrompt }),
-    signal,
-  });
+    { timeoutMs: CHAT_SUBMIT_TIMEOUT_MS, maxBytes: CHAT_RESPONSE_MAX_BYTES },
+  );
 
   if (!response.ok) {
-    const text = await response.text();
     throw new BankrApiError(
       formatPromptSubmitError(text, response.status),
       response.status
     );
   }
 
-  return response.json();
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    throw new BankrApiError("Bankr returned invalid JSON for chat submission");
+  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new BankrApiError("Bankr returned an invalid chat response");
+  }
+  const jobId = (payload as Record<string, unknown>).jobId;
+  if (typeof jobId !== "string" || !/^[A-Za-z0-9_-]{1,256}$/.test(jobId)) {
+    throw new BankrApiError("Bankr returned an invalid chat job ID");
+  }
+  return { jobId };
 }
 
 /**

@@ -73,8 +73,8 @@ export const ConfirmationScreen = forwardRef<
         headingRef={headingRef}
       />
 
-      <ScreenBody ref={bodyRef} pt={4} {...bodyProps}>
-        <VStack align="stretch" spacing={6} minW={0}>
+      <ScreenBody ref={bodyRef} pt={3} {...bodyProps}>
+        <VStack align="stretch" spacing={5} minW={0}>
           {outcome}
 
           {financialImpact && (

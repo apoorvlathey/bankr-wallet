@@ -2,6 +2,7 @@ import { AccountTypeStep } from "./onboarding/AccountTypeStep";
 import { BankrSetupStep } from "./onboarding/BankrSetupStep";
 import {
   OnboardingLoading,
+  OnboardingRecoveryError,
   SuccessStep,
   WelcomeStep,
 } from "./onboarding/OnboardingIntroSteps";
@@ -46,9 +47,13 @@ function Onboarding() {
     setErrors,
     handleContinue,
     handleBack,
+    setupRecoveryError,
   } = useOnboardingController();
 
   if (isCheckingSetup) return <OnboardingLoading />;
+  if (setupRecoveryError) {
+    return <OnboardingRecoveryError message={setupRecoveryError} />;
+  }
   if (step === "welcome") {
     return <WelcomeStep onContinue={() => setStep("accountType")} />;
   }

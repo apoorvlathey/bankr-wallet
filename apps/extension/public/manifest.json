@@ -94,11 +94,7 @@
         "browse.html",
         "interstitial.html",
         "ens-error.html",
-        "setup-kubo.html",
-        "static/js/browse.js",
-        "static/js/interstitial.js",
-        "static/js/ens-error.js",
-        "static/js/setup-kubo.js"
+        "setup-kubo.html"
       ],
       "matches": [
         "<all_urls>"

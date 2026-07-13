@@ -8,6 +8,21 @@ const isFirefox = process.env.BROWSER === "firefox";
 
 export default defineConfig({
   ...sharedConfig,
+  resolve: {
+    ...sharedConfig.resolve,
+    alias: {
+      ...sharedConfig.resolve.alias,
+      // WalletKit imports its optional Pay client unconditionally. The
+      // upstream Pay browser bundle contains dynamic-code/WebAssembly loaders
+      // that violate the extension's strict MV3 CSP. WalletChan does not expose
+      // Pay, so keep WalletConnect sessions/signing and disable only that
+      // optional feature at the background-bundle boundary.
+      "@walletconnect/pay": path.resolve(
+        __dirname,
+        "src/chrome/walletConnectPayUnavailable.ts",
+      ),
+    },
+  },
   plugins: [
     tsconfigPaths(),
     nodePolyfills({

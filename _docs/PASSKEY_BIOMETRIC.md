@@ -1,10 +1,31 @@
-# Passkey Biometric Unlock PRD
+# Passkey/Biometric Unlock
+
+> **Status:** Implemented. This document began as the V1 PRD, so sections
+> explicitly labelled V1 or "historical" preserve design rationale rather than
+> define the current storage contract. The authoritative current architecture
+> is `_docs/IMPLEMENTATION.md` → Passkey/Biometric Unlock and the exact stored
+> shapes are in `_docs/STORAGE.md`.
+
+Current compatibility behavior:
+
+- Existing V1 passkey records remain readable and can unlock the general vault
+  for Bankr, private-key, and already-derived seed-account signing. They do not
+  grant biometric access to recovery phrases.
+- New V2 records derive purpose-separated `vault` and `mnemonic` wrapping keys
+  from the WebAuthn PRF output. They independently wrap the general vault key
+  and the dedicated V2 mnemonic key.
+- V1 password-encrypted mnemonic vaults remain readable. Password-only unlock
+  does not rewrite them. Explicit master-authorized passkey setup converts the
+  mnemonic vault and passkey wrapper together in one atomic V2 commit.
+- A V2 biometric master session can create, import, preview, and derive seed
+  accounts using the cached mnemonic key without caching the master password.
+  Recovery-phrase reveal still requires explicit master-password verification.
 
 ## Overview
 
-WalletChan should support optional passkey/biometric unlock on the extension
-unlock screen so users do not need to type their master password for every
-normal unlock.
+WalletChan supports optional passkey/biometric unlock on the extension unlock
+screen so users do not need to type their master password for every normal
+unlock.
 
 This is an additive unlock method. The master password remains the recovery
 path, existing users continue to work without migration, and agent-password
@@ -164,10 +185,12 @@ Agent Password  -> PBKDF2 -> encryptedVaultKeyAgent  -> Vault Key
 Vault Key -> encryptedApiKeyVault / pkVault / signing state
 ```
 
-Add:
+Current V2 model:
 
 ```text
-Passkey user verification -> passkey-derived secret -> encryptedVaultKeyPasskey -> Vault Key
+WebAuthn PRF output
+  ├─ HKDF("vault")    -> wrappedVaultKey    -> general vault key
+  └─ HKDF("mnemonic") -> wrappedMnemonicKey -> dedicated mnemonic key
 ```
 
 Do not make passkey unlock a third `PasswordType`. It should resolve to the
@@ -191,7 +214,11 @@ under a WebAuthn-derived key. That is convenient and proven as a UX reference,
 but WalletChan's vault-key system allows a cleaner design that avoids storing
 the master password behind the passkey flow.
 
-## Proposed Storage
+## Historical V1 Storage Proposal
+
+The following was the original V1 proposal. Current readers and writers accept
+both the V1 shape below and the V2 additive shape documented in
+`_docs/STORAGE.md`; new setup writes V2.
 
 Add a wallet-scoped local storage key:
 
@@ -221,7 +248,7 @@ Storage rules:
 
 ## Background Handlers
 
-Likely new extension-only messages:
+Implemented extension-only messages:
 
 - `getPasskeyUnlockStatus`
   - Returns supported/configured/enabled flags.
@@ -268,12 +295,16 @@ After passkey unlock:
 - `cachedVaultKey` should be set.
 - `cachedPasswordType` should be `"master"`.
 - API key and private-key vault should be decrypted/cached as today.
+- A valid V2 wrapper should also set the dedicated cached mnemonic key; V1 has
+  no such wrapper.
 - `isWalletUnlocked()` should return true.
 - Normal transaction/signature confirmation should work for all supported
   wallet types.
 - Seed-phrase signing uses the already-derived private key in `pkVault`.
-  `mnemonicVault` remains master-password encrypted, so reveal and derivation
-  continue to require explicit master password entry.
+- With V2, create/import/preview/derive uses the cached dedicated mnemonic key.
+  With V1, those mnemonic operations still require a cached or explicitly
+  supplied master password. Recovery-phrase reveal always requires explicit
+  master-password verification in either format.
 
 Do not cache the master password during passkey unlock.
 

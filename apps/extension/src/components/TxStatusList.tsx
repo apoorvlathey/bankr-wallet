@@ -26,6 +26,7 @@ import { getResolvedChainById } from "@/lib/chains";
 import TxDetailModal from "@/components/TxDetailModal";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import ChainIcon from "@/components/ChainIcon";
+import SafeImage from "@/components/SafeImage";
 import { isDarkThemeId, useIconChipBg, useTheme } from "@/theme";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import {
@@ -400,7 +401,6 @@ function ActivityIcon({
   tx: CompletedTransaction;
   originHostname: string | null;
 }) {
-  const [imageFailed, setImageFailed] = useState(false);
   const internalSendSymbol = getInternalSendSymbol(tx);
   const fallbackLabel = (internalSendSymbol || tx.origin || "?")
     .slice(0, 3)
@@ -413,7 +413,7 @@ function ActivityIcon({
       : tx.favicon ||
         (originHostname ? googleFaviconUrl(originHostname) : undefined);
 
-  if (!imageSrc || imageFailed) {
+  if (!imageSrc) {
     return (
       <Text fontSize="2xs" fontWeight="800" color="text.secondary">
         {fallbackLabel}
@@ -422,24 +422,20 @@ function ActivityIcon({
   }
 
   return (
-    <Image
+    <SafeImage
       src={imageSrc}
+      fallbackSrc={
+        originHostname && !tx.origin.startsWith("Send ")
+          ? googleFaviconUrl(originHostname)
+          : undefined
+      }
       alt={internalSendSymbol || "favicon"}
       boxSize="22px"
-      onError={(e) => {
-        if (!originHostname || tx.origin.startsWith("Send ")) {
-          setImageFailed(true);
-          return;
-        }
-
-        const target = e.target as HTMLImageElement;
-        const googleFallback = googleFaviconUrl(originHostname);
-        if (target.src === googleFallback) {
-          setImageFailed(true);
-          return;
-        }
-        target.src = googleFallback;
-      }}
+      fallback={
+        <Text fontSize="2xs" fontWeight="800" color="text.secondary">
+          {fallbackLabel}
+        </Text>
+      }
     />
   );
 }

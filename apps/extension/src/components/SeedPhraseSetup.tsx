@@ -128,54 +128,78 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
     setError(null);
 
     try {
-      if (onCollect) {
-        // collectOnly mode: generate mnemonic without saving (wallet not unlocked yet)
-        const response = await new Promise<{
-          success: boolean;
-          error?: string;
-          mnemonic?: string;
-        }>((resolve) => {
-          chrome.runtime.sendMessage({ type: "generateMnemonic" }, resolve);
-        });
+      // Generate in renderer memory first. Persisting the encrypted phrase and
+      // account happens only after the user explicitly confirms they saved it.
+      // Pressing Back before confirmation therefore cannot leave a hidden,
+      // un-backed-up account behind.
+      const response = await new Promise<{
+        success: boolean;
+        error?: string;
+        mnemonic?: string;
+      }>((resolve) => {
+        chrome.runtime.sendMessage({ type: "generateMnemonic" }, resolve);
+      });
 
-        if (!response.success || !response.mnemonic) {
-          setError(response.error || "Failed to generate seed phrase");
-          setIsSubmitting(false);
-          return;
-        }
-
-        setGeneratedMnemonic(response.mnemonic);
+      if (!response.success || !response.mnemonic) {
+        setError(response.error || "Failed to generate seed phrase");
         setIsSubmitting(false);
-      } else {
-        // Normal mode: generate and save via addSeedPhraseGroup
-        const response = await new Promise<{
-          success: boolean;
-          error?: string;
-          mnemonic?: string;
-          account?: any;
-          group?: any;
-        }>((resolve) => {
-          chrome.runtime.sendMessage(
-            {
-              type: "addSeedPhraseGroup",
-              name: displayName.trim() || undefined,
-              accountDisplayName: accountDisplayName.trim() || undefined,
-            },
-            resolve
-          );
-        });
-
-        if (!response.success) {
-          setError(response.error || "Failed to generate seed phrase");
-          setIsSubmitting(false);
-          return;
-        }
-
-        setGeneratedMnemonic(response.mnemonic!);
-        setIsSubmitting(false);
+        return;
       }
+
+      setGeneratedMnemonic(response.mnemonic);
+      setIsSubmitting(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate seed phrase");
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleConfirmGenerated = async () => {
+    if (!generatedMnemonic || isSubmitting) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      if (onCollect) {
+        setConfirmed(true);
+        onCollect(
+          generatedMnemonic,
+          [0],
+          displayName.trim() || undefined,
+          accountDisplayName.trim() || undefined,
+        );
+        return;
+      }
+
+      const response = await new Promise<{
+        success: boolean;
+        error?: string;
+      }>((resolve) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "addSeedPhraseGroup",
+            mnemonic: generatedMnemonic,
+            indices: [0],
+            name: displayName.trim() || undefined,
+            accountDisplayName: accountDisplayName.trim() || undefined,
+          },
+          resolve,
+        );
+      });
+      if (!response.success) {
+        throw new Error(response.error || "Failed to save seed phrase");
+      }
+
+      setConfirmed(true);
+      toast({
+        title: "Account added",
+        description: "Seed phrase account has been created",
+        status: "success",
+        duration: 2000,
+      });
+      onComplete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save seed phrase");
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -261,27 +285,11 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
         }}
         action={
           <Button
-            variant="primary"
+            variant="brand"
             w="full"
-            onClick={() => {
-              setConfirmed(true);
-              if (onCollect) {
-                onCollect(
-                  generatedMnemonic,
-                  [0],
-                  displayName.trim() || undefined,
-                  accountDisplayName.trim() || undefined,
-                );
-              } else {
-                toast({
-                  title: "Account added",
-                  description: "Seed phrase account has been created",
-                  status: "success",
-                  duration: 2000,
-                });
-                onComplete();
-              }
-            }}
+            onClick={handleConfirmGenerated}
+            isLoading={isSubmitting}
+            loadingText="Saving…"
           >
             I’ve saved my seed phrase
           </Button>
@@ -299,6 +307,20 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               Write down these 12 words in order. They are the only way to recover these accounts. Never share them.
             </Text>
           </Box>
+
+          {error && (
+            <Box
+              bg="status.error.bg"
+              border="1px solid"
+              borderColor="status.error.border"
+              borderRadius="md"
+              p={3}
+            >
+              <Text fontSize="sm" color="status.error.fg" fontWeight="600">
+                {error}
+              </Text>
+            </Box>
+          )}
 
           <ScreenSection title="Recovery phrase">
             <HStack justify="flex-end" mb={2}>
@@ -352,10 +374,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   if (mode === "choose") {
     return (
       <SetupFrame isOnboarding={isOnboarding} title="Seed phrase" onBack={onBack}>
-        <ScreenSection
-          title="Choose how to continue"
-          description="Create a new recovery phrase or import one you already control."
-        >
+        <ScreenSection title="Choose how to continue">
           <ListSurface>
             <ListItem
               interactive
@@ -372,8 +391,13 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               }}
             >
               <ListItemMedia>
-                <IconBox size="32px" bg="accent.primary" noShadow>
-                  <AddIcon color="accentFg.primary" boxSize="14px" />
+                <IconBox
+                  size="36px"
+                  bg="status.warning.bg"
+                  borderColor="status.warning.border"
+                  noShadow
+                >
+                  <AddIcon color="status.warning.fg" boxSize="16px" />
                 </IconBox>
               </ListItemMedia>
               <ListItemContent>
@@ -391,8 +415,13 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               onClick={() => setMode("import")}
             >
               <ListItemMedia>
-                <IconBox size="32px" bg="accent.secondary" noShadow>
-                  <DownloadIcon color="accentFg.secondary" boxSize="14px" />
+                <IconBox
+                  size="36px"
+                  bg="status.info.bg"
+                  borderColor="status.info.border"
+                  noShadow
+                >
+                  <DownloadIcon color="status.info.fg" boxSize="16px" />
                 </IconBox>
               </ListItemMedia>
               <ListItemContent>
@@ -417,7 +446,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
         onBack={() => setMode("choose")}
         action={
           <Button
-            variant="primary"
+            variant="brand"
             w="full"
             onClick={handleGenerate}
             isLoading={isSubmitting}
@@ -446,7 +475,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
             >
               <VStack spacing={4} align="stretch">
                 <FormControl>
-                  <FormLabel>Group name</FormLabel>
+                  <FormLabel>Group name (optional)</FormLabel>
                   <Input
                     placeholder="e.g., My Seed Wallet"
                     value={displayName}
@@ -455,7 +484,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
                 </FormControl>
 
                 <FormControl>
-                  <FormLabel>Account display name</FormLabel>
+                  <FormLabel>Account display name (optional)</FormLabel>
                   <Input
                     placeholder="e.g., Main Account"
                     value={accountDisplayName}
@@ -539,6 +568,10 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               <Textarea
                 placeholder="Enter your 12-word seed phrase separated by spaces"
                 value={importedMnemonic}
+                autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(e) => {
                   setImportedMnemonic(e.target.value);
                   if (error) setError(null);
@@ -556,7 +589,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
             {!onCollect && (
               <>
                 <FormControl>
-                  <FormLabel>Group name</FormLabel>
+                  <FormLabel>Group name (optional)</FormLabel>
                   <Input
                     placeholder="e.g., My Imported Seed"
                     value={displayName}
@@ -565,7 +598,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
                 </FormControl>
 
                 <FormControl>
-                  <FormLabel>Account display name</FormLabel>
+                  <FormLabel>Account display name (optional)</FormLabel>
                   <Input
                     placeholder="e.g., Main Account"
                     value={accountDisplayName}

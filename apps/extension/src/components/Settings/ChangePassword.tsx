@@ -16,6 +16,11 @@ import { ViewIcon, ViewOffIcon, WarningIcon } from "@chakra-ui/icons";
 import { ScreenSection } from "@/components/ui";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { SettingsScreenFrame } from "./SettingsScreenFrame";
+import {
+  MAX_PASSWORD_LENGTH,
+  MIN_NEW_PASSWORD_LENGTH,
+  newPasswordPolicyError,
+} from "@/constants/securityPolicy";
 
 interface ChangePasswordProps {
   onComplete: () => void;
@@ -94,10 +99,12 @@ function ChangePassword({ onComplete, onCancel }: ChangePasswordProps) {
 
   const validateNewPassword = (): boolean => {
     const nextErrors: typeof errors = {};
-    if (!newPassword) {
-      nextErrors.newPassword = "New password is required";
-    } else if (newPassword.length < 6) {
-      nextErrors.newPassword = "Password must be at least 6 characters";
+    const passwordError = newPasswordPolicyError(
+      newPassword,
+      "New password",
+    );
+    if (passwordError) {
+      nextErrors.newPassword = passwordError;
     } else if (newPassword === currentPassword) {
       nextErrors.newPassword = "Choose a password different from your current one";
     }
@@ -256,8 +263,9 @@ function ChangePassword({ onComplete, onCancel }: ChangePasswordProps) {
                     ref={newPasswordInputRef}
                     aria-label="New password"
                     type={showNewPassword ? "text" : "password"}
-                    placeholder="New password (6+ characters)"
+                    placeholder={`New password (${MIN_NEW_PASSWORD_LENGTH}+ characters)`}
                     value={newPassword}
+                    maxLength={MAX_PASSWORD_LENGTH}
                     onChange={(event) => {
                       setNewPassword(event.target.value);
                       setErrors((current) => ({ ...current, newPassword: undefined }));
@@ -287,6 +295,7 @@ function ChangePassword({ onComplete, onCancel }: ChangePasswordProps) {
                   type={showNewPassword ? "text" : "password"}
                   placeholder="Confirm password"
                   value={confirmPassword}
+                  maxLength={MAX_PASSWORD_LENGTH}
                   onChange={(event) => {
                     setConfirmPassword(event.target.value);
                     setErrors((current) => ({ ...current, confirmPassword: undefined }));

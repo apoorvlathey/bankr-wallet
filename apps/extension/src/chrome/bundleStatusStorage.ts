@@ -55,6 +55,16 @@ export async function updateBundleStatus(
   });
 }
 
+export async function removeBundleStatus(bundleId: string): Promise<void> {
+  return withStorageLock(BUNDLE_STATUS_LOCK_KEY, async () => {
+    const statuses = await getBundleStatuses();
+    const filtered = statuses.filter((status) => status.id !== bundleId);
+    if (filtered.length !== statuses.length) {
+      await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+    }
+  });
+}
+
 export async function cleanupOldBundleStatuses(): Promise<void> {
   return withStorageLock(BUNDLE_STATUS_LOCK_KEY, async () => {
     const statuses = await getBundleStatuses();

@@ -26,6 +26,7 @@ import {
   OutcomeCard,
 } from "@/components/ui";
 import { useIconChipBg, useStripTokens } from "@/theme";
+import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 
 interface SignatureQueueProps {
   currentIndex: number;
@@ -80,6 +81,8 @@ function OriginIcon({
   size?: string;
 }) {
   const iconChipBg = useIconChipBg();
+  const safeSrc = useCachedAvatarSrc(src);
+  const safeFallbackSrc = useCachedAvatarSrc(fallbackSrc);
 
   return (
     <Box
@@ -95,13 +98,15 @@ function OriginIcon({
       borderRadius="md"
     >
       <Image
-        src={src}
+        src={safeSrc || undefined}
         alt=""
         boxSize={size}
         objectFit="contain"
         onError={(event) => {
           const target = event.currentTarget;
-          if (target.src !== fallbackSrc) target.src = fallbackSrc;
+          if (safeFallbackSrc && target.src !== safeFallbackSrc) {
+            target.src = safeFallbackSrc;
+          }
         }}
         fallback={<Box boxSize={size} bg="surface.raisedHover" borderRadius="sm" />}
       />

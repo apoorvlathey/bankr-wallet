@@ -1,11 +1,11 @@
 "use client";
 
 import { Box, Flex, HStack, Icon as ChakraIcon, IconButton, Image, Spacer, Text, VStack } from "@chakra-ui/react";
-import { ChevronDownIcon, ExternalLinkIcon, LockIcon, SearchIcon, SettingsIcon } from "@chakra-ui/icons";
+import { ExternalLinkIcon, LockIcon, SearchIcon, SettingsIcon } from "@chakra-ui/icons";
 import { keyframes } from "@emotion/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BatchTransactionPreview } from "./BatchTransactionPreview";
-import { palette } from "./design";
+import { palette, warmMockup } from "./design";
 import { Mockup3DStage } from "./Mockup3DStage";
 import { HomeWalletSurface, storyPanels, type StoryId } from "./StoryPanels";
 import { SwapBridgePreview } from "./SwapBridgePreview";
@@ -14,15 +14,15 @@ export type { StoryId } from "./StoryPanels";
 
 const MotionBox = motion(Box);
 const ui = {
-  bg: "#090b12",
-  strip: "#111827",
-  raised: "#171b26",
-  border: "rgba(255,255,255,0.14)",
-  borderStrong: "rgba(255,255,255,0.22)",
-  text: "#f7f7f4",
-  muted: "rgba(247,247,244,0.68)",
-  faint: "rgba(247,247,244,0.44)",
-  yellow: "#f5c542",
+  bg: warmMockup.base,
+  strip: warmMockup.surface,
+  raised: warmMockup.surface,
+  border: warmMockup.border,
+  borderStrong: warmMockup.borderStrong,
+  text: warmMockup.text,
+  muted: warmMockup.secondary,
+  faint: warmMockup.muted,
+  yellow: warmMockup.amber,
 };
 const preserve3d = { transformStyle: "preserve-3d" } as const;
 const depths = { shell: "translateZ(8px)", card: "translateZ(46px)", pop: "translateZ(76px)" } as const;
@@ -128,8 +128,8 @@ export function StoryMockup({ active }: { active: StoryId }) {
       transition="max-width 0.48s cubic-bezier(0.22, 1, 0.36, 1), margin-left 0.48s cubic-bezier(0.22, 1, 0.36, 1)"
     >
       <Mockup3DStage>
-        <Box position="absolute" inset="24px -6px 0 26px" borderRadius="34px" bg="rgba(108,140,255,0.09)" border="1px solid rgba(108,140,255,0.16)" transform="translateZ(-34px)" />
-        <Box position="relative" bg={ui.bg} color={ui.text} border="1px solid" borderColor={ui.borderStrong} borderRadius="34px" boxShadow="0 34px 120px rgba(0,0,0,0.48)" overflow="visible" transform={depths.shell} sx={preserve3d}>
+        <Box position="absolute" inset="18px -5px 0 18px" borderRadius="22px" bg="rgba(245,158,11,0.035)" border="1px solid rgba(255,255,255,0.06)" transform="translateZ(-34px)" />
+        <Box position="relative" bg={ui.bg} color={ui.text} border="1px solid" borderColor={ui.borderStrong} borderRadius="22px" boxShadow="0 34px 120px rgba(0,0,0,0.48)" overflow="visible" transform={depths.shell} sx={preserve3d}>
           {isBatching || isSigning ? (
             <BatchTransactionPreview depthFocus={isSigning ? "signing" : "batching"} />
           ) : isSwap ? (
@@ -139,13 +139,13 @@ export function StoryMockup({ active }: { active: StoryId }) {
           ) : (
             <>
               <PreviewHeader />
-              <PoweredStrip />
-              <Box p={3} sx={preserve3d}>
-                <VStack spacing={3.5} align="stretch" sx={preserve3d}>
-                  <AccountNetworkControls />
-                  {active === "home" ? <HomeWalletSurface /> : <AnimatedStoryPanel active={active} panel={panel!} />}
-                </VStack>
-              </Box>
+              {active === "home" ? (
+                <HomeWalletSurface />
+              ) : (
+                <Box p={3} sx={preserve3d}>
+                  <AnimatedStoryPanel active={active} panel={panel!} />
+                </Box>
+              )}
             </>
           )}
         </Box>
@@ -160,10 +160,10 @@ export function StoryMockup({ active }: { active: StoryId }) {
 function ChainOrbitGraphic() {
   return (
     <Flex position="relative" minH={{ base: "520px", lg: "650px" }} align="center" justify="center" sx={{ perspective: "1100px", transformStyle: "preserve-3d" }}>
-      <Box position="absolute" inset="8%" borderRadius="full" bg="radial-gradient(circle, rgba(177,140,255,0.18) 0%, rgba(97,230,166,0.08) 26%, rgba(9,11,18,0) 68%)" filter="blur(8px)" />
+      <Box position="absolute" inset="8%" borderRadius="full" bg="radial-gradient(circle, rgba(245,158,11,0.12) 0%, rgba(74,222,128,0.055) 28%, rgba(9,9,11,0) 68%)" filter="blur(8px)" />
       <Box position="relative" w={{ base: "330px", sm: "460px", lg: "560px" }} h={{ base: "330px", sm: "460px", lg: "560px" }} sx={preserve3d}>
-        <Box position="absolute" inset="8%" border="1px solid rgba(177,140,255,0.2)" borderRadius="full" transform="translateZ(-18px)" />
-        <Box position="absolute" inset="19%" border="1px dashed rgba(97,230,166,0.18)" borderRadius="full" transform="translateZ(-10px)" />
+        <Box position="absolute" inset="8%" border="1px solid rgba(245,158,11,0.18)" borderRadius="full" transform="translateZ(-18px)" />
+        <Box position="absolute" inset="19%" border="1px dashed rgba(74,222,128,0.16)" borderRadius="full" transform="translateZ(-10px)" />
         <Flex
           position="absolute"
           left="50%"
@@ -172,13 +172,12 @@ function ChainOrbitGraphic() {
           h={{ base: "118px", lg: "150px" }}
           ml={{ base: "-59px", lg: "-75px" }}
           mt={{ base: "-59px", lg: "-75px" }}
-          borderRadius="32px"
+          borderRadius="20px"
           align="center"
           justify="center"
-          bg="rgba(255,255,255,0.06)"
-          border="1px solid rgba(255,255,255,0.16)"
-          boxShadow="0 24px 80px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.12)"
-          backdropFilter="blur(10px)"
+          bg={ui.raised}
+          border="1px solid rgba(255,255,255,0.12)"
+          boxShadow="0 24px 80px rgba(0,0,0,0.42)"
           animation={`${chainFloat} 4.2s ease-in-out infinite`}
         >
           <Image src="/images/walletchan-icon-nobg.png" alt="WalletChan" w={{ base: "84px", lg: "108px" }} h={{ base: "84px", lg: "108px" }} />
@@ -191,9 +190,9 @@ function ChainOrbitGraphic() {
             px={4}
             py={2.5}
             borderRadius="999px"
-            bg="rgba(177,140,255,0.14)"
-            border="1px solid rgba(177,140,255,0.38)"
-            color={palette.violet}
+            bg="rgba(245,158,11,0.10)"
+            border="1px solid rgba(245,158,11,0.28)"
+            color={ui.yellow}
             fontSize={{ base: "11px", lg: "13px" }}
             fontWeight="900"
             whiteSpace="nowrap"
@@ -488,7 +487,7 @@ function BrowserWindowPreview() {
   return (
     <Box borderRadius="30px" overflow="hidden" sx={preserve3d}>
       <BrowserChrome />
-      <Box position="relative" h={{ base: "410px", lg: "492px" }} bg="#101112" overflow="hidden" borderBottomRadius="30px">
+      <Box position="relative" h={{ base: "410px", lg: "492px" }} bg={ui.strip} overflow="hidden" borderBottomRadius="20px">
         <Box position="absolute" inset={0} animation={`${browserResolving} 9.2s linear infinite`} sx={preserve3d}>
           <EnsResolvingInterstitial />
         </Box>
@@ -510,14 +509,14 @@ function BrowserWindowPreview() {
 
 function BrowserChrome() {
   return (
-    <Box bg="#151a26" borderBottom="1px solid" borderColor={ui.borderStrong} borderTopRadius="30px" px={3.5} pt={3} pb={2.5} transform="translateZ(10px)">
+    <Box bg={ui.raised} borderBottom="1px solid" borderColor={ui.borderStrong} borderTopRadius="20px" px={3.5} pt={3} pb={2.5} transform="translateZ(10px)">
       <HStack spacing={2.5} align="center">
         <HStack spacing={1.5} flexShrink={0}>
           {["#ff5f57", "#febc2e", "#28c840"].map((color) => (
             <Box key={color} w="9px" h="9px" borderRadius="full" bg={color} />
           ))}
         </HStack>
-        <HStack flex={1} minW={0} h="36px" borderRadius="999px" bg="#0b0d13" border="1px solid rgba(255,255,255,0.12)" px={3} spacing={2} overflow="hidden">
+        <HStack flex={1} minW={0} h="36px" borderRadius="10px" bg={ui.bg} border="1px solid rgba(255,255,255,0.10)" px={3} spacing={2} overflow="hidden">
           <LockIcon color={ui.faint} boxSize={3.5} flexShrink={0} />
           <Box position="relative" flex="1" minW={0} h="18px" fontFamily="mono" fontWeight="900" fontSize="13px" color={ui.text}>
             <Text position="absolute" inset={0} noOfLines={1} animation={`${browserResolving} 9.2s linear infinite`} color={ui.muted}>walletchan://ens/vitalik.eth</Text>
@@ -529,8 +528,8 @@ function BrowserChrome() {
               <Box as="span" w="2px" h="16px" bg={ui.yellow} ml="1px" animation={`${caretBlink} 0.7s steps(1, end) infinite`} />
             </HStack>
           </Box>
-          <HStack spacing={1} color="#61e6a6" fontSize="10px" fontWeight="900" flexShrink={0}>
-            <Box w="7px" h="7px" borderRadius="full" bg="#61e6a6" animation={`${resolverPulse} 1.1s ease-in-out infinite`} />
+          <HStack spacing={1} color={warmMockup.green} fontSize="10px" fontWeight="700" flexShrink={0}>
+            <Box w="7px" h="7px" borderRadius="full" bg={warmMockup.green} animation={`${resolverPulse} 1.1s ease-in-out infinite`} />
             <Text display={{ base: "none", md: "block" }} textTransform="uppercase">Local Kubo</Text>
           </HStack>
         </HStack>
@@ -542,10 +541,10 @@ function BrowserChrome() {
 function EnsResolvingInterstitial() {
   return (
     <Flex h="100%" align="center" justify="center" p={6}>
-      <Box position="relative" maxW="430px" w="100%" p={5} borderRadius="22px" bg="#171b26" border="1px solid rgba(255,255,255,0.18)" boxShadow="0 18px 60px rgba(0,0,0,0.34)" transform="translateZ(48px)">
+      <Box position="relative" maxW="430px" w="100%" p={5} borderRadius="12px" bg={ui.raised} border="1px solid rgba(255,255,255,0.16)" boxShadow="0 18px 60px rgba(0,0,0,0.34)" transform="translateZ(48px)">
         <VStack align="stretch" spacing={5}>
           <HStack spacing={3}>
-            <Box p={1.5} bg="#111827" border="1px solid rgba(255,255,255,0.16)" borderRadius="12px">
+            <Box p={1.5} bg={ui.text} border="1px solid rgba(255,255,255,0.16)" borderRadius="8px">
               <Image src="/images/walletchan-animated.gif" alt="" w="32px" h="32px" borderRadius="8px" />
             </Box>
             <Text fontSize="10px" color={ui.faint} letterSpacing="0.08em" fontWeight="900">
@@ -574,7 +573,7 @@ function EnsResolvingInterstitial() {
 
 function WalletChanEnsBanner() {
   return (
-    <HStack position="absolute" left={4} right={4} bottom={4} spacing={3} borderRadius="18px" bg="rgba(9,11,18,0.82)" border="1px solid rgba(255,255,255,0.16)" color={ui.text} px={3.5} py={3} backdropFilter="blur(10px)" transform="translateZ(58px)">
+    <HStack position="absolute" left={4} right={4} bottom={4} spacing={3} borderRadius="12px" bg="rgba(17,17,19,0.92)" border="1px solid rgba(255,255,255,0.12)" color={ui.text} px={3.5} py={3} backdropFilter="blur(10px)" transform="translateZ(58px)">
       <Image src="/images/walletchan-icon-nobg.png" alt="" w="30px" h="30px" />
       <Box minW={0}>
         <Text fontSize="12px" fontWeight="900" color={ui.yellow}>vitalik.eth resolved</Text>
@@ -593,73 +592,31 @@ function PreviewHeader() {
     color: ui.text,
     h: "30px",
     minW: "30px",
-    borderRadius: "10px",
-    _hover: { bg: "rgba(255,255,255,0.1)" },
+    borderRadius: "8px",
+    _hover: { bg: warmMockup.surfaceHover, color: ui.yellow },
   };
 
   return (
-    <Flex py={2.5} px={4} bg={ui.strip} color={ui.text} align="center" borderBottom="1px solid" borderColor={ui.border} borderTopRadius="34px" sx={preserve3d}>
+    <Flex py={2.5} px={3.5} bg={ui.strip} color={ui.text} align="center" borderBottom="1px solid" borderColor={ui.border} borderTopRadius="22px" sx={preserve3d}>
       <HStack spacing={2}>
-        <Image src="/images/walletchan-icon-nobg.png" alt="WalletChan" h="36px" w="36px" />
-        <Text fontWeight="900" fontSize="18px" textTransform="uppercase" letterSpacing="0">WalletChan</Text>
+        <Flex boxSize="34px" borderRadius="8px" bg={ui.text} align="center" justify="center" overflow="hidden">
+          <Image src="/images/walletchan-icon-nobg.png" alt="WalletChan" h="32px" w="32px" />
+        </Flex>
+        <Text fontFamily="'Anton', sans-serif" fontWeight="400" fontSize="18px" textTransform="uppercase" letterSpacing="0">WalletChan</Text>
       </HStack>
       <Spacer />
       <HStack spacing={1}>
         <IconButton aria-label="Lock wallet" icon={<LockIcon />} {...buttonProps} />
-        <IconButton aria-label="Switch layout" icon={<SidePanelIcon />} {...buttonProps} />
-        <IconButton aria-label="Open fullscreen" icon={<FullscreenIcon />} {...buttonProps} />
         <IconButton aria-label="Settings" icon={<SettingsIcon />} {...buttonProps} />
+        <IconButton aria-label="More app options" icon={<MenuIcon />} {...buttonProps} />
       </HStack>
     </Flex>
   );
 }
 
-function PoweredStrip() {
-  return (
-    <HStack spacing={0} align="stretch" borderBottom="1px solid" borderColor={ui.border}>
-      <HStack flex="1" bg="#2c1e06" py={1.5} pl={3} pr={2} spacing={2}>
-        <Text fontSize="11px" fontWeight="900" color="#c9b27d" textTransform="uppercase">Powered by</Text>
-        <Text color={ui.yellow} fontWeight="900" fontSize="12px" textTransform="uppercase">$WCHAN</Text>
-      </HStack>
-      <Box w="28px" alignSelf="stretch" bgGradient="linear(110deg, #2c1e06 50%, #111832 50%)" flexShrink={0} />
-      <HStack flex="1" bg="#111832" py={1.5} px={3} spacing={1} justify="flex-end">
-        <Text fontSize="11px" fontWeight="900" color={ui.yellow} textTransform="uppercase" whiteSpace="nowrap">WalletChan OS</Text>
-        <ExternalLinkIcon boxSize={3} color={ui.yellow} />
-      </HStack>
-    </HStack>
-  );
-}
-
-function AccountNetworkControls() {
-  return (
-    <HStack spacing={2} align="stretch" sx={preserve3d}>
-      <HStack flex={1} minW="0" minH="76px" p={2.5} spacing={2} borderRadius="18px" bg={ui.raised} border="3px solid rgba(49,56,82,0.95)" transform={depths.card}>
-        <Image src="/images/walletchan-icon.png" alt="" w="28px" h="28px" borderRadius="full" />
-        <Box minW={0} flex="1">
-          <Text color={ui.text} fontSize="17px" fontWeight="900" whiteSpace="nowrap">walletchan.eth</Text>
-          <HStack spacing={2} mt={1}>
-            <Text color={ui.faint} fontSize="13px" fontWeight="900" whiteSpace="nowrap">0xab7d...10e6</Text>
-            <Text px={1.5} py="1px" borderRadius="999px" bg="rgba(132,92,246,0.2)" border="1px solid rgba(132,92,246,0.7)" color="#bda8ff" fontSize="8px" fontWeight="900" textTransform="uppercase" whiteSpace="nowrap">Private key</Text>
-          </HStack>
-        </Box>
-        <ChevronDownIcon color={ui.muted} />
-      </HStack>
-      <HStack flex="0 0 146px" minH="76px" p={2.5} spacing={2} borderRadius="18px" bg={ui.raised} border="3px solid rgba(49,56,82,0.95)" transform={depths.card}>
-        <Image src="/images/base.svg" alt="" w="30px" h="30px" borderRadius="full" />
-        <Box minW={0}>
-          <Text color={ui.faint} fontSize="9px" fontWeight="900" textTransform="uppercase">Network</Text>
-          <Text color={ui.text} fontSize="15px" fontWeight="900">Base</Text>
-        </Box>
-        <Spacer />
-        <ChevronDownIcon color={ui.muted} />
-      </HStack>
-    </HStack>
-  );
-}
-
 function AnimatedStoryPanel({ active, panel }: { active: StoryId; panel: (typeof storyPanels)[StoryId] }) {
   return (
-    <Box borderRadius="24px" bg={ui.raised} border="1px solid" borderColor={ui.borderStrong} minH="442px" p={3.5} overflow="visible" transform={depths.card} sx={preserve3d}>
+    <Box borderRadius="14px" bg={ui.raised} border="1px solid" borderColor={ui.borderStrong} minH="442px" p={3.5} overflow="visible" transform={depths.card} sx={preserve3d}>
       <AnimatePresence mode="wait" initial={false}>
         <MotionBox key={active} initial={{ opacity: 0, y: 18, rotateX: -4 }} animate={{ opacity: 1, y: 0, rotateX: 0 }} exit={{ opacity: 0, y: -14, rotateX: 4 }} transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }} sx={preserve3d}>
           <HStack justify="space-between" mb={4} transform={depths.pop}>
@@ -674,10 +631,6 @@ function AnimatedStoryPanel({ active, panel }: { active: StoryId; panel: (typeof
   );
 }
 
-const SidePanelIcon = (props: any) => (
-  <ChakraIcon viewBox="0 0 24 24" {...props}><path fill="currentColor" d="M3 3h18a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm12 2v14h5V5h-5zM4 5v14h10V5H4z" /></ChakraIcon>
-);
-
-const FullscreenIcon = (props: any) => (
-  <ChakraIcon viewBox="0 0 24 24" {...props}><path fill="currentColor" d="M14 3v2h3.59l-4.3 4.29 1.42 1.42L19 6.41V10h2V3h-7zM5 17.59V14H3v7h7v-2H6.41l4.3-4.29-1.42-1.42L5 17.59z" /></ChakraIcon>
+const MenuIcon = (props: any) => (
+  <ChakraIcon viewBox="0 0 24 24" {...props}><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></ChakraIcon>
 );

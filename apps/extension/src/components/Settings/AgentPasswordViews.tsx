@@ -32,6 +32,10 @@ import {
   ListSurface,
 } from "@/components/ui";
 import { SettingsScreenFrame } from "./SettingsScreenFrame";
+import {
+  MAX_PASSWORD_LENGTH,
+  MIN_NEW_PASSWORD_LENGTH,
+} from "@/constants/securityPolicy";
 
 function PermissionRow({ label, allowed }: { label: string; allowed: boolean }) {
   return (
@@ -169,8 +173,9 @@ export function SetAgentPasswordView(props: SetViewProps) {
               <Input
                 ref={props.passwordInputRef}
                 type={props.showPassword ? "text" : "password"}
-                placeholder="At least 6 characters"
+                placeholder={`At least ${MIN_NEW_PASSWORD_LENGTH} characters`}
                 value={props.password}
+                maxLength={MAX_PASSWORD_LENGTH}
                 onChange={(event) => props.onPasswordChange(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && props.onSubmit()}
                 pr="3rem"
@@ -196,6 +201,7 @@ export function SetAgentPasswordView(props: SetViewProps) {
               type={props.showPassword ? "text" : "password"}
               placeholder="Enter it again"
               value={props.confirmPassword}
+              maxLength={MAX_PASSWORD_LENGTH}
               onChange={(event) => props.onConfirmChange(event.target.value)}
               onKeyDown={(event) => event.key === "Enter" && props.onSubmit()}
               autoComplete="new-password"

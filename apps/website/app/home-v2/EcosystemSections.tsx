@@ -148,20 +148,20 @@ export function FinalCta() {
   return (
     <Box as="section" py={{ base: 16, md: 22 }} borderTop="1px solid rgba(255,255,255,0.12)">
       <Container maxW="5xl" textAlign="center">
-        <Text color={palette.white} fontSize={{ base: "42px", md: "76px" }} fontWeight="900" letterSpacing="0" lineHeight="0.95">
+        <Text color={palette.white} fontSize={{ base: "40px", md: "68px" }} fontWeight="700" letterSpacing="0" lineHeight="1.02">
           Make your browser wallet feel onchain-native.
         </Text>
         <Text color={palette.muted} mt={5} fontSize={{ base: "16px", md: "20px" }} lineHeight="1.75">
           Install WalletChan, connect to your favorite dapps, and start reviewing transactions with real context.
         </Text>
         <HStack mt={8} spacing={3} justify="center" flexWrap="wrap">
-          <Button as="a" href={CHROME_STORE_URL} target="_blank" h="54px" px={8} borderRadius="999px" bg={palette.white} color={palette.ink} textTransform="none" letterSpacing="0" fontWeight="900" leftIcon={<Image src="/images/browsers/chrome.svg" alt="" boxSize="22px" />} rightIcon={<ChevronRight size={18} />} _hover={{ bg: palette.yellow }}>
+          <Button as="a" href={CHROME_STORE_URL} target="_blank" h="50px" px={7} borderRadius="10px" bg={palette.yellow} color={palette.ink} textTransform="none" letterSpacing="0" fontWeight="700" leftIcon={<Image src="/images/browsers/chrome.svg" alt="" boxSize="22px" />} rightIcon={<ChevronRight size={18} />} _hover={{ bg: palette.amberSoft }}>
             Add to Chrome
           </Button>
-          <Button as="a" href={FIREFOX_STORE_URL} target="_blank" h="54px" px={8} borderRadius="999px" bg="rgba(255,255,255,0.08)" color={palette.white} border="1px solid rgba(255,255,255,0.18)" textTransform="none" letterSpacing="0" fontWeight="900" leftIcon={<Image src="/images/browsers/firefox.svg" alt="" boxSize="22px" />} _hover={{ bg: "rgba(255,255,255,0.14)" }}>
+          <Button as="a" href={FIREFOX_STORE_URL} target="_blank" h="50px" px={7} borderRadius="10px" bg={palette.ink2} color={palette.white} border="1px solid rgba(255,255,255,0.12)" textTransform="none" letterSpacing="0" fontWeight="600" leftIcon={<Image src="/images/browsers/firefox.svg" alt="" boxSize="22px" />} _hover={{ bg: palette.ink3 }}>
             Add to Firefox
           </Button>
-          <Button as="a" href={GITHUB_URL} target="_blank" h="54px" px={8} borderRadius="999px" bg="transparent" color={palette.white} border="1px solid rgba(255,255,255,0.18)" textTransform="none" letterSpacing="0" fontWeight="900" _hover={{ bg: "rgba(255,255,255,0.08)" }}>
+          <Button as="a" href={GITHUB_URL} target="_blank" h="50px" px={7} borderRadius="10px" bg="transparent" color={palette.white} border="1px solid rgba(255,255,255,0.12)" textTransform="none" letterSpacing="0" fontWeight="600" _hover={{ bg: palette.ink2 }}>
             View GitHub
           </Button>
         </HStack>

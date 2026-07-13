@@ -41,6 +41,8 @@ export const WALLET_LOCAL_STORAGE_KEYS = [
   "ensIdentityCache",
   "ensAvatarImageCache",
   "sessionEncKey",
+  "onboardingInitialization",
+  "sponsoredTransferIntents",
 ] as const;
 
 export const WALLET_SYNC_STORAGE_KEYS = [

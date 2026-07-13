@@ -6,6 +6,7 @@ import {
   type EnrichedBridgeChain,
 } from "@/chrome/bridgeChainsResolver";
 import { getCachedBungeeTokens } from "@/chrome/bridgeApi";
+import { secureHttpTransport } from "@/chrome/rpcHttpClient";
 import type { BungeeToken } from "@walletchan/shared/bungee";
 import {
   getStoredRpcUrl,
@@ -563,8 +564,8 @@ export default function BridgeChainTokenModal({
         let balance = "0";
         if (rpcUrl && fromAddress) {
           try {
-            const { createPublicClient, http, erc20Abi, formatUnits } = await import("viem");
-            const client = createPublicClient({ transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }) });
+            const { createPublicClient, erc20Abi, formatUnits } = await import("viem");
+            const client = createPublicClient({ transport: secureHttpTransport(rpcUrl, { timeout: 8000, retryCount: 0 }) });
             const raw = isNative
               ? await client.getBalance({ address: fromAddress as `0x${string}` })
               : await client.readContract({

@@ -43,7 +43,7 @@ export const OutcomeCard = forwardRef<HTMLDivElement, OutcomeCardProps>(
         w="full"
         minW={0}
         p={4}
-        bg="surface.accentTint"
+        bg="surface.raised"
         borderWidth="1px"
         borderStyle="solid"
         borderColor="border.default"
@@ -59,9 +59,18 @@ export const OutcomeCard = forwardRef<HTMLDivElement, OutcomeCardProps>(
 
           <VStack align="stretch" spacing={1.5} flex="1 1 180px" minW={0}>
             {label && (
-              <Text color="fg.secondary" fontSize="xs" fontWeight="600">
-                {label}
-              </Text>
+              <Flex align="center" gap={2}>
+                <Box
+                  boxSize="6px"
+                  borderRadius="full"
+                  bg="accent.highlight"
+                  flexShrink={0}
+                  aria-hidden
+                />
+                <Text color="fg.secondary" fontSize="xs" fontWeight="600">
+                  {label}
+                </Text>
+              </Flex>
             )}
             <Heading
               as="h2"

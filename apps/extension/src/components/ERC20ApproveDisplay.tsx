@@ -459,6 +459,7 @@ export default function ERC20ApproveDisplay({
                 window.open(
                   `${explorerUrl}/address/${tokenAddress}`,
                   "_blank",
+                  "noopener,noreferrer",
                 )
               }
               _hover={{ color: "accent.secondary", bg: "surface.raised" }}
@@ -773,6 +774,7 @@ export default function ERC20ApproveDisplay({
                       window.open(
                         `${explorerUrl}/address/${approval.spender}`,
                         "_blank",
+                        "noopener,noreferrer",
                       )
                     }
                     _hover={{ color: "accent.secondary", bg: "bg.muted" }}

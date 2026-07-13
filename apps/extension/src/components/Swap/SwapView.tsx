@@ -6,7 +6,6 @@ import {
   Text,
   Button,
   IconButton,
-  Image,
   InputGroup,
   Input,
   InputLeftElement,
@@ -26,6 +25,7 @@ import { type PortfolioToken } from "@/chrome/portfolioApi";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import { formatTokenAmountFromBase } from "@/lib/tokenFormatUtils";
 import { fetchOnchainBalances } from "@/chrome/onchainBalances";
+import { secureHttpTransport } from "@/chrome/rpcHttpClient";
 import { loadPortfolioTokenCatalog } from "@/chrome/portfolioTokens";
 import {
   NATIVE_TOKEN_ADDRESS,
@@ -62,6 +62,7 @@ import {
   getExecutableBridgeRouteSelection,
 } from "./bridgeRouteUtils";
 import ChainIcon from "@/components/ChainIcon";
+import SafeImage from "@/components/SafeImage";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import {
   BUNGEE_NATIVE_TOKEN,
@@ -464,9 +465,9 @@ function SwapView({
       try {
         const rpcUrl = await getStoredRpcUrl(tokenChainId);
         if (!rpcUrl || cancelled) return;
-        const { createPublicClient, http, erc20Abi } = await import("viem");
+        const { createPublicClient, erc20Abi } = await import("viem");
         const client = createPublicClient({
-          transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }),
+          transport: secureHttpTransport(rpcUrl, { timeout: 8000, retryCount: 0 }),
         });
         const isNative = tokenAddr === "native";
         const rawBalance = isNative
@@ -2210,7 +2211,7 @@ function SwapView({
             >
               <Box position="relative" boxSize="20px" flexShrink={0}>
                 {destNativeInfo.logoUrl ? (
-                  <Image
+                  <SafeImage
                     src={destNativeInfo.logoUrl}
                     alt={destNativeInfo.symbol}
                     boxSize="20px"
@@ -2402,7 +2403,7 @@ function TokenChainTrigger({
       {token && (
         <Box position="relative" boxSize="22px" flexShrink={0}>
           {token.logoUrl ? (
-            <Image
+            <SafeImage
               src={token.logoUrl}
               alt={token.symbol}
               boxSize="22px"

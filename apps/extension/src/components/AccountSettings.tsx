@@ -677,6 +677,10 @@ function AccountSettings({
                   type={showApiKey ? "text" : "password"}
                   placeholder="Enter your API key"
                   value={apiKey}
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   onChange={(e) => {
                     const nextApiKey = e.target.value;
                     setApiKey(nextApiKey);

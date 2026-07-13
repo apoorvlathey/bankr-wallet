@@ -46,6 +46,7 @@ import AssetChangesDisplay, {
 import ERC20ApproveDisplay from "@/components/ERC20ApproveDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import ChainIcon from "@/components/ChainIcon";
+import SafeImage from "@/components/SafeImage";
 import Erc7715PermissionRevokeSummary from "@/components/Erc7715PermissionRevokeSummary";
 import { parseApproveCalldata } from "@/lib/erc20Approve";
 import { getAddressBoundCalldataDescriptor } from "@/lib/clearSigning/builtinDescriptors";
@@ -54,7 +55,7 @@ import { MalformedCalldataBanner } from "@/components/MalformedCalldataBanner";
 import NativeValueAmount from "@/components/NativeValueAmount";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
-import { isDarkThemeId, useTheme, useStripTokens, useChainBadgeStyle, useIconChipBg } from "@/theme";
+import { isDarkThemeId, useTheme, useStripTokens, useIconChipBg } from "@/theme";
 import {
   getResolvedChainById,
   getStoredNativeCurrencySymbol,
@@ -316,15 +317,7 @@ function TransactionConfirmation({
   const { bg: stripBg, fg: stripFg } = useStripTokens();
   const iconChipBg = useIconChipBg();
   const resolvedChain = getResolvedChainById(txRequest.tx.chainId, networksInfo);
-  // Chain badge colors — all per-theme branching lives in `useChainBadgeStyle`.
   const chainBadgeConfig = getChainConfig(txRequest.tx.chainId);
-  const chainBadgeBrandBg = resolvedChain?.bg ?? chainBadgeConfig.bg;
-  const chainBadgeBrandFg = resolvedChain?.text ?? chainBadgeConfig.text;
-  const chainBadgeStyle = useChainBadgeStyle(
-    chainBadgeBrandBg,
-    chainBadgeBrandFg,
-    resolvedChain?.isCustom ?? false,
-  );
   const [state, setState] = useState<ConfirmationState>("ready");
   const [error, setError] = useState<string>("");
   // Tracks the in-flight reject. The background message + parent navigation
@@ -556,19 +549,6 @@ function TransactionConfirmation({
       </Text>
     </Box>
   );
-
-  const handleOriginImageError = (e: any) => {
-    if (originHostname) {
-      const target = e.target as HTMLImageElement;
-      const googleFallback = googleFaviconUrl(originHostname);
-      if (target.src !== googleFallback) {
-        target.src = googleFallback;
-        return;
-      }
-    }
-    const target = e.target as HTMLImageElement;
-    target.style.display = "none";
-  };
 
   // Fetch labels for the "to" address
   useEffect(() => {
@@ -973,7 +953,47 @@ function TransactionConfirmation({
       outcome={
         <OutcomeCard
           outcome={outcomeText}
-          context={`Requested by ${originHostname} on ${txRequest.chainName}`}
+          context={`Requested on ${txRequest.chainName}`}
+          media={
+            <Box
+              boxSize="40px"
+              borderRadius="md"
+              bg={isInternalWalletChan ? "transparent" : iconChipBg}
+              borderWidth={isInternalWalletChan ? 0 : "1px"}
+              borderStyle="solid"
+              borderColor="border.subtle"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              overflow="hidden"
+            >
+              {isInternalWalletChan ? (
+                <Image
+                  src="/walletchan-icon.png"
+                  alt="WalletChan"
+                  boxSize="32px"
+                />
+              ) : favicon || originHostname ? (
+                <SafeImage
+                  src={favicon || undefined}
+                  fallbackSrc={
+                    originHostname ? googleFaviconUrl(originHostname) : undefined
+                  }
+                  alt=""
+                  boxSize="24px"
+                  fallback={
+                    <Text fontSize="xs" fontWeight="700" color="text.secondary">
+                      {originInitials}
+                    </Text>
+                  }
+                />
+              ) : (
+                <Text fontSize="xs" fontWeight="700" color="text.secondary">
+                  {originInitials}
+                </Text>
+              )}
+            </Box>
+          }
           status={
             simulationReverted ? (
               <Badge variant="error">Likely to fail</Badge>
@@ -1313,6 +1333,7 @@ function TransactionConfirmation({
                           window.open(
                             `${explorer}/address/${delegation7702.targetDelegate}`,
                             "_blank",
+                            "noopener,noreferrer",
                           )
                         }
                         _hover={{
@@ -1452,7 +1473,7 @@ function TransactionConfirmation({
           border={tokens.borders.thin}
           borderColor="border.default"
           borderRadius="lg"
-          boxShadow="card"
+          boxShadow="none"
           overflow="hidden"
           position="relative"
         >
@@ -1462,12 +1483,11 @@ function TransactionConfirmation({
               color, so it inherits currentColor and paints as near-white. */}
           <VStack spacing={0} align="stretch">
             {/* Origin */}
-            <HStack w="full" py={1.5} px={3} justify="space-between">
+            <HStack w="full" minH="48px" py={2} px={3} justify="space-between">
               <Text
                 fontSize="xs"
                 color="text.secondary"
-                fontWeight="700"
-                textTransform="uppercase"
+                fontWeight="600"
               >
                 Origin
               </Text>
@@ -1489,29 +1509,24 @@ function TransactionConfirmation({
                       boxSize="20px"
                       sx={{ filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.4)) drop-shadow(0 0 0.5px rgba(255,255,255,0.4))" }}
                     />
-                  ) : favicon ? (
-                    <Image
-                      src={favicon}
+                  ) : favicon || originHostname ? (
+                    <SafeImage
+                      src={favicon || undefined}
+                      fallbackSrc={
+                        originHostname
+                          ? googleFaviconUrl(originHostname)
+                          : undefined
+                      }
                       alt="favicon"
                       boxSize="14px"
                       sx={{ filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.4)) drop-shadow(0 0 0.5px rgba(255,255,255,0.4))" }}
-                      onError={handleOriginImageError}
-                      fallback={originInitialsFallback}
-                    />
-                  ) : originHostname ? (
-                    <Image
-                      src={googleFaviconUrl(originHostname)}
-                      alt="favicon"
-                      boxSize="14px"
-                      sx={{ filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.4)) drop-shadow(0 0 0.5px rgba(255,255,255,0.4))" }}
-                      onError={handleOriginImageError}
                       fallback={originInitialsFallback}
                     />
                   ) : (
                     originInitialsFallback
                   )}
                 </Box>
-                <Text fontSize="xs" fontWeight="700" color="text.primary">
+                <Text fontSize="sm" fontWeight="600" color="text.primary">
                   {originHostname || origin}
                 </Text>
               </HStack>
@@ -1520,7 +1535,8 @@ function TransactionConfirmation({
             {/* From */}
             <HStack
               w="full"
-              py={1.5}
+              minH="48px"
+              py={2}
               px={3}
               justify="space-between"
               borderTop="1px solid"
@@ -1529,8 +1545,7 @@ function TransactionConfirmation({
               <Text
                 fontSize="xs"
                 color="text.secondary"
-                fontWeight="700"
-                textTransform="uppercase"
+                fontWeight="600"
               >
                 From
               </Text>
@@ -1540,7 +1555,8 @@ function TransactionConfirmation({
             {/* Network */}
             <HStack
               w="full"
-              py={1.5}
+              minH="48px"
+              py={2}
               px={3}
               justify="space-between"
               borderTop="1px solid"
@@ -1549,19 +1565,18 @@ function TransactionConfirmation({
               <Text
                 fontSize="xs"
                 color="text.secondary"
-                fontWeight="700"
-                textTransform="uppercase"
+                fontWeight="600"
               >
                 Network
               </Text>
               <HStack spacing={1}>
                 <Badge
                   fontSize="xs"
-                  bg={chainBadgeStyle.bg}
-                  color={chainBadgeStyle.fg}
-                  border="1.5px solid"
-                  borderColor={chainBadgeStyle.border}
-                  fontWeight="700"
+                  bg="surface.sunken"
+                  color="text.primary"
+                  border="1px solid"
+                  borderColor="border.subtle"
+                  fontWeight="600"
                   px={2}
                   py={0.5}
                   display="flex"
@@ -1604,7 +1619,7 @@ function TransactionConfirmation({
               <Collapse in={showAdvanced} animateOpacity>
                 <Box w="full" py={2} px={3} bg="bg.muted">
                   <HStack justify="space-between" mb={1}>
-                    <Text fontSize="xs" fontWeight="700" color="text.primary" textTransform="uppercase">
+                    <Text fontSize="xs" fontWeight="600" color="text.primary">
                       Force Inclusion
                     </Text>
                     <Switch
@@ -1629,7 +1644,8 @@ function TransactionConfirmation({
             {!parsedApproval && (
             <Box
               w="full"
-              py={1.5}
+              minH="48px"
+              py={2}
               px={3}
               borderTop="1px solid"
               borderColor="border.subtle"
@@ -1641,8 +1657,7 @@ function TransactionConfirmation({
                 <Text
                   fontSize="xs"
                   color="text.secondary"
-                  fontWeight="700"
-                  textTransform="uppercase"
+                  fontWeight="600"
                 >
                   {tx.to ? "To" : "Type"}
                 </Text>
@@ -1668,16 +1683,13 @@ function TransactionConfirmation({
                       spacing={0.5}
                       px={1.5}
                       py={0.5}
-                      bg="surface.raised"
-                      border="1.5px solid"
-                      borderColor="border.default"
-                      borderRadius="md"
+                      bg="transparent"
                     >
                       <Text
                         fontSize="xs"
                         color="text.primary"
                         fontFamily="mono"
-                        fontWeight="700"
+                        fontWeight="600"
                       >
                         {tx.to.slice(0, 6)}...{tx.to.slice(-4)}
                       </Text>
@@ -1697,7 +1709,8 @@ function TransactionConfirmation({
                             onClick={() =>
                               window.open(
                                 `${explorer}/address/${tx.to}`,
-                                "_blank"
+                                "_blank",
+                                "noopener,noreferrer",
                               )
                             }
                             _hover={{ color: "accent.secondary", bg: "bg.muted" }}
@@ -1748,7 +1761,8 @@ function TransactionConfirmation({
             {(!parsedApproval || !isValueZero) && (
               <HStack
                 w="full"
-                py={1.5}
+                minH="48px"
+                py={2}
                 px={3}
                 justify="space-between"
                 borderTop="1px solid"
@@ -1757,8 +1771,7 @@ function TransactionConfirmation({
                 <Text
                   fontSize="xs"
                   color="text.secondary"
-                  fontWeight="700"
-                  textTransform="uppercase"
+                  fontWeight="600"
                 >
                   Value
                 </Text>
@@ -1973,7 +1986,7 @@ function TransactionConfirmation({
           </Button>
         ) : (
           <Button
-            variant="primary"
+            variant="brand"
             w="full"
             onClick={handleConfirm}
             isDisabled={!!confirmDisabledReason || state === "submitting"}

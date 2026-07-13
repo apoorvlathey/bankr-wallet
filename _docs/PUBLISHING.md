@@ -28,7 +28,10 @@ pnpm release:minor  # 0.2.0 → 0.3.0 (new features)
 pnpm release:major  # 0.2.0 → 1.0.0 (breaking changes)
 ```
 
-**Important:** The working tree must be clean (no uncommitted changes) before running a release command.
+**Important:** The working tree must be clean before running a release command,
+including no untracked files. `scripts/release.sh` checks
+`git status --porcelain` so an untracked source or asset cannot affect a local
+build while being omitted from the release commit.
 
 **Store artifact rule:** Every extension version bump must be followed by a fresh `pnpm zip:cws` run before uploading to stores. Do not reuse an older zip after changing `apps/extension/package.json` or either manifest version. This regenerates `apps/extension/cws-zip/walletchan-vX.Y.Z.zip` for Chrome Web Store and `apps/extension/zip/walletchan-firefox-vX.Y.Z.zip` for Firefox.
 
@@ -242,7 +245,7 @@ Chrome extensions auto-update silently. Users cannot choose to stay on an old ve
 
 ### How migrations work
 
-`background.ts` listens for `chrome.runtime.onInstalled` with `reason === "update"`. When it fires, the `migrateFromLegacyStorage()` function runs. As a safety net, `App.tsx` also calls the `migrateFromLegacy` message handler if it detects no accounts on load.
+`background.ts` listens for `chrome.runtime.onInstalled` with `reason === "update"`. When it fires, `legacyStorageMigration.ts` runs `migrateFromLegacyStorage()`. As a safety net, `App.tsx` also calls the `migrateFromLegacy` message handler if it detects no accounts on load. Both paths share the wallet secret-operation lock and re-read inside it, so concurrent invocations remain one idempotent migration rather than committing mismatched account IDs.
 
 ### Rules for storage changes
 
@@ -270,12 +273,12 @@ Chrome extensions auto-update silently. Users cannot choose to stay on an old ve
 
 | Version | Migration                                                               | What it does                                                                                                                                                                                                                                     |
 | ------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| v1.0.0  | `migrateFromLegacyStorage`                                              | Creates `accounts` array + `activeAccountId` from legacy `address` / `encryptedApiKey` storage (v0.1.1/v0.2.0 had no multi-account system)                                                                                                       |
+| v1.0.0  | `migrateFromLegacyStorage`                                              | Creates `accounts` array + `activeAccountId` from legacy `address` / `encryptedApiKey` storage (v0.1.1/v0.2.0 had no multi-account system). Current code serializes the update/UI fallback race and repairs stale or missing active IDs left by older builds. |
 | v1.0.0  | Vault key (on first unlock)                                             | `authHandlers.ts` auto-migrates `encryptedApiKey` → `encryptedVaultKeyMaster` + `encryptedApiKeyVault`                                                                                                                                           |
-| v1.3.0  | Private key vault-key encryption (on first unlock with master password) | `authHandlers.ts` auto-migrates `pkVault` entries from password encryption (`salt !== ""`) to vault-key encryption (`salt === ""`). Seed phrases remain master-password encrypted in `mnemonicVault`; their derived signing keys live in `pkVault`. Enables agent password to sign transactions. Idempotent, dual-format support maintained for private keys. |
+| v1.3.0  | Private key vault-key encryption (on first unlock with master password) | `authHandlers.ts` auto-migrates `pkVault` entries from password encryption (`salt !== ""`) to vault-key encryption (`salt === ""`). At that release, seed phrases remained master-password encrypted in V1 `mnemonicVault`; their derived signing keys lived in `pkVault`. Current code still reads that V1 format, while explicit biometric setup can atomically convert it to the V2 dedicated-mnemonic-key format described below. Enables agent password to sign transactions. Idempotent, dual-format support maintained for private keys. |
 | v3.2.0  | None (additive only)                                                    | `selectedThemeId` added to `chrome.storage.local`. Absence resolves to default `"bauhaus"`, so legacy users see no change. No migration code required. See `_docs/THEMING_PRD.md`.                                                              |
 | v3.17.0 | Fresh-install theme initialization                                      | New installs write `selectedThemeId: "midnight"` before onboarding opens. Updates do not write the key, and missing/invalid values still fall back to `"bauhaus"` so existing installs are not auto-changed. No storage shape change.          |
-| next    | None (additive passkey wrapper)                                         | `passkeyUnlock` is created only after explicit biometric setup. Missing data means biometric unlock is disabled, so existing installs require no migration. Reset, passkey removal, and master-password change clear the wrapper.             |
+| next    | Transactional onboarding + lazy/authenticated key hardening             | Fresh setup writes the additive, non-secret `onboardingInitialization` marker before any wallet material. Missing is normal for existing users; a complete wallet is never rolled back because marker cleanup failed, while an owned/abandoned incomplete setup can be removed safely. `passkeyUnlock` is created only after explicit biometric setup. Missing data means biometric unlock is disabled. V1 passkeys remain readable; passkey setup atomically adds the V2 dedicated-key mnemonic vault and authenticated key check, while ordinary password unlock does not rewrite V1 phrases. A partial older `encryptedVaultKeyMaster` + legacy `encryptedApiKey` state converts on the next master unlock, while passkey/agent unlock fails clearly until then. Missing/invalid `autoLockTimeout` becomes the finite 15-minute default; an exact stored `0` remains explicit Never. Browsers without native `storage.session` proactively delete old fallback password-recovery halves and keep Never sessions in memory only; the cleanup also removes stale local fallback ciphertext after a browser later gains native session support without disrupting a valid current native session. Wallet reset rotates `walletConnectStorageNamespace` so replacement wallets cannot inherit SDK sessions, and clears bounded encrypted `sponsoredTransferIntents` retry state. Optional pending-request authority/tag fields and `txHistory.broadcastUncertain` are additive; old stored rows remain decodable and routes fail closed rather than guessing missing authority. No install-time secret decryption or destructive key-format migration is required. Reset, passkey removal, and master-password change clear the passkey wrapper. |
 
 ### Testing an update locally
 

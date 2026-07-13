@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { getStoredRpcUrl } from "@/lib/chains";
+import { secureHttpTransport } from "@/chrome/rpcHttpClient";
 
 /**
  * What kind of account lives at a recipient address.
@@ -82,9 +83,9 @@ export function useRecipientAddressKind(
           return;
         }
 
-        const { createPublicClient, http } = await import("viem");
+        const { createPublicClient } = await import("viem");
         const client = createPublicClient({
-          transport: http(rpcUrl, { timeout: 8000, retryCount: 1 }),
+          transport: secureHttpTransport(rpcUrl, { timeout: 8000, retryCount: 1 }),
         });
         const code = await client.getCode({ address: address as `0x${string}` });
         const resolved = classifyCode(code ?? "0x");

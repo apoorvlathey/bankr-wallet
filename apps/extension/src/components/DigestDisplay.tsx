@@ -93,6 +93,8 @@ function DigestBox({
   const tabOrder: readonly DigestTab[] = ["hex", "emoji"];
   const { tokens, themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
+  const resolvedLabelBg = isDarkTheme ? "surface.sunken" : labelBg;
+  const resolvedLabelColor = isDarkTheme ? "accent.highlight" : labelColor;
   // Alternating hex-chunk colors — Bauhaus uses primary red/green, Midnight
   // swaps to amber/blue so the chunks pop against the dark surface (red/green
   // both render muddy on `bg.muted` in Midnight).
@@ -134,11 +136,11 @@ function DigestBox({
             px={2}
             py={0.5}
             fontSize="10px"
-            bg={labelBg}
-            color={labelColor}
+            bg={resolvedLabelBg}
+            color={resolvedLabelColor}
             fontWeight="700"
             border={tokens.borders.thin}
-            borderColor="border.default"
+            borderColor={isDarkTheme ? "accent.highlight" : "border.default"}
             borderRadius="sm"
             flexShrink={0}
           >

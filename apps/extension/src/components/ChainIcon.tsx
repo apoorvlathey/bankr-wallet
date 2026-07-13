@@ -1,7 +1,8 @@
-import { Box, Image, Text } from "@chakra-ui/react";
+import { Box, Text } from "@chakra-ui/react";
 import { resolveChainIconMeta } from "@/lib/chainIcons";
 import { useBungeeChainsVersion } from "@/lib/useBungeeChainsVersion";
 import { isDarkThemeId, useTheme } from "@/theme";
+import SafeImage from "@/components/SafeImage";
 
 /**
  * Renders a shipped chain icon when known, reuses mainnet icons for common
@@ -50,13 +51,31 @@ export default function ChainIcon({
         />
       )}
       {meta.iconSrc ? (
-        <Image
+        <SafeImage
           src={meta.iconSrc}
           alt={altText}
           boxSize={size}
           position="relative"
           borderRadius={withChip ? "full" : undefined}
           objectFit="contain"
+          fallback={
+            <Box
+              bg={fallbackBg}
+              color={fallbackText}
+              boxSize={size}
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              fontSize="7px"
+              fontWeight="900"
+              letterSpacing="-0.5px"
+              border="1px solid"
+              borderColor={fallbackBorder}
+              borderRadius="full"
+            >
+              {meta.fallbackText}
+            </Box>
+          }
         />
       ) : (
         <Box

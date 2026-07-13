@@ -39,6 +39,7 @@ import { ShapesLoader } from "@/components/Chat/ShapesLoader";
 import { useTheme } from "@/theme";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import { useScreenEntered } from "@/components/ScreenTransition";
+import SafeImage from "@/components/SafeImage";
 
 interface AssetChangesDisplayProps {
   txRequest: PendingTxRequest;
@@ -205,35 +206,10 @@ function NftStandardTag({ standard }: { standard: NftStandard }) {
   );
 }
 
-/** HTML-escape every metacharacter so attacker bytes can't break attributes. */
-function htmlEscape(input: string): string {
-  return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-/** Allowlist of safe URL schemes for NFT image rendering. */
-function isSafeImageUrl(src: string): boolean {
-  return (
-    src.startsWith("https://") ||
-    src.startsWith("http://") ||
-    src.startsWith("data:image/")
-  );
-}
-
 /**
- * Render an NFT image inside a sandboxed iframe so any embedded SVG scripts,
- * remote stylesheets, or external resources can't reach the extension's
- * privileged context. The iframe gets a unique opaque origin (`sandbox=""`),
- * which means:
- *   - JavaScript inside an SVG cannot run.
- *   - It cannot read window.parent, cookies, or chrome.* APIs.
- *   - It cannot navigate the top frame.
- * The image still loads (img-src is CSP-allowed in MV3 by default) and the
- * referrer is suppressed via `<meta name="referrer">`.
+ * Render NFT metadata only after the background has decoded and re-encoded a
+ * bounded raster. Raw SVG/data markup and metadata-controlled network URLs
+ * never enter the privileged renderer.
  */
 function NftMediaSandbox({
   src,
@@ -248,46 +224,31 @@ function NftMediaSandbox({
   height?: string;
   showBorder?: boolean;
 }) {
-  if (!isSafeImageUrl(src)) {
-    return (
-      <Text fontSize="9px" fontWeight="800" color="text.tertiary" textAlign="center">
-        NFT
-      </Text>
-    );
-  }
-
-  // Build srcDoc with rigorous escaping. Both attributes use double quotes;
-  // htmlEscape() turns every quote/angle bracket/ampersand into an entity, so
-  // the rendered HTML is structurally identical regardless of contract bytes.
-  const safeSrc = htmlEscape(src);
-  const safeAlt = htmlEscape(alt);
-  const srcDoc =
-    `<!DOCTYPE html><html><head>` +
-    `<meta name="referrer" content="no-referrer">` +
-    `<style>` +
-    `html,body{margin:0;padding:0;width:100%;height:100%;background:#fff;` +
-    `display:flex;align-items:center;justify-content:center;overflow:hidden}` +
-    `img{max-width:100%;max-height:100%;object-fit:contain;display:block}` +
-    `</style></head><body>` +
-    `<img src="${safeSrc}" alt="${safeAlt}" loading="lazy" decoding="async" />` +
-    `</body></html>`;
-
   return (
     <Box
-      as="iframe"
-      sandbox=""
-      srcDoc={srcDoc}
-      title={alt}
-      referrerPolicy="no-referrer"
       width={width}
       height={height}
       border={showBorder ? "2px solid" : "none"}
       borderColor="border.default"
-      // Sandbox iframe always renders white internally; matching the wrapper
-      // to a literal white avoids a stark dark border in Midnight at the seams.
       bg="white"
-      pointerEvents="none"
-    />
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      overflow="hidden"
+    >
+      <SafeImage
+        src={src}
+        alt={alt}
+        maxW="100%"
+        maxH="100%"
+        objectFit="contain"
+        fallback={
+          <Text fontSize="9px" fontWeight="800" color="text.tertiary" textAlign="center">
+            NFT
+          </Text>
+        }
+      />
+    </Box>
   );
 }
 
@@ -475,10 +436,7 @@ function AssetRow({
   return (
     <Box
       w="full"
-      py={1.5}
-      pl={2.5}
-      borderLeft="1px solid"
-      borderLeftColor={dirColor}
+      py={2}
     >
       <HStack spacing={2.5} align={isNft ? "flex-start" : "center"}>
         {isNft ? <NftPreview change={change} /> : <TokenIcon change={change} />}
@@ -546,7 +504,7 @@ function AssetRow({
                       h="24px"
                       color="text.tertiary"
                       onClick={() =>
-                        window.open(`${explorerUrl}/address/${change.address}`, "_blank")
+                        window.open(`${explorerUrl}/address/${change.address}`, "_blank", "noopener,noreferrer")
                       }
                       _hover={{ color: "accent.secondary", bg: "transparent" }}
                     />
@@ -696,11 +654,15 @@ function AssetChangesDisplay({
   // Retry metadata fetch if initial attempt was incomplete
   useEffect(() => {
     if (!result || result.simulationFailed || result.metadataComplete) return;
-    if (result.tokenChanges.length === 0) return;
+    if (
+      result.tokenChanges.length === 0 &&
+      (!result.nativeChange || result.nativeChange.valueUsd !== null)
+    ) return;
 
     let cancelled = false;
     let attempt = 0;
-    const tokenChanges = result.tokenChanges;
+    let tokenChanges = result.tokenChanges;
+    let nativeChange = result.nativeChange;
 
     function scheduleRetry() {
       if (cancelled || attempt >= MAX_RETRIES) return;
@@ -715,20 +677,25 @@ function AssetChangesDisplay({
             chainId: txRequest.tx.chainId,
             tokenChanges,
             accountAddress: txRequest.tx.from,
+            nativeChange,
           },
           (response: TokenMetadataResult) => {
             if (cancelled || chrome.runtime.lastError) return;
 
             // Check if metadata is now complete
-            const stillIncomplete = response.tokenChanges.some(
-              (c) => c.symbol.includes("...") || c.valueUsd === null,
-            );
+            tokenChanges = response.tokenChanges;
+            nativeChange = response.nativeChange ?? nativeChange;
+            const stillIncomplete =
+              tokenChanges.some(
+                (c) => c.symbol.includes("...") || c.valueUsd === null,
+              ) || !!(nativeChange && nativeChange.valueUsd === null);
 
             setResult((prev) =>
               prev
                 ? {
                     ...prev,
-                    tokenChanges: response.tokenChanges,
+                    tokenChanges,
+                    nativeChange,
                     metadataComplete: !stillIncomplete,
                   }
                 : prev,
@@ -738,7 +705,7 @@ function AssetChangesDisplay({
             if (stillIncomplete) scheduleRetry();
           },
         );
-      }, RETRY_DELAY);
+      }, attempt === 1 ? 0 : RETRY_DELAY);
     }
 
     scheduleRetry();
@@ -809,10 +776,11 @@ function AssetChangesDisplay({
   return (
     <VStack align="stretch" spacing={2}>
       <Box
-        border="1px solid"
-        borderColor="border.default"
+        borderTop="1px solid"
+        borderBottom="1px solid"
+        borderColor="border.subtle"
         borderRadius="lg"
-        bg="surface.raised"
+        bg="transparent"
         boxShadow="none"
         position="relative"
         overflow="hidden"
@@ -842,7 +810,7 @@ function AssetChangesDisplay({
             color="text.secondary"
             fontWeight="700"
           >
-            Asset changes
+            Estimated changes
           </Text>
           <Tooltip
             label="This is an estimation. Actual onchain transfers may differ based on updated contract state."

@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
-import { Box, HStack, Text, Image, Textarea, Button, VStack, Code } from "@chakra-ui/react";
+import { useState } from "react";
+import { Box, HStack, Text, Textarea, Button, VStack, Code } from "@chakra-ui/react";
 import { CopyButton } from "@/components/CopyButton";
+import SafeImage from "@/components/SafeImage";
 import { isValidJSON, decodeBase64 } from "@/lib/convertUtils";
 import { isAddress } from "viem";
 import { AddressParam } from "./AddressParam";
@@ -18,8 +19,6 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
   // See UintParam for the rationale behind chart.numeric.
   const numericColor = "chart.numeric";
   const [activeTab, setActiveTab] = useState<TabKey>("rich");
-  const [fetchedContent, setFetchedContent] = useState<string | null>(null);
-  const [fetchedImage, setFetchedImage] = useState<string | null>(null);
 
   const str = String(value);
   const isJSON = isValidJSON(str);
@@ -28,25 +27,11 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
   const isURL = /^https?:\/\//.test(str) || str.startsWith("ipfs://");
   const isAddressValue = isAddress(str);
 
-  // For URLs, try to fetch content
-  useEffect(() => {
-    if (!isURL || disableRich) return;
-    const url = str.startsWith("ipfs://")
+  const remoteImageUrl = isURL
+    ? str.startsWith("ipfs://")
       ? str.replace("ipfs://", IPFS_GATEWAY)
-      : str;
-
-    fetch(url, { signal: AbortSignal.timeout(5000) })
-      .then(async (r) => {
-        const contentType = r.headers.get("content-type") || "";
-        if (contentType.includes("image")) {
-          setFetchedImage(url);
-        } else if (contentType.includes("json") || contentType.includes("text")) {
-          const text = await r.text();
-          setFetchedContent(text);
-        }
-      })
-      .catch(() => {});
-  }, [str, isURL, disableRich]);
+      : str
+    : null;
 
   // Simple string — no rich features
   if (disableRich || (!isJSON && !base64Result && !isSVG && !isURL && !isAddressValue && str.length <= 200)) {
@@ -75,10 +60,10 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
 
   // Determine available tabs
   const tabs: { key: TabKey; label: string }[] = [{ key: "rich", label: "Rich" }];
-  if (isJSON || base64Result?.isJSON || (fetchedContent && isValidJSON(fetchedContent))) {
+  if (isJSON || base64Result?.isJSON) {
     tabs.push({ key: "raw", label: "Raw JSON" });
   }
-  if (fetchedImage || (base64Result?.isSVG)) {
+  if (remoteImageUrl) {
     tabs.push({ key: "image", label: "Image" });
   }
   if (isSVG) {
@@ -90,8 +75,6 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
     ? str
     : base64Result?.isJSON
     ? base64Result.decoded
-    : fetchedContent && isValidJSON(fetchedContent)
-    ? fetchedContent
     : null;
 
   const svgContent = isSVG
@@ -144,15 +127,7 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
               <ScrollableText value={base64Result.decoded} />
             </Box>
           ) : svgContent ? (
-            // SVG preview tile is intentionally a literal white "physical
-            // surface" — same rationale as the QR code tile in QRCodeModal.
-            <Box border="2px solid" borderColor="border.default" p={2} bg="white" maxW="200px">
-              <Image
-                src={`data:image/svg+xml;utf8,${encodeURIComponent(svgContent)}`}
-                maxH="120px"
-                objectFit="contain"
-              />
-            </Box>
+            <ScrollableText value={svgContent} />
           ) : isURL ? (
             <HStack spacing={1}>
               <Code fontSize="xs" fontFamily="mono" bg="transparent" color="accent.secondary" fontWeight="600" p={0}>
@@ -197,13 +172,17 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
       {/* Image view — literal white tile is intentional (physical surface) */}
       {activeTab === "image" && (
         <Box border="2px solid" borderColor="border.default" p={2} bg="white" maxW="200px">
-          {fetchedImage ? (
-            <Image src={fetchedImage} maxH="120px" objectFit="contain" />
-          ) : svgContent ? (
-            <Image
-              src={`data:image/svg+xml;utf8,${encodeURIComponent(svgContent)}`}
+          {remoteImageUrl ? (
+            <SafeImage
+              src={remoteImageUrl}
               maxH="120px"
               objectFit="contain"
+              alt="Decoded parameter preview"
+              fallback={
+                <Text fontSize="xs" color="text.tertiary">
+                  No safe raster preview
+                </Text>
+              }
             />
           ) : null}
         </Box>

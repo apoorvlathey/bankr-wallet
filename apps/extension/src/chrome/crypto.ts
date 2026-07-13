@@ -7,8 +7,8 @@ import {
   SALT_LENGTH,
   IV_LENGTH,
   arrayBufferToBase64,
-  base64ToUint8Array,
-  base64ToArrayBuffer,
+  decodeBase64Bounded,
+  decodeBase64Exact,
   deriveKey,
 } from "./cryptoUtils";
 
@@ -52,36 +52,26 @@ export async function decrypt(
   password: string
 ): Promise<string> {
   const decoder = new TextDecoder();
-  const salt = base64ToUint8Array(encryptedData.salt);
-  const iv = base64ToUint8Array(encryptedData.iv);
-  const ciphertext = base64ToArrayBuffer(encryptedData.ciphertext);
+  const salt = decodeBase64Exact(encryptedData?.salt, SALT_LENGTH);
+  const iv = decodeBase64Exact(encryptedData?.iv, IV_LENGTH);
+  const ciphertext = decodeBase64Bounded(
+    encryptedData?.ciphertext,
+    16,
+    1024 * 1024,
+  );
+  if (!salt || !iv || !ciphertext) {
+    throw new Error("Invalid encrypted data");
+  }
 
   const key = await deriveKey(password, salt);
 
   const plaintext = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: iv.buffer as ArrayBuffer },
     key,
-    ciphertext
+    ciphertext.buffer as ArrayBuffer,
   );
 
   return decoder.decode(plaintext);
-}
-
-/**
- * Saves encrypted API key to chrome storage
- */
-export async function saveEncryptedApiKey(
-  apiKey: string,
-  password: string
-): Promise<void> {
-  if (await hasVaultKeySystem()) {
-    throw new Error(
-      "Legacy API key storage is disabled after vault key migration",
-    );
-  }
-
-  const encryptedData = await encrypt(apiKey, password);
-  await chrome.storage.local.set({ encryptedApiKey: encryptedData });
 }
 
 /**
@@ -136,13 +126,6 @@ export async function hasEncryptedApiKey(): Promise<boolean> {
   return !!encryptedApiKey || !!encryptedApiKeyVault;
 }
 
-/**
- * Removes the encrypted API key from storage
- */
-export async function removeEncryptedApiKey(): Promise<void> {
-  await chrome.storage.local.remove("encryptedApiKey");
-}
-
 // === Vault Key System ===
 // Instead of encrypting data directly with passwords, we use a vault key:
 // Password -> PBKDF2 -> encrypts vault key -> vault key decrypts actual data
@@ -165,6 +148,9 @@ export async function encryptVaultKey(
   vaultKey: Uint8Array,
   password: string
 ): Promise<EncryptedData> {
+  if (vaultKey.byteLength !== VAULT_KEY_LENGTH) {
+    throw new Error("Vault key must be exactly 32 bytes");
+  }
   const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
 
@@ -173,7 +159,7 @@ export async function encryptVaultKey(
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: iv.buffer as ArrayBuffer },
     key,
-    vaultKey.buffer as ArrayBuffer
+    vaultKey.slice().buffer as ArrayBuffer
   );
 
   return {
@@ -200,19 +186,25 @@ export async function tryDecryptVaultKey(
     return null;
   }
   try {
-    const salt = base64ToUint8Array(encryptedVaultKey.salt);
-    const iv = base64ToUint8Array(encryptedVaultKey.iv);
-    const ciphertext = base64ToArrayBuffer(encryptedVaultKey.ciphertext);
+    const salt = decodeBase64Exact(encryptedVaultKey.salt, SALT_LENGTH);
+    const iv = decodeBase64Exact(encryptedVaultKey.iv, IV_LENGTH);
+    // AES-GCM appends a 16-byte tag to the exact 32-byte vault key.
+    const ciphertext = decodeBase64Exact(
+      encryptedVaultKey.ciphertext,
+      VAULT_KEY_LENGTH + 16,
+    );
+    if (!salt || !iv || !ciphertext) return null;
 
     const key = await deriveKey(password, salt);
 
     const plaintext = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: iv.buffer as ArrayBuffer },
       key,
-      ciphertext
+      ciphertext.buffer as ArrayBuffer,
     );
 
-    return new Uint8Array(plaintext);
+    const result = new Uint8Array(plaintext);
+    return result.byteLength === VAULT_KEY_LENGTH ? result : null;
   } catch {
     return null;
   }
@@ -222,6 +214,9 @@ export async function tryDecryptVaultKey(
  * Imports a raw vault key bytes as a CryptoKey for encryption/decryption
  */
 export async function importVaultKey(vaultKeyBytes: Uint8Array): Promise<CryptoKey> {
+  if (vaultKeyBytes.byteLength !== VAULT_KEY_LENGTH) {
+    throw new Error("Vault key must be exactly 32 bytes");
+  }
   const rawKey = new Uint8Array(vaultKeyBytes).buffer;
   return crypto.subtle.importKey(
     "raw",
@@ -265,13 +260,19 @@ export async function decryptWithVaultKey(
 ): Promise<string | null> {
   try {
     const decoder = new TextDecoder();
-    const iv = base64ToUint8Array(encryptedData.iv);
-    const ciphertext = base64ToArrayBuffer(encryptedData.ciphertext);
+    if (encryptedData?.salt !== "") return null;
+    const iv = decodeBase64Exact(encryptedData.iv, IV_LENGTH);
+    const ciphertext = decodeBase64Bounded(
+      encryptedData.ciphertext,
+      16,
+      1024 * 1024,
+    );
+    if (!iv || !ciphertext) return null;
 
     const plaintext = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: iv.buffer as ArrayBuffer },
       vaultKey,
-      ciphertext
+      ciphertext.buffer as ArrayBuffer,
     );
 
     return decoder.decode(plaintext);

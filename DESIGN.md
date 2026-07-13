@@ -27,7 +27,7 @@
 
 - Direction: Warm Midnight, a precise financial dark interface made unmistakably WalletChan through its pixel mascot, condensed wordmark, and selective amber warmth.
 - Defining trait: structure comes from proximity, alignment, surface lightness, and hairline rules instead of repeated bordered cards.
-- Signature move: the Mascot Spotlight. WalletChan appears at product-entry, onboarding, empty, and reassurance moments; amber marks brand commitment actions, while financial blue remains the transactional decision and focus color. Financial gain/loss keeps semantic green/red.
+- Signature move: the Mascot Spotlight. WalletChan appears at product-entry, onboarding, empty, and reassurance moments; amber marks brand commitment actions and the final single-transaction Confirm decision, while financial blue remains the focus, link, selection, and ordinary interaction color. Financial gain/loss keeps semantic green/red.
 
 ## Typography
 
@@ -231,7 +231,7 @@
 - 2026-07-10: migrated primary, trust-critical, settings, account, token, and chat destinations; added the 235-state preview matrix and packaged all-wallet runtime QA.
 - 2026-07-10: began the Warm Midnight brand pass with a self-hosted Anton wordmark, then consolidated every explicit extension logo/name lockup into the shared `BrandWordmark` component; product typography remains unchanged pending screen-by-screen review.
 - 2026-07-10: simplified unlock to the essential credential actions; password rejection now uses a stable inline label, a reduced-motion-safe input shake, and reveals recovery without shifting surrounding controls.
-- 2026-07-10: established Warm Midnight on the unlock screen with a mascot-led identity composition and a dedicated amber `brand` action; transactional actions remain blue.
+- 2026-07-10: established Warm Midnight on the unlock screen with a mascot-led identity composition and a dedicated amber `brand` action. Superseded on 2026-07-13 for the final single-transaction Confirm action; ordinary transactional controls remain blue.
 - 2026-07-10: replaced the unlock form's generic side label with a centered, larger “Enter password to unlock” instruction beneath the mascot while preserving the fixed-position error treatment.
 - 2026-07-12: reserved a consistent 24px gap between the unlock instruction and password field so inline errors retain clear breathing room, and applied the same reduced-motion-safe field shake and concerned mascot state to empty submissions as incorrect passwords.
 - 2026-07-12: clarified the destructive account-removal decision by removing the duplicate address label for unnamed accounts and showing a freshly loaded, tabular portfolio total alongside the account identity.
@@ -284,3 +284,22 @@
   grouped ETH, USDC, and USDT behave like regular token rows.
 - 2026-07-12: seeded amount-slider sound state at its initial 0% position so
   first contact is silent and `release` remains reserved for real snap entry.
+- 2026-07-12: projected Warm Midnight onto the experimental marketing homepage,
+  centralized its landing/mockup palette, and rebuilt the hero wallet mock from
+  the approved production header, account, portfolio, action, tab, and asset-row
+  composition while retaining the site's product-story 3D depth.
+- 2026-07-12: added handle-only account reordering to the full-screen account
+  picker with pointer, touch, and keyboard support, a restrained lifted-row
+  state, inline persistence failure recovery, and canonical ordering shared by
+  dapp connection requests. Search results remain selection-only so filtered
+  reordering cannot produce surprising placement.
+- 2026-07-13: rebuilt transaction review around the Warm Midnight decision
+  path: dapp-identified outcome, quieter estimated asset movement, a
+  sentence-case request ledger, and shadowless advanced technical surfaces.
+  Amber now appears as a small identity cue and on the final Confirm commitment;
+  transactional blue remains reserved for focus, links, selection, and ordinary
+  controls.
+- 2026-07-13: made the final single-transaction Confirm action an explicit
+  Warm Midnight amber `brand` exception in the component, button recipe,
+  `DESIGN.md`, `_docs/STYLING.md`, and `_docs/WARM_MIDNIGHT.md` after the older
+  blue-confirmation policy repeatedly caused regressions.

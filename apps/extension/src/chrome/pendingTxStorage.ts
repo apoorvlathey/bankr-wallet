@@ -4,6 +4,8 @@
  */
 
 import { TransactionParams } from "./bankrApi";
+import { bindPendingBankrCredential } from "./bankrCredentialBinding";
+import { assertCurrentMasterAuthorization } from "./masterAuthorization";
 import { withStorageLock } from "./storageLock";
 
 export interface Erc7715PermissionRevokeMeta {
@@ -33,10 +35,14 @@ export interface PendingTxRequest {
   accountId?: string;
   accountAddress?: string;
   accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  /** Non-secret ciphertext-generation binding for Bankr signer requests. */
+  bankrCredentialTag?: string;
   tabId?: number;
   frameId?: number;
   senderOrigin?: string;
   requestChainId?: number;
+  /** Explicit service-worker-authored request; never accepted from a webpage. */
+  trustedInternal?: true;
   walletConnect?: {
     topic: string;
     requestId: number;
@@ -90,6 +96,8 @@ export type PinnedTxRequest = PendingTxRequest &
 const STORAGE_KEY = "pendingTxRequests";
 const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
 const TX_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
+const MAX_PENDING_TX_REQUESTS = 50;
+const MAX_PENDING_TX_REQUESTS_PER_ORIGIN = 10;
 
 /**
  * Get all pending transaction requests
@@ -105,11 +113,29 @@ export async function getPendingTxRequests(): Promise<PendingTxRequest[]> {
  * Save a new pending transaction request
  */
 export async function savePendingTxRequest(
-  request: PinnedTxRequest
+  request: PinnedTxRequest,
+  expectedMasterAuthEpoch?: string,
 ): Promise<void> {
+  await clearExpiredTxRequests();
+  const boundRequest = await bindPendingBankrCredential(request);
   await withStorageLock(STORAGE_LOCK_KEY, async () => {
     const requests = await getPendingTxRequests();
-    requests.push(request);
+    if (requests.some((pending) => pending.id === request.id)) {
+      throw new Error("Transaction request already exists");
+    }
+    if (requests.length >= MAX_PENDING_TX_REQUESTS) {
+      throw new Error("Too many pending transaction requests");
+    }
+    if (
+      requests.filter((pending) => pending.origin === request.origin).length >=
+      MAX_PENDING_TX_REQUESTS_PER_ORIGIN
+    ) {
+      throw new Error("This site has too many pending transaction requests");
+    }
+    requests.push(boundRequest);
+    if (expectedMasterAuthEpoch) {
+      assertCurrentMasterAuthorization(expectedMasterAuthEpoch);
+    }
     await chrome.storage.local.set({ [STORAGE_KEY]: requests });
   });
   await updateBadge();
@@ -141,18 +167,23 @@ export async function getPendingTxRequestById(
  * Clear expired transaction requests (older than 30 minutes)
  */
 export async function clearExpiredTxRequests(): Promise<void> {
-  let changed = false;
-  await withStorageLock(STORAGE_LOCK_KEY, async () => {
-    const requests = await getPendingTxRequests();
-    const now = Date.now();
-    const valid = requests.filter((r) => now - r.timestamp < TX_EXPIRY_MS);
-
-    if (valid.length !== requests.length) {
-      await chrome.storage.local.set({ [STORAGE_KEY]: valid });
-      changed = true;
-    }
-  });
-  if (changed) await updateBadge();
+  const expiredBefore = Date.now() - TX_EXPIRY_MS;
+  const expired = (await getPendingTxRequests()).filter(
+    (request) => request.timestamp <= expiredBefore,
+  );
+  if (expired.length === 0) return;
+  const { expirePersistedPendingRequest } = await import(
+    "./pendingRequestExpiry"
+  );
+  await Promise.all(
+    expired.map((request) =>
+      expirePersistedPendingRequest(
+        "transaction",
+        request.id,
+        expiredBefore,
+      ),
+    ),
+  );
 }
 
 /**

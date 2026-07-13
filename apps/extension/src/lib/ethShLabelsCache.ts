@@ -22,6 +22,7 @@
  */
 
 import { ethShLabelsUrl } from "@/constants/externalUrls";
+import { fetchJsonBounded } from "@/chrome/boundedHttpResponse";
 
 const STORAGE_PREFIX = "ethShLabels:";
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -69,9 +70,12 @@ export async function getEthShLabels(
 
     let labels: string[] = [];
     try {
-      const res = await fetch(ethShLabelsUrl(address, chainId));
-      if (res.ok) {
-        const data = await res.json();
+      const { response, data } = await fetchJsonBounded(
+        ethShLabelsUrl(address, chainId),
+        { method: "GET" },
+        { timeoutMs: 8_000, maxBytes: 256 * 1024 },
+      );
+      if (response.ok) {
         if (Array.isArray(data)) {
           labels = data.filter((s): s is string => typeof s === "string");
         }

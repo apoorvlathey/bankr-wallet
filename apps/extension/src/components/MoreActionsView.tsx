@@ -19,6 +19,7 @@ import ConnectedDappsView from "@/components/ConnectedDappsView";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
 import { GlobeIcon } from "@/components/Settings/icons";
 import { useEffect, useState } from "react";
+import { fetchJsonBounded } from "@/chrome/boundedHttpResponse";
 import {
   AppHeader,
   AppScreen,
@@ -172,10 +173,19 @@ export default function MoreActionsView({
     const controller = new AbortController();
 
     const fetchApy = () => {
-      fetch(WALLETCHAN_VAULT_DATA_API, { signal: controller.signal })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (data?.totalApy != null) setStakeApy(data.totalApy);
+      fetchJsonBounded(
+        WALLETCHAN_VAULT_DATA_API,
+        { method: "GET", signal: controller.signal },
+        { timeoutMs: 8_000, maxBytes: 64 * 1024 },
+      )
+        .then(({ response, data }) => {
+          const payload =
+            response.ok && data && typeof data === "object"
+              ? data as { totalApy?: unknown }
+              : null;
+          if (typeof payload?.totalApy === "number") {
+            setStakeApy(payload.totalApy);
+          }
         })
         .catch(() => {});
     };

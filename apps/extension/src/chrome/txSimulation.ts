@@ -11,7 +11,6 @@
 
 import {
   createPublicClient,
-  http,
   erc20Abi,
   encodeFunctionData,
   decodeFunctionData,
@@ -19,36 +18,65 @@ import {
   decodeAbiParameters,
   formatUnits,
   parseEther,
-  keccak256,
   encodeAbiParameters,
   getAddress,
-  toHex,
   type PublicClient,
   type Address,
   type AccessList,
 } from "viem";
 import { getRpcUrl } from "./txHandlers";
+import { fetchRpcEnvelope, secureHttpTransport } from "./rpcHttpClient";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import { getCachedTokenList, fetchTokenPrice } from "./swapApi";
-import { fetchPortfolio, type PortfolioToken } from "./portfolioApi";
+import type { PortfolioToken } from "./portfolioApi";
+import { extractCalldataAddressCandidates } from "./calldataAddressCandidates";
+import { getLatestPortfolioHoldingsSnapshotForAddress } from "./portfolioHoldingsCache";
+import {
+  getPreflightTokenMetadata,
+  preflightAssetCandidates,
+} from "./erc20CandidatePreflight";
 import {
   ETH_NATIVE_ASSET_LOGO_URL,
   getNativeAssetLogoUrl,
   getStoredResolvedChainById,
 } from "@/lib/chains";
 import { KNOWN_TOKEN_LOGOS } from "./tokenLogoConstants";
-import { ERC7710_DELEGATION_MANAGER } from "./erc7715PermissionCaveats";
+import { ERC7710_DELEGATION_MANAGER } from "./erc7715/caveats";
 import { parseTransferCalldata } from "@/lib/erc20Transfer";
+import {
+  resolveNftMetadata,
+  type NftMetadata,
+} from "./nftMetadata";
+import { buildRetryOverrides } from "./simulation/stateOverrides";
+import {
+  BATCH_SIMULATION_GAS_LIMIT,
+  SIMULATION_GAS_LIMIT,
+} from "./simulation/constants";
+import {
+  parseEthSimulateV1CallResults,
+  type EthSimulateCallResult,
+} from "./simulation/ethSimulateLogs";
+import type {
+  AssetChange,
+  RawNftReceived,
+  RawSimulationResult as RawSimResult,
+  SimulationResult,
+  TokenMetadataResult,
+} from "./simulation/types";
 
 export { KNOWN_TOKEN_LOGOS } from "./tokenLogoConstants";
+export type { NftMetadata } from "./nftMetadata";
+export type {
+  AssetChange,
+  NftAssetInfo,
+  NftStandard,
+  SimulationResult,
+  TokenMetadataResult,
+} from "./simulation/types";
 
 /** Multicall3 is deployed at the same address on all supported chains */
 const MULTICALL3_ADDRESS: Address =
   "0xcA11bde05977b3631167028862bE2a173976CA11";
-
-/** Permit2 is deployed at the same address on all supported chains */
-const PERMIT2_ADDRESS: Address =
-  "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 
 /** `redeemDelegations(bytes[],bytes32[],bytes[])` on MetaMask's DelegationManager. */
 const ERC7715_REDEEM_DELEGATIONS_SELECTOR = "0xcef6d209";
@@ -105,36 +133,6 @@ const ERC7715_DELEGATION_CONTEXT_ABI = [
     ],
   },
 ] as const;
-
-/**
- * Explicit gas cap for eth_call / eth_createAccessList requests.
- *
- * Many RPC providers (LlamaRPC, Alchemy, etc.) reject simulation requests
- * whose gas — either explicitly provided OR auto-filled when omitted —
- * exceeds their per-call cap, surfacing as viem's IntrinsicGasTooHighError:
- * "The amount of gas provided for the transaction exceeds the limit allowed
- * for the block." (matches the RPC nodeMessage `gas limit reached`).
- *
- * Empirically, Alchemy mainnet rejects 30M while accepting ≤ ~10M for
- * eth_createAccessList. 10M is safely below every observed cap and still
- * comfortably covers the simulator's overhead (state snapshot balanceOf
- * sweep + user tx + post-tx balanceOf sweep is typically < 5M gas).
- */
-const SIMULATION_GAS_LIMIT = 10_000_000n;
-
-/**
- * Higher gas cap for the batch-simulation `eth_call` (Step 2 of
- * simulateBatchAssetChanges). A batched simulation runs N user calls
- * sequentially plus pre/post balanceOf sweeps over every candidate token,
- * which routinely exceeds 10M for non-trivial batches (e.g. approve + swap
- * with a long candidate list) and surfaces as
- * "out of gas: gas required exceeds: 10000000".
- *
- * Only applied to `eth_call` — most RPC providers accept 50M+ for eth_call
- * while still capping `eth_createAccessList` at ~10M. The access-list step
- * continues to use SIMULATION_GAS_LIMIT.
- */
-const BATCH_SIMULATION_GAS_LIMIT = 50_000_000n;
 
 function isErc7715RedeemDelegationsTx(
   to: Address,
@@ -236,84 +234,6 @@ function addTokenDelta(
 }
 
 // ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export type NftStandard = "erc721" | "erc1155";
-
-/** Resolved NFT metadata (best-effort) */
-export interface NftMetadata {
-  name?: string;
-  description?: string;
-  /** Image URL ready for an <img src> attribute (data:, https://, etc.) */
-  image?: string;
-}
-
-/** NFT-specific data attached to an AssetChange */
-export interface NftAssetInfo {
-  standard: NftStandard;
-  /** Decimal stringified tokenId. Null if we only know the count delta (e.g. outgoing transferFrom). */
-  tokenId: string | null;
-  /** Stringified amount: 1 for ERC-721, variable for ERC-1155. Null when only the count is known. */
-  amount: string | null;
-  /**
-   * The tokenURI / uri string captured INSIDE the simulator (so it reflects
-   * post-tx state). The retry path uses this directly instead of re-querying
-   * the contract — for state-dependent onchain SVG metadata the post-tx
-   * state is no longer available after eth_call returns.
-   */
-  tokenUri?: string;
-  /** Resolved metadata. Undefined while still being fetched / never resolved. */
-  metadata?: NftMetadata;
-  /** True while metadata is still being fetched (UI shows a loader) */
-  metadataLoading?: boolean;
-}
-
-export interface AssetChange {
-  /** Token contract address, or "native" for ETH/BNB/POL */
-  address: string;
-  /** Token symbol (e.g. "USDC", "ETH") */
-  symbol: string;
-  /** Token name (e.g. "USD Coin", "Ether") */
-  name: string;
-  /** Token decimals */
-  decimals: number;
-  /** Token logo URL (from token list or CoinGecko) */
-  logoUrl?: string;
-  /** Raw signed delta as string (for sorting / advanced use) */
-  rawDelta: string;
-  /** Formatted amount string (e.g. "1,500.0", "0.05") — always positive */
-  formattedAmount: string;
-  /** USD value of the change (null if price unavailable) */
-  valueUsd: number | null;
-  /** "in" = user receives, "out" = user sends */
-  direction: "in" | "out";
-  /** Set when the asset is an ERC-721 or ERC-1155 token */
-  nft?: NftAssetInfo;
-}
-
-export interface SimulationResult {
-  /** Whether the inner transaction succeeded */
-  txSuccess: boolean;
-  /** Native currency delta (only if non-zero) */
-  nativeChange: AssetChange | null;
-  /** ERC-20 token balance changes */
-  tokenChanges: AssetChange[];
-  /** If simulation itself failed */
-  simulationFailed: boolean;
-  /** Human-readable error */
-  simulationError?: string;
-  /** False if metadata (symbol/decimals/price) couldn't be fetched for some tokens */
-  metadataComplete: boolean;
-}
-
-/** Result of a metadata-only retry */
-export interface TokenMetadataResult {
-  /** Updated token changes with resolved metadata */
-  tokenChanges: AssetChange[];
-}
-
-// ---------------------------------------------------------------------------
 // Simulator bytecode & ABI
 // ---------------------------------------------------------------------------
 
@@ -390,16 +310,6 @@ const BATCH_SIMULATOR_ABI = [
   },
 ] as const;
 
-/** Raw NFT receipt as decoded from the simulator return value */
-interface RawNftReceived {
-  token: Address;
-  tokenId: bigint;
-  amount: bigint;
-  standard: number; // 1 = ERC-721, 2 = ERC-1155
-  /** Raw return bytes from tokenURI(id) / uri(id), or "0x" if the call failed. */
-  tokenUriRaw: `0x${string}`;
-}
-
 // ---------------------------------------------------------------------------
 // eth_simulateV1 support cache — tracks which chains support the method
 // ---------------------------------------------------------------------------
@@ -434,7 +344,7 @@ async function getClient(chainId: number): Promise<PublicClient | null> {
   }
 
   const client = createPublicClient({
-    transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
+    transport: secureHttpTransport(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
   });
   clientCache.set(chainId, { rpcUrl, client });
   return client;
@@ -507,168 +417,10 @@ async function resolveNativeCurrency(
 }
 
 // ---------------------------------------------------------------------------
-// NFT metadata resolution (tokenURI / uri → JSON → image)
+// Portfolio price cache — preferred before remote token/native price lookups
 // ---------------------------------------------------------------------------
 
-const NFT_FETCH_TIMEOUT = 5_000;
-const IPFS_GATEWAY_URL = "https://ipfs.io/ipfs/";
-
-/** Resolve ipfs:// → https gateway. Pass-through for everything else. */
-function resolveIpfsUri(uri: string): string {
-  if (uri.startsWith("ipfs://")) {
-    // Strip optional `ipfs/` prefix some contracts include redundantly.
-    const path = uri.slice(7).replace(/^ipfs\//, "");
-    return `${IPFS_GATEWAY_URL}${path}`;
-  }
-  return uri;
-}
-
-/** Decode a `data:...` URI. Returns the raw payload string and the mime type. */
-function parseDataUri(uri: string): { mime: string; data: string } | null {
-  if (!uri.startsWith("data:")) return null;
-  const commaIdx = uri.indexOf(",");
-  if (commaIdx === -1) return null;
-  const meta = uri.slice(5, commaIdx); // e.g. "application/json;base64"
-  const payload = uri.slice(commaIdx + 1);
-  const isBase64 = meta.includes(";base64");
-  const mime = (meta.split(";")[0] || "text/plain").trim();
-
-  try {
-    const data = isBase64
-      ? atob(payload)
-      : decodeURIComponent(payload);
-    return { mime, data };
-  } catch {
-    return null;
-  }
-}
-
-/** Pick the first non-empty image-like field from a metadata JSON object. */
-function pickImageField(json: any): string | undefined {
-  if (!json || typeof json !== "object") return undefined;
-  const candidates = [
-    json.image,
-    json.image_url,
-    json.imageUrl,
-    json.image_data, // Some collections inline raw SVG here.
-    json.animation_url,
-  ];
-  for (const v of candidates) {
-    if (typeof v === "string" && v.length > 0) return v;
-  }
-  return undefined;
-}
-
-/**
- * Convert any image string (ipfs://, raw SVG markup, https://, data:) into
- * a value suitable for an <img src> attribute. SVG markup gets wrapped in a
- * data URI so it renders without a network round-trip.
- */
-function normaliseImageSrc(image: string): string {
-  if (image.startsWith("ipfs://")) return resolveIpfsUri(image);
-  if (image.startsWith("data:")) return image;
-  if (image.startsWith("http://") || image.startsWith("https://")) return image;
-  // Some collections store inline `<svg ...>...</svg>` markup.
-  if (image.trimStart().startsWith("<svg")) {
-    return `data:image/svg+xml;utf8,${encodeURIComponent(image)}`;
-  }
-  return image;
-}
-
-function parseMetadataJson(json: any): NftMetadata | null {
-  if (!json || typeof json !== "object") return null;
-  const rawImage = pickImageField(json);
-  return {
-    name: typeof json.name === "string" ? json.name : undefined,
-    description:
-      typeof json.description === "string" ? json.description : undefined,
-    image: rawImage ? normaliseImageSrc(rawImage) : undefined,
-  };
-}
-
-/**
- * Resolve a tokenURI / uri value into NftMetadata. Handles:
- *   - data:application/json;base64,...   (inline JSON)
- *   - data:application/json,...          (inline JSON, urlencoded)
- *   - data:image/svg+xml,...             (inline SVG → image only)
- *   - ipfs://Qm...                       (gateway fetch)
- *   - https://...                        (direct fetch)
- *
- * ERC-1155 contracts may return URIs containing the literal `{id}` placeholder
- * which we substitute per the spec (lowercase hex, 64 chars, no 0x).
- */
-async function resolveNftMetadata(
-  rawUri: string,
-  tokenId: bigint,
-): Promise<NftMetadata | null> {
-  if (!rawUri) return null;
-
-  // ERC-1155 {id} substitution (uint256 → 64-char lowercase hex, no 0x)
-  let uri = rawUri;
-  if (uri.includes("{id}")) {
-    const hex = tokenId.toString(16).padStart(64, "0");
-    uri = uri.replace(/\{id\}/g, hex);
-  }
-
-  // Inline data URI
-  if (uri.startsWith("data:")) {
-    const parsed = parseDataUri(uri);
-    if (!parsed) return null;
-    if (parsed.mime.includes("json") || parsed.data.trimStart().startsWith("{")) {
-      try {
-        return parseMetadataJson(JSON.parse(parsed.data));
-      } catch {
-        return null;
-      }
-    }
-    if (parsed.mime.startsWith("image/")) {
-      return { image: uri };
-    }
-    return null;
-  }
-
-  // Network fetch (ipfs:// or https://)
-  const url = resolveIpfsUri(uri);
-  if (!/^https?:\/\//.test(url)) return null;
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), NFT_FETCH_TIMEOUT);
-    const res = await fetch(url, {
-      signal: controller.signal,
-      // Avoid sending the extension's referrer/cookies to third-party gateways.
-      referrerPolicy: "no-referrer",
-      credentials: "omit",
-    });
-    clearTimeout(timeout);
-    if (!res.ok) return null;
-    const contentType = (res.headers.get("content-type") || "").toLowerCase();
-
-    if (contentType.includes("image/")) {
-      return { image: url };
-    }
-
-    // JSON or unknown text — try to parse.
-    const text = await res.text();
-    try {
-      return parseMetadataJson(JSON.parse(text));
-    } catch {
-      // Last resort: maybe the body is raw SVG markup.
-      if (text.trimStart().startsWith("<svg")) {
-        return { image: normaliseImageSrc(text) };
-      }
-      return null;
-    }
-  } catch {
-    return null;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Portfolio price fallback — uses holdings prices when CoinGecko unavailable
-// ---------------------------------------------------------------------------
-
-/** Cache fetched portfolio for the duration of a simulation to avoid refetching */
+/** In-memory mirror of the latest reset-aware holdings snapshot. */
 let portfolioCache: { address: string; tokens: PortfolioToken[]; timestamp: number } | null = null;
 const PORTFOLIO_CACHE_TTL = 30_000; // 30 seconds
 
@@ -686,15 +438,23 @@ async function getPortfolioPriceMap(
     ) {
       for (const t of portfolioCache.tokens) {
         if (t.priceUsd > 0) {
-          // Key: "chainId:address" (lowercase)
-          const key = `${t.chainId}:${t.contractAddress.toLowerCase()}`;
+          const contractKey =
+            t.contractAddress === "native" ||
+            t.contractAddress.toLowerCase() ===
+              "0x0000000000000000000000000000000000000000"
+              ? "native"
+              : t.contractAddress.toLowerCase();
+          const key = `${t.chainId}:${contractKey}`;
           priceMap.set(key, t.priceUsd);
         }
       }
       return priceMap;
     }
 
-    const portfolio = await fetchPortfolio(accountAddress);
+    const cachedSnapshot =
+      await getLatestPortfolioHoldingsSnapshotForAddress(accountAddress);
+    if (!cachedSnapshot) return priceMap;
+    const portfolio = cachedSnapshot;
     portfolioCache = {
       address: accountAddress.toLowerCase(),
       tokens: portfolio.tokens,
@@ -703,8 +463,14 @@ async function getPortfolioPriceMap(
 
     for (const t of portfolio.tokens) {
       if (t.priceUsd > 0) {
-        const key = `${t.chainId}:${t.contractAddress.toLowerCase()}`;
-        priceMap.set(key, t.priceUsd);
+      const contractKey =
+        t.contractAddress === "native" ||
+        t.contractAddress.toLowerCase() ===
+          "0x0000000000000000000000000000000000000000"
+          ? "native"
+          : t.contractAddress.toLowerCase();
+      const key = `${t.chainId}:${contractKey}`;
+      priceMap.set(key, t.priceUsd);
       }
     }
   } catch {
@@ -712,195 +478,6 @@ async function getPortfolioPriceMap(
   }
 
   return priceMap;
-}
-
-// ---------------------------------------------------------------------------
-// State overrides — grant balances + ERC-20 approvals + Permit2 allowances
-// ---------------------------------------------------------------------------
-
-type StateDiffEntry = { slot: `0x${string}`; value: `0x${string}` };
-type StateOverride = { address: Address; stateDiff: StateDiffEntry[] };
-
-/** Known EIP-1967 proxy slots to ignore when probing balance storage */
-const PROXY_SLOTS = new Set([
-  "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc", // implementation
-  "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103", // admin
-  "0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50", // beacon
-]);
-
-/**
- * Use eth_createAccessList on balanceOf(user) to discover the exact storage
- * slot where `token` stores the balance of `user`.
- */
-async function findBalanceSlot(
-  client: PublicClient,
-  token: Address,
-  user: Address,
-): Promise<`0x${string}` | null> {
-  try {
-    const { accessList } = await client.createAccessList({
-      to: token,
-      data: encodeFunctionData({
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [user],
-      }),
-      gas: SIMULATION_GAS_LIMIT,
-    });
-
-    const tokenEntry = accessList.find(
-      (e) => e.address.toLowerCase() === token.toLowerCase(),
-    );
-    if (!tokenEntry || tokenEntry.storageKeys.length === 0) return null;
-
-    // Filter out known proxy slots — the remaining key(s) are the balance mapping
-    const balanceSlots = tokenEntry.storageKeys.filter(
-      (k: string) => !PROXY_SLOTS.has(k.toLowerCase()),
-    );
-    return (balanceSlots[0] as `0x${string}`) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Similarly, find the exact storage slot for `allowance[owner][spender]` in
- * an ERC-20 token by tracing an `allowance()` call.
- */
-async function findAllowanceSlot(
-  client: PublicClient,
-  token: Address,
-  owner: Address,
-  spender: Address,
-): Promise<`0x${string}` | null> {
-  try {
-    const { accessList } = await client.createAccessList({
-      to: token,
-      data: encodeFunctionData({
-        abi: erc20Abi,
-        functionName: "allowance",
-        args: [owner, spender],
-      }),
-      gas: SIMULATION_GAS_LIMIT,
-    });
-
-    const tokenEntry = accessList.find(
-      (e) => e.address.toLowerCase() === token.toLowerCase(),
-    );
-    if (!tokenEntry || tokenEntry.storageKeys.length === 0) return null;
-
-    const slots = tokenEntry.storageKeys.filter(
-      (k: string) => !PROXY_SLOTS.has(k.toLowerCase()),
-    );
-    return (slots[0] as `0x${string}`) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Build complete state overrides for retry simulation:
- * 1. Token balance overrides (large balance for all candidates)
- * 2. ERC-20 approval overrides (approve Permit2 on all candidates)
- * 3. Permit2 allowance overrides (grant router access)
- *
- * Uses eth_createAccessList to discover exact storage slots — works for
- * any ERC-20 implementation (OZ, USDC proxy, custom, etc.).
- */
-async function buildRetryOverrides(
-  client: PublicClient,
-  owner: Address,
-  spender: Address,
-  candidates: Address[],
-): Promise<StateOverride[]> {
-  const MAX_UINT256 = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" as `0x${string}`;
-  // Large but not max balance (avoids overflow issues in some token logic)
-  const LARGE_BALANCE = toHex(10n ** 30n, { size: 32 });
-
-  // Run all slot probes in parallel (balance + approval for each candidate)
-  const [balanceSlots, allowanceSlots] = await Promise.all([
-    Promise.all(candidates.map((token) => findBalanceSlot(client, token, owner))),
-    Promise.all(candidates.map((token) => findAllowanceSlot(client, token, owner, PERMIT2_ADDRESS))),
-  ]);
-
-  console.log("[TxSim] Balance slots found:", balanceSlots.map((s, i) => `${candidates[i].slice(0, 8)}=${s ? "yes" : "no"}`).join(", "));
-  console.log("[TxSim] Allowance slots found:", allowanceSlots.map((s, i) => `${candidates[i].slice(0, 8)}=${s ? "yes" : "no"}`).join(", "));
-
-  // Merge all diffs per address
-  const diffMap = new Map<string, StateDiffEntry[]>();
-  const addressMap = new Map<string, Address>(); // lowercase → original
-
-  function addDiff(address: Address, diff: StateDiffEntry) {
-    const key = address.toLowerCase();
-    addressMap.set(key, address);
-    const arr = diffMap.get(key) ?? [];
-    arr.push(diff);
-    diffMap.set(key, arr);
-  }
-
-  // 1. Token balance overrides
-  for (let i = 0; i < candidates.length; i++) {
-    if (balanceSlots[i]) {
-      addDiff(candidates[i], { slot: balanceSlots[i]!, value: LARGE_BALANCE });
-    }
-  }
-
-  // 2. ERC-20 approval overrides (owner → Permit2)
-  for (let i = 0; i < candidates.length; i++) {
-    if (allowanceSlots[i]) {
-      addDiff(candidates[i], { slot: allowanceSlots[i]!, value: MAX_UINT256 });
-    }
-  }
-
-  // 3. Permit2 allowance overrides: allowance[owner][token][spender]
-  // Permit2's allowance is a triple-nested mapping at slot 0.
-  // CRITICAL: preserve the current nonce when overriding — Permit2's permit()
-  // verifies the signed nonce matches storage, so changing it breaks signature checks.
-  // Packed layout (256 bits): [nonce:48][expiration:48][amount:160]
-  const permit2Slots: `0x${string}`[] = [];
-  for (const token of candidates) {
-    const ownerSlot = keccak256(
-      encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [owner, 0n]),
-    );
-    const tokenSlot = keccak256(
-      encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [token, ownerSlot]),
-    );
-    const finalSlot = keccak256(
-      encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [spender, tokenSlot]),
-    );
-    permit2Slots.push(finalSlot);
-  }
-
-  // Read current Permit2 slots in parallel to extract nonces
-  const currentPermit2Values = await Promise.all(
-    permit2Slots.map((slot) =>
-      client.getStorageAt({ address: PERMIT2_ADDRESS, slot }).catch(() => "0x0" as `0x${string}`),
-    ),
-  );
-
-  for (let i = 0; i < candidates.length; i++) {
-    const currentValue = BigInt(currentPermit2Values[i] || "0x0");
-    // Extract current nonce from top 48 bits
-    const currentNonce = (currentValue >> 208n) & BigInt("0xffffffffffff");
-    // Pack: [currentNonce:48][maxExpiration:48][maxAmount:160]
-    const overrideValue = toHex(
-      (currentNonce << 208n) |
-      (BigInt("0xffffffffffff") << 160n) |
-      BigInt("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"),
-      { size: 32 },
-    );
-    addDiff(PERMIT2_ADDRESS, { slot: permit2Slots[i], value: overrideValue });
-  }
-
-  // Build final override array
-  const overrides: StateOverride[] = [];
-  for (const [key, diffs] of diffMap) {
-    if (diffs.length > 0) {
-      overrides.push({ address: addressMap.get(key)!, stateDiff: diffs });
-    }
-  }
-
-  return overrides;
 }
 
 // ---------------------------------------------------------------------------
@@ -1075,8 +652,9 @@ export async function simulateAssetChanges(
     // Step 1: Get access list to discover touched contracts. Some RPCs
     // (e.g. Alchemy) reject createAccessList when `from` has no ETH balance
     // — common for impersonator accounts and freshly-created EOAs. Fall back
-    // to `[to]` as the sole candidate so the eth_call simulation (which uses
-    // a state-override balance) still runs and surfaces direct token flows.
+    // to ABI-padded addresses found anywhere in calldata (including nested
+    // Uniswap multicall bytes), plus `to`. The simulator's balanceOf probes
+    // safely filter non-token addresses from this bounded candidate set.
     console.log("[TxSim] Step 1: Creating access list...");
     let candidates: Address[];
     try {
@@ -1105,9 +683,21 @@ export async function simulateAssetChanges(
         candidates.push(to);
       }
     } catch (alErr: any) {
-      console.warn("[TxSim] createAccessList failed, falling back to [to]:", alErr.shortMessage || alErr.message || alErr);
-      candidates = [to];
+      const calldataCandidates = extractCalldataAddressCandidates(data, [from, to]);
+      console.warn(
+        "[TxSim] createAccessList failed, falling back to calldata addresses:",
+        alErr.shortMessage || alErr.message || alErr,
+      );
+      candidates = [to, ...calldataCandidates];
     }
+    candidates = await preflightAssetCandidates(
+      client,
+      tx.chainId,
+      from,
+      candidates,
+      MULTICALL3_ADDRESS,
+    );
+    console.log("[TxSim] Candidates after asset preflight:", candidates.length);
     console.log("[TxSim] Candidate tokens:", candidates.length, candidates);
 
     // Step 2: Simulate via eth_call with state override
@@ -1143,14 +733,6 @@ export async function simulateAssetChanges(
 // ---------------------------------------------------------------------------
 // Simulation core — runs the eth_call with state overrides and decodes result
 // ---------------------------------------------------------------------------
-
-interface RawSimResult {
-  txSuccess: boolean;
-  ethDelta: bigint;
-  tokens: Address[];
-  deltas: bigint[];
-  nftsReceived: RawNftReceived[];
-}
 
 async function runSimulation(
   client: PublicClient,
@@ -1241,6 +823,26 @@ async function buildSimulationResult(
   accountAddress: string,
   raw: RawSimResult,
 ): Promise<SimulationResult> {
+  // The candidate preflight already returned standard ERC-20 metadata. Paint
+  // those deltas immediately and defer logos/prices to retryTokenMetadata so
+  // the confirmation UI is not held behind catalog or pricing requests.
+  const cachedTokenChanges =
+    raw.nftsReceived.length === 0
+      ? buildPreflightTokenChanges(chainId, raw.tokens, raw.deltas)
+      : null;
+  if (cachedTokenChanges) {
+    const native = getNativeCurrency(chainId);
+    const nativeChange = buildUnpricedNativeChange(raw.ethDelta, native);
+    return {
+      txSuccess: raw.txSuccess,
+      nativeChange,
+      tokenChanges: cachedTokenChanges,
+      simulationFailed: false,
+      metadataComplete:
+        cachedTokenChanges.length === 0 && nativeChange === null,
+    };
+  }
+
   const { changes: tokenChanges, metadataComplete } = await enrichTokenChanges(
     client,
     chainId,
@@ -1257,16 +859,15 @@ async function buildSimulationResult(
     const abs = raw.ethDelta < 0n ? -raw.ethDelta : raw.ethDelta;
     const amount = parseFloat(formatUnits(abs, native.decimals));
 
-    let nativePriceUsd: number | null = null;
-    try {
-      const { fetchNativePrice } = await import("./gasEstimation");
-      nativePriceUsd = await fetchNativePrice(chainId);
-    } catch {
-      // Fall back to the portfolio price cache below.
-    }
+    const portfolioPrices = await getPortfolioPriceMap(accountAddress);
+    let nativePriceUsd = portfolioPrices.get(`${chainId}:native`) ?? null;
     if (nativePriceUsd === null) {
-      const portfolioPrices = await getPortfolioPriceMap(accountAddress);
-      nativePriceUsd = portfolioPrices.get(`${chainId}:native`) ?? null;
+      try {
+        const { fetchNativePrice } = await import("./gasEstimation");
+        nativePriceUsd = await fetchNativePrice(chainId);
+      } catch {
+        nativePriceUsd = null;
+      }
     }
 
     nativeChange = {
@@ -1296,6 +897,54 @@ async function buildSimulationResult(
     metadataComplete,
   });
   return finalResult;
+}
+
+function buildPreflightTokenChanges(
+  chainId: number,
+  tokens: Address[],
+  deltas: bigint[],
+): AssetChange[] | null {
+  const metadata = tokens.map((token) =>
+    getPreflightTokenMetadata(chainId, token),
+  );
+  if (metadata.some((entry) => entry === null)) return null;
+
+  return tokens.map((token, index) => {
+    const tokenMetadata = metadata[index]!;
+    const delta = deltas[index];
+    const abs = delta < 0n ? -delta : delta;
+    const amount = parseFloat(formatUnits(abs, tokenMetadata.decimals));
+    return {
+      address: token,
+      symbol: tokenMetadata.symbol,
+      name: tokenMetadata.name,
+      decimals: tokenMetadata.decimals,
+      logoUrl: KNOWN_TOKEN_LOGOS[token.toLowerCase()] || undefined,
+      rawDelta: delta.toString(),
+      formattedAmount: formatAmount(amount),
+      valueUsd: null,
+      direction: delta > 0n ? "in" : "out",
+    };
+  });
+}
+
+function buildUnpricedNativeChange(
+  delta: bigint,
+  native: { symbol: string; name: string; decimals: number; icon: string },
+): AssetChange | null {
+  if (delta === 0n) return null;
+  const abs = delta < 0n ? -delta : delta;
+  return {
+    address: "native",
+    symbol: native.symbol,
+    name: native.name,
+    decimals: native.decimals,
+    logoUrl: native.icon,
+    rawDelta: delta.toString(),
+    formattedAmount: formatAmount(parseFloat(formatUnits(abs, native.decimals))),
+    valueUsd: null,
+    direction: delta > 0n ? "in" : "out",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1481,10 +1130,17 @@ async function enrichTokenChanges(
     tokenListMap.set(t.address.toLowerCase(), t);
   }
 
-  // 2. Identify tokens NOT in the token list — need onchain metadata
+  const onchainMeta = new Map<string, { name: string; symbol: string; decimals: number }>();
+
+  // 2. Reuse metadata fetched by the calldata-candidate preflight. Only tokens
+  // absent from both the token list and this short-lived cache need another
+  // onchain metadata request after simulation.
   const unknownIndices: number[] = [];
   for (let i = 0; i < tokens.length; i++) {
-    if (!tokenListMap.has(tokens[i].toLowerCase())) {
+    const addressKey = tokens[i].toLowerCase();
+    const preflightMetadata = getPreflightTokenMetadata(chainId, tokens[i]);
+    if (preflightMetadata) onchainMeta.set(addressKey, preflightMetadata);
+    if (!tokenListMap.has(addressKey) && !preflightMetadata) {
       unknownIndices.push(i);
     }
   }
@@ -1503,7 +1159,6 @@ async function enrichTokenChanges(
   // 3. Onchain multicall for unknown ERC-20s only: name(), symbol(), decimals().
   //    NFTs use a separate (lighter) lookup path below since they have no decimals.
   let metadataComplete = true;
-  const onchainMeta = new Map<string, { name: string; symbol: string; decimals: number }>();
   const erc20Unknown = unknownIndices.filter(
     (idx) => !nftStandards.has(tokens[idx].toLowerCase()),
   );
@@ -1602,31 +1257,22 @@ async function enrichTokenChanges(
     }
   }
 
-  // 4. Fetch USD prices in parallel for all changed tokens (skip NFTs).
-  const pricePromises = tokens.map((addr) =>
-    nftStandards.has(addr.toLowerCase())
-      ? Promise.resolve(0)
-      : fetchTokenPrice(chainId, addr).catch(() => 0),
-  );
+  // 4. Prefer the extension's reset-aware portfolio cache. Only tokens absent
+  // from that cache hit the remote token-price endpoint.
+  const portfolioPrices = await getPortfolioPriceMap(accountAddress);
+  const pricePromises = tokens.map((addr) => {
+    if (nftStandards.has(addr.toLowerCase())) return Promise.resolve(0);
+    const cached = portfolioPrices.get(`${chainId}:${addr.toLowerCase()}`);
+    return cached
+      ? Promise.resolve(cached)
+      : fetchTokenPrice(chainId, addr).catch(() => 0);
+  });
   let prices: number[];
   try {
     prices = await Promise.all(pricePromises);
   } catch {
     prices = tokens.map(() => 0);
     metadataComplete = false;
-  }
-
-  // 4b. Fallback to portfolio holdings prices for ERC-20s with no CoinGecko price
-  const hasMissingPrices = prices.some((p, i) => p === 0 && !nftStandards.has(tokens[i].toLowerCase()));
-  if (hasMissingPrices) {
-    const portfolioPrices = await getPortfolioPriceMap(accountAddress);
-    for (let i = 0; i < prices.length; i++) {
-      if (prices[i] === 0 && !nftStandards.has(tokens[i].toLowerCase())) {
-        const key = `${chainId}:${tokens[i].toLowerCase()}`;
-        const fallback = portfolioPrices.get(key);
-        if (fallback) prices[i] = fallback;
-      }
-    }
   }
 
   // 5. Index received NFTs so we can suppress balanceOf-derived rows that
@@ -1721,6 +1367,7 @@ export async function retryTokenMetadata(
   chainId: number,
   tokenChanges: AssetChange[],
   accountAddress: string,
+  nativeChange?: AssetChange | null,
 ): Promise<TokenMetadataResult> {
   // Retry conditions:
   //   - Symbol still looks like an address fragment
@@ -1731,10 +1378,13 @@ export async function retryTokenMetadata(
     if (c.nft) return !!c.nft.metadataLoading;
     return c.valueUsd === null;
   });
-  if (needsRetry.length === 0) return { tokenChanges };
+  const nativeNeedsPrice = !!nativeChange && nativeChange.valueUsd === null;
+  if (needsRetry.length === 0 && !nativeNeedsPrice) {
+    return { tokenChanges, nativeChange };
+  }
 
   const client = await getClient(chainId);
-  if (!client) return { tokenChanges };
+  if (!client) return { tokenChanges, nativeChange };
 
   // Retry NFT metadata using the URI captured during the original simulation.
   // Re-querying tokenURI/uri here would return CURRENT state, not the post-tx
@@ -1802,27 +1452,30 @@ export async function retryTokenMetadata(
     }
   }
 
-  // 3. Retry prices for tokens missing USD value (NFTs are skipped — no price feed)
+  // 3. Retry prices for tokens missing USD value. The local portfolio cache
+  // wins; the remote token-price endpoint is called only for cache misses.
   const priceNeeded = needsRetry.filter((c) => !c.nft && c.valueUsd === null);
   const priceMap = new Map<string, number>();
   if (priceNeeded.length > 0) {
-    const prices = await Promise.all(
-      priceNeeded.map((c) => fetchTokenPrice(chainId, c.address).catch(() => 0)),
-    );
-    priceNeeded.forEach((c, i) => {
-      if (prices[i] > 0) priceMap.set(c.address.toLowerCase(), prices[i]);
-    });
-
-    // 3b. Fallback to portfolio holdings prices
-    const stillMissing = priceNeeded.filter((c) => !priceMap.has(c.address.toLowerCase()));
-    if (stillMissing.length > 0) {
-      const portfolioPrices = await getPortfolioPriceMap(accountAddress);
-      for (const c of stillMissing) {
-        const key = `${chainId}:${c.address.toLowerCase()}`;
-        const fallback = portfolioPrices.get(key);
-        if (fallback) priceMap.set(c.address.toLowerCase(), fallback);
-      }
+    const portfolioPrices = await getPortfolioPriceMap(accountAddress);
+    const remoteNeeded: AssetChange[] = [];
+    for (const change of priceNeeded) {
+      const cached = portfolioPrices.get(
+        `${chainId}:${change.address.toLowerCase()}`,
+      );
+      if (cached) priceMap.set(change.address.toLowerCase(), cached);
+      else remoteNeeded.push(change);
     }
+    const remotePrices = await Promise.all(
+      remoteNeeded.map((change) =>
+        fetchTokenPrice(chainId, change.address).catch(() => 0),
+      ),
+    );
+    remoteNeeded.forEach((change, index) => {
+      if (remotePrices[index] > 0) {
+        priceMap.set(change.address.toLowerCase(), remotePrices[index]);
+      }
+    });
   }
 
   // 4. Merge updates into existing token changes
@@ -1888,7 +1541,35 @@ export async function retryTokenMetadata(
     };
   });
 
-  return { tokenChanges: updated };
+  let updatedNativeChange = nativeChange;
+  if (nativeNeedsPrice && nativeChange) {
+    const portfolioPrices = await getPortfolioPriceMap(accountAddress);
+    let nativePrice = portfolioPrices.get(`${chainId}:native`) ?? null;
+    if (nativePrice === null) {
+      try {
+        const { fetchNativePrice } = await import("./gasEstimation");
+        nativePrice = await fetchNativePrice(chainId);
+      } catch {
+        nativePrice = null;
+      }
+    }
+    if (nativePrice !== null) {
+      const amount = parseFloat(
+        formatUnits(
+          BigInt(nativeChange.rawDelta) < 0n
+            ? -BigInt(nativeChange.rawDelta)
+            : BigInt(nativeChange.rawDelta),
+          nativeChange.decimals,
+        ),
+      );
+      updatedNativeChange = {
+        ...nativeChange,
+        valueUsd: amount * nativePrice,
+      };
+    }
+  }
+
+  return { tokenChanges: updated, nativeChange: updatedNativeChange };
 }
 
 // ---------------------------------------------------------------------------
@@ -2159,27 +1840,6 @@ export async function simulateBatchAssetChanges(
 // eth_simulateV1-based batch simulation (non-atomic EOA accounts)
 // ---------------------------------------------------------------------------
 
-/** ERC-20 / ERC-721 Transfer(address,address,uint256) topic */
-const TRANSFER_TOPIC =
-  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-/** ERC-1155 TransferSingle(operator,from,to,id,value) topic */
-const TRANSFER_SINGLE_TOPIC =
-  "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62";
-/** ERC-1155 TransferBatch(operator,from,to,ids,values) topic */
-const TRANSFER_BATCH_TOPIC =
-  "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb";
-
-/** Safely decode a hex string of unknown length (incl. "0x") to a bigint. */
-function safeHexToBigInt(hex: string | undefined | null): bigint {
-  if (!hex) return 0n;
-  if (hex === "0x" || hex === "0X") return 0n;
-  try {
-    return BigInt(hex);
-  } catch {
-    return 0n;
-  }
-}
-
 /**
  * Simulate multiple calls via eth_simulateV1 (sequential, state-persisting).
  * Returns the same SimulationResult as the bytecode-injection approach.
@@ -2233,35 +1893,33 @@ async function simulateViaEthSimulateV1(
   };
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
-
-    const response = await fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    const json = await response.json();
+    const json = await fetchRpcEnvelope(
+      rpcUrl,
+      requestBody.method,
+      requestBody.params,
+      {
+        timeoutMs: 15_000,
+        allowPrivateWithoutOrigin: true,
+      },
+    );
 
     // Check for RPC error (method not found = unsupported)
     if (json.error) {
-      const errMsg = (json.error.message || "").toLowerCase();
+      const rpcError = json.error as Record<string, unknown>;
+      const errMsg = String(rpcError.message || "").toLowerCase();
       if (
         errMsg.includes("method not found") ||
         errMsg.includes("not supported") ||
         errMsg.includes("does not exist") ||
         errMsg.includes("unknown method") ||
-        json.error.code === -32601
+        rpcError.code === -32601
       ) {
         console.log(`[ethSimV1] eth_simulateV1 not supported on chain ${chainId}, caching`);
         setEthSimulateV1Support(chainId, false);
         return null;
       }
       // Other errors — method exists but call failed
-      console.log(`[ethSimV1] RPC error:`, json.error);
+      console.log(`[ethSimV1] RPC error:`, rpcError);
       setEthSimulateV1Support(chainId, true);
       return null;
     }
@@ -2270,102 +1928,21 @@ async function simulateViaEthSimulateV1(
     setEthSimulateV1Support(chainId, true);
 
     // Parse the response
-    const blockResults = json.result;
+    const blockResults = json.result as any;
     if (!blockResults || !Array.isArray(blockResults) || blockResults.length === 0) {
       console.log("[ethSimV1] Empty response");
       return null;
     }
 
     const blockResult = blockResults[0];
-    const callResults = blockResult.calls || [];
+    const callResults = (blockResult.calls || []) as EthSimulateCallResult[];
     console.log(`[ethSimV1] Got ${callResults.length} call results`);
-
-    // Check if all calls succeeded
-    let allSuccess = true;
-    for (const cr of callResults) {
-      if (cr.status !== "0x1") {
-        allSuccess = false;
-      }
-    }
-
-    // Parse Transfer logs to compute net balance changes
-    // tokenAddress → net delta (positive = incoming, negative = outgoing)
-    const tokenDeltas = new Map<string, bigint>();
-    // Addresses that emit Transfer with 4 topics → ERC-721, exclude from ERC-20 deltas
-    const erc721Addresses = new Set<string>();
-    let nativeDelta = 0n;
-
-    for (const cr of callResults) {
-      const logs = cr.logs || [];
-      for (const log of logs) {
-        const topics: string[] = log.topics || [];
-        const address = (log.address || "").toLowerCase();
-        if (topics.length === 0) continue;
-
-        // ERC-20 / ERC-721 Transfer(from, to, value|tokenId)
-        // - ERC-20: 3 indexed topics (sig, from, to), data = amount
-        // - ERC-721: 4 indexed topics (sig, from, to, tokenId), data = "0x"
-        if (topics[0] === TRANSFER_TOPIC) {
-          // ERC-721 — flag the contract and skip; receiver-hook capture in
-          // the bytecode-injection sim handles tokenId/URI/metadata.
-          if (topics.length >= 4) {
-            erc721Addresses.add(address);
-            continue;
-          }
-          if (topics.length < 3) continue;
-
-          const logFrom = "0x" + (topics[1] || "").slice(26).toLowerCase();
-          const logTo = "0x" + (topics[2] || "").slice(26).toLowerCase();
-          const amount = safeHexToBigInt(log.data);
-
-          // Synthetic native transfer (traceTransfers: true) uses 0xeee...e
-          if (address === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee") {
-            if (logFrom === from) nativeDelta -= amount;
-            if (logTo === from) nativeDelta += amount;
-            continue;
-          }
-
-          if (logFrom === from) {
-            const prev = tokenDeltas.get(address) ?? 0n;
-            tokenDeltas.set(address, prev - amount);
-          }
-          if (logTo === from) {
-            const prev = tokenDeltas.get(address) ?? 0n;
-            tokenDeltas.set(address, prev + amount);
-          }
-          continue;
-        }
-
-        // ERC-1155 TransferSingle(operator, from, to, id, value)
-        // topics: [sig, operator, from, to], data = abi.encode(id, value)
-        if (topics[0] === TRANSFER_SINGLE_TOPIC && topics.length >= 4) {
-          // ERC-1155 deltas are tokenId-scoped — skip aggregation here.
-          // The bytecode-injection sim's receiver hooks capture (id, amount).
-          erc721Addresses.add(address);
-          continue;
-        }
-
-        // ERC-1155 TransferBatch — same reasoning, skip aggregation.
-        if (topics[0] === TRANSFER_BATCH_TOPIC && topics.length >= 4) {
-          erc721Addresses.add(address);
-          continue;
-        }
-      }
-    }
-
-    // Drop the synthetic native sentinel and any address we identified as NFT
-    tokenDeltas.delete("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
-    for (const addr of erc721Addresses) tokenDeltas.delete(addr);
-
-    // Filter zero-delta tokens
-    const nonZeroTokens: Address[] = [];
-    const nonZeroDeltas: bigint[] = [];
-    for (const [addr, delta] of tokenDeltas) {
-      if (delta !== 0n) {
-        nonZeroTokens.push(addr as Address);
-        nonZeroDeltas.push(delta);
-      }
-    }
+    const {
+      allSuccess,
+      nativeDelta,
+      tokens: nonZeroTokens,
+      deltas: nonZeroDeltas,
+    } = parseEthSimulateV1CallResults(callResults, from);
 
     console.log(`[ethSimV1] Parsed: native=${nativeDelta}, ${nonZeroTokens.length} token changes`);
 

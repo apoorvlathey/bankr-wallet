@@ -21,6 +21,7 @@ import { resolveTokenMetadata } from "./tokenMetadata";
 import { getRpcUrl } from "./txHandlers";
 import { updateTxInHistory, type AssetChangeRecord, type AssetTransferRecord } from "./txHistoryStorage";
 import { addReceivedToken } from "./recentlyReceivedTokens";
+import { fetchRpcResult } from "./rpcHttpClient";
 
 /**
  * keccak256("Transfer(address,address,uint256)") — ERC-20 Transfer signature.
@@ -61,15 +62,9 @@ async function rpcCall(
   method: string,
   params: unknown[],
 ): Promise<unknown> {
-  const response = await fetch(rpcUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  return fetchRpcResult(rpcUrl, method, params, {
+    allowPrivateWithoutOrigin: true,
   });
-  if (!response.ok) throw new Error(`RPC ${method} HTTP ${response.status}`);
-  const json = await response.json();
-  if (json.error) throw new Error(`RPC ${method}: ${json.error.message}`);
-  return json.result;
 }
 
 async function fetchBalanceAtBlock(

@@ -22,6 +22,16 @@ const KEY = "ensBrowsing";
 export const DEFAULT_GATEWAY_HOST = "localhost";
 export const DEFAULT_GATEWAY_PORT = 8080;
 
+export function isValidGatewayHost(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const host = value.trim().toLowerCase().replace(/\.$/, "");
+  if (!host || host.length > 253 || host.includes("..")) return false;
+  return host.split(".").every(
+    (label) =>
+      /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label),
+  );
+}
+
 export type EnsBrowsingSettings = {
   enabled: boolean;
   useLocalGateway: boolean;
@@ -50,8 +60,8 @@ function normalize(raw: StoredShape | undefined): EnsBrowsingSettings {
   const enabledNew = raw?.enabled;
   const enabledLegacy = raw?.tier1;
   const host =
-    typeof raw?.gatewayHost === "string" && raw.gatewayHost.trim()
-      ? raw.gatewayHost.trim().toLowerCase()
+    isValidGatewayHost(raw?.gatewayHost)
+      ? raw!.gatewayHost!.trim().toLowerCase().replace(/\.$/, "")
       : DEFAULT_GATEWAY_HOST;
   const portRaw = raw?.gatewayPort;
   const port =
@@ -85,6 +95,9 @@ export async function setEnsBrowsingSetting<K extends keyof EnsBrowsingSettings>
   key: K,
   value: EnsBrowsingSettings[K],
 ): Promise<EnsBrowsingSettings> {
+  if (key === "gatewayHost" && !isValidGatewayHost(value)) {
+    throw new Error("Invalid local gateway hostname");
+  }
   const current = await getEnsBrowsingSettings();
   const next: EnsBrowsingSettings = { ...current, [key]: value };
   await chrome.storage.local.set({ [KEY]: next });

@@ -16,6 +16,7 @@ import type {
   Erc7730Descriptor,
 } from "@/lib/clearSigning/types";
 import { resolveProxyImplementation } from "@/chrome/proxyResolver";
+import { fetchJsonBounded } from "./boundedHttpResponse";
 
 const ENABLED_KEY = "cs:enabled";
 const CACHE_PREFIX = "cs:desc:";
@@ -146,8 +147,19 @@ async function fetchDescriptor(
     url.searchParams.set("formatKey", formatKey);
   }
   let res: Response;
+  let data: unknown;
   try {
-    res = await fetch(url.toString(), { method: "GET" });
+    const fetched = await fetchJsonBounded(
+      url,
+      { method: "GET" },
+      {
+        timeoutMs: 10_000,
+        maxBytes: 512 * 1024,
+        invalidMessage: "Clear-signing service returned invalid JSON",
+      },
+    );
+    res = fetched.response;
+    data = fetched.data;
   } catch (err) {
     console.warn("[clear-signing] network error:", err);
     return null;
@@ -157,16 +169,10 @@ async function fetchDescriptor(
     console.warn(`[clear-signing] fetch ${url.toString()} -> ${res.status}`);
     return null;
   }
-  try {
-    const data = await res.json();
-    if (data && typeof data === "object" && "descriptor" in data) {
-      return data.descriptor as Erc7730Descriptor;
-    }
-    return null;
-  } catch (err) {
-    console.warn("[clear-signing] invalid JSON:", err);
-    return null;
+  if (data && typeof data === "object" && "descriptor" in data) {
+    return (data as { descriptor: Erc7730Descriptor }).descriptor;
   }
+  return null;
 }
 
 export interface GetDescriptorMessage {

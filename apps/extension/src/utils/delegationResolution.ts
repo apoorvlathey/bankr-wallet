@@ -28,7 +28,7 @@
  * resolver picks it up via step 1+2 (silent reuse).
  */
 
-import { createPublicClient, http } from "viem";
+import { createPublicClient } from "viem";
 import {
   EIP_7702_DEFAULT_DELEGATE,
   EIP_7702_CODE_PREFIX,
@@ -36,6 +36,7 @@ import {
   VIEM_CHAINS,
 } from "@/constants/chainRegistry";
 import { KNOWN_CHAIN_IDS } from "@/constants/knownChains.generated";
+import { secureHttpTransport } from "@/chrome/rpcHttpClient";
 import { getCustomDelegate } from "@/chrome/delegationStorage";
 
 /**
@@ -93,7 +94,7 @@ function makePublicClient(rpcUrl: string, chainId: number) {
   const chain = VIEM_CHAINS[chainId];
   return createPublicClient({
     chain,
-    transport: http(rpcUrl, { timeout: 8000, retryCount: 1 }),
+    transport: secureHttpTransport(rpcUrl, { timeout: 8000, retryCount: 1 }),
   });
 }
 

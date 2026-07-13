@@ -31,7 +31,7 @@ const storySteps: Array<{
     title: "Know what changes before you sign.",
     body: "Decoded calldata, ERC-7730 descriptors, SIWE parsing, asset-change simulation, and rich history give transactions real context.",
     icon: <Eye size={18} />,
-    accent: palette.green,
+    accent: palette.amberSoft,
     proofs: ["decoded calldata", "asset simulation", "native SIWE"],
   },
   {
@@ -49,7 +49,7 @@ const storySteps: Array<{
     title: "ENS and IPFS feel native in the browser.",
     body: "Resolve ENS contenthashes, open IPFS/IPNS content, and serve onchain pages through a local Kubo node when configured.",
     icon: <Globe2 size={18} />,
-    accent: palette.cyan,
+    accent: palette.blue,
     proofs: ["ENS browsing", "local IPFS", "WalletChan OS"],
   },
   {
@@ -58,7 +58,7 @@ const storySteps: Array<{
     title: "Built-in chains, custom RPCs, same wallet.",
     body: "Users can add any EVM chain while WalletChan surfaces chain-specific UX like Flashblocks where the network supports it.",
     icon: <GitBranch size={18} />,
-    accent: palette.violet,
+    accent: palette.amberSoft,
     proofs: ["custom chains", "Flashblocks", "per-tab network state"],
   },
   {
@@ -118,8 +118,8 @@ export function HeroStorySection() {
         content: '""',
         position: "absolute",
         inset: 0,
-        opacity: 0.72,
-        backgroundImage: "linear-gradient(rgba(255,255,255,0.055) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
+        opacity: 0.46,
+        backgroundImage: "linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.032) 1px, transparent 1px)",
         backgroundSize: "48px 48px",
         pointerEvents: "none",
       }}
@@ -127,7 +127,7 @@ export function HeroStorySection() {
         content: '""',
         position: "absolute",
         inset: 0,
-        background: "linear-gradient(180deg, rgba(7,7,7,0.08) 0%, rgba(7,7,7,0.38) 34%, rgba(7,7,7,0.92) 100%)",
+        background: "linear-gradient(180deg, rgba(9,9,11,0.02) 0%, rgba(9,9,11,0.28) 36%, rgba(9,9,11,0.94) 100%)",
         pointerEvents: "none",
       }}
     >
@@ -182,12 +182,12 @@ function HeroCopy({ active, setRef }: { active: boolean; setRef: (node: HTMLElem
 
   return (
     <VStack id="home" ref={setRef} align={{ base: "center", lg: "flex-start" }} textAlign={{ base: "center", lg: "left" }} spacing={6} minH={{ base: "auto", lg: "820px" }} justify="center" pb={{ base: 16, lg: 12 }}>
-      <ProofPill icon={<Rocket size={15} color={palette.yellow} />} label="Modern wallet ERCs, shipped fast" />
+      <ProofPill icon={<Rocket size={15} color={palette.yellow} />} label="Ethereum UX, shipped early" />
       <Box>
-        <Text as="h1" color={palette.white} fontSize={{ base: "58px", sm: "74px", md: "96px", lg: "110px" }} fontWeight="900" letterSpacing="0" lineHeight="0.86">
+        <Text as="h1" color={palette.white} fontFamily="'Anton', sans-serif" textTransform="uppercase" fontSize={{ base: "54px", sm: "70px", md: "88px", lg: "96px" }} fontWeight="400" letterSpacing="0" lineHeight="0.92">
           WalletChan
         </Text>
-        <Text color={palette.white} fontSize={{ base: "30px", sm: "42px", md: "54px" }} fontWeight="800" letterSpacing="0" lineHeight="1.02" mt={4}>
+        <Text color={palette.white} fontSize={{ base: "30px", sm: "40px", md: "50px" }} fontWeight="600" letterSpacing="0" lineHeight="1.04" mt={4}>
           <GradientText>Sign smarter.</GradientText>
           <br />
           Move faster.
@@ -196,15 +196,15 @@ function HeroCopy({ active, setRef }: { active: boolean; setRef: (node: HTMLElem
       <Text color={palette.muted} fontSize={{ base: "17px", md: "20px" }} lineHeight="1.65" maxW="620px">
         Bundle approvals, preview asset changes, decode calldata, swap and bridge, and browse ENS/IPFS from one open-source browser wallet that moves fast on Ethereum UX.
       </Text>
-      <Button as="a" href={installTarget.href} target="_blank" h="52px" px={7} borderRadius="999px" bg={palette.yellow} color={palette.ink} fontWeight="900" textTransform="none" letterSpacing="0" leftIcon={<Image src={installTarget.iconSrc} alt="" boxSize="22px" />} rightIcon={<ArrowRight size={17} />} _hover={{ bg: palette.white, transform: "translateY(-2px)" }}>
+      <Button as="a" href={installTarget.href} target="_blank" h="50px" px={6} borderRadius="10px" bg={palette.yellow} color={palette.ink} fontWeight="700" textTransform="none" letterSpacing="0" leftIcon={<Image src={installTarget.iconSrc} alt="" boxSize="22px" />} rightIcon={<ArrowRight size={17} />} _hover={{ bg: palette.amberSoft, transform: "translateY(-2px)" }} _active={{ transform: "translateY(0)" }}>
         {installTarget.label}
       </Button>
       <HStack spacing={2} flexWrap="wrap" justify={{ base: "center", lg: "flex-start" }}>
         <ProofPill icon={<Sparkles size={14} color={palette.yellow} />} label="7702 + 5792 + 7730" />
         <ProofPill icon={<Github size={14} color={palette.yellow} />} label="Open source, no tracking" />
-        <ProofPill icon={<Layers3 size={14} color={palette.cyan} />} label="One review, many actions" />
+        <ProofPill icon={<Layers3 size={14} color={palette.blue} />} label="One review, many actions" />
         <ProofPill icon={<Eye size={14} color={palette.green} />} label="Know before you sign" />
-        <ProofPill icon={<Globe2 size={14} color={palette.violet} />} label="Onchain browser mode" />
+        <ProofPill icon={<Globe2 size={14} color={palette.blue} />} label="Onchain browser mode" />
       </HStack>
       <Box display={{ base: "block", lg: "none" }} w="full" pt={4}>
         <StoryMockup active="home" />
@@ -218,13 +218,13 @@ function StoryIntro() {
     <VStack align="flex-start" spacing={4} minH={{ base: "auto", lg: "44vh" }} justify="center" py={{ base: 12, lg: 8 }}>
       <HStack spacing={2} color={palette.yellow}>
         <Sparkles size={16} />
-        <Text fontSize="13px" fontWeight="900" textTransform="uppercase" letterSpacing="0">Product tour</Text>
+        <Text fontSize="13px" fontWeight="700" textTransform="uppercase" letterSpacing="0.04em">Inside WalletChan</Text>
       </HStack>
       <Text color={palette.white} fontSize={{ base: "42px", md: "72px" }} lineHeight="0.92" fontWeight="900" letterSpacing="0" maxW="720px">
-        One wallet surface. Seven product advantages.
+        The wallet Ethereum has been waiting for.
       </Text>
       <Text color={palette.muted} fontSize={{ base: "16px", md: "20px" }} lineHeight="1.75" maxW="640px">
-        The preview does not reset after the hero. It keeps the same wallet surface and morphs into each feature state as the story moves.
+        Less permission fatigue, clearer decisions, and powerful onchain tools that stay close to the action.
       </Text>
     </VStack>
   );
@@ -235,14 +235,14 @@ function StoryStep({ story, index, active, setRef }: { story: (typeof storySteps
     <Box id={story.id} ref={setRef} minH={{ base: "auto", lg: "78vh" }} display="flex" alignItems="center" py={{ base: 12, lg: 16 }}>
       <VStack align="flex-start" spacing={5} opacity={{ base: 1, lg: active ? 1 : 0.52 }} transition="opacity 0.25s ease">
         <HStack spacing={3}>
-          <HStack w="42px" h="42px" borderRadius="15px" justify="center" color={story.accent} bg={`${story.accent}18`} border="1px solid rgba(255,255,255,0.12)">
+          <HStack w="40px" h="40px" borderRadius="10px" justify="center" color={story.accent} bg={`${story.accent}12`} border="1px solid rgba(255,255,255,0.10)">
             {story.icon}
           </HStack>
-          <Text color={active ? story.accent : palette.faint} fontSize="13px" fontWeight="900" textTransform="uppercase" letterSpacing="0">
+          <Text color={active ? story.accent : palette.faint} fontSize="12px" fontWeight="700" textTransform="uppercase" letterSpacing="0.04em">
             {String(index + 1).padStart(2, "0")} / {story.eyebrow}
           </Text>
         </HStack>
-        <Text color={palette.white} fontSize={{ base: "34px", md: "58px" }} lineHeight="0.98" fontWeight="900" letterSpacing="0" maxW="680px">
+        <Text color={palette.white} fontSize={{ base: "34px", md: "56px" }} lineHeight="1.02" fontWeight="700" letterSpacing="0" maxW="680px">
           {story.title}
         </Text>
         <Text color={palette.muted} fontSize={{ base: "16px", md: "20px" }} lineHeight="1.75" maxW="620px">
@@ -250,7 +250,7 @@ function StoryStep({ story, index, active, setRef }: { story: (typeof storySteps
         </Text>
         <HStack spacing={2} flexWrap="wrap">
           {story.proofs.map((proof) => (
-            <Text key={proof} px={3} py={1.5} borderRadius="999px" bg={active ? `${story.accent}18` : "rgba(255,255,255,0.07)"} color={active ? palette.white : palette.muted} border="1px solid rgba(255,255,255,0.12)" fontSize="12px" fontWeight="900">
+            <Text key={proof} px={3} py={1.5} borderRadius="999px" bg={active ? `${story.accent}10` : palette.ink2} color={active ? palette.white : palette.muted} border="1px solid rgba(255,255,255,0.10)" fontSize="12px" fontWeight="700">
               {proof}
             </Text>
           ))}
@@ -270,16 +270,16 @@ function V2Nav() {
   return (
     <Box as="header" position="absolute" top={0} left={0} right={0} zIndex={20} px={{ base: 4, md: 8 }} py={4}>
       <Container maxW="7xl" px={0}>
-        <Flex {...glass} borderRadius="24px" minH="64px" px={{ base: 3, md: 5 }} align="center" justify="space-between">
+        <Flex {...glass} borderRadius="12px" minH="62px" px={{ base: 3, md: 4 }} align="center" justify="space-between">
           <Link href="/" _hover={{ textDecoration: "none" }}><WalletMark /></Link>
           <HStack spacing={7} display={{ base: "none", md: "flex" }}>
             {navItems.map((item) => <Link key={item.href} href={item.href} color={palette.muted} fontSize="14px" fontWeight="700" _hover={{ color: palette.white, textDecoration: "none" }}>{item.label}</Link>)}
           </HStack>
           <HStack spacing={2}>
-            <Button as="a" href={installTarget.href} target="_blank" bg={palette.white} color={palette.ink} borderRadius="999px" px={{ base: 4, md: 5 }} h="42px" fontSize="14px" fontWeight="900" textTransform="none" letterSpacing="0" leftIcon={<Image src={installTarget.iconSrc} alt="" boxSize="18px" />} _hover={{ bg: palette.yellow, transform: "translateY(-1px)" }} _active={{ transform: "scale(0.98)" }}>
+            <Button as="a" href={installTarget.href} target="_blank" bg={palette.yellow} color={palette.ink} borderRadius="8px" px={{ base: 4, md: 5 }} h="40px" fontSize="14px" fontWeight="700" textTransform="none" letterSpacing="0" leftIcon={<Image src={installTarget.iconSrc} alt="" boxSize="18px" />} _hover={{ bg: palette.amberSoft, transform: "translateY(-1px)" }} _active={{ transform: "scale(0.98)" }}>
               {installTarget.navLabel}
             </Button>
-            <IconButton aria-label={open ? "Close menu" : "Open menu"} display={{ base: "inline-flex", md: "none" }} icon={open ? <X size={18} /> : <Menu size={18} />} onClick={() => setOpen((value) => !value)} borderRadius="14px" bg="rgba(255,255,255,0.08)" color={palette.white} _hover={{ bg: "rgba(255,255,255,0.14)" }} />
+            <IconButton aria-label={open ? "Close menu" : "Open menu"} display={{ base: "inline-flex", md: "none" }} icon={open ? <X size={18} /> : <Menu size={18} />} onClick={() => setOpen((value) => !value)} borderRadius="8px" bg={palette.ink3} color={palette.white} _hover={{ bg: "rgba(255,255,255,0.14)" }} />
           </HStack>
         </Flex>
         {open && (
@@ -295,23 +295,23 @@ function V2Nav() {
 function WalletMark() {
   return (
     <HStack spacing={3}>
-      <Flex w={{ base: "38px", md: "42px" }} h={{ base: "38px", md: "42px" }} borderRadius="14px" bg="rgba(255,255,255,0.1)" border="1px solid rgba(255,255,255,0.16)" align="center" justify="center">
+      <Flex w={{ base: "38px", md: "40px" }} h={{ base: "38px", md: "40px" }} borderRadius="8px" bg={palette.white} border="1px solid rgba(255,255,255,0.16)" align="center" justify="center">
         <Image src="/images/walletchan-icon-nobg.png" alt="WalletChan" w="30px" h="30px" />
       </Flex>
-      <Text color={palette.white} fontWeight="900" fontSize={{ base: "18px", md: "20px" }} letterSpacing="0">WalletChan</Text>
+      <Text color={palette.white} fontFamily="'Anton', sans-serif" textTransform="uppercase" fontWeight="400" fontSize={{ base: "20px", md: "22px" }} letterSpacing="0">WalletChan</Text>
     </HStack>
   );
 }
 
 function GradientText({ children }: { children: React.ReactNode }) {
-  return <Box as="span" bgGradient={`linear(90deg, ${palette.white}, ${palette.yellow}, ${palette.cyan})`} bgClip="text" color="transparent">{children}</Box>;
+  return <Box as="span" color={palette.yellow}>{children}</Box>;
 }
 
 function ProofPill({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <HStack spacing={2} px={3} py={2} borderRadius="999px" bg="rgba(255,255,255,0.07)" border="1px solid rgba(255,255,255,0.12)" color={palette.white}>
+    <HStack spacing={2} px={3} py={2} borderRadius="999px" bg={palette.ink2} border="1px solid rgba(255,255,255,0.10)" color={palette.white}>
       {icon}
-      <Text fontSize={{ base: "12px", md: "13px" }} fontWeight="800" whiteSpace="nowrap">{label}</Text>
+      <Text fontSize={{ base: "12px", md: "13px" }} fontWeight="600" whiteSpace="nowrap">{label}</Text>
     </HStack>
   );
 }

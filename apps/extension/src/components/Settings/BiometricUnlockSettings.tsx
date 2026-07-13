@@ -26,6 +26,7 @@ type ViewMode = "status" | "setup" | "remove";
 
 interface PasskeyUnlockStatus {
   configured: boolean;
+  mnemonicCapable?: boolean;
 }
 
 function BiometricUnlockSettings({
@@ -34,6 +35,7 @@ function BiometricUnlockSettings({
 }: BiometricUnlockSettingsProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("status");
   const [isConfigured, setIsConfigured] = useState(false);
+  const [isMnemonicCapable, setIsMnemonicCapable] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [passwordType, setPasswordType] = useState<"master" | "agent" | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,6 +58,7 @@ function BiometricUnlockSettings({
       ]);
 
       setIsConfigured(!!statusResponse?.configured);
+      setIsMnemonicCapable(!!statusResponse?.mnemonicCapable);
       setIsSupported(supported);
       setPasswordType(typeResponse.passwordType);
     } finally {
@@ -64,6 +67,7 @@ function BiometricUnlockSettings({
   };
 
   const isAgentSession = passwordType === "agent";
+  const needsSeedAccessUpgrade = isConfigured && !isMnemonicCapable;
 
   if (isLoading) {
     return (
@@ -116,13 +120,24 @@ function BiometricUnlockSettings({
       primaryAction={
         !isAgentSession && isSupported ? (
           <Button
-            variant={isConfigured ? "danger" : "brand"}
+            variant={
+              needsSeedAccessUpgrade
+                ? "brand"
+                : isConfigured
+                  ? "danger"
+                  : "brand"
+            }
             onClick={() => {
-              if (isConfigured) setViewMode("remove");
+              if (needsSeedAccessUpgrade) setViewMode("setup");
+              else if (isConfigured) setViewMode("remove");
               else setViewMode("setup");
             }}
           >
-            {isConfigured ? "Remove biometric unlock" : "Enable biometric unlock"}
+            {needsSeedAccessUpgrade
+              ? "Upgrade biometric unlock"
+              : isConfigured
+                ? "Remove biometric unlock"
+                : "Enable biometric unlock"}
           </Button>
         ) : undefined
       }
@@ -143,6 +158,36 @@ function BiometricUnlockSettings({
             <Text fontSize="sm" lineHeight="1.5">
               Unlock with the master password to manage biometric unlock.
             </Text>
+          </HStack>
+        )}
+
+        {needsSeedAccessUpgrade && !isAgentSession && (
+          <HStack
+            align="start"
+            spacing={3}
+            bg="status.warning.tint"
+            color="status.warning.fg"
+            border="1px solid"
+            borderColor="status.warning.border"
+            borderRadius="md"
+            p={3}
+          >
+            <WarningIcon mt={0.5} flexShrink={0} />
+            <VStack align="start" spacing={2}>
+              <Text fontSize="sm" lineHeight="1.5">
+                This older biometric setup can unlock signing accounts, but it
+                cannot create, import, derive, or reveal seed phrases. Upgrade
+                it with your master password to protect seed access too.
+              </Text>
+              <Button
+                size="xs"
+                variant="ghost"
+                color="fg.secondary"
+                onClick={() => setViewMode("remove")}
+              >
+                Remove instead
+              </Button>
+            </VStack>
           </HStack>
         )}
 
@@ -192,10 +237,12 @@ function BiometricUnlockSettings({
             Access level
           </Text>
           <Text fontSize="md" fontWeight="600" mb={1}>
-            Full master session
+            {needsSeedAccessUpgrade ? "Signing access only" : "Full master session"}
           </Text>
           <Text fontSize="sm" color="fg.secondary" lineHeight="1.5">
-            Same access as unlocking with your master password.
+            {needsSeedAccessUpgrade
+              ? "Upgrade to enable master-protected seed phrase actions."
+              : "Same access as unlocking with your master password."}
           </Text>
         </Box>
       </VStack>

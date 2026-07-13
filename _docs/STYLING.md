@@ -197,7 +197,8 @@ The full architecture, phased rollout history, and design decisions are in
 ## Midnight V2 Foundation
 
 Midnight follows the durable product direction in `DESIGN.md`: warm financial
-confidence, mobile-first hierarchy, and a blue transactional action family. Its neutral
+confidence, mobile-first hierarchy, and a blue interaction family with an amber
+final transaction commitment. Its neutral
 surface ramp is `#09090B` → `#111113` → `#18181B`; violet is not a general
 action/focus color. Resting cards and buttons are shadowless. Elevation comes
 from surface lightness, hairline borders, and a neutral shadow only on genuine
@@ -213,11 +214,13 @@ semantic colors, radii, shadows, globals, and component recipes. Midnight uses:
 - Explicit property transitions rather than `transition: all`.
 - Sentence-case labels and weights 400–700; weight 900 remains a Bauhaus tool.
 - Alpha status washes with foreground pairs verified at WCAG AA.
-- The `brand` Button variant is the deliberate amber exception. Reserve it for
-  product-entry and mascot-led brand commitment actions such as Unlock; normal
-  transactions, confirmations, focus, and selection remain blue.
+- The `brand` Button variant is the deliberate amber commitment treatment. Use
+  it for product-entry and mascot-led commitments such as Unlock, and for the
+  final single-transaction `Confirm` action. That Confirm button must not use
+  the blue `primary` variant. Focus, links, selection, and ordinary
+  transactional controls remain blue.
 
-`tests/themeContrast.test.ts` protects the core text, action, and status pairs.
+`tests/ui/themeContrast.test.ts` protects the core text, action, and status pairs.
 Use `/preview/components` for the interactive state matrix and the production
 routes for composition checks.
 

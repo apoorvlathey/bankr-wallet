@@ -16,6 +16,7 @@ import {
   WarningTwoIcon,
 } from "@chakra-ui/icons";
 import { Message } from "@/chrome/chatStorage";
+import { sanitizeExternalNavigationUrl } from "@/lib/externalNavigation";
 import ShapesLoader from "./ShapesLoader";
 
 const URL_REGEX = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g;
@@ -27,12 +28,13 @@ function parseContentWithLinks(
   const parts = content.split(URL_REGEX);
 
   return parts.map((part, index) => {
-    if (URL_REGEX.test(part)) {
+    const safeUrl = sanitizeExternalNavigationUrl(part);
+    if (safeUrl) {
       URL_REGEX.lastIndex = 0;
       return (
         <Link
           key={index}
-          href={part}
+          href={safeUrl}
           isExternal
           color={linkColor}
           textDecoration="underline"
@@ -42,7 +44,7 @@ function parseContentWithLinks(
           _hover={{ opacity: 0.8 }}
           onClick={(event) => {
             event.preventDefault();
-            chrome.tabs.create({ url: part });
+            chrome.tabs.create({ url: safeUrl });
           }}
         >
           {part}

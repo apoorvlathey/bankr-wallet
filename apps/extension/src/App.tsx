@@ -37,6 +37,7 @@ import HomeQuickActions from "@/components/HomeQuickActions";
 import HomeDappDock, {
   type ActiveDappConnectionContext,
 } from "@/components/HomeDappDock";
+import type { PortfolioChainRelinkRequest } from "@/components/portfolioChainFilterState";
 
 /**
  * Detects if we're running in Arc browser using CSS variable
@@ -291,6 +292,9 @@ function App() {
   const [activityTabTrigger, setActivityTabTrigger] = useState(0);
   const [holdingsTabTrigger, setHoldingsTabTrigger] = useState(0);
   const [portfolioRefreshTrigger, setPortfolioRefreshTrigger] = useState(0);
+  const [portfolioChainRelinkRequest, setPortfolioChainRelinkRequest] =
+    useState<PortfolioChainRelinkRequest | null>(null);
+  const portfolioChainRelinkRevisionRef = useRef(0);
   // Set by navigateToAdjacentRequest when the popup has already pre-switched
   // to an adjacent pending request. The async onRejected/onCancelled handlers
   // consume & reset this flag so they skip their fallback routing (which
@@ -346,12 +350,36 @@ function App() {
   const visibleRpcIssueChainNames = visibleRpcIssueChainIds
     .map((chainId) => getResolvedChainById(chainId, networksInfo)?.name)
     .filter((name): name is string => !!name);
-  const handleHomepageChainSelect = useCallback((nextChainName: string) => {
-    if (!chainName) {
-      setReloadRequired(true);
-    }
-    setChainName(nextChainName);
-  }, [chainName, setChainName, setReloadRequired]);
+  const requestPortfolioChainRelink = useCallback(
+    (tabId: number, chainId: number) => {
+      portfolioChainRelinkRevisionRef.current += 1;
+      setPortfolioChainRelinkRequest({
+        revision: portfolioChainRelinkRevisionRef.current,
+        tabId,
+        chainId,
+      });
+    },
+    [],
+  );
+  const handleHomepageChainSelect = useCallback(
+    (nextChainName: string) => {
+      if (!chainName) {
+        setReloadRequired(true);
+      }
+      const nextChain = getResolvedChainByName(nextChainName, networksInfo);
+      if (activeDappContext?.connected && nextChain) {
+        requestPortfolioChainRelink(activeDappContext.tabId, nextChain.chainId);
+      }
+      setChainName(nextChainName);
+    },
+    [
+      activeDappContext,
+      chainName,
+      networksInfo,
+      requestPortfolioChainRelink,
+      setReloadRequired,
+    ],
+  );
   const {
     isOpen: isQROpen,
     onOpen: onQROpen,
@@ -1183,6 +1211,7 @@ function App() {
         sessions?: WalletConnectSessionSummary[];
         activeChainId?: number | null;
         chainId?: number;
+        tabId?: number;
       },
       _sender: chrome.runtime.MessageSender,
       sendResponse: (response?: any) => void,
@@ -1343,6 +1372,20 @@ function App() {
       }
       if (message.type === "dappPermissionsChanged") {
         void loadActiveDappContext();
+        return;
+      }
+      const relinkTabId = message.tabId;
+      const relinkChainId = message.chainId;
+      if (
+        message.type === "portfolioDappChainChanged" &&
+        typeof relinkTabId === "number" &&
+        Number.isInteger(relinkTabId) &&
+        relinkTabId >= 0 &&
+        typeof relinkChainId === "number" &&
+        Number.isInteger(relinkChainId) &&
+        relinkChainId > 0
+      ) {
+        requestPortfolioChainRelink(relinkTabId, relinkChainId);
         return;
       }
       // Return undefined for unrecognized messages — critical so this listener
@@ -1689,7 +1732,7 @@ function App() {
         chrome.tabs
           .sendMessage(tab.id!, {
             type: "setChainId",
-            msg: { chainName: chain.name, chainId: chain.chainId, rpcUrl: chain.rpcUrl },
+            msg: { chainName: chain.name, chainId: chain.chainId },
           })
           .catch(() => {
             // Ignore errors if content script not injected (e.g. chrome:// pages)
@@ -1860,6 +1903,10 @@ function App() {
         setShowUnlockMascotSuccess(false);
         setIsWalletUnlocked(false);
         setPasswordType(null);
+        // Bankr credentials are renderer secrets too. Never carry an edited
+        // draft across a lock boundary where the next session could be an
+        // agent-password session that is forbidden from reading the API key.
+        setAccountSettingsApiKeyDraft(null);
         setSuppressPasskeyAutoPrompt(
           message.suppressPasskeyAutoPrompt === true,
         );
@@ -2311,6 +2358,7 @@ function App() {
     unlockReturnTargetRef.current = target;
     isWalletUnlockedRef.current = false;
     unlockRouteHandledRef.current = false;
+    setAccountSettingsApiKeyDraft(null);
     setIsWalletUnlocked(false);
     setView("unlock");
   }, []);
@@ -2573,11 +2621,10 @@ function App() {
                       const { autoLockTimeout } =
                         await chrome.storage.sync.get("autoLockTimeout");
 
-                      if (
-                        autoLockTimeout === 0 ||
-                        autoLockTimeout === undefined
-                      ) {
-                        // Auto-lock is "Never" - try session restoration
+                      if (autoLockTimeout === 0) {
+                        // An explicitly selected "Never" timeout permits
+                        // session restoration. A missing setting uses the
+                        // finite security default and must stay locked.
                         const restored = await sendMessageWithRetry<boolean>({
                           type: "tryRestoreSession",
                         });
@@ -3166,6 +3213,17 @@ function App() {
       (r) => r.type === "batch" && r.request.id === selectedBatchRequest.id,
     );
     const totalCount = combinedRequests.length;
+    const storedBatchAccount = selectedBatchRequest.accountId
+      ? accounts.find((account) => account.id === selectedBatchRequest.accountId)
+      : undefined;
+    const batchAccountAddress =
+      selectedBatchRequest.accountAddress ??
+      storedBatchAccount?.address ??
+      (selectedBatchRequest.accountId ? "" : address);
+    const batchAccountType =
+      selectedBatchRequest.accountType ??
+      storedBatchAccount?.type ??
+      (selectedBatchRequest.accountId ? undefined : activeAccount?.type);
     return (
       <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
         <Box
@@ -3183,8 +3241,8 @@ function App() {
               currentIndex={currentIndex >= 0 ? currentIndex : 0}
               totalCount={totalCount}
               isInSidePanel={isInSidePanel || isFullscreenTab}
-              accountType={selectedBatchRequest.accountType ?? activeAccount?.type}
-              accountAddress={address}
+              accountType={batchAccountType}
+              accountAddress={batchAccountAddress}
               crossDappBatch={crossDappBatch}
               onAddedToBatch={() => {
                 setSelectedBatchRequest(null);
@@ -4007,6 +4065,12 @@ function App() {
                     ? selectedChain?.chainId ?? null
                     : null
                 }
+                connectedDappTabId={
+                  activeDappContext?.connected
+                    ? activeDappContext.tabId
+                    : null
+                }
+                chainRelinkRequest={portfolioChainRelinkRequest}
                 onChainBalancesChange={handleHomeChainBalancesChange}
                 onHideTokens={() => setView("hideTokens")}
                 quickActions={

@@ -1,5 +1,5 @@
 import { Box, Button, HStack, Link, Spinner, Text, VStack } from "@chakra-ui/react";
-import { CheckIcon, LockIcon } from "@chakra-ui/icons";
+import { CheckIcon, LockIcon, WarningIcon } from "@chakra-ui/icons";
 import { TWITTER_URL } from "@/constants/externalUrls";
 import { OnboardingCanvas, OnboardingFooter, OnboardingHeader } from "./OnboardingShell";
 
@@ -33,6 +33,42 @@ export function OnboardingLoading() {
         <Text color="fg.secondary" fontSize="sm">
           Checking your wallet setup…
         </Text>
+      </VStack>
+    </OnboardingCanvas>
+  );
+}
+
+export function OnboardingRecoveryError({ message }: { message: string }) {
+  return (
+    <OnboardingCanvas header={<OnboardingHeader />}>
+      <VStack
+        minH={{ base: "420px", sm: "520px" }}
+        justify="center"
+        align="stretch"
+        spacing={5}
+      >
+        <Box
+          p={5}
+          bg="status.warning.bg"
+          border="1px solid"
+          borderColor="status.warning.border"
+          borderRadius="xl"
+        >
+          <HStack align="start" spacing={3}>
+            <WarningIcon mt={1} color="status.warning.fg" flexShrink={0} />
+            <VStack align="start" spacing={2}>
+              <Text as="h1" fontSize="lg" fontWeight="700">
+                Wallet setup needs recovery
+              </Text>
+              <Text color="fg.secondary" fontSize="sm" lineHeight="1.55">
+                {message}
+              </Text>
+              <Text color="fg.secondary" fontSize="sm" lineHeight="1.55">
+                WalletChan will not overwrite or delete this data automatically.
+              </Text>
+            </VStack>
+          </HStack>
+        </Box>
       </VStack>
     </OnboardingCanvas>
   );

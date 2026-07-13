@@ -10,6 +10,7 @@ import {
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { SettingsScreenFrame } from "./SettingsScreenFrame";
+import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from "@/constants/securityPolicy";
 
 interface AutoLockSettingsProps {
   onComplete: () => void;
@@ -27,7 +28,7 @@ const TIMEOUT_OPTIONS = [
   { label: "Never", value: 0 },
 ];
 
-const DEFAULT_TIMEOUT = 0; // Never (infinite) by default
+const DEFAULT_TIMEOUT = DEFAULT_AUTO_LOCK_TIMEOUT_MS;
 
 function AutoLockSettings({ onCancel }: AutoLockSettingsProps) {
   const [timeout, setTimeout] = useState<number>(DEFAULT_TIMEOUT);
@@ -66,7 +67,7 @@ function AutoLockSettings({ onCancel }: AutoLockSettingsProps) {
       <VStack spacing={6} align="stretch">
         <FormControl>
           <FormLabel htmlFor="auto-lock-timeout" mb={2}>
-            Lock after inactivity
+            Inactivity timeout
           </FormLabel>
           <Select
             id="auto-lock-timeout"
@@ -98,11 +99,12 @@ function AutoLockSettings({ onCancel }: AutoLockSettingsProps) {
                 fontWeight="600"
                 mb={1}
               >
-                Auto-lock is off
+                No inactivity timeout
               </Text>
               <Text color="fg.secondary" fontSize="sm" lineHeight="1.5">
-                WalletChan will stay unlocked until you lock it manually or
-                close the browser.
+                WalletChan will not lock because of inactivity. A browser or
+                service-worker restart may still require you to unlock again,
+                especially with biometric unlock or Firefox.
               </Text>
             </Box>
           </VStack>

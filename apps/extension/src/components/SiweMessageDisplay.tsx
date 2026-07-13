@@ -7,7 +7,6 @@ import {
   HStack,
   IconButton,
   Button,
-  Image,
   Text,
   VStack,
   usePrefersReducedMotion,
@@ -18,6 +17,7 @@ import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { SiweValidationIssues } from "@/components/SiweValidationIssues";
+import SafeImage from "@/components/SafeImage";
 import { getChainConfig } from "@/constants/chainConfig";
 import type { SiweAnalysis } from "@/lib/siwe";
 import { useTheme } from "@/theme";
@@ -192,18 +192,12 @@ export default function SiweMessageDisplay({
                       justifyContent="center"
                       flexShrink={0}
                     >
-                      <Image
+                      <SafeImage
                         src={faviconUrl}
+                        fallbackSrc={fallbackFaviconUrl}
                         alt=""
                         boxSize="20px"
                         fallback={<Box boxSize="20px" bg="surface.sunken" borderRadius="sm" />}
-                        onError={(event) => {
-                          if (!fallbackFaviconUrl) return;
-                          const target = event.target as HTMLImageElement;
-                          if (target.src !== fallbackFaviconUrl) {
-                            target.src = fallbackFaviconUrl;
-                          }
-                        }}
                       />
                     </Box>
                   )}

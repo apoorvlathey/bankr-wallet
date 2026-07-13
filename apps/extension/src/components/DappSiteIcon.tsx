@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { Box, Image, Text } from "@chakra-ui/react";
 import { isDarkThemeId, useTheme } from "@/theme";
+import {
+  INERT_IMAGE_SRC,
+  useCachedAvatarSrc,
+} from "@/hooks/useCachedAvatarSrc";
 
 interface DappSiteIconProps {
   src?: string | null;
@@ -20,11 +24,12 @@ export default function DappSiteIcon({
   imageSize = "24px",
 }: DappSiteIconProps) {
   const [failed, setFailed] = useState(false);
+  const safeSrc = useCachedAvatarSrc(src);
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
-  const showImage = !!src && !failed;
+  const showImage = !!safeSrc && safeSrc !== INERT_IMAGE_SRC && !failed;
 
-  useEffect(() => setFailed(false), [src]);
+  useEffect(() => setFailed(false), [safeSrc]);
 
   return (
     <Box
@@ -41,7 +46,7 @@ export default function DappSiteIcon({
     >
       {showImage ? (
         <Image
-          src={src || undefined}
+          src={safeSrc || undefined}
           alt=""
           boxSize={imageSize}
           objectFit="contain"

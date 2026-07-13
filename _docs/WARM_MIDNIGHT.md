@@ -82,10 +82,13 @@ identity assets, and blue reserved for transactional/focus roles.
 
 - Neutral graphite surfaces carry most of the interface.
 - Amber is WalletChan's brand signature. Use it for the brand Unlock action,
-  selected Warm Midnight accents, the emphasized homepage Send shortcut, and
-  small identity/attention moments.
+  selected Warm Midnight accents, the emphasized homepage Send shortcut, the
+  final single-transaction `Confirm` action, the EIP-7702 `Set delegate`
+  commitment action, and small identity/attention moments.
 - Blue remains the default transactional, selection, link, and focus family
-  unless a surface has received an explicit Warm Midnight exception.
+  unless a surface has received an explicit Warm Midnight exception. The final
+  single-transaction `Confirm` button is one such exception and must use the
+  amber `brand` variant, not `primary`.
 - Green and red are semantic gain/receive and loss/send/error colors.
 - Chain, token, protocol, account, and dapp artwork keeps its real colors.
 - Amber must not fill every action. Its scarcity is what makes WalletChan
@@ -432,6 +435,48 @@ Aggregate row behavior:
 - Long custom-network and testnet names remain readable.
 - Chain logos are round and receive a visibility chip where needed.
 
+### 5.13 Add account
+
+- The root Add account screen is a concise 2-by-2 account-type launcher.
+- Private key, seed phrase, Bankr API, and view-only setup each open as a
+  focused child screen with their own title, fields, validation, and action.
+- Back from a type-specific screen returns to the account-type launcher; Back
+  from the launcher returns to the account list.
+- Keep Bankr visibly unavailable when a Bankr account already exists, without
+  hiding the account type.
+- Keep the launcher surfaces neutral, with restrained semantic color confined
+  to the account-type icons. Bankr uses its real product mark rather than a
+  generic bot glyph.
+- Seed phrase setup continues to expose saved seed groups for deriving another
+  address before offering a new phrase flow. When no saved group exists,
+  selecting Seed phrase opens the import-or-create choice directly instead of
+  showing an empty interstitial.
+- Final account-creation actions use the amber brand treatment. Validation,
+  encryption, and background account handlers remain unchanged.
+
+### 5.14 Transaction review
+
+- The screen follows one decision path: expected outcome, estimated balance
+  changes, request details, then advanced tooling.
+- The outcome uses one quiet raised surface with the requesting dapp identity.
+  A small amber marker supplies WalletChan warmth without competing with the
+  blue Confirm action.
+- Request details read as a compact ledger with sentence-case labels, neutral
+  network identity, row separators, and no nested address card.
+- Asset direction remains explicit in text and signed amounts. Do not use a
+  decorative colored rail beside every asset row.
+- Gas, calldata, digest, and Tenderly controls remain behind Advanced details.
+  Technical surfaces use defined edges without resting shadows. Midnight's
+  active calldata tab uses a thin amber rule rather than a second filled action
+  color.
+- The final single-transaction `Confirm` button uses `variant="brand"` so the
+  commit action is WalletChan amber. Do not replace it with the blue `primary`
+  variant during confirmation refactors. Reject remains the neutral secondary
+  action.
+- Preserve every simulation warning, copy/explorer affordance, pending-request
+  control, force-inclusion option, and Bankr/private-key/seed-phrase execution
+  path while changing this composition.
+
 ## 6. Logic and safety guardrails
 
 Warm Midnight work is presentation-first. Do not casually change:
@@ -477,7 +522,7 @@ Every displayed `0x` address still follows the repository standard:
 | Homepage responsive/focus final pass | Pending | Do only after visual composition is locked |
 | Send | Mobile baseline exists; Warm Midnight review pending | Handle as its own fresh session |
 | Swap/Bridge | Mobile baseline exists; Warm Midnight review pending | Handle as its own fresh session |
-| Confirmations and signing | Mobile baseline exists; Warm Midnight review pending | Preserve information-first trust hierarchy |
+| Confirmations and signing | Transaction review implemented; signing review pending | Transaction uses the Warm Midnight decision path; preserve information-first trust hierarchy |
 | Settings/account management | Mobile baseline exists; Warm Midnight review pending | Review by leaf surface, not as one large rewrite |
 
 Recommended immediate order:

@@ -871,3 +871,22 @@ const { href, homeHref, isOnPage } = useSiteNav();
 <Link href={homeHref}>Home</Link>             // "/" on path hosts, "https://walletchan.com" on subdomains
 const isOnStake = isOnPage("/stake");         // true on /stake paths OR stake.walletchan.com
 ```
+
+## Homepage Warm Midnight projection
+
+The experimental homepage in `apps/website/app/home-v2` follows the extension's
+approved Warm Midnight direction. The extension production UI remains the
+visual source of truth for its 3D product mockups.
+
+- Website and mockup colors come from `home-v2/design.ts`; do not add a second
+  local navy, violet, or legacy Bauhaus palette to a preview.
+- The default wallet mock mirrors the compact app header, account identity,
+  portfolio balance, curved semantic chart, equal quick actions, tabs, asset
+  controls, and thin holding rows.
+- Do not restore the old permanent `$WCHAN`/WalletChan OS strip or a global
+  homepage network selector inside the mock.
+- Amber is the brand/action emphasis, blue is transactional, green/red are
+  semantic value colors, and graphite surface lightness carries hierarchy.
+- Three-dimensional depth remains a website storytelling device, but the
+  components projected into that depth retain the extension's thin borders,
+  restrained radii, and compact typography.

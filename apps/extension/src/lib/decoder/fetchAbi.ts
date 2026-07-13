@@ -1,5 +1,6 @@
 import { InterfaceAbi } from "ethers";
 import { SOURCIFY_BASE } from "@/constants/externalUrls";
+import { fetchJsonBounded } from "@/chrome/boundedHttpResponse";
 
 interface SourcifyResponse {
   abi?: any[];
@@ -22,29 +23,43 @@ export async function fetchContractAbi({
   address: string;
   chainId: number;
 }): Promise<{ abi: InterfaceAbi; name: string }> {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address) || !Number.isSafeInteger(chainId) || chainId <= 0) {
+    throw new Error("Invalid contract ABI lookup target");
+  }
   const url = `${SOURCIFY_BASE}/${chainId}/${address}?fields=abi,compilation.name,proxyResolution`;
-  const res = await fetch(url);
+  const { response: res, data } = await fetchJsonBounded(
+    url,
+    { method: "GET" },
+    { timeoutMs: 8_000, maxBytes: 4 * 1024 * 1024 },
+  );
 
   if (!res.ok) {
     throw new Error(`Failed to fetch ABI for ${address} on chain ${chainId}`);
   }
 
-  const data: SourcifyResponse = await res.json();
+  const parsed = data as SourcifyResponse;
 
-  if (!data.abi || data.abi.length === 0) {
+  if (!parsed.abi || parsed.abi.length === 0) {
     throw new Error(`No ABI found for ${address} on chain ${chainId}`);
   }
 
-  const name = data.compilation?.name ?? "";
+  const name = parsed.compilation?.name ?? "";
 
   // If proxy, fetch the implementation's ABI
-  if (data.proxyResolution?.isProxy && data.proxyResolution.implementations?.length) {
-    const impl = data.proxyResolution.implementations[0];
+  if (parsed.proxyResolution?.isProxy && parsed.proxyResolution.implementations?.length) {
+    const impl = parsed.proxyResolution.implementations[0];
     try {
+      if (!/^0x[0-9a-fA-F]{40}$/.test(impl.address)) {
+        throw new Error("Invalid proxy implementation address");
+      }
       const implUrl = `${SOURCIFY_BASE}/${chainId}/${impl.address}?fields=abi,compilation.name`;
-      const implRes = await fetch(implUrl);
+      const { response: implRes, data: implPayload } = await fetchJsonBounded(
+        implUrl,
+        { method: "GET" },
+        { timeoutMs: 8_000, maxBytes: 4 * 1024 * 1024 },
+      );
       if (implRes.ok) {
-        const implData: SourcifyResponse = await implRes.json();
+        const implData = implPayload as SourcifyResponse;
         if (implData.abi && implData.abi.length > 0) {
           return {
             abi: implData.abi,
@@ -57,5 +72,5 @@ export async function fetchContractAbi({
     }
   }
 
-  return { abi: data.abi, name };
+  return { abi: parsed.abi, name };
 }

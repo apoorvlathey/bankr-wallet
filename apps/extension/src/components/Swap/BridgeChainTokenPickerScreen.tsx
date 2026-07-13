@@ -16,6 +16,7 @@ import {
 import type { PortfolioToken } from "@/chrome/portfolioApi";
 import type { EnrichedBridgeChain } from "@/chrome/bridgeChainsResolver";
 import ChainIcon from "@/components/ChainIcon";
+import SafeImage from "@/components/SafeImage";
 import {
   FullScreenPicker,
   FullScreenPickerEmpty,
@@ -103,7 +104,7 @@ function ChainLogo({
       flexShrink={0}
       overflow="hidden"
     >
-      <Image
+      <SafeImage
         src={iconUrl}
         alt=""
         boxSize={size}

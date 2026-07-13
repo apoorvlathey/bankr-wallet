@@ -1083,7 +1083,7 @@ function AddressInline({ address, chainId }: { address: string; chainId: number 
       minW="14px"
       h="14px"
       color="fg.muted"
-      onClick={() => window.open(explorerUrl, "_blank")}
+      onClick={() => window.open(explorerUrl, "_blank", "noopener,noreferrer")}
     />
   ) : null;
 

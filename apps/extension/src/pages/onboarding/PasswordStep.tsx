@@ -13,6 +13,10 @@ import {
 } from "@chakra-ui/react";
 import { LockIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 import { OnboardingCanvas, OnboardingFooter, OnboardingHeader } from "./OnboardingShell";
+import {
+  MAX_PASSWORD_LENGTH,
+  MIN_NEW_PASSWORD_LENGTH,
+} from "@/constants/securityPolicy";
 
 type Errors = { password?: string; confirmPassword?: string };
 
@@ -78,9 +82,10 @@ export function PasswordStep({
               <Input
                 type={showPassword ? "text" : "password"}
                 value={password}
-                placeholder="At least 6 characters"
+                placeholder={`At least ${MIN_NEW_PASSWORD_LENGTH} characters`}
                 autoFocus
                 autoComplete="new-password"
+                maxLength={MAX_PASSWORD_LENGTH}
                 onChange={(event) => onPasswordChange(event.target.value)}
                 onKeyDown={submitOnEnter}
                 pr="3rem"
@@ -107,6 +112,7 @@ export function PasswordStep({
               value={confirmPassword}
               placeholder="Enter the same password again"
               autoComplete="new-password"
+              maxLength={MAX_PASSWORD_LENGTH}
               onChange={(event) => onConfirmPasswordChange(event.target.value)}
               onKeyDown={submitOnEnter}
             />

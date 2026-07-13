@@ -55,8 +55,6 @@ export default defineConfig({
           "vendor-ethers": [
             "@ethersproject/address",
             "@ethersproject/bytes",
-            "@ethersproject/logger",
-            "@ethersproject/providers",
           ],
         },
       },

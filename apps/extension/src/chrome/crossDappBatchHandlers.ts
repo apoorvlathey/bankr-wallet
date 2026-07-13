@@ -22,6 +22,7 @@ import {
   submitTransactionDirect,
   type TransactionParams,
 } from "./bankrApi";
+import { assertAutomaticEip7702AuthorizationAllowed } from "./delegatedAuthorityPolicy";
 import { BANKR_SUPPORTED_CHAIN_IDS } from "../constants/networks";
 import { CHAIN_CONFIG } from "../constants/chainConfig";
 import { getAccountById } from "./accountStorage";
@@ -30,9 +31,10 @@ import { resolveActiveDelegate } from "@/utils/delegationResolution";
 import {
   signEip7702Authorization,
   signAndBroadcastTransaction,
+  isBroadcastOutcomeUncertain,
 } from "./localSigner";
 import { getStoredResolvedChainById } from "@/lib/chains";
-import { getNextNonce, resetNonce } from "./nonceManager";
+import { getNextNonce, resetNonce } from "./forceInclusion/nonceManager";
 import { hasEncryptedApiKey } from "./crypto";
 import { decryptAllKeys } from "./vaultCrypto";
 import {
@@ -69,7 +71,7 @@ import {
   updateTxInHistory,
   getTxById,
 } from "./txHistoryStorage";
-import { startReceiptPolling } from "./txReceiptPoller";
+import { startReceiptPolling } from "./forceInclusion/receiptPoller";
 import {
   extractAssetChangesWhenReceiptAvailable,
   fetchBundleReceipt,
@@ -90,6 +92,14 @@ import {
   bumpGasForEip7702Auth,
   type GasEstimate,
 } from "./gasEstimation";
+import {
+  enforceCrossDappBatchAuthorizationAtConfirmation,
+  type CrossDappBatchAuthorizationResult,
+} from "./crossDappBatchLifecycle";
+import {
+  beginPendingRequestEffectLease,
+  guardPendingRequestEffectLease,
+} from "./pendingRequestResolution";
 
 // Prevent double-shipping if user clicks Confirm twice in quick succession.
 let isProcessing = false;
@@ -254,6 +264,20 @@ export async function handleAddToCrossDappBatch(
     favicon: pending.favicon,
     addedAt: Date.now(),
     source: { kind: "eth_sendTransaction" },
+    tabId: pending.tabId,
+    frameId: pending.frameId,
+    senderOrigin: pending.senderOrigin,
+    requestChainId: pending.requestChainId,
+    walletConnect: pending.walletConnect
+      ? {
+          topic: pending.walletConnect.topic,
+          requestId: pending.walletConnect.requestId,
+          method: pending.walletConnect.method,
+        }
+      : undefined,
+    trustedInternal: pending.trustedInternal,
+    accountType: pending.accountType,
+    bankrCredentialTag: pending.bankrCredentialTag,
   };
 
   const next: CrossDappBatch = existing
@@ -375,6 +399,14 @@ export async function handleAddCallsToCrossDappBatch(
         callIndex,
         totalCalls,
       },
+      tabId: pending.tabId,
+      frameId: pending.frameId,
+      senderOrigin: pending.senderOrigin,
+      requestChainId: pending.requestChainId,
+      walletConnect: pending.walletConnect,
+      trustedInternal: pending.trustedInternal,
+      accountType: pending.accountType,
+      bankrCredentialTag: pending.bankrCredentialTag,
     }),
   );
 
@@ -734,9 +766,15 @@ export async function handleConfirmCrossDappBatch(
     // Normalized result shape used by both Bankr and PK/SP ship paths so the
     // downstream tx-history + notification + fanOut handling stays unified.
     type ShipResult =
-      | { kind: "ok"; txHash: string; status: "success" | "pending" }
+      | {
+          kind: "ok";
+          txHash: string;
+          status: "success" | "pending";
+          broadcastUncertain?: boolean;
+        }
       | { kind: "reverted"; txHash: string; error: string }
-      | { kind: "error"; error: string };
+      | { kind: "error"; error: string }
+      | { kind: "authorization"; error: string };
 
     let ship: ShipResult;
 
@@ -760,21 +798,75 @@ export async function handleConfirmCrossDappBatch(
         }
       }
 
-      try {
-        const result = await submitTransactionDirect(apiKey, tx);
-        const txHash = result.transactionHash;
-        if (result.status === "reverted") {
-          ship = { kind: "reverted", txHash, error: "Transaction reverted" };
-        } else if (result.status === "success" && txHash) {
-          ship = { kind: "ok", txHash, status: "success" };
+      const authorization =
+        await enforceCrossDappBatchAuthorizationAtConfirmation(batch);
+      if (!authorization.authorized) {
+        ship = { kind: "authorization", error: authorization.error };
+      } else {
+        const commit = authorization.commit();
+        if (!commit.authorized) {
+          await commit.terminalize();
+          ship = { kind: "authorization", error: commit.error };
         } else {
-          ship = { kind: "ok", txHash, status: "pending" };
+          const effectLease = beginPendingRequestEffectLease(
+            "crossDappBatch",
+            "active",
+          );
+          if (!effectLease) {
+            ship = { kind: "error", error: "Wallet reset is in progress" };
+          } else {
+          const effectGuard = guardPendingRequestEffectLease(effectLease);
+          try {
+            const result = await submitTransactionDirect(
+              apiKey,
+              tx,
+              undefined,
+              async () => {
+                const latestAccount = batch.accountId
+                  ? await getAccountById(batch.accountId)
+                  : null;
+                if (
+                  !latestAccount ||
+                  latestAccount.type !== "bankr" ||
+                  latestAccount.address.toLowerCase() !==
+                    batch.fromAddress.toLowerCase()
+                ) {
+                  throw new Error("Pending batch is no longer valid");
+                }
+                const finalAuthorization =
+                  await enforceCrossDappBatchAuthorizationAtConfirmation(
+                    batch,
+                  );
+                if (!finalAuthorization.authorized) {
+                  throw new Error(finalAuthorization.error);
+                }
+                const finalCommit = finalAuthorization.commit();
+                if (!finalCommit.authorized) {
+                  await finalCommit.terminalize();
+                  throw new Error(finalCommit.error);
+                }
+                effectGuard.beginEffect();
+              },
+            );
+            effectGuard.settleEffect();
+            effectGuard.releaseIfSafe();
+            const txHash = result.transactionHash;
+            if (result.status === "reverted") {
+              ship = { kind: "reverted", txHash, error: "Transaction reverted" };
+            } else if (result.status === "success" && txHash) {
+              ship = { kind: "ok", txHash, status: "success" };
+            } else {
+              ship = { kind: "ok", txHash, status: "pending" };
+            }
+          } catch (err) {
+            effectGuard.releaseIfSafe();
+            ship = {
+              kind: "error",
+              error: err instanceof Error ? err.message : "Unknown error",
+            };
+          }
+          }
         }
-      } catch (err) {
-        ship = {
-          kind: "error",
-          error: err instanceof Error ? err.message : "Unknown error",
-        };
       }
     } else {
       // PK / Seed Phrase path — atomic via EIP-7702 type-4 tx, local signing.
@@ -786,7 +878,18 @@ export async function handleConfirmCrossDappBatch(
         encoded: outerBatchTx,
         password,
         precomputedGasEstimates,
+        authorizeBeforeEffect: () =>
+          enforceCrossDappBatchAuthorizationAtConfirmation(batch),
       });
+    }
+
+    if (ship.kind === "authorization") {
+      await updateTxInHistory(historyId, {
+        status: "failed",
+        error: ship.error,
+        completedAt: Date.now(),
+      });
+      return { success: false, error: ship.error };
     }
 
     if (ship.kind === "error") {
@@ -882,6 +985,7 @@ export async function handleConfirmCrossDappBatch(
       await updateTxInHistory(historyId, {
         status: "pending",
         txHash,
+        broadcastUncertain: ship.broadcastUncertain === true,
       });
       await fanOutWalletSendCalls({ kind: "submitted", txHash });
       startReceiptPolling(historyId, txHash, batch.chainId);
@@ -953,10 +1057,17 @@ async function shipCrossDappBatchPkSp(args: {
   encoded: { to: string; data: string; value: string };
   password: string;
   precomputedGasEstimates?: GasEstimate[];
+  authorizeBeforeEffect: () => Promise<CrossDappBatchAuthorizationResult>;
 }): Promise<
-  | { kind: "ok"; txHash: string; status: "success" | "pending" }
+  | {
+      kind: "ok";
+      txHash: string;
+      status: "success" | "pending";
+      broadcastUncertain?: boolean;
+    }
   | { kind: "reverted"; txHash: string; error: string }
   | { kind: "error"; error: string }
+  | { kind: "authorization"; error: string }
 > {
   // Resolve PK via cache → session restore → vault decryption.
   let privateKey = getPrivateKeyFromCache(args.accountId);
@@ -1062,6 +1173,7 @@ async function shipCrossDappBatchPkSp(args: {
       | readonly import("viem").SignedAuthorization[]
       | undefined;
     if (needsAuthorization) {
+      assertAutomaticEip7702AuthorizationAllowed(resolution.delegate);
       const auth = await signEip7702Authorization(privateKey, {
         contractAddress: resolution.delegate,
         chainId: args.chainId,
@@ -1112,25 +1224,79 @@ async function shipCrossDappBatchPkSp(args: {
       }
     }
 
-    const result = await signAndBroadcastTransaction(
-      privateKey,
-      {
-        from: args.accountAddress,
-        to: args.encoded.to,
-        data: args.encoded.data,
-        value: args.encoded.value,
-        chainId: args.chainId,
-        nonce: txNonce,
-        gas: gasHex,
-        maxFeePerGas,
-        maxPriorityFeePerGas,
-        ...(authorizationList
-          ? { type: "eip7702", authorizationList }
-          : {}),
-      },
-      rpcUrl,
-      customChainMeta,
+    // Preliminary authorization before acquiring the reset/effect lease. A
+    // second check runs from localSigner's after-sign beforeBroadcast hook.
+    const authorization = await args.authorizeBeforeEffect();
+    if (!authorization.authorized) {
+      return { kind: "authorization", error: authorization.error };
+    }
+    const commit = authorization.commit();
+    if (!commit.authorized) {
+      await commit.terminalize();
+      return { kind: "authorization", error: commit.error };
+    }
+
+    const effectLease = beginPendingRequestEffectLease(
+      "crossDappBatch",
+      "active",
     );
+    if (!effectLease) {
+      return { kind: "error", error: "Wallet reset is in progress" };
+    }
+    const effectGuard = guardPendingRequestEffectLease(effectLease);
+
+    let result: Awaited<ReturnType<typeof signAndBroadcastTransaction>>;
+    try {
+      result = await signAndBroadcastTransaction(
+        privateKey,
+        {
+          from: args.accountAddress,
+          to: args.encoded.to,
+          data: args.encoded.data,
+          value: args.encoded.value,
+          chainId: args.chainId,
+          nonce: txNonce,
+          gas: gasHex,
+          maxFeePerGas,
+          maxPriorityFeePerGas,
+          ...(authorizationList
+            ? { type: "eip7702", authorizationList }
+            : {}),
+        },
+        rpcUrl,
+        customChainMeta,
+        async () => {
+          const finalAuthorization = await args.authorizeBeforeEffect();
+          if (!finalAuthorization.authorized) {
+            throw new Error(finalAuthorization.error);
+          }
+
+          // Account resolution is deliberately after the async transport
+          // checks. The synchronous commit below then proves no origin/WC
+          // epoch changed while this final account read was pending.
+          const latestAccount = await getAccountById(args.accountId);
+          const finalCommit = finalAuthorization.commit();
+          if (!finalCommit.authorized) {
+            await finalCommit.terminalize();
+            throw new Error(finalCommit.error);
+          }
+          if (
+            !latestAccount ||
+            latestAccount.type !== args.accountType ||
+            latestAccount.address.toLowerCase() !==
+              args.accountAddress.toLowerCase()
+          ) {
+            throw new Error("Pending request account is no longer available");
+          }
+          effectGuard.beginEffect();
+        },
+      );
+      effectGuard.settleEffect();
+      effectGuard.releaseIfSafe();
+    } catch (error) {
+      effectGuard.releaseIfSafe();
+      throw error;
+    }
 
     if (result.receipt) {
       const success =
@@ -1144,7 +1310,12 @@ async function shipCrossDappBatchPkSp(args: {
             error: "Transaction reverted",
           };
     }
-    return { kind: "ok", txHash: result.txHash, status: "pending" };
+    return {
+      kind: "ok",
+      txHash: result.txHash,
+      status: "pending",
+      broadcastUncertain: isBroadcastOutcomeUncertain(result),
+    };
   } catch (error) {
     resetNonce(args.accountAddress, args.chainId);
     return {

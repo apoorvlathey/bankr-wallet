@@ -144,7 +144,7 @@ The same Vite pipeline produces two artifacts:
 
 **Manifest drift control**: whenever you edit `apps/extension/public/manifest.json`, mirror the equivalent change in `apps/extension/manifest.firefox.json`. Chrome-only keys (`side_panel`, `permissions: ["sidePanel"]`, `background.service_worker`/`type:"module"`) MUST stay out of the Firefox manifest; Firefox-only keys (`background.scripts`, `browser_specific_settings.gecko.*`) stay out of the Chrome manifest.
 
-See [`FIREFOX.md`](./FIREFOX.md) for the full Firefox port doc (port rationale, sidepanel/popup divergence, `chrome.storage.session` shim, `chrome-extension://` → `moz-extension://` URL handling, AMO release flow, known gaps).
+See [`FIREFOX.md`](./FIREFOX.md) for the full Firefox port doc (port rationale, sidepanel/popup divergence, the `chrome.storage.session` compatibility layer, `chrome-extension://` → `moz-extension://` URL handling, AMO release flow, known gaps).
 
 ## Loading the extension in your browser
 

@@ -66,6 +66,22 @@ export interface CrossDappBatchEntry {
    * `{ kind: "eth_sendTransaction" }` everywhere it's read.
    */
   source?: CrossDappBatchEntrySource;
+  /** Trusted request provenance copied before the source pending row is removed. */
+  tabId?: number;
+  frameId?: number;
+  senderOrigin?: string;
+  requestChainId?: number;
+  walletConnect?: {
+    topic: string;
+    requestId: number;
+    method: string;
+  };
+  /** Explicit service-worker-authored source. Missing provenance fails closed. */
+  trustedInternal?: true;
+  /** Copied from the source pending row before it is removed. */
+  accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  /** Non-secret ciphertext-generation binding for Bankr signer requests. */
+  bankrCredentialTag?: string;
 }
 
 export interface CrossDappBatch {

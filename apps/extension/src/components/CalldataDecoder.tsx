@@ -132,10 +132,9 @@ function isAbiDecodeBetter(
 function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollapsed = false }: CalldataDecoderProps) {
   const { themeId, tokens } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
-  // Selected tab strip uses an inverted contrast (Bauhaus paints it black with
-  // white text; Midnight uses a recessed dark surface so we don't compete with
-  // the modal-style luminous shadows). Same pattern as Phase 5 header bar.
-  const tabActiveBg = isDarkTheme ? "surface.sunken" : "fg.primary";
+  // Midnight keeps technical navigation quiet: the active view is marked by
+  // a warm rule instead of another filled tab competing with Confirm.
+  const tabActiveBg = isDarkTheme ? "transparent" : "fg.primary";
   const tabActiveFg = isDarkTheme ? "fg.primary" : "fg.inverse";
   const [result, setResult] = useState<DecodeRecursiveResult>(null);
   const [loading, setLoading] = useState(true);
@@ -326,6 +325,9 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollaps
           minH="44px"
           px={3}
           bg={tab === "decoded" ? tabActiveBg : "transparent"}
+          borderBottomWidth={tab === "decoded" && isDarkTheme ? "2px" : 0}
+          borderBottomStyle="solid"
+          borderBottomColor="accent.highlight"
           onClick={() => setTab("decoded")}
           borderRadius={0}
           _hover={{ bg: tab === "decoded" ? tabActiveBg : "surface.raisedHover" }}
@@ -353,6 +355,9 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollaps
           minH="44px"
           px={3}
           bg={tab === "raw" ? tabActiveBg : "transparent"}
+          borderBottomWidth={tab === "raw" && isDarkTheme ? "2px" : 0}
+          borderBottomStyle="solid"
+          borderBottomColor="accent.highlight"
           onClick={() => setTab("raw")}
           borderRadius={0}
           _hover={{ bg: tab === "raw" ? tabActiveBg : "surface.raisedHover" }}
@@ -399,11 +404,11 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollaps
               px={2}
               py={1}
               fontSize="xs"
-              bg="accent.secondary"
-              color="accentFg.secondary"
+              bg={isDarkTheme ? "surface.sunken" : "accent.secondary"}
+              color={isDarkTheme ? "accent.highlight" : "accentFg.secondary"}
               fontFamily="mono"
               border={tokens.borders.thin}
-              borderColor="border.default"
+              borderColor={isDarkTheme ? "accent.highlight" : "border.default"}
               borderRadius="md"
               fontWeight="700"
             >

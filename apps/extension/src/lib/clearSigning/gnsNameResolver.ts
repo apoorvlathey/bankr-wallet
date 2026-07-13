@@ -1,4 +1,5 @@
-import { createPublicClient, http, type Address } from "viem";
+import { createPublicClient, type Address } from "viem";
+import { secureHttpTransport } from "@/chrome/rpcHttpClient";
 
 import { sanitizeResolvedName } from "@/lib/ensUtils";
 
@@ -41,7 +42,7 @@ export async function resolveGweiNameForTokenId({
 
   try {
     const client = createPublicClient({
-      transport: http(rpcUrl, { timeout: 8000, retryCount: 0 }),
+      transport: secureHttpTransport(rpcUrl, { timeout: 8000, retryCount: 0 }),
     });
     const raw = await client.readContract({
       address: GNS_NAME_NFT_ADDRESS,

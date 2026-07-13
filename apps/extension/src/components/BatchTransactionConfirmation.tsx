@@ -48,6 +48,7 @@ import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { CopyButton } from "@/components/CopyButton";
 import ChainIcon from "@/components/ChainIcon";
+import SafeImage from "@/components/SafeImage";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
 import ForceInclusionProgress from "@/components/ForceInclusionProgress";
 import SmartAccountSetupBanner from "@/components/SmartAccountSetupBanner";
@@ -1093,12 +1094,14 @@ function BatchTransactionConfirmation({
                       sx={{ filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.4)) drop-shadow(0 0 0.5px rgba(255,255,255,0.4))" }}
                     />
                   ) : (
-                    <Image
+                    <SafeImage
                       src={
-                        favicon ||
-                        (originHostname
+                        favicon || undefined
+                      }
+                      fallbackSrc={
+                        originHostname
                           ? googleFaviconUrl(originHostname)
-                          : undefined)
+                          : undefined
                       }
                       alt="favicon"
                       boxSize="14px"
@@ -1553,7 +1556,7 @@ function BatchTransactionConfirmation({
                           cursor="pointer"
                           onClick={() => chrome.tabs.create({ url: tenderlyUrl })}
                         >
-                          <Image
+                          <SafeImage
                             src={googleFaviconUrl("tenderly.co")}
                             boxSize="14px"
                           />

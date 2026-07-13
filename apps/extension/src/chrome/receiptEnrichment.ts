@@ -1,6 +1,7 @@
 import { getStoredRpcUrl } from "@/lib/chains";
 import type { BundleReceipt } from "./erc5792Types";
 import { getTxById } from "./txHistoryStorage";
+import { fetchRpcResult } from "./rpcHttpClient";
 
 const RECEIPT_RETRY_ATTEMPTS = 8;
 const RECEIPT_RETRY_DELAY_MS = 2_000;
@@ -13,20 +14,13 @@ export async function fetchRawTransactionReceipt(
   if (!rpcUrl) return null;
 
   try {
-    const response = await fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "eth_getTransactionReceipt",
-        params: [txHash],
-      }),
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    const receipt = data.result;
-    if (!receipt) return null;
+    const receipt = await fetchRpcResult(
+      rpcUrl,
+      "eth_getTransactionReceipt",
+      [txHash],
+      { allowPrivateWithoutOrigin: true },
+    );
+    if (!receipt || typeof receipt !== "object") return null;
     return { receipt, rpcUrl };
   } catch {
     return null;

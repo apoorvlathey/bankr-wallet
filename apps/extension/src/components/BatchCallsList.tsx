@@ -46,6 +46,7 @@ import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getNativeAssetMeta } from "@/lib/chains";
 import NativeValueAmount from "@/components/NativeValueAmount";
+import SafeImage from "@/components/SafeImage";
 
 // Per-call accent rotation. The three intent slots (primary/secondary/highlight)
 // map to RED/BLUE/YELLOW in Bauhaus and to indigo/cyan/amber in Midnight, so each
@@ -357,8 +358,9 @@ export function CallCard({
           )}
           {originHostname && (
             <HStack spacing={1} maxW="100%">
-              <Image
-                src={favicon || googleFaviconUrl(originHostname)}
+              <SafeImage
+                src={favicon || undefined}
+                fallbackSrc={googleFaviconUrl(originHostname)}
                 alt="favicon"
                 boxSize="10px"
                 fallback={
@@ -458,6 +460,7 @@ export function CallCard({
                         window.open(
                           `${config.explorer}/address/${call.to}`,
                           "_blank",
+                          "noopener,noreferrer",
                         )
                       }
                       _hover={{ color: "accent.secondary", bg: "bg.muted" }}
@@ -690,6 +693,7 @@ function BuiltinExpandedContent({
                           window.open(
                             `${config.explorer}/address/${call.to}`,
                             "_blank",
+                            "noopener,noreferrer",
                           )
                         }
                         _hover={{ color: "accent.secondary", bg: "bg.muted" }}

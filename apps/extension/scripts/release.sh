@@ -19,8 +19,10 @@ EXT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$EXT_DIR/../.." && pwd)"
 CHANGELOG="$REPO_ROOT/CHANGELOG.md"
 
-# Ensure working tree is clean
-if ! git -C "$REPO_ROOT" diff --quiet || ! git -C "$REPO_ROOT" diff --cached --quiet; then
+# Ensure working tree is clean, including untracked files. `git diff` alone
+# ignores untracked source/assets that would be omitted from the release commit
+# while still being present in a developer's local build.
+if [[ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]]; then
   echo "Error: working tree is not clean. Commit or stash changes first."
   exit 1
 fi

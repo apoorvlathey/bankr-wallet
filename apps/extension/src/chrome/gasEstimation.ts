@@ -6,12 +6,12 @@
 
 import {
   createPublicClient,
-  http,
   type PublicClient,
   type Address,
   type StateOverride,
 } from "viem";
-import { getRpcUrl } from "./txHandlers";
+import { getRpcUrl } from "./transactions/rpcConfig";
+import { secureHttpTransport } from "./rpcHttpClient";
 import {
   getNativeCurrencySymbol,
   CHAIN_REGISTRY,
@@ -58,6 +58,7 @@ import {
   resolveCoinGeckoNativeAssetsBatch,
 } from "./coingeckoService";
 import { estimateFees, type TierName } from "./feeEstimation";
+import { convertLegacyGasPriceToEip1559 } from "./gasFeeNormalization";
 import { getStoredResolvedChainById } from "@/lib/chains";
 
 /** Per-tier preset fees. Wei strings to keep JSON-safe across chrome.runtime. */
@@ -130,7 +131,7 @@ async function getClient(chainId: number): Promise<PublicClient | null> {
   }
 
   const client = createPublicClient({
-    transport: http(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
+    transport: secureHttpTransport(rpcUrl, { timeout: RPC_TIMEOUT, retryCount: 1 }),
   });
   clientCache.set(chainId, { rpcUrl, client });
   return client;
@@ -376,8 +377,11 @@ export async function estimateGas(
     );
   }
 
-  // Use dapp-provided fees if available, otherwise use RPC estimates
-  // For legacy gasPrice txs, treat gasPrice as both maxFee and priorityFee
+  // baseFee from latest block (informational and required when translating a
+  // legacy total gasPrice into an equivalent EIP-1559 fee pair).
+  const baseFee = feesResult?.baseFee ?? 0n;
+
+  // Use dapp-provided fees if available, otherwise use RPC estimates.
   let maxFeePerGas: bigint;
   let maxPriorityFeePerGas: bigint;
 
@@ -385,16 +389,13 @@ export async function estimateGas(
     maxFeePerGas = dappMaxFee;
     maxPriorityFeePerGas = dappPriorityFee ?? feesResult?.maxPriorityFeePerGas ?? 0n;
   } else if (dappGasPrice) {
-    // Legacy tx: gasPrice acts as both max fee and priority fee
-    maxFeePerGas = dappGasPrice;
-    maxPriorityFeePerGas = dappGasPrice;
+    const converted = convertLegacyGasPriceToEip1559(dappGasPrice, baseFee);
+    maxFeePerGas = converted.maxFeePerGas;
+    maxPriorityFeePerGas = converted.maxPriorityFeePerGas;
   } else {
     maxFeePerGas = feesResult?.maxFeePerGas ?? 0n;
     maxPriorityFeePerGas = feesResult?.maxPriorityFeePerGas ?? 0n;
   }
-
-  // baseFee from latest block (informational, used by the UI gas editor).
-  const baseFee = feesResult?.baseFee ?? 0n;
 
   // Estimated cost = gasLimit * maxFeePerGas
   const estimatedCostWei = gasLimit * maxFeePerGas;

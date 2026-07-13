@@ -1,7 +1,7 @@
 /* Bauhaus Design System - Global Styles */
 
 /* Import Outfit font */
-@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;900&display=swap");
 
 * {
   box-sizing: border-box;

@@ -4,6 +4,7 @@
  */
 
 import { withStorageLock } from "./storageLock";
+import { bindPendingBankrCredential } from "./bankrCredentialBinding";
 
 export type SignatureMethod =
   | "personal_sign"
@@ -32,10 +33,14 @@ export interface PendingSignatureRequest {
   accountId?: string;
   accountAddress?: string;
   accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  /** Non-secret ciphertext-generation binding for Bankr signer requests. */
+  bankrCredentialTag?: string;
   tabId?: number;
   frameId?: number;
   senderOrigin?: string;
   requestChainId?: number;
+  /** Explicit service-worker-authored request; never accepted from a webpage. */
+  trustedInternal?: true;
   walletConnect?: {
     topic: string;
     requestId: number;
@@ -56,6 +61,8 @@ export type PinnedSignatureRequest = PendingSignatureRequest &
 const STORAGE_KEY = "pendingSignatureRequests";
 const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
 const SIGNATURE_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
+const MAX_PENDING_SIGNATURE_REQUESTS = 50;
+const MAX_PENDING_SIGNATURE_REQUESTS_PER_ORIGIN = 10;
 
 /**
  * Get all pending signature requests
@@ -73,9 +80,23 @@ export async function getPendingSignatureRequests(): Promise<PendingSignatureReq
 export async function savePendingSignatureRequest(
   request: PinnedSignatureRequest
 ): Promise<void> {
+  await clearExpiredSignatureRequests();
+  const boundRequest = await bindPendingBankrCredential(request);
   await withStorageLock(STORAGE_LOCK_KEY, async () => {
     const requests = await getPendingSignatureRequests();
-    requests.push(request);
+    if (requests.some((pending) => pending.id === request.id)) {
+      throw new Error("Signature request already exists");
+    }
+    if (requests.length >= MAX_PENDING_SIGNATURE_REQUESTS) {
+      throw new Error("Too many pending signature requests");
+    }
+    if (
+      requests.filter((pending) => pending.origin === request.origin).length >=
+      MAX_PENDING_SIGNATURE_REQUESTS_PER_ORIGIN
+    ) {
+      throw new Error("This site has too many pending signature requests");
+    }
+    requests.push(boundRequest);
     await chrome.storage.local.set({ [STORAGE_KEY]: requests });
   });
   await updateSignatureBadge();
@@ -107,18 +128,23 @@ export async function getPendingSignatureRequestById(
  * Clear expired signature requests (older than 30 minutes)
  */
 export async function clearExpiredSignatureRequests(): Promise<void> {
-  let changed = false;
-  await withStorageLock(STORAGE_LOCK_KEY, async () => {
-    const requests = await getPendingSignatureRequests();
-    const now = Date.now();
-    const valid = requests.filter((r) => now - r.timestamp < SIGNATURE_EXPIRY_MS);
-
-    if (valid.length !== requests.length) {
-      await chrome.storage.local.set({ [STORAGE_KEY]: valid });
-      changed = true;
-    }
-  });
-  if (changed) await updateSignatureBadge();
+  const expiredBefore = Date.now() - SIGNATURE_EXPIRY_MS;
+  const expired = (await getPendingSignatureRequests()).filter(
+    (request) => request.timestamp <= expiredBefore,
+  );
+  if (expired.length === 0) return;
+  const { expirePersistedPendingRequest } = await import(
+    "./pendingRequestExpiry"
+  );
+  await Promise.all(
+    expired.map((request) =>
+      expirePersistedPendingRequest(
+        "signature",
+        request.id,
+        expiredBefore,
+      ),
+    ),
+  );
 }
 
 /**

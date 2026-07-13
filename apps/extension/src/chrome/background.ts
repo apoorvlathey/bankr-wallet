@@ -9,7 +9,6 @@
  * - sidepanelManager.ts: Side panel detection and mode management
  */
 
-import { tryDecryptVaultKey } from "./crypto";
 import {
   getAccounts,
   getAccountById,
@@ -19,28 +18,21 @@ import {
   getTabAccounts,
   clearTabAccount,
   addBankrAccount,
+  addBankrAccountWithCredentialUpdate,
   addImpersonatorAccount,
-  addSeedPhraseAccount,
-  addSeedGroup,
-  removeSeedGroup,
   getSeedGroups,
   renameSeedGroup,
-  updateSeedGroupCount,
-  updateAccountDisplayName,
   validateBankrAccountAddressUpdate,
-  updateBankrAccountAddress,
-  findNonImpersonatorAccountByAddress,
-  convertToSeedPhraseAccount,
+  updateBankrAccountAddressWithCredentialUpdate,
 } from "./accountStorage";
-import type { Account, SeedPhraseAccount } from "./types";
-import { decryptAllKeys, addKeyToVault } from "./vaultCrypto";
+import type { Account } from "./types";
+import { sanitizeCustomExplorerUrl } from "@/lib/externalNavigation";
+import { generateNewMnemonic } from "./mnemonic/derivation";
+import { previewSeedAddresses } from "./mnemonic/addressPreview";
 import {
-  generateNewMnemonic,
-  isValidMnemonic,
-  derivePrivateKey as deriveSeedPrivateKey,
-} from "./seedPhraseUtils";
-import { storeMnemonic, getMnemonic, removeMnemonic } from "./mnemonicStorage";
-import { deriveAddress } from "./localSigner";
+  addSeedPhraseGroup,
+  deriveSeedAccounts,
+} from "./mnemonic/accountHandlers";
 import {
   RAW_ERC7710_DELEGATION_SIGNATURE_ERROR,
   validateEIP712TypedData,
@@ -61,9 +53,10 @@ import {
   ERC7715_PERMISSION_REQUEST_IN_PROGRESS_ERROR,
   isErc7715PermissionRequestLocked,
   refreshErc7715PermissionRequestLockFromStorage,
-} from "./erc7715PermissionLock";
+} from "./erc7715/requestLock";
 import {
   removePendingTxRequest,
+  getPendingTxRequestById,
   getPendingTxRequests,
   clearExpiredTxRequests,
   updateBadge,
@@ -71,6 +64,7 @@ import {
 } from "./pendingTxStorage";
 import {
   removePendingSignatureRequest,
+  getPendingSignatureRequestById,
   getPendingSignatureRequests,
   clearExpiredSignatureRequests,
 } from "./pendingSignatureStorage";
@@ -94,8 +88,6 @@ import { handleSplitBatchIntoIndividualTxs } from "./splitBatchSequencer";
 import {
   handleGetDelegationStatus,
   handleProbeDelegateContract,
-  handleSetCustomDelegate,
-  handleRemoveCustomDelegate,
   handleInitiateRevokeDelegation,
   handleInitiateSetDelegation,
 } from "./delegationHandlers";
@@ -131,17 +123,15 @@ import {
 } from "./clearSigningHandlers";
 import {
   addNetworkIfMissing,
-  deleteNetworkEntry,
-  ensureNetworksInfo,
-  setNetworkHiddenState,
-  updateNetworkEntry,
 } from "./networkStorage";
+import { assertRpcEndpointAllowedForOrigin } from "./rpcHttpClient";
 import {
   getStorageKeysWithPrefixes,
   getWalletLocalStorageKeysToRemove,
   WALLET_RESULT_STORAGE_PREFIXES,
   WALLET_SYNC_STORAGE_KEYS,
 } from "./walletResetStorage";
+import { migrateFromLegacyStorage } from "./legacyStorageMigration";
 import {
   CACHE_PRUNE_INTERVAL_MS,
   pruneNonCriticalStorageCaches,
@@ -150,19 +140,14 @@ import {
 // Session & cache management
 import {
   AUTO_LOCK_STORAGE_KEY,
-  updateCachedAutoLockTimeout,
+  handleAutoLockTimeoutStorageChange,
   getCachedApiKey,
   getCachedPassword,
-  setCachedVault,
   getCachedVaultKey,
   getPasswordType,
   resolvePasswordType,
   getAutoLockTimeout,
-  setAutoLockTimeout,
-  isApiKeyCached,
-  isWalletUnlocked,
-  getPrivateKeyFromCache,
-  getCurrentSessionId,
+  initializeAutoLockTimeoutDefault,
   tryRestoreSession,
   incrementUIConnections,
   decrementUIConnections,
@@ -173,25 +158,22 @@ import {
 // Auth handlers
 import {
   handleUnlockWallet,
-  handleSetAgentPassword,
-  handleRemoveAgentPassword,
-  handleSaveApiKeyWithCachedPassword,
-  handleChangePassword,
-  verifyMasterPassword,
+  prepareApiKeyUpdateWithCachedPassword,
+  commitPreparedApiKeyUpdate,
 } from "./authHandlers";
 import {
-  handleCanSetupPasskeyUnlock,
-  handleGetPasskeyUnlockStatus,
-  handleRemovePasskeyUnlock,
-  handleSetupPasskeyUnlock,
-  handleSetupPasskeyUnlockWithPassword,
-  handleUnlockWithPasskey,
-  handleVerifyPasskeySetupPassword,
-} from "./passkeyUnlock";
-import {
+  getAuthCeremonyEpoch,
   invalidateAuthCeremonies,
   runSerializedAuthTransition,
 } from "./authTransition";
+import { verifyBankrCredentialAddress } from "./bankrApi";
+import {
+  handleRevealPrivateKey,
+  handleRevealSeedPhrase,
+} from "./secretRevealHandlers";
+import {
+  assertCurrentMasterAuthorization,
+} from "./masterAuthorization";
 
 // Transaction handlers
 import {
@@ -234,7 +216,13 @@ import { handleSubmitChatPrompt } from "./chatHandlers";
 import {
   handleSponsoredTransfer,
   handleCheckPremiumStatus,
+  handleCheckSponsoredTransferStatus,
+  handleAcknowledgeSponsoredTransfer,
 } from "./sponsoredTransferHandlers";
+import {
+  hasUnresolvedSponsoredTransferIntent,
+  withSponsoredTransferOperation,
+} from "./sponsoredTransferIntentStorage";
 
 // Swap API
 import {
@@ -273,13 +261,13 @@ import {
   savePendingWatchAssetRequest,
   removePendingWatchAssetRequest,
   getPendingWatchAssetRequests,
-  PendingWatchAssetRequest,
+  clearExpiredWatchAssetRequests,
 } from "./pendingWatchAssetStorage";
 import {
   savePendingAddChainRequest,
   removePendingAddChainRequest,
   getPendingAddChainRequests,
-  PendingAddChainRequest,
+  clearExpiredAddChainRequests,
 } from "./pendingAddChainStorage";
 import {
   addCustomToken,
@@ -298,15 +286,15 @@ import {
 
 import {
   isSidePanelSupported,
-  isSidePanelSupportedAsync,
   getSidePanelMode,
-  setSidePanelMode,
-  transitionSidePanelToPopup,
   initSidePanel,
   POPUP_PATH,
 } from "./sidepanelManager";
 
-import { fetchAndCacheAvatarImage } from "./avatarImageCache";
+import {
+  fetchAndCacheAvatarImage,
+  invalidateAvatarImageCacheForWalletReset,
+} from "./avatarImageCache";
 import { initEnsBrowsing, handleEnsBrowsingMessage } from "./ensBrowsing";
 import {
   handleWalletConnectDisconnectSession,
@@ -314,6 +302,7 @@ import {
   handleWalletConnectPair,
   handleWalletConnectSwitchChain,
   initWalletConnect,
+  resetWalletConnectForWalletReset,
 } from "./walletConnectHandlers";
 import { clearExpiredWalletConnectPendingRequests } from "./walletConnectStorage";
 import {
@@ -327,59 +316,213 @@ import {
   handleRevokeDappPermission,
 } from "./dappConnectionHandlers";
 import { clearExpiredDappConnectionRequests } from "./dappPermissionStorage";
+import { authorizeConnectedDappRequest } from "./dappRequestPolicy";
+import { handleSafeRpcRequest } from "./safeRpcForwarding";
+import { validateExternalProviderMessage } from "./externalProviderValidation";
+import { classifyBackgroundMessage } from "./background/messageAccessPolicy";
+import { routeBackgroundAuthMessage } from "./background/authRouter";
+import { createBackgroundOnboardingMessageRouter } from "./background/onboardingRouter";
+import { routeBackgroundAccountStateMessage } from "./background/accountStateRouter";
+import { createBackgroundSettingsMessageRouter } from "./background/settingsRouter";
+import { createBackgroundDappPermissionMessageRouter } from "./background/dappPermissionRouter";
+import { createBackgroundWalletConnectSessionMessageRouter } from "./background/walletConnectSessionRouter";
+import { createBackgroundWatchAssetMessageRouter } from "./background/watchAssetRouter";
+import { createBackgroundChainPromptMessageRouter } from "./background/chainPromptRouter";
+import { createBackgroundSigningRequestMessageRouter } from "./background/signingRequestRouter";
+import { createBackgroundTransactionStatusMessageRouter } from "./background/transactionStatusRouter";
+import {
+  deliverProviderRequestRejection,
+  mapProviderRequestRejection,
+} from "./background/providerRequestRejection";
+import { isTrustedWalletUiSender } from "./trustedWalletUiSender";
+import {
+  WALLET_SECRET_OPERATION_LOCK_KEY,
+  withStorageLock,
+} from "./storageLock";
 import {
   activateBrowserTabAccount,
   replaceBrowserTabAccountScope,
   resolveBrowserTabAccount,
-  selectBrowserTabAccount,
 } from "./tabAccountResolver";
+import { removeAccountWithDappPrivacyBoundary } from "./accountRemovalDappPrivacy";
+import {
+  canSignalPendingTransactionCancellation,
+  pendingRequestResolutionAction,
+  runPendingRequestResolution,
+  runPendingRequestResolutions,
+  runWalletResetAgainstPendingResolutions,
+  type PendingRequestResolutionAction,
+} from "./pendingRequestResolution";
+import { expireInjectedProviderRequest } from "./pendingRequestLifecycle";
+import {
+  expireDappConnectionRequest,
+  expireErc7715PermissionRequest,
+} from "./pendingDappRequestLifecycle";
+import {
+  enforceMetadataPromptAuthorizationAtConfirmation,
+  expireMetadataPrompt,
+} from "./pendingMetadataPromptLifecycle";
+import { expireBatchAcknowledgement } from "./pendingBatchAcknowledgementLifecycle";
 
-// Handles RPC requests proxied from inpage script (to bypass page CSP)
-async function handleRpcRequest(
-  rpcUrl: string,
-  method: string,
-  params: any[],
-): Promise<any> {
-  // Validate URL is a known RPC endpoint from networksInfo (defense-in-depth)
-  const { networksInfo } = (await chrome.storage.sync.get("networksInfo")) as {
-    networksInfo: Record<string, { rpcUrl: string }> | undefined;
-  };
-  const allowedUrls = networksInfo
-    ? new Set(Object.values(networksInfo).map((n) => n.rpcUrl))
-    : new Set<string>();
-  if (!allowedUrls.has(rpcUrl)) {
-    throw new Error("RPC URL not in allowed list");
-  }
-
-  const response = await fetch(rpcUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method,
-      params,
-    }),
-    signal: AbortSignal.timeout(15000),
+const routeBackgroundOnboardingMessage =
+  createBackgroundOnboardingMessageRouter({
+    resetWalletConnectForWalletReset,
+    invalidateAvatarImageCacheForWalletReset,
+    sendRuntimeMessage: (runtimeMessage) =>
+      chrome.runtime.sendMessage(runtimeMessage),
   });
 
-  if (!response.ok) {
-    throw new Error(`RPC request failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-
-  if (data.error) {
-    throw new Error(data.error.message || "RPC error");
-  }
-
-  return data.result;
-}
+const routeBackgroundSettingsMessage = createBackgroundSettingsMessageRouter({
+  openPopupWindow,
+  setSyncStorage: (values) => chrome.storage.sync.set(values),
+  setActionPopup: (popup) => chrome.action.setPopup({ popup }),
+  popupPath: POPUP_PATH,
+});
 
 const CHAIN_SWITCH_NOTIFICATION_COOLDOWN_MS = 10_000;
 const recentChainSwitchNotifications = new Map<string, number>();
+
+function pendingResolutionConflict(
+  winningAction: PendingRequestResolutionAction,
+): { success: false; error: string } {
+  const actionLabel: Record<PendingRequestResolutionAction, string> = {
+    confirm: "confirmed",
+    reject: "rejected",
+    cancel: "cancelled",
+    expire: "expired",
+    move: "moved into a batch",
+    edit: "edited",
+    split: "split",
+    reset: "reset",
+  };
+  return {
+    success: false,
+    error: `Request is already being ${actionLabel[winningAction]}`,
+  };
+}
+
+const routeBackgroundDappPermissionMessage =
+  createBackgroundDappPermissionMessageRouter({
+    handleGetDappAccounts,
+    handleRequestDappConnection,
+    getDappPermissions,
+    handleGetDappConnectionContext,
+    getPendingDappConnectionRequests,
+    handleConfirmDappConnection,
+    handleRejectDappConnection,
+    handleRevokeDappPermission,
+    expireDappConnectionRequest,
+    expireErc7715PermissionRequest,
+    expireBatchAcknowledgement,
+    expireMetadataPrompt,
+    expireInjectedProviderRequest,
+    runPendingRequestResolution,
+    pendingResolutionConflict,
+    writeResultToStorage,
+  });
+
+const routeBackgroundWalletConnectSessionMessage =
+  createBackgroundWalletConnectSessionMessageRouter({
+    handleWalletConnectGetSessions,
+    handleWalletConnectPair,
+    handleWalletConnectDisconnectSession,
+    handleWalletConnectSwitchChain,
+  });
+
+const routeBackgroundWatchAssetMessage =
+  createBackgroundWatchAssetMessageRouter({
+    authorizeConnectedDappRequest,
+    enforceMetadataPromptAuthorizationAtConfirmation,
+    runPendingRequestResolution,
+    pendingResolutionConflict,
+    getPendingWatchAssetRequests,
+    savePendingWatchAssetRequest,
+    removePendingWatchAssetRequest,
+    fetchTokenInfo,
+    addCustomToken,
+    unhidePortfolioToken,
+    writeResultToStorage,
+    openExtensionPopup,
+    sendRuntimeMessage: (runtimeMessage) =>
+      chrome.runtime.sendMessage(runtimeMessage),
+    now: Date.now,
+  });
+
+const routeBackgroundChainPromptMessage =
+  createBackgroundChainPromptMessageRouter({
+    authorizeConnectedDappRequest,
+    enforceMetadataPromptAuthorizationAtConfirmation,
+    assertRpcEndpointAllowedForOrigin,
+    runPendingRequestResolution,
+    pendingResolutionConflict,
+    getPendingAddChainRequests,
+    savePendingAddChainRequest,
+    removePendingAddChainRequest,
+    getActiveAccount,
+    addNetworkIfMissing,
+    writeResultToStorage,
+    openExtensionPopup,
+    sendRuntimeMessage: (runtimeMessage) =>
+      chrome.runtime.sendMessage(runtimeMessage),
+    handleDappChainSwitchNotification,
+    now: Date.now,
+  });
+
+const routeBackgroundSigningRequestMessage =
+  createBackgroundSigningRequestMessageRouter({
+    connectedProviderOriginOrReject,
+    handleTransactionRequest,
+    enqueueAuthorizedSignatureRequest,
+    getPendingSignatureRequests,
+    getPendingSignatureRequestById,
+    removePendingSignatureRequest,
+    getPendingTxRequests,
+    getPendingTxRequestById,
+    handleConfirmTransaction,
+    handleRejectTransaction,
+    handleCancelTransaction,
+    runPendingRequestResolution,
+    pendingResolutionConflict,
+    pendingRequestResolutionAction,
+    canSignalPendingTransactionCancellation,
+    writeResultToStorage,
+    readLocalStorage: (key) => chrome.storage.local.get(key),
+  });
+
+const routeBackgroundTransactionStatusMessage =
+  createBackgroundTransactionStatusMessageRouter({
+    handleCancelProcessingTx,
+    failedTxResults,
+    removeLocalStorage: (key) => {
+      void chrome.storage.local.remove(key);
+    },
+    getTxHistory,
+    queueAssetChangesBackfill,
+    getProcessingTxs,
+    clearTxHistory,
+    clearTxHistoryForAddresses,
+    clearAllNonces,
+    checkPendingTxReceipt: checkPendingTxReceiptFn,
+  });
+
+/**
+ * Serialize wallet reset against extension-internal signing/submission flows
+ * that do not originate from a persisted dapp prompt. Each operation keeps its
+ * own id so independent user-approved swaps/transfers are not serialized with
+ * one another; the global reset barrier still observes every active claim.
+ */
+function runInternalIrreversibleOperation<T>(
+  resolve: () => Promise<T>,
+): Promise<T> {
+  return runPendingRequestResolution({
+    family: "internalOperation",
+    requestId: crypto.randomUUID(),
+    action: "confirm",
+    resolve,
+    conflictResult: (action) =>
+      pendingResolutionConflict(action) as unknown as T,
+  });
+}
 
 function getSenderUrl(sender: chrome.runtime.MessageSender): string | undefined {
   return sender.url || sender.tab?.url || sender.origin || undefined;
@@ -399,8 +542,9 @@ function getDappLabel(sender: chrome.runtime.MessageSender): string {
 function getNotificationIconUrl(iconPath: string | undefined): string | undefined {
   if (!iconPath) return undefined;
   if (/^https?:\/\//i.test(iconPath)) return undefined;
-  if (iconPath.startsWith("chrome-extension://") || iconPath.startsWith("moz-extension://")) {
-    return iconPath;
+  if (/^(?:chrome|moz)-extension:\/\//i.test(iconPath)) {
+    const extensionRoot = chrome.runtime.getURL("/");
+    return iconPath.startsWith(extensionRoot) ? iconPath : undefined;
   }
   return chrome.runtime.getURL(iconPath.replace(/^\/+/, ""));
 }
@@ -425,6 +569,19 @@ async function handleDappChainSwitchNotification(
   if (!chain) {
     return { success: false, error: "Unknown chain" };
   }
+
+  // Portfolio linking is semantic state, so it must not be suppressed by the
+  // user-notification cooldown below (a dapp can legitimately switch away and
+  // back within that window).
+  void chrome.runtime
+    .sendMessage({
+      type: "portfolioDappChainChanged",
+      tabId: sender.tab.id,
+      chainId: chain.chainId,
+    })
+    .catch(() => {
+      // No wallet UI surface is currently open.
+    });
 
   const source = sender.origin || getSenderUrl(sender) || "unknown";
   const cooldownKey = `${sender.tab.id}:${source}:${chain.chainId}`;
@@ -453,32 +610,115 @@ async function handleDappChainSwitchNotification(
 
 // ─── Security Helpers ────────────────────────────────────────────────────────
 
-/**
- * Checks whether the message sender is an extension page (popup, sidepanel, onboarding)
- * as opposed to a content script running on a web page.
- * Content scripts have sender.url set to the web page URL, not the extension URL.
- */
-// chrome.runtime.getURL("/") returns the extension root: `chrome-extension://<id>/`
-// on Chrome, `moz-extension://<uuid>/` on Firefox. Computing it once avoids hardcoding
-// the URL scheme (which was Firefox-broken: Firefox uses moz-extension://).
-const EXTENSION_ORIGIN_PREFIX = chrome.runtime.getURL("/");
-
-function isExtensionPage(sender: chrome.runtime.MessageSender): boolean {
-  return !!sender.url?.startsWith(EXTENSION_ORIGIN_PREFIX);
-}
-
-async function verifyExplicitMasterPassword(password: string): Promise<boolean> {
-  if (!password) return false;
-
-  const { encryptedVaultKeyMaster } = await chrome.storage.local.get(
-    "encryptedVaultKeyMaster",
-  );
-  if (encryptedVaultKeyMaster) {
-    return !!(await tryDecryptVaultKey(encryptedVaultKeyMaster, password));
+async function connectedProviderOriginOrReject(
+  sender: chrome.runtime.MessageSender,
+  resultPrefix: "txResult" | "sigResult",
+  requestId: unknown,
+): Promise<string | null> {
+  if (
+    typeof requestId !== "string" ||
+    requestId.length === 0 ||
+    requestId.length > 128
+  ) {
+    return null;
   }
 
-  // Legacy fallback for users who have not migrated to vault-key storage yet.
-  return getCachedPassword() === password;
+  try {
+    const authorization = await authorizeConnectedDappRequest(sender);
+    if (authorization.authorized) return authorization.origin;
+
+    await writeResultToStorage(`${resultPrefix}:${requestId}`, {
+      success: false,
+      error: authorization.error,
+      code: authorization.code,
+    });
+  } catch {
+    await writeResultToStorage(`${resultPrefix}:${requestId}`, {
+      success: false,
+      error: "Unable to verify this site's WalletChan connection",
+      code: 4100,
+    });
+  }
+
+  return null;
+}
+
+function enqueueAuthorizedSignatureRequest(
+  message: any,
+  sender: chrome.runtime.MessageSender,
+  trustedOrigin: string,
+): void {
+  const { signature } = message;
+  if (
+    !signature ||
+    typeof signature !== "object" ||
+    typeof signature.method !== "string" ||
+    !Array.isArray(signature.params)
+  ) {
+    void writeResultToStorage(`sigResult:${message.sigId}`, {
+      success: false,
+      error: "Invalid signature request",
+    });
+    return;
+  }
+
+  // SECURITY: reject eth_sign — signs a raw 32-byte digest with no prefix or
+  // semantic context. Reject deprecated v1 typed data for the same reason.
+  if (signature.method === "eth_sign") {
+    void writeResultToStorage(`sigResult:${message.sigId}`, {
+      success: false,
+      error:
+        "eth_sign is deprecated and unsafe; use personal_sign or eth_signTypedData_v4",
+    });
+    return;
+  }
+  if (signature.method === "eth_signTypedData") {
+    void writeResultToStorage(`sigResult:${message.sigId}`, {
+      success: false,
+      error:
+        "eth_signTypedData (v1) is deprecated; please use eth_signTypedData_v4",
+    });
+    return;
+  }
+
+  if (
+    signature.method === "eth_signTypedData_v3" ||
+    signature.method === "eth_signTypedData_v4"
+  ) {
+    const validationResult = validateEIP712TypedData(
+      signature.method,
+      signature.params[1],
+    );
+
+    if (!validationResult.valid) {
+      console.warn(
+        `[WalletChan] EIP-712 validation failed for ${trustedOrigin}:`,
+        validationResult.error,
+      );
+      void writeResultToStorage(`sigResult:${message.sigId}`, {
+        success: false,
+        error:
+          validationResult.error === RAW_ERC7710_DELEGATION_SIGNATURE_ERROR
+            ? RAW_ERC7710_DELEGATION_SIGNATURE_ERROR
+            : "Data must conform to EIP-712 schema",
+      });
+      return;
+    }
+
+    // Use sanitized typed data (extra properties stripped from type fields).
+    if (validationResult.sanitized) {
+      message.signature.params[1] = validationResult.sanitized;
+    }
+  }
+
+  handleSignatureRequest(
+    message,
+    message.sigId,
+    sender.tab?.windowId,
+    trustedOrigin,
+    sender.tab?.id,
+    sender.frameId,
+  );
 }
 
 const EXTERNAL_PROVIDER_RPC_MESSAGES_BLOCKED_DURING_ERC7715 = new Set([
@@ -505,87 +745,24 @@ function rejectExternalProviderRequestDuringErc7715Lock(
   }
   if (!isErc7715PermissionRequestLocked()) return false;
 
-  const error = ERC7715_PERMISSION_REQUEST_IN_PROGRESS_ERROR;
-  switch (message.type) {
-    case "sendTransaction":
-      if (typeof message.txId === "string") {
-        void writeResultToStorage(`txResult:${message.txId}`, {
-          success: false,
-          error,
-        });
-      }
-      return true;
-    case "signatureRequest":
-      if (typeof message.sigId === "string") {
-        void writeResultToStorage(`sigResult:${message.sigId}`, {
-          success: false,
-          error,
-        });
-      }
-      return true;
-    case "walletSendCalls":
-      if (typeof message.bundleId === "string") {
-        void writeResultToStorage(`batchTxAck:${message.bundleId}`, {
-          success: false,
-          error,
-          code: -32002,
-        });
-      }
-      return true;
-    case "walletGetCapabilities":
-      if (typeof message.requestId === "string") {
-        void writeResultToStorage(`capabilitiesResult:${message.requestId}`, {
-          success: false,
-          error,
-        });
-      }
-      return true;
-    case "walletGetCallsStatus":
-      if (typeof message.requestId === "string") {
-        void writeResultToStorage(`callsStatusResult:${message.requestId}`, {
-          success: false,
-          error,
-        });
-      }
-      return true;
-    case "watchAsset":
-      if (typeof message.watchAssetId === "string") {
-        void writeResultToStorage(`watchAssetResult:${message.watchAssetId}`, {
-          success: false,
-          error,
-        });
-      }
-      return true;
-    case "addEthereumChain":
-      if (typeof message.requestId === "string") {
-        void writeResultToStorage(`addChainResult:${message.requestId}`, {
-          success: false,
-          error,
-        });
-      }
-      return true;
-    case "rpcRequest":
-      if (typeof message.rpcId === "string") {
-        void writeResultToStorage(`rpcResult:${message.rpcId}`, { error });
-      }
-      return true;
-    case "walletExecutionPermissions":
-      sendResponse({ success: false, error });
-      return true;
-    case "requestDappConnection":
-      if (typeof message.requestId === "string") {
-        void writeResultToStorage(
-          `dappConnectionResult:${message.requestId}`,
-          { success: false, error, code: -32002 },
-        );
-      }
-      return true;
-    case "walletShowCallsStatus":
-    case "dappChainSwitchNotification":
-      return true;
-    default:
-      return false;
-  }
+  return rejectExternalProviderRequest(
+    message,
+    sendResponse,
+    ERC7715_PERMISSION_REQUEST_IN_PROGRESS_ERROR,
+    -32002,
+  );
+}
+
+function rejectExternalProviderRequest(
+  message: any,
+  sendResponse: (response?: any) => void,
+  error: string,
+  code: number,
+): boolean {
+  return deliverProviderRequestRejection(
+    mapProviderRequestRejection(message, error, code),
+    { writeResult: writeResultToStorage, sendResponse },
+  );
 }
 
 // ─── Chrome Event Listeners ──────────────────────────────────────────────────
@@ -601,7 +778,10 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
 
   if (areaName === "sync") {
     if (changes[AUTO_LOCK_STORAGE_KEY]) {
-      updateCachedAutoLockTimeout(changes[AUTO_LOCK_STORAGE_KEY].newValue);
+      void handleAutoLockTimeoutStorageChange(
+        changes[AUTO_LOCK_STORAGE_KEY].oldValue,
+        changes[AUTO_LOCK_STORAGE_KEY].newValue,
+      );
     }
 
   }
@@ -652,6 +832,8 @@ setInterval(() => {
   clearExpiredErc7715PermissionRequests();
   clearExpiredWalletConnectPendingRequests();
   clearExpiredDappConnectionRequests();
+  clearExpiredAddChainRequests();
+  clearExpiredWatchAssetRequests();
 }, 60000); // Every minute
 
 function pruneStorageCachesBestEffort(): void {
@@ -684,66 +866,6 @@ updateBadge();
 
 // Initialize auto-lock timeout cache on startup
 getAutoLockTimeout();
-
-/**
- * Migrates legacy storage (v0.1.1/v0.2.0) to the multi-account system.
- *
- * Old versions stored only `address` in chrome.storage.sync and had no `accounts`
- * array.  Without this migration the popup enters an onboarding loop because
- * App.tsx requires at least one entry in the accounts array.
- *
- * Safe to call multiple times — exits early when accounts already exist.
- */
-async function migrateFromLegacyStorage(): Promise<boolean> {
-  try {
-    // Already migrated?
-    const { accounts } = await chrome.storage.local.get("accounts");
-    if (Array.isArray(accounts) && accounts.length > 0) {
-      return false;
-    }
-
-    // Must have legacy encrypted data to be a real returning user
-    const { encryptedApiKey } =
-      await chrome.storage.local.get("encryptedApiKey");
-    if (!encryptedApiKey) {
-      return false; // Fresh install — nothing to migrate
-    }
-
-    // Read legacy address
-    const { address, displayAddress } = await chrome.storage.sync.get([
-      "address",
-      "displayAddress",
-    ]);
-    if (!address) {
-      return false; // No address stored — cannot create account entry
-    }
-
-    // Build a BankrAccount entry matching the shape in types.ts
-    const newAccount = {
-      id: crypto.randomUUID(),
-      type: "bankr" as const,
-      address: (address as string).toLowerCase(),
-      displayName:
-        displayAddress && displayAddress !== address
-          ? (displayAddress as string)
-          : undefined,
-      createdAt: Date.now(),
-    };
-
-    // Write accounts array + set this account as active (single atomic write per store)
-    await chrome.storage.local.set({ accounts: [newAccount] });
-    await chrome.storage.sync.set({ activeAccountId: newAccount.id });
-
-    console.log(
-      "[WalletChan] Legacy storage migration complete:",
-      newAccount.address,
-    );
-    return true;
-  } catch (error) {
-    console.error("[WalletChan] Legacy storage migration failed:", error);
-    return false;
-  }
-}
 
 /**
  * Migrates a user's custom OP Mainnet (chainId 10) entry to the built-in
@@ -815,15 +937,31 @@ async function initializeThemeForFreshInstall(): Promise<void> {
 // Handle extension install/update
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === "install") {
-    await initializeThemeForFreshInstall();
+    await initializeAutoLockTimeoutDefault().catch((error) =>
+      console.error("[WalletChan] Auto-lock initialization failed:", error),
+    );
+    await initializeThemeForFreshInstall().catch((error) =>
+      console.error("[WalletChan] Theme initialization failed:", error),
+    );
     // First time install - open onboarding page
     const onboardingUrl = chrome.runtime.getURL("onboarding.html");
-    await chrome.tabs.create({ url: onboardingUrl });
+    await chrome.tabs.create({ url: onboardingUrl }).catch((error) =>
+      console.error("[WalletChan] Could not open onboarding:", error),
+    );
   } else if (details.reason === "update") {
+    // Missing/invalid legacy settings migrate to the finite security default;
+    // an explicit stored zero (Never) remains untouched.
+    await initializeAutoLockTimeoutDefault().catch((error) =>
+      console.error("[WalletChan] Auto-lock migration failed:", error),
+    );
     // Migrate from v0.1.1/v0.2.0 legacy storage to multi-account system
-    await migrateFromLegacyStorage();
+    await migrateFromLegacyStorage().catch((error) =>
+      console.error("[WalletChan] Legacy account migration failed:", error),
+    );
     // v3.5.0: rekey custom OP entries now that Optimism is built-in
-    await migrateCustomOptimismChain();
+    await migrateCustomOptimismChain().catch((error) =>
+      console.error("[WalletChan] Optimism migration failed:", error),
+    );
   }
 });
 
@@ -911,6 +1049,12 @@ chrome.action.onClicked.addListener(async (tab) => {
 
 // Port connection listener - used for waking up the service worker and UI keepalive
 chrome.runtime.onConnect.addListener((port) => {
+  if (!isTrustedWalletUiSender(port.sender || {})) {
+    // Content scripts and web-accessible ENS pages must not suppress auto-lock
+    // by impersonating a wallet UI keepalive connection.
+    port.disconnect();
+    return;
+  }
   if (port.name === "popup-wake") {
     // Just acknowledge the connection - the popup is waking us up
     console.log("Service worker woken up by popup");
@@ -926,177 +1070,6 @@ chrome.runtime.onConnect.addListener((port) => {
 
 // ─── Message Router ──────────────────────────────────────────────────────────
 
-// Message types that MUST originate from extension pages (popup/sidepanel/onboarding).
-// Content scripts (web pages) are never allowed to send these.
-const EXTENSION_ONLY_MESSAGES = new Set([
-  // Transaction/signature confirmations
-  "confirmTransaction",
-  "confirmTransactionAsync",
-  "confirmTransactionAsyncPK",
-  "confirmBatchTransactionAsync",
-  "confirmBatchTransactionAsyncPK",
-  "confirmSignatureRequest",
-  "confirmErc7715PermissionRequest",
-  "confirmAddChain",
-  "confirmWatchAsset",
-  // Rejections (prevent malicious page from rejecting user's pending requests)
-  "rejectTransaction",
-  "rejectBatchTransaction",
-  "splitBatchIntoIndividualTxs",
-  "removeCallFromPendingBatch",
-  "updatePendingTxRequestData",
-  "updateCallInPendingBatch",
-  "rejectSignatureRequest",
-  "rejectErc7715PermissionRequest",
-  "rejectAddChain",
-  "rejectWatchAsset",
-  "cancelTransaction",
-  // Cross-dapp batch (popup-only assembly + ship)
-  "addToCrossDappBatch",
-  "addCallsToCrossDappBatch",
-  "removeFromCrossDappBatch",
-  "updateCallInCrossDappBatch",
-  "rejectCrossDappBatch",
-  "confirmCrossDappBatch",
-  // Account management
-  "addBankrAccount",
-  "addImpersonatorAccount",
-  "addSeedPhraseGroup",
-  "previewSeedAddresses",
-  "deriveSeedAccount",
-  "addPrivateKeyAccount",
-  "removeAccount",
-  "getAccounts",
-  "getTabAccount",
-  "setTabAccount",
-  "getSeedGroups",
-  // getActiveAccount intentionally stays content-script reachable: inject.ts
-  // uses it during provider initialization to correct stale synced address state.
-  "setActiveAccount",
-  "renameSeedGroup",
-  "updateAccountDisplayName",
-  "saveBankrApiKeyAndAddress",
-  // Credential / session management
-  "unlockWallet",
-  "lockWallet",
-  "isApiKeyCached",
-  "isWalletUnlocked",
-  "validateSession",
-  "tryRestoreSession",
-  "clearApiKeyCache",
-  "saveApiKeyWithCachedPassword",
-  "getCachedPassword",
-  "verifyMasterPassword",
-  "changePassword",
-  "setAgentPassword",
-  "removeAgentPassword",
-  "isAgentPasswordEnabled",
-  "getPasswordType",
-  "getPasskeyUnlockStatus",
-  "canSetupPasskeyUnlock",
-  "verifyPasskeySetupPassword",
-  "setupPasskeyUnlock",
-  "setupPasskeyUnlockWithPassword",
-  "unlockWithPasskey",
-  "removePasskeyUnlock",
-  // Sensitive reads (pending request details)
-  "getPendingTxRequests",
-  "getPendingBatchTxRequests",
-  "getPendingTransaction",
-  "getPendingSignatureRequests",
-  "getPendingErc7715PermissionRequests",
-  "getErc7715PermissionGrantsForAccount",
-  "initiateErc7715PermissionRevoke",
-  "getPendingWatchAssetRequests",
-  "getPendingAddChainRequests",
-  "getTxHistory",
-  "getProcessingTxs",
-  "getFailedTxResult",
-  "checkPendingTxReceipt",
-  // Key reveal (already had isExtensionPage but included for completeness)
-  "migrateFromLegacy",
-  "generateMnemonic",
-  "revealSeedPhrase",
-  "revealPrivateKey",
-  // Destructive operations
-  "resetExtension",
-  "onboardingComplete",
-  "clearTxHistory",
-  "clearTxHistoryForAddresses",
-  "clearNonceCache",
-  "clearFailedTxResult",
-  // Settings that affect security
-  "setSidePanelMode",
-  "switchSidePanelToPopup",
-  "setAutoLockTimeout",
-  "getAutoLockTimeout",
-  "setArcBrowser",
-  "isSidePanelSupported",
-  "getSidePanelMode",
-  "openPopupWindow",
-  "getClearSigningEnabled",
-  "setClearSigningEnabled",
-  "INVALIDATE_CLEAR_SIGNING_CACHE",
-  // Network settings mutate synced provider-visible chain metadata.
-  "ensureNetworksInfo",
-  "addNetwork",
-  "updateNetwork",
-  "setNetworkHidden",
-  "deleteNetwork",
-  // Full token metadata may include watched/custom-token metadata.
-  "resolveTokenMetadata",
-  "lookupCustomToken",
-  "addCustomToken",
-  "updateCustomToken",
-  "removeCustomToken",
-  "backfillAssetChanges",
-  // EIP-7702 delegation management
-  "getDelegationStatus",
-  "probeDelegateContract",
-  "setCustomDelegate",
-  "removeCustomDelegate",
-  "initiateSetDelegation",
-  "initiateRevokeDelegation",
-  // WalletConnect session management
-  "walletConnectGetSessions",
-  "walletConnectPair",
-  "walletConnectDisconnectSession",
-  "walletConnectSwitchChain",
-  // Injected dapp connection permission management
-  "getDappPermissions",
-  "getDappConnectionContext",
-  "getPendingDappConnectionRequests",
-  "confirmDappConnection",
-  "rejectDappConnection",
-  "revokeDappPermission",
-  // Direct-execution / UI-only handlers (defense in depth)
-  "executeSwapDirect",
-  "executeSwapBatch",
-  "executeSwapAtomicPK",
-  "initiateTransfer",
-  "cancelProcessingTx",
-  "sponsoredTransfer",
-  "checkPremiumStatus",
-  // Transaction-confirmation helpers operate on pending wallet context.
-  "estimateGas",
-  "estimateForceInclusionGas",
-  "estimateBatchGasSequential",
-  "simulateAssetChanges",
-  "simulateBatchAssetChanges",
-  "simulateBatchAssetChangesNonAtomic",
-  "retryTokenMetadata",
-  // Chat history and prompt submission are extension UI only.
-  "submitChatPrompt",
-  "getChatConversations",
-  "getChatConversation",
-  "createChatConversation",
-  "deleteChatConversation",
-  "addChatMessage",
-  "updateChatMessage",
-  // Clear-signing descriptor requests can use extension cache/preferences.
-  "GET_CLEAR_SIGNING_DESCRIPTOR",
-]);
-
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // ENS browsing handlers (interstitial / banner / settings). Returns true
   // only for messages it handles, so the rest of the router falls through.
@@ -1104,178 +1077,100 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Centralized auth gate: reject extension-only messages from content scripts
-  if (EXTENSION_ONLY_MESSAGES.has(message.type) && !isExtensionPage(sender)) {
+  const trustedWalletUi = isTrustedWalletUiSender(sender);
+  const audience = classifyBackgroundMessage(message?.type);
+
+  if (!trustedWalletUi && audience !== "provider") {
     sendResponse({ success: false, error: "Unauthorized" });
     return false;
   }
 
+  if (!trustedWalletUi) {
+    const validation = validateExternalProviderMessage(message);
+    if (!validation.valid) {
+      rejectExternalProviderRequest(
+        message,
+        sendResponse,
+        validation.error || "Invalid provider request",
+        -32602,
+      );
+      return false;
+    }
+  }
+
   if (
-    !isExtensionPage(sender) &&
+    !trustedWalletUi &&
     rejectExternalProviderRequestDuringErc7715Lock(message, sendResponse)
   ) {
     return false;
   }
 
+  const authRoute = routeBackgroundAuthMessage(message, sendResponse);
+  if (authRoute.handled) return authRoute.keepChannelOpen;
+
+  const onboardingRoute = routeBackgroundOnboardingMessage(
+    message,
+    sendResponse,
+  );
+  if (onboardingRoute.handled) return onboardingRoute.keepChannelOpen;
+
+  const accountStateRoute = routeBackgroundAccountStateMessage(
+    message,
+    sender,
+    sendResponse,
+  );
+  if (accountStateRoute.handled) return accountStateRoute.keepChannelOpen;
+
+  const settingsRoute = routeBackgroundSettingsMessage(message, sendResponse);
+  if (settingsRoute.handled) return settingsRoute.keepChannelOpen;
+
+  const dappPermissionRoute = routeBackgroundDappPermissionMessage(
+    message,
+    sender,
+    sendResponse,
+  );
+  if (dappPermissionRoute.handled) {
+    return dappPermissionRoute.keepChannelOpen;
+  }
+
+  const walletConnectSessionRoute =
+    routeBackgroundWalletConnectSessionMessage(message, sendResponse);
+  if (walletConnectSessionRoute.handled) {
+    return walletConnectSessionRoute.keepChannelOpen;
+  }
+
+  const watchAssetRoute = routeBackgroundWatchAssetMessage(
+    message,
+    sender,
+    sendResponse,
+  );
+  if (watchAssetRoute.handled) return watchAssetRoute.keepChannelOpen;
+
+  const chainPromptRoute = routeBackgroundChainPromptMessage(
+    message,
+    sender,
+    sendResponse,
+  );
+  if (chainPromptRoute.handled) return chainPromptRoute.keepChannelOpen;
+
+  const signingRequestRoute = routeBackgroundSigningRequestMessage(
+    message,
+    sender,
+    sendResponse,
+  );
+  if (signingRequestRoute.handled) {
+    return signingRequestRoute.keepChannelOpen;
+  }
+
+  const transactionStatusRoute = routeBackgroundTransactionStatusMessage(
+    message,
+    sendResponse,
+  );
+  if (transactionStatusRoute.handled) {
+    return transactionStatusRoute.keepChannelOpen;
+  }
+
   switch (message.type) {
-    case "getDappAccounts": {
-      handleGetDappAccounts(sender).then(sendResponse);
-      return true;
-    }
-
-    case "requestDappConnection": {
-      void handleRequestDappConnection(message, sender);
-      return false;
-    }
-
-    case "getDappPermissions": {
-      getDappPermissions().then((permissions) =>
-        sendResponse({ success: true, permissions: Object.values(permissions) }),
-      );
-      return true;
-    }
-
-    case "getDappConnectionContext": {
-      handleGetDappConnectionContext(Number(message.tabId)).then(sendResponse);
-      return true;
-    }
-
-    case "getPendingDappConnectionRequests": {
-      getPendingDappConnectionRequests().then(sendResponse);
-      return true;
-    }
-
-    case "confirmDappConnection": {
-      handleConfirmDappConnection(message.requestId || "").then(sendResponse);
-      return true;
-    }
-
-    case "rejectDappConnection": {
-      handleRejectDappConnection(message.requestId || "").then(sendResponse);
-      return true;
-    }
-
-    case "revokeDappPermission": {
-      handleRevokeDappPermission(message.origin || "").then(sendResponse);
-      return true;
-    }
-
-    case "walletConnectGetSessions": {
-      handleWalletConnectGetSessions().then((result) => {
-        sendResponse(result);
-      });
-      return true;
-    }
-
-    case "walletConnectPair": {
-      handleWalletConnectPair(message.uri || "").then((result) => {
-        sendResponse(result);
-      });
-      return true;
-    }
-
-    case "walletConnectDisconnectSession": {
-      handleWalletConnectDisconnectSession(message.topic || "").then(
-        (result) => {
-          sendResponse(result);
-        },
-      );
-      return true;
-    }
-
-    case "walletConnectSwitchChain": {
-      handleWalletConnectSwitchChain(message.chainName || "").then((result) => {
-        sendResponse(result);
-      });
-      return true;
-    }
-
-    case "sendTransaction": {
-      const senderWindowId = sender.tab?.windowId;
-      handleTransactionRequest(
-        message,
-        message.txId,
-        senderWindowId,
-        sender.origin ?? undefined,
-        sender.tab?.id,
-        sender.frameId,
-      );
-      return false;
-    }
-
-    case "signatureRequest": {
-      // Validate EIP-712 schema — write error to storage so content script picks it up
-      const { signature } = message;
-      // SECURITY: reject eth_sign — signs a raw 32-byte digest with no prefix
-      // or semantic context. Attackers can pre-compute the hash of a transaction
-      // or EIP-712 payload and trick users into producing valid signatures over
-      // them while seeing only opaque hex. No legitimate dapp use remains.
-      if (signature.method === "eth_sign") {
-        writeResultToStorage(`sigResult:${message.sigId}`, {
-          success: false,
-          error:
-            "eth_sign is deprecated and unsafe; use personal_sign or eth_signTypedData_v4",
-        });
-        return false;
-      }
-      // Reject deprecated v1 typed data (no domain separator → no chain binding)
-      if (signature.method === "eth_signTypedData") {
-        writeResultToStorage(`sigResult:${message.sigId}`, {
-          success: false,
-          error:
-            "eth_signTypedData (v1) is deprecated; please use eth_signTypedData_v4",
-        });
-        return false;
-      }
-      if (
-        signature.method === "eth_signTypedData_v3" ||
-        signature.method === "eth_signTypedData_v4"
-      ) {
-        const validationResult = validateEIP712TypedData(
-          signature.method,
-          signature.params[1],
-        );
-
-        if (!validationResult.valid) {
-          console.warn(
-            `[WalletChan] EIP-712 validation failed for ${message.origin}:`,
-            validationResult.error,
-          );
-          writeResultToStorage(`sigResult:${message.sigId}`, {
-            success: false,
-            error:
-              validationResult.error === RAW_ERC7710_DELEGATION_SIGNATURE_ERROR
-                ? RAW_ERC7710_DELEGATION_SIGNATURE_ERROR
-                : "Data must conform to EIP-712 schema",
-          });
-          return false;
-        }
-
-        // Use sanitized typed data (extra properties stripped from type fields)
-        if (validationResult.sanitized) {
-          message.signature.params[1] = validationResult.sanitized;
-        }
-      }
-
-      const senderWindowId = sender.tab?.windowId;
-      handleSignatureRequest(
-        message,
-        message.sigId,
-        senderWindowId,
-        sender.origin ?? undefined,
-        sender.tab?.id,
-        sender.frameId,
-      );
-      return false;
-    }
-
-    case "getPendingSignatureRequests": {
-      getPendingSignatureRequests().then((requests) => {
-        sendResponse(requests);
-      });
-      return true;
-    }
-
     case "getPendingErc7715PermissionRequests": {
       getPendingErc7715PermissionRequests().then((requests) => {
         sendResponse(requests);
@@ -1324,18 +1219,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
-    case "rejectSignatureRequest": {
-      const result: SignatureResult = {
-        success: false,
-        error: "Signature request cancelled by user",
-      };
-      removePendingSignatureRequest(message.sigId).then(async () => {
-        await writeResultToStorage(`sigResult:${message.sigId}`, result);
-        sendResponse(result);
-      });
-      return true;
-    }
-
     case "rejectErc7715PermissionRequest": {
       handleRejectErc7715PermissionRequest(message.requestId).then((result) => {
         sendResponse(result);
@@ -1343,231 +1226,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
-    // ── wallet_watchAsset (EIP-747) ──────────────────────────────────────────
-    case "watchAsset": {
-      const senderWindowId = sender.tab?.windowId;
-      (async () => {
-        const request: PendingWatchAssetRequest = {
-          id: message.watchAssetId,
-          asset: message.asset,
-          chainId: message.chainId,
-          origin: message.origin,
-          favicon: message.favicon || null,
-          timestamp: Date.now(),
-        };
-        await savePendingWatchAssetRequest(request);
-        chrome.runtime
-          .sendMessage({ type: "newPendingWatchAssetRequest", request })
-          .catch(() => {});
-        openExtensionPopup(senderWindowId);
-      })();
-      return false;
-    }
-
-    case "getPendingWatchAssetRequests": {
-      getPendingWatchAssetRequests().then((requests) => {
-        sendResponse(requests);
-      });
-      return true;
-    }
-
-    case "confirmWatchAsset": {
-      (async () => {
-        const requests = await getPendingWatchAssetRequests();
-        const pending = requests.find((r) => r.id === message.watchAssetId);
-        if (pending) {
-          // Try to fetch the real token name from onchain
-          let tokenName = pending.asset.symbol;
-          try {
-            const info = await fetchTokenInfo(pending.asset.address, pending.chainId);
-            if (info?.name) tokenName = info.name;
-          } catch { /* use symbol as fallback */ }
-
-          await addCustomToken({
-            chainId: pending.chainId,
-            contractAddress: pending.asset.address,
-            symbol: pending.asset.symbol,
-            name: tokenName,
-            decimals: pending.asset.decimals,
-            image: pending.asset.image,
-          });
-          await unhidePortfolioToken(pending.chainId, pending.asset.address);
-          await removePendingWatchAssetRequest(message.watchAssetId);
-          await writeResultToStorage(`watchAssetResult:${message.watchAssetId}`, {
-            success: true,
-          });
-        }
-        sendResponse({ success: true });
-      })();
-      return true;
-    }
-
-    case "rejectWatchAsset": {
-      (async () => {
-        await removePendingWatchAssetRequest(message.watchAssetId);
-        await writeResultToStorage(`watchAssetResult:${message.watchAssetId}`, {
-          success: false,
-          error: "User rejected token addition",
-        });
-        sendResponse({ success: true });
-      })();
-      return true;
-    }
-
-    // ── wallet_addEthereumChain (EIP-3085) ────────────────────────────────────
-    case "addEthereumChain": {
-      const senderWindowId = sender.tab?.windowId;
-      (async () => {
-        const request: PendingAddChainRequest = {
-          id: message.requestId,
-          chainId: message.chainId,
-          chainName: message.chainName,
-          nativeCurrency: message.nativeCurrency,
-          rpcUrls: message.rpcUrls,
-          blockExplorerUrls: message.blockExplorerUrls,
-          origin: message.origin,
-          favicon: message.favicon || null,
-          timestamp: Date.now(),
-        };
-        await savePendingAddChainRequest(request);
-        chrome.runtime
-          .sendMessage({ type: "newPendingAddChainRequest", request })
-          .catch(() => {});
-        openExtensionPopup(senderWindowId);
-      })();
-      return false;
-    }
-
-    case "getPendingAddChainRequests": {
-      getPendingAddChainRequests().then((requests) => {
-        sendResponse(requests);
-      });
-      return true;
-    }
-
-    case "ensureNetworksInfo": {
-      ensureNetworksInfo().then(sendResponse);
-      return true;
-    }
-
-    case "addNetwork": {
-      addNetworkIfMissing({
-        chainName: message.chainName,
-        entry: message.entry,
-      }).then(sendResponse);
-      return true;
-    }
-
-    case "updateNetwork": {
-      updateNetworkEntry({
-        chainName: message.chainName,
-        nextChainName: message.nextChainName,
-        entry: message.entry,
-      }).then(sendResponse);
-      return true;
-    }
-
-    case "setNetworkHidden": {
-      (async () => {
-        const activeAccount = await getActiveAccount();
-        const result = await setNetworkHiddenState({
-          chainName: message.chainName,
-          hidden: message.hidden,
-          activeAccountType: activeAccount?.type,
-        });
-        sendResponse(result);
-      })();
-      return true;
-    }
-
-    case "deleteNetwork": {
-      (async () => {
-        const activeAccount = await getActiveAccount();
-        const result = await deleteNetworkEntry({
-          chainName: message.chainName,
-          activeAccountType: activeAccount?.type,
-        });
-        sendResponse(result);
-      })();
-      return true;
-    }
-
-    case "confirmAddChain": {
-      (async () => {
-        const requests = await getPendingAddChainRequests();
-        const pending = requests.find((r) => r.id === message.requestId);
-        if (pending) {
-          const name = message.chainName || pending.chainName || `Chain ${pending.chainId}`;
-          const rpcUrl = message.rpcUrl || pending.rpcUrls?.[0] || "";
-          const explorer =
-            message.explorer || pending.blockExplorerUrls?.[0] || "";
-          const nativeCurrency =
-            message.nativeCurrency || pending.nativeCurrency;
-          const activeAccount = await getActiveAccount();
-          const addResult = await addNetworkIfMissing({
-            chainName: name,
-            entry: {
-              chainId: message.chainId || pending.chainId,
-              rpcUrl,
-              isCustom: true,
-              explorer: explorer || undefined,
-              nativeCurrency,
-            },
-            switchIfSupportedForAccountType: activeAccount?.type ?? null,
-          });
-
-          if (!addResult.success) {
-            sendResponse(addResult);
-            return;
-          }
-
-          await removePendingAddChainRequest(pending.id);
-          const result = {
-            success: true,
-            rpcUrl:
-              addResult.networksInfo[addResult.chainName]?.rpcUrl || rpcUrl,
-            chainName: addResult.chainName,
-            shouldSwitch: addResult.shouldSwitch,
-          };
-          await writeResultToStorage(`addChainResult:${pending.id}`, result);
-          sendResponse(result);
-          return;
-        }
-        sendResponse({ success: false, error: "Pending add-chain request not found" });
-      })();
-      return true;
-    }
-
-    case "rejectAddChain": {
-      (async () => {
-        await removePendingAddChainRequest(message.requestId);
-        await writeResultToStorage(`addChainResult:${message.requestId}`, {
-          success: false,
-          error: "User rejected chain addition",
-        });
-        sendResponse({ success: true });
-      })();
-      return true;
-    }
-
-    case "dappChainSwitchNotification": {
-      handleDappChainSwitchNotification(message, sender)
-        .then(sendResponse)
-        .catch((error) =>
-          sendResponse({
-            success: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Failed to show notification",
-          }),
-        );
-      return true;
-    }
-
     // ── ERC-5792 Batch Transactions ──────────────────────────────────────────
     case "walletGetCapabilities": {
       (async () => {
+        const authorization = await authorizeConnectedDappRequest(sender);
+        if (!authorization.authorized) {
+          await writeResultToStorage(
+            `capabilitiesResult:${message.requestId}`,
+            {
+              success: false,
+              error: authorization.error,
+              code: authorization.code,
+            },
+          );
+          return;
+        }
         const account =
           typeof sender.tab?.id === "number"
             ? await getTabAccount(sender.tab.id)
@@ -1587,43 +1260,90 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "walletSendCalls": {
       const senderWindowId = sender.tab?.windowId;
-      handleWalletSendCalls(
-        message.params,
-        message.bundleId,
-        message.origin,
-        message.favicon,
-        senderWindowId,
-        sender.origin ?? undefined,
-        sender.tab?.id,
-        sender.frameId,
+      void runPendingRequestResolution({
+        family: "batchTransaction",
+        requestId: message.bundleId,
+        action: "confirm",
+        conflictResult: () => undefined,
+        resolve: async () => {
+          const authorization = await authorizeConnectedDappRequest(sender);
+          if (!authorization.authorized) {
+            await writeResultToStorage(`batchTxAck:${message.bundleId}`, {
+              success: false,
+              error: authorization.error,
+              code: authorization.code,
+            });
+            return;
+          }
+          await handleWalletSendCalls(
+            message.params,
+            message.bundleId,
+            authorization.origin,
+            message.favicon,
+            senderWindowId,
+            authorization.origin,
+            authorization.tabId,
+            sender.frameId,
+          );
+        },
+      }).catch((error) =>
+        writeResultToStorage(`batchTxAck:${message.bundleId}`, {
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to queue batch transaction",
+          code: -32000,
+        }).catch(() => undefined),
       );
       return false;
     }
 
     case "walletGetCallsStatus": {
-      // Use sender-derived origin (trusted) to scope the lookup to the dapp
-      // that originally created the bundle.
-      const requestOrigin = sender.origin ?? undefined;
-      handleWalletGetCallsStatus(message.bundleId, requestOrigin).then(
-        async (result) => {
+      void authorizeConnectedDappRequest(sender).then(async (authorization) => {
+        if (!authorization.authorized) {
           await writeResultToStorage(
             `callsStatusResult:${message.requestId}`,
-            result,
+            {
+              success: false,
+              error: authorization.error,
+              code: authorization.code,
+            },
           );
-        },
-      );
+          return;
+        }
+        const result = await handleWalletGetCallsStatus(
+          message.bundleId,
+          authorization.origin,
+        );
+        await writeResultToStorage(
+          `callsStatusResult:${message.requestId}`,
+          result,
+        );
+      });
       return false;
     }
 
     case "walletShowCallsStatus": {
-      const requestOrigin = sender.origin ?? undefined;
-      handleWalletShowCallsStatus(message.bundleId, requestOrigin);
+      void authorizeConnectedDappRequest(sender).then((authorization) => {
+        if (!authorization.authorized) return;
+        handleWalletShowCallsStatus(message.bundleId, authorization.origin);
+      });
       return false;
     }
 
     case "walletExecutionPermissions": {
       (async () => {
         try {
+          const authorization = await authorizeConnectedDappRequest(sender);
+          if (!authorization.authorized) {
+            sendResponse({
+              success: false,
+              error: authorization.error,
+              code: authorization.code,
+            });
+            return;
+          }
           if (!isErc7715PermissionMethod(message.method)) {
             throw new Error(
               `Unsupported execution permission method: ${message.method}`,
@@ -1637,13 +1357,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const result = await handleErc7715PermissionMethod({
             method: message.method,
             params: Array.isArray(message.params) ? message.params : [],
-            origin: sender.origin ?? message.origin ?? undefined,
+            origin: authorization.origin,
             chainId:
               typeof message.chainId === "number" ? message.chainId : undefined,
             favicon: message.favicon || null,
             senderWindowId: sender.tab?.windowId,
-            senderOrigin: sender.origin ?? undefined,
-            tabId: sender.tab?.id,
+            senderOrigin: authorization.origin,
+            tabId: authorization.tabId,
             frameId: sender.frameId,
             account: account ?? undefined,
             requestId:
@@ -1674,35 +1394,85 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "confirmBatchTransactionAsync": {
-      handleConfirmBatchTransaction(
-        message.bundleId,
-        message.password,
-        message.functionNames,
-        message.forceInclusion,
-      ).then((result) => {
-        sendResponse(result);
-      });
+      const bundleId =
+        typeof message.bundleId === "string" ? message.bundleId : "";
+      runPendingRequestResolution({
+        family: "batchTransaction",
+        requestId: bundleId,
+        action: "confirm",
+        resolve: () =>
+          handleConfirmBatchTransaction(
+            bundleId,
+            message.password,
+            message.functionNames,
+            message.forceInclusion,
+          ),
+        conflictResult: pendingResolutionConflict,
+      })
+        .then(sendResponse)
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to confirm batch transaction",
+          }),
+        );
       return true;
     }
 
     case "confirmBatchTransactionAsyncPK": {
-      handleConfirmBatchTransactionPK(
-        message.bundleId,
-        message.password,
-        message.tabId,
-        message.functionNames,
-        message.gasEstimates,
-        message.forceInclusion,
-      ).then((result) => {
-        sendResponse(result);
-      });
+      const bundleId =
+        typeof message.bundleId === "string" ? message.bundleId : "";
+      runPendingRequestResolution({
+        family: "batchTransaction",
+        requestId: bundleId,
+        action: "confirm",
+        resolve: () =>
+          handleConfirmBatchTransactionPK(
+            bundleId,
+            message.password,
+            message.tabId,
+            message.functionNames,
+            message.gasEstimates,
+            message.forceInclusion,
+          ),
+        conflictResult: pendingResolutionConflict,
+      })
+        .then(sendResponse)
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to confirm batch transaction",
+          }),
+        );
       return true;
     }
 
     case "rejectBatchTransaction": {
-      handleRejectBatchTransaction(message.bundleId).then((result) => {
-        sendResponse(result);
-      });
+      const bundleId =
+        typeof message.bundleId === "string" ? message.bundleId : "";
+      runPendingRequestResolution({
+        family: "batchTransaction",
+        requestId: bundleId,
+        action: "reject",
+        resolve: () => handleRejectBatchTransaction(bundleId),
+        conflictResult: pendingResolutionConflict,
+      })
+        .then(sendResponse)
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to reject batch transaction",
+          }),
+        );
       return true;
     }
 
@@ -1715,22 +1485,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "probeDelegateContract": {
       handleProbeDelegateContract(message.chainId, message.address).then(
-        (result) => sendResponse(result),
-      );
-      return true;
-    }
-
-    case "setCustomDelegate": {
-      handleSetCustomDelegate(
-        message.accountId,
-        message.chainId,
-        message.delegate,
-      ).then((result) => sendResponse(result));
-      return true;
-    }
-
-    case "removeCustomDelegate": {
-      handleRemoveCustomDelegate(message.accountId, message.chainId).then(
         (result) => sendResponse(result),
       );
       return true;
@@ -1755,39 +1509,81 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "splitBatchIntoIndividualTxs": {
       const senderWindowId = sender.tab?.windowId;
-      handleSplitBatchIntoIndividualTxs(
-        message.bundleId,
-        senderWindowId,
-      ).then((result) => {
-        sendResponse(result);
-      });
+      const bundleId =
+        typeof message.bundleId === "string" ? message.bundleId : "";
+      runPendingRequestResolution({
+        family: "batchTransaction",
+        requestId: bundleId,
+        action: "split",
+        resolve: () =>
+          handleSplitBatchIntoIndividualTxs(bundleId, senderWindowId),
+        conflictResult: pendingResolutionConflict,
+      }).then(sendResponse).catch((error) =>
+        sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to split batch",
+        }),
+      );
       return true;
     }
 
     case "removeCallFromPendingBatch": {
-      handleRemoveCallFromPendingBatch(
-        message.bundleId,
-        message.callIndex,
-      ).then((result) => {
-        sendResponse(result);
-      });
+      const bundleId =
+        typeof message.bundleId === "string" ? message.bundleId : "";
+      runPendingRequestResolution({
+        family: "batchTransaction",
+        requestId: bundleId,
+        action: "edit",
+        resolve: () =>
+          handleRemoveCallFromPendingBatch(bundleId, message.callIndex),
+        conflictResult: pendingResolutionConflict,
+      }).then(sendResponse).catch((error) =>
+        sendResponse({
+          success: false,
+          error:
+            error instanceof Error ? error.message : "Failed to update batch",
+        }),
+      );
       return true;
     }
 
     case "updateCallInPendingBatch": {
-      handleUpdateCallInPendingBatch(
-        message.bundleId,
-        message.callIndex,
-        message.newData,
-      ).then((result) => {
-        sendResponse(result);
-      });
+      const bundleId =
+        typeof message.bundleId === "string" ? message.bundleId : "";
+      runPendingRequestResolution({
+        family: "batchTransaction",
+        requestId: bundleId,
+        action: "edit",
+        resolve: () =>
+          handleUpdateCallInPendingBatch(
+            bundleId,
+            message.callIndex,
+            message.newData,
+          ),
+        conflictResult: pendingResolutionConflict,
+      }).then(sendResponse).catch((error) =>
+        sendResponse({
+          success: false,
+          error:
+            error instanceof Error ? error.message : "Failed to update batch",
+        }),
+      );
       return true;
     }
 
     case "updatePendingTxRequestData": {
-      updatePendingTxRequestData(message.txId, message.newData)
-        .then(() => sendResponse({ success: true }))
+      const txId = typeof message.txId === "string" ? message.txId : "";
+      runPendingRequestResolution({
+        family: "transaction",
+        requestId: txId,
+        action: "edit",
+        resolve: async () => {
+          await updatePendingTxRequestData(txId, message.newData);
+          return { success: true };
+        },
+        conflictResult: pendingResolutionConflict,
+      })
+        .then(sendResponse)
         .catch((err) =>
           sendResponse({
             success: false,
@@ -1798,330 +1594,140 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "addToCrossDappBatch": {
-      handleAddToCrossDappBatch(message.txId).then((result) => {
-        sendResponse(result);
-      });
+      const txId = typeof message.txId === "string" ? message.txId : "";
+      runPendingRequestResolutions({
+        requests: [
+          { family: "transaction", requestId: txId, action: "move" },
+          { family: "crossDappBatch", requestId: "active", action: "move" },
+        ],
+        resolve: () => handleAddToCrossDappBatch(txId),
+        conflictResult: (_family, _requestId, winningAction) =>
+          pendingResolutionConflict(winningAction),
+      }).then(sendResponse).catch((error) =>
+        sendResponse({
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to add transaction to batch",
+        }),
+      );
       return true;
     }
 
     case "addCallsToCrossDappBatch": {
-      handleAddCallsToCrossDappBatch(message.bundleId).then((result) => {
-        sendResponse(result);
-      });
+      const bundleId =
+        typeof message.bundleId === "string" ? message.bundleId : "";
+      runPendingRequestResolutions({
+        requests: [
+          {
+            family: "batchTransaction",
+            requestId: bundleId,
+            action: "move",
+          },
+          { family: "crossDappBatch", requestId: "active", action: "move" },
+        ],
+        resolve: () => handleAddCallsToCrossDappBatch(bundleId),
+        conflictResult: (_family, _requestId, winningAction) =>
+          pendingResolutionConflict(winningAction),
+      }).then(sendResponse).catch((error) =>
+        sendResponse({
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to add calls to batch",
+        }),
+      );
       return true;
     }
 
     case "removeFromCrossDappBatch": {
-      handleRemoveFromCrossDappBatch(message.txId).then((result) => {
-        sendResponse(result);
-      });
+      runPendingRequestResolution({
+        family: "crossDappBatch",
+        requestId: "active",
+        action: "edit",
+        resolve: () => handleRemoveFromCrossDappBatch(message.txId),
+        conflictResult: pendingResolutionConflict,
+      }).then(sendResponse).catch((error) =>
+        sendResponse({
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to remove transaction from batch",
+        }),
+      );
       return true;
     }
 
     case "updateCallInCrossDappBatch": {
-      handleUpdateCallInCrossDappBatch(message.txId, message.newData).then(
-        (result) => {
-          sendResponse(result);
-        },
+      runPendingRequestResolution({
+        family: "crossDappBatch",
+        requestId: "active",
+        action: "edit",
+        resolve: () =>
+          handleUpdateCallInCrossDappBatch(message.txId, message.newData),
+        conflictResult: pendingResolutionConflict,
+      }).then(sendResponse).catch((error) =>
+        sendResponse({
+          success: false,
+          error:
+            error instanceof Error ? error.message : "Failed to update batch",
+        }),
       );
       return true;
     }
 
     case "rejectCrossDappBatch": {
-      handleRejectCrossDappBatch().then((result) => {
-        sendResponse(result);
-      });
+      runPendingRequestResolution({
+        family: "crossDappBatch",
+        requestId: "active",
+        action: "reject",
+        resolve: handleRejectCrossDappBatch,
+        conflictResult: pendingResolutionConflict,
+      })
+        .then(sendResponse)
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to reject cross-dapp batch",
+          }),
+        );
       return true;
     }
 
     case "confirmCrossDappBatch": {
-      handleConfirmCrossDappBatch(
-        message.password,
-        message.gasEstimates,
-      ).then((result) => {
-        sendResponse(result);
-      });
-      return true;
-    }
-
-    case "getPendingTxRequests": {
-      getPendingTxRequests().then((requests) => {
-        sendResponse(requests);
-      });
-      return true;
-    }
-
-    case "getPendingTransaction": {
-      (async () => {
-        const { getPendingTxRequestById } = await import("./pendingTxStorage");
-        const request = await getPendingTxRequestById(message.txId);
-        if (request) {
+      runPendingRequestResolution({
+        family: "crossDappBatch",
+        requestId: "active",
+        action: "confirm",
+        resolve: () =>
+          handleConfirmCrossDappBatch(
+            message.password,
+            message.gasEstimates,
+          ),
+        conflictResult: pendingResolutionConflict,
+      })
+        .then(sendResponse)
+        .catch((error) =>
           sendResponse({
-            tx: request.tx,
-            origin: request.origin,
-            chainName: request.chainName,
-            favicon: request.favicon,
-          });
-        } else {
-          sendResponse(null);
-        }
-      })();
-      return true;
-    }
-
-    case "isApiKeyCached": {
-      sendResponse(isApiKeyCached());
-      return false;
-    }
-
-    case "confirmTransaction": {
-      handleConfirmTransaction(message.txId, message.password).then(
-        async (result) => {
-          await removePendingTxRequest(message.txId);
-          await writeResultToStorage(`txResult:${message.txId}`, result);
-          sendResponse(result);
-        },
-      );
-      return true;
-    }
-
-    case "rejectTransaction": {
-      handleRejectTransaction(message.txId).then((result) => {
-        sendResponse(result);
-      });
-      return true;
-    }
-
-    case "cancelTransaction": {
-      handleCancelTransaction(message.txId).then((result) => {
-        sendResponse(result);
-      });
-      return true;
-    }
-
-    case "clearApiKeyCache": {
-      runSerializedAuthTransition(async () => {
-        invalidateAuthCeremonies();
-        await clearAllAuthState();
-        chrome.runtime.sendMessage({ type: "walletLockedExternal" }).catch(() => {});
-        return { success: true };
-      })
-        .then(sendResponse)
-        .catch((error) => {
-          console.error("Failed to clear authentication cache:", error);
-          sendResponse({ success: false, error: "Failed to lock wallet" });
-        });
-      return true;
-    }
-
-    case "unlockWallet": {
-      runSerializedAuthTransition(async () => {
-        const result = await handleUnlockWallet(message.password);
-        if (result.success) invalidateAuthCeremonies();
-        return result;
-      })
-        .then((result) => {
-          if (result.success) {
-            // Broadcast so any other open UI surface (sidepanel + full-screen
-            // tab simultaneously) auto-unlocks. The message carries no secrets;
-            // each surface re-queries its own state from the SW cache.
-            chrome.runtime.sendMessage({ type: "walletUnlockedExternal" }).catch(() => {});
-          }
-          sendResponse(result);
-        })
-        .catch((error) => {
-          console.error("Failed to unlock wallet:", error);
-          sendResponse({ success: false, error: "Failed to unlock wallet" });
-        });
-      return true;
-    }
-
-    case "getPasskeyUnlockStatus": {
-      handleGetPasskeyUnlockStatus()
-        .then(sendResponse)
-        .catch((error) => {
-          console.error("Failed to load biometric unlock status:", error);
-          sendResponse({ success: false, configured: false, error: "Failed to load biometric unlock status" });
-        });
-      return true;
-    }
-
-    case "canSetupPasskeyUnlock": {
-      handleCanSetupPasskeyUnlock()
-        .then(sendResponse)
-        .catch((error) => {
-          console.error("Failed to preflight biometric setup:", error);
-          sendResponse({ success: false, error: "Failed to verify biometric setup" });
-        });
-      return true;
-    }
-
-    case "verifyPasskeySetupPassword": {
-      handleVerifyPasskeySetupPassword(message.masterPassword || "")
-        .then(sendResponse)
-        .catch((error) => {
-          console.error("Failed to verify biometric setup password:", error);
-          sendResponse({ success: false, error: "Failed to verify master password" });
-        });
-      return true;
-    }
-
-    case "setupPasskeyUnlock": {
-      runSerializedAuthTransition(() => handleSetupPasskeyUnlock(message))
-        .then(sendResponse)
-        .catch((error) => {
-          console.error("Failed to set up biometric unlock:", error);
-          sendResponse({ success: false, error: "Failed to set up biometric unlock" });
-        });
-      return true;
-    }
-
-    case "setupPasskeyUnlockWithPassword": {
-      runSerializedAuthTransition(() =>
-        handleSetupPasskeyUnlockWithPassword(
-          message,
-          message.masterPassword || "",
-        ),
-      )
-        .then((result) => {
-          if (result.success) {
-            chrome.runtime.sendMessage({ type: "walletUnlockedExternal" }).catch(() => {});
-          }
-          sendResponse(result);
-        })
-        .catch((error) => {
-          console.error("Failed to set up biometric unlock:", error);
-          sendResponse({ success: false, error: "Failed to set up biometric unlock" });
-        });
-      return true;
-    }
-
-    case "unlockWithPasskey": {
-      runSerializedAuthTransition(() => handleUnlockWithPasskey(message))
-        .then((result) => {
-          if (result.success) {
-            chrome.runtime.sendMessage({ type: "walletUnlockedExternal" }).catch(() => {});
-          }
-          sendResponse(result);
-        })
-        .catch((error) => {
-          console.error("Failed to unlock with biometrics:", error);
-          sendResponse({ success: false, error: "Biometric unlock failed" });
-        });
-      return true;
-    }
-
-    case "removePasskeyUnlock": {
-      runSerializedAuthTransition(() =>
-        handleRemovePasskeyUnlock(message.masterPassword || ""),
-      )
-        .then(sendResponse)
-        .catch((error) => {
-          console.error("Failed to remove biometric unlock:", error);
-          sendResponse({ success: false, error: "Failed to remove biometric unlock" });
-        });
-      return true;
-    }
-
-    case "lockWallet": {
-      runSerializedAuthTransition(async () => {
-        invalidateAuthCeremonies();
-        await clearAllAuthState();
-        chrome.runtime.sendMessage({
-          type: "walletLockedExternal",
-          suppressPasskeyAutoPrompt: true,
-        }).catch(() => {});
-        return { success: true };
-      })
-        .then(sendResponse)
-        .catch((error) => {
-          console.error("Failed to lock wallet:", error);
-          sendResponse({ success: false, error: "Failed to lock wallet" });
-        });
-      return true; // async response
-    }
-
-    // Account management handlers
-    case "getAccounts": {
-      getAccounts().then((accounts) => {
-        sendResponse(accounts);
-      });
-      return true;
-    }
-
-    case "getActiveAccount": {
-      const accountPromise =
-        !isExtensionPage(sender) && typeof sender.tab?.id === "number"
-          ? resolveBrowserTabAccount(sender.tab.id)
-          : getActiveAccount();
-      accountPromise.then((account) => {
-        sendResponse(account);
-      });
-      return true;
-    }
-
-    case "setActiveAccount": {
-      (async () => {
-        await setActiveAccountId(message.accountId);
-        const account = await getAccountById(message.accountId);
-        if (account) {
-          await chrome.storage.sync.set({
-            address: account.address,
-            displayAddress: account.displayName || account.address,
-          });
-        }
-        chrome.runtime.sendMessage({ type: "accountsUpdated" }).catch(() => {});
-        sendResponse({ success: true });
-      })();
-      return true;
-    }
-
-    case "getTabAccount": {
-      const tabId =
-        typeof message.tabId === "number" ? message.tabId : sender.tab?.id;
-      if (typeof tabId === "number") {
-        const accountPromise = message.activate
-          ? activateBrowserTabAccount(tabId)
-          : resolveBrowserTabAccount(tabId);
-        accountPromise.then((account) => {
-          sendResponse(account);
-        });
-      } else {
-        getActiveAccount().then((account) => {
-          sendResponse(account);
-        });
-      }
-      return true;
-    }
-
-    case "setTabAccount": {
-      const tabId =
-        typeof message.tabId === "number" ? message.tabId : sender.tab?.id;
-      if (typeof tabId === "number") {
-        selectBrowserTabAccount(tabId, message.accountId)
-          .then(({ account, scope }) => {
-            if (scope === "global") {
-              chrome.runtime
-                .sendMessage({ type: "accountsUpdated" })
-                .catch(() => {});
-            }
-            sendResponse({ success: true, account, scope });
-          })
-          .catch((error) => {
-            sendResponse({
-              success: false,
-              error: error instanceof Error ? error.message : "Failed to select account",
-            });
-          });
-      } else {
-        sendResponse({ success: false, error: "No tab ID" });
-      }
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to confirm cross-dapp batch",
+          }),
+        );
       return true;
     }
 
     case "migrateFromLegacy": {
       // Only extension pages (popup / sidepanel) may trigger migration
-      if (!isExtensionPage(sender)) {
+      if (!isTrustedWalletUiSender(sender)) {
         sendResponse({ migrated: false });
         return false;
       }
@@ -2134,33 +1740,68 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "addBankrAccount": {
       (async () => {
         try {
-          // SECURITY: Block API key changes when unlocked with agent password.
-          // Resolve via session restore so post-SW-restart agent sessions are caught.
-          if (message.apiKey) {
-            const passwordType = await resolvePasswordType(handleUnlockWallet);
-            if (passwordType === "agent") {
-              sendResponse({
-                success: false,
-                error: "Adding accounts with API keys requires master password",
-              });
-              return;
-            }
+          const passwordType = await resolvePasswordType(handleUnlockWallet);
+          if (passwordType !== "master") {
+            sendResponse({
+              success: false,
+              error: "Adding accounts requires master password",
+            });
+            return;
           }
-
-          // If apiKey is provided and wallet is unlocked, save it first
-          if (message.apiKey) {
-            const saveResult = await handleSaveApiKeyWithCachedPassword(
-              message.apiKey,
-            );
-            if (!saveResult.success) {
-              sendResponse(saveResult);
-              return;
-            }
+          const preparedCredential = message.apiKey
+            ? await prepareApiKeyUpdateWithCachedPassword(message.apiKey)
+            : null;
+          if (preparedCredential && !preparedCredential.success) {
+            sendResponse(preparedCredential);
+            return;
           }
-
-          const account = await addBankrAccount(
+          const operationAuthEpoch = preparedCredential?.success
+            ? preparedCredential.expectedAuthEpoch
+            : getAuthCeremonyEpoch();
+          const verificationApiKey = preparedCredential?.success
+            ? preparedCredential.apiKey
+            : getCachedApiKey();
+          if (!verificationApiKey) {
+            sendResponse({
+              success: false,
+              error: "Bankr credential is unavailable. Unlock and try again.",
+            });
+            return;
+          }
+          await verifyBankrCredentialAddress(
+            verificationApiKey,
             message.address,
-            message.displayName,
+          );
+
+          const account = await withStorageLock(
+            WALLET_SECRET_OPERATION_LOCK_KEY,
+            async () => {
+              assertCurrentMasterAuthorization(operationAuthEpoch);
+              if (preparedCredential?.success) {
+                const added = await addBankrAccountWithCredentialUpdate(
+                  message.address,
+                  message.displayName,
+                  preparedCredential.storageUpdate,
+                  operationAuthEpoch,
+                );
+                commitPreparedApiKeyUpdate(preparedCredential);
+                await setActiveAccountId(
+                  added.id,
+                  operationAuthEpoch,
+                ).catch((error) => {
+                  console.warn(
+                    "[background] Failed to select newly added Bankr account:",
+                    error,
+                  );
+                });
+                return added;
+              }
+              return addBankrAccount(
+                message.address,
+                message.displayName,
+                operationAuthEpoch,
+              );
+            },
           );
           chrome.runtime
             .sendMessage({ type: "accountsUpdated" })
@@ -2183,16 +1824,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // SECURITY: Block when unlocked with agent password.
           // Resolve via session restore so post-SW-restart agent sessions are caught.
           const passwordType = await resolvePasswordType(handleUnlockWallet);
-          if (passwordType === "agent") {
+          if (passwordType !== "master") {
             sendResponse({
               success: false,
               error: "Adding accounts requires master password",
             });
             return;
           }
-          const account = await addImpersonatorAccount(
-            message.address,
-            message.displayName,
+          const operationAuthEpoch = getAuthCeremonyEpoch();
+          const account = await withStorageLock(
+            WALLET_SECRET_OPERATION_LOCK_KEY,
+            async () => {
+              assertCurrentMasterAuthorization(operationAuthEpoch);
+              return addImpersonatorAccount(
+                message.address,
+                message.displayName,
+                operationAuthEpoch,
+              );
+            },
           );
           chrome.runtime
             .sendMessage({ type: "accountsUpdated" })
@@ -2211,7 +1860,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "generateMnemonic": {
       // SECURITY: Only extension pages can generate mnemonics
-      if (!isExtensionPage(sender)) {
+      if (!isTrustedWalletUiSender(sender)) {
         sendResponse({ success: false, error: "Unauthorized" });
         return false;
       }
@@ -2221,490 +1870,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "previewSeedAddresses": {
-      (async () => {
-        try {
-          const {
-            mnemonic: rawMnemonic,
-            seedGroupId,
-            start,
-            count,
-          } = message as {
-            mnemonic?: string;
-            seedGroupId?: string;
-            start?: number;
-            count?: number;
-          };
-
-          let mnemonic: string | null = null;
-          if (rawMnemonic) {
-            if (!isValidMnemonic(rawMnemonic)) {
-              sendResponse({
-                success: false,
-                error: "Invalid seed phrase (must be 12 words)",
-              });
-              return;
-            }
-            mnemonic = rawMnemonic.trim();
-          } else if (seedGroupId) {
-            // Existing-group preview: decrypt the stored mnemonic. Requires
-            // unlocked wallet (master, not agent — same gate as deriveSeedAccount).
-            const passwordType = await resolvePasswordType(handleUnlockWallet);
-            if (passwordType === "agent") {
-              sendResponse({
-                success: false,
-                error: "Deriving accounts requires master password",
-              });
-              return;
-            }
-            let password = getCachedPassword();
-            if (!password) {
-              const autoLockTimeout = await getAutoLockTimeout();
-              if (autoLockTimeout === 0) {
-                const restored = await tryRestoreSession(handleUnlockWallet);
-                if (restored) password = getCachedPassword();
-              }
-            }
-            if (!password) {
-              sendResponse({
-                success: false,
-                error: "Wallet must be unlocked",
-              });
-              return;
-            }
-            const stored = await getMnemonic(seedGroupId, password);
-            if (!stored) {
-              sendResponse({
-                success: false,
-                error: "Seed phrase not found",
-              });
-              return;
-            }
-            mnemonic = stored;
-          } else {
-            sendResponse({
-              success: false,
-              error: "Either mnemonic or seedGroupId is required",
-            });
-            return;
-          }
-
-          const startIdx = Math.max(0, Math.floor(start ?? 0));
-          const total = Math.max(1, Math.min(20, Math.floor(count ?? 5)));
-          const existingAddresses = new Set(
-            (await getAccounts())
-              .filter((a) => a.type !== "impersonator")
-              .map((a) => a.address.toLowerCase()),
-          );
-          const items = [] as Array<{
-            index: number;
-            address: string;
-            exists: boolean;
-          }>;
-          for (let i = 0; i < total; i++) {
-            const idx = startIdx + i;
-            const pk = deriveSeedPrivateKey(mnemonic, idx);
-            const address = deriveAddress(pk);
-            items.push({
-              index: idx,
-              address,
-              exists: existingAddresses.has(address.toLowerCase()),
-            });
-          }
-          sendResponse({ success: true, items });
-        } catch (error) {
-          sendResponse({
-            success: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Failed to preview seed phrase addresses",
-          });
-        }
-      })();
+      void previewSeedAddresses(message).then(sendResponse);
       return true;
     }
 
     case "addSeedPhraseGroup": {
-      (async () => {
-        try {
-          // SECURITY: Block when unlocked with agent password.
-          // Resolve via session restore so post-SW-restart agent sessions are caught.
-          const passwordType = await resolvePasswordType(handleUnlockWallet);
-          if (passwordType === "agent") {
-            sendResponse({
-              success: false,
-              error: "Adding seed phrases requires master password",
-            });
-            return;
-          }
-          let password = getCachedPassword();
-
-          // If no cached password, try session restoration (for "Never" auto-lock mode)
-          if (!password) {
-            const autoLockTimeout = await getAutoLockTimeout();
-            if (autoLockTimeout === 0) {
-              const restored = await tryRestoreSession(handleUnlockWallet);
-              if (restored) {
-                password = getCachedPassword();
-              }
-            }
-          }
-
-          if (!password) {
-            sendResponse({ success: false, error: "Wallet must be unlocked" });
-            return;
-          }
-
-          // Generate or validate mnemonic
-          let mnemonic: string;
-          if (message.mnemonic) {
-            if (!isValidMnemonic(message.mnemonic)) {
-              sendResponse({
-                success: false,
-                error: "Invalid seed phrase (must be 12 words)",
-              });
-              return;
-            }
-            mnemonic = message.mnemonic.trim();
-          } else {
-            mnemonic = generateNewMnemonic();
-          }
-
-          // Normalize indices: caller can pass a sorted+deduped list, or omit
-          // for the legacy "import index 0 only" behavior.
-          const rawIndices = Array.isArray(message.indices)
-            ? (message.indices as unknown[])
-            : [0];
-          const indices = Array.from(
-            new Set(
-              rawIndices
-                .map((n) => Math.floor(Number(n)))
-                .filter((n) => Number.isFinite(n) && n >= 0),
-            ),
-          ).sort((a, b) => a - b);
-          if (indices.length === 0) {
-            sendResponse({
-              success: false,
-              error: "At least one derivation index is required",
-            });
-            return;
-          }
-
-          const importableCandidates: Array<{
-            index: number;
-            address: string;
-          }> = [];
-          for (const idx of indices) {
-            const privateKey = deriveSeedPrivateKey(mnemonic, idx);
-            const address = deriveAddress(privateKey);
-            const existingAccount =
-              await findNonImpersonatorAccountByAddress(address);
-            if (!existingAccount || existingAccount.type === "privateKey") {
-              importableCandidates.push({ index: idx, address });
-            }
-          }
-
-          if (importableCandidates.length === 0) {
-            sendResponse({
-              success: false,
-              error: "All selected addresses already exist in this wallet",
-            });
-            return;
-          }
-
-          const group = await addSeedGroup(message.name);
-          let mnemonicStored = false;
-
-          // Store the mnemonic only after at least one selected address can be
-          // imported or converted. Failed duplicate-only imports must not leave
-          // orphaned seed material in storage.
-          try {
-            await storeMnemonic(group.id, mnemonic, password);
-            mnemonicStored = true;
-          } catch (error) {
-            await removeSeedGroup(group.id);
-            throw error;
-          }
-
-          const importedAccounts: SeedPhraseAccount[] = [];
-          for (const candidate of importableCandidates) {
-            // Check if address already exists (PK → seed phrase conversion)
-            const existingAccount =
-              await findNonImpersonatorAccountByAddress(candidate.address);
-            let account: SeedPhraseAccount;
-
-            if (existingAccount) {
-              if (existingAccount.type === "privateKey") {
-                const converted = await convertToSeedPhraseAccount(
-                  existingAccount.id,
-                  group.id,
-                  candidate.index,
-                );
-                if (!converted) throw new Error("Failed to convert account");
-                account = converted;
-              } else {
-                // Skip duplicates that are already seed/bankr.
-                // We don't want to fail the whole import for one collision.
-                continue;
-              }
-            } else {
-              const privateKey = deriveSeedPrivateKey(
-                mnemonic,
-                candidate.index,
-              );
-              account = await addSeedPhraseAccount(
-                candidate.address,
-                group.id,
-                candidate.index,
-                // Only apply the user-supplied display name to the first
-                // imported account so multi-imports don't collide on name.
-                importedAccounts.length === 0
-                  ? message.accountDisplayName || undefined
-                  : undefined,
-              );
-              await addKeyToVault(account.id, privateKey, password);
-            }
-            importedAccounts.push(account);
-          }
-
-          if (importedAccounts.length === 0) {
-            if (mnemonicStored) await removeMnemonic(group.id);
-            await removeSeedGroup(group.id);
-            sendResponse({
-              success: false,
-              error: "All selected addresses already exist in this wallet",
-            });
-            return;
-          }
-
-          await updateSeedGroupCount(group.id, importedAccounts.length);
-
-          // Update cached vault
-          const vault = await decryptAllKeys(password);
-          if (vault) setCachedVault(vault);
-
-          chrome.runtime
-            .sendMessage({ type: "accountsUpdated" })
-            .catch(() => {});
-          sendResponse({
-            success: true,
-            account: importedAccounts[0],
-            accounts: importedAccounts,
-            group,
-            mnemonic: message.mnemonic ? undefined : mnemonic, // Only return if generated
-          });
-        } catch (error) {
-          sendResponse({
-            success: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Failed to create seed phrase",
-          });
-        }
-      })();
+      void addSeedPhraseGroup(message).then(sendResponse);
       return true;
     }
 
     case "deriveSeedAccount": {
-      (async () => {
-        try {
-          // SECURITY: Block when unlocked with agent password.
-          // Resolve via session restore so post-SW-restart agent sessions are caught.
-          const passwordType = await resolvePasswordType(handleUnlockWallet);
-          if (passwordType === "agent") {
-            sendResponse({
-              success: false,
-              error: "Deriving accounts requires master password",
-            });
-            return;
-          }
-          let password = getCachedPassword();
-
-          // If no cached password, try session restoration (for "Never" auto-lock mode)
-          if (!password) {
-            const autoLockTimeout = await getAutoLockTimeout();
-            if (autoLockTimeout === 0) {
-              const restored = await tryRestoreSession(handleUnlockWallet);
-              if (restored) {
-                password = getCachedPassword();
-              }
-            }
-          }
-
-          if (!password) {
-            sendResponse({ success: false, error: "Wallet must be unlocked" });
-            return;
-          }
-
-          const { seedGroupId } = message;
-          const mnemonic = await getMnemonic(seedGroupId, password);
-          if (!mnemonic) {
-            sendResponse({
-              success: false,
-              error: "Seed phrase not found or wrong password",
-            });
-            return;
-          }
-
-          const accounts = await getAccounts();
-          const groupAccounts = accounts.filter(
-            (a) =>
-              a.type === "seedPhrase" && (a as any).seedGroupId === seedGroupId,
-          );
-
-          // Caller may pass `indices: number[]` to derive multiple at once.
-          // Legacy callers pass nothing → derive the next (max+1) index.
-          let indices: number[];
-          if (Array.isArray(message.indices)) {
-            indices = Array.from(
-              new Set(
-                (message.indices as unknown[])
-                  .map((n) => Math.floor(Number(n)))
-                  .filter((n) => Number.isFinite(n) && n >= 0),
-              ),
-            ).sort((a, b) => a - b);
-          } else {
-            const nextIndex =
-              groupAccounts.length > 0
-                ? Math.max(
-                    ...groupAccounts.map((a) => (a as any).derivationIndex),
-                  ) + 1
-                : 0;
-            indices = [nextIndex];
-          }
-
-          if (indices.length === 0) {
-            sendResponse({
-              success: false,
-              error: "At least one derivation index is required",
-            });
-            return;
-          }
-
-          const newAccounts: SeedPhraseAccount[] = [];
-          for (const idx of indices) {
-            const privateKey = deriveSeedPrivateKey(mnemonic, idx);
-            const address = deriveAddress(privateKey);
-
-            const existingAccount =
-              await findNonImpersonatorAccountByAddress(address);
-            let account: SeedPhraseAccount;
-
-            if (existingAccount) {
-              if (existingAccount.type === "privateKey") {
-                const converted = await convertToSeedPhraseAccount(
-                  existingAccount.id,
-                  seedGroupId,
-                  idx,
-                );
-                if (!converted) throw new Error("Failed to convert account");
-                account = converted;
-              } else {
-                // Already a seed-phrase / bankr account.
-                // Skip silently so a multi-derive doesn't fail on one collision.
-                continue;
-              }
-            } else {
-              account = await addSeedPhraseAccount(
-                address,
-                seedGroupId,
-                idx,
-                // Only apply the display name to the first new account.
-                newAccounts.length === 0
-                  ? message.displayName || undefined
-                  : undefined,
-              );
-              await addKeyToVault(account.id, privateKey, password);
-            }
-            newAccounts.push(account);
-          }
-
-          if (newAccounts.length === 0) {
-            sendResponse({
-              success: false,
-              error: "All selected addresses already exist in this wallet",
-            });
-            return;
-          }
-
-          await updateSeedGroupCount(
-            seedGroupId,
-            groupAccounts.length + newAccounts.length,
-          );
-
-          // Update cached vault
-          const vault = await decryptAllKeys(password);
-          if (vault) setCachedVault(vault);
-
-          chrome.runtime
-            .sendMessage({ type: "accountsUpdated" })
-            .catch(() => {});
-          sendResponse({
-            success: true,
-            account: newAccounts[0],
-            accounts: newAccounts,
-          });
-        } catch (error) {
-          sendResponse({
-            success: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Failed to derive account",
-          });
-        }
-      })();
+      void deriveSeedAccounts(message).then(sendResponse);
       return true;
     }
 
     case "revealSeedPhrase": {
       // SECURITY: Only extension pages can reveal seed phrases
-      if (!isExtensionPage(sender)) {
+      if (!isTrustedWalletUiSender(sender)) {
         sendResponse({ success: false, error: "Unauthorized" });
         return true;
       }
-      (async () => {
-        try {
-          const { seedGroupId, password } = message;
-
-          // SECURITY: Block when unlocked with agent password.
-          const seedRevealPasswordType = await resolvePasswordType(handleUnlockWallet);
-          if (seedRevealPasswordType === "agent") {
-            sendResponse({
-              success: false,
-              error: "Seed phrase reveal requires master password",
-              requiresMasterPassword: true,
-            });
-            return;
-          }
-          if (seedRevealPasswordType !== "master") {
-            sendResponse({ success: false, error: "Wallet is locked" });
-            return;
-          }
-
-          if (!(await verifyExplicitMasterPassword(password))) {
-            sendResponse({ success: false, error: "Invalid password" });
-            return;
-          }
-
-          const mnemonic = await getMnemonic(seedGroupId, password);
-          if (!mnemonic) {
-            sendResponse({ success: false, error: "Seed phrase not found" });
-            return;
-          }
-
-          sendResponse({ success: true, mnemonic });
-        } catch (error) {
-          sendResponse({
-            success: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Failed to reveal seed phrase",
-          });
-        }
-      })();
+      void handleRevealSeedPhrase(
+        typeof message.seedGroupId === "string" ? message.seedGroupId : "",
+        typeof message.password === "string" ? message.password : "",
+        sendResponse,
+      );
       return true;
     }
 
@@ -2739,39 +1929,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
-    case "updateAccountDisplayName": {
-      const displayName =
-        typeof message.displayName === "string"
-          ? message.displayName.slice(0, 100)
-          : "";
-      updateAccountDisplayName(message.accountId, displayName)
-        .then(() => {
-          chrome.runtime
-            .sendMessage({ type: "accountsUpdated" })
-            .catch(() => {});
-          sendResponse({ success: true });
-        })
-        .catch((error) => {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : "Failed to update",
-          });
-        });
-      return true;
-    }
-
     case "addPrivateKeyAccount": {
       (async () => {
         // SECURITY: Block adding accounts when unlocked with agent password.
         // Resolve via session restore so post-SW-restart agent sessions are caught.
         const passwordType = await resolvePasswordType(handleUnlockWallet);
-        if (passwordType === "agent") {
+        if (passwordType !== "master") {
           sendResponse({
             success: false,
             error: "Adding accounts requires master password",
           });
           return;
         }
+        const operationAuthEpoch = getAuthCeremonyEpoch();
 
         let password = message.password || getCachedPassword();
 
@@ -2794,6 +1964,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           message.privateKey,
           password,
           message.displayName,
+          operationAuthEpoch,
         );
         sendResponse(result);
       })();
@@ -2805,141 +1976,134 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // SECURITY: Block account removal when unlocked with agent password.
         // Resolve via session restore so post-SW-restart agent sessions are caught.
         const passwordType = await resolvePasswordType(handleUnlockWallet);
-        if (passwordType === "agent") {
+        if (passwordType !== "master") {
           sendResponse({
             success: false,
             error: "Account removal requires master password",
           });
           return;
         }
-        const tabAccounts = await getTabAccounts();
-        const affectedTabIds = Object.entries(tabAccounts)
-          .filter(([, accountId]) => accountId === message.accountId)
-          .map(([tabId]) => Number(tabId))
-          .filter(Number.isInteger);
-        const result = await handleRemoveAccount(message.accountId);
-        if (result.success) {
-          for (const tabId of affectedTabIds) {
-            const fallback = await resolveBrowserTabAccount(tabId);
-            if (fallback) await sendAccountToTab(tabId, fallback);
-          }
-        }
-        sendResponse(result);
-      })();
-      return true;
-    }
-
-    case "revealPrivateKey": {
-      // SECURITY: Only extension pages can reveal private keys
-      if (!isExtensionPage(sender)) {
-        sendResponse({ success: false, error: "Unauthorized" });
-        return true;
-      }
-      (async () => {
+        const operationAuthEpoch = getAuthCeremonyEpoch();
         try {
-          const { accountId, password } = message;
-
-          // SECURITY: Block private key reveal when unlocked with agent password.
-          const pkRevealPasswordType = await resolvePasswordType(handleUnlockWallet);
-          if (pkRevealPasswordType === "agent") {
-            sendResponse({
-              success: false,
-              error: "Private key reveal requires master password",
-              requiresMasterPassword: true,
-            });
-            return;
-          }
-          if (pkRevealPasswordType !== "master") {
-            sendResponse({ success: false, error: "Wallet is locked" });
-            return;
-          }
-
-          if (!(await verifyExplicitMasterPassword(password))) {
-            sendResponse({ success: false, error: "Invalid password" });
-            return;
-          }
-
-          // Try cached vault first
-          let privateKey = getPrivateKeyFromCache(accountId);
-          if (!privateKey) {
-            const cachedVaultKey = getCachedVaultKey();
-            const vault = cachedVaultKey
-              ? await (async () => {
-                  const { decryptAllKeysWithVaultKey } = await import("./authHandlers");
-                  return decryptAllKeysWithVaultKey(cachedVaultKey);
-                })()
-              : await decryptAllKeys(password);
-            if (!vault) {
-              sendResponse({
-                success: false,
-                error: "Failed to decrypt vault",
-              });
-              return;
-            }
-            setCachedVault(vault);
-            privateKey = getPrivateKeyFromCache(accountId);
-          }
-          if (!privateKey) {
-            sendResponse({
-              success: false,
-              error: "Private key not found for this account",
-            });
-            return;
-          }
-          sendResponse({ success: true, privateKey });
+          const result = await withSponsoredTransferOperation(() =>
+            removeAccountWithDappPrivacyBoundary({
+            accountId: message.accountId,
+            validateRemoval: async () => {
+              const account = await getAccountById(message.accountId);
+              if (!account) throw new Error("Account not found");
+              if (
+                await hasUnresolvedSponsoredTransferIntent(account.address)
+              ) {
+                throw new Error(
+                  "Check the pending sponsored transfer before removing this account",
+                );
+              }
+              if ((await getAccounts()).length <= 1) {
+                throw new Error("Cannot remove the last account");
+              }
+            },
+            revokeOrigin: async (origin) => {
+              await handleRevokeDappPermission(origin);
+            },
+            removeAccount: () =>
+              handleRemoveAccount(message.accountId, operationAuthEpoch),
+            }),
+          );
+          sendResponse(result);
         } catch (error) {
           sendResponse({
             success: false,
             error:
               error instanceof Error
                 ? error.message
-                : "Failed to reveal private key",
+                : "Failed to disconnect sites before account removal",
           });
         }
       })();
       return true;
     }
 
+    case "revealPrivateKey": {
+      // SECURITY: Only extension pages can reveal private keys
+      if (!isTrustedWalletUiSender(sender)) {
+        sendResponse({ success: false, error: "Unauthorized" });
+        return true;
+      }
+      void handleRevealPrivateKey(
+        typeof message.accountId === "string" ? message.accountId : "",
+        typeof message.password === "string" ? message.password : "",
+        sendResponse,
+      );
+      return true;
+    }
+
     case "confirmSignatureRequest": {
       const tabId = message.tabId || sender.tab?.id;
-      (async () => {
-        let result: SignatureResult;
-        // SECURITY: route by the pinned account type (captured at arrival),
-        // not by whatever is active right now.
-        const { getPendingSignatureRequestById } = await import(
-          "./pendingSignatureStorage"
-        );
-        const pending = await getPendingSignatureRequestById(message.sigId);
-        let pinnedType = pending?.accountType;
-        if (!pinnedType && pending?.accountId) {
-          const pinnedAcc = await getAccountById(pending.accountId);
-          pinnedType = pinnedAcc?.type as typeof pinnedType;
-        }
-        if (pinnedType === "bankr") {
-          result = await handleConfirmSignatureRequestBankr(
-            message.sigId,
-            message.password,
-            message.allowUnsafeSiwe === true,
-          );
-        } else if (
-          pinnedType === "privateKey" ||
-          pinnedType === "seedPhrase"
-        ) {
-          result = await handleConfirmSignatureRequest(
-            message.sigId,
-            message.password,
-            tabId,
-            message.allowUnsafeSiwe === true,
-          );
-        } else {
-          result = {
+      const sigId = typeof message.sigId === "string" ? message.sigId : "";
+      runPendingRequestResolution<SignatureResult>({
+        family: "signature",
+        requestId: sigId,
+        action: "confirm",
+        conflictResult: pendingResolutionConflict,
+        resolve: async () => {
+          let result: SignatureResult;
+          // SECURITY: route by the pinned account type (captured at arrival),
+          // not by whatever is active right now.
+          const pending = await getPendingSignatureRequestById(sigId);
+          if (!pending) {
+            return { success: false, error: "Signature request not found" };
+          }
+          let pinnedType = pending.accountType;
+          if (!pinnedType && pending.accountId) {
+            const pinnedAcc = await getAccountById(pending.accountId);
+            pinnedType = pinnedAcc?.type as typeof pinnedType;
+          }
+          if (pinnedType === "bankr") {
+            result = await handleConfirmSignatureRequestBankr(
+              sigId,
+              message.password,
+              message.allowUnsafeSiwe === true,
+            );
+          } else if (
+            pinnedType === "privateKey" ||
+            pinnedType === "seedPhrase"
+          ) {
+            result = await handleConfirmSignatureRequest(
+              sigId,
+              message.password,
+              tabId,
+              message.allowUnsafeSiwe === true,
+            );
+          } else {
+            result = {
+              success: false,
+              error: "Pending request is no longer valid",
+            };
+          }
+
+          // Only a removed request is terminal. Invalid passwords and other
+          // safe pre-sign validation failures remain pending and can be
+          // retried without resolving the dapp's promise.
+          if (!(await getPendingSignatureRequestById(sigId))) {
+            const resultKey = `sigResult:${sigId}`;
+            const existingResult = await chrome.storage.local.get(resultKey);
+            if (!existingResult[resultKey]) {
+              await writeResultToStorage(resultKey, result);
+            }
+          }
+          return result;
+        },
+      })
+        .then(sendResponse)
+        .catch((error) =>
+          sendResponse({
             success: false,
-            error: "Pending request is no longer valid",
-          };
-        }
-        await writeResultToStorage(`sigResult:${message.sigId}`, result);
-        sendResponse(result);
-      })();
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to confirm signature request",
+          }),
+        );
       return true;
     }
 
@@ -2990,55 +2154,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "retryTokenMetadata": {
-      retryTokenMetadata(message.chainId, message.tokenChanges, message.accountAddress).then(sendResponse);
+      retryTokenMetadata(
+        message.chainId,
+        message.tokenChanges,
+        message.accountAddress,
+        message.nativeChange,
+      ).then(sendResponse);
       return true;
     }
 
     case "confirmTransactionAsyncPK": {
       const tabId = message.tabId || sender.tab?.id;
-      handleConfirmTransactionAsyncPK(
-        message.txId,
-        message.password,
-        tabId,
-        message.functionName,
-        message.gasOverrides,
-        message.forceInclusion,
-      ).then((result) => {
-        sendResponse(result);
-      });
-      return true;
-    }
-
-    case "isWalletUnlocked": {
-      (async () => {
-        await getAutoLockTimeout();
-        let unlocked = isWalletUnlocked();
-        if (!unlocked) {
-          const autoLockTimeout = await getAutoLockTimeout();
-          if (autoLockTimeout === 0) {
-            const restored = await tryRestoreSession(handleUnlockWallet);
-            if (restored) {
-              unlocked = true;
-            }
-          }
-        }
-        sendResponse(unlocked);
-      })();
-      return true;
-    }
-
-    case "validateSession": {
-      sendResponse({
-        valid: getCurrentSessionId() !== null && isWalletUnlocked(),
-        sessionId: getCurrentSessionId(),
-      });
-      return false;
-    }
-
-    case "tryRestoreSession": {
-      tryRestoreSession(handleUnlockWallet).then((restored) => {
-        sendResponse(restored);
-      });
+      const txId = typeof message.txId === "string" ? message.txId : "";
+      runPendingRequestResolution({
+        family: "transaction",
+        requestId: txId,
+        action: "confirm",
+        resolve: () =>
+          handleConfirmTransactionAsyncPK(
+            txId,
+            message.password,
+            tabId,
+            message.functionName,
+            message.gasOverrides,
+            message.forceInclusion,
+          ),
+        conflictResult: pendingResolutionConflict,
+      })
+        .then(sendResponse)
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to confirm transaction",
+          }),
+        );
       return true;
     }
 
@@ -3062,26 +2214,63 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
           await validateBankrAccountAddressUpdate(accountId, address);
 
-          const saveResult = await handleSaveApiKeyWithCachedPassword(apiKey);
-          if (!saveResult.success) {
-            sendResponse(saveResult);
+          const preparedCredential =
+            await prepareApiKeyUpdateWithCachedPassword(apiKey);
+          if (!preparedCredential.success) {
+            sendResponse(preparedCredential);
             return;
           }
 
-          const updated = await updateBankrAccountAddress(accountId, address);
-          const activeAccount = await getActiveAccount();
-          if (activeAccount?.id === updated.id) {
-            await chrome.storage.sync.set({
-              address: updated.address,
-              displayAddress: updated.displayName || updated.address,
-            });
+          // `/wallet/sign` is non-transactional and returns the controlled
+          // signer. Prove the replacement global credential matches the
+          // account row before publishing either value.
+          await verifyBankrCredentialAddress(
+            preparedCredential.apiKey,
+            address,
+          );
+
+          const updated = await withStorageLock(
+            WALLET_SECRET_OPERATION_LOCK_KEY,
+            async () => {
+              assertCurrentMasterAuthorization(
+                preparedCredential.expectedAuthEpoch,
+              );
+              const committed =
+                await updateBankrAccountAddressWithCredentialUpdate(
+                  accountId,
+                  address,
+                  preparedCredential.storageUpdate,
+                  preparedCredential.expectedAuthEpoch,
+                );
+              commitPreparedApiKeyUpdate(preparedCredential);
+              return committed;
+            },
+          );
+
+          // The security-critical local commit is complete. Sync mirrors and
+          // live-tab notifications are best effort and must not turn that
+          // success into a false failure response.
+          try {
+            const activeAccount = await getActiveAccount();
+            if (activeAccount?.id === updated.id) {
+              await chrome.storage.sync.set({
+                address: updated.address,
+                displayAddress: updated.displayName || updated.address,
+              });
+            }
+          } catch (error) {
+            console.warn("[background] Failed to update active Bankr mirror:", error);
           }
 
-          const tabAccounts = await getTabAccounts();
-          for (const [tabId, mappedAccountId] of Object.entries(tabAccounts)) {
-            if (mappedAccountId === updated.id) {
-              await sendAccountToTab(Number(tabId), updated);
+          try {
+            const tabAccounts = await getTabAccounts();
+            for (const [tabId, mappedAccountId] of Object.entries(tabAccounts)) {
+              if (mappedAccountId === updated.id) {
+                await sendAccountToTab(Number(tabId), updated);
+              }
             }
+          } catch (error) {
+            console.warn("[background] Failed to notify Bankr tabs:", error);
           }
 
           chrome.runtime
@@ -3102,70 +2291,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "saveApiKeyWithCachedPassword": {
-      handleSaveApiKeyWithCachedPassword(message.apiKey).then((result) => {
-        sendResponse(result);
+      // Legacy UI builds used this credential-only mutation. A Bankr API key
+      // is wallet-wide, so changing it without simultaneously proving and
+      // updating the sole Bankr account address can rebind approvals to the
+      // wrong remote signer. Keep an explicit terminal response for a stale
+      // popup, but never perform the unsafe partial update.
+      sendResponse({
+        success: false,
+        error: "Update the Bankr credential from that account's settings.",
       });
-      return true;
-    }
-
-    case "getCachedPassword": {
-      (async () => {
-        let hasCached = getCachedPassword() !== null;
-
-        // If no cached password, try session restoration (for "Never" auto-lock mode)
-        if (!hasCached) {
-          const autoLockTimeout = await getAutoLockTimeout();
-          if (autoLockTimeout === 0) {
-            const restored = await tryRestoreSession(handleUnlockWallet);
-            if (restored) {
-              hasCached = getCachedPassword() !== null;
-            }
-          }
-        }
-
-        sendResponse({ hasCachedPassword: hasCached });
-      })();
-      return true;
-    }
-
-    case "verifyMasterPassword": {
-      verifyMasterPassword(message.masterPassword || "")
-        .then((valid) =>
-          sendResponse({
-            success: valid,
-            error: valid ? undefined : "Invalid master password",
-          }),
-        )
-        .catch((error) => {
-          console.error("Failed to verify master password:", error);
-          sendResponse({
-            success: false,
-            error: "Failed to verify master password",
-          });
-        });
-      return true;
-    }
-
-    case "changePassword": {
-      runSerializedAuthTransition(async () => {
-        const result = await handleChangePassword(
-          message.currentPassword || "",
-          message.newPassword,
-        );
-        if (result.success) invalidateAuthCeremonies();
-        return result;
-      })
-        .then(sendResponse)
-        .catch((error) => {
-          console.error("Failed to change password:", error);
-          sendResponse({ success: false, error: "Failed to change password" });
-        });
-      return true;
+      return false;
     }
 
     case "getCachedApiKey": {
       // SECURITY: Only extension pages can access the API key
-      if (!isExtensionPage(sender)) {
+      if (!isTrustedWalletUiSender(sender)) {
         sendResponse({ apiKey: null });
         return true;
       }
@@ -3190,130 +2330,58 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
-    case "setAgentPassword": {
-      runSerializedAuthTransition(async () => {
-        const result = await handleSetAgentPassword(message.agentPassword);
-        if (result.success) invalidateAuthCeremonies();
-        return result;
-      })
-        .then(sendResponse)
-        .catch((error) => {
-          console.error("Failed to set agent password:", error);
-          sendResponse({ success: false, error: "Failed to set agent password" });
-        });
-      return true;
-    }
-
-    case "removeAgentPassword": {
-      runSerializedAuthTransition(async () => {
-        const result = await handleRemoveAgentPassword(message.masterPassword);
-        if (result.success) invalidateAuthCeremonies();
-        return result;
-      })
-        .then(sendResponse)
-        .catch((error) => {
-          console.error("Failed to remove agent password:", error);
-          sendResponse({ success: false, error: "Failed to remove agent password" });
-        });
-      return true;
-    }
-
-    case "isAgentPasswordEnabled": {
-      (async () => {
-        const { agentPasswordEnabled } = await chrome.storage.local.get(
-          "agentPasswordEnabled",
-        );
-        sendResponse({ enabled: !!agentPasswordEnabled });
-      })();
-      return true;
-    }
-
-    case "getPasswordType": {
-      resolvePasswordType(handleUnlockWallet).then((passwordType) => {
-        sendResponse({ passwordType });
-      });
-      return true;
-    }
-
     case "rpcRequest": {
       const rpcResultKey = `rpcResult:${message.rpcId}`;
-      handleRpcRequest(message.rpcUrl, message.method, message.params)
-        .then((result) => writeResultToStorage(rpcResultKey, { result }))
-        .catch((error) => writeResultToStorage(rpcResultKey, { error: error.message }));
+      void authorizeConnectedDappRequest(sender).then(async (authorization) => {
+        if (!authorization.authorized) {
+          await writeResultToStorage(rpcResultKey, {
+            error: authorization.error,
+            code: authorization.code,
+          });
+          return;
+        }
+        await handleSafeRpcRequest(
+          message.rpcUrl,
+          message.method,
+          message.params,
+          authorization.origin,
+        )
+          .then((result) => writeResultToStorage(rpcResultKey, { result }))
+          .catch((error) =>
+            writeResultToStorage(rpcResultKey, {
+              error:
+                error instanceof Error ? error.message : "RPC request failed",
+            }),
+          );
+      });
       return false;
-    }
-
-    case "setArcBrowser": {
-      if (message.isArc) {
-        chrome.storage.sync.set({
-          sidePanelMode: false,
-          isArcBrowser: true,
-        });
-        // Restore native popup so clicks work on Arc
-        chrome.action.setPopup({ popup: POPUP_PATH }).catch(() => {});
-      }
-      sendResponse({ success: true });
-      return false;
-    }
-
-    case "isSidePanelSupported": {
-      isSidePanelSupportedAsync().then((supported) => {
-        sendResponse({ supported });
-      });
-      return true;
-    }
-
-    case "getSidePanelMode": {
-      getSidePanelMode().then((enabled) => {
-        sendResponse({ enabled });
-      });
-      return true;
-    }
-
-    case "setSidePanelMode": {
-      setSidePanelMode(message.enabled).then((success) => {
-        sendResponse({ success, sidePanelWorks: success || !message.enabled });
-      });
-      return true;
-    }
-
-    case "switchSidePanelToPopup": {
-      const windowId =
-        typeof message.windowId === "number" ? message.windowId : undefined;
-      transitionSidePanelToPopup(windowId, openPopupWindow).then(sendResponse);
-      return true;
-    }
-
-    case "getAutoLockTimeout": {
-      getAutoLockTimeout().then((timeout) => {
-        sendResponse({ timeout });
-      });
-      return true;
-    }
-
-    case "setAutoLockTimeout": {
-      setAutoLockTimeout(message.timeout).then((success) => {
-        sendResponse({ success });
-      });
-      return true;
-    }
-
-    case "openPopupWindow": {
-      openPopupWindow().then(() => {
-        sendResponse({ success: true });
-      });
-      return true;
     }
 
     case "confirmTransactionAsync": {
-      handleConfirmTransactionAsync(
-        message.txId,
-        message.password,
-        message.functionName,
-        message.forceInclusion,
-      ).then((result) => {
-        sendResponse(result);
-      });
+      const txId = typeof message.txId === "string" ? message.txId : "";
+      runPendingRequestResolution({
+        family: "transaction",
+        requestId: txId,
+        action: "confirm",
+        resolve: () =>
+          handleConfirmTransactionAsync(
+            txId,
+            message.password,
+            message.functionName,
+            message.forceInclusion,
+          ),
+        conflictResult: pendingResolutionConflict,
+      })
+        .then(sendResponse)
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to confirm transaction",
+          }),
+        );
       return true;
     }
 
@@ -3559,7 +2627,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "cacheAvatarImage": {
       // SECURITY: Only extension pages can trigger avatar fetches. Content
       // scripts could otherwise enumerate any URL via this proxy.
-      if (!isExtensionPage(sender)) {
+      if (!isTrustedWalletUiSender(sender)) {
         sendResponse({ dataUrl: null });
         return false;
       }
@@ -3667,52 +2735,114 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case "executeSwapDirect": {
-      handleExecuteSwapDirect(
-        message.transactions,
-        message.chainName,
-        message.gasEstimates,
-        {
-          accountId: message.accountId,
-          fromAddress: message.fromAddress,
-        },
-      ).then((result) => {
-        sendResponse(result);
-      });
+      runInternalIrreversibleOperation(() =>
+        handleExecuteSwapDirect(
+          message.transactions,
+          message.chainName,
+          message.gasEstimates,
+          {
+            accountId: message.accountId,
+            fromAddress: message.fromAddress,
+          },
+        ),
+      )
+        .then(sendResponse)
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error ? error.message : "Swap execution failed",
+          }),
+        );
       return true;
     }
 
     case "executeSwapBatch": {
-      handleExecuteSwapBatch(
-        message.batchTx,
-        message.originalTransactions,
-        message.chainId,
-        message.chainName,
-        {
-          accountId: message.accountId,
-          fromAddress: message.fromAddress,
-        },
-      ).then(sendResponse);
+      runInternalIrreversibleOperation(() =>
+        handleExecuteSwapBatch(
+          message.batchTx,
+          message.originalTransactions,
+          message.chainId,
+          message.chainName,
+          {
+            accountId: message.accountId,
+            fromAddress: message.fromAddress,
+          },
+        ),
+      )
+        .then(sendResponse)
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error ? error.message : "Swap execution failed",
+          }),
+        );
       return true;
     }
 
     case "executeSwapAtomicPK": {
-      handleExecuteSwapAtomicPK({
-        originalTransactions: message.originalTransactions,
-        chainId: message.chainId,
-        chainName: message.chainName,
-        accountLock: {
-          accountId: message.accountId,
-          fromAddress: message.fromAddress,
-        },
-        gasOverrides: message.gasOverrides,
-      }).then(sendResponse);
+      runInternalIrreversibleOperation(() =>
+        handleExecuteSwapAtomicPK({
+          originalTransactions: message.originalTransactions,
+          chainId: message.chainId,
+          chainName: message.chainName,
+          accountLock: {
+            accountId: message.accountId,
+            fromAddress: message.fromAddress,
+          },
+          gasOverrides: message.gasOverrides,
+        }),
+      )
+        .then(sendResponse)
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error ? error.message : "Swap execution failed",
+          }),
+        );
       return true;
     }
 
     case "sponsoredTransfer": {
-      handleSponsoredTransfer(message).then((result) => {
-        sendResponse(result);
-      });
+      runInternalIrreversibleOperation(() => handleSponsoredTransfer(message))
+        .then(sendResponse)
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Sponsored transfer failed",
+          }),
+        );
+      return true;
+    }
+
+    case "checkSponsoredTransferStatus": {
+      handleCheckSponsoredTransferStatus(message.fromAddress)
+        .then(sendResponse)
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            hasUnresolved: true,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not check sponsored transfer status",
+          }),
+        );
+      return true;
+    }
+
+    case "acknowledgeSponsoredTransfer": {
+      handleAcknowledgeSponsoredTransfer(
+        message.intentId,
+        message.fromAddress,
+      )
+        .then(sendResponse)
+        .catch(() => sendResponse({ success: false }));
       return true;
     }
 
@@ -3723,133 +2853,69 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
-    case "cancelProcessingTx": {
-      handleCancelProcessingTx(message.txId).then((result) => {
-        sendResponse(result);
-      });
-      return true;
-    }
-
-    case "getFailedTxResult": {
-      const result = failedTxResults.get(message.notificationId);
-      if (result) {
-        failedTxResults.delete(message.notificationId);
-        chrome.storage.local.remove(`notification-${message.notificationId}`);
-      }
-      sendResponse(result || null);
-      return false;
-    }
-
-    case "clearFailedTxResult": {
-      failedTxResults.delete(message.notificationId);
-      chrome.storage.local.remove(`notification-${message.notificationId}`);
-      sendResponse({ success: true });
-      return false;
-    }
-
-    case "onboardingComplete": {
-      chrome.runtime
-        .sendMessage({ type: "onboardingComplete" })
-        .catch(() => {});
-      sendResponse({ success: true });
-      return false;
-    }
-
-    case "getTxHistory": {
-      getTxHistory().then((history) => {
-        sendResponse(history);
-      });
-      return true;
-    }
-
-    case "backfillAssetChanges": {
-      queueAssetChangesBackfill(String(message.txId || "")).then((result) => {
-        sendResponse(result);
-      });
-      return true;
-    }
-
-    case "getProcessingTxs": {
-      getProcessingTxs().then((txs) => {
-        sendResponse(txs);
-      });
-      return true;
-    }
-
-    case "clearTxHistory": {
-      clearTxHistory().then(() => {
-        sendResponse({ success: true });
-      });
-      return true;
-    }
-
-    case "clearTxHistoryForAddresses": {
-      const addresses = Array.isArray(message.addresses)
-        ? (message.addresses as unknown[]).filter(
-            (a): a is string => typeof a === "string",
-          )
-        : [];
-      clearTxHistoryForAddresses(addresses).then(() => {
-        sendResponse({ success: true });
-      });
-      return true;
-    }
-
-    case "clearNonceCache": {
-      clearAllNonces();
-      sendResponse({ success: true });
-      return false;
-    }
-
-    case "checkPendingTxReceipt": {
-      checkPendingTxReceiptFn(
-        message.txId,
-        message.txHash,
-        message.chainId,
-      ).then((result) => {
-        sendResponse({ status: result });
-      });
-      return true;
-    }
-
     case "resetExtension": {
-      runSerializedAuthTransition(async () => {
-        // SECURITY: Block extension reset when unlocked with agent password.
-        // Resolve via session restore so post-SW-restart agent sessions are caught.
-        const passwordType = await resolvePasswordType(handleUnlockWallet, true);
-        if (passwordType === "agent") {
-          return {
-            success: false,
-            error: "Extension reset requires master password",
-          };
-        }
+      runWalletResetAgainstPendingResolutions({
+        // Install the reset barrier synchronously before password/session
+        // restoration or any destructive storage await.
+        resolve: () =>
+          runSerializedAuthTransition(async () => {
+            // SECURITY: Block extension reset when unlocked with agent password.
+            // Resolve via session restore so post-SW-restart agent sessions are caught.
+            const passwordType = await resolvePasswordType(handleUnlockWallet, true);
+            if (passwordType !== "master") {
+              return {
+                success: false,
+                error: "Extension reset requires master password",
+              };
+            }
 
-        invalidateAuthCeremonies();
-        // SECURITY: Perform full auth cleanup first (before async storage operations)
-        await clearAllAuthState();
+            if (await hasUnresolvedSponsoredTransferIntent()) {
+              return {
+                success: false,
+                error:
+                  "Check pending sponsored transfers before resetting WalletChan",
+              };
+            }
 
-        await performSecurityReset();
+            invalidateAuthCeremonies();
+            invalidateAvatarImageCacheForWalletReset();
+            // SECURITY: Perform full auth cleanup first (before async storage operations)
+            await clearAllAuthState();
 
-        const allLocalStorage = await chrome.storage.local.get(null);
-        const localKeys = getWalletLocalStorageKeysToRemove(allLocalStorage);
+            // Rotate WalletConnect identity before persisted wallet secrets are
+            // removed so old sessions cannot reattach to a later wallet.
+            await resetWalletConnectForWalletReset();
 
-        await Promise.all([
-          chrome.storage.local.remove(localKeys),
-          chrome.storage.sync.remove([...WALLET_SYNC_STORAGE_KEYS]),
-        ]);
+            await withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, async () => {
+              await performSecurityReset();
 
-        await chrome.action.setBadgeText({ text: "" });
+              const allLocalStorage = await chrome.storage.local.get(null);
+              const localKeys = getWalletLocalStorageKeysToRemove(allLocalStorage);
 
-        const notificationIds = await new Promise<string[]>((resolve) =>
-          chrome.notifications.getAll((notifications) =>
-            resolve(Object.keys(notifications)),
-          ),
-        );
-        for (const notificationId of notificationIds) {
-          chrome.notifications.clear(notificationId);
-        }
+              await Promise.all([
+                chrome.storage.local.remove(localKeys),
+                chrome.storage.sync.remove([...WALLET_SYNC_STORAGE_KEYS]),
+              ]);
 
-        return { success: true };
+              await chrome.action.setBadgeText({ text: "" });
+            });
+
+            const notificationIds = await new Promise<string[]>((resolve) =>
+              chrome.notifications.getAll((notifications) =>
+                resolve(Object.keys(notifications)),
+              ),
+            );
+            for (const notificationId of notificationIds) {
+              chrome.notifications.clear(notificationId);
+            }
+
+            return { success: true };
+          }),
+        conflictResult: () => ({
+          success: false,
+          error:
+            "A wallet request is currently being resolved. Wait for it to finish before resetting WalletChan.",
+        }),
       })
         .then(sendResponse)
         .catch((error) => {
@@ -3972,7 +3038,8 @@ chrome.notifications.onClicked.addListener(async (notificationId) => {
 
   if (notificationData) {
     if (typeof notificationData === "string") {
-      chrome.tabs.create({ url: notificationData });
+      const safeUrl = sanitizeCustomExplorerUrl(notificationData);
+      if (safeUrl) chrome.tabs.create({ url: safeUrl });
       chrome.storage.local.remove(storageKey);
     } else if (notificationData.type === "error") {
       const useSidePanel = await getSidePanelMode();

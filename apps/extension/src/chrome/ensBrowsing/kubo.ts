@@ -59,10 +59,12 @@ async function runProbe(probeUrl: string): Promise<boolean> {
       method: "GET",
       mode: "no-cors",
       cache: "no-store",
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
       signal: controller.signal,
       // Kubo's subdomain redirect would normally bounce a CID URL to its
       // canonical form; we don't care about the body so any response is OK.
-      redirect: "follow",
+      redirect: "manual",
     });
     return true;
   } catch {
@@ -87,6 +89,52 @@ export function invalidateKuboGatewayProbe(): void {
 // ────────────────────────────────────────────────────────────────────────────
 
 const KUBO_API_BASE = "http://127.0.0.1:5001";
+const KUBO_API_TIMEOUT_MS = 10_000;
+const MAX_KUBO_API_RESPONSE_BYTES = 65_536;
+
+function kuboApiFetch(url: string, init: RequestInit): Promise<Response> {
+  return fetch(url, {
+    ...init,
+    credentials: "omit",
+    referrerPolicy: "no-referrer",
+    redirect: "error",
+    cache: "no-store",
+    signal: AbortSignal.timeout(KUBO_API_TIMEOUT_MS),
+  });
+}
+
+async function readBoundedKuboResponse(response: Response): Promise<string> {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (
+    Number.isFinite(declaredLength) &&
+    declaredLength > MAX_KUBO_API_RESPONSE_BYTES
+  ) {
+    throw new Error("Kubo API response is too large");
+  }
+  if (!response.body) {
+    const text = await response.text();
+    if (new TextEncoder().encode(text).byteLength > MAX_KUBO_API_RESPONSE_BYTES) {
+      throw new Error("Kubo API response is too large");
+    }
+    return text;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let totalBytes = 0;
+  let text = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.byteLength;
+    if (totalBytes > MAX_KUBO_API_RESPONSE_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      throw new Error("Kubo API response is too large");
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
 
 export type KuboPinErrorKind =
   | { kind: "unreachable"; cause: string }
@@ -125,7 +173,9 @@ export type KuboProbeResult =
 export async function probeKuboApi(): Promise<KuboProbeResult> {
   let resp: Response;
   try {
-    resp = await fetch(`${KUBO_API_BASE}/api/v0/version`, { method: "POST" });
+    resp = await kuboApiFetch(`${KUBO_API_BASE}/api/v0/version`, {
+      method: "POST",
+    });
   } catch (e) {
     const cause = e instanceof Error ? e.message : String(e);
     if (/cors|origin/i.test(cause)) {
@@ -136,7 +186,7 @@ export async function probeKuboApi(): Promise<KuboProbeResult> {
   if (resp.ok) {
     let version: string | undefined;
     try {
-      const data = await resp.json();
+      const data = JSON.parse(await readBoundedKuboResponse(resp));
       if (typeof data?.Version === "string") version = data.Version;
     } catch {
       /* a 200 from /version is enough */
@@ -144,13 +194,13 @@ export async function probeKuboApi(): Promise<KuboProbeResult> {
     return { ok: true, version };
   }
   if (resp.status === 403 || resp.status === 405) {
-    const body = await resp.text().catch(() => "");
+    const body = await readBoundedKuboResponse(resp).catch(() => "");
     return {
       ok: false,
       kind: { kind: "cors", cause: body || `HTTP ${resp.status}` },
     };
   }
-  const body = await resp.text().catch(() => "");
+  const body = await readBoundedKuboResponse(resp).catch(() => "");
   return {
     ok: false,
     kind: { kind: "http", status: resp.status, body: body.slice(0, 512) },
@@ -181,7 +231,7 @@ export async function addToKubo(
 
   let resp: Response;
   try {
-    resp = await fetch(url, { method: "POST", body: form });
+    resp = await kuboApiFetch(url, { method: "POST", body: form });
   } catch (e) {
     const cause = e instanceof Error ? e.message : String(e);
     if (/cors|origin/i.test(cause)) {
@@ -190,7 +240,7 @@ export async function addToKubo(
     throw new KuboPinError({ kind: "unreachable", cause });
   }
 
-  const text = await resp.text();
+  const text = await readBoundedKuboResponse(resp);
   if (!resp.ok) {
     if (resp.status === 403 || resp.status === 405) {
       throw new KuboPinError({ kind: "cors", cause: text || `HTTP ${resp.status}` });
@@ -220,13 +270,13 @@ export async function unpinFromKubo(cid: string): Promise<void> {
   const url = `${KUBO_API_BASE}/api/v0/pin/rm?arg=${encodeURIComponent(cid)}`;
   let resp: Response;
   try {
-    resp = await fetch(url, { method: "POST" });
+    resp = await kuboApiFetch(url, { method: "POST" });
   } catch (e) {
     const cause = e instanceof Error ? e.message : String(e);
     throw new KuboPinError({ kind: "unreachable", cause });
   }
   if (resp.ok) return;
-  const text = await resp.text().catch(() => "");
+  const text = await readBoundedKuboResponse(resp).catch(() => "");
   if (/not pinned/i.test(text)) return;
   if (resp.status === 403 || resp.status === 405) {
     throw new KuboPinError({ kind: "cors", cause: text || `HTTP ${resp.status}` });
@@ -247,13 +297,13 @@ export async function removeMfsPath(path: string): Promise<void> {
   const url = `${KUBO_API_BASE}/api/v0/files/rm?${params.toString()}`;
   let resp: Response;
   try {
-    resp = await fetch(url, { method: "POST" });
+    resp = await kuboApiFetch(url, { method: "POST" });
   } catch (e) {
     const cause = e instanceof Error ? e.message : String(e);
     throw new KuboPinError({ kind: "unreachable", cause });
   }
   if (resp.ok) return;
-  const text = await resp.text().catch(() => "");
+  const text = await readBoundedKuboResponse(resp).catch(() => "");
   if (/file does not exist/i.test(text)) return;
   if (resp.status === 403 || resp.status === 405) {
     throw new KuboPinError({ kind: "cors", cause: text || `HTTP ${resp.status}` });
