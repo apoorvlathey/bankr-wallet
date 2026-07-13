@@ -25,7 +25,7 @@ test("custom network storage rejects unsafe or malformed metadata", async () => 
 
   try {
     const { addNetworkIfMissing } = await import(
-      "../../src/chrome/networkStorage"
+      "../../src/chrome/network/networkMutations"
     );
     const base = {
       chainId: 12345,

@@ -1,5 +1,5 @@
 import { createPublicClient, type Address } from "viem";
-import { secureHttpTransport } from "@/chrome/rpcHttpClient";
+import { secureHttpTransport } from "@/chrome/network/rpcClient";
 
 import { sanitizeResolvedName } from "@/lib/ensUtils";
 

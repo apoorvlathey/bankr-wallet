@@ -13,7 +13,7 @@
  */
 
 import { getRpcUrl } from "../transactions/rpcConfig";
-import { fetchRpcEnvelope } from "../rpcHttpClient";
+import { fetchRpcEnvelope } from "../network/rpcClient";
 
 /** How long a cached nonce stays valid (ms) */
 const NONCE_TTL_MS = 30_000;

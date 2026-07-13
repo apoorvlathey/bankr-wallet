@@ -11,7 +11,7 @@
  * so the in-memory copy stays in sync with whatever Bungee returned last.
  *
  * Deliberately React-free: this module is transitively imported by
- * `chainIcons.ts`, which is consumed by `portfolioTokens.ts` inside the
+ * `chainIcons.ts`, which is consumed by `portfolio/tokenCatalog.ts` inside the
  * service-worker background bundle. Pulling React in here would inflate
  * the background bundle and blow up at boot (`process is not defined`
  * inside React's dev shim). The matching React hook lives in

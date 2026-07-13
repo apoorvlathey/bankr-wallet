@@ -2,15 +2,15 @@ import {
   hasEncryptedApiKey,
   loadDecryptedApiKey,
 } from "../crypto";
-import { signMessageViaApi } from "../bankrApi";
+import { signMessageViaApi } from "../bankr/signing";
 import { handleSignatureRequest as localSignatureRequest } from "../localSigner";
-import { enforcePendingRequestAuthorizationAtConfirmation } from "../pendingRequestLifecycle";
+import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pendingRequestLifecycle";
 import {
   beginPendingRequestEffectLease,
   guardPendingRequestEffectLease,
-} from "../pendingRequestResolution";
-import { removePendingSignatureRequest } from "../pendingSignatureStorage";
-import { revalidatePendingSignatureBeforeRelease } from "../pendingSignatureRelease";
+} from "../requests/pendingRequestResolution";
+import { removePendingSignatureRequest } from "../requests/pendingSignatureStorage";
+import { revalidatePendingSignatureBeforeRelease } from "../requests/pendingSignatureRelease";
 import type { SignatureResult } from "../transactions/runtime";
 import {
   getAutoLockTimeout,

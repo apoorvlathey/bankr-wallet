@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { classifyBackgroundMessage } from "../../src/chrome/background/messageAccessPolicy";
-import { classifySponsoredAuthorizationObservations } from "../../src/chrome/sponsoredTransferReconciliation";
+import { classifySponsoredAuthorizationObservations } from "../../src/chrome/sponsoredTransfers/reconciliation";
 
 test("finalized ERC-3009 observations classify only unanimous terminal outcomes", () => {
   const validBefore = 1_000;
@@ -60,7 +60,7 @@ test("finalized ERC-3009 observations classify only unanimous terminal outcomes"
 test("each authorization read is pinned to its fetched finalized block", async () => {
   const source = await readFile(
     new URL(
-      "../../src/chrome/sponsoredTransferReconciliation.ts",
+      "../../src/chrome/sponsoredTransfers/reconciliation.ts",
       import.meta.url,
     ),
     "utf8",
@@ -84,45 +84,58 @@ test("each authorization read is pinned to its fetched finalized block", async (
 });
 
 test("an ambiguous or submitting authorization reconciles but never re-POSTs", async () => {
-  const source = await readFile(
-    new URL("../../src/chrome/sponsoredTransferHandlers.ts", import.meta.url),
-    "utf8",
-  );
-  const recoveredStart = source.indexOf("if (record) {");
-  const createStart = source.indexOf("if (!record) {", recoveredStart);
-  const recovered = source.slice(recoveredStart, createStart);
+  const [handlers, recovery, submission] = await Promise.all([
+    readFile(
+      new URL(
+        "../../src/chrome/sponsoredTransfers/handlers.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/chrome/sponsoredTransfers/recovery.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/chrome/sponsoredTransfers/submission.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ]);
+  const recoveredStart = handlers.indexOf("if (record) {");
+  const createStart = handlers.indexOf("if (!record) {", recoveredStart);
+  const recovered = handlers.slice(recoveredStart, createStart);
 
   assert.match(
     recovered,
     /reconcileSponsoredTransferRecord\(record, vaultKey\)/,
   );
   assert.match(
-    source,
-    /async function reconcileSponsoredTransferRecord[\s\S]*reconcileSponsoredTransferAuthorization\([\s\S]*record\.validBefore/,
+    recovery,
+    /reconcileSponsoredTransferRecord[\s\S]*reconcileSponsoredTransferAuthorization\([\s\S]*record\.validBefore/,
   );
-  assert.match(recovered, /resolution === "consumed"/);
-  assert.match(recovered, /resolution === "expired-unused"/);
+  assert.match(recovered, /reconciled\.status === "consumed"/);
+  assert.match(recovered, /reconciled\.status === "expired-unused"/);
   assert.match(
-    recovered,
-    /record\.state !== "prepared"[\s\S]*outcomeUncertain: true/,
+    handlers,
+    /record\.state !== "prepared"[\s\S]*markExistingTransferAmbiguous[\s\S]*outcomeUncertain: true/,
   );
   assert.doesNotMatch(recovered, /SPONSORED_TRANSFER_API|method: "POST"/);
 
-  const postCalls = source.match(/fetchTextBounded\(\s*SPONSORED_TRANSFER_API/g) ?? [];
+  const postCalls =
+    submission.match(/fetchTextBounded\(\s*SPONSORED_TRANSFER_API/g) ?? [];
   assert.equal(
     postCalls.length,
     1,
     "there must be only one relayer POST site, reachable only for a new/prepared authorization",
   );
 
-  const reconcileStart = source.indexOf(
-    "async function reconcileSponsoredTransferRecord",
-  );
-  const reconcileEnd = source.indexOf(
-    "export async function handleCheckSponsoredTransferStatus",
-    reconcileStart,
-  );
-  const reconcile = source.slice(reconcileStart, reconcileEnd);
+  const reconcile = recovery;
   const consumedStart = reconcile.indexOf('if (status === "consumed")');
   const expiredStart = reconcile.indexOf(
     '} else if (status === "expired-unused")',
@@ -141,12 +154,24 @@ test("an ambiguous or submitting authorization reconciles but never re-POSTs", a
 });
 
 test("uncertain sponsored UI uses a dedicated status action and never the normal gas fallback", async () => {
-  const source = await readFile(
-    new URL("../../src/components/TokenTransfer.tsx", import.meta.url),
-    "utf8",
-  );
+  const [source, notices] = await Promise.all([
+    readFile(
+      new URL(
+        "../../src/components/Transfer/hooks/useSponsoredTransfer.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/components/Transfer/TransferNotices.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ]);
   const statusStart = source.indexOf(
-    "const checkSponsoredTransferStatus = useCallback(async () =>",
+    "const checkStatus = useCallback(async () =>",
   );
   const statusEnd = source.indexOf("useEffect(() =>", statusStart);
   const statusAction = source.slice(statusStart, statusEnd);
@@ -158,48 +183,61 @@ test("uncertain sponsored UI uses a dedicated status action and never the normal
   const completedEnd = statusAction.indexOf("if (result.hasUnresolved", completedStart);
   const completed = statusAction.slice(completedStart, completedEnd);
   const ackIndex = completed.indexOf(
-    "acknowledgeSponsoredTransfer(result.intentId)",
+    "acknowledgeTransfer(result.intentId)",
   );
-  const clearIndex = completed.indexOf("sponsoredIntentRef.current = null");
+  const clearIndex = completed.indexOf("intentRef.current = null");
   const navigateIndex = completed.indexOf("onTransferInitiated(true)");
   assert.ok(ackIndex >= 0);
   assert.ok(clearIndex > ackIndex);
   assert.ok(navigateIndex > ackIndex);
-  assert.doesNotMatch(completed, /await acknowledgeSponsoredTransfer/);
+  assert.doesNotMatch(completed, /await acknowledgeTransfer/);
 
-  const start = source.indexOf("{sponsoredFailed && (");
-  const end = source.indexOf("{/* Impersonator warning */}", start);
-  const failureUi = source.slice(start, end);
+  const start = notices.indexOf("{failure && (");
+  const end = notices.indexOf('{accountType === "impersonator"', start);
+  const failureUi = notices.slice(start, end);
 
   assert.match(
     failureUi,
-    /sponsoredFailed\.outcomeUncertain\s*\? checkSponsoredTransferStatus\s*:\s*handleFallbackSend/,
+    /failure\.outcomeUncertain\s*\? checkStatus\s*:\s*onFallbackSend/,
   );
   assert.match(
     failureUi,
-    /sponsoredFailed\.outcomeUncertain\s*\? "Check status"\s*:\s*"Send and pay gas"/,
+    /failure\.outcomeUncertain\s*\? "Check status"\s*:\s*"Send and pay gas"/,
   );
   assert.doesNotMatch(
     failureUi,
-    /sponsoredFailed\.outcomeUncertain\s*\? handleFallbackSend/,
+    /failure\.outcomeUncertain\s*\? onFallbackSend/,
   );
 });
 
 test("all successful sponsored submissions return the stored intent id and dispatch ACK before navigation", async () => {
-  const [handlerSource, uiSource] = await Promise.all([
+  const [handlerSource, submissionSource, uiSource] = await Promise.all([
     readFile(
-      new URL("../../src/chrome/sponsoredTransferHandlers.ts", import.meta.url),
+      new URL(
+        "../../src/chrome/sponsoredTransfers/handlers.ts",
+        import.meta.url,
+      ),
       "utf8",
     ),
     readFile(
-      new URL("../../src/components/TokenTransfer.tsx", import.meta.url),
+      new URL(
+        "../../src/chrome/sponsoredTransfers/submission.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/components/Transfer/hooks/useSponsoredTransfer.ts",
+        import.meta.url,
+      ),
       "utf8",
     ),
   ]);
   const handlerStart = handlerSource.indexOf(
     "export async function handleSponsoredTransfer(",
   );
-  const handler = handlerSource.slice(handlerStart);
+  const handler = `${handlerSource.slice(handlerStart)}\n${submissionSource}`;
   const successReturns = [...handler.matchAll(/return\s*\{([\s\S]*?)\};/g)]
     .map((match) => match[1] ?? "")
     .filter((body) => /success:\s*true/.test(body));
@@ -216,20 +254,20 @@ test("all successful sponsored submissions return the stored intent id and dispa
   const submitEnd = uiSource.indexOf("} else if (result.retryReady)", submitStart);
   const submitSuccess = uiSource.slice(submitStart, submitEnd);
   const ackIndex = submitSuccess.indexOf(
-    "acknowledgeSponsoredTransfer(result.intentId)",
+    "acknowledgeTransfer(result.intentId)",
   );
   assert.ok(ackIndex >= 0);
   assert.ok(
-    submitSuccess.indexOf("sponsoredIntentRef.current = null") > ackIndex,
+    submitSuccess.indexOf("intentRef.current = null") > ackIndex,
   );
   assert.ok(submitSuccess.indexOf("onTransferInitiated(true)") > ackIndex);
-  assert.doesNotMatch(submitSuccess, /await acknowledgeSponsoredTransfer/);
+  assert.doesNotMatch(submitSuccess, /await acknowledgeTransfer/);
 
   const ackHelperStart = uiSource.indexOf(
-    "const acknowledgeSponsoredTransfer = useCallback(",
+    "const acknowledgeTransfer = useCallback(",
   );
   const ackHelperEnd = uiSource.indexOf(
-    "const checkSponsoredTransferStatus",
+    "const checkStatus",
     ackHelperStart,
   );
   const ackHelper = uiSource.slice(ackHelperStart, ackHelperEnd);
@@ -239,22 +277,24 @@ test("all successful sponsored submissions return the stored intent id and dispa
 });
 
 test("lost relayer responses remain recoverable after the transfer screen reopens", async () => {
-  const [handlerSource, uiSource] = await Promise.all([
+  const [submissionSource, uiSource] = await Promise.all([
     readFile(
-      new URL("../../src/chrome/sponsoredTransferHandlers.ts", import.meta.url),
+      new URL(
+        "../../src/chrome/sponsoredTransfers/submission.ts",
+        import.meta.url,
+      ),
       "utf8",
     ),
     readFile(
-      new URL("../../src/components/TokenTransfer.tsx", import.meta.url),
+      new URL(
+        "../../src/components/Transfer/hooks/useSponsoredTransfer.ts",
+        import.meta.url,
+      ),
       "utf8",
     ),
   ]);
-  const handlerStart = handlerSource.indexOf(
-    "export async function handleSponsoredTransfer(",
-  );
-  const handler = handlerSource.slice(handlerStart);
-  const catchStart = handler.lastIndexOf("} catch (error) {");
-  const ambiguous = handler.slice(catchStart);
+  const catchStart = submissionSource.lastIndexOf("} catch (error) {");
+  const ambiguous = submissionSource.slice(catchStart);
   assert.match(
     ambiguous,
     /updateSponsoredTransferIntent\(record\.id,[\s\S]*state: "ambiguous"/,
@@ -263,16 +303,20 @@ test("lost relayer responses remain recoverable after the transfer screen reopen
   assert.match(ambiguous, /outcomeUncertain: true/);
 
   const mountCheckStart = uiSource.indexOf(
-    "const checkKey = `${fromAddress.toLowerCase()}:8453:usdc`;",
+    "const key = `${fromAddress.toLowerCase()}:8453:usdc`;",
   );
-  const mountCheck = uiSource.slice(mountCheckStart, mountCheckStart + 350);
-  assert.match(mountCheck, /void checkSponsoredTransferStatus\(\)/);
+  const mountCheckEnd = uiSource.indexOf("const execute =", mountCheckStart);
+  const mountCheck = uiSource.slice(mountCheckStart, mountCheckEnd);
+  assert.match(mountCheck, /void checkStatus\(\)/);
   assert.doesNotMatch(mountCheck, /recipient|amount|canSubmit/);
 });
 
 test("status and acknowledgement messages are extension-only routed handlers", async () => {
   const source = await readFile(
-    new URL("../../src/chrome/background.ts", import.meta.url),
+    new URL(
+      "../../src/chrome/background/sponsoredTransferRouter.ts",
+      import.meta.url,
+    ),
     "utf8",
   );
   assert.equal(
@@ -286,44 +330,120 @@ test("status and acknowledgement messages are extension-only routed handlers", a
 
   assert.match(
     source,
-    /case "checkSponsoredTransferStatus":[\s\S]*handleCheckSponsoredTransferStatus\(message\.fromAddress\)/,
+    /case "checkSponsoredTransferStatus":[\s\S]*dependencies\s*\.handleCheckSponsoredTransferStatus\(message\.fromAddress\)/,
   );
   assert.match(
     source,
-    /case "acknowledgeSponsoredTransfer":[\s\S]*handleAcknowledgeSponsoredTransfer\([\s\S]*message\.intentId,[\s\S]*message\.fromAddress/,
+    /case "acknowledgeSponsoredTransfer":[\s\S]*dependencies\s*\.handleAcknowledgeSponsoredTransfer\([\s\S]*message\.intentId,[\s\S]*message\.fromAddress/,
   );
 });
 
 test("account removal and reset cannot destroy unresolved sponsored recovery state", async () => {
-  const source = await readFile(
-    new URL("../../src/chrome/background.ts", import.meta.url),
-    "utf8",
+  const [accountComposition, executionComposition, dataComposition, accountRouter, sponsoredRouter, resetRouter] = await Promise.all([
+    readFile(
+      new URL(
+        "../../src/chrome/background/composition/accountRoutes.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/chrome/background/composition/executionRoutes.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/chrome/background/composition/dataRoutes.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/chrome/background/accountManagementRouter.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/chrome/background/sponsoredTransferRouter.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/chrome/background/resetRouter.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ]);
+  const removalStart = accountRouter.indexOf("async function removeAccount(");
+  const removalEnd = accountRouter.indexOf(
+    "export function createBackgroundAccountManagementMessageRouter",
+    removalStart,
   );
-  const removalStart = source.indexOf('case "removeAccount"');
-  const removalEnd = source.indexOf('case "revealPrivateKey"', removalStart);
-  const removal = source.slice(removalStart, removalEnd);
-  assert.match(removal, /withSponsoredTransferOperation\(/);
+  assert.ok(removalStart >= 0 && removalEnd > removalStart);
+  const removal = accountRouter.slice(removalStart, removalEnd);
   assert.match(
     removal,
-    /hasUnresolvedSponsoredTransferIntent\(account\.address\)/,
+    /dependencies\.withSponsoredTransferOperation\(\(\) =>[\s\S]*dependencies\.removeAccountWithDappPrivacyBoundary\(\{[\s\S]*validateRemoval:[\s\S]*dependencies\.hasUnresolvedSponsoredTransferIntent\([\s\S]*account\.address[\s\S]*removeAccount: \(\) =>[\s\S]*dependencies\.handleRemoveAccount/,
   );
-  assert.match(removal, /removeAccountWithDappPrivacyBoundary/);
-
-  const resetStart = source.indexOf('case "resetExtension"');
-  const resetEnd = source.indexOf("default:", resetStart);
-  const reset = source.slice(resetStart, resetEnd);
-  assert.match(reset, /runWalletResetAgainstPendingResolutions/);
-  assert.match(reset, /hasUnresolvedSponsoredTransferIntent\(\)/);
-
-  const sponsoredStart = source.indexOf('case "sponsoredTransfer"');
-  const sponsoredEnd = source.indexOf('case "checkPremiumStatus"', sponsoredStart);
   assert.match(
-    source.slice(sponsoredStart, sponsoredEnd),
-    /runInternalIrreversibleOperation\(\(\) => handleSponsoredTransfer\(message\)\)/,
+    removal,
+    /dependencies\.hasUnresolvedSponsoredTransferIntent\(\s*account\.address,?\s*\)/,
+  );
+
+  const compositionStart = accountComposition.indexOf(
+    "createBackgroundAccountManagementMessageRouter({",
+  );
+  const compositionEnd = accountComposition.indexOf(
+    "createBackgroundSecretManagementMessageRouter({",
+    compositionStart,
+  );
+  assert.ok(compositionStart >= 0 && compositionEnd > compositionStart);
+  assert.match(
+    accountComposition.slice(compositionStart, compositionEnd),
+    /withSponsoredTransferOperation,[\s\S]*removeAccountWithDappPrivacyBoundary,[\s\S]*hasUnresolvedSponsoredTransferIntent,/,
+  );
+
+  assert.match(resetRouter, /runWalletResetAgainstPendingResolutions/);
+  assert.match(
+    resetRouter,
+    /dependencies\.hasUnresolvedSponsoredTransferIntent\(\)/,
+  );
+  assert.match(
+    dataComposition,
+    /createBackgroundResetMessageRouter\(\{[\s\S]*runWalletResetAgainstPendingResolutions:[\s\S]*hasUnresolvedSponsoredTransferIntent,/,
+  );
+
+  assert.match(
+    sponsoredRouter,
+    /case "sponsoredTransfer":[\s\S]*dependencies\s*\.runInternalIrreversibleOperation\(\(\) =>[\s\S]*dependencies\.handleSponsoredTransfer\(message\)/,
+  );
+  const sponsoredCompositionStart = executionComposition.indexOf(
+    "createBackgroundSponsoredTransferMessageRouter({",
+  );
+  const sponsoredCompositionEnd = executionComposition.indexOf(
+    "createBackgroundTransactionStatusMessageRouter({",
+    sponsoredCompositionStart,
+  );
+  assert.ok(
+    sponsoredCompositionStart >= 0 &&
+      sponsoredCompositionEnd > sponsoredCompositionStart,
+  );
+  assert.match(
+    executionComposition.slice(sponsoredCompositionStart, sponsoredCompositionEnd),
+    /runInternalIrreversibleOperation,[\s\S]*handleSponsoredTransfer,[\s\S]*handleCheckSponsoredTransferStatus,[\s\S]*handleAcknowledgeSponsoredTransfer/,
   );
 
   const resetKeys = await readFile(
-    new URL("../../src/chrome/walletResetStorage.ts", import.meta.url),
+    new URL("../../src/chrome/storage/resetManifest.ts", import.meta.url),
     "utf8",
   );
   assert.match(resetKeys, /"sponsoredTransferIntents"/);

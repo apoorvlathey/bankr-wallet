@@ -1,13 +1,13 @@
 /** Focused transport for EIP-3085 prompts and connected-site chain notices. */
 
 import type * as AccountStorage from "../accountStorage";
-import type * as DappRequestPolicy from "../dappRequestPolicy";
-import type * as MetadataPromptLifecycle from "../pendingMetadataPromptLifecycle";
-import type * as NetworkStorage from "../networkStorage";
-import type * as PendingAddChainStorage from "../pendingAddChainStorage";
-import type * as PendingResolution from "../pendingRequestResolution";
-import type * as RpcHttpClient from "../rpcHttpClient";
-import type { PendingAddChainRequest } from "../pendingAddChainStorage";
+import type * as DappRequestPolicy from "../dapp/requestPolicy";
+import type * as MetadataPromptLifecycle from "../requests/pendingMetadataPromptLifecycle";
+import type * as NetworkStorage from "../network/networkMutations";
+import type * as PendingAddChainStorage from "../requests/pendingAddChainStorage";
+import type * as PendingResolution from "../requests/pendingRequestResolution";
+import type * as RpcHttpClient from "../network/rpcClient";
+import type { PendingAddChainRequest } from "../requests/pendingAddChainStorage";
 
 export const BACKGROUND_CHAIN_PROMPT_MESSAGE_TYPES = [
   "addEthereumChain",

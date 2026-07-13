@@ -2,17 +2,23 @@
 
 Security and logic tests mirror the service-worker domains they exercise:
 
-- `auth/`, `passkey/`, `session/` — authorization factors and secret sessions.
-- `vault/`, `mnemonic/` — local signing material and recovery secrets.
+- `cryptography/`, `auth/`, `passkey/`, `session/` — record encryption,
+  authorization factors, and secret sessions.
+- `vault/`, `mnemonic/`, `secrets/` — local signing material, recovery
+  secrets, and master-only plaintext release.
 - `accounts/`, `onboarding/` — account metadata and fresh-wallet lifecycle.
-- `erc7715/`, `batch/`, `transactions/`, `signatures/`, `simulation/` —
-  provider authority, signing/broadcast, and asset-preview flows.
+- `erc7715/`, `batch/`, `transactions/`, `signatures/`, `simulation/`,
+  `forceInclusion/`, `gas/`, `history/` — provider authority,
+  signing/broadcast, fee estimation, asset-preview/history, L1-deposit, and
+  transaction-recovery flows.
 - `requests/` — pending-request claims, lifecycle, expiry, and capacity.
 - `background/`, `walletConnect/`, `provider/` — Chrome transport, remote
   sessions, and injected-provider boundaries.
 - `network/`, `ensBrowsing/`, `navigation/`, `manifest/` — egress, remote
   content, external URL, and packaged-exposure policy.
 - `storage/`, `security/` — shared infrastructure and cross-domain invariants.
+- `windowing/` — browser capability/mode policy, side-panel verification,
+  popup reuse/geometry, Chrome effect order, and historical facade identity.
 - `bankr/`, `sponsoredTransfers/` — remote signer and sponsored-authorization
   boundaries.
 - `portfolio/`, `preview/`, `ui/` — renderer/view-model and preview tests;

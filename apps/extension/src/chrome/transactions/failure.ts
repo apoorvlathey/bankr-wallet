@@ -1,4 +1,4 @@
-import type { PendingTxRequest } from "../pendingTxStorage";
+import type { PendingTxRequest } from "../requests/pendingTxStorage";
 import {
   failedTxResults,
   writeResultToStorage,

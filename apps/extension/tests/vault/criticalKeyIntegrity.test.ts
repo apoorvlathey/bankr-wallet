@@ -13,7 +13,7 @@ test("critical key integrity boundaries accept compatible wallets and fail close
     const authTransition = await import("../../src/chrome/authTransition");
     const cryptoModule = await import("../../src/chrome/crypto");
     const generalIntegrity = await import(
-      "../../src/chrome/generalVaultIntegrity"
+      "../../src/chrome/vault/generalIntegrity"
     );
     const masterAuthorization = await import(
       "../../src/chrome/masterAuthorization"
@@ -21,7 +21,7 @@ test("critical key integrity boundaries accept compatible wallets and fail close
     const mnemonicIntegrity = await import("../../src/chrome/mnemonic/integrity");
     const mnemonicStorage = await import("../../src/chrome/mnemonicStorage");
     const privateKeyIntegrity = await import(
-      "../../src/chrome/privateKeyIntegrity"
+      "../../src/chrome/vault/accountIntegrity"
     );
     const seedModule = await import("../../src/chrome/mnemonic/derivation");
     const sessionModule = await import("../../src/chrome/sessionCache");

@@ -1,13 +1,13 @@
 /** Focused transport for EIP-747 intake and trusted-UI decisions. */
 
-import type * as DappRequestPolicy from "../dappRequestPolicy";
-import type * as MetadataPromptLifecycle from "../pendingMetadataPromptLifecycle";
-import type * as PendingResolution from "../pendingRequestResolution";
-import type * as WatchAssetStorage from "../pendingWatchAssetStorage";
+import type * as DappRequestPolicy from "../dapp/requestPolicy";
+import type * as MetadataPromptLifecycle from "../requests/pendingMetadataPromptLifecycle";
+import type * as PendingResolution from "../requests/pendingRequestResolution";
+import type * as WatchAssetStorage from "../requests/pendingWatchAssetStorage";
 import type * as SwapApi from "../swapApi";
 import type * as CustomTokenStorage from "../customTokenStorage";
-import type * as HiddenPortfolioTokens from "../hiddenPortfolioTokens";
-import type { PendingWatchAssetRequest } from "../pendingWatchAssetStorage";
+import type * as HiddenPortfolioTokens from "../portfolio/hiddenTokens";
+import type { PendingWatchAssetRequest } from "../requests/pendingWatchAssetStorage";
 
 export const BACKGROUND_WATCH_ASSET_MESSAGE_TYPES = [
   "watchAsset",

@@ -44,11 +44,11 @@ Object.defineProperty(globalThis, "chrome", {
   },
 });
 
-const binding = await import("../../src/chrome/bankrCredentialBinding");
-const txStorage = await import("../../src/chrome/pendingTxStorage");
-const signatureStorage = await import("../../src/chrome/pendingSignatureStorage");
-const batchStorage = await import("../../src/chrome/pendingBatchTxStorage");
-const lifecycle = await import("../../src/chrome/pendingRequestLifecycle");
+const binding = await import("../../src/chrome/bankr/credentialBinding");
+const txStorage = await import("../../src/chrome/requests/pendingTxStorage");
+const signatureStorage = await import("../../src/chrome/requests/pendingSignatureStorage");
+const batchStorage = await import("../../src/chrome/requests/pendingBatchTxStorage");
+const lifecycle = await import("../../src/chrome/requests/pendingRequestLifecycle");
 
 const credentialA = {
   ciphertext: "AAAAAAAAAAAAAAAAAAAAAA==",

@@ -13,7 +13,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
 } from "@chakra-ui/icons";
-import type { PortfolioToken } from "@/chrome/portfolioApi";
+import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { EnrichedBridgeChain } from "@/chrome/bridgeChainsResolver";
 import ChainIcon from "@/components/ChainIcon";
 import SafeImage from "@/components/SafeImage";

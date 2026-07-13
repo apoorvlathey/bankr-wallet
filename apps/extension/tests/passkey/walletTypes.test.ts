@@ -78,6 +78,7 @@ test("passkey hydration supports all wallet caches and vault-key mutations", asy
     );
     assert.equal(result.success, true);
     assert.equal(sessionModule.getCachedApiKey(), "bankr-api-key");
+    assert.equal(sessionModule.isWalletUnlocked(), true);
     sessionModule.clearInMemoryAuthCache();
 
     delete local.encryptedApiKeyVault;
@@ -112,6 +113,7 @@ test("passkey hydration supports all wallet caches and vault-key mutations", asy
       sessionModule.getPrivateKeyFromCache("private-account"),
       privateKey,
     );
+    assert.equal(sessionModule.isWalletUnlocked(), true);
     sessionModule.clearInMemoryAuthCache();
 
     // Seed-phrase accounts sign through their derived key stored in pkVault.
@@ -148,6 +150,7 @@ test("passkey hydration supports all wallet caches and vault-key mutations", asy
       sessionModule.getPrivateKeyFromCache("seed-account"),
       seedDerivedKey,
     );
+    assert.equal(sessionModule.isWalletUnlocked(), true);
 
     // A biometric master session has no plaintext password, but it must still
     // be able to add vault-key-backed private-key entries.

@@ -11,7 +11,7 @@ import {
   runPendingRequestResolutions,
   runWalletResetAgainstPendingResolutions,
   type PendingRequestFamily,
-} from "../../src/chrome/pendingRequestResolution";
+} from "../../src/chrome/requests/pendingRequestResolution";
 
 function deferred(): {
   promise: Promise<void>;

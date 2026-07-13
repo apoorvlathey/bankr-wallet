@@ -7,8 +7,8 @@ import {
   signEip7702Authorization,
 } from "../localSigner";
 import { getNextNonce, resetNonce } from "../forceInclusion/nonceManager";
-import type { PendingTxRequest } from "../pendingTxStorage";
-import { enforcePendingRequestAuthorizationAtConfirmation } from "../pendingRequestLifecycle";
+import type { PendingTxRequest } from "../requests/pendingTxStorage";
+import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pendingRequestLifecycle";
 import {
   activeAbortControllers,
   processingTxIds,
@@ -17,7 +17,7 @@ import {
 import {
   guardPendingRequestEffectLease,
   type PendingRequestEffectLease,
-} from "../pendingRequestResolution";
+} from "../requests/pendingRequestResolution";
 import { addTxToHistory, updateTxInHistory } from "../txHistoryStorage";
 import { applyReceiptToHistory, startReceiptPolling } from "../forceInclusion/receiptPoller";
 import { getAccountById } from "../accountStorage";

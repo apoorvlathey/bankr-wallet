@@ -5,7 +5,7 @@ import {
   closeSidePanelForWindow,
   switchSidePanelToPopup,
 } from "@/lib/sidePanelControls";
-import { clearPortfolioHoldingsLocalMirror } from "@/chrome/portfolioHoldingsCache";
+import { clearPortfolioHoldingsLocalMirror } from "@/chrome/portfolio/holdingsCache";
 import BiometricUnlockSetup from "@/components/BiometricUnlockSetup";
 import {
   getPasskeyErrorMessage,

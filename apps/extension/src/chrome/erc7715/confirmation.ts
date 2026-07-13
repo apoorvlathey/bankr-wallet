@@ -18,9 +18,9 @@ import { commitErc7715GrantForPinnedAccount } from "./grantBoundary";
 import { assertRequestExecutionPermissionsEligible } from "./preflightEligibility";
 import { getPermissionExpirySeconds } from "./preflightNormalization";
 import { runErc7715PermissionResolution } from "./resolution";
-import { getLocalPrivateKeyForAccount } from "../localAccountKeyResolver";
+import { getLocalPrivateKeyForAccount } from "../accounts/localKeyResolver";
 import { signTypedData } from "../localSigner";
-import { enforcePendingRequestAuthorizationAtConfirmation } from "../pendingRequestLifecycle";
+import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pendingRequestLifecycle";
 import {
   ERC7715_PERMISSION_EXPIRY_MS,
   type Erc7715PermissionRequest,

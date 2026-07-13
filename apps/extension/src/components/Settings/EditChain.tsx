@@ -24,7 +24,7 @@ import {
 import { useNetworks } from "@/contexts/NetworksContext";
 import { InlineDisclosure } from "@/components/ui";
 import { SettingsScreenFrame } from "./SettingsScreenFrame";
-import { probeRpcChainId } from "@/chrome/rpcHttpClient";
+import { probeRpcChainId } from "@/chrome/network/rpcClient";
 
 function EditChain({
   chainName,

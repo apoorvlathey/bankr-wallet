@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { PortfolioToken } from "../../src/chrome/portfolioApi";
-import { getPortfolioTokenKey } from "../../src/chrome/hiddenPortfolioTokens";
+import type { PortfolioToken } from "../../src/chrome/portfolio/api";
+import { getPortfolioTokenKey } from "../../src/chrome/portfolio/hiddenTokens";
 import {
   getPortfolioTokenBalance,
   mergeVerifiedTokenBalances,

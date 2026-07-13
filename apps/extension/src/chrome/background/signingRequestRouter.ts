@@ -6,7 +6,7 @@
  * persistence, signing, and publication remain injected dependencies.
  */
 
-import type * as PendingRequestResolutionModule from "../pendingRequestResolution";
+import type * as PendingRequestResolutionModule from "../requests/pendingRequestResolution";
 
 export const BACKGROUND_SIGNING_REQUEST_MESSAGE_TYPES = [
   "sendTransaction",
@@ -15,7 +15,6 @@ export const BACKGROUND_SIGNING_REQUEST_MESSAGE_TYPES = [
   "rejectSignatureRequest",
   "getPendingTxRequests",
   "getPendingTransaction",
-  "confirmTransaction",
   "rejectTransaction",
   "cancelTransaction",
 ] as const;
@@ -48,7 +47,6 @@ type Dependencies = {
   removePendingSignatureRequest: (sigId: string) => Promise<void>;
   getPendingTxRequests: () => Promise<any>;
   getPendingTxRequestById: (txId: string) => Promise<any>;
-  handleConfirmTransaction: (txId: string, password: string) => Promise<any>;
   handleRejectTransaction: (txId: string) => Promise<any>;
   handleCancelTransaction: (txId: string) => Promise<any>;
   runPendingRequestResolution: typeof PendingRequestResolutionModule.runPendingRequestResolution;
@@ -59,7 +57,6 @@ type Dependencies = {
   ) => any;
   canSignalPendingTransactionCancellation: (requestId: string) => boolean;
   writeResultToStorage: (key: string, result: any) => Promise<void>;
-  readLocalStorage: (key: string) => Promise<Record<string, unknown>>;
 };
 
 const HANDLED_ASYNC: BackgroundSigningRequestRouteResult = {
@@ -183,47 +180,6 @@ export function createBackgroundSigningRequestMessageRouter(
               favicon: request.favicon,
             });
           });
-        return HANDLED_ASYNC;
-      }
-
-      case "confirmTransaction": {
-        const txId = typeof message.txId === "string" ? message.txId : "";
-        dependencies
-          .runPendingRequestResolution({
-            family: "transaction",
-            requestId: txId,
-            action: "confirm",
-            conflictResult: dependencies.pendingResolutionConflict,
-            resolve: async () => {
-              const pending = await dependencies.getPendingTxRequestById(txId);
-              if (!pending) {
-                return {
-                  success: false,
-                  error: "Transaction request not found",
-                };
-              }
-              const result = await dependencies.handleConfirmTransaction(
-                txId,
-                message.password,
-              );
-              if (!(await dependencies.getPendingTxRequestById(txId))) {
-                const resultKey = `txResult:${txId}`;
-                const existingResult =
-                  await dependencies.readLocalStorage(resultKey);
-                if (!existingResult[resultKey]) {
-                  await dependencies.writeResultToStorage(resultKey, result);
-                }
-              }
-              return result;
-            },
-          })
-          .then(sendResponse)
-          .catch((error) =>
-            sendResponse({
-              success: false,
-              error: errorMessage(error, "Failed to confirm transaction"),
-            }),
-          );
         return HANDLED_ASYNC;
       }
 

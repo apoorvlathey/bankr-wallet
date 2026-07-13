@@ -3,11 +3,11 @@
 export {
   ONBOARDING_INITIALIZATION_KEY,
   isOnboardingInitializationOwner,
-} from "./onboardingInitializationState";
+} from "./onboarding/state";
 export {
   beginOnboardingInitialization,
   completeOnboardingInitialization,
   getOnboardingInitializationStatus,
   rollbackOnboardingInitialization,
-} from "./onboardingInitializationLifecycle";
-export { initializeOnboardingCredential } from "./onboardingCredentialInitialization";
+} from "./onboarding/lifecycle";
+export { initializeOnboardingCredential } from "./onboarding/credential";

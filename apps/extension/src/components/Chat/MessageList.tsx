@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { ChatIcon } from "@chakra-ui/icons";
 import { usePrefersReducedMotion, VStack } from "@chakra-ui/react";
-import { Message } from "@/chrome/chatStorage";
+import type { Message } from "@/chrome/bankr/chat/storage";
 import {
   EmptyState,
   EmptyStateDescription,

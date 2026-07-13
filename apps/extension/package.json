@@ -35,6 +35,8 @@
     "typecheck:qa": "tsc --noEmit -p tsconfig.qa.json",
     "watch": "pnpm build:web --watch && concurrently 'pnpm build:inpage --watch' 'pnpm build:inject --watch' 'pnpm build:background --watch'",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "test:ui": "tsx --test tests/ui/*.test.ts",
+    "test:ui-architecture": "tsx --test tests/ui/architecture.test.ts tests/ui/moduleSizeBudget.test.ts",
     "test:security": "node scripts/run-security-tests.mjs",
     "test:passkey": "tsx --test tests/auth/transition.test.ts tests/session/restoreRace.test.ts tests/session/firefoxStorage.test.ts tests/passkey/validation.test.ts tests/passkey/walletTypes.test.ts tests/mnemonic/passkeyV2.test.ts tests/auth/emptyMnemonicVaultRotation.test.ts tests/auth/legacyApiUnlockCompatibility.test.ts tests/vault/localSecretGeneration.test.ts tests/vault/secretStateHardening.test.ts tests/vault/secretRevealRace.test.ts tests/vault/masterAuthorizationExpiry.test.ts tests/erc7715/delegatedAuthorityPolicy.test.ts tests/mnemonic/accountRemovalDeriveRace.test.ts tests/auth/passwordChangeSecurity.test.ts tests/passkey/webAuthn.test.ts tests/passkey/promptGate.test.ts",
     "test:request-resolution": "tsx --test tests/requests/resolution.test.ts",

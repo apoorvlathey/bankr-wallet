@@ -9,12 +9,12 @@ import { handleBatchFailure } from "./batchFailure";
 import { processingBundleIds } from "./batchExecutionRuntime";
 import { signAndBroadcastTransaction, signEip7702Authorization } from "../localSigner";
 import { getNextNonce, resetNonce } from "../forceInclusion/nonceManager";
-import { enforcePendingRequestAuthorizationAtConfirmation } from "../pendingRequestLifecycle";
-import { guardPendingRequestEffectLease, type PendingRequestEffectLease } from "../pendingRequestResolution";
+import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pendingRequestLifecycle";
+import { guardPendingRequestEffectLease, type PendingRequestEffectLease } from "../requests/pendingRequestResolution";
 import { writeResultToStorage } from "../transactions/runtime";
 import { applyReceiptToHistory, startReceiptPolling } from "../forceInclusion/receiptPoller";
 import { addTxToHistory, updateTxInHistory, type CompletedTransaction } from "../txHistoryStorage";
-import { updateBundleStatus } from "../bundleStatusStorage";
+import { updateBundleStatus } from "./bundleStatusStorage";
 import { BUNDLE_STATUS, type PendingBatchTxRequest } from "../erc5792Types";
 
 export interface Atomic7702ExecutionDependencies {
@@ -23,8 +23,8 @@ export interface Atomic7702ExecutionDependencies {
 }
 
 export interface AtomicBatchHistoryMeta {
-  swapMeta?: import("./txHistoryStorage").SwapMeta;
-  bridge?: import("./txHistoryStorage").BridgeMeta;
+  swapMeta?: import("../txHistoryStorage").SwapMeta;
+  bridge?: import("../txHistoryStorage").BridgeMeta;
 }
 
 export async function processAtomic7702LocalBatch(
@@ -36,7 +36,7 @@ export async function processAtomic7702LocalBatch(
   delegate: `0x${string}`,
   needsAuthorization: boolean,
   functionNames?: string[],
-  precomputedGasEstimates?: import("./gasEstimation").GasEstimate[],
+  precomputedGasEstimates?: import("../gasEstimation").GasEstimate[],
   historyMeta?: AtomicBatchHistoryMeta,
   effectLease?: PendingRequestEffectLease,
 ): Promise<void> {

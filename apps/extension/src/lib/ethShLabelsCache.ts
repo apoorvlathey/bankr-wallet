@@ -22,7 +22,7 @@
  */
 
 import { ethShLabelsUrl } from "@/constants/externalUrls";
-import { fetchJsonBounded } from "@/chrome/boundedHttpResponse";
+import { fetchJsonBounded } from "@/chrome/network/boundedHttp";
 
 const STORAGE_PREFIX = "ethShLabels:";
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;

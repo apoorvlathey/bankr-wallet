@@ -17,7 +17,7 @@ export async function writeErc7715PermissionResult(
     const {
       getWalletConnectPendingRequest,
       saveWalletConnectTerminalResponse,
-    } = await import("../walletConnectStorage");
+    } = await import("../walletConnect/storage");
     const route = await getWalletConnectPendingRequest(requestId);
     if (!route) return;
     await saveWalletConnectTerminalResponse(
@@ -28,7 +28,7 @@ export async function writeErc7715PermissionResult(
         : { kind: "error", code: -32000, message: result.error },
     );
     const { completeWalletConnectRequestIfNeeded } = await import(
-      "../walletConnectHandlers"
+      "../walletConnect/resultBridge"
     );
     await completeWalletConnectRequestIfNeeded(key, result);
   } catch (error) {

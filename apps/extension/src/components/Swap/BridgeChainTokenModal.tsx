@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { PortfolioToken } from "@/chrome/portfolioApi";
+import type { PortfolioToken } from "@/chrome/portfolio/api";
 import {
   getBridgeSourceChains,
   getBridgeDestinationChains,
   type EnrichedBridgeChain,
 } from "@/chrome/bridgeChainsResolver";
 import { getCachedBungeeTokens } from "@/chrome/bridgeApi";
-import { secureHttpTransport } from "@/chrome/rpcHttpClient";
+import { secureHttpTransport } from "@/chrome/network/rpcClient";
 import type { BungeeToken } from "@walletchan/shared/bungee";
 import {
   getStoredRpcUrl,

@@ -1,8 +1,8 @@
-import { useState,
+import {
+  useState,
   useEffect,
   useCallback,
   useRef,
-  lazy,
   Suspense,
   type ReactNode,
 } from "react";
@@ -10,20 +10,11 @@ import {
   useUpdateEffect,
   Container,
   Text,
-  HStack,
   Box,
-  Button,
-  Image,
   VStack,
-  Link,
   Spinner,
   useDisclosure,
 } from "@chakra-ui/react";
-
-import {
-  WarningIcon,
-  InfoIcon,
-} from "@chakra-ui/icons";
 
 import { isDarkThemeId, useTheme } from "@/theme";
 import {
@@ -38,6 +29,30 @@ import HomeDappDock, {
   type ActiveDappConnectionContext,
 } from "@/components/HomeDappDock";
 import type { PortfolioChainRelinkRequest } from "@/components/portfolioChainFilterState";
+import {
+  AccountSettings,
+  AddAccount,
+  AddChain,
+  BatchTransactionConfirmation,
+  ChatView,
+  CrossDappBatchConfirmation,
+  DappConnectionConfirmation,
+  Erc7715PermissionConfirmation,
+  HiddenPortfolioTokensView,
+  HideTokensView,
+  MoreActionsView,
+  PendingTxList,
+  QRCodeModal,
+  Settings,
+  ShieldView,
+  SignatureRequestConfirmation,
+  SwapView,
+  TokenTransfer,
+  TransactionConfirmation,
+  TxDetailScreen,
+  WalletConnectView,
+  WatchAssetConfirmation,
+} from "@/app/lazyScreens";
 
 /**
  * Detects if we're running in Arc browser using CSS variable
@@ -55,84 +70,6 @@ function isArcBrowser(): boolean {
   }
 }
 
-// Lazy load heavy components
-const Settings = lazy(() => import("@/components/Settings"));
-const TransactionConfirmation = lazy(
-  () => import("@/components/TransactionConfirmation"),
-);
-const SignatureRequestConfirmation = lazy(
-  () => import("@/components/SignatureRequestConfirmation"),
-);
-const Erc7715PermissionConfirmation = lazy(
-  () => import("@/components/Erc7715PermissionConfirmation"),
-);
-const DappConnectionConfirmation = lazy(
-  () => import("@/components/DappConnectionConfirmation"),
-);
-const PendingTxList = lazy(() => import("@/components/PendingTxList"));
-const BatchTransactionConfirmation = lazy(
-  () => import("@/components/BatchTransactionConfirmation"),
-);
-const CrossDappBatchConfirmation = lazy(
-  () => import("@/components/CrossDappBatchConfirmation"),
-);
-const ChatView = lazy(() => import("@/components/Chat/ChatView"));
-const AddAccount = lazy(() => import("@/components/AddAccount"));
-const AccountSettings = lazy(
-  () => import("@/components/AccountSettings"),
-);
-const QRCodeModal = lazy(() =>
-  import("@/components/QRCodeModal").then((m) => ({ default: m.QRCodeModal })),
-);
-const TokenTransfer = lazy(() => import("@/components/TokenTransfer"));
-const SwapView = lazy(() => import("@/components/Swap/SwapView"));
-const ShieldView = lazy(() => import("@/components/ShieldView"));
-const MoreActionsView = lazy(() => import("@/components/MoreActionsView"));
-const HideTokensView = lazy(() => import("@/components/HideTokensView"));
-const HiddenPortfolioTokensView = lazy(
-  () => import("@/components/HiddenPortfolioTokensView"),
-);
-const WalletConnectView = lazy(() => import("@/components/WalletConnectView"));
-const WatchAssetConfirmation = lazy(() => import("@/components/WatchAssetConfirmation"));
-const AddChain = lazy(() => import("@/components/Settings/AddChain"));
-const TxDetailScreen = lazy(() => import("@/components/TxDetailScreen"));
-
-// Preload every lazy screen chunk on idle. Without this, the Suspense
-// fallback renders mid-slide when the user navigates for the first time —
-// the chunk fetches while the screen is already animating in, so content
-// pops into place halfway through the transition. Firing these imports as
-// soon as the popup is idle means chunks are cached by the time the user
-// triggers any navigation and Suspense never has to render its fallback.
-if (typeof window !== "undefined") {
-  const schedule =
-    (window as Window & {
-      requestIdleCallback?: (cb: () => void) => number;
-    }).requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 300));
-  schedule(() => {
-    void import("@/components/Settings");
-    void import("@/components/TransactionConfirmation");
-    void import("@/components/SignatureRequestConfirmation");
-    void import("@/components/Erc7715PermissionConfirmation");
-    void import("@/components/PendingTxList");
-    void import("@/components/BatchTransactionConfirmation");
-    void import("@/components/CrossDappBatchConfirmation");
-    void import("@/components/Chat/ChatView");
-    void import("@/components/AddAccount");
-    void import("@/components/AccountSettings");
-    void import("@/components/QRCodeModal");
-    void import("@/components/TokenTransfer");
-    void import("@/components/Swap/SwapView");
-    void import("@/components/ShieldView");
-    void import("@/components/MoreActionsView");
-    void import("@/components/HideTokensView");
-    void import("@/components/HiddenPortfolioTokensView");
-    void import("@/components/WalletConnectView");
-    void import("@/components/WatchAssetConfirmation");
-    void import("@/components/Settings/AddChain");
-    void import("@/components/TxDetailScreen");
-  });
-}
-
 // Eager load components needed immediately
 import UnlockScreen from "@/components/UnlockScreen";
 import { ScreenStack, type AppView } from "@/components/ScreenTransition";
@@ -144,28 +81,27 @@ import type {
 import PendingTxBanner from "@/components/PendingTxBanner";
 import PortfolioTabs from "@/components/PortfolioTabs";
 import { useNetworks } from "@/contexts/NetworksContext";
-import ChainIcon from "@/components/ChainIcon";
 import { hasEncryptedApiKey } from "@/chrome/crypto";
-import { PendingTxRequest } from "@/chrome/pendingTxStorage";
-import { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
+import { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
+import { PendingSignatureRequest } from "@/chrome/requests/pendingSignatureStorage";
 import type { PendingErc7715PermissionRequest } from "@/chrome/pendingErc7715PermissionStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import {
   getCrossDappBatch,
   type CrossDappBatch,
-} from "@/chrome/crossDappBatchStorage";
-import { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
-import { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
-import type { PendingDappConnectionRequest } from "@/chrome/dappPermissionStorage";
+} from "@/chrome/crossDappBatch/storage";
+import { PendingWatchAssetRequest } from "@/chrome/requests/pendingWatchAssetStorage";
+import { PendingAddChainRequest } from "@/chrome/requests/pendingAddChainStorage";
+import type { PendingDappConnectionRequest } from "@/chrome/requests/dappPermissionStorage";
 import type { Account, PasswordType } from "@/chrome/types";
-import type { PortfolioToken } from "@/chrome/portfolioApi";
+import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import type {
   WalletConnectAddChainContext,
   WalletConnectRetryNotice,
   WalletConnectSessionSummary,
 } from "@/types/walletConnect";
-import { TWITTER_URL, WALLETCHAN_OS_URL } from "@/constants/externalUrls";
+import { WALLETCHAN_OS_URL } from "@/constants/externalUrls";
 import {
   getDefaultChainName,
   getResolvedChainById,
@@ -173,14 +109,15 @@ import {
   getVisibleChains,
 } from "@/lib/chains";
 import { playInteractionSound } from "@/sounds/soundManager";
-
-// Combined request type for unified ordering
-export type CombinedRequest =
-  | { type: "tx"; request: PendingTxRequest }
-  | { type: "sig"; request: PendingSignatureRequest }
-  | { type: "permission"; request: PendingErc7715PermissionRequest }
-  | { type: "batch"; request: PendingBatchTxRequest }
-  | { type: "crossDappBatch"; request: CrossDappBatch };
+import { getCombinedRequests } from "@/app/requestModel";
+import {
+  FailedTransactionAlert,
+  ReloadRequiredAlert,
+  RpcIssueAlert,
+  type FailedTransactionError,
+} from "@/app/home/HomeAlerts";
+import WaitingForOnboardingScreen from "@/app/screens/WaitingForOnboardingScreen";
+import { useRuntimeMessaging } from "@/app/hooks/useRuntimeMessaging";
 
 type AddChainReturnTarget = {
   view: "walletConnect";
@@ -194,35 +131,6 @@ type UnlockReturnTarget =
 
 const UNLOCK_SUCCESS_HOLD_MS = 500;
 const UNLOCK_SUCCESS_REDUCED_MOTION_HOLD_MS = 120;
-
-// Helper to combine and sort requests by timestamp.
-// The cross-dapp batch (when present) is always prepended as the FIRST element
-// so it has a dedicated, prominent slot in the carousel.
-// eslint-disable-next-line react-refresh/only-export-components
-export function getCombinedRequests(
-  txRequests: PendingTxRequest[],
-  sigRequests: PendingSignatureRequest[],
-  batchRequests: PendingBatchTxRequest[] = [],
-  crossDappBatch?: CrossDappBatch | null,
-  permissionRequests: PendingErc7715PermissionRequest[] = [],
-): CombinedRequest[] {
-  const rest: Array<Exclude<CombinedRequest, { type: "crossDappBatch" }>> = [
-    ...txRequests.map((r) => ({ type: "tx" as const, request: r })),
-    ...sigRequests.map((r) => ({ type: "sig" as const, request: r })),
-    ...permissionRequests.map((r) => ({
-      type: "permission" as const,
-      request: r,
-    })),
-    ...batchRequests.map((r) => ({ type: "batch" as const, request: r })),
-  ];
-  // Sort the rest by timestamp ascending (oldest first)
-  rest.sort((a, b) => a.request.timestamp - b.request.timestamp);
-
-  if (crossDappBatch && crossDappBatch.entries.length > 0) {
-    return [{ type: "crossDappBatch", request: crossDappBatch }, ...rest];
-  }
-  return rest;
-}
 
 // Loading fallback component
 const LoadingFallback = () => (
@@ -306,10 +214,8 @@ function App() {
   const [isInSidePanel, setIsInSidePanel] = useState(false);
   const [isFullscreenTab, setIsFullscreenTab] = useState(false);
   const [, setIsPopupWindow] = useState(false);
-  const [failedTxError, setFailedTxError] = useState<{
-    error: string;
-    origin: string;
-  } | null>(null);
+  const [failedTxError, setFailedTxError] =
+    useState<FailedTransactionError | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] =
     useState<SettingsTab>("main");
   const [settingsInitialEditChainName, setSettingsInitialEditChainName] = useState<string | undefined>(undefined);
@@ -347,9 +253,6 @@ function App() {
   const visibleRpcIssueChainIds = rpcIssueChainIds.filter(
     (chainId) => !dismissedRpcIssueChainIds.includes(chainId),
   );
-  const visibleRpcIssueChainNames = visibleRpcIssueChainIds
-    .map((chainId) => getResolvedChainById(chainId, networksInfo)?.name)
-    .filter((name): name is string => !!name);
   const requestPortfolioChainRelink = useCallback(
     (tabId: number, chainId: number) => {
       portfolioChainRelinkRevisionRef.current += 1;
@@ -394,9 +297,9 @@ function App() {
   const [swapInitialSellToken, setSwapInitialSellToken] = useState<PortfolioToken | undefined>();
   const [walletConnectSessionCount, setWalletConnectSessionCount] = useState(0);
   const [walletConnectChainId, setWalletConnectChainId] = useState<number | null>(null);
-  const keepAlivePortRef = useRef<chrome.runtime.Port | null>(null);
-  const reconnectingRef = useRef(false);
   const isPopupWindowRef = useRef(false);
+  const { establishKeepalivePort, sendMessageWithRetry } =
+    useRuntimeMessaging();
 
   const walletConnectStoredChain = walletConnectChainId
     ? getResolvedChainById(walletConnectChainId, networksInfo)
@@ -430,108 +333,6 @@ function App() {
     });
     return normalWindow.tabs?.find((tab) => tab.active) || current;
   };
-
-  /**
-   * Try to wake up the service worker using chrome.runtime.connect
-   * This is needed for browsers like Arc that don't auto-wake the service worker
-   */
-  const wakeUpServiceWorker = useCallback(async (): Promise<boolean> => {
-    return new Promise((resolve) => {
-      try {
-        const port = chrome.runtime.connect({ name: "popup-wake" });
-        port.onDisconnect.addListener(() => {
-          // Port disconnected, but that's okay - we just needed to wake it up
-          resolve(true);
-        });
-        // Give it a moment then disconnect
-        setTimeout(() => {
-          try {
-            port.disconnect();
-          } catch {
-            // Ignore disconnect errors
-          }
-          resolve(true);
-        }, 100);
-      } catch (error) {
-        console.warn("Failed to wake service worker:", error);
-        resolve(false);
-      }
-    });
-  }, []);
-
-  /**
-   * Send a message to the background script with retry logic
-   * Some browsers (like Arc) may not wake up the service worker immediately
-   */
-  const sendMessageWithRetry = useCallback(
-    async <T,>(
-      message: { type: string; [key: string]: any },
-      maxRetries = 5,
-      delay = 200,
-    ): Promise<T | null> => {
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        try {
-          const response = await new Promise<T | null>((resolve, reject) => {
-            chrome.runtime.sendMessage(message, (result) => {
-              if (chrome.runtime.lastError) {
-                reject(new Error(chrome.runtime.lastError.message));
-              } else {
-                resolve(result);
-              }
-            });
-          });
-          return response;
-        } catch (error) {
-          console.warn(`Message attempt ${attempt + 1} failed:`, error);
-          if (attempt < maxRetries - 1) {
-            // Try to wake up the service worker
-            await wakeUpServiceWorker();
-            // Wait before retrying, with exponential backoff
-            await new Promise((r) => setTimeout(r, delay * Math.pow(2, attempt)));
-          }
-        }
-      }
-      return null;
-    },
-    [wakeUpServiceWorker],
-  );
-
-  /**
-   * Establishes and maintains a keepalive port connection to the service worker.
-   * Automatically reconnects if the port disconnects (e.g., service worker restarts).
-   */
-  const establishKeepalivePort = useCallback(() => {
-    if (reconnectingRef.current) return;
-
-    // Disconnect existing port if any
-    if (keepAlivePortRef.current) {
-      try {
-        keepAlivePortRef.current.disconnect();
-      } catch {
-        // Ignore disconnect errors
-      }
-    }
-
-    try {
-      const port = chrome.runtime.connect({ name: "ui-keepalive" });
-      keepAlivePortRef.current = port;
-
-      port.onDisconnect.addListener(() => {
-        keepAlivePortRef.current = null;
-        // Service worker may have restarted - reconnect after a short delay
-        // Only reconnect if extension context is still valid
-        if (chrome.runtime?.id) {
-          reconnectingRef.current = true;
-          setTimeout(() => {
-            reconnectingRef.current = false;
-            establishKeepalivePort();
-          }, 100);
-        }
-      });
-    } catch {
-      keepAlivePortRef.current = null;
-    }
-  }, []);
 
   const loadPendingRequests = async () => {
     const requests = await sendMessageWithRetry<PendingTxRequest[]>({
@@ -2440,132 +2241,10 @@ function App() {
   // Waiting for onboarding to complete
   if (view === "waitingForOnboarding") {
     return (
-      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
-        <Box
-          maxW={isFullscreenTab ? "480px" : "100%"}
-          mx="auto"
-          w="100%"
-          h="100%"
-          display="flex"
-          flexDirection="column"
-        >
-          <Box
-            minH="300px"
-            bg="surface.base"
-            display="flex"
-            flexDirection="column"
-            alignItems="center"
-            justifyContent="center"
-            p={6}
-            textAlign="center"
-            position="relative"
-            flex="1"
-          >
-            {/* Geometric decorations — Bauhaus only */}
-            {!isDarkTheme && (
-              <>
-                <Box
-                  position="absolute"
-                  top={4}
-                  left={4}
-                  w="12px"
-                  h="12px"
-                  bg="accent.primary"
-                  border="2px solid"
-                  borderColor="border.default"
-                />
-                <Box
-                  position="absolute"
-                  top={4}
-                  right={4}
-                  w="12px"
-                  h="12px"
-                  bg="accent.secondary"
-                  border="2px solid"
-                  borderColor="border.default"
-                  borderRadius="full"
-                />
-              </>
-            )}
-
-            <VStack spacing={4}>
-              <Box
-                bg={isDarkTheme ? "surface.raised" : "accent.highlight"}
-                border={isDarkTheme ? "1px solid" : "3px solid"}
-                borderColor={isDarkTheme ? "border.subtle" : "border.default"}
-                boxShadow={isDarkTheme ? "none" : "card"}
-                borderRadius={isDarkTheme ? "xl" : 0}
-                p={3}
-              >
-                <Image src="walletchan-icon.png" w="3rem" borderRadius="lg" />
-              </Box>
-              <Text
-                fontSize="lg"
-                fontWeight="700"
-                color="fg.primary"
-              >
-                Complete setup
-              </Text>
-              <Text fontSize="sm" color="text.secondary" fontWeight="500">
-                Please complete the setup in the new tab that just opened.
-              </Text>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={async () => {
-                  // Re-open or focus onboarding tab
-                  const onboardingUrl =
-                    chrome.runtime.getURL("onboarding.html");
-                  const existingTabs = await chrome.tabs.query({
-                    url: onboardingUrl,
-                  });
-                  if (existingTabs.length > 0 && existingTabs[0].id) {
-                    await chrome.tabs.update(existingTabs[0].id, {
-                      active: true,
-                    });
-                    await chrome.windows.update(existingTabs[0].windowId!, {
-                      focused: true,
-                    });
-                  } else {
-                    await chrome.tabs.create({ url: onboardingUrl });
-                  }
-                }}
-              >
-                Open Setup Tab
-              </Button>
-              <HStack spacing={1} justify="center" mt={4}>
-                <Text fontSize="sm" color="text.tertiary" fontWeight="500">
-                  Built by
-                </Text>
-                <Link
-                  display="flex"
-                  alignItems="center"
-                  gap={1}
-                  color="accent.secondary"
-                  fontWeight="700"
-                  _hover={{ color: "accent.primary" }}
-                  onClick={() => {
-                    chrome.tabs.create({ url: TWITTER_URL });
-                  }}
-                >
-                  <Box
-                    as="svg"
-                    viewBox="0 0 24 24"
-                    w="14px"
-                    h="14px"
-                    fill="currentColor"
-                  >
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                  </Box>
-                  <Text fontSize="sm" textDecor="underline">
-                    @apoorveth
-                  </Text>
-                </Link>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      </Box>
+      <WaitingForOnboardingScreen
+        isDarkTheme={isDarkTheme}
+        isFullscreenTab={isFullscreenTab}
+      />
     );
   }
 
@@ -3803,47 +3482,11 @@ function App() {
           overflowY="auto"
         >
           <VStack spacing={4} align="stretch">
-            {/* Failed Transaction Error */}
             {failedTxError && (
-              <Box
-                bg="status.error.bg"
-                border="1px solid"
-                borderColor="status.error.border"
-                borderRadius="lg"
-                boxShadow="none"
-                p={3}
-                position="relative"
-              >
-                <HStack w="full" justify="space-between" mb={2}>
-                  <HStack>
-                    <Box display="flex" color="status.error.fg">
-                      <WarningIcon boxSize={4} />
-                    </Box>
-                    <Text fontSize="sm" color="status.error.fg" fontWeight="600">
-                      Transaction failed
-                    </Text>
-                  </HStack>
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    color="status.error.fg"
-                    onClick={() => setFailedTxError(null)}
-                  >
-                    Dismiss
-                  </Button>
-                </HStack>
-                <Text
-                  fontSize="xs"
-                  color="fg.secondary"
-                  mb={1}
-                  fontWeight="500"
-                >
-                  {failedTxError.origin}
-                </Text>
-                <Text fontSize="sm" color="status.error.fg" fontWeight="500">
-                  {failedTxError.error}
-                </Text>
-              </Box>
+              <FailedTransactionAlert
+                error={failedTxError}
+                onDismiss={() => setFailedTxError(null)}
+              />
             )}
 
             {/* Pending Requests Banner */}
@@ -3911,128 +3554,17 @@ function App() {
               }}
             />
 
-            {visibleRpcIssueChainIds.length > 0 && (
-              <Box
-                bg={isDarkTheme ? "status.warning.bg" : "status.info.bg"}
-                border={isDarkTheme ? "1px solid" : "2px solid"}
-                borderColor={isDarkTheme ? "status.warning.border" : "border.default"}
-                borderRadius={isDarkTheme ? "md" : undefined}
-                boxShadow={isDarkTheme ? undefined : "card"}
-                px={3}
-                py={2}
-              >
-                <HStack align="start" spacing={2}>
-                  <Box
-                    p={1}
-                    bg={isDarkTheme ? "status.warning.fg" : "accent.secondary"}
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    flexShrink={0}
-                    borderRadius={isDarkTheme ? "sm" : undefined}
-                  >
-                    <WarningIcon
-                      color={isDarkTheme ? "fg.inverse" : "accentFg.secondary"}
-                      boxSize={3}
-                    />
-                  </Box>
-                  <Box flex={1} minW={0}>
-                    <Text
-                      fontSize="2xs"
-                      fontWeight="800"
-                      color={isDarkTheme ? "status.warning.fg" : "status.info.fg"}
-                      textTransform="uppercase"
-                      letterSpacing="wide"
-                      mb={1}
-                    >
-                      RPC Issue Detected
-                    </Text>
-                    {visibleRpcIssueChainNames.length > 0 ? (
-                      <VStack align="start" spacing={1}>
-                        <HStack spacing={2} flexWrap="wrap">
-                          {visibleRpcIssueChainIds.slice(0, 2).map((chainId) => {
-                            const chain = getResolvedChainById(chainId, networksInfo);
-                            if (!chain) return null;
-                            return (
-                              <HStack
-                                key={chainId}
-                                spacing={1.5}
-                                bg="surface.raised"
-                                border="1.5px solid"
-                                borderColor="border.default"
-                                borderRadius={isDarkTheme ? "md" : undefined}
-                                px={1.5}
-                                py={1}
-                                cursor="pointer"
-                                _hover={{ bg: "bg.muted" }}
-                                onClick={() => {
-                                  setSettingsInitialTab("chains");
-                                  setSettingsInitialEditChainName(chain.name);
-                                  setView("settings");
-                                }}
-                              >
-                                <ChainIcon
-                                  chainId={chain.chainId}
-                                  chainName={chain.name}
-                                  size="14px"
-                                  withChip
-                                />
-                                <Text
-                                  fontSize="xs"
-                                  fontWeight="800"
-                                  color="text.primary"
-                                  textTransform="uppercase"
-                                  letterSpacing="wide"
-                                >
-                                  {chain.name}
-                                </Text>
-                              </HStack>
-                            );
-                          })}
-                          {visibleRpcIssueChainIds.length > 2 && (
-                            <Text
-                              fontSize="2xs"
-                              fontWeight="700"
-                              color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
-                              opacity={0.8}
-                            >
-                              +{visibleRpcIssueChainIds.length - 2} more
-                            </Text>
-                          )}
-                        </HStack>
-                        <Text
-                          fontSize="xs"
-                          color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
-                          fontWeight="600"
-                          opacity={isDarkTheme ? 1 : 0.9}
-                        >
-                          Balance fetch failed. Edit the chain RPC if this persists.
-                        </Text>
-                      </VStack>
-                    ) : (
-                      <Text
-                        fontSize="xs"
-                        color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
-                        fontWeight="600"
-                        opacity={isDarkTheme ? 1 : 0.9}
-                      >
-                        Balance fetch failed for one or more chains. Edit the chain RPC if this persists.
-                      </Text>
-                    )}
-                  </Box>
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    color={isDarkTheme ? "status.warning.fg" : "status.info.fg"}
-                    fontWeight="700"
-                    _hover={{ bg: "whiteAlpha.200" }}
-                    onClick={() => setDismissedRpcIssueChainIds(rpcIssueChainIds)}
-                  >
-                    Dismiss
-                  </Button>
-                </HStack>
-              </Box>
-            )}
+            <RpcIssueAlert
+              chainIds={visibleRpcIssueChainIds}
+              networksInfo={networksInfo}
+              isDarkTheme={isDarkTheme}
+              onEditChain={(chainName) => {
+                setSettingsInitialTab("chains");
+                setSettingsInitialEditChainName(chainName);
+                setView("settings");
+              }}
+              onDismiss={() => setDismissedRpcIssueChainIds(rpcIssueChainIds)}
+            />
 
             {/* Account Switcher + Chain Selector Row */}
             <AccountNetworkControls
@@ -4119,53 +3651,16 @@ function App() {
               />
             )}
 
-            {/* Reload Required Alert */}
             {reloadRequired && (
-              <Box
-                bg="status.warning.bg"
-                border="1px solid"
-                borderColor="status.warning.border"
-                borderRadius="lg"
-                boxShadow="none"
-                p={3}
-              >
-                <HStack justify="space-between">
-                  <HStack spacing={2}>
-                    <Box display="flex" color="status.warning.fg">
-                      <InfoIcon boxSize={4} />
-                    </Box>
-                    <Box>
-                      <Text
-                        fontSize="sm"
-                        color="status.warning.fg"
-                        fontWeight="600"
-                      >
-                        Reload page required
-                      </Text>
-                      <Text
-                        fontSize="xs"
-                        color="fg.secondary"
-                        fontWeight="500"
-                      >
-                        To apply changes on the current site
-                      </Text>
-                    </Box>
-                  </HStack>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={async () => {
-                      const tab = await currentTab();
-                      const url = tab.url!;
-                      chrome.tabs.create({ url });
-                      chrome.tabs.remove(tab.id!);
-                      setReloadRequired(false);
-                    }}
-                  >
-                    Reload
-                  </Button>
-                </HStack>
-              </Box>
+              <ReloadRequiredAlert
+                onReload={async () => {
+                  const tab = await currentTab();
+                  const url = tab.url!;
+                  chrome.tabs.create({ url });
+                  chrome.tabs.remove(tab.id!);
+                  setReloadRequired(false);
+                }}
+              />
             )}
           </VStack>
         </Container>

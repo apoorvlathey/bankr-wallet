@@ -10,7 +10,7 @@ import {
   updateMessageInConversation,
   toggleConversationFavorite,
   deleteMessageFromConversation,
-} from "@/chrome/chatStorage";
+} from "@/chrome/bankr/chat/storage";
 
 interface UseChatReturn {
   conversations: Conversation[];

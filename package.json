@@ -20,6 +20,7 @@
     "typecheck:extension:qa": "pnpm --filter @walletchan/extension typecheck:qa",
     "qa:extension": "pnpm --filter @walletchan/extension qa:extension",
     "test:extension-passkey": "pnpm --filter @walletchan/extension test:passkey",
+    "test:extension-ui": "pnpm --filter @walletchan/extension test:ui",
     "zip": "pnpm --filter @walletchan/extension zip",
     "zip:cws": "pnpm --filter @walletchan/extension zip:cws",
     "zip:firefox": "pnpm --filter @walletchan/extension zip:firefox",

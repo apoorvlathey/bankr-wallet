@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { shouldHaltForceInclusionTail } from "../../src/chrome/forceInclusion/batch";
-import { shouldRetainUnobservedBroadcast } from "../../src/chrome/forceInclusion/receiptPoller";
+import {
+  shouldHaltForceInclusionTail,
+  shouldRetainUnobservedBroadcast,
+} from "../../src/chrome/forceInclusion/broadcastPolicy";
 
 test("multi-deposit force inclusion halts its higher-nonce tail on uncertainty", () => {
   assert.equal(

@@ -4,7 +4,7 @@ import {
   VIEM_CHAINS,
 } from "@/constants/chainRegistry";
 import { hasPermit2ApprovalRevocationMethod } from "@/lib/erc7715ApprovalRevocation";
-import { secureHttpTransport } from "../rpcHttpClient";
+import { secureHttpTransport } from "../network/rpcClient";
 import {
   ERC7710_DELEGATION_MANAGER,
   METAMASK_DELEGATOR_V1_3_CAVEAT_ENFORCERS,

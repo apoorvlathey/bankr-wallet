@@ -8,7 +8,7 @@ import {
 } from "../crypto";
 import { migratePrivateKeysToVaultKey } from "./legacyVaultKeyMigration";
 import { assertCurrentMasterAuthorization } from "../masterAuthorization";
-import { retainValidLocalAccountKeys } from "../privateKeyIntegrity";
+import { retainValidLocalAccountKeys } from "../vault/accountIntegrity";
 import {
   getAutoLockTimeout,
   getCachedPassword,

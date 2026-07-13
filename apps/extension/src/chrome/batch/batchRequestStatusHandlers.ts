@@ -10,14 +10,14 @@ import { CHAIN_CONFIG } from "../../constants/chainConfig";
 import {
   getBundleStatus,
   updateBundleStatus,
-} from "../bundleStatusStorage";
+} from "./bundleStatusStorage";
 import { BUNDLE_STATUS, ERC5792_ERRORS } from "../erc5792Types";
 import type { WalletGetCallsStatusResult } from "../erc5792Types";
 import {
   getPendingBatchTxRequestById,
   removeCallFromPendingBatchTxRequest,
   removePendingBatchTxRequest,
-} from "../pendingBatchTxStorage";
+} from "../requests/pendingBatchTxStorage";
 import { writeResultToStorage } from "../transactions/runtime";
 
 export async function handleRejectBatchTransaction(
@@ -68,7 +68,7 @@ export async function handleUpdateCallInPendingBatch(
   newData: string,
 ): Promise<{ success: boolean; error?: string }> {
   const { updateCallInPendingBatchTxRequest } = await import(
-    "./pendingBatchTxStorage"
+    "../requests/pendingBatchTxStorage"
   );
   return updateCallInPendingBatchTxRequest(bundleId, callIndex, newData);
 }

@@ -161,11 +161,11 @@ test("creation and rotation backends use the shared policy without restricting l
     agentFactorSource,
     passwordRotationSource,
     walletUnlockSource,
-    backgroundSource,
+    installUpdateLifecycleSource,
   ] = await Promise.all([
     readFile(
       new URL(
-        "../../src/chrome/onboardingCredentialInitialization.ts",
+        "../../src/chrome/onboarding/credential.ts",
         import.meta.url,
       ),
       "utf8",
@@ -185,7 +185,13 @@ test("creation and rotation backends use the shared policy without restricting l
       new URL("../../src/chrome/auth/walletUnlock.ts", import.meta.url),
       "utf8",
     ),
-    readFile(new URL("../../src/chrome/background.ts", import.meta.url), "utf8"),
+    readFile(
+      new URL(
+        "../../src/chrome/background/lifecycle/installUpdate.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
   ]);
 
   assert.match(onboardingSource, /newPasswordPolicyError\(password/);
@@ -199,5 +205,8 @@ test("creation and rotation backends use the shared policy without restricting l
     /newPasswordPolicyError/,
     "older short passwords must remain unlockable",
   );
-  assert.match(backgroundSource, /initializeAutoLockTimeoutDefault\(\)/);
+  assert.match(
+    installUpdateLifecycleSource,
+    /initializeAutoLockTimeoutDefault\(\)/,
+  );
 });

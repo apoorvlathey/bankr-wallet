@@ -5,9 +5,9 @@ import {
   Text,
 } from "@chakra-ui/react";
 import { ChevronRightIcon, RepeatIcon } from "@chakra-ui/icons";
-import type { CombinedRequest } from "@/App";
-import type { PendingTxRequest } from "@/chrome/pendingTxStorage";
-import type { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
+import type { CombinedRequest } from "@/app/requestModel";
+import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
+import type { PendingSignatureRequest } from "@/chrome/requests/pendingSignatureStorage";
 import type { PendingErc7715PermissionRequest } from "@/chrome/pendingErc7715PermissionStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import { getChainConfig } from "@/constants/chainConfig";

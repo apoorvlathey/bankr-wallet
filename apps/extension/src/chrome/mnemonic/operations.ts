@@ -108,11 +108,13 @@ export async function getMnemonic(
 ): Promise<string | null> {
   const vault = await loadMnemonicVault();
   if (!vault) return null;
-  const entry = vault.entries.find((candidate) => candidate.id === seedGroupId);
-  if (!entry) return null;
 
   try {
     if (vault.version === 2) {
+      const entry = vault.entries.find(
+        (candidate) => candidate.id === seedGroupId,
+      );
+      if (!entry) return null;
       if (!access.mnemonicKey || access.mnemonicKey.keyId !== vault.keyId) {
         return null;
       }
@@ -123,6 +125,10 @@ export async function getMnemonic(
         vault.keyId,
       );
     }
+    const entry = vault.entries.find(
+      (candidate) => candidate.id === seedGroupId,
+    );
+    if (!entry) return null;
     if (entry.keystore.salt) {
       if (!access.password) return null;
       return await decryptMnemonicWithPassword(entry.keystore, access.password);
@@ -145,11 +151,16 @@ export async function removeMnemonic(
     if (expectedAuthEpoch) assertCurrentMasterAuthorization(expectedAuthEpoch);
     const vault = await loadMnemonicVault();
     if (!vault) return;
-    const entries = vault.entries.filter((entry) => entry.id !== seedGroupId);
     if (expectedAuthEpoch) assertCurrentMasterAuthorization(expectedAuthEpoch);
     if (vault.version === 1) {
+      const entries = vault.entries.filter(
+        (entry) => entry.id !== seedGroupId,
+      );
       await saveMnemonicVault({ ...vault, entries });
     } else {
+      const entries = vault.entries.filter(
+        (entry) => entry.id !== seedGroupId,
+      );
       await saveMnemonicVault({
         ...vault,
         revision: vault.revision + 1,

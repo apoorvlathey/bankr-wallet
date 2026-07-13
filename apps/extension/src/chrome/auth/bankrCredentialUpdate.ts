@@ -27,9 +27,10 @@ export type PreparedApiKeyUpdate = {
   success: true;
   apiKey: string;
   expectedAuthEpoch: string;
-  storageUpdate:
-    | { encryptedApiKeyVault: EncryptedData; encryptedApiKey: null }
-    | { encryptedApiKey: EncryptedData };
+  storageUpdate: Partial<{
+    encryptedApiKeyVault: EncryptedData;
+    encryptedApiKey: EncryptedData | null;
+  }>;
 };
 
 /** Saves a replacement API key through the same prepared atomic boundary. */

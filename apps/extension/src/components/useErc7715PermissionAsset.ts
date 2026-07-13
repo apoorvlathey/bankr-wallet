@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 
-import { fetchOnchainBalances } from "@/chrome/onchainBalances";
+import { fetchOnchainBalances } from "@/chrome/portfolio/onchainBalances";
 import type {
   Erc7715PermissionRequest,
   PendingErc7715PermissionRequest,
 } from "@/chrome/pendingErc7715PermissionStorage";
-import type { PortfolioToken } from "@/chrome/portfolioApi";
-import { loadPortfolioTokenCatalog } from "@/chrome/portfolioTokens";
+import type { PortfolioToken } from "@/chrome/portfolio/api";
+import { loadPortfolioTokenCatalog } from "@/chrome/portfolio/tokenCatalog";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import {
   resolveTokenMetadataClient,

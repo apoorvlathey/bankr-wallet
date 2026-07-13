@@ -14,7 +14,7 @@ import {
   Tooltip,
 } from "@chakra-ui/react";
 import { CheckIcon, CopyIcon, ExternalLinkIcon } from "@chakra-ui/icons";
-import type { PortfolioToken } from "@/chrome/portfolioApi";
+import type { PortfolioToken } from "@/chrome/portfolio/api";
 import ChainIcon from "@/components/ChainIcon";
 import TokenLogo from "@/components/TokenLogo";
 import {

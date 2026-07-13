@@ -28,7 +28,7 @@ test("only WalletChan UI documents are trusted as wallet message senders", () =>
   }
 
   // These pages are web-accessible and therefore have only the narrow ENS
-  // capabilities authorized by ensBrowsing/handlers.ts.
+  // capabilities authorized by ensBrowsing/senderAuthorization.ts.
   for (const page of [
     "browse.html",
     "interstitial.html#https://example.eth/",

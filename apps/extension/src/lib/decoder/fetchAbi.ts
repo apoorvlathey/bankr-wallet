@@ -1,6 +1,6 @@
 import { InterfaceAbi } from "ethers";
 import { SOURCIFY_BASE } from "@/constants/externalUrls";
-import { fetchJsonBounded } from "@/chrome/boundedHttpResponse";
+import { fetchJsonBounded } from "@/chrome/network/boundedHttp";
 
 interface SourcifyResponse {
   abi?: any[];

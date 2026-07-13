@@ -14,7 +14,7 @@
  *      PendingTxRequest, closes the batch popup via the existing ack channel.
  *   3. The user confirms call 0. After it terminates (success / revert /
  *      drop / reject / pre-broadcast failure), the standard tx-finalization
- *      paths in txReceiptPoller.ts and txHandlers.ts call advanceSplitBundle.
+ *      paths in receiptPoller.ts and txHandlers.ts call advanceSplitBundle.
  *   4. advanceSplitBundle appends the result to the bundle and either queues
  *      the next call as a fresh PendingTxRequest (so the popup auto-opens
  *      for it with up-to-date chain state) or finalizes the bundle.
@@ -27,15 +27,15 @@
 import {
   getBundleStatus,
   updateBundleStatus,
-} from "../bundleStatusStorage";
+} from "../batch/bundleStatusStorage";
 import {
   getPendingBatchTxRequestById,
   removePendingBatchTxRequest,
-} from "../pendingBatchTxStorage";
+} from "../requests/pendingBatchTxStorage";
 import {
   savePendingTxRequest,
   type PinnedTxRequest,
-} from "../pendingTxStorage";
+} from "../requests/pendingTxStorage";
 import { openExtensionPopup, writeResultToStorage } from "../txHandlers";
 import {
   BUNDLE_STATUS,
@@ -183,7 +183,8 @@ async function enqueueNextSplitCall(bundleId: string): Promise<void> {
     tabId: ctx.tabId,
     frameId: ctx.frameId,
     senderOrigin: ctx.senderOrigin,
-    walletConnect: ctx.walletConnect,
+    walletConnect:
+      ctx.walletConnect as PinnedTxRequest["walletConnect"],
     trustedInternal: ctx.trustedInternal,
     requestChainId: status.chainId,
     parentBundleId: bundleId,

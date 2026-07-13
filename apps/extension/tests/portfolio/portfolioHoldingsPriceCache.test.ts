@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getLatestPortfolioHoldingsSnapshotForAddress } from "../../src/chrome/portfolioHoldingsCache";
+import { getLatestPortfolioHoldingsSnapshotForAddress } from "../../src/chrome/portfolio/holdingsCache";
 
 test("background consumers receive the latest reset-aware portfolio snapshot for an address", async (t) => {
   const originalChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome");

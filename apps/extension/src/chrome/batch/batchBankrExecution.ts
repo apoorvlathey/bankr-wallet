@@ -1,8 +1,8 @@
 /** Bankr batch confirmation, submission, and terminalization pipeline. */
 import { BANKR_SUPPORTED_CHAIN_IDS, CHAIN_NAMES } from "../../constants/networks";
 import { CHAIN_CONFIG } from "../../constants/chainConfig";
-import { submitTransactionDirect, type TransactionParams } from "../bankrApi";
-import { authorizePendingBankrSubmit } from "../bankrPendingAuthorization";
+import { submitTransactionDirect, type TransactionParams } from "../bankr/submission";
+import { authorizePendingBankrSubmit } from "../bankr/pendingAuthorization";
 import { encodeBatchCalls } from "./batchTxEncoding";
 import { BATCH_TX_EXPIRY_MS, processingBundleIds } from "./batchExecutionRuntime";
 import { fetchAndStoreBatchGasData } from "./batchGasEnrichment";
@@ -12,16 +12,16 @@ import { handleUnlockWallet } from "../authHandlers";
 import { loadDecryptedApiKey } from "../crypto";
 import { BUNDLE_STATUS } from "../erc5792Types";
 import type { PendingBatchTxRequest } from "../erc5792Types";
-import { updateBundleStatus } from "../bundleStatusStorage";
-import { removePendingBatchTxRequest, getPendingBatchTxRequestById } from "../pendingBatchTxStorage";
-import { enforcePendingRequestAuthorizationAtConfirmation } from "../pendingRequestLifecycle";
-import { beginPendingRequestEffectLease, guardPendingRequestEffectLease, type PendingRequestEffectLease } from "../pendingRequestResolution";
+import { updateBundleStatus } from "./bundleStatusStorage";
+import { removePendingBatchTxRequest, getPendingBatchTxRequestById } from "../requests/pendingBatchTxStorage";
+import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pendingRequestLifecycle";
+import { beginPendingRequestEffectLease, guardPendingRequestEffectLease, type PendingRequestEffectLease } from "../requests/pendingRequestResolution";
 import { writeResultToStorage } from "../transactions/runtime";
 import { fetchRawTransactionReceipt, toBundleReceipt, extractAssetChangesWhenReceiptAvailable } from "../receiptEnrichment";
 import { getCachedApiKey, getCachedPassword, getAutoLockTimeout, tryRestoreSession, setCachedApiKey } from "../sessionCache";
 import { startReceiptPolling } from "../forceInclusion/receiptPoller";
 import { addTxToHistory, updateTxInHistory } from "../txHistoryStorage";
-import { showNotification } from "../txHandlers";
+import { showNotification } from "../transactions/notification";
 
 export async function handleConfirmBatchTransaction(
   bundleId: string,
@@ -64,7 +64,9 @@ export async function handleConfirmBatchTransaction(
   // For force inclusion, the actual L1 deposit goes to the L1 chain — verify
   // THAT chain is in the Bankr-supported set (currently mainnet only).
   if (forceInclusion) {
-    const { FORCE_INCLUSION_CHAINS } = await import("../constants/chainRegistry");
+    const { FORCE_INCLUSION_CHAINS } = await import(
+      "../../constants/chainRegistry"
+    );
     const info = FORCE_INCLUSION_CHAINS.get(pending.chainId);
     if (!info) {
       return { success: false, error: "Chain does not support force inclusion" };

@@ -1,11 +1,11 @@
 import {
   MAX_PROVIDER_REQUEST_CHARS,
   serializedJsonLength,
-  validateSignatureRequestPayload,
-  validateTransactionPayload,
-  validateWalletSendCallsPayload,
-  type ProviderRequestLimitResult,
-} from "../providerRequestLimits";
+} from "../provider/limits";
+import { validateSignatureRequestPayload } from "../provider/signatureValidation";
+import { validateTransactionPayload } from "../provider/transactionValidation";
+import { validateWalletSendCallsPayload } from "../provider/batchValidation";
+import type { ProviderValidationResult } from "../provider/validation";
 
 const SIGNATURE_METHODS = new Set([
   "personal_sign",
@@ -15,7 +15,7 @@ const SIGNATURE_METHODS = new Set([
   "eth_signTypedData_v4",
 ]);
 
-function fail(error: string): ProviderRequestLimitResult {
+function fail(error: string): ProviderValidationResult {
   return { valid: false, error };
 }
 
@@ -27,7 +27,7 @@ function fail(error: string): ProviderRequestLimitResult {
 export function validateWalletConnectRequestPayload(
   method: unknown,
   params: unknown,
-): ProviderRequestLimitResult {
+): ProviderValidationResult {
   if (typeof method !== "string" || !Array.isArray(params)) {
     return fail("Invalid WalletConnect request params");
   }

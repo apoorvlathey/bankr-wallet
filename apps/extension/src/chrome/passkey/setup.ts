@@ -33,7 +33,7 @@ import {
   hasLegacyPrivateKeyEntries,
   stalePasskeyCeremonyResult,
 } from "./status";
-import { privateKeyMatchesAccount } from "../privateKeyIntegrity";
+import { privateKeyMatchesAccount } from "../vault/accountIntegrity";
 import {
   derivePrivateKey as deriveSeedPrivateKey,
   isValidMnemonic,

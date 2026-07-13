@@ -60,9 +60,9 @@ test("one origin cannot monopolize metadata and connection prompt queues", async
   });
 
   try {
-    const dapp = await import("../../src/chrome/dappPermissionStorage");
-    const addChain = await import("../../src/chrome/pendingAddChainStorage");
-    const watchAsset = await import("../../src/chrome/pendingWatchAssetStorage");
+    const dapp = await import("../../src/chrome/requests/dappPermissionStorage");
+    const addChain = await import("../../src/chrome/requests/pendingAddChainStorage");
+    const watchAsset = await import("../../src/chrome/requests/pendingWatchAssetStorage");
     const now = Date.now();
 
     await dapp.savePendingDappConnectionRequest({

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { fetchBridgeQuote } from "../../src/chrome/bridgeApi";
-import { fetchPortfolio } from "../../src/chrome/portfolioApi";
+import { fetchPortfolio } from "../../src/chrome/portfolio/api";
 import { fetchSwapQuote } from "../../src/chrome/swapApi";
 
 test("wallet API egress is bounded, redirect-safe, and strips unsafe navigation metadata", async () => {

@@ -3,8 +3,8 @@
  *
  * ENS browsing documents are deliberately web-accessible so normal webpages
  * can navigate to them. They have a separate, message-specific authorization
- * policy in `ensBrowsing/handlers.ts` and must never inherit wallet UI access
- * merely because their URL uses the extension origin.
+ * policy in `ensBrowsing/senderAuthorization.ts` and must never inherit wallet
+ * UI access merely because their URL uses the extension origin.
  */
 const TRUSTED_WALLET_UI_PATHS = new Set(["/index.html", "/onboarding.html"]);
 

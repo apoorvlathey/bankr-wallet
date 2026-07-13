@@ -10,7 +10,7 @@ import {
 import {
   getPortfolioTokenKey,
   unhidePortfolioToken,
-} from "@/chrome/hiddenPortfolioTokens";
+} from "@/chrome/portfolio/hiddenTokens";
 import AddTokenChainPicker from "@/components/AddTokenChainPicker";
 import AddTokenScreen from "@/components/AddTokenScreen";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";

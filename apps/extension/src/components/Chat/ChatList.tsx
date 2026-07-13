@@ -6,7 +6,7 @@ import {
   Text,
 } from "@chakra-ui/react";
 import { AddIcon, ChatIcon, DeleteIcon, StarIcon } from "@chakra-ui/icons";
-import { Conversation } from "@/chrome/chatStorage";
+import type { Conversation } from "@/chrome/bankr/chat/storage";
 import {
   AppHeader,
   AppScreen,

@@ -11,7 +11,7 @@ import {
   loadDecryptedApiKey,
   tryDecryptVaultKey,
 } from "../crypto";
-import { validateGeneralVaultMasterRecovery } from "../generalVaultIntegrity";
+import { validateGeneralVaultMasterRecovery } from "../vault/generalIntegrity";
 import { verifyMasterPassword } from "./masterPasswordVerification";
 import { validateV2MnemonicMasterRecovery } from "../mnemonic/integrity";
 import {

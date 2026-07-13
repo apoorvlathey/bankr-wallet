@@ -1,5 +1,5 @@
-import type { DefiPosition, PortfolioToken } from "@/chrome/portfolioApi";
-import { getPortfolioTokenKey } from "@/chrome/hiddenPortfolioTokens";
+import type { DefiPosition, PortfolioToken } from "@/chrome/portfolio/api";
+import { getPortfolioTokenKey } from "@/chrome/portfolio/hiddenTokens";
 import type { AssetChangeRecord, CompletedTransaction } from "@/chrome/txHistoryStorage";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";

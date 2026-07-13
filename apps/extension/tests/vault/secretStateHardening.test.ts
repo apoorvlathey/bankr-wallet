@@ -93,7 +93,7 @@ test("wallet secret-state mutations fail toward encrypted orphans", async (t) =>
     const authModule = await import("../../src/chrome/authHandlers");
     const accountModule = await import("../../src/chrome/accountStorage");
     const bankrCredentialBinding = await import(
-      "../../src/chrome/bankrCredentialBinding"
+      "../../src/chrome/bankr/credentialBinding"
     );
     const storageLockModule = await import("../../src/chrome/storageLock");
     const authTerminationModule = await import(

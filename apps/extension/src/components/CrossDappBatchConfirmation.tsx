@@ -5,7 +5,7 @@ import type {
   WalletSendCallsParams,
   ERC5792Call,
 } from "@/chrome/erc5792Types";
-import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
+import type { CrossDappBatch } from "@/chrome/crossDappBatch/storage";
 import type { GasEstimate } from "@/chrome/gasEstimation";
 import BatchTransactionConfirmation from "@/components/BatchTransactionConfirmation";
 

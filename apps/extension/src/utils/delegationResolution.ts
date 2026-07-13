@@ -36,7 +36,7 @@ import {
   VIEM_CHAINS,
 } from "@/constants/chainRegistry";
 import { KNOWN_CHAIN_IDS } from "@/constants/knownChains.generated";
-import { secureHttpTransport } from "@/chrome/rpcHttpClient";
+import { secureHttpTransport } from "@/chrome/network/rpcClient";
 import { getCustomDelegate } from "@/chrome/delegationStorage";
 
 /**

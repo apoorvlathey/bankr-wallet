@@ -96,7 +96,7 @@ test("per-tab account overrides exist only for connected or pending dapps", asyn
     replaceBrowserTabAccountScope,
     resolveBrowserTabAccount,
     selectBrowserTabAccount,
-  } = await import("../../src/chrome/tabAccountResolver");
+  } = await import("../../src/chrome/accounts/tabResolver");
 
   assert.equal((await resolveBrowserTabAccount(1))?.id, accountA.id);
   assert.deepEqual(syncState.tabAccounts, {});
@@ -137,6 +137,26 @@ test("per-tab account overrides exist only for connected or pending dapps", asyn
     4: accountA.id,
   });
 
+  tabs.set(7, {
+    id: 7,
+    url: "https://connected.example/old-tab",
+    active: false,
+  });
+  tabs.set(8, {
+    id: 8,
+    url: "https://ordinary.example/new-tab",
+    active: false,
+  });
+  syncState.tabAccounts = {
+    ...(syncState.tabAccounts as Record<number, string>),
+    7: accountB.id,
+  };
+  await replaceBrowserTabAccountScope(8, 7);
+  assert.deepEqual(syncState.tabAccounts, {
+    2: accountB.id,
+    4: accountA.id,
+  });
+
   tabs.set(2, {
     id: 2,
     url: "https://ordinary.example/after-navigation",
@@ -149,6 +169,13 @@ test("per-tab account overrides exist only for connected or pending dapps", asyn
   // follow whichever connected tab was active most recently without storing
   // its own override.
   syncState.tabAccounts = { 5: accountA.id, 6: accountB.id };
+  syncState.activeAccountId = accountB.id;
+  assert.equal((await activateBrowserTabAccount(5))?.id, accountA.id);
+  assert.equal(
+    syncState.activeAccountId,
+    accountB.id,
+    "an inactive connected tab must not promote its override globally",
+  );
   tabs.get(2)!.active = false;
   tabs.get(5)!.active = true;
   await activateBrowserTabAccount(5);
@@ -166,4 +193,9 @@ test("per-tab account overrides exist only for connected or pending dapps", asyn
   tabs.get(1)!.active = true;
   assert.equal((await activateBrowserTabAccount(1))?.id, accountB.id);
   assert.deepEqual(syncState.tabAccounts, { 5: accountA.id, 6: accountB.id });
+
+  await assert.rejects(
+    selectBrowserTabAccount(1, "missing-account"),
+    /Account not found/,
+  );
 });

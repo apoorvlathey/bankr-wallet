@@ -4,19 +4,19 @@ import test from "node:test";
 import {
   MAX_HEX_DATA_CHARS,
   MAX_SIGNATURE_PAYLOAD_CHARS,
-} from "../../src/chrome/providerRequestLimits";
-import { validateWalletConnectRequestPayload } from "../../src/chrome/walletConnectRequestValidation";
+} from "../../src/chrome/provider/limits";
+import { validateWalletConnectRequestPayload } from "../../src/chrome/walletConnect/requestValidation";
 import {
   chainIdFromCaip2,
   getSessionMetadata,
   parseWalletChainId,
   sessionSupportsMethod,
-} from "../../src/chrome/walletConnectHelpers";
+} from "../../src/chrome/walletConnect/sessionPolicy";
 import {
   rejectUnroutedSessionRequest,
   respondSessionRequest,
-} from "../../src/chrome/walletConnectProtocol";
-import { flushWalletConnectTerminalResponses } from "../../src/chrome/walletConnectOutbox";
+} from "../../src/chrome/walletConnect/protocol";
+import { flushWalletConnectTerminalResponses } from "../../src/chrome/walletConnect/outbox";
 import {
   MAX_WALLETCONNECT_PENDING_REQUESTS,
   MAX_WALLETCONNECT_PENDING_REQUESTS_PER_TOPIC,
@@ -27,7 +27,7 @@ import {
   saveWalletConnectPendingRequest,
   withWalletConnectPendingRoute,
   type WalletConnectPendingRequest,
-} from "../../src/chrome/walletConnectStorage";
+} from "../../src/chrome/walletConnect/storage";
 
 function route(
   id: string,

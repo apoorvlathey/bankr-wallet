@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
+import { createChromeStorageHarness } from "../helpers/chromeStorageHarness";
 
 const originalFetch = globalThis.fetch;
-const chat = await import("../../src/chrome/chatApi");
-const chatHandlers = await import("../../src/chrome/chatHandlers");
+const chat = await import("../../src/chrome/bankr/chat/client");
+const chatHandlers = await import("../../src/chrome/bankr/chat/handlers");
+const chatStorage = await import("../../src/chrome/bankr/chat/storage");
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
@@ -75,4 +77,40 @@ test("Bankr chat rejects oversized bodies and sanitizes remote errors", async ()
       error.message.length <= 1_000 &&
       !error.message.includes("\u0000"),
   );
+});
+
+test("chat storage preserves its key, ordering, and bounded message history", async () => {
+  const harness = createChromeStorageHarness();
+  try {
+    const older = await chatStorage.createConversation("Older");
+    const newer = await chatStorage.createConversation("Newer");
+    older.updatedAt = 1;
+    newer.updatedAt = 2;
+    await chatStorage.saveConversation(older);
+    await chatStorage.saveConversation(newer);
+    await chatStorage.toggleConversationFavorite(older.id);
+
+    const ordered = await chatStorage.getConversations();
+    assert.deepEqual(
+      ordered.map(({ id }) => id),
+      [older.id, newer.id],
+    );
+    for (let index = 0; index < 101; index += 1) {
+      await chatStorage.addMessageToConversation(older.id, {
+        id: `message-${index}`,
+        role: "user",
+        content: `message ${index}`,
+        timestamp: index,
+      });
+    }
+    const bounded = await chatStorage.getConversation(older.id);
+    assert.equal(bounded?.messages.length, 100);
+    assert.equal(bounded?.messages[0].id, "message-1");
+    assert.deepEqual(Object.keys(harness.stores.local), ["chatHistory"]);
+
+    await chatStorage.clearChatHistory();
+    assert.deepEqual(harness.stores.local.chatHistory, []);
+  } finally {
+    harness.restore();
+  }
 });

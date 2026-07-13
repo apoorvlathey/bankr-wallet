@@ -7,7 +7,7 @@ import {
 } from "@/constants/chainRegistry";
 import { getStoredResolvedChainById } from "@/lib/chains";
 import { readOnchainDelegate } from "@/utils/delegationResolution";
-import { secureHttpTransport } from "../rpcHttpClient";
+import { secureHttpTransport } from "../network/rpcClient";
 import {
   ERC7710_DELEGATION_MANAGER,
   METAMASK_DELEGATOR_V1_3_CAVEAT_ENFORCERS,

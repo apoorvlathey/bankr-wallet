@@ -74,17 +74,17 @@ test("impersonator transaction requests queue for rejection but cannot sign", as
       isRequestSigningAccount,
       pinnedSignatureRequest,
       pinnedTxRequest,
-    } = await import("../../src/chrome/pinnedRequest");
+    } = await import("../../src/chrome/requests/pinnedRequest");
     const {
       getPendingTxRequestById,
       removePendingTxRequest,
       savePendingTxRequest,
-    } = await import("../../src/chrome/pendingTxStorage");
+    } = await import("../../src/chrome/requests/pendingTxStorage");
     const {
       getPendingSignatureRequestById,
       removePendingSignatureRequest,
       savePendingSignatureRequest,
-    } = await import("../../src/chrome/pendingSignatureStorage");
+    } = await import("../../src/chrome/requests/pendingSignatureStorage");
 
     const account = (local.accounts as Array<{
       id: string;

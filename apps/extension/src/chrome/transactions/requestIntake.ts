@@ -1,4 +1,4 @@
-import type { TransactionParams } from "../bankrApi";
+import type { TransactionParams } from "../bankr/submission";
 import { CHAIN_NAMES } from "../../constants/networks";
 import { CHAIN_REGISTRY } from "../../constants/chainRegistry";
 import { getActiveAccount, getTabAccount } from "../accountStorage";
@@ -10,12 +10,12 @@ import { openExtensionPopup } from "../extensionPopup";
 import {
   type SignatureParams,
   savePendingSignatureRequest,
-} from "../pendingSignatureStorage";
-import { savePendingTxRequest } from "../pendingTxStorage";
+} from "../requests/pendingSignatureStorage";
+import { savePendingTxRequest } from "../requests/pendingTxStorage";
 import {
   pinnedSignatureRequest,
   pinnedTxRequest,
-} from "../pinnedRequest";
+} from "../requests/pinnedRequest";
 import { extractSignerParam } from "../signatures/requestSigner";
 import { normalizeTransactionValue } from "../transactionValidation";
 import { writeResultToStorage } from "./runtime";

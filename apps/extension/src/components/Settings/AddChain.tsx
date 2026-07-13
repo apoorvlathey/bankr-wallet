@@ -14,7 +14,7 @@ import {
 } from "@chakra-ui/react";
 import { ExternalLinkIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
-import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
+import type { PendingAddChainRequest } from "@/chrome/requests/pendingAddChainStorage";
 import { KNOWN_CHAINS } from "@/constants/knownChains.generated";
 import { InlineDisclosure } from "@/components/ui";
 import { AddChainConfirmationScreen } from "./AddChainConfirmationScreen";
@@ -22,7 +22,7 @@ import { SettingsScreenFrame } from "./SettingsScreenFrame";
 import {
   assertRpcEndpointAllowedForOrigin,
   probeRpcChainId,
-} from "@/chrome/rpcHttpClient";
+} from "@/chrome/network/rpcClient";
 
 interface AddChainProps {
   back: (options?: { added?: boolean }) => void;

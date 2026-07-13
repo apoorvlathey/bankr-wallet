@@ -5,8 +5,8 @@ import {
   parseProviderChainId,
   resolveProviderActiveChainId,
   validateProviderChainBoundary,
-} from "../../src/chrome/providerChainBoundary";
-import { validateExternalProviderMessage } from "../../src/chrome/externalProviderValidation";
+} from "../../src/chrome/provider/chainBoundary";
+import { validateExternalProviderMessage } from "../../src/chrome/provider/messageValidation";
 
 const ADDRESS = "0x0000000000000000000000000000000000000001";
 const ID = "request_123";

@@ -13,7 +13,7 @@ import {
   respondSessionRequest,
   type WalletKitLike,
 } from "./protocol";
-import { forwardSafeRpcRequestToTrustedUrl } from "../safeRpcForwarding";
+import { forwardSafeRpcRequestToTrustedUrl } from "../network/safeRpcForwarding";
 
 export async function handleSwitchEthereumChain(
   kit: WalletKitLike,

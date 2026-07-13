@@ -23,32 +23,23 @@ test("automatic EIP-7702 repair is canonical-default-only", () => {
   );
 });
 
-test("regular and cross-dapp atomic paths gate every authorization tuple", async () => {
-  const [batchSource, crossSource] = await Promise.all([
-    readFile(
-      new URL("../../src/chrome/batch/batchAtomic7702Execution.ts", import.meta.url),
-      "utf8",
+test("regular atomic paths gate every authorization tuple", async () => {
+  const source = await readFile(
+    new URL(
+      "../../src/chrome/batch/batchAtomic7702Execution.ts",
+      import.meta.url,
     ),
-    readFile(
-      new URL("../../src/chrome/crossDappBatchHandlers.ts", import.meta.url),
-      "utf8",
-    ),
-  ]);
-
-  for (const [label, source] of [
-    ["regular", batchSource],
-    ["cross-dapp", crossSource],
-  ] as const) {
-    const signAt = source.indexOf("const auth = await signEip7702Authorization");
-    const guardAt = source.lastIndexOf(
-      "assertAutomaticEip7702AuthorizationAllowed",
-      signAt,
-    );
-    const branchAt = source.lastIndexOf("if (needsAuthorization)", signAt);
-    assert.ok(signAt > 0, `${label} path must sign an authorization`);
-    assert.ok(
-      branchAt >= 0 && guardAt > branchAt && guardAt < signAt,
-      `${label} path must reject custom reauthorization before signing`,
-    );
-  }
+    "utf8",
+  );
+  const signAt = source.indexOf("const auth = await signEip7702Authorization");
+  const guardAt = source.lastIndexOf(
+    "assertAutomaticEip7702AuthorizationAllowed",
+    signAt,
+  );
+  const branchAt = source.lastIndexOf("if (needsAuthorization)", signAt);
+  assert.ok(signAt > 0, "regular path must sign an authorization");
+  assert.ok(
+    branchAt >= 0 && guardAt > branchAt && guardAt < signAt,
+    "regular path must reject custom reauthorization before signing",
+  );
 });

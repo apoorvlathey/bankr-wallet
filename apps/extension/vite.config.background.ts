@@ -19,7 +19,7 @@ export default defineConfig({
       // optional feature at the background-bundle boundary.
       "@walletconnect/pay": path.resolve(
         __dirname,
-        "src/chrome/walletConnectPayUnavailable.ts",
+        "src/chrome/walletConnect/payUnavailable.ts",
       ),
     },
   },

@@ -42,10 +42,10 @@ Object.defineProperty(globalThis, "chrome", {
   },
 });
 
-const bankr = await import("../../src/chrome/bankrApi");
-const binding = await import("../../src/chrome/bankrCredentialBinding");
-const authorization = await import("../../src/chrome/bankrPendingAuthorization");
-const signatureRelease = await import("../../src/chrome/pendingSignatureRelease");
+const bankr = await import("../../src/chrome/bankr/client");
+const binding = await import("../../src/chrome/bankr/credentialBinding");
+const authorization = await import("../../src/chrome/bankr/pendingAuthorization");
+const signatureRelease = await import("../../src/chrome/requests/pendingSignatureRelease");
 
 test("credential rotation during the signer challenge prevents Bankr submit", async () => {
   const account = privateKeyToAccount(`0x${"11".repeat(32)}`);

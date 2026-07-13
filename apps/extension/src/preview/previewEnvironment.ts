@@ -1,10 +1,10 @@
 import type { Account, SeedGroup } from "@/chrome/types";
-import type { PendingTxRequest } from "@/chrome/pendingTxStorage";
-import type { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
+import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
+import type { PendingSignatureRequest } from "@/chrome/requests/pendingSignatureStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
-import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
+import type { CrossDappBatch } from "@/chrome/crossDappBatch/storage";
 import type { PendingErc7715PermissionRequest } from "@/chrome/pendingErc7715PermissionStorage";
-import type { PortfolioResponse } from "@/chrome/portfolioApi";
+import type { PortfolioResponse } from "@/chrome/portfolio/api";
 import { DEFAULT_NETWORKS } from "@/constants/networks";
 import { SELECTED_THEME_STORAGE_KEY } from "@/theme";
 import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from "@/constants/securityPolicy";

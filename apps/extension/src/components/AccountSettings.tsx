@@ -60,7 +60,7 @@ import {
   StickyActionBar,
 } from "@/components/ui";
 import { BrainIcon, ShieldIcon } from "./Settings/icons";
-import { fetchPortfolio } from "@/chrome/portfolioApi";
+import { fetchPortfolio } from "@/chrome/portfolio/api";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
 

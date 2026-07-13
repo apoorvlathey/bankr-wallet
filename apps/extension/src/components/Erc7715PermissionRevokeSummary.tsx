@@ -10,7 +10,7 @@ import {
 import { ExternalLinkIcon, InfoOutlineIcon } from "@chakra-ui/icons";
 import { formatUnits } from "viem";
 
-import type { Erc7715PermissionRevokeMeta } from "@/chrome/pendingTxStorage";
+import type { Erc7715PermissionRevokeMeta } from "@/chrome/requests/pendingTxStorage";
 import { CopyButton } from "@/components/CopyButton";
 import TokenLogo from "@/components/TokenLogo";
 import {

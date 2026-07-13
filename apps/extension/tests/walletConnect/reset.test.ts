@@ -4,7 +4,7 @@ import {
   createWalletConnectStorageNamespace,
   parseWalletConnectStorageNamespace,
   teardownWalletConnectSdkState,
-} from "../../src/chrome/walletConnectReset";
+} from "../../src/chrome/walletConnect/reset";
 import { getWalletLocalStorageKeysToRemove } from "../../src/chrome/walletResetStorage";
 
 test("missing namespace preserves pre-upgrade WalletConnect storage", () => {

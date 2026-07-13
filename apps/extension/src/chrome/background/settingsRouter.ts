@@ -11,7 +11,7 @@ import {
   ensureNetworksInfo,
   setNetworkHiddenState,
   updateNetworkEntry,
-} from "../networkStorage";
+} from "../network/networkMutations";
 import {
   getSidePanelMode,
   isSidePanelSupportedAsync,

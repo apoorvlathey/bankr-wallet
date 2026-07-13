@@ -28,6 +28,7 @@ test("legacy storage migration is linearizable and stale active IDs recover", as
   const originalChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome");
   const local: StorageRecord = {};
   const sync: StorageRecord = {};
+  let failNextActiveAccountSyncWrite = false;
 
   const storageArea = (storage: StorageRecord) => ({
     async get(keys?: string | string[] | StorageRecord | null) {
@@ -38,6 +39,14 @@ test("legacy storage migration is linearizable and stale active IDs recover", as
     },
     async set(values: StorageRecord) {
       await Promise.resolve();
+      if (
+        storage === sync &&
+        failNextActiveAccountSyncWrite &&
+        "activeAccountId" in values
+      ) {
+        failNextActiveAccountSyncWrite = false;
+        throw new Error("simulated sync mirror failure");
+      }
       Object.assign(storage, clone(values));
     },
     async remove(keys: string | string[]) {
@@ -57,7 +66,7 @@ test("legacy storage migration is linearizable and stale active IDs recover", as
 
   try {
     const { migrateFromLegacyStorage } = await import(
-      "../../src/chrome/legacyStorageMigration"
+      "../../src/chrome/accounts/legacyMigration"
     );
     const { getActiveAccount } = await import("../../src/chrome/accountStorage");
 
@@ -87,6 +96,28 @@ test("legacy storage migration is linearizable and stale active IDs recover", as
         // row survives but the sync mirror did not, ordinary account resolution
         // must still recover and persist the intact row.
         delete sync.activeAccountId;
+        assert.deepEqual(await getActiveAccount(), local.accounts[0]);
+        assert.equal(sync.activeAccountId, local.accounts[0].id);
+      },
+    );
+
+    await t.test(
+      "an interrupted sync mirror repairs from the authoritative local row",
+      async () => {
+        for (const key of Object.keys(local)) delete local[key];
+        for (const key of Object.keys(sync)) delete sync[key];
+        local.encryptedApiKey = {
+          ciphertext: "legacy",
+          iv: "legacy",
+          salt: "legacy",
+        };
+        sync.address = "0x5555555555555555555555555555555555555555";
+        failNextActiveAccountSyncWrite = true;
+
+        assert.equal(await migrateFromLegacyStorage(), false);
+        assert.equal(local.accounts.length, 1);
+        assert.equal(sync.activeAccountId, undefined);
+
         assert.deepEqual(await getActiveAccount(), local.accounts[0]);
         assert.equal(sync.activeAccountId, local.accounts[0].id);
       },
@@ -132,6 +163,11 @@ test("legacy storage migration is linearizable and stale active IDs recover", as
             address: "0x3333333333333333333333333333333333333333",
             seedGroupId: "seed-group",
             derivationIndex: 0,
+          },
+          {
+            id: "view-only-account",
+            type: "impersonator",
+            address: "0x4444444444444444444444444444444444444444",
           },
         ];
 

@@ -7,7 +7,7 @@ import {
   VStack,
 } from "@chakra-ui/react";
 
-import type { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
+import type { PendingSignatureRequest } from "@/chrome/requests/pendingSignatureStorage";
 import ChainIcon from "@/components/ChainIcon";
 import {
   ClearSigningView,

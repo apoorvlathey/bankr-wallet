@@ -25,7 +25,6 @@ function dependencies(overrides: Record<string, unknown> = {}): any {
     removePendingSignatureRequest: async () => {},
     getPendingTxRequests: async () => [],
     getPendingTxRequestById: async () => ({ id: "tx-1" }),
-    handleConfirmTransaction: async () => ({ success: true }),
     handleRejectTransaction: async () => ({ success: true }),
     handleCancelTransaction: async () => ({ success: true }),
     runPendingRequestResolution: async (options: any) => options.resolve(),
@@ -36,7 +35,6 @@ function dependencies(overrides: Record<string, unknown> = {}): any {
     pendingRequestResolutionAction: () => null,
     canSignalPendingTransactionCancellation: () => true,
     writeResultToStorage: async () => {},
-    readLocalStorage: async () => ({}),
     ...overrides,
   };
 }
@@ -131,41 +129,6 @@ test("signature rejection removes the prompt before publishing its result", asyn
     "remove",
     "write:sigResult:sig-1:Signature request cancelled by user",
   ]);
-});
-
-test("transaction confirmation preserves an existing durable terminal result", async () => {
-  let reads = 0;
-  const writes: unknown[][] = [];
-  const capture = responseCapture();
-  const route = createBackgroundSigningRequestMessageRouter(
-    dependencies({
-      getPendingTxRequestById: async () => {
-        reads += 1;
-        return reads === 1 ? { id: "tx-1" } : null;
-      },
-      handleConfirmTransaction: async () => ({
-        success: true,
-        txHash: "0xconfirmed",
-      }),
-      readLocalStorage: async () => ({
-        "txResult:tx-1": { result: { success: false, error: "expired" } },
-      }),
-      writeResultToStorage: async (...args: unknown[]) => {
-        writes.push(args);
-      },
-    }),
-  );
-
-  route(
-    { type: "confirmTransaction", txId: "tx-1", password: "secret" },
-    {} as any,
-    capture.sendResponse,
-  );
-  assert.deepEqual(await capture.response, {
-    success: true,
-    txHash: "0xconfirmed",
-  });
-  assert.deepEqual(writes, []);
 });
 
 test("transaction cancellation cannot overtake the winning request action", () => {

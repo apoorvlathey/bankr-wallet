@@ -86,34 +86,14 @@ export async function migrateToVaultKeySystem(
       }
 
       // Re-encrypt all private keys with vault key (if vault exists)
-      const {
-        loadVault,
-        decryptPrivateKey,
-        encryptPrivateKeyWithVaultKey,
-      } = await import("../vaultCrypto");
+      const { loadVault } = await import("../vaultCrypto");
       const vault = await loadVault();
       let updatedVault = vault;
       if (vault && vault.entries.length > 0) {
-        const newEntries: Array<{
-          id: string;
-          keystore: Awaited<
-            ReturnType<typeof encryptPrivateKeyWithVaultKey>
-          >;
-        }> = [];
-        for (const entry of vault.entries) {
-          // Decrypt with password
-          const privateKey = await decryptPrivateKey(
-            entry.keystore as Parameters<typeof decryptPrivateKey>[0],
-            password,
-          );
-          // Re-encrypt with vault key
-          const newKeystore = await encryptPrivateKeyWithVaultKey(
-            privateKey,
-            vaultKey,
-          );
-          newEntries.push({ id: entry.id, keystore: newKeystore });
+        updatedVault = await computeVaultKeyMigratedVault(password, vaultKey);
+        if (!updatedVault) {
+          throw new Error("Failed to prepare private key migration");
         }
-        updatedVault = { ...vault, entries: newEntries };
       }
 
       // SECURITY: Single atomic write. Persist vault entries, master wrapper,

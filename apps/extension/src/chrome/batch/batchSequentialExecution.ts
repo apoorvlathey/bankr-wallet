@@ -4,15 +4,17 @@ import { BUNDLE_STATUS } from "../erc5792Types";
 import { getStoredResolvedChainById } from "../../lib/chains";
 import { signAndBroadcastTransaction, isBroadcastOutcomeUncertain } from "../localSigner";
 import { getNextNonce, resetNonce } from "../forceInclusion/nonceManager";
-import { guardPendingRequestEffectLease, type PendingRequestEffectLease } from "../pendingRequestResolution";
+import { guardPendingRequestEffectLease, type PendingRequestEffectLease } from "../requests/pendingRequestResolution";
 import { addTxToHistory, updateTxInHistory } from "../txHistoryStorage";
-import { updateBundleStatus } from "../bundleStatusStorage";
+import { updateBundleStatus } from "./bundleStatusStorage";
 import { applyReceiptToHistory, startReceiptPolling } from "../forceInclusion/receiptPoller";
 import { attachClearSignedMetaToHistory } from "../clearSignedMetaSnapshot";
 import { writeResultToStorage } from "../transactions/runtime";
+import { showNotification } from "../transactions/notification";
 import { handleBatchFailure } from "./batchFailure";
-import { showNotification } from "../txHandlers";
+import { authorizePendingLocalBatchBroadcast } from "./batchLocalAuthorization";
 import { processingBundleIds } from "./batchExecutionRuntime";
+import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pendingRequestLifecycle";
 
 export async function processSequentialLocalBatch(
   trackCompletion: (bundleId: string, pending: PendingBatchTxRequest, results: Array<{ txId: string; success: boolean; txHash?: string; receipt?: BundleReceipt; error?: string }>) => void,

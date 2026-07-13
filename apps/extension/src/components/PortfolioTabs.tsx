@@ -17,7 +17,7 @@ import {
 } from "@chakra-ui/react";
 import { AddIcon, ChevronDownIcon, CloseIcon, RepeatIcon, SearchIcon, ViewIcon, ViewOffIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import TxStatusList from "@/components/TxStatusList";
-import type { PortfolioToken } from "@/chrome/portfolioApi";
+import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import AddTokenModal from "@/components/AddTokenModal";
 import PortfolioChart from "@/components/PortfolioChart";

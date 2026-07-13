@@ -3,8 +3,8 @@ import {
   FOURBYTE_SOURCIFY_LOOKUP_URL,
 } from "@/constants/externalUrls";
 import { OP_STACK_CHAIN_IDS } from "../../constants/networks";
-import { fetchJsonBounded } from "../boundedHttpResponse";
-import { fetchRpcResult } from "../rpcHttpClient";
+import { fetchJsonBounded } from "../network/boundedHttp";
+import { fetchRpcResult } from "../network/rpcClient";
 import { updateTxInHistory } from "../txHistoryStorage";
 import { getRpcUrl } from "./rpcConfig";
 
@@ -75,21 +75,30 @@ export async function fetchAndStoreGasData(
       rpcCall("eth_getTransactionReceipt", [txHash]),
     ]);
     if (!receipt) return;
+    const txRecord = txData as { gas?: string } | null;
+    const receiptRecord = receipt as {
+      gasUsed: string;
+      effectiveGasPrice: string;
+      l1Fee?: string;
+      l1GasUsed?: string;
+      l1GasPrice?: string;
+    };
 
     const gasData: import("../txHistoryStorage").GasData = {
-      gasUsed: BigInt(receipt.gasUsed).toString(),
-      gasLimit: txData?.gas
-        ? BigInt(txData.gas).toString()
-        : BigInt(receipt.gasUsed).toString(),
-      effectiveGasPrice: BigInt(receipt.effectiveGasPrice).toString(),
+      gasUsed: BigInt(receiptRecord.gasUsed).toString(),
+      gasLimit: txRecord?.gas
+        ? BigInt(txRecord.gas).toString()
+        : BigInt(receiptRecord.gasUsed).toString(),
+      effectiveGasPrice: BigInt(receiptRecord.effectiveGasPrice).toString(),
     };
     if (OP_STACK_CHAIN_IDS.has(chainId)) {
-      if (receipt.l1Fee) gasData.l1Fee = BigInt(receipt.l1Fee).toString();
-      if (receipt.l1GasUsed) {
-        gasData.l1GasUsed = BigInt(receipt.l1GasUsed).toString();
+      if (receiptRecord.l1Fee)
+        gasData.l1Fee = BigInt(receiptRecord.l1Fee).toString();
+      if (receiptRecord.l1GasUsed) {
+        gasData.l1GasUsed = BigInt(receiptRecord.l1GasUsed).toString();
       }
-      if (receipt.l1GasPrice) {
-        gasData.l1GasPrice = BigInt(receipt.l1GasPrice).toString();
+      if (receiptRecord.l1GasPrice) {
+        gasData.l1GasPrice = BigInt(receiptRecord.l1GasPrice).toString();
       }
     }
     await updateTxInHistory(txId, { gasData });

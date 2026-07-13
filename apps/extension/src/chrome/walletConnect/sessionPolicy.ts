@@ -1,8 +1,8 @@
 import type { WalletConnectSessionSummary } from "@/types/walletConnect";
 import { getAccounts } from "../accountStorage";
 import type { Account } from "../types";
-import { parseProviderChainId } from "../providerChainBoundary";
-import type { SignatureMethod } from "../pendingSignatureStorage";
+import { parseProviderChainId } from "../provider/chainBoundary";
+import type { SignatureMethod } from "../requests/pendingSignatureStorage";
 import { sanitizeUntrustedImageUrl } from "@/lib/remoteImagePolicy";
 
 const MAX_WALLETCONNECT_NAME_CHARS = 200;

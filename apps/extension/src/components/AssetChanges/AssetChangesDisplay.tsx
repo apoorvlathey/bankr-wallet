@@ -1,0 +1,29 @@
+import { memo } from "react";
+import { useNetworks } from "@/contexts/NetworksContext";
+import { getResolvedChainById } from "@/lib/chains";
+import { AssetChangesPanel } from "./AssetChangesPanel";
+import type { AssetChangesDisplayProps } from "./types";
+import { useAssetChangesSimulation } from "./useAssetChangesSimulation";
+
+function AssetChangesDisplay(props: AssetChangesDisplayProps) {
+  const { txRequest } = props;
+  const { networksInfo } = useNetworks();
+  const explorerUrl =
+    getResolvedChainById(txRequest.tx.chainId, networksInfo)?.explorer ?? "";
+  const { loading, result } = useAssetChangesSimulation(props);
+
+  return (
+    <AssetChangesPanel
+      explorerUrl={explorerUrl}
+      loading={loading}
+      result={result}
+    />
+  );
+}
+
+export {
+  SimulationRevertedBanner,
+  SimulationUnavailableBanner,
+} from "./SimulationBanners";
+
+export default memo(AssetChangesDisplay);

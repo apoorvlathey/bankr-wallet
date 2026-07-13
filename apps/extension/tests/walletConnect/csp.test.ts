@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { WalletConnectPay } from "../../src/chrome/walletConnectPayUnavailable";
+import { WalletConnectPay } from "../../src/chrome/walletConnect/payUnavailable";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const EXTENSION_ROOT = path.resolve(HERE, "..", "..");
@@ -25,14 +25,14 @@ test("the background bundle aliases the optional Pay package to the CSP-safe shi
   const shim = fs.readFileSync(
     path.join(
       EXTENSION_ROOT,
-      "src/chrome/walletConnectPayUnavailable.ts",
+      "src/chrome/walletConnect/payUnavailable.ts",
     ),
     "utf8",
   );
   const executableShim = shim.replace(/\/\*[\s\S]*?\*\//g, "");
 
   assert.match(config, /["']@walletconnect\/pay["']\s*:/);
-  assert.match(config, /walletConnectPayUnavailable\.ts/);
+  assert.match(config, /walletConnect\/payUnavailable\.ts/);
   assert.doesNotMatch(executableShim, /\beval\s*\(/);
   assert.doesNotMatch(executableShim, /\bnew\s+Function\b/);
   assert.doesNotMatch(executableShim, /\bWebAssembly\b/);

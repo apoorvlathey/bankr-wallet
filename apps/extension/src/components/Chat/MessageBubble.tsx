@@ -15,7 +15,7 @@ import {
   RepeatIcon,
   WarningTwoIcon,
 } from "@chakra-ui/icons";
-import { Message } from "@/chrome/chatStorage";
+import type { Message } from "@/chrome/bankr/chat/storage";
 import { sanitizeExternalNavigationUrl } from "@/lib/externalNavigation";
 import ShapesLoader from "./ShapesLoader";
 

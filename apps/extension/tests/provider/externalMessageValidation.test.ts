@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { validateExternalProviderMessage } from "../../src/chrome/externalProviderValidation";
+import { validateExternalProviderMessage } from "../../src/chrome/provider/messageValidation";
 
 const validId = "request_123-abc";
 

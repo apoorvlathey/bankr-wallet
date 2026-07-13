@@ -83,41 +83,41 @@ Object.defineProperty(globalThis, "chrome", {
   },
 });
 
-const lifecycle = await import("../../src/chrome/pendingRequestLifecycle");
+const lifecycle = await import("../../src/chrome/requests/pendingRequestLifecycle");
 const bankrCredentialBinding = await import(
-  "../../src/chrome/bankrCredentialBinding"
+  "../../src/chrome/bankr/credentialBinding"
 );
 const dappLifecycle = await import(
-  "../../src/chrome/pendingDappRequestLifecycle"
+  "../../src/chrome/requests/pendingDappRequestLifecycle"
 );
 const walletConnectLifecycle = await import(
-  "../../src/chrome/pendingWalletConnectLifecycle"
+  "../../src/chrome/requests/pendingWalletConnectLifecycle"
 );
 const dappPermissionStorage = await import(
-  "../../src/chrome/dappPermissionStorage"
+  "../../src/chrome/requests/dappPermissionStorage"
 );
-const pendingTxStorage = await import("../../src/chrome/pendingTxStorage");
+const pendingTxStorage = await import("../../src/chrome/requests/pendingTxStorage");
 const pendingSignatureStorage = await import(
-  "../../src/chrome/pendingSignatureStorage"
+  "../../src/chrome/requests/pendingSignatureStorage"
 );
 const pendingBatchStorage = await import(
-  "../../src/chrome/pendingBatchTxStorage"
+  "../../src/chrome/requests/pendingBatchTxStorage"
 );
 const metadataLifecycle = await import(
-  "../../src/chrome/pendingMetadataPromptLifecycle"
+  "../../src/chrome/requests/pendingMetadataPromptLifecycle"
 );
 const batchAcknowledgementLifecycle = await import(
-  "../../src/chrome/pendingBatchAcknowledgementLifecycle"
+  "../../src/chrome/requests/pendingBatchAcknowledgementLifecycle"
 );
 const pendingAddChainStorage = await import(
-  "../../src/chrome/pendingAddChainStorage"
+  "../../src/chrome/requests/pendingAddChainStorage"
 );
 const pendingWatchAssetStorage = await import(
-  "../../src/chrome/pendingWatchAssetStorage"
+  "../../src/chrome/requests/pendingWatchAssetStorage"
 );
-const resolution = await import("../../src/chrome/pendingRequestResolution");
+const resolution = await import("../../src/chrome/requests/pendingRequestResolution");
 const crossDappLifecycle = await import(
-  "../../src/chrome/crossDappBatchLifecycle"
+  "../../src/chrome/crossDappBatch/lifecycle"
 );
 const erc7715Resolution = await import(
   "../../src/chrome/erc7715/resolution"

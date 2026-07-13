@@ -4,12 +4,13 @@ import test from "node:test";
 
 test("Bankr swap legs expose rejected, reverted, and ambiguous terminal states", async () => {
   const source = await readFile(
-    new URL("../../src/chrome/txHandlers.ts", import.meta.url),
+    new URL(
+      "../../src/chrome/transactions/swaps/bankrLeg.ts",
+      import.meta.url,
+    ),
     "utf8",
   );
-  const start = source.indexOf("type BankrSwapLegResult");
-  const end = source.indexOf("/**\n * Processes a swap transaction", start);
-  const implementation = source.slice(start, end > start ? end : undefined);
+  const implementation = source;
 
   assert.match(
     implementation,
@@ -31,12 +32,10 @@ test("Bankr swap legs expose rejected, reverted, and ambiguous terminal states",
 
 test("direct Bankr swaps await each leg and stop before submitting the remaining tail", async () => {
   const source = await readFile(
-    new URL("../../src/chrome/txHandlers.ts", import.meta.url),
+    new URL("../../src/chrome/transactions/swaps/direct.ts", import.meta.url),
     "utf8",
   );
-  const accountBranch = source.indexOf('if (account.type === "bankr")');
-  const localBranch = source.indexOf("// --- PK / Seed Phrase accounts ---", accountBranch);
-  const implementation = source.slice(accountBranch, localBranch);
+  const implementation = source;
 
   const loopIndex = implementation.indexOf("for (const entry of transactions)");
   const awaitedLegIndex = implementation.indexOf(
@@ -44,7 +43,7 @@ test("direct Bankr swaps await each leg and stop before submitting the remaining
     loopIndex,
   );
   const stopIndex = implementation.indexOf(
-    'if (leg.kind !== "accepted")',
+    'if (leg.kind === "accepted") continue',
     awaitedLegIndex,
   );
   const skippedTailIndex = implementation.indexOf(
@@ -73,9 +72,9 @@ test("direct Bankr swaps await each leg and stop before submitting the remaining
 
 test("Bankr API transport errors distinguish uncertain broadcast outcomes", async () => {
   const [source, responseSource] = await Promise.all([
-    readFile(new URL("../../src/chrome/bankrApi.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../src/chrome/bankr/submission.ts", import.meta.url), "utf8"),
     readFile(
-      new URL("../../src/chrome/bankrApiResponse.ts", import.meta.url),
+      new URL("../../src/chrome/bankr/response.ts", import.meta.url),
       "utf8",
     ),
   ]);

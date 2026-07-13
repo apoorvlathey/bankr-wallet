@@ -1,13 +1,13 @@
 import type { Account } from "@/chrome/types";
-import type { PendingTxRequest } from "@/chrome/pendingTxStorage";
-import type { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
+import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
+import type { PendingSignatureRequest } from "@/chrome/requests/pendingSignatureStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
-import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
+import type { CrossDappBatch } from "@/chrome/crossDappBatch/storage";
 import type { PendingErc7715PermissionRequest } from "@/chrome/pendingErc7715PermissionStorage";
-import type { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
-import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
+import type { PendingWatchAssetRequest } from "@/chrome/requests/pendingWatchAssetStorage";
+import type { PendingAddChainRequest } from "@/chrome/requests/pendingAddChainStorage";
 import type { CustomToken } from "@/chrome/customTokenStorage";
-import type { HiddenPortfolioToken } from "@/chrome/hiddenPortfolioTokens";
+import type { HiddenPortfolioToken } from "@/chrome/portfolio/hiddenTokens";
 import {
   ERC7710_EMPTY_CAVEAT_ARGS,
   METAMASK_DELEGATOR_V1_3_CAVEAT_ENFORCERS,

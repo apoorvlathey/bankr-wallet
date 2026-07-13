@@ -17,7 +17,7 @@ test("arbitrary decoded strings cannot fetch or render SVG in the wallet UI", as
 });
 
 test("NFT metadata cannot create raw iframe subresource requests", async () => {
-  const source = await component("AssetChangesDisplay.tsx");
+  const source = await component("AssetChanges/NftMedia.tsx");
   assert.doesNotMatch(source, /\bsrcDoc\s*=/);
   assert.doesNotMatch(source, /as=["']iframe["']/);
   assert.match(source, /<SafeImage[\s\S]*src=\{src\}/);
@@ -34,7 +34,7 @@ test("wallet resets cannot rehydrate identity imagery from DOM localStorage", as
   assert.match(source, /validatedCachedRaster\(response\?\.dataUrl\)/);
 
   const portfolioSource = await readFile(
-    new URL("../../src/chrome/portfolioHoldingsCache.ts", import.meta.url),
+    new URL("../../src/chrome/portfolio/holdingsCache.ts", import.meta.url),
     "utf8",
   );
   assert.doesNotMatch(portfolioSource, /localStorage\.getItem/);
@@ -50,13 +50,16 @@ test("hostile dapp, WalletConnect, permission, and history images use the safe p
     ["Erc7715PermissionReview.tsx", /src=\{permissionRequest\.favicon\}/],
     ["WatchAssetConfirmation/WatchAssetConfirmationScreen.tsx", /src=\{imageUrl\}/],
     ["SiweMessageDisplay.tsx", /src=\{faviconUrl\}/],
-    ["TxStatusList.tsx", /src=\{imageSrc\}/],
-    ["TransactionConfirmation.tsx", /src=\{favicon \|\| undefined\}/],
+    ["Activity/ActivityMedia.tsx", /src=\{imageSrc\}/],
+    [
+      "TransactionConfirmation/TransactionSummary.tsx",
+      /src=\{favicon \|\| undefined\}/,
+    ],
     ["BatchCallsList.tsx", /src=\{favicon \|\| undefined\}/],
     ["ChainIcon.tsx", /src=\{meta\.iconSrc\}/],
     ["Swap/BridgeChainTokenPickerScreen.tsx", /src=\{iconUrl\}/],
-    ["Swap/SwapView.tsx", /src=\{destNativeInfo\.logoUrl\}/],
-    ["Swap/SwapView.tsx", /src=\{token\.logoUrl\}/],
+    ["Swap/SwapQuoteSection.tsx", /src=\{destNativeInfo\.logoUrl\}/],
+    ["Swap/SwapTokenControls.tsx", /src=\{token\.logoUrl\}/],
   ];
 
   for (const [path, sourcePattern] of cases) {

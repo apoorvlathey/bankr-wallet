@@ -3,7 +3,7 @@ import {
   invalidateAuthCeremonies,
   isCurrentAuthCeremonyEpoch,
 } from "../authTransition";
-import { validateGeneralVaultMasterRecovery } from "../generalVaultIntegrity";
+import { validateGeneralVaultMasterRecovery } from "../vault/generalIntegrity";
 import { validateV2MnemonicMasterRecovery } from "../mnemonic/integrity";
 import { withMnemonicVaultLock } from "../mnemonicStorage";
 import { PASSKEY_UNLOCK_STORAGE_KEY } from "./repository";
@@ -11,7 +11,11 @@ import {
   getMasterVaultKeyBytes,
   stalePasskeyCeremonyResult,
 } from "./status";
-import { clearAllAuthState } from "../sessionCache";
+import {
+  clearInMemoryAuthCache,
+  clearSessionStorage,
+  revokePersistedSessionRecoveryKey,
+} from "../sessionCache";
 import {
   WALLET_SECRET_OPERATION_LOCK_KEY,
   withStorageLock,
@@ -60,9 +64,20 @@ export async function handleRemovePasskeyUnlock(
         return stalePasskeyCeremonyResult();
       }
 
+      // Revoke the durable Never-session recovery half before deleting this
+      // factor. A failed revocation leaves biometric unlock fully intact.
+      await revokePersistedSessionRecoveryKey();
       await chrome.storage.local.remove(PASSKEY_UNLOCK_STORAGE_KEY);
       invalidateAuthCeremonies();
-      await clearAllAuthState();
+      clearInMemoryAuthCache();
+      await clearSessionStorage().catch((error) => {
+        // The recovery key was already removed before the factor commit, so
+        // any remaining native-session ciphertext is non-restorable.
+        console.warn(
+          "[passkeyUnlock] Failed to clear non-restorable session residue:",
+          error,
+        );
+      });
       chrome.runtime
         .sendMessage({ type: "walletLockedExternal" })
         .catch(() => {});

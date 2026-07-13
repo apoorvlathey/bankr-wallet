@@ -7,7 +7,7 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import { ExternalLinkIcon } from "@chakra-ui/icons";
-import type { DefiPosition } from "@/chrome/portfolioApi";
+import type { DefiPosition } from "@/chrome/portfolio/api";
 import ChainIcon from "@/components/ChainIcon";
 import {
   ListItem,

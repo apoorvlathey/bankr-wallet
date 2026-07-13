@@ -2,8 +2,8 @@
  * Auto-lock setting normalization and storage cache.
  *
  * This module deliberately owns no credentials and performs no session-secret
- * side effects. The `sessionCache.ts` facade applies transitions such as
- * clearing a persisted Never session after this module reports 0 -> timed.
+ * side effects. `timeoutTransitions.ts` applies effects such as clearing a
+ * persisted Never session after this module reports 0 -> timed.
  */
 
 import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from "@/constants/securityPolicy";

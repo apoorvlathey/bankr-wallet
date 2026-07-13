@@ -6,7 +6,7 @@ import { Box,
   VStack,
 } from "@chakra-ui/react";
 import { AddIcon, CheckIcon, CloseIcon } from "@chakra-ui/icons";
-import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
+import type { PendingAddChainRequest } from "@/chrome/requests/pendingAddChainStorage";
 import type { AccountType } from "@/chrome/types";
 import ChainIcon from "@/components/ChainIcon";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";

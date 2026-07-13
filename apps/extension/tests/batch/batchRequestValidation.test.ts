@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { validateExternalProviderMessage } from "../../src/chrome/externalProviderValidation";
+import { validateExternalProviderMessage } from "../../src/chrome/provider/messageValidation";
 import {
   MAX_HEX_DATA_CHARS,
   MAX_PROVIDER_REQUEST_CHARS,
-  validateWalletSendCallsPayload,
-} from "../../src/chrome/providerRequestLimits";
-import { validateWalletConnectRequestPayload } from "../../src/chrome/walletConnectRequestValidation";
+} from "../../src/chrome/provider/limits";
+import { validateWalletSendCallsPayload } from "../../src/chrome/provider/batchValidation";
+import { validateWalletConnectRequestPayload } from "../../src/chrome/walletConnect/requestValidation";
 
 const address = "0x0000000000000000000000000000000000000001";
 const validCall = { to: address, data: "0x", value: "0x0" };

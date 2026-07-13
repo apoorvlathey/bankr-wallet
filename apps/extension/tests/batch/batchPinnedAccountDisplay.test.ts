@@ -7,7 +7,7 @@ test("batch confirmation renders and simulates the account pinned with the store
     readFile(new URL("../../src/App.tsx", import.meta.url), "utf8"),
     readFile(
       new URL(
-        "../../src/components/BatchTransactionConfirmation.tsx",
+        "../../src/components/BatchConfirmation/BatchTransactionConfirmation.tsx",
         import.meta.url,
       ),
       "utf8",

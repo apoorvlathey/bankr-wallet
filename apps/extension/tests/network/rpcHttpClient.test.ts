@@ -9,7 +9,7 @@ import {
   parseRpcEndpoint,
   probeRpcChainId,
   secureHttpTransport,
-} from "../../src/chrome/rpcHttpClient";
+} from "../../src/chrome/network/rpcClient";
 
 function rpcResponse(result: unknown, headers?: HeadersInit): Response {
   return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result }), {

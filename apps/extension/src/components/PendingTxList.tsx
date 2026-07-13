@@ -1,11 +1,11 @@
 import { memo } from "react";
 import { Button, Text } from "@chakra-ui/react";
-import type { PendingTxRequest } from "@/chrome/pendingTxStorage";
-import type { PendingSignatureRequest } from "@/chrome/pendingSignatureStorage";
+import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
+import type { PendingSignatureRequest } from "@/chrome/requests/pendingSignatureStorage";
 import type { PendingErc7715PermissionRequest } from "@/chrome/pendingErc7715PermissionStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
-import type { CrossDappBatch } from "@/chrome/crossDappBatchStorage";
-import { getCombinedRequests } from "@/App";
+import type { CrossDappBatch } from "@/chrome/crossDappBatch/storage";
+import { getCombinedRequests } from "@/app/requestModel";
 import {
   AppHeader,
   AppScreen,

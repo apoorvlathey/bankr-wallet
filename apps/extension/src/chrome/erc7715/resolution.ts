@@ -2,7 +2,7 @@ import type { Erc7715PermissionResult } from "./types";
 import {
   beginExternalPendingRequestResolution,
   finishExternalPendingRequestResolution,
-} from "../pendingRequestResolution";
+} from "../requests/pendingRequestResolution";
 
 /**
  * A permission prompt can be rendered in more than one extension surface

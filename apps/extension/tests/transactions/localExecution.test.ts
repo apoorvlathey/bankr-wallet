@@ -71,7 +71,7 @@ test("local execution revalidates immediately before one broadcast", async (t) =
             "../gasEstimation": "\0local-execution-gas",
             "../localSigner": "\0local-execution-signer",
             "../forceInclusion/nonceManager": "\0local-execution-nonce",
-            "../pendingRequestLifecycle": "\0local-execution-lifecycle",
+            "../requests/pendingRequestLifecycle": "\0local-execution-lifecycle",
             "./runtime": "\0local-execution-runtime",
             "./displayMetadata": "\0local-execution-display",
             "./failure": "\0local-execution-failure",
@@ -146,7 +146,9 @@ test("local execution revalidates immediately before one broadcast", async (t) =
     });
 
     const execution = await server.ssrLoadModule("/src/chrome/transactions/localExecution.ts");
-    const resolution = await server.ssrLoadModule("/src/chrome/pendingRequestResolution.ts");
+    const resolution = await server.ssrLoadModule(
+      "/src/chrome/requests/pendingRequestResolution.ts",
+    );
     const address = "0x1111111111111111111111111111111111111111";
     const pending = (id: string, type: "privateKey" | "seedPhrase") => ({
       id,

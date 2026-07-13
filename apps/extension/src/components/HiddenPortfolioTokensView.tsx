@@ -11,8 +11,8 @@ import {
   getPortfolioTokenKey,
   type HiddenPortfolioToken,
   unhidePortfolioToken,
-} from "@/chrome/hiddenPortfolioTokens";
-import { recordCurrentPortfolioSnapshot } from "@/chrome/portfolioSnapshotRefresh";
+} from "@/chrome/portfolio/hiddenTokens";
+import { recordCurrentPortfolioSnapshot } from "@/chrome/portfolio/snapshotRefresh";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import PortfolioTokenManageRow from "@/components/PortfolioTokenManageRow";
 import {

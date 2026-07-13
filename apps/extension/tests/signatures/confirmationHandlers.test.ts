@@ -115,7 +115,7 @@ test("confirmation preserves all wallet authorities and final release races", as
             ) return null;
             return ({
               "../localSigner": "\0signature-confirmation-local-signer",
-              "../bankrApi": "\0signature-confirmation-bankr-signer",
+              "../bankr/signing": "\0signature-confirmation-bankr-signer",
               "./confirmationPolicy": "\0signature-confirmation-policy",
               "../sessionCache": "\0signature-confirmation-session",
             } as Record<string, string>)[source] ?? null;
@@ -152,13 +152,13 @@ test("confirmation preserves all wallet authorities and final release races", as
       "/src/chrome/signatures/confirmationHandlers.ts",
     );
     const pendingStorage = await viteServer.ssrLoadModule(
-      "/src/chrome/pendingSignatureStorage.ts",
+      "/src/chrome/requests/pendingSignatureStorage.ts",
     );
     const confirmationPolicy = await viteServer.ssrLoadModule(
       "/src/chrome/signatures/confirmationPolicy.ts",
     );
     const pinnedRequest = await viteServer.ssrLoadModule(
-      "/src/chrome/pinnedRequest.ts",
+      "/src/chrome/requests/pinnedRequest.ts",
     );
     const address = "0x1111111111111111111111111111111111111111";
     const privateKey = `0x${"01".repeat(32)}`;

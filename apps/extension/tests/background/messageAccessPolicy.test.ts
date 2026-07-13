@@ -9,15 +9,32 @@ import {
   classifyBackgroundMessage,
 } from "../../src/chrome/background/messageAccessPolicy";
 import { BACKGROUND_AUTH_MESSAGE_TYPES } from "../../src/chrome/background/authRouter";
+import { BACKGROUND_BANKR_CREDENTIAL_MESSAGE_TYPES } from "../../src/chrome/background/bankrCredentialRouter";
 import { BACKGROUND_ONBOARDING_MESSAGE_TYPES } from "../../src/chrome/background/onboardingRouter";
 import { BACKGROUND_ACCOUNT_STATE_MESSAGE_TYPES } from "../../src/chrome/background/accountStateRouter";
 import { BACKGROUND_SETTINGS_MESSAGE_TYPES } from "../../src/chrome/background/settingsRouter";
 import { BACKGROUND_DAPP_PERMISSION_MESSAGE_TYPES } from "../../src/chrome/background/dappPermissionRouter";
+import { BACKGROUND_PROVIDER_RPC_MESSAGE_TYPES } from "../../src/chrome/background/providerRpcRouter";
 import { BACKGROUND_WALLETCONNECT_SESSION_MESSAGE_TYPES } from "../../src/chrome/background/walletConnectSessionRouter";
 import { BACKGROUND_WATCH_ASSET_MESSAGE_TYPES } from "../../src/chrome/background/watchAssetRouter";
 import { BACKGROUND_CHAIN_PROMPT_MESSAGE_TYPES } from "../../src/chrome/background/chainPromptRouter";
 import { BACKGROUND_SIGNING_REQUEST_MESSAGE_TYPES } from "../../src/chrome/background/signingRequestRouter";
+import { BACKGROUND_TRANSACTION_EXECUTION_MESSAGE_TYPES } from "../../src/chrome/background/transactionExecutionRouter";
+import { BACKGROUND_SWAP_EXECUTION_MESSAGE_TYPES } from "../../src/chrome/background/swapExecutionRouter";
+import { BACKGROUND_SPONSORED_TRANSFER_MESSAGE_TYPES } from "../../src/chrome/background/sponsoredTransferRouter";
 import { BACKGROUND_TRANSACTION_STATUS_MESSAGE_TYPES } from "../../src/chrome/background/transactionStatusRouter";
+import { BACKGROUND_ACCOUNT_MANAGEMENT_MESSAGE_TYPES } from "../../src/chrome/background/accountManagementRouter";
+import { BACKGROUND_SECRET_MANAGEMENT_MESSAGE_TYPES } from "../../src/chrome/background/secretManagementRouter";
+import { BACKGROUND_BATCH_REQUEST_MESSAGE_TYPES } from "../../src/chrome/background/batchRequestRouter";
+import { BACKGROUND_DELEGATION_MESSAGE_TYPES } from "../../src/chrome/background/delegationRouter";
+import { BACKGROUND_CROSS_DAPP_BATCH_MESSAGE_TYPES } from "../../src/chrome/background/crossDappBatchRouter";
+import { BACKGROUND_ERC7715_PERMISSION_MESSAGE_TYPES } from "../../src/chrome/background/erc7715PermissionRouter";
+import { BACKGROUND_GAS_SIMULATION_MESSAGE_TYPES } from "../../src/chrome/background/gasSimulationRouter";
+import { BACKGROUND_SWAP_BRIDGE_DATA_MESSAGE_TYPES } from "../../src/chrome/background/swapBridgeDataRouter";
+import { BACKGROUND_TOKEN_DATA_MESSAGE_TYPES } from "../../src/chrome/background/tokenDataRouter";
+import { BACKGROUND_CHAT_MESSAGE_TYPES } from "../../src/chrome/background/chatRouter";
+import { BACKGROUND_CLEAR_SIGNING_MESSAGE_TYPES } from "../../src/chrome/background/clearSigningRouter";
+import { BACKGROUND_RESET_MESSAGE_TYPES } from "../../src/chrome/background/resetRouter";
 import {
   deliverProviderRequestRejection,
   mapProviderRequestRejection,
@@ -48,29 +65,40 @@ test("background root clutter is limited to the composition root", async () => {
 
 test("every main background route has exactly one explicit audience", async () => {
   const source = await readFile(
-    new URL("../../src/chrome/background.ts", import.meta.url),
+    new URL("../../src/chrome/background/messagePipeline.ts", import.meta.url),
     "utf8",
   );
-  const routerStart = source.indexOf("chrome.runtime.onMessage.addListener");
-  const routerEnd = source.indexOf("// Handle notification clicks", routerStart);
-  assert.ok(routerStart >= 0 && routerEnd > routerStart);
-
   const mainRouterTypes = [
-    ...source
-      .slice(routerStart, routerEnd)
-      .matchAll(/^ {4}case ["']([^"']+)["']/gm),
+    ...source.matchAll(/^ {4}case ["']([^"']+)["']/gm),
   ].map((match) => match[1]);
   const delegatedRouteGroups = [
     BACKGROUND_AUTH_MESSAGE_TYPES,
+    BACKGROUND_BANKR_CREDENTIAL_MESSAGE_TYPES,
     BACKGROUND_ONBOARDING_MESSAGE_TYPES,
     BACKGROUND_ACCOUNT_STATE_MESSAGE_TYPES,
     BACKGROUND_SETTINGS_MESSAGE_TYPES,
     BACKGROUND_DAPP_PERMISSION_MESSAGE_TYPES,
+    BACKGROUND_PROVIDER_RPC_MESSAGE_TYPES,
     BACKGROUND_WALLETCONNECT_SESSION_MESSAGE_TYPES,
     BACKGROUND_WATCH_ASSET_MESSAGE_TYPES,
     BACKGROUND_CHAIN_PROMPT_MESSAGE_TYPES,
     BACKGROUND_SIGNING_REQUEST_MESSAGE_TYPES,
+    BACKGROUND_TRANSACTION_EXECUTION_MESSAGE_TYPES,
+    BACKGROUND_SWAP_EXECUTION_MESSAGE_TYPES,
+    BACKGROUND_SPONSORED_TRANSFER_MESSAGE_TYPES,
     BACKGROUND_TRANSACTION_STATUS_MESSAGE_TYPES,
+    BACKGROUND_ACCOUNT_MANAGEMENT_MESSAGE_TYPES,
+    BACKGROUND_SECRET_MANAGEMENT_MESSAGE_TYPES,
+    BACKGROUND_BATCH_REQUEST_MESSAGE_TYPES,
+    BACKGROUND_DELEGATION_MESSAGE_TYPES,
+    BACKGROUND_CROSS_DAPP_BATCH_MESSAGE_TYPES,
+    BACKGROUND_ERC7715_PERMISSION_MESSAGE_TYPES,
+    BACKGROUND_GAS_SIMULATION_MESSAGE_TYPES,
+    BACKGROUND_SWAP_BRIDGE_DATA_MESSAGE_TYPES,
+    BACKGROUND_TOKEN_DATA_MESSAGE_TYPES,
+    BACKGROUND_CHAT_MESSAGE_TYPES,
+    BACKGROUND_CLEAR_SIGNING_MESSAGE_TYPES,
+    BACKGROUND_RESET_MESSAGE_TYPES,
   ] as const;
   const delegatedTypes = delegatedRouteGroups.flatMap((types) => [...types]);
   const routedTypes = [...mainRouterTypes, ...delegatedTypes];
@@ -114,6 +142,90 @@ test("every main background route has exactly one explicit audience", async () =
   }
   assert.equal(classifyBackgroundMessage("unknownMessage"), null);
   assert.equal(classifyBackgroundMessage(null), null);
+});
+
+test("delegated routers run after the audience gate and before unknown handling", async () => {
+  const [source, ...compositionSources] = await Promise.all([
+    readFile(
+      new URL("../../src/chrome/background/messagePipeline.ts", import.meta.url),
+      "utf8",
+    ),
+    ...[
+      "identityRoutes.ts",
+      "accountRoutes.ts",
+      "providerRoutes.ts",
+      "executionRoutes.ts",
+      "advancedRoutes.ts",
+      "dataRoutes.ts",
+    ].map((file) =>
+      readFile(
+        new URL(`../../src/chrome/background/composition/${file}`, import.meta.url),
+        "utf8",
+      ),
+    ),
+  ]);
+  const composition = compositionSources.join("\n");
+  const audienceGate = source.indexOf(
+    "const audience = classifyBackgroundMessage(message?.type)",
+  );
+  const routeOrder = [
+    "routeBackgroundAuthMessage",
+    "routeBackgroundBankrCredentialMessage",
+    "routeBackgroundOnboardingMessage",
+    "routeBackgroundAccountStateMessage",
+    "routeBackgroundSettingsMessage",
+    "routeBackgroundDappPermissionMessage",
+    "routeBackgroundProviderRpcMessage",
+    "routeBackgroundWalletConnectSessionMessage",
+    "routeBackgroundWatchAssetMessage",
+    "routeBackgroundChainPromptMessage",
+    "routeBackgroundSigningRequestMessage",
+    "routeBackgroundTransactionExecutionMessage",
+    "routeBackgroundSwapExecutionMessage",
+    "routeBackgroundSponsoredTransferMessage",
+    "routeBackgroundTransactionStatusMessage",
+    "routeBackgroundAccountManagementMessage",
+    "routeBackgroundSecretManagementMessage",
+    "routeBackgroundBatchRequestMessage",
+    "routeBackgroundDelegationMessage",
+    "routeBackgroundCrossDappBatchMessage",
+    "routeBackgroundErc7715PermissionMessage",
+    "routeBackgroundGasSimulationMessage",
+    "routeBackgroundSwapBridgeDataMessage",
+    "routeBackgroundTokenDataMessage",
+    "routeBackgroundChatMessage",
+    "routeBackgroundClearSigningMessage",
+    "routeBackgroundResetMessage",
+  ].map((name) => source.indexOf(`routes.${name}`));
+  assert.ok(routeOrder.every((index) => index > audienceGate));
+  assert.deepEqual(routeOrder, [...routeOrder].sort((a, b) => a - b));
+  const resetRoute = routeOrder.at(-1) ?? -1;
+  const unknownHandling = source.indexOf("Unknown message type", resetRoute);
+  assert.ok(audienceGate >= 0 && resetRoute < unknownHandling);
+  assert.match(
+    composition,
+    /createBackgroundAccountManagementMessageRouter\(\{/,
+  );
+  for (const constructorName of [
+    "createBackgroundBankrCredentialMessageRouter",
+    "createBackgroundProviderRpcMessageRouter",
+    "createBackgroundSwapBridgeDataMessageRouter",
+    "createBackgroundTokenDataMessageRouter",
+    "createBackgroundSecretManagementMessageRouter",
+    "createBackgroundBatchRequestMessageRouter",
+    "createBackgroundDelegationMessageRouter",
+    "createBackgroundCrossDappBatchMessageRouter",
+    "createBackgroundErc7715PermissionMessageRouter",
+    "createBackgroundGasSimulationMessageRouter",
+    "createBackgroundChatMessageRouter",
+    "createBackgroundClearSigningMessageRouter",
+    "createBackgroundTransactionExecutionMessageRouter",
+    "createBackgroundSwapExecutionMessageRouter",
+    "createBackgroundSponsoredTransferMessageRouter",
+    "createBackgroundResetMessageRouter",
+  ]) {
+    assert.match(composition, new RegExp(`${constructorName}\\(\\{`));
+  }
 });
 
 test("previously implicit data and credential routes are explicitly wallet-UI-only", () => {
@@ -366,11 +478,10 @@ test("provider rejection delivery preserves listener handling semantics", async 
 
 test("the production listener keeps ENS first and fails untrusted unknown routes closed", async () => {
   const source = await readFile(
-    new URL("../../src/chrome/background.ts", import.meta.url),
+    new URL("../../src/chrome/background/messagePipeline.ts", import.meta.url),
     "utf8",
   );
-  const routerStart = source.indexOf("chrome.runtime.onMessage.addListener");
-  const router = source.slice(routerStart, source.indexOf("switch (message.type)", routerStart));
+  const router = source;
 
   assert.ok(
     router.indexOf("handleEnsBrowsingMessage") <
@@ -392,6 +503,6 @@ test("the production listener keeps ENS first and fails untrusted unknown routes
   );
   assert.match(
     router,
-    /rejectExternalProviderRequestDuringErc7715Lock\(message, sendResponse\)[\s\S]*?return false;/,
+    /rejectExternalProviderRequestDuringErc7715Lock\([\s\S]*?message,[\s\S]*?sendResponse,[\s\S]*?\)[\s\S]*?return false;/,
   );
 });

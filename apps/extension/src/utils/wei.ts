@@ -1,4 +1,4 @@
-import { fetchRpcResult } from "@/chrome/rpcHttpClient";
+import { fetchRpcResult } from "@/chrome/network/rpcClient";
 
 /**
  * Wei/Gwei Name Service SDK

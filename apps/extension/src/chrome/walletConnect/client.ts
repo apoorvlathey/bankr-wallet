@@ -1,43 +1,18 @@
 import { Core } from "@walletconnect/core";
 import { WalletKit } from "@reown/walletkit";
-import { buildApprovedNamespaces } from "@walletconnect/utils";
 import {
   WALLETCHAN_ICON_URL,
   WALLETCHAN_SITE_URL,
 } from "@/constants/externalUrls";
-import { getStoredNetworksInfo, getVisibleChains } from "@/lib/chains";
 import type { WalletConnectProposalRejection } from "@/types/walletConnect";
-import { getActiveAccount } from "../accountStorage";
-import {
-  getWalletConnectPendingRequest,
-} from "./storage";
-import {
-  rejectSessionRequest as rejectRoutedSessionRequest,
-  respondSessionRequest as respondRoutedSessionRequest,
-} from "./protocol";
 import { flushWalletConnectTerminalResponses } from "./outbox";
 import {
   cancelPendingRequestsForWalletConnectTopic,
   finalizeWalletConnectTopicTermination,
-  resumeWalletConnectTopicAfterFailedTermination,
-} from "../pendingWalletConnectLifecycle";
-import {
-  WALLETCONNECT_SUPPORTED_EVENTS,
-  WALLETCONNECT_SUPPORTED_METHODS,
-  isSigningAccount,
-  summarizeWalletConnectSession,
-} from "./sessionPolicy";
-import {
-  buildProposalRejection,
-  hasApprovedNamespaces,
-  normalizeWalletConnectProposal,
-  type WalletConnectSupportedNamespaces,
-} from "./proposal";
+} from "../requests/pendingWalletConnectLifecycle";
+import { summarizeWalletConnectSession } from "./sessionPolicy";
 import { handleWalletConnectSessionRequest } from "./requestRouter";
-import {
-  getWalletConnectActiveChainId,
-  setWalletConnectActiveChainByName,
-} from "./chainState";
+import { getWalletConnectActiveChainId } from "./chainState";
 import {
   startWalletConnectKeepalive,
   stopWalletConnectKeepalive,
@@ -49,6 +24,7 @@ import {
   teardownWalletConnectSdkState,
   type WalletConnectResetSummary,
 } from "./reset";
+import { handleWalletConnectSessionProposal } from "./sessionProposal";
 
 type WalletKitInstance = Awaited<ReturnType<typeof WalletKit.init>>;
 
@@ -89,14 +65,14 @@ async function getWalletConnectStorageNamespace(): Promise<
   return parsed;
 }
 
-function createWalletConnectCore(storageNamespace?: string): Core {
+function createWalletConnectCore(storageNamespace?: string) {
   return new Core({
     projectId: PROJECT_ID,
     ...(storageNamespace ? { customStoragePrefix: storageNamespace } : {}),
   });
 }
 
-function getActiveSessionSummaries() {
+export function getActiveWalletConnectSessionSummaries() {
   if (!walletKit) return [];
   const sessions = Object.values(walletKit.getActiveSessions() || {});
   return sessions
@@ -104,8 +80,8 @@ function getActiveSessionSummaries() {
     .map(summarizeWalletConnectSession);
 }
 
-async function broadcastSessionsChanged(): Promise<void> {
-  const sessions = getActiveSessionSummaries();
+export async function broadcastWalletConnectSessionsChanged(): Promise<void> {
+  const sessions = getActiveWalletConnectSessionSummaries();
   if (sessions.length > 0) {
     startWalletConnectKeepalive(() => walletKit);
   } else {
@@ -151,7 +127,12 @@ function attachWalletKitListeners(
 
   const proposal = (value: any) => {
     if (generation !== walletConnectGeneration) return;
-    void handleSessionProposal(value);
+    void handleWalletConnectSessionProposal(
+      kit,
+      value,
+      broadcastWalletConnectSessionsChanged,
+      broadcastProposalRejected,
+    );
   };
   const request = (value: any) => {
     if (generation !== walletConnectGeneration) return;
@@ -172,7 +153,7 @@ function attachWalletKitListeners(
           error,
         );
       } finally {
-        await broadcastSessionsChanged();
+        await broadcastWalletConnectSessionsChanged();
       }
     })();
   };
@@ -289,7 +270,7 @@ export async function initWalletConnect(): Promise<boolean> {
     walletKit = initializedKit;
     initError = null;
     void flushWalletConnectTerminalResponses(initializedKit);
-    void broadcastSessionsChanged();
+    void broadcastWalletConnectSessionsChanged();
     return true;
   } catch (error) {
     if (generation === walletConnectGeneration) {
@@ -315,7 +296,7 @@ export async function isWalletConnectSessionActive(
   return !!kit?.getActiveSessions()?.[topic];
 }
 
-async function ensureWalletKit(): Promise<WalletKitInstance> {
+export async function ensureWalletKit(): Promise<WalletKitInstance> {
   if (walletKit) return walletKit;
   const initialized = await initWalletConnect();
   if (!initialized || !walletKit) {
@@ -324,184 +305,10 @@ async function ensureWalletKit(): Promise<WalletKitInstance> {
   return walletKit;
 }
 
-export async function handleWalletConnectGetSessions() {
-  const initialized = await initWalletConnect();
-  return {
-    success: initialized,
-    sessions: getActiveSessionSummaries(),
-    activeChainId: await getWalletConnectActiveChainId(),
-    error: initialized ? undefined : initError || "WalletConnect is not available",
-    missingProjectId: !PROJECT_ID,
-  };
+export function getWalletConnectInitError(): string | null {
+  return initError;
 }
 
-export async function handleWalletConnectPair(uri: string) {
-  const trimmed = uri.trim();
-  if (!trimmed.startsWith("wc:")) {
-    return { success: false, error: "Enter a valid WalletConnect URI" };
-  }
-  try {
-    const kit = await ensureWalletKit();
-    await kit.core.pairing.pair({ uri: trimmed });
-    return { success: true };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to connect dapp",
-    };
-  }
-}
-
-export async function handleWalletConnectDisconnectSession(topic: string) {
-  try {
-    const kit = await ensureWalletKit();
-    await cancelPendingRequestsForWalletConnectTopic(topic);
-    await kit.disconnectSession({
-      topic,
-      reason: { code: 6000, message: "User disconnected the session" },
-    });
-    try {
-      await finalizeWalletConnectTopicTermination(topic);
-    } catch (error) {
-      // The SDK already confirmed termination. Keep the synchronous topic gate
-      // closed; normal outbox/session cleanup can retry the storage removal.
-      console.warn(
-        "[WalletConnect] Session disconnected; pending-route cleanup deferred",
-        error,
-      );
-    }
-    void broadcastSessionsChanged();
-    return { success: true };
-  } catch (error) {
-    resumeWalletConnectTopicAfterFailedTermination(topic);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to disconnect dapp",
-    };
-  }
-}
-
-export async function handleWalletConnectSwitchChain(chainName: string) {
-  try {
-    const kit = await ensureWalletKit();
-    const chain = await setWalletConnectActiveChainByName(kit, chainName);
-    return { success: true, chainId: chain.chainId, chainName: chain.name };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to switch chain",
-    };
-  }
-}
-
-async function handleSessionProposal(proposal: any): Promise<void> {
-  const kit = await ensureWalletKit();
-  const account = await getActiveAccount();
-  if (!isSigningAccount(account)) {
-    await kit.rejectSession({
-      id: proposal.id,
-      reason: { code: 4001, message: "No signing account is active" },
-    });
-    return;
-  }
-
-  try {
-    const networksInfo = await getStoredNetworksInfo();
-    const visibleChains = getVisibleChains(networksInfo, account.type);
-    const chains = visibleChains.map(
-      (chain) => `eip155:${chain.chainId}`,
-    );
-    const accounts = chains.map((chain) => `${chain}:${account.address}`);
-    const supportedNamespaces: WalletConnectSupportedNamespaces = {
-      eip155: {
-        chains,
-        accounts,
-        methods: WALLETCONNECT_SUPPORTED_METHODS,
-        events: WALLETCONNECT_SUPPORTED_EVENTS,
-      },
-    };
-    const namespaces = buildApprovedNamespaces({
-      proposal: normalizeWalletConnectProposal(
-        proposal.params,
-        supportedNamespaces,
-      ),
-      supportedNamespaces,
-    });
-    if (!hasApprovedNamespaces(namespaces)) {
-      throw new Error(
-        "No supported WalletConnect chains or methods matched this dapp",
-      );
-    }
-
-    await kit.approveSession({ id: proposal.id, namespaces });
-    void broadcastSessionsChanged();
-  } catch (error) {
-    const rejection = await buildProposalRejection(
-      proposal,
-      account.type,
-      error,
-    );
-    broadcastProposalRejected(rejection);
-    await kit.rejectSession({
-      id: proposal.id,
-      reason: {
-        code: 5000,
-        message: rejection.error,
-      },
-    });
-  }
-}
-
-export async function completeWalletConnectRequestIfNeeded(
-  key: string,
-  result: Record<string, unknown>,
-): Promise<void> {
-  const txPrefix = "txResult:";
-  const sigPrefix = "sigResult:";
-  const erc7715Prefix = "erc7715PermissionResult:";
-  const id = key.startsWith(txPrefix)
-    ? key.slice(txPrefix.length)
-    : key.startsWith(sigPrefix)
-      ? key.slice(sigPrefix.length)
-      : key.startsWith(erc7715Prefix)
-        ? key.slice(erc7715Prefix.length)
-        : null;
-  if (!id) return;
-
-  const pending = await getWalletConnectPendingRequest(id);
-  if (!pending) return;
-
-  try {
-    const kit = await ensureWalletKit();
-    const args = { topic: pending.topic, id: pending.requestId };
-    const payload =
-      pending.kind === "transaction"
-        ? result.txHash
-        : pending.kind === "signature"
-          ? result.signature
-          : result.result;
-    if (
-      result.success === true &&
-      (typeof payload === "string" || Array.isArray(payload))
-    ) {
-      await respondRoutedSessionRequest(kit, args, payload);
-    } else {
-      const error =
-        typeof result.error === "string" ? result.error : "Request failed";
-      await rejectRoutedSessionRequest(
-        kit,
-        args,
-        /reject|cancel/i.test(error) ? 4001 : -32000,
-        error,
-      );
-    }
-  } catch (error) {
-    // The protocol layer stored the first terminal response before attempting
-    // relay delivery. Keep the route/outbox so init, reconnect, or a duplicate
-    // relay event can replay it without another signature/broadcast.
-    console.warn(
-      "[WalletConnect] Response delivery deferred; terminal outbox retained",
-      error,
-    );
-  }
+export function hasWalletConnectProjectId(): boolean {
+  return !!PROJECT_ID;
 }

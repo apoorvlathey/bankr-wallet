@@ -8,14 +8,14 @@ import {
 import {
   getPendingTxRequestById,
   removePendingTxRequest,
-} from "../pendingTxStorage";
-import { enforcePendingRequestAuthorizationAtConfirmation } from "../pendingRequestLifecycle";
+} from "../requests/pendingTxStorage";
+import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pendingRequestLifecycle";
 import {
   processingTxIds,
   resolvePinnedAccount,
   TX_EXPIRY_MS,
 } from "./runtime";
-import { beginPendingRequestEffectLease } from "../pendingRequestResolution";
+import { beginPendingRequestEffectLease } from "../requests/pendingRequestResolution";
 import {
   getAutoLockTimeout,
   getCachedVaultKey,

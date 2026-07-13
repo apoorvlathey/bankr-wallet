@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { getStoredRpcUrl } from "@/lib/chains";
-import { secureHttpTransport } from "@/chrome/rpcHttpClient";
+import { secureHttpTransport } from "@/chrome/network/rpcClient";
 
 /**
  * What kind of account lives at a recipient address.

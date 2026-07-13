@@ -43,6 +43,15 @@ async function clearPersistedSessionSecret(): Promise<void> {
   ]);
 }
 
+/**
+ * Destroy the durable recovery half before removing an authentication factor.
+ * Once this resolves, any remaining session ciphertext is non-restorable.
+ */
+export async function revokePersistedSessionRecoveryKey(): Promise<void> {
+  await legacySessionCleanup;
+  await chrome.storage.local.remove(SESSION_KEY_LOCAL);
+}
+
 export async function readPersistedSessionRecord(): Promise<
   Record<string, unknown>
 > {
@@ -88,15 +97,15 @@ export async function getSessionPassword(): Promise<string | null> {
 
     const key = await crypto.subtle.importKey(
       "raw",
-      sessionKey,
+      sessionKey.buffer as ArrayBuffer,
       "AES-GCM",
       false,
       ["decrypt"],
     );
     const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv },
+      { name: "AES-GCM", iv: iv.buffer as ArrayBuffer },
       key,
-      encryptedData,
+      encryptedData.buffer as ArrayBuffer,
     );
 
     if (decrypted.byteLength > MAX_SESSION_PASSWORD_BYTES) return null;

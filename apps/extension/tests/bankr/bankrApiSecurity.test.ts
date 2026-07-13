@@ -38,8 +38,8 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-const bankr = await import("../../src/chrome/bankrApi");
-const bounded = await import("../../src/chrome/boundedHttpResponse");
+const bankr = await import("../../src/chrome/bankr/client");
+const bounded = await import("../../src/chrome/network/boundedHttp");
 
 test("Bankr signatures require a bounded valid response from the requested signer", async () => {
   globalThis.fetch = async (_input, init) => signatureResponse(init);

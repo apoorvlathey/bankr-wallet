@@ -17,7 +17,7 @@ import {
   MEGAETH_CHAIN_ID,
 } from "@/utils/mega";
 import { getStoredRpcUrl } from "@/lib/chains";
-import { secureHttpTransport } from "@/chrome/rpcHttpClient";
+import { secureHttpTransport } from "@/chrome/network/rpcClient";
 
 // ============================================================================
 // Constants

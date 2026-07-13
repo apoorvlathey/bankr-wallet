@@ -16,7 +16,7 @@ import {
   LinkIcon,
   ViewOffIcon,
 } from "@chakra-ui/icons";
-import type { PortfolioToken } from "@/chrome/portfolioApi";
+import type { PortfolioToken } from "@/chrome/portfolio/api";
 import ChainIcon from "@/components/ChainIcon";
 import {
   ListItem,

@@ -8,17 +8,17 @@ async function source(path: string): Promise<string> {
   return readFile(new URL(path, CHROME_ROOT), "utf8");
 }
 
-test("txSimulation remains the stable coordinator for extracted modules", async () => {
+test("txSimulation is a policy-free stable facade", async () => {
   const coordinator = await source("txSimulation.ts");
-  assert.match(coordinator, /from "\.\/simulation\/stateOverrides"/);
-  assert.match(coordinator, /from "\.\/simulation\/ethSimulateLogs"/);
-  assert.match(coordinator, /from "\.\/simulation\/types"/);
+  assert.match(coordinator, /from "\.\/simulation\/singleSimulation"/);
+  assert.match(coordinator, /from "\.\/simulation\/batchSimulation"/);
+  assert.match(coordinator, /from "\.\/simulation\/nonAtomicBatch"/);
   assert.match(
     coordinator,
     /export type \{[\s\S]*SimulationResult[\s\S]*\} from "\.\/simulation\/types"/,
   );
-  assert.doesNotMatch(coordinator, /function safeHexToBigInt/);
-  assert.doesNotMatch(coordinator, /const PROXY_SLOTS/);
+  assert.doesNotMatch(coordinator, /\b(?:function|fetch|chrome\.|viem)\b/);
+  assert.ok(coordinator.split("\n").length <= 40);
 });
 
 test("focused simulation modules do not depend on coordinator or authority domains", async () => {
@@ -27,12 +27,26 @@ test("focused simulation modules do not depend on coordinator or authority domai
     "simulation/constants.ts",
     "simulation/stateOverrides.ts",
     "simulation/ethSimulateLogs.ts",
+    "simulation/client.ts",
+    "simulation/nativeCurrency.ts",
+    "simulation/portfolioPrices.ts",
+    "simulation/assetChangeNormalization.ts",
+    "simulation/nftEnrichment.ts",
+    "simulation/tokenEnrichment.ts",
+    "simulation/metadataRetry.ts",
+    "simulation/resultBuilder.ts",
+    "simulation/simulatorContract.ts",
+    "simulation/erc7715Preview.ts",
+    "simulation/singleSimulation.ts",
+    "simulation/batchSimulation.ts",
+    "simulation/ethSimulateBatch.ts",
+    "simulation/nonAtomicBatch.ts",
   ]) {
     const moduleSource = await source(path);
     assert.ok(moduleSource.split("\n").length <= 400, `${path} exceeds 400 lines`);
     assert.doesNotMatch(moduleSource, /from ["']\.\.\/txSimulation["']/);
     assert.doesNotMatch(moduleSource, /background|sessionCache|authHandlers/);
-    assert.doesNotMatch(moduleSource, /localSigner|walletConnect|bankrApi/);
+    assert.doesNotMatch(moduleSource, /localSigner|walletConnect|bankr(?:Api|\/)/);
     assert.doesNotMatch(moduleSource, /chrome\.storage/);
   }
 });

@@ -8,7 +8,7 @@ import {
   Text,
   VStack,
 } from "@chakra-ui/react";
-import type { DappPermission } from "@/chrome/dappPermissionStorage";
+import type { DappPermission } from "@/chrome/requests/dappPermissionStorage";
 import DappSiteIcon from "@/components/DappSiteIcon";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import {

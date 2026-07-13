@@ -14,6 +14,10 @@ export const SIMULATION_GAS_LIMIT = 10_000_000n;
  */
 export const BATCH_SIMULATION_GAS_LIMIT = 50_000_000n;
 
+/** Multicall3 is deployed at the same address on all supported chains. */
+export const MULTICALL3_ADDRESS: Address =
+  "0xcA11bde05977b3631167028862bE2a173976CA11";
+
 /** Permit2 is deployed at the same address on every supported chain. */
 export const PERMIT2_ADDRESS: Address =
   "0x000000000022D473030F116dDEE9F6B43aC78BA3";

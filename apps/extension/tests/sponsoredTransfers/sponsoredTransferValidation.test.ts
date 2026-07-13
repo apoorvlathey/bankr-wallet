@@ -4,11 +4,11 @@ import test from "node:test";
 import {
   BASE_USDC_DECIMALS,
   validateSponsoredTransferIntent,
-} from "../../src/chrome/sponsoredTransferValidation";
+} from "../../src/chrome/sponsoredTransfers/validation";
 import {
   parsePremiumStatusResponse,
   parseSponsoredTransferResponse,
-} from "../../src/chrome/sponsoredTransferResponse";
+} from "../../src/chrome/sponsoredTransfers/response";
 
 const ACCOUNT = "0x0000000000000000000000000000000000000001";
 const RECIPIENT = "0x0000000000000000000000000000000000000002";

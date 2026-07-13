@@ -8,7 +8,7 @@ import {
   getPendingSignatureRequestById,
   removePendingSignatureRequest,
   type PendingSignatureRequest,
-} from "../pendingSignatureStorage";
+} from "../requests/pendingSignatureStorage";
 import {
   resolvePinnedAccount,
   SIGNATURE_EXPIRY_MS,

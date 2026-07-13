@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Button, Spinner } from "@chakra-ui/react";
 
-import type { PendingWatchAssetRequest } from "@/chrome/pendingWatchAssetStorage";
+import type { PendingWatchAssetRequest } from "@/chrome/requests/pendingWatchAssetStorage";
 import { WatchAssetConfirmationScreen } from "@/components/WatchAssetConfirmation/WatchAssetConfirmationScreen";
 import { getChainConfig } from "@/constants/chainConfig";
 import { googleFaviconUrl } from "@/constants/externalUrls";

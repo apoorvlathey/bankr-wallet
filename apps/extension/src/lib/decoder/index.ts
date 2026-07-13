@@ -33,7 +33,7 @@ import {
   parseAbi,
 } from "viem";
 import { FOURBYTE_SOURCIFY_LOOKUP_URL, FOURBYTE_DIRECTORY_API_URL } from "@/constants/externalUrls";
-import { fetchJsonBounded } from "@/chrome/boundedHttpResponse";
+import { fetchJsonBounded } from "@/chrome/network/boundedHttp";
 
 // Inline helper replacing swiss-knife's startHexWith0x
 function startHexWith0x(hexValue?: string): Hex {

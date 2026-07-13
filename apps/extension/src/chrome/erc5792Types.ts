@@ -93,7 +93,7 @@ export interface PendingBatchTxRequest {
 
 /**
  * Creation-time shape: pinning fields are REQUIRED. Construct via
- * `pinnedBatchTxRequest(account, base)` in `./pinnedRequest`.
+ * `pinnedBatchTxRequest(account, base)` in ../requests/pinnedRequest`.
  */
 export type PinnedBatchTxRequest = PendingBatchTxRequest &
   Required<Pick<PendingBatchTxRequest, "accountId" | "accountAddress" | "accountType">>;

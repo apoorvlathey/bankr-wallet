@@ -1,12 +1,14 @@
 import { newPasswordPolicyError } from "@/constants/securityPolicy";
 import { invalidateAuthCeremonies } from "../authTransition";
 import { encryptVaultKey, tryDecryptVaultKey } from "../crypto";
-import { validateGeneralVaultMasterRecovery } from "../generalVaultIntegrity";
+import { validateGeneralVaultMasterRecovery } from "../vault/generalIntegrity";
 import {
-  clearAllAuthState,
+  clearInMemoryAuthCache,
+  clearSessionStorage,
   getAutoLockTimeout,
   getCachedPassword,
   getCachedVaultKey,
+  revokePersistedSessionRecoveryKey,
   resolvePasswordType,
   tryRestoreSessionAlreadySerialized,
 } from "../sessionCache";
@@ -156,13 +158,24 @@ export async function handleRemoveAgentPassword(
         };
       }
 
-      invalidateAuthCeremonies();
+      // Revoke the durable Never-session recovery half before deleting this
+      // factor. A failed revocation leaves the agent wrapper fully intact.
+      await revokePersistedSessionRecoveryKey();
       await chrome.storage.local.set({
         encryptedVaultKeyAgent: null,
         agentPasswordEnabled: false,
       });
 
-      await clearAllAuthState();
+      invalidateAuthCeremonies();
+      clearInMemoryAuthCache();
+      await clearSessionStorage().catch((error) => {
+        // The recovery key was already removed before the factor commit, so
+        // any remaining native-session ciphertext is non-restorable.
+        console.warn(
+          "[authHandlers] Failed to clear non-restorable session residue:",
+          error,
+        );
+      });
       chrome.runtime
         .sendMessage({ type: "walletLockedExternal" })
         .catch(() => {});

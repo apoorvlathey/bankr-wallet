@@ -12,15 +12,15 @@ import {
   ViewOffIcon,
 } from "@chakra-ui/icons";
 
-import { fetchOnchainBalances } from "@/chrome/onchainBalances";
-import type { PortfolioToken } from "@/chrome/portfolioApi";
-import { recordSnapshot } from "@/chrome/portfolioSnapshotStorage";
-import { loadPortfolioTokenCatalog } from "@/chrome/portfolioTokens";
+import { fetchOnchainBalances } from "@/chrome/portfolio/onchainBalances";
+import type { PortfolioToken } from "@/chrome/portfolio/api";
+import { recordSnapshot } from "@/chrome/portfolio/snapshotStorage";
+import { loadPortfolioTokenCatalog } from "@/chrome/portfolio/tokenCatalog";
 import {
   getHiddenPortfolioTokens,
   getPortfolioTokenKey,
   hidePortfolioTokens,
-} from "@/chrome/hiddenPortfolioTokens";
+} from "@/chrome/portfolio/hiddenTokens";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import PortfolioTokenManageRow from "@/components/PortfolioTokenManageRow";
 import {

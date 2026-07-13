@@ -87,8 +87,8 @@ test("local confirmation preserves PK, seed, and Never sessions", async (t) => {
             "../vaultCrypto": "\0local-tx-vault",
             "../delegatedAuthorityPolicy": "\0local-tx-delegation",
             "./runtime": "\0local-tx-runtime",
-            "../pendingRequestLifecycle": "\0local-tx-lifecycle",
-            "../pendingTxStorage": "\0local-tx-pending",
+            "../requests/pendingRequestLifecycle": "\0local-tx-lifecycle",
+            "../requests/pendingTxStorage": "\0local-tx-pending",
             "../authHandlers": "\0local-tx-auth",
           } as Store)[source] ?? null;
         },

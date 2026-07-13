@@ -19,7 +19,7 @@ import {
   CopyIcon,
   CheckIcon,
 } from "@chakra-ui/icons";
-import { PendingTxRequest } from "@/chrome/pendingTxStorage";
+import { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
 import { GasEstimate, GasEstimateTier } from "@/chrome/gasEstimation";
 import { GasOverrides } from "@/chrome/txHandlers";
 import { formatEth, formatGwei, formatWeiToUsd } from "@/lib/gasFormatUtils";

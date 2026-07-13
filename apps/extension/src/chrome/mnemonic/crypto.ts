@@ -54,14 +54,15 @@ export async function decryptMnemonicWithPassword(
   return new TextDecoder().decode(plaintext);
 }
 
-function mnemonicAad(keyId: string, seedGroupId: string): Uint8Array {
+function mnemonicAad(keyId: string, seedGroupId: string): ArrayBuffer {
   return new TextEncoder().encode(
     `${MNEMONIC_AAD_PREFIX}/${keyId}/${seedGroupId}`,
-  );
+  ).buffer as ArrayBuffer;
 }
 
-function mnemonicKeyCheckAad(keyId: string): Uint8Array {
-  return new TextEncoder().encode(`${MNEMONIC_AAD_PREFIX}/${keyId}/key-check`);
+function mnemonicKeyCheckAad(keyId: string): ArrayBuffer {
+  return new TextEncoder().encode(`${MNEMONIC_AAD_PREFIX}/${keyId}/key-check`)
+    .buffer as ArrayBuffer;
 }
 
 export async function createMnemonicKeyCheck(

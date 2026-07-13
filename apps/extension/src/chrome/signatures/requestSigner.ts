@@ -1,4 +1,4 @@
-import type { SignatureParams } from "../pendingSignatureStorage";
+import type { SignatureParams } from "../requests/pendingSignatureStorage";
 
 /** Extracts the signer address parameter for each supported signature method. */
 export function extractSignerParam(

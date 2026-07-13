@@ -2,6 +2,8 @@
 
 This directory freezes the remote-session boundary:
 
+- `architecture.test.ts` enforces the single source folder, 400-line ceiling,
+  dependency direction, and direct background composition.
 - `requestSecurity.test.ts` covers bounded request validation, CAIP chain/method
   routing, terminal responses, pending-route locking, and queue limits.
 - `reset.test.ts` covers replacement-wallet namespace compatibility and ordered

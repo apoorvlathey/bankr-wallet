@@ -5,39 +5,56 @@ import test from "node:test";
 const readChromeModule = (name: string) =>
   readFile(new URL(`../../src/chrome/${name}`, import.meta.url), "utf8");
 
-test("EIP-712 parsing delegates to pure policy, schema, and sanitization layers", async () => {
-  const [validator, policy, schema, sanitization] = await Promise.all([
-    readChromeModule("eip712Validator.ts"),
-    readChromeModule("eip712DelegationPolicy.ts"),
-    readChromeModule("eip712SchemaValidation.ts"),
-    readChromeModule("eip712Sanitization.ts"),
-  ]);
+test("EIP-712 parsing delegates to a focused pure audit domain", async () => {
+  const [facade, validator, policy, schema, sanitization, types] =
+    await Promise.all([
+      readChromeModule("eip712Validator.ts"),
+      readChromeModule("signatures/eip712/validator.ts"),
+      readChromeModule("signatures/eip712/delegationPolicy.ts"),
+      readChromeModule("signatures/eip712/schemaValidation.ts"),
+      readChromeModule("signatures/eip712/sanitization.ts"),
+      readChromeModule("signatures/eip712/types.ts"),
+    ]);
 
-  assert.match(validator, /from ["'].\/eip712DelegationPolicy["']/);
-  assert.match(validator, /from ["'].\/eip712SchemaValidation["']/);
-  assert.match(validator, /from ["'].\/eip712Sanitization["']/);
-  for (const source of [policy, schema, sanitization]) {
+  assert.match(facade, /from ["'].\/signatures\/eip712\/validator["']/);
+  assert.match(facade, /from ["'].\/signatures\/eip712\/types["']/);
+  assert.doesNotMatch(facade, /function |const MAX_|JSON\./);
+  assert.match(validator, /from ["'].\/delegationPolicy["']/);
+  assert.match(validator, /from ["'].\/schemaValidation["']/);
+  assert.match(validator, /from ["'].\/sanitization["']/);
+  for (const moduleSource of [validator, policy, schema, sanitization, types]) {
     assert.doesNotMatch(
-      source,
-      /chrome\.|fetch\(|from ["'].\/(?:sessionCache|accountStorage|localSigner|bankrApi)["']/,
+      moduleSource,
+      /chrome\.|fetch\(|sessionCache|accountStorage|localSigner|bankr(?:Api|\/)/,
     );
+    assert.ok(moduleSource.split("\n").length <= 400);
   }
-  assert.doesNotMatch(policy, /eip712Validator/);
-  assert.doesNotMatch(schema, /eip712Validator/);
-  assert.doesNotMatch(sanitization, /eip712Validator/);
 });
 
-test("EIP-712 facade preserves delegation-policy export identities", async () => {
-  const [validator, policy] = await Promise.all([
+test("EIP-712 facade preserves implementation export identities", async () => {
+  const [facade, validator, policy] = await Promise.all([
     import("../../src/chrome/eip712Validator"),
-    import("../../src/chrome/eip712DelegationPolicy"),
+    import("../../src/chrome/signatures/eip712/validator"),
+    import("../../src/chrome/signatures/eip712/delegationPolicy"),
   ]);
   assert.equal(
-    validator.RAW_ERC7710_DELEGATION_SIGNATURE_ERROR,
+    facade.RAW_ERC7710_DELEGATION_SIGNATURE_ERROR,
     policy.RAW_ERC7710_DELEGATION_SIGNATURE_ERROR,
   );
   assert.equal(
-    validator.isRawErc7710DelegationSignatureRequest,
+    facade.isRawErc7710DelegationSignatureRequest,
     policy.isRawErc7710DelegationSignatureRequest,
   );
+  assert.equal(facade.validateEIP712TypedData, validator.validateEIP712TypedData);
+});
+
+test("legacy root implementation files do not reappear", async () => {
+  for (const path of [
+    "eip712DelegationPolicy.ts",
+    "eip712SchemaValidation.ts",
+    "eip712Sanitization.ts",
+    "eip712ValidationTypes.ts",
+  ]) {
+    await assert.rejects(readChromeModule(path), /ENOENT/);
+  }
 });

@@ -13,7 +13,7 @@ import {
   RPC_URLS,
   buildCustomViemChain,
 } from "@/constants/chainRegistry";
-import { secureHttpTransport } from "../rpcHttpClient";
+import { secureHttpTransport } from "../network/rpcClient";
 import type { CustomChainMeta } from "./types";
 
 export function createLocalSignerClient(

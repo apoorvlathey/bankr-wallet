@@ -5,7 +5,7 @@ import { getStoredResolvedChainById } from "../../lib/chains";
 import { resolveActiveDelegate } from "../../utils/delegationResolution";
 import { getActiveAccount, getTabAccount } from "../accountStorage";
 import { normalizeBatchCallValues } from "./batchTxEncoding";
-import { removeBundleStatus, saveBundleStatus } from "../bundleStatusStorage";
+import { removeBundleStatus, saveBundleStatus } from "./bundleStatusStorage";
 import { ERC5792_ERRORS, BUNDLE_STATUS } from "../erc5792Types";
 import type { ERC5792Call, WalletConnectRequestMetadata, WalletSendCallsParams } from "../erc5792Types";
 import { openExtensionPopup } from "../extensionPopup";
@@ -13,15 +13,15 @@ import {
   capturePendingRequestAuthorizationCommitSnapshot,
   pendingRequestLifecycleErrors,
   validatePendingRequestAuthorization,
-} from "../pendingRequestLifecycle";
+} from "../requests/pendingRequestLifecycle";
 import { writeResultToStorage } from "../transactions/runtime";
 import {
   getPendingBatchTxRequestById,
   removePendingBatchTxRequest,
   savePendingBatchTxRequest,
-} from "../pendingBatchTxStorage";
-import { pinnedBatchTxRequest } from "../pinnedRequest";
-import { validateWalletSendCallsPayload } from "../providerRequestLimits";
+} from "../requests/pendingBatchTxStorage";
+import { pinnedBatchTxRequest } from "../requests/pinnedRequest";
+import { validateWalletSendCallsPayload } from "../provider/batchValidation";
 import type { Account } from "../types";
 
 export async function handleWalletSendCalls(

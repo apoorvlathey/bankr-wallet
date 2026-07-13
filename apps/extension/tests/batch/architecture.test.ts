@@ -113,7 +113,7 @@ test("pure encoding policy cannot reach wallet state or side effects", async () 
   );
   assert.doesNotMatch(
     source,
-    /chrome\.|fetch\(|from ["']\.\.\/(?:accountStorage|sessionCache|txHandlers|localSigner|bankrApi|pendingBatchTxStorage|bundleStatusStorage)["']/,
+    /chrome\.|fetch\(|from ["']\.\.\/(?:accountStorage|sessionCache|txHandlers|localSigner|bankr(?:Api|\/[^"']+)|pendingBatchTxStorage|bundleStatusStorage)["']/,
   );
   assert.match(source, /from ["']\.\.\/transactionValidation["']/);
 });
@@ -197,7 +197,7 @@ test("status and pending-call controls cannot reach credentials or signing", asy
   );
   assert.doesNotMatch(
     source,
-    /from ["']\.\.\/(?:txHandlers|sessionCache|authHandlers|vaultCrypto|mnemonicStorage|localSigner|bankrApi|delegationStorage)["']/,
+    /from ["']\.\.\/(?:txHandlers|sessionCache|authHandlers|vaultCrypto|mnemonicStorage|localSigner|bankr(?:Api|\/[^"']+)|delegationStorage)["']/,
   );
   assert.doesNotMatch(source, /privateKey|apiKey|mnemonic|password/i);
   assert.match(source, /from ["']\.\.\/transactions\/runtime["']/);
@@ -212,7 +212,7 @@ test("wallet_sendCalls intake preserves its facade identity and focused boundary
   assert.equal(facade.handleWalletSendCalls, intake.handleWalletSendCalls);
   assert.doesNotMatch(
     source,
-    /from ["']\.\.\/(?:txHandlers|localSigner|sessionCache|authHandlers|vaultCrypto|mnemonicStorage|bankrApi)["']/,
+    /from ["']\.\.\/(?:txHandlers|localSigner|sessionCache|authHandlers|vaultCrypto|mnemonicStorage|bankr(?:Api|\/[^"']+))["']/,
   );
   assert.match(source, /capturePendingRequestAuthorizationCommitSnapshot/);
   assert.match(source, /removePendingBatchTxRequest/);
@@ -292,4 +292,112 @@ test("atomic EIP-7702 execution keeps authorization and sign-once ordering toget
   assert.ok(finalTransportAt > broadcastAt);
   assert.match(source, /trackCompletion/);
   assert.doesNotMatch(source, /getPrivateKeyFromCache|decryptAllKeys/);
+});
+
+test("batch facade preserves remaining focused implementation identities", async () => {
+  const [facade, capabilities, local] = await Promise.all([
+    import("../../src/chrome/batchTxHandlers"),
+    import("../../src/chrome/batch/batchCapabilities"),
+    import("../../src/chrome/batch/batchLocalCoordinator"),
+  ]);
+  assert.equal(
+    facade.handleWalletGetCapabilities,
+    capabilities.handleWalletGetCapabilities,
+  );
+  assert.equal(
+    facade.handleConfirmBatchTransactionPK,
+    local.handleConfirmBatchTransactionPK,
+  );
+  assert.equal(
+    facade.processBatchTransactionAtomic7702InBackground,
+    local.processBatchTransactionAtomic7702InBackground,
+  );
+});
+
+test("batch facade and focused modules remain one-way and audit-sized", async () => {
+  const budgets: Record<string, number> = {
+    "batchTxHandlers.ts": 50,
+    "batch/batchCapabilities.ts": 170,
+    "batch/batchCompletionTracking.ts": 220,
+    "batch/batchLocalAuthorization.ts": 60,
+    "batch/batchLocalCoordinator.ts": 120,
+    "batch/batchSingleExecution.ts": 200,
+  };
+  for (const [name, maximumLines] of Object.entries(budgets)) {
+    const source = await readFile(
+      new URL(`../../src/chrome/${name}`, import.meta.url),
+      "utf8",
+    );
+    assert.ok(
+      source.split("\n").length <= maximumLines,
+      `${name} exceeds its ${maximumLines}-line audit budget`,
+    );
+    if (name !== "batchTxHandlers.ts") {
+      assert.doesNotMatch(
+        source,
+        /(?:from\s+|import\()["'](?:[^"']*\/)?batchTxHandlers["']/,
+      );
+    }
+  }
+  const facade = await readFile(
+    new URL("../../src/chrome/batchTxHandlers.ts", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(facade, /(?:async\s+)?function\s+/);
+  assert.doesNotMatch(
+    facade,
+    /getCached|privateKey|submitTransactionDirect|signAndBroadcast|beginPendingRequestEffectLease/,
+  );
+});
+
+test("capabilities reject an address that is not the connected account before probing chains", async () => {
+  const { handleWalletGetCapabilities } = await import(
+    "../../src/chrome/batch/batchCapabilities"
+  );
+  assert.deepEqual(
+    await handleWalletGetCapabilities(TARGET_A, undefined, {
+      id: "bankr-1",
+      type: "bankr",
+      address: TARGET_B,
+      createdAt: 1,
+    }),
+    {},
+  );
+});
+
+test("local batch effects retain final account authorization and completion ownership", async () => {
+  const [authorization, single, coordinator] = await Promise.all([
+    readFile(
+      new URL(
+        "../../src/chrome/batch/batchLocalAuthorization.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/chrome/batch/batchSingleExecution.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/chrome/batch/batchLocalCoordinator.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ]);
+  const accountCheck = authorization.indexOf("getAccountById(");
+  const transportCheck = authorization.indexOf(
+    "enforcePendingRequestAuthorizationAtConfirmation(",
+  );
+  const effect = authorization.indexOf("beginEffect();");
+  assert.ok(accountCheck >= 0 && transportCheck > accountCheck);
+  assert.ok(effect > transportCheck);
+  assert.match(single, /authorizePendingLocalBatchBroadcast/);
+  assert.match(single, /trackAtomicBundleCompletion/);
+  assert.match(coordinator, /trackNonAtomicBundleCompletion/);
+  assert.match(coordinator, /trackAtomicBundleCompletion/);
 });

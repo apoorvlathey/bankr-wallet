@@ -5,7 +5,7 @@
  * and permission broadcasts remain in the injected domain functions.
  */
 
-import type * as PendingRequestResolutionModule from "../pendingRequestResolution";
+import type * as PendingRequestResolutionModule from "../requests/pendingRequestResolution";
 
 export const BACKGROUND_DAPP_PERMISSION_MESSAGE_TYPES = [
   "getDappAccounts",

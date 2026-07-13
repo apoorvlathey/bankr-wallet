@@ -1,0 +1,158 @@
+/**
+ * Persistent storage for pending batch transaction requests (ERC-5792)
+ * Mirrors pendingTxStorage.ts pattern
+ */
+
+import type { PendingBatchTxRequest, PinnedBatchTxRequest } from "../erc5792Types";
+import { bindPendingBankrCredential } from "../bankr/credentialBinding";
+import { withStorageLock } from "../storageLock";
+
+const STORAGE_KEY = "pendingBatchTxRequests";
+const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
+const TX_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
+const MAX_PENDING_BATCH_REQUESTS = 20;
+const MAX_PENDING_BATCH_REQUESTS_PER_ORIGIN = 5;
+
+export async function getPendingBatchTxRequests(): Promise<PendingBatchTxRequest[]> {
+  const data = await chrome.storage.local.get(STORAGE_KEY);
+  return data[STORAGE_KEY] || [];
+}
+
+export async function savePendingBatchTxRequest(
+  request: PinnedBatchTxRequest,
+): Promise<void> {
+  await clearExpiredBatchTxRequests();
+  const boundRequest = await bindPendingBankrCredential(request);
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingBatchTxRequests();
+    if (requests.some((pending) => pending.id === request.id)) {
+      throw new Error("Batch request already exists");
+    }
+    if (requests.length >= MAX_PENDING_BATCH_REQUESTS) {
+      throw new Error("Too many pending batch requests");
+    }
+    if (
+      requests.filter((pending) => pending.origin === request.origin).length >=
+      MAX_PENDING_BATCH_REQUESTS_PER_ORIGIN
+    ) {
+      throw new Error("This site has too many pending batch requests");
+    }
+    requests.push(boundRequest);
+    await chrome.storage.local.set({ [STORAGE_KEY]: requests });
+  });
+  const { updateBadge } = await import("./pendingTxStorage");
+  await updateBadge();
+}
+
+export async function removePendingBatchTxRequest(bundleId: string): Promise<void> {
+  await withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingBatchTxRequests();
+    const filtered = requests.filter((r) => r.id !== bundleId);
+    await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  });
+  const { updateBadge } = await import("./pendingTxStorage");
+  await updateBadge();
+}
+
+export async function getPendingBatchTxRequestById(
+  bundleId: string,
+): Promise<PendingBatchTxRequest | null> {
+  const requests = await getPendingBatchTxRequests();
+  return requests.find((r) => r.id === bundleId) || null;
+}
+
+/**
+ * Replace one call's `data` field in a pending batch request. Used by the
+ * batch confirmation UI when the user edits a built-in field (e.g. an ERC-20
+ * approve amount) — we re-encode that call's calldata and persist it back so
+ * the downstream sign paths (Bankr ERC-7821, PK/Seed auto-sequential, and any
+ * future EIP-7702 atomic path) read the edited value at sign time without any
+ * per-handler plumbing. Simulation + gas re-run automatically because the
+ * popup's storage listener re-pushes the updated PendingBatchTxRequest into
+ * BatchTransactionConfirmation, whose synthetic batch tx is memoized on
+ * `params.calls`.
+ */
+export async function updateCallInPendingBatchTxRequest(
+  bundleId: string,
+  callIndex: number,
+  newData: string,
+): Promise<{ success: boolean; error?: string }> {
+  return withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingBatchTxRequests();
+    const idx = requests.findIndex((r) => r.id === bundleId);
+    if (idx === -1) return { success: false, error: "Batch not found" };
+
+    const target = requests[idx];
+    const calls = target.params.calls ?? [];
+    if (callIndex < 0 || callIndex >= calls.length) {
+      return { success: false, error: "Call index out of range" };
+    }
+    if (!/^0x[0-9a-fA-F]*$/.test(newData)) {
+      return { success: false, error: "Invalid calldata hex" };
+    }
+
+    const nextCalls = calls.map((c, i) =>
+      i === callIndex ? { ...c, data: newData as `0x${string}` } : c,
+    );
+    const updated: PendingBatchTxRequest = {
+      ...target,
+      params: { ...target.params, calls: nextCalls },
+    };
+    const next = [...requests];
+    next[idx] = updated;
+    await chrome.storage.local.set({ [STORAGE_KEY]: next });
+    return { success: true };
+  });
+}
+
+/**
+ * Remove a single call from a pending batch request's `params.calls` array.
+ * Returns the remaining call count (0 means the caller should drop the bundle
+ * entirely — an empty batch is meaningless and we never want to ship one).
+ */
+export async function removeCallFromPendingBatchTxRequest(
+  bundleId: string,
+  callIndex: number,
+): Promise<{ found: boolean; remainingCalls: number }> {
+  return withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingBatchTxRequests();
+    const idx = requests.findIndex((r) => r.id === bundleId);
+    if (idx === -1) return { found: false, remainingCalls: 0 };
+
+    const target = requests[idx];
+    const calls = target.params.calls ?? [];
+    if (callIndex < 0 || callIndex >= calls.length) {
+      return { found: true, remainingCalls: calls.length };
+    }
+
+    const nextCalls = calls.filter((_, i) => i !== callIndex);
+    const updated: PendingBatchTxRequest = {
+      ...target,
+      params: { ...target.params, calls: nextCalls },
+    };
+    const next = [...requests];
+    next[idx] = updated;
+    await chrome.storage.local.set({ [STORAGE_KEY]: next });
+    return { found: true, remainingCalls: nextCalls.length };
+  });
+}
+
+export async function clearExpiredBatchTxRequests(): Promise<void> {
+  const expiredBefore = Date.now() - TX_EXPIRY_MS;
+  const expired = (await getPendingBatchTxRequests()).filter(
+    (request) => request.timestamp <= expiredBefore,
+  );
+  if (expired.length === 0) return;
+  const { expirePersistedPendingRequest } = await import(
+    "./pendingRequestExpiry"
+  );
+  await Promise.all(
+    expired.map((request) =>
+      expirePersistedPendingRequest(
+        "batchTransaction",
+        request.id,
+        expiredBefore,
+      ),
+    ),
+  );
+}

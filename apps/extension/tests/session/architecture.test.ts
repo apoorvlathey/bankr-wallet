@@ -64,13 +64,26 @@ test("in-memory cache preserves timeout, cross-clear, and timestamp semantics", 
   }
 });
 
-test("session layers have one-way dependencies and the facade stays thin", async () => {
+test("session layers have one-way dependencies and the facade is export-only", async () => {
   const readModule = (name: string) =>
     readFile(new URL(`../../src/chrome/${name}`, import.meta.url), "utf8");
-  const [state, autoLock, persistence, facade] = await Promise.all([
+  const [
+    state,
+    autoLock,
+    persistence,
+    cacheAccess,
+    teardown,
+    timeoutTransitions,
+    restoration,
+    facade,
+  ] = await Promise.all([
     readModule("session/inMemoryCache.ts"),
     readModule("session/autoLockPolicy.ts"),
     readModule("session/persistence.ts"),
+    readModule("session/cacheAccess.ts"),
+    readModule("session/teardown.ts"),
+    readModule("session/timeoutTransitions.ts"),
+    readModule("session/restoration.ts"),
     readModule("sessionCache.ts"),
   ]);
 
@@ -89,35 +102,64 @@ test("session layers have one-way dependencies and the facade stays thin", async
   );
   assert.match(persistence, /from "\.\/storage"/);
 
+  assert.match(cacheAccess, /from "\.\/autoLockPolicy"/);
+  assert.match(cacheAccess, /from "\.\/inMemoryCache"/);
+  assert.doesNotMatch(
+    cacheAccess,
+    /chrome\.|from "\.\/(?:persistence|restoration|teardown|timeoutTransitions)"|from "\.\.\/(?:authTransition|authHandlers)"/,
+  );
+
+  assert.match(teardown, /from "\.\/inMemoryCache"/);
+  assert.match(teardown, /from "\.\/persistence"/);
+  assert.doesNotMatch(
+    teardown,
+    /from "\.\/(?:autoLockPolicy|cacheAccess|restoration|timeoutTransitions)"|from "\.\.\/(?:authTransition|authHandlers)"/,
+  );
+
+  assert.match(timeoutTransitions, /from "\.\.\/authTransition"/);
+  assert.match(timeoutTransitions, /from "\.\/autoLockPolicy"/);
+  assert.match(timeoutTransitions, /from "\.\/cacheAccess"/);
+  assert.match(timeoutTransitions, /from "\.\/inMemoryCache"/);
+  assert.match(timeoutTransitions, /from "\.\/persistence"/);
+  assert.match(timeoutTransitions, /from "\.\/teardown"/);
+
+  assert.match(restoration, /from "\.\.\/authTransition"/);
+  assert.match(restoration, /from "\.\/autoLockPolicy"/);
+  assert.match(restoration, /from "\.\/cacheAccess"/);
+  assert.match(restoration, /from "\.\/inMemoryCache"/);
+  assert.match(restoration, /from "\.\/persistence"/);
+  assert.match(restoration, /from "\.\/teardown"/);
+  assert.doesNotMatch(timeoutTransitions, /authHandlers|sessionCache|restoration/);
+  assert.doesNotMatch(restoration, /authHandlers|sessionCache|timeoutTransitions/);
+
   for (const dependency of [
-    "session/inMemoryCache",
     "session/autoLockPolicy",
+    "session/cacheAccess",
+    "session/inMemoryCache",
     "session/persistence",
-    "authTransition",
+    "session/restoration",
+    "session/teardown",
+    "session/timeoutTransitions",
   ]) {
     assert.match(facade, new RegExp(`from "\\./${dependency}"`));
   }
   assert.doesNotMatch(
     facade,
-    /let cached(?:ApiKey|Password|Vault|VaultKey|MnemonicKey|PasswordType)/,
-    "the compatibility facade must not regain ownership of secret state",
+    /\b(?:import|function|async function|chrome\.|crypto\.|console\.)\b/,
+    "the compatibility facade must contain exports only",
   );
-  assert.doesNotMatch(facade, /crypto\.subtle|sessionEncKey/);
+  assert.ok(facade.split("\n").length <= 65);
 
   const chromeDirectory = new URL("../../src/chrome/", import.meta.url);
   const chromeModules = (await readdir(chromeDirectory)).filter((name) =>
     name.endsWith(".ts"),
   );
   for (const name of chromeModules) {
-    if (
-      name === "sessionCache.ts"
-    ) {
-      continue;
-    }
+    if (name === "sessionCache.ts") continue;
     const source = await readModule(name);
     assert.doesNotMatch(
       source,
-      /from "\.\/session\/(?:inMemoryCache|autoLockPolicy|persistence|storage)"/,
+      /from "\.\/session\/(?:inMemoryCache|autoLockPolicy|cacheAccess|persistence|restoration|storage|teardown|timeoutTransitions)"/,
       `${name} must use the stable sessionCache facade`,
     );
   }
@@ -199,6 +241,7 @@ test("sessionCache preserves its public runtime API through delegation", async (
       "isApiKeyCached",
       "isWalletUnlocked",
       "resolvePasswordType",
+      "revokePersistedSessionRecoveryKey",
       "setAutoLockTimeout",
       "setCachedApiKey",
       "setCachedApiKeyDirect",
@@ -224,6 +267,11 @@ test("sessionCache preserves its public runtime API through delegation", async (
       facade.storeSessionAtomic,
       persistence.storeSessionAtomic,
       "persistence remains a direct compatibility re-export",
+    );
+    assert.equal(
+      facade.revokePersistedSessionRecoveryKey,
+      persistence.revokePersistedSessionRecoveryKey,
+      "session recovery-half revocation remains a direct compatibility re-export",
     );
     assert.equal(
       facade.setCachedVault,

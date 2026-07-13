@@ -18,7 +18,7 @@ import {
   ChevronDownIcon,
   ExternalLinkIcon,
 } from "@chakra-ui/icons";
-import type { PortfolioToken } from "@/chrome/portfolioApi";
+import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { TokenInfo } from "@/chrome/swapApi";
 import type { SwapTxEntry } from "@/chrome/txHandlers";
 import { getChainConfig } from "@/constants/chainConfig";

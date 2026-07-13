@@ -48,7 +48,7 @@ test("sponsored transfer recovery stores only an encrypted one-time authorizatio
   try {
     const [cryptoModule, storage] = await Promise.all([
       import("../../src/chrome/crypto"),
-      import("../../src/chrome/sponsoredTransferIntentStorage"),
+      import("../../src/chrome/sponsoredTransfers/intentStorage"),
     ]);
     const vaultKey = await cryptoModule.importVaultKey(
       new Uint8Array(32).fill(7),
@@ -223,18 +223,41 @@ test("sponsored transfer recovery stores only an encrypted one-time authorizatio
 });
 
 test("sponsored transfer submission persists the encrypted authorization before the relayer request", async () => {
-  const source = await readFile(
-    new URL("../../src/chrome/sponsoredTransferHandlers.ts", import.meta.url),
-    "utf8",
+  const [authorization, handlers, submission] = await Promise.all([
+    readFile(
+      new URL(
+        "../../src/chrome/sponsoredTransfers/authorization.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/chrome/sponsoredTransfers/handlers.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/chrome/sponsoredTransfers/submission.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ]);
+  assert.match(authorization, /encryptWithVaultKey\(/);
+  const authorizeIndex = handlers.indexOf(
+    "createSponsoredTransferAuthorization({",
   );
-  const encryptIndex = source.indexOf("encryptWithVaultKey(");
-  const saveIndex = source.indexOf("saveSponsoredTransferIntent(record)");
-  const postIndex = source.indexOf("request = fetchTextBounded(");
-  assert.ok(encryptIndex >= 0);
-  assert.ok(saveIndex > encryptIndex);
-  assert.ok(postIndex > saveIndex);
+  const saveIndex = handlers.indexOf("saveSponsoredTransferIntent(record)");
+  const submitIndex = handlers.indexOf("submitSponsoredTransfer(");
+  assert.ok(authorizeIndex >= 0);
+  assert.ok(saveIndex > authorizeIndex);
+  assert.ok(submitIndex > saveIndex);
+  assert.match(submission, /request = fetchTextBounded\(/);
   assert.match(
-    source,
+    submission,
     /catch \(error\)[\s\S]*updateSponsoredTransferIntent\(record\.id,[\s\S]*state: "ambiguous"[\s\S]*outcomeUncertain: true/,
   );
 });

@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Box, Button, Flex, Heading, HStack, Icon, Text, VStack } from "@chakra-ui/react";
 import type { Account } from "@/chrome/types";
-import type { PendingDappConnectionRequest } from "@/chrome/dappPermissionStorage";
+import type { PendingDappConnectionRequest } from "@/chrome/requests/dappPermissionStorage";
 import DappConnectionAccountSelector from "@/components/DappConnectionAccountSelector";
 import { ConfirmationScreen } from "@/components/ui";
 import { googleFaviconUrl } from "@/constants/externalUrls";

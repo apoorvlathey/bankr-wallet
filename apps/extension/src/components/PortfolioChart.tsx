@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Box, HStack, Text, Skeleton } from "@chakra-ui/react";
-import { getSnapshots } from "@/chrome/portfolioSnapshotStorage";
+import { getSnapshots } from "@/chrome/portfolio/snapshotStorage";
 import { isDarkThemeId, useTheme } from "@/theme";
 import { formatAbsoluteTimestamp } from "@/lib/timeFormatUtils";
 import PortfolioChartDither from "@/components/PortfolioChartDither";

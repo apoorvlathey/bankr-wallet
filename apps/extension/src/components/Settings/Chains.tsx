@@ -25,7 +25,7 @@ import {
 } from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { NetworksInfo } from "@/types";
-import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
+import type { PendingAddChainRequest } from "@/chrome/requests/pendingAddChainStorage";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import ChainIcon from "@/components/ChainIcon";
 import EditChain from "./EditChain";

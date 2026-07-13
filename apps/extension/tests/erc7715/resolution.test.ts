@@ -6,7 +6,7 @@ import type { Erc7715PermissionResult } from "../../src/chrome/pendingErc7715Per
 import {
   resetPendingRequestResolutionClaimsForTests,
   runWalletResetAgainstPendingResolutions,
-} from "../../src/chrome/pendingRequestResolution";
+} from "../../src/chrome/requests/pendingRequestResolution";
 
 function deferred(): {
   promise: Promise<void>;

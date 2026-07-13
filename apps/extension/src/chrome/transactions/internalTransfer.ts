@@ -1,7 +1,7 @@
 import { getActiveAccount } from "../accountStorage";
-import type { TransactionParams } from "../bankrApi";
-import { savePendingTxRequest } from "../pendingTxStorage";
-import { pinnedTxRequest } from "../pinnedRequest";
+import type { TransactionParams } from "../bankr/submission";
+import { savePendingTxRequest } from "../requests/pendingTxStorage";
+import { pinnedTxRequest } from "../requests/pinnedRequest";
 import { getRpcUrl } from "./rpcConfig";
 
 /** Creates a pinned confirmation request for an extension-initiated transfer. */

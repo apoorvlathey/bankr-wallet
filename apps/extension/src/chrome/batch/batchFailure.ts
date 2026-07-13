@@ -1,9 +1,9 @@
-import { updateBundleStatus } from "../bundleStatusStorage";
+import { updateBundleStatus } from "./bundleStatusStorage";
 import { BUNDLE_STATUS } from "../erc5792Types";
 import type { PendingBatchTxRequest } from "../erc5792Types";
 import { writeResultToStorage } from "../transactions/runtime";
 import { updateTxInHistory } from "../txHistoryStorage";
-import { showNotification } from "../txHandlers";
+import { showNotification } from "../transactions/notification";
 
 export async function handleBatchFailure(
   bundleId: string,

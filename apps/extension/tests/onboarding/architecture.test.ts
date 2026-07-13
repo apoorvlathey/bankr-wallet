@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 const readChromeModule = (name: string) =>
@@ -8,29 +8,29 @@ const readChromeModule = (name: string) =>
 test("onboarding separates state recovery, lifecycle, and first credential commit", async () => {
   const [facade, state, lifecycle, credential] = await Promise.all([
     readChromeModule("onboardingInitialization.ts"),
-    readChromeModule("onboardingInitializationState.ts"),
-    readChromeModule("onboardingInitializationLifecycle.ts"),
-    readChromeModule("onboardingCredentialInitialization.ts"),
+    readChromeModule("onboarding/state.ts"),
+    readChromeModule("onboarding/lifecycle.ts"),
+    readChromeModule("onboarding/credential.ts"),
   ]);
 
   assert.match(facade, /Stable facade/);
   assert.doesNotMatch(facade, /chrome\.|crypto\.|\b(?:async )?function\b/);
   assert.doesNotMatch(
     state,
-    /from ["'].\/(?:onboardingInitializationLifecycle|onboardingCredentialInitialization)["']/,
+    /from ["'].\/(?:lifecycle|credential)["']/,
   );
-  assert.match(lifecycle, /from ["'].\/onboardingInitializationState["']/);
+  assert.match(lifecycle, /from ["'].\/state["']/);
   assert.doesNotMatch(lifecycle, /encryptVaultKey|generateVaultKey|importVaultKey/);
-  assert.match(credential, /from ["'].\/onboardingInitializationState["']/);
-  assert.doesNotMatch(credential, /onboardingInitializationLifecycle/);
+  assert.match(credential, /from ["'].\/state["']/);
+  assert.doesNotMatch(credential, /from ["'].\/lifecycle["']/);
 });
 
 test("onboarding facade preserves exact implementation identities", async () => {
   const [facade, state, lifecycle, credential] = await Promise.all([
     import("../../src/chrome/onboardingInitialization"),
-    import("../../src/chrome/onboardingInitializationState"),
-    import("../../src/chrome/onboardingInitializationLifecycle"),
-    import("../../src/chrome/onboardingCredentialInitialization"),
+    import("../../src/chrome/onboarding/state"),
+    import("../../src/chrome/onboarding/lifecycle"),
+    import("../../src/chrome/onboarding/credential"),
   ]);
 
   assert.equal(
@@ -53,4 +53,22 @@ test("onboarding facade preserves exact implementation identities", async () => 
     facade.initializeOnboardingCredential,
     credential.initializeOnboardingCredential,
   );
+});
+
+test("onboarding root clutter is limited to the stable facade", async () => {
+  const entries = await readdir(
+    new URL("../../src/chrome/", import.meta.url),
+    { withFileTypes: true },
+  );
+  const rootModules = entries
+    .filter(
+      (entry) => entry.isFile() && entry.name.startsWith("onboarding"),
+    )
+    .map((entry) => entry.name)
+    .sort();
+  assert.deepEqual(rootModules, ["onboardingInitialization.ts"]);
+
+  const auditMap = await readChromeModule("onboarding/README.md");
+  assert.match(auditMap, /Dependency direction/);
+  assert.match(auditMap, /storage key and marker shape remain exactly/);
 });

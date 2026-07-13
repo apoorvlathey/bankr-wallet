@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { authorizeConnectedDappRequest } from "../../src/chrome/dappRequestPolicy";
+import { authorizeConnectedDappRequest } from "../../src/chrome/dapp/requestPolicy";
 
 const ACTUAL_ADDRESS = "0x1111111111111111111111111111111111111111";
 const UNCONNECTED_ADDRESS = "0x0000000000000000000000000000000000000000";

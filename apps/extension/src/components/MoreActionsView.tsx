@@ -19,7 +19,7 @@ import ConnectedDappsView from "@/components/ConnectedDappsView";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
 import { GlobeIcon } from "@/components/Settings/icons";
 import { useEffect, useState } from "react";
-import { fetchJsonBounded } from "@/chrome/boundedHttpResponse";
+import { fetchJsonBounded } from "@/chrome/network/boundedHttp";
 import {
   AppHeader,
   AppScreen,

@@ -1,5 +1,5 @@
 import { withStorageLock } from "../storageLock";
-import { serializedJsonLength } from "../providerRequestLimits";
+import { serializedJsonLength } from "../provider/limits";
 
 const STORAGE_KEY = "walletConnectPendingRequests";
 const CHAIN_STORAGE_KEY = "walletConnectChainId";

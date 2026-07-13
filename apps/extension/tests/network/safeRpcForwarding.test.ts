@@ -4,8 +4,8 @@ import test from "node:test";
 import {
   handleSafeRpcRequest,
   isSafeRpcForwardingMethod,
-} from "../../src/chrome/safeRpcForwarding";
-import { forwardSafeRpcRequest as forwardWalletConnectRpc } from "../../src/chrome/walletConnectRpcRequestHandlers";
+} from "../../src/chrome/network/safeRpcForwarding";
+import { forwardSafeRpcRequest as forwardWalletConnectRpc } from "../../src/chrome/walletConnect/rpcRequests";
 
 const RPC_URL = "https://rpc.example";
 

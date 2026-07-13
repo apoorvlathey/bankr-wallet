@@ -10,7 +10,7 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import { CheckIcon } from "@chakra-ui/icons";
-import type { PortfolioToken } from "@/chrome/portfolioApi";
+import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { TokenListEntry } from "@/chrome/swapApi";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import {

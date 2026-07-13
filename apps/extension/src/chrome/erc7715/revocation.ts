@@ -16,8 +16,8 @@ import {
   getErc7715PermissionGrantById,
   revokeErc7715PermissionGrant,
 } from "./grantStorage";
-import { getPendingTxRequests, savePendingTxRequest } from "../pendingTxStorage";
-import { pinnedTxRequest } from "../pinnedRequest";
+import { getPendingTxRequests, savePendingTxRequest } from "../requests/pendingTxStorage";
+import { pinnedTxRequest } from "../requests/pinnedRequest";
 
 export async function handleInitiateErc7715PermissionRevoke({
   accountId,

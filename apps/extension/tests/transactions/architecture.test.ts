@@ -18,6 +18,11 @@ test("txHandlers preserves focused transaction and signature identities", async 
     signatureConfirmation,
     localTransactionConfirmation,
     notifications,
+    bankrConfirmation,
+    requestActions,
+    directSwap,
+    batchSwap,
+    atomicSwap,
   ] = await Promise.all([
     import("../../src/chrome/txHandlers"),
     import("../../src/chrome/transactions/requestIntake"),
@@ -30,6 +35,11 @@ test("txHandlers preserves focused transaction and signature identities", async 
     import("../../src/chrome/signatures/confirmationHandlers"),
     import("../../src/chrome/transactions/localConfirmation"),
     import("../../src/chrome/transactions/notification"),
+    import("../../src/chrome/transactions/bankrConfirmation"),
+    import("../../src/chrome/transactions/requestActions"),
+    import("../../src/chrome/transactions/swaps/direct"),
+    import("../../src/chrome/transactions/swaps/batch"),
+    import("../../src/chrome/transactions/swaps/atomic"),
   ]);
 
   assert.equal(facade.handleTransactionRequest, intake.handleTransactionRequest);
@@ -61,13 +71,39 @@ test("txHandlers preserves focused transaction and signature identities", async 
     localTransactionConfirmation.handleConfirmTransactionAsyncPK,
   );
   assert.equal(facade.showNotification, notifications.showNotification);
+  assert.equal(
+    facade.handleConfirmTransaction,
+    bankrConfirmation.handleConfirmTransaction,
+  );
+  assert.equal(
+    facade.handleConfirmTransactionAsync,
+    bankrConfirmation.handleConfirmTransactionAsync,
+  );
+  assert.equal(
+    facade.handleRejectTransaction,
+    requestActions.handleRejectTransaction,
+  );
+  assert.equal(
+    facade.handleCancelTransaction,
+    requestActions.handleCancelTransaction,
+  );
+  assert.equal(
+    facade.handleCancelProcessingTx,
+    requestActions.handleCancelProcessingTx,
+  );
+  assert.equal(facade.handleExecuteSwapDirect, directSwap.handleExecuteSwapDirect);
+  assert.equal(facade.handleExecuteSwapBatch, batchSwap.handleExecuteSwapBatch);
+  assert.equal(
+    facade.handleExecuteSwapAtomicPK,
+    atomicSwap.handleExecuteSwapAtomicPK,
+  );
 });
 
 test("focused transaction modules stay one-way and audit-sized", async () => {
   const budgets: Record<string, number> = {
     "transactions/runtime.ts": 140,
     "transactions/requestIntake.ts": 300,
-    "extensionPopup.ts": 220,
+    "extensionPopup.ts": 20,
     "signatures/requestSigner.ts": 60,
     "transactions/accountMutations.ts": 240,
     "transactions/securityReset.ts": 100,
@@ -80,13 +116,25 @@ test("focused transaction modules stay one-way and audit-sized", async () => {
     "transactions/failure.ts": 100,
     "transactions/displayMetadata.ts": 160,
     "transactions/notification.ts": 80,
+    "transactions/bankrSession.ts": 60,
+    "transactions/bankrPolicy.ts": 80,
+    "transactions/bankrProcessing.ts": 180,
+    "transactions/bankrConfirmation.ts": 200,
+    "transactions/requestActions.ts": 100,
+    "transactions/swaps/types.ts": 60,
+    "transactions/swaps/accountPolicy.ts": 130,
+    "transactions/swaps/bankrLeg.ts": 180,
+    "transactions/swaps/localBroadcast.ts": 140,
+    "transactions/swaps/direct.ts": 320,
+    "transactions/swaps/batch.ts": 160,
+    "transactions/swaps/atomic.ts": 200,
   };
 
   for (const [name, maximumLines] of Object.entries(budgets)) {
     const source = await readModule(name);
     assert.doesNotMatch(
       source,
-      /from ["']\.\/txHandlers["']|import\(["']\.\/txHandlers["']\)/,
+      /(?:from\s+|import\()["'](?:[^"']*\/)?txHandlers["']/,
       `${name} must not import the compatibility facade`,
     );
     const lines = source.split("\n").length;
@@ -112,8 +160,8 @@ test("focused transaction modules stay one-way and audit-sized", async () => {
 
   const facade = await readModule("txHandlers.ts");
   assert.ok(
-    facade.split("\n").length <= 1_600,
-    "txHandlers.ts must keep shrinking as focused domains are extracted",
+    facade.split("\n").length <= 80,
+    "txHandlers.ts must remain an implementation-free compatibility facade",
   );
   assert.doesNotMatch(facade, /function handleTransactionRequest\(/);
   assert.doesNotMatch(facade, /function openExtensionPopup\(/);
@@ -129,4 +177,62 @@ test("focused transaction modules stay one-way and audit-sized", async () => {
   assert.doesNotMatch(facade, /function processLocalTransactionInBackground\(/);
   assert.doesNotMatch(facade, /function showNotification\(/);
   assert.doesNotMatch(facade, /function handleTransactionFailure\(/);
+  assert.doesNotMatch(facade, /(?:async\s+)?function\s+/);
+  assert.doesNotMatch(facade, /beginPendingRequestEffectLease/);
+  assert.doesNotMatch(facade, /signAndBroadcastTransaction/);
+  assert.doesNotMatch(facade, /submitTransactionDirect/);
+});
+
+test("swap coordinators preserve account locks and effect leases", async () => {
+  const [direct, batch, atomic] = await Promise.all([
+    readModule("transactions/swaps/direct.ts"),
+    readModule("transactions/swaps/batch.ts"),
+    readModule("transactions/swaps/atomic.ts"),
+  ]);
+
+  const directLock = direct.indexOf("resolveLockedSwapAccount(accountLock)");
+  const directValidation = direct.indexOf(
+    "validateLockedSwapTransactions(",
+    directLock,
+  );
+  const bankrCredential = direct.indexOf(
+    "getUnlockedBankrApiKey()",
+    directValidation,
+  );
+  const localPreparation = direct.indexOf(
+    "prepareLocalSwap(",
+    directValidation,
+  );
+  const localBroadcast = direct.indexOf(
+    "broadcastSwapTxLocal(",
+    localPreparation,
+  );
+  assert.ok(directLock >= 0 && directValidation > directLock);
+  assert.ok(bankrCredential > directValidation);
+  assert.ok(localPreparation > directValidation && localBroadcast > localPreparation);
+  assert.match(
+    direct,
+    /broadcastUncertain[\s\S]*Skipped because the previous transaction's broadcast is still unconfirmed/,
+  );
+
+  const batchBinding = batch.indexOf("bindPendingBankrCredential(");
+  const batchLease = batch.indexOf(
+    "beginPendingRequestEffectLease(",
+    batchBinding,
+  );
+  const batchEffect = batch.indexOf("void processSwapTxBankr(", batchLease);
+  assert.ok(batchBinding >= 0 && batchLease > batchBinding);
+  assert.ok(batchEffect > batchLease);
+
+  const atomicBinding = atomic.indexOf("pinnedBatchTxRequest(");
+  const atomicLease = atomic.indexOf(
+    "beginPendingRequestEffectLease(",
+    atomicBinding,
+  );
+  const atomicEffect = atomic.indexOf(
+    "void processBatchTransactionAtomic7702InBackground(",
+    atomicLease,
+  );
+  assert.ok(atomicBinding >= 0 && atomicLease > atomicBinding);
+  assert.ok(atomicEffect > atomicLease);
 });

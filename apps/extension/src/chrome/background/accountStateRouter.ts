@@ -18,7 +18,7 @@ import {
   activateBrowserTabAccount,
   resolveBrowserTabAccount,
   selectBrowserTabAccount,
-} from "../tabAccountResolver";
+} from "../accounts/tabResolver";
 import { isTrustedWalletUiSender } from "../trustedWalletUiSender";
 
 export const BACKGROUND_ACCOUNT_STATE_MESSAGE_TYPES = [

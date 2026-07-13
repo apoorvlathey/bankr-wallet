@@ -40,17 +40,19 @@ test("passkey codec, crypto, repository, and facade keep one-way dependencies", 
 
 test("private-key vault cryptography is storage- and session-independent", async () => {
   const [cryptoSource, facadeSource, cryptoModule, facade] = await Promise.all([
-    readChromeModule("privateKeyVaultCrypto.ts"),
+    readChromeModule("vault/entryCrypto.ts"),
     readChromeModule("vaultCrypto.ts"),
-    import("../../src/chrome/privateKeyVaultCrypto"),
+    import("../../src/chrome/vault/entryCrypto"),
     import("../../src/chrome/vaultCrypto"),
   ]);
 
   assert.doesNotMatch(
     cryptoSource,
-    /chrome\.|from ["'].\/(?:sessionCache|accountStorage|storageLock|masterAuthorization)["']/,
+    /chrome\.|from ["']\.\.\/(?:sessionCache|accountStorage|storageLock|masterAuthorization)["']/,
   );
-  assert.match(facadeSource, /from ["'].\/privateKeyVaultCrypto["']/);
+  assert.match(facadeSource, /from ["'].\/vault\/entryCrypto["']/);
+  assert.match(facadeSource, /from ["'].\/vault\/operations["']/);
+  assert.match(facadeSource, /from ["'].\/vault\/repository["']/);
   for (const name of [
     "encryptPrivateKey",
     "decryptPrivateKey",
@@ -63,8 +65,9 @@ test("private-key vault cryptography is storage- and session-independent", async
 });
 
 test("the background router delegates seed operations to focused handlers", async () => {
-  const [background, handlers] = await Promise.all([
-    readChromeModule("background.ts"),
+  const [background, accountRouter, handlers] = await Promise.all([
+    readChromeModule("background/composition/accountRoutes.ts"),
+    readChromeModule("background/accountManagementRouter.ts"),
     readChromeModule("mnemonic/accountHandlers.ts"),
   ]);
   assert.match(
@@ -73,23 +76,41 @@ test("the background router delegates seed operations to focused handlers", asyn
   );
   assert.match(
     background,
-    /import \{ previewSeedAddresses \} from ["'].\/mnemonic\/addressPreview["']/,
+    /import \{ previewSeedAddresses \} from ["']\.\.\/\.\.\/mnemonic\/addressPreview["']/,
   );
   assert.doesNotMatch(
     background,
     /async function resolveMasterMnemonicAccess\(/,
   );
   assert.match(
-    background,
-    /case "previewSeedAddresses": \{\s*void previewSeedAddresses\(message\)\.then\(sendResponse\);\s*return true;/,
+    accountRouter,
+    /case "previewSeedAddresses":\s*void dependencies\.previewSeedAddresses\(message\)\.then\(sendResponse\);\s*return HANDLED_ASYNC;/,
   );
   assert.match(
-    background,
-    /case "addSeedPhraseGroup": \{\s*void addSeedPhraseGroup\(message\)\.then\(sendResponse\);\s*return true;/,
+    accountRouter,
+    /case "addSeedPhraseGroup":\s*void dependencies\.addSeedPhraseGroup\(message\)\.then\(sendResponse\);\s*return HANDLED_ASYNC;/,
   );
   assert.match(
+    accountRouter,
+    /case "deriveSeedAccount":\s*void dependencies\.deriveSeedAccounts\(message\)\.then\(sendResponse\);\s*return HANDLED_ASYNC;/,
+  );
+  assert.doesNotMatch(
     background,
-    /case "deriveSeedAccount": \{\s*void deriveSeedAccounts\(message\)\.then\(sendResponse\);\s*return true;/,
+    /case "(?:previewSeedAddresses|addSeedPhraseGroup|deriveSeedAccount)":/,
+  );
+
+  const compositionStart = background.indexOf(
+    "createBackgroundAccountManagementMessageRouter({",
+  );
+  const compositionEnd = background.indexOf(
+    "createBackgroundSecretManagementMessageRouter({",
+    compositionStart,
+  );
+  assert.ok(compositionStart >= 0 && compositionEnd > compositionStart);
+  const composition = background.slice(compositionStart, compositionEnd);
+  assert.match(
+    composition,
+    /previewSeedAddresses,[\s\S]*addSeedPhraseGroup,[\s\S]*deriveSeedAccounts,/,
   );
   assert.doesNotMatch(background, /findImportableSeedCandidates|storeMnemonic\(/);
 });

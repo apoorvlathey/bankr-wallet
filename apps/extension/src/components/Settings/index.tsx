@@ -11,9 +11,9 @@ import {
   useDisclosure,
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
+import type { PendingAddChainRequest } from "@/chrome/requests/pendingAddChainStorage";
 
-import { clearChatHistory } from "@/chrome/chatStorage";
+import { clearChatHistory } from "@/chrome/bankr/chat/storage";
 import { isDarkThemeId, useStripTokens, useTheme } from "@/theme";
 import Chains from "./Chains";
 import ChangePassword from "./ChangePassword";

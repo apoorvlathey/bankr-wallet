@@ -1,7 +1,7 @@
 import type { Account } from "../types";
 import type { WalletGetCallsStatusResult } from "../erc5792Types";
 import { getAccountById } from "../accountStorage";
-import { isRequestSigningAccount } from "../pinnedRequest";
+import { isRequestSigningAccount } from "../requests/pinnedRequest";
 
 export interface TransactionResult {
   success: boolean;
@@ -28,7 +28,7 @@ export async function writeResultToStorage(
   await chrome.storage.local.set({ [key]: { result, timestamp: Date.now() } });
   try {
     const { completeWalletConnectRequestIfNeeded } = await import(
-      "../walletConnectHandlers"
+      "../walletConnect/resultBridge"
     );
     await completeWalletConnectRequestIfNeeded(
       key,

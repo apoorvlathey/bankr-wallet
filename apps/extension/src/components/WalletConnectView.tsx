@@ -15,7 +15,7 @@ import {
   WalletConnectRetryNoticeCard,
 } from "@/components/WalletConnectProposalNotice";
 import WalletConnectSessionsList from "@/components/WalletConnectSessionsList";
-import type { PendingAddChainRequest } from "@/chrome/pendingAddChainStorage";
+import type { PendingAddChainRequest } from "@/chrome/requests/pendingAddChainStorage";
 import type { Account } from "@/chrome/types";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import type { ResolvedChain } from "@/lib/chains";
