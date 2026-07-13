@@ -366,7 +366,7 @@ function UnlockScreen({
     pendingBatchCount +
     pendingPermissionCount;
   const pendingRequestLabel = pendingRequestCount > 0
-    ? `${pendingRequestCount} pending ${pendingRequestCount === 1 ? "request" : "requests"}`
+    ? `${pendingRequestCount} Pending ${pendingRequestCount === 1 ? "Request" : "Requests"}`
     : undefined;
   const mascotState = getUnlockMascotState({
     password,

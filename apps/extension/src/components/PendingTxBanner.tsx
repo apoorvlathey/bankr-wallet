@@ -98,26 +98,18 @@ function PendingTxBanner({
       transition={tokens.motion.transitionBase}
     >
       <HStack spacing={2}>
-        <Box
-          p={1}
-          bg="border.default"
-          borderRadius={tokens.radii.badge}
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
+        <BellIcon
+          boxSize={4}
+          ml={1}
           flexShrink={0}
-        >
-          <BellIcon
-            boxSize={3}
-            color="accent.highlight"
-            sx={{
-              animation: prefersReducedMotion
-                ? undefined
-                : "bell-ring 1.5s ease-in-out infinite",
-              transformOrigin: "top center",
-            }}
-          />
-        </Box>
+          color="accentFg.highlight"
+          sx={{
+            animation: prefersReducedMotion
+              ? undefined
+              : "bell-ring 1.5s ease-in-out infinite",
+            transformOrigin: "top center",
+          }}
+        />
         <Text
           flex="1"
           textAlign="center"
@@ -129,21 +121,11 @@ function PendingTxBanner({
         >
           {getLabel()}
         </Text>
-        {isDarkTheme ? (
-          <ChevronRightIcon boxSize={5} color="border.default" flexShrink={0} />
-        ) : (
-          <Box
-            bg="border.default"
-            p={0.5}
-            borderRadius={tokens.radii.badge}
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            flexShrink={0}
-          >
-            <ChevronRightIcon boxSize={3.5} color="accent.highlight" />
-          </Box>
-        )}
+        <ChevronRightIcon
+          boxSize={5}
+          color="accentFg.highlight"
+          flexShrink={0}
+        />
       </HStack>
     </Box>
   );

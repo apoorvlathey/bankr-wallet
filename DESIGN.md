@@ -228,6 +228,11 @@
   labels, retained inline errors, 40–44px icon/action targets, intent-token
   colors, and text-plus-icon factor-removal warnings. Manual WebAuthn and
   screen-reader verification remain release checks.
+- 2026-07-14 unlock pending-request audit: passes the Warm Midnight hierarchy
+  with a lifted shadowless graphite surface, a soft rounded frame, the homepage
+  banner's bare-bell / centered-label / chevron geometry, a repeating
+  reduced-motion-safe ring, and clean popup and compact reflow previews in both
+  themes.
 
 ## Changelog
 
@@ -312,3 +317,7 @@
 - 2026-07-13: established the extension renderer's feature-domain contract,
   compatibility-facade migration pattern, effect/model boundaries, audit maps,
   and ratcheting source-size tests without changing the approved visual system.
+- 2026-07-14: replaced the unlock screen's warning-like pending-request banner
+  with a lifted graphite notice below the header that mirrors the homepage
+  banner's horizontal icon/label/chevron rhythm while keeping the mascot,
+  credential prompt, and Unlock action dominant.

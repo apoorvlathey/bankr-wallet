@@ -1,7 +1,7 @@
 # Warm Midnight Surface Handoff
 
 > Status: active screen-by-screen brand review
-> Last updated: 2026-07-11
+> Last updated: 2026-07-14
 > Scope: WalletChan browser-extension presentation and interaction only
 
 This is the practical handoff document for continuing the Warm Midnight UI
@@ -181,6 +181,12 @@ The unlock screen is the first completed Warm Midnight brand surface.
 - Remove the local-decryption/trust-information box from this screen.
 - The primary Unlock action uses the amber brand treatment.
 - Keep biometric unlock as the secondary large action when configured.
+- Pending requests use a lifted graphite notice directly below the header.
+  Its soft subtle frame retains the rounded unlock-screen treatment, while its
+  spacing and placement mirror the homepage pending-request banner: a bare
+  ringing bell at left, one centered label, and a bare chevron at right. The
+  unlock version stays graphite instead of using the homepage's full amber
+  fill, and stays still when reduced motion is requested.
 - `Forgot password?` appears only after an incorrect password.
 - An incorrect-password label occupies a reserved position at the input's top
   right so the rest of the layout does not move.
@@ -621,3 +627,7 @@ in the same workstream so the next chat does not depend on conversation history.
 - 2026-07-11: created the Warm Midnight surface handoff from the approved
   unlock, homepage identity, dapp, portfolio, asset-row, aggregation, and
   connected-dapp decisions; recorded Positions as the next review surface.
+- 2026-07-14: refined the unlock pending-request state into a lifted graphite
+  notice below the header, matching the homepage banner's bell/centered-label/
+  chevron geometry while retaining a graphite surface and reduced-motion-safe
+  repeating ring.

@@ -310,9 +310,9 @@ function UnlockScenarioPreview({ scenario }: { scenario: string }) {
       <UnlockScreen
         onUnlock={noop}
         pendingTxCount={pendingCount}
-        pendingSignatureCount={pendingCount}
-        pendingBatchCount={pendingCount}
-        pendingPermissionCount={pendingCount}
+        pendingSignatureCount={0}
+        pendingBatchCount={0}
+        pendingPermissionCount={0}
       />
     );
   }

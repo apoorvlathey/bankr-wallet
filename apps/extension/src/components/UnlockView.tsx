@@ -15,10 +15,13 @@ import {
   ModalHeader,
   ModalOverlay,
   Text,
+  usePrefersReducedMotion,
   VStack,
 } from "@chakra-ui/react";
+import { keyframes } from "@emotion/react";
 import {
   BellIcon,
+  ChevronRightIcon,
   LockIcon,
   ViewIcon,
   ViewOffIcon,
@@ -100,6 +103,53 @@ const UnlockMascotSpotlight = ({ state }: { state: UnlockMascotState }) => (
   </Box>
 );
 
+const pendingBellRing = keyframes`
+  0%, 5%, 42%, 100% { transform: rotate(0deg); }
+  10% { transform: rotate(14deg); } 16% { transform: rotate(-12deg); }
+  22% { transform: rotate(9deg); } 28% { transform: rotate(-7deg); }
+  34% { transform: rotate(4deg); } 39% { transform: rotate(-2deg); }
+`;
+
+const PendingUnlockNotice = ({ label }: { label: string }) => {
+  const prefersReducedMotion = usePrefersReducedMotion();
+  return (
+    <HStack
+      role="status"
+      aria-label={`${label}. Unlock to review.`}
+      w="full" maxW="360px" mx="auto"
+      px={3} py={1.5} spacing={2}
+      bg="surface.raisedHover"
+      borderWidth="1px"
+      borderColor="border.subtle"
+      borderRadius="lg"
+    >
+      <BellIcon
+        boxSize={4}
+        ml={1}
+        flexShrink={0}
+        color="accent.highlight"
+        aria-hidden="true"
+        transformOrigin="50% 18%"
+        animation={
+          prefersReducedMotion
+            ? undefined
+            : `${pendingBellRing} 2.2s cubic-bezier(0.77, 0, 0.175, 1) 180ms infinite`
+        }
+      />
+      <Text
+        flex="1"
+        textAlign="center"
+        color="fg.primary"
+        fontSize="xs"
+        fontWeight="600"
+      >
+        {label}
+      </Text>
+      <ChevronRightIcon boxSize={5} color="fg.secondary" flexShrink={0} />
+    </HStack>
+  );
+};
+
 export default function UnlockView({
   password,
   showPassword,
@@ -157,28 +207,21 @@ export default function UnlockView({
       <ScreenBody
         display="flex"
         flexDirection="column"
-        justifyContent="center"
         px={5}
-        py={6}
+        py={4}
       >
-        <VStack w="full" maxW="360px" mx="auto" spacing={5} align="stretch">
-          {pendingRequestLabel && (
-            <HStack
-              role="status"
-              px={3}
-              py={2.5}
-              borderWidth="1px"
-              borderColor="status.warning.border"
-              borderRadius="md"
-              bg="status.warning.bg"
-              color="status.warning.fg"
-              spacing={2.5}
-            >
-              <BellIcon aria-hidden="true" />
-              <Text fontSize="sm" fontWeight="600">{pendingRequestLabel}</Text>
-            </HStack>
-          )}
+        {pendingRequestLabel && <PendingUnlockNotice label={pendingRequestLabel} />}
 
+        <VStack
+          w="full"
+          maxW="360px"
+          mx="auto"
+          flex="1 0 auto"
+          justify="center"
+          spacing={5}
+          align="stretch"
+          py={6}
+        >
           <UnlockMascotSpotlight state={mascotState} />
 
           <Box
