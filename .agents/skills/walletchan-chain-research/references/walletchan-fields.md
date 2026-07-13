@@ -14,7 +14,9 @@ Use this reference after collecting live facts.
 - `isOpStack`: true only when the chain is actually OP Stack/Superchain. Do not infer from ETH gas token.
 - `supportsFlashblocks`, `supportsSyncSend`, `usesNonStandardGasModel`: set only when the chain-specific behavior is known and the repo already has logic for it.
 - `isBankrSupported`: true only when the user confirms Bankr support or Bankr/API docs prove it. Bankr support is independent of 0x/Bungee support.
-- `isSwapSupported`: true when 0x Swap API supports the chain. Also add the chain ID to `ZEROX_SUPPORTED_CHAIN_IDS`.
+- `isSwapSupported`: true only when the exact chain ID has a checked Swap API
+  cell in 0x's **Swap and Gasless APIs** table. `ZEROX_SUPPORTED_CHAIN_IDS` is
+  derived from these registry flags.
 - `isEip7702Supported`: true only when WalletChan's default delegate is usable on that chain, not merely when the protocol supports EIP-7702.
 - `coingeckoTokenId`: native token price ID. ETH-gas chains often use `ethereum`, but verify if native token differs.
 - `coingeckoPlatformId`: CoinGecko asset platform ID used for token prices/logos. Verify from `https://api.coingecko.com/api/v3/asset_platforms`.
@@ -25,11 +27,18 @@ Use this reference after collecting live facts.
 
 Primary source: `https://docs.0x.org/docs/introduction/supported-chains`.
 
-Update all local allowlists that duplicate 0x support:
+Read only the **Swap and Gasless APIs** table for this decision. Match the
+numeric chain ID and require `✅` in the **Swap API** column. Do not accept a
+page-wide name/ID match: the same page has a separate Cross-Chain API table,
+and a chain can appear there without supporting the single-chain Swap API
+(for example, Mode). Absence from the reachable Swap API table means false.
 
-- `apps/extension/src/constants/chainRegistry.ts` → `ZEROX_SUPPORTED_CHAIN_IDS`
-- `apps/website/app/api/swap/price/route.ts` → `SUPPORTED_CHAIN_IDS`
-- `apps/website/app/api/swap/quote/route.ts` → `SUPPORTED_CHAIN_IDS`
+Update both local sources of 0x support:
+
+- `apps/extension/src/constants/chainRegistry.ts` → the chain's
+  `isSwapSupported` flag (`ZEROX_SUPPORTED_CHAIN_IDS` is derived)
+- `apps/website/app/api/swap/supportedChains.ts` →
+  `ZEROX_SWAP_SUPPORTED_CHAIN_IDS`
 - `apps/website/app/api/swap/token-list/route.ts` only when CoinGecko has a platform ID
 
 Token-list support is not the same as quote support. A chain can quote via 0x

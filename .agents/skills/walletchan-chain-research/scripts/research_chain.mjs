@@ -40,6 +40,47 @@ function normalizeName(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function parse0xSwapTable(markdown) {
+  const heading = /^## Swap and Gasless APIs\s*$/m;
+  const headingMatch = heading.exec(markdown);
+  if (!headingMatch) {
+    throw new Error('0x docs no longer contain the "Swap and Gasless APIs" section');
+  }
+
+  const afterHeading = markdown.slice(headingMatch.index + headingMatch[0].length);
+  const nextHeadingIndex = afterHeading.search(/^##\s+/m);
+  const section = nextHeadingIndex === -1
+    ? afterHeading
+    : afterHeading.slice(0, nextHeadingIndex);
+  const entries = [];
+
+  for (const line of section.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) continue;
+
+    const cells = trimmed
+      .slice(1, -1)
+      .split("|")
+      .map((cell) => cell.trim().replace(/\*\*|`/g, ""));
+    if (cells.length < 4 || cells[0] === "Chain" || /^-+$/.test(cells[0])) continue;
+
+    const parsedChainId = Number(cells[1].replace(/,/g, ""));
+    if (!Number.isInteger(parsedChainId) || parsedChainId <= 0) continue;
+    entries.push({
+      chain: cells[0],
+      chainId: parsedChainId,
+      swapApiSupported: cells[2].includes("✅"),
+      gaslessApiSupported: cells[3].includes("✅"),
+      evidence: trimmed,
+    });
+  }
+
+  if (entries.length === 0) {
+    throw new Error("0x Swap API table was found but no chain rows could be parsed");
+  }
+  return entries;
+}
+
 function parseBridgePayload(json) {
   if (Array.isArray(json)) return json;
   if (Array.isArray(json?.result)) return json.result;
@@ -104,19 +145,25 @@ async function checkBridge(chainId) {
   };
 }
 
-async function check0x(chainId, name) {
+async function check0x(chainId) {
   const res = await fetch(ZEROX_DOCS_MD, { signal: AbortSignal.timeout(20_000) });
   const text = await res.text();
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  const query = normalizeName(name);
-  const lines = text
-    .split(/\r?\n/)
-    .filter((line) => line.includes(String(chainId)) || (query && normalizeName(line).includes(query)))
-    .slice(0, 20);
+  const entries = parse0xSwapTable(text);
+  const entry = entries.find((item) => item.chainId === chainId) || null;
   return {
     docsUrl: "https://docs.0x.org/docs/introduction/supported-chains",
-    matchedLines: lines,
-    likelyMentioned: lines.length > 0,
+    section: "Swap and Gasless APIs",
+    chain: entry?.chain || null,
+    chainId,
+    listedInSwapTable: Boolean(entry),
+    swapApiSupported: entry?.swapApiSupported === true,
+    gaslessApiSupported: entry?.gaslessApiSupported === true,
+    evidence: entry?.evidence || null,
+    verifiedChainCount: entries.filter((item) => item.swapApiSupported).length,
+    note: entry
+      ? "Support is taken only from this exact table row and the Swap API column."
+      : "Chain ID is absent from the Swap and Gasless APIs table; treat swap support as false.",
   };
 }
 
@@ -259,7 +306,7 @@ const report = {
 for (const [key, task] of [
   ["rpc", () => checkRpc(rpcUrl)],
   ["bridge", () => checkBridge(chainId)],
-  ["zerox", () => check0x(chainId, name)],
+  ["zerox", () => check0x(chainId)],
   ["coinGecko", () => checkCoinGecko(chainId, name)],
   ["chainidNetwork", () => checkChainIdNetwork(chainId)],
 ]) {

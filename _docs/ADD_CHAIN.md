@@ -26,7 +26,7 @@ Open `src/constants/chainRegistry.ts` and add a new object to the `CHAIN_REGISTR
   hiddenByDefault: false,             // optional: hide until enabled in Settings
   isOpStack: false,                  // true if OP Stack L2 (enables L1 fee breakdown)
   isBankrSupported: false,           // true only if the Bankr API supports this chain
-  isSwapSupported: true,             // true if 0x Swap API supports this chain (see ZEROX_SUPPORTED_CHAIN_IDS)
+  isSwapSupported: true,             // true only when 0x's Swap API table lists this chain ID
   coingeckoTokenId: "ethereum",      // CoinGecko token ID for native gas price, or undefined
   // viemChain: myChain,             // optional: pass a viem/chains built-in if one exists
 },
@@ -46,7 +46,7 @@ Open `src/constants/chainRegistry.ts` and add a new object to the `CHAIN_REGISTR
 | `hiddenByDefault` | no | When `true`, fresh installs and existing users without a stored entry do not query or display the chain until they enable it in Settings → Chains. An existing stored visibility choice wins over this default. |
 | `isOpStack` | yes | `true` for OP Stack L2s (shows L1 fee breakdown in gas estimation) |
 | `isBankrSupported` | yes | `true` if the Bankr API can execute transactions on this chain |
-| `isSwapSupported` | yes | `true` if the 0x Swap API supports this chain. Check `ZEROX_SUPPORTED_CHAIN_IDS` in `chainRegistry.ts` for the canonical list ([source](https://docs.0x.org/docs/introduction/supported-chains)). |
+| `isSwapSupported` | yes | `true` only when the exact chain ID has a checked Swap API cell in 0x's **Swap and Gasless APIs** table ([source](https://docs.0x.org/docs/introduction/supported-chains)). Do not infer this from the separate Cross-Chain API table. |
 | `coingeckoTokenId` | no | CoinGecko token ID for USD gas estimates. Omit if no price feed needed. |
 | `viemChain` | no | A pre-built `Chain` object from `viem/chains`. If omitted, one is auto-built from `rpcUrl`, `explorer`, and `nativeCurrency`. |
 
@@ -61,7 +61,7 @@ From that single entry, the following are all derived automatically:
 | `ALLOWED_CHAIN_IDS` | Inpage provider validation, chain switch validation |
 | `BANKR_SUPPORTED_CHAIN_IDS` | UI dropdown filtering, tx handler validation |
 | `SWAP_SUPPORTED_CHAIN_IDS` | Swap UI eligibility (alias for `ZEROX_SUPPORTED_CHAIN_IDS`) |
-| `ZEROX_SUPPORTED_CHAIN_IDS` | Canonical set of 0x-supported chain IDs (also used for custom chains) |
+| `ZEROX_SUPPORTED_CHAIN_IDS` | Set derived from registry entries whose `isSwapSupported` flag is true |
 | `OP_STACK_CHAIN_IDS` | Gas estimation L1 fee breakdown |
 | `CHAIN_NAMES[chainId]` | Human-readable name lookups |
 | `VIEM_CHAINS[chainId]` | Local signing (viem wallet client) |

@@ -26,8 +26,8 @@ description: Research and verify EVM chain metadata for WalletChan chain additio
    the best chain icon. The script chooses the extension from `content-type`
    when possible.
 4. Read `references/walletchan-fields.md` before editing code. Use it to map
-   verified facts into `apps/extension/src/constants/chainRegistry.ts` and any
-   duplicated website swap API allowlists.
+   verified facts into `apps/extension/src/constants/chainRegistry.ts` and the
+   website swap API allowlist.
 5. Treat EIP-7702 separately from “the chain supports type-4 txs”. WalletChan's
    automatic atomic path requires the configured default delegate contract to be
    deployed and non-empty on the chain.
@@ -46,6 +46,14 @@ Prefer these sources, in this order:
 - CoinGecko asset platforms and token-list endpoints for `coingeckoPlatformId`.
 - GeckoTerminal networks API for `geckoTerminalNetworkId`.
 - Chainlist/chainid.network only as secondary metadata, not final support proof.
+
+For 0x, verify the chain by exact chain ID in the **Swap and Gasless APIs**
+table and require a checkmark in the **Swap API** column. A chain name or ID
+appearing elsewhere on that page is not proof of Swap API support. In
+particular, do not infer single-chain swap support from the separate
+Cross-Chain API table, token metadata, a marketing page, or historical support.
+When the official table is reachable and the chain ID is absent, set swap
+support to false.
 
 ## Output Checklist
 

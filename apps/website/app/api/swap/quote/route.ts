@@ -7,39 +7,13 @@ import {
 } from "../wchanRoute";
 import { resolveFeeBps } from "../feeResolver";
 import { resolveSwapFeeToken } from "../preferredFeeTokens";
+import { ZEROX_SWAP_SUPPORTED_CHAIN_IDS } from "../supportedChains";
 
 const ZEROX_API_KEY = process.env.ZEROX_API_KEY ?? "";
 const ZEROX_BASE_URL = "https://api.0x.org";
 const DEFAULT_CHAIN_ID = "8453"; // Base
 
 const FEE_RECIPIENT = process.env.SWAP_FEE_RECIPIENT ?? "";
-
-// https://docs.0x.org/docs/introduction/supported-chains
-const SUPPORTED_CHAIN_IDS = new Set([
-  "1",      // Ethereum
-  "10",     // Optimism
-  "56",     // BSC
-  "130",    // Unichain
-  "137",    // Polygon
-  "143",    // Monad
-  "146",    // Sonic
-  "480",    // World Chain
-  "999",    // HyperEVM
-  "2741",   // Abstract
-  "4217",   // Tempo
-  "4663",   // Robinhood Chain
-  "5000",   // Mantle
-  "8453",   // Base
-  "9745",   // Plasma
-  "34443",  // Mode
-  "42161",  // Arbitrum
-  "43114",  // Avalanche
-  "57073",  // Ink
-  "59144",  // Linea
-  "80094",  // Berachain
-  "81457",  // Blast
-  "534352", // Scroll
-]);
 
 const NATIVE_PLACEHOLDER = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -164,7 +138,7 @@ export async function GET(request: NextRequest) {
   }
 
   const chainIdParam = searchParams.get("chainId") ?? DEFAULT_CHAIN_ID;
-  if (!SUPPORTED_CHAIN_IDS.has(chainIdParam)) {
+  if (!ZEROX_SWAP_SUPPORTED_CHAIN_IDS.has(chainIdParam)) {
     return NextResponse.json(
       { error: `Unsupported chainId: ${chainIdParam}` },
       { status: 400 },

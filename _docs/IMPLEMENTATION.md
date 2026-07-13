@@ -1614,6 +1614,13 @@ WalletConnect support is a parallel dapp transport for sites that do not list Wa
 
 ### Swap API and token metadata
 
+Swap eligibility follows the exact chain IDs checked in 0x's **Swap and
+Gasless APIs** table. `chainRegistry.ts` derives `ZEROX_SUPPORTED_CHAIN_IDS`
+from built-in `isSwapSupported` flags, while the website price and quote
+proxies share `api/swap/supportedChains.ts`. The separate 0x Cross-Chain API
+table is not evidence of single-chain Swap API support; accordingly, Blast and
+Mode are built-in networks but are not swap-eligible.
+
 `src/chrome/swapApi.ts` is an implementation-free compatibility facade over
 the focused `chrome/swap/` domain. The split preserves its released exports,
 query construction, error text, response ceilings, RPC fallbacks, storage keys,
