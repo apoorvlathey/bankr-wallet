@@ -45,8 +45,12 @@ The gear icon visibility is gated by `isForceInclusionSupportedForAccount(l2Chai
 
 | File | Purpose |
 |------|---------|
-| `src/chrome/forceInclusion.ts` | Core logic: gas estimation, deposit tx building, L1 submission (Bankr + local), progress tracking |
-| `src/chrome/batchForceInclusion.ts` | Batch tx force inclusion: atomic (Bankr ERC-7821) + non-atomic (PK/Seed sequential L1 deposits) |
+| `src/chrome/forceInclusion/single.ts` | Core logic: gas estimation, deposit tx building, L1 submission (Bankr + local), progress tracking |
+| `src/chrome/forceInclusion/batch.ts` | Batch tx force inclusion: atomic (Bankr ERC-7821) + non-atomic (PK/Seed sequential L1 deposits) |
+| `src/chrome/forceInclusion/nonceManager.ts` | Short-lived pending nonce assignment and explicit reset boundaries |
+| `src/chrome/forceInclusion/receiptPoller.ts` | Receipt polling, terminal history application, and restart resumption |
+| `src/chrome/forceInclusion/broadcastPolicy.ts` | Pure fail-closed policy for ambiguous L1 broadcasts |
+| `src/chrome/forceInclusion/splitBatchSequencer.ts` | Durable one-at-a-time execution for user-split batches |
 | `src/components/ForceInclusionProgress.tsx` | Multi-step progress UI shown during confirmation |
 | `src/constants/chainRegistry.ts` | `FORCE_INCLUSION_CHAINS` map, `isForceInclusionSupported()`, `isForceInclusionSupportedForAccount()` (account-aware gate that hides the gear icon when Bankr can't reach the L1) |
 | `src/components/TransactionConfirmation.tsx` | Advanced options gear icon + toggle in tx confirmation screen |
@@ -55,7 +59,8 @@ The gear icon visibility is gated by `isForceInclusionSupportedForAccount(l2Chai
 | `src/components/MultiTxGasEstimateDisplay.tsx` | Re-fetches gas for L1 when force inclusion is toggled (batch txs) |
 | `src/chrome/txHandlers.ts` | `forceInclusion` param on both confirm handlers, branches to force inclusion processors |
 | `src/chrome/batchTxHandlers.ts` | `forceInclusion` param on both batch confirm handlers, branches to batch force inclusion |
-| `src/chrome/background.ts` | Routes `estimateForceInclusionGas` message, passes `forceInclusion` through all confirm handlers |
+| `src/chrome/background/gasSimulationRouter.ts` + `background/composition/advancedRoutes.ts` | Route `estimateForceInclusionGas` into `forceInclusion/deposit.ts` |
+| `src/chrome/background/transactionExecutionRouter.ts` + `background/batchRequestRouter.ts` | Preserve `forceInclusion` through single and batch confirmation handlers |
 | `src/chrome/txHistoryStorage.ts` | `ForceInclusionMeta` interface on `CompletedTransaction` |
 | `src/components/TxStatusList.tsx` | Custom 2-step status display (L1 Pending → L1 Confirmed / L2 Pending) |
 | `src/components/TxDetailModal.tsx` | `ForceInclusionSteps` component, separate L1/L2 explorer links |
@@ -295,7 +300,7 @@ The two are kept in separate state (`estimates` vs `passthroughEstimates`) becau
 1. **L2 gas** comes from `precomputedL2GasEstimates[i].gasLimit` (or falls back to running `estimateBatchGasSequential` itself if the UI didn't provide any) → passed as `l2GasOverride` to `buildL1DepositTxParams` → baked into the portal call
 2. **L1 gas** is estimated via `l1PublicClient.estimateGas()` on the encoded portal call, with 20% buffer and 1M fallback — not passed from the UI, always freshly computed against the final portal calldata
 3. **L1 fees** fetched once via `estimateFeesPerGas()` and shared across all deposits
-4. **L1 nonces** fetched once via `getTransactionCount()` and assigned sequentially (`startNonce + i`) — `nonceManager.ts` is NOT used because it depends on `getRpcUrl()` which may not have L1 chain entries (e.g. Sepolia)
+4. **L1 nonces** fetched once via `getTransactionCount()` and assigned sequentially (`startNonce + i`) — `forceInclusion/nonceManager.ts` is NOT used because it depends on `getRpcUrl()` which may not have L1 chain entries (e.g. Sepolia)
 
 ## Batch Transaction Support
 
@@ -399,7 +404,7 @@ The L1 cost shown to the user is the initial estimate (computed before editing).
 
 ### Key Design Decisions
 
-1. **L1 nonces managed manually** — `l1PublicClient.getTransactionCount({ blockTag: "pending" })` fetched once, nonces assigned sequentially (`startNonce + i`). The `pending` blockTag is critical: `latest` would return the last *mined* nonce and collide with any in-flight L1 tx the user already has. Avoids dependence on `nonceManager.ts` which uses `getRpcUrl()` and doesn't know about L1 chain IDs like Sepolia.
+1. **L1 nonces managed manually** — `l1PublicClient.getTransactionCount({ blockTag: "pending" })` fetched once, nonces assigned sequentially (`startNonce + i`). The `pending` blockTag is critical: `latest` would return the last *mined* nonce and collide with any in-flight L1 tx the user already has. Avoids dependence on `forceInclusion/nonceManager.ts` which uses `getRpcUrl()` and doesn't know about L1 chain IDs like Sepolia.
 2. **L1 fees fetched once** — Single `estimateFeesPerGas()` call shared for all deposit txs (they all go to the same portal on the same L1).
 3. **L1 gas estimated per deposit at broadcast time** — Not passed from the UI. Uses `l1PublicClient.estimateGas()` which runs the portal's burn loop during simulation and returns the accurate value. 20% buffer, 1M fallback.
 4. **L2 gas estimated sequentially via `estimateBatchGasSequential`** — Same function the normal non-atomic batch flow uses. Shared logic means dependent-call state propagation is handled the same way (3-tier: eth_simulateV1 → TxSimulator bytecode injection → per-call fallback with `fallbackUsed` flag).
@@ -459,7 +464,7 @@ For non-atomic batches, the reverted sub-tx additionally mutates `item.success =
 
 ### L1 Receipt Timeout
 
-`L1_RECEIPT_TIMEOUT = 10 * 60 * 1000` (10 minutes), exported from `forceInclusion.ts`. Used by all four `waitForTransactionReceipt` sites. Long enough to absorb L1 mainnet congestion (slow base fee adjustment can leave a tx pending for many minutes). If this fires, the catch handler marks the tx as failed — but `recoverStuckForceInclusionTxs()` reconciles on the next service worker startup if the L1 tx eventually confirms.
+`L1_RECEIPT_TIMEOUT = 10 * 60 * 1000` (10 minutes), exported from `forceInclusion/single.ts`. Used by all four `waitForTransactionReceipt` sites. Long enough to absorb L1 mainnet congestion (slow base fee adjustment can leave a tx pending for many minutes). If this fires, the catch handler marks the tx as failed — but `recoverStuckForceInclusionTxs()` reconciles on the next service worker startup if the L1 tx eventually confirms.
 
 `cleanupStaleProcessingTxs` (in `txHistoryStorage.ts`) also has a 5-minute "stuck in processing" cleanup that runs on SW startup. **Force-inclusion txs are explicitly skipped** by that cleanup (`if (tx.forceInclusionMeta) continue;`) — recovery handles them via the L1-receipt re-fetch path instead.
 
@@ -473,7 +478,7 @@ The most common revert (from my testing) is **out-of-gas inside `OptimismPortal.
 
 ### Recovery: `recoverStuckForceInclusionTxs()`
 
-For txs that were written to history under the old (buggy) behavior or crashed mid-flow, `forceInclusion.ts` exports a recovery function called from `background.ts` on service worker startup (alongside `resumePendingPollers()`):
+For txs that were written to history under the old (buggy) behavior or crashed mid-flow, `forceInclusion/single.ts` exports a recovery function called from `background.ts` on service worker startup (alongside `resumePendingPollers()`):
 
 ```
 For each tx in history with forceInclusionMeta and status ∈ {processing, pending}:
@@ -510,6 +515,6 @@ The per-tx recovery above only fixes individual sub-tx state. Batch force-inclus
    └─ Re-launch trackBatchForceInclusionCompletion(bundleId, chainName, results) (fire-and-forget)
 ```
 
-`trackBatchForceInclusionCompletion` is exported from `batchForceInclusion.ts` so the recovery function can call it. Its signature was changed from `(bundleId, pending: PendingBatchTxRequest, results)` to `(bundleId, chainName: string, results)` because the original `PendingBatchTxRequest` is removed from storage after broadcast — recovery can only reconstruct what's in tx history.
+`trackBatchForceInclusionCompletion` is exported from `forceInclusion/batch.ts` so the recovery function can call it. Its signature was changed from `(bundleId, pending: PendingBatchTxRequest, results)` to `(bundleId, chainName: string, results)` because the original `PendingBatchTxRequest` is removed from storage after broadcast — recovery can only reconstruct what's in tx history.
 
 The reconstructed `results` array preserves the runtime contract where `r.success === false` means "this sub-tx is in a definitively failed state" (matching the original Phase 4 mutation semantics — see the L1 Receipt Status Handling section above).

@@ -37,7 +37,8 @@ inpage.js (runs in page context)     - txHandlers.ts (signing)
 inject.ts (content script bridge)  Extension UI (popup/sidepanel)
   |                                  - Same origin as background
   v                                  - Communicates via chrome.runtime
-background.ts (message router)
+background.ts (five-line entrypoint) → background/bootstrap.ts
+  → background/messagePipeline.ts + background/composition/
 ```
 
 **Key principle**: The webpage and content script are untrusted. All validation
@@ -60,7 +61,7 @@ documents.
 | IV             | 12 bytes (random per encryption)                        |
 | Vault key      | 256-bit random (generated once, encrypted per-password) |
 
-**Files**: `cryptoUtils.ts` (shared constants), `crypto.ts` (API key + general vault key ops), `privateKeyVaultCrypto.ts` (pure password/vault-key private-key transforms), `vaultCrypto.ts` (private-key vault repository/coordination and compatibility exports), `generalVaultIntegrity.ts` (general-key recovery proof), and the stable `mnemonicStorage.ts` facade over the `mnemonic/` audit domain (`record.ts`, `crypto.ts`, `repository.ts`, `operations.ts`, and `recovery.ts` for encrypted-vault compatibility; `derivation.ts` for pure BIP39/BIP44 operations; `masterAccess.ts` for the call-stack-only master capability; `integrity.ts` for master-recovery/account proof; and `addressPreview.ts`, `accountPersistence.ts`, and `accountHandlers.ts` for seed-account workflows). The `passkey/` audit domain contains `record.ts`, `keyWrapping.ts`, `repository.ts`, `status.ts`, `setup.ts`, `hydration.ts`, and `removal.ts`; `passkeyUnlockCrypto.ts` and `passkeyUnlock.ts` remain stable facades. `secretRevealHandlers.ts` owns epoch-bound master-only plaintext release.
+**Files**: the stable `crypto.ts` and `cryptoUtils.ts` facades cover the `cryptography/` audit domain (`types.ts` for the released envelope, `base64.ts` for bounded codecs, `passwordKey.ts` for fixed PBKDF2 policy, `passwordCipher.ts` for legacy AES-GCM records, `vaultKey.ts` for 32-byte vault-key wrapping/direct encryption, and `credentialStorage.ts` for vault-first legacy-compatible Bankr lookup). The policy-free `vaultCrypto.ts` facade covers the `vault/` audit domain (`entryCrypto.ts` for released password/vault-key transforms, `accountIntegrity.ts` for local key binding, `generalIntegrity.ts` for general-key recovery proof, `recordCodec.ts` for bounded released-V1 decoding and the unique-ID mutation gate, `repository.ts` for exact `pkVault` V1 storage, and `operations.ts` for serialized mutation/hydration/migration preparation). The stable `mnemonicStorage.ts` facade covers the `mnemonic/` audit domain (`record.ts`, `crypto.ts`, `repository.ts`, `operations.ts`, and `recovery.ts` for encrypted-vault compatibility; `derivation.ts` for pure BIP39/BIP44 operations; `masterAccess.ts` for the call-stack-only master capability; `integrity.ts` for master-recovery/account proof; and `addressPreview.ts`, `accountPersistence.ts`, and `accountHandlers.ts` for seed-account workflows). The `passkey/` audit domain contains `record.ts`, `keyWrapping.ts`, `repository.ts`, `status.ts`, `setup.ts`, `hydration.ts`, and `removal.ts`; `passkeyUnlockCrypto.ts` and `passkeyUnlock.ts` remain stable facades. Stable `secretRevealHandlers.ts` and `masterAuthorization.ts` facades cover `secrets/revealHandlers.ts` and `secrets/masterAuthorization.ts`, where plaintext release remains lock-held, epoch-bound, master-only, and revalidated after asynchronous reads.
 
 See [`SECURITY_ARCHITECTURE.md`](./SECURITY_ARCHITECTURE.md) for the enforced
 dependency direction, background-message audience contract, critical operation
@@ -149,22 +150,22 @@ The agent password model restricts what operations are available when the wallet
 | Sign/send transactions           | Yes    | Yes         | `txHandlers.ts`                                                                |
 | Sign messages                    | Yes    | Yes         | `txHandlers.ts`                                                                |
 | Add/remove/confirm cross-dapp batch | Yes | Yes         | `crossDappBatchHandlers.ts` (no extra gating — same as single tx submission)   |
-| Canonical WalletChan EIP-7702 batch authorization | Yes | Yes | `delegatedAuthorityPolicy.ts` - routine default delegate remains agent-capable |
-| Install a custom/non-default EIP-7702 delegate | Yes | **BLOCKED** | `delegatedAuthorityPolicy.ts` at initiation and again at the raw-send boundary |
+| Canonical WalletChan EIP-7702 batch authorization | Yes | Yes | `delegation/authorityPolicy.ts` (stable `delegatedAuthorityPolicy.ts` facade) - routine default delegate remains agent-capable |
+| Install a custom/non-default EIP-7702 delegate | Yes | **BLOCKED** | `delegation/authorityPolicy.ts` at initiation and again at the raw-send boundary |
 | Approve an ERC-7715 delegated permission | Yes | **BLOCKED** | `erc7715/confirmation.ts` + grant-storage commit guard                          |
 | Revoke EIP-7702 / ERC-7715 authority | Yes | Yes | Revocation handlers use the routine signing policy because they reduce authority |
-| Reveal private key               | Yes    | **BLOCKED** | `background.ts` - `revealPrivateKey` case                                      |
+| Reveal private key               | Yes    | **BLOCKED** | `background/secretManagementRouter.ts` transport + `secrets/revealHandlers.ts` |
 | Change API key/address           | Yes    | **BLOCKED** | `auth/bankrCredentialUpdate.ts` + verified atomic account/credential commit; legacy cached-password-only mutation fails closed |
 | Change master password           | Yes    | **BLOCKED** | `auth/masterPasswordRotation.ts` - `handleChangePassword()`                    |
-| Add Bankr account (with API key) | Yes    | **BLOCKED** | `background.ts` - `addBankrAccount` case                                       |
-| Add private key account          | Yes    | **BLOCKED** | `background.ts` - `addPrivateKeyAccount` case                                  |
-| Add impersonator account         | Yes    | **BLOCKED** | `background.ts` - `addImpersonatorAccount` case                                |
-| Add seed phrase group            | Yes    | **BLOCKED** | `mnemonic/accountHandlers.ts` through the thin `background.ts` route            |
-| Derive seed account              | Yes    | **BLOCKED** | `mnemonic/accountHandlers.ts` through the thin `background.ts` route            |
-| Reveal seed phrase               | Yes    | **BLOCKED** | `background.ts` - `revealSeedPhrase` case                                      |
-| Remove account                   | Yes    | **BLOCKED** | `background.ts` - `removeAccount` case                                         |
+| Add Bankr account (with API key) | Yes    | **BLOCKED** | `background/accountManagementRouter.ts` + `auth/bankrCredentialUpdate.ts`      |
+| Add private key account          | Yes    | **BLOCKED** | `background/accountManagementRouter.ts` + the private-key vault boundary       |
+| Add impersonator account         | Yes    | **BLOCKED** | `background/accountManagementRouter.ts`                                        |
+| Add seed phrase group            | Yes    | **BLOCKED** | `background/accountManagementRouter.ts` → `mnemonic/accountHandlers.ts`        |
+| Derive seed account              | Yes    | **BLOCKED** | `background/accountManagementRouter.ts` → `mnemonic/accountHandlers.ts`        |
+| Reveal seed phrase               | Yes    | **BLOCKED** | `background/secretManagementRouter.ts` transport + `secrets/revealHandlers.ts` |
+| Remove account                   | Yes    | **BLOCKED** | `background/accountManagementRouter.ts` + account-removal privacy boundary     |
 | Initiate token transfer          | Yes    | Yes         | `txHandlers.ts` - creates PendingTxRequest                                     |
-| Reset extension                  | Yes    | **BLOCKED** | `background.ts` - `resetExtension` case                                        |
+| Reset extension                  | Yes    | **BLOCKED** | `background/resetRouter.ts` + exact `storage/resetManifest.ts`                 |
 | Set/remove agent password        | Yes    | **BLOCKED** | `auth/agentFactorHandlers.ts`                                                   |
 | Set/remove passkey unlock        | Yes    | **BLOCKED** | Stable `passkeyUnlock.ts` facade over focused status/setup/hydration/removal boundaries; setup/removal require master authorization |
 
@@ -207,13 +208,29 @@ if (getPasswordType() === "agent") {
 
 ## Security-Sensitive Message Handlers
 
-These are the message handlers in `background.ts` that touch secrets, modify accounts, or have destructive effects. Each must be audited when changed.
+These are the message handlers composed by `background.ts` and its focused
+transport routers that touch secrets, modify accounts, or have destructive
+effects. Each must be audited when changed.
+
+### External provider ingress policy
+
+Untrusted page and WalletConnect input share the effect-free validators under
+`chrome/provider/`. `messageValidation.ts` caps the complete injected envelope
+before background dispatch. Focused validators separately freeze request-id
+syntax, URL length/policy, transaction calldata and uint256 quantities,
+signature method/signer/payload shape, `wallet_sendCalls` count/data/value
+limits, and EIP-3085/EIP-747 metadata. WalletConnect and batch intake call the
+same payload validators directly, so they do not rely on another transport
+having validated first. `chainBoundary.ts` never coerces arbitrary values and
+requires the requested chain to equal the content-script-attested active chain
+for every state-changing injected route. No provider-policy module may access
+Chrome storage, fetch, credentials, secrets, signing, or broadcasting.
 
 ### Secret-Exposing Handlers
 
 | Handler             | What It Exposes                                               | Guard                                                  |
 | ------------------- | ------------------------------------------------------------- | ------------------------------------------------------ |
-| `getCachedApiKey`   | Returns plaintext API key to caller                           | Extension page sender, master session, auto-lock timeout checked |
+| `getCachedApiKey`   | `background/bankrCredentialRouter.ts` returns plaintext API key to caller | Exact extension page sender, master session, auto-lock timeout checked |
 | `revealPrivateKey`  | Returns plaintext private key                                 | Requires password verification + blocks agent password |
 | `getCachedPassword` | Returns `hasCachedPassword` boolean (not the password itself) | `wallet-ui` audience in `background/messageAccessPolicy.ts` |
 
@@ -222,7 +239,7 @@ These are the message handlers in `background.ts` that touch secrets, modify acc
 | Handler                            | What It Modifies                                                                                                             | Guard                                      |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | `saveApiKeyWithCachedPassword`     | Legacy compatibility message; returns an error and performs no mutation so a credential-only update cannot bypass account binding | Extension-only; fail closed                |
-| `saveBankrApiKeyAndAddress`        | Cryptographically verifies a harmless `/wallet/sign` challenge against the proposed address, then atomically overwrites the encrypted API key and Bankr account row | Master session required; agent blocked     |
+| `saveBankrApiKeyAndAddress`        | `background/bankrCredentialRouter.ts` cryptographically verifies a harmless `/wallet/sign` challenge against the proposed address, then atomically overwrites the encrypted API key and Bankr account row before best-effort mirrors | Master session and prepared auth epoch required; agent blocked |
 | `changePassword`                   | Re-verifies the current master password; proves the general wrapper recovers the non-empty Bankr credential and every local key with the correct account address, and proves the V2 mnemonic wrapper recovers every valid phrase/seed account before clearing factors; atomically re-wraps general/mnemonic keys, re-encrypts V1 phrases, and completes residual API/`pkVault` migrations | Agent password blocked |
 | `addBankrAccount`                  | Verifies the API signer/address, atomically commits credential + row, and enforces one wallet-wide Bankr account for new adds | Master session required; agent blocked     |
 | `addPrivateKeyAccount`             | Adds new entry to encrypted private key vault using the cached vault key after biometric/master unlock, or password fallback for legacy wallets | Agent password blocked                     |
@@ -250,14 +267,14 @@ material remains outside the account metadata domain.
 
 | Handler          | Effect                      | Guard                                         |
 | ---------------- | --------------------------- | --------------------------------------------- |
-| `resetExtension` | Wipes wallet identity state, pending queues, WalletConnect routing, cross-dapp batches, tx history, wallet portfolio state, transient result keys, and session auth state via `walletResetStorage.ts` | Agent password blocked |
+| `resetExtension` | Wipes wallet identity state, pending queues, WalletConnect routing, cross-dapp batches, tx history, wallet portfolio state, transient result keys, and session auth state via the stable `walletResetStorage.ts` facade and exact `storage/resetManifest.ts` manifest | Agent password blocked |
 | `lockWallet`     | Clears all in-memory caches and restorable session auth; tells currently open UI surfaces to suppress their biometric auto-prompt in renderer memory | None needed (user-initiated, non-destructive) |
 | `clearTxHistory` | Deletes transaction history | `wallet-ui` audience policy |
 
 ### Extension-Only UI Reads and Actions
 
 `background/messageAccessPolicy.ts` is the exhaustive audience manifest for the
-main `background.ts` router. Any message owned by popup/sidepanel/onboarding UI
+main `background/messagePipeline.ts` router. Any message owned by popup/sidepanel/onboarding UI
 that reads wallet state, account metadata, chat history, pending-request
 details, transaction history/status, session/auth status, clear-signing
 preferences/cache, or mutates extension-only state must be classified exactly
@@ -270,7 +287,9 @@ The gate uses `isTrustedWalletUiSender()` and accepts only the top-level
 scheme + host. It does **not** trust an arbitrary `chrome-extension://` or
 `moz-extension://` URL. The web-accessible ENS documents (`browse.html`,
 `interstitial.html`, `ens-error.html`, `setup-kubo.html`) are authorized only
-for their exact message/page combinations in `ensBrowsing/handlers.ts`; they
+for their exact message/page combinations in
+`ensBrowsing/senderAuthorization.ts`; `ensBrowsing/handlers.ts` remains only
+the stable message-entry facade. These documents
 cannot call wallet UI, account, auth, or secret handlers. `popup-wake` and
 `ui-keepalive` ports use the same sender check so a content script or embedded
 web-accessible page cannot suppress auto-lock.
@@ -342,7 +361,7 @@ cannot silently alter a pending tx between display and signing.
 
 ### Dapp-Initiated Batch Handlers (`batchTxHandlers.ts`)
 
-`batchTxHandlers.ts` is a transitional coordinator and compatibility facade.
+`batchTxHandlers.ts` is an implementation-free compatibility facade.
 The pure ERC-7821 byte encoding, call-value normalization, contract-creation
 rejection, and payload-bearing EOA self-call rejection live in
 `batch/batchTxEncoding.ts`. That module has no Chrome storage, session, network, API,
@@ -359,6 +378,17 @@ commits the pending request before its bundle status; revalidates the transport
 authorization around both writes; and compensates either partial record before
 publishing a failed acknowledgement. It has no credential or signing access.
 
+Capability discovery, PK/seed credential resolution, and execution are separate
+audit boundaries. `batchCapabilities.ts` refuses addresses other than the exact
+connected account before any delegate probe. `batchLocalConfirmation.ts`
+consumes the pinned request and selects the single, atomic-7702, or sequential
+path. `batchLocalAuthorization.ts` then re-resolves that exact account and
+performs origin/WalletConnect authorization as the final await before beginning
+the RPC effect. `batchSingleExecution.ts`, `batchSequentialExecution.ts`, and
+`batchAtomic7702Execution.ts` own their distinct sign/broadcast state machines;
+`batchCompletionTracking.ts` owns later aggregate status mirroring without
+access to keys or credentials.
+
 These mutate `pendingBatchTxRequests` (dapp `wallet_sendCalls`) before the user signs. All are classified as `wallet-ui` in `background/messageAccessPolicy.ts`:
 
 | Handler                        | Effect                                                                                                                                                 |
@@ -369,6 +399,18 @@ These mutate `pendingBatchTxRequests` (dapp `wallet_sendCalls`) before the user 
 ### Cross-Dapp Batch Handlers (`crossDappBatchHandlers.ts`)
 
 These move pending tx requests in/out of a user-assembled batch and ship the batch via Bankr API or PK/SP EIP-7702 local signing. All are classified as `wallet-ui` in `background/messageAccessPolicy.ts` so a malicious dapp cannot reach into the user's pending tx queue:
+
+The root handler is export-only; implementations live under
+`crossDappBatch/`. `storage.ts` preserves the non-secret released schema,
+`intake.ts` persists staging before source removal, and `lifecycle.ts` removes
+unauthorized source groups before terminal publication. Confirmation acquires
+its duplicate-submit lock before asynchronous reads, validates the persisted
+account/from/chain lock, and delegates to separate Bankr or PK/seed signers.
+Both signer paths acquire a reset-aware effect lease and perform final live
+account, origin/WalletConnect, and synchronous epoch-commit checks immediately
+before the irreversible network effect. `completion.ts` keeps transaction
+result keys separate from source ERC-5792 bundle statuses and preserves one
+atomic result for every sibling group.
 
 | Handler                       | Effect                                                                                           |
 | ----------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -396,11 +438,18 @@ WalletConnect lets dapps that do not discover WalletChan through ERC-6963 send r
 | `walletConnectDisconnectSession` | Extension UI disconnects an active WalletConnect session by topic. | `wallet-ui` audience policy |
 | `walletConnectSwitchChain` | Extension UI updates the shared WalletConnect active chain and emits `chainChanged` to active WC sessions that support the chain. | `wallet-ui` audience policy |
 
-WalletConnect event handlers live in `walletConnectHandlers.ts`, `walletConnectRequestHandlers.ts`, `walletConnectBatchRequestHandlers.ts`, and `walletConnectRpcRequestHandlers.ts`, not in `background.ts`. Session proposals are approved only when a non-impersonator account is active. Approved accounts are derived from the active account at pairing time and the visible chain set for that account type; Bankr accounts only expose Bankr-supported chains.
+WalletConnect implementation lives in the `chrome/walletConnect/` audit domain,
+not in `background.ts`. `client.ts` owns only SDK lifecycle/listeners;
+`sessionProposal.ts` approves namespaces only for an active signing account;
+`requestRouter.ts` claims and validates relay requests before dispatch;
+`pendingRequests.ts`, `batchRequests.ts`, and `rpcRequests.ts` adapt requests to
+the existing wallet boundaries. Approved accounts derive from the active
+account at pairing time and its visible chains; Bankr accounts expose only
+Bankr-supported chains.
 
 Chainless `eip155` proposal namespaces are filled with that same visible chain set before approval, because some dapps request EVM methods without listing chains. If normalization still leaves no approvable namespace, the proposal is rejected rather than approved with an empty namespace. The rejection broadcast (`walletConnectProposalRejected`) contains only bounded/sanitized dapp metadata, capped requested chain IDs/methods, and known public chain metadata used to render the chain notice and prefill Add Chain; it contains no secrets or session request payloads. Unsafe peer URL/icon schemes and overlong metadata are discarded before storage or UI rendering.
 
-`walletConnectKeepalive.ts` runs only while approved WalletConnect sessions exist. It sends periodic `*_batchFetchMessages` requests to the WalletConnect relay so the MV3 service worker stays awake and can receive relay requests without an open popup/sidepanel. The keepalive uses session topics and relay routing metadata only; it does not read cached passwords, API keys, private keys, seed phrases, or transaction payload secrets.
+`walletConnect/keepalive.ts` runs only while approved WalletConnect sessions exist. It sends periodic `*_batchFetchMessages` requests to the WalletConnect relay so the MV3 service worker stays awake and can receive relay requests without an open popup/sidepanel. The keepalive uses session topics and relay routing metadata only; it does not read cached passwords, API keys, private keys, seed phrases, or transaction payload secrets.
 
 For `eth_sendTransaction`, the WC request is converted to a `PendingTxRequest` with `accountId` / `accountAddress` / `accountType` pinned through `pinnedTxRequest()`. For `personal_sign` / typed-data signatures, the request is converted to a `PendingSignatureRequest` through `pinnedSignatureRequest()`. Confirm-time signing still routes through `txHandlers.ts`, so Bankr, private-key, and seed-phrase accounts keep their existing password/session-restoration behavior. View-only impersonator accounts cannot sign.
 
@@ -408,7 +457,7 @@ For ERC-5792 `wallet_sendCalls`, the WC request reuses `batchTxHandlers.ts` and 
 
 Batch acknowledgement is part of the authorization boundary. Injected intake
 owns the batch's first-action claim before its first async permission read;
-`pendingBatchAcknowledgementLifecycle.ts` can publish a timeout only when no
+`requests/pendingBatchAcknowledgementLifecycle.ts` can publish a timeout only when no
 queue operation owns that claim. WalletConnect awaits queue persistence before
 reading the durable acknowledgement. Neither page-world nor WalletConnect has
 an independent timer that can reject while a delayed queue operation may still
@@ -434,7 +483,7 @@ Security rules:
 - `walletConnectPendingRequests` contains only public request routing/JSON-RPC response metadata, never wallet secrets. Each remote `(topic, requestId)` is atomically claimed before any queue entry is created, preventing relay replays from signing/broadcasting twice. A terminal `txResult:{id}`, `sigResult:{id}`, `erc7715PermissionResult:{id}`, or immediate `wallet_sendCalls` bundle id is persisted before relay delivery; the route is cleared only after delivery succeeds or WalletKit confirms session termination. Manual disconnect gates and terminalizes the session's pending approvals before SDK disconnect, but retains any undelivered outbox entry until disconnect succeeds; remote `session_delete` performs the same cleanup at the confirmed termination boundary.
 - `walletConnectChainId` contains only non-secret UI/session state. It is scoped to WalletConnect and does not overwrite injected-provider per-tab chain state.
 
-### EIP-7702 Delegation Handlers (`delegationHandlers.ts`)
+### EIP-7702 Delegation Handlers (`delegation/`)
 
 These are UI-only Smart Account management messages classified as `wallet-ui`:
 
@@ -443,12 +492,29 @@ These are UI-only Smart Account management messages classified as `wallet-ui`:
 | `getDelegationStatus` / `probeDelegateContract` | Reads onchain delegation and probes ERC-7821 support. Kept extension-only to avoid leaking account delegation state and custom-chain probing to webpages. |
 | `initiateSetDelegation` / `initiateRevokeDelegation` | Enqueues a type-4 pending tx request that the user confirms through the normal transaction confirmation flow. Must stay extension-only so a webpage cannot queue smart-account Set/Revoke prompts. A custom/non-default Set requires a live master session both when queued and immediately before raw broadcast; canonical-default authorization remains routine agent-capable signing, and revocation remains agent-capable because it reduces authority. |
 
-`setCustomDelegate` / `removeCustomDelegate` are storage-module helpers used
+`delegationHandlers.ts`, `delegationStorage.ts`, and
+`delegatedAuthorityPolicy.ts` are effect-free compatibility facades. The
+implementation is split into status/probe, Set/Revoke intake, pure request
+construction, durable queueing, authority policy, and storage modules so each
+boundary can be audited independently. Custom Set requests capture the exact
+master auth epoch before their ERC-7821 re-probe; queue persistence rechecks it
+inside the wallet-secret operation lock and stores it on the pending request
+before any UI notification. Canonical-default Set and revocation deliberately
+omit that epoch because they are routine/reducing authority operations.
+
+`setCustomDelegate` / `removeCustomDelegate` are `delegation/storage.ts`
+helpers used
 only by receipt reconciliation. They are deliberately not runtime message
 routes: `customDelegates` is a UI mirror, and extension pages do not need a
 general-purpose way to overwrite it.
 
 Set/Revoke storage reconciliation must read `eth_getCode(EOA)` after any terminal receipt. Do not infer delegation state only from `receipt.status`: EIP-7702 authorization processing occurs before normal execution, so execution can revert while the EOA delegation still changed. If the `eth_getCode` read itself fails, leave the mirror unchanged; an RPC failure is not evidence that the EOA is undelegated.
+
+The `customDelegates` mirror keeps its released nested record shape. All
+read-modify-write mutations are linearized under `local:customDelegates` so
+concurrent receipt reconciliation or account cleanup cannot drop another
+account/chain update. Runtime execution still trusts onchain code and the
+default-delegate registry, never this UI mirror.
 
 ### Token Metadata Handlers
 
@@ -460,9 +526,21 @@ manual token list. Content scripts may still call the narrower `fetchTokenInfo`
 / `fetchTokenLogo` helpers; those return public chain/token-list metadata only
 and do not expose watched-asset custom-token records.
 
+The stable root token modules are export-only facades over `chrome/tokens/`.
+`customTokenStorage.ts` is the sole owner of the unchanged `customTokens` array
+and its serialized read-modify-write lock. `tokenMetadata.ts` keeps custom-token
+lookup opt-out explicit so the public logo route cannot expose watched-asset
+metadata. NFT URI parsing and image-source sanitization are pure in
+`nftMetadataPolicy.ts`; only `nftMetadata.ts` may fetch, and it revalidates each
+manual redirect against the public-HTTPS policy, omits credentials/referrers,
+times out after five seconds, and streams at most 256 KiB. SVG/HTML never
+becomes a renderer image source. Calldata discovery is capped at 64 unique
+ABI-padded addresses; failed Multicall3 preflight returns only that already
+bounded list and never expands authority or performs a transaction.
+
 ### Network Metadata Handlers
 
-`networksInfo` mutations are routed through `networkStorage.ts` in the service
+`networksInfo` mutations are routed through `network/networkMutations.ts` in the service
 worker and classified as `wallet-ui`. Popup/sidepanel pages mirror
 `chrome.storage.sync.networksInfo` through `NetworksContext`; they must not
 write full local snapshots back to storage. This prevents a stale long-lived
@@ -474,7 +552,7 @@ background.
 The extension has broad HTTP(S) host access, so background fetches must not
 turn that privilege into a private-network proxy or an unbounded memory sink.
 
-`safeRpcForwarding.ts` applies the following boundary to injected-provider and
+`network/safeRpcForwarding.ts` applies the following boundary to injected-provider and
 WalletConnect RPC forwarding:
 
 - Only the explicit public read/simulation method allowlist is accepted; raw
@@ -497,7 +575,7 @@ WalletConnect RPC forwarding:
   16 forwarded calls run concurrently, and each call has a 15-second timeout.
   Remote JSON-RPC error text is capped before it reaches the UI.
 
-All other configured-RPC paths use `rpcHttpClient.ts`. Its direct JSON-RPC
+All other configured-RPC paths use `network/rpcClient.ts`. Its direct JSON-RPC
 primitive consumes responses under a deadline and byte ceiling, rejects
 redirects, omits cookies/referrers, bounds error text, and caps concurrency.
 The shared viem transport also uses a private bounded fetch adapter: it pins
@@ -511,12 +589,33 @@ use HTTPS; explicit local/private Settings RPCs may use HTTP. A dapp-proposed
 add-chain URL is checked against the trusted sender origin before persistence,
 again before confirmation, and before the privileged chain-ID probe.
 
-`boundedHttpResponse.ts` is the secure-default boundary for fixed WalletChan,
+`network/boundedHttp.ts` is the secure-default boundary for fixed WalletChan,
 Bankr, swap/bridge, portfolio, CoinGecko, labels, clear-signing, and ABI lookup
 HTTP calls. It rejects redirects, cookies, and referrers and enforces one
 deadline plus a caller-sized streaming byte cap. Signed sponsored-transfer
 authorizations and Bankr API keys therefore cannot follow a backend redirect
 to another origin.
+
+Swap egress is isolated under `chrome/swap/`. `transport.ts` alone performs
+fixed-proxy HTTP reads and retains the 2 MiB quote / 8 MiB catalog / 64 KiB
+price ceilings plus bounded remote error text. `rpcClient.ts` alone resolves a
+configured chain RPC through the shared bounded transport. ERC-20 and Permit2
+read failures return zero as released UI fallback behavior; they cannot sign or
+broadcast. `erc20.ts` and `permit2.ts` contain the only approval calldata
+builders, with Permit2 amount clamped to `uint160` and expiry fixed to 30 days.
+Token metadata/list/logo caches are non-secret, chain-and-address keyed, and
+best-effort on write. The root `swapApi.ts` is an export-only facade, enforced
+by architecture and behavior tests under `tests/swap/`.
+
+Bankr remote authority is isolated under `chrome/bankr/`: `response.ts` is
+pure bounded validation, `transport.ts` owns only fixed-origin bounded HTTP,
+`signing.ts` locally recovers the exact personal/EIP-712 signer,
+`submission.ts` owns the irreversible-start and ambiguous-outcome boundary,
+and `jobs.ts` owns bounded polling. `credentialBinding.ts` hashes only
+authenticated ciphertext metadata, while `pendingAuthorization.ts` performs
+the final pinned account/transport/tag gate. The `chat/` subdomain keeps the
+unchanged `chatHistory` repository separate from prompt egress and session
+orchestration.
 
 Remote navigation metadata is separate from image/network fetch policy.
 `externalNavigation.ts` accepts public HTTPS only; Settings-owned custom
@@ -536,30 +635,43 @@ or CSS imports: those disclose extension-page opens and violate the no-remote-
 code/store-review boundary.
 
 ENS/avatar/token-logo URLs are attacker-controlled display metadata.
-`remoteImagePolicy.ts` and `avatarImageCache.ts` therefore require public HTTPS
-on the default TLS port with no URL credentials, reject reserved/private hosts
-through the same IPv4/IPv6 classifier, and reject `.test`, `.invalid`, and
-`.onion`. Up to three redirects are followed manually and every target is
-revalidated; fetches omit credentials and referrers. Only explicit raster MIME
-types are accepted—SVG and other rich document formats never cross the decoder
-boundary. The response is streamed under a 2 MiB download ceiling, decoded to
-pixels, resized to at most 128×128, re-encoded to WebP under 512 KiB, and only
-that inert data URL is cached/rendered. At most two image fetches run
-concurrently. The renderer sanitizer separately accepts only policy-compliant
-remote URLs or bounded base64 raster data URLs, never SVG data URLs. Raw remote
-URLs remain inert in trusted renderers until those background-reencoded bytes
-arrive. The reset-aware Chrome cache is the sole image source: legacy DOM
-localStorage image/portfolio mirrors are purge-only, persisted cache entries
-are revalidated, and reset/fresh onboarding abort plus epoch-invalidate
-old-wallet image work before storage deletion. NFT tokenURI metadata uses the
-same public-host/redirect rules, streams JSON under 256 KiB, bounds inline data
-and display strings, and rejects SVG/HTML image markup.
+The local-gateway ENS banner treats the mounted page the same way: its metadata
+scraper forwards only a title and `http(s)` or `data:image/*` favicon URL, its
+address field accepts only `.eth`, `.gwei`, or a raw 20-byte contract address,
+and hosted-gateway navigation goes through the authorized
+`ens-open-on-gateway` service-worker route. The manifest-facing
+`ensBanner.ts` is initialization-only; parsing, transport, bookmark/gateway
+actions, and closed-shadow rendering remain separate audit modules under
+`ensBrowsing/banner/`. The banner does not fetch or evaluate page content.
+
+`remoteImagePolicy.ts` and the `avatar/` audit domain behind the stable
+`avatarImageCache.ts` facade therefore require public HTTPS on the default TLS
+port with no URL credentials, reject reserved/private hosts through the same
+IPv4/IPv6 classifier, and reject `.test`, `.invalid`, and `.onion`. Up to three
+redirects are followed manually and every target is revalidated; fetches omit
+credentials and referrers. Only explicit raster MIME types are accepted—SVG
+and other rich document formats never cross the decoder boundary. The response
+is streamed under a 2 MiB download ceiling, decoded to pixels, resized to at
+most 128×128, re-encoded to WebP under 512 KiB, and only that inert data URL is
+cached/rendered. At most two image fetches run concurrently in FIFO order and
+same-URL work is single-flight. The renderer sanitizer separately accepts only
+policy-compliant remote URLs or bounded base64 raster data URLs, never SVG data
+URLs. Raw remote URLs remain inert in trusted renderers until those
+background-reencoded bytes arrive. The reset-aware Chrome cache is the sole
+image source: legacy DOM localStorage image/portfolio mirrors are purge-only,
+persisted entries are revalidated, commits are locked and best-effort, and
+reset/fresh onboarding abort plus epoch-invalidate old-wallet work. A storage
+write that crosses the reset epoch removes its stale entry before returning.
+NFT tokenURI metadata uses the same public-host/redirect rules, streams JSON
+under 256 KiB, bounds inline data and display strings, and rejects SVG/HTML
+image markup.
 
 ---
 
 ## EIP-712 Signature Request Validation
 
-**File**: `apps/extension/src/chrome/eip712Validator.ts`
+**Files**: stable facade `apps/extension/src/chrome/eip712Validator.ts`; pure
+policy implementation `apps/extension/src/chrome/signatures/eip712/`
 **Added**: v1.4.0
 
 All `eth_signTypedData_v3` and `eth_signTypedData_v4` requests are validated before processing to prevent denial-of-service attacks from malicious dapps.
@@ -680,9 +792,11 @@ connection prompts tied to the removed account are terminalized with `4100`,
 and connection approval shares the same account-binding lock as removal so it
 cannot recreate the grant on the other side of deletion.
 
-### Inpage-to-Background Messages (via inject.ts)
+### Inpage-to-Background Messages (via provider/contentBridge)
 
-Only these inpage message types are accepted from the webpage by `inject.ts`:
+Only the message types frozen in
+`provider/contentBridge/messagePolicy.ts` are accepted from the webpage by the
+thin `inject.ts` entrypoint:
 
 | Inpage Message Type       | Background Message / Effect                                      | Purpose |
 | ------------------------- | ---------------------------------------------------------------- | ------- |
@@ -698,7 +812,8 @@ Only these inpage message types are accepted from the webpage by `inject.ts`:
 | `i_walletShowCallsStatus` | `walletShowCallsStatus`                                          | Opens WalletChan status UI for a bundle |
 | `i_walletExecutionPermissions` | `walletExecutionPermissions`                                | ERC-7715 delegated-permission discovery, active-grant listing, and user-confirmed request route |
 
-**Source validation**: `inject.ts` checks `e.source === window` before forwarding.
+**Source validation**: `contentBridge/messagePolicy.ts` checks
+`e.source === window` before dispatch.
 
 After a supported `i_switchEthereumChain` request actually changes the tab's
 chain, `inject.ts` sends the background-only `dappChainSwitchNotification`
@@ -707,7 +822,7 @@ resolves chain metadata from trusted storage, derives the dapp label from the
 Chrome sender, rate-limits repeats per tab/origin/chain, and creates a browser
 notification. It does not expose secrets or account data.
 
-**Dapp RPC fast path**: `dappRpcForwarding.ts` runs entirely in the inpage
+**Dapp RPC fast path**: `dapp/rpcForwarding.ts` runs entirely in the inpage
 script and does not add any new content-script or background message type. It
 observes page `fetch` calls to discover HTTP(S) JSON-RPC URLs, validates them
 with `eth_chainId`, and forwards only a narrow allowlist of dapp-originated
@@ -728,7 +843,13 @@ Only these types are sent to content scripts (and thus forwarded to the webpage)
 
 **Rule**: Never send secrets (passwords, API keys, private keys) to content scripts. Any new background-to-content-script message type must be reviewed for data sensitivity.
 
-**Whitelist enforcement**: `inject.ts` only forwards `setAddress`, `setChainId`, and `setAccount` messages to the webpage via `window.postMessage`. All other message types from background broadcasts (e.g., `newPendingTxRequest`, `accountsUpdated`, `txHistoryUpdated`) are **not** forwarded. This prevents malicious dapps from eavesdropping on wallet activity across other tabs.
+**Whitelist enforcement**: `contentBridge/runtimeForwarding.ts` only exposes the
+address, account, chain, and explicit permission-revocation events declared in
+`messagePolicy.ts`; `getInfo` responds only to the requesting content-script
+runtime channel. All other background broadcasts (e.g., `newPendingTxRequest`,
+`accountsUpdated`, `txHistoryUpdated`) are **not** forwarded. Configured RPC
+URLs are stripped from chain events. This prevents malicious dapps from
+eavesdropping on wallet activity across other tabs.
 
 ### Sender Verification for Secret-Returning Handlers
 
@@ -811,7 +932,8 @@ accessible resources.
 | `activeAccountId`                                      | Active account ID                    |
 | `autoLockTimeout`                                      | Auto-lock timeout (ms)               |
 | `tabAccounts`                                          | Connected/pending-dapp-only per-tab account overrides |
-| `sidePanelMode` / `sidePanelVerified` / `isArcBrowser` | UI settings                          |
+| `sidePanelMode` / `isArcBrowser`                       | Active UI windowing settings         |
+| `sidePanelVerified`                                    | Released legacy field; retained/reset for compatibility but not read by runtime windowing |
 | `hidePortfolioValue`                                   | Boolean - hide/show token USD values |
 
 ---
@@ -848,7 +970,7 @@ These must always hold true. Violations indicate a security bug.
 
 4. **Encryption uses fresh randomness** - Every encryption operation generates a new random salt and IV. Never reuse salt/IV pairs.
 
-5. **Service worker suspend clears credentials** - The `suspend` event handler in `background.ts` calls `clearInMemoryAuthCache()`, which clears the API key, password, private-key vault, general vault key, mnemonic key, password type, and session ID together.
+5. **Service worker suspend clears credentials** - `background/lifecycle/maintenance.ts`, registered by lifecycle composition, calls `clearInMemoryAuthCache()`, which clears the API key, password, private-key vault, general vault key, mnemonic key, password type, and session ID together.
 
 6. **Timed auto-lock clears every in-memory credential** - All cached credential getters, including `getCachedVaultKey()`, `getCachedMnemonicKey()`, and `getPasswordType()`, enforce the configured timeout. Expiry clears the API key, password, private-key vault, both keys, and password type together.
    Missing or invalid settings resolve to the finite 15-minute default and are
@@ -867,6 +989,15 @@ These must always hold true. Violations indicate a security bug.
    ciphertext cannot exceed 1 MiB plus the AES-GCM tag. Malformed or torn
    records return a locked session; there is no permissive fallback.
 
+7a. **Factor removal revokes restoration before commit** - Passkey and agent
+   removal first prove master recovery, then remove the local `sessionEncKey`
+   half before deleting the factor. Failure to revoke leaves the factor
+   untouched. Once the factor commit succeeds, in-memory authority is cleared
+   synchronously; failure to clear the remaining native ciphertext cannot
+   restore a session because its key half is already gone. Password rotation
+   changes the master wrapper and clears the agent wrapper atomically, so an
+   old envelope is non-restorable even if post-commit residue cleanup fails.
+
 8. **Content script only forwards whitelisted message types** - `inject.ts` only bridges the documented dapp-facing allowlist from page to background: transaction/signature requests, RPC proxy calls, chain add/switch/watch-asset prompts, and ERC-5792 capability/batch/status methods. In the reverse direction, only `setAddress`, `setChainId`, and `setAccount` are forwarded from background to the webpage.
 
 9. **No `eval()` or dynamic code execution** - MV3 CSP prevents this, but also verify no `new Function()` or similar patterns exist.
@@ -881,7 +1012,8 @@ These must always hold true. Violations indicate a security bug.
     therefore cannot authorize secrets already cached by a biometric session.
 
 10b. **Plaintext reveal is linearized with auth teardown** -
-    `secretRevealHandlers.ts` captures the current authentication epoch before
+    `secrets/revealHandlers.ts` (behind the stable
+    `secretRevealHandlers.ts` facade) captures the current authentication epoch before
     explicit master verification, then owns the wallet-secret operation lock
     through the final session/epoch recheck, decryption, and synchronous
     `sendResponse` invocation. A manual/automatic lock, password rotation,
@@ -892,6 +1024,14 @@ These must always hold true. Violations indicate a security bug.
 
 11. **Password change proves recovery before clearing factors, then writes atomically** - `handleChangePassword` re-verifies the explicit master password. It requires the unwrapped general key to be exactly 32 bytes, recover a non-empty stored Bankr credential, decrypt every `pkVault` entry, and reproduce every current private-key/seed account address. For V2 it also unwraps the mnemonic key through the master wrapper, validates every BIP39 phrase and seed-group record, and re-derives every seed-account address. Only then does it prepare new wrappers, finish residual legacy API/`pkVault` migrations, and clear agent/passkey wrappers in one `chrome.storage.local.set()`. A corrupt or mismatched-but-decryptable wrapper therefore preserves the old password and passkey instead of destroying the last working recovery factor. V1 phrases are re-encrypted in memory; current general-vault and V2 mnemonic ciphertext remain unchanged.
 
+11a. **The released private-key vault is bounded without a format migration** -
+    `vault/recordCodec.ts` rejects unknown versions, malformed AES-GCM fields,
+    more than 10,000 entries, and IDs longer than 512 characters before
+    cryptographic work. Structurally valid V1 duplicate IDs remain readable to
+    avoid locking out an existing race-affected profile, but every save,
+    add/remove, and password/vault-key migration preparation rejects them with
+    zero writes. Frozen released V1 ciphertext remains byte-for-byte unchanged.
+
 12. **Duplicate-only seed imports do not persist secrets** - `addSeedPhraseGroup` validates that at least one selected derivation index can be imported or converted before creating `seedGroups` metadata or writing the encrypted mnemonic to `mnemonicVault`.
 
 12a. **Seed persistence cannot silently generate recovery material** - The
@@ -901,6 +1041,11 @@ These must always hold true. Violations indicate a security bug.
     recovery secret.
 
 12b. **Fresh onboarding never guesses that recovery material is disposable** -
+    `onboarding/state.ts` owns the frozen marker codec, authoritative-data
+    classification, completeness proof, and rollback cleanup;
+    `onboarding/lifecycle.ts` owns marker transitions without cryptography; and
+    `onboarding/credential.ts` owns only the marker-bound first encrypted
+    credential commit. `onboardingInitialization.ts` is an export-only facade.
     Credentials, general/agent/passkey wrappers, PK/mnemonic vaults, account
     rows, and seed-group metadata are the authoritative unmarked-state boundary.
     Any such partial state is preserved and requires explicit recovery/reset.
@@ -933,7 +1078,7 @@ These must always hold true. Violations indicate a security bug.
     remains fail-closed because the broadcast outcome may be ambiguous.
 
 14. **Pending requests resolve first-action-wins** -
-    `pendingRequestResolution.ts` synchronously claims a transaction,
+    `requests/pendingRequestResolution.ts` synchronously claims a transaction,
     signature, ERC-5792 batch, dapp connection queue, or cross-dapp batch before
     deferring any asynchronous work. Confirm and reject share the claim across
     popup/side-panel/full-page surfaces and across Bankr, private-key,
@@ -1003,6 +1148,15 @@ These must always hold true. Violations indicate a security bug.
     execution through a user retry while still allowing eventual receipt
     reconciliation.
 
+    The force-inclusion audit domain keeps these boundaries independently
+    reviewable: `singleLocal.ts` owns the final account/request check and
+    sign-once broadcast; `batchLocalBroadcast.ts` owns sequential nonce order
+    and tail halting; `singleOutcome.ts` and `batchLocalReceipts.ts` own durable
+    ambiguous/pending recovery; and `receiptFinalizer.ts` owns the rule that an
+    unobserved ambiguous hash is not proof of a dropped transaction. Stable
+    `single.ts`, `batch.ts`, and `receiptPoller.ts` paths are export-only
+    facades, so callers cannot bypass those focused implementations.
+
 14c. **Remote signer responses are bounded and proven** - Bankr sign, submit,
     and job responses have deadlines and streamed byte limits. User-facing
     remote error text is control-character stripped and capped at 1,000
@@ -1033,11 +1187,11 @@ These must always hold true. Violations indicate a security bug.
 
 15. **RPC proxy restricts URL sources and methods** - `handleSafeRpcRequest` only accepts extension-configured RPC URLs and an explicit public read/simulation method allowlist. Signing, transaction/raw submission, debug/admin, and stateful filter-lifecycle methods are rejected in both the provider and service worker. A 15-second timeout limits slow endpoints. The inpage dapp-RPC fast path remains narrower: it only uses HTTP(S) JSON-RPC URLs discovered from the page itself, validates the chain with `eth_chainId`, forwards allowlisted non-critical reads, and falls back to the extension RPC on error or timeout.
 
-16. **Injected signing intake requires a connected origin** - Before `sendTransaction` or `signatureRequest` creates pending state, `dappRequestPolicy.ts` requires a top-level content-script sender, verifies that the sender frame still matches the current tab origin, canonicalizes the Chrome-attested origin, and checks an exact `dappPermissions` grant. Page-provided origins never authorize a request; failures return code `4100` through `txResult:*` / `sigResult:*`.
+16. **Injected signing intake requires a connected origin** - Before `sendTransaction` or `signatureRequest` creates pending state, `dapp/requestPolicy.ts` requires a top-level content-script sender, verifies that the sender frame still matches the current tab origin, canonicalizes the Chrome-attested origin, and checks an exact `dappPermissions` grant. Page-provided origins never authorize a request; failures return code `4100` through `txResult:*` / `sigResult:*`.
 
 17. **Input length validation on user-facing strings** - Display names and group names are capped at 100 characters to prevent storage bloat from malformed inputs. Unknown message types are logged with `console.warn` for debuggability.
 
-18. **Non-critical caches are fail-open** - Metadata/image caches (`tokenInfo:*`, `tokenLogo:*`, `ethShLabels:*`, `swapTokenList:*`, `cs:desc:*`, CoinGecko caches, `portfolioHoldingsCache`, and `ensAvatarImageCache`) must never block wallet-critical storage writes. Cache writes are best-effort and expired entries are pruned by `storageCachePruner.ts`.
+18. **Non-critical caches are fail-open** - Metadata/image caches (`tokenInfo:*`, `tokenLogo:*`, `ethShLabels:*`, `swapTokenList:*`, `cs:desc:*`, CoinGecko caches, `portfolioHoldingsCache`, and `ensAvatarImageCache`) must never block wallet-critical storage writes. Cache writes are best-effort and expired entries are pruned by `storage/cachePruner.ts` through the stable root facade.
 
 ---
 
@@ -1045,7 +1199,7 @@ These must always hold true. Violations indicate a security bug.
 
 When reviewing or making changes to extension code, verify the following:
 
-### If you added/modified a message handler in `background.ts`:
+### If you added/modified a background message route:
 
 - [ ] Does the handler touch secrets (API keys, passwords, private keys, vault keys)?
 - [ ] If it modifies secrets or accounts, does it check `getPasswordType() === "agent"` and block?
@@ -1058,6 +1212,8 @@ When reviewing or making changes to extension code, verify the following:
 - [ ] Is PBKDF2 iteration count still 600,000?
 - [ ] Did you update BOTH read AND write paths for any changed storage keys? (Common bug: updating reads but forgetting writes in other handlers)
 - [ ] Grep for the storage key name across all files to find every touchpoint.
+- [ ] Do persisted crypto codecs reject unknown versions, malformed field
+      shapes, oversized records, and ambiguous IDs before any write/migration?
 
 ### If you modified content scripts or inpage scripts:
 
@@ -1073,6 +1229,10 @@ When reviewing or making changes to extension code, verify the following:
 - [ ] Does manual lock (`lockWallet`) still clear all caches and restorable session storage?
 - [ ] Does manual lock acquire the wallet-secret operation lock before clearing cached vault/mnemonic keys?
 - [ ] Does session restore still require `autoLockTimeout === 0`?
+- [ ] Does factor removal revoke the local Never-session recovery half before
+      its factor commit, preserving the factor if revocation fails?
+- [ ] Do capability-only/view-only sessions require both an expiry-checked
+      vault key and password type rather than accepting either partial alone?
 
 ### If you added a new message handler that uses getCachedPassword() or getCachedApiKey():
 
@@ -1113,51 +1273,103 @@ Quick reference for which files to examine based on what area of security you're
 
 ### Credential lifecycle (storage, caching, expiry)
 
-- `sessionCache.ts` - Stable facade and serialized restore orchestration
+- `sessionCache.ts` - Export-only stable compatibility facade
 - `session/inMemoryCache.ts` - Decrypted capability state and expiry timestamps
 - `session/autoLockPolicy.ts` - Timeout normalization and synced setting cache
+- `session/cacheAccess.ts` - Expiry-aware capability selectors and wallet predicates
+- `session/teardown.ts` - All-or-nothing memory and persisted-session clearing
+- `session/timeoutTransitions.ts` - Finite default and serialized timed/Never transitions
+- `session/restoration.ts` - Authoritative Never restore, password-type binding, and race rechecks
 - `session/persistence.ts` - Native Never-session encrypted password envelope
 - `session/storage.ts` - Cross-browser native/fallback storage adapter
-- `crypto.ts` - API key encryption/decryption, vault key operations
-- `cryptoUtils.ts` - Shared crypto constants (iterations, lengths)
-- `vaultCrypto.ts` - Private key vault encryption/decryption
+- `crypto.ts`, `cryptoUtils.ts` - Stable compatibility facades
+- `cryptography/` - Released envelope, bounded codecs, PBKDF2 policy,
+  password/vault-key AES-GCM, and credential lookup ownership
+- `vaultCrypto.ts` - Stable private-key vault facade
+- `vault/entryCrypto.ts` - Released password/vault-key entry transforms
+- `vault/accountIntegrity.ts` - Local key/account binding proof
+- `vault/generalIntegrity.ts` - Master recovery proof across API/local keys
+- `vault/recordCodec.ts` - Bounded released-V1 decoder and unique-ID mutation gate
+- `vault/repository.ts` - Exact `pkVault` V1 storage authority
+- `vault/operations.ts` - Serialized mutations, hydration, and migration prep
 
 ### Access control (agent vs master password)
 
 - `auth/walletUnlock.ts` / `auth/sessionHydration.ts` - Unlock and complete cache hydration
 - `auth/masterPasswordVerification.ts` - Side-effect-free explicit master proof
+- `secrets/masterAuthorization.ts` / `secrets/revealHandlers.ts` - Exact
+  epoch/live-master authorization and lock-held plaintext release
 - `authHandlers.ts` - Agent guards and credential/password mutations
-- `background.ts` - Agent guards on account/destructive handlers
-- `sessionCache.ts` - Stable password-type compatibility API
+- `background/accountManagementRouter.ts` - Agent/master guards on account and seed mutations/removal
+- `sessionCache.ts` - Stable export-only password-type compatibility API
+- `session/restoration.ts` - Persisted agent/master binding and successful-restore auth-epoch rotation
 - `session/inMemoryCache.ts` - Password-type state and expiry enforcement
 
 ### Message passing (what crosses trust boundaries)
 
-- `inject.ts` - Content script bridge (message whitelist)
-- `impersonator.ts` - Inpage provider (what the webpage can call)
-- `background.ts` - Message router (what handlers exist)
+- `inject.ts` + `provider/contentBridge/` - Thin content-script entrypoint,
+  exact message allowlists, request adapters, and privacy-bounded reverse events
+- `impersonator.ts` + `provider/inpage/` - Thin inpage entrypoint, EIP-1193
+  method routing, result correlation, EIP-6963, and legacy `window.ethereum`
+- `background.ts` - Five-line MV3 bootstrap invocation only
+- `background/bootstrap.ts` - Route/pipeline/lifecycle composition order
+- `background/messagePipeline.ts` - ENS-first audience/provider gates and exact route order
+- `background/composition/` - Audit-sized route-family dependencies and lifecycle registration; see its README
 - `background/authRouter.ts` - Wallet-UI auth/session response and channel-lifetime contracts
+- `background/bankrCredentialRouter.ts` - Remote-signer proof, master-auth epoch, atomic account/credential commit, Never restoration, and agent plaintext block
 - `background/onboardingRouter.ts` - Fresh-wallet initialization ID normalization, serialized transport, rollback/completion response contracts, and injected wallet-identity retirement
 - `background/accountStateRouter.ts` - Non-secret account reads, ordering, display names, and global/per-tab selection transport; secret mutation routes are intentionally excluded
+- `background/accountManagementRouter.ts` - Master-gated legacy migration, all account/seed creation paths, Never-session private-key import recovery, and sponsored/dapp-safe removal ordering
+- `background/secretManagementRouter.ts` - Direct trusted-sender plaintext release plus pinned signature and ERC-7715 confirmation/rejection channel contracts
+- `background/batchRequestRouter.ts` - Mixed-audience ERC-5792 capability/send/status transport and first-action-gated trusted-UI confirm/reject/edit/split decisions
+- `background/delegationRouter.ts` - Trusted-UI EIP-7702 status/probe/set/revoke transport; domain handlers retain authorization and transaction preparation
+- `background/crossDappBatchRouter.ts` - Source-plus-active lease fan-in and active-batch edit/reject/confirm transport
 - `background/settingsRouter.ts` - Trusted-UI network registry and popup/sidepanel transport; provider add-chain prompts remain on the provider-aware boundary
 - `background/dappPermissionRouter.ts` - Mixed-audience dapp account exposure, exact-sender request intake/expiry, and trusted-UI connection/permission decisions
+- `background/providerRpcRouter.ts` - Connected-origin authorization and durable bounded read-only RPC results
+- `background/providerIngress.ts` - Exact-sender origin resolution, durable provider rejection, and ERC-7715 ingress blocking
+- `background/signatureValidation.ts` - Deprecated-method rejection plus bounded EIP-712 validation/sanitization before intake
+- `background/chainSwitchNotification.ts` - Validated chain-switch portfolio signal, cooldown, and safe notification icon handling
 - `background/walletConnectSessionRouter.ts` - Trusted-UI WalletConnect list/pair/disconnect/chain-selection transport with injected SDK handlers
 - `background/watchAssetRouter.ts` - Mixed-audience EIP-747 intake/read/confirm/reject transport with durable result and token-storage ordering
 - `background/chainPromptRouter.ts` - Mixed-audience EIP-3085 intake/read/confirm/reject and connected-site chain-notice transport
 - `background/signingRequestRouter.ts` - Post-gate provider tx/signature intake and trusted-UI pending-request reads/decisions; domain handlers retain authorization, signing, and durable publication
+- `background/transactionExecutionRouter.ts` - First-action claimed immediate/background Bankr and local PK/seed confirmations plus non-signing internal transfer prompt intake
+- `background/swapExecutionRouter.ts` - Reset-barrier-protected account-bound direct, Bankr-batch, and local-atomic swap execution transport
+- `background/sponsoredTransferRouter.ts` - Reset-barrier-protected submission plus fail-closed unresolved status and retryable acknowledgement transport
+- `background/internalOperationBarrier.ts` - Unique `internalOperation` confirmation claims that expose independent swap/relayer effects to the global reset barrier
 - `background/transactionStatusRouter.ts` - Trusted-UI transaction history, processing, failed-result, nonce-cache, enrichment, and receipt-status transport
-- `walletConnectHandlers.ts` / `walletConnectRequestHandlers.ts` / `walletConnectBatchRequestHandlers.ts` / `walletConnectRpcRequestHandlers.ts` / `walletConnectKeepalive.ts` / `walletConnectReset.ts` - WalletConnect relay session approval, request intake, active-session relay keepalive, and replacement-wallet SDK identity teardown
+- `background/swapBridgeDataRouter.ts` - Trusted-UI swap/bridge quote, status, chain, and token-catalog transport
+- `background/tokenDataRouter.ts` - Trusted-UI token metadata/CRUD/price/image/allowance/balance transport with exact-sender avatar defense
+- `background/resetRouter.ts` - Synchronous pending-resolution barrier, restored master proof, sponsored-intent guard, and ordered destructive reset
+- `background/lifecycle/` - Focused Chrome callbacks and immediate startup effects
+- `walletConnect/` - WalletConnect relay audit domain: SDK lifecycle, proposal policy, claimed request dispatch, pinned confirmation adapters, durable terminal outbox, active-session keepalive, and replacement-wallet namespace teardown; see its `README.md`
 
 ### Transaction security
 
-- `txHandlers.ts` - Transaction confirmation, signing, API key usage
+- `txHandlers.ts` - Implementation-free public compatibility facade
+- `transactions/bankrPolicy.ts`, `bankrSession.ts`, `bankrConfirmation.ts`,
+  and `bankrProcessing.ts` - pinned Bankr policy, credential restoration,
+  prompt/effect ownership, and outcome publication
+- `transactions/swaps/` - account/chain-locked direct, Bankr batch, and
+  PK/seed atomic-7702 swap orchestration with ordered ambiguity stops
+- `transactions/localConfirmation.ts` and `localExecution.ts` - pinned local
+  confirmation, key recovery, sign-once execution, and final authority gate
 - `localSigner.ts` - Private key signing (viem)
-- `bankrApi.ts` - API key sent to Bankr backend
-- `pendingTxStorage.ts` - Pending transaction persistence
-- `sponsoredTransferHandlers.ts` / `sponsoredTransferIntentStorage.ts` -
-  ERC-3009 signing, encrypted retry state, and ambiguous relay outcomes
-- `localAccountEffectBoundary.ts` / `erc7715/grantBoundary.ts` - Final
+- `bankr/transport.ts`, `bankr/signing.ts`, `bankr/submission.ts`, and
+  `bankr/jobs.ts` - API key sent only to fixed Bankr backend endpoints
+- `requests/pendingTxStorage.ts` - Pending transaction persistence
+- `sponsoredTransfers/authorization.ts`, `intentStorage.ts`, `submission.ts`,
+  and `reconciliation.ts` - ERC-3009 account-pinned signing, encrypted retry
+  state, sole relayer submission, and finalized ambiguous-outcome recovery
+- `accounts/localEffectBoundary.ts` / `erc7715/grantBoundary.ts` - Final
   account binding before irreversible local effects or delegated grant commits
+- `swap/transport.ts`, `quotes.ts`, `rpcClient.ts`, `erc20.ts`, and `permit2.ts`
+  - bounded quote/RPC reads and pure approval calldata construction
+- `tokens/customTokenStorage.ts`, `tokenMetadata.ts`, `nftMetadataPolicy.ts`,
+  `nftMetadata.ts`, `calldataAddressCandidates.ts`, and
+  `erc20CandidatePreflight.ts` - custom-token privacy/storage, remote metadata,
+  and bounded simulation candidate discovery
 
 ### Extension permissions
 
@@ -1196,7 +1408,7 @@ These are security characteristics that have been reviewed and accepted:
    loopback caller and LAN targets require the caller's exact hostname. The
    background worker explicitly omits credentials and referrers.
 
-6. **Console logging of migration events and decryption operations** in `auth/legacyVaultKeyMigration.ts`, `auth/sessionHydration.ts`, `vaultCrypto.ts`, and `sessionCache.ts`. Logs include timing information ("API key migration completed", "Private key migration completed", "Session restored after service worker restart") but never log the actual secrets (keys, passwords). Acceptable because: (a) Chrome DevTools requires explicit user action to open, (b) logs provide critical debugging info for migration and session restore flows, (c) industry standard practice (MetaMask logs extensively), (d) no secrets are exposed in log messages.
+6. **Console logging of migration events and decryption operations** in `auth/legacyVaultKeyMigration.ts`, `auth/sessionHydration.ts`, and `session/restoration.ts`. Logs include timing information ("API key migration completed", "Private key migration completed", "Session restored after service worker restart") but never log the actual secrets (keys, passwords). Acceptable because: (a) Chrome DevTools requires explicit user action to open, (b) logs provide critical debugging info for migration and session restore flows, (c) industry standard practice (MetaMask logs extensively), (d) no secrets are exposed in log messages.
 
 7. **Private-network classification is hostname-based.** Browser `fetch()` does
    not expose the selected socket address, so the service worker can reject

@@ -104,7 +104,7 @@ interface Conversation {
 
 ### Storage Functions
 
-`src/chrome/chatStorage.ts`:
+`src/chrome/bankr/chat/storage.ts`:
 
 | Function                                              | Description                                                |
 | ----------------------------------------------------- | ---------------------------------------------------------- |
@@ -145,7 +145,7 @@ Conversations are NOT saved to storage until the first message is sent:
 
 ### Chat API Client
 
-`src/chrome/chatApi.ts`:
+`src/chrome/bankr/chat/client.ts`:
 
 ```typescript
 // Submit a prompt to the Bankr API (with optional conversation history)

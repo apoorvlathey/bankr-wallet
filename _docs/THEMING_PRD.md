@@ -822,7 +822,7 @@ This requires a grep + replace sweep. ~30-50 usage sites.
 2. **For numeric value emphasis in calldata/typed-data displays, use `chart.numeric`** — promoted to the token contract in Phase 13. Per-component dark-theme conditionals were the wrong shape; they pollute call sites with theme-specific hex literals.
 3. **For "dark CTA strip" inverted bars, use `useStripTokens()`** from `@/theme` — never duplicate the `isDarkTheme ? "surface.sunken" : "fg.primary"` pair inline. The hook lives at `theme/useStripTokens.ts` and is exported from the public API barrel.
 4. **For component baseStyles in `createTheme.ts` (Modal, Menu, Popover, Slider, Tooltip, Button, Input)**, prefer adding to the factory over inline overrides. Phase 13 added `buildPopover` and `buildSlider`. The pattern: lift the inline `bg`/`border`/`borderRadius`/`boxShadow`/`_focus` props into a `baseStyle` object and source them from `t.radii.*`, `t.shadows.*`, intent token names. Then delete the inline overrides at every call site.
-5. **For Chrome action API badge colors and CSS body backgrounds**, use literals — they live outside the React tree and can't read CSS vars at the moments they need to apply. The `index.css` `popup-window-mode` wash and the `chrome.action.setBadgeBackgroundColor` calls in `pendingTxStorage.ts` / `pendingSignatureStorage.ts` are exempt from the no-literals rule. Use `html[data-theme="..."]` selectors to make CSS theme-aware.
+5. **For Chrome action API badge colors and CSS body backgrounds**, use literals — they live outside the React tree and can't read CSS vars at the moments they need to apply. The `index.css` `popup-window-mode` wash and the `chrome.action.setBadgeBackgroundColor` calls in `requests/pendingTxStorage.ts` / `requests/pendingSignatureStorage.ts` are exempt from the no-literals rule. Use `html[data-theme="..."]` selectors to make CSS theme-aware.
 6. **`text.*` legacy aliases are PERMANENT.** 610+ call sites use them; renaming would be high-churn, low-value sed. The factory's `legacy:` block aliases `text.*` → `fg.*` at zero cost. New code should still prefer `fg.*` but existing usage is fine to leave. Documented in `tokens.ts`.
 7. **JSX comments inside `{condition && (...)}` expressions are JS, not JSX.** Use `// line comments` between `(` and the JSX node. `{/* JSX comments */}` belong to JSX child slots — they break parsing if you put them inside the JS expression of a `{...}` interpolation. Phase 13 hit this in `TransactionConfirmation.tsx` Reject All; the fix is to move JSX comments OUTSIDE the conditional.
 
@@ -832,14 +832,14 @@ This requires a grep + replace sweep. ~30-50 usage sites.
 - `rg 'bauhaus\.' apps/extension/src --glob '!theme/**'` → only docstring/comment matches in `MultiTxGasEstimateDisplay.tsx` and `theme/primitives/{ThemedCard,IconBox}.tsx`. Zero live token references. ✅
 - `rg 'translate\(2px, 2px\)' apps/extension/src` → only `theme/themes/bauhaus.ts` motion config. ✅
 - `rg 'useBauhausToast' apps/extension/src` → zero matches. ✅
-- `rg '#[0-9A-Fa-f]{6}' apps/extension/src --glob '!theme/**' --glob '!constants/chainRegistry.ts' --glob '!lib/chainIcons.ts' --glob '!chrome/pendingTxStorage.ts' --glob '!chrome/pendingSignatureStorage.ts' --glob '!*.css'` → only the WalletChan OS brand banner gradient in `App.tsx` (`#1a1a2e/#16213e` — fixed brand color, intentionally theme-independent). All other component-code hex literals are gone. ✅
+- `rg '#[0-9A-Fa-f]{6}' apps/extension/src --glob '!theme/**' --glob '!constants/chainRegistry.ts' --glob '!lib/chainIcons.ts' --glob '!chrome/requests/pendingTxStorage.ts' --glob '!chrome/requests/pendingSignatureStorage.ts' --glob '!*.css'` → only the WalletChan OS brand banner gradient in `App.tsx` (`#1a1a2e/#16213e` — fixed brand color, intentionally theme-independent). All other component-code hex literals are gone. ✅
 - `pnpm build:extension` → built green across all 5 targets on the second attempt (the first attempt caught a JSX-comment-in-JS-expression error in `TransactionConfirmation.tsx`, fixed in-place). Bundle sizes unchanged from Phase 12.
 
 **Decisions made (carry forward):**
 
 - **`text.*` is permanent compat**, not pending removal. Documented in `tokens.ts` legacy block comment.
 - **Chain brand colors** (`lib/chainIcons.ts`, `constants/chainRegistry.ts`) are exempt from the no-literals rule — Ethereum is `#627EEA` regardless of which theme the user picks. Chain brand identity ≠ theme color.
-- **Chrome API colors** (`chrome.action.setBadgeBackgroundColor` in `pendingTxStorage.ts` / `pendingSignatureStorage.ts`) are exempt — the Chrome API requires literal hex, can't read CSS vars.
+- **Chrome API colors** (`chrome.action.setBadgeBackgroundColor` in `requests/pendingTxStorage.ts` / `requests/pendingSignatureStorage.ts`) are exempt — the Chrome API requires literal hex, can't read CSS vars.
 - **WalletChan OS brand banner gradient** in `App.tsx` is exempt — it's a brand element, not a theme element.
 
 **Test gate:**

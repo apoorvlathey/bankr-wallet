@@ -88,7 +88,7 @@ The old pattern required touching 4+ files. With the registry, these are now thi
 - `constants/networks.ts` — re-exports from `chainRegistry.ts`
 - `chrome/localSigner.ts` — imports `VIEM_CHAINS` and `RPC_URLS` from registry
 - `chrome/gasEstimation.ts` — imports `CHAIN_TOKEN_IDS` from registry
-- `chrome/onchainBalances.ts` — imports `RPC_URLS` from registry
+- `chrome/portfolio/onchainBalances.ts` — imports `RPC_URLS` from registry
 
 ## Auto-prefill from KNOWN_CHAINS
 

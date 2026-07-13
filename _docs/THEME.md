@@ -528,7 +528,7 @@ The "no hex literals in components" rule has a few principled exemptions:
 | `apps/extension/src/theme/themes/*.ts` | Theme definitions. Hex is the entire point. |
 | `apps/extension/src/lib/chainIcons.ts` | Chain brand colors (Ethereum is `#627EEA` regardless of theme). Brand identity ≠ theme color. |
 | `apps/extension/src/constants/chainRegistry.ts` | Same — chain brand colors. |
-| `apps/extension/src/chrome/pendingTxStorage.ts`, `pendingSignatureStorage.ts` | `chrome.action.setBadgeBackgroundColor` requires literal hex; the Chrome API can't read CSS vars. |
+| `apps/extension/src/chrome/requests/pendingTxStorage.ts`, `pendingSignatureStorage.ts` | `chrome.action.setBadgeBackgroundColor` requires literal hex; the Chrome API can't read CSS vars. |
 | `apps/extension/src/index.css`, `onboarding.css` | Body background lives outside the React tree. Use `html[data-theme="…"]` selectors to make CSS theme-aware. |
 | `apps/extension/src/App.tsx` (WalletChan OS brand banner gradient) | Brand element, intentionally theme-independent. |
 
@@ -539,8 +539,8 @@ rg '#[0-9A-Fa-f]{6}' apps/extension/src \
   --glob '!theme/**' \
   --glob '!lib/chainIcons.ts' \
   --glob '!constants/chainRegistry.ts' \
-  --glob '!chrome/pendingTxStorage.ts' \
-  --glob '!chrome/pendingSignatureStorage.ts' \
+  --glob '!chrome/requests/pendingTxStorage.ts' \
+  --glob '!chrome/requests/pendingSignatureStorage.ts' \
   --glob '!*.css'
 ```
 

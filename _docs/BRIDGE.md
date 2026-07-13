@@ -238,10 +238,11 @@ The wallet extension's Swap surface (`apps/extension/src/components/Swap/SwapVie
 
 | File | Purpose |
 |---|---|
-| `apps/extension/src/chrome/bridgeApi.ts` | `fetchBridgeQuote`, `fetchBridgeStatus`, 24h-cached chains + tokens helpers |
-| `apps/extension/src/chrome/bridgeChainsResolver.ts` | `getBridgeSourceChains(accountType)` / `getBridgeDestinationChains()`; source chains come from the runtime configured chain list (`getVisibleChains`, so user-added custom chains like Avalanche are included for PK/Seed accounts) and are kept when either 0x supports same-chain swaps or Socket supports bridge origins. Destination chains use Socket's EVM list. |
-| `apps/extension/src/chrome/bridgeStatusPoller.ts` | In-memory poller + `maybeStartBridgePolling` hook + `resumePendingBridgePollers` |
-| `apps/extension/src/chrome/pendingBridgeStorage.ts` | `pendingBridges` chrome.storage.local key with mutex-locked writes |
+| `apps/extension/src/chrome/bridgeApi.ts` | Stable facade for `fetchBridgeQuote`, `fetchBridgeStatus`, and 24h-cached chain/token helpers |
+| `apps/extension/src/chrome/bridgeChainsResolver.ts` | Stable facade for `getBridgeSourceChains(accountType)` / `getBridgeDestinationChains()`; source chains come from the runtime configured chain list (`getVisibleChains`, so user-added custom chains like Avalanche are included for PK/Seed accounts) and are kept when either 0x supports same-chain swaps or Socket supports bridge origins. Destination chains use Socket's EVM list. |
+| `apps/extension/src/chrome/bridgeStatusPoller.ts` | Stable facade for the in-memory poller, `maybeStartBridgePolling`, and restart resume |
+| `apps/extension/src/chrome/bridge/README.md` | Audit map for bounded API egress, catalog caches, pure chain policy, and ordered settlement transitions |
+| `apps/extension/src/chrome/requests/pendingBridgeStorage.ts` | `pendingBridges` chrome.storage.local key with mutex-locked writes |
 | `apps/extension/src/components/Swap/BridgeChainTokenModal.tsx` | Unified sell/buy chain + token dropdown; sell mode uses source chains, buy mode uses destination chains |
 
 ## Common Errors

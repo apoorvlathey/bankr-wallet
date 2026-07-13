@@ -111,7 +111,7 @@ For native currency (ETH/BNB/POL), metadata comes from `CHAIN_REGISTRY` and the 
 - **ERC-20 fallback**: cache misses call `fetchTokenPrice(chainId, address)` via
   `walletchan.eth.sh/api/swap/token-price`.
 - **Native fallback**: cache misses call `fetchNativePrice(chainId)` from
-  `gasEstimation.ts`, backed by the shared `coingeckoService.ts` cache.
+  `gasEstimation.ts`, backed by the shared `portfolio/coingecko.ts` cache.
 
 ## Rate Limit Handling (Metadata Retry)
 

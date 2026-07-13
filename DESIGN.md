@@ -100,6 +100,12 @@
 - Overlays: popovers for small contextual choices; action sheets for 2 to 6 choices; full screens for search, selection, configuration, and transaction detail; dialogs only for blocking decisions.
 - Empty/loading/error: actionable empty copy, geometry-matching skeletons, recoverable errors with a next step.
 - Focus ring: blue 3px outer ring with sufficient contrast and no layout shift.
+- Architecture: renderer implementations are organized by feature domain with
+  local audit maps. Screen roots compose; feature hooks own one state/effect
+  domain; presentational components receive callbacks; pure models contain no
+  React, Chakra, Chrome, storage, or network effects. New implementation files
+  stay below roughly 400 lines, while existing oversized roots use ratcheting
+  budgets. See `_docs/EXTENSION_UI_ARCHITECTURE.md`.
 
 ## Motion
 
@@ -303,3 +309,6 @@
   Warm Midnight amber `brand` exception in the component, button recipe,
   `DESIGN.md`, `_docs/STYLING.md`, and `_docs/WARM_MIDNIGHT.md` after the older
   blue-confirmation policy repeatedly caused regressions.
+- 2026-07-13: established the extension renderer's feature-domain contract,
+  compatibility-facade migration pattern, effect/model boundaries, audit maps,
+  and ratcheting source-size tests without changing the approved visual system.

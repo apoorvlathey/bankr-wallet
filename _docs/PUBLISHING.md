@@ -245,7 +245,14 @@ Chrome extensions auto-update silently. Users cannot choose to stay on an old ve
 
 ### How migrations work
 
-`background.ts` listens for `chrome.runtime.onInstalled` with `reason === "update"`. When it fires, `legacyStorageMigration.ts` runs `migrateFromLegacyStorage()`. As a safety net, `App.tsx` also calls the `migrateFromLegacy` message handler if it detects no accounts on load. Both paths share the wallet secret-operation lock and re-read inside it, so concurrent invocations remain one idempotent migration rather than committing mismatched account IDs.
+`background/composition/lifecycle.ts` registers `chrome.runtime.onInstalled`
+through `background/lifecycle/installUpdate.ts`. On `reason === "update"`, that
+lifecycle invokes `accounts/legacyMigration.ts`'s
+`migrateFromLegacyStorage()`. As a safety net, `App.tsx` also calls the
+`migrateFromLegacy` message handler if it detects no accounts on load. Both
+paths share the wallet secret-operation lock and re-read inside it, so
+concurrent invocations remain one idempotent migration rather than committing
+mismatched account IDs.
 
 ### Rules for storage changes
 
@@ -256,7 +263,9 @@ Chrome extensions auto-update silently. Users cannot choose to stay on an old ve
 
 ### Adding a new migration
 
-1. Write a function in `background.ts` (or a dedicated module if complex):
+1. Write an idempotent migration in its owning domain (or in
+   `background/lifecycle/installUpdate.ts` only for a small public-settings
+   migration). Never add migration logic to the `background.ts` entrypoint:
    ```ts
    async function migrateXxx(): Promise<boolean> {
      // Check if already migrated — exit early
@@ -265,7 +274,8 @@ Chrome extensions auto-update silently. Users cannot choose to stay on an old ve
      // Return true if migrated, false if skipped
    }
    ```
-2. Call it from the `onInstalled` `"update"` handler.
+2. Inject it through `background/composition/lifecycle.ts` and call it from the
+   focused `onInstalled` `"update"` lifecycle.
 3. Add a fallback call from `App.tsx` init if needed (for cases where the service worker was inactive during install).
 4. Add a message handler gated with `isExtensionPage(sender)` if the fallback needs it.
 

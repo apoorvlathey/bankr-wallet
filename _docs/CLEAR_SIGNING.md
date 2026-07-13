@@ -17,22 +17,23 @@ Confirmation surface
   └─ <ClearSigningView kind=calldata|eip712 …/>
        └─ useClearSigningDescriptor(chainId, address)
             └─ message: GET_CLEAR_SIGNING_DESCRIPTOR
-                 └─ clearSigningHandlers.ts (background)
-                      ├─ chrome.storage.local cache  cs:desc:<chainId>:<address>:<kind>:<selector|format>
-                      │    (TTL 7d hits, 1d misses; schema v3)
-                      ├─ walletchan.eth.sh/api/clearsigning/descriptor (direct)
-                      ├─ ON MISS → proxyResolver.ts (Safe / EIP-1967 / beacon)
-                      │    └─ re-fetch descriptor for impl address
-                      │    └─ extend descriptor.deployments to include the proxy
-                      └─ builtinDescriptors.ts (client-side fallback)
-                           ↳ ERC-20 transfer / approve only
+                 └─ clearSigningHandlers.ts facade (background)
+                      └─ clearSigning/handlers.ts
+                           ├─ descriptorCache.ts  cs:desc:<chainId>:<address>:<kind>:<selector|format>
+                           │    (TTL 7d hits, 1d misses; schema v3)
+                           ├─ walletchan.eth.sh/api/clearsigning/descriptor (direct)
+                           ├─ ON MISS → network/proxyResolver.ts (Safe / EIP-1967 / beacon)
+                           │    └─ re-fetch descriptor for impl address
+                           │    └─ extend descriptor.deployments to include the proxy
+                           └─ builtinDescriptors.ts (client-side fallback)
+                                ↳ ERC-20 transfer / approve only
 ```
 
-**Remote always wins.** A built-in is only consulted after the remote registry returns nothing (or the user has clear-signing disabled). This means a contract with a curated registry descriptor renders that descriptor, not the generic ERC-20 one.
+**Remote always wins.** A built-in is only consulted after the remote registry returns nothing or has no matching format. Explicit opt-out suppresses clear signing entirely. This means a contract with a curated registry descriptor renders that descriptor, not the generic ERC-20 one.
 
 ### Cache schema versioning
 
-Cache entries are stamped with `schemaVersion`. On read, entries with a version older than `CACHE_SCHEMA_VERSION` (in `clearSigningHandlers.ts`) are treated as misses and re-resolved. Bump the constant whenever the resolution pipeline changes in a way that would make pre-existing cache entries wrong — users see new behavior immediately instead of waiting 1–7 days for a stale entry to expire.
+Cache entries are stamped with `schemaVersion`. On read, entries with a version older than `CLEAR_SIGNING_CACHE_SCHEMA_VERSION` in `clearSigning/descriptorCache.ts` are treated as misses and re-resolved. Bump the constant whenever the resolution pipeline changes in a way that would make pre-existing cache entries wrong — users see new behavior immediately instead of waiting 1–7 days for a stale entry to expire.
 
 | Version | Change |
 |---|---|
@@ -134,7 +135,7 @@ Some contracts pass another contract's calldata as a parameter — Safe's `Batch
 
 Reference descriptor: [`registry/safe/calldata-BatchExecutor.json`](https://github.com/ethereum/clear-signing-erc7730-registry/blob/master/registry/safe/calldata-BatchExecutor.json).
 
-## Proxy fallback (`chrome/proxyResolver.ts`)
+## Proxy fallback (`chrome/network/proxyResolver.ts`)
 
 The registry indexes contracts by their *deployed* address. For directly-deployed contracts (Uniswap router, Permit2, the Safe singleton itself) that's exact. For **proxies**, it's not — every Safe is a unique `SafeProxy` at a unique address, every OZ Transparent / UUPS upgradeable contract is a per-instance proxy. The registry can't enumerate millions of them.
 
@@ -148,7 +149,7 @@ The registry indexes contracts by their *deployed* address. For directly-deploye
 
 EIP-1967 / beacon take priority over Safe slot 0 — slot 0 is the first declared storage variable on many non-Safe contracts (ERC-20s, LP pairs, etc.) and would otherwise yield a garbage "implementation" address. A `looksLikeRealAddress` heuristic on slot 0 (require ≥5 non-zero nibbles in the leading 20) further rejects values that look like packed booleans or small integers.
 
-When the resolver returns an implementation, the handler refetches the descriptor for `(chainId, impl)`, then `extendDeployments` appends `(chainId, proxy)` to the descriptor's deployment list before caching it under the proxy's cache key. This means client-side context verification keeps working untouched, and every subsequent confirmation on the same proxy address skips the RPC + the extra fetch entirely.
+When the resolver returns an implementation, `clearSigning/descriptorResolver.ts` refetches the descriptor for `(chainId, impl)`, then `deploymentExtension.ts` clones it and appends `(chainId, proxy)` to the descriptor's deployment list before the handler caches it under the proxy's key. This means client-side context verification keeps working untouched, and every subsequent confirmation on the same proxy address skips the RPC + the extra fetch entirely.
 
 Patterns NOT covered yet: ERC-1167 minimal proxies (bytecode pattern, would need `eth_getCode` + regex), EIP-2535 Diamond (per-selector facets, would need a `facetAddress(selector)` lookup per inner call). Add when a real registry entry needs them.
 

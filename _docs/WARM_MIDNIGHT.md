@@ -342,8 +342,8 @@ Relevant files:
 - `components/DappSiteIcon.tsx`
 - `components/ConnectedDappsView.tsx`
 - `components/MoreActionsView.tsx`
-- `chrome/dappConnectionHandlers.ts`
-- `chrome/dappPermissionStorage.ts`
+- `chrome/dapp/connectionHandlers.ts`
+- `chrome/requests/dappPermissionStorage.ts`
 
 ### 5.7 Portfolio tabs and chart
 

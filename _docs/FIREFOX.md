@@ -46,14 +46,24 @@ Both manifests share `name`, `version`, `description`, `icons`, `action`,
 
 ## Runtime browser detection
 
-We do **not** add Firefox-specific branching in app code beyond a handful of `chrome.sidePanel?.open` guards. The existing `isNonChromeBrowser()` check in `apps/extension/src/chrome/sidepanelManager.ts` already returns `true` for Firefox (Firefox's `navigator.userAgentData.brands` does not include `"Google Chrome"`), so the popup-only fallback path already engages.
+We do **not** add broad Firefox-specific branching in app code. The export-only
+`apps/extension/src/chrome/sidepanelManager.ts` facade delegates to
+`windowing/browserCapabilities.ts`; Firefox takes the popup-only path because
+`chrome.sidePanel` is absent. The Chromium-brand check separately blocks
+phantom side-panel APIs in Arc/Brave/Opera-family browsers.
 
 Direct `chrome.sidePanel.open()` call sites are now guarded for browsers where the API doesn't exist:
 
 - `apps/extension/src/App.tsx` (sidepanel-toggle button) — early return when API absent
 - `apps/extension/src/components/UnlockScreen.tsx` (sidepanel-toggle button) — early return
-- `apps/extension/src/chrome/background.ts` (`chrome.action.onClicked` listener) — falls through to `openPopupWindow()`
-- `apps/extension/src/chrome/txHandlers.ts` (tx confirmation router) — throws to fall through to popup-window fallback already in place
+- `apps/extension/src/chrome/background/composition/lifecycle.ts` injects a
+  nullable side-panel opener into `background/lifecycle/actionFallback.ts`,
+  which falls through to `openPopupWindow()`
+- `apps/extension/src/chrome/windowing/chromeAdapter.ts` guards request-surface
+  panel effects; `windowing/requestSurface.ts` falls through to the reusable
+  detached-popup path
+- `apps/extension/src/lib/sidePanelControls.ts` treats panel closing as an
+  optional browser capability
 
 UX choice: **popup-only on Firefox.** We evaluated using Firefox's native `sidebar_action` / `chrome.sidebarAction` as a sidepanel equivalent and rejected it. Findings:
 

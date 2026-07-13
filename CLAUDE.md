@@ -25,7 +25,7 @@ There are four confirmation surfaces (single, batch, cross-dapp batch, swap/brid
 
 ### Storage changes can brick existing users
 
-Chrome auto-updates silently. Before adding/removing/renaming/reshaping ANY `chrome.storage` key, read [`_docs/STORAGE.md`](./_docs/STORAGE.md) (key reference + audit checklist) and [`_docs/PUBLISHING.md`](./_docs/PUBLISHING.md) (migration rules + pre-release checklist). Write an idempotent migration in `background.ts` if old users would break. Audit ALL read AND write paths — `background.ts` has multiple handlers and `AccountSettingsModal.tsx` can save directly.
+Chrome auto-updates silently. Before adding/removing/renaming/reshaping ANY `chrome.storage` key, read [`_docs/STORAGE.md`](./_docs/STORAGE.md) (key reference + audit checklist) and [`_docs/PUBLISHING.md`](./_docs/PUBLISHING.md) (migration rules + pre-release checklist). Write an idempotent migration in the focused install/update lifecycle module if old users would break. Audit ALL read AND write paths through the owning router/composition/domain and renderer settings surfaces.
 
 ### Handlers that need credentials need session restoration
 
@@ -34,6 +34,17 @@ Any new message handler using `getCachedPassword()` / `getCachedApiKey()` must i
 ### Pre-commit security check
 
 Before any commit that touches extension code (message handlers, storage, crypto, content scripts, session management), verify against the checklist in [`_docs/SECURITY.md`](./_docs/SECURITY.md).
+
+### Keep extension logic in auditable domains
+
+Before adding service-worker logic, read
+[`apps/extension/src/chrome/README.md`](./apps/extension/src/chrome/README.md)
+and [`_docs/SECURITY_ARCHITECTURE.md`](./_docs/SECURITY_ARCHITECTURE.md).
+The `src/chrome/` root is reserved for build entrypoints, policy-free stable
+facades, and true cross-domain primitives. Related implementations belong in a
+named subfolder with a README audit map and mirrored test folder. Do not create
+another flat prefix family or grow a transitional coordinator to avoid making a
+module.
 
 ## AI Session Workflow
 
@@ -84,6 +95,7 @@ When working on features, refer to these docs.
 | --- | --- |
 | [`_docs/IMPLEMENTATION.md`](./_docs/IMPLEMENTATION.md) | Extension internals, message types, tx flow, file structure, session restoration |
 | [`_docs/SECURITY.md`](./_docs/SECURITY.md) | Threat model, access control, pre-commit security checklist |
+| [`_docs/SECURITY_ARCHITECTURE.md`](./_docs/SECURITY_ARCHITECTURE.md) | Service-worker domain boundaries, dependency direction, audit maps, safe refactors |
 | [`_docs/STORAGE.md`](./_docs/STORAGE.md) | Every chrome.storage key, shape, version history, audit checklist |
 | [`_docs/PUBLISHING.md`](./_docs/PUBLISHING.md) | Release workflow, CWS upload, auto-update, storage migrations |
 | [`_docs/DEVELOPMENT.md`](./_docs/DEVELOPMENT.md) | Commands, build modes (dev vs prod), testing changes, browser targets |
@@ -140,14 +152,45 @@ When working on features, refer to these docs.
 
 ## Code Quality Rules
 
-- **Keep files under ~400 lines.** Split into focused modules by responsibility.
+- **Keep implementation files under ~400 lines.** Split before the limit; do
+  not treat it as a target. Generated data and frozen fixtures are the routine
+  exceptions.
+- **Oversized composition roots are ratchets.** Existing transitional roots may
+  remain over 400 only while being decomposed. Never raise their enforced size
+  budget or add policy inline.
 - **One concern per file.** E.g., `sessionCache.ts` owns credential caching; `authHandlers.ts` owns unlock/password.
-- **`background.ts` is a message router only.** It registers Chrome listeners and delegates to `*Handlers.ts`. Never add business logic to it.
+- **`background.ts` is a bootstrap invocation only.** It imports and invokes
+  `background/bootstrap.ts`. Lifecycle behavior, message order,
+  authorization policy, storage work, and other business logic stay in
+  `chrome/background/` or the owning domain, never inline in the entrypoint.
+- **No new flat `src/chrome/` implementation families.** New logic goes in its
+  owning domain folder. Root files are limited to entrypoints, documented
+  policy-free compatibility facades, and genuinely shared primitives.
+- **Every domain has an audit map.** Keep its `README.md` current with file
+  responsibilities, dependency direction, storage/network effects, public
+  facade, and matching `tests/<domain>/` coverage.
+- **Facades re-export; they do not implement.** They must contain no
+  authorization, cryptography, storage, networking, or business policy.
+- **Mirror tests by domain and keep the test root empty.** Put frozen released
+  records in `tests/fixtures/` and shared harnesses in `tests/helpers/`.
+- **Treat `tests/security/chromeDomainLayout.test.ts` as an admission gate.**
+  Never add a flat root implementation to its allowlist just to make the test
+  pass; use an owning source/test domain with both README audit maps.
+- **Moves preserve contracts.** Keep storage keys, serialized records, message
+  names, exact public exports, and irreversible-effect ordering unchanged.
+  Add facade-identity, forbidden-dependency, root-clutter, and size-budget tests
+  with the move.
+- **Dependencies point inward.** Router → coordinator → policy/repository/pure
+  transform. Use dependency injection instead of circular imports.
 - **Search before you build.** Before writing any new component, hook, utility, storage helper, or handler, grep the codebase. If something does ~80% of what you need, extend it (add an optional override callback) instead of forking it. Primitives that already exist: `CopyButton`, `useCachedAvatarSrc`, `useCachedAvatarMap`, `ERC20ApproveDisplay`, `TokenAmount`, `AddressValue`, `useThemedToast`, `useStripTokens`, `getEthShLabels`, `fetchTokenInfo`, `getCachedTokenLogo`.
 - **Extract shared utilities** when the same logic appears in 2+ files (see `cryptoUtils.ts`).
 - **Use dependency injection** to avoid circular imports (e.g., `tryRestoreSession(unlockFn)` takes a callback).
 - **Naming**: `*Handlers.ts` for handlers; `*Storage.ts` / `*Cache.ts` for state; `*Utils.ts` for utilities. Functions sharing state belong in the same module.
-- **New message handlers**: add to the appropriate `*Handlers.ts` and add a 1-3 line case to the `background.ts` switch. Update [`_docs/IMPLEMENTATION.md`](./_docs/IMPLEMENTATION.md) if you add new modules.
+- **New message handlers**: add a focused handler inside the owning domain,
+  route it in exactly one `background/*Router.ts`, classify its audience in
+  `messageAccessPolicy.ts`, and compose it through the ordered message pipeline.
+  Do not add a residual switch to `background.ts`. Update
+  [`_docs/IMPLEMENTATION.md`](./_docs/IMPLEMENTATION.md) and the domain audit map.
 
 ## Foundry libraries
 

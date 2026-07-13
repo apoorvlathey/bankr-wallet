@@ -232,6 +232,20 @@ and About identity block. Keep ordinary product-name mentions, screen headings,
 body copy, controls, and technical content in the product typeface until the
 Warm Midnight screen-by-screen review approves any broader use.
 
+## Component Architecture
+
+Visual rules and source organization are related but have separate owners.
+This document defines tokens, interaction grammar, and component anatomy;
+[`EXTENSION_UI_ARCHITECTURE.md`](./EXTENSION_UI_ARCHITECTURE.md) defines feature
+folders, composition roots, hook/effect ownership, pure models, compatibility
+facades, audit maps, and ratcheting file-size budgets.
+
+New multi-file UI features belong in a named domain folder. Keep
+`components/ui/` domain-free, colocate feature-only hooks and child components,
+and preserve public imports with a small facade during incremental moves. Do
+not add substantial feature behavior to the flat `components/` root or to an
+already oversized screen file.
+
 ## Mobile Application Primitives
 
 Application-level layout primitives live in `components/ui/`; they are
