@@ -62,6 +62,9 @@ function requestDependencies(
     openPopup: async () => {
       events.push("popup");
     },
+    notifyFullscreenRequest: async () => {
+      events.push("notification");
+    },
     ...overrides,
   };
 }
@@ -94,6 +97,35 @@ test("request surface prefers a verified panel and falls back to the same target
     "supportedSync",
     "panel:false",
     "popup",
+  ]);
+});
+
+test("fullscreen panel failure notifies instead of opening a fullscreen popup", async () => {
+  const events: string[] = [];
+  await openExtensionPopupWith(
+    12,
+    requestDependencies(events, {
+      getWindow: async () => {
+        events.push("window:12");
+        return { id: 12, state: "fullscreen" } as chrome.windows.Window;
+      },
+      getMode: async () => {
+        events.push("mode");
+        return false;
+      },
+      openPanel: async (_window, fullscreen) => {
+        events.push(`panel:${fullscreen}`);
+        return false;
+      },
+    }),
+  );
+  assert.deepEqual(events, [
+    "window:12",
+    "mode",
+    "supportedAsync",
+    "supportedSync",
+    "panel:true",
+    "notification",
   ]);
 });
 
@@ -139,15 +171,45 @@ test("request side panel reuses a live view and verifies new panels after 600 ms
   assert.deepEqual(reused, ["ping"]);
 
   const opened: string[] = [];
+  let contextChecks = 0;
   assert.equal(
     await openRequestSidePanelWith(
       { id: 4 } as chrome.windows.Window,
       true,
-      panelDependencies(opened),
+      panelDependencies(opened, {
+        getContexts: async () => {
+          opened.push("contexts");
+          contextChecks += 1;
+          return contextChecks === 1 ? [] : [{}];
+        },
+      }),
     ),
     true,
   );
-  assert.deepEqual(opened, ["open:4", "delay:600", "contexts"]);
+  assert.deepEqual(opened, [
+    "contexts",
+    "open:4",
+    "delay:600",
+    "contexts",
+  ]);
+});
+
+test("fullscreen request reuses the panel opened by the early user-activation hop", async () => {
+  const events: string[] = [];
+  assert.equal(
+    await openRequestSidePanelWith(
+      { id: 4 } as chrome.windows.Window,
+      true,
+      panelDependencies(events, {
+        getContexts: async () => {
+          events.push("contexts");
+          return [{}];
+        },
+      }),
+    ),
+    true,
+  );
+  assert.deepEqual(events, ["contexts"]);
 });
 
 test("request side panel uses ping verification when getContexts is absent", async () => {

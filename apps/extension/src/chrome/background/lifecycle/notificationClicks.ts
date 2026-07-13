@@ -21,12 +21,27 @@ export type NotificationClickLifecycleDependencies = {
     focused: boolean;
   }) => Promise<unknown>;
   clearNotification: (notificationId: string) => unknown;
+  fullscreenRequestWindowId: (notificationId: string) => number | null;
+  openSidePanel: ((options: { windowId: number }) => Promise<unknown>) | null;
 };
 
 export function registerNotificationClickLifecycle(
   dependencies: NotificationClickLifecycleDependencies,
 ): void {
   dependencies.notificationClickedEvent.addListener(async (notificationId) => {
+    const fullscreenWindowId =
+      dependencies.fullscreenRequestWindowId(notificationId);
+    if (fullscreenWindowId !== null) {
+      try {
+        if (dependencies.openSidePanel) {
+          await dependencies.openSidePanel({ windowId: fullscreenWindowId });
+        }
+      } finally {
+        dependencies.clearNotification(notificationId);
+      }
+      return;
+    }
+
     const storageKey = `notification-${notificationId}`;
     const data = await dependencies.getLocalStorage([storageKey]);
     const notificationData = data[storageKey];

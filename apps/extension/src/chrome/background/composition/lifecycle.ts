@@ -55,6 +55,7 @@ import {
 } from "@/theme/tokens";
 import { cleanupStaleProcessingTxs } from "../../txHistoryStorage";
 import { openPopupWindow } from "../../txHandlers";
+import { fullscreenRequestNotificationWindowId } from "../../windowing/providerRequestSurface";
 import { isTrustedWalletUiSender } from "../../trustedWalletUiSender";
 import { initWalletConnect } from "../../walletConnect/client";
 import { clearExpiredWalletConnectPendingRequests } from "../../walletConnect/storage";
@@ -192,5 +193,9 @@ export function registerBackgroundLifecycle(
     createWindow: (options) => chrome.windows.create(options),
     clearNotification: (notificationId) =>
       chrome.notifications.clear(notificationId),
+    fullscreenRequestWindowId: fullscreenRequestNotificationWindowId,
+    openSidePanel: chrome.sidePanel?.open
+      ? (options) => chrome.sidePanel.open(options)
+      : null,
   });
 }

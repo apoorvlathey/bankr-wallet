@@ -26,7 +26,14 @@ export async function openRequestSidePanelWith(
   fullscreenOverride: boolean,
   dependencies: RequestSidePanelDependencies,
 ): Promise<boolean> {
-  if (!fullscreenOverride) {
+  if (fullscreenOverride) {
+    try {
+      const contexts = await dependencies.getContexts();
+      if (contexts !== null && contexts.length > 0) return true;
+    } catch {
+      // The early user-activated open may still need the legacy path below.
+    }
+  } else {
     try {
       if ((await dependencies.pingView()) === "pong") return true;
     } catch {

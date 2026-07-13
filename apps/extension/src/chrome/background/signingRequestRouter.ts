@@ -9,6 +9,8 @@
 import type * as PendingRequestResolutionModule from "../requests/pendingRequestResolution";
 
 export const BACKGROUND_SIGNING_REQUEST_MESSAGE_TYPES = [
+  "getProviderWindowState",
+  "openFullscreenRequestSidePanel",
   "sendTransaction",
   "signatureRequest",
   "getPendingSignatureRequests",
@@ -24,6 +26,12 @@ export type BackgroundSigningRequestRouteResult =
   | { handled: true; keepChannelOpen: boolean };
 
 type Dependencies = {
+  getProviderWindowState: (
+    sender: chrome.runtime.MessageSender,
+  ) => Promise<{ fullscreen: boolean }>;
+  openFullscreenRequestSidePanel: (
+    sender: chrome.runtime.MessageSender,
+  ) => void;
   connectedProviderOriginOrReject: (
     sender: chrome.runtime.MessageSender,
     resultPrefix: "txResult" | "sigResult",
@@ -81,6 +89,16 @@ export function createBackgroundSigningRequestMessageRouter(
 ) => BackgroundSigningRequestRouteResult {
   return (message, sender, sendResponse) => {
     switch (message?.type) {
+      case "getProviderWindowState": {
+        dependencies.getProviderWindowState(sender).then(sendResponse);
+        return HANDLED_ASYNC;
+      }
+
+      case "openFullscreenRequestSidePanel": {
+        dependencies.openFullscreenRequestSidePanel(sender);
+        return HANDLED_SYNC;
+      }
+
       case "sendTransaction": {
         const senderWindowId = sender.tab?.windowId;
         void dependencies

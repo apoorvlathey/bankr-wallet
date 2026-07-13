@@ -55,6 +55,15 @@ function assertInvalid(message: unknown, pattern: RegExp): void {
 }
 
 test("external provider messages enforce total size and bounded URLs", () => {
+  assertValid({ type: "getProviderWindowState" });
+  assertValid({
+    type: "openFullscreenRequestSidePanel",
+    fullscreen: true,
+  });
+  assertInvalid(
+    { type: "openFullscreenRequestSidePanel", fullscreen: false },
+    /fullscreen side-panel/i,
+  );
   assertValid({ type: "getDappAccounts" });
   const maxFavicon = `https://images.example/${"x".repeat(
     2_048 - "https://images.example/".length,

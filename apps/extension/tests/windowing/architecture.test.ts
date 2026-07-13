@@ -43,6 +43,7 @@ test("windowing domain stays one-way, explicit, and audit-sized", async () => {
     "modeTransitions.ts": 170,
     "popupGeometry.ts": 70,
     "popupWindow.ts": 150,
+    "providerRequestSurface.ts": 90,
     "requestSidePanel.ts": 90,
     "requestSurface.ts": 120,
     "types.ts": 40,

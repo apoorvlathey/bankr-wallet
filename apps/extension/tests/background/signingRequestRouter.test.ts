@@ -17,6 +17,8 @@ function responseCapture() {
 
 function dependencies(overrides: Record<string, unknown> = {}): any {
   return {
+    getProviderWindowState: async () => ({ fullscreen: false }),
+    openFullscreenRequestSidePanel: () => {},
     connectedProviderOriginOrReject: async () => "https://app.example",
     handleTransactionRequest: () => {},
     enqueueAuthorizedSignatureRequest: () => {},
@@ -96,6 +98,42 @@ test("provider intake preserves the authorized origin and exact sender scope", a
     ["authorize", sender, "sigResult", "sig-1"],
     ["transaction", tx, "tx-1", 4, "https://app.example", 9, 2],
     ["signature", signature, sender, "https://app.example"],
+  ]);
+});
+
+test("fullscreen surface opening stays synchronous to preserve user activation", async () => {
+  const calls: unknown[][] = [];
+  const sender = { tab: { id: 9, windowId: 4 } } as any;
+  const route = createBackgroundSigningRequestMessageRouter(
+    dependencies({
+      getProviderWindowState: async (value: unknown) => {
+        calls.push(["state", value]);
+        return { fullscreen: true };
+      },
+      openFullscreenRequestSidePanel: (value: unknown) => {
+        calls.push(["open", value]);
+      },
+    }),
+  );
+
+  const capture = responseCapture();
+  assert.deepEqual(
+    route({ type: "getProviderWindowState" }, sender, capture.sendResponse),
+    { handled: true, keepChannelOpen: true },
+  );
+  assert.deepEqual(await capture.response, { fullscreen: true });
+
+  assert.deepEqual(
+    route(
+      { type: "openFullscreenRequestSidePanel", fullscreen: true },
+      sender,
+      assert.fail,
+    ),
+    { handled: true, keepChannelOpen: false },
+  );
+  assert.deepEqual(calls, [
+    ["state", sender],
+    ["open", sender],
   ]);
 });
 

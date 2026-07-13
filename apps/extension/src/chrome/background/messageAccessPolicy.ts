@@ -11,6 +11,8 @@
  */
 
 export const PROVIDER_MESSAGE_TYPES = [
+  "getProviderWindowState",
+  "openFullscreenRequestSidePanel",
   "getActiveAccount",
   "getDappAccounts",
   "requestDappConnection",

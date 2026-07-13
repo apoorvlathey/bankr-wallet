@@ -293,11 +293,21 @@ test("action fallback, trusted ports, and notification clicks retain behavior", 
     getRuntimeUrl: (path) => path,
     createWindow: async () => {},
     clearNotification: (id) => events.push(`notification:clear:${id}`),
+    fullscreenRequestWindowId: (id) =>
+      id === "walletchan-fullscreen-request-5" ? 5 : null,
+    openSidePanel: async ({ windowId }) =>
+      events.push(`notification:sidepanel:${windowId}`),
   });
   await notification("tx-1");
   assert.deepEqual(events.slice(-3), [
     "tab:https://safe.example/tx",
     "storage:remove:notification-tx-1",
     "notification:clear:tx-1",
+  ]);
+
+  await notification("walletchan-fullscreen-request-5");
+  assert.deepEqual(events.slice(-2), [
+    "notification:sidepanel:5",
+    "notification:clear:walletchan-fullscreen-request-5",
   ]);
 });

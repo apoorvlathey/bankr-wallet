@@ -62,6 +62,14 @@ export function validateExternalProviderMessage(
   }
 
   switch (candidate.type) {
+    case "getProviderWindowState":
+      return { valid: true };
+
+    case "openFullscreenRequestSidePanel":
+      return candidate.fullscreen === true
+        ? { valid: true }
+        : failProviderValidation("Invalid fullscreen side-panel request");
+
     case "requestDappConnection":
       return isProviderRequestId(candidate.requestId)
         ? { valid: true }

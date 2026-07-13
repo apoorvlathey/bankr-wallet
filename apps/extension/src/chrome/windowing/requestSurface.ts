@@ -9,6 +9,7 @@ import {
 } from "./modeTransitions";
 import { shouldUseSidePanelForRequest } from "./modePolicy";
 import { openOrFocusRequestPopup } from "./popupWindow";
+import { showFullscreenRequestNotification } from "./providerRequestSurface";
 import { openRequestSidePanel } from "./requestSidePanel";
 
 export interface RequestSurfaceDependencies {
@@ -24,6 +25,9 @@ export interface RequestSurfaceDependencies {
   openPopup: (
     targetWindow: chrome.windows.Window | null,
   ) => Promise<void>;
+  notifyFullscreenRequest: (
+    targetWindow: chrome.windows.Window | null,
+  ) => Promise<void>;
 }
 
 const productionDependencies: RequestSurfaceDependencies = {
@@ -34,6 +38,7 @@ const productionDependencies: RequestSurfaceDependencies = {
   isSupported: isSidePanelSupported,
   openPanel: openRequestSidePanel,
   openPopup: openOrFocusRequestPopup,
+  notifyFullscreenRequest: showFullscreenRequestNotification,
 };
 
 export async function resolveRequestWindowWith(
@@ -79,6 +84,11 @@ export async function openExtensionPopupWith(
     dependencies.isSupported() &&
     (await dependencies.openPanel(targetWindow, fullscreenOverride))
   ) {
+    return;
+  }
+
+  if (fullscreenOverride) {
+    await dependencies.notifyFullscreenRequest(targetWindow);
     return;
   }
 
