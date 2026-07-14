@@ -407,29 +407,14 @@ test("unknown provider message types fail closed", () => {
   assertInvalid({ type: 42 }, /invalid/i);
 });
 
-test("provider expiry accepts only bounded internal request kinds", () => {
-  for (const requestKind of [
-    "transaction",
-    "signature",
-    "dappConnection",
-    "erc7715Permission",
-    "addChain",
-    "watchAsset",
-    "batchTransaction",
-  ]) {
-    assertValid({
-      type: "expireProviderRequest",
-      requestKind,
-      requestId: validId,
-    });
-  }
+test("provider expiry is not an accepted external request", () => {
   assertInvalid(
     {
       type: "expireProviderRequest",
-      requestKind: "privateKey",
+      requestKind: "transaction",
       requestId: validId,
     },
-    /expiring provider request/i,
+    /unsupported/i,
   );
 });
 

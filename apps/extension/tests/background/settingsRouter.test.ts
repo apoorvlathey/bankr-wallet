@@ -10,8 +10,8 @@ import {
 
 const TEST_ENVIRONMENT = {
   openPopupWindow: async () => {},
-  setSyncStorage: async (_values: Record<string, unknown>) => {},
-  setActionPopup: async (_popup: string) => {},
+  setSyncStorage: async () => {},
+  setActionPopup: async () => {},
   popupPath: "popup-init.html",
 };
 
@@ -69,6 +69,7 @@ test("network registry routes preserve arguments, results, and async channels", 
       chainName: "Base",
       nextChainName: "Base Mainnet",
       entry: { chainId: 8453 },
+      rpcUrls: ["https://mainnet.base.org"],
     },
     updated.sendResponse,
   );
@@ -83,6 +84,7 @@ test("network registry routes preserve arguments, results, and async channels", 
         chainName: "Base",
         nextChainName: "Base Mainnet",
         entry: { chainId: 8453 },
+        rpcUrls: ["https://mainnet.base.org"],
       },
     ],
   ]);

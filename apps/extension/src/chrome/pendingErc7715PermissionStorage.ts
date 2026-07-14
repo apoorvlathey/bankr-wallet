@@ -1,4 +1,4 @@
-/** Stable facade for ERC-7715 prompt, grant, expiry, and result persistence. */
+/** Stable facade for ERC-7715 prompt, grant, and result persistence. */
 
 export type {
   Address,
@@ -12,7 +12,6 @@ export type {
   PendingErc7715PermissionRequest,
 } from "./erc7715/types";
 export {
-  ERC7715_PERMISSION_EXPIRY_MS,
   ERC7715_PERMISSION_RESULT_PREFIX,
 } from "./erc7715/types";
 export {
@@ -29,7 +28,6 @@ export {
   revokeErc7715PermissionGrant,
   saveErc7715PermissionGrant,
 } from "./erc7715/grantStorage";
-export { clearExpiredErc7715PermissionRequests } from "./erc7715/expiry";
 export {
   waitForErc7715PermissionResult,
   writeErc7715PermissionResult,

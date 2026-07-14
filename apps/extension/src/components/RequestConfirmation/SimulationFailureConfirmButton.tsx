@@ -1,0 +1,115 @@
+import { WarningTwoIcon } from "@chakra-ui/icons";
+import {
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogOverlay,
+  Button,
+  Text,
+  useDisclosure,
+} from "@chakra-ui/react";
+import { useRef } from "react";
+
+interface SimulationFailureConfirmButtonProps {
+  isDisabled: boolean;
+  isLoading: boolean;
+  label: string;
+  onConfirm: () => void;
+  requestKind: "transaction" | "batch";
+  simulationFailed: boolean;
+}
+
+/**
+ * Adds an explicit second decision before a request known to have failed
+ * simulation can reach any wallet-specific signing path.
+ */
+export function SimulationFailureConfirmButton({
+  isDisabled,
+  isLoading,
+  label,
+  onConfirm,
+  requestKind,
+  simulationFailed,
+}: SimulationFailureConfirmButtonProps) {
+  const warningDialog = useDisclosure();
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const isBatch = requestKind === "batch";
+
+  const handlePrimaryClick = () => {
+    if (simulationFailed) {
+      warningDialog.onOpen();
+      return;
+    }
+    onConfirm();
+  };
+
+  const handleProceed = () => {
+    warningDialog.onClose();
+    onConfirm();
+  };
+
+  return (
+    <>
+      <Button
+        variant="brand"
+        w="full"
+        leftIcon={simulationFailed ? <WarningTwoIcon boxSize="15px" /> : undefined}
+        onClick={handlePrimaryClick}
+        isDisabled={isDisabled || isLoading}
+        isLoading={isLoading}
+      >
+        {label}
+      </Button>
+
+      <AlertDialog
+        isOpen={warningDialog.isOpen}
+        leastDestructiveRef={cancelRef}
+        onClose={warningDialog.onClose}
+        isCentered
+      >
+        <AlertDialogOverlay bg="surface.overlay">
+          <AlertDialogContent mx={4} maxW="340px" w="calc(100% - 2rem)">
+            <AlertDialogHeader
+              display="flex"
+              alignItems="center"
+              gap={2}
+              color="status.error.fg"
+              fontSize="md"
+              fontWeight="700"
+            >
+              <WarningTwoIcon boxSize="16px" flexShrink={0} />
+              {isBatch ? "Batch likely to fail" : "Transaction likely to fail"}
+            </AlertDialogHeader>
+            <AlertDialogBody>
+              <Text color="fg.secondary" fontSize="sm">
+                {isBatch
+                  ? "One or more transactions in this batch failed simulation and are likely to fail onchain. Are you sure you want to proceed?"
+                  : "This transaction failed simulation and is likely to fail onchain. Are you sure you want to proceed?"}
+              </Text>
+            </AlertDialogBody>
+            <AlertDialogFooter gap={2}>
+              <Button
+                ref={cancelRef}
+                variant="secondary"
+                size="sm"
+                onClick={warningDialog.onClose}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="brand"
+                size="sm"
+                leftIcon={<WarningTwoIcon boxSize="13px" />}
+                onClick={handleProceed}
+              >
+                Proceed anyway
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
+    </>
+  );
+}

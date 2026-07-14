@@ -5,9 +5,7 @@ type Store = Record<string, any>;
 
 const store: Store = {};
 const tabUrls = new Map<number, string>();
-let pendingTxReadGate: Promise<void> | null = null;
 let tabReadGate: Promise<void> | null = null;
-let metadataReadGate: Promise<void> | null = null;
 const tabReadGates = new Map<number, Promise<void>>();
 
 function getResult(keys: string | string[] | Record<string, unknown> | null) {
@@ -30,20 +28,6 @@ Object.defineProperty(globalThis, "chrome", {
     storage: {
       local: {
         async get(keys: string | string[] | Record<string, unknown> | null) {
-          if (
-            pendingTxReadGate &&
-            (keys === "pendingTxRequests" ||
-              (Array.isArray(keys) && keys.includes("pendingTxRequests")))
-          ) {
-            await pendingTxReadGate;
-          }
-          if (
-            metadataReadGate &&
-            (keys === "pendingAddChainRequests" ||
-              keys === "pendingWatchAssetRequests")
-          ) {
-            await metadataReadGate;
-          }
           return getResult(keys);
         },
         async set(items: Store) {
@@ -106,14 +90,14 @@ const pendingBatchStorage = await import(
 const metadataLifecycle = await import(
   "../../src/chrome/requests/pendingMetadataPromptLifecycle"
 );
-const batchAcknowledgementLifecycle = await import(
-  "../../src/chrome/requests/pendingBatchAcknowledgementLifecycle"
-);
 const pendingAddChainStorage = await import(
   "../../src/chrome/requests/pendingAddChainStorage"
 );
 const pendingWatchAssetStorage = await import(
   "../../src/chrome/requests/pendingWatchAssetStorage"
+);
+const pendingErc7715PermissionStorage = await import(
+  "../../src/chrome/erc7715/pendingRequestStorage"
 );
 const resolution = await import("../../src/chrome/requests/pendingRequestResolution");
 const crossDappLifecycle = await import(
@@ -249,9 +233,7 @@ function storeFinalEffectPending(
 beforeEach(async () => {
   for (const key of Object.keys(store)) delete store[key];
   tabUrls.clear();
-  pendingTxReadGate = null;
   tabReadGate = null;
-  metadataReadGate = null;
   tabReadGates.clear();
   resolution.resetPendingRequestResolutionClaimsForTests();
   lifecycle.resetPendingRequestLifecycleForTests();
@@ -267,187 +249,155 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  pendingTxReadGate = null;
   tabReadGate = null;
-  metadataReadGate = null;
   tabReadGates.clear();
 });
 
-test("the injected 5-minute timeout atomically terminalizes its exact request", async () => {
-  const origin = "https://app.example";
-  tabUrls.set(7, `${origin}/swap`);
-  store.pendingTxRequests = [transaction("tx-timeout", origin)];
-
-  let releaseRead!: () => void;
-  pendingTxReadGate = new Promise<void>((resolve) => {
-    releaseRead = resolve;
-  });
-  const expiry = lifecycle.expireInjectedProviderRequest(
-    "transaction",
-    "tx-timeout",
-    {
-      origin,
-      url: `${origin}/swap`,
-      frameId: 0,
-      tab: { id: 7, url: `${origin}/swap` },
-    } as chrome.runtime.MessageSender,
-  );
-
-  let confirmRan = false;
-  const competingConfirm = resolution.runPendingRequestResolution({
-    family: "transaction",
-    requestId: "tx-timeout",
-    action: "confirm",
-    conflictResult: (winningAction) => ({ winningAction }),
-    resolve: async () => {
-      confirmRan = true;
-      return { success: true };
-    },
-  });
-  assert.deepEqual(await competingConfirm, { winningAction: "expire" });
-  assert.equal(confirmRan, false);
-
-  releaseRead();
-  assert.deepEqual(await expiry, { success: true, expired: true });
-  assert.deepEqual(store.pendingTxRequests, []);
-  assert.equal(store["txResult:tx-timeout"].result.success, false);
-  assert.match(store["txResult:tx-timeout"].result.error, /timed out/i);
-});
-
-test("timeout handshakes cannot cancel another tab or origin's request", async () => {
+test("saving new prompts preserves every aged pending request", async () => {
   const origin = "https://app.example";
   const otherOrigin = "https://other.example";
-  tabUrls.set(8, `${otherOrigin}/`);
-  store.pendingSignatureRequests = [signature("sig-scoped", origin, 7)];
-
-  const result = await lifecycle.expireInjectedProviderRequest(
-    "signature",
-    "sig-scoped",
+  const agedAt = Date.now() - 24 * 60 * 60 * 1000;
+  store.pendingTxRequests = [
     {
-      origin: otherOrigin,
-      url: `${otherOrigin}/`,
-      frameId: 0,
-      tab: { id: 8, url: `${otherOrigin}/` },
-    } as chrome.runtime.MessageSender,
-  );
-  assert.deepEqual(result, {
-    success: false,
-    error: "Pending request not found",
-  });
-  assert.equal(store.pendingSignatureRequests.length, 1);
-  assert.equal(store["sigResult:sig-scoped"], undefined);
-});
-
-test("wallet_sendCalls acknowledgement expiry terminalizes only its exact batch", async () => {
-  const origin = "https://app.example";
-  const otherOrigin = "https://other.example";
-  const pending = pendingForFinalEffectRoute(
-    finalEffectRoutes.find((route) => route.kind === "batchTransaction")!,
-    "batch-ack-timeout",
-    origin,
-  );
-  storeFinalEffectPending("batchTransaction", pending);
-
-  const wrongSender = await batchAcknowledgementLifecycle.expireBatchAcknowledgement(
-    pending.id,
-    {
-      origin: otherOrigin,
-      url: `${otherOrigin}/`,
-      frameId: 0,
-      tab: { id: 8, url: `${otherOrigin}/` },
-    } as chrome.runtime.MessageSender,
-  );
-  assert.deepEqual(wrongSender, {
-    success: false,
-    error: "Pending request not found",
-  });
-  assert.equal(store.pendingBatchTxRequests.length, 1);
-  assert.equal(store[`batchTxAck:${pending.id}`], undefined);
-
-  const expired = await batchAcknowledgementLifecycle.expireBatchAcknowledgement(
-    pending.id,
-    {
-      origin,
-      url: `${origin}/`,
-      frameId: 0,
-      tab: { id: 7, url: `${origin}/` },
-    } as chrome.runtime.MessageSender,
-  );
-  assert.deepEqual(expired, { success: true, expired: true });
-  assert.deepEqual(store.pendingBatchTxRequests, []);
-  assert.equal(store.bundleStatuses[0].status, 400);
-  assert.match(store[`batchTxAck:${pending.id}`].result.error, /timed out/i);
-});
-
-test("wallet_sendCalls queue ownership prevents a false local timeout", async () => {
-  const origin = "https://app.example";
-  const id = "batch-ack-queue-wins";
-  let releaseQueue!: () => void;
-  const queueGate = new Promise<void>((resolve) => {
-    releaseQueue = resolve;
-  });
-  const queue = resolution.runPendingRequestResolution({
-    family: "batchTransaction",
-    requestId: id,
-    action: "confirm",
-    conflictResult: () => ({ success: false }),
-    resolve: async () => {
-      await queueGate;
-      await chrome.storage.local.set({
-        [`batchTxAck:${id}`]: {
-          result: { success: true, id },
-          timestamp: Date.now(),
-        },
-      });
-      return { success: true };
+      ...transaction("tx-aged", origin),
+      timestamp: agedAt,
     },
-  });
-
-  const expiry = await batchAcknowledgementLifecycle.expireBatchAcknowledgement(
-    id,
+  ];
+  store.pendingSignatureRequests = [
+    { ...signature("sig-aged", origin), timestamp: agedAt },
+  ];
+  store.pendingBatchTxRequests = [
     {
+      id: "batch-aged",
+      params: { version: "2.0.0", chainId: "0x1", calls: [] },
       origin,
-      url: `${origin}/`,
+      senderOrigin: origin,
+      tabId: 7,
       frameId: 0,
-      tab: { id: 7, url: `${origin}/` },
-    } as chrome.runtime.MessageSender,
-  );
-  assert.deepEqual(expiry, {
-    success: false,
-    error: "Request is already being resolved",
-  });
-  assert.equal(store[`batchTxAck:${id}`], undefined);
-
-  releaseQueue();
-  await queue;
-  assert.equal(store[`batchTxAck:${id}`].result.success, true);
-});
-
-test("wallet_sendCalls timeout ownership blocks a delayed queue operation", async () => {
-  const origin = "https://app.example";
-  const id = "batch-ack-timeout-wins";
-  const expiry = batchAcknowledgementLifecycle.expireBatchAcknowledgement(id, {
+      favicon: null,
+      chainName: "Ethereum",
+      chainId: 1,
+      timestamp: agedAt,
+      accountId: "account-1",
+      accountAddress: "0x0000000000000000000000000000000000000001",
+      accountType: "privateKey",
+    },
+  ];
+  store.pendingDappConnectionRequests = [{
+    id: "connect-aged",
     origin,
-    url: `${origin}/`,
+    hostname: "app.example",
+    tabId: 7,
     frameId: 0,
-    tab: { id: 7, url: `${origin}/` },
-  } as chrome.runtime.MessageSender);
-
-  let queued = false;
-  const delayedQueue = await resolution.runPendingRequestResolution({
-    family: "batchTransaction",
-    requestId: id,
-    action: "confirm",
-    conflictResult: (winner) => winner,
-    resolve: async () => {
-      queued = true;
-      return "queued";
+    timestamp: agedAt,
+  }];
+  store.pendingAddChainRequests = [{
+    id: "add-aged",
+    chainId: 123,
+    origin,
+    senderOrigin: origin,
+    tabId: 7,
+    frameId: 0,
+    favicon: null,
+    timestamp: agedAt,
+  }];
+  store.pendingWatchAssetRequests = [{
+    id: "watch-aged",
+    asset: {
+      address: "0x0000000000000000000000000000000000000002",
+      symbol: "OLD",
+      decimals: 18,
     },
+    chainId: 1,
+    origin,
+    senderOrigin: origin,
+    tabId: 7,
+    frameId: 0,
+    favicon: null,
+    timestamp: agedAt,
+  }];
+  store.pendingErc7715PermissionRequests = [{
+    id: "permission-aged",
+    origin,
+    senderOrigin: origin,
+    tabId: 7,
+    frameId: 0,
+    favicon: null,
+    chainName: "Ethereum",
+    chainId: 1,
+    timestamp: agedAt,
+    request: {},
+    permissionType: "native-token-stream",
+    caveats: [],
+    accountId: "account-1",
+    accountAddress: "0x0000000000000000000000000000000000000001",
+    accountType: "privateKey",
+  }];
+
+  await pendingTxStorage.savePendingTxRequest(transaction("tx-new", origin));
+  await pendingSignatureStorage.savePendingSignatureRequest(
+    signature("sig-new", origin),
+  );
+  await pendingBatchStorage.savePendingBatchTxRequest({
+    ...store.pendingBatchTxRequests[0],
+    id: "batch-new",
+    timestamp: Date.now(),
   });
-  assert.equal(delayedQueue, "expire");
-  assert.equal(queued, false);
-  assert.deepEqual(await expiry, { success: true, expired: true });
-  assert.equal(store[`batchTxAck:${id}`].result.success, false);
+  await dappPermissionStorage.savePendingDappConnectionRequest({
+    id: "connect-new",
+    origin: otherOrigin,
+    hostname: "other.example",
+    tabId: 8,
+    frameId: 0,
+    timestamp: Date.now(),
+  });
+  await pendingAddChainStorage.savePendingAddChainRequest({
+    ...store.pendingAddChainRequests[0],
+    id: "add-new",
+    timestamp: Date.now(),
+  });
+  await pendingWatchAssetStorage.savePendingWatchAssetRequest({
+    ...store.pendingWatchAssetRequests[0],
+    id: "watch-new",
+    timestamp: Date.now(),
+  });
+  await pendingErc7715PermissionStorage.savePendingErc7715PermissionRequest({
+    ...store.pendingErc7715PermissionRequests[0],
+    id: "permission-new",
+    timestamp: Date.now(),
+  });
+
+  assert.deepEqual(
+    store.pendingTxRequests.map((request: { id: string }) => request.id),
+    ["tx-aged", "tx-new"],
+  );
+  assert.deepEqual(
+    store.pendingSignatureRequests.map((request: { id: string }) => request.id),
+    ["sig-aged", "sig-new"],
+  );
+  assert.deepEqual(
+    store.pendingBatchTxRequests.map((request: { id: string }) => request.id),
+    ["batch-aged", "batch-new"],
+  );
+  assert.deepEqual(
+    store.pendingDappConnectionRequests.map((request: { id: string }) => request.id),
+    ["connect-aged", "connect-new"],
+  );
+  assert.deepEqual(
+    store.pendingAddChainRequests.map((request: { id: string }) => request.id),
+    ["add-aged", "add-new"],
+  );
+  assert.deepEqual(
+    store.pendingWatchAssetRequests.map((request: { id: string }) => request.id),
+    ["watch-aged", "watch-new"],
+  );
+  assert.deepEqual(
+    store.pendingErc7715PermissionRequests.map((request: { id: string }) => request.id),
+    ["permission-aged", "permission-new"],
+  );
+  assert.equal(store["txResult:tx-aged"], undefined);
+  assert.equal(store["sigResult:sig-aged"], undefined);
+  assert.equal(store["batchTxAck:batch-aged"], undefined);
 });
 
 test("revoking one exact origin cancels all of its approval families only", async () => {
@@ -1160,308 +1110,8 @@ test("WalletConnect disconnect cancels only its topic and drops routes only afte
   assert.ok(store.walletConnectPendingRequests["claim-b"]);
 });
 
-test("a connect confirmation that owns the timeout race publishes the eventual durable result", async () => {
+test("aged metadata prompts remain confirmable but navigation still revokes authority", async () => {
   const origin = "https://app.example";
-  tabUrls.set(7, `${origin}/`);
-  store.pendingDappConnectionRequests = [
-    {
-      id: "connect-confirm-wins",
-      origin,
-      hostname: "app.example",
-      tabId: 7,
-      frameId: 0,
-      timestamp: Date.now(),
-    },
-  ];
-  let releaseConfirm!: () => void;
-  const confirmGate = new Promise<void>((resolve) => {
-    releaseConfirm = resolve;
-  });
-  const confirm = resolution.runPendingRequestResolution({
-    family: "dappConnection",
-    requestId: "all",
-    action: "confirm",
-    conflictResult: () => ({ success: false }),
-    resolve: async () => {
-      await confirmGate;
-      store.pendingDappConnectionRequests = [];
-      await chrome.storage.local.set({
-        "dappConnectionResult:connect-confirm-wins": {
-          result: { success: true, accounts: ["0x1"] },
-          timestamp: Date.now(),
-        },
-      });
-      return { success: true };
-    },
-  });
-
-  const expiry = await dappLifecycle.expireDappConnectionRequest(
-    "connect-confirm-wins",
-    {
-      origin,
-      url: `${origin}/`,
-      frameId: 0,
-      tab: { id: 7, url: `${origin}/` },
-    } as chrome.runtime.MessageSender,
-  );
-  assert.deepEqual(expiry, {
-    success: false,
-    error: "Request is already being resolved",
-  });
-  assert.equal(
-    store["dappConnectionResult:connect-confirm-wins"],
-    undefined,
-  );
-
-  releaseConfirm();
-  await confirm;
-  assert.equal(
-    store["dappConnectionResult:connect-confirm-wins"].result.success,
-    true,
-  );
-});
-
-test("connect expiry is exact-tab scoped and the periodic sweep writes a terminal result", async () => {
-  const origin = "https://app.example";
-  const otherOrigin = "https://other.example";
-  tabUrls.set(8, `${otherOrigin}/`);
-  store.pendingDappConnectionRequests = [
-    {
-      id: "connect-expired",
-      origin,
-      hostname: "app.example",
-      tabId: 7,
-      frameId: 0,
-      timestamp:
-        Date.now() -
-        dappPermissionStorage.DAPP_CONNECTION_REQUEST_EXPIRY_MS -
-        1,
-    },
-  ];
-
-  const wrongSender = await dappLifecycle.expireDappConnectionRequest(
-    "connect-expired",
-    {
-      origin: otherOrigin,
-      url: `${otherOrigin}/`,
-      frameId: 0,
-      tab: { id: 8, url: `${otherOrigin}/` },
-    } as chrome.runtime.MessageSender,
-  );
-  assert.deepEqual(wrongSender, {
-    success: false,
-    error: "Pending request not found",
-  });
-  assert.equal(store.pendingDappConnectionRequests.length, 1);
-
-  await dappPermissionStorage.clearExpiredDappConnectionRequests();
-  assert.deepEqual(store.pendingDappConnectionRequests, []);
-  assert.deepEqual(
-    store["dappConnectionResult:connect-expired"].result,
-    {
-      success: false,
-      error: "Connection request timed out",
-      code: -32000,
-    },
-  );
-});
-
-test("periodic tx, signature, and batch expiry publishes durable terminal state", async () => {
-  const origin = "https://app.example";
-  const expiredTimestamp = Date.now() - 31 * 60 * 1000;
-  store.pendingTxRequests = [
-    { ...transaction("tx-periodic-expired", origin), timestamp: expiredTimestamp },
-  ];
-  store.pendingSignatureRequests = [
-    {
-      ...signature("sig-periodic-expired", origin),
-      timestamp: expiredTimestamp,
-    },
-  ];
-  store.pendingBatchTxRequests = [
-    {
-      id: "batch-periodic-expired",
-      params: { version: "2.0.0", chainId: "0x1", calls: [] },
-      origin,
-      senderOrigin: origin,
-      tabId: 7,
-      frameId: 0,
-      favicon: null,
-      chainName: "Ethereum",
-      chainId: 1,
-      timestamp: expiredTimestamp,
-      accountId: "account-1",
-      accountAddress: "0x0000000000000000000000000000000000000001",
-      accountType: "privateKey",
-    },
-  ];
-  store.bundleStatuses = [
-    {
-      id: "batch-periodic-expired",
-      chainId: 1,
-      status: 100,
-      atomic: false,
-      createdAt: expiredTimestamp,
-    },
-  ];
-
-  await Promise.all([
-    pendingTxStorage.clearExpiredTxRequests(),
-    pendingSignatureStorage.clearExpiredSignatureRequests(),
-    pendingBatchStorage.clearExpiredBatchTxRequests(),
-  ]);
-
-  assert.deepEqual(store.pendingTxRequests, []);
-  assert.deepEqual(store.pendingSignatureRequests, []);
-  assert.deepEqual(store.pendingBatchTxRequests, []);
-  assert.match(
-    store["txResult:tx-periodic-expired"].result.error,
-    /expired/i,
-  );
-  assert.match(
-    store["sigResult:sig-periodic-expired"].result.error,
-    /expired/i,
-  );
-  assert.equal(store.bundleStatuses[0].status, 400);
-  assert.match(store.bundleStatuses[0].error, /expired/i);
-});
-
-test("a confirmation claim prevents the periodic expiry sweep from overtaking it", async () => {
-  const origin = "https://app.example";
-  store.pendingTxRequests = [
-    {
-      ...transaction("tx-confirm-vs-sweep", origin),
-      timestamp: Date.now() - 31 * 60 * 1000,
-    },
-  ];
-  let releaseConfirm!: () => void;
-  const confirmGate = new Promise<void>((resolve) => {
-    releaseConfirm = resolve;
-  });
-  const confirm = resolution.runPendingRequestResolution({
-    family: "transaction",
-    requestId: "tx-confirm-vs-sweep",
-    action: "confirm",
-    conflictResult: () => ({ success: false }),
-    resolve: async () => {
-      await confirmGate;
-      store.pendingTxRequests = [];
-      await chrome.storage.local.set({
-        "txResult:tx-confirm-vs-sweep": {
-          result: { success: true, txHash: "0xconfirmed" },
-          timestamp: Date.now(),
-        },
-      });
-      return { success: true };
-    },
-  });
-
-  await pendingTxStorage.clearExpiredTxRequests();
-  assert.equal(store.pendingTxRequests.length, 1);
-  assert.equal(store["txResult:tx-confirm-vs-sweep"], undefined);
-
-  releaseConfirm();
-  await confirm;
-  assert.deepEqual(store["txResult:tx-confirm-vs-sweep"].result, {
-    success: true,
-    txHash: "0xconfirmed",
-  });
-});
-
-test("an effect lease blocks expiry after the outer confirm resolver releases", async () => {
-  const origin = "https://app.example";
-  store.pendingSignatureRequests = [
-    {
-      ...signature("sig-effect-lease", origin),
-      timestamp: Date.now() - 31 * 60 * 1000,
-    },
-  ];
-  const lease = resolution.beginPendingRequestEffectLease(
-    "signature",
-    "sig-effect-lease",
-  );
-  assert.ok(lease);
-
-  await pendingSignatureStorage.clearExpiredSignatureRequests();
-  assert.equal(store.pendingSignatureRequests.length, 1);
-  assert.equal(store["sigResult:sig-effect-lease"], undefined);
-
-  lease.release();
-  await pendingSignatureStorage.clearExpiredSignatureRequests();
-  assert.deepEqual(store.pendingSignatureRequests, []);
-  assert.match(store["sigResult:sig-effect-lease"].result.error, /expired/i);
-});
-
-test("metadata prompt expiry wins atomically against confirm and reject", async () => {
-  const origin = "https://app.example";
-  tabUrls.set(7, `${origin}/`);
-  store.pendingAddChainRequests = [
-    {
-      id: "add-chain-expiry-race",
-      chainId: 123,
-      rpcUrls: ["https://rpc.example"],
-      origin,
-      senderOrigin: origin,
-      tabId: 7,
-      frameId: 0,
-      favicon: null,
-      timestamp: Date.now(),
-    },
-  ];
-  let releaseRead!: () => void;
-  metadataReadGate = new Promise<void>((resolve) => {
-    releaseRead = resolve;
-  });
-
-  const expiry = metadataLifecycle.expireMetadataPrompt(
-    "addChain",
-    "add-chain-expiry-race",
-    {
-      origin,
-      url: `${origin}/`,
-      frameId: 0,
-      tab: { id: 7, url: `${origin}/` },
-    } as chrome.runtime.MessageSender,
-  );
-  let confirmed = false;
-  let rejected = false;
-  const confirm = resolution.runPendingRequestResolution({
-    family: "addChain",
-    requestId: "add-chain-expiry-race",
-    action: "confirm",
-    conflictResult: (winner) => winner,
-    resolve: async () => {
-      confirmed = true;
-      return "confirm";
-    },
-  });
-  const reject = resolution.runPendingRequestResolution({
-    family: "addChain",
-    requestId: "add-chain-expiry-race",
-    action: "reject",
-    conflictResult: (winner) => winner,
-    resolve: async () => {
-      rejected = true;
-      return "reject";
-    },
-  });
-  assert.equal(await confirm, "expire");
-  assert.equal(await reject, "expire");
-  assert.equal(confirmed, false);
-  assert.equal(rejected, false);
-
-  releaseRead();
-  assert.deepEqual(await expiry, { success: true, expired: true });
-  assert.deepEqual(store.pendingAddChainRequests, []);
-  assert.match(
-    store["addChainResult:add-chain-expiry-race"].result.error,
-    /timed out/i,
-  );
-});
-
-test("metadata confirmation fails closed after expiry or navigation", async () => {
-  const origin = "https://app.example";
-  tabUrls.set(7, "https://other.example/");
   store.dappPermissions = {
     [origin]: {
       origin,
@@ -1471,7 +1121,7 @@ test("metadata confirmation fails closed after expiry or navigation", async () =
     },
   };
   const navigated = {
-    id: "watch-navigated",
+    id: "watch-aged",
     asset: {
       address: "0x0000000000000000000000000000000000000001",
       symbol: "TEST",
@@ -1483,9 +1133,19 @@ test("metadata confirmation fails closed after expiry or navigation", async () =
     tabId: 7,
     frameId: 0,
     favicon: null,
-    timestamp: Date.now(),
+    timestamp: Date.now() - 24 * 60 * 60 * 1000,
   };
+  tabUrls.set(7, `${origin}/`);
   store.pendingWatchAssetRequests = [navigated];
+  const allowed =
+    await metadataLifecycle.enforceMetadataPromptAuthorizationAtConfirmation(
+      "watchAsset",
+      navigated,
+    );
+  assert.deepEqual(allowed, { authorized: true });
+  assert.equal(store.pendingWatchAssetRequests.length, 1);
+
+  tabUrls.set(7, "https://other.example/");
   const denied =
     await metadataLifecycle.enforceMetadataPromptAuthorizationAtConfirmation(
       "watchAsset",
@@ -1493,117 +1153,5 @@ test("metadata confirmation fails closed after expiry or navigation", async () =
     );
   assert.equal(denied.authorized, false);
   assert.deepEqual(store.pendingWatchAssetRequests, []);
-  assert.equal(store["watchAssetResult:watch-navigated"].result.code, 4100);
-
-  const expired = {
-    ...navigated,
-    id: "watch-expired",
-    timestamp: Date.now() - metadataLifecycle.metadataPromptExpiryMs - 1,
-  };
-  store.pendingWatchAssetRequests = [expired];
-  const timedOut =
-    await metadataLifecycle.enforceMetadataPromptAuthorizationAtConfirmation(
-      "watchAsset",
-      expired,
-    );
-  assert.equal(timedOut.authorized, false);
-  assert.match(
-    store["watchAssetResult:watch-expired"].result.error,
-    /timed out/i,
-  );
-});
-
-test("periodic metadata prompt cleanup writes durable timeout results", async () => {
-  const expiredTimestamp = Date.now() - 6 * 60 * 1000;
-  store.pendingAddChainRequests = [
-    {
-      id: "add-periodic",
-      chainId: 123,
-      origin: "https://app.example",
-      favicon: null,
-      timestamp: expiredTimestamp,
-    },
-  ];
-  store.pendingWatchAssetRequests = [
-    {
-      id: "watch-periodic",
-      asset: {
-        address: "0x0000000000000000000000000000000000000001",
-        symbol: "TEST",
-        decimals: 18,
-      },
-      chainId: 1,
-      origin: "https://app.example",
-      favicon: null,
-      timestamp: expiredTimestamp,
-    },
-  ];
-
-  await Promise.all([
-    pendingAddChainStorage.clearExpiredAddChainRequests(),
-    pendingWatchAssetStorage.clearExpiredWatchAssetRequests(),
-  ]);
-  assert.deepEqual(store.pendingAddChainRequests, []);
-  assert.deepEqual(store.pendingWatchAssetRequests, []);
-  assert.match(store["addChainResult:add-periodic"].result.error, /timed out/i);
-  assert.match(
-    store["watchAssetResult:watch-periodic"].result.error,
-    /timed out/i,
-  );
-});
-
-test("ERC-7715 timeout handshake is exact-origin scoped and durable", async () => {
-  const origin = "https://app.example";
-  const otherOrigin = "https://other.example";
-  const permission = {
-    id: "permission-timeout",
-    origin,
-    senderOrigin: origin,
-    tabId: 7,
-    frameId: 0,
-    favicon: null,
-    chainName: "Ethereum",
-    chainId: 1,
-    timestamp: Date.now(),
-    request: {},
-    permissionType: "native-token-stream",
-    caveats: [],
-    accountId: "account-1",
-    accountAddress: "0x0000000000000000000000000000000000000001",
-    accountType: "privateKey",
-  };
-  store.pendingErc7715PermissionRequests = [permission];
-  tabUrls.set(8, `${otherOrigin}/`);
-
-  const wrongOrigin = await dappLifecycle.expireErc7715PermissionRequest(
-    permission.id,
-    {
-      origin: otherOrigin,
-      url: `${otherOrigin}/`,
-      frameId: 0,
-      tab: { id: 8, url: `${otherOrigin}/` },
-    } as chrome.runtime.MessageSender,
-  );
-  assert.deepEqual(wrongOrigin, {
-    success: false,
-    error: "Pending request not found",
-  });
-  assert.equal(store.pendingErc7715PermissionRequests.length, 1);
-
-  tabUrls.set(7, `${origin}/`);
-  const expired = await dappLifecycle.expireErc7715PermissionRequest(
-    permission.id,
-    {
-      origin,
-      url: `${origin}/`,
-      frameId: 0,
-      tab: { id: 7, url: `${origin}/` },
-    } as chrome.runtime.MessageSender,
-  );
-  assert.match(expired.error || "", /timed out/i);
-  assert.deepEqual(store.pendingErc7715PermissionRequests, []);
-  assert.match(
-    store["erc7715PermissionResult:permission-timeout"].result.error,
-    /timed out/i,
-  );
+  assert.equal(store["watchAssetResult:watch-aged"].result.code, 4100);
 });

@@ -144,7 +144,7 @@ test("background, requests, account resolver, and provider compose direct dapp p
   assert.match(accountComposition, /from ["']\.\.\/\.\.\/dapp\/connectionHandlers["']/);
   assert.match(providerComposition, /from ["']\.\.\/\.\.\/dapp\/requestPolicy["']/);
   assert.match(accountComposition, /from ["']\.\.\/\.\.\/dapp\/accountRemovalPrivacy["']/);
-  assert.match(lifecycle, /from ["']\.\.\/dapp\/requestPolicy["']/);
+  assert.match(lifecycle, /from ["']\.\/dappPermissionStorage["']/);
   assert.match(resolver, /from ["']\.\.\/dapp\/accountScope["']/);
   assert.match(provider, /from ["']\.\.\/\.\.\/dapp\/rpcForwarding["']/);
 });

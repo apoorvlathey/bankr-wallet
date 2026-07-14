@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Box, HStack, VStack, Text, Icon } from "@chakra-ui/react";
+import { CheckIcon, EditIcon } from "@chakra-ui/icons";
 import { useTheme, useStripTokens } from "@/theme";
 import {
   TIER_LABELS,
@@ -7,9 +8,10 @@ import {
   type GasTierSelection,
 } from "@/lib/gasTiers";
 import type { GasEstimateTiers } from "@/chrome/gasEstimation";
+import { GAS_TIER_ACCENT } from "./GasEstimate/model/tierPresentation";
 
 interface GasTierPickerProps {
-  /** Per-preset fee pairs (Slow / Standard / Fast). Undefined while loading. */
+  /** Per-preset fee pairs (Slow / Normal / Fast). Undefined while loading. */
   tiers?: GasEstimateTiers;
   /** Total gasLimit across all calls (single tx → its limit; batch → sum). */
   gasLimit: bigint | null;
@@ -18,6 +20,8 @@ interface GasTierPickerProps {
   nativeCurrencySymbol: string;
   selected: GasTierSelection;
   onChange: (next: GasTierSelection) => void;
+  layout?: "segmented" | "menu";
+  customBadge?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -25,14 +29,27 @@ interface GasTierPickerProps {
 //
 // Visual language:
 //   - Slow: turtle silhouette (deliberate, low-urgency)
-//   - Standard: stopwatch (the "normal" pace)
+//   - Normal: stopwatch (the default pace)
 //   - Fast: lightning bolt (immediate, urgent)
 //   - Custom: sliders (user-controlled)
 // ---------------------------------------------------------------------------
 
+// Lucide Turtle v0.460.0 (ISC), kept local so the extension does not pull in
+// a separate icon dependency for one glyph.
 const TurtleIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" fill="currentColor" {...props}>
-    <path d="M12 5c-3.31 0-6 2.69-6 6 0 1.85.84 3.5 2.16 4.6L7 18h2l1.13-1.62c.6.16 1.22.25 1.87.25s1.27-.09 1.87-.25L15 18h2l-1.16-2.4A5.99 5.99 0 0 0 18 11c0-3.31-2.69-6-6-6zM5 14H3v-2h2v2zm14 0h2v-2h-2v2zM12 7.5c.83 0 1.5.67 1.5 1.5h-3c0-.83.67-1.5 1.5-1.5z" />
+  <Icon
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    <path d="m12 10 2 4v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3a8 8 0 1 0-16 0v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3l2-4h4Z" />
+    <path d="M4.82 7.9 8 10" />
+    <path d="M15.18 7.9 12 10" />
+    <path d="M16.93 10H20a2 2 0 0 1 0 4H2" />
   </Icon>
 );
 
@@ -59,21 +76,6 @@ const TIER_ICON: Record<GasTierSelection, (props: any) => JSX.Element> = {
   standard: StopwatchIcon,
   fast: LightningIcon,
   custom: SlidersIcon,
-};
-
-// Per-tier accent color used for the inactive icon + tier name. Gives the
-// picker a clear visual hierarchy at a glance: green = cheap, blue = default,
-// amber = urgent, neutral = advanced. Resolves to the right hue in both
-// Bauhaus and Midnight via theme tokens.
-//
-// NOTE: `status.info.fg` is NOT safe here — in Bauhaus it's WHITE (it pairs
-// with the BLUE `status.info.bg`), so it'd render invisibly on the picker's
-// light surface. Use `accent.secondary` for the standalone blue accent.
-const TIER_ACCENT: Record<GasTierSelection, string> = {
-  slow: "chart.positive",
-  standard: "accent.secondary",
-  fast: "chart.numeric",
-  custom: "fg.secondary",
 };
 
 /**
@@ -112,19 +114,12 @@ function formatPreviewUsd(weiCost: bigint, priceUsd: number | null): string | nu
 }
 
 /**
- * 4-button segmented control: Slow / Standard / Fast / Custom.
+ * Slow / Normal / Fast / Custom selector. `segmented` supports legacy gas
+ * surfaces; `menu` is the transaction decision popover's scan-friendly form.
  *
- * Each preset button shows:
- *   - Icon + tier label, colored per-tier when inactive
- *     (green / blue / amber / purple) so the user can scan tiers at a glance
- *   - Priority fee in gwei (the meaningful comparison number — the network's
- *     current tip ladder is what differentiates these tiers, not the
- *     micro-difference in total ETH cost which is unreadable at low base
- *     fees)
- *   - Total cost USD (what the user actually budgets against)
- *
- * Custom shows just the icon + label — its cost is computed live from the
- * user's edits in the parent component.
+ * The menu layout is intentionally decision-only: speed, estimated fiat cost,
+ * and selection state. Raw gas parameters stay behind Custom instead of being
+ * repeated under every preset.
  *
  * The active button uses the same strip tokens as other segmented selectors
  * in the codebase (Bauhaus: solid black; Midnight: recessed surface) so the
@@ -137,6 +132,8 @@ export default function GasTierPicker({
   nativePriceUsd,
   selected,
   onChange,
+  layout = "segmented",
+  customBadge,
 }: GasTierPickerProps) {
   const { tokens } = useTheme();
   const { bg: activeBg, fg: activeFg } = useStripTokens();
@@ -150,6 +147,104 @@ export default function GasTierPicker({
       fast: gasLimit * BigInt(tiers.fast.maxFeePerGas),
     };
   }, [tiers, gasLimit]);
+
+  if (layout === "menu") {
+    return (
+      <VStack
+        spacing={0.5}
+        align="stretch"
+        p={0}
+      >
+        {TIER_ORDER.map((tier) => {
+          const isActive = selected === tier;
+          const TierIcon = TIER_ICON[tier];
+          const usdLine =
+            tier !== "custom" && previewCosts
+              ? formatPreviewUsd(previewCosts[tier], nativePriceUsd)
+              : null;
+
+          return (
+            <HStack
+              key={tier}
+              as="button"
+              type="button"
+              aria-pressed={isActive}
+              w="full"
+              minH="36px"
+              px={2.5}
+              py={1}
+              spacing={2}
+              border={0}
+              borderRadius="md"
+              bg={isActive ? "surface.raisedHover" : "transparent"}
+              color="fg.primary"
+              textAlign="left"
+              cursor="pointer"
+              onClick={() => onChange(tier)}
+              _hover={{ bg: "surface.raisedHover" }}
+              _focus={{ outline: "none" }}
+              _focusVisible={{ boxShadow: "focus" }}
+            >
+              <TierIcon
+                boxSize={3.5}
+                color={GAS_TIER_ACCENT[tier]}
+                flexShrink={0}
+              />
+              <HStack spacing={1.5} flex="1 1 auto" minW={0}>
+                <Text fontSize="xs" fontWeight="600">
+                  {TIER_LABELS[tier]}
+                </Text>
+                {tier === "custom" && customBadge && (
+                  <Text
+                    px={1.5}
+                    py={0.5}
+                    borderRadius="sm"
+                    bg="status.info.bg"
+                    color="status.info.fg"
+                    border={tokens.borders.thin}
+                    borderColor="status.info.border"
+                    fontSize="2xs"
+                    fontWeight="700"
+                    lineHeight="shorter"
+                  >
+                    {customBadge}
+                  </Text>
+                )}
+              </HStack>
+              {tier === "custom" ? (
+                <HStack
+                  spacing={1}
+                  px={2}
+                  minH="26px"
+                  borderRadius="md"
+                  bg="accent.highlight"
+                  color="accentFg.highlight"
+                  flexShrink={0}
+                >
+                  <EditIcon boxSize={3} aria-hidden />
+                  <Text fontSize="2xs" fontWeight="700">
+                    Edit
+                  </Text>
+                </HStack>
+              ) : (
+                <Text
+                  color="fg.secondary"
+                  fontSize="2xs"
+                  fontWeight="600"
+                  sx={{ fontVariantNumeric: "tabular-nums" }}
+                >
+                  {usdLine || "—"}
+                </Text>
+              )}
+              {isActive && tier !== "custom" && (
+                <CheckIcon boxSize={3} color="accent.highlight" flexShrink={0} />
+              )}
+            </HStack>
+          );
+        })}
+      </VStack>
+    );
+  }
 
   return (
     <HStack
@@ -165,7 +260,7 @@ export default function GasTierPicker({
       {TIER_ORDER.flatMap((tier, idx) => {
         const isActive = selected === tier;
         const TierIcon = TIER_ICON[tier];
-        const accentColor = TIER_ACCENT[tier];
+        const accentColor = GAS_TIER_ACCENT[tier];
 
         // Lines for preset tiers; nothing for Custom (cost is user-driven).
         let gweiLine: string | null = null;

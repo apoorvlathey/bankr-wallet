@@ -269,13 +269,14 @@ The extension maintains address consistency between storage and the active accou
 ### Injected dapp connection permissions
 
 - `eth_accounts` is a non-interactive privacy check. It returns `[]` until the exact trusted page origin has been approved.
-- The first `eth_requestAccounts` call crosses `impersonator.ts` → `inject.ts` → `background.ts`, persists a five-minute `pendingDappConnectionRequests` record, and opens the extension connection-confirmation screen.
+- The first `eth_requestAccounts` call crosses `impersonator.ts` → `inject.ts` → `background.ts`, persists a durable `pendingDappConnectionRequests` record, and opens the extension connection-confirmation screen. The prompt has no age-based timeout.
 - Background derives the canonical `http(s)` origin, tab, and frame from `chrome.runtime.MessageSender`; page-provided origin values are never authorization inputs. Cross-origin/subframe requests currently fail closed and must connect from the top-level site.
 - Approval stores an origin-only `dappPermissions` grant and resolves the request through `dappConnectionResult:{id}`. Future visits reuse the grant without prompting and receive the account currently selected for that tab/fallback active account.
 - A pending connection request sets the Chrome action badge to `1` only when
   there are no pending transaction, signature, batch, ERC-7715 permission, or
   cross-dapp batch approvals. Connection requests never increment or replace
-  the existing approval count; approving, rejecting, or expiring the request
+  the existing approval count; approving, rejecting, or explicitly
+  invalidating the request
   refreshes the badge.
 - Account switches remain visible to an approved origin through `accountsChanged`; unapproved origins receive no account-change event. Revocation sends `accountsChanged([])` to matching open tabs.
 - Account removal uses the same exact-origin revocation path before deleting a
@@ -747,7 +748,7 @@ src/
 │   ├── txHandlers.ts        # Stable transaction/signature compatibility facade
 │   ├── transactions/        # Transaction coordinator audit domain (see README.md)
 │   │   ├── requestIntake.ts # Provider validation and pinned prompt intake
-│   │   ├── runtime.ts       # Results, expiry, pinned accounts, and process state
+│   │   ├── runtime.ts       # Results, pinned accounts, and process state
 │   │   ├── localConfirmation.ts # PK/seed preflight and key/session recovery
 │   │   ├── localExecution.ts # Sign-once preparation, final authority gate, and publication
 │   │   ├── bankrConfirmation.ts # Pinned Bankr confirmation and effect leasing
@@ -778,7 +779,7 @@ src/
 │   │   └── completion.ts    # Source-aware result and receipt fan-out
 │   ├── signatures/          # Signature confirmation audit domain (see README.md)
 │   │   ├── requestSigner.ts # Method-specific signer parameter selection
-│   │   ├── confirmationPolicy.ts # Shared expiry, signer, SIWE, and pinned-account preflight
+│   │   ├── confirmationPolicy.ts # Shared signer, SIWE, and pinned-account preflight
 │   │   ├── confirmationHandlers.ts # Local/Bankr orchestration and final release gate
 │   │   └── eip712/          # Pure typed-data policy audit domain (see README.md)
 │   │       ├── validator.ts # Bounded parsing and validation ordering
@@ -930,7 +931,7 @@ src/
 │   ├── forceInclusion/    # L1 deposit, nonce, receipt, and split recovery domain
 │   │   ├── single.ts      # Stable single-deposit export facade
 │   │   ├── l1Client.ts    # L1 chain/RPC selection and progress persistence
-│   │   ├── deposit.ts     # OptimismPortal calldata and gas estimation
+│   │   ├── deposit.ts     # Zero-mint OptimismPortal calldata + separate L1-gas/L2-value balance estimation
 │   │   ├── singleBankr.ts # Remote-signer single-deposit execution
 │   │   ├── singleLocal.ts # Final-authorized sign-once local execution
 │   │   ├── singleOutcome.ts # Durable confirmed/ambiguous/failure outcomes
@@ -1003,7 +1004,6 @@ src/
 │   │   ├── pendingRequestResolution.ts # First-action claims, leases, reset barrier
 │   │   ├── pendingRequestLifecycle.ts # Confirm-time origin/account/WC authorization
 │   │   ├── pendingRequestTerminalization.ts # Remove-before-result publication
-│   │   ├── pendingRequestExpiry.ts # Claim-aware durable expiry
 │   │   ├── pendingTxStorage.ts # Persistent transaction prompts
 │   │   ├── pendingSignatureStorage.ts # Persistent signature prompts
 │   │   ├── pendingBatchTxStorage.ts # Persistent ERC-5792 prompts
@@ -1011,7 +1011,7 @@ src/
 │   │   ├── pendingAddChainStorage.ts # Persistent EIP-3085 prompts
 │   │   ├── dappPermissionStorage.ts # Approved and pending dapp connections
 │   │   ├── pendingDappRequestLifecycle.ts # Exact-origin cancellation
-│   │   ├── pendingMetadataPromptLifecycle.ts # Metadata provenance and expiry
+│   │   ├── pendingMetadataPromptLifecycle.ts # Metadata provenance and origin invalidation
 │   │   ├── pendingWalletConnectLifecycle.ts # Topic termination and cancellation
 │   │   └── pendingBridgeStorage.ts # In-flight bridge settlement records
 │   ├── trustedWalletUiSender.ts # Exact index/onboarding runtime sender boundary
@@ -1483,10 +1483,9 @@ await provider.request({
 - Immediately starts watching `chrome.storage.onChanged` for a `txResult:{txId}` key (via `waitForStorageResult`)
 - Sends a **fire-and-forget** `chrome.runtime.sendMessage` to background (no callback) with the `txId` included
 - When the storage result appears, forwards it back to inpage via `postMessage`
-- On timeout, asks the background to expire the exact request under the same
-  first-action claim. If confirmation already owns the request or the worker is
-  transiently unavailable, the listener remains active and retries; the page
-  never receives a local timeout while WalletChan may still sign or broadcast.
+- Installs no age-based timeout. The listener remains active until the user or
+  an explicit authorization/session/account/reset lifecycle resolves the
+  request and publishes its durable terminal result.
 - **Security**: Only forwards whitelisted message types from background to the webpage (`setAddress`, `setChainId`, `setAccount`). All other background broadcasts are not forwarded, preventing dapps from eavesdropping on wallet events.
 
 > **Why no sendMessage callback?** Chrome MV3 swallows `sendResponse` calls when multiple `onMessage` listeners exist across extension contexts (background + popup/sidepanel). The storage-based approach is immune to this because it bypasses the message channel entirely.
@@ -1828,7 +1827,7 @@ raw-message block.
 Validation is run in the UI for user review and again in
 `signatures/confirmationPolicy.ts` before signing for every signing-capable
 account type. Both the local and Bankr confirmation handlers consume this same
-preflight, so expiry, pinned-account resolution, raw ERC-7710 rejection, signer
+preflight, so request presence, pinned-account resolution, raw ERC-7710 rejection, signer
 matching, and SIWE origin checks cannot drift between transports. If a SIWE
 message has validation errors, the Sign button stays disabled until the user
 types the exact phrase
@@ -2141,9 +2140,12 @@ lock instance.
 
 Durable provider results use the stable `storageResultWaiter.ts` facade over
 `storage/resultWaiter.ts`. The listener reads `chrome.storage.local`, removes
-the exact result key after settlement, and retries an expiry handshake when
-confirmation may already own the first-action claim. It reports the ordinary
-`Request timed out` error only for waiters without that ownership handshake.
+the exact result key after settlement, and retries an expiry handshake only for
+bounded non-prompt operations. Every user-review request passes a null timeout
+and remains subscribed until an explicit confirm, reject, authorization
+revocation, session termination, account removal, or reset path publishes a
+durable result. Bounded read-only operations retain their ordinary
+`Request timed out` error.
 
 ### UI Component
 
@@ -2490,8 +2492,8 @@ Dapps must use ERC-7715 provider methods:
   WalletChan's default MetaMask DeleGator. If preflight passes, the request is
   stored in `pendingErc7715PermissionRequests`, shown in
   `Erc7715PermissionConfirmation.tsx`, and resolved after user approval or
-  rejection. Permission prompts use a five-minute lifetime. Final approval,
-  rejection, and timeout results are written to
+  rejection. Permission prompts have no age-based timeout. Final approval,
+  rejection, or explicit authorization/session invalidation results are written to
   `erc7715PermissionResult:{id}` so injected and WalletConnect callers do not
   depend on a long-lived MV3 `sendMessage` response channel.
 
@@ -2501,7 +2503,7 @@ MetaMask-style in-process error. The injected provider holds an inpage lock so
 locally answered methods like `eth_chainId` cannot bypass the block, and the
 background router enforces the same lock for injected transaction, signature,
 batch, RPC proxy, capabilities/status, watch-asset, add-chain, and execution
-permission requests. The lock is also derived from unexpired
+permission requests. The lock is also derived from all valid pending
 `pendingErc7715PermissionRequests`, so it survives MV3 service-worker restarts;
 until that storage-backed state is loaded, external provider RPCs fail closed.
 The enqueue path synchronizes the derived storage lock from the saved pending
@@ -3601,16 +3603,25 @@ and only the master wrapper is rotated.
 2. Re-encrypt all present legacy secrets with new password in memory
 3. Persist `encryptedApiKey`, `pkVault`, and `mnemonicVault` together in one `chrome.storage.local.set()` call
 
-### Pending Transaction Storage
+### Pending User-Review Request Storage
 
-Transactions are stored persistently in `chrome.storage.local`:
+Transactions, signatures, ERC-5792 batches, cross-dapp batches, dapp
+connections, add-chain prompts, watch-asset prompts, and ERC-7715 permission
+requests are stored persistently in `chrome.storage.local`:
 
 - Closing popup does NOT reject/cancel pending transactions
 - Pending requests survive popup close, browser restart
 - Extension badge shows count of pending requests
-- Transactions, signatures, and ERC-5792 batches auto-expire after 30 minutes (periodic cleanup + enforced at confirmation time). `requests/pendingRequestExpiry.ts` acquires the same first-action claim as confirmation and writes a durable error/result or failed bundle status instead of silently deleting a request and leaving its dapp waiter hanging.
-- Confirmation handlers reject expired requests even if periodic cleanup hasn't run
-- Save/remove/expiry writes are serialized with `storageLock.ts` so a cleanup interval cannot erase a request saved by a concurrent dapp or WalletConnect request
+- User-review prompts do not auto-expire. Injected dapps wait without a local
+  timer, persisted rows survive browser/service-worker restarts, and every
+  Bankr/private-key/seed confirmation path ignores request age.
+- WalletConnect transaction/signature/permission routing records also remain
+  until the prompt resolves. Only short-lived pre-prompt intake claims and
+  already-terminal relay response records retain bounded cleanup.
+- A prompt remains pending until the user confirms/rejects it or an
+  explicit authorization, WalletConnect-session, account, reset, or
+  cancellation lifecycle terminalizes it.
+- Save/remove writes are serialized with `storageLock.ts`.
 - `requests/pendingRequestResolution.ts` installs a synchronous, first-action-wins
   claim before any confirmation/rejection work starts. Popup, side panel, and
   full-page surfaces therefore cannot concurrently confirm/reject the same
@@ -3631,7 +3642,7 @@ Transactions are stored persistently in `chrome.storage.local`:
   defense-in-depth for background processing, but they are not the atomic
   resolution boundary.
 - Async transaction and batch handlers install a short-lived effect lease
-  before returning to the router. The lease keeps expiry, rejection, and wallet
+  before returning to the router. The lease keeps rejection and wallet
   reset excluded after durable pending state is consumed and until the
   background signer/submission path reaches its final authorization check.
   Signature handlers remain awaited by the router and also hold an explicit
@@ -3930,8 +3941,8 @@ Provider-originated add-chain intake,
 confirmation, rejection, and per-tab chain notifications remain in the main
 provider-aware flow.
 
-Dapp account exposure, connection intake, generic injected-request expiry,
-permission reads, connection confirmation/rejection, and revocation are
+Dapp account exposure, durable connection intake, permission reads, connection
+confirmation/rejection, and revocation are
 delegated to `background/dappPermissionRouter.ts` only after the existing
 audience and external-provider validation gates. The router passes the exact
 Chrome sender into origin/tab-bound domain handlers; result persistence,
@@ -3963,9 +3974,10 @@ pending reads, and first-action-wins confirmation/rejection, including durable
 provider results and custom-token/unhide commits. `background/chainPromptRouter.ts`
 owns EIP-3085 intake and decisions plus connected-site chain-switch notices,
 including origin-bound RPC validation and network registry commits. Both run
-after provider validation, pass the exact sender/authorization metadata into
-existing policy boundaries, and leave persisted-prompt expiry in the shared
-metadata lifecycle service.
+after provider validation and pass the exact sender/authorization metadata
+into existing policy boundaries. Their persisted prompts have no age-based
+expiry; the shared metadata lifecycle service only handles explicit origin
+invalidation.
 
 Single transaction and signature transport is delegated to
 `background/signingRequestRouter.ts`. Provider intake keeps the exact sender,
@@ -4405,7 +4417,6 @@ All main screens display a centered footer with attribution:
 | API key not configured      | Redirect to settings             |
 | Wrong password              | Retry prompt in popup            |
 | API error                   | Display error message; chat prompt errors surface the Bankr API `message` field in the assistant error bubble |
-| Transaction timeout (5 min) | Auto-fail with timeout message   |
 | RPC/preparation error before signed bytes are sent | Definite failure; keep/reopen the request and allow retry |
 | Local raw-send response lost | Persist the deterministic hash as pending/`broadcastUncertain`, poll it, and do not create a new transaction or higher-nonce tail |
 | Bankr submit abort/timeout/408/409/425/429/5xx or unprovable response | Outcome unknown; retain the effect lease and direct the user to check Activity before retrying |

@@ -40,6 +40,10 @@ const pureModules = [
     url: new URL("Portfolio/Holdings/transforms.ts", componentsUrl),
   },
   {
+    path: "components/TransactionConfirmation/transactionPresentation.ts",
+    url: new URL("TransactionConfirmation/transactionPresentation.ts", componentsUrl),
+  },
+  {
     path: "components/TransactionConfirmation/transactionValue.ts",
     url: new URL("TransactionConfirmation/transactionValue.ts", componentsUrl),
   },

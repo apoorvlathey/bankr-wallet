@@ -5,9 +5,10 @@ This directory owns the extracted, audit-sized transaction concerns:
 
 - `requestIntake.ts` validates provider transaction/signature envelopes and
   persists exact account/origin/chain snapshots.
-- `runtime.ts` owns result publication, pinned-account resolution, expiry
-  constants, abort controllers, and duplicate-processing state.
-- `localConfirmation.ts` owns PK/seed confirmation preflight, EIP-7702 master
+- `runtime.ts` owns result publication, pinned-account resolution, abort
+  controllers, and duplicate-processing state. Signing prompts remain pending
+  until explicitly resolved.
+- `localConfirmation.ts` owns non-expiring PK/seed confirmation preflight, EIP-7702 master
   authorization capture, and master/agent/Never-session key recovery.
 - `localExecution.ts` owns nonce/gas preparation, sign-once execution, the
   final pre-RPC account/transport/authority check, and receipt publication.

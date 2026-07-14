@@ -37,13 +37,6 @@ import { migrateFromLegacyStorage } from "../../accounts/legacyMigration";
 import { addSeedPhraseGroup, deriveSeedAccounts } from "../../mnemonic/accountHandlers";
 import { previewSeedAddresses } from "../../mnemonic/addressPreview";
 import { generateNewMnemonic } from "../../mnemonic/derivation";
-import { expireBatchAcknowledgement } from "../../requests/pendingBatchAcknowledgementLifecycle";
-import {
-  expireDappConnectionRequest,
-  expireErc7715PermissionRequest,
-} from "../../requests/pendingDappRequestLifecycle";
-import { expireMetadataPrompt } from "../../requests/pendingMetadataPromptLifecycle";
-import { expireInjectedProviderRequest } from "../../requests/pendingRequestLifecycle";
 import { getPendingSignatureRequestById } from "../../requests/pendingSignatureStorage";
 import {
   getAutoLockTimeout,
@@ -98,11 +91,6 @@ export function composeAccountRoutes(
       handleConfirmDappConnection,
       handleRejectDappConnection,
       handleRevokeDappPermission,
-      expireDappConnectionRequest,
-      expireErc7715PermissionRequest,
-      expireBatchAcknowledgement,
-      expireMetadataPrompt,
-      expireInjectedProviderRequest,
       runPendingRequestResolution: pending.runPendingRequestResolution,
       pendingResolutionConflict: pending.pendingResolutionConflict,
       writeResultToStorage,

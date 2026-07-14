@@ -1,8 +1,10 @@
 import { Button, Spinner } from "@chakra-ui/react";
+import { SimulationFailureConfirmButton } from "@/components/RequestConfirmation/SimulationFailureConfirmButton";
 
 interface ConfirmActionProps {
   customConfirm: boolean;
   confirmDisabled: boolean;
+  simulationFailed: boolean;
   submitting: boolean;
   onConfirm: () => void;
 }
@@ -10,19 +12,19 @@ interface ConfirmActionProps {
 export function ConfirmAction({
   customConfirm,
   confirmDisabled,
+  simulationFailed,
   submitting,
   onConfirm,
 }: ConfirmActionProps) {
   return (
-    <Button
-      variant="primary"
-      w="full"
-      onClick={onConfirm}
-      isDisabled={confirmDisabled || submitting}
+    <SimulationFailureConfirmButton
+      isDisabled={confirmDisabled}
       isLoading={submitting}
-    >
-      {customConfirm ? "Confirm batch" : "Confirm"}
-    </Button>
+      label={customConfirm ? "Confirm batch" : "Confirm"}
+      onConfirm={onConfirm}
+      requestKind="batch"
+      simulationFailed={simulationFailed}
+    />
   );
 }
 

@@ -4,22 +4,24 @@ import {
   VStack,
   HStack,
   Text,
-  Spinner,
-  Collapse,
-  Button,
+  Popover,
+  PopoverBody,
+  PopoverContent,
+  PopoverTrigger,
+  Portal,
   Input,
   IconButton,
   Tooltip,
   Icon,
-  usePrefersReducedMotion,
 } from "@chakra-ui/react";
-import {
-  ChevronDownIcon,
-  WarningIcon,
-  ExternalLinkIcon,
-} from "@chakra-ui/icons";
+import { WarningIcon, ExternalLinkIcon } from "@chakra-ui/icons";
 import { GasEstimate } from "@/chrome/gasEstimation";
-import { formatEth, formatGwei, formatWeiToUsd } from "@/lib/gasFormatUtils";
+import {
+  formatEth,
+  formatEthCompact,
+  formatGwei,
+  formatWeiToUsd,
+} from "@/lib/gasFormatUtils";
 import { getChainConfig } from "@/constants/chainConfig";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
@@ -32,6 +34,14 @@ import {
   type GasTierSelection,
 } from "@/lib/gasTiers";
 import { useScreenEntered } from "@/components/ScreenTransition";
+import { ShapesLoader } from "@/components/Chat/ShapesLoader";
+import { GasFeeTrigger } from "@/components/GasEstimate/GasFeeTrigger";
+import {
+  applyBatchedNativeOutlayBalance,
+  applyForceInclusionBalanceTotals,
+  getBatchedNativeOutlayWei,
+  getInsufficientBalanceMessage,
+} from "@/components/GasEstimate/model/balanceWarnings";
 
 // Inline icons for the Auto / Edited badge — kept in sync with
 // GasEstimateDisplay.tsx so single-tx and batch UX read identically.
@@ -216,15 +226,6 @@ function isValidGasLimit(val: string): boolean {
   return !isNaN(n) && n > 0 && Number.isInteger(n);
 }
 
-function parseTxValueWei(value?: string): bigint {
-  if (!value || value === "0x" || value === "0x0") return 0n;
-  try {
-    return BigInt(value);
-  } catch {
-    return 0n;
-  }
-}
-
 function MultiTxGasEstimateDisplay({
   transactions,
   accountType,
@@ -239,7 +240,6 @@ function MultiTxGasEstimateDisplay({
   eip7702Delegate,
 }: MultiTxGasEstimateDisplayProps) {
   const { tokens } = useTheme();
-  const prefersReducedMotion = usePrefersReducedMotion();
   // Display estimates — what the user sees
   //   Normal batch: from estimateBatchGasSequential (L2 gas + L2 fees)
   //   Force inclusion: from estimateForceInclusionGas per call (L1 gas + L1 fees)
@@ -316,31 +316,20 @@ function MultiTxGasEstimateDisplay({
   const innerValueKey = transactions.map((t) => t.tx.value).join(",");
   const batchedNativeOutlayWei = useMemo(() => {
     if (!batchedTx) return 0n;
-    const outerValue = parseTxValueWei(batchedTx.tx.value);
-    const innerValue = transactions.reduce(
-      (sum, item) => sum + parseTxValueWei(item.tx.value),
-      0n,
+    return getBatchedNativeOutlayWei(
+      batchedTx.tx.value,
+      transactions.map((item) => item.tx.value),
     );
-    return innerValue > outerValue ? innerValue : outerValue;
   }, [batchedTx, transactions]);
-
-  const withBatchedNativeOutlayBalance = useCallback(
-    (results: (GasEstimate | null)[]) => {
-      if (!isLocalSigningAccount || !batchedTx || results.length !== 1) {
-        return results;
-      }
-      return results.map((result) => {
-        if (!result) return result;
-        const gasCostWei = parseTxValueWei(result.estimatedCostWei);
-        const balanceWei = parseTxValueWei(result.accountBalance);
-        return {
-          ...result,
-          insufficientBalance:
-            balanceWei < gasCostWei + batchedNativeOutlayWei,
-        };
-      });
-    },
-    [batchedNativeOutlayWei, batchedTx, isLocalSigningAccount],
+  const forceInclusionNativeOutlayWei = useMemo(
+    () =>
+      batchedTx
+        ? batchedNativeOutlayWei
+        : getBatchedNativeOutlayWei(
+            undefined,
+            transactions.map((item) => item.tx.value),
+          ),
+    [batchedNativeOutlayWei, batchedTx, transactions],
   );
 
   // Stable key for dependency — only re-run when actual tx data changes
@@ -432,16 +421,22 @@ function MultiTxGasEstimateDisplay({
 
       Promise.all([Promise.all(l1CostPromises), l2GasPromise]).then(([l1Results, l2Results]) => {
         if (cancelled) return;
-        setEstimates(l1Results);
+        const balancedResults = applyForceInclusionBalanceTotals(
+          l1Results,
+          forceInclusionNativeOutlayWei,
+        );
+        setEstimates(balancedResults);
         setLoading(false);
 
-        const hasEstimates = l1Results.some((r) => r !== null);
+        const hasEstimates = balancedResults.some((r) => r !== null);
         if (!hasEstimates) {
           setError("Gas estimate unavailable");
         }
 
         if (onInsufficientBalance) {
-          const anyInsufficient = l1Results.some((r) => r?.insufficientBalance);
+          const anyInsufficient = balancedResults.some(
+            (r) => r?.insufficientBalance,
+          );
           onInsufficientBalance(!!anyInsufficient);
         }
 
@@ -647,7 +642,11 @@ function MultiTxGasEstimateDisplay({
             );
           }
 
-          finalResults = withBatchedNativeOutlayBalance(finalResults);
+          finalResults = applyBatchedNativeOutlayBalance(
+            finalResults,
+            batchedNativeOutlayWei,
+            isLocalSigningAccount && !!batchedTx,
+          );
 
           setEstimates(finalResults);
           if (isLocalSigningAccount && batchedTx) {
@@ -883,6 +882,8 @@ function MultiTxGasEstimateDisplay({
   const sym = validEstimates[0]?.nativeCurrencySymbol || "ETH";
   const anyFailed = validEstimates.some((e) => e.estimationFailed);
   const anyInsufficient = validEstimates.some((e) => e.insufficientBalance);
+  const insufficientBalanceMessage =
+    getInsufficientBalanceMessage(validEstimates);
   const anyEditInvalid = hasEdited && editedGasLimits.some((g) => !isValidGasLimit(g));
 
   useEffect(() => {
@@ -952,7 +953,7 @@ function MultiTxGasEstimateDisplay({
         boxShadow="none"
       >
         <HStack px={3} py={3} justify="center">
-          <Spinner size="xs" color="accent.secondary" />
+          <ShapesLoader size="6px" />
           <Text fontSize="xs" color="text.secondary" fontWeight="600">
             Estimating gas…
           </Text>
@@ -1008,7 +1009,7 @@ function MultiTxGasEstimateDisplay({
       )}
 
       {/* Insufficient balance warning */}
-      {anyInsufficient && !anyFailed && (
+      {anyInsufficient && insufficientBalanceMessage && !anyFailed && (
         <HStack
           bg="status.warning.bg"
           border={tokens.borders.medium}
@@ -1021,7 +1022,7 @@ function MultiTxGasEstimateDisplay({
         >
           <WarningIcon color="status.warning.fg" boxSize={3.5} />
           <Text fontSize="xs" color="status.warning.fg" fontWeight="600">
-            Insufficient balance for gas
+            {insufficientBalanceMessage}
           </Text>
         </HStack>
       )}
@@ -1056,82 +1057,30 @@ function MultiTxGasEstimateDisplay({
         </VStack>
       )}
 
-      {/* Force inclusion info banner */}
-      {forceInclusion && (
-        <HStack
-          bg="status.info.bg"
-          border={tokens.borders.medium}
-          borderColor="border.default"
-          borderRadius="lg"
-          boxShadow="card"
-          px={3}
-          py={1.5}
-          spacing={2}
-        >
-          <Text fontSize="xs" color="status.info.fg" fontWeight="600">
-            Gas estimated for L1 deposit
-          </Text>
-        </HStack>
-      )}
-
-      {/* Gas estimate box */}
-      <Box
-        border={tokens.borders.medium}
-        borderColor="border.default"
-        borderRadius="lg"
-        // overflow:hidden clips the header's hover bg to the card's rounded
-        // corners — matches GasEstimateDisplay (single-tx surface). Without
-        // it, the hover fill renders as a square inside the rounded card.
-        overflow="hidden"
-        bg="surface.raised"
-        boxShadow="card"
-        position="relative"
+      <Popover
+        isOpen={expanded}
+        onClose={() => setExpanded(false)}
+        placement="top-end"
+        gutter={8}
+        closeOnBlur
       >
-        {/* Collapsed header */}
-        <Button
-          type="button"
-          variant="unstyled"
-          display="flex"
-          w="full"
-          minH="44px"
-          h="auto"
-          px={3}
-          py={2.5}
-          onClick={() => setExpanded(!expanded)}
-          aria-expanded={expanded}
-          aria-controls="multi-transaction-gas-details"
-          borderRadius={0}
-          fontWeight="inherit"
-          textTransform="none"
-          _hover={{ bg: "surface.raisedHover" }}
-          justifyContent="space-between"
-        >
-          <Text fontSize="xs" color="text.secondary" fontWeight="600" flexShrink={0}>
-            Gas fee
-          </Text>
-          <HStack spacing={1} minW={0}>
-            <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono" noOfLines={1}>
-              {formatEth(totalCostWei, sym)}
-            </Text>
-            {usdDisplay && (
-              <Text fontSize="xs" color="text.tertiary" fontWeight="600">
-                ({usdDisplay})
-              </Text>
-            )}
-            <ChevronDownIcon
-              boxSize={4}
-              color="text.tertiary"
-              transform={expanded ? "rotate(180deg)" : "rotate(0deg)"}
-              transition={prefersReducedMotion ? "none" : "transform 150ms cubic-bezier(0.23, 1, 0.32, 1)"}
-              aria-hidden
-            />
-          </HStack>
-        </Button>
-
-        {/* Expanded details */}
-        <Collapse id="multi-transaction-gas-details" in={expanded} animateOpacity={!prefersReducedMotion}>
-          <VStack align="stretch" spacing={1.5} px={3} pb={3} pt={1}>
-            <Box h="1px" bg="border.subtle" />
+        <PopoverTrigger>
+          <GasFeeTrigger
+            expanded={expanded}
+            fiatFee={usdDisplay}
+            nativeFee={formatEthCompact(totalCostWei, sym)}
+            tier={showPicker ? tier : undefined}
+            onToggle={() => setExpanded((value) => !value)}
+          />
+        </PopoverTrigger>
+        <Portal>
+          <PopoverContent
+            w="332px"
+            maxW="calc(100vw - 32px)"
+            maxH="calc(100vh - 96px)"
+          >
+            <PopoverBody p={3} overflowY="auto" overflowX="hidden">
+              <VStack align="stretch" spacing={2}>
 
             {/* Tier picker (non-atomic PK/SP only). Lives at the top of the
                 expanded section so the user picks once and the per-call rows
@@ -1156,6 +1105,7 @@ function MultiTxGasEstimateDisplay({
                 nativeCurrencySymbol={sym}
                 selected={tier}
                 onChange={handleTierChange}
+                layout="menu"
               />
             )}
 
@@ -1450,9 +1400,11 @@ function MultiTxGasEstimateDisplay({
                 Gas managed by Bankr API
               </Text>
             )}
-          </VStack>
-        </Collapse>
-      </Box>
+              </VStack>
+            </PopoverBody>
+          </PopoverContent>
+        </Portal>
+      </Popover>
     </VStack>
   );
 }

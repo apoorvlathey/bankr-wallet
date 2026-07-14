@@ -20,12 +20,8 @@ import {
 } from "./pendingRequestLifecycle";
 import { terminalizeUnauthorizedPendingRequest } from "./pendingRequestTerminalization";
 import {
-  DAPP_CONNECTION_TIMEOUT_ERROR,
-  getPendingDappConnectionRequests,
   normalizeDappOrigin,
-  removePendingDappConnectionRequests,
 } from "./dappPermissionStorage";
-import { trustedTopLevelDappOrigin } from "../dapp/requestPolicy";
 import { runErc7715PermissionResolution } from "../erc7715/resolution";
 import { runPendingRequestResolution } from "./pendingRequestResolution";
 import { cancelCrossDappBatchForDappOrigin } from "../crossDappBatch/lifecycle";
@@ -36,83 +32,6 @@ const revokedFailure = {
   error: pendingRequestLifecycleErrors.authorizationRevoked,
   code: 4100,
 };
-
-export async function expireDappConnectionRequest(
-  requestId: string,
-  sender: chrome.runtime.MessageSender,
-): Promise<{ success: boolean; expired?: boolean; error?: string }> {
-  const trusted = trustedTopLevelDappOrigin(sender);
-  if (!trusted) return { success: false, error: "Unauthorized" };
-
-  return runPendingRequestResolution({
-    family: "dappConnection",
-    requestId: "all",
-    action: "expire",
-    conflictResult: () => ({
-      success: false,
-      error: "Request is already being resolved",
-    }),
-    resolve: async () => {
-      const pending = (await getPendingDappConnectionRequests()).find(
-        (request) => request.id === requestId,
-      );
-      if (
-        !pending ||
-        pending.origin !== trusted.origin ||
-        pending.tabId !== trusted.tabId ||
-        (pending.frameId !== undefined && pending.frameId !== 0)
-      ) {
-        return { success: false, error: "Pending request not found" };
-      }
-      const removed = await removePendingDappConnectionRequests(
-        (request) => request.id === requestId,
-      );
-      if (removed.length === 0) {
-        return { success: false, error: "Pending request not found" };
-      }
-      await chrome.storage.local.set({
-        [`dappConnectionResult:${requestId}`]: {
-          result: {
-            success: false,
-            error: DAPP_CONNECTION_TIMEOUT_ERROR,
-            code: -32000,
-          },
-          timestamp: Date.now(),
-        },
-      });
-      return { success: true, expired: true };
-    },
-  });
-}
-
-export async function expireErc7715PermissionRequest(
-  requestId: string,
-  sender: chrome.runtime.MessageSender,
-): Promise<{ success: boolean; error?: string }> {
-  const trusted = trustedTopLevelDappOrigin(sender);
-  if (!trusted) return { success: false, error: "Unauthorized" };
-  return runErc7715PermissionResolution(requestId, async () => {
-    const pending = await getPendingErc7715PermissionRequestById(requestId);
-    if (
-      !pending ||
-      pending.tabId !== trusted.tabId ||
-      !pendingRequestMatchesInjectedOrigin(pending, trusted.origin)
-    ) {
-      return { success: false, error: "Pending request not found" };
-    }
-    const failure = {
-      authorized: false as const,
-      error: "Execution permission request timed out",
-      code: -32000,
-    };
-    await terminalizeUnauthorizedPendingRequest(
-      "erc7715Permission",
-      pending,
-      failure,
-    );
-    return { success: false, error: failure.error };
-  });
-}
 
 /** Cancel every still-pending approval created by one injected exact origin. */
 export async function cancelPendingRequestsForDappOrigin(

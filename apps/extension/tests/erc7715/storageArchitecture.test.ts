@@ -5,14 +5,13 @@ import test from "node:test";
 const readChromeModule = (name: string) =>
   readFile(new URL(`../../src/chrome/${name}`, import.meta.url), "utf8");
 
-test("ERC-7715 persistence separates types, prompts, grants, results, and expiry", async () => {
-  const [facade, types, pending, grants, results, expiry] = await Promise.all([
+test("ERC-7715 persistence separates types, prompts, grants, and results", async () => {
+  const [facade, types, pending, grants, results] = await Promise.all([
     readChromeModule("pendingErc7715PermissionStorage.ts"),
     readChromeModule("erc7715/types.ts"),
     readChromeModule("erc7715/pendingRequestStorage.ts"),
     readChromeModule("erc7715/grantStorage.ts"),
     readChromeModule("erc7715/resultStorage.ts"),
-    readChromeModule("erc7715/expiry.ts"),
   ]);
 
   assert.match(facade, /Stable facade/);
@@ -22,20 +21,18 @@ test("ERC-7715 persistence separates types, prompts, grants, results, and expiry
   assert.match(grants, /from ["']\.\.\/masterAuthorization["']/);
   assert.doesNotMatch(grants, /localSigner|walletConnect/);
   assert.doesNotMatch(results, /masterAuthorization|localSigner|erc7715GrantStorage/);
-  assert.doesNotMatch(expiry, /masterAuthorization|localSigner|walletConnect/);
+  assert.doesNotMatch(results, /setTimeout|requestExecutionPermissions timeout/);
 });
 
 test("ERC-7715 storage facade preserves every public runtime identity", async () => {
-  const [facade, types, pending, grants, results, expiry] = await Promise.all([
+  const [facade, types, pending, grants, results] = await Promise.all([
     import("../../src/chrome/pendingErc7715PermissionStorage"),
     import("../../src/chrome/erc7715/types"),
     import("../../src/chrome/erc7715/pendingRequestStorage"),
     import("../../src/chrome/erc7715/grantStorage"),
     import("../../src/chrome/erc7715/resultStorage"),
-    import("../../src/chrome/erc7715/expiry"),
   ]);
   const expected = {
-    ERC7715_PERMISSION_EXPIRY_MS: types.ERC7715_PERMISSION_EXPIRY_MS,
     ERC7715_PERMISSION_RESULT_PREFIX: types.ERC7715_PERMISSION_RESULT_PREFIX,
     getPendingErc7715PermissionRequestById:
       pending.getPendingErc7715PermissionRequestById,
@@ -52,8 +49,6 @@ test("ERC-7715 storage facade preserves every public runtime identity", async ()
     getErc7715PermissionGrants: grants.getErc7715PermissionGrants,
     revokeErc7715PermissionGrant: grants.revokeErc7715PermissionGrant,
     saveErc7715PermissionGrant: grants.saveErc7715PermissionGrant,
-    clearExpiredErc7715PermissionRequests:
-      expiry.clearExpiredErc7715PermissionRequests,
     waitForErc7715PermissionResult: results.waitForErc7715PermissionResult,
     writeErc7715PermissionResult: results.writeErc7715PermissionResult,
   };

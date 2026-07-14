@@ -8,6 +8,8 @@ export interface BatchAssetChangeCall {
 
 export interface AssetChangesDisplayProps {
   txRequest: PendingTxRequest;
+  /** Remove the panel's duplicate disclosure header inside a titled parent section. */
+  embedded?: boolean;
   /** For batch transactions: simulate each call individually instead of the encoded batch. */
   batchCalls?: BatchAssetChangeCall[];
   /** Use eth_simulateV1-based non-atomic simulation for PK/seed EOA accounts. */

@@ -609,6 +609,7 @@ export function PreviewScreen({
             onBack={noop}
             onConfirmed={noop}
             onRejected={noop}
+            onRejectAll={noop}
             onNavigate={noop}
           />
         </PreviewShell>

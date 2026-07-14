@@ -26,11 +26,6 @@ function dependencies(overrides: Record<string, unknown> = {}): any {
     handleConfirmDappConnection: async () => ({ success: true }),
     handleRejectDappConnection: async () => ({ success: true }),
     handleRevokeDappPermission: async () => ({ success: true }),
-    expireDappConnectionRequest: async () => ({ success: true }),
-    expireErc7715PermissionRequest: async () => ({ success: true }),
-    expireBatchAcknowledgement: async () => ({ success: true }),
-    expireMetadataPrompt: async () => ({ success: true }),
-    expireInjectedProviderRequest: async () => ({ success: true }),
     runPendingRequestResolution: async (options: any) => options.resolve(),
     pendingResolutionConflict: () => ({ success: false }),
     writeResultToStorage: async () => {},
@@ -105,82 +100,6 @@ test("connection intake remains fire-and-forget and persists queue failures", as
       "dappConnectionResult:connect-1",
       { success: false, error: "queue unavailable" },
     ],
-  ]);
-});
-
-test("provider expiry preserves family routing and exact sender binding", async () => {
-  const sender = { origin: "https://app.example", tab: { id: 8 } } as any;
-  const calls: unknown[][] = [];
-  const route = createBackgroundDappPermissionMessageRouter(
-    dependencies({
-      expireDappConnectionRequest: async (...args: unknown[]) => {
-        calls.push(["dapp", ...args]);
-        return { success: true, family: "dapp" };
-      },
-      expireErc7715PermissionRequest: async (...args: unknown[]) => {
-        calls.push(["permission", ...args]);
-        return { success: true, family: "permission" };
-      },
-      expireBatchAcknowledgement: async (...args: unknown[]) => {
-        calls.push(["batch", ...args]);
-        return { success: true, family: "batch" };
-      },
-      expireMetadataPrompt: async (...args: unknown[]) => {
-        calls.push(["metadata", ...args]);
-        return { success: true, family: "metadata" };
-      },
-      expireInjectedProviderRequest: async (...args: unknown[]) => {
-        calls.push(["injected", ...args]);
-        return { success: true, family: "injected" };
-      },
-    }),
-  );
-  const kinds = [
-    "dappConnection",
-    "erc7715Permission",
-    "batchTransaction",
-    "addChain",
-    "watchAsset",
-    "transaction",
-    "signature",
-  ];
-
-  for (const kind of kinds) {
-    const capture = responseCapture();
-    assert.deepEqual(
-      route(
-        { type: "expireProviderRequest", requestKind: kind, requestId: kind },
-        sender,
-        capture.sendResponse,
-      ),
-      { handled: true, keepChannelOpen: true },
-    );
-    assert.equal((await capture.response as any).success, true);
-  }
-  assert.deepEqual(calls, [
-    ["dapp", "dappConnection", sender],
-    ["permission", "erc7715Permission", sender],
-    ["batch", "batchTransaction", sender],
-    ["metadata", "addChain", "addChain", sender],
-    ["metadata", "watchAsset", "watchAsset", sender],
-    ["injected", "transaction", "transaction", sender],
-    ["injected", "signature", "signature", sender],
-  ]);
-});
-
-test("malformed provider expiry fails synchronously without domain effects", () => {
-  const responses: unknown[] = [];
-  const route = createBackgroundDappPermissionMessageRouter(dependencies());
-  assert.deepEqual(
-    route(
-      { type: "expireProviderRequest", requestKind: "unknown", requestId: "x" },
-      {} as any,
-      (value) => responses.push(value),
-    ),
-    { handled: true, keepChannelOpen: false },
-  );
-  assert.deepEqual(responses, [
-    { success: false, error: "Invalid provider request" },
   ]);
 });
 

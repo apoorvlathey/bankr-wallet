@@ -71,8 +71,6 @@ export async function resolvePinnedAccount(
 }
 
 export const processingTxIds = new Set<string>();
-export const TX_EXPIRY_MS = 30 * 60 * 1000;
-export const SIGNATURE_EXPIRY_MS = 30 * 60 * 1000;
 
 export interface FailedTxResult {
   txId: string;

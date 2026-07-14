@@ -38,6 +38,7 @@ test("network implementations remain audit-sized with one-way dependencies", asy
     "network/proxyResolver.ts": 220,
     "network/customNetworkValidation.ts": 140,
     "network/networkRepository.ts": 70,
+    "network/rpcHistoryRepository.ts": 110,
     "network/networkPolicy.ts": 80,
     "network/networkMutations.ts": 340,
   };
@@ -64,6 +65,7 @@ test("network implementations remain audit-sized with one-way dependencies", asy
   assert.match(mutations, /from "\.\/customNetworkValidation"/);
   assert.match(mutations, /from "\.\/networkRepository"/);
   assert.match(mutations, /from "\.\/networkPolicy"/);
+  assert.match(mutations, /from "\.\/rpcHistoryRepository"/);
   assert.match(mutations, /NETWORKS_INFO_LOCK_KEY/);
 });
 
@@ -91,6 +93,10 @@ test("network source freezes egress and storage security constants", async () =>
   assert.match(repository, /"networksInfo"/);
   assert.match(repository, /"chainName"/);
   assert.match(repository, /NETWORKS_INFO_LOCK_KEY = "sync:networksInfo"/);
+
+  const rpcHistory = await source("network/rpcHistoryRepository.ts");
+  assert.match(rpcHistory, /chrome\.storage\.local/);
+  assert.match(rpcHistory, /NETWORK_RPC_URLS_STORAGE_KEY/);
 
   const validation = await source("network/customNetworkValidation.ts");
   assert.match(validation, /trimmed\.length > 2_048/);

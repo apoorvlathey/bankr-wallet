@@ -10,7 +10,6 @@ import type * as PendingRequestResolutionModule from "../requests/pendingRequest
 export const BACKGROUND_DAPP_PERMISSION_MESSAGE_TYPES = [
   "getDappAccounts",
   "requestDappConnection",
-  "expireProviderRequest",
   "getDappPermissions",
   "getDappConnectionContext",
   "getPendingDappConnectionRequests",
@@ -22,15 +21,6 @@ export const BACKGROUND_DAPP_PERMISSION_MESSAGE_TYPES = [
 export type BackgroundDappPermissionRouteResult =
   | { handled: false }
   | { handled: true; keepChannelOpen: boolean };
-
-type ProviderRequestKind =
-  | "transaction"
-  | "signature"
-  | "dappConnection"
-  | "erc7715Permission"
-  | "addChain"
-  | "watchAsset"
-  | "batchTransaction";
 
 type Dependencies = {
   handleGetDappAccounts: (sender: chrome.runtime.MessageSender) => Promise<any>;
@@ -44,28 +34,6 @@ type Dependencies = {
   handleConfirmDappConnection: (requestId: string) => Promise<any>;
   handleRejectDappConnection: (requestId: string) => Promise<any>;
   handleRevokeDappPermission: (origin: string) => Promise<any>;
-  expireDappConnectionRequest: (
-    requestId: string,
-    sender: chrome.runtime.MessageSender,
-  ) => Promise<any>;
-  expireErc7715PermissionRequest: (
-    requestId: string,
-    sender: chrome.runtime.MessageSender,
-  ) => Promise<any>;
-  expireBatchAcknowledgement: (
-    requestId: string,
-    sender: chrome.runtime.MessageSender,
-  ) => Promise<any>;
-  expireMetadataPrompt: (
-    kind: "addChain" | "watchAsset",
-    requestId: string,
-    sender: chrome.runtime.MessageSender,
-  ) => Promise<any>;
-  expireInjectedProviderRequest: (
-    kind: "transaction" | "signature",
-    requestId: string,
-    sender: chrome.runtime.MessageSender,
-  ) => Promise<any>;
   runPendingRequestResolution: typeof PendingRequestResolutionModule.runPendingRequestResolution;
   pendingResolutionConflict: (action: any) => any;
   writeResultToStorage: (
@@ -83,41 +51,8 @@ const HANDLED_SYNC: BackgroundDappPermissionRouteResult = {
   keepChannelOpen: false,
 };
 
-function isProviderRequestKind(value: unknown): value is ProviderRequestKind {
-  return (
-    value === "transaction" ||
-    value === "signature" ||
-    value === "dappConnection" ||
-    value === "erc7715Permission" ||
-    value === "addChain" ||
-    value === "watchAsset" ||
-    value === "batchTransaction"
-  );
-}
-
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
-}
-
-function expireProviderRequest(
-  dependencies: Dependencies,
-  kind: ProviderRequestKind,
-  requestId: string,
-  sender: chrome.runtime.MessageSender,
-): Promise<any> {
-  if (kind === "dappConnection") {
-    return dependencies.expireDappConnectionRequest(requestId, sender);
-  }
-  if (kind === "erc7715Permission") {
-    return dependencies.expireErc7715PermissionRequest(requestId, sender);
-  }
-  if (kind === "batchTransaction") {
-    return dependencies.expireBatchAcknowledgement(requestId, sender);
-  }
-  if (kind === "addChain" || kind === "watchAsset") {
-    return dependencies.expireMetadataPrompt(kind, requestId, sender);
-  }
-  return dependencies.expireInjectedProviderRequest(kind, requestId, sender);
 }
 
 export function createBackgroundDappPermissionMessageRouter(
@@ -151,30 +86,6 @@ export function createBackgroundDappPermissionMessageRouter(
             );
           });
         return HANDLED_SYNC;
-      }
-
-      case "expireProviderRequest": {
-        if (
-          !isProviderRequestKind(message.requestKind) ||
-          typeof message.requestId !== "string"
-        ) {
-          sendResponse({ success: false, error: "Invalid provider request" });
-          return HANDLED_SYNC;
-        }
-        expireProviderRequest(
-          dependencies,
-          message.requestKind,
-          message.requestId,
-          sender,
-        )
-          .then(sendResponse)
-          .catch((error) =>
-            sendResponse({
-              success: false,
-              error: errorMessage(error, "Failed to expire provider request"),
-            }),
-          );
-        return HANDLED_ASYNC;
       }
 
       case "getDappPermissions": {

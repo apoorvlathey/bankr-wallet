@@ -204,7 +204,7 @@ async function runWalletScenario(
       extensionId,
       new Set([onboarding, dapp]),
     );
-    await initialPopup.getByRole("heading", { name: "Review transaction" }).waitFor({
+    await initialPopup.getByRole("heading", { name: "Transaction request" }).waitFor({
       timeout: 20_000,
     });
 
@@ -226,7 +226,7 @@ async function runWalletScenario(
     );
     const reopened = await reopenPopup(context, extensionId, helper);
     await helper.close();
-    await reopened.getByRole("heading", { name: "Review transaction" }).waitFor({
+    await reopened.getByRole("heading", { name: "Transaction request" }).waitFor({
       timeout: 20_000,
     });
     await reopened.getByRole("button", { name: "Confirm", exact: true }).waitFor();

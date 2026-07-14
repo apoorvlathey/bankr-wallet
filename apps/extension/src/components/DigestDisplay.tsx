@@ -78,6 +78,7 @@ function DigestBox({
   hash,
   defaultOpen = false,
   defaultTab = "hex",
+  quiet = false,
 }: {
   label: string;
   labelBg: string;
@@ -85,6 +86,7 @@ function DigestBox({
   hash: string;
   defaultOpen?: boolean;
   defaultTab?: DigestTab;
+  quiet?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [tab, setTab] = useState<DigestTab>(defaultTab);
@@ -122,7 +124,8 @@ function DigestBox({
           type="button"
           variant="unstyled"
           display="flex"
-          minH="32px"
+          minH={quiet ? "44px" : "32px"}
+          w={quiet && !open ? "full" : "auto"} px={quiet ? 3 : 0}
           h="auto"
           gap={1}
           onClick={() => setOpen(!open)}
@@ -133,14 +136,14 @@ function DigestBox({
           _hover={{ bg: "surface.raisedHover" }}
         >
           <Code
-            px={2}
+            px={quiet ? 0.5 : 2}
             py={0.5}
-            fontSize="10px"
-            bg={resolvedLabelBg}
-            color={resolvedLabelColor}
+            fontSize={quiet ? "xs" : "10px"}
+            bg={quiet ? "transparent" : resolvedLabelBg}
+            color={quiet ? "fg.secondary" : resolvedLabelColor}
             fontWeight="700"
-            border={tokens.borders.thin}
-            borderColor={isDarkTheme ? "accent.highlight" : "border.default"}
+            border={quiet ? 0 : tokens.borders.thin}
+            borderColor={quiet ? "transparent" : isDarkTheme ? "accent.highlight" : "border.default"}
             borderRadius="sm"
             flexShrink={0}
           >
@@ -163,7 +166,7 @@ function DigestBox({
               borderColor="border.default"
               borderRadius="sm"
               overflow="hidden"
-              minH="24px"
+              h="28px"
               role="group"
               aria-label={`${label} representation`}
             >
@@ -176,7 +179,8 @@ function DigestBox({
                     aria-pressed={active}
                     variant="unstyled"
                     px={2}
-                    minH="24px"
+                    h="28px"
+                    py={0}
                     fontSize="10px"
                     fontWeight="700"
                     textTransform="uppercase"
@@ -292,7 +296,7 @@ function DigestBox({
 }
 
 /** ERC-8213: Calldata Digest display for transaction confirmation */
-export function CalldataDigestDisplay({ calldata }: { calldata: string }) {
+export function CalldataDigestDisplay({ calldata, quiet = false }: { calldata: string; quiet?: boolean }) {
   const digest = useMemo(
     () => computeCalldataDigest(calldata as Hex),
     [calldata]
@@ -306,6 +310,7 @@ export function CalldataDigestDisplay({ calldata }: { calldata: string }) {
       labelBg="bauhaus.yellow"
       labelColor="bauhaus.black"
       hash={digest}
+      quiet={quiet}
     />
   );
 }

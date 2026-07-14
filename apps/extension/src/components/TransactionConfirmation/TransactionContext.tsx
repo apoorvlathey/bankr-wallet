@@ -13,30 +13,21 @@ import { useTheme } from "@/theme";
 import type { detectAbiEncodingError } from "@/lib/calldataValidation";
 import type { parseApproveCalldata } from "@/lib/erc20Approve";
 import { DelegationRevokeNotice, DelegationSetNotice } from "./DelegationNotices";
-import { QueueNavigation } from "./QueueNavigation";
 import { RequestStatus } from "./RequestStatus";
 import { TransactionInfoCard } from "./TransactionInfoCard";
 import type {
   ConfirmationState,
-  ForceInclusionInfo,
   TransactionAccountType,
 } from "./types";
 import type { SplitPriorTxState } from "./useSplitPriorTxState";
 
 interface TransactionContextProps {
   txRequest: PendingTxRequest;
-  currentIndex: number;
-  totalCount: number;
+  actionLabel: string | null;
   accountType?: TransactionAccountType;
-  resolvedChainName: string;
   explorer?: string;
   nativeSymbol: string;
-  iconChipBg: string;
-  stripBg: string;
-  stripFg: string;
-  originHostname: string | null;
-  originInitials: string;
-  isInternalWalletChan: boolean;
+  nativePriceUsd: number | null;
   toLabels: string[];
   delegateLabels: string[];
   resolvedToName: string | null;
@@ -47,35 +38,21 @@ interface TransactionContextProps {
   clearSigningEligible: boolean;
   simulationReverted: boolean;
   simulationUnavailable: boolean;
-  forceInclusion: boolean;
-  forceInclusionInfo: ForceInclusionInfo | null;
-  showAdvanced: boolean;
   requestState: ConfirmationState;
   requestError: string;
   confirmDisabledReason: string | null;
   gasValid: boolean;
   splitState: SplitPriorTxState;
-  onNavigate: (direction: "prev" | "next") => void;
-  onRejectAll: () => void;
   onClearSigningResolved: (matched: boolean) => void;
-  onToggleAdvanced: () => void;
-  onForceInclusionChange: (enabled: boolean) => void;
 }
 
 export function TransactionContext({
   txRequest,
-  currentIndex,
-  totalCount,
+  actionLabel,
   accountType,
-  resolvedChainName,
   explorer,
   nativeSymbol,
-  iconChipBg,
-  stripBg,
-  stripFg,
-  originHostname,
-  originInitials,
-  isInternalWalletChan,
+  nativePriceUsd,
   toLabels,
   delegateLabels,
   resolvedToName,
@@ -86,19 +63,12 @@ export function TransactionContext({
   clearSigningEligible,
   simulationReverted,
   simulationUnavailable,
-  forceInclusion,
-  forceInclusionInfo,
-  showAdvanced,
   requestState,
   requestError,
   confirmDisabledReason,
   gasValid,
   splitState,
-  onNavigate,
-  onRejectAll,
   onClearSigningResolved,
-  onToggleAdvanced,
-  onForceInclusionChange,
 }: TransactionContextProps) {
   const { tokens } = useTheme();
   const { tx, chainName } = txRequest;
@@ -109,15 +79,6 @@ export function TransactionContext({
 
   return (
     <VStack spacing={3} align="stretch">
-      <QueueNavigation
-        currentIndex={currentIndex}
-        totalCount={totalCount}
-        stripBg={stripBg}
-        stripFg={stripFg}
-        onNavigate={onNavigate}
-        onRejectAll={onRejectAll}
-      />
-
       {txRequest.parentBundleId !== undefined &&
         txRequest.bundleIndex !== undefined &&
         txRequest.bundleTotalCalls !== undefined && (
@@ -238,22 +199,14 @@ export function TransactionContext({
 
       <TransactionInfoCard
         txRequest={txRequest}
-        resolvedChainName={resolvedChainName}
+        actionLabel={actionLabel}
         explorer={explorer}
         nativeSymbol={nativeSymbol}
+        nativePriceUsd={nativePriceUsd}
         parsedApproval={parsedApproval}
         isValueZero={isValueZero}
-        isInternalWalletChan={isInternalWalletChan}
-        iconChipBg={iconChipBg}
-        originHostname={originHostname}
-        originInitials={originInitials}
         toLabels={toLabels}
         resolvedToName={resolvedToName}
-        forceInclusion={forceInclusion}
-        forceInclusionInfo={forceInclusionInfo}
-        showAdvanced={showAdvanced}
-        onToggleAdvanced={onToggleAdvanced}
-        onForceInclusionChange={onForceInclusionChange}
       />
 
       <RequestStatus

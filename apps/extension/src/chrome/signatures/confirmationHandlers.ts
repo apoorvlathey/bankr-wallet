@@ -37,7 +37,7 @@ export async function handleConfirmSignatureRequest(
 ): Promise<SignatureResult> {
   const preflight = await prepareSignatureConfirmation(sigId, allowUnsafeSiwe);
   if (!preflight.ok) return preflight.result;
-  const { pending, account } = preflight.value;
+  const { account } = preflight.value;
 
   if (account.type !== "privateKey" && account.type !== "seedPhrase") {
     return {

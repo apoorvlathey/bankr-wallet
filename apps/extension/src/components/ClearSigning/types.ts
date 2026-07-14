@@ -30,10 +30,17 @@ interface Eip712Props {
 
 export type ClearSigningViewProps = (CalldataProps | Eip712Props) & {
   /**
+   * Removes the view's outer card chrome when another component already owns
+   * the surface. The clear-signing hierarchy and field layout stay intact.
+   */
+  embedded?: boolean;
+  /** Omits the intent/owner heading when a parent surface already presents it. */
+  hideHeader?: boolean;
+  /**
    * Called once when the view determines whether it has anything to render.
    * Parent can use this to collapse the raw decoder when `matched` is true.
    */
-  onResolved?: (matched: boolean) => void;
+  onResolved?: (matched: boolean, intent?: string) => void;
   /**
    * When true, render nothing during descriptor resolution instead of the
    * default skeleton card. Used by the batch summary view where we mount one

@@ -17,6 +17,7 @@ function AssetChangesDisplay(props: AssetChangesDisplayProps) {
       explorerUrl={explorerUrl}
       loading={loading}
       result={result}
+      embedded={props.embedded}
     />
   );
 }

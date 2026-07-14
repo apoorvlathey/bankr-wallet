@@ -95,7 +95,6 @@ export type PinnedTxRequest = PendingTxRequest &
 
 const STORAGE_KEY = "pendingTxRequests";
 const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
-const TX_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
 const MAX_PENDING_TX_REQUESTS = 50;
 const MAX_PENDING_TX_REQUESTS_PER_ORIGIN = 10;
 
@@ -116,7 +115,6 @@ export async function savePendingTxRequest(
   request: PinnedTxRequest,
   expectedMasterAuthEpoch?: string,
 ): Promise<void> {
-  await clearExpiredTxRequests();
   const boundRequest = await bindPendingBankrCredential(request);
   await withStorageLock(STORAGE_LOCK_KEY, async () => {
     const requests = await getPendingTxRequests();
@@ -161,29 +159,6 @@ export async function getPendingTxRequestById(
 ): Promise<PendingTxRequest | null> {
   const requests = await getPendingTxRequests();
   return requests.find((r) => r.id === txId) || null;
-}
-
-/**
- * Clear expired transaction requests (older than 30 minutes)
- */
-export async function clearExpiredTxRequests(): Promise<void> {
-  const expiredBefore = Date.now() - TX_EXPIRY_MS;
-  const expired = (await getPendingTxRequests()).filter(
-    (request) => request.timestamp <= expiredBefore,
-  );
-  if (expired.length === 0) return;
-  const { expirePersistedPendingRequest } = await import(
-    "./pendingRequestExpiry"
-  );
-  await Promise.all(
-    expired.map((request) =>
-      expirePersistedPendingRequest(
-        "transaction",
-        request.id,
-        expiredBefore,
-      ),
-    ),
-  );
 }
 
 /**

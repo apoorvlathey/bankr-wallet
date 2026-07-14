@@ -22,7 +22,6 @@ import { getLocalPrivateKeyForAccount } from "../accounts/localKeyResolver";
 import { signTypedData } from "../localSigner";
 import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pendingRequestLifecycle";
 import {
-  ERC7715_PERMISSION_EXPIRY_MS,
   type Erc7715PermissionRequest,
   type Erc7715PermissionResponse,
   type Erc7715PermissionResult,
@@ -45,16 +44,6 @@ export async function handleConfirmErc7715PermissionRequest(
     if (!pending) {
       return { success: false, error: "Permission request is no longer pending" };
     }
-    if (Date.now() - pending.timestamp > ERC7715_PERMISSION_EXPIRY_MS) {
-      await removePendingErc7715PermissionRequest(requestId);
-      const expired: Erc7715PermissionResult = {
-        success: false,
-        error: "Permission request expired",
-      };
-      await writeErc7715PermissionResult(requestId, expired);
-      return expired;
-    }
-
     try {
       const account = await getAccountById(pending.accountId);
       if (!account || account.address.toLowerCase() !== pending.accountAddress) {

@@ -36,6 +36,16 @@ export interface GasEstimate {
   nativeCurrencySymbol: string;
   accountBalance: string;
   insufficientBalance: boolean;
+  /** L1/source-chain balance cannot cover the estimated gas cost. */
+  insufficientGasBalance?: boolean;
+  /** L2/destination-chain balance cannot cover the transaction's native value. */
+  insufficientTransactionValueBalance?: boolean;
+  /** L2 native balance used for the force-inclusion value preflight. */
+  transactionValueBalance?: string;
+  /** Human-readable destination chain for the native-value warning. */
+  transactionValueChainName?: string;
+  /** Human-readable source chain whose native token pays the gas. */
+  gasBalanceChainName?: string;
   estimationFailed: boolean;
   estimationError?: string;
   estimationErrorFull?: string;

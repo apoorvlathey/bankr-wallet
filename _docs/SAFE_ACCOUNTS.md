@@ -564,8 +564,8 @@ Recommended policy:
    effects and offer the user a separately initiated in-wallet proposal.
 
 This needs targeted compatibility testing with major Safe-heavy dapps. The
-policy must not inherit WalletChan's current 30-minute pending expiry without a
-Safe-specific design; legitimate approvals can take much longer.
+policy should preserve WalletChan's user-controlled, non-expiring prompt model;
+legitimate multisig approvals can take much longer than an arbitrary timeout.
 
 ### ERC-5792
 

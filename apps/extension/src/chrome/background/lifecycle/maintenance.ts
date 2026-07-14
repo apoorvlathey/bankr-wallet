@@ -1,4 +1,4 @@
-/** Suspend handling, periodic expiry, and immediate cache maintenance. */
+/** Suspend handling, transient-route cleanup, and immediate cache maintenance. */
 
 export type MaintenanceLifecycleDependencies = {
   suspendTarget: {
@@ -7,14 +7,7 @@ export type MaintenanceLifecycleDependencies = {
   setInterval: (callback: () => void, milliseconds: number) => unknown;
   invalidateAuthCeremonies: () => void;
   clearInMemoryAuthCache: () => void;
-  clearExpiredTxRequests: () => unknown;
-  clearExpiredSignatureRequests: () => unknown;
-  clearExpiredBatchTxRequests: () => unknown;
-  clearExpiredErc7715PermissionRequests: () => unknown;
   clearExpiredWalletConnectPendingRequests: () => unknown;
-  clearExpiredDappConnectionRequests: () => unknown;
-  clearExpiredAddChainRequests: () => unknown;
-  clearExpiredWatchAssetRequests: () => unknown;
   getAllLocalStorage: () => Promise<Record<string, any>>;
   getStorageKeysWithPrefixes: (
     storage: Record<string, unknown>,
@@ -40,14 +33,7 @@ export function startMaintenanceLifecycle(
   });
 
   dependencies.setInterval(() => {
-    dependencies.clearExpiredTxRequests();
-    dependencies.clearExpiredSignatureRequests();
-    dependencies.clearExpiredBatchTxRequests();
-    dependencies.clearExpiredErc7715PermissionRequests();
     dependencies.clearExpiredWalletConnectPendingRequests();
-    dependencies.clearExpiredDappConnectionRequests();
-    dependencies.clearExpiredAddChainRequests();
-    dependencies.clearExpiredWatchAssetRequests();
   }, 60_000);
 
   void dependencies.getAllLocalStorage().then((items) => {

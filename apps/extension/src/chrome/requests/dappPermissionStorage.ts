@@ -1,5 +1,4 @@
 import { withStorageLock } from "../storageLock";
-import { runPendingRequestResolution } from "./pendingRequestResolution";
 
 export interface DappPermission {
   origin: string;
@@ -25,8 +24,6 @@ const PERMISSIONS_KEY = "dappPermissions";
 const PENDING_KEY = "pendingDappConnectionRequests";
 const PERMISSIONS_LOCK = `local:${PERMISSIONS_KEY}`;
 const PENDING_LOCK = `local:${PENDING_KEY}`;
-export const DAPP_CONNECTION_REQUEST_EXPIRY_MS = 5 * 60 * 1000;
-export const DAPP_CONNECTION_TIMEOUT_ERROR = "Connection request timed out";
 const MAX_PENDING_CONNECTION_REQUESTS = 20;
 // One exact origin cannot monopolize the global prompt queue by issuing many
 // concurrent eth_requestAccounts calls. EIP-1193 callers should await the
@@ -124,11 +121,7 @@ export async function savePendingDappConnectionRequest(
   request: PendingDappConnectionRequest,
 ): Promise<void> {
   await withStorageLock(PENDING_LOCK, async () => {
-    const now = Date.now();
-    const requests = (await getPendingDappConnectionRequests()).filter(
-      (pending) =>
-        now - pending.timestamp < DAPP_CONNECTION_REQUEST_EXPIRY_MS,
-    );
+    const requests = await getPendingDappConnectionRequests();
     if (requests.some((pending) => pending.id === request.id)) {
       throw new Error("Connection request already exists");
     }
@@ -162,34 +155,4 @@ export async function removePendingDappConnectionRequests(
   });
   if (removed.length > 0) await updatePendingRequestBadge();
   return removed;
-}
-
-export async function clearExpiredDappConnectionRequests(): Promise<void> {
-  await runPendingRequestResolution({
-    family: "dappConnection",
-    requestId: "all",
-    action: "expire",
-    conflictResult: () => undefined,
-    resolve: async () => {
-      const now = Date.now();
-      const expired = await removePendingDappConnectionRequests(
-        (request) =>
-          now - request.timestamp >= DAPP_CONNECTION_REQUEST_EXPIRY_MS,
-      );
-      await Promise.all(
-        expired.map((request) =>
-          chrome.storage.local.set({
-            [`dappConnectionResult:${request.id}`]: {
-              result: {
-                success: false,
-                error: DAPP_CONNECTION_TIMEOUT_ERROR,
-                code: -32000,
-              },
-              timestamp: Date.now(),
-            },
-          }),
-        ),
-      );
-    },
-  });
 }

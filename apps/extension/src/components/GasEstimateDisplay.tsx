@@ -4,17 +4,10 @@ import {
   VStack,
   HStack,
   Text,
-  Spinner,
-  Collapse,
-  Button,
-  Input,
   IconButton,
   Tooltip,
-  Icon,
-  usePrefersReducedMotion,
 } from "@chakra-ui/react";
 import {
-  ChevronDownIcon,
   WarningIcon,
   CopyIcon,
   CheckIcon,
@@ -24,7 +17,6 @@ import { GasEstimate, GasEstimateTier } from "@/chrome/gasEstimation";
 import { GasOverrides } from "@/chrome/txHandlers";
 import { formatEth, formatGwei, formatWeiToUsd } from "@/lib/gasFormatUtils";
 import { useTheme } from "@/theme";
-import GasTierPicker from "./GasTierPicker";
 import {
   DEFAULT_TIER,
   getStoredGasTier,
@@ -32,22 +24,10 @@ import {
   type GasTierSelection,
 } from "@/lib/gasTiers";
 import { useScreenEntered } from "@/components/ScreenTransition";
-
-// Small chain-link icon — used as the visual cue for "Max Fee follows
-// Priority Fee" auto-derivation. Inline SVG so we can size it tightly next
-// to the "Auto" badge text.
-const ChainLinkIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" fill="currentColor" {...props}>
-    <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" />
-  </Icon>
-);
-
-// Pencil icon for the "Edited" / manually-overridden state.
-const PencilIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" fill="currentColor" {...props}>
-    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
-  </Icon>
-);
+import { ShapesLoader } from "@/components/Chat/ShapesLoader";
+import { CustomGasEditor } from "@/components/GasEstimate/CustomGasEditor";
+import { GasFeePopover } from "@/components/GasEstimate/GasFeePopover";
+import { getInsufficientBalanceMessage } from "@/components/GasEstimate/model/balanceWarnings";
 
 interface GasEstimateDisplayProps {
   txRequest: PendingTxRequest;
@@ -75,65 +55,25 @@ function GasRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function EditableGasRow({
-  label,
-  value,
-  onChange,
-  suffix,
-  isInvalid,
-  rightAdornment,
-}: {
-  label: string;
-  value: string;
-  onChange: (val: string) => void;
-  suffix: string;
-  isInvalid?: boolean;
-  rightAdornment?: React.ReactNode;
-}) {
-  return (
-    <HStack justify="space-between" w="full">
-      <HStack spacing={1.5} minW={0}>
-        <Text fontSize="xs" color="text.tertiary" fontWeight="600">
-          {label}
-        </Text>
-        {rightAdornment}
-      </HStack>
-      <HStack spacing={1}>
-        <Input
-          size="xs"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          w="100px"
-          textAlign="right"
-          fontFamily="mono"
-          fontWeight="700"
-          fontSize="xs"
-          isInvalid={isInvalid}
-          px={2}
-          h="24px"
-        />
-        <Text fontSize="xs" color="text.tertiary" fontWeight="600" minW="35px">
-          {suffix}
-        </Text>
-      </HStack>
-    </HStack>
-  );
-}
-
-/** Format USD price for display */
-/** Convert wei string to gwei display string */
 function weiToGweiStr(wei: string): string {
   const gwei = Number(BigInt(wei)) / 1e9;
   if (gwei === 0) return "0";
   return gwei.toFixed(9).replace(/0+$/, "").replace(/\.$/, "");
 }
 
-/** Convert gwei display string to wei string (returns null if invalid) */
+function formatCompactFee(wei: string, symbol: string): string {
+  const value = Number(BigInt(wei)) / 1e18;
+  const amount = value.toLocaleString("en-US", {
+    maximumSignificantDigits: 4,
+    useGrouping: false,
+  });
+  return `${amount} ${symbol}`;
+}
+
 function gweiStrToWei(gweiStr: string): string | null {
   const val = Number(gweiStr);
   if (isNaN(val) || val < 0) return null;
   try {
-    // Convert gwei to wei: multiply by 1e9
     const wei = BigInt(Math.round(val * 1e9));
     return wei.toString();
   } catch {
@@ -214,12 +154,8 @@ function GasEstimateDisplay({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const prefersReducedMotion = usePrefersReducedMotion();
 
-  // Tier picker state. Lives across estimate refreshes (e.g., when forceInclusion
-  // toggles) so the user's choice doesn't reset under their feet.
   const [tier, setTier] = useState<GasTierSelection>(DEFAULT_TIER);
-  // Rehydrate the user's last preset choice from chrome.storage.sync.
   useEffect(() => {
     let cancelled = false;
     getStoredGasTier().then((stored) => {
@@ -228,12 +164,16 @@ function GasEstimateDisplay({
     return () => { cancelled = true; };
   }, []);
 
-  // Editable fields (gwei strings for fees, decimal string for gas limit).
-  // Always populated, even on preset tiers — so flipping Custom shows the
-  // current preset values and the user can fine-tune from there.
   const [editGasLimit, setEditGasLimit] = useState("");
   const [editMaxFee, setEditMaxFee] = useState("");
   const [editPriorityFee, setEditPriorityFee] = useState("");
+  const [customEditorOpen, setCustomEditorOpen] = useState(false);
+  const [draftGasLimit, setDraftGasLimit] = useState("");
+  const [draftMaxFee, setDraftMaxFee] = useState("");
+  const [draftPriorityFee, setDraftPriorityFee] = useState("");
+  const [draftMaxFeeManual, setDraftMaxFeeManual] = useState(false);
+  const [draftUsesPendingDappValues, setDraftUsesPendingDappValues] =
+    useState(false);
   // Sticky-edit flag for Custom mode: once the user touches Max Fee directly,
   // we stop auto-deriving it from Priority. Cleared by the relink button.
   const [maxFeeManual, setMaxFeeManual] = useState(false);
@@ -253,7 +193,8 @@ function GasEstimateDisplay({
   // instead of being locked into whatever the dapp asked for.
   const showPicker =
     isLocalAccount && !forceInclusion && !!estimate?.tiers;
-  const showCustomEditor = isLocalAccount && (tier === "custom" || !showPicker);
+  const showCustomEditor =
+    isLocalAccount && (customEditorOpen || !showPicker);
 
   // Defer the gas estimate RPC until the screen has finished animating in.
   // Fetching mid-animation triggers a re-render with new layout (tier picker,
@@ -270,6 +211,7 @@ function GasEstimateDisplay({
     setError(null);
     setMaxFeeManual(false);
     setDappValuesPendingForCustom(false);
+    setCustomEditorOpen(false);
 
     const messageType = forceInclusion ? "estimateForceInclusionGas" : "estimateGas";
 
@@ -344,34 +286,98 @@ function GasEstimateDisplay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [txRequest.id, forceInclusion, screenEntered]);
 
-  // When the user picks a preset tier, repopulate the editable fields from
-  // the cached tiers and clear the sticky-manual flag so Custom starts linked
-  // again next time the user opens it.
+  const openCustomEditor = useCallback(() => {
+    if (!estimate) return;
+
+    const usePendingDappValues = dappValuesPendingForCustom;
+    setDraftGasLimit(editGasLimit);
+    setDraftMaxFee(
+      usePendingDappValues
+        ? weiToGweiStr(estimate.maxFeePerGas)
+        : editMaxFee,
+    );
+    setDraftPriorityFee(
+      usePendingDappValues
+        ? weiToGweiStr(estimate.maxPriorityFeePerGas)
+        : editPriorityFee,
+    );
+    setDraftMaxFeeManual(usePendingDappValues ? false : maxFeeManual);
+    setDraftUsesPendingDappValues(usePendingDappValues);
+    setCustomEditorOpen(true);
+  }, [
+    dappValuesPendingForCustom,
+    editGasLimit,
+    editMaxFee,
+    editPriorityFee,
+    estimate,
+    maxFeeManual,
+  ]);
+
+  // Presets apply immediately. Custom is a deliberate second step: opening
+  // it only seeds a draft, and the transaction overrides remain untouched
+  // until the user presses Set.
   const handleTierChange = useCallback(
     (next: GasTierSelection) => {
+      if (next === "custom") {
+        openCustomEditor();
+        return;
+      }
+
       setTier(next);
       setStoredGasTier(next);
-      if (next !== "custom" && estimate?.tiers) {
+      if (estimate?.tiers) {
         const t = estimate.tiers[next];
         setEditMaxFee(weiToGweiStr(t.maxFeePerGas));
         setEditPriorityFee(weiToGweiStr(t.maxPriorityFeePerGas));
         setMaxFeeManual(false);
-      } else if (next === "custom" && dappValuesPendingForCustom && estimate) {
-        // First visit to Custom after we auto-switched away from a
-        // dapp-suggested-but-unusable default. Re-seed with the dapp's
-        // values so the user can review/edit them.
-        setEditMaxFee(weiToGweiStr(estimate.maxFeePerGas));
-        setEditPriorityFee(weiToGweiStr(estimate.maxPriorityFeePerGas));
-        setMaxFeeManual(false);
-        setDappValuesPendingForCustom(false);
       }
+      setExpanded(false);
     },
-    [estimate, dappValuesPendingForCustom],
+    [estimate, openCustomEditor],
   );
 
   // Custom-mode coupling: editing Priority recomputes Max Fee unless the
   // user has explicitly edited Max Fee since the last relink.
-  const handlePriorityEdit = useCallback(
+  const handleDraftPriorityEdit = useCallback(
+    (val: string) => {
+      setDraftPriorityFee(val);
+      if (!draftMaxFeeManual && estimate?.predictedNextBaseFee) {
+        const priorityWei = gweiStrToWei(val);
+        if (priorityWei !== null) {
+          const derived = deriveMaxFeeFromPriority(
+            BigInt(priorityWei),
+            BigInt(estimate.predictedNextBaseFee),
+          );
+          setDraftMaxFee(weiToGweiStr(derived.toString()));
+        }
+      }
+    },
+    [draftMaxFeeManual, estimate],
+  );
+
+  const handleDraftMaxFeeEdit = useCallback((val: string) => {
+    setDraftMaxFee(val);
+    setDraftMaxFeeManual(true);
+  }, []);
+
+  const handleDraftEnableMaxFeeEdit = useCallback(() => {
+    setDraftMaxFeeManual(true);
+  }, []);
+
+  const handleDraftRelinkMaxFee = useCallback(() => {
+    if (!estimate?.predictedNextBaseFee) return;
+    const priorityWei = gweiStrToWei(draftPriorityFee);
+    if (priorityWei === null) return;
+    const derived = deriveMaxFeeFromPriority(
+      BigInt(priorityWei),
+      BigInt(estimate.predictedNextBaseFee),
+    );
+    setDraftMaxFee(weiToGweiStr(derived.toString()));
+    setDraftMaxFeeManual(false);
+  }, [draftPriorityFee, estimate]);
+
+  // Chains without a tier picker retain the existing direct-edit path.
+  const handleAppliedPriorityEdit = useCallback(
     (val: string) => {
       setEditPriorityFee(val);
       if (!maxFeeManual && estimate?.predictedNextBaseFee) {
@@ -388,12 +394,16 @@ function GasEstimateDisplay({
     [maxFeeManual, estimate],
   );
 
-  const handleMaxFeeEdit = useCallback((val: string) => {
+  const handleAppliedMaxFeeEdit = useCallback((val: string) => {
     setEditMaxFee(val);
     setMaxFeeManual(true);
   }, []);
 
-  const handleRelinkMaxFee = useCallback(() => {
+  const handleAppliedEnableMaxFeeEdit = useCallback(() => {
+    setMaxFeeManual(true);
+  }, []);
+
+  const handleAppliedRelinkMaxFee = useCallback(() => {
     if (!estimate?.predictedNextBaseFee) return;
     const priorityWei = gweiStrToWei(editPriorityFee);
     if (priorityWei === null) return;
@@ -436,6 +446,63 @@ function GasEstimateDisplay({
       return false;
     }
   })();
+
+  const isDraftGasLimitValid = (() => {
+    const val = Number(draftGasLimit);
+    return !isNaN(val) && val > 0 && Number.isInteger(val);
+  })();
+  const isDraftMaxFeeValid = (() => {
+    const val = Number(draftMaxFee);
+    return !isNaN(val) && val > 0;
+  })();
+  const isDraftPriorityFeeValid = (() => {
+    const val = Number(draftPriorityFee);
+    return !isNaN(val) && val >= 0;
+  })();
+  const allDraftFieldsValid =
+    isDraftGasLimitValid &&
+    isDraftMaxFeeValid &&
+    isDraftPriorityFeeValid;
+  const draftMaxFeeCoversBase = (() => {
+    if (!allDraftFieldsValid || !estimate) return false;
+    try {
+      const maxFeeWei = gweiStrToWei(draftMaxFee);
+      const priorityWei = gweiStrToWei(draftPriorityFee);
+      if (!maxFeeWei || !priorityWei) return false;
+      return (
+        BigInt(maxFeeWei) >=
+        BigInt(estimate.baseFee || "0") + BigInt(priorityWei)
+      );
+    } catch {
+      return false;
+    }
+  })();
+  const draftValidForSet = allDraftFieldsValid && draftMaxFeeCoversBase;
+
+  const handleCancelCustomEditor = useCallback(() => {
+    setCustomEditorOpen(false);
+  }, []);
+
+  const handleSetCustomGas = useCallback(() => {
+    if (!draftValidForSet) return;
+    setEditGasLimit(draftGasLimit);
+    setEditMaxFee(draftMaxFee);
+    setEditPriorityFee(draftPriorityFee);
+    setMaxFeeManual(draftMaxFeeManual);
+    setTier("custom");
+    if (draftUsesPendingDappValues) {
+      setDappValuesPendingForCustom(false);
+    }
+    setCustomEditorOpen(false);
+    setExpanded(false);
+  }, [
+    draftGasLimit,
+    draftMaxFee,
+    draftMaxFeeManual,
+    draftPriorityFee,
+    draftUsesPendingDappValues,
+    draftValidForSet,
+  ]);
 
   const validForBroadcast =
     !isLocalAccount || // Bankr / impersonator paths don't broadcast through us
@@ -507,7 +574,13 @@ function GasEstimateDisplay({
     return estimate.estimatedCostWei;
   })();
 
-  // Loading state
+  const draftDisplayCostWei = (() => {
+    if (!estimate || !allDraftFieldsValid) return displayCostWei;
+    const maxFeeWei = gweiStrToWei(draftMaxFee);
+    if (!maxFeeWei) return displayCostWei;
+    return (BigInt(draftGasLimit) * BigInt(maxFeeWei)).toString();
+  })();
+
   if (loading) {
     return (
       <Box
@@ -517,8 +590,8 @@ function GasEstimateDisplay({
         bg="surface.raised"
         boxShadow="none"
       >
-        <HStack px={3} py={3} justify="center">
-          <Spinner size="xs" color="accent.secondary" />
+        <HStack px={3} py={3} justify="center" spacing={3}>
+          <ShapesLoader size="6px" />
           <Text fontSize="xs" color="text.secondary" fontWeight="600">
             Estimating gas…
           </Text>
@@ -527,7 +600,6 @@ function GasEstimateDisplay({
     );
   }
 
-  // Error state (non-blocking)
   if (error && !estimate) {
     return (
       <Box
@@ -550,10 +622,79 @@ function GasEstimateDisplay({
 
   const usdDisplay = formatWeiToUsd(displayCostWei, estimate.nativePriceUsd);
   const sym = estimate.nativeCurrencySymbol || "ETH";
+  const insufficientBalanceMessage = getInsufficientBalanceMessage([estimate]);
+  const editorGasLimit = customEditorOpen ? draftGasLimit : editGasLimit;
+  const editorMaxFee = customEditorOpen ? draftMaxFee : editMaxFee;
+  const editorPriorityFee = customEditorOpen
+    ? draftPriorityFee
+    : editPriorityFee;
+  const editorMaxFeeManual = customEditorOpen
+    ? draftMaxFeeManual
+    : maxFeeManual;
+  const editorGasLimitValid = customEditorOpen
+    ? isDraftGasLimitValid
+    : isGasLimitValid;
+  const editorMaxFeeValid = customEditorOpen
+    ? isDraftMaxFeeValid
+    : isMaxFeeValid;
+  const editorPriorityFeeValid = customEditorOpen
+    ? isDraftPriorityFeeValid
+    : isPriorityFeeValid;
+  const editorAllFieldsValid = customEditorOpen
+    ? allDraftFieldsValid
+    : allFieldsValid;
+  const editorMaxFeeCoversBase = customEditorOpen
+    ? draftMaxFeeCoversBase
+    : maxFeeCoversBase;
+  const editorCostWei = customEditorOpen
+    ? draftDisplayCostWei
+    : displayCostWei;
+  const editorUsdDisplay = formatWeiToUsd(
+    editorCostWei,
+    estimate.nativePriceUsd,
+  );
+  const gasEditorContent = (
+    <CustomGasEditor
+      gasLimit={editorGasLimit}
+      priorityFee={editorPriorityFee}
+      maxFee={editorMaxFee}
+      baseFee={weiToGweiStr(estimate.baseFee)}
+      fiatCost={editorUsdDisplay}
+      nativeCost={formatEth(editorCostWei, sym)}
+      gasLimitValid={editorGasLimitValid}
+      priorityFeeValid={editorPriorityFeeValid}
+      maxFeeValid={editorMaxFeeValid}
+      allFieldsValid={editorAllFieldsValid}
+      maxFeeCoversBase={editorMaxFeeCoversBase}
+      maxFeeManual={editorMaxFeeManual}
+      showActions={customEditorOpen}
+      canSet={draftValidForSet}
+      onGasLimitChange={customEditorOpen ? setDraftGasLimit : setEditGasLimit}
+      onPriorityFeeChange={
+        customEditorOpen
+          ? handleDraftPriorityEdit
+          : handleAppliedPriorityEdit
+      }
+      onMaxFeeChange={
+        customEditorOpen ? handleDraftMaxFeeEdit : handleAppliedMaxFeeEdit
+      }
+      onEnableMaxFeeEdit={
+        customEditorOpen
+          ? handleDraftEnableMaxFeeEdit
+          : handleAppliedEnableMaxFeeEdit
+      }
+      onRelinkMaxFee={
+        customEditorOpen
+          ? handleDraftRelinkMaxFee
+          : handleAppliedRelinkMaxFee
+      }
+      onCancel={handleCancelCustomEditor}
+      onSet={handleSetCustomGas}
+    />
+  );
 
   return (
     <VStack spacing={2} align="stretch">
-      {/* Revert warning */}
       {estimate.estimationFailed && (
         <RevertWarning
           shortError={estimate.estimationError || "estimation failed"}
@@ -561,8 +702,7 @@ function GasEstimateDisplay({
         />
       )}
 
-      {/* Insufficient balance warning */}
-      {estimate.insufficientBalance && !estimate.estimationFailed && (
+      {insufficientBalanceMessage && !estimate.estimationFailed && (
         <HStack
           bg="accent.highlight"
           border={tokens.borders.medium}
@@ -575,257 +715,81 @@ function GasEstimateDisplay({
         >
           <WarningIcon color="accentFg.highlight" boxSize={3.5} />
           <Text fontSize="xs" color="accentFg.highlight" fontWeight="600">
-            Insufficient balance for gas
+            {insufficientBalanceMessage}
           </Text>
         </HStack>
       )}
 
-      {/* Force inclusion L1 gas banner */}
-      {forceInclusion && (
-        <Box
-          bg="accent.secondary"
-          border={tokens.borders.thin}
-          borderColor="border.default"
-          borderRadius="md"
-          px={3}
-          py={1.5}
-        >
-          <Text fontSize="2xs" color="accentFg.secondary" fontWeight="600">
-            Gas estimated for L1 deposit transaction
-          </Text>
-        </Box>
-      )}
-
-      {/* Gas estimate box */}
-      <Box
-        border={tokens.borders.thin}
-        borderColor="border.default"
-        borderRadius="lg"
-        // overflow:hidden clips the header's hover bg to the card's rounded
-        // corners. Without it, the inner HStack hover fill renders as a sharp
-        // rectangle inside the rounded outer Box and leaks square corners
-        // (most visible on Midnight, where the hover tint is most saturated).
-        overflow="hidden"
-        bg="surface.raised"
-        boxShadow="none"
-        position="relative"
-      >
-        {/* Collapsed header */}
-        <Button
-          type="button"
-          variant="unstyled"
-          display="flex"
-          w="full"
-          minH="44px"
-          h="auto"
-          px={3}
-          py={2.5}
-          onClick={() => setExpanded(!expanded)}
-          aria-expanded={expanded}
-          aria-controls="gas-fee-details"
-          borderRadius={0}
-          fontWeight="inherit"
-          textTransform="none"
-          _hover={{ bg: "surface.raisedHover" }}
-          justifyContent="space-between"
-        >
-          <Text fontSize="xs" color="text.secondary" fontWeight="600" flexShrink={0}>
-            Gas fee
-          </Text>
-          <HStack spacing={1} minW={0}>
-            <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono" noOfLines={1}>
-              {formatEth(displayCostWei, sym)}
-            </Text>
-            {usdDisplay && (
-              <Text fontSize="xs" color="text.tertiary" fontWeight="600">
-                ({usdDisplay})
-              </Text>
-            )}
-            <ChevronDownIcon
-              boxSize={4}
-              color="text.tertiary"
-              transform={expanded ? "rotate(180deg)" : "rotate(0deg)"}
-              transition={prefersReducedMotion ? "none" : "transform 150ms cubic-bezier(0.23, 1, 0.32, 1)"}
-              aria-hidden
-            />
-          </HStack>
-        </Button>
-
-        {/* Expanded details */}
-        <Collapse id="gas-fee-details" in={expanded} animateOpacity={!prefersReducedMotion}>
-          <VStack align="stretch" spacing={1.5} px={3} pb={3} pt={1}>
-            <Box h="1px" bg="border.subtle" />
-
-            {showPicker && (
-              <GasTierPicker
-                tiers={estimate.tiers}
-                gasLimit={pickerGasLimit}
-                nativePriceUsd={estimate.nativePriceUsd}
-                nativeCurrencySymbol={sym}
-                selected={tier}
-                onChange={handleTierChange}
-              />
-            )}
-
+      <GasFeePopover
+        expanded={expanded}
+        fiatFee={usdDisplay}
+        nativeFee={formatCompactFee(displayCostWei, sym)}
+        tier={showPicker ? tier : undefined}
+        onToggle={() => {
+          if (expanded) {
+            setExpanded(false);
+            setCustomEditorOpen(false);
+          } else {
+            setCustomEditorOpen(false);
+            setExpanded(true);
+          }
+        }}
+        onClose={() => {
+          setExpanded(false);
+          setCustomEditorOpen(false);
+        }}
+        showPicker={showPicker}
+        customEditorOpen={customEditorOpen}
+        customEditor={gasEditorContent}
+        tiers={estimate.tiers}
+        gasLimit={pickerGasLimit}
+        nativePriceUsd={estimate.nativePriceUsd}
+        nativeCurrencySymbol={sym}
+        selectedTier={tier}
+        onTierChange={handleTierChange}
+        customBadge={estimate.dappProvidedGas ? "Dapp suggested" : undefined}
+        fallbackContent={
+          <VStack align="stretch" spacing={1.5}>
             {showCustomEditor ? (
-              <>
-                <EditableGasRow
-                  label="Gas Limit"
-                  value={editGasLimit}
-                  onChange={(v) => setEditGasLimit(v)}
-                  suffix=""
-                  isInvalid={!isGasLimitValid}
-                />
-                <EditableGasRow
-                  label="Max Priority Fee"
-                  value={editPriorityFee}
-                  onChange={handlePriorityEdit}
-                  suffix="Gwei"
-                  isInvalid={!isPriorityFeeValid}
-                />
-                <EditableGasRow
-                  label="Max Fee"
-                  value={editMaxFee}
-                  onChange={handleMaxFeeEdit}
-                  suffix="Gwei"
-                  isInvalid={!isMaxFeeValid}
-                  rightAdornment={
-                    estimate.predictedNextBaseFee ? (
-                      maxFeeManual ? (
-                        // Manual state: explicit "Edited" pill + reset button.
-                        // Click the whole pill to relink — single, obvious
-                        // affordance instead of a tiny standalone repeat icon.
-                        <Tooltip
-                          label="You edited Max Fee. Click to auto-link it back to Priority Fee."
-                          fontSize="2xs"
-                          hasArrow
-                          openDelay={300}
-                        >
-                          <HStack
-                            as="button"
-                            type="button"
-                            aria-label="Auto-link Max Fee to Priority Fee"
-                            onClick={handleRelinkMaxFee}
-                            spacing={1}
-                            px={1.5}
-                            py={0.5}
-                            minH="24px"
-                            borderRadius="md"
-                            bg="accent.highlight"
-                            cursor="pointer"
-                            _hover={{ filter: "brightness(0.95)" }}
-                            _focus={{ outline: "none" }}
-                            _focusVisible={{ boxShadow: "focus" }}
-                            transition="filter 100ms ease-out"
-                          >
-                            <PencilIcon boxSize="9px" color="accentFg.highlight" />
-                            <Text
-                              fontSize="2xs"
-                              fontWeight="700"
-                              textTransform="uppercase"
-                              color="accentFg.highlight"
-                              letterSpacing="wide"
-                            >
-                              Edited
-                            </Text>
-                          </HStack>
-                        </Tooltip>
-                      ) : (
-                        // Linked / auto state: subtle informational badge.
-                        // No click target — there's nothing to do here,
-                        // editing Max Fee directly will switch to Edited.
-                        <Tooltip
-                          label="Max Fee follows your Priority Fee changes."
-                          fontSize="2xs"
-                          hasArrow
-                          openDelay={300}
-                        >
-                          <HStack spacing={1} color="text.tertiary">
-                            <ChainLinkIcon boxSize="9px" />
-                            <Text
-                              fontSize="2xs"
-                              fontWeight="700"
-                              textTransform="uppercase"
-                              letterSpacing="wide"
-                            >
-                              Auto
-                            </Text>
-                          </HStack>
-                        </Tooltip>
-                      )
-                    ) : undefined
-                  }
-                />
-              </>
+              gasEditorContent
             ) : (
               <>
                 <GasRow label="Gas Limit" value={estimate.gasLimit} />
-                {(() => {
-                  // Resolve the fees to display for the currently selected
-                  // preset tier. Falling back to `estimate.maxFeePerGas` is
-                  // wrong here when the dapp suggested unusable fees — the
-                  // raw estimate carries those values, not the active
-                  // tier's, so the user would see "0" priority while the
-                  // picker says "Standard".
-                  const fees =
-                    tier !== "custom" && estimate.tiers
-                      ? estimate.tiers[tier]
-                      : { maxFeePerGas: estimate.maxFeePerGas, maxPriorityFeePerGas: estimate.maxPriorityFeePerGas };
-                  return (
-                    <>
-                      <GasRow
-                        label="Max Priority Fee"
-                        value={formatGwei(fees.maxPriorityFeePerGas)}
-                      />
-                      <GasRow
-                        label="Max Fee"
-                        value={formatGwei(fees.maxFeePerGas)}
-                      />
-                    </>
-                  );
-                })()}
+                <GasRow
+                  label="Max Priority Fee"
+                  value={formatGwei(estimate.maxPriorityFeePerGas)}
+                />
+                <GasRow
+                  label="Max Fee"
+                  value={formatGwei(estimate.maxFeePerGas)}
+                />
+                <GasRow label="Base Fee" value={formatGwei(estimate.baseFee)} />
+                <Box h="1px" bg="border.subtle" />
+                <HStack justify="space-between" align="center" spacing={3}>
+                  <Text fontSize="xs" color="text.secondary" fontWeight="600">
+                    Estimated max
+                  </Text>
+                  <VStack align="flex-end" spacing={0} minW={0}>
+                    <Text fontSize="xs" color="text.primary" fontWeight="700" noOfLines={1}>
+                      {usdDisplay || formatEth(displayCostWei, sym)}
+                    </Text>
+                    {usdDisplay && (
+                      <Text fontSize="2xs" color="text.tertiary" fontFamily="mono" noOfLines={1}>
+                        {formatEth(displayCostWei, sym)}
+                      </Text>
+                    )}
+                  </VStack>
+                </HStack>
               </>
             )}
-
-            <GasRow label="Base Fee" value={formatGwei(estimate.baseFee)} />
-
-            <Box h="1px" bg="border.subtle" mt={0.5} />
-
-            <GasRow
-              label="Estimated Cost"
-              value={`${formatEth(displayCostWei, sym)}${usdDisplay ? ` (${usdDisplay})` : ""}`}
-            />
-
-            {estimate.dappProvidedGas && tier === "custom" && (
-              // Only display the badge while we're actually using the dapp's
-              // values (Custom tier with the prefilled inputs). Picking
-              // Slow/Standard/Fast overrides the dapp's suggestion, so the
-              // label would otherwise mislead the user about what's about to
-              // be broadcast.
-              <Text fontSize="2xs" color="accent.secondary" fontWeight="700">
-                Custom uses gas params suggested by dapp
-              </Text>
-            )}
-
             {accountType === "bankr" && (
               <Text fontSize="2xs" color="text.tertiary" fontWeight="600" fontStyle="italic">
                 Gas managed by Bankr API
               </Text>
             )}
-
-            {isLocalAccount && allFieldsValid && !maxFeeCoversBase && (
-              <Text fontSize="2xs" color="status.error.fg" fontWeight="700">
-                Max Fee must be at least Base Fee + Priority Fee
-              </Text>
-            )}
-            {isLocalAccount && !allFieldsValid && (
-              <Text fontSize="2xs" color="status.error.fg" fontWeight="700">
-                Invalid gas parameters
-              </Text>
-            )}
           </VStack>
-        </Collapse>
-      </Box>
+        }
+      />
     </VStack>
   );
 }

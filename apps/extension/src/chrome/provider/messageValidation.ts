@@ -20,16 +20,6 @@ import {
 
 export type ExternalProviderValidationResult = ProviderValidationResult;
 
-const EXPIRABLE_PROVIDER_REQUEST_KINDS = new Set([
-  "transaction",
-  "signature",
-  "dappConnection",
-  "erc7715Permission",
-  "addChain",
-  "watchAsset",
-  "batchTransaction",
-]);
-
 function validateChainPinnedRequest(
   requestedChainId: unknown,
   providerChainId: unknown,
@@ -74,13 +64,6 @@ export function validateExternalProviderMessage(
       return isProviderRequestId(candidate.requestId)
         ? { valid: true }
         : failProviderValidation("Invalid connection request id");
-
-    case "expireProviderRequest":
-      return isProviderRequestId(candidate.requestId) &&
-        typeof candidate.requestKind === "string" &&
-        EXPIRABLE_PROVIDER_REQUEST_KINDS.has(candidate.requestKind)
-        ? { valid: true }
-        : failProviderValidation("Invalid expiring provider request");
 
     case "sendTransaction": {
       if (

@@ -60,7 +60,6 @@ export type PinnedSignatureRequest = PendingSignatureRequest &
 
 const STORAGE_KEY = "pendingSignatureRequests";
 const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
-const SIGNATURE_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
 const MAX_PENDING_SIGNATURE_REQUESTS = 50;
 const MAX_PENDING_SIGNATURE_REQUESTS_PER_ORIGIN = 10;
 
@@ -80,7 +79,6 @@ export async function getPendingSignatureRequests(): Promise<PendingSignatureReq
 export async function savePendingSignatureRequest(
   request: PinnedSignatureRequest
 ): Promise<void> {
-  await clearExpiredSignatureRequests();
   const boundRequest = await bindPendingBankrCredential(request);
   await withStorageLock(STORAGE_LOCK_KEY, async () => {
     const requests = await getPendingSignatureRequests();
@@ -122,29 +120,6 @@ export async function getPendingSignatureRequestById(
 ): Promise<PendingSignatureRequest | null> {
   const requests = await getPendingSignatureRequests();
   return requests.find((r) => r.id === sigId) || null;
-}
-
-/**
- * Clear expired signature requests (older than 30 minutes)
- */
-export async function clearExpiredSignatureRequests(): Promise<void> {
-  const expiredBefore = Date.now() - SIGNATURE_EXPIRY_MS;
-  const expired = (await getPendingSignatureRequests()).filter(
-    (request) => request.timestamp <= expiredBefore,
-  );
-  if (expired.length === 0) return;
-  const { expirePersistedPendingRequest } = await import(
-    "./pendingRequestExpiry"
-  );
-  await Promise.all(
-    expired.map((request) =>
-      expirePersistedPendingRequest(
-        "signature",
-        request.id,
-        expiredBefore,
-      ),
-    ),
-  );
 }
 
 /**

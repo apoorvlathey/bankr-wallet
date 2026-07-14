@@ -14,9 +14,10 @@ Review in dependency order:
 3. `cachePolicy.ts` — pure TTL/schema/LRU pruning plan for non-critical caches.
 4. `cachePruner.ts` — one local-storage snapshot followed by ordered remove
    then set effects; portfolio pruning remains delegated to its owning domain.
-5. `resultWaiter.ts` — durable provider-result listener and retrying expiry
-   handshake. It never reports a local timeout while confirmation may own the
-   request's first-action claim.
+5. `resultWaiter.ts` — durable provider-result listener and optional retrying
+   expiry handshake. It never reports a local timeout while confirmation may
+   own the request's first-action claim. Every user-review request uses its
+   unbounded mode and settles only from an explicit durable terminal result.
 
 `storageLock.ts`, `walletResetStorage.ts`, `storageCachePruner.ts`, and
 `storageResultWaiter.ts` are policy-free compatibility facades. Existing
@@ -32,5 +33,6 @@ callers retain their runtime function and constant identities.
   LRU limits, storage keys, summary counts, and remove-before-set ordering are
   frozen. Cache failures still reject here and are caught by the startup caller.
 - Result listeners accept only `chrome.storage.local` values with a truthy
-  `result`, remove the durable key after settling, retain the exact
-  `Request timed out` error, and retry ambiguous expiry ownership.
+  `result` and remove the durable key after settling. Bounded callers retain
+  the exact `Request timed out` error and retry ambiguous expiry ownership;
+  user-review prompt callers deliberately install no local timer.

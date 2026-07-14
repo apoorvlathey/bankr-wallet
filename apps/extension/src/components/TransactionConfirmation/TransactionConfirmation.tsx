@@ -10,9 +10,14 @@ import {
   RejectActionButton,
 } from "./ConfirmationActions";
 import { CopyButton } from "./CopyButton";
+import { QueueNavigation } from "./QueueNavigation";
+import { shouldConfirmSimulationFailure } from "@/components/RequestConfirmation/simulationFailure";
 import { ForceInclusionScreen, TransactionSentScreen } from "./StateScreens";
 import { TransactionContext } from "./TransactionContext";
+import { TransactionDecisionSummary } from "./TransactionDecisionSummary";
+import { getDecodedActionFallback } from "./transactionPresentation";
 import {
+  TransactionEstimatedChangesTitle,
   TransactionFinancialImpact,
   TransactionOutcome,
 } from "./TransactionSummary";
@@ -61,7 +66,6 @@ function TransactionConfirmation({
   const review = useTransactionReviewState(
     txRequest,
     accountType,
-    metadata.nativeSymbol,
   );
   const batch = useTransactionBatchEligibility(
     txRequest,
@@ -104,20 +108,7 @@ function TransactionConfirmation({
       ? "Set smart account"
       : review.parsedApproval
         ? "Token approval"
-        : "Review transaction";
-  const outcomeText = is7702Revoke
-    ? `Remove smart-account access on ${txRequest.chainName}`
-    : is7702SetDelegate
-      ? `Enable smart-account access on ${txRequest.chainName}`
-      : review.parsedApproval
-        ? "Allow this app to spend your tokens"
-        : !tx.to
-          ? "Deploy a smart contract"
-          : decodedFunctionName
-            ? `${decodedFunctionName} on ${metadata.originHostname}`
-            : review.parsedTxValue.ok && review.parsedTxValue.wei > 0n
-              ? `Send ${review.nativeValueDisplay.compact}`
-              : `Submit a transaction to ${metadata.originHostname}`;
+        : "Transaction request";
   const confirmDisabledReason = actions.isRejecting
     ? "Reject in progress"
     : actions.state === "error"
@@ -131,6 +122,13 @@ function TransactionConfirmation({
             : !review.gasValid
               ? "Set a valid gas fee — fee fields can't be empty / max fee must cover base + priority"
               : null;
+  const decodedActionFallback = getDecodedActionFallback({
+    clearSigningStatus: review.clearSigningStatus,
+    decodedFunctionName,
+    hasSpecializedSummary: Boolean(
+      review.parsedApproval || isErc7715PermissionRevoke,
+    ),
+  });
   const rejectButton = (
     <RejectActionButton
       state={actions.state}
@@ -159,45 +157,50 @@ function TransactionConfirmation({
           )}
         />
       }
+      navigation={
+        totalCount > 1 ? (
+          <QueueNavigation
+            currentIndex={currentIndex}
+            totalCount={totalCount}
+            stripBg={stripBg}
+            stripFg={stripFg}
+            onNavigate={onNavigate}
+            onRejectAll={onRejectAll}
+          />
+        ) : undefined
+      }
       outcome={
         <TransactionOutcome
           txRequest={txRequest}
-          outcomeText={outcomeText}
           iconChipBg={iconChipBg}
           isInternalWalletChan={metadata.isInternalWalletChan}
           originHostname={metadata.originHostname}
           originInitials={metadata.originInitials}
-          simulationReverted={review.simulationReverted}
-          simulationUnavailable={review.simulationUnavailable}
         />
       }
       financialImpact={
         <TransactionFinancialImpact
           txRequest={txRequest}
-          parsedTxValue={review.parsedTxValue}
           isValueMalformed={review.isValueMalformed}
           isValueZero={review.isValueZero}
-          nativeSymbol={metadata.nativeSymbol}
-          nativeValueCompact={review.nativeValueDisplay.compact}
           onRevertedChange={review.setSimulationReverted}
           onSimulationUnavailableChange={review.setSimulationUnavailable}
+        />
+      }
+      financialImpactTitle={
+        <TransactionEstimatedChangesTitle
+          txRequest={txRequest}
+          resolvedChainName={resolvedChainName}
         />
       }
       context={
         <TransactionContext
           txRequest={txRequest}
-          currentIndex={currentIndex}
-          totalCount={totalCount}
+          actionLabel={decodedActionFallback}
           accountType={accountType}
-          resolvedChainName={resolvedChainName}
           explorer={explorer}
           nativeSymbol={metadata.nativeSymbol}
-          iconChipBg={iconChipBg}
-          stripBg={stripBg}
-          stripFg={stripFg}
-          originHostname={metadata.originHostname}
-          originInitials={metadata.originInitials}
-          isInternalWalletChan={metadata.isInternalWalletChan}
+          nativePriceUsd={review.nativePriceUsd}
           toLabels={metadata.toLabels}
           delegateLabels={metadata.delegateLabels}
           resolvedToName={metadata.resolvedToName}
@@ -208,30 +211,19 @@ function TransactionConfirmation({
           clearSigningEligible={review.clearSigningEligible}
           simulationReverted={review.simulationReverted}
           simulationUnavailable={review.simulationUnavailable}
-          forceInclusion={review.forceInclusion}
-          forceInclusionInfo={review.forceInclusionInfo}
-          showAdvanced={review.showAdvanced}
           requestState={actions.state}
           requestError={actions.error}
           confirmDisabledReason={confirmDisabledReason}
           gasValid={review.gasValid}
           splitState={review.splitState}
-          onNavigate={onNavigate}
-          onRejectAll={onRejectAll}
           onClearSigningResolved={(matched) =>
             review.setClearSigningStatus(matched ? "matched" : "absent")
           }
-          onToggleAdvanced={() => review.setShowAdvanced(!review.showAdvanced)}
-          onForceInclusionChange={review.setForceInclusion}
         />
       }
       advancedDetails={
         <AdvancedDetails
           txRequest={txRequest}
-          accountType={accountType}
-          gasEstimateKey={review.gasEstimateKey}
-          forceInclusion={review.forceInclusion}
-          isValueMalformed={review.isValueMalformed}
           clearSigningStatus={review.clearSigningStatus}
           clearSigningMatched={review.clearSigningMatched}
           parsedApproval={review.parsedApproval}
@@ -240,10 +232,24 @@ function TransactionConfirmation({
           addToBatchDisabledReason={batch.addToBatchDisabledReason}
           isAddingToBatch={actions.isAddingToBatch}
           batchedCount={batch.batchedCount}
-          onGasOverrides={review.setGasOverrides}
-          onGasValidityChange={review.setGasValid}
+          forceInclusion={review.forceInclusion}
+          forceInclusionInfo={review.forceInclusionInfo}
           onFunctionName={setDecodedFunctionName}
           onAddToBatch={actions.handleAddToBatch}
+          onForceInclusionChange={review.setForceInclusion}
+        />
+      }
+      actionSummary={
+        <TransactionDecisionSummary
+          txRequest={txRequest}
+          accountType={accountType}
+          gasEstimateKey={review.gasEstimateKey}
+          forceInclusion={review.forceInclusion}
+          forceInclusionInfo={review.forceInclusionInfo}
+          destinationChainName={resolvedChainName}
+          isValueMalformed={review.isValueMalformed}
+          onGasOverrides={review.setGasOverrides}
+          onGasValidityChange={review.setGasValid}
         />
       }
       confirmAction={
@@ -253,6 +259,9 @@ function TransactionConfirmation({
           <ConfirmActionButton
             state={actions.state}
             confirmDisabledReason={confirmDisabledReason}
+            simulationFailed={shouldConfirmSimulationFailure({
+              simulationReverted: review.simulationReverted,
+            })}
             onConfirm={actions.handleConfirm}
           />
         )

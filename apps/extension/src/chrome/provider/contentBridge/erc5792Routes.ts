@@ -62,13 +62,7 @@ async function handleSendCalls(msg: any): Promise<void> {
     code?: number;
   }>(
     `batchTxAck:${bundleId}`,
-    15_000,
-    () =>
-      chrome.runtime.sendMessage({
-        type: "expireProviderRequest",
-        requestKind: "batchTransaction",
-        requestId: bundleId,
-      }),
+    null,
   )
     .then((result) => {
       if (result.success) {

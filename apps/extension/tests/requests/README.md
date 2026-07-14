@@ -5,8 +5,8 @@
   remove-before-result terminalization, and direct background composition.
 - `resolution.test.ts` protects synchronous first-action claims, effect leases,
   retries, reset behavior, and all wallet request families.
-- `lifecycle.test.ts` covers confirm-time authority checks, durable expiry, and
-  cleanup across injected and WalletConnect request stores.
+- `lifecycle.test.ts` covers confirm-time authority checks, non-expiring signing
+  prompts, and explicit cleanup across injected and WalletConnect stores.
 - `promptCapacity.test.ts` enforces per-origin bounds for connection, chain,
   and asset prompts.
 

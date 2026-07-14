@@ -13,34 +13,19 @@ import {
   validateInjectedPendingRequestAuthorization,
   type LifecycleValidationResult,
 } from "./pendingRequestLifecycle";
-import { trustedTopLevelDappOrigin } from "../dapp/requestPolicy";
 import { runPendingRequestResolution } from "./pendingRequestResolution";
 
 export type MetadataPromptKind = "addChain" | "watchAsset";
 type MetadataPrompt = PendingAddChainRequest | PendingWatchAssetRequest;
 
-const PROMPT_EXPIRY_MS = 5 * 60 * 1000;
 const promptConfig = {
   addChain: {
     resultPrefix: "addChainResult:",
-    timeoutError: "Add-chain request timed out",
   },
   watchAsset: {
     resultPrefix: "watchAssetResult:",
-    timeoutError: "Watch-asset request timed out",
   },
 } as const;
-
-async function getPrompt(
-  kind: MetadataPromptKind,
-  requestId: string,
-): Promise<MetadataPrompt | null> {
-  const requests =
-    kind === "addChain"
-      ? await getPendingAddChainRequests()
-      : await getPendingWatchAssetRequests();
-  return requests.find((request) => request.id === requestId) || null;
-}
 
 async function removePrompt(
   kind: MetadataPromptKind,
@@ -81,13 +66,7 @@ export async function enforceMetadataPromptAuthorizationAtConfirmation(
   pending: MetadataPrompt,
 ): Promise<LifecycleValidationResult> {
   let validation: LifecycleValidationResult;
-  if (Date.now() - pending.timestamp >= PROMPT_EXPIRY_MS) {
-    validation = {
-      authorized: false,
-      error: promptConfig[kind].timeoutError,
-      code: -32000,
-    };
-  } else if (typeof pending.tabId !== "number") {
+  if (typeof pending.tabId !== "number") {
     validation = {
       authorized: false,
       error: pendingRequestLifecycleErrors.authorizationRevoked,
@@ -100,63 +79,6 @@ export async function enforceMetadataPromptAuthorizationAtConfirmation(
     await terminalizePromptFailure(kind, pending, validation);
   }
   return validation;
-}
-
-export async function expireMetadataPrompt(
-  kind: MetadataPromptKind,
-  requestId: string,
-  sender: chrome.runtime.MessageSender,
-): Promise<{ success: boolean; expired?: boolean; error?: string }> {
-  const trusted = trustedTopLevelDappOrigin(sender);
-  if (!trusted) return { success: false, error: "Unauthorized" };
-  return runPendingRequestResolution({
-    family: kind,
-    requestId,
-    action: "expire",
-    conflictResult: () => ({
-      success: false,
-      error: "Request is already being resolved",
-    }),
-    resolve: async () => {
-      const pending = await getPrompt(kind, requestId);
-      if (
-        !pending ||
-        pending.tabId !== trusted.tabId ||
-        pending.senderOrigin !== trusted.origin ||
-        (pending.frameId !== undefined && pending.frameId !== 0)
-      ) {
-        return { success: false, error: "Pending request not found" };
-      }
-      await terminalizePromptFailure(kind, pending, {
-        authorized: false,
-        error: promptConfig[kind].timeoutError,
-        code: -32000,
-      });
-      return { success: true, expired: true };
-    },
-  });
-}
-
-export async function expirePersistedMetadataPrompt(
-  kind: MetadataPromptKind,
-  requestId: string,
-  expiredAtOrBefore: number,
-): Promise<void> {
-  await runPendingRequestResolution({
-    family: kind,
-    requestId,
-    action: "expire",
-    conflictResult: () => undefined,
-    resolve: async () => {
-      const pending = await getPrompt(kind, requestId);
-      if (!pending || pending.timestamp > expiredAtOrBefore) return;
-      await terminalizePromptFailure(kind, pending, {
-        authorized: false,
-        error: promptConfig[kind].timeoutError,
-        code: -32000,
-      });
-    },
-  });
 }
 
 export async function cancelMetadataPromptsForDappOrigin(
@@ -197,5 +119,3 @@ export async function cancelMetadataPromptsForDappOrigin(
       ),
   ]);
 }
-
-export const metadataPromptExpiryMs = PROMPT_EXPIRY_MS;

@@ -1,22 +1,47 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useDisclosure } from "@chakra-ui/react";
 import type { GasEstimate } from "@/chrome/gasEstimation";
 
-export function useBatchReviewState() {
-  const [expandedCalls, setExpandedCalls] = useState<Set<number>>(new Set());
+export function getSmartExpandedCalls(callCount: number): Set<number> {
+  return callCount === 1 ? new Set([0]) : new Set();
+}
+
+export function useBatchReviewState(requestId: string, callCount: number) {
+  const [expandedCalls, setExpandedCalls] = useState<Set<number>>(() =>
+    getSmartExpandedCalls(callCount),
+  );
+  const previousRequestId = useRef(requestId);
+  const previousCallCount = useRef(callCount);
   const [decodedFunctionNames, setDecodedFunctionNames] = useState<
+    Record<number, string>
+  >({});
+  const [clearSigningActionNames, setClearSigningActionNames] = useState<
     Record<number, string>
   >({});
   const [cachedGasEstimates, setCachedGasEstimates] =
     useState<GasEstimate[] | null>(null);
-  const [nativePriceUsd, setNativePriceUsd] = useState<number | null>(null);
   const [gasValid, setGasValid] = useState(true);
   const [forceInclusion, setForceInclusion] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [simulationReverted, setSimulationReverted] = useState(false);
   const [simulationUnavailable, setSimulationUnavailable] = useState(false);
   const [anyTxMayRevert, setAnyTxMayRevert] = useState(false);
   const splitModal = useDisclosure();
+
+  useLayoutEffect(() => {
+    const requestChanged = previousRequestId.current !== requestId;
+    const callCountChanged = previousCallCount.current !== callCount;
+
+    if (requestChanged || callCountChanged) {
+      setExpandedCalls(getSmartExpandedCalls(callCount));
+    }
+    if (requestChanged || callCountChanged) {
+      setDecodedFunctionNames({});
+      setClearSigningActionNames({});
+    }
+
+    previousRequestId.current = requestId;
+    previousCallCount.current = callCount;
+  }, [callCount, requestId]);
 
   const toggleCall = (index: number) => {
     setExpandedCalls((previous) => {
@@ -33,19 +58,30 @@ export function useBatchReviewState() {
     );
   };
 
+  const recordClearSigningAction = (index: number, name?: string) => {
+    setClearSigningActionNames((previous) => {
+      if (name) {
+        return previous[index] === name
+          ? previous
+          : { ...previous, [index]: name };
+      }
+      if (!(index in previous)) return previous;
+      const next = { ...previous };
+      delete next[index];
+      return next;
+    });
+  };
+
   return {
     expandedCalls,
     decodedFunctionNames,
+    clearSigningActionNames,
     cachedGasEstimates,
     setCachedGasEstimates,
-    nativePriceUsd,
-    setNativePriceUsd,
     gasValid,
     setGasValid,
     forceInclusion,
     setForceInclusion,
-    showAdvanced,
-    setShowAdvanced,
     simulationReverted,
     setSimulationReverted,
     simulationUnavailable,
@@ -55,6 +91,7 @@ export function useBatchReviewState() {
     splitModal,
     toggleCall,
     recordFunctionName,
+    recordClearSigningAction,
   };
 }
 

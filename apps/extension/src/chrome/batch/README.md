@@ -22,7 +22,7 @@ Focused boundaries in this directory are:
 - `batchCompletionTracking.ts`: atomic and sequential receipt-to-bundle
   terminal status mirroring.
 - `batchFailure.ts`: shared durable failure publication.
-- `batchExecutionRuntime.ts`: shared duplicate-processing and expiry state.
+- `batchExecutionRuntime.ts`: shared duplicate-processing state.
 - `batchGasEnrichment.ts`: best-effort post-broadcast fee enrichment.
 
 Dependency direction is encoding/storage policy → authorization/credential

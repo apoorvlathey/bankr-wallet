@@ -13,7 +13,6 @@ import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pe
 import {
   processingTxIds,
   resolvePinnedAccount,
-  TX_EXPIRY_MS,
 } from "./runtime";
 import { beginPendingRequestEffectLease } from "../requests/pendingRequestResolution";
 import {
@@ -83,10 +82,7 @@ export async function handleConfirmTransactionAsyncPK(
   }
 
   const pending = await getPendingTxRequestById(txId);
-  if (!pending || Date.now() - pending.timestamp > TX_EXPIRY_MS) {
-    if (pending) await removePendingTxRequest(txId);
-    return { success: false, error: "Transaction request expired" };
-  }
+  if (!pending) return { success: false, error: "Transaction request not found" };
   processingTxIds.add(txId);
 
   const pinned = await resolvePinnedAccount(pending);

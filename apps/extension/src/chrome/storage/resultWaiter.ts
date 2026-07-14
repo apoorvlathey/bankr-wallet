@@ -7,11 +7,12 @@ const TIMEOUT_ATTEMPT_MAX_WAIT_MS = 5_000;
  * Wait for a durable provider result without keeping an MV3 message channel
  * open. Ambiguous timeout ownership keeps the listener alive and retries the
  * expiry handshake so a dapp cannot time out while WalletChan may still sign
- * or broadcast the same request.
+ * or broadcast the same request. A null timeout keeps user-review prompts
+ * subscribed until an explicit terminal result arrives.
  */
 export function waitForStorageResult<T>(
   key: string,
-  timeoutMs = 5 * 60 * 1000,
+  timeoutMs: number | null = 5 * 60 * 1000,
   onTimeout?: StorageResultTimeoutAttempt,
   timeoutRetryMs = DEFAULT_TIMEOUT_RETRY_MS,
 ): Promise<T> {
@@ -72,15 +73,17 @@ export function waitForStorageResult<T>(
 
     chrome.storage.onChanged.addListener(listener);
     void readDurableResult();
-    timeoutTimer = setTimeout(() => {
-      if (!onTimeout) {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(new Error("Request timed out"));
-        return;
-      }
-      void attemptExpiry();
-    }, timeoutMs);
+    if (timeoutMs !== null) {
+      timeoutTimer = setTimeout(() => {
+        if (!onTimeout) {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(new Error("Request timed out"));
+          return;
+        }
+        void attemptExpiry();
+      }, timeoutMs);
+    }
   });
 }

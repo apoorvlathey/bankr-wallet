@@ -1,7 +1,7 @@
 /**
  * Gas tier preference helpers.
  *
- * The tier picker is a 4-button segmented control: Slow / Standard / Fast /
+ * The tier picker is a 4-button segmented control: Slow / Normal / Fast /
  * Custom. The user's last preset choice is persisted to chrome.storage.sync
  * so the next confirmation defaults to the same tier. Custom is intentionally
  * NOT persisted — switching to Custom is always a one-shot opt-in for the
@@ -15,7 +15,7 @@ export type GasTierSelection = TierName | "custom";
 
 export const TIER_LABELS: Record<GasTierSelection, string> = {
   slow: "Slow",
-  standard: "Standard",
+  standard: "Normal",
   fast: "Fast",
   custom: "Custom",
 };

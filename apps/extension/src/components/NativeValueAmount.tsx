@@ -1,8 +1,10 @@
-import { Box, Button, Text } from "@chakra-ui/react";
+import { Box, Button, Text, VStack } from "@chakra-ui/react";
 import { useId, useState } from "react";
+import { formatUsd } from "@/lib/currencyFormatUtils";
 import {
   formatNativeValueCompact,
   formatNativeValueExact,
+  nativeAmountToNumber,
   parseNativeAmount,
 } from "@/lib/nativeValueFormat";
 
@@ -10,6 +12,7 @@ export default function NativeValueAmount({
   value,
   symbol,
   decimals,
+  priceUsd,
   fontSize = "xs",
   fontWeight = "700",
   color = "text.primary",
@@ -20,6 +23,7 @@ export default function NativeValueAmount({
   value: string | bigint | undefined;
   symbol: string;
   decimals?: number;
+  priceUsd?: number | null;
   fontSize?: string;
   fontWeight?: string;
   color?: string;
@@ -46,6 +50,19 @@ export default function NativeValueAmount({
 
   const compact = formatNativeValueCompact(parsed.amount, symbol, decimals);
   const exact = formatNativeValueExact(parsed.amount, symbol, decimals);
+  const nativeValue = nativeAmountToNumber(parsed.amount, decimals);
+  const usdValue =
+    priceUsd && priceUsd > 0 ? nativeValue * priceUsd : null;
+  const usdLabel =
+    usdValue !== null && Number.isFinite(usdValue) && usdValue > 0
+      ? formatUsd(usdValue)
+      : null;
+  const alignment =
+    textAlign === "right"
+      ? "flex-end"
+      : textAlign === "left"
+        ? "flex-start"
+        : "center";
 
   if (parsed.amount === 0n) {
     return (
@@ -58,6 +75,27 @@ export default function NativeValueAmount({
       >
         {compact}
       </Text>
+    );
+  }
+
+  if (compact === exact) {
+    return (
+      <VStack spacing={0} align={alignment} minW={0} maxW={maxW}>
+        <Text
+          fontSize={fontSize}
+          fontWeight={fontWeight}
+          color={color}
+          fontFamily={fontFamily}
+          textAlign={textAlign}
+        >
+          {compact}
+        </Text>
+        {usdLabel && (
+          <Text fontSize="xs" color="fg.secondary" fontWeight="500">
+            {usdLabel}
+          </Text>
+        )}
+      </VStack>
     );
   }
 
@@ -98,6 +136,11 @@ export default function NativeValueAmount({
           wordBreak="break-all"
         >
           {exact}
+        </Text>
+      )}
+      {usdLabel && (
+        <Text fontSize="xs" color="fg.secondary" fontWeight="500">
+          {usdLabel}
         </Text>
       )}
     </Box>

@@ -10,6 +10,29 @@ export function formatEth(wei: string, symbol = "ETH"): string {
   return `${formatted} ${symbol}`;
 }
 
+/**
+ * Compact native-token fee for constrained confirmation footers.
+ * Keeps three significant fractional digits without switching to scientific
+ * notation; full precision remains available in the expanded gas details.
+ */
+export function formatEthCompact(wei: string, symbol = "ETH"): string {
+  const eth = Number(BigInt(wei)) / 1e18;
+  if (eth === 0) return `0 ${symbol}`;
+
+  const absolute = Math.abs(eth);
+  const leadingFractionalZeros =
+    absolute < 1 ? Math.max(0, Math.floor(-Math.log10(absolute))) : 0;
+  const fractionDigits = absolute < 1
+    ? Math.min(18, leadingFractionalZeros + 3)
+    : 4;
+  const formatted = eth
+    .toFixed(fractionDigits)
+    .replace(/0+$/, "")
+    .replace(/\.$/, "");
+
+  return `${formatted} ${symbol}`;
+}
+
 export function formatGwei(wei: string): string {
   const gwei = Number(BigInt(wei)) / 1e9;
   if (gwei === 0) return "0 Gwei";

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import TokenLogo from "@/components/TokenLogo";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import { useNetworks } from "@/contexts/NetworksContext";
-import { getNativeAssetMeta } from "@/lib/chains";
+import { getNativeAssetMeta, getResolvedChainById } from "@/lib/chains";
 import type { TokenMetadataHint } from "@/lib/clearSigning/applyFormat";
 import {
   getCachedTokenMetadataSync,
@@ -20,6 +20,7 @@ import {
   toTokenInfo,
   type TokenInfo,
 } from "../formatters/valueFormatters";
+import { TokenContractPopover } from "./TokenContractPopover";
 
 /**
  * Headline amount text. When the raw value is a max-uint sentinel
@@ -98,6 +99,10 @@ export function TokenAmountInline({
   const nativeInfo = useMemo(
     () => (native ? getNativeAssetMeta(chainId, networksInfo) : null),
     [chainId, native, networksInfo],
+  );
+  const explorer = useMemo(
+    () => getResolvedChainById(chainId, networksInfo)?.explorer,
+    [chainId, networksInfo],
   );
 
   useEffect(() => {
@@ -249,15 +254,37 @@ export function TokenAmountInline({
           thresholdRaw={thresholdRaw}
           thresholdMessage={thresholdMessage}
         />
-        <TokenLogo
-          logoUrl={info.logoUrl}
-          symbol={info.symbol}
-          alt={info.symbol}
-          size="20px"
-        />
-        <Text fontSize="sm" color="fg.secondary" fontWeight="600">
-          {info.symbol}
-        </Text>
+        {tokenAddress && /^0x[a-fA-F0-9]{40}$/.test(tokenAddress) ? (
+          <TokenContractPopover
+            address={tokenAddress}
+            explorer={explorer}
+            symbol={info.symbol}
+          >
+            <HStack spacing={2}>
+              <TokenLogo
+                logoUrl={info.logoUrl}
+                symbol={info.symbol}
+                alt={info.symbol}
+                size="20px"
+              />
+              <Text fontSize="sm" color="inherit" fontWeight="600">
+                {info.symbol}
+              </Text>
+            </HStack>
+          </TokenContractPopover>
+        ) : (
+          <>
+            <TokenLogo
+              logoUrl={info.logoUrl}
+              symbol={info.symbol}
+              alt={info.symbol}
+              size="20px"
+            />
+            <Text fontSize="sm" color="fg.secondary" fontWeight="600">
+              {info.symbol}
+            </Text>
+          </>
+        )}
       </HStack>
       {usd && (
         <Text fontSize="xs" color="fg.muted" fontWeight="500">

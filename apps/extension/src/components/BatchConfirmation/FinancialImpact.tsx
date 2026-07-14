@@ -1,14 +1,9 @@
-import { VStack } from "@chakra-ui/react";
+import { Box } from "@chakra-ui/react";
 import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import AssetChangesDisplay from "@/components/AssetChangesDisplay";
-import NativeValueAmount from "@/components/NativeValueAmount";
-import { AssetDeltaRow } from "@/components/ui";
 
 interface FinancialImpactProps {
-  totalValueWei: bigint;
-  nativeSymbol: string;
-  nativeDecimals: number;
   calls: PendingBatchTxRequest["params"]["calls"];
   syntheticTxRequest: PendingTxRequest;
   isNonAtomic: boolean;
@@ -17,9 +12,6 @@ interface FinancialImpactProps {
 }
 
 export function FinancialImpact({
-  totalValueWei,
-  nativeSymbol,
-  nativeDecimals,
   calls,
   syntheticTxRequest,
   isNonAtomic,
@@ -27,23 +19,16 @@ export function FinancialImpact({
   onUnavailableChange,
 }: FinancialImpactProps) {
   return (
-    <VStack spacing={0} align="stretch">
-      {totalValueWei > 0n && (
-        <AssetDeltaRow
-          direction="send"
-          asset={nativeSymbol}
-          amount={
-            <NativeValueAmount
-              value={totalValueWei}
-              symbol={nativeSymbol}
-              decimals={nativeDecimals}
-              fontSize="md"
-              fontWeight="600"
-            />
-          }
-          meta={`Total native value across ${calls.length} ${calls.length === 1 ? "action" : "actions"}`}
-        />
-      )}
+    <Box
+      px={3}
+      bg="surface.raised"
+      borderWidth="1px"
+      borderStyle="solid"
+      borderColor="border.subtle"
+      borderRadius="lg"
+      overflow="hidden"
+      boxShadow="none"
+    >
       <AssetChangesDisplay
         txRequest={syntheticTxRequest}
         batchCalls={calls.map((call) => ({
@@ -52,9 +37,10 @@ export function FinancialImpact({
           value: call.value,
         }))}
         isNonAtomic={isNonAtomic}
+        embedded
         onRevertedChange={onRevertedChange}
         onSimulationUnavailableChange={onUnavailableChange}
       />
-    </VStack>
+    </Box>
   );
 }

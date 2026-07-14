@@ -144,10 +144,35 @@ test("a transient worker error retries expiry instead of losing the listener", a
   assert.equal(attempts, 2);
 });
 
-test("non-signing storage waits retain their ordinary bounded timeout", async () => {
+test("bounded non-prompt storage waits retain their ordinary timeout", async () => {
   await assert.rejects(
     waitForStorageResult("dappConnectionResult:missing", 5),
     /timed out/i,
   );
+  assert.equal(listeners.size, 0);
+});
+
+test("an unbounded user-review wait stays subscribed until a durable result arrives", async () => {
+  const key = "txResult:no-expiry";
+  let settled = false;
+  const result = waitForStorageResult<{ success: boolean; txHash?: string }>(
+    key,
+    null,
+  );
+  void result.finally(() => {
+    settled = true;
+  });
+
+  await delay(25);
+  assert.equal(settled, false);
+  assert.equal(listeners.size, 1);
+
+  await chrome.storage.local.set({
+    [key]: {
+      result: { success: true, txHash: "0xconfirmed" },
+      timestamp: Date.now(),
+    },
+  });
+  assert.deepEqual(await result, { success: true, txHash: "0xconfirmed" });
   assert.equal(listeners.size, 0);
 });

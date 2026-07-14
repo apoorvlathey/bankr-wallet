@@ -12,17 +12,19 @@ callers and lazy imports. It stays policy-free and preserves the default export.
 | `transactionValue.ts` | Pure native-value parsing and formatting. |
 | `useSplitPriorTxState.ts` | Prior-split history gate and gas-refresh signal. |
 | `useTransactionMetadata.ts` | Non-secret symbol, label, name, and origin lookups. |
-| `useTransactionReviewState.ts` | Simulation, gas, calldata, clear-signing, and force-inclusion review state. |
+| `useTransactionReviewState.ts` | Simulation, native-price, gas, calldata, clear-signing, and force-inclusion review state. |
 | `useTransactionBatchEligibility.ts` | Cross-dapp batch eligibility for every wallet type. |
 | `useTransactionActions.ts` | Bankr/local submission routing, rejection, batch-add, and completion transitions. |
-| `TransactionSummary.tsx` | Outcome and financial impact. |
+| `TransactionSummary.tsx` | Centered dapp identity, chain-qualified simulation heading, and financial impact. |
+| `TransactionDecisionSummary.tsx` | Sticky signer identity and network-fee control. |
+| `transactionPresentation.ts` | Pure function-name presentation for outcome copy. |
 | `TransactionContext.tsx` | Ordered warnings, intent, metadata, and status. |
-| `TransactionInfoCard.tsx` | Origin, account, network, destination, and value rows. |
-| `AdvancedDetails.tsx` | Gas, calldata, digest, Tenderly, and batch controls. |
+| `TransactionInfoCard.tsx` | Interacting identity popover and native value rows. |
+| `AdvancedDetails.tsx` | Force inclusion, calldata, digest, Tenderly, and batch controls. |
 | `DelegationNotices.tsx` | EIP-7702 consequences. |
 | `QueueNavigation.tsx` | Pending-request navigation. |
 | `RequestStatus.tsx` | Async, error, impersonator, and split feedback. |
-| `ConfirmationActions.tsx` | Confirm/reject arrangement. |
+| `ConfirmationActions.tsx` | Confirm/reject arrangement and single-transaction simulation-warning projection. |
 | `StateScreens.tsx` | Force-inclusion progress and success animation. |
 | `CopyButton.tsx` | Inline clipboard feedback. |
 

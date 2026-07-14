@@ -23,13 +23,16 @@ export interface ConfirmationScreenProps
   headingRef?: Ref<HTMLHeadingElement>;
   bodyRef?: Ref<HTMLDivElement>;
   bodyProps?: ScreenBodyProps;
+  navigation?: ReactNode;
   outcome: ReactNode;
   financialImpact?: ReactNode;
   financialImpactTitle?: ReactNode;
   context?: ReactNode;
   contextTitle?: ReactNode;
+  contextHeaderAction?: ReactNode;
   advancedDetails?: ReactNode;
   advancedLabel?: string;
+  actionSummary?: ReactNode;
   confirmAction: ReactNode;
   rejectAction?: ReactNode;
 }
@@ -50,13 +53,16 @@ export const ConfirmationScreen = forwardRef<
     headingRef,
     bodyRef,
     bodyProps,
+    navigation,
     outcome,
     financialImpact,
     financialImpactTitle = "Financial impact",
     context,
     contextTitle = "Request details",
+    contextHeaderAction,
     advancedDetails,
     advancedLabel = "Advanced details",
+    actionSummary,
     confirmAction,
     rejectAction,
     ...screenProps
@@ -75,6 +81,8 @@ export const ConfirmationScreen = forwardRef<
 
       <ScreenBody ref={bodyRef} pt={3} {...bodyProps}>
         <VStack align="stretch" spacing={5} minW={0}>
+          {navigation}
+
           {outcome}
 
           {financialImpact && (
@@ -84,7 +92,7 @@ export const ConfirmationScreen = forwardRef<
           )}
 
           {context && (
-            <ScreenSection title={contextTitle}>
+            <ScreenSection title={contextTitle} headerAction={contextHeaderAction}>
               {context}
             </ScreenSection>
           )}
@@ -98,6 +106,7 @@ export const ConfirmationScreen = forwardRef<
       </ScreenBody>
 
       <StickyActionBar
+        summary={actionSummary}
         primaryAction={confirmAction}
         secondaryAction={rejectAction}
       />

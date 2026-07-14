@@ -7,8 +7,6 @@ import {
   pageFaviconUrl,
 } from "./bridgeState";
 
-const FIVE_MINUTES_MS = 5 * 60 * 1000;
-
 function post(type: string, msg: Record<string, unknown>): void {
   window.postMessage({ type, msg }, "*");
 }
@@ -49,20 +47,14 @@ async function handleDappAccounts(msg: any): Promise<void> {
     code?: number;
   }>(
     `dappConnectionResult:${requestId}`,
-    FIVE_MINUTES_MS,
-    () =>
-      chrome.runtime.sendMessage({
-        type: "expireProviderRequest",
-        requestKind: "dappConnection",
-        requestId,
-      }),
+    null,
   )
     .then((result) => post("dappAccountsResult", { id, ...result }))
     .catch((error) =>
       post("dappAccountsResult", {
         id,
         success: false,
-        error: error?.message || "Connection request timed out",
+        error: error?.message || "Connection request failed",
       }),
     );
   chrome.runtime.sendMessage({
@@ -172,13 +164,7 @@ async function handleAddChain(msg: AddChainMessage): Promise<void> {
     shouldSwitch?: boolean;
   }>(
     `addChainResult:${requestId}`,
-    FIVE_MINUTES_MS,
-    () =>
-      chrome.runtime.sendMessage({
-        type: "expireProviderRequest",
-        requestKind: "addChain",
-        requestId,
-      }),
+    null,
   )
     .then((result) => {
       if (result.success && result.chainName) {

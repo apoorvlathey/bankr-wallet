@@ -456,13 +456,12 @@ For `eth_sendTransaction`, the WC request is converted to a `PendingTxRequest` w
 For ERC-5792 `wallet_sendCalls`, the WC request reuses `batchTxHandlers.ts` and is converted to a `PendingBatchTxRequest` with the account authorized in the WalletConnect session passed explicitly into the batch handler. The pending request and bundle status pin exact `{ topic, requestId, method }` transport metadata, and the bundle status is scoped to the WalletConnect peer metadata, so another WC peer cannot query, confirm, or open a bundle it did not create.
 
 Batch acknowledgement is part of the authorization boundary. Injected intake
-owns the batch's first-action claim before its first async permission read;
-`requests/pendingBatchAcknowledgementLifecycle.ts` can publish a timeout only when no
-queue operation owns that claim. WalletConnect awaits queue persistence before
-reading the durable acknowledgement. Neither page-world nor WalletConnect has
-an independent timer that can reject while a delayed queue operation may still
-create a signable prompt. Queue persistence revalidates the exact tab/origin or
-live WalletConnect topic before and after its storage writes.
+owns the batch's first-action claim before its first async permission read and
+publishes a durable acknowledgement only after queue persistence. The injected
+page waits without an age-based timer; WalletConnect awaits queue persistence
+before reading the same acknowledgement. Queue persistence revalidates the
+exact tab/origin or live WalletConnect topic before and after its storage
+writes.
 
 Security rules:
 
@@ -474,9 +473,9 @@ Security rules:
 - ERC-7715 caveat generation follows the MetaMask DeleGator v1.3.0 standard shapes: native-token grants include `ExactCalldataEnforcer(0x)`, ERC-20 grants include `ValueLteEnforcer(0)`, standard grants include `NonceEnforcer(currentNonce)`, allowance grants use the relevant periodic enforcer with `periodDuration = uint256.max`, and the EIP-712 `Caveat` type signs only `enforcer` and `terms` while ABI context/revoke encoding retains `args`. Dapps cannot supply arbitrary caveat enforcer addresses through ERC-7715.
 - If the user edits a request in the confirmation UI, `lib/erc7715PermissionEditing.ts` keeps fixed identity fields immutable (chain, account, delegate, permission type, token, adjustment policy). `permission.isAdjustmentAllowed` gates amount, periodic frequency, start time, stream rate / initial allowance / max allowance edits; streams still require expiry and `maxAmount > initialAmount`. Non-stream expiry can be added, removed, extended, or shortened even when permission terms are locked, matching MetaMask's confirmation behavior. Token-approval-revocation method flags remain immutable and only the required expiry can be adjusted. Confirmation then re-runs ERC-7715 preflight and recomputes caveats from the edited request before signing.
 - The registry rejects ambiguous extras, unbounded non-stream amounts, periodic durations over ten years, streams without expiry, stream max caps that do not exceed initial allowance, token approval revocation without an expiry, token approval revocation without at least one enabled method, broad `permit2InvalidateNonces` revocation, malformed token addresses, expired/duplicate expiry rules, invalid start times, start times after expiry, and oversized/ambiguous justification metadata. Missing non-revocation `startTime` values are normalized to the preflight timestamp. Permit2 revocation primitives additionally require a WalletChan built-in chain with live code at the canonical Permit2 address on the configured RPC. `permission.justification` is display-only and normalized out of `permission.data` before caveat derivation.
-- While a `wallet_requestExecutionPermissions` request is active, the injected provider, background router, and WalletConnect router block additional external dapp transaction/signature/batch/RPC proxy/capabilities/status/watch/add-chain/execution-permission requests with the MetaMask-style in-process error. The background/WC block is backed by unexpired `pendingErc7715PermissionRequests`, not only process memory, so it survives MV3 service-worker restarts and fails closed until storage-backed lock state is loaded.
+- While a `wallet_requestExecutionPermissions` request is active, the injected provider, background router, and WalletConnect router block additional external dapp transaction/signature/batch/RPC proxy/capabilities/status/watch/add-chain/execution-permission requests with the MetaMask-style in-process error. The background/WC block is backed by every valid row in `pendingErc7715PermissionRequests`, not only process memory, so it survives MV3 service-worker restarts and fails closed until storage-backed lock state is loaded.
 - The ERC-7715 enqueue path must synchronize `erc7715/requestLock.ts` from the saved pending-request list before releasing the in-memory request lock. Do not rely only on `chrome.storage.onChanged`; that event can arrive after the handler returns and briefly reopen external request processing.
-- ERC-7715 approval/rejection/timeout results are delivered through `erc7715PermissionResult:{id}` instead of long-lived `sendMessage` channels. Injected dapps create the request id in `inject.ts` and wait on that storage key; WalletConnect stores kind `erc7715Permission` in `walletConnectPendingRequests`, commits the first terminal response before relay delivery, and replays only that result after relay/MV3 recovery.
+- ERC-7715 approval/rejection/explicit-invalidation results are delivered through `erc7715PermissionResult:{id}` instead of long-lived `sendMessage` channels. Injected dapps create the request id in `inject.ts` and wait on that storage key without an age timer; WalletConnect stores kind `erc7715Permission` in `walletConnectPendingRequests`, commits the first terminal response before relay delivery, and replays only that result after relay/MV3 recovery.
 - ERC-7715 grant management uses extension-only messages (`getErc7715PermissionGrantsForAccount`, `initiateErc7715PermissionRevoke`). They must not be forwarded from content scripts because grant records contain reusable signed delegation context. Active grant reads check `eth_getCode(account)`, `disabledDelegations(hash)`, and stored `NonceEnforcer` terms through the configured chain RPC, then locally mark grants revoked before returning them to Account Settings or dapps if the EOA is no longer delegated to WalletChan's default DeleGator, the delegation hash is disabled, or the nonce was invalidated. Any onchain status read failure fails closed. Onchain revoke validates account/grant ownership, canonical DelegationManager consistency, and the stored delegator before checking onchain status and queueing `disableDelegation(delegation)` through the normal transaction confirmation path; the pending tx carries only public display metadata plus `grantId`, while the reusable delegation context stays in the extension-only grant store. The receipt poller marks the grant locally revoked only after a successful receipt.
 - WalletConnect ERC-7715 grants are scoped by session topic (`walletconnect:<topic>`), not self-reported peer URL. Peer URL/name/icon metadata is display-only and may be untrusted.
 - Only a small allowlist of read-only RPC methods is proxied to the user's configured RPC URL. Raw transaction submission and debugging methods are not proxied, and privileged RPC fetches use `redirect: "error"` so an allowed endpoint cannot redirect onto private/loopback infrastructure.
@@ -773,7 +772,7 @@ signing unless they become validation errors.
 Users can bypass SIWE validation errors only from the extension UI by typing the
 exact phrase `I understand`. This sends `allowUnsafeSiwe` on the extension-only
 `confirmSignatureRequest` message and skips only the SIWE validation pass. The
-stored pending request, pinned account binding, request expiry, account type,
+stored pending request, pinned account binding, account type,
 and dapp-supplied signer parameter checks still run and are not bypassable by
 the SIWE override.
 
@@ -1086,11 +1085,18 @@ These must always hold true. Violations indicate a security bug.
     every valid Bankr/private-key/seed selection. Malformed legacy EVM addresses
     leave the encrypted credential untouched and create no account row.
 
-13. **Transaction confirmation checks expiry** - `handleConfirmTransaction`,
-    `handleConfirmTransactionAsync`, and
-    `transactions/localConfirmation.ts:handleConfirmTransactionAsyncPK` reject
-    requests older than 30 minutes (`TX_EXPIRY_MS`), preventing stale
-    transaction confirmation. The local handler resolves only the account
+13. **Signing confirmation preserves explicit user control** -
+    `handleConfirmTransaction`, `handleConfirmTransactionAsync`, and
+    `transactions/localConfirmation.ts:handleConfirmTransactionAsyncPK` do not
+    reject a transaction because of request age. Signature confirmation,
+    ERC-5792 Bankr/PK/seed confirmation, and cross-dapp batch confirmation apply
+    the same rule. Injected transaction/signature/batch result listeners are
+    unbounded, and periodic maintenance does not sweep `pendingTxRequests`,
+    `pendingSignatureRequests`, or `pendingBatchTxRequests`. WalletConnect keeps
+    unresolved transaction/signature routes without an age limit. Prompts
+    remain reviewable until confirm, reject, authorization/session
+    cancellation, account removal, or reset resolves them.
+    The local handler still resolves only the account
     pinned at intake, verifies `tx.from`, restores the PK/seed key through the
     existing master/agent/Never-session paths, removes the prompt, revalidates
     live request authority, and transfers reset exclusion to an effect lease.
@@ -1115,9 +1121,12 @@ These must always hold true. Violations indicate a security bug.
     Unexpected exceptions retain the claim fail-closed because an external
     signer or RPC may have accepted an operation even when its response was
     lost. `processingTxIds` and `processingBundleIds` remain secondary guards,
-    not the resolution boundary. Periodic tx/signature/batch expiry acquires
-    the same claim and publishes a durable terminal error/status; it cannot
-    silently delete a request while confirmation owns the effect.
+    not the resolution boundary. No user-review prompt has periodic age-based
+    expiry: transactions, signatures, ERC-5792 batches, cross-dapp batches,
+    dapp connections, add-chain prompts, watch-asset prompts, and ERC-7715
+    permission requests remain pending for the user's decision. Only
+    pre-prompt transport claims and already-terminal response records retain
+    bounded cleanup.
     Background transaction/batch processors and signature signers hold an
     effect lease after durable removal through their last-safe-point transport
     authorization check. The lease is released for provably pre-publication
@@ -1348,7 +1357,7 @@ Quick reference for which files to examine based on what area of security you're
 - `background/delegationRouter.ts` - Trusted-UI EIP-7702 status/probe/set/revoke transport; domain handlers retain authorization and transaction preparation
 - `background/crossDappBatchRouter.ts` - Source-plus-active lease fan-in and active-batch edit/reject/confirm transport
 - `background/settingsRouter.ts` - Trusted-UI network registry and popup/sidepanel transport; provider add-chain prompts remain on the provider-aware boundary
-- `background/dappPermissionRouter.ts` - Mixed-audience dapp account exposure, exact-sender request intake/expiry, and trusted-UI connection/permission decisions
+- `background/dappPermissionRouter.ts` - Mixed-audience dapp account exposure, exact-sender durable request intake, and trusted-UI connection/permission decisions
 - `background/providerRpcRouter.ts` - Connected-origin authorization and durable bounded read-only RPC results
 - `background/providerIngress.ts` - Exact-sender origin resolution, durable provider rejection, and ERC-7715 ingress blocking
 - `background/signatureValidation.ts` - Deprecated-method rejection plus bounded EIP-712 validation/sanitization before intake

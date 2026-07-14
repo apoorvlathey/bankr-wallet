@@ -3132,6 +3132,7 @@ function App() {
                   window.close();
                 }
               }}
+              onRejectAll={handleRejectAll}
               onBeforeReject={navigateToAdjacentRequest}
               onNavigate={(direction) => {
                 const currentIdx = combinedRequests.findIndex(

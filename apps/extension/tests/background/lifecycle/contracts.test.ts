@@ -102,14 +102,7 @@ test("maintenance preserves registration, immediate startup, expiry, and stale-r
     },
     invalidateAuthCeremonies: () => events.push("auth:invalidate"),
     clearInMemoryAuthCache: () => events.push("auth:clear"),
-    clearExpiredTxRequests: expired("tx"),
-    clearExpiredSignatureRequests: expired("sig"),
-    clearExpiredBatchTxRequests: expired("batch"),
-    clearExpiredErc7715PermissionRequests: expired("permission"),
     clearExpiredWalletConnectPendingRequests: expired("wc"),
-    clearExpiredDappConnectionRequests: expired("dapp"),
-    clearExpiredAddChainRequests: expired("chain"),
-    clearExpiredWatchAssetRequests: expired("asset"),
     getAllLocalStorage: async () => {
       events.push("stale:get");
       return { "txResult:old": { timestamp: 1 } };
@@ -144,17 +137,10 @@ test("maintenance preserves registration, immediate startup, expiry, and stale-r
   assert.deepEqual(events.slice(8), ["stale:filter", "stale:remove:txResult:old"]);
   suspend();
   intervals.find(({ milliseconds }) => milliseconds === 60_000)!.callback();
-  assert.deepEqual(events.slice(-10), [
+  assert.deepEqual(events.slice(-3), [
     "auth:invalidate",
     "auth:clear",
-    "expire:tx",
-    "expire:sig",
-    "expire:batch",
-    "expire:permission",
     "expire:wc",
-    "expire:dapp",
-    "expire:chain",
-    "expire:asset",
   ]);
 });
 

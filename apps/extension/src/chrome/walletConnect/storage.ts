@@ -4,7 +4,7 @@ import { serializedJsonLength } from "../provider/limits";
 const STORAGE_KEY = "walletConnectPendingRequests";
 const CHAIN_STORAGE_KEY = "walletConnectChainId";
 const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
-const WALLETCONNECT_REQUEST_EXPIRY_MS = 30 * 60 * 1000;
+const WALLETCONNECT_TERMINAL_ROUTE_EXPIRY_MS = 30 * 60 * 1000;
 const WALLETCONNECT_CLAIM_EXPIRY_MS = 2 * 60 * 1000;
 const MAX_WALLETCONNECT_TERMINAL_RESPONSE_CHARS = 1_000_000;
 const MAX_WALLETCONNECT_TOPIC_CHARS = 512;
@@ -93,10 +93,12 @@ function activePendingRequests(value: unknown, now = Date.now()): PendingRequest
       ([id, request]) =>
         isPendingRequest(request) &&
         request.id === id &&
-        now - (request.terminalResponse?.timestamp ?? request.timestamp) <
-          (request.kind === "claim" && !request.terminalResponse
-            ? WALLETCONNECT_CLAIM_EXPIRY_MS
-            : WALLETCONNECT_REQUEST_EXPIRY_MS),
+        (request.terminalResponse
+          ? now - request.terminalResponse.timestamp <
+            WALLETCONNECT_TERMINAL_ROUTE_EXPIRY_MS
+          : request.kind === "claim"
+            ? now - request.timestamp < WALLETCONNECT_CLAIM_EXPIRY_MS
+            : true),
     ),
   );
 }
@@ -192,8 +194,10 @@ export async function saveWalletConnectPendingRequest(
 /**
  * Atomically claims a remote JSON-RPC request before any account lookup,
  * pending persistence, or signing UI is created. The claim lives in the same
- * bounded/expiring route map as deferred requests, so MV3 worker restarts do
- * not reopen an already-pending request.
+ * bounded route map as deferred requests. Short-lived intake claims expire so
+ * a crashed ingress cannot hold capacity forever; persisted transaction,
+ * signature, and permission routes remain until their user-controlled prompt
+ * resolves.
  */
 export async function claimWalletConnectRemoteRequest(
   topic: string,
@@ -336,8 +340,9 @@ export async function clearExpiredWalletConnectPendingRequests(): Promise<void> 
   await withStorageLock(STORAGE_LOCK_KEY, async () => {
     const stored = await chrome.storage.local.get(STORAGE_KEY);
     const requests = activePendingRequests(stored[STORAGE_KEY]);
-    // Persist the sanitized map so expired or malformed legacy entries do not
-    // continue consuming Chrome storage even though reads already ignore them.
+    // Persist the sanitized map so expired claims, delivered terminal responses,
+    // or malformed legacy entries do not consume storage. Unresolved prompt
+    // routes intentionally have no age limit.
     await chrome.storage.local.set({ [STORAGE_KEY]: requests });
   });
 }

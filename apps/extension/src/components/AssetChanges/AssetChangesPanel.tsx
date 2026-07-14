@@ -1,8 +1,14 @@
-import { ChevronDownIcon, InfoOutlineIcon } from "@chakra-ui/icons";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  ChevronDownIcon,
+  InfoOutlineIcon,
+} from "@chakra-ui/icons";
 import {
   Box,
   Button,
   Collapse,
+  Flex,
   HStack,
   Text,
   Tooltip,
@@ -10,26 +16,92 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import { useState } from "react";
-import type { SimulationResult } from "@/chrome/txSimulation";
+import type { AssetChange, SimulationResult } from "@/chrome/txSimulation";
 import { ShapesLoader } from "@/components/Chat/ShapesLoader";
 import { useTheme } from "@/theme";
 import { AssetRow } from "./AssetRow";
 import { groupAssetChanges } from "./assetChangesModel";
 
+function EmbeddedAssetGroup({
+  changes,
+  direction,
+  explorerUrl,
+}: {
+  changes: AssetChange[];
+  direction: "send" | "receive";
+  explorerUrl: string;
+}) {
+  const isSend = direction === "send";
+  const ArrowIcon = isSend ? ArrowUpIcon : ArrowDownIcon;
+  const color = isSend ? "chart.negative" : "chart.positive";
+
+  return (
+    <VStack spacing={0} align="stretch">
+      <HStack spacing={1.5} pt={2.5} pb={0.5}>
+        <Flex
+          boxSize="18px"
+          flexShrink={0}
+          align="center"
+          justify="center"
+          borderRadius="full"
+          bg={color}
+          color="surface.base"
+        >
+          <ArrowIcon
+            boxSize="10px"
+            transform="rotate(45deg)"
+            aria-hidden
+          />
+        </Flex>
+        <Text
+          color={color}
+          fontSize="xs"
+          fontWeight="700"
+          textTransform="uppercase"
+        >
+          {direction}
+        </Text>
+      </HStack>
+
+      <VStack spacing={0} align="stretch">
+        {changes.map((change, index) => (
+          <AssetRow
+            key={`${direction}-${change.address}-${index}`}
+            change={change}
+            explorerUrl={explorerUrl}
+          />
+        ))}
+      </VStack>
+    </VStack>
+  );
+}
+
 export function AssetChangesPanel({
   explorerUrl,
   loading,
   result,
+  embedded = false,
 }: {
   explorerUrl: string;
   loading: boolean;
   result: SimulationResult | null;
+  embedded?: boolean;
 }) {
   const { tokens } = useTheme();
   const [expanded, setExpanded] = useState(true);
   const prefersReducedMotion = usePrefersReducedMotion();
 
   if (loading) {
+    if (embedded) {
+      return (
+        <HStack minH="44px" justify="center" spacing={3}>
+          <ShapesLoader size="6px" />
+          <Text fontSize="xs" color="text.secondary" fontWeight="600">
+            Simulating changes…
+          </Text>
+        </HStack>
+      );
+    }
     return (
       <Box
         border={tokens.borders.medium}
@@ -58,6 +130,27 @@ export function AssetChangesPanel({
       <Text color="fg.secondary" fontSize="sm" lineHeight="1.45">
         No additional asset changes were detected.
       </Text>
+    );
+  }
+
+  if (embedded) {
+    return (
+      <VStack align="stretch" spacing={2} pb={2}>
+        {outgoing.length > 0 && (
+          <EmbeddedAssetGroup
+            changes={outgoing}
+            direction="send"
+            explorerUrl={explorerUrl}
+          />
+        )}
+        {incoming.length > 0 && (
+          <EmbeddedAssetGroup
+            changes={incoming}
+            direction="receive"
+            explorerUrl={explorerUrl}
+          />
+        )}
+      </VStack>
     );
   }
 

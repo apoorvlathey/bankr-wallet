@@ -94,8 +94,11 @@ Findings from a comprehensive security audit of the extension's injected scripts
 
 ### ~~8. Pending Batch Requests Never Actively Cleaned Up~~
 
-- **Status:** [x] NOT AN ISSUE
-- **Reason:** `background.ts:292-296` already runs `clearExpiredBatchTxRequests()` every 60 seconds via `setInterval`. `cleanupOldBundleStatuses()` also runs on startup.
+- **Status:** [x] SUPERSEDED BY USER-CONTROLLED PROMPTS
+- **Current policy:** Pending batch requests deliberately have no age-based
+  cleanup. They remain available until the user confirms/rejects them or their
+  authorization context is explicitly invalidated. Terminal bundle-status
+  maintenance remains separate.
 
 ### ~~9. `addEthereumChain` RPC URL Validation~~
 

@@ -18,6 +18,31 @@ import {
 } from "./l1Client";
 
 export const DEFAULT_L2_GAS = 8_000_000n;
+/**
+ * Force execution spends the reviewed transaction value from the sender's
+ * existing L2 balance. The L1 portal call therefore carries no ETH to mint;
+ * the L1 account pays only the portal transaction's gas.
+ */
+export const FORCE_INCLUSION_L1_CALL_VALUE = 0n;
+
+export function evaluateForceInclusionBalances(args: {
+  l1Balance: bigint;
+  l1GasCost: bigint;
+  l2Balance: bigint | null;
+  l2TransactionValue: bigint;
+}): {
+  insufficientGasBalance: boolean;
+  insufficientTransactionValueBalance: boolean;
+} {
+  return {
+    insufficientGasBalance: args.l1Balance < args.l1GasCost,
+    // A failed balance read must not be presented as a known zero balance.
+    // The L2 simulation remains the fallback signal when the read is unavailable.
+    insufficientTransactionValueBalance:
+      args.l2Balance !== null &&
+      args.l2Balance < args.l2TransactionValue,
+  };
+}
 
 const PORTAL_DEPOSIT_ABI = [
   {
@@ -63,17 +88,28 @@ export async function estimateForceInclusionGas(
       },
       info,
     );
-    const [gas, fees, balance, price, symbol] = await Promise.all([
+    const l2RpcUrl = await getRpcUrl(tx.chainId);
+    const l2Client = l2RpcUrl
+      ? createPublicClient({
+          chain: info.viemChain,
+          transport: secureHttpTransport(l2RpcUrl, {
+            timeout: L1_RPC_TIMEOUT,
+          }),
+        })
+      : null;
+    const [gas, fees, balance, l2Balance, price, symbol] = await Promise.all([
       l1Client
         .estimateGas({
           account: from,
           to: l1TxParams.to as `0x${string}`,
           data: l1TxParams.data as `0x${string}`,
-          value,
+          value: FORCE_INCLUSION_L1_CALL_VALUE,
         })
         .catch(() => null),
       estimateFees(l1Client, info.l1ChainId).catch(() => null),
       l1Client.getBalance({ address: from }).catch(() => 0n),
+      l2Client?.getBalance({ address: from }).catch(() => null) ??
+        Promise.resolve(null),
       fetchNativeCoinGeckoPrice(info.l1ChainId),
       getNativeCurrencySymbol(info.l1ChainId),
     ]);
@@ -82,6 +118,12 @@ export async function estimateForceInclusionGas(
     const maxPriorityFeePerGas = fees?.maxPriorityFeePerGas ?? 0n;
     const baseFee = fees?.baseFee ?? 0n;
     const estimatedCostWei = gasLimit * maxFeePerGas;
+    const balanceStatus = evaluateForceInclusionBalances({
+      l1Balance: balance,
+      l1GasCost: estimatedCostWei,
+      l2Balance,
+      l2TransactionValue: value,
+    });
     return {
       gasLimit: gasLimit.toString(),
       maxFeePerGas: maxFeePerGas.toString(),
@@ -91,7 +133,17 @@ export async function estimateForceInclusionGas(
       nativePriceUsd: price,
       nativeCurrencySymbol: symbol,
       accountBalance: balance.toString(),
-      insufficientBalance: balance < estimatedCostWei + value,
+      insufficientBalance:
+        balanceStatus.insufficientGasBalance ||
+        balanceStatus.insufficientTransactionValueBalance,
+      insufficientGasBalance: balanceStatus.insufficientGasBalance,
+      insufficientTransactionValueBalance:
+        balanceStatus.insufficientTransactionValueBalance,
+      ...(l2Balance !== null
+        ? { transactionValueBalance: l2Balance.toString() }
+        : {}),
+      transactionValueChainName: info.viemChain.name,
+      gasBalanceChainName: info.l1ChainName,
       estimationFailed: false,
       dappProvidedGas: false,
     };
@@ -172,7 +224,10 @@ export async function buildL1DepositTxParams(
         l2Data,
       ],
     }),
-    value: value > 0n ? `0x${value.toString(16)}` : "0x0",
+    // `msg.value` becomes the deposit's L2 `mint`. Force execution must not
+    // bridge fresh ETH: `_value` above spends the sender's existing L2 ETH,
+    // while this outer L1 value remains zero so L1 ETH pays gas only.
+    value: "0x0",
     chainId: info.l1ChainId,
   };
 }

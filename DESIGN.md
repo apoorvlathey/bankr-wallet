@@ -27,7 +27,7 @@
 
 - Direction: Warm Midnight, a precise financial dark interface made unmistakably WalletChan through its pixel mascot, condensed wordmark, and selective amber warmth.
 - Defining trait: structure comes from proximity, alignment, surface lightness, and hairline rules instead of repeated bordered cards.
-- Signature move: the Mascot Spotlight. WalletChan appears at product-entry, onboarding, empty, and reassurance moments; amber marks brand commitment actions and the final single-transaction Confirm decision, while financial blue remains the focus, link, selection, and ordinary interaction color. Financial gain/loss keeps semantic green/red.
+- Signature move: the Mascot Spotlight. WalletChan appears at product-entry, onboarding, empty, and reassurance moments; amber marks brand commitment actions and final transaction or batch Confirm decisions, while financial blue remains the focus, link, selection, and ordinary interaction color. Financial gain/loss keeps semantic green/red.
 
 ## Typography
 
@@ -234,6 +234,27 @@
   banner's bare-bell / centered-label / chevron geometry, a repeating
   reduced-motion-safe ring, and clean popup and compact reflow previews in both
   themes.
+- 2026-07-14 transaction-request audit: passes the focused mobile-finance
+  hierarchy, defined-edge surface rule, color-independent signed asset deltas,
+  44px decision targets, keyboard-visible fee disclosure, compact reflow, and
+  both-theme popup/sidepanel review. The fee popover retains signer and decision
+  visibility; automated preview accessibility passed for every wallet fixture.
+- 2026-07-14 transaction-request hierarchy refinement: passes after removing
+  duplicate request/action labels, centering the dapp identity, qualifying the
+  simulation heading with an accessible estimate disclaimer and chain badge,
+  and moving force inclusion into progressive disclosure. The requested
+  centered dapp mark is a deliberate trust-context identity moment rather than
+  a reusable icon-above-heading card pattern.
+- 2026-07-14 advanced-details audit: passes with one defined-edge owner,
+  separator-led technical rows, sentence-case labels, visible disabled reasons,
+  native disclosure/switch/button semantics, and no nested resting shadows.
+- 2026-07-14 fee-selector audit: passes after separating ordinary speed choice
+  from expert gas editing. One-line, 42px native buttons retain visible focus,
+  explicit selected state, text labels, and tabular fiat estimates; raw gas
+  diagnostics appear only when Custom makes them actionable.
+- 2026-07-14 force-inclusion route audit: passes with a text-first destination
+  and L1 path, paired chain identities, no new interactive target, and no
+  reliance on icon color to communicate the execution route.
 - 2026-07-14 saved-RPC selector audit: passes with the token-styled Chakra menu
   already established by the extension, named provider identities, sanitized
   provider favicons, single-source selected-endpoint status, independent per-row
@@ -245,9 +266,96 @@
   and the amber brand
   commitment style. The single-line URL field retains inline validation,
   keyboard Enter/Escape support, reduced-motion fallback, and one primary action.
+- 2026-07-14 custom-gas editor audit: passes with a modular full-width field
+  grid, equal Priority/Base columns, right-aligned tabular values and units,
+  associated visible labels, an informational linked-Auto tooltip, and a
+  reduced-motion-safe animated Edit affordance inside the Max fee field. Popup,
+  compact, both-theme, private-key, and seed-phrase previews have no editor
+  overflow or editor-specific axe violations. The read-only Base fee input
+  explains on hover or focus that its value is determined by the network.
+- 2026-07-14 batch-request audit: passes after adopting the single-transaction
+  decision path: shared centered dapp identity, top queue controls, one chain-
+  qualified Estimated changes heading, one defined-edge simulation surface,
+  progressive request/advanced details, and a sticky pinned-signer/gas summary.
+  Request details now owns one ordered call list. Descriptor-backed clear
+  signing stays fully visible as the primary decision surface. ERC-20 approvals
+  keep their concise amount/token/spender summary until the user expands the
+  editable approval view; raw addresses, decoded calldata, and digests remain
+  secondary disclosures. A compact, unboxed “Batch overview” row sits beneath the
+  section heading once every call has a meaningful label, connecting the muted
+  context label to an action equation such as “Approve + Swap”; amber is
+  reserved for the equation separators so the names remain the scanning focus;
+  force inclusion stays last in advanced options, and all three wallet types
+  retain their existing execution paths. Superseded origin/from/network,
+  descriptor-only, and duplicate native-value summaries were removed rather
+  than hidden behind the new composition. Midnight call numbers use one neutral
+  graphite treatment instead of rotating blue accents. Destructive removal is
+  available from a hover/focus overflow menu rather than occupying every call
+  header, leaving calldata metadata aligned at the trailing edge. The neutral
+  Midnight badge surface retains a small WalletChan signature through amber
+  numerals rather than filling the entire marker with accent color. For matched
+  clear signing, each call header promotes the resolved action name while the
+  embedded body omits its duplicate intent and “via” attribution, leaving the
+  human-readable fields as the primary detail content.
 
 ## Changelog
 
+- 2026-07-15: kept incompatible Add to batch actions safely disabled while
+  restoring their account/chain reason through a keyboard-accessible tooltip,
+  without bringing back persistent helper copy. Cross-dapp Reject all now
+  reaches the App-owned global queue rejection path instead of merely invoking
+  the local post-rejection navigation callback.
+- 2026-07-14: removed redundant explanatory subtext from the shared Tenderly
+  and Add to batch rows, tightening both transaction and batch Advanced details
+  to compact 44px actions while retaining disabled reasons in accessible labels.
+- 2026-07-14: turned explicit simulation failure into a consistent second-step
+  decision across single, ERC-5792 batch, and cross-dapp batch requests. The
+  amber Confirm action gains a warning icon, and its first press opens a compact
+  “likely to fail” dialog before the existing wallet-specific signing callback
+  can run; simulation-unavailable notices remain informational rather than
+  pretending the chain outcome is known.
+- 2026-07-14: matched batch Advanced details to the single-transaction reveal
+  behavior by scrolling the newly expanded option set into the nearest visible
+  area, using instant movement when reduced motion is preferred.
+- 2026-07-14: aligned ERC-20 approval spenders with the shared counterparty
+  identity pattern: resolved labels remain visible in one neutral pill while
+  hover or keyboard focus on its three-dot affordance reveals the address,
+  copy action, and explorer link; unlabeled spenders stay explicit inline.
+- 2026-07-14: tightened the ERC-20 approval amount editor to a 32×28px amber
+  control when embedded in a batch call, while retaining the standard 40px
+  standalone approval target.
+- 2026-07-14: promoted resolved clear-signing action names into batch-call
+  headers and removed the duplicate embedded action/protocol heading.
+- 2026-07-14: added a restrained amber numeral to Midnight batch-call markers
+  while retaining their neutral graphite surface and edge.
+- 2026-07-14: neutralized numbered batch-call badges in Midnight and moved
+  persistent delete controls into accessible hover/focus overflow menus, with
+  coarse-pointer visibility retained and the call disclosure chevron yielding
+  its trailing position while the menu is active.
+- 2026-07-14: refined the batch action equation into an unboxed “Batch overview”
+  row with a quiet connector, right-aligned action names, amber separators, and
+  single-line overflow handling plus a hover/focus tooltip for the complete
+  equation, so it reads as context rather than a third heading or another
+  nested card.
+- 2026-07-14: added registry-owned, theme-aware contrast-surface metadata for
+  chain logos. HyperEVM keeps its supplied white treatment in Bauhaus and uses
+  a quiet dark surface with a mint edge in Midnight; registered testnets inherit
+  both schemes from their parent identity.
+- 2026-07-14: aligned batch and single-transaction requests around shared
+  request identity, estimated-change, queue, force-inclusion, and developer-tool
+  primitives; moved batch gas and the pinned signer to the decision footer and
+  kept batch-level tooling under one Advanced details disclosure.
+- 2026-07-14: unified batch request details and calls into one ordered review
+  surface. Descriptor clear signing remains fully visible for matched calls,
+  while ERC-20 approvals retain the compact one-line amount/token/spender
+  summary and reveal their editable approval card on demand. Raw calldata is a
+  second disclosure inside the approval editor. Editing, split, removal, and
+  technical fallback remain attached to their owning calls while Advanced
+  details is batch-level only.
+- 2026-07-14: added a batch action equation beneath Request details. It resolves
+  each call through specialized approval/native semantics, descriptor intent,
+  then decoded function fallback and only appears once the complete sequence is
+  meaningful, avoiding temporary generic “Call” labels.
 - 2026-07-14: placed a default-on, checkmarked Unify Balances row directly
   beneath Refresh in Portfolio options. Selecting it persists the inverse state,
   dismisses the sheet, and reveals either cross-network ETH/USDC/USDT summaries
@@ -257,6 +365,10 @@
   rhythm as Quick Actions by removing redundant supporting copy.
 - 2026-07-14: moved Chains directly after Appearance in the main Settings list
   so theme and network configuration stay together near the top-level entry.
+- 2026-07-14: rebuilt the custom-gas form around one consistent field grid,
+  removing the unused left label column while preserving the linked-Auto info
+  tooltip and animated Max fee edit overlap; the read-only Base fee now explains
+  its network ownership on hover and focus.
 - 2026-07-14: replaced the single RPC field in Edit Network with a bounded,
   keyboard-operable saved-endpoint dropdown. Named endpoints pair provider
   favicons with readable domains, expose the complete URL with copy/edit
@@ -264,6 +376,51 @@
   endpoint changes without a redundant footer, while custom chains retain the
   staged Cancel and amber Save changes actions for their editable name, chain ID,
   endpoint, explorer, and native-currency fields.
+- 2026-07-14: simplified transaction requests to one action label, one chain
+  context, on-demand interacting-address metadata, and advanced-only force
+  inclusion while preserving all signing and fee paths.
+- 2026-07-14: enclosed the estimated asset-change rows in one quiet, defined-edge
+  surface so the simulation reads as a single financial result.
+- 2026-07-14: removed the separate native-value summary from estimated changes;
+  simulated Send/Receive rows remain the single source for asset movement.
+- 2026-07-14: suppressed redundant native-value precision disclosure when the
+  compact and exact strings match, and placed a positive chain-native USD
+  estimate beneath the request value when pricing is available.
+- 2026-07-14: restored explicit Send/Receive simulation groups with compact
+  diagonal direction markers, tightened asset identity metadata, and enlarged
+  token marks for faster scanning.
+- 2026-07-14: gave simulated-asset fallback token marks a subtle semantic edge
+  so symbol-only identities remain distinct from the surrounding dark surface.
+- 2026-07-14: returned clear-signing cards to the neutral raised surface so
+  human-readable request details do not imply protocol-specific blue emphasis.
+- 2026-07-14: restored request-counterparty alignment with the field label on
+  the left and contract identity plus address controls on a right-hand rail.
+- 2026-07-14: kept contract identity in a filled pill, using neutral graphite in
+  Midnight and theme blue in Bauhaus, then moved its low-frequency address,
+  copy, and explorer controls into a three-dot popover whose trigger uses amber
+  icon feedback without splitting the pill surface on hover. Unlabeled
+  contracts skip the generic identity pill and expose the shortened address,
+  copy, and explorer actions directly. The labeled-contract popover sizes to
+  its single address/action row rather than reserving a menu-width minimum.
+- 2026-07-14: made ERC-20 logo/symbol identities in clear-signing amount rows
+  disclose their contract address, copy action, and explorer link through a
+  compact hover/focus popover, without adding a persistent menu affordance.
+- 2026-07-14: consolidated single-transaction advanced controls into one
+  neutral, divided surface. Inclusion policy, calldata inspection, digest, and
+  developer actions now share one row grammar instead of competing card styles.
+- 2026-07-14: ordered advanced transaction details from inspection to action to
+  policy: developer rows now lead with recognizable icons, while optional force
+  inclusion closes the list as the final execution-policy choice.
+- 2026-07-14: packaged the Tenderly service mark with the extension so advanced
+  simulation actions render immediately without a favicon fetch or cache race.
+- 2026-07-14: tightened the calldata digest representation switch to a compact
+  28px technical toggle and promoted the batch-add glyph with the brand amber
+  tile while retaining text labels and native button semantics.
+- 2026-07-14: expanded the collapsed calldata-digest disclosure target across
+  its full technical row while preserving the established left label/chevron
+  composition and independent expanded-state controls.
+- 2026-07-14: added a small horizontal inset to inline disclosure headers so
+  their hover and focus surfaces retain visible breathing room at both edges.
 - 2026-07-10: established the durable mobile-wallet direction and Midnight V2 foundation before production UI changes.
 - 2026-07-10: implemented Midnight V2 recipes, quiet theme primitives, contrast tests, and the production component-state lab.
 - 2026-07-10: added the mobile screen/list/picker/action-sheet grammar, horizontal navigation, and restoration-aware interaction preview.
@@ -349,3 +506,20 @@
   with a lifted graphite notice below the header that mirrors the homepage
   banner's horizontal icon/label/chevron rhythm while keeping the mascot,
   credential prompt, and Unlock action dominant.
+- 2026-07-14: refined single-transaction review into a compact dapp/action
+  masthead, one estimated-change section, clear-signed request ledger, and a
+  pinned signer/fee decision region. Local fee tiers now open upward without
+  displacing Reject or the amber Confirm commitment.
+- 2026-07-14: made expanded transaction advanced details reveal their full
+  option list by scrolling the content end into the nearest visible position,
+  while preserving focus and honoring reduced-motion preferences.
+- 2026-07-14: reduced the transaction fee popover to compact one-line speed
+  choices with estimated fiat cost. Presets now close on selection and omit
+  duplicated raw gas diagnostics; editable gas fields remain available only
+  through Custom.
+- 2026-07-14: restored the fee tier icons' semantic green, blue, amber, and
+  neutral accents after simplifying the menu, retaining personality and rapid
+  scanning without reintroducing the removed technical rows.
+- 2026-07-14: added an always-visible execution route beneath the signer when
+  force inclusion is enabled, pairing destination and L1 chain logos with the
+  plain-language “Transacting on … via …” path above the fee decision.

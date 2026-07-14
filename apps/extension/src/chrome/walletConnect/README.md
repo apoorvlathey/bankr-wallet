@@ -22,3 +22,8 @@ compatibility family. Review implementation in this order:
 Storage key names, namespace rotation, SDK listener generation checks, and
 terminal-response persistence are compatibility boundaries. Folder moves must
 not alter them.
+
+Unresolved transaction, signature, and ERC-7715 permission routes are durable
+until the user decides or the WalletConnect session is explicitly terminated.
+Only pre-prompt intake claims and already-terminal response routes have bounded
+retention so abandoned transport metadata cannot consume capacity forever.

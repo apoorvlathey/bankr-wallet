@@ -129,7 +129,7 @@ function isAbiDecodeBetter(
   return false;
 }
 
-function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollapsed = false }: CalldataDecoderProps) {
+function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollapsed = false, flat = false }: CalldataDecoderProps) {
   const { themeId, tokens } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
   // Midnight keeps technical navigation quiet: the active view is marked by
@@ -248,10 +248,10 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollaps
       <Box
         w="full"
         maxW="100%"
-        bg="surface.raised"
-        border="1px solid"
+        bg={flat ? "transparent" : "surface.raised"}
+        border={flat ? 0 : "1px solid"}
         borderColor="border.default"
-        borderRadius="lg"
+        borderRadius={flat ? 0 : "lg"}
         boxShadow="none"
         overflow="hidden"
       >
@@ -305,10 +305,10 @@ function CalldataDecoder({ calldata, to, chainId, onFunctionName, defaultCollaps
     <Box
       w="full"
       maxW="100%"
-      bg="surface.raised"
-      border="1px solid"
+      bg={flat ? "transparent" : "surface.raised"}
+      border={flat ? 0 : "1px solid"}
       borderColor="border.default"
-      borderRadius="lg"
+      borderRadius={flat ? 0 : "lg"}
       boxShadow="none"
       overflow="hidden"
     >

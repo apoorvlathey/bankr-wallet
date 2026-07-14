@@ -1,5 +1,4 @@
 import { memo, useMemo } from "react";
-import { Badge, HStack, Text, VStack } from "@chakra-ui/react";
 import { getChainConfig } from "@/constants/chainConfig";
 import {
   FORCE_INCLUSION_CHAINS,
@@ -7,20 +6,25 @@ import {
 } from "@/constants/chainRegistry";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { useBatchPlan } from "@/hooks/useBatchPlan";
-import { getNativeAssetMeta, getResolvedChainById } from "@/lib/chains";
+import { getResolvedChainById } from "@/lib/chains";
 import {
   isDarkThemeId,
-  useChainBadgeStyle,
   useIconChipBg,
   useStripTokens,
   useTheme,
 } from "@/theme";
 import { omitOuterValueForEip7702 } from "@/chrome/batchTxHandlers";
-import { ConfirmationScreen, OutcomeCard } from "@/components/ui";
+import { ConfirmationScreen } from "@/components/ui";
 import { CopyButton } from "@/components/CopyButton";
+import { EstimatedChangesHeading } from "@/components/RequestConfirmation/EstimatedChangesHeading";
+import { QueueNavigation } from "@/components/RequestConfirmation/QueueNavigation";
+import { RequestIdentity } from "@/components/RequestConfirmation/RequestIdentity";
+import { shouldConfirmSimulationFailure } from "@/components/RequestConfirmation/simulationFailure";
 import SmartAccountSetupBanner from "@/components/SmartAccountSetupBanner";
 import { AdvancedDetails } from "./AdvancedDetails";
-import { CallsReview } from "./CallsReview";
+import { getBatchActionSummary } from "./batchActionSummary";
+import { BatchDecisionSummary } from "./BatchDecisionSummary";
+import { CallsReview, CallsReviewHeaderAction } from "./CallsReview";
 import { ConfirmAction, RejectAction } from "./ConfirmationActions";
 import { FinancialImpact } from "./FinancialImpact";
 import {
@@ -29,11 +33,9 @@ import {
   findMalformedValue,
   getOriginHostname,
   makeSyntheticTxRequest,
-  sumNativeValue,
   tryEncodeBatch,
 } from "./helpers";
 import { RequestContext } from "./RequestContext";
-import { RequestMetadataCard } from "./RequestMetadataCard";
 import { RequestWarnings } from "./RequestWarnings";
 import { SplitBatchModal } from "./SplitBatchModal";
 import { ForceInclusionState, SentState } from "./TerminalStates";
@@ -57,12 +59,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   const calls = params.calls;
   const resolvedChain = getResolvedChainById(chainId, networksInfo);
   const chainConfig = getChainConfig(chainId);
-  const chainBadgeStyle = useChainBadgeStyle(
-    resolvedChain?.bg ?? chainConfig.bg,
-    resolvedChain?.text ?? chainConfig.text,
-    resolvedChain?.isCustom ?? false,
-  );
-  const review = useBatchReviewState();
+  const review = useBatchReviewState(batchRequest.id, calls.length);
   const fromAddress = params.from || accountAddress;
   const batchPlan = useBatchPlan({
     accountId: batchRequest.accountId ?? null,
@@ -72,13 +69,18 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   const isLocalSigningAccount = accountType === "privateKey" || accountType === "seedPhrase";
   const isAtomic7702 = batchPlan.strategy === "atomic-7702";
   const isNonAtomic = isLocalSigningAccount && !isAtomic7702;
-  const nativeAsset = getNativeAssetMeta(chainId, networksInfo);
-  const nativeSymbol = nativeAsset?.symbol ?? "ETH";
-  const nativeDecimals = nativeAsset?.decimals ?? 18;
+  const resolvedChainName = resolvedChain?.name ?? chainName;
+  const originHostname = getOriginHostname(origin);
+  const isInternalWalletChan = origin === "WalletChan" || origin === "Cross-Dapp Batch";
+  const originInitials = (originHostname || origin || "?")
+    .split(/[.\s-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "?";
 
   const malformedValueInfo = useMemo(() => findMalformedValue(calls), [calls]);
   const malformedCallInfo = useMemo(() => findMalformedCalldata(calls), [calls]);
-  const totalValueWei = useMemo(() => sumNativeValue(calls), [calls]);
   const { encodedBatch, encodingError } = useMemo(
     () => malformedValueInfo
       ? emptyEncodedBatch(fromAddress)
@@ -92,6 +94,14 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   const syntheticTxRequest = useMemo(
     () => makeSyntheticTxRequest(batchRequest, fromAddress, outerEncodedBatch),
     [batchRequest, fromAddress, outerEncodedBatch],
+  );
+  const batchActionSummary = useMemo(
+    () => getBatchActionSummary({
+      calls,
+      clearSigningActionNames: review.clearSigningActionNames,
+      decodedFunctionNames: review.decodedFunctionNames,
+    }),
+    [calls, review.clearSigningActionNames, review.decodedFunctionNames],
   );
 
   const forceInclusionInfo = useMemo<ForceInclusionInfo | null>(() => {
@@ -153,7 +163,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
 
   const screenTitle = titleOverride
     ? titleOverride.replace(/\s*\([^)]*\)\s*$/, "")
-    : calls.length === 1 ? "Review transaction" : "Review batch";
+    : calls.length === 1 ? "Transaction request" : "Batch request";
   const canConfirmBatch = !!customConfirmHandler || accountType !== "impersonator";
   const confirmDisabledReason = actions.isRejecting
     ? "Reject in progress"
@@ -189,38 +199,50 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
           value: call.value && call.value !== "0x0" ? call.value : "0",
           data: call.data || "0x",
         })), null, 2)} />}
-        outcome={<OutcomeCard
-          outcome={calls.length === 1 ? "Execute 1 action" : `Execute ${calls.length} actions together`}
-          context={<VStack align="stretch" spacing={2}>
-            <Text fontSize="sm">Requested by {getOriginHostname(origin) || origin} on {resolvedChain?.name ?? chainName}</Text>
-            <HStack spacing={1.5} flexWrap="wrap">
-              <Badge variant={isNonAtomic ? "warning" : "info"}>
-                {isNonAtomic ? "Sequential" : "Atomic"}
-              </Badge>
-              {review.simulationReverted && <Badge variant="error">Likely to fail</Badge>}
-              {review.simulationUnavailable && !review.simulationReverted && (
-                <Badge variant="warning">Not simulated</Badge>
-              )}
-            </HStack>
-          </VStack>}
+        navigation={totalCount > 1 ? (
+          <QueueNavigation
+            currentIndex={currentIndex}
+            totalCount={totalCount}
+            stripBg={stripBg}
+            stripFg={stripFg}
+            onNavigate={onNavigate}
+            onRejectAll={onRejectAll}
+          />
+        ) : undefined}
+        outcome={<RequestIdentity
+          origin={origin}
+          originHostname={originHostname}
+          favicon={favicon}
+          iconChipBg={iconChipBg}
+          isInternalWalletChan={isInternalWalletChan}
+          originInitials={originInitials}
         />}
         financialImpact={<FinancialImpact
-          totalValueWei={totalValueWei}
-          nativeSymbol={nativeSymbol}
-          nativeDecimals={nativeDecimals}
           calls={calls}
           syntheticTxRequest={syntheticTxRequest}
           isNonAtomic={isNonAtomic}
           onRevertedChange={review.setSimulationReverted}
           onUnavailableChange={review.setSimulationUnavailable}
         />}
-        context={<RequestContext
-          calls={calls}
+        financialImpactTitle={<EstimatedChangesHeading
           chainId={chainId}
-          currentIndex={currentIndex}
-          totalCount={totalCount}
-          stripBg={stripBg}
-          stripFg={stripFg}
+          chainName={resolvedChainName}
+        />}
+        context={<RequestContext
+          callList={<CallsReview
+            batchRequestId={batchRequest.id}
+            calls={calls}
+            chainId={chainId}
+            expandedCalls={review.expandedCalls}
+            decodedFunctionNames={review.decodedFunctionNames}
+            originPerCall={originPerCall}
+            onEditCallData={onEditCallData}
+            onRemoveCall={onRemoveCall}
+            onToggleCall={review.toggleCall}
+            onFunctionName={review.recordFunctionName}
+            onClearSigningAction={review.recordClearSigningAction}
+          />}
+          actionSummary={batchActionSummary}
           state={actions.state}
           error={actions.error}
           accountType={accountType}
@@ -243,73 +265,54 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
               explorerUrl={chainConfig.explorer}
             />
           ) : null}
-          metadata={<RequestMetadataCard
-            borders={tokens.borders}
-            origin={origin}
-            originHostname={getOriginHostname(origin)}
-            favicon={favicon}
-            isInternalWalletChan={origin === "WalletChan" || origin === "Cross-Dapp Batch"}
-            iconChipBg={iconChipBg}
-            fromAddress={fromAddress}
-            chainId={chainId}
-            chainName={resolvedChain?.name ?? chainName}
-            chainBadgeStyle={chainBadgeStyle}
-            forceInclusionInfo={forceInclusionInfo}
-            forceInclusion={review.forceInclusion}
-            setForceInclusion={review.setForceInclusion}
-            showAdvanced={review.showAdvanced}
-            setShowAdvanced={review.setShowAdvanced}
-            totalValueWei={totalValueWei}
-            nativePriceUsd={review.nativePriceUsd}
-            nativeSymbol={nativeSymbol}
-            nativeDecimals={nativeDecimals}
-          />}
-          onNavigate={onNavigate}
-          onRejectAll={onRejectAll}
         />}
-        advancedDetails={<VStack spacing={3} align="stretch">
-          <CallsReview
-            batchRequestId={batchRequest.id}
-            calls={calls}
-            chainId={chainId}
-            expandedCalls={review.expandedCalls}
-            decodedFunctionNames={review.decodedFunctionNames}
-            canSplitBatch={canSplitBatch}
-            originPerCall={originPerCall}
-            onEditCallData={onEditCallData}
-            onRemoveCall={onRemoveCall}
-            onToggleCall={review.toggleCall}
-            onFunctionName={review.recordFunctionName}
-            onOpenSplit={review.splitModal.onOpen}
-          />
+        contextHeaderAction={<CallsReviewHeaderAction
+          callCount={calls.length}
+          canSplitBatch={canSplitBatch}
+          onOpenSplit={review.splitModal.onOpen}
+        />}
+        advancedDetails={
           <AdvancedDetails
-            calls={calls}
             fromAddress={fromAddress}
             chainId={chainId}
-            accountType={accountType}
-            decodedFunctionNames={review.decodedFunctionNames}
             isNonAtomic={isNonAtomic}
-            isLocalSigningAccount={isLocalSigningAccount}
             isAtomic7702={isAtomic7702}
             outerEncodedBatch={outerEncodedBatch}
-            eip7702Delegate={isAtomic7702 && batchPlan.delegate && batchPlan.needsAuthorization
-              ? batchPlan.delegate : undefined}
             forceInclusion={review.forceInclusion}
+            forceInclusionInfo={forceInclusionInfo}
             showAddToBatch={showAddToBatch}
             addToBatchDisabledReason={addToBatchDisabledReason}
             isAddingToBatch={actions.isAddingToBatch}
             batchedCount={crossDappBatch?.entries.length ?? 0}
-            borders={tokens.borders}
-            onGasEstimates={review.setCachedGasEstimates}
-            onGasValidityChange={review.setGasValid}
-            onNativePriceUsd={review.setNativePriceUsd}
-            onAnyFailedChange={review.setAnyTxMayRevert}
+            onForceInclusionChange={review.setForceInclusion}
             onAddToBatch={actions.handleAddBundleToBatch}
           />
-        </VStack>}
+        }
+        actionSummary={<BatchDecisionSummary
+          calls={calls}
+          fromAddress={fromAddress}
+          chainId={chainId}
+          chainName={resolvedChainName}
+          accountType={accountType}
+          decodedFunctionNames={review.decodedFunctionNames}
+          isNonAtomic={isNonAtomic}
+          isLocalSigningAccount={isLocalSigningAccount}
+          outerEncodedBatch={outerEncodedBatch}
+          eip7702Delegate={isAtomic7702 && batchPlan.delegate && batchPlan.needsAuthorization
+            ? batchPlan.delegate : undefined}
+          forceInclusion={review.forceInclusion}
+          forceInclusionInfo={forceInclusionInfo}
+          onGasEstimates={review.setCachedGasEstimates}
+          onGasValidityChange={review.setGasValid}
+          onAnyFailedChange={review.setAnyTxMayRevert}
+        />}
         confirmAction={canConfirmBatch ? <ConfirmAction
           customConfirm={!!customConfirmHandler}
           confirmDisabled={!!confirmDisabledReason}
+          simulationFailed={shouldConfirmSimulationFailure({
+            simulationReverted: review.simulationReverted,
+            gasEstimateFailed: review.anyTxMayRevert,
+          })}
           submitting={actions.state === "submitting"}
           onConfirm={actions.handleConfirm}
         /> : rejectAction}

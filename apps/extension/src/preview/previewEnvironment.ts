@@ -5,7 +5,6 @@ import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import type { CrossDappBatch } from "@/chrome/crossDappBatch/storage";
 import type { PendingErc7715PermissionRequest } from "@/chrome/pendingErc7715PermissionStorage";
 import type { PortfolioResponse } from "@/chrome/portfolio/api";
-import { DEFAULT_NETWORKS } from "@/constants/networks";
 import { SELECTED_THEME_STORAGE_KEY } from "@/theme";
 import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from "@/constants/securityPolicy";
 import {
@@ -16,6 +15,8 @@ import {
   createPreviewSignatureScenario,
   createPreviewTxScenario,
   previewAccounts,
+  previewNetworkRpcUrls,
+  previewNetworks,
   previewCustomToken,
   previewHiddenTokens,
 } from "./fixtures";
@@ -23,7 +24,6 @@ import { previewAssets } from "./previewAssets";
 import { parsePreviewState, type ParsedPreviewState } from "./previewState";
 import type { PreviewWalletType } from "./types";
 import { getPreviewCompletedTransaction } from "./completedTransactionFixture";
-
 export type PreviewStorageAreaName = "local" | "sync" | "session";
 export type PreviewStorageRecord = Record<string, unknown>;
 
@@ -41,7 +41,6 @@ export interface PreviewEnvironment {
   unlocked: boolean;
   txHistory: unknown[];
 }
-
 function accountForWallet(
   accounts: Account[],
   wallet: PreviewWalletType,
@@ -83,6 +82,7 @@ export function createPreviewEnvironment(href: string): PreviewEnvironment {
 
   const local: PreviewStorageRecord = {
     [SELECTED_THEME_STORAGE_KEY]: parsed.state.theme,
+    networkRpcUrls: previewNetworkRpcUrls,
     // App.tsx only checks presence during startup. This intentionally is not a
     // decryptable credential and is never returned by the runtime shim.
     encryptedApiKeyVault: { previewOnly: true },
@@ -203,7 +203,7 @@ export function createPreviewEnvironment(href: string): PreviewEnvironment {
     storage: {
       local,
       sync: {
-        networksInfo: DEFAULT_NETWORKS,
+        networksInfo: previewNetworks,
         address: activeAccount.address,
         displayAddress: activeAccount.displayName || activeAccount.address,
         chainName: "Base",

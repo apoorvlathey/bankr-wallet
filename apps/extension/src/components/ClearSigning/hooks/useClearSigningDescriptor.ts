@@ -213,14 +213,15 @@ export function useClearSigningDescriptor(props: ClearSigningViewProps): {
       }
       console.log(`${tag} ✓ rendering ${fields.length} field(s)`);
 
+      const intent = resolveIntentText(matched.format, renderInput, descriptor);
       setState({
         descriptor,
         fields,
-        intent: resolveIntentText(matched.format, renderInput, descriptor),
+        intent,
         ownerName: descriptor.metadata?.owner,
       });
       setLoading(false);
-      onResolvedRef.current?.(true);
+      onResolvedRef.current?.(true, intent);
     })();
 
     return () => {

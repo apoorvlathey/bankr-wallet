@@ -5,7 +5,7 @@ import { hasEncryptedApiKey, loadDecryptedApiKey } from "../crypto";
 import { resolveActiveDelegate } from "../../utils/delegationResolution";
 import { getStoredResolvedChainById } from "../../lib/chains";
 import { updateBundleStatus } from "./bundleStatusStorage";
-import { processingBundleIds, BATCH_TX_EXPIRY_MS } from "./batchExecutionRuntime";
+import { processingBundleIds } from "./batchExecutionRuntime";
 import type { PendingBatchTxRequest } from "../erc5792Types";
 import { removePendingBatchTxRequest, getPendingBatchTxRequestById } from "../requests/pendingBatchTxStorage";
 import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pendingRequestLifecycle";
@@ -35,10 +35,7 @@ export async function confirmLocalBatchWithExecutors(
   }
 
   const pending = await getPendingBatchTxRequestById(bundleId);
-  if (!pending || Date.now() - pending.timestamp > BATCH_TX_EXPIRY_MS) {
-    if (pending) await removePendingBatchTxRequest(bundleId);
-    return { success: false, error: "Batch request expired" };
-  }
+  if (!pending) return { success: false, error: "Batch request not found" };
 
   processingBundleIds.add(bundleId);
 

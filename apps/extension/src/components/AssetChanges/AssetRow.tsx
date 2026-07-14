@@ -53,6 +53,7 @@ export function AssetRow({
                 fontSize="sm"
                 fontWeight="700"
                 color="text.primary"
+                lineHeight="1.2"
                 noOfLines={1}
               >
                 {change.symbol}
@@ -79,7 +80,12 @@ export function AssetRow({
           {!isNative && (
             <HStack w="full" justify="space-between" spacing={2}>
               <HStack spacing={0.5} minW={0}>
-                <Text fontSize="2xs" color="text.tertiary" noOfLines={1}>
+                <Text
+                  fontSize="2xs"
+                  color="text.tertiary"
+                  lineHeight="1.15"
+                  noOfLines={1}
+                >
                   {isNft
                     ? nftDisplayName
                     : showName
@@ -92,9 +98,10 @@ export function AssetRow({
                     icon={copied ? <CheckIcon /> : <CopyIcon />}
                     size="xs"
                     variant="ghost"
+                    minH="16px"
                     minW="24px"
                     w="24px"
-                    h="24px"
+                    h="16px"
                     color={copied ? "accent.highlight" : "text.tertiary"}
                     onClick={handleCopy}
                     _hover={{ color: "accent.secondary", bg: "transparent" }}
@@ -107,9 +114,10 @@ export function AssetRow({
                       icon={<ExternalLinkIcon boxSize="9px" />}
                       size="xs"
                       variant="ghost"
+                      minH="16px"
                       minW="24px"
                       w="24px"
-                      h="24px"
+                      h="16px"
                       color="text.tertiary"
                       onClick={() =>
                         window.open(

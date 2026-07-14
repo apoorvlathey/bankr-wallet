@@ -9,8 +9,9 @@
   prefixes, cleanup ordering, and the retained WalletConnect namespace.
 - `cachePruner.test.ts` covers TTL/schema/future-time rejection, avatar LRU,
   portfolio delegation, remove-before-set effects, and propagated failures.
-- `resultWaiter.test.ts` protects listener cleanup, bounded non-signing waits,
-  and retry semantics when confirmation or expiry owns a signing request.
+- `resultWaiter.test.ts` protects listener cleanup, bounded non-prompt waits,
+  unbounded user-review waits, and retry semantics when a bounded operation's
+  expiry handshake is already owned elsewhere.
 
 Domain-owned repositories and schemas stay beside their account, mnemonic,
 request, ERC-7715, or session suites instead of accumulating here.

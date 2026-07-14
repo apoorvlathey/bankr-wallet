@@ -1,26 +1,12 @@
 import {
-  getPendingSignatureRequestById,
-  removePendingSignatureRequest,
-} from "./pendingSignatureStorage";
-import {
-  getPendingTxRequestById,
-  removePendingTxRequest,
-} from "./pendingTxStorage";
-import {
   getDappPermission,
   normalizeDappOrigin,
 } from "./dappPermissionStorage";
-import { trustedTopLevelDappOrigin } from "../dapp/requestPolicy";
 import { validatePendingBankrCredential } from "../bankr/credentialBinding";
-import { runPendingRequestResolution } from "./pendingRequestResolution";
-import {
-  terminalizeUnauthorizedPendingRequest,
-  writeProviderResult,
-} from "./pendingRequestTerminalization";
+import { terminalizeUnauthorizedPendingRequest } from "./pendingRequestTerminalization";
 
 const PROVIDER_AUTHORIZATION_REVOKED_ERROR =
   "This site's WalletChan connection is no longer active";
-const PROVIDER_REQUEST_TIMEOUT_ERROR = "Wallet request timed out";
 const WALLETCONNECT_SESSION_ENDED_ERROR =
   "WalletConnect session is no longer active";
 const BANKR_CREDENTIAL_CHANGED_ERROR =
@@ -262,73 +248,6 @@ export function finishDappOriginRevocation(rawOrigin: string): void {
   if (origin) revokingDappOrigins.delete(origin);
 }
 
-export async function expireInjectedProviderRequest(
-  kind: "transaction" | "signature",
-  requestId: string,
-  sender: chrome.runtime.MessageSender,
-): Promise<{ success: boolean; expired?: boolean; error?: string }> {
-  const trusted = trustedTopLevelDappOrigin(sender);
-  if (!trusted) return { success: false, error: "Unauthorized" };
-
-  if (kind === "transaction") {
-    return runPendingRequestResolution({
-      family: "transaction",
-      requestId,
-      action: "expire",
-      conflictResult: () => ({
-        success: false,
-        error: "Request is already being resolved",
-      }),
-      resolve: async () => {
-        const pending = await getPendingTxRequestById(requestId);
-        if (
-          !pending ||
-          pending.walletConnect ||
-          pending.tabId !== trusted.tabId ||
-          !pendingRequestMatchesInjectedOrigin(pending, trusted.origin)
-        ) {
-          return { success: false, error: "Pending request not found" };
-        }
-        await removePendingTxRequest(requestId);
-        await writeProviderResult(`txResult:${requestId}`, {
-          success: false,
-          error: PROVIDER_REQUEST_TIMEOUT_ERROR,
-          code: -32000,
-        });
-        return { success: true, expired: true };
-      },
-    });
-  }
-
-  return runPendingRequestResolution({
-    family: "signature",
-    requestId,
-    action: "expire",
-    conflictResult: () => ({
-      success: false,
-      error: "Request is already being resolved",
-    }),
-    resolve: async () => {
-      const pending = await getPendingSignatureRequestById(requestId);
-      if (
-        !pending ||
-        pending.walletConnect ||
-        pending.tabId !== trusted.tabId ||
-        !pendingRequestMatchesInjectedOrigin(pending, trusted.origin)
-      ) {
-        return { success: false, error: "Pending request not found" };
-      }
-      await removePendingSignatureRequest(requestId);
-      await writeProviderResult(`sigResult:${requestId}`, {
-        success: false,
-        error: PROVIDER_REQUEST_TIMEOUT_ERROR,
-        code: -32000,
-      });
-      return { success: true, expired: true };
-    },
-  });
-}
-
 /** Test-only reset for service-worker-local revocation gates. */
 export function resetPendingRequestLifecycleForTests(): void {
   revokingDappOrigins.clear();
@@ -337,6 +256,5 @@ export function resetPendingRequestLifecycleForTests(): void {
 
 export const pendingRequestLifecycleErrors = {
   authorizationRevoked: PROVIDER_AUTHORIZATION_REVOKED_ERROR,
-  timeout: PROVIDER_REQUEST_TIMEOUT_ERROR,
   walletConnectSessionEnded: WALLETCONNECT_SESSION_ENDED_ERROR,
 } as const;

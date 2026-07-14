@@ -6,7 +6,6 @@ import {
 } from "./bridgeState";
 
 const RESULT_PREFIX = "erc7715PermissionResult:";
-const RESULT_TIMEOUT_MS = 5 * 60 * 1000;
 
 function post(msg: Record<string, unknown>): void {
   window.postMessage({ type: "walletExecutionPermissionsResult", msg }, "*");
@@ -54,13 +53,7 @@ export async function handleExecutionPermissionPageMessage(
         error?: string;
       }>(
         `${RESULT_PREFIX}${requestId}`,
-        RESULT_TIMEOUT_MS,
-        () =>
-          chrome.runtime.sendMessage({
-            type: "expireProviderRequest",
-            requestKind: "erc7715Permission",
-            requestId,
-          }),
+        null,
       );
       post({
         id,

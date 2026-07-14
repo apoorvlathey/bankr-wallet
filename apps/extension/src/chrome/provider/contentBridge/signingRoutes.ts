@@ -7,8 +7,6 @@ import {
   pageFaviconUrl,
 } from "./bridgeState";
 
-const FIVE_MINUTES_MS = 5 * 60 * 1000;
-
 function post(type: string, msg: Record<string, unknown>): void {
   window.postMessage({ type, msg }, "*");
 }
@@ -53,13 +51,7 @@ async function handleSendTransaction(msg: any): Promise<void> {
     code?: number;
   }>(
     `txResult:${txId}`,
-    FIVE_MINUTES_MS,
-    () =>
-      chrome.runtime.sendMessage({
-        type: "expireProviderRequest",
-        requestKind: "transaction",
-        requestId: txId,
-      }),
+    null,
   )
     .then((result) =>
       post("sendTransactionResult", {
@@ -117,13 +109,7 @@ async function handleSignature(msg: any): Promise<void> {
     code?: number;
   }>(
     `sigResult:${sigId}`,
-    FIVE_MINUTES_MS,
-    () =>
-      chrome.runtime.sendMessage({
-        type: "expireProviderRequest",
-        requestKind: "signature",
-        requestId: sigId,
-      }),
+    null,
   )
     .then((result) =>
       post("signatureRequestResult", {
@@ -166,13 +152,7 @@ async function handleWatchAsset(msg: any): Promise<void> {
   const watchAssetId = crypto.randomUUID();
   waitForStorageResult<{ success: boolean; error?: string; code?: number }>(
     `watchAssetResult:${watchAssetId}`,
-    FIVE_MINUTES_MS,
-    () =>
-      chrome.runtime.sendMessage({
-        type: "expireProviderRequest",
-        requestKind: "watchAsset",
-        requestId: watchAssetId,
-      }),
+    null,
   )
     .then((result) =>
       post("watchAssetResult", {

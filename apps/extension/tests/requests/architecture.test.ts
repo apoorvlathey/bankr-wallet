@@ -5,12 +5,10 @@ import test from "node:test";
 const movedRootFiles = new Set([
   "dappPermissionStorage.ts",
   "pendingAddChainStorage.ts",
-  "pendingBatchAcknowledgementLifecycle.ts",
   "pendingBatchTxStorage.ts",
   "pendingBridgeStorage.ts",
   "pendingDappRequestLifecycle.ts",
   "pendingMetadataPromptLifecycle.ts",
-  "pendingRequestExpiry.ts",
   "pendingRequestLifecycle.ts",
   "pendingRequestResolution.ts",
   "pendingSignatureRelease.ts",
@@ -78,11 +76,17 @@ test("durable request storage keys and result routes stay compatible", async () 
     for (const key of keys) assert.match(source, new RegExp(`"${key}"`));
   }
 
-  const [terminalization, metadata, dapp, batchAck] = await Promise.all([
+  const [terminalization, metadata, connectionHandlers, batchIntake] = await Promise.all([
     readRequestModule("pendingRequestTerminalization.ts"),
     readRequestModule("pendingMetadataPromptLifecycle.ts"),
-    readRequestModule("pendingDappRequestLifecycle.ts"),
-    readRequestModule("pendingBatchAcknowledgementLifecycle.ts"),
+    readFile(
+      new URL("../../src/chrome/dapp/connectionHandlers.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../../src/chrome/batch/batchRequestIntake.ts", import.meta.url),
+      "utf8",
+    ),
   ]);
   for (const prefix of ["txResult:", "sigResult:"]) {
     assert.match(terminalization, new RegExp(prefix));
@@ -90,8 +94,8 @@ test("durable request storage keys and result routes stay compatible", async () 
   for (const prefix of ["addChainResult:", "watchAssetResult:"]) {
     assert.match(metadata, new RegExp(prefix));
   }
-  assert.match(dapp, /dappConnectionResult:/);
-  assert.match(batchAck, /batchTxAck:/);
+  assert.match(connectionHandlers, /dappConnectionResult:/);
+  assert.match(batchIntake, /batchTxAck:/);
 });
 
 test("request claims and terminal effects retain their safety ordering", async () => {
@@ -149,7 +153,11 @@ test("background and request modules compose direct domain paths", async () => {
   assert.match(providerComposition, /from ["']\.\.\/\.\.\/requests\/pendingTxStorage["']/);
   assert.match(
     accountComposition,
-    /from ["']\.\.\/\.\.\/requests\/pendingRequestLifecycle["']/,
+    /from ["']\.\.\/\.\.\/dapp\/connectionHandlers["']/,
+  );
+  assert.doesNotMatch(
+    accountComposition,
+    /pendingRequestExpiry|pendingBatchAcknowledgementLifecycle|expireProviderRequest/,
   );
   assert.doesNotMatch(
     providerComposition + accountComposition,

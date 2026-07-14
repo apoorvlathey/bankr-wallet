@@ -175,9 +175,12 @@ There's also a fallback guard for the case where `extractL2Hash` failed: `tx.txH
 - L1 Tx button appears as soon as the L1 hash is known (before confirmation)
 - L2 Tx button only appears once `tx.status === "success"` (the L2 sequencer has included the tx and the L2 explorer can resolve it). Hidden during the "L1 Confirmed / L2 Pending" window to avoid sending users to a "tx not found" page.
 
-## Portal Call Encoding (Bankr API Path)
+## Portal Call Encoding and Native-Value Semantics
 
-For Bankr API accounts, we can't use viem's `walletActionsL1().depositTransaction()` directly (Bankr signs on their end). Instead, we manually encode the portal call:
+All Bankr, private-key, and seed-phrase paths use the shared
+`buildL1DepositTxParams()` encoder. Bankr signs the returned L1 transaction
+remotely; private-key and seed-phrase accounts sign that same transaction
+locally.
 
 ```typescript
 // Minimal ABI for OptimismPortal.depositTransaction
@@ -204,25 +207,30 @@ encodeFunctionData({
 
 **Important**: The args must use the original L2 transaction parameters directly. Do NOT use fields from `buildDepositTransaction`'s return value — those are restructured for viem's internal `depositTransaction` action and will produce incorrect encoding (empty `_to`, empty `_data`).
 
+OP Stack deposits have two independent native-value fields:
+
+- the outer L1 call's `msg.value` becomes the deposit's L2 `mint`
+- portal `_value` becomes the native value executed by the L2 call
+
+WalletChan force inclusion is an execution path, not an ETH bridge. The shared
+builder therefore keeps `_value = originalL2Tx.value` but always sends the L1
+portal transaction with `value = 0`. The reviewed value is spent from the
+user's existing L2 balance; the L1 balance pays only L1 gas. Setting both
+fields to the original value would silently bridge/mint fresh ETH and would
+make the L1 balance check incorrectly require `gas + L2 value`.
+
 ## PK/Seed Path: Account Override + L1 Gas Overrides
 
-When using `buildDepositTransaction` + `depositTransaction` for local signing:
+Local signing broadcasts the shared encoded portal transaction directly:
 
 ```typescript
-const depositArgs = await l2Client.buildDepositTransaction({ ... account: from });
-
-// MUST override account — depositArgs.account is a string address,
-// not the local signer. Without this, viem sends eth_sendTransaction
-// instead of eth_sendRawTransaction.
-await l1WalletClient.depositTransaction({
-  ...depositArgs,
-  account: viemAccount, // privateKeyToAccount(privateKey)
+const l1TxParams = await buildL1DepositTxParams(l2Tx, info, l2Gas);
+await prepareSignAndBroadcastTransaction(l1WalletClient, {
+  account: viemAccount,
   chain: l1Chain,
-  targetChain: info.viemChain,
-  // Apply user-edited L1 gas/fees from GasEstimateDisplay if present.
-  // viem's depositTransaction has a top-level `gas` (L1 gas limit) and
-  // accepts `maxFeePerGas`/`maxPriorityFeePerGas` from the underlying
-  // FormattedTransactionRequest spread.
+  to: l1TxParams.to,
+  data: l1TxParams.data,
+  value: 0n,
   ...(gasOverrides
     ? {
         gas: BigInt(gasOverrides.gasLimit),
@@ -242,10 +250,11 @@ GasEstimateDisplay edited fields
   → confirm message: { type: "confirmTransactionAsyncPK", forceInclusion: true, gasOverrides }
   → handleConfirmTransactionAsyncPK
   → processForceInclusionLocal(txId, pending, account, privateKey, gasOverrides)
-  → spread into l1WalletClient.depositTransaction({ gas, maxFeePerGas, maxPriorityFeePerGas })
+  → spread into the locally signed L1 portal transaction
 ```
 
-If `gasOverrides` is undefined (user didn't edit), the spread is `{}` and viem's auto-estimation runs as before.
+If `gasOverrides` is undefined, the local broadcaster estimates its L1 gas and
+fees as before. It never changes the zero outer L1 value.
 
 ## Gas Estimation
 
@@ -277,8 +286,12 @@ Returns a `GasEstimate`-compatible object with L1 values:
 
 1. Calls `buildL1DepositTxParams()` to build the actual encoded portal call (with L2 gas estimated + 20% buffer, or `DEFAULT_L2_GAS = 8M` fallback)
 2. Calls `l1Client.estimateGas()` on the encoded portal call — the L1 RPC actually executes the burn loop during simulation, so the returned value includes the burn cost accurately
-3. Fetches L1 fees, balance, native ETH price in parallel
-4. Applies a 20% buffer to the gas estimate; falls back to `1_000_000n` if `estimateGas` fails
+3. Estimates the L1 portal call with outer `value: 0`, so the source-chain
+   balance requirement is L1 gas only
+4. Fetches the L1 balance and the sender's L2 native balance independently;
+   the L2 balance is compared with the original transaction value
+5. Fetches L1 fees and native ETH price in parallel
+6. Applies a 20% buffer to the gas estimate; falls back to `1_000_000n` if `estimateGas` fails
 
 ### UI Integration
 
@@ -290,6 +303,11 @@ The `MultiTxGasEstimateDisplay` component handles both single-tx batches (Bankr 
 2. **`estimateBatchGasSequential`** — for the editable L2 `_gasLimit` baked into each portal call
 
 The two are kept in separate state (`estimates` vs `passthroughEstimates`) because they represent fundamentally different gas values: one is the L1 tx cost, the other is what gets argued to `depositTransaction()`.
+
+For multi-deposit force inclusion, the UI totals the L1 gas costs before
+checking the L1 balance and totals the reviewed native outlay before checking
+the L2 balance. The resulting warning names the deficient chain and whether
+the missing balance is for gas or transaction value.
 
 **`fallbackUsed` flag on `eth_simulateV1`** — `tryEthSimulateV1` in `batchGasEstimation.ts` returns `Array<{ gasLimit, fallbackUsed }>`. If a `cr.gasUsed` field is missing on a call result (rare, but possible), the function falls back to a hardcoded `200_000n` and sets `fallbackUsed: true` so the UI surfaces it via the same yellow warning banner used for the per-call `eth_estimateGas` fallback. Without this flag, an undersized 200k could silently be baked into a force-inclusion portal `_gasLimit` and revert L2 execution.
 

@@ -11,7 +11,7 @@ Security and logic tests mirror the service-worker domains they exercise:
   `forceInclusion/`, `gas/`, `history/` — provider authority,
   signing/broadcast, fee estimation, asset-preview/history, L1-deposit, and
   transaction-recovery flows.
-- `requests/` — pending-request claims, lifecycle, expiry, and capacity.
+- `requests/` — pending-request claims, lifecycle invalidation, non-expiry, and capacity.
 - `background/`, `walletConnect/`, `provider/` — Chrome transport, remote
   sessions, and injected-provider boundaries.
 - `network/`, `ensBrowsing/`, `navigation/`, `manifest/` — egress, remote

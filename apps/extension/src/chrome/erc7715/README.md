@@ -22,7 +22,8 @@ entry points remain at the parent level:
    construction. `preflight.ts` is the stable local facade.
 5. `delegationSigning.ts` — authority encoded into an ERC-7710 delegation.
 6. `methods.ts`, `requestHandler.ts` — ingress and prompt scope.
-7. `requestLock.ts`, `resolution.ts`, `expiry.ts` — first-action and timeout rules.
+7. `requestLock.ts`, `resolution.ts` — first-action rules and the durable
+   request lock. Permission prompts have no age-based expiry.
 8. `confirmation.ts`, `grantBoundary.ts`, `grantStorage.ts` — master-only signing
    and the atomic capability-issuance commit.
 9. `onchainStatus.ts`, `queries.ts`, `revocation.ts` — live status and removal.

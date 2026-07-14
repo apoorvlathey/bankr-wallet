@@ -27,6 +27,7 @@ feature internals.
 | Raw calldata | `renderers/InlineCalldataRow.tsx` | Perform the two-phase local/ABI decode used by an expanded nested fallback | ABI lookup through `decodeRecursive` |
 | Addresses | `renderers/AddressInline.tsx` | Resolve wallet/ENS/eth.sh identity and render copy/explorer actions | `getAccounts` message, ENS/eth.sh reads, clipboard/window actions |
 | Token amounts | `renderers/TokenAmountInline.tsx` | Resolve native/ERC-20 metadata and price, then render amount/logo/USD | CoinGecko messages and token metadata reads |
+| Token contract disclosure | `renderers/TokenContractPopover.tsx` | Reveal an ERC-20 contract address and copy/explorer actions from the token identity hover/focus target | Clipboard and explorer actions |
 | Token ticker | `renderers/TokenTickerInline.tsx` | Resolve and render an ERC-20 ticker or address fallback | Token metadata reads |
 | Gwei name | `renderers/GweiNameInline.tsx` | Resolve and render a Gwei name or deterministic token fallback | Bounded RPC resolution |
 | Pure formatting | `formatters/valueFormatters.ts` | Format units, unlimited sentinels, USD values, durations, and timestamps | None |
@@ -43,6 +44,8 @@ Keep rendering and resolution behavior neutral when splitting this domain:
 
 - `onResolved` fires only after resolution reaches the same terminal branch.
 - `hideLoadingSkeleton` stays quiet while resolution is pending.
+- `hideHeader` lets a parent-owned action heading suppress only the duplicated
+  intent/owner row while preserving every formatted field.
 - nested calldata stops after `MAX_NESTED_DEPTH` and falls back to raw rows.
 - storage/runtime messages remain inside the focused effect-owning renderer or
   descriptor hook listed above.

@@ -23,7 +23,6 @@ import {
 import {
   activeAbortControllers,
   processingTxIds,
-  TX_EXPIRY_MS,
   type TransactionResult,
 } from "./runtime";
 
@@ -32,10 +31,7 @@ export async function handleConfirmTransaction(
   password: string,
 ): Promise<TransactionResult> {
   const pending = await getPendingTxRequestById(txId);
-  if (!pending || Date.now() - pending.timestamp > TX_EXPIRY_MS) {
-    if (pending) await removePendingTxRequest(txId);
-    return { success: false, error: "Transaction request expired" };
-  }
+  if (!pending) return { success: false, error: "Transaction request not found" };
 
   const policy = await validatePinnedBankrTransaction(pending);
   if (!policy.ok) return { success: false, error: policy.error };
@@ -112,10 +108,7 @@ export async function handleConfirmTransactionAsync(
   }
 
   const pending = await getPendingTxRequestById(txId);
-  if (!pending || Date.now() - pending.timestamp > TX_EXPIRY_MS) {
-    if (pending) await removePendingTxRequest(txId);
-    return { success: false, error: "Transaction request expired" };
-  }
+  if (!pending) return { success: false, error: "Transaction request not found" };
   const policy = await validatePinnedBankrTransaction(pending);
   if (!policy.ok) return { success: false, error: policy.error };
   const chainPolicy = validateBankrTransactionChain(

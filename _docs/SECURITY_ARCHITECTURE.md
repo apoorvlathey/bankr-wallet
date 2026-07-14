@@ -155,10 +155,10 @@ authorization snapshots, pending-request then bundle-status persistence, final
 live-authorization verification, durable acknowledgement, and reverse-order
 compensation. It cannot access credentials or sign/broadcast transactions.
 
-`batchBankrExecution.ts` owns pinned Bankr confirmation, credential restoration,
+`batchBankrExecution.ts` owns non-expiring pinned Bankr confirmation, credential restoration,
 final credential-generation/transport authorization, submission, receipt and
 terminal status/history/result publication. `batchExecutionRuntime.ts` keeps
-duplicate-processing and expiry state shared with local signer paths.
+duplicate-processing state shared with local signer paths.
 `batchLocalConfirmation.ts` owns pinned PK/seed account validation, Never-mode
 session restoration, vault fallback, key-cache resolution, final transport
 authorization, and single/atomic-7702/sequential path selection. Actual signing
@@ -190,7 +190,7 @@ credentials or re-enter signing.
 
 Signature confirmation follows the same focused-boundary rule.
 `signatures/confirmationPolicy.ts` is the single shared preflight for local and
-Bankr signers: expiry, pinned-account resolution, raw ERC-7710 rejection,
+Bankr signers: request presence, pinned-account resolution, raw ERC-7710 rejection,
 method-specific signer-address binding, and SIWE origin/account/chain checks.
 `signatures/confirmationHandlers.ts` owns only credential/key restoration, the
 signing effect lease, lifecycle authorization, and the final account,
@@ -208,7 +208,9 @@ repository, bounded prompt client, and session-aware background handler. No
 Bankr/chat implementation or facade remains in the Chrome root.
 
 Private-key and seed-phrase transaction confirmation is split at the raw-RPC
-effect boundary. `transactions/localConfirmation.ts` owns request expiry,
+effect boundary. Like every user-review prompt, transaction prompts are
+intentionally non-expiring;
+`transactions/localConfirmation.ts` owns
 pinned-account and `tx.from` checks, EIP-7702 master-capability capture,
 master/agent/Never-session key recovery, durable prompt consumption, live
 transport authorization, and transfer to an effect lease.
@@ -311,8 +313,10 @@ Shared cross-domain primitives live under `chrome/storage/`. `lock.ts` owns
 the single per-key in-process queue; `resetManifest.ts` is a pure, exact list
 of wallet-owned keys and prefixes; `cachePolicy.ts` builds a pure prune plan
 before `cachePruner.ts` performs ordered remove-then-set effects; and
-`resultWaiter.ts` owns the durable provider-result listener and retrying
-expiry handshake. The four historical root paths are export-only facades, so
+`resultWaiter.ts` owns the durable provider-result listener, unbounded
+user-review waits, and optional retrying expiry handshake for bounded
+non-prompt operations.
+The four historical root paths are export-only facades, so
 callers share the same lock/function identities without duplicating state.
 Account, request, vault, mnemonic, session, and WalletConnect repositories
 remain in their owning domains rather than moving into this shared folder.
@@ -376,12 +380,13 @@ those effects as dependencies; background composition imports only the stable
 facades and does not own windowing policy.
 
 `background/dappPermissionRouter.ts` is deliberately mixed-audience:
-provider account exposure, connection intake, and expiry enter only after the
+provider account exposure and durable connection intake enter only after the
 external-envelope gate, while permission reads and decisions remain trusted-UI
 only. Exact sender objects are forwarded to origin/tab-bound domain services;
 the router cannot grant access, persist prompts, open UI, update the badge, or
-broadcast permission changes itself. The generic expiry route retains its
-family-specific lifecycle service and result channel. The separate
+broadcast permission changes itself. No generic prompt-expiry route exists;
+explicit origin/session/account invalidation stays in each request family's
+lifecycle service. The separate
 `background/walletConnectSessionRouter.ts` imports no relay SDK; it only
 forwards trusted-UI list, pair, disconnect, and chain-selection calls to
 composition-root handlers, preserving the SDK's teardown boundary.
@@ -409,7 +414,8 @@ storage and portfolio-unhide commits. `background/chainPromptRouter.ts`
 does the same for EIP-3085, retaining origin-bound RPC validation, active-account
 compatibility, network storage, and chain-notification authorization. Provider
 intake remains fire-and-forget; trusted-UI decisions keep asynchronous response
-channels. Shared metadata expiry remains in its dedicated lifecycle service.
+channels. The shared metadata lifecycle service handles explicit origin
+invalidation; it does not age-expire prompts.
 
 `background/signingRequestRouter.ts` is the post-gate transport for single
 transaction/signature intake and trusted-UI pending-request decisions. It
@@ -420,7 +426,7 @@ single-transaction confirmation transports: immediate Bankr, background Bankr,
 and local private-key/seed-phrase. Each installs the same transaction-confirm
 claim before its handler; the immediate path preserves terminal-result
 non-overwrite, and the local path preserves explicit/sender tab scope, gas, and
-force-inclusion arguments. Transfer intake remains non-signing prompt creation.
+force-inclusion arguments. Transfer intake remains transaction-prompt creation.
 `background/swapExecutionRouter.ts` and
 `background/sponsoredTransferRouter.ts` enter the shared `internalOperation`
 reset barrier before swap or relayer effects. Exact account locks and sponsored

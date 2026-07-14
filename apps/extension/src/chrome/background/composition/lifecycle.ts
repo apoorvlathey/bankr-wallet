@@ -11,21 +11,10 @@ import { migrateFromLegacyStorage } from "../../accounts/legacyMigration";
 import { resumePendingBridgePollers } from "../../bridgeStatusPoller";
 import { cleanupOldBundleStatuses } from "../../bundleStatusStorage";
 import { initEnsBrowsing } from "../../ensBrowsing";
-import {
-  clearExpiredErc7715PermissionRequests,
-} from "../../pendingErc7715PermissionStorage";
 import { recoverStuckForceInclusionTxs } from "../../forceInclusion/single";
 import { resumePendingPollers } from "../../forceInclusion/receiptPoller";
-import { clearExpiredBatchTxRequests } from "../../requests/pendingBatchTxStorage";
 import { prunePendingBridges } from "../../requests/pendingBridgeStorage";
-import { clearExpiredDappConnectionRequests } from "../../requests/dappPermissionStorage";
-import { clearExpiredAddChainRequests } from "../../requests/pendingAddChainStorage";
-import { clearExpiredSignatureRequests } from "../../requests/pendingSignatureStorage";
-import {
-  clearExpiredTxRequests,
-  updateBadge,
-} from "../../requests/pendingTxStorage";
-import { clearExpiredWatchAssetRequests } from "../../requests/pendingWatchAssetStorage";
+import { updateBadge } from "../../requests/pendingTxStorage";
 import {
   AUTO_LOCK_STORAGE_KEY,
   clearInMemoryAuthCache,
@@ -103,14 +92,7 @@ export function registerBackgroundLifecycle(
       setInterval(callback, milliseconds),
     invalidateAuthCeremonies,
     clearInMemoryAuthCache,
-    clearExpiredTxRequests,
-    clearExpiredSignatureRequests,
-    clearExpiredBatchTxRequests,
-    clearExpiredErc7715PermissionRequests,
     clearExpiredWalletConnectPendingRequests,
-    clearExpiredDappConnectionRequests,
-    clearExpiredAddChainRequests,
-    clearExpiredWatchAssetRequests,
     getAllLocalStorage: () => chrome.storage.local.get(null),
     getStorageKeysWithPrefixes,
     walletResultStoragePrefixes: WALLET_RESULT_STORAGE_PREFIXES,

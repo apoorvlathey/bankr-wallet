@@ -97,7 +97,7 @@ async function verifyViewOnlyRequest(
   const popup = await waitForPopup(profile.context, profile.extensionId, ignored);
   const isTx = kind === "tx";
   await popup.getByRole("heading", {
-    name: isTx ? "Review transaction" : "Review signature",
+    name: isTx ? "Transaction request" : "Review signature",
   }).waitFor({ timeout: 20_000 });
   await popup.getByText(
     isTx

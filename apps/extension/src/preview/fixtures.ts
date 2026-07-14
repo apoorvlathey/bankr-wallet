@@ -12,9 +12,11 @@ import {
   ERC7710_EMPTY_CAVEAT_ARGS,
   METAMASK_DELEGATOR_V1_3_CAVEAT_ENFORCERS,
 } from "@/chrome/erc7715/caveats";
-import { getVisibleChains, normalizeNetworksInfo } from "@/lib/chains";
-import { DEFAULT_NETWORKS } from "@/constants/networks";
+import { getVisibleChains } from "@/lib/chains";
 import { previewAssets } from "./previewAssets";
+import { previewNetworks } from "./networkFixtures";
+
+export { previewNetworks, previewNetworkRpcUrls } from "./networkFixtures";
 import type { PreviewWalletType } from "./types";
 
 export type { PreviewWalletType } from "./types";
@@ -654,8 +656,6 @@ export const previewHomeAccounts: Account[] = [
     (account) => account.id !== PREVIEW_WALLETS.privateKey.accountId,
   ),
 ];
-
-export const previewNetworks = normalizeNetworksInfo(DEFAULT_NETWORKS);
 
 export const previewVisibleChains = getVisibleChains(
   previewNetworks,

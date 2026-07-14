@@ -1,4 +1,5 @@
 import { Button, Spinner } from "@chakra-ui/react";
+import { SimulationFailureConfirmButton } from "@/components/RequestConfirmation/SimulationFailureConfirmButton";
 import type { ConfirmationState } from "./types";
 
 interface ActionButtonProps {
@@ -29,23 +30,24 @@ export function RejectActionButton({
 interface ConfirmActionButtonProps {
   state: ConfirmationState;
   confirmDisabledReason: string | null;
+  simulationFailed: boolean;
   onConfirm: () => void;
 }
 
 export function ConfirmActionButton({
   state,
   confirmDisabledReason,
+  simulationFailed,
   onConfirm,
 }: ConfirmActionButtonProps) {
   return (
-    <Button
-      variant="brand"
-      w="full"
-      onClick={onConfirm}
-      isDisabled={!!confirmDisabledReason || state === "submitting"}
+    <SimulationFailureConfirmButton
+      isDisabled={!!confirmDisabledReason}
       isLoading={state === "submitting"}
-    >
-      Confirm
-    </Button>
+      label="Confirm"
+      onConfirm={onConfirm}
+      requestKind="transaction"
+      simulationFailed={simulationFailed}
+    />
   );
 }

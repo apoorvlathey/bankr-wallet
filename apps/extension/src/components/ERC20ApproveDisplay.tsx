@@ -33,6 +33,10 @@ import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import {
+  AddressActions,
+  LabeledAddressPopover,
+} from "@/components/shared/LabeledAddressPopover";
+import {
   getCachedTokenMetadataSync,
   resolveTokenMetadataClient,
 } from "@/lib/tokenMetadataClient";
@@ -66,6 +70,8 @@ interface ERC20ApproveDisplayProps {
   approval: ParsedApproval;
   /** Chain ID for explorer links and RPC calls */
   chainId: number;
+  /** Remove outer card chrome when a parent call card owns the surface. */
+  embedded?: boolean;
   /**
    * Pending tx ID — used to persist calldata changes for single-tx
    * confirmations. Optional when `onSaveCalldata` is provided (batch flows
@@ -152,6 +158,7 @@ export default function ERC20ApproveDisplay({
   tokenAddress,
   approval,
   chainId,
+  embedded = false,
   txId,
   onSaveCalldata,
 }: ERC20ApproveDisplayProps) {
@@ -192,8 +199,8 @@ export default function ERC20ApproveDisplay({
       : "status.warning.tint";
   const [spenderLabels, setSpenderLabels] = useState<string[]>([]);
   const [resolvedSpenderName, setResolvedSpenderName] = useState<string | null>(null);
-  const [copiedSpender, setCopiedSpender] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
+  const spenderLabel = spenderLabels[0] ?? resolvedSpenderName;
 
   const explorerUrl = getResolvedChainById(chainId, networksInfo)?.explorer ?? "";
 
@@ -324,16 +331,6 @@ export default function ERC20ApproveDisplay({
   // conditional returns (hook order).
   const cachedTokenLogo = useCachedAvatarSrc(token?.logoUrl);
 
-  const handleCopySpender = async () => {
-    try {
-      await navigator.clipboard.writeText(approval.spender);
-      setCopiedSpender(true);
-      setTimeout(() => setCopiedSpender(false), 2000);
-    } catch {
-      // Clipboard may be unavailable in some extension contexts.
-    }
-  };
-
   const handleCopyToken = async () => {
     try {
       await navigator.clipboard.writeText(tokenAddress);
@@ -348,10 +345,10 @@ export default function ERC20ApproveDisplay({
     return (
       <Box
         bg="surface.raised"
-        border={tokens.borders.thin}
+        border={embedded ? "none" : tokens.borders.thin}
         borderColor="border.default"
-        borderRadius="lg"
-        boxShadow="card"
+        borderRadius={embedded ? 0 : "lg"}
+        boxShadow={embedded ? "none" : "card"}
         p={3}
       >
         <HStack justify="center" spacing={2}>
@@ -396,10 +393,10 @@ export default function ERC20ApproveDisplay({
   return (
     <Box
       bg={approvalCardBg}
-      border={tokens.borders.thin}
+      border={embedded ? "none" : tokens.borders.thin}
       borderColor="border.default"
-      borderRadius="lg"
-      boxShadow="card"
+      borderRadius={embedded ? 0 : "lg"}
+      boxShadow={embedded ? "none" : "card"}
       overflow="hidden"
       position="relative"
     >
@@ -660,35 +657,38 @@ export default function ERC20ApproveDisplay({
                   same amber fill but no hard stroke — Midnight borrows
                   weight from luminous shadows instead of thick borders, so
                   the Bauhaus rectangle reads as out-of-place there. */}
-              <IconButton
-                aria-label="Edit amount"
-                icon={<EditIcon boxSize="11px" />}
-                size="sm"
-                color="accentFg.highlight"
-                bg="accent.highlight"
-                border={isDarkTheme ? "none" : "1.5px solid"}
-                borderColor={isDarkTheme ? undefined : "border.default"}
-                borderRadius={isDarkTheme ? "md" : "none"}
-                boxShadow={isDarkTheme ? "button" : undefined}
-                onClick={handleStartEdit}
-                _hover={
-                  isDarkTheme
-                    ? { opacity: 0.9, transform: "translateY(-1px)" }
-                    : { opacity: 0.85 }
-                }
-                _active={isDarkTheme ? { transform: "scale(0.96)" } : undefined}
-                minW="26px"
-                h="26px"
-                flexShrink={0}
-              />
+              {(txId || onSaveCalldata) && (
+                <IconButton
+                  aria-label="Edit amount"
+                  icon={<EditIcon boxSize="11px" />}
+                  size={embedded ? "xs" : "sm"}
+                  color="accentFg.highlight"
+                  bg="accent.highlight"
+                  border={isDarkTheme ? "none" : "1.5px solid"}
+                  borderColor={isDarkTheme ? undefined : "border.default"}
+                  borderRadius={isDarkTheme ? "md" : "none"}
+                  boxShadow={isDarkTheme ? "button" : undefined}
+                  onClick={handleStartEdit}
+                  _hover={
+                    isDarkTheme
+                      ? { opacity: 0.9, transform: "translateY(-1px)" }
+                      : { opacity: 0.85 }
+                  }
+                  _active={isDarkTheme ? { transform: "scale(0.96)" } : undefined}
+                  minW={embedded ? "32px" : "40px"}
+                  w={embedded ? "32px" : "40px"}
+                  minH={embedded ? "28px" : "40px"}
+                  h={embedded ? "28px" : "40px"}
+                  flexShrink={0}
+                />
+              )}
             </HStack>
           )}
         </Box>
 
-        {/* Spender — secondary. Mirrors the outer "To" row pattern:
-            an ENS/Basename/WNS/GNS badge (highlight) on top, the address pill
-            in the middle, and the eth.sh label badge (secondary) on the
-            bottom. All three are optional; any subset may be visible. */}
+        {/* Spender — secondary. Recognizable labels stay visible while raw
+            address controls move into the same on-demand disclosure used by
+            transaction counterparties. Unlabeled spenders remain explicit. */}
         <Box
           w="full"
           py={2}
@@ -714,90 +714,22 @@ export default function ERC20ApproveDisplay({
                   here would just stack a third "REVOKE …". */}
               Spender
             </Text>
-            <VStack spacing={1} align="flex-end" minW={0}>
-              {resolvedSpenderName && (
-                <Badge
-                  fontSize="2xs"
-                  bg="accent.highlight"
-                  color="accentFg.highlight"
-                  border="1.5px solid"
-                  borderColor="border.default"
-                  px={1.5}
-                  py={0}
-                  fontWeight="700"
-                  maxW="180px"
-                  isTruncated
-                >
-                  {resolvedSpenderName}
-                </Badge>
-              )}
-              <HStack
-                spacing={0.5}
-                px={1.5}
-                py={0.5}
-                bg="surface.raised"
-                border="1.5px solid"
-                borderColor="border.default"
-                borderRadius="md"
-                flexShrink={0}
-              >
-                <Text
-                  fontSize="2xs"
-                  color="text.secondary"
-                  fontFamily="mono"
-                  fontWeight="700"
-                >
-                  {approval.spender.slice(0, 6)}...
-                  {approval.spender.slice(-4)}
-                </Text>
-                <IconButton
-                  aria-label="Copy spender"
-                  icon={copiedSpender ? <CheckIcon boxSize="9px" /> : <CopyIcon boxSize="9px" />}
-                  size="xs"
-                  variant="ghost"
-                  minW="18px"
-                  h="18px"
-                  color={copiedSpender ? "accent.highlight" : "text.tertiary"}
-                  onClick={handleCopySpender}
-                  _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-                />
-                {explorerUrl && (
-                  <IconButton
-                    aria-label="View on explorer"
-                    icon={<ExternalLinkIcon boxSize="9px" />}
-                    size="xs"
-                    variant="ghost"
-                    minW="18px"
-                    h="18px"
-                    color="text.tertiary"
-                    onClick={() =>
-                      window.open(
-                        `${explorerUrl}/address/${approval.spender}`,
-                        "_blank",
-                        "noopener,noreferrer",
-                      )
-                    }
-                    _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-                  />
-                )}
-              </HStack>
-              {spenderLabels.length > 0 && (
-                <Badge
-                  fontSize="2xs"
-                  bg="accent.secondary"
-                  color="accentFg.secondary"
-                  border="1.5px solid"
-                  borderColor="border.default"
-                  px={1.5}
-                  py={0}
-                  fontWeight="700"
-                  maxW="200px"
-                  isTruncated
-                >
-                  {spenderLabels[0]}
-                </Badge>
-              )}
-            </VStack>
+            {spenderLabel ? (
+              <LabeledAddressPopover
+                address={approval.spender}
+                contextLabel="spender address"
+                explorer={explorerUrl}
+                label={spenderLabel}
+                maxW="200px"
+              />
+            ) : (
+              <AddressActions
+                address={approval.spender}
+                compact
+                contextLabel="spender address"
+                explorer={explorerUrl}
+              />
+            )}
           </HStack>
         </Box>
       </VStack>

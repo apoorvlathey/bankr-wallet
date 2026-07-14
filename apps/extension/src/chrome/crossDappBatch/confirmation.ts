@@ -19,10 +19,8 @@ import {
   beginCrossDappBatchProcessing,
   finishCrossDappBatchProcessing,
 } from "./runtime";
-import { clearCrossDappBatch, getCrossDappBatch } from "./storage";
+import { getCrossDappBatch } from "./storage";
 import type { CrossDappBatchShipResult } from "./types";
-
-const BATCH_EXPIRY_MS = 30 * 60 * 1000;
 
 export async function handleConfirmCrossDappBatch(
   password: string,
@@ -35,10 +33,6 @@ export async function handleConfirmCrossDappBatch(
     const batch = await getCrossDappBatch();
     if (!batch || batch.entries.length === 0) {
       return { success: false, error: "No batch to confirm" };
-    }
-    if (Date.now() - batch.createdAt > BATCH_EXPIRY_MS) {
-      await clearCrossDappBatch();
-      return { success: false, error: "Batch request expired" };
     }
     const pinned = await resolvePinnedCrossDappAccount(
       {

@@ -4,7 +4,7 @@ import { CHAIN_CONFIG } from "../../constants/chainConfig";
 import { submitTransactionDirect, type TransactionParams } from "../bankr/submission";
 import { authorizePendingBankrSubmit } from "../bankr/pendingAuthorization";
 import { encodeBatchCalls } from "./batchTxEncoding";
-import { BATCH_TX_EXPIRY_MS, processingBundleIds } from "./batchExecutionRuntime";
+import { processingBundleIds } from "./batchExecutionRuntime";
 import { fetchAndStoreBatchGasData } from "./batchGasEnrichment";
 import { handleBatchFailure } from "./batchFailure";
 import { getAccountById } from "../accountStorage";
@@ -34,10 +34,7 @@ export async function handleConfirmBatchTransaction(
   }
 
   const pending = await getPendingBatchTxRequestById(bundleId);
-  if (!pending || Date.now() - pending.timestamp > BATCH_TX_EXPIRY_MS) {
-    if (pending) await removePendingBatchTxRequest(bundleId);
-    return { success: false, error: "Batch request expired" };
-  }
+  if (!pending) return { success: false, error: "Batch request not found" };
 
   // SECURITY: resolve the pinned account; reject stale/missing bindings.
   if (!pending.accountId) {

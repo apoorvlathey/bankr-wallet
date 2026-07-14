@@ -2,6 +2,25 @@ import { Box, Image, Text } from "@chakra-ui/react";
 import type { AssetChange } from "@/chrome/txSimulation";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 
+function TokenFallback({ symbol }: { symbol: string }) {
+  return (
+    <Box
+      boxSize="28px"
+      bg="surface.raisedHover"
+      border="1px solid"
+      borderColor="border.default"
+      borderRadius="full"
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+    >
+      <Text fontSize="8px" fontWeight="800" color="accent.highlight">
+        {symbol.slice(0, 3)}
+      </Text>
+    </Box>
+  );
+}
+
 export function TokenIcon({ change }: { change: AssetChange }) {
   // The shared avatar cache exposes only background-sanitized raster data URLs.
   const cachedLogo = useCachedAvatarSrc(change.logoUrl);
@@ -9,11 +28,10 @@ export function TokenIcon({ change }: { change: AssetChange }) {
 
   return (
     <Box
-      bg="bg.muted"
       borderRadius="full"
-      w="24px"
-      h="24px"
-      minW="24px"
+      w="28px"
+      h="28px"
+      minW="28px"
       display="flex"
       alignItems="center"
       justifyContent="center"
@@ -23,18 +41,12 @@ export function TokenIcon({ change }: { change: AssetChange }) {
         <Image
           src={src}
           alt={change.symbol}
-          boxSize="24px"
+          boxSize="28px"
           borderRadius="full"
-          fallback={
-            <Text fontSize="8px" fontWeight="800" color="text.secondary">
-              {change.symbol.slice(0, 3)}
-            </Text>
-          }
+          fallback={<TokenFallback symbol={change.symbol} />}
         />
       ) : (
-        <Text fontSize="8px" fontWeight="800" color="text.secondary">
-          {change.symbol.slice(0, 3)}
-        </Text>
+        <TokenFallback symbol={change.symbol} />
       )}
     </Box>
   );

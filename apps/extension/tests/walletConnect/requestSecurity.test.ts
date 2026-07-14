@@ -518,24 +518,52 @@ test("WalletConnect pending routes are compensated, bounded, and pruned", async 
       assert.equal(retained[0].terminalResponse, undefined);
     });
 
-    await t.test("periodic cleanup removes expired and malformed routes", async () => {
+    await t.test("periodic cleanup preserves unresolved prompt routes", async () => {
       const active = route("active", "topic-active");
-      const expired = route(
-        "expired",
-        "topic-expired",
+      const agedTransaction = route(
+        "aged-transaction",
+        "topic-transaction",
         Date.now() - 31 * 60 * 1000,
       );
+      const agedSignature: WalletConnectPendingRequest = {
+        ...route("aged-signature", "topic-signature", Date.now() - 86_400_000),
+        kind: "signature",
+        method: "personal_sign",
+      };
+      const agedPermission: WalletConnectPendingRequest = {
+        ...route("aged-permission", "topic-permission", Date.now() - 86_400_000),
+        kind: "erc7715Permission",
+        method: "wallet_requestExecutionPermissions",
+      };
+      const delivered = {
+        ...route("delivered", "topic-delivered"),
+        terminalResponse: {
+          kind: "error" as const,
+          code: 4001,
+          message: "Rejected",
+          timestamp: Date.now() - 31 * 60 * 1000,
+        },
+      };
       storage.walletConnectPendingRequests = {
         [active.id]: active,
-        [expired.id]: expired,
+        [agedTransaction.id]: agedTransaction,
+        [agedSignature.id]: agedSignature,
+        [agedPermission.id]: agedPermission,
+        [delivered.id]: delivered,
         malformed: { topic: "missing fields" },
       };
       await clearExpiredWalletConnectPendingRequests();
       assert.deepEqual(await getWalletConnectPendingRequests(), {
         [active.id]: active,
+        [agedTransaction.id]: agedTransaction,
+        [agedSignature.id]: agedSignature,
+        [agedPermission.id]: agedPermission,
       });
       assert.deepEqual(storage.walletConnectPendingRequests, {
         [active.id]: active,
+        [agedTransaction.id]: agedTransaction,
+        [agedSignature.id]: agedSignature,
+        [agedPermission.id]: agedPermission,
       });
     });
   } finally {

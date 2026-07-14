@@ -8,17 +8,13 @@ import {
 import { detectAbiEncodingError } from "@/lib/calldataValidation";
 import { getAddressBoundCalldataDescriptor } from "@/lib/clearSigning/builtinDescriptors";
 import { parseApproveCalldata } from "@/lib/erc20Approve";
-import {
-  formatNativeValueCompact,
-  parseTransactionValueWei,
-} from "./transactionValue";
+import { parseTransactionValueWei } from "./transactionValue";
 import type { ForceInclusionInfo, TransactionAccountType } from "./types";
 import { useSplitPriorTxState } from "./useSplitPriorTxState";
 
 export function useTransactionReviewState(
   txRequest: PendingTxRequest,
   accountType: TransactionAccountType | undefined,
-  nativeSymbol: string,
 ) {
   const { tx } = txRequest;
   const delegation7702 = txRequest.delegation7702Meta;
@@ -54,7 +50,7 @@ export function useTransactionReviewState(
   const [gasOverrides, setGasOverrides] = useState<GasOverrides | null>(null);
   const [gasValid, setGasValid] = useState(true);
   const [forceInclusion, setForceInclusion] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [nativePriceUsd, setNativePriceUsd] = useState<number | null>(null);
 
   useEffect(() => {
     setClearSigningStatus(clearSigningEligible ? "loading" : "absent");
@@ -66,6 +62,28 @@ export function useTransactionReviewState(
     setSimulationReverted(false);
     setSimulationUnavailable(false);
   }, [isValueMalformed, txRequest.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setNativePriceUsd(null);
+
+    if (!parsedTxValue.ok || parsedTxValue.wei <= 0n) return undefined;
+
+    chrome.runtime.sendMessage(
+      { type: "fetchNativePrice", chainId: tx.chainId },
+      (response) => {
+        if (cancelled || chrome.runtime.lastError) return;
+        const price = Number(response?.priceUsd ?? 0);
+        if (response?.success && Number.isFinite(price) && price > 0) {
+          setNativePriceUsd(price);
+        }
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [parsedTxValue, tx.chainId, txRequest.id]);
 
   const splitState = useSplitPriorTxState(txRequest);
   const [gasEstimateKey, setGasEstimateKey] = useState(0);
@@ -98,15 +116,6 @@ export function useTransactionReviewState(
     () => detectAbiEncodingError(tx.data),
     [tx.data],
   );
-  const nativeValueDisplay = useMemo(
-    () => ({
-      compact: parsedTxValue.ok
-        ? formatNativeValueCompact(parsedTxValue.wei, nativeSymbol)
-        : "Invalid value",
-    }),
-    [nativeSymbol, parsedTxValue],
-  );
-
   return {
     calldataValidation,
     clearSigningEligible,
@@ -120,17 +129,15 @@ export function useTransactionReviewState(
     isCalldataMalformed: calldataValidation.malformed,
     isValueMalformed,
     isValueZero: parsedTxValue.ok && parsedTxValue.wei === 0n,
-    nativeValueDisplay,
+    nativePriceUsd,
     parsedApproval,
     parsedTxValue,
     setClearSigningStatus,
     setForceInclusion,
     setGasOverrides,
     setGasValid,
-    setShowAdvanced,
     setSimulationReverted,
     setSimulationUnavailable,
-    showAdvanced,
     simulationReverted,
     simulationUnavailable,
     splitState,

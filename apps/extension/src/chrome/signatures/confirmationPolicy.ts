@@ -11,7 +11,6 @@ import {
 } from "../requests/pendingSignatureStorage";
 import {
   resolvePinnedAccount,
-  SIGNATURE_EXPIRY_MS,
   type SignatureResult,
 } from "../transactions/runtime";
 import { extractSignerParam } from "./requestSigner";
@@ -34,11 +33,10 @@ export async function prepareSignatureConfirmation(
   allowUnsafeSiwe = false,
 ): Promise<SignatureConfirmationPreflight> {
   const pending = await getPendingSignatureRequestById(sigId);
-  if (!pending || Date.now() - pending.timestamp > SIGNATURE_EXPIRY_MS) {
-    if (pending) await removePendingSignatureRequest(sigId);
+  if (!pending) {
     return {
       ok: false,
-      result: { success: false, error: "Signature request expired" },
+      result: { success: false, error: "Signature request not found" },
     };
   }
 

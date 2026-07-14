@@ -32,7 +32,6 @@ const transitionalBudgets: Record<string, number> = {
   "components/SeedPhraseSetup.tsx": 629,
   "components/Settings/AddChain.tsx": 550,
   "components/Settings/Chains.tsx": 478,
-  "components/Settings/EditChain.tsx": 403,
   "components/Settings/EnsBrowsingSettings.tsx": 666,
   "components/Settings/index.tsx": 406,
   "components/Settings/settingsRegistry.tsx": 455,

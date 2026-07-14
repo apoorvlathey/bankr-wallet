@@ -22,7 +22,6 @@ export interface PendingAddChainRequest {
 
 const STORAGE_KEY = "pendingAddChainRequests";
 const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
-const REQUEST_EXPIRY_MS = 5 * 60 * 1000;
 const MAX_PENDING_REQUESTS = 20;
 const MAX_PENDING_REQUESTS_PER_ORIGIN = 5;
 
@@ -34,7 +33,6 @@ export async function getPendingAddChainRequests(): Promise<PendingAddChainReque
 export async function savePendingAddChainRequest(
   request: PendingAddChainRequest
 ): Promise<void> {
-  await clearExpiredAddChainRequests();
   await withStorageLock(STORAGE_LOCK_KEY, async () => {
     const requests = await getPendingAddChainRequests();
     if (requests.some((pending) => pending.id === request.id)) {
@@ -60,20 +58,4 @@ export async function removePendingAddChainRequest(id: string): Promise<void> {
     const filtered = requests.filter((r) => r.id !== id);
     await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
   });
-}
-
-export async function clearExpiredAddChainRequests(): Promise<void> {
-  const expiredBefore = Date.now() - REQUEST_EXPIRY_MS;
-  const expired = (await getPendingAddChainRequests()).filter(
-    (request) => request.timestamp <= expiredBefore,
-  );
-  if (expired.length === 0) return;
-  const { expirePersistedMetadataPrompt } = await import(
-    "./pendingMetadataPromptLifecycle"
-  );
-  await Promise.all(
-    expired.map((request) =>
-      expirePersistedMetadataPrompt("addChain", request.id, expiredBefore),
-    ),
-  );
 }

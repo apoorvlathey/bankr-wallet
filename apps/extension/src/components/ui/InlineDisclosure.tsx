@@ -68,6 +68,7 @@ export const InlineDisclosure = forwardRef<
       <Summary
         aria-expanded={expanded}
         minH="44px"
+        px={2}
         py={2.5}
         display="flex"
         alignItems="center"

@@ -462,19 +462,28 @@ Aggregate row behavior:
 
 ### 5.14 Transaction review
 
-- The screen follows one decision path: expected outcome, estimated balance
-  changes, request details, then advanced tooling.
-- The outcome uses one quiet raised surface with the requesting dapp identity.
-  A small amber marker supplies WalletChan warmth without competing with the
-  blue Confirm action.
+- The screen follows one decision path: requesting dapp and plain-language
+  action, estimated balance changes, clear-signed request details, then
+  advanced tooling.
+- The former `Expected outcome` box is replaced by a compact masthead. Dapp
+  identity and chain establish context first; the action follows beneath one
+  separator without repeating the hostname in oversized copy.
+- A small amber review marker supplies WalletChan warmth without competing
+  with the final amber Confirm action.
 - Request details read as a compact ledger with sentence-case labels, neutral
-  network identity, row separators, and no nested address card.
+  network identity, row separators, and no duplicated origin/signer rows.
 - Asset direction remains explicit in text and signed amounts. Do not use a
-  decorative colored rail beside every asset row.
-- Gas, calldata, digest, and Tenderly controls remain behind Advanced details.
-  Technical surfaces use defined edges without resting shadows. Midnight's
-  active calldata tab uses a thin amber rule rather than a second filled action
-  color.
+  decorative colored rail beside every asset row. The parent owns the
+  `Estimated changes` heading; the simulator must not add a second disclosure
+  heading inside it.
+- The pinned decision region shows the signing account and network fee above
+  Reject/Confirm. Local accounts expose Slow, Standard, Fast, and Custom in an
+  anchored upward popover; opening it must never move the action buttons out of
+  the viewport. Bankr keeps its managed-fee readout.
+- Calldata, digest, Tenderly, and batching controls remain behind Advanced
+  details. Technical surfaces use defined edges without resting shadows.
+  Midnight's active calldata tab uses a thin amber rule rather than a second
+  filled action color.
 - The final single-transaction `Confirm` button uses `variant="brand"` so the
   commit action is WalletChan amber. Do not replace it with the blue `primary`
   variant during confirmation refactors. Reject remains the neutral secondary

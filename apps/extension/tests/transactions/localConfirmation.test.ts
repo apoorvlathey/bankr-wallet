@@ -124,7 +124,6 @@ test("local confirmation preserves PK, seed, and Never sessions", async (t) => {
           if (id === "\0local-tx-runtime") return `
             export const processingTxIds = globalThis.__walletchanLocalTxConfirmation.processing;
             export const activeAbortControllers = globalThis.__walletchanLocalTxConfirmation.active;
-            export const TX_EXPIRY_MS = 1800000;
             export const resolvePinnedAccount = async () => ({ ok: true, account: globalThis.__walletchanLocalTxConfirmation.account });`;
           if (id === "\0local-tx-lifecycle") {
             return `export const enforcePendingRequestAuthorizationAtConfirmation = async () => ({ authorized: true });`;
@@ -202,6 +201,19 @@ test("local confirmation preserves PK, seed, and Never sessions", async (t) => {
       assert.equal(hooks.restoreCalls, 1);
       assert.equal(hooks.dispatched.length, 1);
     });
+
+    for (const type of ["privateKey", "seedPhrase"] as const) {
+      await t.test(`an aged ${type} transaction remains confirmable`, async () => {
+        reset();
+        const id = `aged-${type}`;
+        await queue(type, id);
+        hooks.pending.timestamp = Date.now() - 24 * 60 * 60 * 1000;
+        const result = await confirmation.handleConfirmTransactionAsyncPK(id, "ignored");
+        assert.deepEqual(result, { success: true });
+        assert.equal(hooks.dispatched.length, 1);
+        assert.equal(hooks.dispatched[0][2].type, type);
+      });
+    }
 
     await t.test("a mismatched from address leaves the prompt retryable", async () => {
       reset();

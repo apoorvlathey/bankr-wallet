@@ -9,7 +9,6 @@ import { withStorageLock } from "../storageLock";
 
 const STORAGE_KEY = "pendingBatchTxRequests";
 const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
-const TX_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
 const MAX_PENDING_BATCH_REQUESTS = 20;
 const MAX_PENDING_BATCH_REQUESTS_PER_ORIGIN = 5;
 
@@ -21,7 +20,6 @@ export async function getPendingBatchTxRequests(): Promise<PendingBatchTxRequest
 export async function savePendingBatchTxRequest(
   request: PinnedBatchTxRequest,
 ): Promise<void> {
-  await clearExpiredBatchTxRequests();
   const boundRequest = await bindPendingBankrCredential(request);
   await withStorageLock(STORAGE_LOCK_KEY, async () => {
     const requests = await getPendingBatchTxRequests();
@@ -135,24 +133,4 @@ export async function removeCallFromPendingBatchTxRequest(
     await chrome.storage.local.set({ [STORAGE_KEY]: next });
     return { found: true, remainingCalls: nextCalls.length };
   });
-}
-
-export async function clearExpiredBatchTxRequests(): Promise<void> {
-  const expiredBefore = Date.now() - TX_EXPIRY_MS;
-  const expired = (await getPendingBatchTxRequests()).filter(
-    (request) => request.timestamp <= expiredBefore,
-  );
-  if (expired.length === 0) return;
-  const { expirePersistedPendingRequest } = await import(
-    "./pendingRequestExpiry"
-  );
-  await Promise.all(
-    expired.map((request) =>
-      expirePersistedPendingRequest(
-        "batchTransaction",
-        request.id,
-        expiredBefore,
-      ),
-    ),
-  );
 }

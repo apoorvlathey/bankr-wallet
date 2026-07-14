@@ -97,6 +97,3 @@ export type Erc7715PermissionResult =
   | { success: false; error: string };
 
 export const ERC7715_PERMISSION_RESULT_PREFIX = "erc7715PermissionResult:";
-export const ERC7715_PERMISSION_RESULT_TIMEOUT_MS = 5 * 60 * 1000;
-export const ERC7715_PERMISSION_EXPIRY_MS =
-  ERC7715_PERMISSION_RESULT_TIMEOUT_MS;

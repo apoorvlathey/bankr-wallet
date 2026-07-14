@@ -223,9 +223,11 @@ test("confirmation preserves all wallet authorities and final release races", as
       ["seedPhrase", "agent"],
       ["bankr", "master"],
     ] as const) {
-      await t.test(`${type} signing remains available to ${authority}`, async () => {
+      await t.test(`aged ${type} signing remains available to ${authority}`, async () => {
         reset();
-        const { account } = await queue(type, `${type}-success`);
+        await queue(type, `${type}-success`);
+        (local.pendingSignatureRequests as Array<{ timestamp: number }>)[0]
+          .timestamp = Date.now() - 24 * 60 * 60 * 1000;
         if (type === "bankr") {
           hooks.apiKey = "bankr-api-key";
         } else {

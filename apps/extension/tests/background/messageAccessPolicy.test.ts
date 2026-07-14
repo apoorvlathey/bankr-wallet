@@ -280,7 +280,6 @@ test("delegated dapp and WalletConnect routes retain their exact audiences", () 
   for (const type of [
     "getDappAccounts",
     "requestDappConnection",
-    "expireProviderRequest",
   ]) {
     assert.equal(classifyBackgroundMessage(type), "provider", type);
   }

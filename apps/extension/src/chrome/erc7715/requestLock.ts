@@ -1,6 +1,3 @@
-import {
-  ERC7715_PERMISSION_EXPIRY_MS,
-} from "./types";
 import { getPendingErc7715PermissionRequests } from "./pendingRequestStorage";
 
 export const ERC7715_PERMISSION_REQUEST_IN_PROGRESS_ERROR =
@@ -8,26 +5,21 @@ export const ERC7715_PERMISSION_REQUEST_IN_PROGRESS_ERROR =
 
 let requestExecutionPermissionsInProgress = false;
 let pendingStorageLockInitialized = false;
-let pendingStorageLockUntil = 0;
+let pendingStorageLockActive = false;
 
 function isChromeStorageAvailable(): boolean {
   return typeof chrome !== "undefined" && !!chrome.storage?.local;
 }
 
 function updatePendingStorageLockUntil(timestamps: number[]): void {
-  const now = Date.now();
-  pendingStorageLockUntil = timestamps.reduce((max, timestamp) => {
-    if (!Number.isFinite(timestamp)) return max;
-    const until = timestamp + ERC7715_PERMISSION_EXPIRY_MS;
-    return until > now && until > max ? until : max;
-  }, 0);
+  pendingStorageLockActive = timestamps.some(Number.isFinite);
   pendingStorageLockInitialized = true;
 }
 
 export async function refreshErc7715PermissionRequestLockFromStorage(): Promise<void> {
   if (!isChromeStorageAvailable()) {
     pendingStorageLockInitialized = true;
-    pendingStorageLockUntil = 0;
+    pendingStorageLockActive = false;
     return;
   }
 
@@ -38,7 +30,7 @@ export async function refreshErc7715PermissionRequestLockFromStorage(): Promise<
     console.warn("[erc7715] failed to refresh pending request lock", err);
     // Fail closed for external request gating until the next storage refresh.
     pendingStorageLockInitialized = false;
-    pendingStorageLockUntil = 0;
+    pendingStorageLockActive = false;
   }
 }
 
@@ -51,7 +43,7 @@ export function syncErc7715PermissionRequestLockFromPendingRequests(
 export function isErc7715PermissionRequestLocked(): boolean {
   if (requestExecutionPermissionsInProgress) return true;
   if (!pendingStorageLockInitialized) return true;
-  return Date.now() < pendingStorageLockUntil;
+  return pendingStorageLockActive;
 }
 
 export async function runWithErc7715PermissionRequestLock<T>(

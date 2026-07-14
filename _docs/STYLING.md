@@ -276,11 +276,15 @@ Review these contracts at `/preview/mobile-primitives` in `journey`, `picker`,
 and `sheet` scenarios before migrating a production destination.
 
 Transaction-like decisions use `ConfirmationScreen` with a fixed reading
-order: `OutcomeCard`, financial impact (`AssetDeltaRow`), request context, then
-`InlineDisclosure` for advanced technical detail. Outcome Card is the only
-deliberately emphasized content surface. Asset direction always has a text
-label and icon in addition to semantic color. Review default, long-number, and
-disabled/error states at `/preview/decision-primitives`.
+order: requesting identity and plain-language action, financial impact
+(`AssetDeltaRow`), request context, then `InlineDisclosure` for advanced
+technical detail. The single-transaction screen keeps the pinned signer and
+network-fee selector directly above Reject/Confirm; local accounts open an
+upward fee-tier popover so the decision buttons remain visible. The outcome
+masthead is the only deliberately emphasized content surface. Asset direction
+always has a text label or signed amount in addition to semantic color. Review
+default, long-number, and disabled/error states at
+`/preview/decision-primitives` and the production `/preview/tx` route.
 
 ---
 

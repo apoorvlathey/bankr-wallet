@@ -16,7 +16,6 @@ export const PROVIDER_MESSAGE_TYPES = [
   "getActiveAccount",
   "getDappAccounts",
   "requestDappConnection",
-  "expireProviderRequest",
   "dappChainSwitchNotification",
   "addEthereumChain",
   "sendTransaction",

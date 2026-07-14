@@ -4,8 +4,6 @@ import {
   getTabAccount,
 } from "../accountStorage";
 import {
-  DAPP_CONNECTION_REQUEST_EXPIRY_MS,
-  DAPP_CONNECTION_TIMEOUT_ERROR,
   getDappPermission,
   getDappPermissions,
   getPendingDappConnectionRequests,
@@ -164,20 +162,6 @@ async function confirmDappConnectionUnderBindingLock(requestId: string) {
   if (!pending) {
     return { success: false, error: "Connection request not found" };
   }
-  if (
-    Date.now() - pending.timestamp >= DAPP_CONNECTION_REQUEST_EXPIRY_MS
-  ) {
-    await removePendingDappConnectionRequests(
-      (request) => request.id === pending.id,
-    );
-    await writeConnectionResult(pending, {
-      success: false,
-      error: DAPP_CONNECTION_TIMEOUT_ERROR,
-      code: -32000,
-    });
-    return { success: false, error: DAPP_CONNECTION_TIMEOUT_ERROR };
-  }
-
   const requestTab =
     typeof pending.tabId === "number"
       ? await chrome.tabs.get(pending.tabId).catch(() => null)

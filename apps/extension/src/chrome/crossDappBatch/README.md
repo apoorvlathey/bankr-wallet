@@ -13,7 +13,7 @@ This directory owns the user-assembled `crossDappBatch` lifecycle:
 - `lifecycle.ts` groups source authority, captures injected/WalletConnect
   epochs, removes unauthorized groups before terminal publication, and exposes
   the synchronous final commit.
-- `confirmation.ts` owns expiry, duplicate-confirm locking, ERC-7821 encoding,
+- `confirmation.ts` owns non-expiring duplicate-confirm locking, ERC-7821 encoding,
   history initialization, and signer/result composition only.
 - `bankr.ts` owns Bankr credential recovery and the final remote submit gate.
 - `local.ts` owns PK/seed recovery, delegate recheck, guarded EIP-7702
