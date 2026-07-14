@@ -23,6 +23,7 @@ import {
 } from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { InlineDisclosure } from "@/components/ui";
+import ChainIcon from "@/components/ChainIcon";
 import { SettingsScreenFrame } from "./SettingsScreenFrame";
 import { probeRpcChainId } from "@/chrome/network/rpcClient";
 
@@ -189,41 +190,25 @@ function EditChain({
     currentCurrencyDecimals,
   ]);
 
-  const headerActions = (
-    <HStack spacing={0}>
-      {currentEntry && onToggleHidden && (
-        <Tooltip label={currentEntry.hidden ? "Show network" : "Hide network"} hasArrow>
-          <IconButton
-            aria-label={currentEntry.hidden ? "Show network" : "Hide network"}
-            icon={currentEntry.hidden ? <ViewOffIcon /> : <ViewIcon />}
-            variant="ghost"
-            minW="44px"
-            h="44px"
-            onClick={() => onToggleHidden(!currentEntry.hidden)}
-          />
-        </Tooltip>
-      )}
-      {isCustom && onDelete && (
-        <Tooltip label="Delete network" hasArrow>
-          <IconButton
-            aria-label="Delete network"
-            icon={<DeleteIcon />}
-            variant="ghost"
-            minW="44px"
-            h="44px"
-            color="chart.negative"
-            onClick={onDelete}
-          />
-        </Tooltip>
-      )}
-    </HStack>
-  );
+  const headerAction = isCustom && onDelete ? (
+    <Tooltip label="Delete network" hasArrow>
+      <IconButton
+        aria-label="Delete network"
+        icon={<DeleteIcon />}
+        variant="ghost"
+        minW="44px"
+        h="44px"
+        color="chart.negative"
+        onClick={onDelete}
+      />
+    </Tooltip>
+  ) : undefined;
 
   return (
     <SettingsScreenFrame
       title="Edit network"
       onBack={back}
-      trailing={headerActions}
+      trailing={headerAction}
       secondaryAction={
         <Button variant="secondary" onClick={back}>
           Cancel
@@ -236,7 +221,7 @@ function EditChain({
           </Button>
         ) : (
           <Button
-            variant="primary"
+            variant="brand"
             onClick={saveChain}
             isLoading={isBtnLoading || isValidating}
             loadingText={isValidating ? "Checking" : "Saving"}
@@ -247,14 +232,19 @@ function EditChain({
       }
     >
       <VStack spacing={5} align="stretch">
-        <Box>
+        <HStack spacing={3} align="center">
+          {currentEntry && (
+            <ChainIcon
+              chainId={currentEntry.chainId}
+              chainName={chainName}
+              size="32px"
+              withChip
+            />
+          )}
           <Text color="fg.primary" fontSize="md" fontWeight="600">
             {chainName}
           </Text>
-          <Text mt={1} color="fg.secondary" fontSize="sm" lineHeight="1.45">
-            WalletChan verifies a changed RPC endpoint before saving it.
-          </Text>
-        </Box>
+        </HStack>
 
         <VStack
           spacing={4}
@@ -385,6 +375,18 @@ function EditChain({
             </InlineDisclosure>
           )}
         </VStack>
+
+        {currentEntry && onToggleHidden && (
+          <Box display="flex" justifyContent="flex-end">
+            <Button
+              variant="ghost"
+              leftIcon={currentEntry.hidden ? <ViewIcon /> : <ViewOffIcon />}
+              onClick={() => onToggleHidden(!currentEntry.hidden)}
+            >
+              {currentEntry.hidden ? "Unhide network" : "Hide network"}
+            </Button>
+          </Box>
+        )}
 
         {rpcWarning && (
           <Alert status="warning" py={2} px={3}>
