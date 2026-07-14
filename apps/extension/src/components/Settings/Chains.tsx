@@ -81,7 +81,7 @@ function Chain({
       <ListItemContent>
         <ListItemTitle>{chainName}</ListItemTitle>
         <ListItemDescription>Chain ID {network.chainId}</ListItemDescription>
-        <ListItemDescription title={network.rpcUrl} noOfLines={1}>
+        <ListItemDescription title={network.rpcUrl} display="block" w="full" minW={0} isTruncated sx={{ overflowWrap: "normal" }}>
           {rpcDisplay}
         </ListItemDescription>
         {(network.isCustom || network.hidden) && (

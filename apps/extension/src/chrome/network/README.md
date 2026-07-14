@@ -7,13 +7,18 @@
 - `safeRpcForwarding.ts` owns the exact provider/WalletConnect read-method
   allowlist and configured-endpoint forwarding boundary.
 - `proxyResolver.ts` performs bounded configured-RPC proxy-slot discovery.
-- `customNetworkValidation.ts` validates custom names, RPCs, explorers, chain
-  IDs, and native-currency metadata without storage access.
+- `customNetworkValidation.ts` validates custom names, active and saved RPCs,
+  explorers, chain IDs, and native-currency metadata without storage access.
 - `networkRepository.ts` alone reads/writes the released `networksInfo` and
   `chainName` sync-storage state and owns its mutation lock key.
+- `rpcHistoryRepository.ts` alone reads/writes the bounded, Settings-only
+  `networkRpcUrls` local-storage record of named endpoint objects keyed by
+  decimal chain ID, migrates a custom network's history when its chain ID
+  changes, and decodes the released string-array shape.
 - `networkPolicy.ts` owns pure chain-ID lookup, visibility fallback, and typed
   mutation results.
-- `networkMutations.ts` serializes ensure/add/update/hide/delete operations.
+- `networkMutations.ts` serializes ensure/add/update/hide/delete operations and
+  keeps the active `rpcUrl` separate from its bounded Settings-only history.
 
 There are no root compatibility facades for these internal boundaries. Imports
 must point directly into this domain. URL validation must remain at final egress

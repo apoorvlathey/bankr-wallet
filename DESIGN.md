@@ -233,9 +233,29 @@
   banner's bare-bell / centered-label / chevron geometry, a repeating
   reduced-motion-safe ring, and clean popup and compact reflow previews in both
   themes.
+- 2026-07-14 saved-RPC selector audit: passes with the token-styled Chakra menu
+  already established by the extension, named provider identities, sanitized
+  provider favicons, single-source selected-endpoint status, independent per-row
+  editing, confirmed removal of any endpoint when a fallback exists, and no
+  duplicate details block below the selector. Selected and hovered endpoints use
+  one continuous row surface; the nested edit target darkens independently.
+  Its editor uses conventional left-hand back navigation, a stable label-row
+  copy action with a compact 24px target, edge-aligned full-width footer actions,
+  and the amber brand
+  commitment style. The single-line URL field retains inline validation,
+  keyboard Enter/Escape support, reduced-motion fallback, and one primary action.
 
 ## Changelog
 
+- 2026-07-14: moved Chains directly after Appearance in the main Settings list
+  so theme and network configuration stay together near the top-level entry.
+- 2026-07-14: replaced the single RPC field in Edit Network with a bounded,
+  keyboard-operable saved-endpoint dropdown. Named endpoints pair provider
+  favicons with readable domains, expose the complete URL with copy/edit
+  actions, and morph into a full-width editor. Built-in chains autosave validated
+  endpoint changes without a redundant footer, while custom chains retain the
+  staged Cancel and amber Save changes actions for their editable name, chain ID,
+  endpoint, explorer, and native-currency fields.
 - 2026-07-10: established the durable mobile-wallet direction and Midnight V2 foundation before production UI changes.
 - 2026-07-10: implemented Midnight V2 recipes, quiet theme primitives, contrast tests, and the production component-state lab.
 - 2026-07-10: added the mobile screen/list/picker/action-sheet grammar, horizontal navigation, and restoration-aware interaction preview.

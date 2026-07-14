@@ -120,6 +120,8 @@ export function createBackgroundSettingsMessageRouter(
             chainName: message.chainName,
             nextChainName: message.nextChainName,
             entry: message.entry,
+            rpcEndpoints: message.rpcEndpoints,
+            rpcUrls: message.rpcUrls,
           })
           .then(sendResponse);
         return HANDLED_ASYNC;

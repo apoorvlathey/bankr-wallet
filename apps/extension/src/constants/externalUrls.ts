@@ -106,7 +106,7 @@ export const COINGECKO_SEARCH_API =
 // External APIs — Google Favicons
 // ---------------------------------------------------------------------------
 export const googleFaviconUrl = (domain: string, size = 32) =>
-  `https://www.google.com/s2/favicons?domain=${domain}&sz=${size}`;
+  `https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent(`https://${domain}`)}&size=${size}`;
 
 // ---------------------------------------------------------------------------
 // Token Logos

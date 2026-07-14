@@ -33,9 +33,84 @@ export interface ResolvedChain {
 }
 
 const DEFAULT_NATIVE_CURRENCY = { name: "Ether", symbol: "ETH", decimals: 18 };
+export const MAX_SAVED_RPC_URLS = 10;
+export const MAX_RPC_ENDPOINT_NAME_LENGTH = 64;
+export const NETWORK_RPC_URLS_STORAGE_KEY = "networkRpcUrls";
+
+export interface SavedRpcEndpoint {
+  url: string;
+  name?: string;
+}
 const CHAIN_BY_ID = new Map<number, ChainEntry>(
   CHAIN_REGISTRY.map((chain) => [chain.chainId, chain]),
 );
+
+export function normalizeRpcUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 2_048) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (
+      (parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+      parsed.username ||
+      parsed.password
+    ) {
+      return null;
+    }
+    return trimmed.replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeRpcEndpointName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, MAX_RPC_ENDPOINT_NAME_LENGTH) : null;
+}
+
+export function normalizeSavedRpcEndpoints(
+  activeRpcUrl: unknown,
+  savedRpcEndpoints: unknown,
+): SavedRpcEndpoint[] {
+  const candidates: unknown[] = [
+    activeRpcUrl,
+    ...(Array.isArray(savedRpcEndpoints) ? savedRpcEndpoints : []),
+  ];
+  const normalized: SavedRpcEndpoint[] = [];
+
+  for (const candidate of candidates) {
+    const endpoint =
+      candidate && typeof candidate === "object" && !Array.isArray(candidate)
+        ? (candidate as { url?: unknown; name?: unknown })
+        : { url: candidate, name: undefined };
+    const url = normalizeRpcUrl(endpoint.url);
+    if (!url) continue;
+
+    const name = normalizeRpcEndpointName(endpoint.name) ?? undefined;
+    const existing = normalized.find((saved) => saved.url === url);
+    if (existing) {
+      if (!existing.name && name) existing.name = name;
+      continue;
+    }
+
+    normalized.push({ url, ...(name ? { name } : {}) });
+    if (normalized.length === MAX_SAVED_RPC_URLS) break;
+  }
+
+  return normalized;
+}
+
+export function normalizeSavedRpcUrls(
+  activeRpcUrl: unknown,
+  savedRpcUrls: unknown,
+): string[] {
+  return normalizeSavedRpcEndpoints(activeRpcUrl, savedRpcUrls).map(
+    (endpoint) => endpoint.url,
+  );
+}
 
 function getStoredEntryForRegistryChain(
   networksInfo: NetworksInfo | undefined,

@@ -32,6 +32,7 @@ export const WALLET_LOCAL_STORAGE_KEYS = [
   "hiddenPortfolioTokens",
   "customTokens",
   "customDelegates",
+  "networkRpcUrls",
   "recentlyReceivedTokens",
   "ensIdentityCache",
   "ensAvatarImageCache",

@@ -9,7 +9,13 @@ import { withStorageLock } from "../storageLock";
 import {
   cleanChainName,
   cleanNetworkEntry,
+  cleanSavedRpcEndpoints,
 } from "./customNetworkValidation";
+import {
+  getNetworkRpcEndpoints,
+  moveNetworkRpcEndpoints,
+  removeNetworkRpcUrls,
+} from "./rpcHistoryRepository";
 import {
   failure,
   findChainNameById,
@@ -116,10 +122,15 @@ export async function updateNetworkEntry({
   chainName,
   nextChainName,
   entry,
+  rpcEndpoints,
+  rpcUrls,
 }: {
   chainName: unknown;
   nextChainName: unknown;
   entry: unknown;
+  rpcEndpoints?: unknown;
+  /** Released compatibility input for older Settings pages. */
+  rpcUrls?: unknown;
 }): Promise<NetworkMutationResult> {
   return withStorageLock(NETWORKS_INFO_LOCK_KEY, async () => {
     try {
@@ -135,17 +146,46 @@ export async function updateNetworkEntry({
 
       const isCustom = current.isCustom === true;
       const savedName = isCustom ? requestedNextName : currentName;
+      const savedChainId = isCustom ? cleanedEntry.chainId : current.chainId;
       const existingByName = networksInfo[savedName];
 
       if (savedName !== currentName && existingByName) {
         return failure(`Chain name "${savedName}" already exists.`, networksInfo);
       }
 
-      const existingByChainId = findChainNameById(networksInfo, cleanedEntry.chainId);
+      const existingByChainId = findChainNameById(networksInfo, savedChainId);
       if (existingByChainId && existingByChainId !== currentName) {
         return failure(
-          `Chain ID ${cleanedEntry.chainId} already exists as "${existingByChainId}".`,
+          `Chain ID ${savedChainId} already exists as "${existingByChainId}".`,
           networksInfo,
+        );
+      }
+
+      const requestedRpcEndpoints = rpcEndpoints ?? rpcUrls;
+      if (requestedRpcEndpoints !== undefined) {
+        const cleanedRpcEndpoints = cleanSavedRpcEndpoints(
+          requestedRpcEndpoints,
+          cleanedEntry.rpcUrl,
+        );
+        await moveNetworkRpcEndpoints(
+          current.chainId,
+          savedChainId,
+          cleanedEntry.rpcUrl,
+          cleanedRpcEndpoints,
+        );
+      } else if (
+        cleanedEntry.rpcUrl !== current.rpcUrl ||
+        savedChainId !== current.chainId
+      ) {
+        const existingRpcEndpoints = await getNetworkRpcEndpoints(
+          current.chainId,
+          current.rpcUrl,
+        );
+        await moveNetworkRpcEndpoints(
+          current.chainId,
+          savedChainId,
+          cleanedEntry.rpcUrl,
+          [...existingRpcEndpoints, { url: current.rpcUrl }],
         );
       }
 
@@ -289,6 +329,7 @@ export async function deleteNetworkEntry({
         normalizedNext,
         fallbackChainName ? { chainName: fallbackChainName } : {},
       );
+      await removeNetworkRpcUrls(current.chainId).catch(() => undefined);
 
       return {
         success: true,

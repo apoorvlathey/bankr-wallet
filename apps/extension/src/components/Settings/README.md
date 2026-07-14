@@ -2,7 +2,22 @@
 
 - `index.tsx` is the Settings screen router/composition root.
 - `settingsRegistry.tsx` declares settings destinations and metadata.
-- Chain screens own user-facing network configuration forms.
+- `EditChain.tsx` composes the edit form and save/validation flow.
+- `RpcEndpointManager.tsx` composes the named saved-RPC dropdown, selected status,
+  per-row edit actions, confirmed removal, and add/edit transition; it has no
+  storage or network effects.
+- `RpcEndpointEditor.tsx` and `RpcEndpointFavicon.tsx` own the full-width editor
+  with a single-line URL field, label-row copy action, and sanitized
+  provider-favicon presentation respectively.
+- `rpcEndpointModel.ts` owns pure URL/domain presentation helpers.
+- `useNetworkRpcEndpoints.ts` loads the selected chain's local endpoint history
+  and falls back to the active RPC while legacy wallets have no history record.
+- `useBuiltInRpcPersistence.ts` probes active-endpoint changes and immediately
+  persists built-in-chain endpoint selection/history through `updateNetwork`;
+  inactive endpoint metadata edits retain the current runtime endpoint.
+- `CustomNetworkDetails.tsx` presents custom-chain explorer and native-currency
+  fields behind the advanced disclosure.
+- The remaining chain screens own network list and add-chain flows.
 - Authentication screens own password, biometric, agent-factor, auto-lock, and
   sound preference flows.
 

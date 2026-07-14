@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import {
   Button,
   Box,
@@ -11,7 +11,6 @@ import {
   FormLabel,
   InputGroup,
   InputRightElement,
-  Spinner,
   Tooltip,
   Alert,
 } from "@chakra-ui/react";
@@ -22,10 +21,20 @@ import {
   WarningTwoIcon,
 } from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
-import { InlineDisclosure } from "@/components/ui";
 import ChainIcon from "@/components/ChainIcon";
 import { SettingsScreenFrame } from "./SettingsScreenFrame";
+import { RpcEndpointManager } from "./RpcEndpointManager";
+import { CustomNetworkDetails } from "./CustomNetworkDetails";
+import { useNetworkRpcEndpoints } from "./useNetworkRpcEndpoints";
+import {
+  useBuiltInRpcPersistence,
+  type BuiltInRpcChange,
+} from "./useBuiltInRpcPersistence";
 import { probeRpcChainId } from "@/chrome/network/rpcClient";
+import {
+  normalizeSavedRpcEndpoints,
+  type SavedRpcEndpoint,
+} from "@/lib/chains";
 
 function EditChain({
   chainName,
@@ -53,6 +62,11 @@ function EditChain({
   const [newChainName, setNewChainName] = useState<string>(chainName);
   const [chainId, setChainId] = useState<string>("");
   const [rpc, setRpc] = useState<string>("");
+  const {
+    rpcEndpoints: savedRpcEndpoints,
+    setRpcEndpoints: setSavedRpcEndpoints,
+    isLoading: isRpcHistoryLoading,
+  } = useNetworkRpcEndpoints(currentChainId, currentRpcUrl);
   const [explorer, setExplorer] = useState<string>("");
   const [currencySymbol, setCurrencySymbol] = useState<string>("ETH");
   const [currencyDecimals, setCurrencyDecimals] = useState<string>("18");
@@ -65,7 +79,23 @@ function EditChain({
   const [isValidating, setIsValidating] = useState(false);
   const [forceAllowed, setForceAllowed] = useState(false);
 
+  const handleBuiltInRpcSaved = useCallback(
+    ({ rpcUrl, endpoints }: BuiltInRpcChange) => {
+      setSavedRpcEndpoints(endpoints);
+      setRpc(rpcUrl);
+    },
+    [setSavedRpcEndpoints],
+  );
+  const builtInRpcPersistence = useBuiltInRpcPersistence({
+    enabled: !isCustom,
+    chainName,
+    chainId: currentChainId,
+    activeRpcUrl: rpc,
+    onSaved: handleBuiltInRpcSaved,
+  });
+
   const saveChain = async () => {
+    if (isRpcHistoryLoading) return;
     setIsBtnLoading(true);
     setRpcWarning("");
     setForceAllowed(false);
@@ -108,7 +138,13 @@ function EditChain({
   };
 
   const doSave = async () => {
-    if (!newChainName || !chainId || !rpc || !networksInfo) return;
+    if (
+      isRpcHistoryLoading ||
+      !newChainName ||
+      !chainId ||
+      !rpc ||
+      !networksInfo
+    ) return;
 
     const savedChainId = parseInt(chainId);
     const savedChainName = newChainName;
@@ -124,6 +160,7 @@ function EditChain({
           type: "updateNetwork",
           chainName,
           nextChainName: savedChainName,
+          rpcEndpoints: savedRpcEndpoints,
           entry: {
             chainId: savedChainId,
             rpcUrl: rpc,
@@ -190,6 +227,84 @@ function EditChain({
     currentCurrencyDecimals,
   ]);
 
+  const selectRpcLocally = (rpcUrl: string) => {
+    setRpc(rpcUrl);
+    setRpcWarning("");
+    setForceAllowed(false);
+  };
+
+  const selectRpc = (rpcUrl: string) => {
+    const nextEndpoints = normalizeSavedRpcEndpoints(
+      rpcUrl,
+      savedRpcEndpoints,
+    );
+    if (isCustom) {
+      setSavedRpcEndpoints(nextEndpoints);
+      selectRpcLocally(rpcUrl);
+      return;
+    }
+    void builtInRpcPersistence.persist({
+      rpcUrl,
+      endpoints: nextEndpoints,
+    });
+  };
+
+  const addRpc = (endpoint: SavedRpcEndpoint) => {
+    const nextEndpoints = normalizeSavedRpcEndpoints(endpoint.url, [
+      ...savedRpcEndpoints,
+      endpoint,
+    ]);
+    if (isCustom) {
+      setSavedRpcEndpoints(nextEndpoints);
+      selectRpcLocally(endpoint.url);
+      return;
+    }
+    void builtInRpcPersistence.persist({
+      rpcUrl: endpoint.url,
+      endpoints: nextEndpoints,
+    });
+  };
+
+  const updateRpc = (
+    previousUrl: string,
+    endpoint: SavedRpcEndpoint,
+  ) => {
+    const isSelectedEndpoint = rpc === previousUrl;
+    const nextSelectedUrl = isSelectedEndpoint ? endpoint.url : rpc;
+    const nextEndpoints = normalizeSavedRpcEndpoints(
+      nextSelectedUrl,
+      savedRpcEndpoints.map((saved) =>
+        saved.url === previousUrl ? endpoint : saved,
+      ),
+    );
+
+    if (isCustom) {
+      setSavedRpcEndpoints(nextEndpoints);
+      if (isSelectedEndpoint) selectRpcLocally(endpoint.url);
+      return;
+    }
+    void builtInRpcPersistence.persist({
+      rpcUrl: nextSelectedUrl,
+      endpoints: nextEndpoints,
+    });
+  };
+
+  const removeRpc = (rpcUrl: string, nextSelectedUrl: string) => {
+    const nextEndpoints = normalizeSavedRpcEndpoints(
+      nextSelectedUrl,
+      savedRpcEndpoints.filter((candidate) => candidate.url !== rpcUrl),
+    );
+    if (isCustom) {
+      setSavedRpcEndpoints(nextEndpoints);
+      selectRpcLocally(nextSelectedUrl);
+      return;
+    }
+    void builtInRpcPersistence.persist({
+      rpcUrl: nextSelectedUrl,
+      endpoints: nextEndpoints,
+    });
+  };
+
   const headerAction = isCustom && onDelete ? (
     <Tooltip label="Delete network" hasArrow>
       <IconButton
@@ -209,12 +324,12 @@ function EditChain({
       title="Edit network"
       onBack={back}
       trailing={headerAction}
-      secondaryAction={
+      secondaryAction={isCustom ? (
         <Button variant="secondary" onClick={back}>
           Cancel
         </Button>
-      }
-      primaryAction={
+      ) : undefined}
+      primaryAction={isCustom ? (
         forceAllowed ? (
           <Button variant="highlight" onClick={forceSave}>
             Save anyway
@@ -223,13 +338,14 @@ function EditChain({
           <Button
             variant="brand"
             onClick={saveChain}
+            isDisabled={isRpcHistoryLoading}
             isLoading={isBtnLoading || isValidating}
             loadingText={isValidating ? "Checking" : "Saving"}
           >
             Save changes
           </Button>
         )
-      }
+      ) : undefined}
     >
       <VStack spacing={5} align="stretch">
         <HStack spacing={3} align="center">
@@ -256,28 +372,39 @@ function EditChain({
           borderRadius="lg"
         >
           <FormControl isInvalid={isChainNameNotUnique}>
-            <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
+            <FormLabel
+              htmlFor="edit-network-name"
+              mb={1.5}
+              color="fg.secondary"
+              fontSize="sm"
+              fontWeight="500"
+            >
               Network name
             </FormLabel>
-            <Input
-              placeholder="Network name"
-              value={newChainName}
-              onChange={(event) => {
-                setNewChainName(event.target.value);
-                if (isChainNameNotUnique) {
-                  setIsChainNameNotUnique(false);
-                }
-              }}
-              isReadOnly={!isCustom}
-              bg={!isCustom ? "surface.sunken" : undefined}
-              color={!isCustom ? "fg.muted" : undefined}
-              cursor={!isCustom ? "not-allowed" : undefined}
-            />
-            {!isCustom && (
-              <Text mt={1} color="fg.secondary" fontSize="xs">
-                Built-in network names cannot be changed.
-              </Text>
-            )}
+            <Tooltip
+              label="Built-in network names cannot be changed."
+              isDisabled={isCustom}
+              placement="top"
+              hasArrow
+            >
+              <Box>
+                <Input
+                  id="edit-network-name"
+                  placeholder="Network name"
+                  value={newChainName}
+                  onChange={(event) => {
+                    setNewChainName(event.target.value);
+                    if (isChainNameNotUnique) {
+                      setIsChainNameNotUnique(false);
+                    }
+                  }}
+                  isReadOnly={!isCustom}
+                  bg={!isCustom ? "surface.sunken" : undefined}
+                  color={!isCustom ? "fg.muted" : undefined}
+                  cursor={!isCustom ? "not-allowed" : undefined}
+                />
+              </Box>
+            </Tooltip>
             {isChainNameNotUnique && (
               <Text mt={1} color="chart.negative" fontSize="xs" fontWeight="600">
                 Chain name already exists
@@ -286,93 +413,77 @@ function EditChain({
           </FormControl>
 
           <FormControl>
-            <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
-              RPC URL
-            </FormLabel>
-            <HStack>
-              <Input
-                placeholder="https://rpc.example.com"
-                value={rpc}
-                onChange={(event) => {
-                  setRpc(event.target.value.trim());
-                  setRpcWarning("");
-                  setForceAllowed(false);
-                }}
-              />
-              {isValidating && <Spinner size="sm" flexShrink={0} />}
-            </HStack>
-            <Text mt={1} color="fg.secondary" fontSize="xs">
-              The endpoint must report the same chain ID shown below.
-            </Text>
-          </FormControl>
-
-          <FormControl>
-            <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
+            <FormLabel
+              htmlFor="edit-network-chain-id"
+              mb={1.5}
+              color="fg.secondary"
+              fontSize="sm"
+              fontWeight="500"
+            >
               Chain ID
             </FormLabel>
-            <InputGroup>
-              <Input
-                placeholder="Chain ID"
-                value={chainId}
-                isReadOnly
-                bg="surface.sunken"
-                color="fg.muted"
-                cursor="not-allowed"
-                pr={chainIdHex ? "5.75rem" : undefined}
-              />
-              {chainIdHex && (
-                <InputRightElement width="5.5rem" pointerEvents="none">
-                  <Text color="fg.muted" fontFamily="mono" fontSize="xs">
-                    {chainIdHex}
-                  </Text>
-                </InputRightElement>
-              )}
-            </InputGroup>
-            <Text mt={1} color="fg.secondary" fontSize="xs">
-              Chain ID cannot be changed.
-            </Text>
+            <Tooltip
+              label="Chain ID cannot be changed."
+              isDisabled={isCustom}
+              placement="top"
+              hasArrow
+            >
+              <Box>
+                <InputGroup>
+                  <Input
+                    id="edit-network-chain-id"
+                    placeholder="Chain ID"
+                    value={chainId}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    onChange={(event) => {
+                      if (isCustom) {
+                        setChainId(event.target.value.replace(/\D/g, ""));
+                      }
+                    }}
+                    isReadOnly={!isCustom}
+                    bg={!isCustom ? "surface.sunken" : undefined}
+                    color={!isCustom ? "fg.muted" : undefined}
+                    cursor={!isCustom ? "not-allowed" : undefined}
+                    pr={chainIdHex ? "5.75rem" : undefined}
+                  />
+                  {chainIdHex && (
+                    <InputRightElement width="5.5rem" pointerEvents="none">
+                      <Text color="fg.muted" fontFamily="mono" fontSize="xs">
+                        {chainIdHex}
+                      </Text>
+                    </InputRightElement>
+                  )}
+                </InputGroup>
+              </Box>
+            </Tooltip>
           </FormControl>
 
-          {isCustom && (
-            <InlineDisclosure
-              label="Advanced network details"
-              description="Explorer and native currency metadata"
-            >
-              <VStack spacing={4} align="stretch" pt={2}>
-                <FormControl>
-                  <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
-                    Block explorer URL
-                  </FormLabel>
-                  <Input
-                    placeholder="https://explorer.example.com"
-                    value={explorer}
-                    onChange={(event) => setExplorer(event.target.value.trim())}
-                  />
-                </FormControl>
+          {currentRpcUrl && (
+            <RpcEndpointManager
+              currentUrl={currentRpcUrl}
+              endpoints={savedRpcEndpoints}
+              selectedUrl={rpc}
+              isLoading={
+                isRpcHistoryLoading ||
+                (!isCustom && builtInRpcPersistence.isSaving)
+              }
+              onSelect={selectRpc}
+              onAdd={addRpc}
+              onUpdate={updateRpc}
+              onRemove={removeRpc}
+            />
+          )}
 
-                <HStack spacing={3} align="flex-start">
-                  <FormControl flex={2}>
-                    <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
-                      Native token symbol
-                    </FormLabel>
-                    <Input
-                      value={currencySymbol}
-                      onChange={(event) => setCurrencySymbol(event.target.value.trim())}
-                    />
-                  </FormControl>
-                  <FormControl flex={1}>
-                    <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
-                      Decimals
-                    </FormLabel>
-                    <Input
-                      type="number"
-                      value={currencyDecimals}
-                      onChange={(event) => setCurrencyDecimals(event.target.value)}
-                    />
-                  </FormControl>
-                </HStack>
-              </VStack>
-            </InlineDisclosure>
+          {isCustom && (
+            <CustomNetworkDetails
+              explorer={explorer}
+              currencySymbol={currencySymbol}
+              currencyDecimals={currencyDecimals}
+              onExplorerChange={setExplorer}
+              onCurrencySymbolChange={setCurrencySymbol}
+              onCurrencyDecimalsChange={setCurrencyDecimals}
+            />
           )}
         </VStack>
 
@@ -388,12 +499,29 @@ function EditChain({
           </Box>
         )}
 
-        {rpcWarning && (
+        {(isCustom ? rpcWarning : builtInRpcPersistence.warning) && (
           <Alert status="warning" py={2} px={3}>
             <WarningTwoIcon mr={2} color="status.warning.fg" flexShrink={0} />
-            <Text color="status.warning.fg" fontSize="xs" fontWeight="600">
-              {rpcWarning}
+            <Text
+              flex={1}
+              color="status.warning.fg"
+              fontSize="xs"
+              fontWeight="600"
+            >
+              {isCustom ? rpcWarning : builtInRpcPersistence.warning}
             </Text>
+            {!isCustom && builtInRpcPersistence.requiresConfirmation && (
+              <Button
+                ml={2}
+                variant="highlight"
+                size="sm"
+                flexShrink={0}
+                isLoading={builtInRpcPersistence.isSaving}
+                onClick={() => void builtInRpcPersistence.forceSave()}
+              >
+                Use anyway
+              </Button>
+            )}
           </Alert>
         )}
       </VStack>

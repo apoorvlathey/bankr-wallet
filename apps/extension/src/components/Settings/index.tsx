@@ -305,6 +305,7 @@ function Settings({
 
     const defaultRows = [
       renderRootLeaf("appearance"),
+      renderRootLeaf("chains"),
       <SettingsRow
         key="security"
         title="Security"
@@ -316,7 +317,6 @@ function Settings({
         showChevron
         onClick={() => setTab("security")}
       />,
-      renderRootLeaf("chains"),
       renderRootLeaf("ensBrowsing"),
       <SettingsRow
         key="data"

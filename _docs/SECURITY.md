@@ -300,7 +300,7 @@ web-accessible page cannot suppress auto-lock.
 | Transaction/history UI | `getTxHistory`, `getProcessingTxs`, `getFailedTxResult`, `checkPendingTxReceipt`, `cancelProcessingTx`, `splitBatchIntoIndividualTxs`, gas/simulation helpers | Avoid letting content scripts inspect or alter local pending/history/status state. |
 | Chat | `submitChatPrompt`, `getChatConversations`, `getChatConversation`, `createChatConversation`, `deleteChatConversation`, `addChatMessage`, `updateChatMessage` | Chat prompt submission uses the user's Bankr credentials/session and chat history is local user data. |
 | Settings/cache | `setArcBrowser`, `getSidePanelMode`, `setSidePanelMode`, `getClearSigningEnabled`, `setClearSigningEnabled`, `INVALIDATE_CLEAR_SIGNING_CACHE` | These are extension UI preferences/cache controls, not dapp APIs. |
-| Network settings | `ensureNetworksInfo`, `addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain` | Mutate provider-visible `networksInfo` / `chainName`; keep service-worker-owned so webpages cannot alter wallet RPC metadata or clobber user-added chains. |
+| Network settings | `ensureNetworksInfo`, `addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain` | Mutate provider-visible `networksInfo` / `chainName` and local saved-RPC history; keep service-worker-owned so webpages cannot alter RPC metadata or clobber user-added chains. |
 
 `getActiveAccount` is the narrow exception: `inject.ts` uses it during content
 script initialization to correct stale synced address state before emitting
@@ -546,6 +546,27 @@ worker and classified as `wallet-ui`. Popup/sidepanel pages mirror
 write full local snapshots back to storage. This prevents a stale long-lived
 sidepanel from deleting a chain that was added by a dapp confirmation in the
 background.
+
+Each entry's required `rpcUrl` remains the only endpoint used at runtime.
+`chrome.storage.local.networkRpcUrls` is separate Settings-only history keyed
+by decimal chain ID. The service worker validates every member with the same
+scheme, credential, private-network, length, and trusted-origin rules,
+deduplicates the list, rejects more than ten endpoints, and limits optional
+display names to 64 characters before storage. Released string-array records
+remain read-compatible and are converted to `{ url, name? }` objects only on a
+later successful save. Provider favicon lookup is derived only for public
+domain RPCs; private, loopback, literal-IP, and reserved hostnames are never
+sent to the external favicon service, and returned bytes cross the existing
+background rasterization/cache boundary before renderer display.
+Selecting a saved endpoint does not bypass chain-ID probing. Built-in-chain
+selection/add/edit/remove actions promote the chosen endpoint immediately only
+after the renderer probe and existing service-worker `updateNetwork` validation
+succeed; the explicit warning override still uses that same route. Editing an
+inactive saved endpoint changes history only. Custom-chain endpoint changes stay
+staged until the full form is saved. A custom chain-ID change is duplicate-checked
+and re-keys its bounded RPC history inside the same locked service-worker
+mutation. Missing history resolves to the active endpoint and requires no eager
+migration.
 
 ### Privileged Network and Remote-Image Boundaries
 
@@ -886,6 +907,7 @@ accessible resources.
 | `mnemonicVault`            | Yes (encrypted)  | V2 dedicated-key-encrypted phrases + master wrapper, or V1 PBKDF2-encrypted phrases |
 | `seedGroups`               | No               | Seed group metadata (names, counts)                     |
 | `accounts`                 | No               | Account metadata (addresses, names, types)              |
+| `networkRpcUrls`           | No               | Bounded Settings-only RPC history keyed by chain ID. It never changes runtime routing until the selected endpoint is validated and promoted to `networksInfo[*].rpcUrl` through the service worker. |
 | `onboardingInitialization` | No               | Temporary `{ version, id, startedAt }` transaction marker for one fresh-wallet setup. Missing is normal; unmarked authoritative key/account state fails closed, disposable residue is cleared before begin, and complete wallets cannot be rolled back because marker cleanup failed. |
 | `pendingTxRequests`        | No               | Pending transaction queue                               |
 | `pendingSignatureRequests` | No               | Pending signature queue                                 |
@@ -928,7 +950,7 @@ accessible resources.
 | `address`                                              | Current wallet address               |
 | `displayAddress`                                       | Display-friendly address             |
 | `chainName`                                            | Active chain name                    |
-| `networksInfo`                                         | Runtime chain RPC/hidden/custom metadata; service-worker-owned mutations |
+| `networksInfo`                                         | Runtime active RPC plus hidden/custom metadata; service-worker-owned mutations |
 | `activeAccountId`                                      | Active account ID                    |
 | `autoLockTimeout`                                      | Auto-lock timeout (ms)               |
 | `tabAccounts`                                          | Connected/pending-dapp-only per-tab account overrides |
