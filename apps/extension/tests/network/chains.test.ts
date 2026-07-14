@@ -6,7 +6,12 @@ import {
   DEFAULT_NETWORKS,
   ZEROX_SUPPORTED_CHAIN_IDS,
 } from "../../src/constants/chainRegistry";
-import { getVisibleChains, normalizeNetworksInfo } from "../../src/lib/chains";
+import {
+  getVisibleChains,
+  MAX_SAVED_RPC_URLS,
+  normalizeNetworksInfo,
+  normalizeSavedRpcUrls,
+} from "../../src/lib/chains";
 import {
   getChainEnvironmentLabel,
   resolveChainIconMeta,
@@ -46,6 +51,36 @@ test("a stored visible choice overrides the registry default", () => {
   assert.equal(normalized.Blast.hidden, undefined);
   assert.equal(visibleNames.has("Blast"), true);
   assert.equal(normalized.Mantle.hidden, true, "missing default-hidden chains stay hidden");
+});
+
+test("saved RPC URLs keep the active endpoint first and remain bounded", () => {
+  const activeRpcUrl = "https://active-rpc.example/";
+  const savedRpcUrls = [
+    "https://old-rpc.example",
+    "https://active-rpc.example",
+    "https://user:secret@unsafe.example",
+    ...Array.from(
+      { length: MAX_SAVED_RPC_URLS },
+      (_, index) => `https://rpc-${index}.example`,
+    ),
+  ];
+
+  assert.deepEqual(normalizeSavedRpcUrls(activeRpcUrl, savedRpcUrls), [
+    "https://active-rpc.example",
+    "https://old-rpc.example",
+    ...Array.from(
+      { length: MAX_SAVED_RPC_URLS - 2 },
+      (_, index) => `https://rpc-${index}.example`,
+    ),
+  ]);
+
+  assert.deepEqual(
+    normalizeSavedRpcUrls(undefined, [
+      "javascript:alert(1)",
+      "https://user:secret@unsafe.example",
+    ]),
+    [],
+  );
 });
 
 test("registered testnets reuse their mainnet chain identity", () => {

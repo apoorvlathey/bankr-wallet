@@ -369,8 +369,11 @@ handlers rather than importing cryptography or secret storage.
 transport separate from provider add-chain authority. The router forwards the
 active account type needed for visibility/deletion compatibility, but URL
 validation, normalization, and the network storage lock remain in
-`network/customNetworkValidation.ts`, `network/networkRepository.ts`, and
-`network/networkMutations.ts`. Bounded fixed-origin HTTP, configured-RPC
+`network/customNetworkValidation.ts`, `network/networkRepository.ts`,
+`network/rpcHistoryRepository.ts`, and `network/networkMutations.ts`. The
+auxiliary saved-RPC history is local and never becomes a runtime endpoint until
+the existing update route validates and promotes its selection. Bounded
+fixed-origin HTTP, configured-RPC
 egress, and provider/WalletConnect read forwarding live beside them without
 root compatibility shims. `sidepanelManager.ts` and `extensionPopup.ts` are
 export-only compatibility facades over `windowing/`: pure browser/mode policy,

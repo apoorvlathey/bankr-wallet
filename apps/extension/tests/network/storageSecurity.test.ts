@@ -6,6 +6,7 @@ test("custom network storage rejects unsafe or malformed metadata", async () => 
   const sync: Record<string, unknown> = {
     networksInfo: {},
   };
+  const local: Record<string, unknown> = {};
   Object.defineProperty(globalThis, "chrome", {
     configurable: true,
     value: {
@@ -19,12 +20,21 @@ test("custom network storage rejects unsafe or malformed metadata", async () => 
             Object.assign(sync, structuredClone(values));
           },
         },
+        local: {
+          async get(keys: string | string[]) {
+            const list = Array.isArray(keys) ? keys : [keys];
+            return Object.fromEntries(list.map((key) => [key, local[key]]));
+          },
+          async set(values: Record<string, unknown>) {
+            Object.assign(local, structuredClone(values));
+          },
+        },
       },
     },
   });
 
   try {
-    const { addNetworkIfMissing } = await import(
+    const { addNetworkIfMissing, updateNetworkEntry } = await import(
       "../../src/chrome/network/networkMutations"
     );
     const base = {
@@ -58,6 +68,54 @@ test("custom network storage rejects unsafe or malformed metadata", async () => 
       assert.equal(valid.networksInfo[valid.chainName].rpcUrl, "https://rpc.example");
       assert.equal(valid.networksInfo[valid.chainName].explorer, "https://explorer.example");
     }
+
+    for (const [name, rpcUrls, error] of [
+      ["Unsafe saved RPC", [base.rpcUrl, "javascript:alert(1)"], /RPC URL/],
+      [
+        "Too many saved RPCs",
+        Array.from({ length: 11 }, (_, index) => `https://rpc-${index}.example`),
+        /at most 10 RPC URLs/,
+      ],
+    ] as const) {
+      const result = await updateNetworkEntry({
+        chainName: "Safe custom chain",
+        nextChainName: "Safe custom chain",
+        entry: base,
+        rpcUrls,
+      });
+      assert.equal(result.success, false, name);
+      assert.match(result.error, error);
+    }
+
+    const switched = await updateNetworkEntry({
+      chainName: "Safe custom chain",
+      nextChainName: "Safe custom chain",
+      entry: {
+        ...base,
+        rpcUrl: "https://backup-rpc.example",
+      },
+      rpcUrls: ["https://rpc.example", "https://backup-rpc.example"],
+    });
+    assert.equal(switched.success, true);
+    if (switched.success) {
+      assert.equal(
+        switched.networksInfo[switched.chainName].rpcUrl,
+        "https://backup-rpc.example",
+      );
+      assert.equal("rpcUrls" in switched.networksInfo[switched.chainName], false);
+    }
+    assert.deepEqual(
+      (
+        local.networkRpcUrls as Record<
+          string,
+          Array<{ url: string; name?: string }>
+        >
+      )["12345"],
+      [
+        { url: "https://backup-rpc.example" },
+        { url: "https://rpc.example" },
+      ],
+    );
 
     const remotePrivate = await addNetworkIfMissing({
       chainName: "Remote private pivot",

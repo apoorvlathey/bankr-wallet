@@ -330,6 +330,7 @@ apps/extension/src/
 │   │   ├── proxyResolver.ts # Configured-RPC proxy implementation lookup
 │   │   ├── customNetworkValidation.ts # Custom-chain schema/URL validation
 │   │   ├── networkRepository.ts # networksInfo/chainName sync storage
+│   │   ├── rpcHistoryRepository.ts # Local saved-RPC history storage
 │   │   ├── networkPolicy.ts # Pure fallback and mutation result policy
 │   │   └── networkMutations.ts # Locked ensure/add/update/hide/delete
 │   ├── provider/            # Effect-free external provider validation domain
@@ -571,7 +572,11 @@ apps/extension/src/
 │   ├── SignatureRequestConfirmation.tsx
 │   ├── UnlockScreen.tsx
 │   ├── passkeyPromptGate.ts # Renderer-local single-flight gate for biometric prompts
-│   └── Settings/
+│   └── Settings/              # Settings feature domain
+│       ├── EditChain.tsx      # Network edit/save composition
+│       ├── RpcEndpointManager.tsx # Saved RPC selection and list controls
+│       ├── CustomNetworkDetails.tsx # Custom-chain metadata fields
+│       └── useNetworkRpcUrls.ts # Saved-RPC history lifecycle
 ├── pages/
 │   └── Onboarding.tsx
 └── App.tsx                   # Main popup app
