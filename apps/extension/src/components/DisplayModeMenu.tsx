@@ -56,7 +56,7 @@ export default function DisplayModeMenu({
     <>
       <IconButton
         ref={optionsButtonRef}
-        aria-label="App options"
+        aria-label="Quick actions"
         icon={<HamburgerIcon />}
         variant="ghost"
         minW="44px"
@@ -67,7 +67,7 @@ export default function DisplayModeMenu({
         isOpen={options.isOpen}
         onClose={options.onClose}
         finalFocusRef={optionsButtonRef}
-        title="App options"
+        title="Quick Actions"
         choices={choices}
         onSelect={(id) => {
           if (id === "panel") onToggleSidePanel();

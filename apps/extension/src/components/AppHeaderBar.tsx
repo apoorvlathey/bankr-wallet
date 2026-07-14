@@ -200,8 +200,8 @@ export default function AppHeaderBar({
           />
           <IconButton
             ref={optionsButtonRef}
-            aria-label="More app options"
-            title="More app options"
+            aria-label="Quick actions"
+            title="Quick actions"
             icon={<HamburgerIcon />}
             variant="ghost"
             size="sm"
@@ -216,7 +216,7 @@ export default function AppHeaderBar({
         isOpen={options.isOpen}
         onClose={options.onClose}
         finalFocusRef={optionsButtonRef}
-        title="App options"
+        title="Quick Actions"
         choices={choices}
         onSelect={(id) => {
           if (id === "chat") onChat();
