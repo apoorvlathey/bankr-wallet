@@ -29,6 +29,7 @@ export interface TokenHoldingsProps {
   hideCard?: boolean;
   onRpcIssuesChange?: (chainIds: number[]) => void;
   filterChainId?: number | null;
+  onShowAllNetworks?: () => void;
   searchQuery?: string;
   onSnapshotsChanged?: () => void;
   view?: "all" | "assets" | "positions";

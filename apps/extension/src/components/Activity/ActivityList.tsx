@@ -5,6 +5,7 @@ import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import TxDetailModal from "@/components/TxDetailModal";
 import {
   EmptyState,
+  EmptyStateActions,
   EmptyStateDescription,
   EmptyStateHeader,
   EmptyStateTitle,
@@ -20,6 +21,7 @@ interface ActivityListProps {
   hideHeader?: boolean;
   hideCard?: boolean;
   filterChainId?: number | null;
+  onShowAllNetworks?: () => void;
   /** When provided, the parent owns screen-level transaction detail navigation. */
   onSelectTx?: (tx: CompletedTransaction) => void;
 }
@@ -30,6 +32,7 @@ function TxStatusList({
   hideHeader,
   hideCard,
   filterChainId,
+  onShowAllNetworks,
   onSelectTx,
 }: ActivityListProps) {
   const [allHistory, setAllHistory] = useState<CompletedTransaction[]>([]);
@@ -147,6 +150,13 @@ function TxStatusList({
               Transactions from this account will appear here.
             </EmptyStateDescription>
           </EmptyStateHeader>
+          {filterChainId != null && onShowAllNetworks && (
+            <EmptyStateActions>
+              <Button variant="secondary" onClick={onShowAllNetworks}>
+                View all networks
+              </Button>
+            </EmptyStateActions>
+          )}
         </EmptyState>
         {modal}
       </Box>

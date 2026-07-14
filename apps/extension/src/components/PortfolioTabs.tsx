@@ -622,11 +622,11 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
               hideCard
               onStateChange={handleStateChange}
               filterChainId={filterChainId}
+              onShowAllNetworks={() => selectPortfolioChain(null)}
               searchQuery={tabIndex === 0 ? assetSearchQuery : ""}
               onSnapshotsChanged={handleSnapshotsChanged}
             />
           </Box>
-
           {tabIndex === 2 && (
             <TxStatusList
               maxItems={10}
@@ -634,12 +634,12 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
               hideHeader
               hideCard
               filterChainId={filterChainId}
+              onShowAllNetworks={() => selectPortfolioChain(null)}
               onSelectTx={onTransactionClick}
             />
           )}
         </Box>
       </VStack>
-
       <AddTokenModal
         isOpen={addTokenModal.isOpen}
         onClose={addTokenModal.onClose}

@@ -38,6 +38,7 @@ function TokenHoldings({
   hideCard,
   onRpcIssuesChange,
   filterChainId,
+  onShowAllNetworks,
   searchQuery = "",
   onSnapshotsChanged,
   onStateChange,
@@ -162,6 +163,8 @@ function TokenHoldings({
       loading={state.loading}
       tokenCount={state.tokens.length}
       hideCard={hideCard}
+      hasNetworkFilter={filterChainId != null}
+      onShowAllNetworks={onShowAllNetworks}
       searchQuery={searchQuery}
       view={view}
       showLowValueTokens={showLowValueTokens}

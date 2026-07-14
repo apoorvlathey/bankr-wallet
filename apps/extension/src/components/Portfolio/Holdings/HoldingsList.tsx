@@ -1,9 +1,10 @@
 import type { RefObject } from "react";
-import { Box, Text } from "@chakra-ui/react";
+import { Box, Button, Text } from "@chakra-ui/react";
 import type { DefiPosition } from "@/chrome/portfolio/api";
 import { DefiPositionRow } from "@/components/PortfolioHoldingRows";
 import {
   EmptyState,
+  EmptyStateActions,
   EmptyStateDescription,
   EmptyStateHeader,
   EmptyStateTitle,
@@ -22,6 +23,8 @@ interface HoldingsListProps extends AssetRowPresentationProps {
   loading: boolean;
   tokenCount: number;
   hideCard?: boolean;
+  hasNetworkFilter: boolean;
+  onShowAllNetworks?: () => void;
   searchQuery: string;
   view: "all" | "assets" | "positions";
   showLowValueTokens: boolean;
@@ -39,6 +42,8 @@ export function HoldingsList({
   loading,
   tokenCount,
   hideCard,
+  hasNetworkFilter,
+  onShowAllNetworks,
   searchQuery,
   view,
   showLowValueTokens,
@@ -87,6 +92,13 @@ export function HoldingsList({
                     : "Tokens with a balance will appear here."}
               </EmptyStateDescription>
             </EmptyStateHeader>
+            {hasNetworkFilter && onShowAllNetworks && (
+              <EmptyStateActions>
+                <Button variant="secondary" onClick={onShowAllNetworks}>
+                  View all networks
+                </Button>
+              </EmptyStateActions>
+            )}
           </EmptyState>
         </Box>
       ) : (
