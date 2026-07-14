@@ -22,48 +22,17 @@ interface ChainIconAlias {
 }
 
 const REGISTRY_BY_ID = new Map(CHAIN_REGISTRY.map((chain) => [chain.chainId, chain]));
+const TESTNET_REGISTRY_BY_ID = new Map(
+  CHAIN_REGISTRY.flatMap((chain) =>
+    chain.testnetChainIds.map((chainId) => [chainId, chain] as const),
+  ),
+);
 
 const CHAIN_ICON_ALIASES: ChainIconAlias[] = [
-  {
-    chainIds: [84532],
-    names: ["base sepolia", "base sepolia testnet"],
-    iconSrc: "/chainIcons/base.svg",
-    overlayLabel: "SEP",
-    bg: "rgba(0, 82, 255, 0.15)",
-    border: "rgba(0, 82, 255, 0.4)",
-    text: "#0052FF",
-  },
-  {
-    chainIds: [11155111],
-    names: ["sepolia", "ethereum sepolia", "sepolia testnet"],
-    iconSrc: "/chainIcons/ethereum.svg",
-    overlayLabel: "SEP",
-    bg: "rgba(37, 41, 46, 0.15)",
-    border: "rgba(37, 41, 46, 0.4)",
-    text: "#25292E",
-  },
-  {
-    chainIds: [421614],
-    names: ["arbitrum sepolia"],
-    iconSrc: "/chainIcons/arbitrum.svg",
-    overlayLabel: "SEP",
-    bg: "rgba(40, 160, 240, 0.15)",
-    border: "rgba(40, 160, 240, 0.4)",
-    text: "#28A0F0",
-  },
   {
     chainIds: [43114],
     names: ["avalanche", "avalanche c-chain", "avalanche c chain"],
     iconSrc: "/chainIcons/avalanche.svg",
-    bg: "rgba(232, 65, 66, 0.15)",
-    border: "rgba(232, 65, 66, 0.4)",
-    text: "#E84142",
-  },
-  {
-    chainIds: [43113],
-    names: ["avalanche fuji", "fuji", "fuji testnet"],
-    iconSrc: "/chainIcons/avalanche.svg",
-    overlayLabel: "FUJI",
     bg: "rgba(232, 65, 66, 0.15)",
     border: "rgba(232, 65, 66, 0.4)",
     text: "#E84142",
@@ -133,7 +102,6 @@ const CHAIN_ICON_ALIASES: ChainIconAlias[] = [
     text: "#121212",
   },
   {
-    chainIds: [143, 41454],
     names: ["monad", "monad testnet"],
     iconSrc: "/chainIcons/monad.svg",
     bg: "rgba(18, 18, 18, 0.08)",
@@ -229,6 +197,18 @@ export function resolveChainIconMeta(
     };
   }
 
+  const testnetParent = TESTNET_REGISTRY_BY_ID.get(chainId);
+  if (testnetParent) {
+    return {
+      iconSrc: testnetParent.icon || undefined,
+      overlayLabel: inferOverlayLabel(chainName) ?? "T",
+      fallbackText: getChainInitials(chainName || testnetParent.name),
+      bg: testnetParent.bg,
+      border: testnetParent.border,
+      text: testnetParent.text,
+    };
+  }
+
   const alias = findAlias(chainId, chainName);
   if (alias) {
     return {
@@ -287,10 +267,11 @@ export function getChainEnvironmentLabel(
   chainId: number,
   chainName?: string,
 ): "TESTNET" | undefined {
-  // KNOWN_CHAINS is the most precise testnet signal — it's keyed by chainId
-  // and pulled from MM's deployment registry where testnet/mainnet status
-  // is curated. Consult it before the brittle name-based heuristics so
-  // user-renamed chains still get labeled correctly.
+  if (TESTNET_REGISTRY_BY_ID.has(chainId)) return "TESTNET";
+
+  // KNOWN_CHAINS is the next precise testnet signal after the registry-owned
+  // mainnet/testnet relationships above. Consult it before brittle name-based
+  // heuristics so user-renamed chains still get labeled correctly.
   const known = KNOWN_CHAINS[chainId];
   if (known) return known.isTestnet ? "TESTNET" : undefined;
 

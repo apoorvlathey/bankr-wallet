@@ -5,6 +5,12 @@ Use this reference after collecting live facts.
 ## ChainEntry fields
 
 - `chainId`: decimal chain ID. Verify by RPC `eth_chainId` when an RPC URL is available.
+- `testnetChainIds`: decimal IDs for the chain operator's current public
+  testnets. Verify the set from official network docs and each ID by live
+  `eth_chainId` where possible. Store IDs only; do not duplicate testnet RPC,
+  explorer, native-currency, or icon metadata. Exclude local/dev networks and
+  deprecated testnets unless an existing WalletChan mapping must remain
+  compatible, and note any such legacy ID in the research report.
 - `name`: user-facing chain name from the chain operator or Bungee/0x if operator docs are unavailable.
 - `rpcUrl`: stable public RPC. Prefer the chain's official public RPC or an existing WalletChan provider pattern (`*.drpc.org`) when available.
 - `explorer`: base explorer URL without trailing `/address/...`.

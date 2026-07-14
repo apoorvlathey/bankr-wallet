@@ -15,6 +15,7 @@ Open `src/constants/chainRegistry.ts` and add a new object to the `CHAIN_REGISTR
 ```ts
 {
   chainId: 12345,
+  testnetChainIds: [12346],          // current public testnets; IDs only
   name: "NewChain",
   rpcUrl: "https://rpc.newchain.io",
   explorer: "https://explorer.newchain.io",
@@ -37,6 +38,7 @@ Open `src/constants/chainRegistry.ts` and add a new object to the `CHAIN_REGISTR
 | Field | Required | Description |
 | --- | --- | --- |
 | `chainId` | yes | The chain's numeric ID |
+| `testnetChainIds` | yes | Numeric IDs of current official public testnets that should reuse this mainnet entry's icon and brand colors. Use `[]` when none are verified. Do not add testnet RPC, explorer, currency, or other metadata. |
 | `name` | yes | Human-readable name (used in UI dropdown, `CHAIN_NAMES`, and `DEFAULT_NETWORKS` key) |
 | `rpcUrl` | yes | Default public RPC URL |
 | `explorer` | yes | Block explorer base URL (used for address/tx links) |
@@ -67,6 +69,12 @@ From that single entry, the following are all derived automatically:
 | `VIEM_CHAINS[chainId]` | Local signing (viem wallet client) |
 | `RPC_URLS[chainId]` | Local signing fallback, onchain balance fetching |
 | `CHAIN_TOKEN_IDS[chainId]` | CoinGecko native token price for gas estimation |
+
+Custom chains whose ID appears in a built-in entry's `testnetChainIds` reuse
+that entry's local mainnet icon and brand colors. The existing testnet overlay
+(`SEP`, `FUJI`, or `T`) remains visible, so the shared logo does not make the
+testnet look like mainnet. Keep this relationship in the registry instead of
+adding one-off icon aliases.
 
 ## Step 3: Build and test
 

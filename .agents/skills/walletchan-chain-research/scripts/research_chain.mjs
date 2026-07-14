@@ -12,10 +12,10 @@ const CHAINID_NETWORK = "https://chainid.network/chains.json";
 
 function usage() {
   console.error(`Usage:
-  node research_chain.mjs --chain-id <id> [--name <name>] [--rpc <url>] [--icon-out <path>]
+  node research_chain.mjs --chain-id <id> [--name <name>] [--rpc <url>] [--testnet-rpc <url> ...] [--icon-out <path>]
 
 Examples:
-  node research_chain.mjs --chain-id 4663 --name "Robinhood Chain" --rpc https://rpc.mainnet.chain.robinhood.com
+  node research_chain.mjs --chain-id 4663 --name "Robinhood Chain" --rpc https://rpc.mainnet.chain.robinhood.com --testnet-rpc https://rpc.testnet.chain.robinhood.com
   node research_chain.mjs --chain-id 4663 --icon-out apps/extension/public/chainIcons/robinhood.webp`);
 }
 
@@ -29,7 +29,11 @@ function parseArgs(argv) {
     if (!next || next.startsWith("--")) {
       args[key] = true;
     } else {
-      args[key] = next;
+      if (key === "testnet-rpc") {
+        args[key] = [...(args[key] || []), next];
+      } else {
+        args[key] = next;
+      }
       i += 1;
     }
   }
@@ -124,6 +128,15 @@ async function checkRpc(rpcUrl) {
     defaultDelegateHasCode: Boolean(delegateCode && delegateCode !== "0x"),
     defaultDelegateCodeBytes:
       delegateCode && delegateCode !== "0x" ? (delegateCode.length - 2) / 2 : 0,
+  };
+}
+
+async function checkTestnetRpc(rpcUrl) {
+  const chainIdHex = await rpcCall(rpcUrl, "eth_chainId", []);
+  return {
+    rpcUrl,
+    chainIdHex,
+    chainId: Number(BigInt(chainIdHex)),
   };
 }
 
@@ -288,11 +301,15 @@ if (!Number.isInteger(chainId) || chainId <= 0) {
 
 const name = args.name || "";
 const rpcUrl = args.rpc || "";
+const testnetRpcUrls = Array.isArray(args["testnet-rpc"])
+  ? args["testnet-rpc"]
+  : [];
 
 const report = {
-  input: { chainId, name, rpcUrl },
+  input: { chainId, name, rpcUrl, testnetRpcUrls },
   checkedAt: new Date().toISOString(),
   rpc: null,
+  testnets: [],
   bridge: null,
   zerox: null,
   coinGecko: [],
@@ -325,6 +342,17 @@ try {
 }
 
 report.metamaskDelegationDeployments = checkMetamaskDeployments(chainId);
+
+for (const testnetRpcUrl of testnetRpcUrls) {
+  try {
+    report.testnets.push(await checkTestnetRpc(testnetRpcUrl));
+  } catch (error) {
+    report.errors.push({
+      source: `testnetRpc:${testnetRpcUrl}`,
+      error: error.message,
+    });
+  }
+}
 
 if (args["icon-out"]) {
   const iconUrl =

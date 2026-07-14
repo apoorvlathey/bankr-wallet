@@ -1,6 +1,6 @@
 ---
 name: walletchan-chain-research
-description: Research and verify EVM chain metadata for WalletChan chain additions or updates. Use when Codex is asked to add a new WalletChan chain, update chain params, verify RPC/explorer/native currency/icon, determine Bankr support, 0x swap support, Bungee/Socket bridge support, CoinGecko/GeckoTerminal IDs, or MetaMask EIP-7702 default delegate support.
+description: Research and verify EVM chain metadata for WalletChan chain additions or updates. Use when Codex is asked to add a new WalletChan chain, update chain params, map official testnet chain IDs to a mainnet logo, verify RPC/explorer/native currency/icon, determine Bankr support, 0x swap support, Bungee/Socket bridge support, CoinGecko/GeckoTerminal IDs, or MetaMask EIP-7702 default delegate support.
 ---
 
 # WalletChan Chain Research
@@ -20,8 +20,12 @@ description: Research and verify EVM chain metadata for WalletChan chain additio
    node .agents/skills/walletchan-chain-research/scripts/research_chain.mjs \
      --chain-id 4663 \
      --name "Robinhood Chain" \
-     --rpc "https://rpc.mainnet.chain.robinhood.com"
+     --rpc "https://rpc.mainnet.chain.robinhood.com" \
+     --testnet-rpc "https://rpc.testnet.chain.robinhood.com"
    ```
+   Repeat `--testnet-rpc` for each current official public testnet. The helper
+   records only its live `eth_chainId`; WalletChan does not store testnet RPC,
+   explorer, currency, or other duplicated metadata in the built-in entry.
    Add `--icon-out apps/extension/public/chainIcons/<name>.<ext>` to download
    the best chain icon. The script chooses the extension from `content-type`
    when possible.
@@ -33,12 +37,20 @@ description: Research and verify EVM chain metadata for WalletChan chain additio
    deployed and non-empty on the chain.
 6. Report uncertainty explicitly. If a source cannot verify a field, leave the
    risky flag false or omit the optional ID instead of guessing.
+7. Research current public testnets from the chain operator's documentation and
+   verify every candidate with `eth_chainId` when an RPC is available. Add the
+   resulting IDs to the mainnet entry's `testnetChainIds` array so custom-added
+   testnets reuse its icon and testnet overlay. Exclude local/dev networks and
+   deprecated testnets unless retaining an ID preserves existing WalletChan
+   behavior; document any retained legacy ID.
 
 ## Required Sources
 
 Prefer these sources, in this order:
 
 - RPC: `eth_chainId`, `eth_getCode`, and optionally block samples for type-4 txs.
+- Chain-operator network documentation for the set of current public testnets;
+  confirm each numeric ID against its live RPC where possible.
 - WalletChan/Bungee bridge endpoint: `/api/bridge/chains`.
 - 0x official supported-chains docs for Swap API support.
 - `@metamask/delegation-deployments` plus `eth_getCode` at WalletChan's
@@ -60,6 +72,7 @@ support to false.
 When finishing a chain research task, include:
 
 - Proposed `ChainEntry` values, including explicit true/false support flags.
+- Verified `testnetChainIds`, including the reason for any retained legacy ID.
 - Which swap/bridge/7702 facts were verified and from where.
 - Icon source and local path, if downloaded.
 - Files changed and validation commands run.

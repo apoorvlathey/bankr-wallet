@@ -7,6 +7,10 @@ import {
   ZEROX_SUPPORTED_CHAIN_IDS,
 } from "../../src/constants/chainRegistry";
 import { getVisibleChains, normalizeNetworksInfo } from "../../src/lib/chains";
+import {
+  getChainEnvironmentLabel,
+  resolveChainIconMeta,
+} from "../../src/lib/chainIcons";
 
 const DEFAULT_HIDDEN_CHAIN_NAMES = [
   "Blast",
@@ -42,6 +46,38 @@ test("a stored visible choice overrides the registry default", () => {
   assert.equal(normalized.Blast.hidden, undefined);
   assert.equal(visibleNames.has("Blast"), true);
   assert.equal(normalized.Mantle.hidden, true, "missing default-hidden chains stay hidden");
+});
+
+test("registered testnets reuse their mainnet chain identity", () => {
+  const mainnetIds = new Set(CHAIN_REGISTRY.map((chain) => chain.chainId));
+  const seenTestnetIds = new Set<number>();
+
+  for (const chain of CHAIN_REGISTRY) {
+    for (const testnetChainId of chain.testnetChainIds) {
+      assert.equal(
+        mainnetIds.has(testnetChainId),
+        false,
+        `${testnetChainId} must not collide with a built-in mainnet`,
+      );
+      assert.equal(
+        seenTestnetIds.has(testnetChainId),
+        false,
+        `${testnetChainId} must belong to only one mainnet chain`,
+      );
+      seenTestnetIds.add(testnetChainId);
+
+      const icon = resolveChainIconMeta(testnetChainId, `${chain.name} Testnet`);
+      assert.equal(icon.iconSrc, chain.icon);
+      assert.equal(icon.bg, chain.bg);
+      assert.equal(icon.border, chain.border);
+      assert.equal(icon.text, chain.text);
+      assert.ok(icon.overlayLabel, `${testnetChainId} should show a testnet overlay`);
+      assert.equal(
+        getChainEnvironmentLabel(testnetChainId, `${chain.name} Testnet`),
+        "TESTNET",
+      );
+    }
+  }
 });
 
 test("swap support matches the official 0x Swap API table", () => {

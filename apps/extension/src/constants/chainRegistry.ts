@@ -52,6 +52,8 @@ import { type NetworksInfo } from "@/types";
 
 export interface ChainEntry {
   chainId: number;
+  /** Testnet chain IDs that should reuse this chain's visual identity. */
+  testnetChainIds: readonly number[];
   name: string;
   rpcUrl: string;
   explorer: string;
@@ -152,6 +154,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   // Ethereum first, then alphabetical
   {
     chainId: 1,
+    testnetChainIds: [11155111, 560048],
     name: "Ethereum",
     rpcUrl: "https://eth.drpc.org",
     explorer: "https://etherscan.io",
@@ -171,6 +174,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 2741,
+    testnetChainIds: [11124],
     name: "Abstract",
     rpcUrl: "https://api.mainnet.abs.xyz",
     explorer: "https://abscan.org",
@@ -190,6 +194,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 42161,
+    testnetChainIds: [421614],
     name: "Arbitrum",
     rpcUrl: "https://arb1.arbitrum.io/rpc",
     explorer: "https://arbiscan.io",
@@ -209,6 +214,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 43114,
+    testnetChainIds: [43113],
     name: "Avalanche",
     rpcUrl: "https://api.avax.network/ext/bc/C/rpc",
     explorer: "https://snowtrace.io",
@@ -228,6 +234,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 8453,
+    testnetChainIds: [84532],
     name: "Base",
     rpcUrl: "https://base.drpc.org",
     explorer: "https://basescan.org",
@@ -248,6 +255,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 80094,
+    testnetChainIds: [80069],
     name: "Berachain",
     rpcUrl: "https://rpc.berachain.com",
     explorer: "https://berascan.com",
@@ -267,6 +275,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 81457,
+    testnetChainIds: [168587773],
     name: "Blast",
     rpcUrl: "https://rpc.blast.io",
     explorer: "https://blastscan.io",
@@ -287,6 +296,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 56,
+    testnetChainIds: [97],
     name: "BNB Chain",
     rpcUrl: "https://bsc-dataseed.binance.org",
     explorer: "https://bscscan.com",
@@ -306,6 +316,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 999,
+    testnetChainIds: [998],
     name: "HyperEVM",
     rpcUrl: "https://rpc.hyperliquid.xyz/evm",
     explorer: "https://hyperevmscan.io",
@@ -325,6 +336,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 57073,
+    testnetChainIds: [763373],
     name: "Ink",
     rpcUrl: "https://rpc-gel.inkonchain.com",
     explorer: "https://explorer.inkonchain.com",
@@ -344,6 +356,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 59144,
+    testnetChainIds: [59141],
     name: "Linea",
     rpcUrl: "https://rpc.linea.build",
     explorer: "https://lineascan.build",
@@ -363,6 +376,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 5000,
+    testnetChainIds: [5003],
     name: "Mantle",
     rpcUrl: "https://rpc.mantle.xyz",
     explorer: "https://mantlescan.xyz",
@@ -383,6 +397,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 10,
+    testnetChainIds: [11155420],
     name: "Optimism",
     rpcUrl: "https://mainnet.optimism.io",
     explorer: "https://optimistic.etherscan.io",
@@ -403,6 +418,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 4326,
+    testnetChainIds: [6343],
     name: "MegaETH",
     rpcUrl: "https://mainnet.megaeth.com/rpc",
     explorer: "https://mega.etherscan.io",
@@ -427,6 +443,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 34443,
+    testnetChainIds: [919],
     name: "Mode",
     rpcUrl: "https://mainnet.mode.network",
     explorer: "https://modescan.io",
@@ -447,6 +464,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 143,
+    testnetChainIds: [10143, 41454], // 41454 is legacy; retain existing icon coverage
     name: "Monad",
     rpcUrl: "https://rpc.monad.xyz",
     explorer: "https://monadvision.com",
@@ -466,6 +484,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 9745,
+    testnetChainIds: [9746],
     name: "Plasma",
     rpcUrl: "https://rpc.plasma.to",
     explorer: "https://plasmascan.to",
@@ -485,6 +504,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 137,
+    testnetChainIds: [80002],
     name: "Polygon",
     rpcUrl: "https://polygon.drpc.org",
     explorer: "https://polygonscan.com",
@@ -504,6 +524,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 4663,
+    testnetChainIds: [46630],
     name: "Robinhood Chain",
     rpcUrl: "https://rpc.mainnet.chain.robinhood.com",
     explorer: "https://robinhoodchain.blockscout.com",
@@ -524,6 +545,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 534352,
+    testnetChainIds: [534351],
     name: "Scroll",
     rpcUrl: "https://rpc.scroll.io",
     explorer: "https://scrollscan.com",
@@ -544,6 +566,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 146,
+    testnetChainIds: [14601, 57054], // Blaze (57054) is legacy but still recognizable
     name: "Sonic",
     rpcUrl: "https://rpc.soniclabs.com",
     explorer: "https://sonicscan.org",
@@ -564,6 +587,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 4217,
+    testnetChainIds: [42431],
     name: "Tempo",
     rpcUrl: "https://rpc.presto.tempo.xyz",
     explorer: "https://explore.mainnet.tempo.xyz",
@@ -580,6 +604,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 130,
+    testnetChainIds: [1301],
     name: "Unichain",
     rpcUrl: "https://mainnet.unichain.org",
     explorer: "https://uniscan.xyz",
@@ -599,6 +624,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 480,
+    testnetChainIds: [4801],
     name: "World Chain",
     rpcUrl: "https://worldchain-mainnet.g.alchemy.com/public",
     explorer: "https://worldscan.org",
@@ -618,6 +644,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
   },
   {
     chainId: 324,
+    testnetChainIds: [300],
     name: "ZKsync Era",
     rpcUrl: "https://mainnet.era.zksync.io",
     explorer: "https://explorer.zksync.io",
