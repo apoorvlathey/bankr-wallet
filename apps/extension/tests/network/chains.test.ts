@@ -71,6 +71,7 @@ test("registered testnets reuse their mainnet chain identity", () => {
       assert.equal(icon.bg, chain.bg);
       assert.equal(icon.border, chain.border);
       assert.equal(icon.text, chain.text);
+      assert.deepEqual(icon.logoStyle, chain.logoStyle);
       assert.ok(icon.overlayLabel, `${testnetChainId} should show a testnet overlay`);
       assert.equal(
         getChainEnvironmentLabel(testnetChainId, `${chain.name} Testnet`),
@@ -78,6 +79,27 @@ test("registered testnets reuse their mainnet chain identity", () => {
       );
     }
   }
+});
+
+test("HyperEVM mainnet and testnet share the contrast-safe logo style", () => {
+  const expectedLogoStyle = {
+    light: {
+      surface: "rgba(255, 255, 255, 0.94)",
+      border: "rgba(255, 255, 255, 0.28)",
+      insetOutline: "rgba(0, 0, 0, 0.08)",
+    },
+    dark: {
+      surface: "rgba(9, 9, 11, 0.94)",
+      border: "rgba(151, 252, 228, 0.28)",
+      insetOutline: "rgba(255, 255, 255, 0.06)",
+    },
+  };
+
+  assert.deepEqual(resolveChainIconMeta(999, "HyperEVM").logoStyle, expectedLogoStyle);
+  assert.deepEqual(
+    resolveChainIconMeta(998, "HyperEVM Testnet").logoStyle,
+    expectedLogoStyle,
+  );
 });
 
 test("swap support matches the official 0x Swap API table", () => {

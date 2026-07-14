@@ -9,13 +9,12 @@ import SafeImage from "@/components/SafeImage";
  * testnets with a small overlay label, and falls back to deterministic initials
  * for custom chains we do not recognize yet.
  *
- * `withChip`: opt-in light circular fill painted behind image icons. Several
- * chain SVGs (MegaETH, Mantle, HyperEVM, Linea, Ink, ApeChain, Monad) ship as a
- * dark glyph on a transparent canvas — they vanish on Midnight's dark surfaces.
- * Pass `withChip` from chain dropdowns / selected-chain badges so the glyph
- * stays legible in dark themes. Initials fallbacks get their own readable
- * Midnight fill automatically because they may render anywhere a custom chain
- * appears, including compact selected-chain buttons.
+ * Registry-defined `logoStyle` metadata is always applied when a particular
+ * logo needs its own contrast surface. Registered testnets inherit that style
+ * from their mainnet identity. `withChip` remains the opt-in generic dark-theme
+ * fallback for other transparent icons. Initials fallbacks get their own
+ * readable Midnight fill automatically because they may render anywhere a
+ * custom chain appears, including compact selected-chain buttons.
  */
 export default function ChainIcon({
   chainId,
@@ -36,12 +35,30 @@ export default function ChainIcon({
   const altText = chainName || `Chain ${chainId}`;
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
-  const showChip = withChip && isDarkTheme && Boolean(meta.iconSrc);
+  const logoColorScheme = meta.logoStyle
+    ? isDarkTheme
+      ? meta.logoStyle.dark ?? meta.logoStyle.light
+      : meta.logoStyle.light
+    : undefined;
+  const showCustomLogoSurface = Boolean(meta.iconSrc && logoColorScheme);
+  const showChip =
+    !showCustomLogoSurface && withChip && isDarkTheme && Boolean(meta.iconSrc);
   const fallbackBg = isDarkTheme ? "whiteAlpha.900" : meta.bg;
   const fallbackText = isDarkTheme ? "fg.inverse" : meta.text;
   const fallbackBorder = isDarkTheme ? "border.default" : meta.border;
   return (
     <Box position="relative" boxSize={size} flexShrink={0}>
+      {showCustomLogoSurface && logoColorScheme && (
+        <Box
+          position="absolute"
+          inset={0}
+          bg={logoColorScheme.surface}
+          border="1px solid"
+          borderColor={logoColorScheme.border}
+          borderRadius="full"
+          boxShadow={`inset 0 0 0 1px ${logoColorScheme.insetOutline}`}
+        />
+      )}
       {showChip && (
         <Box
           position="absolute"
@@ -56,7 +73,8 @@ export default function ChainIcon({
           alt={altText}
           boxSize={size}
           position="relative"
-          borderRadius={withChip ? "full" : undefined}
+          p={showCustomLogoSurface ? "1px" : undefined}
+          borderRadius={showCustomLogoSurface || withChip ? "full" : undefined}
           objectFit="contain"
           fallback={
             <Box

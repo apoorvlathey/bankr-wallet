@@ -150,6 +150,7 @@
 - Set: existing Chakra/custom icons, normalized to a 20 or 24px grid with approximately 2px strokes and rounded joins.
 - Icons inherit `currentColor`. Interactive icon targets remain at least 40px, preferably 44px.
 - Network, token, and dapp marks retain their real identity inside quiet neutral containers.
+- Network marks may opt into registry-owned light and dark contrast surfaces when their source colors lose legibility; registered testnets inherit the parent mark's complete treatment. Midnight-specific surfaces preserve mark contrast instead of reusing bright light-theme chips.
 
 ## Imagery and illustration
 

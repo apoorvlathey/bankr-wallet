@@ -1,9 +1,14 @@
-import { CHAIN_REGISTRY, DEFAULT_CHAIN_CONFIG } from "@/constants/chainRegistry";
+import {
+  CHAIN_REGISTRY,
+  DEFAULT_CHAIN_CONFIG,
+  type ChainLogoStyle,
+} from "@/constants/chainRegistry";
 import { KNOWN_CHAINS } from "@/constants/knownChains.generated";
 import { getBungeeChain } from "@/lib/bungeeChainCache";
 
 export interface ResolvedChainIconMeta {
   iconSrc?: string;
+  logoStyle?: ChainLogoStyle;
   overlayLabel?: string;
   fallbackText: string;
   bg: string;
@@ -190,6 +195,7 @@ export function resolveChainIconMeta(
   if (builtIn) {
     return {
       iconSrc: builtIn.icon || undefined,
+      logoStyle: builtIn.logoStyle,
       fallbackText: getChainInitials(chainName || builtIn.name),
       bg: builtIn.bg,
       border: builtIn.border,
@@ -201,6 +207,7 @@ export function resolveChainIconMeta(
   if (testnetParent) {
     return {
       iconSrc: testnetParent.icon || undefined,
+      logoStyle: testnetParent.logoStyle,
       overlayLabel: inferOverlayLabel(chainName) ?? "T",
       fallbackText: getChainInitials(chainName || testnetParent.name),
       bg: testnetParent.bg,

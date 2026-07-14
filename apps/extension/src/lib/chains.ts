@@ -4,6 +4,7 @@ import {
   DEFAULT_CHAIN_CONFIG,
   ZEROX_SUPPORTED_CHAIN_IDS,
   type ChainEntry,
+  type ChainLogoStyle,
 } from "@/constants/chainRegistry";
 import { resolveChainIconMeta } from "@/lib/chainIcons";
 import { sanitizeCustomExplorerUrl } from "@/lib/externalNavigation";
@@ -23,6 +24,7 @@ export interface ResolvedChain {
   isCustom: boolean;
   nativeCurrency: { name: string; symbol: string; decimals: number };
   icon: string;
+  logoStyle?: ChainLogoStyle;
   iconOverlayLabel?: string;
   bg: string;
   border: string;
@@ -216,6 +218,7 @@ export function getResolvedChains(
         isCustom: entry.isCustom === true || !builtIn,
         nativeCurrency: entry.nativeCurrency ?? builtIn?.nativeCurrency ?? DEFAULT_NATIVE_CURRENCY,
         icon: config.icon,
+        logoStyle: iconMeta.logoStyle,
         iconOverlayLabel: iconMeta.overlayLabel,
         bg: config.bg,
         border: config.border,

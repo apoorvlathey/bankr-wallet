@@ -50,6 +50,20 @@ import { type NetworksInfo } from "@/types";
 // Core types
 // ---------------------------------------------------------------------------
 
+export interface ChainLogoColorScheme {
+  /** Surface painted behind transparent or low-contrast logo artwork. */
+  surface: string;
+  /** Outer edge color for the logo surface. */
+  border: string;
+  /** Inner edge color that keeps the surface distinct from its surroundings. */
+  insetOutline: string;
+}
+
+export interface ChainLogoStyle {
+  light: ChainLogoColorScheme;
+  dark?: ChainLogoColorScheme;
+}
+
 export interface ChainEntry {
   chainId: number;
   /** Testnet chain IDs that should reuse this chain's visual identity. */
@@ -59,6 +73,8 @@ export interface ChainEntry {
   explorer: string;
   /** Icon path relative to extension public dir */
   icon: string;
+  /** Optional logo-specific legibility treatment, inherited by testnets. */
+  logoStyle?: ChainLogoStyle;
   /** UI brand colors */
   bg: string;
   border: string;
@@ -141,6 +157,7 @@ export interface ChainConfig {
   border: string;
   text: string;
   icon: string;
+  logoStyle?: ChainLogoStyle;
   explorer: string;
 }
 
@@ -321,6 +338,18 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     rpcUrl: "https://rpc.hyperliquid.xyz/evm",
     explorer: "https://hyperevmscan.io",
     icon: "/chainIcons/hyperevm.svg",
+    logoStyle: {
+      light: {
+        surface: "rgba(255, 255, 255, 0.94)",
+        border: "rgba(255, 255, 255, 0.28)",
+        insetOutline: "rgba(0, 0, 0, 0.08)",
+      },
+      dark: {
+        surface: "rgba(9, 9, 11, 0.94)",
+        border: "rgba(151, 252, 228, 0.28)",
+        insetOutline: "rgba(255, 255, 255, 0.06)",
+      },
+    },
     bg: "rgba(80, 227, 194, 0.15)",
     border: "rgba(80, 227, 194, 0.4)",
     text: "#50E3C2",
@@ -676,6 +705,7 @@ for (const c of CHAIN_REGISTRY) {
     border: c.border,
     text: c.text,
     icon: c.icon,
+    logoStyle: c.logoStyle,
     explorer: c.explorer,
   };
 }

@@ -2314,6 +2314,7 @@ Important constraints:
 
 - No chain icons are stored in `chrome.storage`; icon rendering is fully derived from chain ID + chain name
 - Known testnets should reuse the mainnet icon with an overlay instead of adding a separate storage concept
+- Chain logos that need a contrast surface declare optional theme-aware `logoStyle` metadata on their `CHAIN_REGISTRY` entry. Each light/dark scheme owns its `surface`, `border`, and `insetOutline`; dark themes fall back to the light scheme when no dark override exists. `resolveChainIconMeta` carries the complete treatment to every registered testnet parent mapping, and `ChainIcon` applies the active scheme without requiring a caller-specific chip flag.
 - Any new UI that needs a chain icon should render `ChainIcon`, not `config.icon` directly
 
 ### TokenHoldings Component
