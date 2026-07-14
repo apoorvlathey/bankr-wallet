@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   Checkbox,
-  HStack,
   IconButton,
 } from "@chakra-ui/react";
 import {
@@ -211,7 +210,7 @@ export default function HideTokensView({
       />
 
       <ScreenBody pt={4}>
-        <ListSurface mb={6}>
+        <ListSurface>
           <ListItem interactive onClick={onOpenHidden}>
             <ListItemMedia>
               <ViewOffIcon boxSize={5} />
@@ -229,22 +228,23 @@ export default function HideTokensView({
         </ListSurface>
 
         <ScreenSection
+          mt={8}
           title="Portfolio tokens"
-          description="Choose which tokens to hide from every wallet portfolio."
-          headingProps={{ fontSize: "lg" }}
-        >
-          <HStack justify="flex-end" mb={2}>
+          headerAction={
             <IconButton
               aria-label="Refresh tokens"
               icon={<RepeatIcon />}
-              size="sm"
+              size="xs"
               variant="ghost"
               color="fg.secondary"
               onClick={() => loadData()}
               isDisabled={loading || submitting}
             />
-          </HStack>
-
+          }
+          description="Choose which tokens to hide from every wallet portfolio."
+          headingProps={{ fontSize: "lg" }}
+          descriptionProps={{ mt: -1 }}
+        >
           {loading ? (
             <ListSurface aria-label="Loading portfolio tokens">
               {Array.from({ length: 5 }, (_, index) => (
@@ -277,14 +277,21 @@ export default function HideTokensView({
             </EmptyState>
           ) : (
             <ListSurface>
-              <ListItem isSelected={allSelected}>
+              <ListItem
+                isSelected={allSelected}
+                density="compact"
+                px={3}
+                py={2}
+                gap={2}
+              >
                 <Box
-                  minW="44px"
+                  w="28px"
+                  minW="28px"
                   minH="44px"
                   display="flex"
                   alignItems="center"
                   justifyContent="center"
-                  ml={-2}
+                  ml={-1}
                 >
                   <Checkbox
                     aria-label="Select all portfolio tokens"

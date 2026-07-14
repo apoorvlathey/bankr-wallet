@@ -1,6 +1,7 @@
 import {
   Box,
   Heading,
+  HStack,
   Text,
   VStack,
   type BoxProps,
@@ -87,6 +88,7 @@ export const ScreenBody = forwardRef<HTMLDivElement, ScreenBodyProps>(
 
 export interface ScreenSectionProps extends Omit<BoxProps, "title"> {
   title?: ReactNode;
+  headerAction?: ReactNode;
   description?: ReactNode;
   titleId?: string;
   descriptionId?: string;
@@ -100,6 +102,7 @@ export const ScreenSection = forwardRef<HTMLDivElement, ScreenSectionProps>(
   function ScreenSection(
     {
       title,
+      headerAction,
       description,
       titleId,
       descriptionId,
@@ -127,15 +130,20 @@ export const ScreenSection = forwardRef<HTMLDivElement, ScreenSectionProps>(
         {(title || description) && (
           <VStack align="stretch" spacing={1} mb={3}>
             {title && (
-              <Heading
-                as={headingAs}
-                id={resolvedTitleId}
-                fontSize="xl"
-                overflowWrap="anywhere"
-                {...headingProps}
-              >
-                {title}
-              </Heading>
+              <HStack align="center" justify="space-between" spacing={3}>
+                <Heading
+                  as={headingAs}
+                  id={resolvedTitleId}
+                  flex="1"
+                  minW={0}
+                  fontSize="xl"
+                  overflowWrap="anywhere"
+                  {...headingProps}
+                >
+                  {title}
+                </Heading>
+                {headerAction && <Box flexShrink={0}>{headerAction}</Box>}
+              </HStack>
             )}
             {description && (
               <Text
