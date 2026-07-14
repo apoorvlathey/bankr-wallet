@@ -208,6 +208,11 @@ function App() {
   // consume & reset this flag so they skip their fallback routing (which
   // would otherwise cause a second transition after the pre-nav).
   const preNavigatedRef = useRef(false);
+  // Storage changes can arrive before or after the reject callback. Remember
+  // which removals came from an explicit user rejection so the storage
+  // fallback returns to Assets instead of treating every removal as a
+  // submitted transaction and opening Activity.
+  const rejectingTxIdsRef = useRef(new Set<string>());
 
   const [sidePanelSupported, setSidePanelSupported] = useState(false);
   const [sidePanelMode, setSidePanelMode] = useState(false);
@@ -1242,6 +1247,9 @@ function App() {
             selectedTxRequest &&
             !updated.find((r) => r.id === selectedTxRequest.id)
           ) {
+            const wasUserRejected = rejectingTxIdsRef.current.delete(
+              selectedTxRequest.id,
+            );
             if (updated.length > 0) {
               setSelectedTxRequest(updated[0]);
             } else {
@@ -1268,7 +1276,13 @@ function App() {
                   !hasOtherPending &&
                   (view === "txConfirm" || view === "pendingTxList")
                 ) {
-                  setActivityTabTrigger((k) => k + 1);
+                  if (wasUserRejected) {
+                    setHoldingsTabTrigger((current) =>
+                      Math.max(current + 1, activityTabTrigger + 1),
+                    );
+                  } else {
+                    setActivityTabTrigger((k) => k + 1);
+                  }
                   setView("main");
                 }
               }
@@ -1432,7 +1446,7 @@ function App() {
 
     chrome.storage.onChanged.addListener(handleStorageChange);
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
-  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, selectedErc7715PermissionRequest, selectedBatchRequest, pendingWatchAssetRequest, pendingRequests, pendingBatchRequests, pendingSignatureRequests, pendingErc7715PermissionRequests, crossDappBatch, view, isInSidePanel, isFullscreenTab]);
+  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, selectedErc7715PermissionRequest, selectedBatchRequest, pendingWatchAssetRequest, pendingRequests, pendingBatchRequests, pendingSignatureRequests, pendingErc7715PermissionRequests, crossDappBatch, view, isInSidePanel, isFullscreenTab, activityTabTrigger]);
 
   // Keep the Home dapp context synchronized with both tab switches and
   // same-tab navigations (for example New Tab -> app.aave.com).
@@ -1824,6 +1838,13 @@ function App() {
     view,
   ]);
 
+  const handleBeforeTxReject = useCallback(() => {
+    if (selectedTxRequest?.id) {
+      rejectingTxIdsRef.current.add(selectedTxRequest.id);
+    }
+    navigateToAdjacentRequest();
+  }, [navigateToAdjacentRequest, selectedTxRequest?.id]);
+
   const handleTxConfirmed = useCallback(async () => {
     const currentTxId = selectedTxRequest?.id;
     const requests = await loadPendingRequests();
@@ -1847,6 +1868,9 @@ function App() {
     // routing to avoid a second transition.
     if (preNavigatedRef.current) {
       preNavigatedRef.current = false;
+      if (selectedTxRequest?.id) {
+        rejectingTxIdsRef.current.delete(selectedTxRequest.id);
+      }
       return;
     }
     const currentTxId = selectedTxRequest?.id;
@@ -1873,6 +1897,9 @@ function App() {
         }
         if (isInSidePanel || isFullscreenTab) {
           setSelectedTxRequest(null);
+          setHoldingsTabTrigger((current) =>
+            Math.max(current + 1, activityTabTrigger + 1),
+          );
           setView("main");
         } else {
           window.close();
@@ -1881,7 +1908,12 @@ function App() {
     }
   // Rejection fallback routing reads the current pending-request helpers.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTxRequest?.id, isInSidePanel, isFullscreenTab]);
+  }, [
+    selectedTxRequest?.id,
+    isInSidePanel,
+    isFullscreenTab,
+    activityTabTrigger,
+  ]);
 
   const handleRejectAll = useCallback(async () => {
     // Reject all pending transactions
@@ -2816,7 +2848,7 @@ function App() {
               totalCount={totalCount}
               onRejected={handleTxRejected}
               onRejectAll={handleRejectAll}
-              onBeforeReject={navigateToAdjacentRequest}
+              onBeforeReject={handleBeforeTxReject}
             >
               <TransactionConfirmation
                 key={selectedTxRequest.id}
@@ -2836,7 +2868,7 @@ function App() {
                 onConfirmed={handleTxConfirmed}
                 onRejected={handleTxRejected}
                 onRejectAll={handleRejectAll}
-                onBeforeReject={navigateToAdjacentRequest}
+                onBeforeReject={handleBeforeTxReject}
                 onAddedToBatch={() => {
                   setSelectedTxRequest(null);
                   setView("crossDappBatchConfirm");
