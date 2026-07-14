@@ -300,6 +300,12 @@
 
 ## Changelog
 
+- 2026-07-15: removed the duplicate inline batch-confirmation disabled message.
+  The disabled Confirm batch control now remains focusable and explains the
+  blocking reason on hover or keyboard focus, with corrective copy for unsafe
+  self-recursive calls while preserving the signing block itself. The
+  user-assembled review screen now uses the stable “Cross-Dapp Batch” heading
+  instead of a source-count-derived “Review app batch” label.
 - 2026-07-15: kept incompatible Add to batch actions safely disabled while
   restoring their account/chain reason through a keyboard-accessible tooltip,
   without bringing back persistent helper copy. Cross-dapp Reject all now

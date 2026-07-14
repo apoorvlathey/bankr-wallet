@@ -48,23 +48,6 @@ function CrossDappBatchConfirmation({
 }: CrossDappBatchConfirmationProps) {
   const toast = useToast();
 
-  // Count source applications without reordering the entries. The original
-  // call order is execution-critical, while the per-call source labels make
-  // origin boundaries visible inside the Actions disclosure.
-  const sourceCount = useMemo(
-    () =>
-      new Set(
-        batch.entries.map((entry) => {
-          try {
-            return new URL(entry.origin).origin;
-          } catch {
-            return entry.origin;
-          }
-        }),
-      ).size,
-    [batch.entries],
-  );
-
   // Build a synthetic PendingBatchTxRequest so we can reuse the existing batch
   // confirmation UI without forking it. The id and origin are placeholders —
   // the cross-dapp batch isn't tied to any single dapp.
@@ -212,7 +195,7 @@ function CrossDappBatchConfirmation({
       onRemoveCall={handleRemoveCall}
       onEditCallData={handleEditCallData}
       originPerCall={originPerCall}
-      titleOverride={`Review ${sourceCount === 1 ? "app" : `${sourceCount}-app`} batch (${batch.entries.length} action${batch.entries.length === 1 ? "" : "s"})`}
+      titleOverride="Cross-Dapp Batch"
       customConfirmHandler={handleCustomConfirm}
       customRejectHandler={handleCustomReject}
       // Cross-dapp identity is communicated by the title and per-action dapp

@@ -35,6 +35,8 @@ to `useBatchActions.ts` and the default edit path in `CallsReview.tsx`.
 
 Behavioral coverage belongs under `tests/ui/`; transaction execution and wallet
 type branches remain covered by the existing recursive batch/security suites.
+The production preview route includes an `unsafe-self-call` scenario for the
+encoder-level ERC-7821 self-recursion block and its disabled confirmation state.
 
 Cross-dapp adapters must pass queue-level Reject all through to the App-owned
 global rejection handler; the adapter's local `onRejected` callback only owns

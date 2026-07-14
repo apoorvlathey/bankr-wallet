@@ -6,13 +6,17 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogOverlay,
+  Box,
   Button,
   Text,
+  Tooltip,
+  VStack,
   useDisclosure,
 } from "@chakra-ui/react";
 import { useRef } from "react";
 
 interface SimulationFailureConfirmButtonProps {
+  disabledReason?: string | null;
   isDisabled: boolean;
   isLoading: boolean;
   label: string;
@@ -26,6 +30,7 @@ interface SimulationFailureConfirmButtonProps {
  * simulation can reach any wallet-specific signing path.
  */
 export function SimulationFailureConfirmButton({
+  disabledReason,
   isDisabled,
   isLoading,
   label,
@@ -52,16 +57,43 @@ export function SimulationFailureConfirmButton({
 
   return (
     <>
-      <Button
-        variant="brand"
-        w="full"
-        leftIcon={simulationFailed ? <WarningTwoIcon boxSize="15px" /> : undefined}
-        onClick={handlePrimaryClick}
-        isDisabled={isDisabled || isLoading}
-        isLoading={isLoading}
+      <Tooltip
+        isDisabled={!disabledReason}
+        label={disabledReason ? (
+          <VStack align="start" spacing={1} maxW="280px">
+            <Text fontSize="xs" fontWeight="700">
+              Confirmation blocked
+            </Text>
+            <Text fontSize="xs" fontWeight="500" lineHeight="short">
+              {disabledReason}
+            </Text>
+          </VStack>
+        ) : undefined}
+        placement="top"
+        openDelay={200}
+        hasArrow
       >
-        {label}
-      </Button>
+        <Box
+          w="full"
+          role={disabledReason ? "group" : undefined}
+          aria-label={disabledReason ? `${label} unavailable. ${disabledReason}` : undefined}
+          tabIndex={disabledReason && !isLoading ? 0 : undefined}
+          borderRadius="md"
+          _focus={{ outline: "none" }}
+          _focusVisible={{ boxShadow: "focus" }}
+        >
+          <Button
+            variant="brand"
+            w="full"
+            leftIcon={simulationFailed ? <WarningTwoIcon boxSize="15px" /> : undefined}
+            onClick={handlePrimaryClick}
+            isDisabled={isDisabled || isLoading}
+            isLoading={isLoading}
+          >
+            {label}
+          </Button>
+        </Box>
+      </Tooltip>
 
       <AlertDialog
         isOpen={warningDialog.isOpen}

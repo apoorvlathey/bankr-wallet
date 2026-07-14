@@ -9,8 +9,6 @@ interface RequestContextProps {
   error: string;
   accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
   customConfirm: boolean;
-  canConfirmBatch: boolean;
-  confirmDisabledReason: string | null;
   warnings: ReactNode;
   smartAccountSetup: ReactNode;
 }
@@ -23,8 +21,6 @@ export function RequestContext({
   error,
   accountType,
   customConfirm,
-  canConfirmBatch,
-  confirmDisabledReason,
   warnings,
   smartAccountSetup,
 }: RequestContextProps) {
@@ -127,12 +123,6 @@ export function RequestContext({
             Connected via an impersonated account. Signing is disabled.
           </Text>
         </Box>
-      )}
-
-      {canConfirmBatch && confirmDisabledReason && state !== "submitting" && (
-        <Text role="status" color="text.secondary" fontSize="xs">
-          Confirm unavailable: {confirmDisabledReason}
-        </Text>
       )}
     </VStack>
   );

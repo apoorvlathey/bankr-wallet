@@ -400,6 +400,22 @@ export function createPreviewBatchScenario(
     };
   }
 
+  if (scenario === "unsafe-self-call") {
+    return {
+      ...base,
+      params: {
+        ...base.params,
+        calls: [
+          {
+            ...base.params.calls[0],
+            to: base.params.from,
+          },
+          ...base.params.calls.slice(1),
+        ],
+      },
+    };
+  }
+
   if (scenario === "stress") {
     return {
       ...base,

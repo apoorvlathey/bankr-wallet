@@ -3,7 +3,7 @@ import { SimulationFailureConfirmButton } from "@/components/RequestConfirmation
 
 interface ConfirmActionProps {
   customConfirm: boolean;
-  confirmDisabled: boolean;
+  confirmDisabledReason: string | null;
   simulationFailed: boolean;
   submitting: boolean;
   onConfirm: () => void;
@@ -11,14 +11,15 @@ interface ConfirmActionProps {
 
 export function ConfirmAction({
   customConfirm,
-  confirmDisabled,
+  confirmDisabledReason,
   simulationFailed,
   submitting,
   onConfirm,
 }: ConfirmActionProps) {
   return (
     <SimulationFailureConfirmButton
-      isDisabled={confirmDisabled}
+      disabledReason={confirmDisabledReason}
+      isDisabled={!!confirmDisabledReason}
       isLoading={submitting}
       label={customConfirm ? "Confirm batch" : "Confirm"}
       onConfirm={onConfirm}

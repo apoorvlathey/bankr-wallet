@@ -31,6 +31,7 @@ import {
   emptyEncodedBatch,
   findMalformedCalldata,
   findMalformedValue,
+  getBatchEncodingBlockedReason,
   getOriginHostname,
   makeSyntheticTxRequest,
   tryEncodeBatch,
@@ -172,7 +173,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
       : isValueMalformed
         ? "Transaction value is malformed — signing blocked"
         : encodingError
-          ? "Unsafe batch — signing blocked"
+          ? getBatchEncodingBlockedReason(encodingError)
           : isCalldataMalformed
             ? "Calldata is malformed — signing blocked"
             : isLocalSigningAccount && batchPlan.strategy === "loading"
@@ -247,8 +248,6 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
           error={actions.error}
           accountType={accountType}
           customConfirm={!!customConfirmHandler}
-          canConfirmBatch={canConfirmBatch}
-          confirmDisabledReason={confirmDisabledReason}
           warnings={<RequestWarnings
             borders={tokens.borders}
             simulationReverted={review.simulationReverted}
@@ -308,7 +307,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
         />}
         confirmAction={canConfirmBatch ? <ConfirmAction
           customConfirm={!!customConfirmHandler}
-          confirmDisabled={!!confirmDisabledReason}
+          confirmDisabledReason={confirmDisabledReason}
           simulationFailed={shouldConfirmSimulationFailure({
             simulationReverted: review.simulationReverted,
             gasEstimateFailed: review.anyTxMayRevert,

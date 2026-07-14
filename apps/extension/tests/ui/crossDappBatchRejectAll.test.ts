@@ -14,5 +14,7 @@ test("cross-dapp Reject all reaches the global queue rejection handler", async (
   assert.match(app, /<CrossDappBatchConfirmation[\s\S]*?onRejectAll=\{handleRejectAll\}/);
   assert.match(adapter, /onRejectAll:\s*\(\)\s*=>\s*void/);
   assert.match(adapter, /<BatchTransactionConfirmation[\s\S]*?onRejectAll=\{onRejectAll\}/);
+  assert.match(adapter, /titleOverride="Cross-Dapp Batch"/);
+  assert.doesNotMatch(adapter, /titleOverride=\{`Review /);
   assert.doesNotMatch(adapter, /onRejectAll=\{onRejected\}/);
 });

@@ -61,6 +61,18 @@ export function tryEncodeBatch(calls: BatchCalls, fromAddress: string) {
   }
 }
 
+export function getBatchEncodingBlockedReason(encodingError: string): string {
+  if (encodingError.includes("self-recursion")) {
+    return "WalletChan blocked this batch because the call targeting your own account could bypass authorization. Remove or edit that call to continue.";
+  }
+
+  if (encodingError.includes("contract deployments")) {
+    return "Contract deployments can't be included in a batch. Remove the deployment call to continue.";
+  }
+
+  return "WalletChan couldn't safely prepare this batch. Remove or edit the flagged call, then try again.";
+}
+
 export function emptyEncodedBatch(fromAddress: string) {
   return {
     encodedBatch: {

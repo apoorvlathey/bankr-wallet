@@ -191,6 +191,7 @@ export const PREVIEW_ROUTE_REGISTRY: Record<
       "loading",
       "simulation-error",
       "malformed-disabled",
+      "unsafe-self-call",
       "stress",
       "impersonator-disabled",
     ],
