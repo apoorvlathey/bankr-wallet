@@ -32,6 +32,8 @@ export interface TokenHoldingsProps {
   onShowAllNetworks?: () => void;
   searchQuery?: string;
   onSnapshotsChanged?: () => void;
+  /** Groups canonical ETH, USDC, and USDT rows across networks by default. */
+  unifyBalances?: boolean;
   view?: "all" | "assets" | "positions";
   onStateChange?: (state: TokenHoldingsStateSnapshot) => void;
 }

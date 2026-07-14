@@ -42,6 +42,7 @@ function TokenHoldings({
   searchQuery = "",
   onSnapshotsChanged,
   onStateChange,
+  unifyBalances = true,
   view = "all",
 }: TokenHoldingsProps) {
   const { networksInfo } = useNetworks();
@@ -77,6 +78,7 @@ function TokenHoldings({
     filterChainId,
     searchQuery,
     showLowValueTokens,
+    unifyBalances,
     state,
   });
   useLowValueBalanceRefresh({

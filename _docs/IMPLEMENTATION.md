@@ -2323,6 +2323,12 @@ Important constraints:
 - Hover actions include Swap, Send, custom-token Edit, and an overflow menu for hiding ERC-20 tokens
 - Hiding a token stores a global hidden-token entry, removes it from totals, clears cached holdings, and force-appends a current aggregate snapshot so future chart points reflect the hidden-token view without deleting existing chart history
 - Total portfolio value header with hide/show toggle (persisted in `chrome.storage.sync.hidePortfolioValue`)
+- Canonical ETH, USDC, and USDT balances are unified across networks by
+  default. The checkmarked Portfolio options → Unify Balances row toggles the
+  grouped presentation and dismisses the sheet so the result is immediately
+  visible; disabling it renders every chain/token entry separately. The
+  preference is persisted in `chrome.storage.sync.unifyPortfolioBalances`, and
+  missing or malformed values resolve to `true` for released installs.
 - 60-second client-side cache plus a best-effort local `portfolioHoldingsCache` for first paint after popup/sidepanel reopen
 - Refresh button, loading skeletons, empty state
 - Click token → opens TokenTransfer view

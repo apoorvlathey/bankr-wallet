@@ -14,6 +14,7 @@ interface UseHoldingsViewModelOptions {
   filterChainId?: number | null;
   searchQuery: string;
   showLowValueTokens: boolean;
+  unifyBalances: boolean;
   state: HoldingsState;
 }
 
@@ -21,6 +22,7 @@ export function useHoldingsViewModel({
   filterChainId,
   searchQuery,
   showLowValueTokens,
+  unifyBalances,
   state,
 }: UseHoldingsViewModelOptions) {
   const { tokens, defiPositions } = state;
@@ -38,8 +40,8 @@ export function useHoldingsViewModel({
     [filterChainId, searchQuery, tokens],
   );
   const { primaryAssetRows, lowValueAssetRows, lowValueTotalUsd } = useMemo(
-    () => buildAssetDisplayRows(filteredTokens, filterChainId),
-    [filterChainId, filteredTokens],
+    () => buildAssetDisplayRows(filteredTokens, filterChainId, unifyBalances),
+    [filterChainId, filteredTokens, unifyBalances],
   );
   const primaryTokens = useMemo(
     () => getTokensFromRows(primaryAssetRows),

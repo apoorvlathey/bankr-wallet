@@ -49,6 +49,7 @@ export const WALLET_SYNC_STORAGE_KEYS = [
   "autoLockTimeout",
   "isArcBrowser",
   "hidePortfolioValue",
+  "unifyPortfolioBalances",
   "sidePanelVerified",
   "sidePanelMode",
   "activeAccountId",

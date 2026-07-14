@@ -5,10 +5,14 @@ import type {
   PortfolioToken,
 } from "../../src/chrome/portfolio/api";
 import {
+  buildAssetDisplayRows,
   filterPortfolioTokens,
   getChainTotals,
   mergeTokenEnrichment,
 } from "../../src/components/Portfolio/Holdings/transforms";
+import {
+  resolveUnifyPortfolioBalances,
+} from "../../src/components/Portfolio/portfolioPreferences";
 
 const token = (
   symbol: string,
@@ -39,6 +43,36 @@ test("portfolio filtering composes chain and case-insensitive search", () => {
     ["USDC"],
   );
   assert.deepEqual(filterPortfolioTokens(tokens, 1, "usd"), []);
+});
+
+test("portfolio balance unification defaults on for missing or invalid storage", () => {
+  assert.equal(resolveUnifyPortfolioBalances(undefined), true);
+  assert.equal(resolveUnifyPortfolioBalances("false"), true);
+  assert.equal(resolveUnifyPortfolioBalances(false), false);
+});
+
+test("portfolio rows can preserve individual cross-network balances", () => {
+  const ethTokens = [
+    token("ETH", 1, {
+      contractAddress: "native",
+      valueUsd: 10,
+    }),
+    token("ETH", 8453, {
+      contractAddress: "native",
+      valueUsd: 5,
+    }),
+  ];
+
+  const unified = buildAssetDisplayRows(ethTokens, null);
+  assert.equal(unified.primaryAssetRows.length, 1);
+  assert.equal(unified.primaryAssetRows[0]?.kind, "aggregate");
+
+  const individual = buildAssetDisplayRows(ethTokens, null, false);
+  assert.equal(individual.primaryAssetRows.length, 2);
+  assert.deepEqual(
+    individual.primaryAssetRows.map((row) => row.kind),
+    ["token", "token"],
+  );
 });
 
 test("metadata enrichment retains authoritative balance while updating price", () => {

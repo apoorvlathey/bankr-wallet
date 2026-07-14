@@ -34,6 +34,8 @@ export interface ActionSheetChoice {
   icon?: ReactElement;
   /** Marks the current choice without changing the button's semantics. */
   isSelected?: boolean;
+  /** Keeps selection emphasis on the checkmark instead of tinting the row. */
+  selectionVariant?: "highlighted" | "indicator-only";
   /** Uses the error intent for an explicitly destructive action. */
   isDestructive?: boolean;
   isDisabled?: boolean;
@@ -59,6 +61,10 @@ export interface ActionSheetProps {
   closeOnEsc?: boolean;
   /** Safe default for this non-blocking surface. */
   closeOnOverlayClick?: boolean;
+}
+
+function hasHighlightedSelection(choice: ActionSheetChoice): boolean {
+  return choice.isSelected === true && choice.selectionVariant !== "indicator-only";
 }
 
 /**
@@ -188,7 +194,7 @@ export const ActionSheet = forwardRef<HTMLElement, ActionSheetProps>(
                       bg={
                         choice.isDestructive && tokens.colorMode !== "dark"
                           ? "status.error.bg"
-                          : choice.isSelected
+                          : hasHighlightedSelection(choice)
                             ? "surface.accentTint"
                             : "transparent"
                       }
@@ -199,7 +205,7 @@ export const ActionSheet = forwardRef<HTMLElement, ActionSheetProps>(
                       _hover={{
                         bg: choice.isDestructive
                           ? "status.error.bg"
-                          : choice.isSelected
+                          : hasHighlightedSelection(choice)
                             ? "surface.accentTint"
                             : "surface.raisedHover",
                         color: choice.isDestructive ? "status.error.fg" : "fg.primary",
@@ -207,7 +213,7 @@ export const ActionSheet = forwardRef<HTMLElement, ActionSheetProps>(
                       _active={{
                         bg: choice.isDestructive
                           ? "status.error.bg"
-                          : choice.isSelected
+                          : hasHighlightedSelection(choice)
                             ? "surface.accentTint"
                             : "surface.sunken",
                         color: choice.isDestructive ? "status.error.fg" : "fg.primary",
@@ -260,7 +266,11 @@ export const ActionSheet = forwardRef<HTMLElement, ActionSheetProps>(
 
                       {choice.isSelected && (
                         <Box
-                          color="accent.secondary"
+                          color={
+                            choice.selectionVariant === "indicator-only"
+                              ? "accent.highlight"
+                              : "accent.secondary"
+                          }
                           display="flex"
                           alignItems="center"
                           justifyContent="center"

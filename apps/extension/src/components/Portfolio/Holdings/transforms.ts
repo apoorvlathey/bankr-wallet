@@ -115,6 +115,7 @@ export function filterPortfolioTokens(
 export function buildAssetDisplayRows(
   filteredTokens: PortfolioToken[],
   filterChainId: number | null | undefined,
+  unifyBalances = true,
 ): {
   primaryAssetRows: AssetDisplayRow[];
   lowValueAssetRows: AssetDisplayRow[];
@@ -145,11 +146,13 @@ export function buildAssetDisplayRows(
             token.contractAddress.toLowerCase(),
         )
       : [];
-  const aggregateGroups = [
-    { symbol: "ETH" as const, tokens: ethTokens },
-    { symbol: "USDC" as const, tokens: usdcTokens },
-    { symbol: "USDT" as const, tokens: usdtTokens },
-  ].filter((group) => group.tokens.length > 1);
+  const aggregateGroups = unifyBalances
+    ? [
+        { symbol: "ETH" as const, tokens: ethTokens },
+        { symbol: "USDC" as const, tokens: usdcTokens },
+        { symbol: "USDT" as const, tokens: usdtTokens },
+      ].filter((group) => group.tokens.length > 1)
+    : [];
   const aggregatedTokenKeys = new Set(
     aggregateGroups.flatMap((group) =>
       group.tokens.map((token) =>

@@ -210,6 +210,7 @@ Syncs across Chrome profiles (if signed in). Persists across restarts.
 | `sidePanelVerified`  | `boolean`                   | Released legacy field retained in reset/migration manifests for compatibility. Runtime windowing no longer reads or writes it; do not reinterpret or delete it without a separate migration review. | v0.2.0     |
 | `isArcBrowser`       | `boolean`                   | Stored UI-detected Arc flag read by `windowing/`; disables sidepanel without deleting the user's mode preference. | v0.2.0     |
 | `hidePortfolioValue` | `boolean`                   | User preference to hide USD values in portfolio.                                                        | v1.0.0     |
+| `unifyPortfolioBalances` | `boolean`               | Default-on preference controlling whether canonical ETH, USDC, and USDT balances are grouped across networks in Holdings. Missing or malformed values resolve to `true`. | next |
 | `defaultGasTier`     | `"slow" \| "standard" \| "fast"` | User's last preset gas-tier choice from the tx-confirmation tier picker. Absent = default `"standard"`. The Custom tier is intentionally not persisted — it's always a one-shot opt-in for the current confirmation. | v3.4.0 |
 | `swapSlippageBps`    | `number` (BPS, 1–10000) | User's last slippage tolerance in basis points (e.g. `500` = 5%). Absent = `DEFAULT_SLIPPAGE_BPS` (5%). Read once on SwapView mount; persisted on every SlippageSettings change so a user who tunes it down (or up) doesn't see it reset to 5% next session. | next |
 

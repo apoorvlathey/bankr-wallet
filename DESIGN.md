@@ -247,6 +247,13 @@
 
 ## Changelog
 
+- 2026-07-14: placed a default-on, checkmarked Unify Balances row directly
+  beneath Refresh in Portfolio options. Selecting it persists the inverse state,
+  dismisses the sheet, and reveals either cross-network ETH/USDC/USDT summaries
+  or individual chain entries without supporting-copy clutter. Its resting row
+  remains neutral; only the selected checkmark carries brand amber.
+- 2026-07-14: reduced Portfolio options to the same compact, single-line action
+  rhythm as Quick Actions by removing redundant supporting copy.
 - 2026-07-14: moved Chains directly after Appearance in the main Settings list
   so theme and network configuration stay together near the top-level entry.
 - 2026-07-14: replaced the single RPC field in Edit Network with a bounded,

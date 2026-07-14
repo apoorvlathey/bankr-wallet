@@ -15,13 +15,13 @@ import {
   VStack,
   type IconProps,
 } from "@chakra-ui/react";
-import { AddIcon, ChevronDownIcon, CloseIcon, RepeatIcon, SearchIcon, ViewIcon, ViewOffIcon, WarningTwoIcon } from "@chakra-ui/icons";
+import { ChevronDownIcon, CloseIcon, RepeatIcon, SearchIcon, ViewIcon, ViewOffIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import TxStatusList from "@/components/TxStatusList";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import AddTokenModal from "@/components/AddTokenModal";
 import PortfolioChart from "@/components/PortfolioChart";
-import TokenHoldings from "@/components/TokenHoldings";
+import TokenHoldings, { type TokenHoldingsStateSnapshot } from "@/components/TokenHoldings";
 import ChainIcon from "@/components/ChainIcon";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
@@ -31,8 +31,6 @@ import {
   FullScreenPickerEmpty,
   FullScreenPickerGroup,
   FullScreenPickerSearch,
-  ActionSheet,
-  type ActionSheetChoice,
   ListItem,
   ListItemContent,
   ListItemDescription,
@@ -48,19 +46,8 @@ import {
   syncLinkedPortfolioChain,
   type PortfolioChainRelinkRequest,
 } from "@/components/portfolioChainFilterState";
-
-interface HoldingsState {
-  totalValueUsd: number;
-  loading: boolean;
-  hideValue: boolean;
-  toggleHideValue: () => void;
-  refresh: (options?: { forceSnapshot?: boolean }) => Promise<void>;
-  tokenKeys: Set<string>;
-  allTokenKeys: Set<string>;
-  hiddenTokenKeys: Set<string>;
-  apiUnavailable: boolean;
-  chainTotals: ReadonlyMap<number, number>;
-}
+import { PortfolioOptionsSheet } from "@/components/Portfolio/PortfolioOptionsSheet";
+import { useUnifyPortfolioBalances } from "@/components/Portfolio/useUnifyPortfolioBalances";
 
 interface PortfolioTabsProps {
   address: string;
@@ -113,8 +100,8 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
   // activityTabTrigger increments after a tx is initiated; holdingsTabTrigger
   // increments when the user backs out of send/swap without submitting.
   const [tabIndex, setTabIndex] = useState(activityTabTrigger > holdingsTabTrigger ? 2 : 0);
-  const [holdingsState, setHoldingsState] = useState<HoldingsState | null>(null);
-  const holdingsStateRef = useRef<HoldingsState | null>(null);
+  const [holdingsState, setHoldingsState] = useState<TokenHoldingsStateSnapshot | null>(null);
+  const holdingsStateRef = useRef<TokenHoldingsStateSnapshot | null>(null);
   holdingsStateRef.current = holdingsState;
   const [chartRefreshNonce, setChartRefreshNonce] = useState(0);
   const [hoveredChartValue, setHoveredChartValue] = useState<number | null>(null);
@@ -139,6 +126,7 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
   const [isAssetSearchOpen, setIsAssetSearchOpen] = useState(false);
   const [assetSearchQuery, setAssetSearchQuery] = useState("");
   const assetSearchInputRef = useRef<HTMLInputElement>(null);
+  const { unifyBalances, setUnifyBalances } = useUnifyPortfolioBalances();
 
   // Follow active dapp context changes only while the filter is linked. A
   // manual selection remains detached across browser-tab changes.
@@ -267,7 +255,7 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
     };
   }, [address]);
 
-  const handleStateChange = useCallback((state: HoldingsState) => {
+  const handleStateChange = useCallback((state: TokenHoldingsStateSnapshot) => {
     setHoldingsState(state);
     onChainBalancesChange?.(state.chainTotals, state.hideValue);
   }, [onChainBalancesChange]);
@@ -308,36 +296,6 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
     },
     [],
   );
-
-  const portfolioActionChoices: ActionSheetChoice[] = [
-    {
-      id: "refresh",
-      label: "Refresh portfolio",
-      description: "Fetch the latest balances and positions",
-      icon: <RepeatIcon boxSize="18px" />,
-      isDisabled: holdingsState?.loading,
-    },
-    {
-      id: "add-token",
-      label: "Add custom token",
-      description: "Add a token using its contract address",
-      icon: <AddIcon boxSize="16px" />,
-    },
-    ...(onHideTokens
-      ? [{
-          id: "hide-tokens",
-          label: "Hide tokens",
-          description: "Remove spam or unwanted tokens from your portfolio",
-          icon: <ViewOffIcon boxSize="18px" />,
-        }]
-      : []),
-  ];
-
-  const handlePortfolioAction = (choiceId: string) => {
-    if (choiceId === "refresh") void holdingsState?.refresh();
-    else if (choiceId === "add-token") addTokenModal.onOpen();
-    else if (choiceId === "hide-tokens") onHideTokens?.();
-  };
 
   const portfolioControls = (
     <VStack align="stretch" spacing={2} mt={tabIndex === 0 ? 1 : 0} mb={2}>
@@ -625,6 +583,7 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
               onShowAllNetworks={() => selectPortfolioChain(null)}
               searchQuery={tabIndex === 0 ? assetSearchQuery : ""}
               onSnapshotsChanged={handleSnapshotsChanged}
+              unifyBalances={unifyBalances}
             />
           </Box>
           {tabIndex === 2 && (
@@ -652,13 +611,16 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
         hiddenTokenKeys={holdingsState?.hiddenTokenKeys ?? new Set()}
       />
 
-      <ActionSheet
+      <PortfolioOptionsSheet
         isOpen={portfolioActions.isOpen}
         onClose={portfolioActions.onClose}
-        title="Portfolio options"
-        choices={portfolioActionChoices}
-        onSelect={handlePortfolioAction}
         finalFocusRef={portfolioActionsButtonRef}
+        isRefreshing={holdingsState?.loading ?? false}
+        onRefresh={() => void holdingsState?.refresh()}
+        onAddToken={addTokenModal.onOpen}
+        onHideTokens={onHideTokens}
+        unifyBalances={unifyBalances}
+        onUnifyBalancesChange={setUnifyBalances}
       />
 
       {isChainMenuOpen && (
