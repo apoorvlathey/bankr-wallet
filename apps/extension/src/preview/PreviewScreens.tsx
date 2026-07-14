@@ -735,7 +735,6 @@ export function PreviewScreen({
       );
     case "token-management":
       return <TokenManagementPreview wallet={wallet} scenario={scenario} />;
-    case "all":
-      return null;
+    case "all": return null;
   }
 }

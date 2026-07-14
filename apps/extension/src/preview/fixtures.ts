@@ -15,6 +15,7 @@ import {
 import { getVisibleChains } from "@/lib/chains";
 import { previewAssets } from "./previewAssets";
 import { previewNetworks } from "./networkFixtures";
+import { applyPreviewBatchScenario } from "./batchScenarioFixtures";
 
 export { previewNetworks, previewNetworkRpcUrls } from "./networkFixtures";
 import type { PreviewWalletType } from "./types";
@@ -383,56 +384,18 @@ export function createPreviewBatchScenario(
   walletType: PreviewWalletType,
   scenario: string,
 ): PendingBatchTxRequest {
-  const base = createPreviewBatchRequest(walletType, {
-    id: `preview-batch-${scenario}-${walletType}`,
-  });
-
-  if (scenario === "malformed-disabled") {
-    return {
-      ...base,
-      params: {
-        ...base.params,
-        calls: [
-          ...base.params.calls,
-          { to: previewSpender as `0x${string}`, data: "0x123", value: "0x0" },
-        ],
-      },
-    };
-  }
-
-  if (scenario === "unsafe-self-call") {
-    return {
-      ...base,
-      params: {
-        ...base.params,
-        calls: [
-          {
-            ...base.params.calls[0],
-            to: base.params.from,
-          },
-          ...base.params.calls.slice(1),
-        ],
-      },
-    };
-  }
-
-  if (scenario === "stress") {
-    return {
-      ...base,
-      origin: "https://multi-market-treasury-rebalancer.example",
-      senderOrigin: "https://multi-market-treasury-rebalancer.example",
-      params: {
-        ...base.params,
-        calls: Array.from({ length: 9 }, (_, index) => ({
-          to: (index % 2 === 0 ? previewUsdc : previewWeth) as `0x${string}`,
-          data: (index % 2 === 0 ? approveData : "0xd0e30db0") as `0x${string}`,
-          value: index % 2 === 0 ? "0x0" : "0x2386f26fc10000",
-        })),
-      },
-    };
-  }
-
-  return base;
+  return applyPreviewBatchScenario(
+    createPreviewBatchRequest(walletType, {
+      id: `preview-batch-${scenario}-${walletType}`,
+    }),
+    scenario,
+    {
+      spender: previewSpender,
+      usdc: previewUsdc,
+      weth: previewWeth,
+      approveData,
+    },
+  );
 }
 
 export function createPreviewCrossDappBatch(

@@ -3,15 +3,29 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("cross-dapp Reject all reaches the global queue rejection handler", async () => {
-  const [app, adapter] = await Promise.all([
+  const [app, screen, adapter] = await Promise.all([
     readFile(new URL("../../src/App.tsx", import.meta.url), "utf8"),
+    readFile(
+      new URL(
+        "../../src/app/screens/CrossDappBatchRequestScreen.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
     readFile(
       new URL("../../src/components/CrossDappBatchConfirmation.tsx", import.meta.url),
       "utf8",
     ),
   ]);
 
-  assert.match(app, /<CrossDappBatchConfirmation[\s\S]*?onRejectAll=\{handleRejectAll\}/);
+  assert.match(
+    app,
+    /<CrossDappBatchRequestScreen[\s\S]*?onRejectAll=\{handleRejectAll\}/,
+  );
+  assert.match(
+    screen,
+    /<CrossDappBatchConfirmation[\s\S]*?onRejectAll=\{onRejectAll\}/,
+  );
   assert.match(adapter, /onRejectAll:\s*\(\)\s*=>\s*void/);
   assert.match(adapter, /<BatchTransactionConfirmation[\s\S]*?onRejectAll=\{onRejectAll\}/);
   assert.match(adapter, /titleOverride="Cross-Dapp Batch"/);

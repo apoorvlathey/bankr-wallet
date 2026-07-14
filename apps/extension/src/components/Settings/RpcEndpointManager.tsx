@@ -1,11 +1,5 @@
 import { useRef, useState } from "react";
 import {
-  AlertDialog,
-  AlertDialogBody,
-  AlertDialogContent,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogOverlay,
   Box,
   Button,
   Flex,
@@ -30,6 +24,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { MAX_SAVED_RPC_URLS, type SavedRpcEndpoint } from "@/lib/chains";
 import { RpcEndpointEditor } from "./RpcEndpointEditor";
 import { RpcEndpointFavicon } from "./RpcEndpointFavicon";
+import { RpcEndpointRemoveDialog } from "./RpcEndpointRemoveDialog";
 import {
   getRpcEndpointName,
   getRpcUrlLabel,
@@ -65,7 +60,6 @@ export function RpcEndpointManager({
     useState<SavedRpcEndpoint | null>(null);
   const restoreSelectFocus = useRef(false);
   const selectRef = useRef<HTMLButtonElement>(null);
-  const removeCancelRef = useRef<HTMLButtonElement>(null);
   const prefersReducedMotion = useReducedMotion();
   const selectedEndpoint =
     endpoints.find(({ url }) => url === selectedUrl) ?? { url: selectedUrl };
@@ -356,58 +350,11 @@ export function RpcEndpointManager({
       </AnimatePresence>
       </FormControl>
 
-      <AlertDialog
-        isOpen={endpointToRemove !== null}
-        leastDestructiveRef={removeCancelRef}
+      <RpcEndpointRemoveDialog
+        endpoint={endpointToRemove}
         onClose={() => setEndpointToRemove(null)}
-        isCentered
-      >
-        <AlertDialogOverlay bg="surface.overlay">
-          <AlertDialogContent mx={4} maxW="340px" w="calc(100% - 2rem)">
-            <AlertDialogHeader color="fg.primary" fontSize="md" fontWeight="700">
-              Remove RPC endpoint?
-            </AlertDialogHeader>
-            <AlertDialogBody color="fg.secondary" fontSize="sm">
-              <Text>
-                Remove{" "}
-                {endpointToRemove
-                  ? getRpcEndpointName(endpointToRemove)
-                  : "this endpoint"}{" "}
-                from the saved list?
-              </Text>
-              {endpointToRemove && (
-                <Text
-                  mt={2}
-                  color="fg.muted"
-                  fontFamily="mono"
-                  fontSize="xs"
-                  overflowWrap="anywhere"
-                >
-                  {getRpcUrlLabel(endpointToRemove.url)}
-                </Text>
-              )}
-            </AlertDialogBody>
-            <AlertDialogFooter gap={2}>
-              <Button
-                ref={removeCancelRef}
-                variant="secondary"
-                size="sm"
-                onClick={() => setEndpointToRemove(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                leftIcon={<DeleteIcon />}
-                onClick={confirmRemoveEndpoint}
-              >
-                Remove
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialogOverlay>
-      </AlertDialog>
+        onConfirm={confirmRemoveEndpoint}
+      />
     </>
   );
 }

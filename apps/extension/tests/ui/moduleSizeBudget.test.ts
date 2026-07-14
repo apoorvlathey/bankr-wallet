@@ -9,7 +9,7 @@ const sourceUrl = new URL("../../src/", import.meta.url);
 // remove an entry whenever its module is decomposed; never raise one to make a
 // feature fit. Frozen preview fixtures remain listed so growth stays explicit.
 const transitionalBudgets: Record<string, number> = {
-  "App.tsx": 3_709,
+  "App.tsx": 3_701,
   "components/AccountSettings.tsx": 1_170,
   "components/AccountSwitcher.tsx": 472,
   "components/AddAccount.tsx": 843,

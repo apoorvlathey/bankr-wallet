@@ -3,12 +3,17 @@
 - `index.tsx` is the Settings screen router/composition root.
 - `settingsRegistry.tsx` declares settings destinations and metadata.
 - `EditChain.tsx` composes the edit form and save/validation flow.
+- `NetworkIdentityFields.tsx` renders the editable/read-only network name and
+  chain-ID controls.
+- `useEditChainRpcEndpoints.ts` composes endpoint history and built-in RPC
+  persistence into the select/add/edit/remove actions consumed by Edit Chain.
 - `RpcEndpointManager.tsx` composes the named saved-RPC dropdown, selected status,
   per-row edit actions, confirmed removal, and add/edit transition; it has no
   storage or network effects.
 - `RpcEndpointEditor.tsx` and `RpcEndpointFavicon.tsx` own the full-width editor
   with a single-line URL field, label-row copy action, and sanitized
   provider-favicon presentation respectively.
+- `RpcEndpointRemoveDialog.tsx` owns the destructive endpoint-removal prompt.
 - `rpcEndpointModel.ts` owns pure URL/domain presentation helpers.
 - `useNetworkRpcEndpoints.ts` loads the selected chain's local endpoint history
   and falls back to the active RPC while legacy wallets have no history record.

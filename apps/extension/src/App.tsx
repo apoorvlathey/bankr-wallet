@@ -35,7 +35,6 @@ import {
   AddChain,
   BatchTransactionConfirmation,
   ChatView,
-  CrossDappBatchConfirmation,
   DappConnectionConfirmation,
   Erc7715PermissionConfirmation,
   HiddenPortfolioTokensView,
@@ -117,6 +116,7 @@ import {
   type FailedTransactionError,
 } from "@/app/home/HomeAlerts";
 import WaitingForOnboardingScreen from "@/app/screens/WaitingForOnboardingScreen";
+import CrossDappBatchRequestScreen from "@/app/screens/CrossDappBatchRequestScreen";
 import { useRuntimeMessaging } from "@/app/hooks/useRuntimeMessaging";
 
 type AddChainReturnTarget = {
@@ -3074,93 +3074,52 @@ function App() {
       (r) => r.type === "crossDappBatch",
     );
     const totalCount = combinedRequests.length;
-    // Distinctive tinted background so this screen is instantly recognizable
-    // as the user-assembled cross-dapp batch (vs the standard surface.base
-    // used by every other tx/sig/batch confirmation screen). Sourced from
-    // status.warning.tint — Bauhaus = cornsilk wash, Midnight = recessed surface.
-    const crossDappBg = "status.warning.tint";
     return (
-      <Box bg={crossDappBg} h="100%" display="flex" flexDirection="column">
-        {/* Theme-accent strip across the top of the page — vivid yellow in
-            Bauhaus, warm amber in Midnight (both via accent.highlight). */}
-        <Box
-          h="6px"
-          w="100%"
-          bg="accent.highlight"
-          borderBottom="2px solid"
-          borderColor="border.default"
-          flexShrink={0}
-        />
-        <Box
-          maxW={isFullscreenTab ? "480px" : "100%"}
-          mx="auto"
-          w="100%"
-          h="100%"
-          display="flex"
-          flexDirection="column"
-        >
-          <Suspense fallback={<LoadingFallback />}>
-            <CrossDappBatchConfirmation
-              batch={crossDappBatch}
-              currentIndex={currentIndex >= 0 ? currentIndex : 0}
-              totalCount={totalCount}
-              isInSidePanel={isInSidePanel || isFullscreenTab}
-              onBack={() => {
-                if (totalCount > 1) {
-                  setView("pendingTxList");
-                } else {
-                  setView("main");
-                }
-              }}
-              onConfirmed={() => {
-                setActivityTabTrigger((k) => k + 1);
-                if (isInSidePanel || isFullscreenTab) {
-                  setView("main");
-                }
-                // Popup: CrossDappBatchConfirmation plays its "sent" animation
-                // and closes the window itself via window.close().
-              }}
-              onRejected={() => {
-                setActivityTabTrigger((k) => k + 1);
-                if (preNavigatedRef.current) {
-                  preNavigatedRef.current = false;
-                  return;
-                }
-                if (isInSidePanel || isFullscreenTab) {
-                  setView("main");
-                } else {
-                  window.close();
-                }
-              }}
-              onRejectAll={handleRejectAll}
-              onBeforeReject={navigateToAdjacentRequest}
-              onNavigate={(direction) => {
-                const currentIdx = combinedRequests.findIndex(
-                  (r) => r.type === "crossDappBatch",
-                );
-                const newIdx =
-                  direction === "prev" ? currentIdx - 1 : currentIdx + 1;
-                if (newIdx >= 0 && newIdx < combinedRequests.length) {
-                  const nextRequest = combinedRequests[newIdx];
-                  if (nextRequest.type === "tx") {
-                    setSelectedTxRequest(nextRequest.request);
-                    setView("txConfirm");
-                  } else if (nextRequest.type === "batch") {
-                    setSelectedBatchRequest(nextRequest.request);
-                    setView("batchTxConfirm");
-                  } else if (nextRequest.type === "sig") {
-                    setSelectedSignatureRequest(nextRequest.request);
-                    setView("signatureConfirm");
-                  } else if (nextRequest.type === "permission") {
-                    setSelectedErc7715PermissionRequest(nextRequest.request);
-                    setView("erc7715PermissionConfirm");
-                  }
-                }
-              }}
-            />
-          </Suspense>
-        </Box>
-      </Box>
+      <CrossDappBatchRequestScreen
+        batch={crossDappBatch}
+        currentIndex={currentIndex >= 0 ? currentIndex : 0}
+        totalCount={totalCount}
+        isInSidePanel={isInSidePanel}
+        isFullscreenTab={isFullscreenTab}
+        onBack={() => setView(totalCount > 1 ? "pendingTxList" : "main")}
+        onConfirmed={() => {
+          setActivityTabTrigger((k) => k + 1);
+          if (isInSidePanel || isFullscreenTab) setView("main");
+        }}
+        onRejected={() => {
+          setActivityTabTrigger((k) => k + 1);
+          if (preNavigatedRef.current) {
+            preNavigatedRef.current = false;
+            return;
+          }
+          if (isInSidePanel || isFullscreenTab) setView("main");
+          else window.close();
+        }}
+        onRejectAll={handleRejectAll}
+        onBeforeReject={navigateToAdjacentRequest}
+        onNavigate={(direction) => {
+          const currentIdx = combinedRequests.findIndex(
+            (request) => request.type === "crossDappBatch",
+          );
+          const nextRequest =
+            combinedRequests[
+              direction === "prev" ? currentIdx - 1 : currentIdx + 1
+            ];
+          if (nextRequest?.type === "tx") {
+            setSelectedTxRequest(nextRequest.request);
+            setView("txConfirm");
+          } else if (nextRequest?.type === "batch") {
+            setSelectedBatchRequest(nextRequest.request);
+            setView("batchTxConfirm");
+          } else if (nextRequest?.type === "sig") {
+            setSelectedSignatureRequest(nextRequest.request);
+            setView("signatureConfirm");
+          } else if (nextRequest?.type === "permission") {
+            setSelectedErc7715PermissionRequest(nextRequest.request);
+            setView("erc7715PermissionConfirm");
+          }
+        }}
+      />
     );
   }
 
