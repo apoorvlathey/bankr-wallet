@@ -18,100 +18,31 @@ import {
   VStack,
   useDisclosure,
 } from "@chakra-ui/react";
-import { ChevronLeftIcon, ChevronRightIcon, TimeIcon } from "@chakra-ui/icons";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  TimeIcon,
+  WarningTwoIcon,
+} from "@chakra-ui/icons";
 
 import { useTheme } from "@/theme";
-
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-const SHORT_MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
-const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
-const MINUTES = Array.from({ length: 60 }, (_, minute) => minute);
-
-type UtcParts = {
-  year: number;
-  monthIndex: number;
-  day: number;
-  hour: number;
-  minute: number;
-};
-
-function pad2(value: number): string {
-  return value.toString().padStart(2, "0");
-}
-
-function toUtcParts(seconds: number): UtcParts {
-  const date = new Date(seconds * 1000);
-  return {
-    year: date.getUTCFullYear(),
-    monthIndex: date.getUTCMonth(),
-    day: date.getUTCDate(),
-    hour: date.getUTCHours(),
-    minute: date.getUTCMinutes(),
-  };
-}
-
-function toUtcSeconds(parts: UtcParts): number {
-  return Math.floor(Date.UTC(
-    parts.year,
-    parts.monthIndex,
-    parts.day,
-    parts.hour,
-    parts.minute,
-  ) / 1000);
-}
-
-function formatUtcDisplay(seconds: number | null): string {
-  if (seconds === null) return "Select date and time";
-  const parts = toUtcParts(seconds);
-  return `${SHORT_MONTHS[parts.monthIndex]} ${parts.day}, ${parts.year}, ${pad2(
-    parts.hour,
-  )}:${pad2(parts.minute)} UTC`;
-}
-
-function visibleMonthFromSeconds(seconds: number | null): {
-  year: number;
-  monthIndex: number;
-} {
-  const parts = toUtcParts(seconds ?? Math.floor(Date.now() / 1000));
-  return { year: parts.year, monthIndex: parts.monthIndex };
-}
-
-function shiftMonth(
-  year: number,
-  monthIndex: number,
-  delta: number,
-): { year: number; monthIndex: number } {
-  const date = new Date(Date.UTC(year, monthIndex + delta, 1));
-  return { year: date.getUTCFullYear(), monthIndex: date.getUTCMonth() };
-}
-
-function buildCalendarDays(year: number, monthIndex: number) {
-  const firstDay = new Date(Date.UTC(year, monthIndex, 1)).getUTCDay();
-  const mondayBasedOffset = (firstDay + 6) % 7;
-  const gridStartDay = 1 - mondayBasedOffset;
-  const daysInMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
-  const gridLength = Math.max(
-    35,
-    Math.ceil((mondayBasedOffset + daysInMonth) / 7) * 7,
-  );
-
-  return Array.from({ length: gridLength }, (_, index) => {
-    const date = new Date(Date.UTC(year, monthIndex, gridStartDay + index));
-    return {
-      year: date.getUTCFullYear(),
-      monthIndex: date.getUTCMonth(),
-      day: date.getUTCDate(),
-      inVisibleMonth: date.getUTCMonth() === monthIndex,
-    };
-  });
-}
+import { CalendarDayButton } from "./UtcDateTimePicker/CalendarDayButton";
+import {
+  buildCalendarDays,
+  formatUtcDisplay,
+  getCalendarDayBoundaryState,
+  HOURS,
+  MINUTES,
+  MONTHS,
+  pad2,
+  shiftMonth,
+  toUtcParts,
+  toUtcSeconds,
+  visibleMonthFromSeconds,
+  WEEKDAYS,
+  type UtcDateBoundaryDirection,
+  type UtcParts,
+} from "./UtcDateTimePicker/dateTimeModel";
 
 function CalendarGlyph() {
   return (
@@ -127,11 +58,19 @@ function CalendarGlyph() {
 export function UtcDateTimePicker({
   valueSeconds,
   disabled,
+  dateBoundaries = [],
+  error,
   label,
   onChange,
 }: {
   valueSeconds: number | null;
   disabled: boolean;
+  dateBoundaries?: Array<{
+    seconds: number;
+    direction: UtcDateBoundaryDirection;
+    label: string;
+  }>;
+  error?: string | null;
   label: string;
   onChange: (seconds: number) => void;
 }) {
@@ -213,6 +152,7 @@ export function UtcDateTimePicker({
           ref={triggerRef}
           type="button"
           aria-label={label}
+          aria-invalid={Boolean(error)}
           isDisabled={disabled}
           onClick={onOpen}
           variant="outline"
@@ -241,16 +181,31 @@ export function UtcDateTimePicker({
         <DrawerOverlay />
         <DrawerContent
           maxH="92dvh"
-          borderTop={tokens.borders.thin}
-          borderColor="border.default"
-          borderTopRadius={tokens.radii.modal}
+          bg="transparent"
+          boxShadow="none"
+          pointerEvents="none"
         >
-          <DrawerCloseButton aria-label="Close date and time picker" boxSize="44px" />
-          <DrawerHeader px={4} pt={5} pb={2} pr={16}>
-            <Text as="h2" fontSize="lg">{label}</Text>
-          </DrawerHeader>
-          <DrawerBody px={4} py={2} overflowY="auto">
-            <VStack align="stretch" spacing={3} maxW="320px" mx="auto">
+          <Box
+            position="relative"
+            display="flex"
+            flexDirection="column"
+            w="full"
+            maxW="480px"
+            maxH="92dvh"
+            mx="auto"
+            bg="surface.raised"
+            borderTop={tokens.borders.thin}
+            borderColor="border.default"
+            borderTopRadius={tokens.radii.modal}
+            overflow="hidden"
+            pointerEvents="auto"
+          >
+            <DrawerCloseButton aria-label="Close date and time picker" boxSize="44px" />
+            <DrawerHeader px={4} pt={5} pb={2} pr={16}>
+              <Text as="h2" fontSize="lg">{label}</Text>
+            </DrawerHeader>
+            <DrawerBody px={4} py={2} overflowY="auto">
+              <VStack align="stretch" spacing={3} maxW="320px" w="full" mx="auto">
             <HStack justify="space-between" px={0.5}>
               <IconButton
                 aria-label="Previous month"
@@ -270,6 +225,26 @@ export function UtcDateTimePicker({
                 onClick={() => goToMonth(1)}
               />
             </HStack>
+
+            {error && (
+              <HStack
+                role="alert"
+                align="flex-start"
+                spacing={2}
+                bg="status.error.bg"
+                color="status.error.fg"
+                borderWidth="1px"
+                borderColor="status.error.border"
+                borderRadius="md"
+                px={3}
+                py={2.5}
+              >
+                <WarningTwoIcon boxSize="14px" mt="2px" flexShrink={0} />
+                <Text fontSize="xs" fontWeight="600" lineHeight="1.45">
+                  {error}
+                </Text>
+              </HStack>
+            )}
 
             <SimpleGrid columns={7} spacing="3px">
               {WEEKDAYS.map((weekday, index) => (
@@ -291,52 +266,43 @@ export function UtcDateTimePicker({
                   selectedParts.monthIndex === day.monthIndex &&
                   selectedParts.day === day.day;
                 const isToday = dayKey === todayKey;
+                const boundaryStates = dateBoundaries.map((boundary) => ({
+                  boundary,
+                  state: getCalendarDayBoundaryState(
+                    day,
+                    boundary.seconds,
+                    boundary.direction,
+                  ),
+                }));
+                const matchingBoundaries = boundaryStates.filter(
+                  ({ state }) => state.isBoundary,
+                );
+                const boundaryTooltip = matchingBoundaries
+                  .map(({ boundary }) => {
+                    const parts = toUtcParts(boundary.seconds);
+                    return `${boundary.label} · ${pad2(parts.hour)}:${pad2(
+                      parts.minute,
+                    )} UTC`;
+                  })
+                  .join(" • ");
 
                 return (
-                  <Button
+                  <CalendarDayButton
                     key={dayKey}
-                    type="button"
-                    variant="ghost"
-                    h="30px"
-                    minW={0}
-                    p={0}
+                    day={day.day}
+                    inVisibleMonth={day.inVisibleMonth}
+                    isSelected={isSelected}
+                    isToday={isToday}
+                    isBoundary={matchingBoundaries.length > 0}
+                    isDisabled={boundaryStates.some(
+                      ({ state }) => state.isDisabled,
+                    )}
+                    boundaryTooltip={boundaryTooltip || undefined}
                     borderRadius={tokens.radii.input}
-                    border="1px solid"
-                    borderColor={
-                      isSelected
-                        ? "accent.secondary"
-                        : isToday
-                          ? "border.default"
-                          : "transparent"
-                    }
-                    bg={
-                      isSelected
-                        ? "accent.secondary"
-                        : isToday
-                          ? "surface.raised"
-                          : "transparent"
-                    }
-                    color={
-                      isSelected
-                        ? "accentFg.secondary"
-                        : day.inVisibleMonth
-                          ? "text.primary"
-                          : "text.tertiary"
-                    }
-                    fontSize="xs"
-                    fontWeight="900"
-                    opacity={day.inVisibleMonth ? 1 : 0.55}
-                    _hover={{
-                      bg: isSelected
-                        ? "accent.secondary"
-                        : "surface.raisedHover",
-                    }}
-                    onClick={() =>
+                    onSelect={() =>
                       selectDate(day.year, day.monthIndex, day.day)
                     }
-                  >
-                    {day.day}
-                  </Button>
+                  />
                 );
               })}
             </SimpleGrid>
@@ -398,16 +364,17 @@ export function UtcDateTimePicker({
               </HStack>
             </Box>
 
-              <Button size="sm" variant="ghost" alignSelf="flex-start" onClick={selectToday}>
+              <Button size="sm" variant="ghost" alignSelf="flex-end" onClick={selectToday}>
                 Use today
               </Button>
-            </VStack>
-          </DrawerBody>
-          <DrawerFooter px={4} pb="calc(16px + env(safe-area-inset-bottom, 0px))">
-            <Button w="full" variant="primary" onClick={onClose}>
-              Done
-            </Button>
-          </DrawerFooter>
+              </VStack>
+            </DrawerBody>
+            <DrawerFooter px={4} pb="calc(16px + env(safe-area-inset-bottom, 0px))">
+              <Button w="full" variant="brand" onClick={onClose}>
+                Done
+              </Button>
+            </DrawerFooter>
+          </Box>
         </DrawerContent>
       </Drawer>
     </>

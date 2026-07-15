@@ -9,5 +9,8 @@ address, clipboard, and explorer disclosure across transaction and EIP-712
 review. Unlabeled callers use its exported `AddressActions` row directly rather
 than inventing a generic contract label.
 
+`TokenContractPopover.tsx` keeps ERC-20 contract copy and explorer tools behind
+the visible token symbol across transaction and permission-review surfaces.
+
 Feature-specific state and one-off child components stay in their owning
 domain. Domain-free screen/list primitives belong in `components/ui/` instead.

@@ -5,6 +5,7 @@ import {
   HStack,
   Text,
   VStack,
+  type BoxProps,
   type GridProps,
 } from "@chakra-ui/react";
 import { ArrowDownIcon, ArrowUpIcon, MinusIcon } from "@chakra-ui/icons";
@@ -20,6 +21,10 @@ export interface AssetDeltaRowProps extends Omit<GridProps, "direction"> {
   fiat?: ReactNode;
   meta?: ReactNode;
   directionLabel?: ReactNode;
+  showDirectionIcon?: boolean;
+  amountColor?: BoxProps["color"];
+  metaFullWidth?: boolean;
+  metaTextAlign?: BoxProps["textAlign"];
 }
 
 const DIRECTION_PRESENTATION = {
@@ -51,6 +56,10 @@ export const AssetDeltaRow = forwardRef<HTMLDivElement, AssetDeltaRowProps>(
       fiat,
       meta,
       directionLabel,
+      showDirectionIcon = true,
+      amountColor,
+      metaFullWidth = false,
+      metaTextAlign,
       ...rest
     },
     ref,
@@ -81,7 +90,9 @@ export const AssetDeltaRow = forwardRef<HTMLDivElement, AssetDeltaRowProps>(
           )}
           <VStack align="stretch" spacing={0.5} minW={0}>
             <HStack spacing={1.5} color={presentation.color} minW={0}>
-              <DirectionIcon boxSize={3} flexShrink={0} aria-hidden />
+              {showDirectionIcon && (
+                <DirectionIcon boxSize={3} flexShrink={0} aria-hidden />
+              )}
               <Text fontSize="xs" fontWeight="600" overflowWrap="anywhere">
                 {directionLabel ?? presentation.label}
               </Text>
@@ -89,7 +100,7 @@ export const AssetDeltaRow = forwardRef<HTMLDivElement, AssetDeltaRowProps>(
             <Box color="fg.primary" fontSize="md" fontWeight="600" minW={0} overflowWrap="anywhere">
               {asset}
             </Box>
-            {meta && (
+            {meta && !metaFullWidth && (
               <Box color="fg.secondary" fontSize="xs" minW={0} overflowWrap="anywhere">
                 {meta}
               </Box>
@@ -99,7 +110,7 @@ export const AssetDeltaRow = forwardRef<HTMLDivElement, AssetDeltaRowProps>(
 
         <VStack align="flex-end" spacing={0.5} minW={0} maxW="55vw">
           <Box
-            color={presentation.color}
+            color={amountColor ?? presentation.color}
             fontSize="md"
             fontWeight="600"
             sx={{ fontVariantNumeric: "tabular-nums" }}
@@ -126,6 +137,20 @@ export const AssetDeltaRow = forwardRef<HTMLDivElement, AssetDeltaRowProps>(
             </Box>
           )}
         </VStack>
+
+        {meta && metaFullWidth && (
+          <Box
+            gridColumn="1 / -1"
+            color="fg.secondary"
+            fontSize="xs"
+            minW={0}
+            mt={0.5}
+            textAlign={metaTextAlign}
+            overflowWrap="anywhere"
+          >
+            {meta}
+          </Box>
+        )}
       </Grid>
     );
   },

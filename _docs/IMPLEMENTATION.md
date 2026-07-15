@@ -1143,9 +1143,9 @@ src/
 │   ├── TransactionConfirmationErrorBoundary.tsx # Last-resort reject UI for malformed tx renders
 │   ├── BatchTransactionConfirmation.tsx # Re-export-only batch facade
 │   ├── SignatureRequestConfirmation.tsx # Signature request display for Bankr/PK/Seed signing
-│   ├── Erc7715PermissionConfirmation.tsx # ERC-7715 delegated-permission approval screen
-│   ├── Erc7715PermissionReview.tsx # Human-readable delegated-permission summary
-│   ├── Erc7715PermissionEditableControls.tsx # Adjustable amount/frequency/time controls
+│   ├── Erc7715PermissionConfirmation.tsx # Re-export-only delegated-permission facade
+│   ├── Erc7715PermissionEditableControls.tsx # Re-export-only permission-editor facade
+│   ├── Erc7715PermissionConfirmation/ # ERC-7715 review, adjustment, and decision domain
 │   ├── DelegatedPermissionsSection.tsx # Account-settings grant management/revoke section
 │   ├── DelegatedPermissionGrantCard.tsx # Active grant card with copy/explorer actions
 │   ├── SiweMessageDisplay.tsx # Human-readable SIWE auth review + raw message disclosure
@@ -2650,14 +2650,17 @@ generic calldata decoder collapsed for audit access instead of making
 reuses the same snapshot after submission so the Activity tab shows the
 delegated-permission revoke summary above the raw transaction details.
 
-The confirmation UI is purpose-built for delegated permissions:
-`Erc7715PermissionReview.tsx` shows the site, account, chain, delegate/session
-account, site-provided justification or an explicit italic missing-state,
-token/native asset logo/metadata, live token balance/USD value, amount,
-frequency for periodic permissions, stream rate / available-per-day / total
-exposure for stream permissions, token approval revocation method flags, and
-start/expiry as human-readable rows where applicable.
-`Erc7715PermissionEditableControls.tsx`
+The confirmation UI composes the same Warm Midnight request primitives as
+transaction, batch, and signature review. The screen uses shared top queue
+navigation and Reject all, centered `RequestIdentity`, a plain-language summary
+of the reusable authority, one chain-qualified permission-limits section,
+delegate and site-justification rows, scroll-aware Advanced details, and the
+same compact `Signing with` sticky footer with secondary Reject and amber Grant
+permission actions. Origin, account, and chain are each shown once. Shared
+`LabeledAddressPopover` tools own delegate, token, manager, and enforcer copy /
+explorer actions. Request type, manager, WalletChan-derived caveats and terms,
+and exact raw request JSON remain behind Advanced details.
+`Erc7715PermissionConfirmation/Erc7715PermissionEditableControls.tsx`
 lets users adjust supported permission terms before approval only when
 `permission.isAdjustmentAllowed === true`. Locked requests keep amount,
 frequency, start time, stream caps, and identity fields immutable. To match
@@ -2675,7 +2678,9 @@ and signs only that recomputed delegation. Raw delegation/caveat details live
 behind an advanced accordion for auditability. ERC-20 token amounts are not
 formatted or signable with guessed decimals: if metadata lookup cannot verify a
 token's decimals, the UI shows the token address and blocks amount editing /
-approval until metadata is verified.
+approval until metadata is verified. The renderer feature domain is documented
+in `components/Erc7715PermissionConfirmation/README.md`; root imports remain
+policy-free compatibility facades.
 
 Injected-provider calls bridge through `i_walletExecutionPermissions` in
 `provider/inpage/executionPermissionAdapter.ts` and

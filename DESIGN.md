@@ -297,9 +297,24 @@
   clear signing, each call header promotes the resolved action name while the
   embedded body omits its duplicate intent and “via” attribution, leaving the
   human-readable fields as the primary detail content.
+- 2026-07-15 ERC-7715 permission-request audit: passes with the shared request
+  identity and queue controls, plain-language reusable-authority warning,
+  chain-qualified limits, one delegate/reason surface, labeled address tools,
+  scroll-aware technical disclosure, 44px decision targets, and a pinned signer
+  plus amber Grant permission commitment. Permission variants retain editable
+  allowance, recurrence, stream, expiry, and approval-cleanup semantics without
+  duplicating origin, signer, chain, or raw caveat data in the primary path.
 
 ## Changelog
 
+- 2026-07-15: rebuilt ERC-7715 permission confirmation on the shared Warm
+  Midnight transaction/signature architecture. Queue navigation and Reject all
+  now lead the body; dapp identity, human-readable reusable authority, live
+  limits, delegate/reason context, and advanced caveats each have one owner;
+  the sticky footer pins the signer beside secondary Reject and amber Grant
+  permission. The renderer moved behind an audited feature domain and retains
+  background-owned master authorization, account pinning, edit validation,
+  first-action claims, and non-expiring pending requests.
 - 2026-07-15: removed the duplicate inline batch-confirmation disabled message.
   The disabled Confirm batch control now remains focusable and explains the
   blocking reason on hover or keyboard focus, with corrective copy for unsafe

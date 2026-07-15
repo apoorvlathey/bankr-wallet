@@ -36,6 +36,7 @@ integration boundary, not the default home for new implementations.
 - `BatchConfirmation/` owns ERC-5792 batch review, editing, and decisions.
 - `Chat/` owns the Bankr conversation screens and message presentation.
 - `ClearSigning/` owns descriptor loading and clear-signing renderers.
+- `Erc7715PermissionConfirmation/` owns delegated-execution permission review and decisions.
 - `Portfolio/Holdings/` owns portfolio hydration, display transforms, and asset rows.
 - `Settings/` owns settings navigation and configuration screens.
 - `SignatureConfirmation/` owns signature-decision screen composition.

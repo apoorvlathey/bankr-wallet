@@ -13,6 +13,8 @@ const appUrl = new URL("../../src/app/", import.meta.url);
 const compatibilityFacades = [
   "AssetChangesDisplay.tsx",
   "BatchTransactionConfirmation.tsx",
+  "Erc7715PermissionConfirmation.tsx",
+  "Erc7715PermissionEditableControls.tsx",
   "SignatureRequestConfirmation.tsx",
   "TokenHoldings.tsx",
   "TokenTransfer.tsx",
@@ -20,6 +22,7 @@ const compatibilityFacades = [
   "TxDetailModal.tsx",
   "TxDetailScreen.tsx",
   "TxStatusList.tsx",
+  "useErc7715PermissionAsset.ts",
 ];
 
 const pureModules = [
@@ -35,6 +38,13 @@ const pureModules = [
   {
     path: "components/ClearSigning/formatters/valueFormatters.ts",
     url: new URL("ClearSigning/formatters/valueFormatters.ts", componentsUrl),
+  },
+  {
+    path: "components/Erc7715PermissionConfirmation/permissionPresentation.ts",
+    url: new URL(
+      "Erc7715PermissionConfirmation/permissionPresentation.ts",
+      componentsUrl,
+    ),
   },
   {
     path: "components/Portfolio/Holdings/transforms.ts",

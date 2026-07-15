@@ -286,6 +286,15 @@ always has a text label or signed amount in addition to semantic color. Review
 default, long-number, and disabled/error states at
 `/preview/decision-primitives` and the production `/preview/tx` route.
 
+ERC-7715 permission review follows that same decision path. Reusable authority
+is explained before its editable amount/time controls; the destination chain
+lives beside the permission-limits heading; delegate identity and app-provided
+reason form one separator-led context surface; and request type, manager,
+caveats, terms, and raw JSON live in one scroll-aware Advanced details
+disclosure. The pinned signer stays in the sticky footer with secondary Reject
+and amber Grant permission actions. Do not repeat origin, signer, or network in
+the body, and do not render individual caveats as nested cards.
+
 ---
 
 # Design Style: Bauhaus
