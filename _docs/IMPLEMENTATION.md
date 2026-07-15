@@ -966,6 +966,7 @@ src/
 │   │   ├── types.ts        # Exact ensAvatarImageCache entry schema
 │   │   ├── policy.ts       # Public HTTPS, raster MIME, and cached-data validation
 │   │   ├── bodyReader.ts   # Streaming response allocation ceiling
+│   │   ├── rasterSignature.ts # Generic-binary raster signature policy
 │   │   ├── scheduler.ts    # Two-wide FIFO, same-URL flight, reset abort/epoch
 │   │   ├── transport.ts    # Manual redirects and credentialless fetch
 │   │   ├── rasterizer.ts   # Pixel decode, 128px resize, bounded WebP output
@@ -2785,8 +2786,10 @@ uses an inert pixel until `avatarImageCache.ts` has produced a safe raster.
   URL credentials. It rejects reserved/private IPv4, IPv6, IPv4-mapped IPv6,
   localhost/local hostname suffixes, `.test`, `.invalid`, and `.onion`.
 - The background follows at most three redirects manually, revalidates each
-  target, omits credentials/referrers, permits only explicit raster MIME types,
-  and rejects SVG before decoding.
+  target, and omits credentials/referrers. It permits explicit raster MIME
+  types; misconfigured `application/octet-stream` responses must additionally
+  carry a recognized JPEG, PNG, GIF, or WebP byte signature. SVG and other
+  document bytes remain rejected before decoding.
 - Downloads are streamed under 2 MiB, decoded to pixels, resized to at most
   128×128, re-encoded as WebP under 512 KiB, and cached for 14 days. The cache
   is limited to 200 entries / 5 MiB and only two remote image fetches may run at

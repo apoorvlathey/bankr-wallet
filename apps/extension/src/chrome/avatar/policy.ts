@@ -17,6 +17,14 @@ export function normalizeAvatarRasterContentType(
   return value!.split(";", 1)[0]!.trim().toLowerCase();
 }
 
+/** Some image CDNs label raster files as generic binary data. */
+export function isGenericBinaryContentType(value: string | null): boolean {
+  return (
+    value?.split(";", 1)[0]?.trim().toLowerCase() ===
+    "application/octet-stream"
+  );
+}
+
 /** Persisted entries must still satisfy the current trusted-renderer policy. */
 export function isAllowedCachedAvatarDataUrl(value: unknown): value is string {
   return (

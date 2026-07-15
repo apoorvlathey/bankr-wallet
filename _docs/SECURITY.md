@@ -669,8 +669,10 @@ actions, and closed-shadow rendering remain separate audit modules under
 port with no URL credentials, reject reserved/private hosts through the same
 IPv4/IPv6 classifier, and reject `.test`, `.invalid`, and `.onion`. Up to three
 redirects are followed manually and every target is revalidated; fetches omit
-credentials and referrers. Only explicit raster MIME types are accepted—SVG
-and other rich document formats never cross the decoder boundary. The response
+credentials and referrers. Explicit raster MIME types are accepted. A generic
+`application/octet-stream` declaration is accepted only when the bounded body
+starts with a known JPEG, PNG, GIF, or WebP signature; SVG and other rich
+document formats never cross the decoder boundary. The response
 is streamed under a 2 MiB download ceiling, decoded to pixels, resized to at
 most 128×128, re-encoded to WebP under 512 KiB, and only that inert data URL is
 cached/rendered. At most two image fetches run concurrently in FIFO order and

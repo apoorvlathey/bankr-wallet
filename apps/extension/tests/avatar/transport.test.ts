@@ -117,6 +117,43 @@ test("avatar transport rejects rich MIME and oversized declared bodies", async (
   }
 });
 
+test("avatar transport recovers signature-identified rasters from generic binary CDNs", async () => {
+  await withGlobalReplacements(
+    {
+      fetch: async () =>
+        new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 0x00]), {
+          status: 200,
+          headers: { "content-type": "application/octet-stream" },
+        }),
+    },
+    async () => {
+      const blob = await fetchAvatarRasterBlob(
+        "https://protocol-icons.example.org/aave-v2.jpg",
+      );
+      assert.equal(blob?.type, "image/jpeg");
+      assert.equal(blob?.size, 5);
+    },
+  );
+});
+
+test("avatar transport rejects document bytes mislabeled as generic binary", async () => {
+  await withGlobalReplacements(
+    {
+      fetch: async () =>
+        new Response("<svg><script/></svg>", {
+          status: 200,
+          headers: { "content-type": "application/octet-stream" },
+        }),
+    },
+    async () => {
+      assert.equal(
+        await fetchAvatarRasterBlob("https://cdn.example.org/logo.jpg"),
+        null,
+      );
+    },
+  );
+});
+
 test("avatar transport converts network failures to null under a 10s deadline", async () => {
   assert.equal(AVATAR_FETCH_TIMEOUT_MS, 10_000);
   await withGlobalReplacements(

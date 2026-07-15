@@ -9,8 +9,10 @@ import {
 import {
   isAllowedAvatarUrl,
   isAllowedCachedAvatarDataUrl,
+  isGenericBinaryContentType,
   normalizeAvatarRasterContentType,
 } from "../../src/chrome/avatar/policy";
+import { sniffAvatarRasterContentType } from "../../src/chrome/avatar/rasterSignature";
 
 test("avatar fetch policy allows only public HTTPS resources", () => {
   for (const url of [
@@ -79,6 +81,25 @@ test("avatar decoder accepts explicit raster MIME types and rejects documents", 
     assert.equal(isAllowedRasterImageContentType(contentType), false);
     assert.equal(normalizeAvatarRasterContentType(contentType), null);
   }
+});
+
+test("generic binary raster recovery requires a known file signature", () => {
+  assert.equal(isGenericBinaryContentType("application/octet-stream"), true);
+  assert.equal(isGenericBinaryContentType("text/html"), false);
+  assert.equal(
+    sniffAvatarRasterContentType(new Uint8Array([0xff, 0xd8, 0xff, 0xdb])),
+    "image/jpeg",
+  );
+  assert.equal(
+    sniffAvatarRasterContentType(
+      new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    ),
+    "image/png",
+  );
+  assert.equal(
+    sniffAvatarRasterContentType(new TextEncoder().encode("<svg/>")),
+    null,
+  );
 });
 
 test("persisted cache policy admits inert raster data only", () => {

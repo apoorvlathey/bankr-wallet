@@ -270,10 +270,11 @@ broadcast. The two historical root paths are export-only identity-preserving
 facades, and this domain never owns credentials or authorization.
 
 Attacker-controlled avatar and token-logo bytes are isolated under
-`chrome/avatar/`. URL/MIME policy and the streaming body reader precede the
-manual-redirect transport; rasterization converts accepted bytes to bounded
-pixels before the locked best-effort repository can write the exact released
-`ensAvatarImageCache` schema. A two-wide FIFO scheduler owns same-URL
+`chrome/avatar/`. Transport enforces URL/MIME and redirect policy, the streaming
+body reader caps allocation, and generic-binary responses require a bounded
+raster signature check before decoding. Rasterization converts accepted bytes
+to bounded pixels before the locked best-effort repository can write the exact
+released `ensAvatarImageCache` schema. A two-wide FIFO scheduler owns same-URL
 single-flight work, abort controllers, and the wallet-reset epoch. Repository
 commits recheck that epoch and remove a stale entry when an asynchronous
 storage write crosses reset. The historical `avatarImageCache.ts` path is an

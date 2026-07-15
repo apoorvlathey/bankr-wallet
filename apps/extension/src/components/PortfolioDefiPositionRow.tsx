@@ -18,6 +18,7 @@ import {
   ListItemTitle,
 } from "@/components/ui";
 import { getChainConfig } from "@/constants/chainConfig";
+import { INERT_IMAGE_SRC } from "@/hooks/useCachedAvatarSrc";
 import { sanitizeExternalNavigationUrl } from "@/lib/externalNavigation";
 
 interface PositionAssetLineProps {
@@ -58,6 +59,7 @@ function PositionAssetLine({
   formatUsd,
   resolveLogo,
 }: PositionAssetLineProps) {
+  const logoSrc = resolveLogo(asset.logoUrl);
   const exactBalance = `${asset.balanceFormatted} ${asset.symbol}`;
   const balanceLabel = hideValue
     ? "••••"
@@ -75,9 +77,9 @@ function PositionAssetLine({
           bg="surface.sunken"
           borderRadius="full"
         >
-          {asset.logoUrl ? (
+          {logoSrc && logoSrc !== INERT_IMAGE_SRC ? (
             <Image
-              src={resolveLogo(asset.logoUrl)}
+              src={logoSrc}
               alt=""
               boxSize="18px"
               fallback={
@@ -142,6 +144,7 @@ export function DefiPositionRow({
   formatUsd,
   resolveLogo,
 }: DefiPositionRowProps) {
+  const protocolLogoSrc = resolveLogo(position.protocolLogo);
   const chainConfig = getChainConfig(position.chainId);
   const typeLabel = humanizePositionLabel(position.type);
   const nameLabel = humanizePositionLabel(position.name);
@@ -164,9 +167,9 @@ export function DefiPositionRow({
               bg="surface.sunken"
               borderRadius="md"
             >
-              {position.protocolLogo ? (
+              {protocolLogoSrc && protocolLogoSrc !== INERT_IMAGE_SRC ? (
                 <Image
-                  src={resolveLogo(position.protocolLogo)}
+                  src={protocolLogoSrc}
                   alt=""
                   boxSize="36px"
                   borderRadius="md"

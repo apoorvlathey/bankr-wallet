@@ -6,8 +6,10 @@ import {
 import { readAvatarBlobBounded } from "./bodyReader";
 import {
   isAllowedAvatarUrl,
+  isGenericBinaryContentType,
   normalizeAvatarRasterContentType,
 } from "./policy";
+import { sniffAvatarRasterContentType } from "./rasterSignature";
 import { trackAvatarImageFetchController } from "./scheduler";
 
 /** Fetch a public raster through a manually revalidated redirect chain. */
@@ -40,18 +42,25 @@ export async function fetchAvatarRasterBlob(url: string): Promise<Blob | null> {
     }
 
     if (!response?.ok) return null;
-    const contentType = normalizeAvatarRasterContentType(
-      response.headers.get("content-type"),
-    );
-    if (!contentType) return null;
+    const declaredContentType = response.headers.get("content-type");
+    const contentType = normalizeAvatarRasterContentType(declaredContentType);
+    const isGenericBinary = isGenericBinaryContentType(declaredContentType);
+    if (!contentType && !isGenericBinary) return null;
 
     const contentLength = Number(response.headers.get("content-length") || 0);
     if (contentLength > AVATAR_MAX_DOWNLOAD_BYTES) return null;
-    return await readAvatarBlobBounded(
+    const blob = await readAvatarBlobBounded(
       response,
       AVATAR_MAX_DOWNLOAD_BYTES,
-      contentType,
+      contentType || "application/octet-stream",
     );
+    if (!blob || contentType) return blob;
+
+    const prefix = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+    const sniffedContentType = sniffAvatarRasterContentType(prefix);
+    return sniffedContentType
+      ? new Blob([blob], { type: sniffedContentType })
+      : null;
   } catch {
     return null;
   } finally {

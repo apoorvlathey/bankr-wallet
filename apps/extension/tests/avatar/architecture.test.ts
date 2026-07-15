@@ -29,6 +29,7 @@ test("avatar modules retain one-way trust and effect boundaries", async () => {
     "avatar/types.ts",
     "avatar/policy.ts",
     "avatar/bodyReader.ts",
+    "avatar/rasterSignature.ts",
     "avatar/scheduler.ts",
     "avatar/transport.ts",
     "avatar/rasterizer.ts",
@@ -42,6 +43,7 @@ test("avatar modules retain one-way trust and effect boundaries", async () => {
   assert.doesNotMatch(sources["avatar/types.ts"], /\bimport\b|chrome\.|fetch\(/);
   assert.doesNotMatch(sources["avatar/policy.ts"], /chrome\.storage|fetch\(|OffscreenCanvas/);
   assert.doesNotMatch(sources["avatar/bodyReader.ts"], /chrome\.|fetch\(|OffscreenCanvas/);
+  assert.doesNotMatch(sources["avatar/rasterSignature.ts"], /\bimport\b|chrome\.|fetch\(|OffscreenCanvas/);
   assert.doesNotMatch(sources["avatar/scheduler.ts"], /chrome\.|fetch\(|OffscreenCanvas/);
   assert.doesNotMatch(sources["avatar/transport.ts"], /chrome\.storage|OffscreenCanvas/);
   assert.doesNotMatch(sources["avatar/rasterizer.ts"], /chrome\.|fetch\(/);
@@ -58,6 +60,7 @@ test("avatar facade and implementations remain audit-sized", async () => {
     "avatar/types.ts": 12,
     "avatar/policy.ts": 40,
     "avatar/bodyReader.ts": 55,
+    "avatar/rasterSignature.ts": 60,
     "avatar/scheduler.ts": 100,
     "avatar/transport.ts": 90,
     "avatar/rasterizer.ts": 90,
