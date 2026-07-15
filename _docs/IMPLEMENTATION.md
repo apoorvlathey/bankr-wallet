@@ -1778,12 +1778,21 @@ When dapps request signatures, the extension displays the request details. For B
 
 The SignatureRequestConfirmation component shows:
 
-- Origin (with favicon)
-- Network badge
-- Method name (e.g., "Personal Sign", "Sign Typed Data v4")
-- Decoded message content (for personal_sign)
-- Human-readable SIWE auth review for EIP-4361 messages
-- Raw data with copy button
+- The standard request header and shared combined-queue controls
+- Centered requesting-app identity via `RequestIdentity`
+- A plain-language signature summary before any raw data
+- Readable personal-message, SIWE, clear-signed, delegation, or structured
+  EIP-712 fields as the primary content
+- Network, method, raw payload/parameters, typed-data domain/types, and hashes
+  under the shared Advanced details disclosure
+- The same compact `Signing with` footer geometry as transaction requests
+- Secondary Reject and amber `brand` Sign actions in `StickyActionBar`
+
+The flat `SignatureRequestConfirmation.tsx` path is a compatibility facade. The
+implementation and presentation modules live in
+`components/SignatureConfirmation/`; they compose `ConfirmationScreen`,
+`RequestConfirmation/QueueNavigation`, `RequestIdentity`, `StickyActionBar`,
+and `shared/LabeledAddressPopover` instead of cloning transaction markup.
 
 External ERC-7710 `Delegation` typed-data requests are rejected before they are
 stored as pending signatures. Dapps must use ERC-7715 permission methods
@@ -1807,11 +1816,11 @@ raw-message block.
 
 **Human-readable display:**
 
-- "Sign in to {domain}" summary with the SIWE statement and dapp favicon
-- Site, account, chain, URI, issued/expiration times, request ID, nonce, and resources
-- Copy + explorer actions for the SIWE account address
+- "Sign in to {domain}" summary followed by the SIWE statement
+- URI, issued/expiration times, request ID, nonce, and resources without
+  repeating the already-visible requesting site, pinned signer, or network
 - Validation status and issue list
-- Raw SIWE message behind a collapsed disclosure
+- Raw SIWE message and request parameters inside shared Advanced details
 
 **Validation performed:**
 
@@ -1830,8 +1839,8 @@ account type. Both the local and Bankr confirmation handlers consume this same
 preflight, so request presence, pinned-account resolution, raw ERC-7710 rejection, signer
 matching, and SIWE origin checks cannot drift between transports. If a SIWE
 message has validation errors, the Sign button stays disabled until the user
-types the exact phrase
-`I understand`. The popup then sends the extension-only `allowUnsafeSiwe`
+opens the sticky decision-bar warning popover and checks its explicit
+acknowledgement checkbox. Confirmation then sends the extension-only `allowUnsafeSiwe`
 confirmation flag so the background handler can skip SIWE validation for that
 request. The dapp-supplied signer parameter must still match the pinned account;
 that check is separate from SIWE validation and is not bypassable.
@@ -1843,7 +1852,9 @@ When both transaction and signature requests are pending:
 - Counter shows combined total (e.g., "1/3" for 2 tx + 1 sig)
 - Transaction requests appear first in the list
 - Navigation arrows allow moving between all request types
-- "Reject All" button rejects both transactions and signatures
+- "Reject all" uses App's global queue handler and rejects transactions,
+  batches, signatures, permissions, and a cross-dapp batch represented by the
+  combined counter
 - Pending list shows both types with TX/SIG badges
 
 ### EIP-712 Validation (v1.4.0+)
@@ -2462,11 +2473,14 @@ resolution is remote-first, local-second:
 
 EIP-712 typed data signatures show structured display:
 
-- **Component**: `TypedDataDisplay.tsx` with Structured/Raw tab toggle
-- **Domain section**: name, version, chainId, verifyingContract (with address label)
-- **Primary type**: highlighted header
-- **Message fields**: recursive display for nested objects/arrays, address labels from eth.sh
-- Personal_sign and eth_sign fall back to plain message + raw data display
+- **Primary content**: primary type plus recursive message fields for nested
+  objects/arrays
+- **Address tools**: eth.sh labels use the shared transaction-style
+  `LabeledAddressPopover`; unlabeled addresses use shared copy/explorer actions
+- **Advanced details**: domain, types, exact raw typed data, and EIP-712 hashes
+- `personal_sign` shows safe decoded text first; invalid UTF-8, control-heavy,
+  `eth_sign`, and otherwise unreadable payloads display a warning and keep exact
+  bytes in Advanced details
 
 ### ERC-7710 / ERC-7715 Delegated Permissions
 
@@ -4276,27 +4290,31 @@ When in sidepanel:
 - Sidepanel: 100vh height (no max-height restriction)
 - Font: Inter (UI), JetBrains Mono (code/addresses)
 
-### Transaction/Signature Confirmation Header
+### Transaction/Signature Confirmation Layout
 
-The confirmation views use a two-row header layout:
+The confirmation views share the mobile confirmation shell:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  ←  │               < 1/2 >               │  Reject All │  ← Row 1
+│  ←  │               Request title              │  Copy    │  ← Header
 ├─────────────────────────────────────────────────────────────┤
-│                   Transaction Request                       │  ← Row 2
+│                 < 1/2 >          Reject all                │  ← Queue
+│                    Requesting app                           │
+│                Human-readable meaning                       │
+│               Review details / Advanced                     │
+├─────────────────────────────────────────────────────────────┤
+│  Signing with …                                             │
+│  Reject                                  Confirm / Sign      │  ← Sticky
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Row 1:**
-
-- **Back arrow** (left): Returns to pending list (if multiple) or main view
-- **Navigation** (center, absolute): `< 1/2 >` arrows + counter badge
-- **Reject All** (right): Rejects all pending requests (only shown when multiple)
-
-**Row 2:**
-
-- **Title** (centered): "Transaction Request" or "Signature Request" (larger font)
+- **Back arrow**: Returns to the pending list or main view
+- **Navigation**: Shared queue row before request identity; only shown when
+  multiple combined requests exist
+- **Reject all**: Uses the global combined-queue action
+- **Title**: "Transaction request", "Batch request", or "Signature request"
+- **Footer**: Shared sticky action layout keeps the pinned signer and decisions
+  visible
 
 ### Pending Requests List
 

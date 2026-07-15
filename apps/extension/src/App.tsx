@@ -2082,50 +2082,6 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedErc7715PermissionRequest?.id, isInSidePanel, isFullscreenTab]);
 
-  const handleCancelAllSignatures = useCallback(async () => {
-    // Cancel all pending signature requests
-    for (const request of pendingSignatureRequests) {
-      await new Promise<void>((resolve) => {
-        chrome.runtime.sendMessage(
-          { type: "rejectSignatureRequest", sigId: request.id },
-          () => resolve(),
-        );
-      });
-    }
-    // Check if there are other pending requests
-    const txRequests = await loadPendingRequests();
-    if (txRequests.length > 0) {
-      setPendingSignatureRequests([]);
-      setSelectedSignatureRequest(null);
-      setSelectedTxRequest(txRequests[0]);
-      setView("txConfirm");
-    } else {
-      const batchReqs = await loadPendingBatchRequests();
-      if (batchReqs.length > 0) {
-        setPendingSignatureRequests([]);
-        setSelectedSignatureRequest(null);
-        setSelectedBatchRequest(batchReqs[0]);
-        setView("batchTxConfirm");
-      } else {
-        const permissionReqs = await loadPendingErc7715PermissionRequests();
-        if (permissionReqs.length > 0) {
-          setPendingSignatureRequests([]);
-          setSelectedSignatureRequest(null);
-          setSelectedErc7715PermissionRequest(permissionReqs[0]);
-          setView("erc7715PermissionConfirm");
-        } else if (isInSidePanel || isFullscreenTab) {
-          setPendingSignatureRequests([]);
-          setSelectedSignatureRequest(null);
-          setView("main");
-        } else {
-          window.close();
-        }
-      }
-    }
-  // Bulk cancellation fallback routing reads the current pending-request helpers.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingSignatureRequests, isInSidePanel, isFullscreenTab]);
-
   const handleRpcIssuesChange = useCallback((chainIds: number[]) => {
     setRpcIssueChainIds(chainIds);
     setDismissedRpcIssueChainIds([]);
@@ -3250,7 +3206,7 @@ function App() {
                 }
               }}
               onCancelled={handleSignatureCancelled}
-              onCancelAll={handleCancelAllSignatures}
+              onRejectAll={handleRejectAll}
               onBeforeCancel={navigateToAdjacentRequest}
               onConfirmed={handleSignatureCancelled}
               onNavigate={(direction) => {

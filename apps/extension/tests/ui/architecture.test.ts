@@ -13,6 +13,7 @@ const appUrl = new URL("../../src/app/", import.meta.url);
 const compatibilityFacades = [
   "AssetChangesDisplay.tsx",
   "BatchTransactionConfirmation.tsx",
+  "SignatureRequestConfirmation.tsx",
   "TokenHoldings.tsx",
   "TokenTransfer.tsx",
   "TransactionConfirmation.tsx",
@@ -38,6 +39,13 @@ const pureModules = [
   {
     path: "components/Portfolio/Holdings/transforms.ts",
     url: new URL("Portfolio/Holdings/transforms.ts", componentsUrl),
+  },
+  {
+    path: "components/SignatureConfirmation/signaturePresentation.ts",
+    url: new URL(
+      "SignatureConfirmation/signaturePresentation.ts",
+      componentsUrl,
+    ),
   },
   {
     path: "components/TransactionConfirmation/transactionPresentation.ts",

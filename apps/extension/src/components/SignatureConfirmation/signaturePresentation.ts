@@ -1,7 +1,108 @@
 export interface FormattedSignatureData {
   message: string;
+  messageReadable: boolean;
+  rawPayload: string;
   rawData: string;
-  typedData?: Record<string, any>;
+  typedData?: Record<string, unknown>;
+}
+
+export interface ClearSigningTypedData {
+  primaryType: string;
+  domain?: Record<string, unknown>;
+  types: Record<string, Array<{ name: string; type: string }>>;
+  message: Record<string, unknown>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function isClearSigningTypedData(
+  value: unknown,
+): value is ClearSigningTypedData {
+  if (!isRecord(value)) return false;
+  if (typeof value.primaryType !== "string") return false;
+  if (!isRecord(value.types) || !isRecord(value.message)) return false;
+  if (value.domain !== undefined && !isRecord(value.domain)) return false;
+
+  return Object.values(value.types).every(
+    (fields) =>
+      Array.isArray(fields) &&
+      fields.every(
+        (field) =>
+          isRecord(field) &&
+          typeof field.name === "string" &&
+          typeof field.type === "string",
+      ),
+  );
+}
+
+export function getOriginHostname(origin: string, fallback: string): string {
+  try {
+    return new URL(origin).hostname;
+  } catch {
+    try {
+      return new URL(fallback).hostname;
+    } catch {
+      return origin;
+    }
+  }
+}
+
+function stringifySignatureValue(value: unknown): string {
+  try {
+    return JSON.stringify(
+      value,
+      (_key, nestedValue) =>
+        typeof nestedValue === "bigint" ? nestedValue.toString() : nestedValue,
+      2,
+    );
+  } catch {
+    return String(value ?? "");
+  }
+}
+
+function isReadableText(value: string): boolean {
+  if (value.includes("\uFFFD")) return false;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    const isDisallowedControl =
+      (codePoint >= 0 && codePoint <= 8) ||
+      codePoint === 11 ||
+      codePoint === 12 ||
+      (codePoint >= 14 && codePoint <= 31) ||
+      codePoint === 127;
+    if (isDisallowedControl) return false;
+  }
+  return true;
+}
+
+export function decodePersonalMessage(value: unknown): {
+  message: string;
+  readable: boolean;
+} {
+  if (typeof value !== "string") {
+    return { message: "", readable: false };
+  }
+
+  if (!value.startsWith("0x")) {
+    return { message: value, readable: isReadableText(value) };
+  }
+
+  const hex = value.slice(2);
+  if (hex.length % 2 !== 0 || !/^[0-9a-f]*$/iu.test(hex)) {
+    return { message: "", readable: false };
+  }
+
+  try {
+    const bytes = new Uint8Array(
+      hex.match(/.{2}/gu)?.map((byte) => Number.parseInt(byte, 16)) ?? [],
+    );
+    const message = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return { message, readable: isReadableText(message) };
+  } catch {
+    return { message: "", readable: false };
+  }
 }
 
 export function getMethodDisplayName(method: string): string {
@@ -9,7 +110,7 @@ export function getMethodDisplayName(method: string): string {
     case "personal_sign":
       return "Personal message";
     case "eth_sign":
-      return "Data hash";
+      return "Raw data hash";
     case "eth_signTypedData":
       return "Typed data";
     case "eth_signTypedData_v3":
@@ -35,57 +136,66 @@ export function getSignerAddress(
 
 export function formatSignatureData(
   method: string,
-  params: any[],
+  params: unknown[],
 ): FormattedSignatureData {
+  const rawData = stringifySignatureValue(params);
+
   try {
     if (method === "personal_sign") {
-      const messageParam = params[0];
-      let message = messageParam;
-
-      if (typeof messageParam === "string" && messageParam.startsWith("0x")) {
-        try {
-          const hex = messageParam.slice(2);
-          const bytes = new Uint8Array(
-            hex.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) ?? [],
-          );
-          message = new TextDecoder().decode(bytes);
-        } catch {
-          message = messageParam;
-        }
-      }
-
+      const rawPayload =
+        typeof params[0] === "string"
+          ? params[0]
+          : stringifySignatureValue(params[0]);
+      const decoded = decodePersonalMessage(params[0]);
       return {
-        message,
-        rawData: JSON.stringify(params, null, 2),
+        message: decoded.message,
+        messageReadable: decoded.readable,
+        rawPayload,
+        rawData,
       };
     }
 
     if (method === "eth_sign") {
       return {
-        message: params[1] || "",
-        rawData: JSON.stringify(params, null, 2),
+        message: "",
+        messageReadable: false,
+        rawPayload:
+          typeof params[1] === "string"
+            ? params[1]
+            : stringifySignatureValue(params[1]),
+        rawData,
       };
     }
 
     if (method.startsWith("eth_signTypedData")) {
-      const typedData =
+      const typedDataValue =
         typeof params[1] === "string" ? JSON.parse(params[1]) : params[1];
+      const typedData =
+        typeof typedDataValue === "object" &&
+        typedDataValue !== null &&
+        !Array.isArray(typedDataValue)
+          ? (typedDataValue as Record<string, unknown>)
+          : undefined;
 
       return {
-        message: typedData.message
-          ? JSON.stringify(typedData.message, null, 2)
+        message: typedData?.message
+          ? stringifySignatureValue(typedData.message)
           : "",
-        rawData: JSON.stringify(typedData, null, 2),
+        messageReadable: Boolean(typedData?.message),
+        rawPayload: stringifySignatureValue(typedDataValue),
+        rawData,
         typedData,
       };
     }
   } catch {
-    // Preserve the original request as raw JSON when decoding is not possible.
+    // Keep the original bounded request available in Advanced details.
   }
 
   return {
     message: "",
-    rawData: JSON.stringify(params, null, 2),
+    messageReadable: false,
+    rawPayload: typeof params[0] === "string" ? params[0] : "",
+    rawData,
   };
 }
 
@@ -95,18 +205,20 @@ export function getSignatureIntent({
   typedData,
   isSiwe,
   isDelegation,
+  messageReadable,
 }: {
   method: string;
   originHostname: string;
-  typedData?: Record<string, any>;
+  typedData?: Record<string, unknown>;
   isSiwe: boolean;
   isDelegation: boolean;
+  messageReadable: boolean;
 }): { title: string; description: string } {
   if (isSiwe) {
     return {
       title: `Sign in to ${originHostname}`,
       description:
-        "Confirm the site, account, and network before signing this login request.",
+        "This proves control of your wallet without sending a transaction.",
     };
   }
 
@@ -119,25 +231,32 @@ export function getSignatureIntent({
   }
 
   if (typedData) {
-    const application = typedData.domain?.name || originHostname;
+    const domain = typedData.domain;
+    const application =
+      typeof domain === "object" &&
+      domain !== null &&
+      !Array.isArray(domain) &&
+      typeof (domain as Record<string, unknown>).name === "string"
+        ? String((domain as Record<string, unknown>).name)
+        : originHostname;
     return {
       title: `Authorize ${application}`,
       description:
-        "This structured signature may authorize actions without sending a transaction.",
+        "Review the structured fields below before authorizing this request.",
     };
   }
 
-  if (method === "eth_sign") {
+  if (method === "eth_sign" || !messageReadable) {
     return {
-      title: "Sign a data hash",
+      title: "Sign unreadable data",
       description:
-        "The original message is not readable here. Only sign if you trust this request.",
+        "WalletChan cannot verify the meaning of this payload. Only sign if you trust the request.",
     };
   }
 
   return {
-    title: "Sign a message",
+    title: "Sign this message",
     description:
-      "This creates a cryptographic signature for the requesting site. It does not send a transaction.",
+      "Signing proves this wallet approved the message shown below.",
   };
 }

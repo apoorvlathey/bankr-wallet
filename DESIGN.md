@@ -529,3 +529,9 @@
 - 2026-07-14: added an always-visible execution route beneath the signer when
   force inclusion is enabled, pairing destination and L1 chain logos with the
   plain-language “Transacting on … via …” path above the fee decision.
+- 2026-07-15: rebuilt signature review on the same Warm Midnight request
+  architecture as transaction and batch review: shared queue navigation,
+  centered request identity, readable-first personal/SIWE/EIP-712 content,
+  transaction-style labeled-address tools, collapsed technical payloads, and a
+  compact pinned-signer footer with secondary Reject and amber Sign. The
+  combined queue's Reject all action now matches its displayed scope.

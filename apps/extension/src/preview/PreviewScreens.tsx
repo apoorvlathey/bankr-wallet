@@ -543,7 +543,7 @@ export function PreviewScreen({
             }
             onBack={noop}
             onCancelled={noop}
-            onCancelAll={noop}
+            onRejectAll={noop}
             onNavigate={noop}
             onConfirmed={noop}
           />

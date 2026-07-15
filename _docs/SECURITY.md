@@ -769,8 +769,9 @@ Warnings such as missing expiration, weak nonce, old issued-at time, insecure
 HTTP URI, or non-checksummed address remain visible in the UI but do not block
 signing unless they become validation errors.
 
-Users can bypass SIWE validation errors only from the extension UI by typing the
-exact phrase `I understand`. This sends `allowUnsafeSiwe` on the extension-only
+Users can bypass SIWE validation errors only from the extension UI by opening
+the sticky decision-bar warning popover and explicitly checking its
+acknowledgement checkbox. This sends `allowUnsafeSiwe` on the extension-only
 `confirmSignatureRequest` message and skips only the SIWE validation pass. The
 stored pending request, pinned account binding, account type,
 and dapp-supplied signer parameter checks still run and are not bypassable by
@@ -782,7 +783,7 @@ the SIWE override.
 SignatureRequestConfirmation → analyzeSiweMessage()
   ├─ Display human-readable auth summary
   ├─ Show validation issues
-  └─ Require "I understand" before signing through validation errors
+  └─ Require the explicit warning checkbox before signing through errors
 
 handleConfirmSignatureRequest*() → prepareSignatureConfirmation()
   ├─ Re-parse raw personal_sign message

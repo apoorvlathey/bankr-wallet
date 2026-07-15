@@ -7,6 +7,35 @@ interface EstimatedChangesHeadingProps {
   chainName: string;
 }
 
+/** Compact destination-chain context shared by request-section headings. */
+export function RequestChainContext({
+  chainId,
+  chainName,
+}: EstimatedChangesHeadingProps) {
+  return (
+    <HStack
+      as="span"
+      spacing={1}
+      flexShrink={0}
+      minH="28px"
+      px={2}
+      borderWidth="1px"
+      borderStyle="solid"
+      borderColor="border.subtle"
+      borderRadius="md"
+      bg="surface.raised"
+    >
+      <Text as="span" color="fg.secondary" fontSize="xs" fontWeight="500">
+        on
+      </Text>
+      <ChainIcon chainId={chainId} chainName={chainName} size="14px" withChip />
+      <Text as="span" color="fg.primary" fontSize="xs" fontWeight="600">
+        {chainName}
+      </Text>
+    </HStack>
+  );
+}
+
 /** Shared simulation heading and network context for request decisions. */
 export function EstimatedChangesHeading({
   chainId,
@@ -41,26 +70,7 @@ export function EstimatedChangesHeading({
         </Tooltip>
       </HStack>
 
-      <HStack
-        as="span"
-        spacing={1}
-        flexShrink={0}
-        minH="28px"
-        px={2}
-        borderWidth="1px"
-        borderStyle="solid"
-        borderColor="border.subtle"
-        borderRadius="md"
-        bg="surface.raised"
-      >
-        <Text as="span" color="fg.secondary" fontSize="xs" fontWeight="500">
-          on
-        </Text>
-        <ChainIcon chainId={chainId} chainName={chainName} size="14px" withChip />
-        <Text as="span" color="fg.primary" fontSize="xs" fontWeight="600">
-          {chainName}
-        </Text>
-      </HStack>
+      <RequestChainContext chainId={chainId} chainName={chainName} />
     </Flex>
   );
 }
