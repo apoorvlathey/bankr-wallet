@@ -7,10 +7,7 @@ import {
 } from "@chakra-ui/react";
 import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
 import NativeValueAmount from "@/components/NativeValueAmount";
-import {
-  AddressActions,
-  LabeledAddressPopover,
-} from "@/components/shared/LabeledAddressPopover";
+import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover";
 import { useTheme } from "@/theme";
 
 interface TransactionInfoCardProps {
@@ -104,21 +101,15 @@ export function TransactionInfoCard({
                 >
                   Interacting with
                 </Text>
-                {interactingLabel ? (
-                  <LabeledAddressPopover
-                    address={tx.to}
-                    contextLabel="interacting address"
-                    explorer={explorer}
-                    label={interactingLabel}
-                  />
-                ) : (
-                  <AddressActions
-                    address={tx.to}
-                    compact
-                    contextLabel="interacting address"
-                    explorer={explorer}
-                  />
-                )}
+                <LabeledAddressPopover
+                  address={tx.to}
+                  contextLabel="interacting address"
+                  explorer={explorer}
+                  label={
+                    interactingLabel ??
+                    `${tx.to.slice(0, 6)}...${tx.to.slice(-4)}`
+                  }
+                />
               </HStack>
             ) : (
               <HStack justify="space-between" spacing={3}>

@@ -2,10 +2,7 @@ import { Box, Code, HStack, Text, VStack } from "@chakra-ui/react";
 import { memo, useEffect, useState } from "react";
 
 import { CopyButton } from "@/components/CopyButton";
-import {
-  AddressActions,
-  LabeledAddressPopover,
-} from "@/components/shared/LabeledAddressPopover";
+import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
 
 interface TypedDataDisplayProps {
@@ -51,20 +48,13 @@ function AddressValue({
     };
   }, [address, chainId]);
 
-  return label ? (
+  return (
     <LabeledAddressPopover
       address={address}
       contextLabel="typed-data address"
       explorer={explorer}
-      label={label}
+      label={label ?? `${address.slice(0, 6)}...${address.slice(-4)}`}
       maxW="190px"
-    />
-  ) : (
-    <AddressActions
-      address={address}
-      compact
-      contextLabel="typed-data address"
-      explorer={explorer}
     />
   );
 }

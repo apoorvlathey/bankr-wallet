@@ -4,6 +4,7 @@ import {
   HStack,
   Icon,
   IconButton,
+  Image,
   Popover,
   PopoverBody,
   PopoverContent,
@@ -12,7 +13,14 @@ import {
   Text,
 } from "@chakra-ui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { Account } from "@/chrome/types";
+import { AccountAvatar } from "@/components/AccountIdentity";
+import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
+import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { isDarkThemeId, useTheme } from "@/theme";
+import { getAddressIdentityPresentation } from "./addressIdentityPresentation";
+
+const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/u;
 
 interface AddressActionsProps {
   address: string;
@@ -135,27 +143,82 @@ export function LabeledAddressPopover({
 }: LabeledAddressPopoverProps) {
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
+  const isAddress = ADDRESS_REGEX.test(address);
+  const identityAddresses = useMemo(
+    () => (isAddress ? [address] : []),
+    [address, isAddress],
+  );
+  const { identities } = useEnsIdentities(identityAddresses);
+  const identity = identities.get(address.toLowerCase());
+  const cachedIdentityAvatar = useCachedAvatarSrc(identity?.avatar);
+  const [account, setAccount] = useState<Account | null>(null);
+
+  useEffect(() => {
+    setAccount(null);
+    if (!isAddress) return;
+
+    let cancelled = false;
+    chrome.runtime.sendMessage(
+      { type: "getAccounts" },
+      (accounts: Account[] | null) => {
+        if (cancelled || chrome.runtime.lastError || !Array.isArray(accounts)) {
+          return;
+        }
+        const matchingAccount = accounts.find(
+          (candidate) =>
+            candidate.address.toLowerCase() === address.toLowerCase(),
+        );
+        setAccount(matchingAccount ?? null);
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address, isAddress]);
+
+  const presentation = getAddressIdentityPresentation({
+    account,
+    fallbackLabel: label,
+    resolvedAvatar: identity?.avatar,
+    resolvedName: identity?.name,
+  });
+
+  const avatar =
+    presentation.avatarKind === "resolved" && identity?.avatar ? (
+      <Image
+        src={cachedIdentityAvatar || identity.avatar}
+        alt="Resolved address avatar"
+        boxSize="20px"
+        minW="20px"
+        borderRadius="full"
+        objectFit="cover"
+      />
+    ) : presentation.avatarKind === "walletFallback" && account ? (
+      <AccountAvatar account={account} ensAvatar={null} size={20} />
+    ) : null;
 
   return (
     <HStack
-      spacing={0}
+      spacing={1}
       minW={0}
       maxW={maxW}
-      pl={2}
+      pl={avatar ? 1 : 2}
       bg={isDarkTheme ? "surface.raisedHover" : "accent.secondary"}
       color={isDarkTheme ? "fg.primary" : "accentFg.secondary"}
       border="1px solid"
       borderColor={isDarkTheme ? "border.default" : "accent.secondary"}
       borderRadius="md"
     >
+      {avatar}
       <Text
         minW={0}
         fontSize="2xs"
         fontWeight="700"
         noOfLines={1}
-        title={label}
+        title={presentation.label}
       >
-        {label}
+        {presentation.label}
       </Text>
 
       <Popover
@@ -167,7 +230,7 @@ export function LabeledAddressPopover({
         isLazy
       >
         <PopoverTrigger>
-          <Box as="span" display="inline-flex" flexShrink={0}>
+          <Box as="span" display="inline-flex" flexShrink={0} ml={-0.5}>
             <IconButton
               aria-label={`Show ${contextLabel} actions`}
               icon={<MoreHorizontalIcon />}

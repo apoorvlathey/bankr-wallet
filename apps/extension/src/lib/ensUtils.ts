@@ -9,7 +9,7 @@ import {
 import { mainnet, base } from "viem/chains";
 import { normalize } from "viem/ens";
 import { L2ResolverAbi } from "./L2ResolverAbi";
-import wei from "@/utils/wei";
+import wei, { GWEI_CONTRACT } from "@/utils/wei";
 import {
   isMega,
   megaNamesAbi,
@@ -25,6 +25,26 @@ import { secureHttpTransport } from "@/chrome/network/rpcClient";
 
 const BASENAME_L2_RESOLVER_ADDRESS =
   "0xC6d566A56A1aFf6508b41f6c90ff131615583BCD" as const;
+
+const GWEI_NAME_NFT_AVATAR_ABI = [
+  {
+    type: "function",
+    name: "computeId",
+    stateMutability: "pure",
+    inputs: [{ name: "fullName", type: "string" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "text",
+    stateMutability: "view",
+    inputs: [
+      { name: "tokenId", type: "uint256" },
+      { name: "key", type: "string" },
+    ],
+    outputs: [{ name: "", type: "string" }],
+  },
+] as const;
 
 // ============================================================================
 // Public Clients (use user-configured RPCs from storage)
@@ -382,11 +402,39 @@ const getMegaAvatar = async (
   }
 };
 
+const getGweiAvatar = async (
+  gweiName: string
+): Promise<string | null> => {
+  try {
+    const client = await getMainnetClient();
+    const tokenId = await client.readContract({
+      abi: GWEI_NAME_NFT_AVATAR_ABI,
+      address: GWEI_CONTRACT as Address,
+      functionName: "computeId",
+      args: [gweiName],
+    });
+    if (tokenId === 0n) return null;
+
+    const avatar = await client.readContract({
+      abi: GWEI_NAME_NFT_AVATAR_ABI,
+      address: GWEI_CONTRACT as Address,
+      functionName: "text",
+      args: [tokenId, "avatar"],
+    });
+    return avatar.length > 0 ? avatar : null;
+  } catch {
+    return null;
+  }
+};
+
 export const getNameAvatar = async (
   name: string
 ): Promise<string | null> => {
   if (isMega(name)) {
     return await getMegaAvatar(name);
+  }
+  if (wei.isGwei(name)) {
+    return await getGweiAvatar(name);
   }
   if (wei.isSupportedName(name)) {
     return null;
@@ -409,7 +457,8 @@ export const getNameAvatar = async (
  * - Resolves all name services in parallel for speed
  * - If ENS name exists, uses ENS name + ENS avatar
  * - Falls back to Basename name + Basename avatar
- * - Falls back to WNS/GNS name (no avatar support for .wei/.gwei names)
+ * - Falls back to WNS name (no avatar support for .wei names)
+ * - Falls back to GNS name + its avatar text record
  * - Falls back to Mega name + Mega avatar (via text record)
  */
 export const resolveEnsIdentity = async (
@@ -436,12 +485,13 @@ export const resolveEnsIdentity = async (
       return { name: basename, avatar };
     }
 
-    // Fall back to WNS/GNS (no avatar support)
+    // Fall back to WNS (no avatar support)
     if (weiName) {
       return { name: weiName, avatar: null };
     }
     if (gweiName) {
-      return { name: gweiName, avatar: null };
+      const avatar = await getGweiAvatar(gweiName);
+      return { name: gweiName, avatar };
     }
 
     // Fall back to Mega

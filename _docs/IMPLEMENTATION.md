@@ -2738,9 +2738,9 @@ Accounts in the dropdown automatically resolve ENS names, Basenames, WNS `.wei` 
 ENS (Ethereum mainnet) takes precedence over Basename (Base L2), which takes precedence over WNS (Wei Name Service), then GNS (Gwei Name Service), then MegaNames (MegaETH):
 
 1. **Name**: ENS name > Basename > WNS `.wei` name > GNS `.gwei` name > MegaNames `.mega` name > truncated address
-2. **Avatar**: ENS avatar (when ENS name exists) > Basename avatar (when only Basename exists) > Mega avatar (when only Mega name exists) > BankrAvatar (Bankr accounts) > BlockieAvatar (fallback). WNS/GNS names have no avatar support.
+2. **Avatar**: ENS avatar (when ENS name exists) > Basename avatar (when only Basename exists) > GNS avatar text record (when only a GNS name exists) > Mega avatar (when only Mega name exists) > BankrAvatar (Bankr accounts) > BlockieAvatar (wallet-account fallback only). WNS names have no avatar support.
 
-All name services are resolved in parallel for speed via `resolveEnsIdentity()` in `ensUtils.ts`. If ENS name exists, ENS avatar is fetched; Basename avatar is only fetched when no ENS name is found; Mega avatar is fetched via `text(tokenId, "avatar")` when only Mega name exists; WNS/GNS names have no avatar support.
+All name services are resolved in parallel for speed via `resolveEnsIdentity()` in `ensUtils.ts`. If ENS name exists, ENS avatar is fetched; Basename avatar is only fetched when no ENS name is found; GNS and Mega avatars are fetched through their `text(tokenId, "avatar")` records when their names win resolution priority. WNS names have no avatar support. Shared request address pills prioritize a matching WalletChan account's `displayName`, then the cached resolved name, then the caller's contract/address label. Resolved avatars are available for wallet and external addresses; Bankr/blockie fallbacks are restricted to addresses present in the user's account list.
 
 ### Display Priority in AccountSwitcher
 
@@ -2764,6 +2764,7 @@ AccountSwitcher.tsx
                     ├── getMegaName()     # MegaNames reverse resolution (MegaETH chain 4326)
                     ├── getEnsAvatar()    # mainnet avatar lookup
                     ├── getBasenameAvatar() # Base L2 avatar lookup
+                    ├── getGweiAvatar()   # GNS avatar text-record lookup
                     └── getMegaAvatar()   # MegaNames avatar lookup (text record)
 ```
 

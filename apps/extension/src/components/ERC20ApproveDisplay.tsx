@@ -32,10 +32,7 @@ import { isDarkThemeId, useTheme } from "@/theme";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
-import {
-  AddressActions,
-  LabeledAddressPopover,
-} from "@/components/shared/LabeledAddressPopover";
+import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover";
 import {
   getCachedTokenMetadataSync,
   resolveTokenMetadataClient,
@@ -714,22 +711,16 @@ export default function ERC20ApproveDisplay({
                   here would just stack a third "REVOKE …". */}
               Spender
             </Text>
-            {spenderLabel ? (
-              <LabeledAddressPopover
-                address={approval.spender}
-                contextLabel="spender address"
-                explorer={explorerUrl}
-                label={spenderLabel}
-                maxW="200px"
-              />
-            ) : (
-              <AddressActions
-                address={approval.spender}
-                compact
-                contextLabel="spender address"
-                explorer={explorerUrl}
-              />
-            )}
+            <LabeledAddressPopover
+              address={approval.spender}
+              contextLabel="spender address"
+              explorer={explorerUrl}
+              label={
+                spenderLabel ??
+                `${approval.spender.slice(0, 6)}...${approval.spender.slice(-4)}`
+              }
+              maxW="200px"
+            />
           </HStack>
         </Box>
       </VStack>
