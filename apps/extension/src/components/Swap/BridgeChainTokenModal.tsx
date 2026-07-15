@@ -19,6 +19,7 @@ import {
 import { useNetworks } from "@/contexts/NetworksContext";
 import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
+import { chainHasNativeToken } from "@/constants/chainRegistry";
 import { BridgeChainTokenPickerScreen } from "./BridgeChainTokenPickerScreen";
 
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
@@ -339,8 +340,10 @@ export default function BridgeChainTokenModal({
 
   const nativeAsset = useMemo(
     () =>
-      nativeMetaFromBungeeChain(currentChain) ??
-      getNativeAssetMeta(currentChainId, networksInfo),
+      chainHasNativeToken(currentChainId)
+        ? nativeMetaFromBungeeChain(currentChain) ??
+          getNativeAssetMeta(currentChainId, networksInfo)
+        : null,
     [currentChain, currentChainId, networksInfo],
   );
 
@@ -368,7 +371,9 @@ export default function BridgeChainTokenModal({
   const tokensAsPortfolio = useMemo(() => {
     if (tokensStale) return [];
     const mapped = tokens.map((t) => bungeeToPortfolio(t, currentChainId));
-    if (!nativeAsset) return mapped;
+    if (!nativeAsset) {
+      return mapped.filter((token) => token.contractAddress !== "native");
+    }
 
     const nativeIndex = mapped.findIndex((t) => t.contractAddress === "native");
     if (nativeIndex >= 0) {

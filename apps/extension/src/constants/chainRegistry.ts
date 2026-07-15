@@ -80,6 +80,12 @@ export interface ChainEntry {
   border: string;
   text: string;
   nativeCurrency: { name: string; symbol: string; decimals: number };
+  /**
+   * Whether eth_getBalance represents a real user-owned native asset.
+   * Defaults to true. Chains such as Tempo still require nativeCurrency
+   * metadata for EVM compatibility and fee display, but have no native token.
+   */
+  hasNativeToken?: boolean;
   /** Hidden until the user explicitly enables the chain in Settings. */
   hiddenByDefault?: boolean;
   /** Whether this chain uses OP Stack (for L1 fee breakdown in gas display) */
@@ -625,6 +631,7 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     border: "rgba(255, 77, 141, 0.4)",
     text: "#FF4D8D",
     nativeCurrency: { name: "USD", symbol: "USD", decimals: 6 },
+    hasNativeToken: false,
     isOpStack: false,
     isBankrSupported: false,
     isSwapSupported: true,
@@ -916,6 +923,19 @@ for (const c of CHAIN_REGISTRY) {
 export const NATIVE_CURRENCY_SYMBOLS: Record<number, string> = {};
 for (const c of CHAIN_REGISTRY) {
   NATIVE_CURRENCY_SYMBOLS[c.chainId] = c.nativeCurrency.symbol;
+}
+
+const CHAIN_IDENTITY_BY_ID = new Map<number, ChainEntry>();
+for (const chain of CHAIN_REGISTRY) {
+  CHAIN_IDENTITY_BY_ID.set(chain.chainId, chain);
+  for (const testnetChainId of chain.testnetChainIds) {
+    CHAIN_IDENTITY_BY_ID.set(testnetChainId, chain);
+  }
+}
+
+/** Unknown/custom EVM chains retain the conventional native-token default. */
+export function chainHasNativeToken(chainId: number): boolean {
+  return CHAIN_IDENTITY_BY_ID.get(chainId)?.hasNativeToken !== false;
 }
 
 /**

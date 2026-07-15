@@ -156,7 +156,7 @@ test("avatar cache keeps the 200 most recently accessed valid entries", async ()
 
 test("portfolio cache pruning stays delegated and reset-aware", async () => {
   values.portfolioHoldingsCache = {
-    version: 1,
+    version: 2,
     entries: {
       fresh: {
         tokens: [{}],

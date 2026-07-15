@@ -7,6 +7,7 @@ import {
 } from "@/chrome/swapApi";
 import { getCachedBungeeTokens } from "@/chrome/bridgeApi";
 import { getChainConfig } from "@/constants/chainConfig";
+import { chainHasNativeToken } from "@/constants/chainRegistry";
 import { useNetworks } from "@/contexts/NetworksContext";
 import {
   getNativeAssetLogoUrl,
@@ -186,6 +187,10 @@ export function useSwapQuotes({
     }
     let cancelled = false;
     (async () => {
+      if (!chainHasNativeToken(buyChainId)) {
+        if (!cancelled) setDestNativeInfo(null);
+        return;
+      }
       const nativeMeta = getNativeAssetMeta(buyChainId, networksInfo);
       if (nativeMeta) {
         if (!cancelled) setDestNativeInfo(nativeMeta);

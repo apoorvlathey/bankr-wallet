@@ -86,15 +86,6 @@ export const KNOWN_CHAINS: Record<number, KnownChainMetadata> = {
     isTestnet: false,
     icon: "/chainIcons/citrea.webp",
   },
-  4217: {
-    chainId: 4217,
-    name: "Tempo",
-    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-    defaultRpc: "https://tempo.drpc.org",
-    explorer: "https://explorer.tempo.fi",
-    isTestnet: false,
-    icon: "/chainIcons/tempo.webp",
-  },
   5000: {
     chainId: 5000,
     name: "Mantle",

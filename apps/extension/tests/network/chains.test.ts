@@ -5,13 +5,18 @@ import {
   CHAIN_REGISTRY,
   DEFAULT_NETWORKS,
   ZEROX_SUPPORTED_CHAIN_IDS,
+  chainHasNativeToken,
 } from "../../src/constants/chainRegistry";
 import {
   getVisibleChains,
+  getNativeAssetMeta,
+  getResolvedChainById,
   MAX_SAVED_RPC_URLS,
   normalizeNetworksInfo,
   normalizeSavedRpcUrls,
 } from "../../src/lib/chains";
+import { KNOWN_CHAINS } from "../../src/constants/knownChains.generated";
+import { normalizeActiveChainName } from "../../src/chrome/network/networkRepository";
 import {
   getChainEnvironmentLabel,
   resolveChainIconMeta,
@@ -114,6 +119,61 @@ test("registered testnets reuse their mainnet chain identity", () => {
       );
     }
   }
+});
+
+test("Tempo mainnet and testnet do not expose a synthetic native balance", () => {
+  assert.equal(chainHasNativeToken(4217), false);
+  assert.equal(chainHasNativeToken(42431), false);
+  assert.equal(getNativeAssetMeta(4217, {})?.symbol, "USD");
+  assert.equal(
+    getNativeAssetMeta(42431, {
+      "Tempo Testnet": {
+        chainId: 42431,
+        rpcUrl: "https://rpc.moderato.tempo.xyz",
+        isCustom: true,
+        nativeCurrency: { name: "USD", symbol: "USD", decimals: 6 },
+      },
+    })?.symbol,
+    "USD",
+  );
+  assert.equal(chainHasNativeToken(8453), true);
+  assert.equal(chainHasNativeToken(9_999_999), true);
+});
+
+test("v3.19 custom Tempo state upgrades without losing user preferences", () => {
+  const storedNetworks = {
+    "My Tempo": {
+      chainId: 4217,
+      rpcUrl: "https://tempo.drpc.org",
+      explorer: "https://explorer.tempo.fi",
+      hidden: true,
+      isCustom: true,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    },
+  };
+  const normalized = normalizeNetworksInfo(storedNetworks);
+  const tempo = getResolvedChainById(4217, normalized);
+
+  assert.deepEqual(normalized.Tempo, {
+    chainId: 4217,
+    rpcUrl: "https://tempo.drpc.org",
+    hidden: true,
+  });
+  assert.equal(tempo?.name, "Tempo");
+  assert.equal(tempo?.rpcUrl, "https://tempo.drpc.org");
+  assert.equal(tempo?.hidden, true);
+  assert.equal(tempo?.isCustom, false);
+  assert.deepEqual(tempo?.nativeCurrency, {
+    name: "USD",
+    symbol: "USD",
+    decimals: 6,
+  });
+  assert.equal(tempo?.hasNativeToken, false);
+  assert.equal(KNOWN_CHAINS[4217], undefined);
+  assert.equal(
+    normalizeActiveChainName("My Tempo", storedNetworks, normalized),
+    "Tempo",
+  );
 });
 
 test("HyperEVM mainnet and testnet share the contrast-safe logo style", () => {

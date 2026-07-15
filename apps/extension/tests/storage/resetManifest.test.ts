@@ -39,6 +39,7 @@ test("wallet reset local and sync manifests retain their exact released keys", (
     "pendingBridges",
     "chatHistory",
     "portfolioSnapshots",
+    "portfolioSnapshotsV2",
     "portfolioHoldingsCache",
     "hiddenPortfolioTokens",
     "customTokens",

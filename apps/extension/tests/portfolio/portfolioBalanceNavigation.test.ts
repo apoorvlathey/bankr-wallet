@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { chromium } from "@playwright/test";
+import { chromium, type Locator } from "@playwright/test";
 import { createServer } from "vite";
 
 const APP_DIR = path.resolve(
@@ -10,6 +10,13 @@ const APP_DIR = path.resolve(
   "..",
   "..",
 );
+
+async function readNumberFlowValue(balance: Locator): Promise<number> {
+  const serialized = await balance.locator("number-flow-react").getAttribute("data");
+  if (!serialized) return Number.NaN;
+  const value = (JSON.parse(serialized) as { value?: unknown }).value;
+  return typeof value === "number" ? value : Number.NaN;
+}
 
 test(
   "portfolio balance survives Activity -> transaction details -> back for every wallet type",
@@ -42,9 +49,9 @@ test(
 
           const balance = page.getByTestId("portfolio-balance");
           await balance.waitFor();
-          const initialBalance = (await balance.textContent())?.trim();
+          const initialBalance = await readNumberFlowValue(balance);
           assert.ok(
-            initialBalance && initialBalance !== "$0.00",
+            Number.isFinite(initialBalance) && initialBalance > 0,
             `${wallet} should load its initial portfolio balance`,
           );
           await page
@@ -65,9 +72,9 @@ test(
             "true",
           );
           await balance.waitFor();
-          assert.notEqual(
-            (await balance.textContent())?.trim(),
-            "$0.00",
+          const restoredBalance = await readNumberFlowValue(balance);
+          assert.ok(
+            Number.isFinite(restoredBalance) && restoredBalance > 0,
             `${wallet} should retain its balance after returning to Activity`,
           );
         } finally {

@@ -1,4 +1,5 @@
 import { getNativeAssetMeta, getStoredNetworksInfo } from "@/lib/chains";
+import { chainHasNativeToken } from "@/constants/chainRegistry";
 
 import { fetchAndCacheAvatarImage } from "../avatarImageCache";
 import { getCachedBungeeTokens } from "../bridgeApi";
@@ -36,6 +37,7 @@ function warmLogoImageCache(logoUrl: string | undefined): void {
 }
 
 async function resolveNativeMetadata(chainId: number): Promise<TokenMetadata> {
+  if (!chainHasNativeToken(chainId)) return {};
   const networksInfo = await getStoredNetworksInfo().catch(() => undefined);
   const native = getNativeAssetMeta(chainId, networksInfo);
   if (native) {

@@ -1,7 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getLatestPortfolioHoldingsSnapshotForAddress } from "../../src/chrome/portfolio/holdingsCache";
+import {
+  getLatestPortfolioHoldingsSnapshotForAddress,
+  prunePortfolioHoldingsCacheValue,
+} from "../../src/chrome/portfolio/holdingsCache";
+
+test("sentinel-era V1 holdings caches are invalidated", () => {
+  const result = prunePortfolioHoldingsCacheValue({
+    version: 1,
+    entries: {
+      tempo: {
+        tokens: [{ chainId: 4217, contractAddress: "native" }],
+        defiPositions: [],
+        totalValueUsd: 4.24e69,
+        timestamp: Date.now(),
+      },
+    },
+  });
+
+  assert.equal(result.changed, true);
+  assert.equal(result.next, undefined);
+});
 
 test("background consumers receive the latest reset-aware portfolio snapshot for an address", async (t) => {
   const originalChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome");
@@ -17,7 +37,7 @@ test("background consumers receive the latest reset-aware portfolio snapshot for
           async get() {
             return {
               portfolioHoldingsCache: {
-                version: 1,
+                version: 2,
                 entries: {
                   [`${address}|older-chains`]: older,
                   [`${address}|latest-chains`]: latest,

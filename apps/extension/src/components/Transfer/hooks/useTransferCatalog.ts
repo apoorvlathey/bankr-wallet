@@ -3,6 +3,7 @@ import type { PortfolioToken } from "@/chrome/portfolio/api";
 import { fetchOnchainBalances } from "@/chrome/portfolio/onchainBalances";
 import { loadPortfolioTokenCatalog } from "@/chrome/portfolio/tokenCatalog";
 import { secureHttpTransport } from "@/chrome/network/rpcClient";
+import { chainHasNativeToken } from "@/constants/chainRegistry";
 import { NATIVE_TOKEN_ADDRESS, type TokenListEntry } from "@/chrome/swapApi";
 import { SWAP_SUPPORTED_CHAIN_IDS } from "@/constants/chainRegistry";
 import {
@@ -238,6 +239,10 @@ export function useTransferCatalog({
       const isNative =
         addressLower === "0x0000000000000000000000000000000000000000" ||
         addressLower === NATIVE_TOKEN_ADDRESS.toLowerCase();
+      if (isNative && !chainHasNativeToken(selectedChainId)) {
+        setCustomTokenError("This chain does not have a native token");
+        return;
+      }
       const { createPublicClient, erc20Abi, formatUnits } = await import("viem");
       const rpcUrl = await getStoredRpcUrl(selectedChainId);
       if (!rpcUrl) {

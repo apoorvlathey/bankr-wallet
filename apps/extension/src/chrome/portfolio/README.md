@@ -17,9 +17,10 @@ ordering must remain deterministic. Review the implementation in this order:
 6. `snapshotRefresh.ts` — catalog load, live onchain refresh, then forced
    snapshot persistence.
 
-The storage keys `portfolioSnapshots`, `portfolioHoldingsCache`,
+The storage keys `portfolioSnapshotsV2`, `portfolioHoldingsCache`,
 `hiddenPortfolioTokens`, `recentlyReceivedTokens`, `coingeckoMarketCache`,
 `coingeckoSearchCache`, `coingeckoNativeResolutionCache`, and
 `coingeckoErc20PriceCache` are compatibility boundaries. Their shapes, TTLs,
 best-effort cache writes, CoinGecko/GeckoTerminal fallback order, and snapshot
-refresh ordering must not change during file-only refactors.
+refresh ordering must not change during file-only refactors. The legacy
+`portfolioSnapshots` key is purge-only and remains in the wallet-reset manifest.

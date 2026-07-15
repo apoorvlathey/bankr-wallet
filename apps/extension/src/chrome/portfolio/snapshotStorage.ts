@@ -12,9 +12,18 @@ interface SnapshotStore {
   [address: string]: HoldingsSnapshot[];
 }
 
-const STORAGE_KEY = "portfolioSnapshots";
+const STORAGE_KEY = "portfolioSnapshotsV2";
+const LEGACY_STORAGE_KEY = "portfolioSnapshots";
 const MIN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000; // 8 days
+
+async function purgeLegacySnapshots(): Promise<void> {
+  try {
+    await chrome.storage.local.remove(LEGACY_STORAGE_KEY);
+  } catch {
+    // Chart history cleanup is best-effort and must not block live holdings.
+  }
+}
 
 /**
  * Record a portfolio value snapshot for an address.
@@ -26,6 +35,10 @@ export async function recordSnapshot(
   totalValueUsd: number,
   options: { force?: boolean } = {},
 ): Promise<void> {
+  if (!Number.isFinite(totalValueUsd) || totalValueUsd < 0) return;
+  // V1 totals may contain Tempo's eth_getBalance sentinel. They cannot be
+  // repaired because snapshots do not retain a per-chain/token breakdown.
+  await purgeLegacySnapshots();
   const key = address.toLowerCase();
   const data = await chrome.storage.local.get(STORAGE_KEY);
   const store: SnapshotStore = data[STORAGE_KEY] || {};
@@ -54,6 +67,7 @@ export async function recordSnapshot(
 export async function getSnapshots(
   address: string
 ): Promise<HoldingsSnapshot[]> {
+  await purgeLegacySnapshots();
   const key = address.toLowerCase();
   const data = await chrome.storage.local.get(STORAGE_KEY);
   const store: SnapshotStore = data[STORAGE_KEY] || {};

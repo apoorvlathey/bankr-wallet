@@ -1,3 +1,4 @@
+import { chainHasNativeToken } from "@/constants/chainRegistry";
 import { getChainEnvironmentLabel } from "@/lib/chainIcons";
 import { getNativeAssetMeta, getResolvedChainById } from "@/lib/chains";
 import type { NetworksInfo } from "@/types";
@@ -45,17 +46,21 @@ export function finalizePortfolioTokens(
   hiddenTokenKeys: Set<string>,
   networksInfo: NetworksInfo,
 ): { visibleTokens: PortfolioToken[]; allTokenKeys: Set<string> } {
-  const finalTokens = tokens.map((token) => {
-    let next = token;
-    if (isNativeToken(next) && !next.logoUrl) {
-      const meta = getNativeAssetMeta(next.chainId, networksInfo);
-      if (meta?.logoUrl) next = { ...next, logoUrl: meta.logoUrl };
-    }
-    if (isNativeToken(next) && isTestnetChain(next.chainId, networksInfo)) {
-      next = { ...next, priceUsd: 0, valueUsd: 0 };
-    }
-    return next;
-  });
+  const finalTokens = tokens
+    .filter(
+      (token) => !isNativeToken(token) || chainHasNativeToken(token.chainId),
+    )
+    .map((token) => {
+      let next = token;
+      if (isNativeToken(next) && !next.logoUrl) {
+        const meta = getNativeAssetMeta(next.chainId, networksInfo);
+        if (meta?.logoUrl) next = { ...next, logoUrl: meta.logoUrl };
+      }
+      if (isNativeToken(next) && isTestnetChain(next.chainId, networksInfo)) {
+        next = { ...next, priceUsd: 0, valueUsd: 0 };
+      }
+      return next;
+    });
   const visibleTokens = finalTokens.filter(
     (token) =>
       !hiddenTokenKeys.has(

@@ -8,7 +8,25 @@ export type NetworkState = {
   networksInfo: NetworksInfo;
   storedNetworksInfo?: NetworksInfo;
   chainName?: string;
+  storedChainName?: string;
 };
+
+export function normalizeActiveChainName(
+  chainName: string | undefined,
+  storedNetworksInfo: NetworksInfo | undefined,
+  normalizedNetworksInfo: NetworksInfo,
+): string | undefined {
+  if (!chainName || normalizedNetworksInfo[chainName]) return chainName;
+
+  const storedChainId = storedNetworksInfo?.[chainName]?.chainId;
+  if (storedChainId === undefined) return chainName;
+
+  return (
+    Object.entries(normalizedNetworksInfo).find(
+      ([, entry]) => entry.chainId === storedChainId,
+    )?.[0] ?? chainName
+  );
+}
 
 export async function getNetworkState(): Promise<NetworkState> {
   const { networksInfo, chainName } = (await chrome.storage.sync.get([
@@ -19,10 +37,19 @@ export async function getNetworkState(): Promise<NetworkState> {
     chainName?: string;
   };
 
+  const normalizedNetworksInfo = normalizeNetworksInfo(
+    networksInfo ?? DEFAULT_NETWORKS,
+  );
+
   return {
-    networksInfo: normalizeNetworksInfo(networksInfo ?? DEFAULT_NETWORKS),
+    networksInfo: normalizedNetworksInfo,
     storedNetworksInfo: networksInfo,
-    chainName,
+    chainName: normalizeActiveChainName(
+      chainName,
+      networksInfo,
+      normalizedNetworksInfo,
+    ),
+    storedChainName: chainName,
   };
 }
 

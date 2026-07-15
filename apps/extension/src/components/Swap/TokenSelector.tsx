@@ -9,6 +9,7 @@ import { ChevronDownIcon } from "@chakra-ui/icons";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { TokenListEntry } from "@/chrome/swapApi";
 import { getNativeAssetMeta } from "@/lib/chains";
+import { chainHasNativeToken } from "@/constants/chainRegistry";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
@@ -178,11 +179,13 @@ export default function TokenSelector({
       tokenList
         .filter(
           (t) =>
+            (chainHasNativeToken(chainId) ||
+              t.address.toLowerCase() !== NATIVE_TOKEN_ADDRESS.toLowerCase()) &&
             !heldAddresses.has(t.address.toLowerCase()) &&
             t.address.toLowerCase() !== excludeLower,
         )
         .sort((a, b) => a.symbol.localeCompare(b.symbol)),
-    [tokenList, heldAddresses, excludeLower],
+    [tokenList, heldAddresses, excludeLower, chainId],
   );
 
   const filteredHoldings = useMemo(() => {
@@ -234,7 +237,9 @@ export default function TokenSelector({
 
     // Native token: ensure presence + override its logo via getNativeAssetMeta
     // (custom-chain-aware; portfolio-API native logos can come back missing).
-    const native = getNativeAssetMeta(chainId, networksInfo);
+    const native = chainHasNativeToken(chainId)
+      ? getNativeAssetMeta(chainId, networksInfo)
+      : null;
     if (native) {
       const nativeSym = native.symbol.toUpperCase();
       const existing = bySymbol.get(nativeSym);

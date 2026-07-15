@@ -3,6 +3,7 @@ import {
   CHAIN_REGISTRY,
   DEFAULT_CHAIN_CONFIG,
   ZEROX_SUPPORTED_CHAIN_IDS,
+  chainHasNativeToken,
   type ChainEntry,
   type ChainLogoStyle,
 } from "@/constants/chainRegistry";
@@ -23,6 +24,7 @@ export interface ResolvedChain {
   hidden: boolean;
   isCustom: boolean;
   nativeCurrency: { name: string; symbol: string; decimals: number };
+  hasNativeToken: boolean;
   icon: string;
   logoStyle?: ChainLogoStyle;
   iconOverlayLabel?: string;
@@ -217,6 +219,7 @@ export function getResolvedChains(
         hidden: entry.hidden === true,
         isCustom: entry.isCustom === true || !builtIn,
         nativeCurrency: entry.nativeCurrency ?? builtIn?.nativeCurrency ?? DEFAULT_NATIVE_CURRENCY,
+        hasNativeToken: chainHasNativeToken(entry.chainId),
         icon: config.icon,
         logoStyle: iconMeta.logoStyle,
         iconOverlayLabel: iconMeta.overlayLabel,
@@ -283,7 +286,9 @@ export function getNativeAssetLogoUrl(
  * consistent with built-ins and the logo always falls back to the chain icon
  * for non-ETH natives (AVAX, BNB, POL, …).
  *
- * Returns null only when the chain itself can't be resolved.
+ * This describes the chain's EVM currency metadata, including fee display.
+ * Callers that create a selectable/balance-bearing native token must also
+ * check `chain.hasNativeToken` (or `chainHasNativeToken`).
  */
 export function getNativeAssetMeta(
   chainId: number,

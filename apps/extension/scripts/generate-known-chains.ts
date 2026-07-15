@@ -43,6 +43,7 @@ const BUILT_IN_CHAIN_IDS = new Set([
   10, // Optimism
   4326, // MegaETH
   137, // Polygon
+  4217, // Tempo
   130, // Unichain
 ]);
 
@@ -75,7 +76,6 @@ const RPC_OVERRIDES: Record<number, string> = {
   146: "https://sonic.drpc.org",
   1329: "https://sei.drpc.org",
   2020: "https://ronin.drpc.org",
-  4217: "https://tempo.drpc.org",
   5000: "https://mantle.drpc.org",
   42170: "https://arbitrum-nova.drpc.org",
   42220: "https://celo.drpc.org",
@@ -119,21 +119,12 @@ const ICON_OVERRIDES: Record<number, string> = {
   1329: "/chainIcons/sei.webp",
   2020: "/chainIcons/ronin.webp",
   4114: "/chainIcons/citrea.webp",
-  4217: "/chainIcons/tempo.webp",
   42170: "/chainIcons/arbitrum-nova.webp",
   747474: "/chainIcons/katana.webp",
   // Intuition (1155) — no defillama coverage; placeholder fallback.
 };
 
 const MANUAL_OVERRIDES: Record<number, ManualOverride> = {
-  // Tempo (Stripe/Paradigm L1) — Tempo mainnet
-  4217: {
-    name: "Tempo",
-    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-    rpc: "https://rpc.tempo.fi",
-    explorer: "https://explorer.tempo.fi",
-    isTestnet: false,
-  },
   // Tempo Moderato (testnet) — viem's tempoModerato has the right chainId but
   // doesn't set `testnet: true`, so we override here to force the flag and to
   // give a more recognisable display name.

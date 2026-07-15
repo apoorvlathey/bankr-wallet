@@ -9,6 +9,7 @@ import { PortfolioToken } from "./api";
 import { getPortfolioTokenKey } from "./hiddenTokens";
 import { getStoredRpcUrl } from "@/lib/chains";
 import { secureHttpTransport } from "../network/rpcClient";
+import { chainHasNativeToken } from "@/constants/chainRegistry";
 
 /** Multicall3 is deployed at the same address on all supported chains */
 const MULTICALL3_ADDRESS: Address =
@@ -67,16 +68,25 @@ export async function fetchOnchainBalances(
   rpcIssueChainIds: number[];
   verifiedTokenKeys: Set<string>;
 }> {
+  // Some EVM-compatible chains expose an eth_getBalance sentinel even though
+  // they have no native token. Drop those synthetic rows before any RPC work.
+  const eligibleTokens = tokens.filter((token) => {
+    const isNative =
+      token.contractAddress === "native" ||
+      token.contractAddress === "0x0000000000000000000000000000000000000000";
+    return !isNative || chainHasNativeToken(token.chainId);
+  });
+
   // Group tokens by chainId
   const byChain = new Map<number, { index: number; token: PortfolioToken }[]>();
-  tokens.forEach((token, index) => {
+  eligibleTokens.forEach((token, index) => {
     const group = byChain.get(token.chainId) || [];
     group.push({ index, token });
     byChain.set(token.chainId, group);
   });
 
   // Clone tokens so we can mutate
-  const updated = tokens.map((t) => ({ ...t }));
+  const updated = eligibleTokens.map((t) => ({ ...t }));
   const rpcIssueChainIds = new Set<number>();
   const verifiedTokenKeys = new Set<string>();
 

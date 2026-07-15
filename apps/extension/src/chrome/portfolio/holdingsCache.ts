@@ -2,7 +2,8 @@ import type { DefiPosition, PortfolioToken } from "./api";
 
 export const PORTFOLIO_HOLDINGS_CACHE_KEY = "portfolioHoldingsCache";
 
-const CACHE_VERSION = 1;
+// V2 invalidates V1 snapshots that may contain Tempo's eth_getBalance sentinel.
+const CACHE_VERSION = 2;
 const HOUR = 60 * 60 * 1000;
 const MAX_AGE_MS = 24 * HOUR;
 const MAX_ENTRIES = 12;

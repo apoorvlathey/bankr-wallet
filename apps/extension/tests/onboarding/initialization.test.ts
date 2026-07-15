@@ -159,6 +159,7 @@ test("onboarding initialization preserves existing wallet data and recovers only
             name: "private-key metadata residue",
             localResidue: {
               portfolioSnapshots: { stale: true },
+              portfolioSnapshotsV2: { stale: true },
               recentlyReceivedTokens: { stale: true },
               "txResult:stale-private": {
                 result: { success: false },

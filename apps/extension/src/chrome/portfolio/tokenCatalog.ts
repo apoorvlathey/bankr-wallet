@@ -192,7 +192,10 @@ export async function loadPortfolioTokenCatalog(
   // other built-in chain (MegaETH, BNB, Arbitrum, …) plus all user-added
   // custom chains.
   const missingNativeTokens: PortfolioToken[] = visibleChains
-    .filter((chain) => !existingNativeChainIds.has(chain.chainId))
+    .filter(
+      (chain) =>
+        chain.hasNativeToken && !existingNativeChainIds.has(chain.chainId),
+    )
     .map((chain) => ({
       symbol: chain.nativeCurrency.symbol,
       name: chain.nativeCurrency.name,

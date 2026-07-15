@@ -2286,7 +2286,7 @@ public `PortfolioResponse` contract uses numeric chain IDs.
 
 API portfolio data is shown immediately, while onchain balances are verified in the background via `portfolio/onchainBalances.ts`:
 
-- **Multicall3** (`0xcA11bde05977b3631167028862bE2a173976CA11`, same address on all chains) batches native `getEthBalance` and ERC20 `balanceOf` calls into a single multicall per chain
+- **Multicall3** (`0xcA11bde05977b3631167028862bE2a173976CA11`, same address on all chains) batches native `getEthBalance` and ERC20 `balanceOf` calls into a single multicall per chain. Registry entries with `hasNativeToken: false` are excluded before RPC work; Tempo uses this policy because its `eth_getBalance` response is a compatibility sentinel, not a user-owned asset. Tempo's USD/6 EVM currency metadata remains available to fee and transaction renderers; only balance-bearing/selectable native-token paths are disabled.
 - Calls are chunked into batches of 100 to avoid oversized RPC requests
 - Parallel execution across all chains with 8s timeout and no retries
 - Cached viem clients per chainId for performance
@@ -2300,7 +2300,8 @@ API portfolio data is shown immediately, while onchain balances are verified in 
 - Portfolio API tokens
 - User-added custom ERC-20 tokens from `chrome.storage.local.customTokens`
 - Recently received ERC-20 stubs from `chrome.storage.local.recentlyReceivedTokens`
-- Native token placeholders for visible custom chains
+- Native token placeholders for visible chains whose registry policy permits a real native token
+- On upgrade, a v3.19 user-added Tempo record is canonicalized into the built-in `Tempo` entry by chain ID. Its RPC override and hidden/visible preference survive, while stale custom explorer/native-currency metadata is replaced by the registry policy. If the user renamed the custom record, its active-chain selection is migrated to the canonical `Tempo` name in the same locked storage update. The generated add-network catalog excludes Tempo mainnet so it cannot reintroduce the released ETH/18 metadata.
 - CoinGecko USD price fallback for custom-chain native tokens when the portfolio API has no price (for example `MON` on Monad)
 - ERC-20 metadata fallback via `tokenMetadata.ts` so recently received/custom tokens can reuse the same logo/name source as Swap/Bridge selectors
 - The CoinGecko fallback runs through the background `portfolio/coingecko.ts` facade, which shares rate-limit/cache state across focused native and ERC-20 services and persists market/search caches in `chrome.storage.local` so reopening the popup doesn't cold-start CoinGecko traffic each time
@@ -2350,7 +2351,7 @@ Important constraints:
 
 ### Portfolio Snapshot Storage
 
-`portfolio/snapshotStorage.ts` silently records `totalValueUsd` snapshots per address over time in `chrome.storage.local` under the key `portfolioSnapshots`. Forced refreshes preserve the explicit `tokenCatalog` → `onchainBalances` → `snapshotStorage` sequence in `portfolio/snapshotRefresh.ts`.
+`portfolio/snapshotStorage.ts` silently records `totalValueUsd` snapshots per address over time in `chrome.storage.local` under the key `portfolioSnapshotsV2`. The legacy `portfolioSnapshots` key is removed on read/write because its aggregate-only records cannot be repaired after the Tempo native-balance sentinel bug. Forced refreshes preserve the explicit `tokenCatalog` → `onchainBalances` → `snapshotStorage` sequence in `portfolio/snapshotRefresh.ts`.
 
 **How it works:**
 
@@ -2363,7 +2364,7 @@ Important constraints:
 **Storage shape:**
 
 ```typescript
-// chrome.storage.local key: "portfolioSnapshots"
+// chrome.storage.local key: "portfolioSnapshotsV2"
 { [address: string]: { timestamp: number; totalValueUsd: number }[] }
 ```
 
@@ -4399,7 +4400,7 @@ prefixes. It clears secrets/accounts (`encrypted*`, `pkVault`, `mnemonicVault`,
 state (`walletConnectPendingRequests`, `walletConnectChainId`), cross-dapp batch
 state (`crossDappBatch`, `bundleStatuses`), bridge state (`pendingBridges`),
 short-lived sponsored-transfer recovery state (`sponsoredTransferIntents`),
-wallet portfolio state (`portfolioSnapshots`, `portfolioHoldingsCache`,
+wallet portfolio state (`portfolioSnapshots`, `portfolioSnapshotsV2`, `portfolioHoldingsCache`,
 `hiddenPortfolioTokens`, `customTokens`, `customDelegates`,
 `recentlyReceivedTokens`), and transient
 result/artifact prefixes (`txResult:`, `sigResult:`, `rpcResult:`,

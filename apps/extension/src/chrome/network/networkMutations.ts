@@ -35,11 +35,18 @@ export async function ensureNetworksInfo(): Promise<NetworkMutationResult> {
     try {
       const state = await getNetworkState();
       const normalized = state.networksInfo;
+      const chainNameChanged = state.storedChainName !== state.chainName;
       if (
         !state.storedNetworksInfo ||
-        JSON.stringify(state.storedNetworksInfo) !== JSON.stringify(normalized)
+        JSON.stringify(state.storedNetworksInfo) !== JSON.stringify(normalized) ||
+        chainNameChanged
       ) {
-        await writeNetworkState(normalized);
+        await writeNetworkState(
+          normalized,
+          chainNameChanged && state.chainName
+            ? { chainName: state.chainName }
+            : {},
+        );
       }
       return {
         success: true,
