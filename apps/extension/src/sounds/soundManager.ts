@@ -78,27 +78,30 @@ function installStorageListener() {
 }
 
 export function initializeSoundManager(): Promise<boolean> {
-  if (initialization) return initialization;
+  if (!initialization) {
+    installStorageListener();
+    initialization = new Promise((resolve) => {
+      if (typeof chrome === "undefined" || !chrome.storage?.local) {
+        setCuelumeEnabled(DEFAULT_SOUNDS_ENABLED);
+        resolve(DEFAULT_SOUNDS_ENABLED);
+        return;
+      }
 
-  installStorageListener();
-  initialization = new Promise((resolve) => {
-    if (typeof chrome === "undefined" || !chrome.storage?.local) {
-      setCuelumeEnabled(DEFAULT_SOUNDS_ENABLED);
-      resolve(DEFAULT_SOUNDS_ENABLED);
-      return;
-    }
-
-    chrome.storage.local.get(SOUNDS_ENABLED_STORAGE_KEY, (result) => {
-      const enabled = result?.[SOUNDS_ENABLED_STORAGE_KEY] !== false;
-      applyPreference(enabled);
-      // applyPreference intentionally skips equal values, so initialize the
-      // audio engine explicitly when the stored/default value is true.
-      setCuelumeEnabled(enabled);
-      resolve(enabled);
+      chrome.storage.local.get(SOUNDS_ENABLED_STORAGE_KEY, (result) => {
+        const enabled = result?.[SOUNDS_ENABLED_STORAGE_KEY] !== false;
+        applyPreference(enabled);
+        // applyPreference intentionally skips equal values, so initialize the
+        // audio engine explicitly when the stored/default value is true.
+        setCuelumeEnabled(enabled);
+        resolve(enabled);
+      });
     });
-  });
+  }
 
-  return initialization;
+  // The bootstrap promise resolves with the preference from the first read.
+  // Return the live value so screens that remount after an in-session change
+  // do not rehydrate from that stale initial result.
+  return initialization.then(() => soundsEnabled);
 }
 
 export async function playInteractionSound(cue: InteractionSound): Promise<void> {
