@@ -20,22 +20,27 @@ async function handleDappAccounts(msg: any): Promise<void> {
   if (method === "eth_accounts") {
     chrome.runtime
       .sendMessage({ type: "getDappAccounts" })
-      .then((result) =>
+      .then((result) => {
+        bridgeState.dappConnected =
+          result?.success === true &&
+          Array.isArray(result.accounts) &&
+          typeof result.accounts[0] === "string";
         post("dappAccountsResult", {
           id,
           success: result?.success === true,
           accounts: result?.accounts || [],
           error: result?.error,
           code: result?.code,
-        }),
-      )
-      .catch((error) =>
+        });
+      })
+      .catch((error) => {
+        bridgeState.dappConnected = false;
         post("dappAccountsResult", {
           id,
           success: false,
           error: error?.message || "Account request failed",
-        }),
-      );
+        });
+      });
     return;
   }
 
@@ -49,14 +54,21 @@ async function handleDappAccounts(msg: any): Promise<void> {
     `dappConnectionResult:${requestId}`,
     null,
   )
-    .then((result) => post("dappAccountsResult", { id, ...result }))
-    .catch((error) =>
+    .then((result) => {
+      bridgeState.dappConnected =
+        result.success === true &&
+        Array.isArray(result.accounts) &&
+        typeof result.accounts[0] === "string";
+      post("dappAccountsResult", { id, ...result });
+    })
+    .catch((error) => {
+      bridgeState.dappConnected = false;
       post("dappAccountsResult", {
         id,
         success: false,
         error: error?.message || "Connection request failed",
-      }),
-    );
+      });
+    });
   chrome.runtime.sendMessage({
     type: "requestDappConnection",
     requestId,
@@ -104,6 +116,7 @@ async function handleSwitchChain(msg: any): Promise<void> {
   }
   const previousChainName = bridgeState.chainName;
   bridgeState.chainName = resolved.name;
+  bridgeState.chainId = chainId;
   await chrome.storage.sync.set({ chainName: resolved.name });
   if (previousChainName !== resolved.name) {
     notifyDappChainSwitch(chainId, resolved.name);
@@ -142,6 +155,7 @@ async function handleAddChain(msg: AddChainMessage): Promise<void> {
         resolved?.isBankrSupported === true;
       if (shouldSwitch) {
         bridgeState.chainName = name;
+        bridgeState.chainId = chainId;
         await chrome.storage.sync.set({ chainName: name });
       }
       post("addEthereumChainResult", {
@@ -170,6 +184,7 @@ async function handleAddChain(msg: AddChainMessage): Promise<void> {
       if (result.success && result.chainName) {
         if (result.shouldSwitch !== false) {
           bridgeState.chainName = result.chainName;
+          bridgeState.chainId = chainId;
           chrome.storage.sync
             .set({ chainName: result.chainName })
             .catch(() => undefined);

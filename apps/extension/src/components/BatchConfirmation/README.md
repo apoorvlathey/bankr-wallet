@@ -8,7 +8,7 @@ compatibility facade so the existing lazy import remains stable.
 
 | File | Responsibility | Effects |
 | --- | --- | --- |
-| `BatchTransactionConfirmation.tsx` | Composes the screen and derives account/chain execution capabilities. | None directly. |
+| `BatchTransactionConfirmation.tsx` | Composes the screen, derives account/chain execution capabilities, keeps signing/edit/split/move controls unavailable while an early-painted request still has `intakeStatus: "validating"`, and leaves terminal Reject accessible. | None directly. |
 | `useBatchActions.ts` | Confirmation, rejection, split, and add-to-batch ordering for Bankr, private-key, seed-phrase, impersonator, and cross-dapp flows. | Chrome messages, close timer, confirmation sound. |
 | `useBatchReviewState.ts` | Renderer-only disclosure, simulation, gas, and editable-call state. | None outside React state. |
 | `RequestContext.tsx` | Unified call review, warnings, setup state, and request status. | None. |

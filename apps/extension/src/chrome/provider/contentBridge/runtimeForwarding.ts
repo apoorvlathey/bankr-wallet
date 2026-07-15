@@ -30,6 +30,9 @@ export function installRuntimeToPageForwarding(): void {
         chrome.runtime
           .sendMessage({ type: "getDappAccounts" })
           .then((result) => {
+            bridgeState.dappConnected =
+              Array.isArray(result?.accounts) &&
+              typeof result.accounts[0] === "string";
             window.postMessage(
               {
                 ...message,
@@ -44,6 +47,7 @@ export function installRuntimeToPageForwarding(): void {
             );
           })
           .catch(() => {
+            bridgeState.dappConnected = false;
             window.postMessage(
               {
                 ...message,
@@ -60,6 +64,7 @@ export function installRuntimeToPageForwarding(): void {
       }
       case "setChainId":
         bridgeState.chainName = message.msg.chainName as string;
+        bridgeState.chainId = message.msg.chainId as number;
         window.postMessage(
           { type: "setChainId", msg: { chainId: message.msg.chainId } },
           "*",
@@ -75,6 +80,9 @@ export function installRuntimeToPageForwarding(): void {
         chrome.runtime
           .sendMessage({ type: "getDappAccounts" })
           .then((result) => {
+            bridgeState.dappConnected =
+              Array.isArray(result?.accounts) &&
+              typeof result.accounts[0] === "string";
             window.postMessage(
               {
                 type: "setAddress",
@@ -86,12 +94,15 @@ export function installRuntimeToPageForwarding(): void {
               "*",
             );
           })
-          .catch(() => undefined);
+          .catch(() => {
+            bridgeState.dappConnected = false;
+          });
         break;
       case "getInfo":
         sendResponse(bridgeState);
         break;
       case "dappPermissionRevoked":
+        bridgeState.dappConnected = false;
         window.postMessage(
           { type: "accountsChanged", msg: { accounts: [] } },
           "*",

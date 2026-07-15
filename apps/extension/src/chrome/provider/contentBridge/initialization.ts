@@ -39,6 +39,10 @@ export async function initializeInpageProvider(): Promise<void> {
         address,
         displayAddress,
         chainName,
+        chainId: networksInfo[chainName].chainId,
+        dappConnected:
+          Array.isArray(dappAccounts?.accounts) &&
+          typeof dappAccounts.accounts[0] === "string",
         accountId: account?.id || "",
         accountType: account?.type || "",
       });

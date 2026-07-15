@@ -58,6 +58,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   const { networksInfo } = useNetworks();
   const { params, origin, chainName, favicon, chainId } = batchRequest;
   const calls = params.calls;
+  const isIntakeValidating = batchRequest.intakeStatus === "validating";
   const resolvedChain = getResolvedChainById(chainId, networksInfo);
   const chainConfig = getChainConfig(chainId);
   const review = useBatchReviewState(batchRequest.id, calls.length);
@@ -130,7 +131,8 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   const isValueMalformed = !!malformedValueInfo;
   const isCalldataMalformed = !!malformedCallInfo;
   const hasDeploymentCall = calls.some((call) => !call.to);
-  const canSplitBatch = isNonAtomic && !customConfirmHandler && !review.forceInclusion && calls.length > 0;
+  const canSplitBatch = !isIntakeValidating && isNonAtomic && !customConfirmHandler
+    && !review.forceInclusion && calls.length > 0;
   const canBatchAccount = accountType === "bankr" || isLocalSigningAccount;
   const addToBatchDisabledReason = useMemo(() => {
     if (!crossDappBatch) return null;
@@ -142,7 +144,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
     }
     return null;
   }, [crossDappBatch, fromAddress, chainId]);
-  const showAddToBatch = canBatchAccount && !customConfirmHandler && !!onAddedToBatch
+  const showAddToBatch = !isIntakeValidating && canBatchAccount && !customConfirmHandler && !!onAddedToBatch
     && !isNonAtomic && !hasDeploymentCall && !isValueMalformed && !encodingError;
 
   if (actions.state === "forceInclusion" && forceInclusionInfo) {
@@ -166,7 +168,9 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
     ? titleOverride.replace(/\s*\([^)]*\)\s*$/, "")
     : calls.length === 1 ? "Transaction request" : "Batch request";
   const canConfirmBatch = !!customConfirmHandler || accountType !== "impersonator";
-  const confirmDisabledReason = actions.isRejecting
+  const confirmDisabledReason = isIntakeValidating
+    ? "Validating request"
+    : actions.isRejecting
     ? "Reject in progress"
     : actions.state === "error"
       ? "Fix the error above before retrying"
@@ -200,7 +204,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
           value: call.value && call.value !== "0x0" ? call.value : "0",
           data: call.data || "0x",
         })), null, 2)} />}
-        navigation={totalCount > 1 ? (
+        navigation={!isIntakeValidating && totalCount > 1 ? (
           <QueueNavigation
             currentIndex={currentIndex}
             totalCount={totalCount}
@@ -237,8 +241,8 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
             expandedCalls={review.expandedCalls}
             decodedFunctionNames={review.decodedFunctionNames}
             originPerCall={originPerCall}
-            onEditCallData={onEditCallData}
-            onRemoveCall={onRemoveCall}
+            onEditCallData={isIntakeValidating ? undefined : onEditCallData}
+            onRemoveCall={isIntakeValidating ? undefined : onRemoveCall}
             onToggleCall={review.toggleCall}
             onFunctionName={review.recordFunctionName}
             onClearSigningAction={review.recordClearSigningAction}

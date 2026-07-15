@@ -17,8 +17,8 @@ function responseCapture() {
 
 function dependencies(overrides: Record<string, unknown> = {}): any {
   return {
-    getProviderWindowState: async () => ({ fullscreen: false }),
-    openFullscreenRequestSidePanel: () => {},
+    openProviderRequestSidePanel: () => {},
+    takeProviderRequestSurfaceHint: () => null,
     connectedProviderOriginOrReject: async () => "https://app.example",
     handleTransactionRequest: () => {},
     enqueueAuthorizedSignatureRequest: () => {},
@@ -101,40 +101,41 @@ test("provider intake preserves the authorized origin and exact sender scope", a
   ]);
 });
 
-test("fullscreen surface opening stays synchronous to preserve user activation", async () => {
+test("provider request surface opening stays synchronous to preserve user activation", async () => {
   const calls: unknown[][] = [];
   const sender = { tab: { id: 9, windowId: 4 } } as any;
   const route = createBackgroundSigningRequestMessageRouter(
     dependencies({
-      getProviderWindowState: async (value: unknown) => {
-        calls.push(["state", value]);
-        return { fullscreen: true };
+      openProviderRequestSidePanel: (...values: unknown[]) => {
+        calls.push(["open", ...values]);
       },
-      openFullscreenRequestSidePanel: (value: unknown) => {
-        calls.push(["open", value]);
-      },
+      takeProviderRequestSurfaceHint: (windowId: number) => ({ windowId }),
     }),
   );
 
-  const capture = responseCapture();
-  assert.deepEqual(
-    route({ type: "getProviderWindowState" }, sender, capture.sendResponse),
-    { handled: true, keepChannelOpen: true },
-  );
-  assert.deepEqual(await capture.response, { fullscreen: true });
-
   assert.deepEqual(
     route(
-      { type: "openFullscreenRequestSidePanel", fullscreen: true },
+      {
+        type: "openProviderRequestSidePanel",
+        requestType: "i_signatureRequest",
+      },
       sender,
       assert.fail,
     ),
     { handled: true, keepChannelOpen: false },
   );
-  assert.deepEqual(calls, [
-    ["state", sender],
-    ["open", sender],
-  ]);
+  assert.deepEqual(calls, [["open", sender, "i_signatureRequest"]]);
+
+  const hintCapture = responseCapture();
+  assert.deepEqual(
+    route(
+      { type: "getProviderRequestSurfaceHint", windowId: 4 },
+      sender,
+      hintCapture.sendResponse,
+    ),
+    { handled: true, keepChannelOpen: false },
+  );
+  assert.deepEqual(await hintCapture.response, { windowId: 4 });
 });
 
 test("signature rejection removes the prompt before publishing its result", async () => {

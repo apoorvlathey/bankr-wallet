@@ -1491,7 +1491,7 @@ await provider.request({
 
 > **Why no sendMessage callback?** Chrome MV3 swallows `sendResponse` calls when multiple `onMessage` listeners exist across extension contexts (background + popup/sidepanel). The storage-based approach is immune to this because it bypasses the message channel entirely.
 
-### 5. Background Stores Pending Transaction & Opens Popup
+### 5. Background Stores Pending Transaction & Opens the Request Surface
 
 `src/chrome/background.ts`:
 
@@ -1499,26 +1499,70 @@ await provider.request({
 - Validates and normalizes `tx.value` through `src/chrome/transactionValidation.ts`; malformed values write a `txResult:{txId}` error and are not stored as pending requests
 - Stores pending transaction in `chrome.storage.local`
 - Updates extension badge with pending count
-- Opens the configured confirmation surface for user confirmation. When the
-  requesting dapp's browser window is fullscreen and Chrome side-panel support
-  is available, it opens the side panel even if popup mode is normally selected;
-  this avoids macOS creating a separate fullscreen popup window. The content
-  bridge keeps the browser-window state warm and sends the fullscreen open
-  signal synchronously from the original transaction gesture, before chain,
-  account, or storage awaits can consume Chrome's transient user activation.
-  If Chrome has already consumed that gesture, WalletChan leaves the dapp in
-  place and shows a native notification; clicking it opens the side panel from
-  that new user gesture instead of creating a detached fullscreen window.
+- Opens the configured confirmation surface for user confirmation. On browsers
+  with side-panel support, missing `sidePanelMode` defaults to enabled; an
+  explicit `false` preserves popup mode. When enabled, the content bridge sends
+  `openProviderRequestSidePanel` synchronously from the original user gesture
+  for single transactions, ERC-5792 batches, signatures, and
+  `wallet_requestExecutionPermissions`. Before sending that presentation-only
+  signal, `contentBridge/requestSurfacePreflight.ts` synchronously reuses the
+  bounded provider envelope validation plus the content-script-attested active
+  chain, connected-origin state, account address, and account type. Invalid
+  payloads, disconnected origins, stale/wrong-chain requests, unsupported
+  batch versions, ineligible ERC-7715 account types, and signer/`from`
+  mismatches therefore return through the normal provider error. Signature
+  preflight also runs the complete bounded EIP-712 schema/raw-delegation policy
+  and requires a finite typed-data `domain.chainId` to match the request's
+  active chain, mirroring every synchronous signature rejection before storage.
+  Batch preflight mirrors wallet-type/chain support, caller binding, and unsafe
+  self-recursion policy. ERC-7715 preflight mirrors request count, account type,
+  supported delegate chain, address binding, permission data, and rule policy
+  before its network-backed delegation eligibility checks.
+  These failures return without opening a sidepanel or recording a loading
+  hint. The background
+  repeats all validation authoritatively before persistence. The early signal
+  still runs before authorization or storage awaits can consume Chromium's
+  transient user activation. This policy is identical in normal and fullscreen
+  browser windows. If a fullscreen
+  side-panel open still fails after the gesture is consumed, WalletChan leaves
+  the dapp in place and shows a native notification whose click retries the
+  panel open with a fresh user gesture.
+- The synchronous open also records a ten-second, window-scoped, one-shot
+  request-family hint. A cold popup/sidepanel consumes it through the trusted-UI
+  `getProviderRequestSurfaceHint` route before loading the four approval queues.
+  If the hinted queue is not persisted yet, `app/initialApprovalRequests.ts`
+  keeps the request-shaped skeleton visible and polls only that queue for up to
+  five seconds. `app/lazyScreens.ts` simultaneously preloads the hinted review
+  chunk. As soon as the matching durably pinned request and current lock state
+  are available, `app/initialApprovalRoute.ts` selects that exact review family
+  and releases the skeleton; homepage, WalletConnect, secondary request,
+  account-list, and active-dapp hydration continue concurrently behind the
+  visible review. ERC-5792 intake persists its pinned request with
+  `intakeStatus: "validating"` before any network-backed atomic-delegate probe,
+  so the actual batch review paints immediately. Confirm, edit, split, move,
+  and reject-all controls remain unavailable until transport/capability
+  validation, the bundle-status commit, and final authorization revalidation
+  succeed and atomically remove that marker. The request's own Reject action
+  remains available during gas estimation and provisional intake; removal wins
+  safely if it races validation. Bankr and both local wallet paths
+  also reject a validating record in the service worker, so renderer state can
+  never make the provisional prompt actionable. Successful request persistence clears any hint the
+  renderer did not already consume. The renderer therefore never paints Home
+  between panel open and the transaction, batch, signature, or ERC-7715 review
+  screen. The hint contains no request payload, origin, account, or
+  authorization data and can never produce an actionable confirmation by
+  itself.
 
 ### 6. Confirmation Surface Auto-Opens
 
 The extension automatically opens the configured confirmation surface when a
-transaction request is received:
+single transaction, batch transaction, signature, or ERC-7715 permission
+request is received:
 
 - Popup positioned at **top-right of the dapp's browser window**
 - Works correctly across **multiple monitors** (follows the dapp's window)
-- Fullscreen dapp windows prefer the side panel on supported Chrome browsers,
-  while unsupported browsers retain the detached-popup fallback
+- Sidepanel mode opens the panel in both normal and fullscreen Chrome windows;
+  explicit popup mode and unsupported browsers retain the popup path
 - If popup already exists, focuses the existing window instead of creating a new one
 - Shows the **newest transaction** by default (e.g., "2/2" not "1/2")
 
@@ -3646,6 +3690,12 @@ requests are stored persistently in `chrome.storage.local`:
   explicit authorization, WalletConnect-session, account, reset, or
   cancellation lifecycle terminalizes it.
 - Save/remove writes are serialized with `storageLock.ts`.
+- ERC-5792 batch intake may briefly persist a non-actionable
+  `intakeStatus: "validating"` row after account/origin pinning. This lets a
+  cold sidepanel render the real request before an atomic EIP-7702 RPC probe
+  returns. The marker is removed only after the second pending authorization
+  check, bundle-status write, durable reread, and final authorization check;
+  every Bankr/private-key/seed confirmation path fails closed while it exists.
 - `requests/pendingRequestResolution.ts` installs a synchronous, first-action-wins
   claim before any confirmation/rejection work starts. Popup, side panel, and
   full-page surfaces therefore cannot concurrently confirm/reject the same
@@ -3721,18 +3771,22 @@ When multiple transactions are pending:
 
 ## Request Surface Positioning
 
-When a transaction request is received outside browser fullscreen, the
-background worker opens the configured surface; detached popups are positioned
-at the top-right of the dapp's window. Fullscreen Chrome requests use the early
-user-activated side-panel route described above and never create a detached
-fullscreen window.
+When a transaction, batch, signature, or ERC-7715 permission request is
+received, the background worker opens the configured surface. Sidepanel mode
+uses the early user-activated route described above at every browser window
+size. Popup mode uses a detached window positioned at the top-right of the
+dapp's window, including when the user explicitly selected popup mode while
+fullscreen.
 
 **See**: `src/chrome/windowing/requestSurface.ts` for surface selection and
 `windowing/popupGeometry.ts` / `popupWindow.ts` for placement, reuse, and
-creation. `provider/contentBridge/requestSurface.ts` and
-`windowing/providerRequestSurface.ts` preserve the fullscreen transaction
-gesture and own its notification fallback. `extensionPopup.ts` is an
-export-only compatibility facade.
+creation. `provider/contentBridge/requestSurface.ts` caches the non-secret
+sidepanel preference and recognizes the four approval families;
+`windowing/providerRequestSurface.ts` consumes the original request gesture,
+owns the short-lived cold-renderer hint, and owns the fullscreen notification
+fallback. `app/initialApprovalRequests.ts` gates initial routing on the hinted
+queue without moving request payloads into the renderer. `extensionPopup.ts`
+is an export-only compatibility facade.
 
 **Multi-Monitor Support**:
 
@@ -3861,8 +3915,7 @@ Build command: `pnpm build`
 
 | Type                    | Description                                                                                                      |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `getProviderWindowState` | Warm the content bridge's fullscreen-window state before a transaction gesture                                  |
-| `openFullscreenRequestSidePanel` | Synchronously consume an active fullscreen transaction gesture to open the supported Chrome side panel   |
+| `openProviderRequestSidePanel` | Synchronously consume an active approval gesture to open the supported Chrome side panel for single tx, batch tx, signature, or ERC-7715 permission review when sidepanel mode is enabled |
 | `sendTransaction`       | Submit transaction. Fire-and-forget (no callback). Includes `txId` generated by content script. Result via storage (`txResult:{txId}`)  |
 | `signatureRequest`      | Submit signature request. Fire-and-forget (no callback). Includes `sigId` generated by content script. Result via storage (`sigResult:{sigId}`) |
 | `rpcRequest`            | Proxy an allowlisted public read/simulation RPC method through an extension-configured URL (15s timeout); signing, submission, debug/admin, and filter-lifecycle methods are rejected |
@@ -4057,6 +4110,7 @@ notification clicks. The focused callback implementations remain under
 
 | Type                               | Description                                                                                     |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `getProviderRequestSurfaceHint`    | Consume the current window's short-lived request-family hint so a cold renderer waits for the matching approval queue |
 | `getPendingTxRequests`             | Get all pending tx requests                                                                     |
 | `getPendingTransaction`            | Get specific tx details                                                                         |
 | `isApiKeyCached`                   | Check if password needed                                                                        |

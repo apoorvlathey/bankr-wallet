@@ -59,9 +59,8 @@ test("mode policy keeps runtime default and popup-first startup distinct", () =>
   );
 });
 
-test("fullscreen override never bypasses the browser support boundary", () => {
-  assert.equal(shouldUseSidePanelForRequest(false, true, "fullscreen"), true);
-  assert.equal(shouldUseSidePanelForRequest(false, true, "normal"), false);
-  assert.equal(shouldUseSidePanelForRequest(true, true, "normal"), true);
-  assert.equal(shouldUseSidePanelForRequest(true, false, "fullscreen"), false);
+test("request surfaces respect the user's mode at every browser size", () => {
+  assert.equal(shouldUseSidePanelForRequest(false, true), false);
+  assert.equal(shouldUseSidePanelForRequest(true, true), true);
+  assert.equal(shouldUseSidePanelForRequest(true, false), false);
 });

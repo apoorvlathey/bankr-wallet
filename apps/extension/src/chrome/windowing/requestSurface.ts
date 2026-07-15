@@ -20,7 +20,7 @@ export interface RequestSurfaceDependencies {
   isSupported: () => boolean;
   openPanel: (
     targetWindow: chrome.windows.Window | null,
-    fullscreenOverride: boolean,
+    earlyOpenExpected: boolean,
   ) => Promise<boolean>;
   openPopup: (
     targetWindow: chrome.windows.Window | null,
@@ -71,23 +71,22 @@ export async function openExtensionPopupWith(
     dependencies.getMode(),
     dependencies.isSupportedAsync(),
   ]);
-  const fullscreenOverride =
-    sidePanelSupported && targetWindow?.state === "fullscreen";
   const useSidePanel = shouldUseSidePanelForRequest(
     sidePanelMode,
     sidePanelSupported,
-    targetWindow?.state,
   );
+  const fullscreenPanelRequest =
+    useSidePanel && targetWindow?.state === "fullscreen";
 
   if (
     useSidePanel &&
     dependencies.isSupported() &&
-    (await dependencies.openPanel(targetWindow, fullscreenOverride))
+    (await dependencies.openPanel(targetWindow, useSidePanel))
   ) {
     return;
   }
 
-  if (fullscreenOverride) {
+  if (fullscreenPanelRequest) {
     await dependencies.notifyFullscreenRequest(targetWindow);
     return;
   }

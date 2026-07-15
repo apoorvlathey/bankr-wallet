@@ -1,55 +1,81 @@
+import { bridgeState } from "./bridgeState";
+import { providerRequestPassesSurfacePreflight } from "./requestSurfacePreflight";
+
 type NavigatorWithUserActivation = Navigator & {
   userActivation?: { isActive: boolean };
 };
 
-let browserWindowFullscreen = false;
-let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+export type ProviderSidePanelModeState = {
+  isArcBrowser?: boolean;
+  sidePanelMode?: boolean;
+};
 
-async function refreshBrowserWindowState(): Promise<void> {
+let sidePanelModeState: ProviderSidePanelModeState | null = null;
+
+export function isProviderSidePanelModeEnabled(
+  state: ProviderSidePanelModeState | null,
+): boolean {
+  return (
+    state !== null &&
+    state.isArcBrowser !== true &&
+    state.sidePanelMode !== false
+  );
+}
+
+async function hydrateSidePanelMode(): Promise<void> {
   try {
-    const response = await chrome.runtime.sendMessage({
-      type: "getProviderWindowState",
-    });
-    browserWindowFullscreen = response?.fullscreen === true;
+    sidePanelModeState = await new Promise<ProviderSidePanelModeState>(
+      (resolve) => {
+        chrome.storage.sync.get(
+          ["isArcBrowser", "sidePanelMode"],
+          (state) => resolve(state),
+        );
+      },
+    );
   } catch {
-    browserWindowFullscreen = false;
+    sidePanelModeState = null;
   }
 }
 
-function scheduleBrowserWindowStateRefresh(): void {
-  if (refreshTimer !== null) clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(() => {
-    refreshTimer = null;
-    void refreshBrowserWindowState();
-  }, 50);
-}
-
 /**
- * Keep the browser-window state warm before a dapp request occurs. Chrome only
- * accepts sidePanel.open() while the original user activation is live, so the
- * transaction message path cannot stop to query chrome.windows first.
+ * Keep the user's request-surface preference warm before a dapp request occurs.
+ * Chrome only accepts sidePanel.open() while the original user activation is
+ * live, so the request path cannot stop to read sync storage first.
  */
 export function startProviderRequestSurfaceTracking(): void {
-  void refreshBrowserWindowState();
-  window.addEventListener("resize", scheduleBrowserWindowStateRefresh);
-  window.addEventListener("focus", scheduleBrowserWindowStateRefresh);
-  window.addEventListener("pageshow", scheduleBrowserWindowStateRefresh);
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      scheduleBrowserWindowStateRefresh();
+  void hydrateSidePanelMode();
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "sync" || sidePanelModeState === null) return;
+    if (changes.isArcBrowser) {
+      sidePanelModeState.isArcBrowser = changes.isArcBrowser.newValue;
+    }
+    if (changes.sidePanelMode) {
+      sidePanelModeState.sidePanelMode = changes.sidePanelMode.newValue;
     }
   });
 }
 
-export function shouldRequestFullscreenTransactionSidePanel(
+export function shouldRequestProviderSidePanel(
   type: string,
-  fullscreen: boolean,
+  message: unknown,
+  modeEnabled: boolean,
   userActivationActive: boolean | undefined,
+  requestAccepted = true,
 ): boolean {
+  if (!modeEnabled || userActivationActive === false || !requestAccepted) {
+    return false;
+  }
+  if (
+    type === "i_sendTransaction" ||
+    type === "i_signatureRequest" ||
+    type === "i_walletSendCalls"
+  ) {
+    return true;
+  }
   return (
-    type === "i_sendTransaction" &&
-    fullscreen &&
-    userActivationActive !== false
+    type === "i_walletExecutionPermissions" &&
+    (message as { method?: unknown } | null)?.method ===
+      "wallet_requestExecutionPermissions"
   );
 }
 
@@ -57,14 +83,16 @@ export function shouldRequestFullscreenTransactionSidePanel(
  * Runs synchronously from the page-message event. Do not await before this
  * call: Chromium drops the transient user activation across async work.
  */
-export function requestFullscreenTransactionSidePanel(type: string): void {
+export function requestProviderSidePanel(type: string, message: unknown): void {
   const userActivation = (navigator as NavigatorWithUserActivation)
     .userActivation;
   if (
-    !shouldRequestFullscreenTransactionSidePanel(
+    !shouldRequestProviderSidePanel(
       type,
-      browserWindowFullscreen,
+      message,
+      isProviderSidePanelModeEnabled(sidePanelModeState),
       userActivation?.isActive,
+      providerRequestPassesSurfacePreflight(type, message, bridgeState),
     )
   ) {
     return;
@@ -72,8 +100,12 @@ export function requestFullscreenTransactionSidePanel(type: string): void {
 
   chrome.runtime
     .sendMessage({
-      type: "openFullscreenRequestSidePanel",
-      fullscreen: true,
+      type: "openProviderRequestSidePanel",
+      requestType: type,
+      permissionMethod:
+        type === "i_walletExecutionPermissions"
+          ? (message as { method?: unknown } | null)?.method
+          : undefined,
     })
     .catch(() => undefined);
 }

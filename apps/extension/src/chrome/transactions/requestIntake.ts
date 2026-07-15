@@ -18,6 +18,7 @@ import {
 } from "../requests/pinnedRequest";
 import { extractSignerParam } from "../signatures/requestSigner";
 import { normalizeTransactionValue } from "../transactionValidation";
+import { clearProviderRequestSurfaceHint } from "../windowing/providerRequestSurface";
 import { writeResultToStorage } from "./runtime";
 
 const CHAIN_BY_ID_TX = new Map(
@@ -97,6 +98,7 @@ export function handleTransactionRequest(
     });
 
     await savePendingTxRequest(pendingRequest);
+    clearProviderRequestSurfaceHint(senderWindowId);
     chrome.runtime
       .sendMessage({ type: "newPendingTxRequest", txRequest: pendingRequest })
       .catch(() => {});
@@ -214,6 +216,7 @@ export function handleSignatureRequest(
     });
 
     await savePendingSignatureRequest(pendingRequest);
+    clearProviderRequestSurfaceHint(senderWindowId);
     chrome.runtime
       .sendMessage({
         type: "newPendingSignatureRequest",

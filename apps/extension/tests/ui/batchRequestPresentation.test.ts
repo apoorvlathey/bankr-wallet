@@ -13,13 +13,26 @@ test("smart batch call expansion opens only single-call requests", () => {
 });
 
 test("unsafe batch confirmation explains the corrective action on the button", async () => {
-  const [contextSource, actionSource, confirmButtonSource] = await Promise.all([
+  const [contextSource, actionSource, screenSource, confirmButtonSource] = await Promise.all([
     readFile(
-      new URL("../../src/components/BatchConfirmation/RequestContext.tsx", import.meta.url),
+      new URL(
+        "../../src/components/BatchConfirmation/RequestContext.tsx",
+        import.meta.url,
+      ),
       "utf8",
     ),
     readFile(
-      new URL("../../src/components/BatchConfirmation/ConfirmationActions.tsx", import.meta.url),
+      new URL(
+        "../../src/components/BatchConfirmation/ConfirmationActions.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/components/BatchConfirmation/BatchTransactionConfirmation.tsx",
+        import.meta.url,
+      ),
       "utf8",
     ),
     readFile(
@@ -33,6 +46,9 @@ test("unsafe batch confirmation explains the corrective action on the button", a
 
   assert.doesNotMatch(contextSource, /Confirm unavailable:/);
   assert.match(actionSource, /disabledReason=\{confirmDisabledReason\}/);
+  assert.match(actionSource, /isDisabled=\{submitting\}/);
+  assert.doesNotMatch(actionSource, /disabled\?: boolean/);
+  assert.doesNotMatch(screenSource, /disabled=\{isIntakeValidating\}/);
   assert.match(confirmButtonSource, /role=\{disabledReason \? "group" : undefined\}/);
   assert.match(
     confirmButtonSource,

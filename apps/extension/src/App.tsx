@@ -9,7 +9,6 @@ import {
 import {
   useUpdateEffect,
   Container,
-  Text,
   Box,
   VStack,
   Spinner,
@@ -41,6 +40,7 @@ import {
   HideTokensView,
   MoreActionsView,
   PendingTxList,
+  preloadApprovalRequestScreen,
   QRCodeModal,
   Settings,
   ShieldView,
@@ -117,8 +117,14 @@ import {
 } from "@/app/home/HomeAlerts";
 import WaitingForOnboardingScreen from "@/app/screens/WaitingForOnboardingScreen";
 import CrossDappBatchRequestScreen from "@/app/screens/CrossDappBatchRequestScreen";
+import AppBootstrapTransition from "@/app/AppBootstrapTransition";
 import { useRuntimeMessaging } from "@/app/hooks/useRuntimeMessaging";
-
+import {
+  loadInitialApprovalRequests,
+  takeInitialApprovalRequestHint,
+} from "@/app/initialApprovalRequests";
+import { applyInitialApprovalRoute, resolveHintedInitialApprovalRoute } from "@/app/initialApprovalRoute";
+import { openOrFocusOnboarding } from "@/app/openOnboarding";
 type AddChainReturnTarget = {
   view: "walletConnect";
   dappName?: string;
@@ -151,6 +157,7 @@ function App() {
   const { networksInfo, reloadRequired, setReloadRequired } = useNetworks();
   const [view, setView] = useState<AppView>("main");
   const [isLoading, setIsLoading] = useState(true);
+  const [isApprovalRequestLoading, setIsApprovalRequestLoading] = useState(false);
   const [address, setAddress] = useState<string>("");
   const [displayAddress, setDisplayAddress] = useState<string>("");
   const [chainName, setChainName] = useState<string>();
@@ -781,38 +788,23 @@ function App() {
 
   useEffect(() => {
     const init = async () => {
-      // Check if API key is configured
+      const approvalRequestHintPromise = takeInitialApprovalRequestHint();
       const apiKeyConfigured = await hasEncryptedApiKey();
       setHasApiKey(apiKeyConfigured);
 
       if (!apiKeyConfigured) {
-        // No API key - open onboarding in a new tab
-        const onboardingUrl = chrome.runtime.getURL("onboarding.html");
-
-        // Check if onboarding tab already exists
-        const existingTabs = await chrome.tabs.query({ url: onboardingUrl });
-        if (existingTabs.length > 0 && existingTabs[0].id) {
-          // Focus existing onboarding tab
-          await chrome.tabs.update(existingTabs[0].id, { active: true });
-          await chrome.windows.update(existingTabs[0].windowId!, {
-            focused: true,
-          });
-          setOnboardingTabId(existingTabs[0].id);
-        } else {
-          // Create new onboarding tab
-          const tab = await chrome.tabs.create({ url: onboardingUrl });
-          if (tab.id) {
-            setOnboardingTabId(tab.id);
-          }
-        }
-
+        await openOrFocusOnboarding(setOnboardingTabId);
         setView("waitingForOnboarding");
         setIsLoading(false);
         return;
       }
 
-      // API key is configured - close any open onboarding tabs
-      // Use pattern matching to ensure we find the tab regardless of URL variations
+      const approvalRequestHint = await approvalRequestHintPromise;
+      setIsApprovalRequestLoading(approvalRequestHint !== null);
+      if (approvalRequestHint) {
+        void preloadApprovalRequestScreen(approvalRequestHint.requestType);
+      }
+
       const onboardingUrlPattern =
         chrome.runtime.getURL("onboarding.html") + "*";
       const onboardingTabs = await chrome.tabs.query({
@@ -826,24 +818,51 @@ function App() {
         }
       }
 
-      // Establish keepalive connection so the service worker can track UI close time
-      // Use the robust reconnection mechanism
       establishKeepalivePort();
 
-      // Check lock state
       const isUnlocked = await checkLockState();
+      const [requests, sigRequests, permissionRequests, batchRequests] =
+        await loadInitialApprovalRequests([
+          loadPendingRequests,
+          loadPendingSignatureRequests,
+          loadPendingErc7715PermissionRequests,
+          loadPendingBatchRequests,
+        ], approvalRequestHint);
+      const hintedApprovalRoute = resolveHintedInitialApprovalRoute(
+        approvalRequestHint,
+        [requests, sigRequests, permissionRequests, batchRequests],
+      );
+      if (hintedApprovalRoute) {
+        setIsWalletUnlocked(isUnlocked);
+        if (isUnlocked) {
+          applyInitialApprovalRoute(hintedApprovalRoute, {
+            setTransaction: setSelectedTxRequest,
+            setSignature: setSelectedSignatureRequest,
+            setPermission: setSelectedErc7715PermissionRequest,
+            setBatch: setSelectedBatchRequest,
+            setView,
+          });
+        } else setView("unlock");
+        setIsLoading(false);
+      }
 
-      // Load pending requests
-      const requests = await loadPendingRequests();
-      const sigRequests = await loadPendingSignatureRequests();
-      const permissionRequests = await loadPendingErc7715PermissionRequests();
-      const batchRequests = await loadPendingBatchRequests();
-      const watchAssetRequests = await loadPendingWatchAssetRequests();
-      const addChainRequests = await loadPendingAddChainRequests();
-      const dappConnectionRequests = await loadPendingDappConnectionRequests();
-      await loadActiveDappContext();
-      const loadedCrossDappBatch = await loadCrossDappBatch();
-      await loadWalletConnectSessionCount();
+      const [
+        watchAssetRequests,
+        addChainRequests,
+        dappConnectionRequests,
+        ,
+        loadedCrossDappBatch,
+        ,
+        loadedAccountState,
+      ] = await Promise.all([
+        loadPendingWatchAssetRequests(),
+        loadPendingAddChainRequests(),
+        loadPendingDappConnectionRequests(),
+        loadActiveDappContext(),
+        loadCrossDappBatch(),
+        loadWalletConnectSessionCount(),
+        loadAccounts(),
+      ]);
 
       if (
         requests.length > 0 ||
@@ -860,7 +879,7 @@ function App() {
 
       // Load accounts
       let { accounts: loadedAccounts, activeAccount: loadedActive } =
-        await loadAccounts();
+        loadedAccountState;
 
       // Migration fallback: if API key exists but no accounts, the user is
       // upgrading from v0.1.1/v0.2.0 and the onInstalled migration may not
@@ -879,25 +898,13 @@ function App() {
         }
       }
 
-      // Safety net: if API key exists but no accounts, redirect to onboarding
-      // This handles edge cases like interrupted setup
       if (loadedAccounts.length === 0) {
-        const onboardingUrl = chrome.runtime.getURL("onboarding.html");
-        const existingTabs = await chrome.tabs.query({ url: onboardingUrl });
-        if (existingTabs.length > 0 && existingTabs[0].id) {
-          await chrome.tabs.update(existingTabs[0].id, { active: true });
-          await chrome.windows.update(existingTabs[0].windowId!, {
-            focused: true,
-          });
-        } else {
-          await chrome.tabs.create({ url: onboardingUrl });
-        }
+        await openOrFocusOnboarding();
         setView("waitingForOnboarding");
         setIsLoading(false);
         return;
       }
 
-      // Load stored data
       const {
         displayAddress: storedDisplayAddress,
         address: storedAddress,
@@ -948,11 +955,11 @@ function App() {
         },
       );
 
-      // Set wallet unlock state
       setIsWalletUnlocked(isUnlocked);
 
-      // Determine initial view
-      if (!isUnlocked) {
+      if (hintedApprovalRoute) {
+        // The matching request is already visible; finish hydration in place.
+      } else if (!isUnlocked) {
         setView("unlock");
       } else if (requests.length > 0) {
         // Auto-open newest (last) pending transaction request
@@ -2179,20 +2186,10 @@ function App() {
 
   if (isLoading) {
     return (
-      <Box
-        minH="300px"
-        bg="bg.base"
-        display="flex"
-        alignItems="center"
-        justifyContent="center"
-      >
-        <VStack spacing={3}>
-          <Spinner size="sm" color="accent.secondary" />
-          <Text color="fg.secondary" fontSize="sm">
-            Loading WalletChan…
-          </Text>
-        </VStack>
-      </Box>
+      <AppBootstrapTransition
+        isLoading
+        showRequestSkeleton={isApprovalRequestLoading}
+      />
     );
   }
 
@@ -3635,7 +3632,10 @@ function App() {
   })();
 
   return (
-    <>
+    <AppBootstrapTransition
+      isLoading={false}
+      showRequestSkeleton={isApprovalRequestLoading}
+    >
       <ScreenStack view={view}>{screen}</ScreenStack>
 
       {/* QR Code Modal */}
@@ -3649,7 +3649,7 @@ function App() {
         </Suspense>
       )}
 
-    </>
+    </AppBootstrapTransition>
   );
 }
 

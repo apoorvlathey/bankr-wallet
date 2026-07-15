@@ -98,6 +98,9 @@ export async function handleAddCallsToCrossDappBatch(
   if (!pending) {
     return { success: false, error: "Pending batch request not found" };
   }
+  if (pending.intakeStatus === "validating") {
+    return { success: false, error: "Batch request is still being validated" };
+  }
   const pinned = await resolvePinnedCrossDappAccount(
     pending,
     pending.params.from,

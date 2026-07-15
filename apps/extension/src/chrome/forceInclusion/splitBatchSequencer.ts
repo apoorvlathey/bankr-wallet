@@ -64,6 +64,9 @@ export async function handleSplitBatchIntoIndividualTxs(
       code: ERC5792_ERRORS.UNKNOWN_BUNDLE_ID,
     };
   }
+  if (pending.intakeStatus === "validating") {
+    return { success: false, error: "Batch request is still being validated" };
+  }
 
   // No sender-origin check here: this handler is invoked from the wallet's
   // own popup UI (`sender.origin` would be `chrome-extension://...`), not

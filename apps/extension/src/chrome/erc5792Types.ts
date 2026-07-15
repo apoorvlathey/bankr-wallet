@@ -71,6 +71,12 @@ export interface PendingBatchTxRequest {
   chainName: string;
   chainId: number;
   timestamp: number;
+  /**
+   * Present only while intake is completing async authorization/capability
+   * checks. The renderer may show the reviewed calls immediately, but every
+   * mutating action must remain disabled until this field is removed.
+   */
+  intakeStatus?: "validating";
   /** Account type at time of request — determines atomic vs non-atomic path */
   accountType?: "bankr" | "impersonator" | "privateKey" | "seedPhrase";
   /** Non-secret ciphertext-generation binding for Bankr signer requests. */

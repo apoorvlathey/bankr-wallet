@@ -189,6 +189,44 @@ test("aged batches remain confirmable for Bankr, private-key, and seed accounts"
       assert.equal(hooks.pending, null);
       await hooks.backgroundDone;
     });
+
+    for (const type of ["privateKey", "seedPhrase"] as const) {
+      await t.test(`validating ${type} batch cannot sign`, async () => {
+        const id = `validating-${type}`;
+        queue(type, id);
+        hooks.pending.intakeStatus = "validating";
+        const result = await local.confirmLocalBatchWithExecutors(
+          {
+            processSingle: () => hooks.dispatched.push(type),
+            processNonAtomic: () => hooks.dispatched.push(type),
+            processAtomic7702: () => hooks.dispatched.push(type),
+          },
+          id,
+          "ignored",
+        );
+        assert.deepEqual(result, {
+          success: false,
+          error: "Batch request is still being validated",
+        });
+        assert.deepEqual(hooks.dispatched, []);
+        assert.equal(hooks.pending?.id, id);
+      });
+    }
+
+    await t.test("validating Bankr batch cannot submit", async () => {
+      queue("bankr", "validating-bankr");
+      hooks.pending.intakeStatus = "validating";
+      const result = await bankr.handleConfirmBatchTransaction(
+        "validating-bankr",
+        "ignored",
+      );
+      assert.deepEqual(result, {
+        success: false,
+        error: "Batch request is still being validated",
+      });
+      assert.deepEqual(hooks.dispatched, []);
+      assert.equal(hooks.pending?.id, "validating-bankr");
+    });
   } finally {
     await server?.close();
     Reflect.deleteProperty(globalThis, "__walletchanNonExpiringBatch");

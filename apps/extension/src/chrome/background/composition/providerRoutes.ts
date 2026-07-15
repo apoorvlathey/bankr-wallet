@@ -42,8 +42,8 @@ import { createBackgroundProviderRpcMessageRouter } from "../providerRpcRouter";
 import { createBackgroundSigningRequestMessageRouter } from "../signingRequestRouter";
 import { createBackgroundWatchAssetMessageRouter } from "../watchAssetRouter";
 import {
-  getProviderWindowState,
-  openFullscreenRequestSidePanel,
+  openProviderRequestSidePanel,
+  takeProviderRequestSurfaceHint,
 } from "../../windowing/providerRequestSurface";
 import type { PendingResolutionComposition } from "./pendingResolution";
 import type { ProviderContextComposition } from "./providerContext";
@@ -101,8 +101,8 @@ export function composeProviderRoutes(
 
   const routeBackgroundSigningRequestMessage =
     createBackgroundSigningRequestMessageRouter({
-      getProviderWindowState,
-      openFullscreenRequestSidePanel,
+      openProviderRequestSidePanel,
+      takeProviderRequestSurfaceHint,
       connectedProviderOriginOrReject: provider.connectedProviderOriginOrReject,
       handleTransactionRequest,
       enqueueAuthorizedSignatureRequest:

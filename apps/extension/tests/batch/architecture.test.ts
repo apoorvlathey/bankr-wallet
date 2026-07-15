@@ -243,6 +243,76 @@ test("intake compensates a durable acknowledgement write failure", async () => {
   }
 });
 
+test("validating batch rows are non-actionable until the ready commit", async () => {
+  const request = {
+    id: "validating-batch",
+    params: {
+      version: "2.0.0",
+      chainId: "0x1",
+      calls: [{ to: TARGET_A, data: "0x", value: "0x0" }],
+    },
+    origin: "https://dapp.example",
+    favicon: null,
+    chainName: "Ethereum",
+    chainId: 1,
+    timestamp: Date.now(),
+    intakeStatus: "validating",
+    accountId: "private-key-account",
+    accountAddress: WALLET,
+    accountType: "privateKey",
+  } as const;
+  const harness = createChromeStorageHarness({
+    local: { pendingBatchTxRequests: [request] },
+  });
+  try {
+    const storage = await import(
+      "../../src/chrome/requests/pendingBatchTxStorage"
+    );
+    assert.deepEqual(
+      await storage.updateCallInPendingBatchTxRequest(
+        request.id,
+        0,
+        "0x1234",
+      ),
+      { success: false, error: "Batch request is still being validated" },
+    );
+    assert.deepEqual(
+      await storage.removeCallFromPendingBatchTxRequest(request.id, 0),
+      {
+        found: true,
+        remainingCalls: 1,
+        error: "Batch request is still being validated",
+      },
+    );
+
+    const ready = await storage.markPendingBatchTxRequestReady(request.id);
+    assert.equal(ready?.intakeStatus, undefined);
+    assert.equal(
+      (harness.snapshot("local").pendingBatchTxRequests as any[])[0]
+        .intakeStatus,
+      undefined,
+    );
+  } finally {
+    harness.restore();
+  }
+});
+
+test("every batch execution or move boundary rejects validating rows", async () => {
+  const sources = await Promise.all([
+    "batch/batchBankrExecution.ts",
+    "batch/batchLocalConfirmation.ts",
+    "forceInclusion/splitBatchSequencer.ts",
+    "crossDappBatch/intake.ts",
+  ].map((name) => readFile(
+    new URL(`../../src/chrome/${name}`, import.meta.url),
+    "utf8",
+  )));
+  for (const source of sources) {
+    assert.match(source, /intakeStatus === ["']validating["']/);
+    assert.match(source, /Batch request is still being validated/);
+  }
+});
+
 test("Bankr batch execution preserves facade identity and credential boundary", async () => {
   const [facade, bankr, source] = await Promise.all([
     import("../../src/chrome/batchTxHandlers"),

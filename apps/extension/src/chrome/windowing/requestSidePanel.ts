@@ -23,10 +23,10 @@ const productionDependencies: RequestSidePanelDependencies = {
 
 export async function openRequestSidePanelWith(
   targetWindow: chrome.windows.Window | null,
-  fullscreenOverride: boolean,
+  earlyOpenExpected: boolean,
   dependencies: RequestSidePanelDependencies,
 ): Promise<boolean> {
-  if (fullscreenOverride) {
+  if (earlyOpenExpected) {
     try {
       const contexts = await dependencies.getContexts();
       if (contexts !== null && contexts.length > 0) return true;
@@ -53,7 +53,7 @@ export async function openRequestSidePanelWith(
     }
   } catch (error) {
     dependencies.warn(
-      "Sidepanel failed to open for tx confirmation, falling back to popup:",
+      "Sidepanel failed to open for request confirmation, falling back to popup:",
       error,
     );
   }
@@ -62,11 +62,11 @@ export async function openRequestSidePanelWith(
 
 export function openRequestSidePanel(
   targetWindow: chrome.windows.Window | null,
-  fullscreenOverride: boolean,
+  earlyOpenExpected: boolean,
 ): Promise<boolean> {
   return openRequestSidePanelWith(
     targetWindow,
-    fullscreenOverride,
+    earlyOpenExpected,
     productionDependencies,
   );
 }

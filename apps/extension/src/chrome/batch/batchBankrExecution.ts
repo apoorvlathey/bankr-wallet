@@ -35,6 +35,9 @@ export async function handleConfirmBatchTransaction(
 
   const pending = await getPendingBatchTxRequestById(bundleId);
   if (!pending) return { success: false, error: "Batch request not found" };
+  if (pending.intakeStatus === "validating") {
+    return { success: false, error: "Batch request is still being validated" };
+  }
 
   // SECURITY: resolve the pinned account; reject stale/missing bindings.
   if (!pending.accountId) {

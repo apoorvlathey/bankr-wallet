@@ -1,4 +1,5 @@
 import { lazy } from "react";
+import type { ProviderRequestSurfaceType } from "@/chrome/windowing/providerRequestSurface";
 
 export const Settings = lazy(() => import("@/components/Settings"));
 export const TransactionConfirmation = lazy(
@@ -52,6 +53,22 @@ export const AddChain = lazy(() => import("@/components/Settings/AddChain"));
 export const TxDetailScreen = lazy(
   () => import("@/components/TxDetailScreen"),
 );
+
+/** Starts the exact approval chunk while its durable request is being prepared. */
+export function preloadApprovalRequestScreen(
+  requestType: ProviderRequestSurfaceType,
+): Promise<unknown> {
+  switch (requestType) {
+    case "i_sendTransaction":
+      return import("@/components/TransactionConfirmation");
+    case "i_signatureRequest":
+      return import("@/components/SignatureRequestConfirmation");
+    case "i_walletExecutionPermissions":
+      return import("@/components/Erc7715PermissionConfirmation");
+    case "i_walletSendCalls":
+      return import("@/components/BatchTransactionConfirmation");
+  }
+}
 
 // Prime every route chunk once the popup is idle so first navigation never
 // swaps a Suspense fallback into an already-running screen transition.

@@ -36,6 +36,9 @@ export async function confirmLocalBatchWithExecutors(
 
   const pending = await getPendingBatchTxRequestById(bundleId);
   if (!pending) return { success: false, error: "Batch request not found" };
+  if (pending.intakeStatus === "validating") {
+    return { success: false, error: "Batch request is still being validated" };
+  }
 
   processingBundleIds.add(bundleId);
 

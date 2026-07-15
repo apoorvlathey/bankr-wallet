@@ -18,6 +18,7 @@ import {
   savePendingErc7715PermissionRequest,
 } from "./pendingRequestStorage";
 import { waitForErc7715PermissionResult } from "./resultStorage";
+import { clearProviderRequestSurfaceHint } from "../windowing/providerRequestSurface";
 
 export async function handleErc7715PermissionMethod({
   method,
@@ -84,6 +85,7 @@ export async function handleErc7715PermissionMethod({
           id: requestId,
         });
         const pendingRequests = await savePendingErc7715PermissionRequest(pending);
+        clearProviderRequestSurfaceHint(senderWindowId);
         syncErc7715PermissionRequestLockFromPendingRequests(pendingRequests);
         chrome.runtime
           .sendMessage({

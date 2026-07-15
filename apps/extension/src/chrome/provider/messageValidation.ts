@@ -52,13 +52,15 @@ export function validateExternalProviderMessage(
   }
 
   switch (candidate.type) {
-    case "getProviderWindowState":
-      return { valid: true };
-
-    case "openFullscreenRequestSidePanel":
-      return candidate.fullscreen === true
+    case "openProviderRequestSidePanel":
+      return candidate.requestType === "i_sendTransaction" ||
+        candidate.requestType === "i_signatureRequest" ||
+        candidate.requestType === "i_walletSendCalls" ||
+        (candidate.requestType === "i_walletExecutionPermissions" &&
+          candidate.permissionMethod ===
+            "wallet_requestExecutionPermissions")
         ? { valid: true }
-        : failProviderValidation("Invalid fullscreen side-panel request");
+        : failProviderValidation("Invalid provider side-panel request");
 
     case "requestDappConnection":
       return isProviderRequestId(candidate.requestId)

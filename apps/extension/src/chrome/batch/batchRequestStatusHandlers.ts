@@ -54,6 +54,9 @@ export async function handleRemoveCallFromPendingBatch(
   if (!result.found) {
     return { success: false, error: "Pending batch not found" };
   }
+  if (result.error) {
+    return { success: false, error: result.error };
+  }
   if (result.remainingCalls === 0) {
     await handleRejectBatchTransaction(bundleId);
     return { success: true, rejected: true };

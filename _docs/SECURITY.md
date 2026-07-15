@@ -374,9 +374,15 @@ This keeps status disclosure and pending-request mutation separate from all key
 resolution and signing paths while preserving the original facade identities.
 `batchRequestIntake.ts` owns the shared injected/WalletConnect queue boundary:
 it pins the validated account, chain, origin, tab/frame or WC request metadata;
-commits the pending request before its bundle status; revalidates the transport
-authorization around both writes; and compensates either partial record before
-publishing a failed acknowledgement. It has no credential or signing access.
+commits a non-actionable `intakeStatus: "validating"` pending request before
+its bundle status or any network-backed atomic-delegate probe; revalidates the
+transport authorization around both writes; and compensates either partial
+record before publishing a failed acknowledgement. The early row exists only
+to paint the real review surface. Signing/edit/split/move controls are disabled,
+while terminal rejection remains available and safely wins a race with intake.
+The pending storage call-mutation helpers refuse the row, and both Bankr and local
+confirmation handlers fail closed until the final authorization/durability
+checks atomically remove the marker. It has no credential or signing access.
 
 Capability discovery, PK/seed credential resolution, and execution are separate
 audit boundaries. `batchCapabilities.ts` refuses addresses other than the exact
@@ -838,6 +844,38 @@ thin `inject.ts` entrypoint:
 **Source validation**: `contentBridge/messagePolicy.ts` checks
 `e.source === window` before dispatch.
 
+For approval-bearing messages only, `contentBridge/requestSurface.ts` may also
+send `openProviderRequestSidePanel` synchronously while the original user
+activation is live. The effect is presentation-only: the background route
+opens the sender tab's side panel and returns no wallet data. It runs only when
+the cached non-secret `sidePanelMode` preference is enabled (missing means the
+fresh-install default), the browser is not marked as Arc, and the request is a
+single transaction, ERC-5792 batch, signature, or
+`wallet_requestExecutionPermissions`. `provider/messageValidation.ts` bounds
+the route to those exact request-family tags; ERC-7715 discovery/read methods
+do not open an approval surface. The content bridge first runs the same bounded
+provider-envelope validation synchronously against its cached, non-secret
+connected-origin state, account address/type, and attested chain. Requests with
+invalid payloads, disconnected origins, wrong/stale chains, unsupported batch
+versions, ineligible permission account types, or signer/`from` mismatches
+never send the early-open message. Typed-data signatures additionally pass the
+same bounded EIP-712 schema, raw ERC-7710 delegation, and domain-chain checks
+that run before background persistence. ERC-5792 also mirrors wallet/chain,
+caller-binding, and unsafe self-recursion checks; ERC-7715 mirrors its
+request-only account, chain, address, permission-data, and rule validation
+before network eligibility. These checks only suppress presentation for
+already-invalid input; the service
+worker repeats authorization, account binding, and schema checks as the
+authoritative acceptance boundary. Before opening, the service worker records a
+ten-second, window-bound hint containing only that request-family tag. Only an
+exact trusted WalletChan UI document can consume it through
+`getProviderRequestSurfaceHint`; the route returns no request payload, origin,
+account, permission terms, or secret. The one-shot hint lives only in service
+worker memory and is used solely to keep a cold renderer on its loading screen
+until the already-authorized pending-request repository contains the matching
+review record. Successful persistence clears any hint the cold renderer did
+not already consume.
+
 After a supported `i_switchEthereumChain` request actually changes the tab's
 chain, `inject.ts` sends the background-only `dappChainSwitchNotification`
 message. That message carries only `chainId`/`chainName`; the background worker
@@ -913,6 +951,7 @@ accessible resources.
 | `onboardingInitialization` | No               | Temporary `{ version, id, startedAt }` transaction marker for one fresh-wallet setup. Missing is normal; unmarked authoritative key/account state fails closed, disposable residue is cleared before begin, and complete wallets cannot be rolled back because marker cleanup failed. |
 | `pendingTxRequests`        | No               | Pending transaction queue                               |
 | `pendingSignatureRequests` | No               | Pending signature queue                                 |
+| `pendingBatchTxRequests`   | No               | Pending ERC-5792 queue. A newly pinned row may briefly carry non-actionable `intakeStatus: "validating"`; signing and call mutation fail closed until intake removes it, while terminal rejection may remove it safely. |
 | `pendingErc7715PermissionRequests` | No        | Pending ERC-7715 delegated-permission prompts pinned to account/origin/chain. Contains requested public authority scope, not private keys. |
 | `erc7715PermissionGrants`  | No               | ERC-7715 grant records with returned context and signed ERC-7710 delegation. This is reusable public authority material and must stay origin/account/chain scoped in all listing UI/API paths. |
 | `dappPermissions`         | No               | Exact-origin grants allowing injected sites to read the current WalletChan account. Chrome-attested origin is authoritative; title/favicon are untrusted display metadata. |

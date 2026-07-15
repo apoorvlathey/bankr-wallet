@@ -55,14 +55,21 @@ function assertInvalid(message: unknown, pattern: RegExp): void {
 }
 
 test("external provider messages enforce total size and bounded URLs", () => {
-  assertValid({ type: "getProviderWindowState" });
   assertValid({
-    type: "openFullscreenRequestSidePanel",
-    fullscreen: true,
+    type: "openProviderRequestSidePanel",
+    requestType: "i_signatureRequest",
   });
   assertInvalid(
-    { type: "openFullscreenRequestSidePanel", fullscreen: false },
-    /fullscreen side-panel/i,
+    { type: "openProviderRequestSidePanel", requestType: "i_watchAsset" },
+    /provider side-panel/i,
+  );
+  assertInvalid(
+    {
+      type: "openProviderRequestSidePanel",
+      requestType: "i_walletExecutionPermissions",
+      permissionMethod: "wallet_getGrantedExecutionPermissions",
+    },
+    /provider side-panel/i,
   );
   assertValid({ type: "getDappAccounts" });
   const maxFavicon = `https://images.example/${"x".repeat(

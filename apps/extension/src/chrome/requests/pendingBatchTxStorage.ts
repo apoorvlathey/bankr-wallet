@@ -60,6 +60,30 @@ export async function getPendingBatchTxRequestById(
 }
 
 /**
+ * Publish the final actionable snapshot after intake validation succeeds.
+ * Returning null makes a concurrent removal/rejection fail closed instead of
+ * recreating a request that another surface already resolved.
+ */
+export async function markPendingBatchTxRequestReady(
+  bundleId: string,
+): Promise<PendingBatchTxRequest | null> {
+  return withStorageLock(STORAGE_LOCK_KEY, async () => {
+    const requests = await getPendingBatchTxRequests();
+    const index = requests.findIndex((request) => request.id === bundleId);
+    if (index === -1 || requests[index].intakeStatus !== "validating") {
+      return null;
+    }
+
+    const readyRequest = { ...requests[index] };
+    delete readyRequest.intakeStatus;
+    const next = [...requests];
+    next[index] = readyRequest;
+    await chrome.storage.local.set({ [STORAGE_KEY]: next });
+    return readyRequest;
+  });
+}
+
+/**
  * Replace one call's `data` field in a pending batch request. Used by the
  * batch confirmation UI when the user edits a built-in field (e.g. an ERC-20
  * approve amount) — we re-encode that call's calldata and persist it back so
@@ -81,6 +105,9 @@ export async function updateCallInPendingBatchTxRequest(
     if (idx === -1) return { success: false, error: "Batch not found" };
 
     const target = requests[idx];
+    if (target.intakeStatus === "validating") {
+      return { success: false, error: "Batch request is still being validated" };
+    }
     const calls = target.params.calls ?? [];
     if (callIndex < 0 || callIndex >= calls.length) {
       return { success: false, error: "Call index out of range" };
@@ -111,13 +138,20 @@ export async function updateCallInPendingBatchTxRequest(
 export async function removeCallFromPendingBatchTxRequest(
   bundleId: string,
   callIndex: number,
-): Promise<{ found: boolean; remainingCalls: number }> {
+): Promise<{ found: boolean; remainingCalls: number; error?: string }> {
   return withStorageLock(STORAGE_LOCK_KEY, async () => {
     const requests = await getPendingBatchTxRequests();
     const idx = requests.findIndex((r) => r.id === bundleId);
     if (idx === -1) return { found: false, remainingCalls: 0 };
 
     const target = requests[idx];
+    if (target.intakeStatus === "validating") {
+      return {
+        found: true,
+        remainingCalls: target.params.calls?.length ?? 0,
+        error: "Batch request is still being validated",
+      };
+    }
     const calls = target.params.calls ?? [];
     if (callIndex < 0 || callIndex >= calls.length) {
       return { found: true, remainingCalls: calls.length };

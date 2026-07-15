@@ -16,9 +16,11 @@ secrets.
   600 ms verification delay, and `getContexts`/ping fallback.
 - `popupGeometry.ts` owns fixed size and same-monitor work-area clamping.
 - `popupWindow.ts` owns existing-window reuse, focus, placement, and creation.
-- `providerRequestSurface.ts` owns the provider-window fullscreen query and the
-  synchronous, user-activation-preserving side-panel open effect. It also owns
-  the notification fallback used when Chrome has already consumed the gesture.
+- `providerRequestSurface.ts` owns the synchronous,
+  user-activation-preserving side-panel open effect for transaction, batch,
+  signature, and ERC-7715 approval requests. It also owns the window-scoped,
+  one-shot cold-renderer request hint and the fullscreen notification fallback
+  used when Chrome has already consumed the gesture.
 - `requestSurface.ts` resolves the sender window and selects the verified panel
   or popup fallback.
 - `types.ts` contains the small shared contracts.

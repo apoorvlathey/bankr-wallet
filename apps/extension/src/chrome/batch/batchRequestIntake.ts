@@ -17,12 +17,14 @@ import {
 import { writeResultToStorage } from "../transactions/runtime";
 import {
   getPendingBatchTxRequestById,
+  markPendingBatchTxRequestReady,
   removePendingBatchTxRequest,
   savePendingBatchTxRequest,
 } from "../requests/pendingBatchTxStorage";
 import { pinnedBatchTxRequest } from "../requests/pinnedRequest";
 import { validateWalletSendCallsPayload } from "../provider/batchValidation";
 import type { Account } from "../types";
+import { clearProviderRequestSurfaceHint } from "../windowing/providerRequestSurface";
 
 export async function handleWalletSendCalls(
   params: WalletSendCallsParams,
@@ -135,32 +137,6 @@ export async function handleWalletSendCalls(
       }
     }
 
-    if (isPKOrSP && params.atomicRequired === true && normalizedParams.calls.length > 1) {
-      const resolved = await getStoredResolvedChainById(chainId);
-      let canBeAtomic = false;
-      if (resolved?.rpcUrl) {
-        try {
-          const result = await resolveActiveDelegate({
-            accountId: account.id,
-            accountAddress: account.address as `0x${string}`,
-            chainId,
-            rpcUrl: resolved.rpcUrl,
-          });
-          canBeAtomic = !!result.delegate;
-        } catch {
-          canBeAtomic = false;
-        }
-      }
-      if (!canBeAtomic) {
-        await writeResultToStorage(`batchTxAck:${bundleId}`, {
-          success: false,
-          error: `Atomic execution is not available for chain ${chainId} on this account. Configure a 7702 delegate in Account Settings → Smart Account, or retry without atomicRequired.`,
-          code: ERC5792_ERRORS.ATOMIC_NOT_SUPPORTED,
-        });
-        return;
-      }
-    }
-
     const trustedOrigin = senderOrigin ?? origin;
     const pendingRequest = pinnedBatchTxRequest(account, {
       id: bundleId,
@@ -170,6 +146,7 @@ export async function handleWalletSendCalls(
       chainName: CHAIN_NAMES[chainId] || `Chain ${chainId}`,
       chainId,
       timestamp: Date.now(),
+      intakeStatus: "validating",
       tabId,
       frameId,
       senderOrigin,
@@ -193,6 +170,43 @@ export async function handleWalletSendCalls(
     }
 
     await savePendingBatchTxRequest(pendingRequest);
+    // The pinned request is now safe to display. Publish/open it before any
+    // network-backed atomic-capability check so a cold sidepanel can render
+    // the real review screen instead of waiting behind its request skeleton.
+    chrome.runtime.sendMessage({
+      type: "newPendingBatchTxRequest",
+      batchRequest: pendingRequest,
+    }).catch(() => {});
+    openExtensionPopup(senderWindowId);
+
+    if (isPKOrSP && params.atomicRequired === true && normalizedParams.calls.length > 1) {
+      const resolved = await getStoredResolvedChainById(chainId);
+      let canBeAtomic = false;
+      if (resolved?.rpcUrl) {
+        try {
+          const result = await resolveActiveDelegate({
+            accountId: account.id,
+            accountAddress: account.address as `0x${string}`,
+            chainId,
+            rpcUrl: resolved.rpcUrl,
+          });
+          canBeAtomic = !!result.delegate;
+        } catch {
+          canBeAtomic = false;
+        }
+      }
+      if (!canBeAtomic) {
+        await removePendingBatchTxRequest(bundleId);
+        await writeResultToStorage(`batchTxAck:${bundleId}`, {
+          success: false,
+          error: `Atomic execution is not available for chain ${chainId} on this account. Configure a 7702 delegate in Account Settings → Smart Account, or retry without atomicRequired.`,
+          code: ERC5792_ERRORS.ATOMIC_NOT_SUPPORTED,
+        });
+        clearProviderRequestSurfaceHint(senderWindowId);
+        return;
+      }
+    }
+
     const authorizationAfterPendingSave =
       await validatePendingRequestAuthorization("batchTransaction", pendingRequest);
     if (!authorizationAfterPendingSave.authorized || !authorizationSnapshot.isCurrent()) {
@@ -233,12 +247,24 @@ export async function handleWalletSendCalls(
       return;
     }
 
+    const readyRequest = await markPendingBatchTxRequestReady(bundleId);
+    if (!readyRequest) {
+      await removeBundleStatus(bundleId);
+      await writeResultToStorage(`batchTxAck:${bundleId}`, {
+        success: false,
+        error: "Batch request was resolved before validation completed",
+        code: 4001,
+      });
+      clearProviderRequestSurfaceHint(senderWindowId);
+      return;
+    }
+
     await writeResultToStorage(`batchTxAck:${bundleId}`, { success: true, id: bundleId });
+    clearProviderRequestSurfaceHint(senderWindowId);
     chrome.runtime.sendMessage({
       type: "newPendingBatchTxRequest",
-      batchRequest: pendingRequest,
+      batchRequest: readyRequest,
     }).catch(() => {});
-    openExtensionPopup(senderWindowId);
   } catch (error) {
     await removePendingBatchTxRequest(bundleId).catch(() => undefined);
     await removeBundleStatus(bundleId).catch(() => undefined);

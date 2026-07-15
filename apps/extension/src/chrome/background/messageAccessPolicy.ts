@@ -11,8 +11,7 @@
  */
 
 export const PROVIDER_MESSAGE_TYPES = [
-  "getProviderWindowState",
-  "openFullscreenRequestSidePanel",
+  "openProviderRequestSidePanel",
   "getActiveAccount",
   "getDappAccounts",
   "requestDappConnection",
@@ -145,6 +144,7 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "setArcBrowser",
   "isSidePanelSupported",
   "getSidePanelMode",
+  "getProviderRequestSurfaceHint",
   "openPopupWindow",
   "getClearSigningEnabled",
   "setClearSigningEnabled",

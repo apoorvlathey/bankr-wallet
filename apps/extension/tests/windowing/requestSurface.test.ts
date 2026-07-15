@@ -55,8 +55,8 @@ function requestDependencies(
       events.push("supportedSync");
       return true;
     },
-    openPanel: async (_window, fullscreen) => {
-      events.push(`panel:${fullscreen}`);
+    openPanel: async (_window, earlyOpenExpected) => {
+      events.push(`panel:${earlyOpenExpected}`);
       return true;
     },
     openPopup: async () => {
@@ -77,7 +77,7 @@ test("request surface prefers a verified panel and falls back to the same target
     "mode",
     "supportedAsync",
     "supportedSync",
-    "panel:false",
+    "panel:true",
   ]);
 
   const fallbackEvents: string[] = [];
@@ -85,7 +85,7 @@ test("request surface prefers a verified panel and falls back to the same target
     12,
     requestDependencies(fallbackEvents, {
       openPanel: async () => {
-        fallbackEvents.push("panel:false");
+        fallbackEvents.push("panel:true");
         return false;
       },
     }),
@@ -95,12 +95,12 @@ test("request surface prefers a verified panel and falls back to the same target
     "mode",
     "supportedAsync",
     "supportedSync",
-    "panel:false",
+    "panel:true",
     "popup",
   ]);
 });
 
-test("fullscreen panel failure notifies instead of opening a fullscreen popup", async () => {
+test("disabled sidepanel mode opens a popup even in fullscreen", async () => {
   const events: string[] = [];
   await openExtensionPopupWith(
     12,
@@ -113,8 +113,27 @@ test("fullscreen panel failure notifies instead of opening a fullscreen popup", 
         events.push("mode");
         return false;
       },
-      openPanel: async (_window, fullscreen) => {
-        events.push(`panel:${fullscreen}`);
+    }),
+  );
+  assert.deepEqual(events, [
+    "window:12",
+    "mode",
+    "supportedAsync",
+    "popup",
+  ]);
+});
+
+test("fullscreen panel failure notifies when sidepanel mode is enabled", async () => {
+  const events: string[] = [];
+  await openExtensionPopupWith(
+    12,
+    requestDependencies(events, {
+      getWindow: async () => {
+        events.push("window:12");
+        return { id: 12, state: "fullscreen" } as chrome.windows.Window;
+      },
+      openPanel: async (_window, earlyOpenExpected) => {
+        events.push(`panel:${earlyOpenExpected}`);
         return false;
       },
     }),
@@ -194,7 +213,7 @@ test("request side panel reuses a live view and verifies new panels after 600 ms
   ]);
 });
 
-test("fullscreen request reuses the panel opened by the early user-activation hop", async () => {
+test("request reuses the panel opened by the early user-activation hop", async () => {
   const events: string[] = [];
   assert.equal(
     await openRequestSidePanelWith(

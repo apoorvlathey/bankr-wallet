@@ -9,6 +9,8 @@ export interface ContentBridgeState {
   address: string;
   displayAddress: string;
   chainName: string;
+  chainId: number | null;
+  dappConnected: boolean;
   accountId: string;
   accountType: string;
 }
@@ -17,6 +19,8 @@ export const bridgeState: ContentBridgeState = {
   address: "",
   displayAddress: "",
   chainName: "",
+  chainId: null,
+  dappConnected: false,
   accountId: "",
   accountType: "",
 };

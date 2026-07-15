@@ -1,4 +1,4 @@
-import type { RequestWindowState, SidePanelModeState } from "./types";
+import type { SidePanelModeState } from "./types";
 
 export function effectiveSidePanelMode(
   supported: boolean,
@@ -19,10 +19,6 @@ export function shouldInitializeInSidePanelMode(
 export function shouldUseSidePanelForRequest(
   preferenceEnabled: boolean,
   sidePanelSupported: boolean,
-  windowState: RequestWindowState | undefined,
 ): boolean {
-  return (
-    sidePanelSupported &&
-    (preferenceEnabled || windowState === "fullscreen")
-  );
+  return sidePanelSupported && preferenceEnabled;
 }

@@ -7,10 +7,11 @@
  */
 
 import type * as PendingRequestResolutionModule from "../requests/pendingRequestResolution";
+import type { ProviderRequestSurfaceType } from "../windowing/providerRequestSurface";
 
 export const BACKGROUND_SIGNING_REQUEST_MESSAGE_TYPES = [
-  "getProviderWindowState",
-  "openFullscreenRequestSidePanel",
+  "openProviderRequestSidePanel",
+  "getProviderRequestSurfaceHint",
   "sendTransaction",
   "signatureRequest",
   "getPendingSignatureRequests",
@@ -26,12 +27,11 @@ export type BackgroundSigningRequestRouteResult =
   | { handled: true; keepChannelOpen: boolean };
 
 type Dependencies = {
-  getProviderWindowState: (
+  openProviderRequestSidePanel: (
     sender: chrome.runtime.MessageSender,
-  ) => Promise<{ fullscreen: boolean }>;
-  openFullscreenRequestSidePanel: (
-    sender: chrome.runtime.MessageSender,
+    requestType: ProviderRequestSurfaceType,
   ) => void;
+  takeProviderRequestSurfaceHint: (windowId: number) => unknown;
   connectedProviderOriginOrReject: (
     sender: chrome.runtime.MessageSender,
     resultPrefix: "txResult" | "sigResult",
@@ -89,13 +89,21 @@ export function createBackgroundSigningRequestMessageRouter(
 ) => BackgroundSigningRequestRouteResult {
   return (message, sender, sendResponse) => {
     switch (message?.type) {
-      case "getProviderWindowState": {
-        dependencies.getProviderWindowState(sender).then(sendResponse);
-        return HANDLED_ASYNC;
+      case "openProviderRequestSidePanel": {
+        dependencies.openProviderRequestSidePanel(
+          sender,
+          message.requestType as ProviderRequestSurfaceType,
+        );
+        return HANDLED_SYNC;
       }
 
-      case "openFullscreenRequestSidePanel": {
-        dependencies.openFullscreenRequestSidePanel(sender);
+      case "getProviderRequestSurfaceHint": {
+        const windowId = message.windowId;
+        sendResponse(
+          Number.isSafeInteger(windowId) && windowId >= 0
+            ? dependencies.takeProviderRequestSurfaceHint(windowId)
+            : null,
+        );
         return HANDLED_SYNC;
       }
 

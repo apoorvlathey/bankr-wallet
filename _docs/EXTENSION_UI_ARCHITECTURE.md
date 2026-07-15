@@ -22,6 +22,10 @@ apps/extension/src/
 ├── App.tsx                 # Transitional renderer composition root
 ├── app/                    # Renderer-wide models and App-owned adapters
 │   ├── requestModel.ts
+│   ├── initialApprovalRequests.ts # Cold-renderer approval-queue loading gate
+│   ├── initialApprovalRoute.ts # Pure hint-to-pinned-request route selection
+│   ├── AppBootstrapTransition.tsx # Request-skeleton/bootstrap crossfade shell
+│   ├── openOnboarding.ts # Renderer-owned onboarding tab recovery adapter
 │   ├── lazyScreens.ts
 │   ├── hooks/               # App-owned runtime/effect boundaries
 │   ├── home/
