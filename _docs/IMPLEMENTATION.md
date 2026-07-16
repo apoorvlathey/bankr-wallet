@@ -2335,6 +2335,9 @@ API portfolio data is shown immediately, while onchain balances are verified in 
 - Parallel execution across all chains with 8s timeout and no retries
 - Cached viem clients per chainId for performance
 - Falls back to API values on any error (per-token or per-batch)
+- A failed token read does not by itself label the chain RPC unhealthy. The
+  home warning is eligible only when every attempted balance read for a chain
+  fails and a final `eth_blockNumber` health probe also fails.
 - `fetchOnchainBalances(..., { preserveZeroBalanceTokens: true })` keeps zero-balance entries when selector UIs need the full token catalog instead of a non-zero-only holdings list
 
 ### Shared Portfolio Token Catalog
@@ -2351,6 +2354,11 @@ API portfolio data is shown immediately, while onchain balances are verified in 
 - The CoinGecko fallback runs through the background `portfolio/coingecko.ts` facade, which shares rate-limit/cache state across focused native and ERC-20 services and persists market/search caches in `chrome.storage.local` so reopening the popup doesn't cold-start CoinGecko traffic each time
 - `TokenHoldings` first calls the catalog with enrichment disabled so Portfolio API data renders immediately, then runs metadata/native-price enrichment and onchain balance refresh in detached background work. Holdings deliberately skips ERC-20 price fallback during enrichment to avoid fan-out/rate limits from token-price APIs; it keeps Portfolio API prices until the portfolio backend indexes newer values.
 - Fresh popup/sidepanel mounts hydrate asynchronously from the reset-aware `chrome.storage.local.portfolioHoldingsCache` before the live fetch starts. The cache is keyed by address plus the visible-chain reload key, capped to 12 entries, TTL-pruned after 24 hours, and treated as optional display data. Older `walletchan:portfolioHoldingsCache:v1` renderer-localStorage mirrors are purged and never read, preventing a replacement wallet from inheriting prior addresses/balances/token imagery. Missing/invalid entries fall back to the normal live portfolio load.
+- Cached RPC issue IDs are display metadata only and are not replayed into the
+  home warning. Live issue reports wait three seconds before rendering, so a
+  normal cache-to-live refresh or short-lived RPC failure clears without a
+  distracting banner flash. Repeated identical reports preserve both the
+  original reveal deadline and an in-renderer dismissal.
 
 After the merged catalog is built, `portfolio/tokenCatalog.ts` filters global hidden tokens from `chrome.storage.local.hiddenPortfolioTokens` before calculating `totalValueUsd`. This keeps Holdings, Send, Swap holdings, current totals, and newly-written balance snapshots aligned across every wallet address. Recently received token keys are returned alongside the catalog so Holdings can still RPC-refresh those tokens immediately even if their current USD value would normally place them in the collapsed low-value group. `AddTokenModal` removes a matching hidden entry before adding a token; if the Portfolio API already returned that token, no custom token record is created.
 

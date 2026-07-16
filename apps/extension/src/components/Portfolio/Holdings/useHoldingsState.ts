@@ -10,13 +10,11 @@ import type { HoldingsSnapshot } from "./types";
 interface UseHoldingsStateOptions {
   address: string;
   chainReloadKey: string;
-  onRpcIssuesChange?: (chainIds: number[]) => void;
 }
 
 export function useHoldingsState({
   address,
   chainReloadKey,
-  onRpcIssuesChange,
 }: UseHoldingsStateOptions) {
   // Synchronous hydration is deliberately renderer-local. The reset-aware
   // chrome.storage mirror is handled later by the lifecycle hook.
@@ -101,9 +99,10 @@ export function useHoldingsState({
       setLoading(false);
       setPortfolioBalanceRefreshing(false);
       setLowValueLoading(false);
-      onRpcIssuesChange?.(snapshot.rpcIssueChainIds);
+      // RPC health is ephemeral. Cached issue IDs must not recreate a warning
+      // before the detached live balance refresh has checked the endpoints.
     },
-    [onRpcIssuesChange],
+    [],
   );
 
   return {

@@ -168,7 +168,7 @@ export function RpcIssueAlert({
                 fontWeight="600"
                 opacity={isDarkTheme ? 1 : 0.9}
               >
-                Balance fetch failed. Edit the chain RPC if this persists.
+                Some balances may be stale. Check the chain RPC if this persists.
               </Text>
             </VStack>
           ) : (
@@ -178,8 +178,7 @@ export function RpcIssueAlert({
               fontWeight="600"
               opacity={isDarkTheme ? 1 : 0.9}
             >
-              Balance fetch failed for one or more chains. Edit the chain RPC
-              if this persists.
+              Some balances may be stale. Check the chain RPC if this persists.
             </Text>
           )}
         </Box>

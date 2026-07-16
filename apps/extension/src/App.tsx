@@ -115,6 +115,7 @@ import {
   RpcIssueAlert,
   type FailedTransactionError,
 } from "@/app/home/HomeAlerts";
+import { useRpcIssueAlert } from "@/app/home/useRpcIssueAlert";
 import WaitingForOnboardingScreen from "@/app/screens/WaitingForOnboardingScreen";
 import CrossDappBatchRequestScreen from "@/app/screens/CrossDappBatchRequestScreen";
 import AppBootstrapTransition from "@/app/AppBootstrapTransition";
@@ -192,8 +193,12 @@ function App() {
     ReadonlyMap<number, number>
   >(new Map());
   const [homeChainBalancesHidden, setHomeChainBalancesHidden] = useState(false);
-  const [rpcIssueChainIds, setRpcIssueChainIds] = useState<number[]>([]);
-  const [dismissedRpcIssueChainIds, setDismissedRpcIssueChainIds] = useState<number[]>([]);
+  const {
+    visibleChainIds: visibleRpcIssueChainIds,
+    reportRpcIssues,
+    dismissRpcIssues,
+    clearRpcIssue,
+  } = useRpcIssueAlert();
   const [pendingBatchRequests, setPendingBatchRequests] = useState<
     PendingBatchTxRequest[]
   >([]);
@@ -262,9 +267,6 @@ function App() {
   const selectedChain = getResolvedChainByName(chainName, networksInfo);
   const visibleChains = getVisibleChains(networksInfo, activeAccount?.type);
 
-  const visibleRpcIssueChainIds = rpcIssueChainIds.filter(
-    (chainId) => !dismissedRpcIssueChainIds.includes(chainId),
-  );
   const requestPortfolioChainRelink = useCallback(
     (tabId: number, chainId: number) => {
       portfolioChainRelinkRevisionRef.current += 1;
@@ -2089,11 +2091,6 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedErc7715PermissionRequest?.id, isInSidePanel, isFullscreenTab]);
 
-  const handleRpcIssuesChange = useCallback((chainIds: number[]) => {
-    setRpcIssueChainIds(chainIds);
-    setDismissedRpcIssueChainIds([]);
-  }, []);
-
   const handleHomeChainBalancesChange = useCallback(
     (totals: ReadonlyMap<number, number>, hidden: boolean) => {
       setHomeChainBalances(totals);
@@ -2104,8 +2101,7 @@ function App() {
 
   const handleChainSaved = useCallback((chain: { chainName: string; chainId: number }) => {
     const returnTarget = settingsAddChainReturnTarget;
-    setRpcIssueChainIds((prev) => prev.filter((id) => id !== chain.chainId));
-    setDismissedRpcIssueChainIds((prev) => prev.filter((id) => id !== chain.chainId));
+    clearRpcIssue(chain.chainId);
     setSettingsInitialEditChainName(undefined);
     setSettingsAddChainInitialRequest(undefined);
     setSettingsAddChainReturnTarget(null);
@@ -2119,7 +2115,7 @@ function App() {
       });
       setView("walletConnect");
     }
-  }, [settingsAddChainReturnTarget]);
+  }, [clearRpcIssue, settingsAddChainReturnTarget]);
 
   const openSettingsAddChain = useCallback(
     (request?: PendingAddChainRequest) => {
@@ -3508,7 +3504,7 @@ function App() {
                 setSettingsInitialEditChainName(chainName);
                 setView("settings");
               }}
-              onDismiss={() => setDismissedRpcIssueChainIds(rpcIssueChainIds)}
+              onDismiss={dismissRpcIssues}
             />
 
             {/* Account Switcher + Chain Selector Row */}
@@ -3571,7 +3567,7 @@ function App() {
                 activityTabTrigger={activityTabTrigger}
                 holdingsTabTrigger={holdingsTabTrigger}
                 refreshTrigger={portfolioRefreshTrigger}
-                onRpcIssuesChange={handleRpcIssuesChange}
+                onRpcIssuesChange={reportRpcIssues}
                 onTransactionClick={(tx) => {
                   setSelectedCompletedTx(tx);
                   setView("txDetail");

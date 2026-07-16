@@ -28,6 +28,10 @@ const compatibilityFacades = [
 const pureModules = [
   { path: "app/requestModel.ts", url: new URL("requestModel.ts", appUrl) },
   {
+    path: "app/home/rpcIssueAlertModel.ts",
+    url: new URL("home/rpcIssueAlertModel.ts", appUrl),
+  },
+  {
     path: "components/AssetChanges/assetChangesModel.ts",
     url: new URL("AssetChanges/assetChangesModel.ts", componentsUrl),
   },

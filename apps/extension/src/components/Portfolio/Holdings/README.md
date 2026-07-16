@@ -26,6 +26,9 @@ Dependency direction is `TokenHoldings` -> hooks/view -> pure transforms/cache.
 Presentation modules receive data and callbacks; they do not fetch or mutate
 portfolio storage. Chrome portfolio modules remain the effect boundary.
 
+Snapshot hydration restores display data but never republishes cached RPC issue
+IDs. Only the detached live balance refresh can update the home RPC warning.
+
 `usePortfolioLoader.ts`, `useHoldingsLifecycle.ts`,
 `useLowValueBalanceRefresh.ts`, and `useTokenManagement.ts` own Chrome/RPC,
 storage, and transaction-refresh effects. `useHoldingsState.ts` owns only React

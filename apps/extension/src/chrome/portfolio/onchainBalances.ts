@@ -103,6 +103,8 @@ export async function fetchOnchainBalances(
       }
 
       const addr = address as Address;
+      let successfulBalanceReads = 0;
+      let failedBalanceReads = 0;
 
       // Build unified call list – native uses Multicall3.getEthBalance,
       // ERC20 uses balanceOf, all batched into a single multicall
@@ -145,6 +147,7 @@ export async function fetchOnchainBalances(
 
           await Promise.all(results.map(async (result: any, j: number) => {
             if (result.status === "success") {
+              successfulBalanceReads += 1;
               applyBalance(
                 updated,
                 chunk[j].entryIndex,
@@ -163,11 +166,12 @@ export async function fetchOnchainBalances(
                 addr,
               );
               if (succeeded) {
+                successfulBalanceReads += 1;
                 verifiedTokenKeys.add(
                   getPortfolioTokenKey(chainId, chunk[j].token.contractAddress),
                 );
               } else {
-                rpcIssueChainIds.add(chainId);
+                failedBalanceReads += 1;
               }
             }
           }));
@@ -180,6 +184,7 @@ export async function fetchOnchainBalances(
           );
           results.forEach((succeeded, index) => {
             if (succeeded) {
+              successfulBalanceReads += 1;
               verifiedTokenKeys.add(
                 getPortfolioTokenKey(
                   chainId,
@@ -187,9 +192,17 @@ export async function fetchOnchainBalances(
                 ),
               );
             } else {
-              rpcIssueChainIds.add(chainId);
+              failedBalanceReads += 1;
             }
           });
+        }
+      }
+
+      if (successfulBalanceReads === 0 && failedBalanceReads > 0) {
+        try {
+          await client.getBlockNumber();
+        } catch {
+          rpcIssueChainIds.add(chainId);
         }
       }
     }

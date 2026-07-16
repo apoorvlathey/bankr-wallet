@@ -63,7 +63,6 @@ function TokenHoldings({
   const state = useHoldingsState({
     address,
     chainReloadKey,
-    onRpcIssuesChange,
   });
   const loadPortfolio = usePortfolioLoader({
     address,
