@@ -130,14 +130,16 @@ read/write `chrome.storage.local` with a `__session__` key prefix for
 `chrome.runtime.onStartup` listener that wipes those prefixed keys on browser
 restart.
 
-**Security note:** password-session restoration is deliberately disabled when
-native `chrome.storage.session` is unavailable. Those fallback environments
-keep Never-session credentials only in service-worker memory;
-`encryptedSessionPassword` and `sessionEncKey` are not written by the fallback.
+**Security note:** password and passkey-vault session restoration are
+deliberately disabled when native `chrome.storage.session` is unavailable.
+Those fallback environments keep Never-session credentials only in
+service-worker memory; `encryptedSessionPassword`,
+`encryptedSessionVaultKey`, and `sessionEncKey` are not written by the fallback.
 Current workers proactively remove either secret half left by an older
 fallback build. This cleanup also runs after a browser upgrade adds native
 `storage.session`: stale `__session__*` local records are removed, while an
-already-valid current native Never session is preserved. On supported Chrome and Firefox, the ciphertext half remains
+already-valid current native password or passkey Never session is preserved.
+On supported Chrome and Firefox, the ciphertext half remains
 memory-backed in `storage.session` and disappears on browser close; only its
 random AES key half is in `storage.local`.
 
@@ -145,7 +147,8 @@ random AES key half is in `storage.local`.
 `chrome.storage.session.*` directly or send password material through the
 non-native local fallback. Keep the adapter in `session/storage.ts`, use it
 through `session/persistence.ts`, and retain the explicit
-`hasNativeSessionStorage()` gate there. Other non-secret feature
+`hasNativeSessionStorage()` gate there (passkey capability wrapping is split
+into `session/passkeyPersistence.ts`). Other non-secret feature
 state must independently handle browsers where the native area is absent.
 
 ## AMO release flow

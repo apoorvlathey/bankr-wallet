@@ -22,11 +22,13 @@ import {
 } from "./storage";
 import type { PasswordType } from "../types";
 
-const SESSION_KEY_LOCAL = "sessionEncKey";
-const SESSION_KEY_BYTES = 32;
+export const SESSION_KEY_LOCAL = "sessionEncKey";
+export const SESSION_KEY_BYTES = 32;
 const SESSION_IV_BYTES = 12;
 const AES_GCM_TAG_BYTES = 16;
 const MAX_SESSION_PASSWORD_BYTES = 1024 * 1024;
+export const SESSION_CREDENTIAL_KIND_PASSWORD = "password";
+export const SESSION_CREDENTIAL_KIND_PASSKEY = "passkey-vault";
 
 const legacySessionCleanup =
   typeof chrome === "undefined"
@@ -36,11 +38,40 @@ void legacySessionCleanup.catch((error) => {
   console.error("Failed to clean up legacy local session state:", error);
 });
 
-async function clearPersistedSessionSecret(): Promise<void> {
-  await Promise.all([
-    removeSessionItems("encryptedSessionPassword"),
-    chrome.storage.local.remove(SESSION_KEY_LOCAL),
-  ]);
+export async function waitForLegacySessionCleanup(): Promise<void> {
+  await legacySessionCleanup;
+}
+
+async function revokeSplitSessionSecret(
+  removeSessionHalf: () => Promise<void>,
+): Promise<void> {
+  let recoveryKeyRemovalFailed = false;
+  try {
+    // Revoke the durable half first. Once this resolves, a worker termination
+    // cannot leave the browser-session ciphertext restorable.
+    await chrome.storage.local.remove(SESSION_KEY_LOCAL);
+  } catch {
+    recoveryKeyRemovalFailed = true;
+  }
+
+  try {
+    // Always attempt the other half, including after a local-storage failure.
+    await removeSessionHalf();
+  } catch {
+    if (recoveryKeyRemovalFailed) {
+      throw new Error("Failed to revoke persisted session capability");
+    }
+  }
+}
+
+export async function clearPersistedSessionSecret(): Promise<void> {
+  await revokeSplitSessionSecret(() =>
+    removeSessionItems([
+      "encryptedSessionPassword",
+      "encryptedSessionVaultKey",
+      "sessionCredentialKind",
+    ]),
+  );
 }
 
 /**
@@ -59,21 +90,52 @@ export async function readPersistedSessionRecord(): Promise<
     "sessionId",
     "autoLockNever",
     "encryptedSessionPassword",
+    "encryptedSessionVaultKey",
+    "sessionCredentialKind",
     "passwordType",
   ]);
+}
+
+export function isBoundedSessionId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 128;
+}
+
+export async function importSessionEncryptionKey(
+  value: unknown,
+): Promise<CryptoKey | null> {
+  const sessionKey = decodeBase64Exact(value, SESSION_KEY_BYTES);
+  if (!sessionKey) return null;
+  try {
+    return await crypto.subtle.importKey(
+      "raw",
+      sessionKey.buffer as ArrayBuffer,
+      "AES-GCM",
+      false,
+      ["encrypt", "decrypt"],
+    );
+  } catch {
+    return null;
+  } finally {
+    sessionKey.fill(0);
+  }
 }
 
 export async function getSessionPassword(): Promise<string | null> {
   if (!hasNativeSessionStorage()) return null;
   await legacySessionCleanup;
   const [session, local] = await Promise.all([
-    getSessionItems<{ data: string; iv: string }>(
+    getSessionItems<unknown>([
+      "sessionCredentialKind",
       "encryptedSessionPassword",
-    ),
+    ]),
     chrome.storage.local.get(SESSION_KEY_LOCAL),
   ]);
 
-  if (!session.encryptedSessionPassword || !local[SESSION_KEY_LOCAL]) {
+  if (
+    session.sessionCredentialKind !== SESSION_CREDENTIAL_KIND_PASSWORD ||
+    !session.encryptedSessionPassword ||
+    !local[SESSION_KEY_LOCAL]
+  ) {
     return null;
   }
 
@@ -88,20 +150,9 @@ export async function getSessionPassword(): Promise<string | null> {
       AES_GCM_TAG_BYTES,
       MAX_SESSION_PASSWORD_BYTES + AES_GCM_TAG_BYTES,
     );
-    const sessionKey = decodeBase64Exact(
-      local[SESSION_KEY_LOCAL],
-      SESSION_KEY_BYTES,
-    );
     const iv = decodeBase64Exact(ivB64, SESSION_IV_BYTES);
-    if (!encryptedData || !sessionKey || !iv) return null;
-
-    const key = await crypto.subtle.importKey(
-      "raw",
-      sessionKey.buffer as ArrayBuffer,
-      "AES-GCM",
-      false,
-      ["decrypt"],
-    );
+    const key = await importSessionEncryptionKey(local[SESSION_KEY_LOCAL]);
+    if (!encryptedData || !key || !iv) return null;
     const decrypted = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: iv.buffer as ArrayBuffer },
       key,
@@ -117,10 +168,7 @@ export async function getSessionPassword(): Promise<string | null> {
 
 export async function clearPersistedSessionStorage(): Promise<void> {
   await legacySessionCleanup;
-  await Promise.all([
-    clearSession(),
-    chrome.storage.local.remove(SESSION_KEY_LOCAL),
-  ]);
+  await revokeSplitSessionSecret(clearSession);
 }
 
 export async function storeSessionAtomic(
@@ -141,39 +189,46 @@ export async function storeSessionAtomic(
       sessionId,
       sessionStartedAt: Date.now(),
       autoLockNever: false,
+      sessionCredentialKind: SESSION_CREDENTIAL_KIND_PASSWORD,
       passwordType,
     });
     return;
   }
 
   const sessionKey = crypto.getRandomValues(new Uint8Array(SESSION_KEY_BYTES));
-  const iv = crypto.getRandomValues(new Uint8Array(SESSION_IV_BYTES));
-  const key = await crypto.subtle.importKey(
-    "raw",
-    sessionKey,
-    "AES-GCM",
-    false,
-    ["encrypt"],
-  );
-  const encrypted = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    key,
-    new TextEncoder().encode(password),
-  );
+  try {
+    const iv = crypto.getRandomValues(new Uint8Array(SESSION_IV_BYTES));
+    const key = await crypto.subtle.importKey(
+      "raw",
+      sessionKey,
+      "AES-GCM",
+      false,
+      ["encrypt"],
+    );
+    const encrypted = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      key,
+      new TextEncoder().encode(password),
+    );
 
-  await setSessionItems({
-    sessionId,
-    sessionStartedAt: Date.now(),
-    autoLockNever: isUnlocked,
-    passwordType,
-    encryptedSessionPassword: {
-      data: arrayBufferToBase64(encrypted),
-      iv: arrayBufferToBase64(iv.buffer as ArrayBuffer),
-    },
-  });
-  await chrome.storage.local.set({
-    [SESSION_KEY_LOCAL]: arrayBufferToBase64(
-      sessionKey.buffer as ArrayBuffer,
-    ),
-  });
+    await removeSessionItems("encryptedSessionVaultKey");
+    await setSessionItems({
+      sessionId,
+      sessionStartedAt: Date.now(),
+      autoLockNever: isUnlocked,
+      sessionCredentialKind: SESSION_CREDENTIAL_KIND_PASSWORD,
+      passwordType,
+      encryptedSessionPassword: {
+        data: arrayBufferToBase64(encrypted),
+        iv: arrayBufferToBase64(iv.buffer as ArrayBuffer),
+      },
+    });
+    await chrome.storage.local.set({
+      [SESSION_KEY_LOCAL]: arrayBufferToBase64(
+        sessionKey.buffer as ArrayBuffer,
+      ),
+    });
+  } finally {
+    sessionKey.fill(0);
+  }
 }

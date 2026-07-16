@@ -167,10 +167,21 @@ auto-triggers biometric unlock again.
 - Manual lock clears passkey-unlocked in-memory session state exactly like
   password unlock and tells currently open UI surfaces to suppress their next
   automatic biometric prompt in renderer-local state.
+- Manual lock removes the durable local recovery key before independently
+  clearing the browser-session ciphertext. Either confirmed deletion makes the
+  split capability non-restorable. If neither storage operation succeeds, the
+  worker broadcasts failure so every open renderer purges its secret-bearing
+  state, suppresses automatic biometric prompting, and shows a blocking retry
+  screen. A worker-local barrier rejects routine restoration until a fresh
+  explicit password or passkey authentication succeeds.
 - Timed auto-lock clears passkey-unlocked in-memory session state exactly like
   password unlock.
 - After timed auto-lock, the next unlock page can trigger passkey
   authentication again.
+- With an explicitly stored `Never` timeout and native `storage.session`, MV3
+  service-worker suspension restores routine signing from a factor-bound,
+  encrypted general-vault capability without opening another WebAuthn prompt.
+  Manual lock and browser close still require a new unlock.
 
 ## Recommended Architecture
 
@@ -286,7 +297,9 @@ and setup/unlock must present the epoch returned before the native WebAuthn
 ceremony. Lock, password change, reset, factor changes, successful unlock, and
 service-worker suspension/restart invalidate older epochs so a stale prompt
 cannot undo a newer security action. Serialization also ensures an in-flight
-"Never" session restore cannot rehydrate credentials after manual lock.
+"Never" session restore cannot rehydrate credentials after manual lock. The
+manual-lock barrier additionally rejects later restore attempts in the current
+worker even if both recovery-half deletions failed.
 
 ## Session Semantics
 
@@ -305,6 +318,34 @@ After passkey unlock:
   With V1, those mnemonic operations still require a cached or explicitly
   supplied master password. Recovery-phrase reveal always requires explicit
   master-password verification in either format.
+
+For explicit `Never` sessions on browsers with native `storage.session`, the
+background stores only a split AES-GCM envelope around the 32-byte general
+vault capability. The ciphertext is authenticated against the session ID,
+master authority, and a stable fingerprint of the current validated passkey
+record; its random AES key half remains in local extension storage. It does
+not store the password, WebAuthn PRF output, API key, private/derived keys,
+seed phrases, or the V2 mnemonic key. A cold service-worker restore therefore
+supports Bankr, imported-private-key, and already-derived seed signing, while
+seed creation/import/derivation requires a fresh V2 passkey assertion or the
+master-password recovery path. The envelope disappears on browser close and
+is revoked by manual lock, timeout changes, factor removal, password rotation,
+reset, or passkey-record replacement. Browsers without native session storage
+persist no secret-bearing Never-session recovery material.
+
+The native session half is hidden from content scripts by default but is
+readable by privileged extension-origin pages as well as the service worker.
+Because those pages can also read local extension storage, all packaged
+privileged pages are part of the secret-bearing trust boundary. Setting the
+session area to `TRUSTED_CONTEXTS` would restate the browser default, not make
+it worker-only.
+
+If a user selects Never after the current biometric assertion was already
+hydrated under a finite timeout, WalletChan does not retain extra raw key bytes
+or make the cached non-extractable `CryptoKey` exportable. That live worker
+remains unlocked, and the next explicit passkey unlock under Never establishes
+the restorable envelope. This may cause one prompt after the first worker
+restart following the setting change, but not repeated prompts afterward.
 
 Do not cache the master password during passkey unlock.
 
@@ -408,6 +449,17 @@ Committed unit coverage runs with `pnpm test:extension-passkey` and verifies:
 - Payload and stored-record cryptographic sizes fail closed.
 - Bankr API, private-key, and seed-phrase derived-key caches hydrate from the
   same passkey-unwrapped vault key.
+- Native Never restoration works for Bankr (`type: "bankr"`), imported
+  private-key, seed-derived, and view-only (`type: "impersonator"`) wallets
+  without persisting any API
+  key, private key, mnemonic, password, PRF output, or mnemonic key.
+- Exact record bounds, ciphertext/IV/AAD tampering, stale/replaced factors,
+  ambiguous password/passkey fields, agent-type metadata, timed settings, and
+  both storage-write halves fail closed.
+- Manual lock is serialized after in-flight passkey restoration, factor
+  removal revokes recovery before commit, V2 cold restore omits mnemonic-key
+  authority, native-upgrade cleanup preserves only valid current state, and
+  fallback browsers persist non-secret metadata only.
 
 The browser/hardware cases below remain required release QA because native
 platform authenticators cannot be exercised by the Node test environment.
@@ -417,6 +469,7 @@ Test all wallet types:
 - Bankr API account (`type: "bankr"`)
 - Private key account (`type: "privateKey"`)
 - Seed phrase account (`type: "seedPhrase"`)
+- View-only account (`type: "impersonator"`) remains reject-only
 
 Core cases:
 
@@ -469,8 +522,6 @@ Browser cases:
   compatibility path because that version was not shipped.
 - Should passkey unlock be allowed to manage API key edits, or should API key
   changes require manual master password entry?
-- Passkey sessions intentionally require another biometric prompt after a
-  service-worker restart; no passkey-derived secret is persisted for "Never".
 - Is WebAuthn PRF support broad enough for the desired Chrome user base, or
   should v1 show the feature only on detected PRF-capable devices?
 

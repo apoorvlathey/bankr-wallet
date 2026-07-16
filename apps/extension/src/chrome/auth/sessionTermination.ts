@@ -1,4 +1,7 @@
-import { invalidateAuthCeremonies } from "../authTransition";
+import {
+  blockSessionRestorationForManualLock,
+  invalidateAuthCeremonies,
+} from "../authTransition";
 import { clearAllAuthState } from "../sessionCache";
 import {
   WALLET_SECRET_OPERATION_LOCK_KEY,
@@ -14,8 +17,21 @@ export function terminateActiveAuthSession(
   suppressPasskeyAutoPrompt = false,
 ): Promise<{ success: true }> {
   return withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, async () => {
+    // This worker must not restore a surviving Never envelope after the user
+    // has requested a lock, even when both durable-half deletions fail.
+    blockSessionRestorationForManualLock();
     invalidateAuthCeremonies();
-    await clearAllAuthState();
+    try {
+      await clearAllAuthState();
+    } catch (error) {
+      await chrome.runtime
+        .sendMessage({
+          type: "walletLockFailedExternal",
+          suppressPasskeyAutoPrompt: true,
+        })
+        .catch(() => {});
+      throw error;
+    }
     chrome.runtime
       .sendMessage({
         type: "walletLockedExternal",

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import test from "node:test";
 
 type StorageRecord = Record<string, unknown>;
@@ -95,13 +96,25 @@ test("Firefox local-session fallback never persists password recovery material",
     assert.equal(local.__session__autoLockNever, false);
     assert.equal(await sessionModule.getSessionPassword(), null);
 
+    await sessionModule.storePasskeySessionAtomic(
+      "firefox-passkey-session",
+      new Uint8Array(32).fill(0x44),
+      Buffer.alloc(32, 0x45).toString("base64"),
+    );
+    assert.equal(local.sessionEncKey, undefined);
+    assert.equal(local.__session__encryptedSessionVaultKey, undefined);
+    assert.equal(local.__session__sessionId, "firefox-passkey-session");
+    assert.equal(local.__session__sessionCredentialKind, "passkey-vault");
+    assert.equal(local.__session__passwordType, "master");
+    assert.equal(local.__session__autoLockNever, false);
+
     // Re-running the upgrade cleanup in a still-non-native browser must keep
     // the current non-secret fallback metadata now that no password envelope
-    // exists.
+    // or vault-capability envelope exists.
     await sessionStorageModule.cleanupLegacyLocalSessionFallback(
       "sessionEncKey",
     );
-    assert.equal(local.__session__sessionId, "firefox-never-session");
+    assert.equal(local.__session__sessionId, "firefox-passkey-session");
     assert.equal(local.__session__passwordType, "master");
 
     sessionModule.clearInMemoryAuthCache();

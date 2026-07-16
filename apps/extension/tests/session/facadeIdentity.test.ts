@@ -6,6 +6,7 @@ import * as autoLockPolicy from "../../src/chrome/session/autoLockPolicy";
 import * as cacheAccess from "../../src/chrome/session/cacheAccess";
 import * as inMemoryCache from "../../src/chrome/session/inMemoryCache";
 import * as persistence from "../../src/chrome/session/persistence";
+import * as passkeyPersistence from "../../src/chrome/session/passkeyPersistence";
 import * as restoration from "../../src/chrome/session/restoration";
 import * as teardown from "../../src/chrome/session/teardown";
 import * as timeoutTransitions from "../../src/chrome/session/timeoutTransitions";
@@ -40,6 +41,7 @@ const owners = {
   getSessionPassword: persistence,
   revokePersistedSessionRecoveryKey: persistence,
   storeSessionAtomic: persistence,
+  storePasskeySessionAtomic: passkeyPersistence,
   resolvePasswordType: restoration,
   tryRestoreSession: restoration,
   tryRestoreSessionAlreadySerialized: restoration,

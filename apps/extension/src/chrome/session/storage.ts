@@ -22,6 +22,8 @@ const LEGACY_LOCAL_SESSION_KEYS = [
   "sessionStartedAt",
   "autoLockNever",
   "encryptedSessionPassword",
+  "encryptedSessionVaultKey",
+  "sessionCredentialKind",
   "passwordType",
 ].map((key) => `${PREFIX}${key}`);
 
@@ -55,26 +57,28 @@ export async function cleanupLegacyLocalSessionFallback(
   );
   if (legacyKeys.length === 0) return;
 
-  const hasLegacyPasswordCiphertext =
-    legacyLocal[prefix("encryptedSessionPassword")] !== undefined;
+  const hasLegacySecretCiphertext =
+    legacyLocal[prefix("encryptedSessionPassword")] !== undefined ||
+    legacyLocal[prefix("encryptedSessionVaultKey")] !== undefined;
   // Current non-native builds still use prefixed local storage for explicitly
   // non-secret session metadata. Preserve that state across event-page/service
   // worker restarts; only a sensitive legacy envelope requires eager cleanup.
-  if (!NATIVE && !hasLegacyPasswordCiphertext) return;
+  if (!NATIVE && !hasLegacySecretCiphertext) return;
 
-  let hasCurrentNativePasswordCiphertext = false;
+  let hasCurrentNativeSecretCiphertext = false;
   if (NATIVE) {
     const current = await getSessionItems<unknown>(
-      "encryptedSessionPassword",
+      ["encryptedSessionPassword", "encryptedSessionVaultKey"],
     );
-    hasCurrentNativePasswordCiphertext =
-      current.encryptedSessionPassword !== undefined;
+    hasCurrentNativeSecretCiphertext =
+      current.encryptedSessionPassword !== undefined ||
+      current.encryptedSessionVaultKey !== undefined;
   }
 
   const keysToRemove = [...legacyKeys];
   if (
-    hasLegacyPasswordCiphertext &&
-    !hasCurrentNativePasswordCiphertext
+    hasLegacySecretCiphertext &&
+    !hasCurrentNativeSecretCiphertext
   ) {
     keysToRemove.push(sessionKeyLocal);
   }

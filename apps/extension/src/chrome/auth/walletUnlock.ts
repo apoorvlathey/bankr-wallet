@@ -18,6 +18,13 @@ import {
 } from "../sessionCache";
 import type { PasswordType } from "../types";
 import { decryptAllKeys, hasVaultEntries } from "../vaultCrypto";
+import {
+  isRestoredPasskeySessionCredential,
+  type RestoredPasskeySessionCredential,
+} from "../session/restoration";
+import { loadPasskeyUnlockRecord } from "../passkey/repository";
+import { getPasskeySessionBinding } from "../passkey/sessionBinding";
+import { clearManualLockRestorationBlock } from "../authTransition";
 
 export interface UnlockWalletResult {
   success: boolean;
@@ -27,14 +34,47 @@ export interface UnlockWalletResult {
 
 /** Unlock with either the current vault-key system or the legacy format. */
 export async function handleUnlockWallet(
-  password: string,
+  credential: string | RestoredPasskeySessionCredential,
 ): Promise<UnlockWalletResult> {
+  if (isRestoredPasskeySessionCredential(credential)) {
+    return unlockWithRestoredPasskeySession(credential);
+  }
+  if (typeof credential !== "string") {
+    return { success: false, error: "Invalid password" };
+  }
+
   const hasVaultKeySystemActive = await checkHasVaultKeySystem();
 
-  if (hasVaultKeySystemActive) {
-    return await unlockWithVaultKeySystem(password);
+  const result = hasVaultKeySystemActive
+    ? await unlockWithVaultKeySystem(credential)
+    : await unlockWithLegacySystem(credential);
+  if (result.success) clearManualLockRestorationBlock();
+  return result;
+}
+
+async function unlockWithRestoredPasskeySession(
+  credential: RestoredPasskeySessionCredential,
+): Promise<UnlockWalletResult> {
+  try {
+    const record = await loadPasskeyUnlockRecord();
+    if (
+      !record ||
+      (await getPasskeySessionBinding(record)) !== credential.passkeyBinding
+    ) {
+      return { success: false, error: "Biometric session is no longer valid" };
+    }
+
+    const hydrated = await hydrateAuthSessionFromVaultKeyBytes(
+      credential.vaultKeyBytes,
+      "master",
+      { password: null },
+    );
+    return hydrated.success
+      ? { success: true, passwordType: "master" }
+      : hydrated;
+  } catch {
+    return { success: false, error: "Biometric session could not be restored" };
   }
-  return await unlockWithLegacySystem(password);
 }
 
 /** Checks if the general vault-key system is in use. */

@@ -10,24 +10,40 @@ callers should import. This folder contains the independently auditable layers.
 | `cacheAccess.ts` | Expiry-aware selectors, wallet predicates, and private-key lookup | Reads in-memory capabilities only |
 | `teardown.ts` | All-or-nothing memory and persisted-session clearing | Clears every session capability |
 | `timeoutTransitions.ts` | Default initialization, timed/Never persistence, and serialized storage changes | Password only while creating a Never envelope |
-| `restoration.ts` | Authoritative Never re-read, unlock proof, type binding, timeout recheck, and failure teardown | Bounded decrypted session password during unlock |
+| `restoration.ts` | Authoritative Never re-read, branded unlock proof, type binding, timeout recheck, and failure teardown | Bounded decrypted password or passkey vault capability during unlock |
 | `storage.ts` | Cross-browser `chrome.storage.session` adapter and legacy fallback cleanup | Opaque session fields only |
-| `persistence.ts` | Encrypt/decrypt the native Never-session envelope | Bounded plaintext password during immediate wrap/unwrap |
+| `persistence.ts` | Shared recovery half plus native password envelope | Bounded plaintext password during immediate wrap/unwrap |
+| `passkeyCredentialRecord.ts` | Exact versioned passkey-session record codec | None |
+| `passkeyPersistence.ts` | Encrypt/decrypt the native factor-bound general-vault envelope | Exact 32-byte general vault capability during immediate wrap/unwrap |
 
 ## Invariants
 
 - Expiry of one capability clears the entire in-memory authorization state.
 - Missing or invalid timeout settings resolve to a finite default; only an
   explicit valid `0` enables Never mode.
-- Restorable password sessions are written only when native
+- Restorable password/passkey sessions are written only when native
   `chrome.storage.session` is available. A local-storage fallback never stores
-  both an encrypted password and its recovery key.
+  a secret ciphertext or its recovery key.
+- Native session ciphertext is readable by the service worker and privileged
+  extension-origin pages, but hidden from content scripts by default. All
+  privileged extension pages are part of the secret-bearing trust boundary.
+- Passkey restoration persists no password, PRF output, API key, private key,
+  seed phrase, or mnemonic key. Its exact-size general capability is bound to
+  the session ID, master authority, and current validated passkey record.
+- Exactly one credential kind may exist. Unknown, ambiguous, tampered, stale,
+  or type-inconsistent state clears both halves and returns locked.
 - Factor removal revokes the local `sessionEncKey` recovery half before the
   factor commit. If that revocation fails, the factor remains intact; after a
   successful commit, in-memory authority is cleared synchronously and any
   remaining native-session ciphertext is non-restorable cleanup residue.
 - Restore, manual lock, and factor/password mutations share the serialized
   auth-transition queue so an older restore cannot resurrect a newer lock.
+  Manual lock revokes the durable local recovery key first, then independently
+  removes the browser-session half. Either confirmed deletion makes restoration
+  impossible. If neither deletion succeeds, the worker broadcasts failure to
+  every open trusted UI, those surfaces purge renderer secrets and remain in a
+  blocking retry state, and a worker-local barrier rejects routine restoration
+  until a fresh explicit password or passkey authentication succeeds.
 - A persisted password type may confirm the wrapper that actually decrypted;
   it can never upgrade an agent restore to master.
 - Restoration rechecks the authoritative timeout after unlock and rotates the

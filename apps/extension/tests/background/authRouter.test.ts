@@ -143,6 +143,28 @@ test("manual lock preserves the suppress-prompt flag and transition ordering", a
   ]);
 });
 
+test("manual lock reports teardown failure instead of confirming lock", async () => {
+  const capture = responseCapture();
+  const originalConsoleError = console.error;
+  console.error = () => undefined;
+  try {
+    const route = createBackgroundAuthMessageRouter({
+      runSerializedAuthTransition: async (operation) => operation(),
+      terminateActiveAuthSession: async () => {
+        throw new Error("both recovery halves survived");
+      },
+    });
+
+    route({ type: "lockWallet" }, capture.sendResponse);
+    assert.deepEqual(await capture.response, {
+      success: false,
+      error: "Failed to lock wallet",
+    });
+  } finally {
+    console.error = originalConsoleError;
+  }
+});
+
 test("successful passkey hydration preserves the external unlock broadcast", async () => {
   const broadcasts: unknown[] = [];
   const capture = responseCapture();

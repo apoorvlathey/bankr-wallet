@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import test from "node:test";
 
 type StorageRecord = Record<string, unknown>;
@@ -107,6 +108,30 @@ test("native session upgrades remove only stale Firefox fallback secrets", async
         await sessionModule.getSessionPassword(),
         "current-native-master-password",
       );
+    });
+
+    await t.test("a valid native passkey capability keeps its recovery half", async () => {
+      const binding = Buffer.alloc(32, 0x51).toString("base64");
+      await sessionModule.storePasskeySessionAtomic(
+        "native-passkey-session",
+        new Uint8Array(32).fill(0x52),
+        binding,
+      );
+      const currentKey = local.sessionEncKey;
+      const currentCiphertext = session.encryptedSessionVaultKey;
+
+      local.__session__encryptedSessionVaultKey = {
+        version: 1,
+        data: "stale-fallback-ciphertext",
+        iv: "stale-fallback-iv",
+        passkeyBinding: binding,
+      };
+      const storageModule = await import("../../src/chrome/session/storage");
+      await storageModule.cleanupLegacyLocalSessionFallback("sessionEncKey");
+
+      assert.equal(local.__session__encryptedSessionVaultKey, undefined);
+      assert.equal(local.sessionEncKey, currentKey);
+      assert.deepEqual(session.encryptedSessionVaultKey, currentCiphertext);
     });
   } finally {
     if (originalChrome) {

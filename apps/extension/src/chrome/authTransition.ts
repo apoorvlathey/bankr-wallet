@@ -10,6 +10,7 @@
 
 let authCeremonyEpoch = crypto.randomUUID();
 let authTransitionTail: Promise<void> = Promise.resolve();
+let manualLockRestorationBlocked = false;
 
 export function getAuthCeremonyEpoch(): string {
   return authCeremonyEpoch;
@@ -22,6 +23,18 @@ export function isCurrentAuthCeremonyEpoch(epoch: unknown): epoch is string {
 export function invalidateAuthCeremonies(): string {
   authCeremonyEpoch = crypto.randomUUID();
   return authCeremonyEpoch;
+}
+
+export function blockSessionRestorationForManualLock(): void {
+  manualLockRestorationBlocked = true;
+}
+
+export function clearManualLockRestorationBlock(): void {
+  manualLockRestorationBlocked = false;
+}
+
+export function isSessionRestorationBlockedByManualLock(): boolean {
+  return manualLockRestorationBlocked;
 }
 
 export async function runSerializedAuthTransition<T>(

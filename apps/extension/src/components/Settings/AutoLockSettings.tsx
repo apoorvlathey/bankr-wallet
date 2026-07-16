@@ -102,9 +102,12 @@ function AutoLockSettings({ onCancel }: AutoLockSettingsProps) {
                 No inactivity timeout
               </Text>
               <Text color="fg.secondary" fontSize="sm" lineHeight="1.5">
-                WalletChan will not lock because of inactivity. A browser or
-                service-worker restart may still require you to unlock again,
-                especially with biometric unlock or Firefox.
+                WalletChan will not lock because of inactivity. It remains
+                unlocked across service-worker restarts when secure session
+                storage is available. Closing the browser or locking manually
+                still requires you to unlock again. A biometric session opened
+                before selecting Never may need one more unlock to establish
+                secure resume.
               </Text>
             </Box>
           </VStack>

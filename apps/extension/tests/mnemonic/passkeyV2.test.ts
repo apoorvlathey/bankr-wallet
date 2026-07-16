@@ -256,6 +256,28 @@ test("dedicated mnemonic key remains compatible and isolated", async (t) => {
         assert.equal(storedMnemonicVault.entries.length, 1);
         assert.equal(JSON.stringify(local).includes(mnemonic), false);
 
+        const recoveredMnemonicKey =
+          await mnemonicModule.unlockMnemonicKeyWithPassword(masterPassword);
+        assert.ok(recoveredMnemonicKey);
+        const persistedState = JSON.stringify({ local, session });
+        for (const secret of [
+          masterPassword,
+          agentPassword,
+          payload().prfKeyMaterial,
+          Buffer.from(recoveredMnemonicKey.keyBytes).toString("base64"),
+          Buffer.from(vaultKeyBytes).toString("base64"),
+          seedModule.derivePrivateKey(mnemonic, 0),
+        ]) {
+          assert.equal(
+            persistedState.includes(secret),
+            false,
+            `persisted biometric state exposed ${secret.slice(0, 12)}`,
+          );
+        }
+        recoveredMnemonicKey.keyBytes.fill(0);
+
+        sync.autoLockTimeout = 0;
+        sessionModule.updateCachedAutoLockTimeout(0);
         sessionModule.clearInMemoryAuthCache();
         const biometric = await passkeyModule.handleUnlockWithPasskey(
           payload(),
@@ -269,6 +291,23 @@ test("dedicated mnemonic key remains compatible and isolated", async (t) => {
           await mnemonicModule.getMnemonic("seed-group", { mnemonicKey }),
           mnemonic,
         );
+
+        sessionModule.clearInMemoryAuthCache();
+        assert.equal(
+          await sessionModule.tryRestoreSession(authModule.handleUnlockWallet),
+          true,
+        );
+        assert.equal(sessionModule.getCachedPassword(), null);
+        assert.equal(
+          sessionModule.getCachedMnemonicKey(),
+          null,
+          "cold Never restore retains only routine signing authority",
+        );
+        assert.equal(
+          sessionModule.getPrivateKeyFromCache("seed-account"),
+          seedModule.derivePrivateKey(mnemonic, 0),
+        );
+        assert.equal(JSON.stringify(session).includes(mnemonic), false);
 
         sessionModule.clearInMemoryAuthCache();
         const agent = await authModule.hydrateAuthSessionFromVaultKeyBytes(

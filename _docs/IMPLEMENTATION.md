@@ -497,7 +497,7 @@ ERC-20 display metadata is centralized behind the stable
 `src/chrome/tokens/tokenMetadata.ts`.
 
 - Resolves name/symbol/decimals via `fetchTokenInfo`
-- Resolves logos through the swap token list, Bungee token list, watched-asset custom tokens, and `tokens/tokenLogoConstants.ts`
+- Resolves logos through the swap token list, Bungee token list, watched-asset custom tokens, `tokens/tokenLogoConstants.ts`, then the WalletChan API's verified MetaMask token-icon fallback
 - Portfolio catalog calls skip the Bungee token-list fallback so holdings render from the portfolio API/RPC without waiting on bridge token metadata
 - Used by receipt asset-change extraction, tx details backfill, clear-signed snapshots, batch call summaries, approve cards, and portfolio auto-add stubs so custom swap/bridge chains do not diverge by page
 - Logo image bytes are warmed through the shared `ensAvatarImageCache` sanitizer as soon as a metadata lookup finds a URL. Renderer pages read only the reset-aware `chrome.storage.local` cache through `src/lib/avatarCacheClient.ts`; legacy DOM-localStorage mirrors are purged and never rehydrated.
@@ -683,7 +683,9 @@ src/
 │   │   ├── teardown.ts     # All-or-nothing memory/session clearing
 │   │   ├── timeoutTransitions.ts # Default and timed/Never transitions
 │   │   ├── restoration.ts # Serialized native Never-session recovery
-│   │   ├── persistence.ts   # Native Never-session encrypted envelope
+│   │   ├── persistence.ts   # Native Never password envelope/shared recovery half
+│   │   ├── passkeyPersistence.ts # Native Never passkey-vault envelope
+│   │   ├── passkeyCredentialRecord.ts # Exact passkey-session record codec
 │   │   └── storage.ts       # Cross-browser session-storage adapter
 │   ├── authHandlers.ts      # Stable factor/credential/password-management facade
 │   ├── auth/                # Authentication audit domain (see README.md)
@@ -724,6 +726,7 @@ src/
 │   │   ├── removal.ts       # Recovery proofs and factor removal
 │   │   ├── record.ts        # Passkey V1/V2 record codec
 │   │   ├── keyWrapping.ts   # Purpose-separated PRF/HKDF key wrapping
+│   │   ├── sessionBinding.ts # Stable passkey-factor/session fingerprint
 │   │   └── repository.ts    # Validated passkey record storage
 │   ├── mnemonicStorage.ts # Stable mnemonic-vault compatibility facade
 │   ├── mnemonic/            # Mnemonic/seed-account audit domain (see README.md)
@@ -1690,11 +1693,17 @@ ERC-20 approval preserves the requested amount, while Permit2 clamps to
 `uint160` and sets the released 30-day expiry.
 
 Token metadata caches remain non-secret and behavior-compatible:
-`tokenInfo:{chainId}:{lowercaseAddress}` and
-`tokenLogo:{chainId}:{lowercaseAddress}` use 30-day TTLs, while
-`swapTokenList:{chainId}` stores the raw upstream list for 24 hours. Pinned
-WalletChan tokens merge at read time so canonical metadata wins without a
-cache migration. Cache writes are best-effort; stale token lists remain the
+`tokenInfo:{chainId}:{lowercaseAddress}` and positive
+`tokenLogo:{chainId}:{lowercaseAddress}` results use 30-day TTLs, while logo
+misses use six hours and `swapTokenList:{chainId}` uses 24 hours. Pinned WalletChan
+tokens merge at read time so canonical metadata wins without a cache migration.
+Negative logo records carry a fallback version; older empty records created
+before the MetaMask source are treated as stale immediately.
+When the catalog has no ERC-20 logo, the extension asks the address-aware form
+of `/api/swap/token-list`; the website verifies the deterministic MetaMask
+token-icon PNG with a bounded HEAD request before returning its URL. This
+fallback also feeds simulation rows, while NFT imagery stays on its separate
+metadata path. Cache writes are best-effort; stale token lists remain the
 offline fallback.
 
 ### Gas Estimation
@@ -1992,7 +2001,7 @@ In sidepanel mode, the view navigates back immediately without the animation (si
 
 ### Receipt Polling & Flashblocks
 
-After a tx is broadcast, `txReceiptPoller.startReceiptPolling(txId, txHash, chainId)` polls `eth_getTransactionReceipt` until a receipt is found or the 10-minute timeout elapses. Default cadence: 2s initial, 1.5× exponential backoff up to 30s.
+After a tx is broadcast, `txReceiptPoller.startReceiptPolling(txId, txHash, chainId)` polls `eth_getTransactionReceipt` until a receipt is found or the 10-minute timeout elapses. Default cadence: 2s initial, 1.5× exponential backoff up to 30s. OP Stack force-inclusion L2 hashes are derived from the confirmed L1 deposit rather than broadcast into the L2 mempool, so a missing `eth_getTransactionByHash` result is expected during derivation and is never classified as a mempool drop. Those hashes receive a 15-minute polling window around the expected 1-10 minute inclusion delay. Startup recovery reopens older force-inclusion entries that were incorrectly terminalized by the former 60-second mempool heuristic.
 
 Local PK/seed broadcasts are prepared and signed exactly once. The transaction
 hash is derived from those serialized bytes before the RPC effect. A transport
@@ -2041,7 +2050,7 @@ After a tx confirms successfully, the receipt path fires-and-forgets `extractAnd
 
 1. Decodes the receipt's `logs[]` for ERC-20 `Transfer(from, to, amount)` events (topic0 = `0xddf252ad…`, exactly 3 topics — ERC-721 logs have 4 and are skipped naturally) where the lowercased `from` OR `to` matches the sender. Internal pool routing is filtered out.
 2. Resolves `symbol/decimals/logoUrl` per unique token via `tokenMetadata.ts`, which shares swap-list, Bungee-list, watched-asset, and hardcoded-logo fallbacks.
-3. Computes the sender's pure native-value flow as `balance(blockNumber) - balance(blockNumber-1) + gasCost`, where `gasCost = gasUsed * effectiveGasPrice + (l1Fee || 0)`. The historical-balance call retries up to 3× with 2s backoff to absorb load-balanced RPCs that briefly don't yet know about `blockNumber-1`; if it never resolves, `nativeDelta` is left undefined and the modal silently hides the row.
+3. Computes the sender's pure native-value flow as `balance(blockNumber) - balance(blockNumber-1) + gasCost`, where `gasCost = gasUsed * effectiveGasPrice + (l1Fee || 0)`. The historical-balance call retries up to 3× with 2s backoff to absorb load-balanced RPCs that briefly don't yet know about `blockNumber-1`; if it never resolves, `nativeDelta` is left undefined and the modal silently hides the row. For chains marked `supportsFlashblocks`, receipt-derived history first waits for one following block and verifies that a refreshed receipt's `blockHash` matches the canonical block before using its fee fields. This prevents a preconfirmed L1-fee estimate from surviving as a false native transfer. Opening Transaction details queues one reconciliation per mounted Flashblocks entry, including already-enriched history, so older gas/native snapshots are repaired from the same settled receipt; ordinary-chain snapshots remain immutable.
 4. Attempts to seed `recentlyReceivedTokens` (5-minute TTL cache) for every inbound ERC-20 so `loadPortfolioTokenCatalog` (`chrome/portfolio/tokenCatalog.ts`) can inject a synthetic stub into the portfolio before the upstream portfolio API has re-indexed. This happens before the tx-history broadcast when storage succeeds, so Holdings can merge the stub immediately. A seed failure is logged but must not block writing `assetChanges`. The on-chain balance multicall in `TokenHoldings` overwrites balance with the live value; CoinGecko/GeckoTerminal backfills price while `tokenMetadata.ts` backfills any missing symbol/logo.
 5. Writes the resulting `AssetChangeRecord` onto the existing tx-history entry via `updateTxInHistory({ assetChanges })` — purely additive, no migration required.
 
@@ -2152,7 +2161,7 @@ The resolved name is stored in tx history via `updateTxInHistory()`.
 
 Gas data is not available at confirmation time (tx hasn't been mined). It's fetched asynchronously:
 
-1. **After tx success**: `fetchAndStoreGasData()` in `transactions/displayMetadata.ts` runs fire-and-forget, calling `eth_getTransactionByHash` (gasLimit) and `eth_getTransactionReceipt` (gasUsed, effectiveGasPrice). For OP Stack L2s (Base 8453, Unichain 130), L1 fee fields (`l1Fee`, `l1GasUsed`, `l1GasPrice`) are extracted from the receipt.
+1. **After tx success**: `fetchAndStoreGasData()` in `transactions/displayMetadata.ts` runs fire-and-forget, calling `eth_getTransactionByHash` (gasLimit) and `eth_getTransactionReceipt` (gasUsed, effectiveGasPrice). For OP Stack L2s (Base 8453, Unichain 130), L1 fee fields (`l1Fee`, `l1GasUsed`, `l1GasPrice`) are extracted from the receipt. Flashblocks-capable chains pass through the shared sealed-receipt gate before gas data is persisted; transaction, batch, and receipt-polling paths share the same receipt projection, and Transaction details reconciliation updates cached gas data alongside asset changes.
 2. **On-demand in TxDetailModal**: For older transactions missing `gasData`, the modal fetches directly via RPC when opened.
 3. **Graceful degradation**: Errors are silently ignored (non-critical data).
 
@@ -3183,6 +3192,20 @@ WebAuthn PRF output
   creation-time PRF results fall back to one assertion to obtain the output.
 - Passkey unlock loads the configured `autoLockTimeout` before hydrating
   in-memory credentials so timed auto-lock applies to biometric sessions.
+- When the authoritative timeout is exactly `0`, passkey unlock persists only
+  an encrypted 32-byte general vault capability for native-session recovery.
+  A fresh AES-GCM key is split between memory-backed `storage.session`
+  ciphertext and `local.sessionEncKey`; AAD binds the ciphertext to the
+  session ID, master authority, and a stable fingerprint of the current
+  validated passkey record. No master password, PRF output, Bankr API key,
+  private/derived key, seed phrase, or mnemonic key is persisted.
+- After MV3 service-worker suspension, the restored general capability
+  rehydrates Bankr/private-key/already-derived seed signing without another
+  WebAuthn ceremony. V2 mnemonic-decryption authority is intentionally not
+  restored, so seed creation/import/derive and phrase recovery require a fresh
+  V2 assertion or explicit master-password path. Browser close, manual lock,
+  factor removal, password rotation, reset, timeout change, malformed state,
+  or passkey-record replacement revokes/fails the capability closed.
 - Normal transaction/signature confirmations use the hydrated API key/private-key vault caches.
 - Master-authorized vault mutations that only need the vault key work after
   biometric unlock without a cached plaintext password. This includes adding
@@ -3288,9 +3311,10 @@ generation, `autoLockPolicy.ts` owns timeout normalization/storage caching,
 memory/persistence clearing. `timeoutTransitions.ts` owns finite-default and
 timed/Never transitions; `restoration.ts` owns serialized authoritative Never
 recovery, unlock proof, password-type binding, post-unlock timeout recheck, and
-auth-epoch invalidation. `persistence.ts` and `storage.ts` retain the unchanged
-native envelope and cross-browser adapter. Lower layers never import the
-facade or authentication handlers.
+auth-epoch invalidation. `persistence.ts` owns password/shared recovery state,
+`passkeyPersistence.ts` plus `passkeyCredentialRecord.ts` own the exact
+factor-bound general-vault capability, and `storage.ts` owns the cross-browser
+adapter. Lower layers never import the facade or authentication handlers.
 
 - Decrypted API key, **private keys vault**, and password are cached in background worker memory
 - **Private keys are NEVER sent to UI** - only used internally for signing
@@ -3300,6 +3324,13 @@ facade or authentication handlers.
   - Viewing the main wallet interface
   - Confirming any pending transactions or signature requests
 - Unlock persists across popup open/close cycles (until cache expires)
+- With explicit Never and native `storage.session`, both password and passkey
+  sessions survive service-worker suspension. Passkey restoration rehydrates
+  routine signing authority without persisting wallet plaintext secrets.
+- Switching a live passwordless biometric session from timed to Never cannot
+  export its non-extractable cached key or synthesize a persisted capability.
+  It remains live in the current worker; the next explicit passkey unlock under
+  Never establishes secure resume. The UI discloses this one-time edge.
 
 #### Agent Password (Optional Secondary Password)
 
@@ -3539,9 +3570,10 @@ Chrome MV3 service workers are frequently suspended/restarted to save resources.
 │                                                                             │
 │  On Manual Lock:                                                            │
 │    1. Wait for any earlier wallet-secret mutation to finish                 │
-│    2. Rotate the auth epoch and clear memory + session storage              │
-│    3. Open UI surfaces suppress their biometric auto-prompt in local state  │
-│    4. Session cannot be restored until next unlock                          │
+│    2. Set the worker restore barrier, rotate the epoch, and purge secrets   │
+│    3. Remove local recovery key first, then session half independently      │
+│    4. Either deletion confirms lock; neither broadcasts failure to all UIs  │
+│    5. Every open UI blocks/retries; routine restore stays blocked in worker │
 │                                                                             │
 │  On Auto-Lock Setting Change:                                               │
 │    - "Never" → timed: Clear session storage (no more restoration)           │
@@ -3558,7 +3590,11 @@ Chrome MV3 service workers are frequently suspended/restarted to save resources.
   oversized, or torn records fail closed as a locked session.
 - `chrome.storage.session` is cleared when the browser closes
 - Session storage is not synced across devices
-- Session storage is only accessible to the background service worker
+- Native session storage is readable by privileged extension contexts: the
+  background service worker and extension-origin pages. It is hidden from
+  content scripts by default. Every privileged extension page is therefore
+  inside the secret-bearing trust boundary; `TRUSTED_CONTEXTS` is the default
+  access level and does not narrow storage to the worker alone.
 - Browsers without native `storage.session` do not persist a restorable
   password; a service-worker restart safely returns them to the unlock screen.
 - Restoration runs through the same serialized auth-transition queue as
@@ -3568,8 +3604,12 @@ Chrome MV3 service workers are frequently suspended/restarted to save resources.
 - Passkey and agent-factor removal delete the local recovery-key half before
   their factor commit. If that pre-commit removal fails, the factor is not
   changed; after commit, stale session ciphertext cannot restore a password.
-- Manual lock always clears session storage. Biometric auto-prompt suppression
-  is renderer-local UI state and is not persisted.
+- Manual lock always attempts both recovery-half deletions. Either confirmed
+  deletion makes the session non-restorable. If neither succeeds, the worker
+  broadcasts `walletLockFailedExternal`; every open renderer purges its auth
+  state, suppresses biometric auto-prompting, and stays on a blocking retry
+  surface. A worker-local barrier also rejects background Never restoration
+  until a fresh explicit password or passkey authentication succeeds.
 - Manual lock shares the wallet-secret operation serializer with account and
   recovery-material mutations. It never clears a cached data key underneath a
   mutation that already linearized first.
@@ -4267,6 +4307,7 @@ notification clicks. The focused callback implementations remain under
 | `accountsUpdated`            | Notifies views that accounts list changed       |
 | `addressContactsUpdated`     | Notifies views that the ordered contact list changed |
 | `walletLockedExternal`       | Force-lock signal (password rotation, agent removal, manual lock) — all surfaces route to unlock screen. Manual lock adds `suppressPasskeyAutoPrompt: true` so only already-open surfaces skip their automatic biometric prompt. |
+| `walletLockFailedExternal`   | Fail-closed manual-lock signal — every open wallet surface purges renderer auth state, suppresses automatic biometric prompting, and shows the blocking retry screen. |
 | `walletUnlockedExternal`     | Unlock-sync signal — sibling surfaces (sidepanel + full-screen tab) auto-unlock by re-running their post-unlock flow against the SW credential cache |
 | `ping`                       | Check if any extension view is open             |
 
@@ -4566,8 +4607,10 @@ All main screens display a centered footer with attribution:
 
 1. **API Key Protection**: Encrypted with AES-256-GCM; passwords are never
    stored in plaintext. Native "Never" sessions may store only an encrypted
-   password with its random key split across memory-backed session storage and
-   local storage; fallback browsers do not persist either recovery half.
+   password or encrypted passkey-unwrapped general capability with its random
+   key split across memory-backed session storage and local storage; fallback
+   browsers do not persist either recovery half. Passkey session state never
+   stores the PRF output, API key, private keys, seed phrases, or mnemonic key.
 2. **Chain Restriction**: Only 4 supported chains, validated at multiple layers
 3. **User Confirmation**: Every transaction requires explicit user approval
 4. **Origin Display**: Shows requesting dapp's origin in confirmation popup

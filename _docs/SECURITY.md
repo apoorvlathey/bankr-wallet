@@ -19,8 +19,8 @@ This document is the security reference for the WalletChan Chrome extension. It 
 | Bankr API key   | `encryptedApiKeyVault` (AES-256-GCM via vault key) or `encryptedApiKey` (legacy, password-based) | `cachedApiKey` in `session/inMemoryCache.ts`       |
 | Private keys    | `pkVault` entries (AES-256-GCM via vault key or password, indicated by `salt` field)             | `cachedVault` in `session/inMemoryCache.ts`        |
 | Seed phrases    | V2 `mnemonicVault` entries encrypted by a dedicated mnemonic key; V1 entries encrypted by the master password (plus read-only transitional shared-vault compatibility) | `cachedMnemonicKey` only in master/password or V2 passkey sessions; never in agent sessions. Reveal still requires explicit master-password verification |
-| Vault key       | `encryptedVaultKeyMaster` / `encryptedVaultKeyAgent` (PBKDF2-wrapped)                            | `cachedVaultKey` in `session/inMemoryCache.ts`     |
-| Mnemonic key    | Master wrapper in V2 `mnemonicVault.masterWrappedKey`; independent V2 passkey wrapper in `passkeyUnlock.wrappedMnemonicKey` | `cachedMnemonicKey` as a non-extractable CryptoKey in master sessions only |
+| Vault key       | `encryptedVaultKeyMaster` / `encryptedVaultKeyAgent` (PBKDF2-wrapped); an explicit native Never passkey session may also hold one encrypted, factor-bound general-key capability split across session/local storage | `cachedVaultKey` in `session/inMemoryCache.ts`     |
+| Mnemonic key    | Master wrapper in V2 `mnemonicVault.masterWrappedKey`; independent V2 passkey wrapper in `passkeyUnlock.wrappedMnemonicKey` | `cachedMnemonicKey` as a non-extractable CryptoKey in password-master and fresh V2 passkey-assertion sessions only; it is deliberately absent after cold Never restoration |
 
 ### Trust Boundaries
 
@@ -47,6 +47,13 @@ keys and seed phrases reach only the exact trusted WalletChan UI document after
 the corresponding explicit, master-password-gated reveal action; they are
 never sent to content scripts, inpage code, webpages, or unrelated extension
 documents.
+
+Native `chrome.storage.session` is readable by the service worker and trusted
+extension-origin pages, not only the worker; content scripts are excluded by
+default. A trusted extension-page compromise can therefore read both halves of
+a Never-session envelope and is inside the secret-bearing trust boundary. A
+content-script compromise can read only the random local `sessionEncKey` half,
+which is insufficient without the browser-session ciphertext.
 
 ---
 
@@ -132,7 +139,7 @@ To maintain agent password access control guards across service worker restarts:
 
 **Storage**: `chrome.storage.session.passwordType` (stored alongside session password)
 
-**Restoration**: When `tryRestoreSession()` succeeds, `passwordType` is restored to `cachedPasswordType`, ensuring operations remain blocked for agent password sessions even after restart. Restoration shares the serialized auth-transition queue with manual lock and factor/password mutations, so an in-flight restore cannot resurrect credentials after a newer lock.
+**Restoration**: When `tryRestoreSession()` succeeds, `passwordType` is restored to `cachedPasswordType`, ensuring operations remain blocked for agent password sessions even after restart. Restoration shares the serialized auth-transition queue with manual lock and factor/password mutations, so an in-flight restore cannot resurrect credentials after a newer lock. Manual lock also sets a worker-local restoration barrier before teardown; if both durable-half deletions fail, every open UI receives `walletLockFailedExternal` and later routine restore attempts in that worker fail closed until fresh explicit authentication.
 
 **Critical**: Without password type persistence, agent password users could temporarily bypass guards (reveal private keys, change settings) after service worker restart until manual lock/unlock. This is now mitigated in v1.3.0+.
 
@@ -268,7 +275,7 @@ material remains outside the account metadata domain.
 | Handler          | Effect                      | Guard                                         |
 | ---------------- | --------------------------- | --------------------------------------------- |
 | `resetExtension` | Wipes wallet identity state, pending queues, WalletConnect routing, cross-dapp batches, tx history, wallet portfolio state, transient result keys, and session auth state via the stable `walletResetStorage.ts` facade and exact `storage/resetManifest.ts` manifest | Agent password blocked |
-| `lockWallet`     | Clears all in-memory caches and restorable session auth; tells currently open UI surfaces to suppress their biometric auto-prompt in renderer memory | None needed (user-initiated, non-destructive) |
+| `lockWallet`     | Clears all in-memory caches, revokes the durable Never-session recovery half first, then independently clears the browser-session half. Either confirmed deletion is sufficient; if both fail the UI blocks on an explicit retry state instead of claiming success. Successful lock tells open UI surfaces to suppress their biometric auto-prompt in renderer memory. | None needed (user-initiated, non-destructive) |
 | `clearTxHistory` | Deletes transaction history | `wallet-ui` audience policy |
 
 ### Extension-Only UI Reads and Actions
@@ -340,6 +347,9 @@ the wallet-secret operation lock before rotating the epoch and clearing cached
 keys. This prevents an in-flight seed/private-key mutation from observing a
 vault key that disappears halfway through its commit; operations queued behind
 the lock retain their earlier epoch and fail closed.
+The persisted split capability is revoked local-key-first and both storage
+operations are attempted independently. Lock succeeds when either half is
+confirmed gone and fails visibly when neither deletion can be confirmed.
 
 For the same expiry boundary, `addKeyToVault` checks the persisted master
 wrapper before selecting its encryption format. Once a wallet is migrated,
@@ -940,7 +950,7 @@ accessible resources.
 | `encryptedApiKey`          | Yes (encrypted)  | Legacy API key encrypted with password                  |
 | `encryptedVaultKeyMaster`  | Yes (encrypted)  | Vault key encrypted with master password                |
 | `encryptedVaultKeyAgent`   | Yes (encrypted)  | Vault key encrypted with agent password                 |
-| `sessionEncKey`            | Yes (random key half) | AES key for native-session "Never" password restoration. The matching ciphertext is memory-backed in `chrome.storage.session`; fallback browsers never persist either secret half. |
+| `sessionEncKey`            | Yes (random key half) | AES key for native-session "Never" password or passkey-vault restoration. The matching ciphertext is memory-backed in `chrome.storage.session`; fallback browsers never persist either secret half. |
 | `passkeyUnlock`            | Yes (encrypted)  | V1 general-key wrapper or V2 purpose-separated general/mnemonic key wrappers |
 | `pkVault`                  | Yes (encrypted)  | Private key vault with encrypted entries                |
 | `agentPasswordEnabled`     | No               | Boolean flag                                            |
@@ -982,6 +992,8 @@ accessible resources.
 | Key                        | Contains Secrets | Description                                                      |
 | -------------------------- | ---------------- | ---------------------------------------------------------------- |
 | `encryptedSessionPassword` | Yes (encrypted)  | Password for "Never" auto-lock restore (AES-GCM with random key), only with native memory-backed `storage.session` |
+| `encryptedSessionVaultKey` | Yes (encrypted)  | Exact 32-byte general vault capability for native "Never" restore after a passkey assertion. AES-GCM AAD binds it to the session ID, master authority, and current validated passkey-record fingerprint. It never contains the PRF output, password, API key, private keys, mnemonic key, or seed phrase. |
+| `sessionCredentialKind`    | No               | Exact discriminator: `"password"` or `"passkey-vault"`; ambiguous/mismatched records fail closed. |
 | `sessionId`                | No               | Session identifier (UUID)                                        |
 | `sessionStartedAt`         | No               | Session timestamp (milliseconds since epoch)                     |
 | `autoLockNever`            | No               | Boolean flag indicating "Never" auto-lock mode                   |
@@ -1046,15 +1058,21 @@ These must always hold true. Violations indicate a security bug.
    without treating absent/corrupt state as indefinite unlock.
 
 7. **Session restore only works for "Never" auto-lock** - `tryRestoreSession()` checks `autoLockTimeout === 0` before attempting restoration.
-   Password restoration additionally requires native memory-backed
+   Password and passkey-vault restoration additionally require native memory-backed
    `chrome.storage.session` (available in WalletChan's supported Chrome and
    Firefox versions). The fallback for browsers/forks without it stores only
-   non-secret state; old fallback password ciphertext/key halves are
+   non-secret state; old fallback password/vault ciphertext and key halves are
    proactively removed and Never mode relocks after a worker restart.
    Native session envelopes are allocation-bounded before base64 decoding: the
    key and IV must be exactly 32 and 12 bytes, and the authenticated password
-   ciphertext cannot exceed 1 MiB plus the AES-GCM tag. Malformed or torn
-   records return a locked session; there is no permissive fallback.
+   ciphertext cannot exceed 1 MiB plus the AES-GCM tag. Passkey capabilities
+   require exact 32-byte plaintext, IV, tag, and binding sizes; exact record
+   fields; `passwordType === "master"`; and a fingerprint match against the
+   current validated `passkeyUnlock` factor. Malformed, ambiguous, stale,
+   tampered, or torn records return a locked session and delete both recovery
+   halves; there is no permissive fallback. The decrypted capability crosses
+   restoration only as a symbol-branded, non-enumerable call-stack object, so
+   a runtime message or structured clone cannot forge it.
 
 7a. **Factor removal revokes restoration before commit** - Passkey and agent
    removal first prove master recovery, then remove the local `sessionEncKey`
@@ -1305,6 +1323,8 @@ When reviewing or making changes to extension code, verify the following:
 - [ ] Does the `suspend` event still clear all caches?
 - [ ] Does manual lock (`lockWallet`) still clear all caches and restorable session storage?
 - [ ] Does manual lock acquire the wallet-secret operation lock before clearing cached vault/mnemonic keys?
+- [ ] Does manual lock attempt the local recovery key first and the session half independently, accepting either confirmed deletion but showing a blocking retry state if neither succeeds?
+- [ ] On simultaneous recovery-half failure, do all open wallet surfaces purge renderer auth state, suppress passkey auto-prompting, and receive the retry state while the worker blocks routine restoration?
 - [ ] Does session restore still require `autoLockTimeout === 0`?
 - [ ] Does factor removal revoke the local Never-session recovery half before
       its factor commit, preserving the factor if revocation fails?
@@ -1358,6 +1378,7 @@ Quick reference for which files to examine based on what area of security you're
 - `session/timeoutTransitions.ts` - Finite default and serialized timed/Never transitions
 - `session/restoration.ts` - Authoritative Never restore, password-type binding, and race rechecks
 - `session/persistence.ts` - Native Never-session encrypted password envelope
+- `session/passkeyPersistence.ts` / `session/passkeyCredentialRecord.ts` - Exact native passkey-vault envelope and bounded codec
 - `session/storage.ts` - Cross-browser native/fallback storage adapter
 - `crypto.ts`, `cryptoUtils.ts` - Stable compatibility facades
 - `cryptography/` - Released envelope, bounded codecs, PBKDF2 policy,
@@ -1458,13 +1479,17 @@ Quick reference for which files to examine based on what area of security you're
 
 These are security characteristics that have been reviewed and accepted:
 
-1. **Native "Never" sessions retain a recoverable encrypted password.** The
-   ciphertext is in memory-backed `chrome.storage.session` and its random AES
-   key is in local extension storage. This survives MV3 service-worker
-   suspension but not browser closure because the ciphertext half disappears.
-   Browsers without native session storage do not persist either recovery
-   half. If the live extension service-worker context is compromised, its
-   in-memory credentials are already exposed.
+1. **Native "Never" sessions retain a recoverable encrypted credential.** A
+   password unlock retains the encrypted password; a passkey unlock retains
+   only the encrypted 32-byte general vault capability, bound to the current
+   passkey factor and master authority. Neither passkey PRF output nor the
+   mnemonic key is retained. The ciphertext is in memory-backed
+   `chrome.storage.session` and its random AES key is in local extension
+   storage. This survives MV3 service-worker suspension but not browser
+   closure because the ciphertext half disappears. Browsers without native
+   session storage do not persist either recovery half. If the live extension
+   service-worker context is compromised, its decrypted API/private-key
+   session state is already exposed.
 
 2. **No rate limiting on local unlock attempts.** PBKDF2-SHA256 with 600,000
    iterations slows each guess but does not make a weak password safe against

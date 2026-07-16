@@ -137,6 +137,10 @@ export function createChromeStorageHarness(
           runtimeMessages.push(clone(message));
         },
       },
+      action: {
+        async setBadgeText() {},
+        async setBadgeBackgroundColor() {},
+      },
       storage: {
         local: storageArea("local"),
         sync: storageArea("sync"),

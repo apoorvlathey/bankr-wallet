@@ -2,6 +2,7 @@
 
 import {
   invalidateAuthCeremonies,
+  isSessionRestorationBlockedByManualLock,
   runSerializedAuthTransition,
 } from "../authTransition";
 import type { PasswordType } from "../types";
@@ -17,10 +18,46 @@ import {
   readPersistedSessionRecord,
   storeSessionAtomic,
 } from "./persistence";
+import {
+  getSessionPasskeyCredential,
+  storePasskeySessionAtomic,
+} from "./passkeyPersistence";
 import { clearAllAuthState, clearSessionStorage } from "./teardown";
 
+const RESTORED_PASSKEY_SESSION = Symbol("restored-passkey-session");
+
+export interface RestoredPasskeySessionCredential {
+  readonly [RESTORED_PASSKEY_SESSION]: true;
+  readonly vaultKeyBytes: Uint8Array;
+  readonly passkeyBinding: string;
+}
+
+export function isRestoredPasskeySessionCredential(
+  value: unknown,
+): value is RestoredPasskeySessionCredential {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as RestoredPasskeySessionCredential)[RESTORED_PASSKEY_SESSION] ===
+      true
+  );
+}
+
+function createRestoredPasskeySessionCredential(
+  vaultKeyBytes: Uint8Array,
+  passkeyBinding: string,
+): RestoredPasskeySessionCredential {
+  const credential = {} as RestoredPasskeySessionCredential;
+  Object.defineProperties(credential, {
+    [RESTORED_PASSKEY_SESSION]: { value: true },
+    vaultKeyBytes: { value: vaultKeyBytes },
+    passkeyBinding: { value: passkeyBinding },
+  });
+  return Object.freeze(credential);
+}
+
 export type UnlockFn = (
-  password: string,
+  credential: string | RestoredPasskeySessionCredential,
 ) => Promise<{ success: boolean; passwordType?: PasswordType }>;
 
 export async function resolvePasswordType(
@@ -42,6 +79,8 @@ export async function resolvePasswordType(
 async function restoreSessionWithinAuthTransition(
   unlockFn: UnlockFn,
 ): Promise<boolean> {
+  if (isSessionRestorationBlockedByManualLock()) return false;
+
   // Re-read authoritative sync storage inside the serialized transition.
   const timeout = await readStoredAutoLockTimeout();
   setCachedAutoLockTimeout(timeout);
@@ -57,23 +96,69 @@ async function restoreSessionWithinAuthTransition(
     session.passwordType === "master" || session.passwordType === "agent"
       ? session.passwordType
       : undefined;
+  const credentialKind =
+    session.sessionCredentialKind === "password" ||
+    session.sessionCredentialKind === "passkey-vault"
+      ? session.sessionCredentialKind
+      : undefined;
 
   if (
     !sessionId ||
     session.autoLockNever !== true ||
-    !session.encryptedSessionPassword
+    !credentialKind
   ) {
+    if (
+      session.autoLockNever !== undefined ||
+      session.encryptedSessionPassword !== undefined ||
+      session.encryptedSessionVaultKey !== undefined ||
+      session.sessionCredentialKind !== undefined
+    ) {
+      await clearSessionStorage();
+    }
     return false;
   }
 
+  let restoredPassword: string | null = null;
+  let restoredPasskeyCredential: RestoredPasskeySessionCredential | null = null;
   try {
-    const password = await getSessionPassword();
-    if (!password) {
-      await clearSessionStorage();
-      return false;
+    let unlockCredential: string | RestoredPasskeySessionCredential;
+    if (credentialKind === "password") {
+      if (
+        !session.encryptedSessionPassword ||
+        session.encryptedSessionVaultKey
+      ) {
+        await clearSessionStorage();
+        return false;
+      }
+      const password = await getSessionPassword();
+      if (!password) {
+        await clearSessionStorage();
+        return false;
+      }
+      restoredPassword = password;
+      unlockCredential = password;
+    } else {
+      if (
+        persistedPasswordType !== "master" ||
+        !session.encryptedSessionVaultKey ||
+        session.encryptedSessionPassword
+      ) {
+        await clearSessionStorage();
+        return false;
+      }
+      const passkeyCredential = await getSessionPasskeyCredential(sessionId);
+      if (!passkeyCredential) {
+        await clearSessionStorage();
+        return false;
+      }
+      restoredPasskeyCredential = createRestoredPasskeySessionCredential(
+        passkeyCredential.vaultKeyBytes,
+        passkeyCredential.passkeyBinding,
+      );
+      unlockCredential = restoredPasskeyCredential;
     }
 
-    const result = await unlockFn(password);
+    const result = await unlockFn(unlockCredential);
     if (!result.success || !result.passwordType) {
       await clearAllAuthState();
       return false;
@@ -87,8 +172,8 @@ async function restoreSessionWithinAuthTransition(
       return false;
     }
 
-    // The wrapper that decrypted is authoritative. Persisted metadata may
-    // confirm it but can never upgrade an agent session to master.
+    // The wrapper/capability that decrypted is authoritative. Persisted
+    // metadata may confirm it but can never upgrade an agent session.
     if (
       persistedPasswordType &&
       persistedPasswordType !== result.passwordType
@@ -100,12 +185,27 @@ async function restoreSessionWithinAuthTransition(
     const resolvedPasswordType = result.passwordType;
     memoryCache.setCurrentSessionId(sessionId);
     memoryCache.setCachedPasswordType(resolvedPasswordType);
-    await storeSessionAtomic(
-      sessionId,
-      true,
-      resolvedPasswordType,
-      password,
-    );
+    if (credentialKind === "password") {
+      if (!restoredPassword) {
+        await clearSessionStorage();
+        return false;
+      }
+      await storeSessionAtomic(
+        sessionId,
+        true,
+        resolvedPasswordType,
+        restoredPassword,
+      );
+    } else if (restoredPasskeyCredential) {
+      await storePasskeySessionAtomic(
+        sessionId,
+        restoredPasskeyCredential.vaultKeyBytes,
+        restoredPasskeyCredential.passkeyBinding,
+      );
+    } else {
+      await clearSessionStorage();
+      return false;
+    }
 
     invalidateAuthCeremonies();
     console.log("Session restored successfully after service worker restart");
@@ -116,6 +216,8 @@ async function restoreSessionWithinAuthTransition(
       memoryCache.clearInMemoryAuthCache();
     });
     return false;
+  } finally {
+    restoredPasskeyCredential?.vaultKeyBytes.fill(0);
   }
 }
 

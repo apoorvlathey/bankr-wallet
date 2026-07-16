@@ -1,5 +1,6 @@
 import { hydrateAuthSessionFromVaultKeyBytes } from "../authHandlers";
 import {
+  clearManualLockRestorationBlock,
   invalidateAuthCeremonies,
   isCurrentAuthCeremonyEpoch,
 } from "../authTransition";
@@ -13,13 +14,22 @@ import {
   type PasskeyCredentialPayload,
   type PasskeyUnlockRecord,
 } from "./record";
-import { unwrapPasskeyRecordKeys } from "./keyWrapping";
+import {
+  unwrapPasskeyRecordKeys,
+  type UnwrappedPasskeyRecordKeys,
+} from "./keyWrapping";
 import {
   loadPasskeyUnlockRecord,
   PASSKEY_UNLOCK_STORAGE_KEY,
 } from "./repository";
 import { stalePasskeyCeremonyResult } from "./status";
-import { clearAllAuthState } from "../sessionCache";
+import {
+  clearAllAuthState,
+  getAutoLockTimeout,
+  setCurrentSessionId,
+  storePasskeySessionAtomic,
+} from "../sessionCache";
+import { getPasskeySessionBinding } from "./sessionBinding";
 
 export async function handleUnlockWithPasskey(
   payload: Partial<PasskeyCredentialPayload>,
@@ -31,6 +41,7 @@ export async function handleUnlockWithPasskey(
     return stalePasskeyCeremonyResult();
   }
 
+  let unwrapped: UnwrappedPasskeyRecordKeys | null = null;
   try {
     const record = await loadPasskeyUnlockRecord();
     if (!record) {
@@ -43,7 +54,7 @@ export async function handleUnlockWithPasskey(
       return { success: false, error: "Passkey does not match this wallet" };
     }
 
-    const unwrapped = await unwrapPasskeyRecordKeys(
+    unwrapped = await unwrapPasskeyRecordKeys(
       record,
       payload.prfKeyMaterial,
     );
@@ -86,6 +97,15 @@ export async function handleUnlockWithPasskey(
     }
 
     await clearAllAuthState();
+    let persistedSessionId: string | null = null;
+    if ((await getAutoLockTimeout()) === 0) {
+      persistedSessionId = crypto.randomUUID();
+      await storePasskeySessionAtomic(
+        persistedSessionId,
+        unwrapped.vaultKeyBytes,
+        await getPasskeySessionBinding(record),
+      );
+    }
     const hydrated = await hydrateAuthSessionFromVaultKeyBytes(
       unwrapped.vaultKeyBytes,
       "master",
@@ -95,6 +115,7 @@ export async function handleUnlockWithPasskey(
       await clearAllAuthState();
       return hydrated;
     }
+    if (persistedSessionId) setCurrentSessionId(persistedSessionId);
     invalidateAuthCeremonies();
 
     // Usage metadata is non-essential. Never turn successful hydration into a
@@ -109,10 +130,14 @@ export async function handleUnlockWithPasskey(
       .catch((error) => {
         console.warn("[passkeyUnlock] Failed to update last-used time:", error);
       });
+    clearManualLockRestorationBlock();
     return { success: true };
   } catch (error) {
     await clearAllAuthState().catch(() => undefined);
     console.error("[passkeyUnlock] Failed to unlock with biometrics:", error);
     return { success: false, error: "Biometric unlock failed" };
+  } finally {
+    unwrapped?.vaultKeyBytes.fill(0);
+    unwrapped?.mnemonicKeyBytes?.fill(0);
   }
 }

@@ -12,9 +12,13 @@ Browser wallet extension + landing page website in a pnpm workspace monorepo.
 
 **IMPORTANT**: WalletChan supports THREE wallet types:
 
-1. **Bankr API accounts** (`type: "impersonator"`) - API-based impersonation, transactions via Bankr API
+1. **Bankr API accounts** (`type: "bankr"`) - Remote signing and transactions via the Bankr API
 2. **Private Key accounts** (`type: "privateKey"`) - Local signing with imported private keys
 3. **Seed Phrase accounts** (`type: "seedPhrase"`) - Local signing with HD wallet derivation
+
+WalletChan also supports **view-only impersonator accounts**
+(`type: "impersonator"`). They may receive reject-only transaction/signature
+prompts but must never reach a signing or submission path.
 
 **When implementing ANY feature that touches transactions, signatures, or authentication:**
 

@@ -120,6 +120,8 @@ import WaitingForOnboardingScreen from "@/app/screens/WaitingForOnboardingScreen
 import CrossDappBatchRequestScreen from "@/app/screens/CrossDappBatchRequestScreen";
 import AppBootstrapTransition from "@/app/AppBootstrapTransition";
 import { useRuntimeMessaging } from "@/app/hooks/useRuntimeMessaging";
+import { useManualWalletLock } from "@/app/hooks/useManualWalletLock";
+import ManualWalletLockScreen from "@/app/screens/ManualWalletLockScreen";
 import {
   loadInitialApprovalRequests,
   takeInitialApprovalRequestHint,
@@ -264,6 +266,7 @@ function App() {
     useState<BankrConfigDraft | null>(null);
   const unlockReturnTargetRef = useRef<UnlockReturnTarget | null>(null);
   const unlockRouteHandledRef = useRef(false);
+  const isWalletUnlockedRef = useRef(isWalletUnlocked);
   const selectedChain = getResolvedChainByName(chainName, networksInfo);
   const visibleChains = getVisibleChains(networksInfo, activeAccount?.type);
 
@@ -1704,51 +1707,19 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [returnToChatAfterUnlock]);
 
-  // Cross-surface lock/unlock sync. The originating surface also receives
-  // its own broadcast, so guard the unlock branch with isWalletUnlocked to
-  // avoid re-running handleUnlock and clobbering its view.
-  const isWalletUnlockedRef = useRef(isWalletUnlocked);
-  useEffect(() => {
-    isWalletUnlockedRef.current = isWalletUnlocked;
-    if (!isWalletUnlocked) {
-      unlockRouteHandledRef.current = false;
-      setShowUnlockMascotSuccess(false);
-    }
-  }, [isWalletUnlocked]);
-  useEffect(() => {
-    const handler = (
-      message: { type?: string; suppressPasskeyAutoPrompt?: boolean },
-      _sender: chrome.runtime.MessageSender,
-      sendResponse: (response?: unknown) => void,
-    ) => {
-      if (message?.type === "walletLockedExternal") {
-        isWalletUnlockedRef.current = false;
-        unlockRouteHandledRef.current = false;
-        setShowUnlockMascotSuccess(false);
-        setIsWalletUnlocked(false);
-        setPasswordType(null);
-        // Bankr credentials are renderer secrets too. Never carry an edited
-        // draft across a lock boundary where the next session could be an
-        // agent-password session that is forbidden from reading the API key.
-        setAccountSettingsApiKeyDraft(null);
-        setSuppressPasskeyAutoPrompt(
-          message.suppressPasskeyAutoPrompt === true,
-        );
-        setView("unlock");
-        sendResponse({ ok: true });
-      } else if (message?.type === "walletUnlockedExternal") {
-        if (!isWalletUnlockedRef.current) {
-          handleUnlock();
-        }
-        sendResponse({ ok: true });
-      }
-      return false; // synchronous response
-    };
-    chrome.runtime.onMessage.addListener(handler);
-    return () => {
-      chrome.runtime.onMessage.removeListener(handler);
-    };
-  }, [handleUnlock]);
+  const { status: manualLockStatus, requestLock: requestManualLock } =
+    useManualWalletLock({
+      isWalletUnlocked,
+      isWalletUnlockedRef,
+      unlockRouteHandledRef,
+      handleUnlock,
+      setShowUnlockMascotSuccess,
+      setIsWalletUnlocked,
+      setPasswordType,
+      setAccountSettingsApiKeyDraft,
+      setSuppressPasskeyAutoPrompt,
+      setView,
+    });
 
   // Called by confirmation screens BEFORE they fire a reject message to the
   // background. Pre-switches the popup to the adjacent request in the combined
@@ -2185,6 +2156,16 @@ function App() {
       <AppBootstrapTransition
         isLoading
         showRequestSkeleton={isApprovalRequestLoading}
+      />
+    );
+  }
+
+  if (manualLockStatus !== "idle") {
+    return (
+      <ManualWalletLockScreen
+        status={manualLockStatus}
+        isFullscreenTab={isFullscreenTab}
+        onRetry={requestManualLock}
       />
     );
   }
@@ -3396,14 +3377,7 @@ function App() {
             setStartChatWithNew(false);
             setView("chat");
           }}
-          onLock={() => {
-            chrome.runtime.sendMessage({ type: "lockWallet" }, () => {
-              setIsWalletUnlocked(false);
-              setPasswordType(null);
-              setSuppressPasskeyAutoPrompt(true);
-              setView("unlock");
-            });
-          }}
+          onLock={requestManualLock}
           onSettings={() => setView("settings")}
           onToggleSidePanel={toggleSidePanelMode}
           onOpenFullscreen={openInFullscreenTab}

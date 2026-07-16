@@ -4,6 +4,7 @@ import {
   hydrateAuthSessionFromVaultKeyBytes,
 } from "../authHandlers";
 import {
+  clearManualLockRestorationBlock,
   invalidateAuthCeremonies,
   isCurrentAuthCeremonyEpoch,
 } from "../authTransition";
@@ -294,6 +295,7 @@ export async function handleSetupPasskeyUnlockWithPassword(
       await clearAllAuthState();
       return committed;
     }
+    clearManualLockRestorationBlock();
     return { success: true };
   } catch (error) {
     if (sessionHydrated) await clearAllAuthState().catch(() => undefined);

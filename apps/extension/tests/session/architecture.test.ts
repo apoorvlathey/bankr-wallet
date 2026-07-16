@@ -71,6 +71,7 @@ test("session layers have one-way dependencies and the facade is export-only", a
     state,
     autoLock,
     persistence,
+    passkeyPersistence,
     cacheAccess,
     teardown,
     timeoutTransitions,
@@ -80,6 +81,7 @@ test("session layers have one-way dependencies and the facade is export-only", a
     readModule("session/inMemoryCache.ts"),
     readModule("session/autoLockPolicy.ts"),
     readModule("session/persistence.ts"),
+    readModule("session/passkeyPersistence.ts"),
     readModule("session/cacheAccess.ts"),
     readModule("session/teardown.ts"),
     readModule("session/timeoutTransitions.ts"),
@@ -101,6 +103,12 @@ test("session layers have one-way dependencies and the facade is export-only", a
     /from "(?:\.\.\/sessionCache|\.\/inMemoryCache|\.\/autoLockPolicy|\.\.\/(?:authTransition|authHandlers))"/,
   );
   assert.match(persistence, /from "\.\/storage"/);
+  assert.match(passkeyPersistence, /from "\.\/persistence"/);
+  assert.match(passkeyPersistence, /from "\.\/storage"/);
+  assert.doesNotMatch(
+    passkeyPersistence,
+    /from "(?:\.\.\/sessionCache|\.\/inMemoryCache|\.\/autoLockPolicy|\.\.\/(?:authTransition|authHandlers))"/,
+  );
 
   assert.match(cacheAccess, /from "\.\/autoLockPolicy"/);
   assert.match(cacheAccess, /from "\.\/inMemoryCache"/);
@@ -128,6 +136,7 @@ test("session layers have one-way dependencies and the facade is export-only", a
   assert.match(restoration, /from "\.\/cacheAccess"/);
   assert.match(restoration, /from "\.\/inMemoryCache"/);
   assert.match(restoration, /from "\.\/persistence"/);
+  assert.match(restoration, /from "\.\/passkeyPersistence"/);
   assert.match(restoration, /from "\.\/teardown"/);
   assert.doesNotMatch(timeoutTransitions, /authHandlers|sessionCache|restoration/);
   assert.doesNotMatch(restoration, /authHandlers|sessionCache|timeoutTransitions/);
@@ -136,6 +145,7 @@ test("session layers have one-way dependencies and the facade is export-only", a
     "session/autoLockPolicy",
     "session/cacheAccess",
     "session/inMemoryCache",
+    "session/passkeyPersistence",
     "session/persistence",
     "session/restoration",
     "session/teardown",
@@ -159,7 +169,7 @@ test("session layers have one-way dependencies and the facade is export-only", a
     const source = await readModule(name);
     assert.doesNotMatch(
       source,
-      /from "\.\/session\/(?:inMemoryCache|autoLockPolicy|cacheAccess|persistence|restoration|storage|teardown|timeoutTransitions)"/,
+      /from "\.\/session\/(?:inMemoryCache|autoLockPolicy|cacheAccess|passkeyPersistence|persistence|restoration|storage|teardown|timeoutTransitions)"/,
       `${name} must use the stable sessionCache facade`,
     );
   }
@@ -216,9 +226,10 @@ test("sessionCache preserves its public runtime API through delegation", async (
   });
 
   try {
-    const [facade, persistence] = await Promise.all([
+    const [facade, persistence, passkeyPersistence] = await Promise.all([
       import("../../src/chrome/sessionCache"),
       import("../../src/chrome/session/persistence"),
+      import("../../src/chrome/session/passkeyPersistence"),
     ]);
     const expectedFunctions = [
       "clearAllAuthState",
@@ -251,6 +262,7 @@ test("sessionCache preserves its public runtime API through delegation", async (
       "setCachedVault",
       "setCachedVaultKey",
       "setCurrentSessionId",
+      "storePasskeySessionAtomic",
       "storeSessionAtomic",
       "tryRestoreSession",
       "tryRestoreSessionAlreadySerialized",
@@ -263,6 +275,11 @@ test("sessionCache preserves its public runtime API through delegation", async (
     assert.equal(facade.DEFAULT_AUTO_LOCK_TIMEOUT, 900_000);
     assert.equal(facade.AUTO_LOCK_STORAGE_KEY, "autoLockTimeout");
     assert.equal(facade.VALID_AUTO_LOCK_TIMEOUTS.has(0), true);
+    assert.equal(
+      facade.storePasskeySessionAtomic,
+      passkeyPersistence.storePasskeySessionAtomic,
+      "passkey persistence remains a direct compatibility re-export",
+    );
     assert.equal(
       facade.storeSessionAtomic,
       persistence.storeSessionAtomic,

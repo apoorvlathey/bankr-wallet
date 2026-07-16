@@ -115,14 +115,16 @@ async function unwrapKeyBytes(
   }
 }
 
-export async function unwrapPasskeyRecordKeys(
-  record: PasskeyUnlockRecord,
-  prfKeyMaterial: string,
-): Promise<{
+export interface UnwrappedPasskeyRecordKeys {
   vaultKeyBytes: Uint8Array;
   mnemonicKeyBytes?: Uint8Array;
   mnemonicKeyId?: string;
-} | null> {
+}
+
+export async function unwrapPasskeyRecordKeys(
+  record: PasskeyUnlockRecord,
+  prfKeyMaterial: string,
+): Promise<UnwrappedPasskeyRecordKeys | null> {
   if (record.version === 1) {
     const key = await importLegacyPrfKey(prfKeyMaterial);
     if (!key) return null;

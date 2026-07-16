@@ -37,6 +37,7 @@ export {
   revokePersistedSessionRecoveryKey,
   storeSessionAtomic,
 } from "./session/persistence";
+export { storePasskeySessionAtomic } from "./session/passkeyPersistence";
 export {
   resolvePasswordType,
   tryRestoreSession,

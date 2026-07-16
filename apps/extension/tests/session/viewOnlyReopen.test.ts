@@ -42,6 +42,7 @@ test("view-only-only wallets remain unlocked across every auth mode and reopen",
       expectedType: "master" | "agent",
     ) => {
       await sessionModule.clearAllAuthState();
+      authTransition.blockSessionRestorationForManualLock();
       const unlocked = await authModule.handleUnlockWallet(password);
       assert.deepEqual(unlocked, {
         success: true,
@@ -50,6 +51,11 @@ test("view-only-only wallets remain unlocked across every auth mode and reopen",
       assert.equal(sessionModule.getCachedApiKey(), null);
       assert.equal(sessionModule.getCachedVault(), null);
       assert.equal(sessionModule.isWalletUnlocked(), true);
+      assert.equal(
+        authTransition.isSessionRestorationBlockedByManualLock(),
+        false,
+        "fresh password authentication releases the worker lock barrier",
+      );
 
       // A renderer reopen reuses the coherent worker generation.
       assert.equal(sessionModule.isWalletUnlocked(), true);
@@ -83,15 +89,34 @@ test("view-only-only wallets remain unlocked across every auth mode and reopen",
     assert.ok(built.record);
     chromeHarness.stores.local.passkeyUnlock = built.record;
 
+    authTransition.blockSessionRestorationForManualLock();
     const passkeyResult = await passkeyModule.handleUnlockWithPasskey(payload);
     assert.equal(passkeyResult.success, true);
+    assert.equal(
+      authTransition.isSessionRestorationBlockedByManualLock(),
+      false,
+      "fresh passkey authentication releases the worker lock barrier",
+    );
     assert.equal(sessionModule.getCachedPassword(), null);
     assert.equal(sessionModule.getCachedApiKey(), null);
     assert.equal(sessionModule.getCachedVault(), null);
     assert.equal(sessionModule.getPasswordType(), "master");
     assert.equal(sessionModule.isWalletUnlocked(), true);
     assert.equal(sessionModule.isWalletUnlocked(), true, "renderer reopen");
+
+    sessionModule.clearInMemoryAuthCache();
+    assert.equal(sessionModule.isWalletUnlocked(), false);
+    assert.equal(
+      await sessionModule.tryRestoreSession(authModule.handleUnlockWallet),
+      true,
+      "service-worker restart",
+    );
+    assert.equal(sessionModule.getCachedPassword(), null);
+    assert.equal(sessionModule.getPasswordType(), "master");
+    assert.equal(sessionModule.isWalletUnlocked(), true);
   } finally {
+    const authTransition = await import("../../src/chrome/authTransition");
+    authTransition.clearManualLockRestorationBlock();
     chromeHarness.restore();
   }
 });

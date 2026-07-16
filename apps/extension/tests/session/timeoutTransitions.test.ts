@@ -109,7 +109,7 @@ test("timed to Never persistence preserves Bankr, private-key, and seed sessions
   }
 });
 
-test("passwordless biometric master remains in memory when Never is selected", async () => {
+test("selecting Never cannot synthesize a passkey capability from a non-extractable live key", async () => {
   const storage = installNativeSessionStorage({
     sync: { autoLockTimeout: 300_000 },
   });
@@ -130,6 +130,17 @@ test("passwordless biometric master remains in memory when Never is selected", a
     assert.equal(session.getPasswordType(), "master");
     assert.equal(session.getCachedVaultKey(), vaultKey);
     assert.equal(session.getCachedPassword(), null);
+
+    session.clearInMemoryAuthCache();
+    let unlockCalls = 0;
+    assert.equal(
+      await session.tryRestoreSession(async () => {
+        unlockCalls += 1;
+        return { success: true, passwordType: "master" as const };
+      }),
+      false,
+    );
+    assert.equal(unlockCalls, 0);
   } finally {
     storage.restore();
   }
