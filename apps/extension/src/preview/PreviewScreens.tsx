@@ -49,7 +49,7 @@ import {
   previewCustomToken,
   previewVisibleChains,
 } from "./fixtures";
-import { getPreviewCompletedTransaction } from "./completedTransactionFixture";
+import { getPreviewCompletedTransaction } from "./completedTransactionScenarios";
 import {
   getPreviewPortfolioResponse,
   previewPortfolioResponse,
@@ -558,7 +558,7 @@ export function PreviewScreen({
         <PreviewShell>
           <TxDetailScreen
             onBack={noop}
-            tx={getPreviewCompletedTransaction(scenario)}
+            tx={getPreviewCompletedTransaction(scenario, effectiveWallet)}
           />
         </PreviewShell>
       );

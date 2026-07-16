@@ -93,13 +93,18 @@ simulation. The regression test is `apps/contracts/test/TxSimulator.t.sol`.
 
 #### Step 3: Resolve Token Metadata
 
-For each token with a non-zero balance change, we need `name`, `symbol`, `decimals`, `logoUrl`, and `priceUsd`. Three sources, in priority order:
+For each token with a non-zero balance change, we need `name`, `symbol`, `decimals`, `logoUrl`, and `priceUsd`. Four sources, in priority order:
 
 1. **Swap token list** (`getCachedTokenList`) — cached 24h from `walletchan.eth.sh/api/swap/token-list`. Has name, symbol, decimals, logoURI for ~1000 popular tokens per chain. Fastest and most reliable.
 
 2. **Onchain multicall** — for tokens not in the list, batch `name()`, `symbol()`, `decimals()` via Multicall3 (`0xcA11bde05977b3631167028862bE2a173976CA11`). Must pass `multicallAddress` explicitly since the viem client is created without a `chain` object.
 
 3. **Known token logos** (`KNOWN_TOKEN_LOGOS`) — hardcoded map for tokens like WCHAN that aren't in the swap token list.
+
+4. **MetaMask token icons** — if the catalog and pinned map have no ERC-20
+   logo, the extension asks the address-aware WalletChan token-list API. The
+   API constructs the CAIP-style MetaMask CDN URL and returns it only after a
+   bounded HEAD request confirms an existing PNG. NFT contracts skip this path.
 
 For native currency (ETH/BNB/POL), metadata comes from `CHAIN_REGISTRY` and the chain icon is used as the token logo.
 
@@ -131,7 +136,9 @@ calls `retryTokenMetadata` immediately. This function:
 1. Retries the token list lookup (may have cached since first attempt)
 2. Retries onchain multicall for tokens still showing address-like symbols
 3. Retries price fetches for tokens missing USD values
-4. Merges updates into existing results (recomputes formatted amounts if decimals changed)
+4. Resolves missing logos through the shared per-address catalog/MetaMask
+   fallback, including the fast preflight result path
+5. Merges updates into existing results (recomputes formatted amounts if decimals changed)
 
 The first enrichment begins immediately; unresolved fields receive up to two
 more retries at 2.5s intervals. The UI updates reactively as metadata arrives.

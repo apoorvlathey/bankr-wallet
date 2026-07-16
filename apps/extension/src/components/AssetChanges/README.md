@@ -13,9 +13,10 @@ the named simulation-warning banner exports.
   retry schedule.
 - `AssetChangesPanel.tsx` owns loading, empty, collapsed-summary, and grouped
   Send/Receive presentation.
-- `AssetRow.tsx` renders one asset delta and owns address copy/explorer effects.
-- `TokenIcon.tsx` renders fungible-token imagery through the shared sanitized
-  avatar cache.
+- `AssetRow.tsx` renders one asset delta, restores shared token-symbol contract
+  disclosure, and owns the persistent metadata-row copy/explorer effects.
+- `TokenIcon.tsx` delegates fungible-token imagery and symbol fallback to the
+  shared `TokenLogo`, keeping request and receipt identities synchronized.
 - `NftMedia.tsx` owns NFT tags, bounded-raster `SafeImage` rendering, and the
   fullscreen preview. Raw SVG/data markup and metadata-controlled subresources
   must never enter this renderer.
@@ -29,13 +30,17 @@ the named simulation-warning banner exports.
 `AssetChangesDisplay` → simulation hook / panel → rows and media. The hook is
 the only Chrome-message boundary. `AssetRow` alone owns clipboard, timeout, and
 explorer-window effects. Media depends on `SafeImage` and the sanitized avatar
-cache; it never performs network requests. The pure model imports only types.
+cache; it never performs network requests. `TokenLogo` keeps its symbol fallback
+visible while remote rasterization is pending. The pure model imports only types.
 
 ## Coverage
 
 - `tests/ui/assetChangesModel.test.ts` protects message selection, stable batch
   keys, retry decisions, grouping, and summaries.
-- `tests/network/remoteImageRendererBoundary.test.ts` protects the NFT
-  `SafeImage` boundary.
+- `tests/ui/tokenContractPopover.test.ts` requires both estimated and confirmed
+  ERC-20 symbols to retain the shared hover/focus address, copy, and explorer
+  disclosure with help-cursor and amber interaction feedback.
+- `tests/network/remoteImageRendererBoundary.test.ts` protects the NFT and
+  fungible-token `SafeImage` boundaries plus the shared token fallback.
 - `tests/ui/architecture.test.ts` and `moduleSizeBudget.test.ts` protect the
   compatibility facade and implementation size.

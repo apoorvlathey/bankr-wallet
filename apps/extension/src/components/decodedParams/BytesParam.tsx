@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { Box, HStack, VStack, Text, Button, Code, Collapse, useDisclosure } from "@chakra-ui/react";
+import { Box, HStack, VStack, Text, Code, Collapse, useDisclosure } from "@chakra-ui/react";
 import { ChevronDownIcon, ChevronRightIcon } from "@chakra-ui/icons";
 import { CopyButton } from "@/components/CopyButton";
 import { hexToBigInt, hexToString, Hex } from "viem";
 import type { DecodeBytesParamResult, Arg } from "@/lib/decoder/types";
 import { renderParams } from "@/components/renderParams";
+import { isDarkThemeId, useTheme } from "@/theme";
+import { ParamTabButton } from "./ParamTabButton";
 
 interface BytesParamProps {
   value: DecodeBytesParamResult | string;
@@ -18,6 +20,8 @@ export function BytesParam({ value, rawValue, chainId }: BytesParamProps) {
   // See UintParam for the rationale behind chart.numeric.
   const numericColor = "chart.numeric";
   const { isOpen, onToggle } = useDisclosure();
+  const { themeId } = useTheme();
+  const isDarkTheme = isDarkThemeId(themeId);
   const [tab, setTab] = useState<BytesTab>("decoded");
 
   // Determine if we have nested decoded calldata
@@ -81,18 +85,18 @@ export function BytesParam({ value, rawValue, chainId }: BytesParamProps) {
           {/* Tab buttons */}
           <HStack spacing={0} mb={2}>
             {hasDecoded && (
-              <TabButton
+              <ParamTabButton
                 label="Decoded"
                 isActive={effectiveTab === "decoded"}
                 onClick={() => setTab("decoded")}
               />
             )}
-            <TabButton
+            <ParamTabButton
               label="Decimal"
               isActive={effectiveTab === "decimal"}
               onClick={() => setTab("decimal")}
             />
-            <TabButton
+            <ParamTabButton
               label="Text"
               isActive={effectiveTab === "text"}
               onClick={() => setTab("text")}
@@ -107,11 +111,12 @@ export function BytesParam({ value, rawValue, chainId }: BytesParamProps) {
                 px={1.5}
                 py={0.5}
                 fontSize="10px"
-                bg="accent.secondary"
-                color="accentFg.secondary"
+                bg={isDarkTheme ? "accent.highlight" : "accent.secondary"}
+                color={isDarkTheme ? "accentFg.highlight" : "accentFg.secondary"}
                 fontFamily="mono"
-                border="1.5px solid"
-                borderColor="border.default"
+                border={isDarkTheme ? "1px solid" : "1.5px solid"}
+                borderColor={isDarkTheme ? "accent.highlight" : "border.default"}
+                borderRadius={isDarkTheme ? "md" : 0}
                 fontWeight="700"
               >
                 {bytesResult.decoded.functionName}
@@ -159,40 +164,5 @@ export function BytesParam({ value, rawValue, chainId }: BytesParamProps) {
         </Box>
       </Collapse>
     </VStack>
-  );
-}
-
-function TabButton({
-  label,
-  isActive,
-  onClick,
-  isLast,
-}: {
-  label: string;
-  isActive: boolean;
-  onClick: () => void;
-  isLast?: boolean;
-}) {
-  return (
-    <Button
-      size="xs"
-      h="18px"
-      px={2}
-      fontSize="9px"
-      fontWeight="800"
-      textTransform="uppercase"
-      letterSpacing="wide"
-      bg={isActive ? "fg.primary" : "transparent"}
-      color={isActive ? "fg.inverse" : "text.tertiary"}
-      border="1.5px solid"
-      borderColor="border.default"
-      borderRadius={0}
-      borderRight={isLast ? undefined : "none"}
-      onClick={onClick}
-      _hover={{ bg: "fg.primary", color: "fg.inverse" }}
-      _active={{ transform: "translate(1px, 1px)" }}
-    >
-      {label}
-    </Button>
   );
 }

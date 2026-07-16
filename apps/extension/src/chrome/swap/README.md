@@ -17,7 +17,11 @@ Focused ownership:
 - `tokenInfo.ts` owns native/onchain metadata resolution and its 30-day cache.
 - `tokenListPolicy.ts` is the pure pinned-token merge rule; `tokenList.ts` owns
   the raw upstream 24-hour list cache.
-- `tokenLogo.ts` owns the per-address 30-day logo-result cache.
+- `tokenLogo.ts` owns the per-address logo-result cache. Positive results retain
+  the 30-day TTL; misses use a six-hour TTL and fall back through the
+  WalletChan API to a verified MetaMask token-icon asset.
+- `tokenLogoFallback.ts` owns that bounded WalletChan fallback request and
+  accepts only the exact chain/address-derived MetaMask CDN URL.
 - `tokenPrice.ts` owns proxy pricing and the existing direct CoinGecko fallback.
 
 No module signs or broadcasts transactions. Failed RPC balance and allowance

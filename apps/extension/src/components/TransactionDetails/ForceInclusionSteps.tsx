@@ -1,9 +1,103 @@
-import { Box, HStack, Spinner, Text, VStack } from "@chakra-ui/react";
-import { CheckCircleIcon, WarningIcon } from "@chakra-ui/icons";
+import {
+  CheckCircleIcon,
+  ExternalLinkIcon,
+  TimeIcon,
+  WarningIcon,
+} from "@chakra-ui/icons";
+import {
+  Box,
+  HStack,
+  IconButton,
+  Spinner,
+  Text,
+  VStack,
+} from "@chakra-ui/react";
+
 import type { ForceInclusionMeta } from "@/chrome/txHistoryStorage";
+import ChainIcon from "@/components/ChainIcon";
 import { getChainConfig } from "@/constants/chainConfig";
-import { isDarkThemeId, useTheme } from "@/theme";
 import { getForceInclusionState } from "./forceInclusionState";
+
+type StepState = "waiting" | "pending" | "confirmed" | "failed";
+
+function explorerTxUrl(explorer: string | undefined, txHash: string | undefined) {
+  if (!explorer || !txHash) return null;
+  const normalizedHash = txHash.match(/0x[a-fA-F0-9]{64}/u)?.[0];
+  return normalizedHash
+    ? `${explorer.replace(/\/$/u, "")}/tx/${normalizedHash}`
+    : null;
+}
+
+function StepStatus({ state }: { state: StepState }) {
+  const presentation =
+    state === "confirmed"
+      ? { label: "Confirmed", color: "status.success.emphasis", Icon: CheckCircleIcon }
+      : state === "failed"
+        ? { label: "Failed", color: "status.error.emphasis", Icon: WarningIcon }
+        : state === "pending"
+          ? { label: "Pending", color: "status.info.emphasis", Icon: TimeIcon }
+          : { label: "Waiting", color: "fg.muted", Icon: TimeIcon };
+
+  return (
+    <HStack spacing={1.5} color={presentation.color} flexShrink={0}>
+      {state === "pending" ? (
+        <Spinner boxSize="11px" thickness="2px" speed="0.8s" />
+      ) : (
+        <presentation.Icon boxSize="12px" aria-hidden />
+      )}
+      <Text fontSize="2xs" fontWeight="700">
+        {presentation.label}
+      </Text>
+    </HStack>
+  );
+}
+
+function InclusionStep({
+  label,
+  chainId,
+  chainName,
+  state,
+  explorerUrl,
+}: {
+  label: string;
+  chainId: number;
+  chainName: string;
+  state: StepState;
+  explorerUrl: string | null;
+}) {
+  return (
+    <HStack minH="52px" px={3} py={2.5} justify="space-between" spacing={3}>
+      <HStack spacing={2.5} minW={0}>
+        <ChainIcon chainId={chainId} chainName={chainName} size="24px" withChip />
+        <VStack spacing={0} align="stretch" minW={0}>
+          <Text color="fg.primary" fontSize="sm" fontWeight="700" noOfLines={1}>
+            {label}
+          </Text>
+          <Text color="fg.secondary" fontSize="2xs" fontWeight="600" noOfLines={1}>
+            {chainName}
+          </Text>
+        </VStack>
+      </HStack>
+      <HStack spacing={0.5} flexShrink={0}>
+        <StepStatus state={state} />
+        {explorerUrl && (state === "confirmed" || state === "failed") && (
+          <IconButton
+            type="button"
+            aria-label={`View ${label} on ${chainName} explorer`}
+            icon={<ExternalLinkIcon boxSize="11px" aria-hidden />}
+            size="xs"
+            variant="ghost"
+            h="28px"
+            minW="28px"
+            color="fg.secondary"
+            onClick={() => chrome.tabs.create({ url: explorerUrl })}
+            _hover={{ bg: "surface.raisedHover", color: "fg.primary" }}
+          />
+        )}
+      </HStack>
+    </HStack>
+  );
+}
 
 export default function ForceInclusionSteps({
   meta,
@@ -14,93 +108,57 @@ export default function ForceInclusionSteps({
   status: string;
   txHash: string | undefined;
 }) {
-  const { themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
-  // The step circles are vivid filled discs (red/green/blue) with a small icon
-  // inside. White contrasts well against the vivid Bauhaus palette but vanishes
-  // against Midnight's lighter chart tints — flip to a near-black icon there.
-  const stepIconColor = isDarkTheme ? "fg.inverse" : "white";
   const l1Config = getChainConfig(meta.l1ChainId);
   const l2Config = getChainConfig(meta.l2ChainId);
-  const l1HasHash = !!meta.l1TxHash;
   const { l1Confirmed, l1Reverted, l2Confirmed, l2Reverted } =
     getForceInclusionState(meta, status, txHash);
+  const l1State: StepState = l1Reverted
+    ? "failed"
+    : l1Confirmed
+      ? "confirmed"
+      : meta.l1TxHash
+        ? "pending"
+        : "waiting";
+  const l2State: StepState = l2Reverted
+    ? "failed"
+    : l2Confirmed
+      ? "confirmed"
+      : l1Confirmed
+        ? "pending"
+        : "waiting";
+  const l1ExplorerUrl = explorerTxUrl(l1Config.explorer, meta.l1TxHash);
+  const l2ExplorerUrl = explorerTxUrl(
+    l2Config.explorer,
+    txHash && txHash !== meta.l1TxHash ? txHash : undefined,
+  );
 
   return (
     <Box
-      border="2px solid"
+      bg="surface.raised"
+      border="1px solid"
       borderColor="border.default"
-      bg="bg.muted"
-      p={3}
+      borderRadius="lg"
+      overflow="hidden"
     >
-      <Text fontSize="2xs" fontWeight="700" textTransform="uppercase" color="text.secondary" mb={2}>
-        Force Inclusion Progress
-      </Text>
-      <VStack spacing={2} align="stretch">
-        {/* Step 1: L1 */}
-        <HStack spacing={2}>
-          <Box
-            w="18px" h="18px" flexShrink={0}
-            border="2px solid" borderColor="border.default"
-            bg={l1Reverted ? "chart.negative" : l1Confirmed ? "chart.positive" : "accent.secondary"}
-            display="flex" alignItems="center" justifyContent="center"
-          >
-            {l1Reverted ? (
-              <WarningIcon boxSize={2.5} color={stepIconColor} />
-            ) : l1Confirmed ? (
-              <CheckCircleIcon boxSize={2.5} color={stepIconColor} />
-            ) : (
-              <Spinner size="xs" color={stepIconColor} boxSize="10px" />
-            )}
-          </Box>
-          <Text fontSize="xs" fontWeight="700" color="text.primary">
-            L1 Deposit ({l1Config.name || "Ethereum"})
-          </Text>
-          {l1Reverted ? (
-            <Text fontSize="2xs" color="chart.negative" fontWeight="600">Failed</Text>
-          ) : l1Confirmed ? (
-            <Text fontSize="2xs" color="chart.positive" fontWeight="600">Confirmed</Text>
-          ) : l1HasHash ? (
-            <Text fontSize="2xs" color="accent.secondary" fontWeight="600">Pending...</Text>
-          ) : null}
-        </HStack>
-        {/* Step 2: L2 */}
-        <HStack spacing={2}>
-          <Box
-            w="18px" h="18px" flexShrink={0}
-            border="2px solid" borderColor="border.default"
-            bg={
-              l2Reverted
-                ? "chart.negative"
-                : l2Confirmed
-                  ? "chart.positive"
-                  : l1Confirmed
-                    ? "accent.secondary"
-                    : "border.subtle"
-            }
-            display="flex" alignItems="center" justifyContent="center"
-          >
-            {l2Reverted ? (
-              <WarningIcon boxSize={2.5} color={stepIconColor} />
-            ) : l2Confirmed ? (
-              <CheckCircleIcon boxSize={2.5} color={stepIconColor} />
-            ) : l1Confirmed ? (
-              <Spinner size="xs" color={stepIconColor} boxSize="10px" />
-            ) : (
-              <Text fontSize="2xs" fontWeight="800" color="text.tertiary">2</Text>
-            )}
-          </Box>
-          <Text fontSize="xs" fontWeight="700" color={l1Confirmed ? "text.primary" : "text.tertiary"}>
-            L2 Sequencer ({l2Config.name || "L2"})
-          </Text>
-          {l2Reverted ? (
-            <Text fontSize="2xs" color="chart.negative" fontWeight="600">Reverted</Text>
-          ) : l2Confirmed ? (
-            <Text fontSize="2xs" color="chart.positive" fontWeight="600">Confirmed</Text>
-          ) : l1Confirmed ? (
-            <Text fontSize="2xs" color="accent.secondary" fontWeight="600">Awaiting inclusion...</Text>
-          ) : null}
-        </HStack>
+      <VStack
+        spacing={0}
+        align="stretch"
+        divider={<Box borderTop="1px solid" borderColor="border.subtle" />}
+      >
+        <InclusionStep
+          label="L1 deposit"
+          chainId={meta.l1ChainId}
+          chainName={l1Config.name || "Ethereum"}
+          state={l1State}
+          explorerUrl={l1ExplorerUrl}
+        />
+        <InclusionStep
+          label="L2 inclusion"
+          chainId={meta.l2ChainId}
+          chainName={l2Config.name || "L2"}
+          state={l2State}
+          explorerUrl={l2ExplorerUrl}
+        />
       </VStack>
     </Box>
   );

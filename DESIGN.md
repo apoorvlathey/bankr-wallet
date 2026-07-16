@@ -314,6 +314,10 @@
   established amber brand variant in both Add and Edit modes. Cancel remains
   secondary, field focus remains blue, and the shared button recipe preserves
   native submission, loading, disabled, hover, active, and focus states.
+- 2026-07-16 address-pill audit: batch-call targets now use the shared
+  labeled-address pill and its contact action. Add contact seeds its label from
+  the pill's current wallet, public-name, or API identity without treating the
+  suggestion as an existing contact; raw address fallbacks stay empty.
 - 2026-07-16 Send contact-add audit: passes with one named 32px native icon
   action aligned to the Contacts heading, using the established picker-group
   hierarchy and shared modal. The group remains visible with a text empty state,
@@ -336,9 +340,62 @@
   Both themes and all supported signing wallet fixtures passed compact through
   sidepanel review without overflow; automated Activity accessibility reported
   no violations.
+- 2026-07-16 Transaction-detail audit: passes as the post-submission half of
+  the request-review system. The screen establishes requesting identity and a
+  color-independent state first, then actual signed asset movement, readable
+  clear-signed intent, one receipt ledger for signer, fee, time, hash, and copy,
+  plus a chain-adjacent explorer action. Bridge source/destination legs retain
+  their chain-marked links;
+  failure remains adjacent to status; raw addresses, calldata, deploy data, and
+  gas share one native advanced disclosure. Defined edges replace nested card
+  shadows, current address identities flow through shared controls, and preview
+  fixtures bind Bankr, private-key, and seed-phrase accounts to the real record.
+  ERC-7730 fields remain inside the rounded summary owner instead of becoming a
+  detached description card. The primary explorer action sits beside the
+  status-line chain; force-inclusion explorer actions sit beside their terminal
+  L1/L2 statuses, while the receipt retains the transaction hash and copy action.
+- 2026-07-16 Transaction-detail refinement: kept the requesting hostname's
+  resting color while making it a focusable website action with a gently
+  revealed link signifier; removed duplicate chain context above actual
+  changes; matched request-review token scale and contract disclosure; aligned
+  counterparty metadata; preserved 1-99,999 wei and other tiny non-zero values;
+  vertically centered custom clear-signing intent; and used the scarce amber
+  accent for the batch-call count.
+- 2026-07-16 Transaction-detail variant audit: same-chain swaps, EIP-7702
+  delegation set/revoke, ERC-7715 revoke, atomic and sequential batches, force
+  inclusion, bridge pending/refund, broadcast uncertainty, contract deployment,
+  and undecoded legacy calls now resolve into explicit receipt states. Generic
+  fallbacks remain truthful and disclose Advanced details by default; known
+  intent stays compact. Deterministic preview scenarios cover the full matrix.
 
 ## Changelog
 
+- 2026-07-16: replaced Transaction details' filled error alert with a neutral
+  defined-edge failure receipt. Semantic red is confined to the status marker,
+  the message follows the screen's normal hierarchy, technical diagnostics use
+  an accessible disclosure, and Rebroadcast is a neutral recovery action.
+- 2026-07-16: moved force-inclusion L1/L2 explorer actions beside their
+  confirmed or failed stage statuses, keeping each link attached to the exact
+  chain outcome and removing the duplicate receipt-level explorer row.
+- 2026-07-16: finished the remaining Transaction-details variants with shared
+  swap and delegation ledgers, a two-stage force-inclusion receipt, sequential
+  batch context, explicit processing/uncertain states, generic deployment and
+  contract-call actions, refund explorer access, and focused preview fixtures.
+- 2026-07-16: separated confirmed ERC-7715 revocations from their
+  pre-confirmation warning treatment. Transaction details now presents revoke
+  intent, permission type, requester, delegate, asset, limit, methods, and
+  expiry as one quiet receipt ledger with shared address and token disclosure.
+- 2026-07-16: consolidated the Transaction-details bridge route into one
+  directional ledger. Source and destination now share a stable token/value
+  grid, request-scale token marks with contextual chain badges, aligned signed
+  amounts, restrained explorer actions, and one secondary route row instead of
+  competing stacked cards.
+- 2026-07-16: rebuilt Transaction details around the Warm Midnight receipt
+  hierarchy shared with transaction and batch review. Replaced the badge/card
+  stack with request identity, explicit status and network, actual Send/Receive
+  changes, synchronous action summaries, a compact bridge route, one receipt
+  ledger, and one shadowless advanced disclosure. Added production-fidelity
+  approval, transfer, bridge, metadata, stress, and wallet-bound preview states.
 - 2026-07-16: rebuilt Activity as one production ledger aligned with Assets and
   Positions: a single defined-edge owner, internal date markers, compact
   identity media, a stable two-line intent/context and value/status grid,
@@ -662,3 +719,22 @@
   contacts in Send without changing the quiet Address Book management rows.
 - 2026-07-16: simplified Send's recipient placeholder from a name-service list
   to a concise address/name-service/wallet/contact capability summary.
+- 2026-07-16: refined Transaction details with a concise Advanced disclosure
+  that scrolls its heading into view on expansion, quiet Midnight calldata
+  tabs with amber decoded-function identity, decoder-fed fallback summaries
+  for transactions without clear signing, exact optional native payment, and
+  a directly clickable receipt hash.
+- 2026-07-16: aligned decoded and clear-signed transaction actions with the
+  receipt ledger as a right-aligned `Action` value, removing the ornamental
+  action icon and keeping Advanced details closed once readable intent exists.
+- 2026-07-16: unified bytes and rich-string calldata tabs behind one decoded-
+  parameter control, giving every Midnight param view the same quiet labels,
+  amber active rule, and focus treatment while preserving Bauhaus styling.
+- 2026-07-16: unified request and receipt token-image fallbacks behind the safe
+  shared token mark, so missing or still-rasterizing logos remain legible as an
+  amber symbol identity instead of disappearing into the dark surface.
+- 2026-07-16: restored token-contract disclosure to estimated and confirmed
+  balance-change symbols. Hover and keyboard focus now share the help cursor,
+  amber identity feedback, address, copy, and explorer tools; the request
+  simulation retry also consumes the same catalog/MetaMask logo fallback as
+  Transaction details.

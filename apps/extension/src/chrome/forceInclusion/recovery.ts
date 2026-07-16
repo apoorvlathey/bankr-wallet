@@ -7,17 +7,34 @@ import {
   type CompletedTransaction,
 } from "../txHistoryStorage";
 import { createL1PublicClient, getL1RpcUrl } from "./l1Client";
+import { isForceInclusionL2Hash } from "./broadcastPolicy";
 import { extractL2Hash } from "./singleOutcome";
 
 export async function recoverStuckForceInclusionTxs(): Promise<void> {
   const history = await getTxHistory();
   for (const tx of history) await recoverSingleEntry(tx);
-  await recoverStuckForceInclusionBundles(history);
+  await recoverStuckForceInclusionBundles(await getTxHistory());
 }
 
 async function recoverSingleEntry(tx: CompletedTransaction): Promise<void> {
   if (!tx.forceInclusionMeta) return;
-  if (tx.status === "success" || tx.status === "failed") return;
+  if (tx.status === "success") return;
+  if (tx.status === "failed") {
+    const knownL2Hash = tx.txHash;
+    if (
+      tx.error === "Transaction dropped from the mempool" &&
+      isForceInclusionL2Hash(tx, knownL2Hash)
+    ) {
+      await updateTxInHistory(tx.id, {
+        status: "pending",
+        error: undefined,
+        completedAt: undefined,
+      });
+      const { startReceiptPolling } = await import("./receiptPoller");
+      startReceiptPolling(tx.id, knownL2Hash!, tx.forceInclusionMeta.l2ChainId);
+    }
+    return;
+  }
   const l1Hash = tx.forceInclusionMeta.l1TxHash;
   if (!l1Hash) return;
   if (tx.status === "pending" && tx.txHash && tx.txHash !== l1Hash) return;

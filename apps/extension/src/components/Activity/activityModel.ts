@@ -4,6 +4,11 @@ import type {
 } from "@/chrome/txHistoryStorage";
 import { VIEM_CHAINS } from "@/constants/chainRegistry";
 import {
+  formatSmallBaseUnitLabel,
+  formatTokenDecimalAmount,
+  parseDecimalToBaseUnits,
+} from "@/lib/tokenAmountFormat";
+import {
   formatActivityAddress,
   getLiveActivityAddressLabel,
 } from "./activityIdentityModel";
@@ -101,60 +106,12 @@ export function formatTimeAgo(timestamp: number, now: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-const SUBSCRIPT_DIGITS = "₀₁₂₃₄₅₆₇₈₉";
-
-function toSubscript(value: number): string {
-  return String(value)
-    .split("")
-    .map((digit) => SUBSCRIPT_DIGITS[Number(digit)])
-    .join("");
-}
-
 /** Format a decimal amount string for the Activity row. */
 export function formatActivityAmount(
   value: string,
   compactTiny = false,
 ): string {
-  const [integer = "0", decimal = ""] = value.split(".");
-  const digits = integer.length;
-  if (digits <= 9) {
-    const formatted = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    const significantDecimal = decimal.replace(/0+$/, "");
-    const firstNonZero = significantDecimal.search(/[1-9]/);
-    if (integer === "0" && firstNonZero >= 6) {
-      const coefficient = significantDecimal
-        .slice(firstNonZero, firstNonZero + 4)
-        .replace(/0+$/, "");
-      if (compactTiny) {
-        return `0.0${toSubscript(firstNonZero)}${coefficient}`;
-      }
-      return `0.${"0".repeat(firstNonZero)}${coefficient}`;
-    }
-    const trimmed = significantDecimal.slice(0, 6).replace(/0+$/, "");
-    return trimmed ? `${formatted}.${trimmed}` : formatted;
-  }
-  if (digits <= 12) {
-    const intBig = BigInt(integer);
-    const scaled = (intBig * 100n) / 1_000_000_000n;
-    const whole = scaled / 100n;
-    const fraction = scaled % 100n;
-    return `${whole}.${fraction.toString().padStart(2, "0")}B`;
-  }
-  const first = integer[0];
-  const next = integer.slice(1, 3).padEnd(2, "0");
-  return `${first}.${next}e${digits - 1}`;
-}
-
-function toExactBaseUnits(value: string, decimals: number): bigint | null {
-  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) return null;
-  if (!/^\d+(?:\.\d+)?$/.test(value)) return null;
-  const [integer, fraction = ""] = value.split(".");
-  if (fraction.length > decimals) return null;
-  const scale = 10n ** BigInt(decimals);
-  return (
-    BigInt(integer) * scale +
-    BigInt((fraction || "0").padEnd(decimals, "0"))
-  );
+  return formatTokenDecimalAmount(value, compactTiny);
 }
 
 function getActivityTokenDecimals(
@@ -190,14 +147,11 @@ function formatActivityValueLabel(
   decimals: number | undefined,
   compactTiny: boolean,
 ): string {
-  if (decimals === 18) {
-    const baseUnits = toExactBaseUnits(amount, decimals);
-    if (baseUnits !== null && baseUnits >= 1n && baseUnits <= 99_999n) {
-      const formattedBaseUnits = baseUnits
-        .toString()
-        .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-      return `${prefix}${formattedBaseUnits} wei`;
-    }
+  if (decimals !== undefined) {
+    const baseUnits = parseDecimalToBaseUnits(amount, decimals);
+    const baseUnitLabel =
+      baseUnits === null ? null : formatSmallBaseUnitLabel(baseUnits, decimals);
+    if (baseUnitLabel) return `${prefix}${baseUnitLabel}`;
   }
   return `${prefix}${formatActivityAmount(amount, compactTiny)} ${symbol}`;
 }

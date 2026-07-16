@@ -1,468 +1,193 @@
-import { Box,
-  VStack,
-  HStack,
-  Text,
-  Image,
-  Badge,
-  IconButton,
-  Spacer,
-  Tooltip,
-} from "@chakra-ui/react";
-import {
-  WarningIcon,
-  CopyIcon,
-  CheckIcon,
-  ExternalLinkIcon,
-} from "@chakra-ui/icons";
-import { useState } from "react";
-
+import { Box, HStack, Text, VStack } from "@chakra-ui/react";
+import type { ReactNode } from "react";
 import type { ClearSignedMeta } from "@/chrome/txHistoryStorage";
+import TokenLogo from "@/components/TokenLogo";
+import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover";
 import { getChainConfig } from "@/constants/chainConfig";
-import { isDarkThemeId, useTheme } from "@/theme";
-import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
-
-/**
- * Snapshot-driven "what did this transaction do?" hero card for the
- * Transaction Details modal.
- *
- * Mirrors the layout of `ERC20ApproveDisplay` (header strip / big action /
- * counterparty pill) so users get the same human-readable surface they saw on
- * the confirmation screen. Unlike the confirmation screen this card is fed
- * entirely by the `ClearSignedMeta` captured at submission time — no RPC,
- * eth.sh, or ENS calls happen during render — and is read-only (no edit
- * button on the amount).
- */
 
 interface Props {
   meta: ClearSignedMeta;
   chainId: number;
+  details?: ReactNode;
+  showDetails?: boolean;
 }
 
-// Card backgrounds.
-//   approve: warning tint in Bauhaus (cornsilk yellow) / lifted navy in
-//     Midnight — same colors `ERC20ApproveDisplay` uses, so the user
-//     recognizes the "approve, with care" visual across confirmation and
-//     activity-detail surfaces.
-//   revoke (approve with amount === 0): success tint in Bauhaus (the
-//     protective action shouldn't wear a caution color), lifted navy in
-//     Midnight (REVOKE chip below carries the green semantic on its own).
-//   everything else: surface.sunken to integrate with the modal's other
-//     section cards (transferMeta, From→To, gas).
-function useCardBg(meta: ClearSignedMeta) {
-  const { themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
+interface ActionPresentation {
+  label: string;
+  description?: string;
+}
+
+function getActionPresentation(meta: ClearSignedMeta): ActionPresentation {
+  const symbol = meta.tokenSymbol || "token";
+
   if (meta.kind === "approve") {
     if (meta.isRevoke) {
-      return isDarkTheme ? "surface.raisedHover" : "status.success.tint";
+      return {
+        label: `Revoke ${symbol} approval`,
+        description: "The spender can no longer move this token.",
+      };
     }
-    return isDarkTheme ? "surface.raisedHover" : "status.warning.tint";
-  }
-  return "surface.sunken";
-}
-
-function actionLabel(meta: ClearSignedMeta): string {
-  switch (meta.kind) {
-    case "approve":
-      // The green REVOKE chip below already carries the verb. Pair it with a
-      // neutral "Approval" label so the section doesn't read "REVOKE … REVOKE
-      // …" stacked vertically.
-      return meta.isRevoke ? "Approval" : "Approve Amount";
-    case "transfer":
-    case "nativeSend":
-      return "Send Amount";
-    case "erc7730":
-      return "Action";
-  }
-}
-
-function CopyIconButton({
-  value,
-  label,
-  size = "xs",
-}: {
-  value: string;
-  label: string;
-  size?: "xs" | "sm";
-}) {
-  const [copied, setCopied] = useState(false);
-  const handle = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // clipboard may be unavailable in some contexts — silently no-op
+    if (meta.isInfinite) {
+      return {
+        label: `Approve unlimited ${symbol}`,
+        description: "This approval does not have a spending limit.",
+      };
     }
+    return {
+      label: `Approve ${meta.amount || "an amount of"} ${symbol}`,
+    };
+  }
+
+  if (meta.kind === "erc7730") {
+    return {
+      label: meta.intent || meta.contractName || "Contract interaction",
+    };
+  }
+
+  return {
+    label: `Send ${meta.amount || "an amount of"} ${symbol}`,
   };
-  return (
-    <IconButton
-      aria-label={label}
-      icon={copied ? <CheckIcon boxSize="9px" /> : <CopyIcon boxSize="9px" />}
-      size={size}
-      variant="ghost"
-      minW={size === "xs" ? "18px" : "20px"}
-      h={size === "xs" ? "18px" : "20px"}
-      color={copied ? "accent.highlight" : "text.tertiary"}
-      onClick={handle}
-      _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-    />
-  );
 }
 
-export default function ClearSignedSummaryCard({ meta, chainId }: Props) {
-  const { tokens, themeId } = useTheme();
-  const isDarkTheme = isDarkThemeId(themeId);
-  const cardBg = useCardBg(meta);
-  const chainConfig = getChainConfig(chainId);
+function counterpartyLabel(meta: ClearSignedMeta): string {
+  if (meta.kind === "approve") return "Spender";
+  if (meta.kind === "erc7730") return "Contract";
+  return "Recipient";
+}
 
-  // Token logo: prewarm via the shared avatar cache so reopens are
-  // synchronous. `useCachedAvatarSrc` returns null while warming, in which
-  // case we fall back to the raw URL so the row never has a flicker frame.
-  const cachedTokenLogo = useCachedAvatarSrc(meta.tokenLogo || undefined);
-  const tokenLogoSrc = cachedTokenLogo || meta.tokenLogo || undefined;
-
-  // Header strip content varies per kind so the same outer shell can host
-  // an ERC-20 row, a chain-native row, or a contract row.
-  const headerLogo =
-    meta.kind === "erc7730" || (meta.kind === "nativeSend" && !meta.tokenLogo)
-      ? null
-      : tokenLogoSrc;
-
-  const headerTitle = (() => {
-    if (meta.kind === "erc7730") {
-      return meta.contractName || meta.counterpartyLabel || "Contract Call";
-    }
-    if (meta.kind === "nativeSend") {
-      return meta.tokenSymbol || "Native Asset";
-    }
-    return meta.tokenSymbol || "Token";
-  })();
-
-  const headerBadge = (() => {
-    if (meta.kind === "approve" || meta.kind === "transfer") {
-      return meta.tokenSymbol;
-    }
-    return null;
-  })();
-
-  const counterpartyAddress = meta.counterparty;
-  const counterpartySectionLabel = (() => {
-    switch (meta.kind) {
-      case "approve":
-        // "Spender" stays the same whether granting or revoking — the chip
-        // above already says which direction we're going, so re-labeling
-        // this row "Revoke From" just adds a third stacked "REVOKE …".
-        return "Spender";
-      case "transfer":
-      case "nativeSend":
-        return "Recipient";
-      case "erc7730":
-        return "Contract";
-    }
-  })();
+export default function ClearSignedSummaryCard({
+  meta,
+  chainId,
+  details,
+  showDetails = false,
+}: Props) {
+  const explorer = getChainConfig(chainId).explorer;
+  const action = getActionPresentation(meta);
+  const fallbackCounterparty = meta.counterparty
+    ? `${meta.counterparty.slice(0, 8)}…${meta.counterparty.slice(-6)}`
+    : "";
 
   return (
     <Box
-      bg={cardBg}
-      border={tokens.borders.thin}
+      bg="surface.raised"
+      borderWidth="1px"
+      borderStyle="solid"
       borderColor="border.default"
       borderRadius="lg"
-      boxShadow="card"
       overflow="hidden"
     >
-      <VStack spacing={0} align="stretch">
-        {/* Header strip — mirrors ERC20ApproveDisplay so the visual is
-            recognizable across confirmation and activity-detail surfaces.
-            Midnight gets a recessed sunken navy strip to read as a title bar
-            against the lifted card bg; Bauhaus inherits the card bg. */}
+      <VStack align="stretch" spacing={0}>
         <HStack
-          w="full"
-          py={1.5}
+          minH="48px"
           px={3}
-          spacing={2}
-          bg={isDarkTheme && meta.kind === "approve" ? "surface.sunken" : "transparent"}
-        >
-          {headerLogo ? (
-            <Image
-              src={headerLogo}
-              alt={meta.tokenSymbol || ""}
-              boxSize="20px"
-              borderRadius="full"
-              border="1.5px solid"
-              borderColor="border.default"
-            />
-          ) : (
-            <Box
-              boxSize="20px"
-              bg="accent.secondary"
-              borderRadius="full"
-              border="1.5px solid"
-              borderColor="border.default"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <Text fontSize="8px" fontWeight="900" color="accentFg.secondary">
-                {(meta.tokenSymbol || headerTitle).slice(0, 2).toUpperCase()}
-              </Text>
-            </Box>
-          )}
-          <Text fontSize="xs" fontWeight="700" color="text.primary" isTruncated>
-            {headerTitle}
-          </Text>
-          {headerBadge && (
-            <Badge
-              fontSize="2xs"
-              bg="surface.raised"
-              color="text.secondary"
-              border="1px solid"
-              borderColor="border.subtle"
-              px={1.5}
-              py={0}
-              fontWeight="700"
-            >
-              {headerBadge}
-            </Badge>
-          )}
-          <Spacer />
-          {/* For ERC-20 kinds we copy the token contract; for native sends
-              there's no token contract; for erc7730 the contract == the
-              counterparty (shown below). */}
-          {meta.tokenAddress && (
-            <CopyIconButton
-              value={meta.tokenAddress}
-              label="Copy token address"
-              size="sm"
-            />
-          )}
-          {meta.tokenAddress && chainConfig.explorer && (
-            <IconButton
-              aria-label="View token on explorer"
-              icon={<ExternalLinkIcon boxSize="10px" />}
-              size="xs"
-              variant="ghost"
-              minW="20px"
-              h="20px"
-              color="text.tertiary"
-              onClick={() =>
-                chrome.tabs.create({
-                  url: `${chainConfig.explorer}/address/${meta.tokenAddress}`,
-                })
-              }
-              _hover={{ color: "accent.secondary", bg: "surface.raised" }}
-            />
-          )}
-        </HStack>
-
-        {/* Main action block. Amount + symbol dominates for approve/transfer/
-            nativeSend. For erc7730 we show the intent string (the descriptor's
-            human-readable function summary). */}
-        <Box
-          w="full"
-          py={3}
-          px={3}
-          borderTop="1px solid"
-          borderColor="border.subtle"
+          py={2.5}
+          spacing={3}
+          justify="space-between"
+          align={action.description ? "flex-start" : "center"}
         >
           <Text
-            fontSize="2xs"
-            color="text.secondary"
-            fontWeight="700"
-            textTransform="uppercase"
-            letterSpacing="wider"
-            mb={1}
+            color="fg.secondary"
+            fontSize="xs"
+            fontWeight="600"
+            flexShrink={0}
           >
-            {actionLabel(meta)}
+            Action
           </Text>
-          {meta.kind === "approve" && meta.isRevoke ? (
-            <Tooltip
-              label="The spender's allowance was set to 0 — they can no longer move your tokens."
-              fontSize="xs"
-              hasArrow
-              bg="fg.primary"
-              color="fg.inverse"
-              maxW="260px"
-            >
-              <HStack
-                spacing={1.5}
-                bg="status.success.bg"
-                px={2}
-                py={1}
-                border={isDarkTheme ? "none" : "1.5px solid"}
-                borderColor={
-                  isDarkTheme ? undefined : "status.success.border"
-                }
-                borderRadius={isDarkTheme ? "md" : "none"}
-                display="inline-flex"
-                w="fit-content"
-              >
-                <CheckIcon boxSize={3} color="status.success.fg" />
-                <Text
-                  fontSize="md"
-                  fontWeight="900"
-                  color="status.success.fg"
-                  textTransform="uppercase"
-                  letterSpacing="wide"
-                >
-                  {/* Token symbol intentionally omitted — already shown in
-                      the header strip above, and pairing them stacks the
-                      symbol on three lines ("McCAT … REVOKE McCAT …"). */}
-                  Revoke
-                </Text>
-              </HStack>
-            </Tooltip>
-          ) : meta.kind === "approve" && meta.isInfinite ? (
-            <Tooltip
-              label="This grants unlimited spending of your tokens."
-              fontSize="xs"
-              hasArrow
-              bg="fg.primary"
-              color="fg.inverse"
-              maxW="240px"
-            >
-              <HStack
-                spacing={1.5}
-                bg="status.error.bg"
-                px={2}
-                py={1}
-                border={isDarkTheme ? "none" : "1.5px solid"}
-                borderColor={isDarkTheme ? undefined : "status.error.border"}
-                borderRadius={isDarkTheme ? "md" : "none"}
-                display="inline-flex"
-                w="fit-content"
-              >
-                <WarningIcon boxSize={3} color="status.error.fg" />
-                <Text
-                  fontSize="md"
-                  fontWeight="900"
-                  color="status.error.fg"
-                  textTransform="uppercase"
-                  letterSpacing="wide"
-                >
-                  Unlimited {meta.tokenSymbol || ""}
-                </Text>
-              </HStack>
-            </Tooltip>
-          ) : meta.kind === "erc7730" ? (
+          <VStack
+            align="flex-end"
+            justify="center"
+            spacing={0.5}
+            minW={0}
+            flex="1"
+          >
             <Text
+              color="fg.primary"
               fontSize="md"
-              fontWeight="800"
-              color="text.primary"
-              lineHeight="1.25"
+              fontWeight="700"
+              lineHeight="short"
+              textAlign="right"
+              overflowWrap="anywhere"
             >
-              {meta.intent || meta.contractName || "Contract interaction"}
+              {action.label}
             </Text>
-          ) : (
-            <Text
-              fontSize="xl"
-              fontWeight="900"
-              color="text.primary"
-              fontFamily="mono"
-              lineHeight="1.1"
-              isTruncated
-            >
-              {meta.amount}
-              <Text as="span" fontSize="sm" fontWeight="700" color="text.secondary" ml={1}>
+            {action.description && (
+              <Text
+                color="fg.secondary"
+                fontSize="xs"
+                lineHeight="short"
+                textAlign="right"
+              >
+                {action.description}
+              </Text>
+            )}
+          </VStack>
+        </HStack>
+
+        {meta.tokenSymbol && meta.kind !== "erc7730" && (
+          <HStack
+            minH="48px"
+            px={3}
+            py={2.5}
+            justify="space-between"
+            spacing={3}
+            borderTopWidth="1px"
+            borderTopStyle="solid"
+            borderTopColor="border.subtle"
+          >
+            <Text color="fg.secondary" fontSize="xs" fontWeight="600">
+              Asset
+            </Text>
+            <HStack spacing={2} minW={0}>
+              <TokenLogo
+                logoUrl={meta.tokenLogo}
+                symbol={meta.tokenSymbol}
+                alt={meta.tokenSymbol}
+                size="20px"
+              />
+              <Text color="fg.primary" fontSize="xs" fontWeight="700" noOfLines={1}>
                 {meta.tokenSymbol}
               </Text>
-            </Text>
-          )}
-        </Box>
-
-        {/* Counterparty (spender / recipient / contract). Same shape as the
-            outer "To" row on the confirmation screen: ENS badge on top,
-            address pill in the middle, eth.sh label on the bottom. Any subset
-            may be visible; address pill is always present when we have a
-            counterparty at all. */}
-        {counterpartyAddress && (
-          <Box
-            w="full"
-            py={2}
-            px={3}
-            borderTop="1px solid"
-            borderColor="border.subtle"
-          >
-            <HStack justify="space-between" align="flex-start" spacing={2}>
-              <Text
-                fontSize="2xs"
-                color="text.secondary"
-                fontWeight="700"
-                textTransform="uppercase"
-                letterSpacing="wider"
-                pt={0.5}
-              >
-                {counterpartySectionLabel}
-              </Text>
-              <VStack spacing={1} align="flex-end" minW={0}>
-                {meta.counterpartyEns && (
-                  <Badge
-                    fontSize="2xs"
-                    bg="accent.highlight"
-                    color="accentFg.highlight"
-                    border="1.5px solid"
-                    borderColor="border.default"
-                    px={1.5}
-                    py={0}
-                    fontWeight="700"
-                    maxW="180px"
-                    isTruncated
-                  >
-                    {meta.counterpartyEns}
-                  </Badge>
-                )}
-                <HStack
-                  spacing={0.5}
-                  px={1.5}
-                  py={0.5}
-                  bg="surface.raised"
-                  border="1.5px solid"
-                  borderColor="border.default"
-                  borderRadius="md"
-                  flexShrink={0}
-                >
-                  <Text fontSize="2xs" color="text.secondary" fontFamily="mono" fontWeight="700">
-                    {counterpartyAddress.slice(0, 6)}...{counterpartyAddress.slice(-4)}
-                  </Text>
-                  <CopyIconButton
-                    value={counterpartyAddress}
-                    label={`Copy ${counterpartySectionLabel.toLowerCase()}`}
-                  />
-                  {chainConfig.explorer && (
-                    <IconButton
-                      aria-label="View on explorer"
-                      icon={<ExternalLinkIcon boxSize="9px" />}
-                      size="xs"
-                      variant="ghost"
-                      minW="18px"
-                      h="18px"
-                      color="text.tertiary"
-                      onClick={() =>
-                        chrome.tabs.create({
-                          url: `${chainConfig.explorer}/address/${counterpartyAddress}`,
-                        })
-                      }
-                      _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-                    />
-                  )}
-                </HStack>
-                {meta.counterpartyLabel && (
-                  <Badge
-                    fontSize="2xs"
-                    bg="accent.secondary"
-                    color="accentFg.secondary"
-                    border="1.5px solid"
-                    borderColor="border.default"
-                    px={1.5}
-                    py={0}
-                    fontWeight="700"
-                    maxW="200px"
-                    isTruncated
-                  >
-                    {meta.counterpartyLabel}
-                  </Badge>
-                )}
-              </VStack>
             </HStack>
+          </HStack>
+        )}
+
+        {meta.counterparty && (
+          <HStack
+            minH="48px"
+            px={3}
+            py={2.5}
+            justify="space-between"
+            spacing={3}
+            borderTopWidth="1px"
+            borderTopStyle="solid"
+            borderTopColor="border.subtle"
+          >
+            <Text color="fg.secondary" fontSize="xs" fontWeight="600" flexShrink={0}>
+              {counterpartyLabel(meta)}
+            </Text>
+            <LabeledAddressPopover
+              address={meta.counterparty}
+              contextLabel={counterpartyLabel(meta).toLowerCase()}
+              explorer={explorer}
+              label={
+                meta.counterpartyLabel ||
+                meta.counterpartyEns ||
+                fallbackCounterparty
+              }
+              maxW="220px"
+            />
+          </HStack>
+        )}
+
+        {details && (
+          <Box
+            display={showDetails ? "block" : "none"}
+            bg="surface.sunken"
+            borderTopWidth="1px"
+            borderTopStyle="solid"
+            borderTopColor="border.subtle"
+          >
+            {details}
           </Box>
         )}
       </VStack>

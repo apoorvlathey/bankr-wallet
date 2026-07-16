@@ -2,42 +2,28 @@ import type {
   AssetChangeRecord,
   AssetTransferRecord,
 } from "@/chrome/txHistoryStorage";
+import {
+  appendTokenSymbol,
+  formatTokenBaseUnits,
+} from "@/lib/tokenAmountFormat";
 
 export function formatValue(
   value: string | undefined,
   symbol = "ETH",
 ): string {
-  if (!value || value === "0" || value === "0x0") {
-    return `0 ${symbol}`;
-  }
-  const wei = BigInt(value);
-  const eth = Number(wei) / 1e18;
-  return `${eth.toFixed(6)} ${symbol}`;
+  if (!value) return `0 ${symbol}`;
+  const formatted = formatTokenBaseUnits(value, 18, true);
+  return formatted ? appendTokenSymbol(formatted, symbol) : `0 ${symbol}`;
 }
 
 /**
- * Format a positive base-unit amount to a token-friendly decimal string.
- * Returns null when the amount rounds to zero at the display precision.
+ * Format a positive base-unit amount without collapsing tiny non-zero values.
  */
 export function formatTokenAmountWei(
   amountWei: string,
   decimals: number,
 ): string | null {
-  let bi: bigint;
-  try {
-    bi = BigInt(amountWei);
-  } catch {
-    return null;
-  }
-  if (bi < 0n) bi = -bi;
-  if (bi === 0n) return null;
-  const divisor = 10n ** BigInt(decimals);
-  const whole = bi / divisor;
-  const frac = bi % divisor;
-  let fracStr = frac.toString().padStart(decimals, "0").slice(0, 6);
-  fracStr = fracStr.replace(/0+$/, "");
-  const numStr = fracStr.length > 0 ? `${whole}.${fracStr}` : `${whole}`;
-  return numStr === "0" ? null : numStr;
+  return formatTokenBaseUnits(amountWei, decimals, true);
 }
 
 export function formatSignedTokenAmount(

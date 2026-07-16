@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AssetChangeRecord,
   CompletedTransaction,
 } from "@/chrome/txHistoryStorage";
+import { FLASHBLOCKS_CHAIN_IDS } from "@/constants/networks";
 import {
   applyTokenDisplayMetadata,
   collectMissingTokenMetadataRequests,
@@ -16,6 +17,7 @@ export function useAssetChangeData({
   isOpen: boolean;
   tx: CompletedTransaction;
 }) {
+    const reconciledReceiptRef = useRef<string | null>(null);
     // Source-chain native USD price for the Value + Transaction Fee rows.
     // Fetched lazily once the modal opens. Almost every recorded tx has a
     // non-zero gas fee, so we don't bother gating on value/fee here — the
@@ -142,12 +144,16 @@ export function useAssetChangeData({
 
     useEffect(() => {
       if (!isOpen) return;
-      if (tx.assetChanges || tx.status !== "success" || !tx.txHash) return;
+      if (tx.status !== "success" || !tx.txHash) return;
+      if (tx.assetChanges && !FLASHBLOCKS_CHAIN_IDS.has(tx.chainId)) return;
+      const receiptKey = `${tx.id}:${tx.txHash}`;
+      if (reconciledReceiptRef.current === receiptKey) return;
+      reconciledReceiptRef.current = receiptKey;
       chrome.runtime.sendMessage({
         type: "backfillAssetChanges",
         txId: tx.id,
       });
-    }, [isOpen, tx.id, tx.status, tx.txHash, tx.assetChanges]);
+    }, [isOpen, tx.id, tx.status, tx.txHash, tx.assetChanges, tx.chainId]);
 
     // USD prices keyed by `${chainId}-${address-lowercase}` for ERC-20s and
     // `${chainId}-native` for native deltas. Populated lazily from assetChanges

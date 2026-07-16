@@ -66,8 +66,12 @@ test("history implementations keep one-way audit boundaries", async () => {
     "history/repository.ts",
     "history/maintenance.ts",
     "history/rpc.ts",
+    "history/nativeDelta.ts",
     "history/assetChangeExtraction.ts",
     "history/assetChangePersistence.ts",
+    "history/receiptGasData.ts",
+    "history/receiptSettlement.ts",
+    "history/receiptReconciliation.ts",
     "history/receiptTransport.ts",
     "history/receiptEnrichment.ts",
   ];
@@ -95,6 +99,8 @@ test("history implementations keep one-way audit boundaries", async () => {
   assert.doesNotMatch(sources["history/maintenance.ts"], /fetchRpcResult|resolveTokenMetadata/);
   assert.match(sources["history/rpc.ts"], /from ["']\.\.\/network\/rpcClient["']/);
   assert.doesNotMatch(sources["history/rpc.ts"], /chrome\.storage/);
+  assert.doesNotMatch(sources["history/nativeDelta.ts"], /chrome\.|fetchRpcResult/);
+  assert.doesNotMatch(sources["history/receiptGasData.ts"], /chrome\.|fetchRpcResult/);
   assert.match(
     sources["history/assetChangeExtraction.ts"],
     /from ["']\.\/assetTransferParser["']/,
@@ -107,7 +113,10 @@ test("history implementations keep one-way audit boundaries", async () => {
   assert.doesNotMatch(sources["history/assetChangePersistence.ts"], /chrome\./);
   assert.match(sources["history/receiptTransport.ts"], /from ["']\.\/rpc["']/);
   assert.doesNotMatch(sources["history/receiptTransport.ts"], /getTxById|updateTxInHistory/);
-  assert.match(sources["history/receiptEnrichment.ts"], /from ["']\.\/repository["']/);
+  assert.match(
+    sources["history/receiptReconciliation.ts"],
+    /from ["']\.\/repository["']/,
+  );
 });
 
 test("history facades and implementations stay audit-sized", async () => {
@@ -120,8 +129,12 @@ test("history facades and implementations stay audit-sized", async () => {
     "history/repository.ts": 90,
     "history/maintenance.ts": 80,
     "history/rpc.ts": 140,
+    "history/nativeDelta.ts": 40,
     "history/assetChangeExtraction.ts": 110,
     "history/assetChangePersistence.ts": 100,
+    "history/receiptGasData.ts": 40,
+    "history/receiptSettlement.ts": 100,
+    "history/receiptReconciliation.ts": 90,
     "history/receiptTransport.ts": 60,
     "history/receiptEnrichment.ts": 110,
   };

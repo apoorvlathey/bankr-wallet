@@ -48,7 +48,7 @@ async function evaluateMissingTransaction(
   chainId: number,
 ): Promise<boolean | null> {
   const tx = await getTxById(txId);
-  if (shouldRetainUnobservedBroadcast(tx)) {
+  if (shouldRetainUnobservedBroadcast(tx, txHash)) {
     notFoundCounts.delete(txId);
     return null;
   }

@@ -1,6 +1,5 @@
 import { AddIcon, CheckIcon, CopyIcon, EditIcon, ExternalLinkIcon } from "@chakra-ui/icons";
 import {
-  Box,
   Button,
   HStack,
   Icon,
@@ -32,6 +31,7 @@ interface AddressActionsProps {
   contextLabel?: string;
   explorer?: string;
   showAddress?: boolean;
+  suggestedLabel?: string;
 }
 
 export function AddressActions({
@@ -40,6 +40,7 @@ export function AddressActions({
   contextLabel = "address",
   explorer,
   showAddress = true,
+  suggestedLabel,
 }: AddressActionsProps) {
   const [copied, setCopied] = useState(false);
   const [isContactEditorOpen, setIsContactEditorOpen] = useState(false);
@@ -134,7 +135,8 @@ export function AddressActions({
       </VStack>
       <AddressContactEditorModal
         address={address}
-        initialLabel={contact?.label}
+        initialLabel={contact?.label ?? suggestedLabel}
+        isEditing={Boolean(contact)}
         isOpen={isContactEditorOpen}
         onClose={() => setIsContactEditorOpen(false)}
       />
@@ -149,6 +151,14 @@ const MoreHorizontalIcon = () => (
     <circle cx="16" cy="10" r="1.5" fill="currentColor" />
   </Icon>
 );
+
+function isRawAddressLabel(label: string, address: string): boolean {
+  const normalized = label.trim();
+  return (
+    normalized.toLowerCase() === address.toLowerCase() ||
+    /^0x[a-fA-F0-9]{4,12}(?:\.\.\.|…)[a-fA-F0-9]{4,12}$/u.test(normalized)
+  );
+}
 
 interface LabeledAddressPopoverProps {
   address: string;
@@ -209,6 +219,10 @@ export function LabeledAddressPopover({
     resolvedAvatar: identity?.avatar,
     resolvedName: identity?.name,
   });
+  const suggestedLabel = contact?.label
+    ?? account?.displayName
+    ?? identity?.name
+    ?? (isRawAddressLabel(label, address) ? undefined : label.trim() || undefined);
 
   const avatar =
     presentation.avatarKind === "resolved" && identity?.avatar ? (
@@ -257,28 +271,28 @@ export function LabeledAddressPopover({
         lazyBehavior="keepMounted"
       >
         <PopoverTrigger>
-          <Box as="span" display="inline-flex" flexShrink={0} ml={-0.5}>
-            <IconButton
-              aria-label={`Show ${contextLabel} actions`}
-              icon={<MoreHorizontalIcon />}
-              size="xs"
-              variant="ghost"
-              minW="32px"
-              w="32px"
-              h="32px"
-              color={isDarkTheme ? "fg.secondary" : "accentFg.secondary"}
-              _hover={{
-                bg: "transparent",
-                color: "accent.highlight",
-                opacity: 1,
-              }}
-              _active={{
-                bg: "transparent",
-                color: "accent.highlight",
-                opacity: 0.8,
-              }}
-            />
-          </Box>
+          <IconButton
+            aria-label={`Show ${contextLabel} actions`}
+            icon={<MoreHorizontalIcon />}
+            size="xs"
+            variant="ghost"
+            minW="32px"
+            w="32px"
+            h="32px"
+            flexShrink={0}
+            ml={-0.5}
+            color={isDarkTheme ? "fg.secondary" : "accentFg.secondary"}
+            _hover={{
+              bg: "transparent",
+              color: "accent.highlight",
+              opacity: 1,
+            }}
+            _active={{
+              bg: "transparent",
+              color: "accent.highlight",
+              opacity: 0.8,
+            }}
+          />
         </PopoverTrigger>
         <Portal>
           <PopoverContent
@@ -291,6 +305,7 @@ export function LabeledAddressPopover({
                 address={address}
                 contextLabel={contextLabel}
                 explorer={explorer}
+                suggestedLabel={suggestedLabel}
               />
             </PopoverBody>
           </PopoverContent>

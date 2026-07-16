@@ -21,17 +21,14 @@ function isRpcQuantity(value: unknown): value is RpcQuantity {
 export function useGasData({
   isOpen,
   tx,
-  onResetExpansion,
 }: {
   isOpen: boolean;
   tx: CompletedTransaction;
-  onResetExpansion: () => void;
 }) {
   const [gasData, setGasData] = useState<GasData | undefined>(tx.gasData);
 
   useEffect(() => {
     setGasData(tx.gasData);
-    onResetExpansion();
 
     if (tx.gasData || !tx.txHash || tx.status !== "success" || !isOpen) return;
 
@@ -97,7 +94,6 @@ export function useGasData({
     tx.status,
     tx.chainId,
     isOpen,
-    onResetExpansion,
   ]);
 
   const derived = useMemo(() => {

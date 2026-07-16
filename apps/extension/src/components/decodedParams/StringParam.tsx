@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Box, HStack, Text, Textarea, Button, VStack, Code } from "@chakra-ui/react";
+import { Box, HStack, Text, Textarea, VStack, Code } from "@chakra-ui/react";
 import { CopyButton } from "@/components/CopyButton";
 import SafeImage from "@/components/SafeImage";
 import { isValidJSON, decodeBase64 } from "@/lib/convertUtils";
 import { isAddress } from "viem";
 import { AddressParam } from "./AddressParam";
 import { IPFS_GATEWAY } from "@/constants/externalUrls";
+import { ParamTabButton } from "./ParamTabButton";
 
 interface StringParamProps {
   value: string;
@@ -89,27 +90,13 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
       {tabs.length > 1 && (
         <HStack spacing={0}>
           {tabs.map((t) => (
-            <Button
+            <ParamTabButton
               key={t.key}
-              size="xs"
-              h="20px"
-              px={2}
-              fontSize="9px"
-              fontWeight="800"
-              textTransform="uppercase"
-              letterSpacing="wide"
-              bg={activeTab === t.key ? "fg.primary" : "transparent"}
-              color={activeTab === t.key ? "fg.inverse" : "text.tertiary"}
-              border="1.5px solid"
-              borderColor="border.default"
-              borderRadius={0}
-              borderRight={t.key !== tabs[tabs.length - 1].key ? "none" : undefined}
+              label={t.label}
+              isActive={activeTab === t.key}
+              isLast={t.key === tabs[tabs.length - 1].key}
               onClick={() => setActiveTab(t.key)}
-              _hover={{ bg: "fg.primary", color: "fg.inverse" }}
-              _active={{ transform: "translate(1px, 1px)" }}
-            >
-              {t.label}
-            </Button>
+            />
           ))}
         </HStack>
       )}

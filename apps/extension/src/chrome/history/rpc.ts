@@ -30,6 +30,20 @@ export async function fetchReceiptAtRpcUrl(
   }
 }
 
+export async function fetchTxAtRpcUrl(
+  rpcUrl: string,
+  txHash: string,
+): Promise<any | null> {
+  try {
+    const result = await historyRpcCall(rpcUrl, "eth_getTransactionByHash", [
+      txHash,
+    ]);
+    return result || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchBalanceAtBlock(
   rpcUrl: string,
   address: string,

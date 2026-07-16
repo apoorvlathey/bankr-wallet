@@ -7,7 +7,6 @@ import {
   getResolvedChainById,
   getStoredNativeCurrencySymbol,
 } from "@/lib/chains";
-import { isDarkThemeId, useTheme, useChainBadgeStyle } from "@/theme";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import {
@@ -18,11 +17,14 @@ import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import TxDetailView, {
   type TxDetailPresentation,
 } from "@/components/TxDetailView";
+import { ScreenSection } from "@/components/ui";
+import AdvancedDetails from "./AdvancedDetails";
 import BridgeSummary from "./BridgeSummary";
 import ClearSigningSummary from "./ClearSigningSummary";
-import GasDetails from "./GasDetails";
-import RawTransactionDetails from "./RawTransactionDetails";
+import DecodedFunctionSummary from "./DecodedFunctionSummary";
+import ReceiptDetails from "./ReceiptDetails";
 import StatusHeader from "./StatusHeader";
+import SwapSummary from "./SwapSummary";
 import TransactionError from "./TransactionError";
 import TransactionImpact from "./TransactionImpact";
 import { useAssetChangeData } from "./useAssetChangeData";
@@ -65,12 +67,6 @@ export function TxDetailController({
     (url: string | null | undefined): string | undefined =>
       (url && cachedLogoMap.get(url)) || url || undefined,
     [cachedLogoMap],
-  );
-  // Chain badge colors — all per-theme branching lives in `useChainBadgeStyle`.
-  const chainBadgeStyle = useChainBadgeStyle(
-    resolvedChain?.bg ?? config.bg,
-    resolvedChain?.text ?? config.text,
-    resolvedChain?.isCustom ?? false,
   );
   // Atomic batches (Bankr ERC-7821, EIP-7702 PK/SP) land on-chain as a self-
   // call whose data is `execute(mode, encodedCalls)`. Decode it back into the
@@ -128,9 +124,16 @@ export function TxDetailController({
     hasDelegation ||
     !!tx.swapMeta ||
     !!tx.bridge;
-  const [rawDetailsExpanded, setRawDetailsExpanded] = useState(!hasHero);
-  const [gasExpanded, setGasExpanded] = useState(false);
   const [errorExpanded, setErrorExpanded] = useState(false);
+  const [decodedFunctionName, setDecodedFunctionName] = useState<string | undefined>(
+    tx.functionName,
+  );
+  useEffect(() => {
+    setDecodedFunctionName(tx.functionName);
+  }, [tx.functionName, tx.id]);
+  const handleDecodedFunctionName = useCallback((name: string) => {
+    setDecodedFunctionName((current) => (current === name ? current : name));
+  }, []);
   const [isRebroadcasting, setIsRebroadcasting] = useState(false);
   const {
     sourceAssetChanges,
@@ -139,12 +142,6 @@ export function TxDetailController({
     formatWeiUsd,
   } = useAssetChangeData({ isOpen, tx });
   const toast = useThemedToast();
-  const { themeId } = useTheme();
-  // On midnight, the error.fg coral reads as another "error" cue on top of the
-  // already-red container — use a neutral light surface so the CTA feels like
-  // an action, not a warning. Bauhaus error.fg is already WHITE, so it's fine.
-  const rebroadcastBg = isDarkThemeId(themeId) ? "fg.primary" : "status.error.fg";
-  const rebroadcastFg = isDarkThemeId(themeId) ? "fg.inverse" : "status.error.bg";
 
   const canRebroadcast =
     tx.status === "failed" &&
@@ -206,7 +203,6 @@ export function TxDetailController({
     getStoredNativeCurrencySymbol(tx.chainId).then(setNativeSym).catch(() => {});
   }, [resolvedChain, tx.chainId]);
 
-  const resetGasExpansion = useCallback(() => setGasExpanded(false), []);
   const {
     gasData,
     isL2,
@@ -218,7 +214,7 @@ export function TxDetailController({
     setGasPrice,
     hasSetGasParams,
     estimatedMaxCost,
-  } = useGasData({ isOpen, tx, onResetExpansion: resetGasExpansion });
+  } = useGasData({ isOpen, tx });
 
   // Resolve explorer: hardcoded chain config first, then custom chain in networksInfo
   const explorerBase = resolvedChain?.explorer || config.explorer || "";
@@ -233,6 +229,21 @@ export function TxDetailController({
   };
 
   const displayTimestamp = tx.completedAt ?? tx.createdAt;
+  const hasBalanceChanges = Boolean(
+    (sourceAssetChanges && !(tx.bridge && tx.swapMeta)) ||
+      (destinationAssetChanges && tx.bridge && !tx.swapMeta),
+  );
+  const hasStructuredSummary = Boolean(
+    clearSignedMeta || hasErc7715Revoke || hasBatchCalls || hasDelegation,
+  );
+  const hasSwapSummary = Boolean(tx.swapMeta && !tx.bridge && !hasBatchCalls);
+  const hasGenericSummary = !hasStructuredSummary && !hasSwapSummary;
+  const genericAction = !tx.tx.to
+    ? "Deploy contract"
+    : tx.tx.data && tx.tx.data !== "0x"
+      ? "Contract interaction"
+      : "Transaction";
+  const chainName = resolvedChain?.name ?? tx.chainName;
 
   return (
     <TxDetailView
@@ -241,60 +252,98 @@ export function TxDetailController({
       onClose={onClose}
       title="Transaction details"
     >
-      <VStack spacing={3} align="stretch">
+      <VStack spacing={5} align="stretch">
         <StatusHeader
           tx={tx}
           resolvedChain={resolvedChain}
-          chainBadgeStyle={chainBadgeStyle}
-        />
-
-        <BridgeSummary
-          tx={tx}
-          resolvedChain={resolvedChain}
-          networksInfo={networksInfo}
-          resolveLogo={resolveLogo}
-          sourceAssetChanges={sourceAssetChanges}
-          destinationAssetChanges={destinationAssetChanges}
-          nativeSym={nativeSym}
           explorerBase={explorerBase}
-          formatUsd={formatTokenAmountUsd}
-        />
-        <TransactionImpact
-          tx={tx}
-          networksInfo={networksInfo}
-          sourceAssetChanges={sourceAssetChanges}
-          destinationAssetChanges={destinationAssetChanges}
-          nativeSym={nativeSym}
-          explorerBase={explorerBase}
-          displayTimestamp={displayTimestamp}
-          formatUsd={formatTokenAmountUsd}
           onViewExplorer={handleViewOnExplorer}
         />
 
-        <ClearSigningSummary
+        <TransactionError
           tx={tx}
-          chainName={resolvedChain?.name ?? tx.chainName}
-          explorerBase={explorerBase}
-          nativeSym={nativeSym}
-          batchCalls={batchCalls}
-          delegateLabels={delegateLabels}
-          clearSignedMeta={clearSignedMeta}
+          canRebroadcast={canRebroadcast}
+          isRebroadcasting={isRebroadcasting}
+          expanded={errorExpanded}
+          onToggle={() => setErrorExpanded(!errorExpanded)}
+          onRebroadcast={handleRebroadcast}
         />
 
-        <RawTransactionDetails
+        {tx.bridge && (
+          <ScreenSection title="Bridge route">
+            <BridgeSummary
+              tx={tx}
+              resolvedChain={resolvedChain}
+              networksInfo={networksInfo}
+              sourceAssetChanges={sourceAssetChanges}
+              destinationAssetChanges={destinationAssetChanges}
+              nativeSym={nativeSym}
+              explorerBase={explorerBase}
+              formatUsd={formatTokenAmountUsd}
+            />
+          </ScreenSection>
+        )}
+
+        {hasBalanceChanges && (
+          <ScreenSection title="Balance changes">
+            <TransactionImpact
+              tx={tx}
+              networksInfo={networksInfo}
+              sourceAssetChanges={sourceAssetChanges}
+              destinationAssetChanges={destinationAssetChanges}
+              nativeSym={nativeSym}
+              formatUsd={formatTokenAmountUsd}
+            />
+          </ScreenSection>
+        )}
+
+        {(hasStructuredSummary || hasSwapSummary || hasGenericSummary) && (
+          <ScreenSection title="Transaction summary">
+            {hasSwapSummary && tx.swapMeta ? (
+              <SwapSummary meta={tx.swapMeta} />
+            ) : hasStructuredSummary ? (
+              <ClearSigningSummary
+                tx={tx}
+                chainName={chainName}
+                explorerBase={explorerBase}
+                nativeSym={nativeSym}
+                batchCalls={batchCalls}
+                delegateLabels={delegateLabels}
+                clearSignedMeta={clearSignedMeta}
+              />
+            ) : (
+              <DecodedFunctionSummary
+                functionName={decodedFunctionName || genericAction}
+                contractAddress={tx.tx.to}
+                chainId={tx.chainId}
+                value={tx.tx.value}
+                nativeSymbol={nativeSym}
+                valueUsd={formatWeiUsd(tx.tx.value)}
+              />
+            )}
+          </ScreenSection>
+        )}
+
+        <ScreenSection title="Receipt">
+          <ReceiptDetails
+            tx={tx}
+            nativeSym={nativeSym}
+            txFee={txFee}
+            estimatedMaxCost={estimatedMaxCost}
+            displayTimestamp={displayTimestamp}
+            explorerBase={explorerBase}
+            onViewExplorer={handleViewOnExplorer}
+            formatWeiUsd={formatWeiUsd}
+          />
+        </ScreenSection>
+
+        <AdvancedDetails
           tx={tx}
           resolveLogo={resolveLogo}
           nativeSym={nativeSym}
-          expanded={rawDetailsExpanded}
-          onToggle={() => setRawDetailsExpanded(!rawDetailsExpanded)}
-          formatWeiUsd={formatWeiUsd}
-        />
-
-        <GasDetails
           gasData={gasData}
           txFee={txFee}
           gasUsagePercent={gasUsagePercent}
-          nativeSym={nativeSym}
           isL2={isL2}
           setGas={setGas}
           setMaxFee={setMaxFee}
@@ -302,20 +351,9 @@ export function TxDetailController({
           setGasPrice={setGasPrice}
           hasSetGasParams={hasSetGasParams}
           estimatedMaxCost={estimatedMaxCost}
-          expanded={gasExpanded}
-          onToggle={() => setGasExpanded(!gasExpanded)}
+          defaultOpen={!hasHero && !decodedFunctionName}
           formatWeiUsd={formatWeiUsd}
-        />
-
-        <TransactionError
-          tx={tx}
-          canRebroadcast={canRebroadcast}
-          isRebroadcasting={isRebroadcasting}
-          rebroadcastBg={rebroadcastBg}
-          rebroadcastFg={rebroadcastFg}
-          expanded={errorExpanded}
-          onToggle={() => setErrorExpanded(!errorExpanded)}
-          onRebroadcast={handleRebroadcast}
+          onFunctionName={handleDecodedFunctionName}
         />
       </VStack>
     </TxDetailView>

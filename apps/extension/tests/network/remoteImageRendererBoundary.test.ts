@@ -23,6 +23,16 @@ test("NFT metadata cannot create raw iframe subresource requests", async () => {
   assert.match(source, /<SafeImage[\s\S]*src=\{src\}/);
 });
 
+test("token logos show the shared fallback while remote rasterization is pending", async () => {
+  const sharedLogo = await component("TokenLogo.tsx");
+  const requestLogo = await component("AssetChanges/TokenIcon.tsx");
+
+  assert.match(sharedLogo, /import SafeImage from/);
+  assert.match(sharedLogo, /<SafeImage[\s\S]*fallback=\{placeholder\}/);
+  assert.match(requestLogo, /import TokenLogo from/);
+  assert.match(requestLogo, /<TokenLogo/);
+});
+
 test("wallet resets cannot rehydrate identity imagery from DOM localStorage", async () => {
   const source = await readFile(
     new URL("../../src/lib/avatarCacheClient.ts", import.meta.url),

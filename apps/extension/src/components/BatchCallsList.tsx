@@ -11,14 +11,13 @@
  * `BatchCallsList` supplies that state for read-only history surfaces.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Box,
   VStack,
   HStack,
   Text,
   Badge,
-  IconButton,
   Image,
   Collapse,
   Button,
@@ -26,7 +25,6 @@ import {
 } from "@chakra-ui/react";
 import {
   ChevronDownIcon,
-  ExternalLinkIcon,
 } from "@chakra-ui/icons";
 import { parseApproveCalldata } from "@/lib/erc20Approve";
 import ERC20ApproveDisplay from "@/components/ERC20ApproveDisplay";
@@ -37,13 +35,14 @@ import CalldataDecoder from "@/components/CalldataDecoder";
 import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
 import { useErc20InlineSummary } from "@/hooks/useErc20InlineSummary";
-import { CopyButton } from "@/components/CopyButton";
+import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getNativeAssetMeta } from "@/lib/chains";
 import NativeValueAmount from "@/components/NativeValueAmount";
 import SafeImage from "@/components/SafeImage";
 import { isDarkThemeId, useTheme } from "@/theme";
+import { getEthShLabels } from "@/lib/ethShLabelsCache";
 
 // Per-call accent rotation for expressive surfaces. CallCard resolves these to
 // neutral graphite badges in Midnight while Bauhaus keeps the color sequence;
@@ -124,6 +123,18 @@ export function CallCard({
   });
   const [primaryTechnicalDetailsOpen, setPrimaryTechnicalDetailsOpen] =
     useState(false);
+  const [targetLabel, setTargetLabel] = useState<string | null>(null);
+  useEffect(() => {
+    setTargetLabel(null);
+    if (!call.to) return;
+    let cancelled = false;
+    void getEthShLabels(call.to, chainId).then((labels) => {
+      if (!cancelled) setTargetLabel(labels[0] ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [call.to, chainId]);
   const clearSigningResolved = clearSigningResolution.key === clearSigningKey;
   const clearSigningMatched =
     clearSigningResolved && clearSigningResolution.matched;
@@ -368,6 +379,7 @@ export function CallCard({
           approve={approve}
           clearSigningMatched={clearSigningMatched}
           technicalDetailsOpen={technicalDetailsOpen}
+          targetLabel={targetLabel}
           onClearSigningResolved={(matched, intent) => {
             setClearSigningResolution({
               key: clearSigningKey,
@@ -401,45 +413,13 @@ export function CallCard({
                 >
                   To
                 </Text>
-                <HStack
-                  spacing={0.5}
-                  px={1.5}
-                  py={0.5}
-                  bg="surface.raised"
-                  border="1.5px solid"
-                  borderColor="border.default"
-                  borderRadius="md"
-                >
-                  <Text
-                    fontSize="xs"
-                    color="text.primary"
-                    fontFamily="mono"
-                    fontWeight="700"
-                  >
-                    {call.to.slice(0, 6)}...{call.to.slice(-4)}
-                  </Text>
-                  <CopyButton value={call.to} />
-                  {config.explorer && (
-                    <IconButton
-                      aria-label="View on explorer"
-                      icon={<ExternalLinkIcon boxSize="10px" />}
-                      size="xs"
-                      variant="ghost"
-                      minW="24px"
-                      w="24px"
-                      h="24px"
-                      color="text.tertiary"
-                      onClick={() =>
-                        window.open(
-                          `${config.explorer}/address/${call.to}`,
-                          "_blank",
-                          "noopener,noreferrer",
-                        )
-                      }
-                      _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-                    />
-                  )}
-                </HStack>
+                <LabeledAddressPopover
+                  address={call.to}
+                  contextLabel="batch call target"
+                  explorer={config.explorer}
+                  label={targetLabel ?? `${call.to.slice(0, 6)}...${call.to.slice(-4)}`}
+                  maxW="220px"
+                />
               </HStack>
             )}
 
@@ -515,6 +495,7 @@ function CalldataCallContent({
   approve,
   clearSigningMatched,
   technicalDetailsOpen,
+  targetLabel,
   onClearSigningResolved,
   onFunctionName,
   onEditCallData,
@@ -529,6 +510,7 @@ function CalldataCallContent({
   approve: ReturnType<typeof parseApproveCalldata>;
   clearSigningMatched: boolean;
   technicalDetailsOpen: boolean;
+  targetLabel: string | null;
   onClearSigningResolved: (matched: boolean, intent?: string) => void;
   onFunctionName: (name: string) => void;
   onEditCallData?: (
@@ -550,45 +532,13 @@ function CalldataCallContent({
           <Text fontSize="xs" color="text.secondary" fontWeight="700">
             To
           </Text>
-          <HStack
-            spacing={0.5}
-            px={1.5}
-            py={0.5}
-            bg="surface.raised"
-            border="1.5px solid"
-            borderColor="border.default"
-            borderRadius="md"
-          >
-            <Text
-              fontSize="xs"
-              color="text.primary"
-              fontFamily="mono"
-              fontWeight="700"
-            >
-              {call.to.slice(0, 6)}...{call.to.slice(-4)}
-            </Text>
-            <CopyButton value={call.to} />
-            {config.explorer && (
-              <IconButton
-                aria-label="View on explorer"
-                icon={<ExternalLinkIcon boxSize="10px" />}
-                size="xs"
-                variant="ghost"
-                minW="24px"
-                w="24px"
-                h="24px"
-                color="text.tertiary"
-                onClick={() =>
-                  window.open(
-                    `${config.explorer}/address/${call.to}`,
-                    "_blank",
-                    "noopener,noreferrer",
-                  )
-                }
-                _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-              />
-            )}
-          </HStack>
+          <LabeledAddressPopover
+            address={call.to}
+            contextLabel="batch call target"
+            explorer={config.explorer}
+            label={targetLabel ?? `${call.to.slice(0, 6)}...${call.to.slice(-4)}`}
+            maxW="220px"
+          />
         </HStack>
       )}
 

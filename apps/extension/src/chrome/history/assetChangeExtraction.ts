@@ -3,6 +3,7 @@ import {
   decodeAccountErc20Transfers,
   toHistoryBigInt,
 } from "./assetTransferParser";
+import { deriveNativeDelta } from "./nativeDelta";
 import { fetchBalanceAtBlock, sumSiblingSenderTxCosts } from "./rpc";
 import type { AssetChangeRecord, AssetTransferRecord } from "./types";
 
@@ -60,27 +61,23 @@ export async function extractAssetChangesFromConfirmedReceipt({
 
   let nativeDelta: string | undefined;
   if (currentBalance !== null && previousBalance !== null) {
-    let pureFlow = currentBalance - previousBalance;
-    if (payerForGas) {
-      try {
-        const gasUsed = toHistoryBigInt(receipt.gasUsed);
-        const effectiveGasPrice = toHistoryBigInt(receipt.effectiveGasPrice);
-        const l1Fee = receipt.l1Fee ? toHistoryBigInt(receipt.l1Fee) : 0n;
-        pureFlow += gasUsed * effectiveGasPrice + l1Fee;
-      } catch {
-        // Preserve the observable balance delta when gas fields are malformed.
-      }
-      const txHash: string | undefined = receipt.transactionHash;
-      if (txHash) {
-        pureFlow += await sumSiblingSenderTxCosts(
-          rpcUrl,
-          currentBlockHex,
-          userAddress,
-          txHash,
-        );
-      }
-    }
-    if (pureFlow !== 0n) nativeDelta = pureFlow.toString();
+    const txHash: string | undefined = receipt.transactionHash;
+    const siblingSenderCosts =
+      payerForGas && txHash
+        ? await sumSiblingSenderTxCosts(
+            rpcUrl,
+            currentBlockHex,
+            userAddress,
+            txHash,
+          )
+        : 0n;
+    nativeDelta = deriveNativeDelta({
+      currentBalance,
+      previousBalance,
+      receipt,
+      payerForGas,
+      siblingSenderCosts,
+    });
   }
 
   if (erc20Transfers.length === 0 && nativeDelta === undefined) return null;

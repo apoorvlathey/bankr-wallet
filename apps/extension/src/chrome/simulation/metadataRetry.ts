@@ -4,7 +4,11 @@ import {
   resolveNftMetadata,
   type NftMetadata,
 } from "../nftMetadata";
-import { getCachedTokenList, fetchTokenPrice } from "../swapApi";
+import {
+  fetchTokenPrice,
+  getCachedTokenList,
+  getCachedTokenLogo,
+} from "../swapApi";
 import { KNOWN_TOKEN_LOGOS } from "../tokenLogoConstants";
 import { formatAmount } from "./assetChangeNormalization";
 import { getSimulationClient } from "./client";
@@ -32,7 +36,7 @@ export async function retryTokenMetadata(
   const needsRetry = tokenChanges.filter((c) => {
     if (c.symbol.includes("...")) return true;
     if (c.nft) return !!c.nft.metadataLoading;
-    return c.valueUsd === null;
+    return c.valueUsd === null || !c.logoUrl;
   });
   const nativeNeedsPrice = !!nativeChange && nativeChange.valueUsd === null;
   if (needsRetry.length === 0 && !nativeNeedsPrice) {
@@ -134,6 +138,18 @@ export async function retryTokenMetadata(
     });
   }
 
+  const logoMap = new Map<string, string>();
+  await Promise.all(
+    needsRetry
+      .filter((change) => !change.nft && !change.logoUrl)
+      .map(async (change) => {
+        const logo = await getCachedTokenLogo(chainId, change.address).catch(
+          () => null,
+        );
+        if (logo) logoMap.set(change.address.toLowerCase(), logo);
+      }),
+  );
+
   // 4. Merge updates into existing token changes
   const updated = tokenChanges.map((c) => {
     const addr = c.address.toLowerCase();
@@ -159,13 +175,18 @@ export async function retryTokenMetadata(
     const listEntry = tokenListMap.get(addr);
     const onchain = onchainMeta.get(addr);
     const newPrice = priceMap.get(addr);
+    const fallbackLogo = logoMap.get(addr);
 
-    if (!listEntry && !onchain && newPrice === undefined) return c;
+    if (!listEntry && !onchain && newPrice === undefined && !fallbackLogo) return c;
 
     const newSymbol = listEntry?.symbol ?? onchain?.symbol ?? c.symbol;
     const newName = listEntry?.name ?? onchain?.name ?? c.name;
     const newDecimals = listEntry?.decimals ?? onchain?.decimals ?? c.decimals;
-    const newLogoUrl = listEntry?.logoURI || KNOWN_TOKEN_LOGOS[addr] || c.logoUrl;
+    const newLogoUrl =
+      listEntry?.logoURI ||
+      KNOWN_TOKEN_LOGOS[addr] ||
+      fallbackLogo ||
+      c.logoUrl;
 
     // Recompute formatted amount if decimals changed
     let formattedAmount = c.formattedAmount;

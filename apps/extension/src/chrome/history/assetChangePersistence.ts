@@ -62,7 +62,7 @@ export async function extractAndStoreDestinationAssetChanges(
   }
 }
 
-async function seedRecentlyReceivedSafely(
+export async function seedRecentlyReceivedSafely(
   chainId: number,
   record: AssetChangeRecord,
 ): Promise<void> {

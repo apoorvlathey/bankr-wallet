@@ -2,6 +2,7 @@ import { CheckIcon, CopyIcon, ExternalLinkIcon } from "@chakra-ui/icons";
 import { Box, HStack, IconButton, Text, Tooltip, VStack } from "@chakra-ui/react";
 import { useState } from "react";
 import type { AssetChange } from "@/chrome/txSimulation";
+import { TokenContractPopover } from "@/components/shared/TokenContractPopover";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import { NftPreview, NftStandardTag } from "./NftMedia";
 import { TokenIcon } from "./TokenIcon";
@@ -40,6 +41,30 @@ export function AssetRow({
     change.nft?.metadata?.name ||
     (showName ? change.name : null) ||
     `${change.address.slice(0, 6)}...${change.address.slice(-4)}`;
+  const symbolText = (
+    <Text
+      fontSize="sm"
+      fontWeight="700"
+      color="inherit"
+      lineHeight="1.2"
+      noOfLines={1}
+    >
+      {change.symbol}
+    </Text>
+  );
+  const symbolIdentity =
+    !isNative && !isNft && /^0x[a-fA-F0-9]{40}$/.test(change.address) ? (
+      <TokenContractPopover
+        address={change.address}
+        explorer={explorerUrl || undefined}
+        symbol={change.symbol}
+        triggerColor="fg.primary"
+      >
+        {symbolText}
+      </TokenContractPopover>
+    ) : (
+      <Box color="text.primary">{symbolText}</Box>
+    );
 
   return (
     <Box w="full" py={2}>
@@ -49,15 +74,7 @@ export function AssetRow({
         <VStack spacing={0} flex="1" minW={0} align="stretch">
           <HStack w="full" justify="space-between" spacing={2} align="center">
             <HStack spacing={1.5} minW={0}>
-              <Text
-                fontSize="sm"
-                fontWeight="700"
-                color="text.primary"
-                lineHeight="1.2"
-                noOfLines={1}
-              >
-                {change.symbol}
-              </Text>
+              {symbolIdentity}
               {isNft && <NftStandardTag standard={change.nft!.standard} />}
             </HStack>
             <VStack spacing={0} align="flex-end" flexShrink={0}>

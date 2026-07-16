@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveMetaMaskTokenIcon } from "./metamaskTokenIcon";
 
 /**
  * CoinGecko platform IDs keyed by chainId.
@@ -63,6 +64,7 @@ interface TokenListResponse {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const chainIdStr = searchParams.get("chainId");
+  const tokenAddress = searchParams.get("address");
 
   if (!chainIdStr || !/^\d+$/.test(chainIdStr)) {
     return NextResponse.json(
@@ -72,6 +74,32 @@ export async function GET(request: NextRequest) {
   }
 
   const chainId = parseInt(chainIdStr, 10);
+  if (!Number.isSafeInteger(chainId) || chainId <= 0) {
+    return NextResponse.json(
+      { error: "Invalid chainId parameter" },
+      { status: 400 },
+    );
+  }
+
+  if (tokenAddress !== null) {
+    if (!/^0x[a-fA-F0-9]{40}$/.test(tokenAddress)) {
+      return NextResponse.json(
+        { error: "Invalid token address" },
+        { status: 400 },
+      );
+    }
+    const logoUrl = await resolveMetaMaskTokenIcon(chainId, tokenAddress);
+    return NextResponse.json(
+      { logoUrl },
+      {
+        headers: {
+          "Cache-Control": logoUrl
+            ? "public, max-age=3600"
+            : "public, max-age=300",
+        },
+      },
+    );
+  }
 
   if (!SUPPORTED_CHAIN_IDS.has(chainId)) {
     return NextResponse.json(

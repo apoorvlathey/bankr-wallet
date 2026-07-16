@@ -641,6 +641,16 @@ A funky, bold landing page that showcases WalletChan—the browser extension tha
 
 ## API Integrations
 
+### Token-list logo fallback
+
+`GET /api/swap/token-list?chainId=<id>` proxies the CoinGecko token catalog.
+The address-aware form, `GET /api/swap/token-list?chainId=<id>&address=<erc20>`,
+is the final logo fallback used by the extension when the catalog and pinned
+sources have no icon. It constructs the fixed MetaMask CAIP-style token-icon
+URL and returns `{ logoUrl }` only after a five-second HEAD request confirms a
+PNG. The upstream host is fixed; user input supplies only a validated positive
+chain ID and 20-byte ERC-20 address.
+
 ### GeckoTerminal API
 
 **Endpoint**: `https://api.geckoterminal.com/api/v2/`

@@ -1,115 +1,166 @@
-import { Badge, HStack, Text } from "@chakra-ui/react";
-import { CheckCircleIcon, WarningIcon } from "@chakra-ui/icons";
+import {
+  CheckCircleIcon,
+  ExternalLinkIcon,
+  TimeIcon,
+  WarningIcon,
+} from "@chakra-ui/icons";
+import { Button, HStack, Spinner, Text, VStack } from "@chakra-ui/react";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import ChainIcon from "@/components/ChainIcon";
+import { RequestIdentity } from "@/components/RequestConfirmation/RequestIdentity";
 import type { ResolvedChain } from "@/lib/chains";
+import { useIconChipBg } from "@/theme";
 import ForceInclusionSteps from "./ForceInclusionSteps";
 import { getForceInclusionState } from "./forceInclusionState";
+
+function getOriginHostname(origin: string): string | null {
+  try {
+    return new URL(origin).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function getOpenableOrigin(origin: string): string | null {
+  try {
+    const url = new URL(origin);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function getStatusPresentation(tx: CompletedTransaction) {
+  if (tx.status === "success") {
+    return {
+      label: tx.forceInclusionMeta ? "L1 + L2 confirmed" : "Confirmed",
+      color: "status.success.emphasis",
+      icon: CheckCircleIcon,
+    } as const;
+  }
+
+  if (tx.status === "failed") {
+    let label = "Failed";
+    if (tx.forceInclusionMeta) {
+      const { l1Reverted, l2Reverted } = getForceInclusionState(
+        tx.forceInclusionMeta,
+        tx.status,
+        tx.txHash,
+      );
+      if (l1Reverted) label = "L1 failed";
+      else if (l2Reverted) label = "L2 failed";
+    }
+    return {
+      label,
+      color: "status.error.emphasis",
+      icon: WarningIcon,
+    } as const;
+  }
+
+  return {
+    label: tx.broadcastUncertain
+      ? "Verifying broadcast"
+      : tx.status === "processing"
+        ? "Processing"
+        : "Pending",
+    color: "status.info.emphasis",
+    icon: TimeIcon,
+  } as const;
+}
 
 export default function StatusHeader({
   tx,
   resolvedChain,
-  chainBadgeStyle,
+  explorerBase,
+  onViewExplorer,
 }: {
   tx: CompletedTransaction;
   resolvedChain: ResolvedChain | undefined;
-  chainBadgeStyle: { bg: string; fg: string; border: string };
+  explorerBase: string;
+  onViewExplorer: () => void;
 }) {
+  const iconChipBg = useIconChipBg();
+  const originHostname = getOriginHostname(tx.origin);
+  const openableOrigin = getOpenableOrigin(tx.origin);
+  const isInternalWalletChan = !originHostname && tx.origin.startsWith("WalletChan");
+  const status = getStatusPresentation(tx);
+  const StatusIcon = status.icon;
+  const isPending = tx.status === "pending" || tx.status === "processing";
+  const chainName = resolvedChain?.name ?? tx.chainName;
+  const initials = (originHostname ?? tx.origin)
+    .split(/[.\s-]+/u)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase() || "?";
+
   return (
-    <>
-      {/* Status + Chain row */}
-      <HStack spacing={2} flexWrap="wrap">
-        <Badge
-          fontSize="xs"
-          bg={chainBadgeStyle.bg}
-          color={chainBadgeStyle.fg}
-          borderWidth="1px"
-          borderColor={chainBadgeStyle.border}
-          px={2}
-          py={0.5}
-          display="flex"
-          alignItems="center"
-          gap={1}
-        >
+    <VStack align="stretch" spacing={3}>
+      <RequestIdentity
+        origin={tx.origin}
+        originHostname={originHostname}
+        favicon={tx.favicon}
+        iconChipBg={iconChipBg}
+        isInternalWalletChan={isInternalWalletChan}
+        originInitials={initials}
+        onOpenOrigin={
+          openableOrigin
+            ? () => chrome.tabs.create({ url: openableOrigin })
+            : undefined
+        }
+      />
+
+      <HStack
+        justify="center"
+        spacing={2}
+        minH="24px"
+        aria-live={isPending ? "polite" : undefined}
+      >
+        <HStack spacing={1.5} color={status.color}>
+          {isPending ? (
+            <Spinner boxSize="12px" thickness="2px" speed="0.8s" />
+          ) : (
+            <StatusIcon boxSize="13px" aria-hidden />
+          )}
+          <Text fontSize="xs" fontWeight="700">
+            {status.label}
+          </Text>
+        </HStack>
+        <Text aria-hidden color="fg.muted" fontSize="xs">
+          ·
+        </Text>
+        <HStack spacing={1.5} minW={0}>
           <ChainIcon
             chainId={tx.chainId}
-            chainName={resolvedChain?.name ?? tx.chainName}
-            size="10px"
+            chainName={chainName}
+            size="14px"
             withChip
           />
-          {resolvedChain?.name ?? tx.chainName}
-        </Badge>
-        {tx.status === "pending" && !tx.forceInclusionMeta && (
-          <Badge
-            bg="status.info.bg"
-            color="status.info.fg"
-            border="2px solid"
-            borderColor="border.default"
-            px={2}
-            py={0.5}
-            fontSize="xs"
-            display="flex"
-            alignItems="center"
-            gap={1}
-          >
-            <Text fontSize="xs" lineHeight="1">
-              ⌛
-            </Text>
-            Pending...
-          </Badge>
-        )}
-        {tx.status === "success" && (
-          <Badge
-            bg="accent.highlight"
-            color="accentFg.highlight"
-            border="2px solid"
-            borderColor="border.default"
-            px={2}
-            py={0.5}
-            fontSize="xs"
-            display="flex"
-            alignItems="center"
-            gap={1}
-          >
-            <CheckCircleIcon boxSize={3} />
-            {tx.forceInclusionMeta ? "L1 + L2 Confirmed" : "Confirmed"}
-          </Badge>
-        )}
-        {tx.status === "failed" && (() => {
-          // For force inclusion, distinguish L1 vs L2 failure so the user
-          // immediately sees which side broke. The discriminator is
-          // hasDistinctL2Hash — see getForceInclusionState above.
-          let label = "Failed";
-          if (tx.forceInclusionMeta) {
-            const { l1Reverted, l2Reverted } = getForceInclusionState(
-              tx.forceInclusionMeta,
-              tx.status,
-              tx.txHash,
-            );
-            if (l1Reverted) label = "L1 Failed";
-            else if (l2Reverted) label = "L2 Failed";
-          }
-          return (
-            <Badge
-              bg="status.error.bg"
-              color="status.error.fg"
-              border="2px solid"
-              borderColor="border.default"
+          <Text color="fg.secondary" fontSize="xs" fontWeight="600" noOfLines={1}>
+            {chainName}
+          </Text>
+          {tx.txHash && explorerBase && !tx.forceInclusionMeta && (
+            <Button
+              aria-label={`View transaction on ${chainName} explorer`}
+              size="xs"
+              variant="ghost"
+              minH="28px"
               px={2}
-              py={0.5}
-              fontSize="xs"
-              display="flex"
-              alignItems="center"
-              gap={1}
+              ml={0.5}
+              color="fg.secondary"
+              rightIcon={<ExternalLinkIcon boxSize="10px" aria-hidden />}
+              onClick={onViewExplorer}
+              _hover={{ bg: "surface.raisedHover", color: "fg.primary" }}
             >
-              <WarningIcon boxSize={3} />
-              {label}
-            </Badge>
-          );
-        })()}
+              Explorer
+            </Button>
+          )}
+        </HStack>
       </HStack>
 
-      {/* Force Inclusion 2-step status */}
       {tx.forceInclusionMeta && (
         <ForceInclusionSteps
           meta={tx.forceInclusionMeta}
@@ -117,6 +168,6 @@ export default function StatusHeader({
           txHash={tx.txHash}
         />
       )}
-    </>
+    </VStack>
   );
 }

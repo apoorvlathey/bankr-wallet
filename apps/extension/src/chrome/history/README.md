@@ -15,13 +15,19 @@ Review this domain in dependency order:
    Force-inclusion entries remain owned by receipt-based recovery.
 5. `rpc.ts` — bounded receipt/balance/block reads, balance retry policy, and
    same-block sibling-cost correction.
-6. `assetChangeExtraction.ts` — metadata enrichment and ERC-20/native delta
+6. `nativeDelta.ts` — pure fee and sibling-cost removal from block-level native
+   balance deltas.
+7. `assetChangeExtraction.ts` — metadata enrichment and ERC-20/native delta
    assembly without storage writes.
-7. `assetChangePersistence.ts` — best-effort recent-token seeding followed by
+8. `assetChangePersistence.ts` — best-effort recent-token seeding followed by
    additive source/destination history writes.
-8. `receiptTransport.ts` — configured-chain receipt lookup and the narrow
+9. `receiptGasData.ts` — pure canonical-receipt projection into durable gas
+   display data.
+10. `receiptSettlement.ts` — Flashblocks sealing and canonical block-hash gate.
+11. `receiptReconciliation.ts` — existing-record repair from one settled receipt.
+12. `receiptTransport.ts` — configured-chain receipt lookup and the narrow
    ERC-5792 `BundleReceipt` projection.
-9. `receiptEnrichment.ts` — delayed receipt retry and old-entry backfill policy.
+13. `receiptEnrichment.ts` — delayed receipt retry and reconciliation facade.
 
 The root `txHistoryStorage.ts`, `assetChangesExtractor.ts`, and
 `receiptEnrichment.ts` paths are policy-free compatibility facades. Their
@@ -37,7 +43,12 @@ function export identities remain stable for existing callers.
   change during file-only refactors.
 - Asset extraction and backfill stay best-effort. RPC, metadata, recent-token,
   or history-write failures must never block confirmation or bridge progress.
-- Backfill only queues a successful entry with a hash, sender, and no existing
-  `assetChanges`; an existing snapshot is never overwritten just by opening UI.
+- Backfill only queues a successful entry with a hash and sender. Existing
+  snapshots remain immutable on ordinary chains, while Flashblocks chains are
+  revalidated once per mounted details view because preconfirmed receipt fee
+  fields may differ from the sealed canonical receipt.
+- Flashblocks receipt-derived gas and native movement are never persisted until
+  a following block exists and the refreshed receipt hash matches the canonical
+  block. Gas data and asset changes must use that same settled receipt.
 - Receipt logs stored in `BundleReceipt` remain limited to address, topics, and
   data. Raw provider receipt fields must not leak into that released shape.

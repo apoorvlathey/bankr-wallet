@@ -48,10 +48,21 @@ test("local force-inclusion batch sends in nonce order and halts an uncertain ta
 test("ambiguous broadcasts are retained before dropped-transaction classification", async () => {
   const text = await source("receiptFinalizer.ts");
   assertOrdered(text, [
-    "shouldRetainUnobservedBroadcast(tx)",
+    "shouldRetainUnobservedBroadcast(tx, txHash)",
     "age <= DROPPED_MIN_AGE_MS",
     "count < DROPPED_NOT_FOUND_THRESHOLD",
     'error: "Transaction dropped from the mempool"',
+  ]);
+});
+
+test("recovery reopens false derived-L2 drops before ordinary failed entries return", async () => {
+  const text = await source("recovery.ts");
+  assertOrdered(text, [
+    'tx.error === "Transaction dropped from the mempool"',
+    "isForceInclusionL2Hash(tx, knownL2Hash)",
+    'status: "pending"',
+    'import("./receiptPoller")',
+    "return;",
   ]);
 });
 

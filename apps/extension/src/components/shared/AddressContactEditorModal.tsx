@@ -26,11 +26,18 @@ import { truncateAddress } from "@/lib/addressUtils";
 interface AddressContactEditorModalProps {
   address?: string;
   initialLabel?: string;
+  isEditing?: boolean;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export function AddressContactEditorModal({ address, initialLabel = "", isOpen, onClose }: AddressContactEditorModalProps) {
+export function AddressContactEditorModal({
+  address,
+  initialLabel = "",
+  isEditing: isEditingProp,
+  isOpen,
+  onClose,
+}: AddressContactEditorModalProps) {
   const [addressValue, setAddressValue] = useState(address || "");
   const [label, setLabel] = useState(initialLabel);
   const [error, setError] = useState<{ field: "address" | "label" | "form"; message: string } | null>(null);
@@ -38,7 +45,7 @@ export function AddressContactEditorModal({ address, initialLabel = "", isOpen, 
   const addressRef = useRef<HTMLInputElement>(null);
   const labelRef = useRef<HTMLInputElement>(null);
   const { createContact, updateContact } = useAddressContacts();
-  const isEditing = Boolean(initialLabel && address);
+  const isEditing = isEditingProp ?? Boolean(initialLabel && address);
   const [resolution, setResolution] = useState<
     | { status: "idle" | "resolving"; address: null; error: null }
     | { status: "resolved"; address: string; error: null }
@@ -191,7 +198,7 @@ export function AddressContactEditorModal({ address, initialLabel = "", isOpen, 
                 setError(null);
               }}
               maxLength={64}
-              placeholder="e.g. John"
+              placeholder="e.g. milady"
               autoComplete="off"
             />
             {error?.field === "label" && (

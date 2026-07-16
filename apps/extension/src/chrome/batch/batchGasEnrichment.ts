@@ -1,4 +1,5 @@
-import { OP_STACK_CHAIN_IDS } from "../../constants/networks";
+import { buildHistoryGasData } from "../history/receiptGasData";
+import { fetchSettledReceiptAtRpcUrl } from "../history/receiptSettlement";
 import { fetchRpcResult } from "../network/rpcClient";
 import { getRpcUrl } from "../transactions/rpcConfig";
 import { updateTxInHistory } from "../txHistoryStorage";
@@ -18,29 +19,19 @@ export async function fetchAndStoreBatchGasData(
       rpcCall("eth_getTransactionReceipt", [txHash]),
     ]);
     if (!receipt) return;
+    const settledReceipt = await fetchSettledReceiptAtRpcUrl(
+      rpcUrl,
+      txHash,
+      chainId,
+      receipt,
+    );
+    if (!settledReceipt) return;
     const txRecord = txData as { gas?: string } | null;
-    const receiptRecord = receipt as {
-      gasUsed: string;
-      effectiveGasPrice: string;
-      l1Fee?: string;
-      l1GasUsed?: string;
-      l1GasPrice?: string;
-    };
-    const gasData: import("../txHistoryStorage").GasData = {
-      gasUsed: BigInt(receiptRecord.gasUsed).toString(),
-      gasLimit: txRecord?.gas
-        ? BigInt(txRecord.gas).toString()
-        : BigInt(receiptRecord.gasUsed).toString(),
-      effectiveGasPrice: BigInt(receiptRecord.effectiveGasPrice).toString(),
-    };
-    if (OP_STACK_CHAIN_IDS.has(chainId)) {
-      if (receiptRecord.l1Fee)
-        gasData.l1Fee = BigInt(receiptRecord.l1Fee).toString();
-      if (receiptRecord.l1GasUsed)
-        gasData.l1GasUsed = BigInt(receiptRecord.l1GasUsed).toString();
-      if (receiptRecord.l1GasPrice)
-        gasData.l1GasPrice = BigInt(receiptRecord.l1GasPrice).toString();
-    }
+    const gasData = buildHistoryGasData(
+      settledReceipt,
+      chainId,
+      txRecord?.gas,
+    );
     await updateTxInHistory(bundleId, { gasData });
   } catch {
     // Non-critical enrichment must never change transaction outcome.

@@ -1,5 +1,6 @@
 import { FLASHBLOCKS_CHAIN_IDS } from "../../constants/networks";
-import { getPendingConfirmationTxs } from "../txHistoryStorage";
+import { getPendingConfirmationTxs, getTxById } from "../txHistoryStorage";
+import { getReceiptPollingWindowMs } from "./broadcastPolicy";
 import {
   checkAndFinalizeReceipt,
   clearReceiptObservationState,
@@ -8,7 +9,6 @@ import {
 const INITIAL_INTERVAL_MS = 2_000;
 const MAX_INTERVAL_MS = 30_000;
 const BACKOFF_FACTOR = 1.5;
-const MAX_POLL_DURATION_MS = 10 * 60 * 1000;
 const FLASHBLOCKS_FAST_INTERVAL_MS = 250;
 const FLASHBLOCKS_FAST_PHASE_MS = 5_000;
 const activePollers = new Set<string>();
@@ -32,6 +32,10 @@ async function pollReceipt(
   chainId: number,
 ): Promise<void> {
   const startTime = Date.now();
+  const maxPollDurationMs = getReceiptPollingWindowMs(
+    await getTxById(txId),
+    txHash,
+  );
   if (FLASHBLOCKS_CHAIN_IDS.has(chainId)) {
     const fastPhaseEnd = startTime + FLASHBLOCKS_FAST_PHASE_MS;
     while (Date.now() < fastPhaseEnd) {
@@ -40,7 +44,7 @@ async function pollReceipt(
     }
   }
   let interval = INITIAL_INTERVAL_MS;
-  while (Date.now() - startTime < MAX_POLL_DURATION_MS) {
+  while (Date.now() - startTime < maxPollDurationMs) {
     await sleep(interval);
     if ((await checkAndFinalizeReceipt(txId, txHash, chainId)) !== null) return;
     interval = Math.min(interval * BACKOFF_FACTOR, MAX_INTERVAL_MS);

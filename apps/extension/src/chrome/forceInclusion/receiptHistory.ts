@@ -1,5 +1,6 @@
 import { getRpcUrl } from "../transactions/rpcConfig";
 import { getTxById, updateTxInHistory } from "../txHistoryStorage";
+import { fetchSettledReceiptAtRpcUrl } from "../history/receiptSettlement";
 import { showReceiptNotification } from "./receiptNotification";
 import { buildReceiptGasData } from "./receiptRpc";
 import {
@@ -20,13 +21,24 @@ export async function applyReceiptToHistory(
     receipt.status === 1 ||
     receipt.status === 1n;
   if (succeeded) {
-    const gasData = await buildReceiptGasData(
-      options.rpcUrl,
-      txHash,
-      receipt,
-      chainId,
-      options.signedGasLimit,
-    );
+    const rpcUrl = options.rpcUrl ?? (await getRpcUrl(chainId)) ?? undefined;
+    const settledReceipt = rpcUrl
+      ? await fetchSettledReceiptAtRpcUrl(
+          rpcUrl,
+          txHash,
+          chainId,
+          receipt,
+        )
+      : receipt;
+    const gasData = settledReceipt
+      ? await buildReceiptGasData(
+          rpcUrl,
+          txHash,
+          settledReceipt,
+          chainId,
+          options.signedGasLimit,
+        )
+      : undefined;
     await updateTxInHistory(txId, {
       status: "success",
       txHash,
@@ -34,7 +46,7 @@ export async function applyReceiptToHistory(
       completedAt: Date.now(),
       gasData,
     });
-    startAssetChangeExtraction(txId, chainId, receipt, options.rpcUrl);
+    startAssetChangeExtraction(txId, txHash, chainId, settledReceipt, rpcUrl);
   } else {
     await updateTxInHistory(txId, {
       status: "failed",
@@ -66,8 +78,9 @@ export async function applyReceiptToHistory(
 
 function startAssetChangeExtraction(
   txId: string,
+  txHash: string,
   chainId: number,
-  receipt: any,
+  receipt?: any,
   rpcUrlOverride?: string,
 ): void {
   void (async () => {
@@ -77,11 +90,12 @@ function startAssetChangeExtraction(
       const tx = await getTxById(txId);
       const sender = tx?.tx?.from;
       if (!sender) return;
-      const { extractAndStoreAssetChanges } = await import(
-        "../assetChangesExtractor"
+      const { extractAssetChangesWhenReceiptAvailable } = await import(
+        "../receiptEnrichment"
       );
-      await extractAndStoreAssetChanges({
+      extractAssetChangesWhenReceiptAvailable({
         txId,
+        txHash,
         chainId,
         userAddress: sender,
         receipt,

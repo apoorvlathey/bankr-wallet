@@ -1,7 +1,7 @@
-import { Box, Image, Text } from "@chakra-ui/react";
+import { Box, Text } from "@chakra-ui/react";
+import SafeImage from "@/components/SafeImage";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getNativeAssetMeta } from "@/lib/chains";
-import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 
 interface TokenLogoProps {
   symbol?: string | null;
@@ -32,8 +32,6 @@ export default function TokenLogo({
       : null;
   const displaySymbol = symbol || native?.symbol || "";
   const resolvedLogoUrl = native?.logoUrl || logoUrl || undefined;
-  const cachedLogoUrl = useCachedAvatarSrc(resolvedLogoUrl);
-  const src = cachedLogoUrl || resolvedLogoUrl;
   const initials = displaySymbol.trim().slice(0, 3).toUpperCase();
 
   const placeholder = (
@@ -41,7 +39,7 @@ export default function TokenLogo({
       boxSize={size}
       minW={size}
       borderRadius="full"
-      bg="surface.raised"
+      bg="surface.raisedHover"
       border="1px solid"
       borderColor="border.default"
       display="flex"
@@ -54,7 +52,7 @@ export default function TokenLogo({
         <Text
           fontSize={fontSize}
           fontWeight="800"
-          color="text.secondary"
+          color="accent.highlight"
           lineHeight="1"
         >
           {initials}
@@ -63,11 +61,9 @@ export default function TokenLogo({
     </Box>
   );
 
-  if (!src) return placeholder;
-
   return (
-    <Image
-      src={src}
+    <SafeImage
+      src={resolvedLogoUrl}
       alt={alt || displaySymbol || "Token"}
       boxSize={size}
       minW={size}

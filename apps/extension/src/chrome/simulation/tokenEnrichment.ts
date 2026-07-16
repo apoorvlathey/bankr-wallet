@@ -6,7 +6,11 @@ import {
 } from "viem";
 
 import { getPreflightTokenMetadata } from "../erc20CandidatePreflight";
-import { getCachedTokenList, fetchTokenPrice } from "../swapApi";
+import {
+  fetchTokenPrice,
+  getCachedTokenList,
+  getCachedTokenLogo,
+} from "../swapApi";
 import { KNOWN_TOKEN_LOGOS } from "../tokenLogoConstants";
 import { formatAmount } from "./assetChangeNormalization";
 import { MULTICALL3_ADDRESS } from "./constants";
@@ -182,6 +186,21 @@ export async function enrichTokenChanges(
     metadataComplete = false;
   }
 
+  // Resolve logos absent from the primary catalog through the same cached
+  // per-address fallback used by confirmed transaction details. NFT contracts
+  // deliberately skip the ERC-20-only MetaMask asset namespace.
+  const logoUrls = await Promise.all(
+    tokens.map((address) => {
+      const addressKey = address.toLowerCase();
+      if (nftStandards.has(addressKey)) return Promise.resolve<string | null>(null);
+      const known =
+        tokenListMap.get(addressKey)?.logoURI || KNOWN_TOKEN_LOGOS[addressKey];
+      return known
+        ? Promise.resolve(known)
+        : getCachedTokenLogo(chainId, address).catch(() => null);
+    }),
+  );
+
   // 5. Index received NFTs so we can suppress balanceOf-derived rows that
   //    are already covered by detailed receiver-hook entries (avoids
   //    duplicate "+1 UNI-V3-POS" alongside the per-tokenId rows).
@@ -203,7 +222,7 @@ export async function enrichTokenChanges(
     const name = listEntry?.name ?? onchain?.name ?? "";
     // Force decimals = 0 for NFTs even if a (non-standard) decimals() exists.
     const decimals = nftStandard ? 0 : (listEntry?.decimals ?? onchain?.decimals ?? 18);
-    const logoUrl = listEntry?.logoURI || KNOWN_TOKEN_LOGOS[addr] || undefined;
+    const logoUrl = logoUrls[i] || undefined;
 
     const delta = deltas[i];
 

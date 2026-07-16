@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -13,13 +14,9 @@ import {
   getScreenTransitionPlan,
   type ScreenTransitionKind,
 } from "./screenTransitionModel";
+import { createScreenAnimationCompletionGate } from "./screenAnimationCompletionGate";
 import { useScreenScrollRestoration } from "./useScreenScrollRestoration";
 
-// True once the surrounding screen's entry animation has settled.
-// Stable / exit layers always read `true`. Entering layers start at `false`
-// and flip when the slide/fade completes. Heavy data-bound subtrees gate
-// their first fetch on this so the slide-in stays smooth (no React work +
-// layout shift competing with the running animation).
 const ScreenEnteredContext = createContext<boolean>(true);
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -88,25 +85,6 @@ export const SCREEN_META: Record<AppView, ScreenMeta> = {
   waitingForOnboarding: { kind: "fade", depth: 0 },
 };
 
-// -----------------------------------------------------------------------
-// Design notes
-// -----------------------------------------------------------------------
-// We don't use <AnimatePresence> — it has a quirk where the exiting element's
-// props (including the `custom` passed to variants) can reflect stale values
-// captured at mount time, which caused the previous implementation to pick the
-// wrong exit direction on back transitions (visible as a jitter mid-slide).
-//
-// Instead we manage a tiny explicit state machine:
-//   phase="idle"         — one active layer, no animation
-//   phase="transitioning" — two layers: a static `beneath` and an animating
-//                           `above`. Above is either entering (forward / fade)
-//                           or exiting (back).
-//
-// The motion.div that holds the current view keeps the same React `key` across
-// the idle ↔ transitioning boundary, so the component inside (Settings, Swap,
-// etc.) is not remounted by the transition itself.
-// -----------------------------------------------------------------------
-
 interface Snapshot {
   view: AppView;
   children: ReactNode;
@@ -149,6 +127,8 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
   }));
   const lastViewRef = useRef(view);
   const keyCounter = useRef(1);
+  const completionGateRef = useRef(createScreenAnimationCompletionGate());
+  const completionTimerRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const navigationStateRef = useRef(
     new Map<AppView, { scrollTop: number; focusPath: number[] | null }>(),
@@ -156,9 +136,6 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
   const pendingBackRestoreRef = useRef<AppView | null>(null);
   const { cancel: cancelScrollRestore, restore: restoreScroll } =
     useScreenScrollRestoration(containerRef);
-  // Set of layer keys whose entry animation has already settled. Layers
-  // listed here read `true` from ScreenEnteredContext; layers absent read
-  // `false`. The first/initial layer (key=0) is considered entered.
   const [enteredKeys, setEnteredKeys] = useState<Set<number>>(
     () => new Set([0]),
   );
@@ -190,6 +167,10 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
     lastViewRef.current = view;
 
     cancelScrollRestore();
+    if (completionTimerRef.current !== null) {
+      window.clearTimeout(completionTimerRef.current);
+      completionTimerRef.current = null;
+    }
 
     const prevMeta = SCREEN_META[prevView];
     const nextMeta = SCREEN_META[view];
@@ -291,15 +272,19 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
     });
   }, [view, children, cancelScrollRestore]);
 
-  const restoreDestinationState = (destination: AppView) => {
+  useLayoutEffect(() => {
+    if (state.phase !== "transitioning" || state.above.role !== "exit") return;
+    const destination = pendingBackRestoreRef.current;
+    if (!destination) return;
+    const saved = navigationStateRef.current.get(destination);
+    if (saved) restoreScroll(saved.scrollTop, state.beneathKey);
+  }, [state, restoreScroll]);
+
+  const restoreDestinationFocus = (destination: AppView) => {
     const root = containerRef.current;
     if (!root) return;
 
     const saved = navigationStateRef.current.get(destination);
-    if (saved) {
-      restoreScroll(saved.scrollTop);
-    }
-
     let target: HTMLElement | null = null;
     if (saved?.focusPath) {
       let node: Element = root;
@@ -372,7 +357,7 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
 
     requestAnimationFrame(() => {
       if (completedRole === "exit" && pendingBackRestoreRef.current) {
-        restoreDestinationState(pendingBackRestoreRef.current);
+        restoreDestinationFocus(pendingBackRestoreRef.current);
         pendingBackRestoreRef.current = null;
       } else if (completedRole === "enter" && completedKind === "slide") {
         focusEnteredHeading(completedKey);
@@ -502,9 +487,7 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
         const layerEntered = enteredKeys.has(layer.key);
         const isCovered =
           state.phase === "transitioning" && layer.key === state.beneathKey;
-        // React 18's DOM typings predate the `inert` attribute. A declarative
-        // string attribute still keeps it synchronized when a Framer layer is
-        // reused, unlike the previous callback-ref mutation.
+        // React 18's DOM typings predate the declarative `inert` attribute.
         const inertProps = isCovered ? ({ inert: "" } as const) : {};
 
         return (
@@ -516,14 +499,32 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
             initial={initial}
             animate={animate}
             transition={transition}
+            onAnimationStart={
+              animating
+                ? (definition) =>
+                    completionGateRef.current.start(layer.key, definition)
+                : undefined
+            }
             onAnimationComplete={
               animating && layer.transitionRole && layer.transitionKind
-                ? () =>
-                    onAboveSettled(
+                ? (definition) => {
+                    const delay = completionGateRef.current.consumeDelay(
                       layer.key,
-                      layer.transitionRole!,
-                      layer.transitionKind!,
-                    )
+                      definition,
+                      duration * 1_000,
+                    );
+                    if (delay === null) return;
+                    const settle = () => {
+                      completionTimerRef.current = null;
+                      onAboveSettled(
+                        layer.key,
+                        layer.transitionRole!,
+                        layer.transitionKind!,
+                      );
+                    };
+                    if (delay === 0) settle();
+                    else completionTimerRef.current = window.setTimeout(settle, delay);
+                  }
                 : undefined
             }
             style={{

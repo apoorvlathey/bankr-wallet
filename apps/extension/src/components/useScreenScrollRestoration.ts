@@ -15,12 +15,17 @@ export function useScreenScrollRestoration(
   }, []);
 
   const restore = useCallback(
-    (scrollTop: number) => {
+    (scrollTop: number, layerKey?: number) => {
       cancel();
       const startedAt = performance.now();
 
       const apply = () => {
-        const scrollOwner = containerRef.current?.querySelector<HTMLElement>(
+        const root = layerKey === undefined
+          ? containerRef.current
+          : containerRef.current?.querySelector<HTMLElement>(
+              `[data-screen-layer="${layerKey}"]`,
+            );
+        const scrollOwner = root?.querySelector<HTMLElement>(
           "[data-screen-scroll-owner]",
         );
         if (scrollOwner) {

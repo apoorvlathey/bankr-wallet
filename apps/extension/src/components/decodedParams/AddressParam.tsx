@@ -7,9 +7,14 @@ import { getEthShLabels } from "@/lib/ethShLabelsCache";
 interface AddressParamProps {
   value: string;
   chainId: number;
+  contextLabel?: string;
 }
 
-export function AddressParam({ value, chainId }: AddressParamProps) {
+export function AddressParam({
+  value,
+  chainId,
+  contextLabel = "decoded parameter address",
+}: AddressParamProps) {
   const address = value?.toLowerCase().startsWith("0x") ? value : `0x${value}`;
   const [label, setLabel] = useState<string | null>(null);
 
@@ -27,7 +32,7 @@ export function AddressParam({ value, chainId }: AddressParamProps) {
   return (
     <LabeledAddressPopover
       address={address}
-      contextLabel="decoded parameter address"
+      contextLabel={contextLabel}
       explorer={getChainConfig(chainId).explorer}
       label={label || `${address.slice(0, 8)}...${address.slice(-6)}`}
       maxW="200px"

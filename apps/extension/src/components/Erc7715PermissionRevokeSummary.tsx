@@ -8,11 +8,11 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import { ExternalLinkIcon, InfoOutlineIcon } from "@chakra-ui/icons";
-import { formatUnits } from "viem";
 
 import type { Erc7715PermissionRevokeMeta } from "@/chrome/requests/pendingTxStorage";
 import { CopyButton } from "@/components/CopyButton";
 import TokenLogo from "@/components/TokenLogo";
+import Erc7715RevokeReceipt from "@/components/TransactionDetails/Erc7715RevokeReceipt";
 import {
   formatDateTime,
   permissionTitle,
@@ -21,8 +21,6 @@ import {
 } from "@/lib/erc7715PermissionDisplay";
 import {
   isErc7715NativePermissionType,
-  isErc7715PeriodicPermissionType,
-  isErc7715StreamPermissionType,
   isErc7715TokenApprovalRevocationPermissionType,
 } from "@/lib/erc7715PermissionEditing";
 import { approvalRevocationMethodLabelsFromFields } from "@/lib/erc7715ApprovalRevocation";
@@ -30,32 +28,8 @@ import {
   resolveTokenMetadataClient,
   type TokenDisplayMetadata,
 } from "@/lib/tokenMetadataClient";
+import { formatErc7715RevokeAmount } from "@/lib/erc7715PermissionRevokeDisplay";
 import { useTheme } from "@/theme";
-
-function compactDecimal(value: string): string {
-  const [whole, fraction = ""] = value.split(".");
-  const compactFraction = fraction.slice(0, 6).replace(/0+$/u, "");
-  return compactFraction ? `${whole}.${compactFraction}` : whole;
-}
-
-function frequencyLabel(seconds: number | undefined): string | null {
-  switch (seconds) {
-    case 60 * 60:
-      return "hour";
-    case 24 * 60 * 60:
-      return "day";
-    case 7 * 24 * 60 * 60:
-      return "week";
-    case 14 * 24 * 60 * 60:
-      return "2 weeks";
-    case 30 * 24 * 60 * 60:
-      return "month";
-    case 365 * 24 * 60 * 60:
-      return "year";
-    default:
-      return seconds ? `${seconds}s` : null;
-  }
-}
 
 function isValidAddress(value: string | undefined): value is `0x${string}` {
   return !!value && /^0x[0-9a-fA-F]{40}$/u.test(value);
@@ -107,52 +81,20 @@ function RevokeAddressRow({
   );
 }
 
-function formatAmount({
-  meta,
-  metadata,
-  nativeSymbol,
-  isNative,
-}: {
-  meta: Erc7715PermissionRevokeMeta;
-  metadata: TokenDisplayMetadata | null;
-  nativeSymbol: string;
-  isNative: boolean;
-}): string | null {
-  if (!meta.amount) return null;
-
-  try {
-    const raw = BigInt(meta.amount);
-    const decimals = isNative ? 18 : metadata?.decimals;
-    const symbol = isNative ? nativeSymbol : metadata?.symbol || "tokens";
-    if (typeof decimals !== "number") return `${raw.toString()} base units`;
-
-    const amount = `${compactDecimal(formatUnits(raw, decimals))} ${symbol}`;
-    const shouldShowFrequency =
-      isErc7715PeriodicPermissionType(meta.permissionType || "") ||
-      isErc7715StreamPermissionType(meta.permissionType || "");
-    if (!shouldShowFrequency) {
-      return amount;
-    }
-
-    const frequency = frequencyLabel(meta.periodDuration);
-    return frequency ? `${amount} / ${frequency}` : amount;
-  } catch {
-    return null;
-  }
-}
-
 export default function Erc7715PermissionRevokeSummary({
   meta,
   chainId,
   chainName,
   explorer,
   nativeSymbol,
+  presentation = "review",
 }: {
   meta: Erc7715PermissionRevokeMeta;
   chainId: number;
   chainName: string;
   explorer?: string;
   nativeSymbol: string;
+  presentation?: "review" | "receipt";
 }) {
   const { tokens } = useTheme();
   const [metadata, setMetadata] = useState<TokenDisplayMetadata | null>(null);
@@ -179,7 +121,8 @@ export default function Erc7715PermissionRevokeSummary({
   }, [chainId, isNative, tokenAddress]);
 
   const amountLabel = useMemo(
-    () => formatAmount({ meta, metadata, nativeSymbol, isNative }),
+    () =>
+      formatErc7715RevokeAmount({ meta, metadata, nativeSymbol, isNative }),
     [isNative, meta, metadata, nativeSymbol],
   );
   const revocationMethodLabels = useMemo(
@@ -199,6 +142,24 @@ export default function Erc7715PermissionRevokeSummary({
     tokenAddress && explorer
       ? `${explorer.replace(/\/+$/u, "")}/address/${tokenAddress}`
       : null;
+
+  if (presentation === "receipt") {
+    return (
+      <Erc7715RevokeReceipt
+        meta={meta}
+        chainId={chainId}
+        explorer={explorer}
+        metadata={metadata}
+        isNative={isNative}
+        tokenAddress={tokenAddress}
+        tokenSymbol={tokenSymbol}
+        tokenName={tokenName}
+        amountLabel={amountLabel}
+        expiresLabel={expiresLabel}
+        revocationMethodLabels={revocationMethodLabels}
+      />
+    );
+  }
 
   return (
     <Box

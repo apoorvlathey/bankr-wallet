@@ -559,6 +559,49 @@ Relevant files:
   control, force-inclusion option, and Bankr/private-key/seed-phrase execution
   path while changing this composition.
 
+### 5.16 Transaction details
+
+- Transaction details is the post-submission counterpart to transaction review,
+  not a separate dashboard. It follows the same readable hierarchy: requesting
+  identity and network status, actual balance changes, human-readable action,
+  receipt, then technical diagnostics.
+- Confirmed, pending, and failed state always pairs its semantic color with an
+  icon and text. Failure detail follows the status immediately; bridge progress
+  names its terminal or in-flight state.
+- Actual asset movement reuses the request review's explicit Send and Receive
+  direction groups, signed tabular values, token identity fallbacks, and
+  destination-chain context. A bridge uses one compact directional ledger with
+  source and destination chain identities, aligned signed token values,
+  chain-correct explorer actions, settlement state, and the provider route.
+- Transaction details does not repeat the already-established chain in the
+  Balance changes heading. Token identities use the request-review 28px scale,
+  expose the shared contract popover, and align counterparty metadata beneath
+  the symbol. Non-zero dust remains visible through exact wei or compact
+  subscript-zero notation.
+- Human-readable submission snapshots paint synchronously. ERC-7730 descriptors
+  may enrich the same rounded summary surface with decoded fields, but must not
+  replace it with a loading, empty, or visually detached card. Current
+  wallet/contact labels continue to win inside shared address controls.
+- Same-chain swaps use one Action/From/To ledger; EIP-7702 delegation changes
+  use Action/Delegate/Policy or Result rows; ERC-7715 revocations retain their
+  receipt-specific permission ledger. Generic deployments and undecoded calls
+  still show a truthful Action row while leaving Advanced details open.
+- Atomic batch calls keep the shared call list and amber count. Sequential
+  fallback receipts identify the submitted call number without presenting the
+  execution as atomic. Force inclusion uses one L1-deposit/L2-inclusion ledger,
+  and broadcast uncertainty remains an explicit in-progress state.
+- The Receipt ledger owns signing account, paid or maximum network fee,
+  timestamp, transaction hash, and copy. The primary correct-chain explorer
+  action sits beside the chain in the status line; force-inclusion's distinct
+  L1/L2 links remain in the receipt. These facts must not be repeated across
+  unrelated cards.
+- Function, From/To, raw value, calldata/deploy bytes, and gas diagnostics live
+  behind one native Advanced details disclosure. Technical surfaces use one
+  defined edge, quiet separators, and no resting shadow.
+- Preserve force-inclusion L1/L2 state and explorer links, rebroadcast behavior,
+  receipt enrichment, bridge settlement data, metadata fallback, back-scroll
+  restoration, and wallet-type-neutral history rendering.
+
 ## 6. Logic and safety guardrails
 
 Warm Midnight work is presentation-first. Do not casually change:
@@ -588,7 +631,11 @@ Every displayed `0x` address still follows the repository standard:
   name/API labels. Resolved avatars remain independent and may still accompany
   the user label. Address overflow
   disclosures keep copy/explorer together and place Add/Edit contact beneath
-  them; the Address Book itself uses the full-screen searchable list grammar.
+  them. Batch-call targets use this same labeled-address pill instead of a
+  separate copy/explorer chip. When adding a new contact from a pill, its
+  current wallet, public-name, or API label seeds the Label field; raw and
+  truncated address fallbacks do not. The Address Book itself uses the
+  full-screen searchable list grammar.
   Contact rows keep the user label primary, show a cached public primary name
   instead of the truncated address when one exists, and replace the blockie
   with a safely cached resolved avatar when available. The deterministic
@@ -622,6 +669,7 @@ Every displayed `0x` address still follows the repository standard:
 | Assets tab | Substantially approved | Chart, controls, rows, sheets, aggregation, low-value behavior |
 | Positions tab | Pending | Needs populated-state Warm Midnight visual review |
 | Activity tab | Implemented and reviewed | Shared ledger grid, complete status hierarchy, realistic preview fixtures, and detail transition verified |
+| Transaction details | Implemented and reviewed | Receipt-first request hierarchy, actual changes, bridge route, and one advanced disclosure verified across transaction states and signing wallets |
 | Homepage loading/empty/error states | Pending | Review after Positions and Activity |
 | Homepage responsive/focus final pass | Pending | Do only after visual composition is locked |
 | Send | Mobile baseline exists; Warm Midnight review pending | Handle as its own fresh session |
@@ -696,6 +744,7 @@ broader QA scripts or automatically open preview pages.
 | Asset rows/sheets | `PortfolioHoldingRows.tsx`, `TokenHoldings.tsx`, `tokenHoldingsUtils.ts` |
 | Positions | `TokenHoldings.tsx` and its DeFi position row helpers |
 | Activity/detail | transaction list components, `TxDetailScreen.tsx`, `TxDetailModal.tsx` |
+| Transaction detail composition | `components/TransactionDetails/`, `ClearSignedSummaryCard.tsx`, `preview/completedTransactionFixture.ts` |
 | Shared mobile primitives | `components/ui/` |
 | Midnight tokens | `theme/themes/midnight.ts`, `theme/recipes/`, `theme/tokens.ts` |
 
@@ -720,6 +769,20 @@ in the same workstream so the next chat does not depend on conversation history.
 
 ## 12. Changelog
 
+- 2026-07-16: completed the Transaction-details variant matrix. Same-chain
+  swaps, EIP-7702 set/revoke, ERC-7715 revoke, atomic and sequential batches,
+  force inclusion, bridge pending/refund, broadcast uncertainty, deployments,
+  and undecoded legacy calls now use intentional Warm Midnight receipt states;
+  deterministic preview fixtures cover each path without oversized modules.
+- 2026-07-16: replaced the request-oriented ERC-7715 revoke warning inside
+  Transaction details with a receipt-specific ledger. The confirmed summary
+  now uses stable Action, Permission, Requested by, Delegate, Asset, Limit,
+  Methods, and Expires rows while preserving shared contact and token tools.
+- 2026-07-16: replaced Transaction details' stacked bridge cards with one
+  source-to-destination ledger aligned to the approved balance-change grammar:
+  request-scale token marks with lower-right chain badges, clear directional
+  headers, right-aligned token and fiat values, quiet explorer actions, and
+  secondary route metadata.
 - 2026-07-11: created the Warm Midnight surface handoff from the approved
   unlock, homepage identity, dapp, portfolio, asset-row, aggregation, and
   connected-dapp decisions; recorded Positions as the next review surface.
@@ -727,3 +790,25 @@ in the same workstream so the next chat does not depend on conversation history.
   notice below the header, matching the homepage banner's bell/centered-label/
   chevron geometry while retaining a graphite surface and reduced-motion-safe
   repeating ring.
+- 2026-07-16: rebuilt Transaction details as the receipt counterpart to Warm
+  Midnight transaction review: requesting identity and explicit status, actual
+  Send/Receive movement, synchronous clear-signed intent, compact bridge route,
+  one signer/fee/hash receipt, and one advanced technical disclosure. Expanded
+  deterministic previews now cover bridge, approval, transfer, metadata stress,
+  and real Bankr/private-key/seed-phrase signing identities.
+- 2026-07-16: refined Transaction details with clickable requesting-site
+  identity, request-scale token media and contract popovers, aligned
+  counterparty metadata, exact tiny-amount rendering, a bare Midnight
+  clear-signing info mark, and the amber batch-call count.
+- 2026-07-16: removed redundant Advanced-detail helper copy, aligned user-opened
+  disclosures to the top of the detail viewport, replaced nested calldata's
+  Bauhaus tabs with a quiet Midnight tab rule and amber function chip, promoted
+  the existing decoder result into a contract/payment summary when clear
+  signing is unavailable, and made the receipt hash an explorer action.
+- 2026-07-16: converted decoded-function and clear-signing action headers into
+  the same `Action` ledger row as the rest of Transaction summary, removed the
+  redundant icon, and kept Advanced details closed whenever readable decoded
+  intent is already presented above it.
+- 2026-07-16: applied the approved Midnight decoded-parameter tab treatment to
+  rich strings as well as nested bytes through one shared control; number-unit
+  pickers and format toggles remain separate interactions rather than tabs.

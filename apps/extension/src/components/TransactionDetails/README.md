@@ -22,16 +22,23 @@ here and should stay organized by one user-facing responsibility per file.
 | `TxDetailController.tsx` | Coordinate shared detail state and compose sections in the established visual/message order | Native-symbol lookup, delegate-label lookup, rebroadcast request, explorer navigation |
 | `TxDetailModal.tsx` | Adapt the shared controller to the modal host | None |
 | `TxDetailScreen.tsx` | Adapt the shared controller to navigation and refresh pending history | History messages, receipt polling, runtime listener |
-| `StatusHeader.tsx` | Render chain and terminal/pending status before all detail sections | None |
+| `StatusHeader.tsx` | Render the requesting identity plus color-independent chain and terminal/pending status | Opens the requesting site and transaction explorer |
 | `BridgeSummary.tsx` | Render source and destination bridge legs, status, amounts, and explorer actions | Explorer navigation |
-| `TransactionImpact.tsx` | Render source/destination asset changes, force-inclusion explorer links, and timestamp | Explorer navigation |
+| `TransactionImpact.tsx` | Render source/destination asset changes in the shared request-review direction hierarchy | None |
 | `ClearSigningSummary.tsx` | Render ERC-7715 revoke, ERC-7821 batch, EIP-7702 delegation, and clear-signed summaries | Copy/explorer actions delegated to shared components |
-| `RawTransactionDetails.tsx` | Render the disclosure for function, transfer, addresses, value, calldata, and deploy data | Copy/explorer actions delegated to shared components |
-| `GasDetails.tsx` | Render confirmed or estimated gas details behind one disclosure | None |
+| `SwapSummary.tsx` | Render same-chain swaps as a compact action/from/to receipt ledger when bridge context is absent | None |
+| `DelegationReceipt.tsx` | Render EIP-7702 enable/revoke results with delegate and policy context | Address tools delegated to the shared labeled-address popover |
+| `Erc7715RevokeReceipt.tsx` | Render a confirmed permission revocation as the shared summary ledger rather than reusing its pre-confirmation warning card | Address and token tools delegated to shared popovers |
+| `DecodedFunctionSummary.tsx` | Render the existing calldata decoder's resolved function, contract, and optional native payment when no clear-signed summary exists | Address actions delegated to the shared labeled-address popover |
+| `ReceiptDetails.tsx` | Render signer, fee, timestamp, hash, and copy as one post-submission ledger | Copy and transaction-hash explorer actions delegated to shared components |
+| `AdvancedDetails.tsx` | Own the single technical disclosure, scroll its heading into view on user expansion, and compose raw transaction plus gas diagnostics | Scrolls the existing detail viewport only |
+| `RawTransactionDetails.tsx` | Render function, transfer, addresses, value, calldata, and deploy data inside the advanced owner; publish the existing decoder's resolved function name | Copy/explorer actions delegated to shared components |
+| `GasDetails.tsx` | Render confirmed or estimated gas diagnostics inside the advanced owner | None |
 | `TransactionError.tsx` | Render bounded error detail and the optional rebroadcast action | Copy action; rebroadcast callback is owned by the controller |
-| `AssetChangesCard.tsx` | Order native/ERC-20 outflows before inflows and own group expansion state | None directly |
-| `Erc20TransferRow.tsx` | Render one summarized ERC-20 counterparty row | Explorer navigation |
-| `ForceInclusionSteps.tsx` | Render the L1/L2 progress indicator without deriving transport state | None |
+| `AssetChangesCard.tsx` | Order native/ERC-20 outflows before inflows and compose exact amount rows | None directly |
+| `Erc20TransferRow.tsx` | Render one summarized ERC-20 counterparty row with shared safe token imagery, symbol fallback, and hover/focus token-symbol contract disclosure | Explorer navigation, token copy delegated to the shared popover |
+| `Erc20TransferGroupRow.tsx` | Render aggregate ERC-20 movement and own multi-counterparty expansion | Explorer navigation, token copy delegated to the shared popover |
+| `ForceInclusionSteps.tsx` | Render L1 deposit and L2 inclusion as one rounded two-stage receipt ledger, with each terminal status linked to its chain explorer | Opens the matching L1 or L2 explorer transaction |
 | `formatting.ts` | Pure amount, grouping, swap-selection, and timestamp helpers | None |
 | `forceInclusionState.ts` | Pure L1/L2 progress derivation | None |
 | `tokenMetadata.ts` | Pure token-metadata request collection and record enrichment | None |
@@ -52,20 +59,50 @@ large hook.
 
 ## Behavior invariants
 
-- Preserve section and message ordering: status, bridge, asset impact,
-  clear-signing summaries, raw details, gas, then failure details.
+- Preserve the receipt-first information order: requesting identity and status,
+  failure (when present), bridge route, balance changes, human-readable summary,
+  receipt, then one advanced technical disclosure.
 - Force-inclusion state comes from the distinct L1/L2 hash invariant; do not
   infer stages from error strings.
 - Wallet-type-neutral history rendering must remain shared across Bankr,
   private-key, and seed-phrase transactions.
 - Existing message names, receipt polling cadence, explorer URL validation,
   metadata fallback rules, and collapse defaults are compatibility behavior.
+- Non-zero balance changes must remain visible. Eighteen-decimal dust up to
+  99,999 base units uses exact wei; other narrow tiny values use the shared
+  compact subscript-zero notation rather than rounding to zero.
+- Token identities reuse the request-review `TokenLogo` fallback. Missing,
+  rejected, and still-rasterizing remote logos must show the token symbol rather
+  than an invisible inert image.
+- When no structured clear-signing summary exists, the already-mounted calldata
+  decoder may promote its resolved function name into a lightweight summary;
+  the summary must not start a second decode or show a zero-value payment row.
+- Summary actions use the same left-label/right-value ledger row as Contract,
+  Asset, and Payment. Once a decoded-function summary is available, Advanced
+  details defaults closed while keeping its mounted decoder state available.
+- Same-chain swaps use a dedicated Action/From/To ledger; bridge transactions
+  continue to use the chain-aware route ledger instead of duplicating it.
+- EIP-7702 set/revoke results and force-inclusion L1/L2 progress use the same
+  defined-edge receipt grammar as ordinary summaries, not request-era cards.
+- Transactions without a decoded or clear-signed action still receive a
+  truthful generic Action row: contract deployment, contract interaction, or
+  transaction. Their Advanced details remain open so raw context is visible.
+- Processing and broadcast-uncertain records remain explicitly in progress;
+  sequential batch receipts identify their call index without implying atomic
+  execution.
+- Confirmed ERC-7715 revocations use a receipt-specific ledger. The blue
+  explanatory warning and nested allowance panel remain exclusive to the
+  pre-confirmation review surface.
 
 ## Coverage
 
 - `tests/portfolio/portfolioBalanceNavigation.test.ts` covers the Activity →
   transaction-details → Back path for all three wallet types.
-- `src/preview/PreviewScreens.tsx` exercises the full-screen adapter and
-  representative transaction states.
+- `src/preview/PreviewScreens.tsx` exercises the full-screen adapter across
+  confirmed, pending, failed, bridge settlement, swap, approval/transfer,
+  EIP-7702 and ERC-7715 revocation, atomic and sequential batch, force
+  inclusion, deployment, legacy, metadata, and stress states. Its wallet
+  selector rebinds the history record to Bankr, private-key, and seed-phrase
+  identities rather than only changing chrome.
 - Run `pnpm --filter @walletchan/extension typecheck:ui` and targeted ESLint
   whenever this domain changes.

@@ -240,6 +240,164 @@ test("token metadata and logo cache keys stay chain-bound and normalized", async
   assert.equal(native?.decimals, 18);
 });
 
+test("token logos fall back through the address-aware WalletChan API", async () => {
+  const storage = installStorage();
+  const originalFetch = globalThis.fetch;
+  const expected =
+    "https://static.cx.metamask.io/api/v2/tokenIcons/assets/eip155/8453/erc20/0x0000000000000000000000000000000000000002.png";
+  const requests: URL[] = [];
+  globalThis.fetch = (async (input) => {
+    const url = new URL(String(input));
+    requests.push(url);
+    const data = url.searchParams.has("address")
+      ? { logoUrl: expected }
+      : { tokens: [] };
+    return new Response(JSON.stringify(data), { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    assert.equal(await getCachedTokenLogo(8453, TOKEN_B), expected);
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1]?.searchParams.get("chainId"), "8453");
+    assert.equal(
+      requests[1]?.searchParams.get("address"),
+      TOKEN_B.toLowerCase(),
+    );
+    const cached = storage.state[tokenLogoCacheKey(8453, TOKEN_B)] as {
+      logoUrl: string;
+      fetchedAt: number;
+    };
+    assert.equal(cached.logoUrl, expected);
+    assert.equal(typeof cached.fetchedAt, "number");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("resolved token logos retain the 30-day cache window", async () => {
+  const cachedLogo = "https://example.com/cached.png";
+  installStorage({
+    [tokenLogoCacheKey(8453, TOKEN_A)]: {
+      logoUrl: cachedLogo,
+      fetchedAt: Date.now() - 29 * 24 * 60 * 60 * 1000,
+    },
+  });
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ logoUrl: null }), { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    assert.equal(await getCachedTokenLogo(8453, TOKEN_A), cachedLogo);
+    assert.equal(calls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("resolved token logos refresh after 30 days", async () => {
+  const refreshedLogo = "https://example.com/refreshed.png";
+  installStorage({
+    [tokenLogoCacheKey(8453, TOKEN_A)]: {
+      logoUrl: "https://example.com/stale.png",
+      fetchedAt: Date.now() - 30 * 24 * 60 * 60 * 1000 - 1,
+    },
+    "swapTokenList:8453": {
+      tokens: [
+        {
+          address: TOKEN_A,
+          name: "Token A",
+          symbol: "A",
+          decimals: 18,
+          logoURI: refreshedLogo,
+        },
+      ],
+      fetchedAt: Date.now(),
+    },
+  });
+
+  assert.equal(await getCachedTokenLogo(8453, TOKEN_A), refreshedLogo);
+});
+
+test("legacy known-no-logo cache entries retry immediately", async () => {
+  const now = Date.now();
+  const storage = installStorage({
+    [tokenLogoCacheKey(8453, TOKEN_A)]: {
+      logoUrl: "",
+      fetchedAt: now,
+    },
+    "swapTokenList:8453": { tokens: [], fetchedAt: now },
+  });
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ logoUrl: null }), { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    assert.equal(await getCachedTokenLogo(8453, TOKEN_A), null);
+    assert.equal(calls, 1);
+    assert.equal(
+      (storage.state[tokenLogoCacheKey(8453, TOKEN_A)] as {
+        fallbackVersion?: number;
+      }).fallbackVersion,
+      1,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("current known-no-logo cache entries retain a six-hour TTL", async () => {
+  installStorage({
+    [tokenLogoCacheKey(8453, TOKEN_A)]: {
+      logoUrl: "",
+      fetchedAt: Date.now(),
+      fallbackVersion: 1,
+    },
+  });
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ logoUrl: null }), { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    assert.equal(await getCachedTokenLogo(8453, TOKEN_A), null);
+    assert.equal(calls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("current known-no-logo cache entries retry after six hours", async () => {
+  installStorage({
+    [tokenLogoCacheKey(8453, TOKEN_A)]: {
+      logoUrl: "",
+      fetchedAt: Date.now() - 6 * 60 * 60 * 1000 - 1,
+      fallbackVersion: 1,
+    },
+    "swapTokenList:8453": { tokens: [], fetchedAt: Date.now() },
+  });
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ logoUrl: null }), { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    assert.equal(await getCachedTokenLogo(8453, TOKEN_A), null);
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("pinned-token merge is a no-op for unpinned chains", () => {
   const tokens: TokenListEntry[] = [];
   assert.equal(mergePinnedTokens(1, tokens), tokens);

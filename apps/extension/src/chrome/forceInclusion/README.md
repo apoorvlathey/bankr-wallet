@@ -33,7 +33,12 @@ Receipt ownership:
 - `receiptPolling.ts` owns active-poller deduplication, Flashblocks fast polling,
   exponential backoff, on-demand checks, and restart resumption.
 - `receiptFinalizer.ts` classifies confirmed, pending, ambiguous, and dropped
-  broadcasts. An ambiguous deterministic hash is never declared dropped.
+  broadcasts. An ambiguous deterministic hash is never declared dropped, and
+  a derived force-inclusion L2 hash is never treated as a mempool transaction.
+- `broadcastPolicy.ts` distinguishes ordinary/L1 broadcasts from derived L2
+  deposits. Derived L2 hashes remain pending while absent and receive a
+  fifteen-minute receipt-polling window around the expected one-to-ten-minute
+  OP Stack derivation delay.
 - `receiptHistory.ts` applies terminal status and gas data.
 - `receiptSideEffects.ts` mirrors EIP-7702/ERC-7715 state and advances split or
   bridge flows only after receipt application.

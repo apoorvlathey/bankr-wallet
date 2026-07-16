@@ -76,7 +76,9 @@ export function isMetadataIncomplete(
   return (
     tokenChanges.some(
       (change) =>
-        change.symbol.includes("...") || change.valueUsd === null,
+        change.symbol.includes("...") ||
+        change.valueUsd === null ||
+        (!change.nft && !change.logoUrl),
     ) || !!(nativeChange && nativeChange.valueUsd === null)
   );
 }

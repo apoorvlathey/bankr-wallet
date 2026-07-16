@@ -24,6 +24,7 @@ function asset(
     formattedAmount: "1",
     direction,
     valueUsd: 1,
+    logoUrl: "https://example.com/token.png",
     ...overrides,
   };
 }
@@ -100,6 +101,13 @@ test("failure and retry projections preserve released simulation semantics", () 
   assert.equal(
     isMetadataIncomplete(
       [asset("TOKEN", "in", { valueUsd: null })],
+      null,
+    ),
+    true,
+  );
+  assert.equal(
+    isMetadataIncomplete(
+      [asset("TOKEN", "in", { logoUrl: undefined })],
       null,
     ),
     true,

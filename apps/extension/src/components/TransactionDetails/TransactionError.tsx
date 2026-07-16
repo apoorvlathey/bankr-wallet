@@ -1,8 +1,17 @@
-import { Box, Button, Collapse, HStack, Text } from "@chakra-ui/react";
+import {
+  Box,
+  Button,
+  Collapse,
+  Flex,
+  HStack,
+  Text,
+  VStack,
+} from "@chakra-ui/react";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
   RepeatIcon,
+  WarningIcon,
 } from "@chakra-ui/icons";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import { CopyButton } from "@/components/CopyButton";
@@ -11,8 +20,6 @@ export default function TransactionError({
   tx,
   canRebroadcast,
   isRebroadcasting,
-  rebroadcastBg,
-  rebroadcastFg,
   expanded,
   onToggle,
   onRebroadcast,
@@ -20,8 +27,6 @@ export default function TransactionError({
   tx: CompletedTransaction;
   canRebroadcast: boolean;
   isRebroadcasting: boolean;
-  rebroadcastBg: string;
-  rebroadcastFg: string;
   expanded: boolean;
   onToggle: () => void;
   onRebroadcast: () => void;
@@ -48,51 +53,73 @@ export default function TransactionError({
 
         return (
           <Box
-            p={3}
-            bg="status.error.bg"
-            border="2px solid"
+            bg="surface.raised"
+            border="1px solid"
             borderColor="border.default"
-            borderRadius="md"
+            borderRadius="lg"
+            overflow="hidden"
           >
-            <Text fontSize="xs" color="status.error.fg" fontWeight="700" mb={0.5} textTransform="uppercase">
-              Error
-            </Text>
-            <Text fontSize="xs" color="status.error.fg" fontWeight="500">
-              {errorShort}
-            </Text>
+            <HStack px={3} py={3} spacing={2.5} align="flex-start" role="alert">
+              <Flex
+                boxSize="28px"
+                flexShrink={0}
+                align="center"
+                justify="center"
+                borderRadius="full"
+                bg="status.error.bg"
+                color="status.error.fg"
+              >
+                <WarningIcon boxSize="13px" aria-hidden />
+              </Flex>
+              <VStack spacing={0.5} align="stretch" minW={0} pt={0.5}>
+                <Text color="fg.primary" fontSize="sm" fontWeight="700">
+                  Transaction failed
+                </Text>
+                <Text
+                  color="fg.secondary"
+                  fontSize="xs"
+                  fontWeight="500"
+                  lineHeight="1.45"
+                  overflowWrap="anywhere"
+                >
+                  {errorShort}
+                </Text>
+              </VStack>
+            </HStack>
 
             {hasDetail && (
               <>
-                <HStack
-                  mt={2}
-                  spacing={1}
-                  cursor="pointer"
-                  onClick={() => onToggle()}
-                  w="fit-content"
-                  _hover={{ opacity: 0.8 }}
-                >
-                  <Text
-                    fontSize="2xs"
-                    color="status.error.fg"
-                    fontWeight="700"
-                    textTransform="uppercase"
-                    letterSpacing="wider"
-                  >
-                    {expanded ? "Hide details" : "Show details"}
-                  </Text>
-                  {expanded
-                    ? <ChevronUpIcon boxSize={3} color="status.error.fg" />
-                    : <ChevronDownIcon boxSize={3} color="status.error.fg" />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  w="full"
+                  minH="40px"
+                  h="40px"
+                  px={3}
+                  borderTop="1px solid"
+                  borderTopColor="border.subtle"
+                  borderRadius="0"
+                  justifyContent="space-between"
+                  color="fg.secondary"
+                  fontSize="xs"
+                  onClick={onToggle}
+                  aria-expanded={expanded}
+                  rightIcon={
+                    expanded ? (
+                      <ChevronUpIcon boxSize={3.5} aria-hidden />
+                    ) : (
+                      <ChevronDownIcon boxSize={3.5} aria-hidden />
+                    )
                   }
-                </HStack>
+                  _hover={{ bg: "surface.raisedHover", color: "fg.primary" }}
+                >
+                  {expanded ? "Hide technical details" : "Technical details"}
+                </Button>
                 <Collapse in={expanded} animateOpacity>
                   <Box
-                    mt={2}
-                    bg="bg.muted"
-                    border="1px solid"
+                    borderTop="1px solid"
                     borderColor="border.subtle"
-                    borderRadius="md"
-                    overflow="hidden"
+                    bg="surface.sunken"
                   >
                     {/* Header strip — "FULL ERROR" label on the left,
                         copy button on the right. Sits OUTSIDE the
@@ -105,16 +132,13 @@ export default function TransactionError({
                       py={1.5}
                       borderBottom="1px solid"
                       borderColor="border.subtle"
-                      bg="surface.sunken"
                     >
                       <Text
                         fontSize="2xs"
                         fontWeight="700"
-                        color="text.secondary"
-                        textTransform="uppercase"
-                        letterSpacing="wider"
+                        color="fg.secondary"
                       >
-                        Full Error
+                        Full error
                       </Text>
                       <CopyButton value={errorText} />
                     </HStack>
@@ -136,7 +160,7 @@ export default function TransactionError({
                       <Text
                         fontSize="xs"
                         fontFamily="mono"
-                        color="text.secondary"
+                        color="fg.secondary"
                         lineHeight="1.55"
                         wordBreak="break-all"
                         whiteSpace="pre-wrap"
@@ -150,20 +174,24 @@ export default function TransactionError({
             )}
 
             {canRebroadcast && (
-              <Button
-                size="xs"
-                leftIcon={<RepeatIcon />}
-                onClick={onRebroadcast}
-                isLoading={isRebroadcasting}
-                mt={2}
-                bg={rebroadcastBg}
-                color={rebroadcastFg}
-                borderColor={rebroadcastBg}
-                _hover={{ bg: rebroadcastBg, opacity: 0.85 }}
-                _active={{ bg: rebroadcastBg, opacity: 0.75 }}
+              <Box
+                display="flex"
+                justifyContent="flex-end"
+                px={3}
+                py={3}
+                borderTop="1px solid"
+                borderColor="border.subtle"
               >
-                Rebroadcast
-              </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={<RepeatIcon boxSize="14px" aria-hidden />}
+                  onClick={onRebroadcast}
+                  isLoading={isRebroadcasting}
+                >
+                  Rebroadcast
+                </Button>
+              </Box>
             )}
           </Box>
         );

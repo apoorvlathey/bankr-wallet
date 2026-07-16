@@ -1,8 +1,5 @@
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
-import {
-  PREVIEW_EPOCH_MS,
-  PREVIEW_WALLETS,
-} from "./fixtures";
+import { PREVIEW_EPOCH_MS, PREVIEW_WALLETS } from "./fixtures";
 import { previewAssets } from "./previewAssets";
 
 const previewAavePool = "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5";
@@ -256,14 +253,4 @@ export function getPreviewActivityTransactions(): CompletedTransaction[] {
       },
     },
   ];
-}
-
-export function getPreviewCompletedTransaction(
-  scenario: string,
-): CompletedTransaction {
-  if (scenario === "pending") return previewPendingTransaction;
-  if (scenario === "failed") return previewFailedTransaction;
-  if (scenario === "missing-metadata") return previewMissingMetadataTransaction;
-  if (scenario === "stress") return previewStressTransaction;
-  return previewCompletedTransaction;
 }

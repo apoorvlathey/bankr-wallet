@@ -6,6 +6,9 @@ import {
   toHistoryBigInt,
 } from "../../src/chrome/history/assetTransferParser";
 import { toBundleReceipt } from "../../src/chrome/history/receiptTransport";
+import { deriveNativeDelta } from "../../src/chrome/history/nativeDelta";
+import { fetchSettledReceiptAtRpcUrl } from "../../src/chrome/history/receiptSettlement";
+import { shouldReconcileReceiptDerivedHistory } from "../../src/chrome/history/receiptReconciliation";
 import type { CompletedTransaction } from "../../src/chrome/history/types";
 import { createChromeStorageHarness } from "../helpers/chromeStorageHarness";
 
@@ -97,6 +100,88 @@ test("bundle receipt projection excludes provider-specific fields", () => {
   );
 });
 
+test("sealed Base fees remove the exact false native residual", () => {
+  const previousBalance = 10_000_000_000_000_000n;
+  const chargedFee = 226_003_804_786n;
+  const currentBalance = previousBalance - chargedFee;
+  const commonReceipt = {
+    gasUsed: "0x8fc0",
+    effectiveGasPrice: "0x5d6240",
+  };
+
+  assert.equal(
+    deriveNativeDelta({
+      currentBalance,
+      previousBalance,
+      receipt: { ...commonReceipt, l1Fee: "0x25e7de09" },
+      payerForGas: true,
+    }),
+    "-151852137",
+  );
+  assert.equal(
+    deriveNativeDelta({
+      currentBalance,
+      previousBalance,
+      receipt: { ...commonReceipt, l1Fee: "0x2ef4f272" },
+      payerForGas: true,
+    }),
+    undefined,
+  );
+});
+
+test("Flashblocks receipt enrichment waits for a canonical following block", async () => {
+  const blockNumber = "0x2e7103e";
+  const canonicalReceipt = {
+    blockNumber,
+    blockHash: "0xcanonical",
+    l1Fee: "0x2ef4f272",
+  };
+  let headReads = 0;
+  const receipt = await fetchSettledReceiptAtRpcUrl(
+    "https://example.invalid",
+    "0xhash",
+    8453,
+    {
+      ...canonicalReceipt,
+      blockHash: "0xpreconfirmed",
+      l1Fee: "0x25e7de09",
+    },
+    {
+      attempts: 3,
+      sleep: async () => undefined,
+      rpcCall: async (method) => {
+        if (method === "eth_blockNumber") {
+          headReads += 1;
+          return headReads === 1 ? blockNumber : "0x2e7103f";
+        }
+        if (method === "eth_getBlockByNumber") {
+          return { hash: "0xcanonical" };
+        }
+        if (method === "eth_getTransactionReceipt") return canonicalReceipt;
+        throw new Error(`Unexpected method: ${method}`);
+      },
+    },
+  );
+
+  assert.equal(receipt?.l1Fee, "0x2ef4f272");
+  assert.equal(receipt?.blockHash, "0xcanonical");
+});
+
+test("receipt reconciliation is wallet-type neutral", () => {
+  for (const accountType of ["bankr", "privateKey", "seedPhrase"] as const) {
+    const tx = {
+      id: accountType,
+      status: "success",
+      txHash: "0xhash",
+      tx: { from: USER },
+      chainId: 8453,
+      accountType,
+      assetChanges: { blockNumber: "1", erc20Transfers: [] },
+    } as CompletedTransaction;
+    assert.equal(shouldReconcileReceiptDerivedHistory(tx), true, accountType);
+  }
+});
+
 test("backfill eligibility does not requeue existing or non-success entries", async () => {
   const history = [
     {
@@ -104,7 +189,7 @@ test("backfill eligibility does not requeue existing or non-success entries", as
       status: "success",
       txHash: "0xhash",
       tx: { from: USER },
-      chainId: 8453,
+      chainId: 1,
       assetChanges: { blockNumber: "1", erc20Transfers: [] },
     },
     {

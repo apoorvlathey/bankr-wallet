@@ -1,5 +1,8 @@
-import { getTxById } from "./repository";
 import { fetchRawTransactionReceipt } from "./receiptTransport";
+import { fetchSettledReceiptAtRpcUrl } from "./receiptSettlement";
+export {
+  queueReceiptDerivedHistoryReconciliation as queueAssetChangesBackfill,
+} from "./receiptReconciliation";
 
 const RECEIPT_RETRY_ATTEMPTS = 8;
 const RECEIPT_RETRY_DELAY_MS = 2_000;
@@ -29,12 +32,19 @@ export function extractAssetChangesWhenReceiptAvailable(args: {
   void (async () => {
     const logPrefix = args.logPrefix ?? "[receipt]";
     try {
-      if (args.receipt && args.rpcUrl) {
+      if (args.rpcUrl) {
+        const receipt = await fetchSettledReceiptAtRpcUrl(
+          args.rpcUrl,
+          args.txHash,
+          args.chainId,
+          args.receipt,
+        );
+        if (!receipt) return;
         await extractAssetChangesFromReceipt({
           txId: args.txId,
           chainId: args.chainId,
           userAddress: args.userAddress,
-          receipt: args.receipt,
+          receipt,
           rpcUrl: args.rpcUrl,
         });
         return;
@@ -43,11 +53,18 @@ export function extractAssetChangesWhenReceiptAvailable(args: {
       for (let attempt = 0; attempt < RECEIPT_RETRY_ATTEMPTS; attempt++) {
         const raw = await fetchRawTransactionReceipt(args.txHash, args.chainId);
         if (raw) {
+          const receipt = await fetchSettledReceiptAtRpcUrl(
+            raw.rpcUrl,
+            args.txHash,
+            args.chainId,
+            raw.receipt,
+          );
+          if (!receipt) continue;
           await extractAssetChangesFromReceipt({
             txId: args.txId,
             chainId: args.chainId,
             userAddress: args.userAddress,
-            receipt: raw.receipt,
+            receipt,
             rpcUrl: raw.rpcUrl,
           });
           return;
@@ -60,26 +77,6 @@ export function extractAssetChangesWhenReceiptAvailable(args: {
       console.warn(`${logPrefix} asset-changes extraction failed`, error);
     }
   })();
-}
-
-export async function queueAssetChangesBackfill(
-  txId: string,
-): Promise<{ success: boolean; queued?: boolean; error?: string }> {
-  const tx = await getTxById(txId);
-  if (!tx) return { success: false, error: "Transaction not found" };
-  if (tx.assetChanges) return { success: true, queued: false };
-  if (tx.status !== "success" || !tx.txHash || !tx.tx.from) {
-    return { success: false, error: "Transaction is not backfillable" };
-  }
-
-  extractAssetChangesWhenReceiptAvailable({
-    txId,
-    txHash: tx.txHash,
-    chainId: tx.chainId,
-    userAddress: tx.tx.from,
-    logPrefix: "[asset-backfill]",
-  });
-  return { success: true, queued: true };
 }
 
 function sleep(ms: number): Promise<void> {

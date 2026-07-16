@@ -37,3 +37,8 @@ Dependency direction is `types/constants/pure normalization -> metadata and
 state-override helpers -> execution paths -> txSimulation facade`. These
 modules do not own dapp authorization, credentials, signing, broadcast, Chrome
 message routing, or persisted wallet state.
+
+`tests/simulation/tokenLogoRegression.test.ts` requires both the full metadata
+path and the preflight fast-retry path to consume the shared per-address logo
+resolver, preventing transaction requests from drifting from confirmed receipt
+display again.
